@@ -18,14 +18,17 @@ const mocks = vi.hoisted(() => ({
     isEmpty: () => false,
     getSize: () => ({ width: 320, height: 200 })
   })),
-  thumbnailGenerate: vi.fn(async () => 'data:image/jpeg;base64,thumb'),
-  registerNamespace: vi.fn(),
-  startCleanup: vi.fn(),
-  createFile: vi.fn(async () => ({
-    path: '/tmp/tuff/native/thumbnails/thumb.jpg',
+  thumbnailGenerate: vi.fn(async () => ({
+    status: 'generated',
+    kind: 'image',
+    path: '/tmp/tuff/file/thumbnails/thumb.jpg',
+    mimeType: 'image/jpeg',
     sizeBytes: 5,
-    createdAt: 1
+    width: 64,
+    height: 40,
+    durationMs: 7
   })),
+  readFile: vi.fn(async () => Buffer.from('thumb')),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -39,9 +42,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', () => ({
   default: {
-    stat: mocks.stat
+    stat: mocks.stat,
+    readFile: mocks.readFile
   },
-  stat: mocks.stat
+  stat: mocks.stat,
+  readFile: mocks.readFile
 }))
 
 vi.mock('electron', () => ({
@@ -59,14 +64,6 @@ vi.mock('../box-tool/addon/files/workers/thumbnail-worker-client', () => ({
   ThumbnailWorkerClient: vi.fn(() => ({
     generate: mocks.thumbnailGenerate
   }))
-}))
-
-vi.mock('../../service/temp-file.service', () => ({
-  tempFileService: {
-    registerNamespace: mocks.registerNamespace,
-    startCleanup: mocks.startCleanup,
-    createFile: mocks.createFile
-  }
 }))
 
 vi.mock('../../utils/logger', () => ({
@@ -119,21 +116,32 @@ describe('NativeFileService', () => {
 
     const result = await service.getThumbnail({ path: '/tmp/a.png' })
 
-    expect(mocks.thumbnailGenerate).toHaveBeenCalledWith('/tmp/a.png')
-    expect(mocks.registerNamespace).toHaveBeenCalledWith({
-      namespace: 'native/thumbnails',
-      retentionMs: 30 * 60_000
-    })
-    expect(mocks.createFile).toHaveBeenCalledWith({
-      namespace: 'native/thumbnails',
-      ext: 'jpg',
-      base64: 'thumb',
-      prefix: 'thumbnail'
+    expect(mocks.thumbnailGenerate).toHaveBeenCalledWith('/tmp/a.png', {
+      extension: 'png',
+      sizeBytes: 1024
     })
     expect(result).toMatchObject({
       kind: 'tfile',
-      url: 'tfile:///tmp/tuff/native/thumbnails/thumb.jpg',
-      path: '/tmp/tuff/native/thumbnails/thumb.jpg',
+      url: 'tfile:///tmp/tuff/file/thumbnails/thumb.jpg',
+      path: '/tmp/tuff/file/thumbnails/thumb.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 5,
+      width: 64,
+      height: 40,
+      durationMs: 7
+    })
+  })
+
+  it('returns data-url thumbnails when requested', async () => {
+    const { NativeFileService } = await import('./native-file-service')
+    const service = new NativeFileService()
+
+    const result = await service.getThumbnail({ path: '/tmp/a.png', output: 'data-url' })
+
+    expect(mocks.readFile).toHaveBeenCalledWith('/tmp/tuff/file/thumbnails/thumb.jpg')
+    expect(result).toMatchObject({
+      kind: 'data-url',
+      url: 'data:image/jpeg;base64,dGh1bWI=',
       mimeType: 'image/jpeg',
       sizeBytes: 5
     })

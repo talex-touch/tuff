@@ -22,6 +22,7 @@ import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
 import { everythingProvider } from '../box-tool/addon/files/everything-provider'
 import { fileProvider } from '../box-tool/addon/files/file-provider'
+import { getVideoThumbnailSupport } from '../box-tool/addon/files/thumbnail-service'
 import { nativeFileService } from './native-file-service'
 import { getPermissionModule } from '../permission'
 import { getNativeScreenshotService } from './screenshot-service'
@@ -77,7 +78,10 @@ function toPermissionState(
   return permissionModule.checkPermission(pluginName, apiName).allowed ? 'granted' : 'denied'
 }
 
-function createUnsupportedCapability(id: string, reason = 'not-implemented-in-v1'): NativeCapabilityStatus {
+function createUnsupportedCapability(
+  id: string,
+  reason = 'not-implemented-in-v1'
+): NativeCapabilityStatus {
   return {
     id,
     supported: false,
@@ -200,7 +204,9 @@ export class NativeCapabilitiesModule extends BaseModule {
         const signal = new AbortController().signal
         const useEverything =
           provider === 'everything' ||
-          (provider === 'auto' && process.platform === 'win32' && everythingProvider.isSearchReady())
+          (provider === 'auto' &&
+            process.platform === 'win32' &&
+            everythingProvider.isSearchReady())
         const result = useEverything
           ? await everythingProvider.onSearch(query, signal)
           : await fileProvider.onSearch(query, signal)
@@ -339,7 +345,6 @@ export class NativeCapabilitiesModule extends BaseModule {
           features: ['stat', 'open', 'reveal', 'tfile', 'thumbnail']
         }
       case 'media.metadata':
-      case 'media.thumbnail':
         return {
           id,
           supported: true,
@@ -347,10 +352,25 @@ export class NativeCapabilitiesModule extends BaseModule {
           platform: process.platform,
           engine: 'electron',
           permission: toPermissionState(context, 'native:media:probe'),
-          degraded: id === 'media.thumbnail',
-          reason: id === 'media.thumbnail' ? 'v1-image-thumbnail-only' : undefined,
+          degraded: false,
           features: ['metadata', 'thumbnail']
         }
+      case 'media.thumbnail': {
+        const videoSupport = getVideoThumbnailSupport()
+        return {
+          id,
+          supported: true,
+          available: true,
+          platform: process.platform,
+          engine: videoSupport.available ? 'sharp+ffmpeg' : 'sharp',
+          permission: toPermissionState(context, 'native:media:probe'),
+          degraded: !videoSupport.available,
+          reason: videoSupport.reason,
+          features: videoSupport.available
+            ? ['image-thumbnail', 'video-thumbnail']
+            : ['image-thumbnail']
+        }
+      }
       default:
         return createUnsupportedCapability(id)
     }

@@ -6,19 +6,23 @@ import type {
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
-import { nativeImage } from 'electron'
-import { THUMBNAIL_JPEG_QUALITY, THUMBNAIL_SIZE } from '../thumbnail-config'
+import { generateThumbnail, type ThumbnailGenerationResult } from '../thumbnail-service'
 
 interface ThumbnailRequest {
   type: 'thumbnail'
   taskId: string
   filePath: string
+  outputDir: string
+  extension?: string | null
+  sizeBytes?: number | null
+  ffmpegPath?: string | null
+  ffprobePath?: string | null
 }
 
 interface ThumbnailResultMessage {
   type: 'done'
   taskId: string
-  thumbnail: string | null
+  thumbnail: ThumbnailGenerationResult
 }
 
 interface ThumbnailErrorMessage {
@@ -53,22 +57,6 @@ function buildMetricsPayload(): WorkerMetricsPayload {
   }
 }
 
-function generateThumbnail(filePath: string): string | null {
-  const img = nativeImage.createFromPath(filePath)
-  if (img.isEmpty()) return null
-
-  const size = img.getSize()
-  if (size.width <= THUMBNAIL_SIZE && size.height <= THUMBNAIL_SIZE) {
-    return null
-  }
-
-  const resized = img.resize({ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, quality: 'good' })
-  const jpegBuffer = resized.toJPEG(THUMBNAIL_JPEG_QUALITY)
-  if (jpegBuffer.length === 0) return null
-
-  return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`
-}
-
 const queue: ThumbnailRequest[] = []
 let running = false
 
@@ -79,7 +67,14 @@ async function processQueue(): Promise<void> {
   running = true
 
   try {
-    const thumbnail = generateThumbnail(next.filePath)
+    const thumbnail = await generateThumbnail({
+      filePath: next.filePath,
+      outputDir: next.outputDir,
+      extension: next.extension,
+      sizeBytes: next.sizeBytes,
+      ffmpegPath: next.ffmpegPath,
+      ffprobePath: next.ffprobePath
+    })
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,

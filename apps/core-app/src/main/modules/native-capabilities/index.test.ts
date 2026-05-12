@@ -76,6 +76,18 @@ const mocks = vi.hoisted(() => ({
   toTfile: vi.fn(async () => ({ ref: { kind: 'tfile', url: 'tfile:///tmp/a.png' } })),
   probeMedia: vi.fn(async () => ({ path: '/tmp/a.png', kind: 'image' })),
   getMediaThumbnail: vi.fn(async () => ({ kind: 'tfile', url: 'tfile:///tmp/media.jpg' })),
+  getVideoThumbnailSupport: vi.fn<
+    () => {
+      available: boolean
+      reason?: string
+      ffmpegPath?: string
+      ffprobePath?: string
+    }
+  >(() => ({
+    available: true,
+    ffmpegPath: '/bin/ffmpeg',
+    ffprobePath: '/bin/ffprobe'
+  })),
   enforcePermission: vi.fn(),
   checkPermission: vi.fn(() => ({ allowed: true })),
   logger: {
@@ -147,6 +159,10 @@ vi.mock('../box-tool/addon/files/everything-provider', () => ({
   }
 }))
 
+vi.mock('../box-tool/addon/files/thumbnail-service', () => ({
+  getVideoThumbnailSupport: mocks.getVideoThumbnailSupport
+}))
+
 vi.mock('./native-file-service', () => ({
   nativeFileService: {
     stat: mocks.stat,
@@ -206,10 +222,7 @@ describe('NativeCapabilitiesModule', () => {
     const handler = mocks.handlers.get(NativeEvents.screenshot.capture.toEventName())
     await handler?.({ target: 'cursor-display' }, createContext('demo.plugin'))
 
-    expect(mocks.enforcePermission).toHaveBeenCalledWith(
-      'demo.plugin',
-      'native:screenshot:capture'
-    )
+    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:screenshot:capture')
   })
 
   it('registers capability, file-index, file, and media handlers', async () => {
@@ -233,14 +246,8 @@ describe('NativeCapabilitiesModule', () => {
     const handler = mocks.handlers.get(NativeEvents.fileIndex.query.toEventName())
     const result = await handler?.({ text: 'demo', limit: 2 }, createContext('demo.plugin'))
 
-    expect(mocks.enforcePermission).toHaveBeenCalledWith(
-      'demo.plugin',
-      'native:file-index:query'
-    )
-    expect(mocks.fileIndexSearch).toHaveBeenCalledWith(
-      { text: 'demo' },
-      expect.any(AbortSignal)
-    )
+    expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:file-index:query')
+    expect(mocks.fileIndexSearch).toHaveBeenCalledWith({ text: 'demo' }, expect.any(AbortSignal))
     expect(result).toMatchObject({
       provider: 'auto',
       result: { items: [] }
@@ -265,5 +272,27 @@ describe('NativeCapabilitiesModule', () => {
     expect(mocks.enforcePermission).toHaveBeenCalledWith('demo.plugin', 'native:media:probe')
     expect(mocks.stat).toHaveBeenCalledWith({ path: '/tmp/a.png' })
     expect(mocks.probeMedia).toHaveBeenCalledWith({ path: '/tmp/a.png' })
+  })
+
+  it('reports media thumbnail degradation when video support is unavailable', async () => {
+    mocks.getVideoThumbnailSupport.mockReturnValueOnce({
+      available: false,
+      reason: 'ffmpeg-unavailable'
+    })
+    const { NativeCapabilitiesModule } = await import('./index')
+    const module = new NativeCapabilitiesModule()
+
+    module.onInit({} as any)
+    const handler = mocks.handlers.get(NativeEvents.capabilities.get.toEventName())
+    const result = handler?.({ id: 'media.thumbnail' }, createContext('demo.plugin'))
+
+    expect(result).toMatchObject({
+      id: 'media.thumbnail',
+      supported: true,
+      available: true,
+      degraded: true,
+      reason: 'ffmpeg-unavailable',
+      features: ['image-thumbnail']
+    })
   })
 })

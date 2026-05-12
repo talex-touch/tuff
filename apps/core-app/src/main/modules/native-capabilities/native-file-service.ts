@@ -13,22 +13,23 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
 import { nativeImage, shell } from 'electron'
-import { isThumbnailCandidate } from '../box-tool/addon/files/thumbnail-config'
+import {
+  IMAGE_THUMBNAIL_EXTENSIONS,
+  VIDEO_THUMBNAIL_EXTENSIONS,
+  getThumbnailUnsupportedReason,
+  isThumbnailCandidate
+} from '../box-tool/addon/files/thumbnail-config'
 import { ThumbnailWorkerClient } from '../box-tool/addon/files/workers/thumbnail-worker-client'
-import { tempFileService } from '../../service/temp-file.service'
 import { createLogger } from '../../utils/logger'
 
 const nativeFileLog = createLogger('NativeFile')
 const thumbnailWorker = new ThumbnailWorkerClient()
-const NATIVE_THUMBNAIL_NAMESPACE = 'native/thumbnails'
-const NATIVE_THUMBNAIL_RETENTION_MS = 30 * 60_000
-let thumbnailNamespaceRegistered = false
 
 type CodedError = Error & { code?: string }
 
-const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'])
+const IMAGE_EXTENSIONS = new Set([...IMAGE_THUMBNAIL_EXTENSIONS, 'svg', 'ico'])
 const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus'])
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'])
+const VIDEO_EXTENSIONS = new Set([...VIDEO_THUMBNAIL_EXTENSIONS])
 
 function createCodedError(message: string, code: string): CodedError {
   const error = new Error(message) as CodedError
@@ -61,6 +62,13 @@ function getMimeType(filePath: string): string {
       return 'image/gif'
     case 'bmp':
       return 'image/bmp'
+    case 'heic':
+      return 'image/heic'
+    case 'heif':
+      return 'image/heif'
+    case 'tif':
+    case 'tiff':
+      return 'image/tiff'
     case 'svg':
       return 'image/svg+xml'
     case 'mp3':
@@ -87,6 +95,10 @@ function getMimeType(filePath: string): string {
       return 'video/webm'
     case 'avi':
       return 'video/x-msvideo'
+    case 'wmv':
+      return 'video/x-ms-wmv'
+    case 'flv':
+      return 'video/x-flv'
     default:
       return 'application/octet-stream'
   }
@@ -146,11 +158,61 @@ async function buildThumbnailRef(
   const startedAt = performance.now()
   const sizeBytes = toNumberSize(stats.size)
   const canGenerate = isThumbnailCandidate(extension, sizeBytes)
-  let thumbnail: string | null = null
+  const unsupportedReason = getThumbnailUnsupportedReason(extension, sizeBytes)
 
   if (canGenerate) {
     try {
-      thumbnail = await thumbnailWorker.generate(filePath)
+      const thumbnail = await thumbnailWorker.generate(filePath, {
+        extension,
+        sizeBytes
+      })
+      if (thumbnail.status === 'generated') {
+        if (output === 'data-url') {
+          const data = await fs.readFile(thumbnail.path)
+          return {
+            kind: 'data-url',
+            url: `data:${thumbnail.mimeType};base64,${data.toString('base64')}`,
+            mimeType: thumbnail.mimeType,
+            sizeBytes: data.length,
+            width: thumbnail.width,
+            height: thumbnail.height,
+            durationMs: thumbnail.durationMs
+          }
+        }
+
+        return {
+          kind: 'tfile',
+          url: toTfileUrl(thumbnail.path),
+          path: thumbnail.path,
+          mimeType: thumbnail.mimeType,
+          sizeBytes: thumbnail.sizeBytes,
+          width: thumbnail.width,
+          height: thumbnail.height,
+          durationMs: thumbnail.durationMs
+        }
+      }
+
+      nativeFileLog.debug('Native thumbnail unavailable', {
+        meta: {
+          platform: process.platform,
+          extension,
+          sizeBytes,
+          status: thumbnail.status,
+          reason: thumbnail.reason
+        }
+      })
+      return {
+        kind: 'tfile',
+        url: toTfileUrl(filePath),
+        path: filePath,
+        mimeType,
+        sizeBytes,
+        durationMs: Math.round(performance.now() - startedAt),
+        metadata: {
+          degraded: true,
+          reason: thumbnail.reason
+        }
+      }
     } catch (error) {
       nativeFileLog.warn('Native thumbnail generation failed', {
         meta: {
@@ -163,29 +225,6 @@ async function buildThumbnailRef(
     }
   }
 
-  if (thumbnail) {
-    const durationMs = Math.round(performance.now() - startedAt)
-    if (output === 'data-url') {
-      return {
-        kind: 'data-url',
-        url: thumbnail,
-        mimeType: getDataUrlMimeType(thumbnail),
-        sizeBytes: Buffer.byteLength(thumbnail),
-        durationMs
-      }
-    }
-
-    const stored = await storeDataUrlThumbnail(thumbnail)
-    return {
-      kind: 'tfile',
-      url: toTfileUrl(stored.path),
-      path: stored.path,
-      mimeType: stored.mimeType,
-      sizeBytes: stored.sizeBytes,
-      durationMs
-    }
-  }
-
   return {
     kind: 'tfile',
     url: toTfileUrl(filePath),
@@ -195,54 +234,8 @@ async function buildThumbnailRef(
     durationMs: Math.round(performance.now() - startedAt),
     metadata: {
       degraded: true,
-      reason: canGenerate ? 'thumbnail-generation-failed' : 'unsupported-thumbnail-type'
+      reason: canGenerate ? 'thumbnail-generation-failed' : unsupportedReason
     }
-  }
-}
-
-function ensureThumbnailNamespace(): void {
-  if (thumbnailNamespaceRegistered) return
-  tempFileService.registerNamespace({
-    namespace: NATIVE_THUMBNAIL_NAMESPACE,
-    retentionMs: NATIVE_THUMBNAIL_RETENTION_MS
-  })
-  tempFileService.startCleanup()
-  thumbnailNamespaceRegistered = true
-}
-
-function getDataUrlMimeType(dataUrl: string): string {
-  const match = /^data:([^;,]+)[;,]/.exec(dataUrl)
-  return match?.[1] || 'image/png'
-}
-
-function getDataUrlExt(dataUrl: string): string {
-  switch (getDataUrlMimeType(dataUrl)) {
-    case 'image/jpeg':
-      return 'jpg'
-    case 'image/webp':
-      return 'webp'
-    case 'image/png':
-    default:
-      return 'png'
-  }
-}
-
-async function storeDataUrlThumbnail(
-  dataUrl: string
-): Promise<{ path: string; sizeBytes: number; mimeType: string }> {
-  ensureThumbnailNamespace()
-  const marker = 'base64,'
-  const markerIndex = dataUrl.indexOf(marker)
-  const base64 = markerIndex >= 0 ? dataUrl.slice(markerIndex + marker.length) : dataUrl
-  const stored = await tempFileService.createFile({
-    namespace: NATIVE_THUMBNAIL_NAMESPACE,
-    ext: getDataUrlExt(dataUrl),
-    base64,
-    prefix: 'thumbnail'
-  })
-  return {
-    ...stored,
-    mimeType: getDataUrlMimeType(dataUrl)
   }
 }
 
@@ -360,8 +353,8 @@ export class NativeFileService {
         height: dimensions.height
       },
       metadata: {
-        degraded: kind !== 'image',
-        reason: kind === 'image' ? undefined : 'v1-metadata-only'
+        degraded: kind !== 'image' && kind !== 'video',
+        reason: kind === 'image' || kind === 'video' ? undefined : 'v1-metadata-only'
       }
     }
   }
@@ -369,7 +362,7 @@ export class NativeFileService {
   async getMediaThumbnail(request: NativeFileResourceRequest): Promise<NativeResourceRef> {
     const filePath = normalizePathRequest(request)
     const kind = inferMediaKind(filePath)
-    if (kind !== 'image') {
+    if (kind !== 'image' && kind !== 'video') {
       const stats = await getFileStats(filePath)
       return {
         kind: 'tfile',
@@ -379,7 +372,7 @@ export class NativeFileService {
         sizeBytes: toNumberSize(stats.size),
         metadata: {
           degraded: true,
-          reason: 'media-thumbnail-v1-image-only'
+          reason: 'unsupported-thumbnail-type'
         }
       }
     }

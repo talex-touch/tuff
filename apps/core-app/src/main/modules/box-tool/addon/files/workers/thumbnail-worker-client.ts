@@ -4,16 +4,15 @@ import type {
   WorkerStatusSnapshot,
   WorkerTaskSnapshot
 } from './worker-status'
+import type { ThumbnailGeneratedResult, ThumbnailGenerationResult } from '../thumbnail-service'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import {
-  FILE_WORKER_IDLE_SHUTDOWN_MS,
-  IdleWorkerShutdownController
-} from './idle-worker-shutdown'
+import { tempFileService } from '../../../../../service/temp-file.service'
+import { FILE_WORKER_IDLE_SHUTDOWN_MS, IdleWorkerShutdownController } from './idle-worker-shutdown'
 
 interface PendingThumbnail {
-  resolve: (value: string | null) => void
+  resolve: (value: ThumbnailGenerationResult) => void
   reject: (error: Error) => void
   startedAt: number
 }
@@ -24,11 +23,28 @@ interface PendingMetrics {
 }
 
 type WorkerMessage =
-  | { type: 'done'; taskId: string; thumbnail: string | null }
+  | { type: 'done'; taskId: string; thumbnail: ThumbnailGenerationResult }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
 
 const fileProviderLog = getLogger('file-provider')
+const FILE_THUMBNAIL_NAMESPACE = 'file/thumbnails'
+const FILE_THUMBNAIL_RETENTION_MS = 7 * 24 * 60 * 60_000
+let thumbnailNamespaceRegistered = false
+
+function ensureThumbnailNamespace(): string {
+  if (!thumbnailNamespaceRegistered) {
+    tempFileService.registerNamespace({
+      namespace: FILE_THUMBNAIL_NAMESPACE,
+      retentionMs: FILE_THUMBNAIL_RETENTION_MS
+    })
+    tempFileService.startCleanup()
+    thumbnailNamespaceRegistered = true
+  }
+  return tempFileService.resolveNamespaceDir(FILE_THUMBNAIL_NAMESPACE)
+}
+
+export type { ThumbnailGenerationResult, ThumbnailGeneratedResult }
 
 export class ThumbnailWorkerClient {
   private worker: Worker | null = null
@@ -45,18 +61,28 @@ export class ThumbnailWorkerClient {
     shutdown: () => this.terminateWorker()
   })
 
-  async generate(filePath: string): Promise<string | null> {
+  async generate(
+    filePath: string,
+    options: {
+      extension?: string | null
+      sizeBytes?: number | null
+    } = {}
+  ): Promise<ThumbnailGenerationResult> {
     const taskId = `thumbnail-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const worker = this.ensureWorker()
+    const outputDir = ensureThumbnailNamespace()
 
-    return new Promise<string | null>((resolve, reject) => {
+    return new Promise<ThumbnailGenerationResult>((resolve, reject) => {
       this.pending.set(taskId, { resolve, reject, startedAt })
 
       worker.postMessage({
         type: 'thumbnail',
         taskId,
-        filePath
+        filePath,
+        outputDir,
+        extension: options.extension,
+        sizeBytes: options.sizeBytes
       })
     })
   }
@@ -119,7 +145,7 @@ export class ThumbnailWorkerClient {
 
     if (message.type === 'done') {
       this.pending.delete(message.taskId)
-      pending.resolve(message.thumbnail ?? null)
+      pending.resolve(message.thumbnail)
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),

@@ -52,6 +52,14 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
   })
 }))
 
+vi.mock('../../../../../service/temp-file.service', () => ({
+  tempFileService: {
+    registerNamespace: vi.fn(),
+    startCleanup: vi.fn(),
+    resolveNamespaceDir: vi.fn(() => '/tmp/tuff/file/thumbnails')
+  }
+}))
+
 import { IconWorkerClient } from './icon-worker-client'
 import { ThumbnailWorkerClient } from './thumbnail-worker-client'
 
@@ -131,9 +139,19 @@ describe('asset worker clients idle shutdown', () => {
     firstWorker.emit('message', {
       type: 'done',
       taskId: taskIdOf(firstWorker.messages[0]),
-      thumbnail: 'data:image/png;base64,first'
+      thumbnail: {
+        status: 'generated',
+        kind: 'image',
+        path: '/tmp/tuff/file/thumbnails/first.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 5,
+        durationMs: 1
+      }
     })
-    await expect(firstGenerate).resolves.toBe('data:image/png;base64,first')
+    await expect(firstGenerate).resolves.toMatchObject({
+      status: 'generated',
+      path: '/tmp/tuff/file/thumbnails/first.jpg'
+    })
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(firstWorker.terminateCalls).toBe(1)
@@ -150,10 +168,18 @@ describe('asset worker clients idle shutdown', () => {
     secondWorker.emit('message', {
       type: 'done',
       taskId: taskIdOf(secondWorker.messages[0]),
-      thumbnail: null
+      thumbnail: {
+        status: 'failed',
+        kind: 'image',
+        reason: 'decode-failed',
+        durationMs: 1
+      }
     })
 
-    await expect(secondGenerate).resolves.toBeNull()
+    await expect(secondGenerate).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'decode-failed'
+    })
   })
 
   it('keeps the icon worker alive while status metrics are pending', async () => {
@@ -194,9 +220,19 @@ describe('asset worker clients idle shutdown', () => {
     worker.emit('message', {
       type: 'done',
       taskId: taskIdOf(worker.messages[0]),
-      thumbnail: 'data:image/png;base64,preview'
+      thumbnail: {
+        status: 'generated',
+        kind: 'image',
+        path: '/tmp/tuff/file/thumbnails/preview.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 5,
+        durationMs: 1
+      }
     })
-    await expect(generate).resolves.toBe('data:image/png;base64,preview')
+    await expect(generate).resolves.toMatchObject({
+      status: 'generated',
+      path: '/tmp/tuff/file/thumbnails/preview.jpg'
+    })
 
     const statusPromise = client.getStatus()
     await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
