@@ -10,11 +10,12 @@
 | 主题 | 当前事实 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
 | 版本主线 | 当前工作区基线为 `2.4.10-beta.19` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Beta 发布准备 | `2.4.10-beta.19` release notes 已补齐；`build-and-release` 已显式支持 beta 类型并收窄 artifact 上传；PR CI 已从 `pull_request_target` 收窄为只读 `pull_request` | 用户确认后再创建/推送 `v2.4.10-beta.19` tag 触发发布；未补齐 Windows 真机 evidence 前不得宣称正式 `2.4.10` gate 通过 | `TODO` / `README` / `INDEX` / `CHANGES` / `.github/workflows/README` |
 | 2.4.10 Windows 发版 gate | 功能实现与本地 verifier 已进入收口态；缺口集中在 Windows 真机 evidence、性能采样与 Release Evidence 写入 | 在 Windows 真机补齐 acceptance manifest 强门禁、常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并写入 Nexus Release Evidence；任一项缺失均阻塞当前版本发版 | `TODO` / `README` / `INDEX` / `CHANGES` / `Quality Baseline` |
 | Windows App 索引 | Start Menu、UWP、registry uninstall 与 `launchArgs/workingDirectory` 已有回归覆盖，但仍缺真实 Windows 设备体验证据 | `2.4.10` 完成微信/Codex/Apple Music 等真实应用搜索与启动验证，并记录失败证据 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），清册退场目标统一前移到 `2.4.11` | 清册中的 `2.4.11` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | CoreApp 平台适配 | `2.4.11` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
-| Native transport / 截图 | Rust/xcap screenshot addon 已作为首个能力落地；`NativeEvents` 已扩展为 `capabilities`、`screenshot`、`file-index`、`file`、`media` 五域，默认以 `tfile`/metadata 传输大资源；CoreApp `NativeCapabilitiesModule` 已桥接 fileProvider/Everything status、文件 stat/open/reveal/tfile、图片媒体 metadata/thumbnail；插件侧强制 `window.capture` / `fs.index` / `fs.read` / `media.read` 权限 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort 真机 smoke；后续 OCR/前台窗口/Clipboard 是否收敛到 `native:*:*` 仍需按能力成熟度分批决策 | `TODO` / `README` / `CHANGES` |
+| Native transport / 截图 | Rust/xcap screenshot addon 已作为首个能力落地；`NativeEvents` 已扩展为 `capabilities`、`screenshot`、`file-index`、`file`、`media` 五域，默认以 `tfile`/metadata 传输大资源；CoreApp `NativeCapabilitiesModule` 已桥接 fileProvider/Everything status、文件 stat/open/reveal/tfile、图片/视频媒体 metadata/thumbnail；媒体 thumbnail 与 FileProvider 复用统一 thumbnail worker，图片/HEIC 使用 `sharp`，常见视频使用内置 ffmpeg 抽帧，生成结果落本地 cache 并通过 `tfile://` 展示；插件侧强制 `window.capture` / `fs.index` / `fs.read` / `media.read` 权限 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort 真机 smoke；打包预览需确认 `sharp`、ffmpeg/ffprobe 在产物中可执行；后续 OCR/前台窗口/Clipboard 是否收敛到 `native:*:*` 仍需按能力成熟度分批决策 | `TODO` / `README` / `CHANGES` |
 | 跨平台/假实现审计 | 2026-05-10 已新增独立报告，确认 CoreApp 平台能力合同方向正确；生产 raw send 直连未见新增命中；2026-05-11 当前三段 retained raw event candidate 已清零，retained raw definition 按测试口径冻结为 `<=264` | `2.4.11` 前继续关闭 P0 假值成功路径，拆分 retained non-conforming event 保留理由，并推进 SRP 拆分 | `report` / `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 架构治理切片 | Transport guard 已拆出 raw send / retained raw definition / typed candidate 指标；Pilot stat 假值与 mock 支付默认成功已收口；touch-image 历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 已迁出并降到 `1143` 行、清退 size exception；`recommendation-engine.ts` 已拆出纯 utility 并低于 exception cap；`search-core.ts` 已拆出纯 helper 并低于 exception cap；`app-provider.ts` 已拆出 path helper 与 source scanner facade 并降到 `3305` 行、growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders 并降到 `1791` 行、growth exception cap 收紧到 `1792`；`update-system.ts` 已拆出 update asset utility 并低于 baseline；`omni-panel/index.ts` 已拆出 builtin definitions 并低于 exception cap；`sdk-compat.ts` 与 Pilot `pilot-compat-*` 已完成物理命名 hard-cut；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper并清退 size exception；Nexus Provider Registry 页面/API 测试、CoreApp Windows acceptance verifier/test、AppProvider test harness、`intelligence-uikit` playground、Nexus `useSignIn.ts`、docs assistant API、Intelligence Lab tools、telemetry sanitizer 与 locale legal shard 已完成 SRP 拆分并退出 grown list，CoreApp 当前不在 grown list，`newOversizedFiles=0`，`grownOversizedFiles=0`，`cleanupCandidates=0`；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，lint 不再串全量架构债务，`size:guard:strict` 保留 release 红线 | 下一步转入剩余业务闭环与 Windows 真机 evidence，不再有新增/增长超长文件阻塞 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.5.0 AI 板块 | Plan PRD 已锁定为“桌面 AI 入口收口版本”，CoreBox AI Ask 最小 Stable 切片已接入 `text.chat` 与剪贴板图片 `vision.ocr -> text.chat`，CoreBox / OmniPanel 是主入口，Workflow 是主要执行载体，Pilot 是增强能力来源，Nexus Provider/Scene 作为后续架构约束 | 继续拆分 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板；不得扩大到全量多模态或 Scene runtime 编排 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
@@ -40,6 +41,7 @@
 > 目标：当前治理版本可按“guard 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
 - [ ] 发版前最小复核：重新执行 `node "scripts/check-doc-governance.mjs" --strict true --json`、`pnpm compat:registry:guard`、`node "scripts/check-large-file-boundaries.mjs" --report`、`git diff --check`，并记录命令结果。
+- [x] `2.4.10-beta.19` beta 发布准备：补齐 `notes/update_2.4.10-beta.19.{zh,en}.md`、显式 `build:beta:*` 脚本与 `build-and-release` beta release type；真实 tag/push 仍需用户确认后执行。
 - [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。
 - [ ] Windows 真机 release evidence：补齐 acceptance manifest、Everything target probe、App Index diagnostic、常见 App 启动、复制 app path、本地启动区索引、更新安装、DivisionBox detached widget、分时推荐、search trace 与 clipboard stress 证据。
 - [ ] 搜索性能验收：在真实设备采样 `200` 次查询，生成 `search-trace-stats/v1`，确认 `first.result/session.end` P95 与 slowRatio 达标。
@@ -1091,9 +1093,9 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 309 |
+| 已完成 (`- [x]`) | 310 |
 | 未完成 (`- [ ]`) | 58 |
-| 总计 | 367 |
+| 总计 | 368 |
 | 完成率 | 84% |
 
 > 统计时间: 2026-05-11（按本文件实时 checkbox 计数）。

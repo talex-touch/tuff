@@ -5,6 +5,57 @@
 
 ## 2026-05-12
 
+### fix(core-app): scope macOS Spotlight file search
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+  - macOS Spotlight fast file search 改为只在默认用户文件目录与 `FILE_INDEX_SETTINGS.extraPaths` 内执行，并对返回结果做二次 scope 过滤。
+  - 系统框架内部资源（如 `/System/Library/PrivateFrameworks` 下的 Safari/MapsUI 图标）不再作为普通文件结果展示，避免 CoreBox 渲染时触发 `tfile://` 403 噪音。
+
+### fix(core-app): generate indexed media thumbnails
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/{thumbnail-config,thumbnail-service,utils,file-provider}.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/{thumbnail-worker,thumbnail-worker-client}.ts`
+- `apps/core-app/src/main/modules/native-capabilities/{index,native-file-service}.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/electron-builder.yml`
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+  - FileProvider 缩略图生成从 Electron `nativeImage` worker 直连切到统一 thumbnail service；图片/HEIC/TIFF/WebP 等使用 `sharp`，视频使用 `ffmpeg-static`/`ffprobe-static` 抽帧后统一输出本地 JPEG cache。
+  - 索引封面不再把新生成结果写入长期 data URL；`file_extensions.thumbnail` 保存本地 cache 路径，搜索展示继续通过 `tfile://` 渲染，历史合法 data URL 仍兼容。
+  - 图片与视频分别使用 50MB / 2GB 上限；失败或不支持结果写入 `thumbnailStatus`，文件 `mtime/size` 未变化时跳过重复生成，降低损坏媒体和 Photos Library 类路径的重复 warning。
+  - `native:media:get-thumbnail` 与 CoreBox 搜索复用同一 thumbnail worker；`media.thumbnail` capability 已标注图片+视频支持，ffmpeg 不可用时显式 degraded 但图片缩略图不受影响。
+  - 打包清单补充 `sharp`、`@img`、`ffmpeg-static`、`ffprobe-static` 的 asar unpack/runtime modules，避免 native binary 或可执行文件被打包到不可执行位置。
+
+### fix(core-app): normalize app identity and display-name indexing
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-provider,app-scanner,darwin,win,display-name-sync-utils}.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/*.{test,ts}`
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - AppProvider 将搜索索引 itemId 收敛到 canonical `appIdentity`，重建关键词前会清理 path/bundleId/launchTarget 等历史 itemId，避免同一 app 在 `search_index` 中分裂成多条记录。
+  - 应用扫描新增 `identityKind`、`displayNameSource`、`displayNameQuality` 元数据并持久化到 `file_extensions`，诊断接口同步暴露这些字段；Windows desktop app 允许没有 `bundleId`。
+  - macOS 新鲜扫描优先读取 `InfoPlist.strings` 本地化名称，mdls 增量扫描会覆盖旧的 filename/manifest fallback；已有 localized/system 名称不会被低质量来源降级。
+  - Windows UWP 使用 AUMID canonical identity、PFN 作为可选 bundle alias；desktop/shortcut 将 Start Menu 名称、shortcut 名、target exe/path 合并到 aliases。
+  - 设置页文案区分“文件索引重建”和“应用关键词/元数据重扫”，避免误以为文件索引重建会刷新 app 展示名。
+
+### ci(release): harden beta release workflow
+
+- `.github/workflows/build-and-release.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/package-ci.yml`
+- `.github/workflows/package-*-publish.yml`
+- `.github/workflows/{omnipanel-gate,package-utils-ci,package-unplugin-ci,pilot-ci,release-drafter}.yml`
+- `package.json`
+- `apps/core-app/package.json`
+- `apps/core-app/scripts/build-target.js`
+- `notes/update_2.4.10-beta.19.{zh,en}.md`
+  - `build-and-release` 新增显式 `beta` release type，手动触发默认 beta；tag 触发会从 `v*-beta*` / `*snapshot*` 自动推导 beta/snapshot/release 构建类型，避免 beta tag 进入 release 分支。
+  - CoreApp 新增 `build:beta` / `build:beta:{win,mac,linux}`，根 workspace 同步新增平台脚本；beta 版本保留 `BETA` 运行时 metadata，但继续复用 snapshot packaging policy 与 Windows builder metadata 兼容转换。
+  - 发布构建统一 Node `22.16.0`、pnpm `10.32.1`、frozen lockfile install 与 `pnpm approve-builds --all`；上传 artifact 收窄到安装包、压缩包和 updater metadata，减少 release 汇总下载体积。
+  - `build-and-release` 增加 workflow concurrency 与 job 最小权限；`sync-nexus-release` 保留 `contents: read`，Release 创建 job 只在需要上传 release 时授予 `contents: write`。
+  - 主 PR CI 从 `pull_request_target` 改为只读 `pull_request`，不再 checkout PR head 时携带写权限；主线分支过滤覆盖 `main/master`。
+  - reusable package CI 与 package publish workflow 统一 `pnpm/action-setup@v4`；`omnipanel-gate`、utils/unplugin package CI、Pilot CI 与 Release Drafter 补齐 `master/main` 触发口径。
+  - 补齐 `2.4.10-beta.19` 中英文 release notes，明确该版本仍为 beta 测试包，不宣称 Windows 真机 acceptance、性能采样和 Nexus Release Evidence 已完成。
+
 ### refactor(core-app): unify Nexus runtime API server resolver
 
 - `packages/utils/env`

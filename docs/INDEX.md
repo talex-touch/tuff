@@ -30,6 +30,7 @@
 ## 状态快照（2026-05-12，统一口径）
 
 - **当前工作区基线**：`2.4.10-beta.19`（根包与 CoreApp 对齐）。
+- **2.4.10-beta.19 发布准备（2026-05-12）**：`build-and-release` 已补显式 beta release type，tag 触发可从 `v*-beta*` 自动进入 beta 预发布语义；CI/CD 统一 Node `22.16.0` 与 pnpm `10.32.1`，PR CI 改为只读 `pull_request`，release artifact 上传范围收窄到安装包、压缩包与 updater metadata；`notes/update_2.4.10-beta.19.{zh,en}.md` 已补齐，当前仍是 beta 测试包。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；不把全部跨平台回归压进 `2.4.10`。
 - **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence：Windows acceptance manifest 最终强门禁、微信/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测都必须通过；Nexus Release Evidence 写入闭环仍是发版阻塞项。
 - **2.4.11 必解门槛**：剩余 Windows/macOS 阻塞级人工回归、Linux best-effort 记录、Release Evidence 写入闭环、legacy/compat/size 清册退场项必须关闭或显式降权。

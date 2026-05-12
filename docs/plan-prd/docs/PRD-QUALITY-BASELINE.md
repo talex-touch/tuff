@@ -202,6 +202,9 @@
 - npm 自动发布链路在 registry 已存在同版本时必须转为“已发布成功”语义，禁止把重复版本冲突直接上浮为 release-blocking 失败。
 - Package CI 必须能在 clean runner 内自洽构建内部 workspace-only 依赖；跨 job 的 `needs` 只表达顺序，不得依赖上游 job 产出的本地 `dist` 残留。
 - beta / snapshot tag 创建的 GitHub Release 必须保持 pre-release 语义，不得误标为稳定版。
+- `build-and-release` 的手动 `release_type=beta` 与 `v*-beta*` tag 必须走 beta/pre-release 分支；CoreApp beta build 必须保留 `BETA` runtime metadata，并可复用 snapshot packaging policy。
+- Release 同步前必须存在 `notes/update_<version>.zh.md` 与 `.en.md`；缺失时不得宣称 Nexus release notes 已闭环。
+- 执行 PR 代码的 workflow 不得使用 `pull_request_target` 写权限；主 PR CI 必须使用只读 `pull_request`，高权限 release / label / release-drafter workflow 只处理仓库受控事件。
 - 预发布不得覆盖 npm 默认安装通道（`next` 与 `latest` 分离）。
 - 发布后需同步 Nexus 可观测入口（release 或 update news）。
 

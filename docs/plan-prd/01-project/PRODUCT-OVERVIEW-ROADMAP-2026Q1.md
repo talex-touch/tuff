@@ -57,6 +57,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Windows/macOS release-blocking 能力必须有真实设备证据，Linux 保持 documented best-effort 且用户可见限制原因。
 - 生产 API 禁止返回固定假值成功；能力不可用时必须返回 `unavailable + reason` 或显式错误码。
 - 插件与 renderer 持久化不得绕过 Storage/Security 规则保存敏感本地路径、token、key 或业务明文。
+- 2026-05-12 发布链路收口：`build-and-release` 已显式支持 beta release type，`v*-beta*` tag 会进入 beta/pre-release 语义；CoreApp beta build 保留 `BETA` runtime metadata 并复用 snapshot packaging policy；主 PR CI 已从 `pull_request_target` 收窄为只读 `pull_request`，release artifact 上传只保留发布资产与 updater metadata。
 - 2026-05-11 治理切片已在第一治理切片基础上继续推进：`system:permission:*` / `omni-panel:feature:*` 三段 retained raw event 已无损迁到 typed builder，`typedMigrationCandidates` 当前为 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，lint 不再串全量架构债务，release 仍走 strict size/docs 门禁。
 
 ## 3. 质量约束（全项目强制）
