@@ -64,19 +64,19 @@ describe('resolveTuffNexusBaseUrl', () => {
     ).toBe('https://runtime.example.test')
   })
 
-  it('ignores removed legacy Nexus env names', () => {
-    const legacyEnv = {
-      [['VITE', 'NEXUS', 'URL'].join('_')]: 'http://legacy-vite.test',
-      [['NEXUS', 'API', 'BASE'].join('_')]: 'http://legacy-api.test',
-      [['NEXUS', 'API', 'BASE', 'LOCAL'].join('_')]: 'http://legacy-local.test',
-      [['TPEX', 'API', 'BASE'].join('_')]: 'http://legacy-tpex.test',
-      [['AUTH', 'ORIGIN'].join('_')]: 'http://legacy-auth.test',
-      [['TUFF', 'LOCAL', 'BASE', 'URL'].join('_')]: 'http://legacy-local-base.test'
+  it('ignores removed Nexus env aliases', () => {
+    const removedEnvAliases = {
+      [['VITE', 'NEXUS', 'URL'].join('_')]: 'http://old-vite.test',
+      [['NEXUS', 'API', 'BASE'].join('_')]: 'http://old-api.test',
+      [['NEXUS', 'API', 'BASE', 'LOCAL'].join('_')]: 'http://old-local.test',
+      [['TPEX', 'API', 'BASE'].join('_')]: 'http://old-tpex.test',
+      [['AUTH', 'ORIGIN'].join('_')]: 'http://old-auth.test',
+      [['TUFF', 'LOCAL', 'BASE', 'URL'].join('_')]: 'http://old-local-base.test'
     }
 
     expect(
       resolveTuffNexusBaseUrl({
-        env: legacyEnv
+        env: removedEnvAliases
       })
     ).toBe(NEXUS_BASE_URL)
   })
