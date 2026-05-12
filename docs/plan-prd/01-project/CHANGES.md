@@ -5,6 +5,14 @@
 
 ## 2026-05-12
 
+### fix(core-app): skip unresolved optional packaged runtime modules
+
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `apps/core-app/src/main/core/runtime-modules.contract.test.ts`
+  - Packaged runtime closure 对缺失的 `optionalDependencies` 恢复 skip-optional 策略，避免 `esbuild` 等包声明的非目标平台 optional package（如 `@esbuild/aix-ppc64`）在 CI 打包时被误判为必须依赖。
+  - 目标平台 `@esbuild/*` 二进制仍由 `verifyPackagedEsbuildBinaries()` fail-fast 校验，确保实际运行平台需要的 compiler binary 必须进入 `resources/node_modules` 且可执行。
+  - 补充 runtime modules contract，固定 packaged closure 不会因缺失 optional platform package 失败。
+
 ### fix(core-app): scope macOS Spotlight file search
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`

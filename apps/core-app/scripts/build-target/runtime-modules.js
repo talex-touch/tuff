@@ -578,7 +578,7 @@ function collectPackagedRuntimeModuleEntries(
     ...options,
     dependencyTypes: options.dependencyTypes || ['dependencies', 'optionalDependencies'],
     dedupeBy: options.dedupeBy || 'name',
-    missingDependencyStrategy: options.missingDependencyStrategy || 'throw'
+    missingDependencyStrategy: options.missingDependencyStrategy || 'skip-optional'
   }).modules
 }
 
