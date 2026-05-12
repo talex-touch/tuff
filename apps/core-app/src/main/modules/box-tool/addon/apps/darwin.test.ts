@@ -28,7 +28,7 @@ async function loadSubject() {
 async function createTempAppBundle(
   name: string,
   plistDisplayName: string,
-  options?: { localizedDisplayName?: string; iconFile?: string }
+  options?: { localizedDisplayName?: string; localizedDir?: string; iconFile?: string }
 ): Promise<string> {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'darwin-app-test-'))
   const appPath = path.join(tmpRoot, `${name}.app`)
@@ -65,7 +65,7 @@ async function createTempAppBundle(
   }
 
   if (options?.localizedDisplayName) {
-    const localizedDir = path.join(resourcesPath, 'zh-Hans.lproj')
+    const localizedDir = path.join(resourcesPath, options.localizedDir ?? 'zh-Hans.lproj')
     await fs.mkdir(localizedDir, { recursive: true })
     await fs.writeFile(
       path.join(localizedDir, 'InfoPlist.strings'),
@@ -135,6 +135,9 @@ describe('darwin app info', () => {
       expect.objectContaining({
         name: 'WeChat',
         displayName: '微信',
+        displayNameSource: 'InfoPlist.strings',
+        displayNameQuality: 'localized',
+        identityKind: 'macos-path',
         bundleId: 'com.example.wechat',
         path: appPath
       })
@@ -157,6 +160,30 @@ describe('darwin app info', () => {
         name: 'NeteaseMusic 2',
         displayName: '网易云音乐',
         alternateNames: expect.arrayContaining(['NeteaseMusic', 'NeteaseMusic 2'])
+      })
+    )
+    expect(execFileSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('reads zh_CN InfoPlist.strings for WeChat developer tools', async () => {
+    const tempRoot = await createTempAppBundle('wechatwebdevtools', 'wechatwebdevtools', {
+      localizedDisplayName: '微信开发者工具',
+      localizedDir: 'zh_CN.lproj'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'wechatwebdevtools.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo).toEqual(
+      expect.objectContaining({
+        name: 'wechatwebdevtools',
+        displayName: '微信开发者工具',
+        displayNameSource: 'InfoPlist.strings',
+        displayNameQuality: 'localized',
+        identityKind: 'macos-path',
+        alternateNames: expect.arrayContaining(['wechatwebdevtools'])
       })
     )
     expect(execFileSafeMock).not.toHaveBeenCalled()

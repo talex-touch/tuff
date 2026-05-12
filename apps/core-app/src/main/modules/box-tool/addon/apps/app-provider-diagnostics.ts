@@ -43,6 +43,9 @@ export interface AppProviderDiagnosticsContext {
 }
 
 const APP_IDENTITY_EXTENSION_KEY = 'appIdentity'
+const APP_IDENTITY_KIND_EXTENSION_KEY = 'identityKind'
+const APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY = 'displayNameSource'
+const APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY = 'displayNameQuality'
 const APP_ENTRY_SOURCE_EXTENSION_KEY = 'entrySource'
 const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 
@@ -213,6 +216,7 @@ function scoreDiagnosticTarget(
     [app.displayName, 94],
     [app.name, 92],
     [appInfo.fileName, 90],
+    [appInfo.launchTarget, 89],
     [fileBaseName, 88],
     ...alternateNames.map((name): [string, number] => [name, 86])
   ]
@@ -228,6 +232,7 @@ function scoreDiagnosticTarget(
     [app.name, 68],
     [appInfo.fileName, 66],
     [fileBaseName, 64],
+    [appInfo.launchTarget, 50],
     ...alternateNames.map((name): [string, number] => [name, 62]),
     [app.path, 48],
     [app.extensions.bundleId, 44],
@@ -259,6 +264,13 @@ function toDiagnosticApp(
     displayName: resolvedDisplayName || undefined,
     rawDisplayName: rawDisplayName || undefined,
     displayNameStatus,
+    identityKind: app.extensions[
+      APP_IDENTITY_KIND_EXTENSION_KEY
+    ] as AppIndexDiagnosticApp['identityKind'],
+    displayNameSource: app.extensions[APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY] || undefined,
+    displayNameQuality: app.extensions[
+      APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY
+    ] as AppIndexDiagnosticApp['displayNameQuality'],
     iconPresent: Boolean(appInfo.icon?.trim()),
     fileName: appInfo.fileName,
     bundleId: app.extensions.bundleId || undefined,

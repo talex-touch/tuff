@@ -5,7 +5,7 @@ import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
-import type { ScannedAppInfo } from './app-types'
+import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
 import { getAppIconCacheDir, getAppIconCachePath } from './app-icon-cache'
 import { readLocalizedStringsFile } from './localized-strings-parser'
 import { createLogger } from '../../../../utils/logger'
@@ -64,6 +64,43 @@ function normalizeDisplayNameCandidate(rawValue: string | null | undefined): str
   }
 
   return normalizedValue
+}
+
+function resolveDarwinDisplayName(
+  localizedName: string | null,
+  plistDisplayName: string | null,
+  bundleName: string | null,
+  fileName: string
+): {
+  displayName: string | null
+  displayNameSource: string
+  displayNameQuality: AppDisplayNameQuality
+} {
+  const candidates: Array<{
+    value: string | null
+    source: string
+    quality: AppDisplayNameQuality
+  }> = [
+    { value: localizedName, source: 'InfoPlist.strings', quality: 'localized' },
+    {
+      value: normalizeDisplayNameCandidate(plistDisplayName),
+      source: 'CFBundleDisplayName',
+      quality: 'manifest'
+    },
+    {
+      value: normalizeDisplayNameCandidate(bundleName),
+      source: 'CFBundleName',
+      quality: 'manifest'
+    },
+    { value: fileName, source: 'filename', quality: 'filename' }
+  ]
+
+  const matched = candidates.find((candidate) => candidate.value)
+  return {
+    displayName: matched?.value ?? null,
+    displayNameSource: matched?.source ?? 'fallback',
+    displayNameQuality: matched?.quality ?? 'fallback'
+  }
 }
 
 function collectAlternateDisplayNames(
@@ -241,10 +278,13 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const localizedName = await getLocalizedDisplayName(appPath)
 
   // mdls display-name corrections are handled by the background mdls scan.
-  const displayName =
-    localizedName ||
-    normalizeDisplayNameCandidate(plistDisplayName) ||
-    normalizeDisplayNameCandidate(bundleName)
+  const displayNameMeta = resolveDarwinDisplayName(
+    localizedName,
+    plistDisplayName,
+    bundleName,
+    fileName
+  )
+  const displayName = displayNameMeta.displayName
   const alternateNames = collectAlternateDisplayNames(displayName, [
     localizedName,
     plistDisplayName,
@@ -265,6 +305,9 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   return {
     name,
     displayName: displayName || undefined,
+    displayNameSource: displayNameMeta.displayNameSource,
+    displayNameQuality: displayNameMeta.displayNameQuality,
+    identityKind: 'macos-path',
     fileName,
     alternateNames: alternateNames.length > 0 ? alternateNames : undefined,
     path: appPath,

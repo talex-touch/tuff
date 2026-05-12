@@ -571,6 +571,7 @@ describe('appProvider rebuild maintenance', () => {
     const scannedApp = {
       name: 'WeChat',
       displayName: 'WeChat',
+      displayNameQuality: 'localized',
       path: 'D:\\Weixin\\Weixin.exe',
       icon: '',
       bundleId: '',
@@ -610,7 +611,10 @@ describe('appProvider rebuild maintenance', () => {
     privateProvider.fetchExtensionsForFiles = vi.fn(async (files: unknown[]) =>
       files.map((file) => ({
         ...(file as typeof dbRow),
-        extensions: { appIdentity: 'path:d:\\weixin\\weixin.exe' }
+        extensions: {
+          appIdentity: 'path:d:\\weixin\\weixin.exe',
+          displayNameQuality: 'filename'
+        }
       }))
     )
     privateProvider._recordMissingIconApps = vi.fn().mockResolvedValue(undefined)
@@ -815,7 +819,11 @@ describe('appProvider rebuild maintenance', () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
     const indexItemsMock = vi.fn(async () => undefined)
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
+    const removeItemsMock = vi.fn(async () => undefined)
+    privateProvider.searchIndex = {
+      indexItems: indexItemsMock,
+      removeItems: removeItemsMock
+    }
 
     await privateProvider._syncKeywordsForApp({
       name: 'NeteaseMusic 2',
@@ -837,6 +845,7 @@ describe('appProvider rebuild maintenance', () => {
         keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
       })
     ])
+    expect(removeItemsMock).toHaveBeenCalledWith(['com.netease.163music'])
   })
 
   it('indexes Windows Store app keywords by UWP stable id', async () => {
@@ -873,7 +882,7 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
-  it('does not keep removing retired app item ids during steady-state keyword sync', async () => {
+  it('keeps steady-state keyword sync removal as a no-op when no legacy ids exist', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
     const indexItemsMock = vi.fn(async () => undefined)
@@ -887,7 +896,7 @@ describe('appProvider rebuild maintenance', () => {
       name: 'NeteaseMusic 2',
       displayName: 'NeteaseMusic 2',
       alternateNames: ['网易云音乐'],
-      bundleId: 'com.netease.163music',
+      bundleId: '',
       path: '/Applications/NeteaseMusic 2.app',
       launchKind: 'path',
       launchTarget: '/Applications/NeteaseMusic 2.app',

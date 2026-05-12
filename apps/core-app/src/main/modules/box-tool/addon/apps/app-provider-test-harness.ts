@@ -214,11 +214,35 @@ vi.mock('./display-name-sync-utils', () => ({
     return fallbackName
   }),
   shouldUpdateDisplayName: vi.fn(
-    (current: string | null | undefined, next: string | null | undefined) => {
+    (
+      current: string | null | undefined,
+      next: string | null | undefined,
+      options?: {
+        currentQuality?: string | null
+        incomingQuality?: string | null
+      }
+    ) => {
+      const qualityRank: Record<string, number> = {
+        fallback: 0,
+        filename: 1,
+        registry: 2,
+        manifest: 3,
+        system: 4,
+        localized: 5
+      }
       const normalizedCurrent = current ?? null
       const normalizedNext = next ?? null
       if (typeof normalizedNext === 'string' && normalizedNext.includes('\uFFFD')) return false
       if (typeof normalizedCurrent === 'string' && normalizedCurrent.includes('\uFFFD')) return true
+      if (!normalizedNext) return false
+      if (!normalizedCurrent) return true
+      const currentRank = options?.currentQuality ? qualityRank[options.currentQuality] : undefined
+      const incomingRank = options?.incomingQuality
+        ? qualityRank[options.incomingQuality]
+        : undefined
+      if (currentRank !== undefined && incomingRank !== undefined && incomingRank < currentRank) {
+        return false
+      }
       return normalizedCurrent !== normalizedNext
     }
   )
@@ -347,6 +371,9 @@ export type AppProviderPrivate = {
       displayPath?: string
       description?: string
       alternateNames?: string[]
+      identityKind?: string
+      displayNameSource?: string
+      displayNameQuality?: string
     }
   ) => Array<{ fileId: number; key: string; value: string }>
   syncScannedAppExtensions: (
@@ -362,6 +389,9 @@ export type AppProviderPrivate = {
       displayPath?: string
       description?: string
       alternateNames?: string[]
+      identityKind?: string
+      displayNameSource?: string
+      displayNameQuality?: string
     }
   ) => Promise<void>
   context: unknown
@@ -377,6 +407,7 @@ export type AppProviderPrivate = {
     alternateNames?: string[]
     bundleId?: string
     displayName?: string
+    displayNameQuality?: string
     fileName?: string
     icon?: string
     lastModified?: Date
@@ -385,11 +416,13 @@ export type AppProviderPrivate = {
     name: string
     path: string
     stableId?: string
+    uniqueId?: string
   }) => Promise<Set<string>>
   _syncKeywordsForApp: (app: {
     alternateNames?: string[]
     bundleId?: string
     displayName?: string
+    displayNameQuality?: string
     fileName?: string
     icon?: string
     lastModified?: Date
@@ -398,6 +431,7 @@ export type AppProviderPrivate = {
     name: string
     path: string
     stableId?: string
+    uniqueId?: string
   }) => Promise<void>
   diagnoseAppSearch: (request: { target: string; query?: string }) => Promise<unknown>
   reindexAppSearchTarget: (request: {
@@ -424,6 +458,7 @@ export type AppProviderPrivate = {
     description?: string
     displayName?: string
     launchKind: string
+    displayNameQuality?: string
   }
 }
 

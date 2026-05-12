@@ -28,6 +28,9 @@ describe('appProvider app search diagnostics recall', () => {
         appIdentity: 'path:d:\\weixin\\weixin.exe',
         bundleId: '',
         alternateNames: JSON.stringify(['WeChat']),
+        identityKind: 'windows-path',
+        displayNameSource: 'Get-StartApps',
+        displayNameQuality: 'system',
         launchKind: 'path',
         launchTarget: 'D:\\Weixin\\Weixin.exe'
       }
@@ -96,7 +99,10 @@ describe('appProvider app search diagnostics recall', () => {
       app: {
         path: 'D:\\Weixin\\Weixin.exe',
         displayName: '微信',
-        alternateNames: ['WeChat']
+        alternateNames: ['WeChat'],
+        identityKind: 'windows-path',
+        displayNameSource: 'Get-StartApps',
+        displayNameQuality: 'system'
       },
       query: {
         normalized: 'weixin',

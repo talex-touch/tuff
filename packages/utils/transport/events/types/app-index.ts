@@ -79,6 +79,22 @@ export interface AppIndexDiagnosticApp {
   displayName?: string;
   rawDisplayName?: string;
   displayNameStatus?: "clean" | "fallback" | "missing";
+  identityKind?:
+    | "macos-path"
+    | "macos-bundle"
+    | "windows-uwp"
+    | "windows-shortcut"
+    | "windows-path"
+    | "linux-desktop"
+    | "fallback";
+  displayNameSource?: string;
+  displayNameQuality?:
+    | "localized"
+    | "system"
+    | "manifest"
+    | "registry"
+    | "filename"
+    | "fallback";
   iconPresent?: boolean;
   fileName?: string;
   bundleId?: string;
