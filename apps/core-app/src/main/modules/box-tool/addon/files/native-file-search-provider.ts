@@ -7,12 +7,14 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
-import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { shell } from 'electron'
+import { app, shell } from 'electron'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
+import { getMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
+import type { FileIndexSettings } from './types'
 import { mapFileToTuffItem } from './utils'
 
 export interface NativeFileSearchCapabilities {
@@ -42,12 +44,93 @@ type LinuxNativeSearchBackend = 'locate' | 'tracker3' | 'tracker' | 'baloo'
 const nativeFileSearchLog = getLogger('file-provider').child('Native')
 const execFileAsync = promisify(execFile)
 const NATIVE_SEARCH_MAX_RESULTS = 50
+const MAC_SPOTLIGHT_DEFAULT_PATH_NAMES = [
+  'documents',
+  'downloads',
+  'desktop',
+  'music',
+  'pictures',
+  'videos'
+] as const
+
+interface MacSpotlightSearchRoot {
+  path: string
+  key: string
+}
 
 function isMacApplicationBundlePath(filePath: string): boolean {
   return filePath
     .replace(/\\/g, '/')
     .split('/')
     .some((segment) => segment.toLowerCase().endsWith('.app'))
+}
+
+function normalizeMacSpotlightPathKey(filePath: string): string {
+  const resolved = path.resolve(filePath.trim()).replace(/\\/g, '/')
+  const withoutTrailingSlash = resolved.length > 1 ? resolved.replace(/\/+$/, '') : resolved
+  return withoutTrailingSlash.toLowerCase()
+}
+
+function createMacSpotlightSearchRoots(candidates: string[]): MacSpotlightSearchRoot[] {
+  const roots: MacSpotlightSearchRoot[] = []
+  const seen = new Set<string>()
+
+  for (const candidate of candidates) {
+    const trimmed = typeof candidate === 'string' ? candidate.trim() : ''
+    if (!trimmed) continue
+
+    const resolved = path.resolve(trimmed)
+    const key = normalizeMacSpotlightPathKey(resolved)
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    roots.push({ path: resolved, key })
+  }
+
+  return roots
+}
+
+function readFileIndexExtraPaths(): string[] {
+  try {
+    const settings = getMainConfig(StorageList.FILE_INDEX_SETTINGS) as
+      | Partial<FileIndexSettings>
+      | undefined
+    return Array.isArray(settings?.extraPaths)
+      ? settings.extraPaths.filter((value): value is string => typeof value === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function getDefaultMacSpotlightSearchPathCandidates(): string[] {
+  const candidates: string[] = []
+
+  for (const name of MAC_SPOTLIGHT_DEFAULT_PATH_NAMES) {
+    try {
+      const value = app.getPath(name)
+      if (value) candidates.push(value)
+    } catch {
+      // Ignore unavailable Electron paths and continue with remaining roots.
+    }
+  }
+
+  return candidates
+}
+
+function getMacSpotlightSearchRoots(): MacSpotlightSearchRoot[] {
+  return createMacSpotlightSearchRoots([
+    ...getDefaultMacSpotlightSearchPathCandidates(),
+    ...readFileIndexExtraPaths()
+  ])
+}
+
+function isWithinMacSpotlightSearchRoots(
+  filePath: string,
+  roots: readonly MacSpotlightSearchRoot[]
+): boolean {
+  const fileKey = normalizeMacSpotlightPathKey(filePath)
+  return roots.some((root) => fileKey === root.key || fileKey.startsWith(`${root.key}/`))
 }
 
 function emptyResult(query: TuffQuery): TuffSearchResult {
@@ -244,9 +327,15 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
     text: string,
     signal: AbortSignal
   ): Promise<NativeFileSearchResult[]> {
+    const searchRoots = getMacSpotlightSearchRoots()
+    if (searchRoots.length === 0) {
+      return []
+    }
+
     const escaped = text.replace(/["\\]/g, '\\$&')
     const query = `(kMDItemFSName == "*${escaped}*"cd || kMDItemDisplayName == "*${escaped}*"cd)`
-    const { stdout } = await execFileAsync('mdfind', ['-0', query], {
+    const scopeArgs = searchRoots.flatMap((root) => ['-onlyin', root.path])
+    const { stdout } = await execFileAsync('mdfind', ['-0', ...scopeArgs, query], {
       timeout: 1200,
       maxBuffer: 1024 * 1024 * 5,
       signal
@@ -257,6 +346,7 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
           .split('\0')
           .map((entry) => entry.trim())
           .filter(Boolean)
+          .filter((entry) => isWithinMacSpotlightSearchRoots(entry, searchRoots))
           .filter((entry) => !isMacApplicationBundlePath(entry))
       )
     ).slice(0, NATIVE_SEARCH_MAX_RESULTS)
@@ -348,5 +438,7 @@ export const macSpotlightFileProvider = new MacSpotlightFileProvider()
 export const linuxNativeFileProvider = new LinuxNativeFileProvider()
 
 export const __test__ = {
-  isMacApplicationBundlePath
+  createMacSpotlightSearchRoots,
+  isMacApplicationBundlePath,
+  isWithinMacSpotlightSearchRoots
 }
