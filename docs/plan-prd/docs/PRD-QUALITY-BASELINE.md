@@ -13,9 +13,10 @@
 - 文档盘点历史快照参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前优先级路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
 - 当前主线动作为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；`Nexus 设备授权风控` 保留实施文档与历史入口，Phase 1 频控/冷却/审计/长期授权时间窗/可信设备白名单已完成，非当前主线。
-- 2026-05-10 跨平台兼容与占位实现审计已新增：`docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md`，后续 PRD 必须区分真实 unavailable、开发 mock 与生产假值成功。
+- 2026-05-12 跨平台兼容与占位实现复核已新增：`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`；`2026-05-10` 审计保留为历史基线，当前 PRD 必须继续区分真实 unavailable、开发 mock 与生产假值成功，并把 Windows/macOS 真机 evidence、CLI token storage、retained raw definition 与 `compat-file=5` 作为后续收口口径。
 - 2026-05-11 架构治理切片已新增并收紧：transport guard 独立输出 raw send / retained raw definition / typed candidate，当前三段 typed candidate 为 `0`，retained raw definition 上限为 `264`；Pilot stat 与 mock payment 假成功路径已门控；插件图片历史路径不得继续长期写 renderer `localStorage`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`update-system.ts` 与 `omni-panel/index.ts` 已拆出纯 utility/helper 并退出 grown list，CoreApp 当前不在 grown list；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders，growth exception cap 收紧到 `1792`；`app-provider.test.ts` 已拆出测试 harness 并退出 grown list；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 state composable 并降到阈值以下；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，`lint/lint:fix` 只负责 ESLint 与 intelligence check，架构债务由 `architecture:guard` / `release:guard` 承载。
 - 2026-05-11 Nexus Intelligence provider 已镜像到 Provider Registry；Provider metadata 不保存明文 API key，密钥只通过 secure store `authRef` 绑定；dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已统一经 bridge 合并读取旧表与 registry mirror，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史，OpenAI-compatible AI mirror 已可通过 Scene 默认 adapter 执行 `vision.ocr`；Dashboard Admin Provider Registry 已补系统级本地 `overlay.render` provider 与 `corebox.screenshot.translate` Scene 的幂等 seed 入口，且不会把 user-scope AI mirror OCR 自动绑入 system Scene；旧表退场、user-scope AI mirror OCR 绑定策略与高级策略仍是后续门禁。
+- 2026-05-12 CI/CD warning 迁移已建立：GitHub Actions JavaScript Action `uses:` 依赖统一到 Node 24-compatible major baseline，项目业务 Node runtime 继续保持 `22.16.0`；后续 CI warning 收口不得通过 `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过。
 - 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
@@ -67,6 +68,7 @@
 - 2.5.0 AI 类 PRD 必须保持桌面入口收口边界：Stable 能力只承诺文本 + OCR；Workflow / Pilot 联动必须标为 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 必须标为 Experimental 或 2.5.x 后续，禁止作为 2.5.0 稳定承诺。
 - 假值治理门禁：生产 API / dashboard / runtime 不得默认返回 Mock CPU、固定磁盘/内存、mock 支付 URL、伪成功空结果；开发 mock 必须由显式环境变量或配置开关启用，关闭时返回明确错误码与 reason。
 - Transport 统计门禁：文档和 guard 必须区分 raw send violation 与 retained raw event definition；新增符合 `namespace/module/action` 结构的事件必须使用 typed builder；当前三段 migration candidate 必须保持 `0`，下载迁移 push events 以 `DownloadEvents.migration.progress/result` 为 typed registry SoT。
+- CI/CD Action runtime 门禁：`.github/workflows` 中 JavaScript Actions 必须使用 Node 24-compatible major；保留项目业务 `node-version: 22.16.0`，禁止把 Actions runtime warning 迁移处理成业务 Node 版本升级。
 - SRP/size 收敛门禁：超长模块每完成一个行为等价切片就必须同步降低对应 allowlist / growth exception cap；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；Tuffex `TxFlipOverlay.vue` stack helper 切片已把组件降到 `1194` 行并清退 size exception；Nexus `provider-registry.vue` 已拆出 admin composable 并降到 `999` 行，`provider-registry.api.test.ts` 已拆出测试 helper 并降到 `951` 行；CoreApp Windows acceptance verifier 已拆出 command requirements、case/performance evidence spec 与 manifest test helper，`windows-acceptance-manifest-verifier.ts` 降到 `1136` 行，`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行；`recommendation-engine.ts` 已拆出 `recommendation-utils.ts` 并降到 `1869` 行；`search-core.ts` 已拆出 `search-core-utils.ts` 并降到 `2475` 行；`app-provider.test.ts` 已拆出 `app-provider-test-harness.ts` 并降到 `1400` 行；`app-provider.ts` 已拆出 `app-provider-path-utils.ts` 与 `app-provider-source-scanner.ts` 并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 `deepagent-input.ts` 并降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已拆出 `update-asset-utils.ts` 并降到 `1610` 行；`omni-panel/index.ts` 已拆出 `omni-panel-builtin-features.ts` 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 `usePlaygroundState.ts` 并降到 `919` 行；Nexus `useSignIn.ts` 已拆出 `sign-in-redirect-utils.ts` 并降到 `1538` 行，`assistant.post.ts` 已拆出 `requestAuditMeta.ts` 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已拆出 `tuffIntelligenceLabTools.ts` 并降到 `3408` 行，`telemetryStore.ts` 已拆出 `telemetrySanitizer.ts` 并降到 `1502` 行，`en.ts/zh.ts` 已拆出 legal shard 并低于 exception cap；当前 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`，后续治理聚焦剩余业务闭环与 Windows 真机 evidence。
 
 ### 3.2 可靠性约束
@@ -95,20 +97,20 @@
 - 对外行为变化必须同步 Nexus 对应开发文档。
 - 推荐统一验收入口：`pnpm quality:gate`（`architecture:guard + network:guard + test:targeted + typecheck(node/web)`）；release/milestone 使用 `pnpm release:guard` 追加 strict size 与 strict docs。
 
-## 4. 项目质量审查优化计划（2026-05-10）
+## 4. 项目质量审查优化计划（2026-05-12 复核）
 
-本节用于承接 `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` 的审查结论，把跨平台兼容、占位/假实现、transport 收口与 SRP 拆分转成后续迭代的质量门禁。
+本节用于承接 `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` 与 `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md` 的审查结论，把跨平台兼容、占位/假实现、transport 收口、安全凭据与 SRP 拆分转成后续迭代的质量门禁。
 
 ### 4.1 分阶段治理顺序
 
 | 阶段 | 目标 | 验收要求 |
 | --- | --- | --- |
 | Phase 0 | `2.4.10` 收口，只补 Windows 真机证据，不扩大兼容层 | Windows App 索引、更新安装、DivisionBox detached widget、复制 app path 等 acceptance manifest 留证；macOS/Linux 不因本阶段降级或新增兼容分支 |
-| Phase 1 | `2.4.11` blocker 清零 | Pilot 假值治理、支付 mock 环境门控、`plugins/touch-image` storage 迁移、Linux best-effort 证据归档必须完成或显式降权 |
+| Phase 1 | `2.4.11` blocker 清零 | `compat-file=5` 退场评估、retained raw definition 高频路径迁移、CLI token storage 安全收口、插件命令能力统一 degraded/unsupported 诊断与 Linux best-effort 证据归档必须完成或显式降权 |
 | Phase 2 | Transport / SDK 收口 | 区分生产 raw send violation 与 retained `defineRawEvent` definition；优先收口 CoreBox、terminal、auth、sync、opener 等高频/高敏路径 |
 | Phase 3 | SRP 结构拆分 | 优先拆分 `clipboard.ts`、`search-core.ts`、`plugin.ts/plugin-module`、`app-provider.ts`；每次拆分保持外部契约兼容并补最近路径测试 |
 
-切片执行状态（2026-05-11）：Phase 1 中 Pilot stat 假值、mock payment 默认成功与 `plugins/touch-image` localStorage 历史持久化已先行收口；Phase 2 指标口径已在 transport boundary test 固化，当前三段 retained typed candidates 已迁移清零；Phase 3 已完成 `clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 行为等价切片，并拆出 `recommendation-engine.ts` 纯 utility、`search-core.ts` 纯 helper、`app-provider.ts` path helper 与 source scanner facade、`deepagent-engine.ts` input builders、`update-system.ts` asset helper、`omni-panel/index.ts` builtin definitions、`app-provider.test.ts` harness 与 `intelligence-uikit` playground state；同日已把 guard 调整为重构期分层策略，历史 size debt 先报告，changed/release strict 继续防回潮。
+切片执行状态（2026-05-12）：Phase 1 中 Pilot stat 假值、mock payment 默认成功与 `plugins/touch-image` localStorage 历史持久化已先行收口；当前 release blocker 收敛为 Windows/macOS 真机 evidence，`compat-file=5`、retained raw definition 高频路径、CLI token storage 与插件命令能力统一诊断保留为 `2.4.11` 治理余量。Phase 2 指标口径已在 transport boundary test 固化，当前三段 retained typed candidates 已迁移清零；Phase 3 已完成 `clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 行为等价切片，并拆出 `recommendation-engine.ts` 纯 utility、`search-core.ts` 纯 helper、`app-provider.ts` path helper 与 source scanner facade、`deepagent-engine.ts` input builders、`update-system.ts` asset helper、`omni-panel/index.ts` builtin definitions、`app-provider.test.ts` harness 与 `intelligence-uikit` playground state；guard 已调整为重构期分层策略，历史 size debt 先报告，changed/release strict 继续防回潮。
 
 ### 4.2 审查门禁
 

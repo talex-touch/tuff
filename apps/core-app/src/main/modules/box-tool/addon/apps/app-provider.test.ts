@@ -882,7 +882,7 @@ describe('appProvider rebuild maintenance', () => {
     ])
   })
 
-  it('keeps steady-state keyword sync removal as a no-op when no legacy ids exist', async () => {
+  it('keeps steady-state keyword sync removal as a no-op when no retired ids exist', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
     const indexItemsMock = vi.fn(async () => undefined)

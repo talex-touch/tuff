@@ -57,6 +57,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Windows/macOS release-blocking 能力必须有真实设备证据，Linux 保持 documented best-effort 且用户可见限制原因。
 - 生产 API 禁止返回固定假值成功；能力不可用时必须返回 `unavailable + reason` 或显式错误码。
 - 插件与 renderer 持久化不得绕过 Storage/Security 规则保存敏感本地路径、token、key 或业务明文。
+- 2026-05-12 CI warning 迁移：GitHub Actions `uses:` 依赖已统一到 Node 24-compatible major baseline，消除 Node.js 20 action runtime deprecation warning；项目业务 Node runtime 仍固定为 `22.16.0`。
 - 2026-05-12 发布链路收口：`build-and-release` 已显式支持 beta release type，`v*-beta*` tag 会进入 beta/pre-release 语义；CoreApp beta build 保留 `BETA` runtime metadata 并复用 snapshot packaging policy；主 PR CI 已从 `pull_request_target` 收窄为只读 `pull_request`，release artifact 上传只保留发布资产与 updater metadata。
 - 2026-05-11 治理切片已在第一治理切片基础上继续推进：`system:permission:*` / `omni-panel:feature:*` 三段 retained raw event 已无损迁到 typed builder，`typedMigrationCandidates` 当前为 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，lint 不再串全量架构债务，release 仍走 strict size/docs 门禁。
 
@@ -100,6 +101,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 版本发布必须附带最小变更说明与风险说明。
 - 桌面构建产物必须附带运行时依赖完整性校验，关键主进程依赖链缺失时应在构建阶段直接失败，而不是留到用户启动时暴露。
 - beta / snapshot 标签发布必须保持 pre-release 语义，避免预发布资产进入稳定发布通道。
+- CI/CD JavaScript Action runtime 必须保持 Node 24-compatible major baseline；不得通过 `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过 warning，且不得把该迁移误解为项目业务 Node 版本升级。
 
 ### 3.4 文档约束
 - 功能行为变化需同步 `README.md` / `plan-prd` / `docs/INDEX.md` 至少一处。
@@ -110,7 +112,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 当前执行优先级调整为：先完成 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，再在 `2.4.11` 关闭剩余 Windows/macOS 阻塞级回归、Release Evidence 与清册退场项；`Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
 - Nexus Provider 聚合与 Scene 编排已进入架构蓝图；后续实现必须遵守 Provider/Scene 解耦、typed transport/domain SDK、Storage/Sync 与 Metering/Audit 边界。
 - 2.5.0 AI Plan PRD 已锁定：CoreBox AI Ask 最小 Stable 切片已落地；后续实现必须继续交付 CoreBox / OmniPanel 桌面入口闭环、OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue 与 P0 模板，禁止将范围扩大到全量多模态、Assistant 默认启用或 Nexus Scene runtime 编排。
-- 2026-05-10 跨平台兼容与占位实现审计已落地：CoreApp 平台能力合同方向正确；`2.4.11` 前需关闭 Pilot 假值成功路径、插件 localStorage 路径持久化、retained raw event 统计口径与超长模块 SRP 拆分。
+- 2026-05-12 跨平台兼容与占位实现复核已落地：`cross-platform-compat-placeholder-audit-2026-05-10.md` 保留为历史基线，当前执行口径以 `cross-platform-compat-placeholder-review-2026-05-12.md` 与 `TODO.md` 为准；Pilot 假值成功、mock payment 默认成功与 `touch-image` renderer localStorage 长期持久化已收口，`2.4.10` release blocker 收敛为 Windows/macOS 真机 evidence，`2.4.11` 后续聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
 - 2026-05-11 架构治理切片已继续落地：Pilot stat 改真实 runtime metrics，mock payment 必须显式 `PILOT_PAYMENT_MODE=mock`，touch-image 图片历史迁入 plugin storage SDK，Transport boundary test 输出 raw send / retained raw definition / typed candidate 独立指标；三段 typed candidate 清零，`clipboard.ts` 已降到 `1143` 行并清退 size exception，`app-provider.ts` source scanner 第一切片完成并收紧 growth exception cap。
 - 2026-05-11 Nexus AI provider 已同步镜像到 Provider Registry，API key 只进入 secure store 并通过 `authRef` 引用；dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已统一走 `listIntelligenceProvidersWithRegistryMirrors` / secure-store fallback，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史；OpenAI-compatible AI mirror 已可通过 Scene 默认 adapter 执行 `vision.ocr`；Dashboard Admin Provider Registry 已补系统级本地 `overlay.render` provider 与 `corebox.screenshot.translate` Scene 的幂等 seed 入口；下一步是旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略与高级策略。
 - 升级 strict 前置条件固定：连续 5 次 `docs:guard` 零告警 + 连续 2 周无口径漂移。

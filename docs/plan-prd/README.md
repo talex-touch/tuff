@@ -13,7 +13,8 @@
 - [一次性完整修复总方案（统一实施 PRD）](./02-architecture/UNIFIED-LEGACY-COMPAT-STRUCTURE-REMEDIATION-PRD-2026-03-16.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
 - [Nexus Provider 聚合与 Scene 编排重构 PRD](./02-architecture/nexus-provider-scene-aggregation-prd.md)
-- [跨平台兼容与占位实现审计报告（2026-05-10）](./report/cross-platform-compat-placeholder-audit-2026-05-10.md)
+- [跨平台兼容与占位实现复核报告（2026-05-12）](./report/cross-platform-compat-placeholder-review-2026-05-12.md)
+- [跨平台兼容与占位实现审计报告（2026-05-10，历史基线）](./report/cross-platform-compat-placeholder-audit-2026-05-10.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)
 - [长期债务池](./docs/TODO-BACKLOG-LONG-TERM.md)
 
@@ -53,7 +54,7 @@
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
-- 跨平台兼容审计（2026-05-10）：CoreApp 平台能力已具备显式 degraded/unsupported 合同；生产 raw send 直连未见新增命中；2026-05-11 当前三段 retained raw event candidate 已清零，retained raw definition 按测试扫描口径冻结为 `<=264`。
+- 跨平台兼容复核（2026-05-12）：2026-05-10 报告中的 Pilot stat 假值、mock payment 默认成功与 touch-image localStorage 历史持久化已收口；CoreApp 平台能力保持显式 degraded/unsupported 合同，生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；本轮 `compat:registry:guard`、`runtime:guard`、`docs:guard`、`transport-event-boundary.test.ts` 已通过。
 - Native transport V1 已从截图首切扩展为 `capabilities / screenshot / file-index / file / media` 五域：`NativeEvents.screenshot` 事件名保持不变，新增 `native:capabilities:*`、`native:file-index:*`、`native:file:*`、`native:media:*`；CoreApp `NativeCapabilitiesModule` 桥接现有 fileProvider/Everything status、文件 stat/open/reveal/tfile 与图片/视频媒体 metadata/thumbnail，大资源默认返回短期 `tfile://` 引用；媒体 thumbnail 已复用 FileProvider thumbnail worker，图片/HEIC 走 `sharp`，视频走内置 ffmpeg 抽帧，ffmpeg 不可用时 `media.thumbnail` 显式 degraded 且图片缩略图继续可用；插件调用必须按域声明 `window.capture`、`fs.index`、`fs.read` 或 `media.read`。
 - 架构治理切片（2026-05-11）：Transport boundary test 已拆出 `rawSendViolations / retainedRawEventDefinitions / typedMigrationCandidates`；Pilot stat 固定假值与 mock 支付默认成功已收口；`plugins/touch-image` 图片历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，`lint/lint:fix` 不再串全量架构债务，`size:guard:strict` 保留 release 红线。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。

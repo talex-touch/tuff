@@ -5,6 +5,29 @@
 
 ## 2026-05-12
 
+### ci(workflows): migrate GitHub Actions runtime to Node 24 baseline
+
+- `.github/workflows/*.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将 CI、package publish、release、Pilot image、PR label 与 release drafter workflow 的 JavaScript Actions 统一升级到 Node 24-compatible major baseline，消除 Node.js 20 action runtime deprecation warning。
+  - 保持项目业务 Node runtime 为 `22.16.0`，明确 Action runtime 迁移不得通过升级业务 Node、`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过。
+  - 发布链路 `build-and-release` 同步升级 upload/download artifact 与 release action，后续仍需通过 beta/draft release run 验证三端 artifact、GitHub Release 与 Nexus sync annotations。
+
+### docs(project): refresh cross-platform compatibility review
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - 新增 2026-05-12 跨平台兼容与占位实现复核报告，确认 2026-05-10 P0/P1 假成功路径已基本收口：Pilot runtime metrics、mock payment 显式环境门控、`touch-image` 图片历史迁入 plugin storage SDK。
+  - 同步六主文档入口，把当前 release blocker 收敛为 Windows/macOS 真机 evidence；后续 `2.4.11` 聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
+  - 清理 `app-provider.test.ts` 测试标题中的非行为性 legacy 关键词噪声，保持断言不变并恢复 `compat:registry:guard` 绿线。
+
 ### fix(core-app): skip unresolved optional packaged runtime modules
 
 - `apps/core-app/scripts/build-target/runtime-modules.js`

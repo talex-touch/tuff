@@ -16,7 +16,8 @@
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象入口
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 Plan PRD
-- `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` - 跨平台兼容与占位/假实现审计报告
+- `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md` - 跨平台兼容与占位/假实现复核报告
+- `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` - 跨平台兼容与占位/假实现审计报告（历史基线）
 - `docs/engineering/README.md` - 工程过程资料索引（plans / issues / code-review / reports）
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
 
@@ -83,7 +84,7 @@
 - **Nexus composed 截图翻译编排（2026-05-10）**：Scene Orchestrator 已支持 `vision.ocr -> text.translate -> overlay.render` 链式输出传递，图片置顶窗口可消费本地 `overlay.render` 客户端 overlay payload；OpenAI-compatible Intelligence mirror 已有默认 `vision.ocr` adapter，Dashboard Admin seed 已补系统级 overlay provider 与截图翻译 Scene 默认配置；生产闭环仍需补 user-scope AI mirror OCR 绑定策略、旧 AI provider 表退场与高级策略。
 - **Nexus AI Provider Registry check（2026-05-11）**：Intelligence provider registry mirror 已接入 Provider Registry check，Dashboard 可对 `chat.completion` 与 `vision.ocr` 执行探活并写入 `provider_health_checks`，Health 视图可继续统一查询 latency/error/degraded reason；`vision.ocr` 探活复用 OpenAI-compatible OCR adapter，不再用 chat probe 代替。
 - **Nexus Provider/Scene 默认 seed（2026-05-11）**：Dashboard Admin Provider Registry 页面加载前会幂等触发默认 seed，创建系统级本地 `custom-local-overlay` provider 与 `corebox.screenshot.translate` Scene，并只追加缺失的 system binding；不会把 user-scope AI mirror OCR provider 自动绑定进 system Scene，避免个人凭证跨用户误用。
-- **跨平台兼容与占位实现审计（2026-05-10）**：新增报告并锁定下一步：Windows/macOS 人工证据、Linux best-effort 记录、Pilot 假值/支付 mock 门控、插件 localStorage 路径迁移、retained raw event 指标拆分与超长模块 SRP 拆分；生产 raw send 直连未见新增命中，2026-05-11 当前三段 retained raw event candidate 已清零。
+- **跨平台兼容与占位实现复核（2026-05-12）**：2026-05-10 报告中的 Pilot stat 假值、payment mock 默认成功与 touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 上限冻结为 `<=264`；剩余重点是 Windows/macOS 真机证据、Linux best-effort 记录、`compat-file=5`、CLI token 明文 JSON 与超长模块 SRP 拆分。
 - **架构治理切片（2026-05-11）**：Transport guard 已拆出 raw send / retained raw definition / typed migration candidate 三类指标，retained raw definition 上限收紧为 `264`；Pilot `/system/serve/stat` 已改真实运行时指标，mock 支付默认成功由 `PILOT_PAYMENT_MODE=mock` 门控；`plugins/touch-image` 图片历史迁入 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，lint 不再被历史 size debt 阻塞，release 仍走 strict guard。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
 - **治理基线（主线代码域）**：`legacy 81/184`、raw `channel.send('x:y') 13/46`、超长文件（>=1200）`47`。
