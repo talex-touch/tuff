@@ -1,7 +1,7 @@
 # Nexus 设备授权风控实施方案（2.4.9）
 
 > 更新时间：2026-03-22  
-> 来源提炼：`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`  
+> 来源提炼：`docs/engineering/plans/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`
 > 适用范围：`apps/nexus` 设备码授权链路、登录历史、设备管理、CLI 登录配套
 
 ## 1. 目标

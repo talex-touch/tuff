@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TuffInput, TxButton, TxSpinner } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
@@ -50,7 +51,7 @@ interface ListOauthApplicationsResponse {
 const { t } = useI18n()
 const { user } = useAuthUser()
 
-const { data: teamData, pending: teamPending } = useFetch<TeamSummaryResponse>('/api/dashboard/team')
+const { data: teamData, pending: teamPending } = useTypedFetch<TeamSummaryResponse>('/api/dashboard/team')
 
 const isNexusAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'admin')
 const isTeamAdmin = computed(() => {
@@ -139,7 +140,7 @@ async function fetchApplications() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const data = await $fetch<ListOauthApplicationsResponse>('/api/dashboard/oauth/clients', {
+    const data = await requestJson<ListOauthApplicationsResponse>('/api/dashboard/oauth/clients', {
       query: {
         scope: activeScope.value,
       },
@@ -179,7 +180,7 @@ async function createApplication() {
   saving.value = true
   errorMessage.value = ''
   try {
-    const data = await $fetch<CreateOauthApplicationResponse>('/api/dashboard/oauth/clients', {
+    const data = await requestJson<CreateOauthApplicationResponse>('/api/dashboard/oauth/clients', {
       method: 'POST',
       body: {
         scope: activeScope.value,
@@ -233,7 +234,7 @@ async function saveEdit(applicationId: string) {
   updating.value = true
   errorMessage.value = ''
   try {
-    await $fetch<UpdateOauthApplicationResponse>(`/api/dashboard/oauth/clients/${encodeURIComponent(applicationId)}`, {
+    await requestJson<UpdateOauthApplicationResponse>(`/api/dashboard/oauth/clients/${encodeURIComponent(applicationId)}`, {
       method: 'PATCH',
       body: {
         scope: activeScope.value,
@@ -257,7 +258,7 @@ async function rotateSecret(application: OauthApplication) {
   rotatingId.value = application.id
   errorMessage.value = ''
   try {
-    const data = await $fetch<CreateOauthApplicationResponse>(`/api/dashboard/oauth/clients/${encodeURIComponent(application.id)}/rotate-secret`, {
+    const data = await requestJson<CreateOauthApplicationResponse>(`/api/dashboard/oauth/clients/${encodeURIComponent(application.id)}/rotate-secret`, {
       method: 'POST',
       body: {
         scope: activeScope.value,
@@ -280,7 +281,7 @@ async function rotateSecret(application: OauthApplication) {
 
 async function revokeApplication(applicationId: string) {
   try {
-    await $fetch(`/api/dashboard/oauth/clients/${encodeURIComponent(applicationId)}`, {
+    await requestJson(`/api/dashboard/oauth/clients/${encodeURIComponent(applicationId)}`, {
       method: 'DELETE',
       query: {
         scope: activeScope.value,

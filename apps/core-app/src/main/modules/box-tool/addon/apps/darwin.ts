@@ -5,15 +5,15 @@ import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
-import type { ScannedAppInfo } from './app-types'
+import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
+import { getAppIconCacheDir, getAppIconCachePath } from './app-icon-cache'
 import { readLocalizedStringsFile } from './localized-strings-parser'
 import { createLogger } from '../../../../utils/logger'
 
-const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
 const darwinAppLog = createLogger('AppScanner').child('Darwin')
 
 export async function getApps(): Promise<ScannedAppInfo[]> {
-  await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
+  await fs.mkdir(getAppIconCacheDir('darwin'), { recursive: true })
   // Switch to mdfind as the primary method for discovering applications for better coverage.
   return getAppsViaMdfind()
 }
@@ -66,6 +66,43 @@ function normalizeDisplayNameCandidate(rawValue: string | null | undefined): str
   return normalizedValue
 }
 
+function resolveDarwinDisplayName(
+  localizedName: string | null,
+  plistDisplayName: string | null,
+  bundleName: string | null,
+  fileName: string
+): {
+  displayName: string | null
+  displayNameSource: string
+  displayNameQuality: AppDisplayNameQuality
+} {
+  const candidates: Array<{
+    value: string | null
+    source: string
+    quality: AppDisplayNameQuality
+  }> = [
+    { value: localizedName, source: 'InfoPlist.strings', quality: 'localized' },
+    {
+      value: normalizeDisplayNameCandidate(plistDisplayName),
+      source: 'CFBundleDisplayName',
+      quality: 'manifest'
+    },
+    {
+      value: normalizeDisplayNameCandidate(bundleName),
+      source: 'CFBundleName',
+      quality: 'manifest'
+    },
+    { value: fileName, source: 'filename', quality: 'filename' }
+  ]
+
+  const matched = candidates.find((candidate) => candidate.value)
+  return {
+    displayName: matched?.value ?? null,
+    displayNameSource: matched?.source ?? 'fallback',
+    displayNameQuality: matched?.quality ?? 'fallback'
+  }
+}
+
 function collectAlternateDisplayNames(
   displayName: string | null,
   candidates: Array<string | null | undefined>
@@ -86,6 +123,81 @@ function collectAlternateDisplayNames(
   }
 
   return alternateNames
+}
+
+function normalizeIconFileName(rawValue: unknown): string | null {
+  if (typeof rawValue !== 'string') {
+    return null
+  }
+
+  const normalized = rawValue.trim()
+  if (!normalized || normalized === '(null)') {
+    return null
+  }
+
+  return normalized.endsWith('.icns') ? normalized : `${normalized}.icns`
+}
+
+async function findAppIconSourcePath(
+  appPath: string,
+  plistData: Record<string, unknown>
+): Promise<string | null> {
+  const resourcesPath = path.join(appPath, 'Contents', 'Resources')
+  const iconNames = [
+    normalizeIconFileName(plistData.CFBundleIconFile),
+    normalizeIconFileName(plistData.CFBundleIconName)
+  ].filter((value): value is string => Boolean(value))
+
+  for (const iconName of iconNames) {
+    const iconPath = path.join(resourcesPath, iconName)
+    try {
+      await fs.access(iconPath)
+      return iconPath
+    } catch {
+      // Continue to fallback directory scan.
+    }
+  }
+
+  try {
+    const entries = await fs.readdir(resourcesPath)
+    const fallbackIcon = entries.find((entry) => entry.toLowerCase().endsWith('.icns'))
+    return fallbackIcon ? path.join(resourcesPath, fallbackIcon) : null
+  } catch {
+    return null
+  }
+}
+
+async function ensureCachedAppIcon(
+  appPath: string,
+  bundleId: string,
+  plistData: Record<string, unknown>
+): Promise<string> {
+  const cachedIconPath = getAppIconCachePath(bundleId || appPath, 'darwin')
+
+  try {
+    await fs.access(cachedIconPath)
+    return cachedIconPath
+  } catch {
+    // Cache miss; generate it below.
+  }
+
+  const sourceIconPath = await findAppIconSourcePath(appPath, plistData)
+  if (!sourceIconPath) {
+    return ''
+  }
+
+  try {
+    await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
+    await execFileSafe('sips', ['-s', 'format', 'png', sourceIconPath, '--out', cachedIconPath])
+    await fs.access(cachedIconPath)
+    return cachedIconPath
+  } catch (error) {
+    darwinAppLog.warn('Failed to generate app icon cache', {
+      error,
+      meta: { pathLength: appPath.length, iconPathLength: sourceIconPath.length }
+    })
+    return ''
+  }
 }
 
 // Helper to get localized display name from .lproj directories
@@ -153,6 +265,9 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
 
   const stats = await fs.stat(appPath)
   const plistContent = await fs.readFile(plistPath, 'utf-8')
+  const plistData: Record<string, unknown> = await readPlistAsync(plistPath).catch(() => ({}))
+  const plistIconFile = getValueFromPlist(plistContent, 'CFBundleIconFile')
+  const plistIconName = getValueFromPlist(plistContent, 'CFBundleIconName')
 
   // Get names from Info.plist
   const plistDisplayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
@@ -163,10 +278,13 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const localizedName = await getLocalizedDisplayName(appPath)
 
   // mdls display-name corrections are handled by the background mdls scan.
-  const displayName =
-    localizedName ||
-    normalizeDisplayNameCandidate(plistDisplayName) ||
-    normalizeDisplayNameCandidate(bundleName)
+  const displayNameMeta = resolveDarwinDisplayName(
+    localizedName,
+    plistDisplayName,
+    bundleName,
+    fileName
+  )
+  const displayName = displayNameMeta.displayName
   const alternateNames = collectAlternateDisplayNames(displayName, [
     localizedName,
     plistDisplayName,
@@ -178,17 +296,18 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const name = fileName
 
   const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
-
-  const safeIconName = (displayName || name).replace(/[/\\?%*:|"<>]/g, '-')
-  const cachedIconPath = path.join(ICON_CACHE_DIR, `${safeIconName}.png`)
-  const icon = await fs
-    .stat(cachedIconPath)
-    .then(() => cachedIconPath)
-    .catch(() => '')
+  const icon = await ensureCachedAppIcon(appPath, bundleId, {
+    ...plistData,
+    CFBundleIconFile: plistData.CFBundleIconFile ?? plistIconFile,
+    CFBundleIconName: plistData.CFBundleIconName ?? plistIconName
+  })
 
   return {
     name,
     displayName: displayName || undefined,
+    displayNameSource: displayNameMeta.displayNameSource,
+    displayNameQuality: displayNameMeta.displayNameQuality,
+    identityKind: 'macos-path',
     fileName,
     alternateNames: alternateNames.length > 0 ? alternateNames : undefined,
     path: appPath,

@@ -382,16 +382,36 @@ describe('/api/dashboard/provider-registry/scenes', () => {
     h3Mocks.readBody.mockResolvedValue({
       strategyMode: 'balanced',
       requiredCapabilities: ['vision.ocr', 'text.translate', 'overlay.render'],
+      meteringPolicy: {
+        units: ['character', 'image'],
+      },
+      auditPolicy: {
+        persistInput: false,
+        persistOutput: false,
+        persistTrace: true,
+      },
+      metadata: {
+        ownerTeam: 'corebox',
+      },
       bindings: [
         {
           providerId: 'prv_tencent_cloud_mt',
           capability: 'text.translate',
           priority: 20,
+          weight: 0.8,
+          status: 'enabled',
+          constraints: {
+            cost: 0.01,
+          },
+          metadata: {
+            route: 'primary',
+          },
         },
         {
           providerId: 'prv_local_overlay',
           capability: 'overlay.render',
           priority: 30,
+          status: 'disabled',
         },
       ],
     })
@@ -402,6 +422,29 @@ describe('/api/dashboard/provider-registry/scenes', () => {
       id: 'corebox.screenshot.translate',
       strategyMode: 'balanced',
       requiredCapabilities: ['vision.ocr', 'text.translate', 'overlay.render'],
+      meteringPolicy: {
+        units: ['character', 'image'],
+      },
+      auditPolicy: {
+        persistInput: false,
+        persistOutput: false,
+        persistTrace: true,
+      },
+      metadata: {
+        ownerTeam: 'corebox',
+      },
+    })
+    expect(result.scene.bindings[0]).toMatchObject({
+      providerId: 'prv_tencent_cloud_mt',
+      capability: 'text.translate',
+      weight: 0.8,
+      status: 'enabled',
+      constraints: {
+        cost: 0.01,
+      },
+      metadata: {
+        route: 'primary',
+      },
     })
     expect(result.scene.bindings.map((binding: any) => binding.capability)).toEqual([
       'text.translate',

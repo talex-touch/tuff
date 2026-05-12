@@ -2,18 +2,19 @@
 import { TxButton, TxStatCard, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useToast } from '~/composables/useToast'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
 const { t } = useI18n()
 const toast = useToast()
 
-const { data: summary, pending: summaryPending, refresh: refreshSummary } = useFetch<any>('/api/credits/summary')
-const { data: ledger, pending: ledgerPending, refresh: refreshLedger } = useFetch<any[]>('/api/credits/ledger')
-const { data: checkinStatus, pending: checkinPending, refresh: refreshCheckin } = useFetch<any>('/api/credits/checkin/status')
-const { data: checkinCalendar, pending: checkinCalendarPending, refresh: refreshCheckinCalendar } = useFetch<any>('/api/credits/checkin/month')
-const { data: trend, pending: trendPending, refresh: refreshTrend } = useFetch<any>('/api/credits/trend')
-const { data: models, pending: modelsPending, refresh: refreshModels } = useFetch<any>('/api/credits/models')
+const { data: summary, pending: summaryPending, refresh: refreshSummary } = useTypedFetch<any>('/api/credits/summary')
+const { data: ledger, pending: ledgerPending, refresh: refreshLedger } = useTypedFetch<any[]>('/api/credits/ledger')
+const { data: checkinStatus, pending: checkinPending, refresh: refreshCheckin } = useTypedFetch<any>('/api/credits/checkin/status')
+const { data: checkinCalendar, pending: checkinCalendarPending, refresh: refreshCheckinCalendar } = useTypedFetch<any>('/api/credits/checkin/month')
+const { data: trend, pending: trendPending, refresh: refreshTrend } = useTypedFetch<any>('/api/credits/trend')
+const { data: models, pending: modelsPending, refresh: refreshModels } = useTypedFetch<any>('/api/credits/models')
 
 const creditTab = ref<'overview' | 'signin' | 'apis' | 'audits' | 'models'>('overview')
 
@@ -207,7 +208,7 @@ async function handleClaimBoost() {
     return
   claimLoading.value = true
   try {
-    const res = await $fetch<{ claimed: boolean; reason?: string }>('/api/credits/claim', { method: 'POST' })
+    const res = await requestJson<{ claimed: boolean; reason?: string }>('/api/credits/claim', { method: 'POST' })
     if (res.claimed) {
       toast.success(t('dashboard.credits.boost.claimed', '已领取本月提升额度'))
     } else if (res.reason === 'already-claimed') {
@@ -229,7 +230,7 @@ async function handleCheckin() {
     return
   checkinLoading.value = true
   try {
-    const res = await $fetch<{ claimed: boolean; reward?: number }>('/api/credits/checkin', { method: 'POST' })
+    const res = await requestJson<{ claimed: boolean; reward?: number }>('/api/credits/checkin', { method: 'POST' })
     if (res.claimed) {
       toast.success(t('dashboard.credits.checkin.claimed', '签到成功'), t('dashboard.credits.checkin.reward', { n: formatNumber(res.reward ?? checkinReward.value) }))
     } else {

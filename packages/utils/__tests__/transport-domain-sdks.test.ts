@@ -3,6 +3,7 @@ import {
   AgentsEvents,
   AppEvents,
   ClipboardEvents,
+  NativeEvents,
   PermissionEvents,
   PluginEvents,
   StorageEvents,
@@ -13,6 +14,7 @@ import { createAgentsSdk } from '../transport/sdk/domains/agents'
 import { createAgentStoreSdk } from '../transport/sdk/domains/agents-store'
 import { createAppSdk } from '../transport/sdk/domains/app'
 import { createIntelligenceSdk } from '../transport/sdk/domains/intelligence'
+import { createNativeSdk } from '../transport/sdk/domains/native'
 import { createPermissionSdk } from '../transport/sdk/domains/permission'
 import { createSettingsSdk } from '../transport/sdk/domains/settings'
 import { createStorageSdk } from '../transport/sdk/domains/storage'
@@ -175,6 +177,106 @@ describe('transport domain sdk mappings', () => {
       module: 'history',
       action: 'query-meta',
     })
+  })
+
+  it('native events and sdk use typed transport naming', async () => {
+    const transport = createTransportMock()
+    const sdk = createNativeSdk(transport as any)
+
+    expect(NativeEvents.capabilities.list.toEventName()).toBe(
+      'native:capabilities:list',
+    )
+    expect(NativeEvents.capabilities.get.toEventName()).toBe(
+      'native:capabilities:get',
+    )
+    expect(NativeEvents.screenshot.getSupport.toEventName()).toBe(
+      'native:screenshot:get-support',
+    )
+    expect(NativeEvents.screenshot.listDisplays.toEventName()).toBe(
+      'native:screenshot:list-displays',
+    )
+    expect(NativeEvents.screenshot.capture.toEventName()).toBe(
+      'native:screenshot:capture',
+    )
+    expect(NativeEvents.screenshot.capture).toMatchObject({
+      namespace: 'native',
+      module: 'screenshot',
+      action: 'capture',
+    })
+    expect(NativeEvents.fileIndex.query.toEventName()).toBe(
+      'native:file-index:query',
+    )
+    expect(NativeEvents.file.stat.toEventName()).toBe('native:file:stat')
+    expect(NativeEvents.file.getThumbnail.toEventName()).toBe(
+      'native:file:get-thumbnail',
+    )
+    expect(NativeEvents.media.probe.toEventName()).toBe('native:media:probe')
+
+    await sdk.capabilities.list()
+    await sdk.capabilities.get({ id: 'file.stat' })
+    await sdk.screenshot.getSupport()
+    await sdk.screenshot.listDisplays()
+    await sdk.screenshot.capture({
+      target: 'cursor-display',
+      writeClipboard: true,
+    })
+    await sdk.fileIndex.query({ text: 'hello', limit: 3 })
+    await sdk.file.stat({ path: '/tmp/a.png' })
+    await sdk.file.getThumbnail({ path: '/tmp/a.png' })
+    await sdk.media.probe({ path: '/tmp/a.png' })
+    await sdk.fileIndex.streamProgress({ onData: vi.fn() })
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      NativeEvents.capabilities.list,
+      undefined,
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      NativeEvents.capabilities.get,
+      { id: 'file.stat' },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      NativeEvents.screenshot.getSupport,
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      4,
+      NativeEvents.screenshot.listDisplays,
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      5,
+      NativeEvents.screenshot.capture,
+      {
+        target: 'cursor-display',
+        writeClipboard: true,
+      },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      6,
+      NativeEvents.fileIndex.query,
+      { text: 'hello', limit: 3 },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      7,
+      NativeEvents.file.stat,
+      { path: '/tmp/a.png' },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      8,
+      NativeEvents.file.getThumbnail,
+      { path: '/tmp/a.png' },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      9,
+      NativeEvents.media.probe,
+      { path: '/tmp/a.png' },
+    )
+    expect(transport.stream).toHaveBeenCalledWith(
+      NativeEvents.fileIndex.progress,
+      undefined,
+      expect.objectContaining({ onData: expect.any(Function) }),
+    )
   })
 
   it('settings sdk maps device idle diagnostic event', async () => {

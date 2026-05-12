@@ -116,12 +116,12 @@
 - 建议顺序：
   1. 质量/修复类：`docs/engineering/reports/*` + `docs/code-audit-2026-01-31.md` + `docs/incident-2026-01-16-longterm-fixes.md`
   2. 工程过程类：`docs/engineering/audits/*`、`docs/engineering/typecheck/*`、`docs/engineering/ci-cd/*`、`docs/engineering/optimization/*`
-  3. 执行与跟踪：`plan/*` + `issues/*`（同名可配对）
+  3. 执行与跟踪：`docs/engineering/plans/*` + `docs/engineering/issues/*`（同名可配对）
   4. PRD/规划：`docs/plan-prd/*`（量大，建议按模块分批）
 - 摘要（压缩）：
   - `docs/` 顶层 16 份（脚本原生、everything、分析/事故）
   - `docs/engineering/` 15 份（reports 4 / audits 2 / notes 3 / ci-cd 1 / optimization 1 / typecheck 1 / 其他 3）
-  - `plan/` 21 份
-  - `issues/` 15 份
-  - `reports/` 3 份
+  - `docs/engineering/plans/` 21 份
+  - `docs/engineering/issues/` 15 份
+  - `docs/engineering/reports/` 3 份
 - 备注：后续你说“处理过了”我会在此处归档，并删除对应源文件（需你明确确认）。

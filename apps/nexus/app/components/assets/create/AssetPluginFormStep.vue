@@ -8,6 +8,7 @@ import { TxButton, TxScroll } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
+import { requestJson } from '~/utils/request'
 
 interface Props {
   visible: boolean
@@ -156,7 +157,7 @@ interface PackagePreviewResult {
 async function requestPackagePreview(file: File): Promise<PackagePreviewResult> {
   const formDataObj = new FormData()
   formDataObj.append('package', file)
-  return await $fetch<PackagePreviewResult>(PACKAGE_PREVIEW_ENDPOINT, {
+  return await requestJson<PackagePreviewResult>(PACKAGE_PREVIEW_ENDPOINT, {
     method: 'POST',
     body: formDataObj,
   })

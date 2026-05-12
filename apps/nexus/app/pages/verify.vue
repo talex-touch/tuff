@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: false,
@@ -23,7 +24,7 @@ onMounted(async () => {
   }
 
   try {
-    await $fetch('/api/auth/verify', {
+    await requestJson('/api/auth/verify', {
       method: 'POST',
       body: { email, token },
     })

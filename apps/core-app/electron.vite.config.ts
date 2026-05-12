@@ -153,6 +153,7 @@ export default defineConfig(async () => {
             'file-index-worker':
               'src/main/modules/box-tool/addon/files/workers/file-index-worker.ts',
             'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts',
+            'thumbnail-worker': 'src/main/modules/box-tool/addon/files/workers/thumbnail-worker.ts',
             'search-index-worker':
               'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts'
           },
@@ -168,6 +169,8 @@ export default defineConfig(async () => {
                 return 'file-index-worker.js'
               } else if (chunkInfo.name === 'icon-worker') {
                 return 'icon-worker.js'
+              } else if (chunkInfo.name === 'thumbnail-worker') {
+                return 'thumbnail-worker.js'
               } else if (chunkInfo.name === 'search-index-worker') {
                 return 'search-index-worker.js'
               } else if (chunkInfo.name === 'index') {

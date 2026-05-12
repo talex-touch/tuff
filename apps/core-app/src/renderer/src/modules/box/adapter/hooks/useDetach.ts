@@ -11,8 +11,10 @@ import { DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/even
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { createRendererLogger } from '../../../../utils/renderer-log'
 
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
+const detachLog = createRendererLogger('useDetach')
 
 interface UseDetachOptions {
   searchVal: Ref<string>
@@ -31,11 +33,12 @@ function resolveIcon(item: TuffItem): string | ITuffIcon | undefined {
   return undefined
 }
 
-function buildDetachedFeatureUrl(item: TuffItem, query: string): string {
+function buildDetachedFeatureUrl(item: TuffItem, query: string, pluginId: string): string {
   const params = new URLSearchParams({
     itemId: item.id,
     query: query || '',
-    source: item.source?.id || ''
+    source: pluginId,
+    providerSource: item.source?.id || ''
   })
   return `tuff://detached?${params.toString()}`
 }
@@ -79,7 +82,9 @@ export function buildDetachedFeatureConfig(
   return {
     isWidget,
     config: {
-      url: isWidget ? buildDetachedFeatureUrl(item, query) : `plugin://${pluginId}/${path}`,
+      url: isWidget
+        ? buildDetachedFeatureUrl(item, query, pluginId)
+        : `plugin://${pluginId}/${path}`,
       title: item.render?.basic?.title || 'Detached Item',
       icon: resolveIcon(item),
       size: 'medium',
@@ -167,7 +172,7 @@ export function useDetach(options: UseDetachOptions) {
               value: detachedPayload
             })
             .catch((error) => {
-              console.warn('[useDetach] Failed to persist widget payload:', error)
+              detachLog.warn('Failed to persist widget payload:', error)
             })
         }
         toast.success(t('corebox.detached', '已分离到独立窗口'))
@@ -175,7 +180,7 @@ export function useDetach(options: UseDetachOptions) {
         throw new Error(response?.error?.message || 'Failed')
       }
     } catch (error) {
-      console.error('[useDetach] Failed:', error)
+      detachLog.error('Failed:', error)
       toast.error(t('corebox.detachFailed', '分离失败'))
     }
   }
@@ -194,14 +199,14 @@ export function useDetach(options: UseDetachOptions) {
       const response = await transport.send(DivisionBoxEvents.open, config)
       if (response?.success) {
         await deactivateProvider(activation.id).catch((error) => {
-          console.warn('[useDetach] Detached UI view, but failed to deactivate provider:', error)
+          detachLog.warn('Detached UI view, but failed to deactivate provider:', error)
         })
         toast.success(t('corebox.detached', '已分离到独立窗口'))
       } else {
         throw new Error(response?.error?.message || 'Failed')
       }
     } catch (error) {
-      console.error('[useDetach] Failed:', error)
+      detachLog.error('Failed:', error)
       toast.error(t('corebox.detachFailed', '分离失败'))
     }
   }
@@ -246,7 +251,7 @@ export function useDetach(options: UseDetachOptions) {
         throw new Error(response?.error?.message || 'Flow failed')
       }
     } catch (error) {
-      console.error('[useDetach] Flow failed:', error)
+      detachLog.error('Flow failed:', error)
       toast.error(t('corebox.flowFailed', '流转失败'))
     } finally {
       closeFlowSelector()

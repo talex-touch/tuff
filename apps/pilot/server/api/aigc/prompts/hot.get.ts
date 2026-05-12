@@ -1,4 +1,4 @@
-import { listPromptPage } from '../../../utils/pilot-compat-aigc'
+import { listPromptPage } from '../../../utils/pilot-aigc-service'
 import { quotaOk } from '../../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

@@ -2,6 +2,7 @@
 import type { FileUploaderFile } from '@talex-touch/tuffex'
 import { computed, ref, watchEffect } from 'vue'
 import { useDashboardImagesData } from '~/composables/useDashboardData'
+import { requestJson } from '~/utils/request'
 
 interface DashboardImage {
   key: string
@@ -58,7 +59,7 @@ async function handleImageUpload(files: FileUploaderFile[]) {
     const formData = new FormData()
     formData.append('file', file)
 
-    await $fetch('/api/images/upload', {
+    await requestJson('/api/images/upload', {
       method: 'POST',
       body: formData,
     })
@@ -89,7 +90,7 @@ async function confirmDeleteImage(): Promise<boolean> {
   if (!pendingDeleteKey.value)
     return true
   try {
-    await $fetch(`/api/images/${pendingDeleteKey.value}`, {
+    await requestJson(`/api/images/${pendingDeleteKey.value}`, {
       method: 'DELETE',
     })
     await refreshImages()

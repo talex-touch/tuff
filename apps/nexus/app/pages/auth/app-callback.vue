@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { TxSpinner, TxButton } from '@talex-touch/tuffex'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: false,
@@ -104,7 +105,7 @@ async function handleCallback() {
     if (devicePlatform)
       headers['x-device-platform'] = devicePlatform
 
-    const data = await $fetch<{ appToken?: string | null }>('/api/app-auth/sign-in-token', {
+    const data = await requestJson<{ appToken?: string | null }>('/api/app-auth/sign-in-token', {
       method: 'POST',
       headers,
       credentials: 'include',

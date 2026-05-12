@@ -50,6 +50,10 @@ const watermarkFeatureEnabled = isEnvFlagEnabled(
 const riskControlFeatureEnabled = isEnvFlagEnabled(
   process.env.NUXT_PUBLIC_RISK_CONTROL_ENABLED || process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED,
 )
+const nitroTypegenRouteExcludes = [
+  '/api/dashboard/provider-registry/providers/:id/capabilities',
+  '/api/dashboard/provider-registry/providers/:id/capabilities/:capabilityId',
+]
 
 export default defineNuxtConfig({
   modules: [
@@ -236,6 +240,12 @@ export default defineNuxtConfig({
   nitro: {
     minify: !disableNitroMinify,
     sourceMap: !disableNitroSourceMap,
+    hooks: {
+      'types:extend'(types) {
+        for (const route of nitroTypegenRouteExcludes)
+          delete types.routes[route]
+      },
+    },
     alias: {
       '@panva/hkdf': hkdfCompatEntry,
       'next-auth/core': nextAuthCoreEntry,

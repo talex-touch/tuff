@@ -102,6 +102,11 @@ export interface UpdateSettings {
    */
   autoDownload?: boolean
   /**
+   * Automatically hand off downloaded Windows installers after auto download.
+   * Disabled by default; the installer still owns OS/UAC confirmation.
+   */
+  autoInstallDownloadedUpdates?: boolean
+  /**
    * Enable experimental renderer override updates.
    */
   rendererOverrideEnabled?: boolean
@@ -153,6 +158,7 @@ export const defaultUpdateSettings: UpdateSettings = {
   ignoredVersions: [],
   customSources: [],
   autoDownload: true,
+  autoInstallDownloadedUpdates: false,
   rendererOverrideEnabled: false,
   lastCheckedAt: null,
   cacheEnabled: true,

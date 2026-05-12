@@ -4,7 +4,11 @@ import { createError } from 'h3'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from '../../../utils/intelligenceModels'
-import { getProviderApiKey, getSettings, listProviders, type IntelligenceProviderRecord } from '../../../utils/intelligenceStore'
+import {
+  getIntelligenceProviderApiKeyWithRegistryFallback,
+  listIntelligenceProvidersWithRegistryMirrors,
+} from '../../../utils/intelligenceProviderRegistryBridge'
+import { getSettings, type IntelligenceProviderRecord } from '../../../utils/intelligenceStore'
 import { getRuntimeSession, upsertRuntimeSession } from '../../../utils/tuffIntelligenceRuntimeStore'
 
 interface ChatHistoryItem {
@@ -118,7 +122,7 @@ function buildSystemPrompt(provider: IntelligenceProviderRecord): string {
 }
 
 async function resolveProviderContext(event: any, userId: string): Promise<ResolvedProviderContext> {
-  const providers = await listProviders(event, userId)
+  const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
   const enabledProviders = providers.filter(provider => provider.enabled)
   if (!enabledProviders.length) {
     throw new Error('No enabled intelligence providers.')
@@ -141,7 +145,7 @@ async function resolveProviderContext(event: any, userId: string): Promise<Resol
 
   const apiKey = provider.type === IntelligenceProviderType.LOCAL
     ? null
-    : await getProviderApiKey(event, userId, provider.id)
+    : await getIntelligenceProviderApiKeyWithRegistryFallback(event, userId, provider.id)
 
   if (provider.type !== IntelligenceProviderType.LOCAL && !apiKey) {
     throw new Error('Provider API key is missing.')

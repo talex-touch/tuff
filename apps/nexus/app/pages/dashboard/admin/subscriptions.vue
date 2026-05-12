@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex'
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
@@ -177,7 +178,7 @@ async function fetchSubscriptions(options: { resetPage?: boolean } = {}) {
   subscriptionLoading.value = true
   subscriptionError.value = null
   try {
-    const res = await $fetch<{ subscriptions: AdminSubscription[], pagination: Pagination }>('/api/admin/subscriptions', {
+    const res = await rawFetch<{ subscriptions: AdminSubscription[], pagination: Pagination }>('/api/admin/subscriptions', {
       query: buildSubscriptionQuery(),
     })
     subscriptionList.value = res.subscriptions ?? []
@@ -200,7 +201,7 @@ async function fetchCodes() {
   codesLoading.value = true
   codesError.value = null
   try {
-    const res = await $fetch<{ codes: ActivationCode[] }>('/api/admin/codes')
+    const res = await rawFetch<{ codes: ActivationCode[] }>('/api/admin/codes')
     codes.value = res.codes
   }
   catch (e: any) {
@@ -215,7 +216,7 @@ async function generateCodes() {
   codesGenerating.value = true
   codesError.value = null
   try {
-    await $fetch('/api/admin/codes/generate', {
+    await rawFetch('/api/admin/codes/generate', {
       method: 'POST',
       body: genForm,
     })
@@ -290,7 +291,7 @@ async function grantSubscription() {
     else
       payload.userId = target
 
-    await $fetch('/api/admin/subscriptions/grant', {
+    await rawFetch('/api/admin/subscriptions/grant', {
       method: 'POST',
       body: payload,
     })
@@ -352,7 +353,7 @@ async function revokeCode(code: ActivationCode) {
     return
   codesActionPendingId.value = code.id
   try {
-    await $fetch(`/api/admin/codes/${code.id}`, {
+    await rawFetch(`/api/admin/codes/${code.id}`, {
       method: 'PATCH',
       body: { status: 'revoked' },
     })

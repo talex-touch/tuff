@@ -1,4 +1,4 @@
-import { calcSubscriptionPrice } from '../../utils/pilot-compat-payment'
+import { calcSubscriptionPrice } from '../../utils/pilot-payment-service'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

@@ -436,6 +436,7 @@ function formatTimeout(ms: number): string {
 
     <!-- Storage path display -->
     <TuffBlockSlot
+      class="setting-download-wide-slot"
       :title="t('settings.settingDownload.tempDir')"
       :description="t('settings.settingDownload.tempDirDesc')"
       default-icon="i-carbon-folder"
@@ -464,6 +465,7 @@ function formatTimeout(ms: number): string {
 
     <!-- Actions -->
     <TuffBlockSlot
+      class="setting-download-wide-slot"
       :title="t('settings.settingDownload.actions')"
       :description="t('settings.settingDownload.actionsDesc')"
       default-icon="i-carbon-settings-adjust"
@@ -482,32 +484,22 @@ function formatTimeout(ms: number): string {
 </template>
 
 <style lang="scss" scoped>
-.setting-download-group {
-  :deep(.TBlockSlot-Container) {
-    gap: 16px;
-    align-items: flex-start;
-    min-height: 56px;
-    height: auto;
-  }
+:deep(.setting-download-wide-slot.TBlockSlot-Container) {
+  align-items: flex-start;
+  min-height: 56px;
+  height: auto;
+}
 
-  :deep(.TBlockSlot-Content) {
-    flex: 1 1 0;
-    width: auto;
-    min-width: 0;
-    padding: 8px 0;
-  }
+:deep(.setting-download-wide-slot .TBlockSlot-Content) {
+  padding: 8px 0;
+}
 
-  :deep(.TBlockSlot-Label) {
-    min-width: 0;
-  }
-
-  :deep(.TBlockSlot-Slot) {
-    flex: 0 1 520px;
-    width: min(100%, 520px);
-    max-width: min(100%, 520px);
-    min-width: 0;
-    padding: 8px 0;
-  }
+:deep(.setting-download-wide-slot .TBlockSlot-Slot) {
+  flex: 0 1 520px;
+  width: min(100%, 520px);
+  max-width: min(100%, 520px);
+  min-width: 0;
+  padding: 8px 0;
 }
 
 .storage-controls {

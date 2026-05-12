@@ -31,10 +31,15 @@ Options:
   --requireArch <csv>            Require runtime arch values, e.g. x64,arm64.
   --requireInstallMode <csv>     Require install mode, e.g. windows-installer-handoff.
   --requireUserConfirmation      Require user-confirmed handoff/manual install path.
+  --requireAutoInstallEnabled    Require autoInstallDownloadedUpdates=true.
   --requireUnattendedDisabled    Require unattended auto install disabled.
+  --requireUnattendedEnabled     Require unattended auto install enabled.
   --requireCachedRelease         Require cached release summary.
   --requireMatchingAsset         Require at least one matching runtime asset.
   --requireChecksums             Require checksums on all matching assets.
+  --requireInstalledVersion      Require installed app version evidence.
+  --requireInstalledVersionMatchesTarget
+                                  Require installed version to match the target update version.
   --requireCaseIds <csv>         Require reusable manual regression case ids.
   --compact                      Print single-line JSON.
   --help                         Show this help.
@@ -57,6 +62,7 @@ function parseInstallModes(value: string | undefined): UpdateDiagnosticInstallMo
   const allowed = new Set([
     'mac-auto-updater',
     'windows-installer-handoff',
+    'windows-auto-installer-handoff',
     'manual-installer',
     'not-ready'
   ])
@@ -116,8 +122,16 @@ function parseArgs(argv: string[]): CliOptions | null {
       options.requireUserConfirmation = true
       continue
     }
+    if (arg === '--requireAutoInstallEnabled') {
+      options.requireAutoInstallEnabled = true
+      continue
+    }
     if (arg === '--requireUnattendedDisabled') {
       options.requireUnattendedDisabled = true
+      continue
+    }
+    if (arg === '--requireUnattendedEnabled') {
+      options.requireUnattendedEnabled = true
       continue
     }
     if (arg === '--requireCachedRelease') {
@@ -130,6 +144,14 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireChecksums') {
       options.requireChecksums = true
+      continue
+    }
+    if (arg === '--requireInstalledVersion') {
+      options.requireInstalledVersion = true
+      continue
+    }
+    if (arg === '--requireInstalledVersionMatchesTarget') {
+      options.requireInstalledVersionMatchesTarget = true
       continue
     }
     if (arg === '--requireCaseIds' && argv[i + 1]) {

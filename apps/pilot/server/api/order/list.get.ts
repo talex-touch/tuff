@@ -1,5 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { getOrderListByUser } from '../../utils/pilot-compat-payment'
+import { getOrderListByUser } from '../../utils/pilot-payment-service'
 import { quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

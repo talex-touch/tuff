@@ -7,6 +7,10 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
+import {
+  COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+  COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
+} from '../../../../../../shared/events/corebox-scenes'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
@@ -243,6 +247,37 @@ function generateBuiltinActions(item: TuffItem): MetaAction[] {
           icon: { type: 'class', value: 'i-ri-folder-open-line' }
         },
         shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F',
+        group: '操作'
+      },
+      handler: 'builtin',
+      priority: 0
+    })
+  }
+
+  if (item.kind === 'image') {
+    actions.push({
+      id: COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+      render: {
+        basic: {
+          title: '翻译图片',
+          subtitle: '通过 Nexus 场景翻译图片内容',
+          icon: { type: 'class', value: 'i-ri-translate-2' }
+        },
+        shortcut: isMac ? '⌘⇧T' : 'Ctrl+Shift+T',
+        group: '操作'
+      },
+      handler: 'builtin',
+      priority: 0
+    })
+    actions.push({
+      id: COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
+      render: {
+        basic: {
+          title: '翻译并置顶',
+          subtitle: '通过 Nexus 场景翻译图片并打开置顶窗口',
+          icon: { type: 'class', value: 'i-ri-window-line' }
+        },
+        shortcut: isMac ? '⌘⌥T' : 'Ctrl+Alt+T',
         group: '操作'
       },
       handler: 'builtin',

@@ -1,4 +1,5 @@
 import { hasWindow } from '@talex-touch/utils/env'
+import { requestJson } from '~/utils/request'
 
 export type AuthFlow = 'login' | 'bind'
 export type OauthProvider = 'github' | 'linuxdo'
@@ -213,7 +214,7 @@ function isSameOriginUrl(value: string) {
 }
 
 export async function requestOauthAuthorizationUrl(input: RequestOauthAuthorizationInput) {
-  const csrfData = await $fetch<{ csrfToken?: string }>('/api/auth/csrf', {
+  const csrfData = await requestJson<{ csrfToken?: string }>('/api/auth/csrf', {
     credentials: 'include',
   })
   const csrfToken = csrfData?.csrfToken
@@ -226,7 +227,7 @@ export async function requestOauthAuthorizationUrl(input: RequestOauthAuthorizat
     json: 'true',
   })
 
-  const response = await $fetch<{ url?: string }>(`/api/auth/signin/${input.provider}`, {
+  const response = await requestJson<{ url?: string }>(`/api/auth/signin/${input.provider}`, {
     method: 'POST',
     credentials: 'include',
     headers: {

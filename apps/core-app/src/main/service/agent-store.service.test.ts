@@ -15,13 +15,9 @@ vi.mock('../modules/storage', () => ({
   saveMainConfig: saveMainConfigMock
 }))
 
-vi.mock('@talex-touch/utils/env', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@talex-touch/utils/env')>()
-  return {
-    ...actual,
-    getTpexApiBase: () => 'https://agent-store.test'
-  }
-})
+vi.mock('../modules/nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: () => 'https://agent-store.test'
+}))
 
 vi.mock('../modules/network', () => ({
   getNetworkService: () => ({

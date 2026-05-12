@@ -1,4 +1,4 @@
-import { invalidateCoupon } from '../../utils/pilot-compat-payment'
+import { invalidateCoupon } from '../../utils/pilot-payment-service'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

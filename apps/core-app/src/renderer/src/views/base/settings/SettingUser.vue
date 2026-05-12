@@ -12,6 +12,11 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { getSyncPreferenceState, setSyncPreferenceByUser } from '~/modules/auth/sync-preferences'
 import { useAuth } from '~/modules/auth/useAuth'
+import {
+  getRuntimeNexusBaseUrl,
+  getRuntimeServerMode,
+  setRuntimeServerMode
+} from '~/modules/nexus/runtime-base'
 import { triggerManualSync } from '~/modules/sync'
 import { appSetting } from '~/modules/storage/app-storage'
 
@@ -199,16 +204,14 @@ const canTriggerManualSync = computed(
   () => isLoggedIn.value && syncEnabled.value && !syncSubmitting.value
 )
 
-const isDev = import.meta.env.DEV
 const useLocalServer = computed({
-  get: () => appSetting?.dev?.authServer === 'local',
+  get: () => getRuntimeServerMode() === 'local',
   set: (val: boolean) => {
-    if (!appSetting?.dev) {
-      return
-    }
-    appSetting.dev.authServer = val ? 'local' : 'production'
+    setRuntimeServerMode(val ? 'local' : 'production')
   }
 })
+
+const runtimeServerDescription = computed(() => getRuntimeNexusBaseUrl())
 
 async function handleLogin() {
   try {
@@ -375,10 +378,10 @@ onMounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSwitch
-      v-if="isDev && !isLoggedIn"
+      v-if="!isLoggedIn"
       v-model="useLocalServer"
-      :title="t('settingUser.devAuthServer', '本地服务器')"
-      :description="useLocalServer ? 'localhost:3200' : 'tuff.tagzxia.com'"
+      :title="t('settingUser.runtimeApiServer', '运行时 API 服务器')"
+      :description="runtimeServerDescription"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
     />

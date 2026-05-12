@@ -12,6 +12,7 @@ import {
 } from '~/composables/useOauthContext'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { useTypedFetch } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 defineI18nRoute(false)
@@ -128,7 +129,7 @@ function boundMessage(provider: OauthProvider, accountId?: string | null) {
 
 // OAuth bind feedback is handled on the sign-in page now.
 
-const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
+const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useTypedFetch<any[]>('/api/login-history')
 const handleRefreshHistory = () => refreshHistory()
 
 const emailState = computed(() => user.value?.emailState ?? 'unverified')
@@ -283,7 +284,7 @@ async function unbindOauth(provider: OauthProvider) {
 
   loadingState.value = true
   try {
-    await $fetch(`/api/user/linked-accounts/${provider}`, { method: 'DELETE' })
+    await requestJson(`/api/user/linked-accounts/${provider}`, { method: 'DELETE' })
     await refresh()
   }
   catch (error: any) {
@@ -322,7 +323,7 @@ async function handlePasskeyRegister() {
   passkeyLoading.value = true
   passkeyMessage.value = ''
   try {
-    const options = await $fetch<any>('/api/passkeys/register-options', { method: 'POST' })
+    const options = await requestJson<any>('/api/passkeys/register-options', { method: 'POST' })
     const publicKey: PublicKeyCredentialCreationOptions = {
       ...options,
       challenge: base64UrlToBuffer(options.challenge),
@@ -337,7 +338,7 @@ async function handlePasskeyRegister() {
       return
     }
     const payload = serializeCredential(credential)
-    await $fetch('/api/passkeys/register-verify', {
+    await requestJson('/api/passkeys/register-verify', {
       method: 'POST',
       body: { credential: payload },
     })

@@ -1,20 +1,22 @@
-# Talex Touch 治理看板（Legacy / Compat / Size）
+# Tuff 治理看板（Legacy / Compat / Size）
 
-> 更新时间: 2026-03-17  
-> 数据来源（SoT）:  
-> - `docs/plan-prd/docs/compatibility-debt-registry.csv`  
-> - `scripts/legacy-boundary-allowlist.json`  
+> 更新时间: 2026-05-11
+> 数据来源（SoT）:
+> - `docs/plan-prd/docs/compatibility-debt-registry.csv`
+> - `scripts/legacy-boundary-allowlist.json`
 > - `scripts/large-file-boundary-allowlist.json`
 
 ---
 
 ## 1) 快照结论（当前基线）
 
-- 兼容债务清册总量：`120` 条  
-- 分域分布：`legacy-keyword 79` / `compat-file 26` / `raw-channel-send 13` / `size-growth-exception 2`  
-- 超长文件基线（>=1200）：`46` 个  
-- 允许增长豁免（growthExceptions）：`2` 个（全部 `expiresVersion=2.5.0`）
-- 主线门禁状态（本次快照）：`pnpm quality:gate` 通过
+- 兼容债务清册总量：`36` 条
+- 分域分布：`compat-file 5` / `core-app-migration-exception 3` / `size-growth-exception 28`
+- Legacy/raw 边界：`legacy-keyword 0` / `raw-channel-send 0` / `legacy-transport-import 0` / `legacy-permission-import 0`
+- 超长文件报告：`oversizedFiles=58` / `newOversizedFiles=5` / `grownOversizedFiles=15`
+- 允许增长豁免（growthExceptions）：`28` 个
+- 最大超长文件：`3659` 行（`apps/nexus/server/utils/tuffIntelligenceLabService.ts`）
+- 主线门禁状态：`size:guard --report` 可生成报告且当前无过期债务；release strict 仍需继续清理新增/增长超长文件。
 
 ---
 
@@ -22,62 +24,63 @@
 
 | owner | 总数 | 主要构成 |
 | --- | ---: | --- |
-| `core-app` | 46 | compat-file(10), legacy-keyword(36) |
-| `packages-utils` | 36 | compat-file(3), legacy-keyword(21), raw-channel-send(12) |
-| `pilot` | 15 | compat-file(5), legacy-keyword(9), size-growth-exception(1) |
-| `nexus` | 11 | compat-file(3), legacy-keyword(8) |
-| `packages-tuff-intelligence` | 4 | compat-file(2), legacy-keyword(1), size-growth-exception(1) |
-| 其他 | 8 | tuffex / plugin / unplugin 等 |
+| `core-app` | 22 | compat-file(5), core-app-migration-exception(3), size-growth-exception(14) |
+| `pilot` | 6 | size-growth-exception(6) |
+| `nexus` | 3 | size-growth-exception(3) |
+| `packages-tuff-intelligence` | 2 | size-growth-exception(2) |
+| `plugin-touch-translation` | 2 | size-growth-exception(2) |
+| `packages-tuff-cli` | 1 | size-growth-exception(1) |
 
 ---
 
 ## 3) Ticket 维度（强跟踪项）
 
-### 3.1 Growth Exceptions（必须追踪 file + ticket + CHANGES）
+### 3.1 Compatibility Naming（必须追踪 file + registry + guard）
 
-| ticket | owner | file | cap(lines) | expiresVersion |
-| --- | --- | --- | ---: | --- |
-| `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` | `pilot` | `apps/pilot/server/api/aigc/executor.post.ts` | 1666 | 2.5.0 |
-| `SIZE-GROWTH-2026-03-16-DEEPAGENT` | `packages-tuff-intelligence` | `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` | 1924 | 2.5.0 |
+| owner | remaining files | 说明 |
+| --- | ---: | --- |
+| `core-app` | 5 | `startup-migrations.ts`、download migration 文件、`polyfills.ts`、renderer `MigrationProgress.vue` 仍作为迁移/运行时命名债务登记。 |
 
-### 3.2 固定测试票据（策略项）
+### 3.2 Growth Exceptions（必须追踪 file + ticket + CHANGES）
 
-- `LEGACY-GUARD-KEYWORD`: 覆盖 `legacy-keyword` 全域  
-- `LEGACY-GUARD-RAW-EVENT`: 覆盖 `raw-channel-send` 全域  
-- `COMPAT-REGISTRY-NAMING`: 覆盖 `compat-file` 命名债务
+| owner | count | 重点清理方向 |
+| --- | ---: | --- |
+| `core-app` | 14 | `clipboard.ts`、`search-core.ts`、`plugin-module.ts`、`app-provider.ts` 等继续按 SRP 切片降低 cap。 |
+| `pilot` | 6 | AIGC completion、chat stream、tool gateway 与 admin channel 继续拆分。 |
+| `nexus` | 3 | i18n locale 与 `authStore.ts` 拆分。 |
+| `packages-tuff-intelligence` | 2 | `deepagent-engine.ts` 与 intelligence 类型拆分。 |
+| `plugin-touch-translation` | 2 | 插件入口与翻译面板拆分。 |
+| `packages-tuff-cli` | 1 | CLI 入口拆分。 |
 
 ---
 
-## 4) 结构风险榜（超长文件 Top 10）
+## 4) 结构风险榜（当前报告口径）
 
-| lines | file |
-| ---: | --- |
-| 4898 | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` |
-| 3657 | `apps/nexus/server/utils/tuffIntelligenceLabService.ts` |
-| 3627 | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| 2821 | `apps/nexus/app/pages/docs/[...slug].vue` |
-| 2783 | `packages/utils/transport/events/index.ts` |
-| 2693 | `apps/nexus/i18n/locales/en.ts` |
-| 2688 | `apps/core-app/src/main/modules/clipboard.ts` |
-| 2678 | `apps/nexus/i18n/locales/zh.ts` |
-| 2547 | `apps/core-app/src/main/modules/update/UpdateService.ts` |
-| 2413 | `apps/nexus/server/utils/pluginsStore.ts` |
+| 指标 | 当前值 |
+| --- | ---: |
+| `oversizedFiles` | 58 |
+| `newOversizedFiles` | 5 |
+| `grownOversizedFiles` | 15 |
+| `growthExceptions` | 28 |
+| `expiredDebt` | 0 |
+| `cleanupCandidates` | 0 |
+| `invalidConfig` | 0 |
 
 ---
 
 ## 5) 执行口径（单一标准）
 
-1. 新增兼容债务必须先入 `compatibility-debt-registry.csv`，且带 `owner + expires_version + test_case_id`。  
-2. 所有新增 `legacy-keyword` / `raw-channel-send` 必须先更新 `legacy-boundary-allowlist.json`，否则门禁阻断。  
-3. `size:guard` 禁止自动抬升 baseline；超限仅能通过 `growthExceptions + ticket` 临时放行。  
-4. `growthExceptions` 变更必须同时更新 `CHANGES` 与 registry 对应条目。  
-5. 默认清退门槛维持 `v2.5.0`，兼容路径坚持“只减不增”。
+1. 新增兼容债务必须先入 `compatibility-debt-registry.csv`，且带 `owner + expires_version + test_case_id`。
+2. `legacy-keyword` / `raw-channel-send` / legacy import 维度必须保持 `0`，不得通过 allowlist 扩容兜底。
+3. `size:guard` 禁止自动抬升 baseline；超限仅能通过 `growthExceptions + ticket` 临时放行。
+4. `growthExceptions` 变更必须同步 `CHANGES` 与 registry 对应条目。
+5. 默认清退门槛维持 `v2.4.11`，兼容路径坚持“只减不增”。
 
 ---
 
 ## 6) 下一个清理窗口（建议）
 
-1. `pilot`：优先消化 `executor.post.ts` 的 growth exception 并完成 API entry/service 拆分。  
-2. `packages-tuff-intelligence`：拆分 `deepagent-engine.ts`，清退 `SIZE-GROWTH-2026-03-16-DEEPAGENT`。  
-3. `packages-utils`：继续压降 `raw-channel-send(12)`，优先 plugin sdk 高频通道。  
-4. `core-app`：从 `file-provider / plugin-module / clipboard` 启动 SRP 拆分。
+1. `core-app`：继续清理剩余 `compat-file 5`，优先评估 download migration 命名与 `polyfills.ts` 的退场条件。
+2. `core-app`：继续拆 `clipboard.ts` autopaste、`search-core.ts` 与 `app-provider.ts`，按行为等价切片降低 size cap。
+3. `nexus`：拆分 `tuffIntelligenceLabService.ts`、locale 与 auth store 超长报告项。
+4. `packages-utils`：retained raw definition 上限保持 `<=264`，继续把符合 typed builder 结构的事件分批迁入 typed registry。

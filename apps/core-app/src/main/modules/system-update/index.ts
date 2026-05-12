@@ -5,7 +5,7 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import * as schema from '../../db/schema'
 import { AppPreviewChannel, resolveUpdateChannelLabel, splitUpdateTag } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { eq, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../db/sqlite-retry'
@@ -108,7 +108,7 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
   private readonly pollingService = PollingService.getInstance()
   private db: LibSQLDatabase<typeof schema> | null = null
-  private baseUrl = getTuffBaseUrl()
+  private baseUrl = NEXUS_BASE_URL
   private channel: AppPreviewChannel = this.resolveChannel()
   private startupRefreshTimer: NodeJS.Timeout | null = null
 

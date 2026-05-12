@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { requireAdmin } from '../../../../utils/auth'
+import { syncIntelligenceProviderToRegistry } from '../../../../utils/intelligenceProviderRegistryBridge'
 import { getProvider, updateProvider } from '../../../../utils/intelligenceStore'
 
 const normalizeBaseUrl = (value: string) => {
@@ -44,6 +45,12 @@ export default defineEventHandler(async (event) => {
     rateLimit: rateLimit === null ? null : (rateLimit && typeof rateLimit === 'object' ? rateLimit : undefined),
     capabilities: capabilities === null ? null : (Array.isArray(capabilities) ? capabilities : undefined),
     metadata: metadata === null ? null : (metadata && typeof metadata === 'object' ? metadata : undefined),
+  })
+  if (!provider) {
+    throw createError({ statusCode: 404, statusMessage: 'Provider not found.' })
+  }
+  await syncIntelligenceProviderToRegistry(event, provider, userId, {
+    apiKey: apiKey === null ? null : (typeof apiKey === 'string' ? apiKey : undefined),
   })
 
   return { provider }

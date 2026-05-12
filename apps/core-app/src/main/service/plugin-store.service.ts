@@ -10,29 +10,31 @@ import type {
   StoreSearchOptions,
   StoreSearchResult
 } from '@talex-touch/utils/plugin/providers'
-import { getTpexApiBase } from '@talex-touch/utils/env'
 import { PluginStoreClient } from '@talex-touch/utils/plugin/providers'
+import { getRuntimeNexusBaseUrl } from '../modules/nexus/runtime-base'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('PluginStoreService')
 
 // Singleton store client
 let storeClient: PluginStoreClient | null = null
+let storeClientBaseUrl = ''
 
 function resolveTpexApiBase(): string {
-  return getTpexApiBase()
+  return getRuntimeNexusBaseUrl()
 }
 
 /**
  * Get or create the store client instance
  */
 export function getStoreClient(): PluginStoreClient {
-  if (!storeClient) {
-    const tpexApiBase = resolveTpexApiBase()
+  const tpexApiBase = resolveTpexApiBase()
+  if (!storeClient || storeClientBaseUrl !== tpexApiBase) {
     storeClient = new PluginStoreClient({
       tpexApiBase,
       npmRegistry: 'https://registry.npmjs.org'
     })
+    storeClientBaseUrl = tpexApiBase
     log.info('Plugin store client initialized', { meta: { tpexApiBase } })
   }
   return storeClient

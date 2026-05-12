@@ -1,4 +1,4 @@
-import { getTelemetryApiBase, normalizeBaseUrl } from '../env'
+import { getTuffBaseUrl, normalizeBaseUrl } from '../env'
 import type {
   ConflictItem,
   DeviceAttestPayload,
@@ -68,7 +68,7 @@ export class CloudSyncSDK {
   private handshakePromise: Promise<HandshakeResponse> | null = null
 
   constructor(options: CloudSyncSDKOptions) {
-    const baseUrl = options.baseUrl ?? options.serviceBaseUrl ?? options.apiBaseUrl ?? getTelemetryApiBase()
+    const baseUrl = options.baseUrl ?? options.serviceBaseUrl ?? options.apiBaseUrl ?? getTuffBaseUrl()
     this.baseUrl = normalizeBaseUrl(baseUrl)
     this.getAuthToken = async () => options.getAuthToken()
     this.getDeviceId = async () => options.getDeviceId()

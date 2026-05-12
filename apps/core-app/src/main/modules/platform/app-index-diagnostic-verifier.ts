@@ -16,6 +16,17 @@ export type AppIndexDiagnosticStageKey =
   | 'ngram'
   | 'subsequence'
 
+const APP_INDEX_DIAGNOSTIC_STAGE_KEYS: AppIndexDiagnosticStageKey[] = [
+  'precise',
+  'phrase',
+  'prefix',
+  'fts',
+  'ngram',
+  'subsequence'
+]
+
+const APP_INDEX_DIAGNOSTIC_STAGE_KEY_SET = new Set<string>(APP_INDEX_DIAGNOSTIC_STAGE_KEYS)
+
 export interface AppIndexDiagnosticEvidenceStage {
   ran: boolean
   targetHit: boolean
@@ -72,6 +83,7 @@ export interface AppIndexDiagnosticGateOptions {
   requireBundleOrIdentity?: boolean
   requireCleanDisplayName?: boolean
   requireIcon?: boolean
+  requireManagedEntry?: boolean
   requireReindex?: boolean
   requireCaseIds?: string[]
 }
@@ -105,11 +117,32 @@ export function evaluateAppIndexDiagnosticEvidence(
     failures.push('diagnostic target is missing')
   }
 
+  const diagnosisClaimsFound = evidence.diagnosis.success || evidence.diagnosis.status === 'found'
+
+  if (
+    (diagnosisClaimsFound || options.requireSuccess) &&
+    !sameText(evidence.input.target, evidence.diagnosis.target)
+  ) {
+    failures.push('diagnostic input target does not match diagnosis target')
+  }
+
   if (!evidence.diagnosis.success || evidence.diagnosis.status !== 'found') {
     const message = `diagnostic target was not found: ${evidence.diagnosis.reason || evidence.diagnosis.status}`
     if (options.requireSuccess) failures.push(message)
     else warnings.push(message)
   }
+
+  failures.push(...findStageConsistencyFailures(evidence, options))
+  if (
+    diagnosisClaimsFound ||
+    evidence.app ||
+    evidence.index ||
+    evidence.stages ||
+    evidence.reindex
+  ) {
+    failures.push(...findSuggestedFieldConsistencyFailures(evidence))
+  }
+  failures.push(...findReindexConsistencyFailures(evidence, options))
 
   if (options.requireQueryHit && evidence.diagnosis.matchedStages.length === 0) {
     failures.push('diagnostic query did not hit the target app')
@@ -154,6 +187,17 @@ export function evaluateAppIndexDiagnosticEvidence(
     failures.push('diagnostic icon is missing')
   }
 
+  if (options.requireManagedEntry) {
+    if (evidence.app?.entrySource !== 'manual') {
+      failures.push(
+        `diagnostic managed entry source mismatch: expected manual, got ${evidence.app?.entrySource || 'missing'}`
+      )
+    }
+    if (evidence.app?.entryEnabled !== true) {
+      failures.push('diagnostic managed entry is not enabled')
+    }
+  }
+
   if (options.requireReindex && !evidence.reindex?.success) {
     failures.push(`diagnostic reindex did not succeed: ${evidence.reindex?.status || 'missing'}`)
   }
@@ -166,6 +210,216 @@ export function evaluateAppIndexDiagnosticEvidence(
   }
 
   return { passed: failures.length === 0, failures, warnings }
+}
+
+function findStageConsistencyFailures(
+  evidence: AppIndexDiagnosticEvidencePayload,
+  options: AppIndexDiagnosticGateOptions
+): string[] {
+  const failures: string[] = []
+  const matchedStages = normalizeStageList(evidence.diagnosis.matchedStages)
+  const targetItemIds = new Set(
+    [evidence.index?.itemId, ...(evidence.index?.itemIds ?? [])].filter(Boolean)
+  )
+
+  if (matchedStages.invalid.length > 0) {
+    failures.push(`diagnostic matched stages are invalid: ${matchedStages.invalid.join(', ')}`)
+  }
+
+  if (!evidence.stages) {
+    if (options.requireQueryHit && matchedStages.valid.length > 0) {
+      failures.push('diagnostic query stage evidence is missing')
+    }
+    return failures
+  }
+
+  const targetHitStages: AppIndexDiagnosticStageKey[] = []
+  for (const stageKey of APP_INDEX_DIAGNOSTIC_STAGE_KEYS) {
+    const stage = evidence.stages[stageKey]
+    if (!stage) continue
+
+    const matches = Array.isArray(stage.matches) ? stage.matches : []
+    if (!Number.isInteger(stage.matchCount) || stage.matchCount < 0) {
+      failures.push(`diagnostic ${stageKey} matchCount is invalid`)
+    } else if (stage.matchCount !== matches.length) {
+      failures.push(
+        `diagnostic ${stageKey} matchCount mismatch: expected ${matches.length}, got ${stage.matchCount}`
+      )
+    }
+
+    if (!stage.ran && (stage.targetHit || stage.matchCount > 0 || matches.length > 0)) {
+      failures.push(`diagnostic ${stageKey} has results without running`)
+    }
+
+    if (!stage.targetHit && (stage.matchCount > 0 || matches.length > 0)) {
+      failures.push(`diagnostic ${stageKey} has matches without target hit`)
+    }
+
+    if (!stage.targetHit) continue
+
+    targetHitStages.push(stageKey)
+    if (stage.matchCount <= 0) {
+      failures.push(`diagnostic ${stageKey} target hit has no matches`)
+    }
+    if (targetItemIds.size === 0) {
+      failures.push(`diagnostic ${stageKey} target hit cannot be verified without target item ids`)
+      continue
+    }
+    if (!matches.some((match) => targetItemIds.has(match.itemId))) {
+      failures.push(`diagnostic ${stageKey} target hit does not include the target item id`)
+    }
+  }
+
+  if (!sameStageList(targetHitStages, matchedStages.valid)) {
+    failures.push(
+      `diagnostic matchedStages do not match stage target hits: expected ${formatStageList(targetHitStages)}, got ${formatStageList(matchedStages.valid)}`
+    )
+  }
+
+  if (options.requireQueryHit && targetHitStages.length === 0) {
+    failures.push('diagnostic query stages did not hit the target app')
+  }
+
+  return failures
+}
+
+function findSuggestedFieldConsistencyFailures(
+  evidence: AppIndexDiagnosticEvidencePayload
+): string[] {
+  const suggested = evidence.manualRegression.suggestedEvidenceFields
+  const failures: string[] = []
+
+  if (!sameText(suggested.target, evidence.input.target)) {
+    failures.push('diagnostic suggested target does not match input target')
+  }
+  if (!sameNullableText(suggested.query, evidence.input.query)) {
+    failures.push('diagnostic suggested query does not match input query')
+  }
+  if (!sameStageList(suggested.matchedStages, evidence.diagnosis.matchedStages)) {
+    failures.push('diagnostic suggested matchedStages do not match diagnosis')
+  }
+
+  const app = evidence.app
+  if (suggested.launchKind !== undefined && suggested.launchKind !== app?.launchKind) {
+    failures.push('diagnostic suggested launchKind does not match app')
+  }
+  if (
+    suggested.launchTarget !== undefined &&
+    !sameText(suggested.launchTarget, app?.launchTarget)
+  ) {
+    failures.push('diagnostic suggested launchTarget does not match app')
+  }
+  if (suggested.launchArgs !== undefined && !sameText(suggested.launchArgs, app?.launchArgs)) {
+    failures.push('diagnostic suggested launchArgs do not match app')
+  }
+  if (
+    suggested.workingDirectory !== undefined &&
+    !sameText(suggested.workingDirectory, app?.workingDirectory)
+  ) {
+    failures.push('diagnostic suggested workingDirectory does not match app')
+  }
+  if (
+    suggested.displayNameStatus !== undefined &&
+    suggested.displayNameStatus !== app?.displayNameStatus
+  ) {
+    failures.push('diagnostic suggested displayNameStatus does not match app')
+  }
+  if (suggested.iconPresent !== undefined && suggested.iconPresent !== app?.iconPresent) {
+    failures.push('diagnostic suggested iconPresent does not match app')
+  }
+  if (
+    suggested.bundleOrIdentity !== undefined &&
+    suggested.bundleOrIdentity !== app?.bundleId &&
+    suggested.bundleOrIdentity !== app?.appIdentity
+  ) {
+    failures.push('diagnostic suggested bundleOrIdentity does not match app')
+  }
+  if (
+    suggested.reindexStatus !== undefined &&
+    suggested.reindexStatus !== evidence.reindex?.status
+  ) {
+    failures.push('diagnostic suggested reindexStatus does not match reindex')
+  }
+
+  return failures
+}
+
+function findReindexConsistencyFailures(
+  evidence: AppIndexDiagnosticEvidencePayload,
+  options: AppIndexDiagnosticGateOptions
+): string[] {
+  if (!evidence.reindex?.success) return []
+
+  const appEntityAliases = [
+    evidence.app?.path,
+    evidence.app?.launchTarget,
+    evidence.app?.appIdentity,
+    evidence.app?.bundleId
+  ].filter((value): value is string => Boolean(value?.trim()))
+  const aliases =
+    evidence.app && appEntityAliases.length > 0
+      ? appEntityAliases
+      : [evidence.input.target, evidence.diagnosis.target].filter((value): value is string =>
+          Boolean(value?.trim())
+        )
+
+  if (!evidence.reindex.path) {
+    return options.requireReindex ? ['diagnostic reindex path is missing'] : []
+  }
+  if (!aliases.some((alias) => sameText(alias, evidence.reindex?.path))) {
+    return ['diagnostic reindex path does not match target app']
+  }
+
+  return []
+}
+
+function normalizeStageList(stages: readonly string[] | undefined): {
+  valid: AppIndexDiagnosticStageKey[]
+  invalid: string[]
+} {
+  if (!Array.isArray(stages)) return { valid: [], invalid: [] }
+
+  const valid: AppIndexDiagnosticStageKey[] = []
+  const invalid: string[] = []
+  for (const stage of stages) {
+    if (APP_INDEX_DIAGNOSTIC_STAGE_KEY_SET.has(stage)) {
+      valid.push(stage as AppIndexDiagnosticStageKey)
+    } else {
+      invalid.push(stage)
+    }
+  }
+  return { valid, invalid }
+}
+
+function sameStageList(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+): boolean {
+  const leftStages = normalizeStageList(left).valid
+  const rightStages = normalizeStageList(right).valid
+  return (
+    leftStages.length === rightStages.length &&
+    leftStages.every((stage, index) => stage === rightStages[index])
+  )
+}
+
+function formatStageList(stages: readonly string[]): string {
+  return stages.length > 0 ? stages.join(', ') : 'none'
+}
+
+function sameText(left: string | null | undefined, right: string | null | undefined): boolean {
+  return normalizeText(left) === normalizeText(right)
+}
+
+function sameNullableText(
+  left: string | null | undefined,
+  right: string | null | undefined
+): boolean {
+  return left == null && right == null ? true : sameText(left, right)
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
 }
 
 export function verifyAppIndexDiagnosticEvidence(

@@ -39,6 +39,20 @@ const registryOnlyDomains = new Set([
 const scanRoots = LEGACY_SCAN_ROOTS
 const scopeRoots = SCOPE_GUARD_ROOTS
 const scopeExemptFiles = SCOPE_GUARD_EXEMPT_FILES
+const compatibilityFilenameMarker = /(?:legacy|migration|migrations|polyfill|polyfills)/i
+const compatFilenameMarker = /(?:^|[^a-z0-9])compat(?:[^a-z0-9]|$)/i
+const shimFilenameMarker = /(?:^|[^a-z0-9])shims?(?:[^a-z0-9]|$)/i
+
+function hasCompatibilityFilenameMarker(relativePath) {
+  const basename = path.basename(relativePath)
+  if (compatibilityFilenameMarker.test(basename) || compatFilenameMarker.test(basename)) {
+    return true
+  }
+  if (basename.endsWith('.d.ts')) {
+    return false
+  }
+  return shimFilenameMarker.test(basename)
+}
 
 const domainRules = [
   {
@@ -46,7 +60,7 @@ const domainRules = [
     description: 'Filename contains compatibility markers',
     collect(content, relativePath) {
       void content
-      return /(?:legacy|compat|migration|shim|polyfill|adapter)/i.test(path.basename(relativePath))
+      return hasCompatibilityFilenameMarker(relativePath)
     },
     defaultContract: 'Compatibility shell only; no new capability growth',
     defaultReason: 'Historical compatibility filename retained for migration path',

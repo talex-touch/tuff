@@ -5,7 +5,6 @@
  */
 
 import { StorageList, type AgentCapability, type AgentDescriptor } from '@talex-touch/utils'
-import { getTpexApiBase } from '@talex-touch/utils/env'
 import crypto from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -13,6 +12,7 @@ import compressing from 'compressing'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import { getNetworkService } from '../modules/network'
+import { getRuntimeNexusBaseUrl } from '../modules/nexus/runtime-base'
 import { getMainConfig, isMainStorageReady, saveMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
 
@@ -108,6 +108,7 @@ interface RemoteAgentPackage {
 
 interface RemoteCatalogSnapshot {
   fetchedAt: number
+  baseUrl: string
   agents: StoreAgentInfo[]
   packagesByAgent: Map<string, Map<string, RemoteAgentPackage>>
 }
@@ -293,7 +294,7 @@ class AgentStoreService {
   private remoteCatalog: RemoteCatalogSnapshot | null = null
 
   private resolveCatalogBase(): string {
-    const base = getTpexApiBase().replace(/\/+$/, '')
+    const base = getRuntimeNexusBaseUrl().replace(/\/+$/, '')
     return base
   }
 
@@ -408,15 +409,18 @@ class AgentStoreService {
 
     return {
       fetchedAt: Date.now(),
+      baseUrl: this.resolveCatalogBase(),
       agents: parsedAgents,
       packagesByAgent
     }
   }
 
   private async loadRemoteCatalog(force = false): Promise<RemoteCatalogSnapshot> {
+    const currentBaseUrl = this.resolveCatalogBase()
     if (
       !force &&
       this.remoteCatalog &&
+      this.remoteCatalog.baseUrl === currentBaseUrl &&
       Date.now() - this.remoteCatalog.fetchedAt < REMOTE_CATALOG_CACHE_TTL_MS
     ) {
       return this.remoteCatalog

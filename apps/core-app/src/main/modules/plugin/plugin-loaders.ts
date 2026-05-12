@@ -23,7 +23,7 @@ import { getNetworkService } from '../network'
 import { TouchPlugin } from './plugin'
 import { PluginFeature } from './plugin-feature'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
-import { getPluginSdkCompatibilityGate, SDKAPI_BLOCKED_CODE } from './sdk-compat'
+import { getPluginSdkHardCutGate, SDKAPI_BLOCKED_CODE } from './sdkapi-hard-cut-gate'
 
 /**
  * Plugin manifest structure from manifest.json
@@ -45,7 +45,7 @@ interface PluginManifest {
   features?: IPluginFeature[]
   divisionBox?: ManifestDivisionBoxConfig
   /**
-   * SDK API version for compatibility checking.
+   * SDK API version for hard-cut runtime gating.
    * Format: YYMMDD (e.g., 251212)
    */
   sdkapi?: SdkApiVersion
@@ -147,27 +147,27 @@ abstract class BasePluginLoader {
         ? pluginInfo.category.trim()
         : undefined
 
-    // SDK version compatibility check
+    // SDK version hard-cut gate
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
-    const sdkCompatGate = getPluginSdkCompatibilityGate(this.pluginName, pluginInfo.sdkapi)
-    const sdkBlocked = sdkCompatGate.blocked
+    const sdkHardCutGate = getPluginSdkHardCutGate(this.pluginName, pluginInfo.sdkapi)
+    const sdkBlocked = sdkHardCutGate.blocked
 
     if (sdkBlocked) {
       const blockedMessage =
-        sdkCompatGate.message ||
-        `Plugin "${this.pluginName}" is blocked by the sdkapi compatibility gate.`
+        sdkHardCutGate.message ||
+        `Plugin "${this.pluginName}" is blocked by the sdkapi hard-cut gate.`
       this.touchPlugin.issues.push({
         type: 'error',
         message: blockedMessage,
         source: 'manifest.json',
         code: SDKAPI_BLOCKED_CODE,
-        suggestion: sdkCompatGate.suggestion,
+        suggestion: sdkHardCutGate.suggestion,
         meta: {
           declaredVersion: pluginInfo.sdkapi,
-          resolvedVersion: sdkCompatGate.resolvedSdkapi,
+          resolvedVersion: sdkHardCutGate.resolvedSdkapi,
           currentVersion: CURRENT_SDK_VERSION,
-          reason: sdkCompatGate.reason
+          reason: sdkHardCutGate.reason
         },
         timestamp: Date.now()
       })

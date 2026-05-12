@@ -33,6 +33,7 @@ interface CliOptions {
   intervals: number[]
   durationMs: number
   outputDir?: string
+  output?: string
 }
 
 const DEFAULT_INTERVALS = [1000, 500, 250]
@@ -65,6 +66,10 @@ function parseArgs(argv: string[]): CliOptions {
     }
     if (arg === '--outputDir' && argv[i + 1]) {
       options.outputDir = argv[++i]
+      continue
+    }
+    if (arg === '--output' && argv[i + 1]) {
+      options.output = argv[++i]
       continue
     }
   }
@@ -317,14 +322,14 @@ function renderTable(results: ScenarioResult[]): string {
   return lines.join('\n')
 }
 
-async function persistReport(results: ScenarioResult[], outputDir?: string): Promise<string> {
+async function persistReport(results: ScenarioResult[], options: CliOptions): Promise<string> {
   const __filename = fileURLToPath(import.meta.url)
   const __dirname = path.dirname(__filename)
   const coreRoot = path.resolve(__dirname, '..')
   const repoRoot = path.resolve(coreRoot, '..', '..')
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const reportDir = outputDir
-    ? path.resolve(outputDir)
+  const reportDir = options.outputDir
+    ? path.resolve(options.outputDir)
     : path.resolve(
         repoRoot,
         'docs',
@@ -333,8 +338,10 @@ async function persistReport(results: ScenarioResult[], outputDir?: string): Pro
         `clipboard-polling-stress-${timestamp}`
       )
 
-  await mkdir(reportDir, { recursive: true })
-  const reportPath = path.join(reportDir, 'summary.json')
+  const reportPath = options.output
+    ? path.resolve(options.output)
+    : path.join(reportDir, 'summary.json')
+  await mkdir(path.dirname(reportPath), { recursive: true })
   await writeFile(
     reportPath,
     `${JSON.stringify(
@@ -370,7 +377,7 @@ async function main(): Promise<void> {
   )
   process.stdout.write(`${table}\n`)
 
-  const reportPath = await persistReport(results, options.outputDir)
+  const reportPath = await persistReport(results, options)
   process.stdout.write(`\n[clipboard-stress] report saved: ${reportPath}\n`)
 
   PollingService.getInstance().stop('clipboard stress benchmark completed')

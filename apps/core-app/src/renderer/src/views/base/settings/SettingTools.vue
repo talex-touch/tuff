@@ -9,7 +9,7 @@ import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { TxButton, TxInput, TxSelectItem } from '@talex-touch/tuffex'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -66,9 +66,10 @@ interface SystemPermissionCheckResult {
   message?: string
 }
 
-const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
-  'system:permission:check'
-)
+const systemPermissionCheck = defineEvent('system')
+  .module('permission')
+  .event('check')
+  .define<string, SystemPermissionCheckResult>()
 const omniPanelAccessibilityGranted = ref<boolean | null>(null)
 
 function parseSelectNumber(value: unknown): number | null {

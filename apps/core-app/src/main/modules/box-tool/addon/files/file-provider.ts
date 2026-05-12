@@ -42,6 +42,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core/alias'
 import { app, shell } from 'electron'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
@@ -74,13 +75,20 @@ import {
   WHITELISTED_EXTENSIONS
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
-import { THUMBNAIL_EXTENSIONS, isThumbnailCandidate } from './thumbnail-config'
+import {
+  THUMBNAIL_EXTENSIONS,
+  getThumbnailUnsupportedReason,
+  isThumbnailCandidate
+} from './thumbnail-config'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { EmbeddingService } from './embedding-service'
 import { IconWorkerClient } from './workers/icon-worker-client'
-import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
+import {
+  ThumbnailWorkerClient,
+  type ThumbnailGenerationResult
+} from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   SearchIndexWorkerClient,
@@ -103,6 +111,11 @@ import {
   resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
   resolveTypeTag as resolveFileProviderTypeTag
 } from './services/file-provider-search-service'
+import {
+  FILE_ICON_META_EXTENSION_KEY,
+  persistFileIconCache,
+  type FileIconCacheMeta
+} from './services/file-provider-icon-cache-service'
 import { FileProviderWatchService } from './services/file-provider-watch-service'
 import {
   FileProviderOpenerService,
@@ -112,7 +125,6 @@ import { FileProviderIndexRuntimeService } from './services/file-provider-index-
 import { type PersistEntry } from '../../search-engine/workers/search-index-worker-client'
 import FileSystemWatcher from '../../file-system-watcher'
 
-const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
 const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
 const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
@@ -120,6 +132,7 @@ const SEMANTIC_SEARCH_TIMEOUT_MS = 120
 const BACKGROUND_CONTENT_INDEX_MIN_BYTES = 5 * 1024 * 1024
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -141,15 +154,20 @@ interface IncrementalUpdatePayload {
   manual?: boolean
 }
 
-interface IconCacheMeta {
-  mtime: number | null
-  size: number | null
-}
-
 interface IconCacheEntry {
   icon?: string | null
-  meta?: IconCacheMeta
+  meta?: FileIconCacheMeta
 }
+
+interface ThumbnailStatusPayload {
+  status: 'failed' | 'unsupported'
+  reason: string
+  mtime: number | null
+  size: number | null
+  at: number
+}
+
+type ThumbnailFileSnapshot = Pick<typeof filesSchema.$inferSelect, 'mtime' | 'size'>
 
 interface FileUpdateRecord {
   id: number
@@ -730,6 +748,73 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return left === right
     }
     return Math.abs(left - right) <= this.timestampToleranceMs
+  }
+
+  private buildThumbnailStatus(
+    file: ThumbnailFileSnapshot | undefined,
+    result: Extract<ThumbnailGenerationResult, { status: 'failed' | 'unsupported' }>
+  ): string {
+    const payload: ThumbnailStatusPayload = {
+      status: result.status,
+      reason: result.reason,
+      mtime: file ? this.toTimestamp(file.mtime) : null,
+      size: file && typeof file.size === 'number' ? file.size : null,
+      at: Date.now()
+    }
+    return JSON.stringify(payload)
+  }
+
+  private parseThumbnailStatus(value: string | undefined): ThumbnailStatusPayload | null {
+    if (!value) return null
+    try {
+      const parsed = JSON.parse(value) as Partial<ThumbnailStatusPayload>
+      if (
+        (parsed.status !== 'failed' && parsed.status !== 'unsupported') ||
+        typeof parsed.reason !== 'string'
+      ) {
+        return null
+      }
+      return {
+        status: parsed.status,
+        reason: parsed.reason,
+        mtime: typeof parsed.mtime === 'number' ? parsed.mtime : null,
+        size: typeof parsed.size === 'number' ? parsed.size : null,
+        at: typeof parsed.at === 'number' ? parsed.at : 0
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private matchesThumbnailStatus(
+    file: ThumbnailFileSnapshot,
+    status: ThumbnailStatusPayload | null
+  ): boolean {
+    if (!status) return false
+    const fileMtime = this.toTimestamp(file.mtime)
+    const fileSize = typeof file.size === 'number' ? file.size : null
+    return status.mtime === fileMtime && status.size === fileSize
+  }
+
+  private shouldSkipThumbnailGeneration(
+    file: ThumbnailFileSnapshot,
+    extensions?: Record<string, string>
+  ): boolean {
+    const status = this.parseThumbnailStatus(extensions?.[THUMBNAIL_STATUS_KEY])
+    return this.matchesThumbnailStatus(file, status)
+  }
+
+  private async persistThumbnailStatus(
+    fileId: number,
+    file: ThumbnailFileSnapshot | undefined,
+    result: Extract<ThumbnailGenerationResult, { status: 'failed' | 'unsupported' }>
+  ): Promise<void> {
+    if (!this.dbUtils) return
+    await this.withDbWrite('thumbnail.status', () =>
+      this.dbUtils!.addFileExtensions([
+        { fileId, key: THUMBNAIL_STATUS_KEY, value: this.buildThumbnailStatus(file, result) }
+      ])
+    )
   }
 
   // private hasDiskFileChanged(
@@ -1526,40 +1611,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return
       }
 
-      const meta: IconCacheMeta = {
+      const meta: FileIconCacheMeta = {
         mtime: file ? this.toTimestamp(file.mtime) : Date.now(),
         size: file && typeof file.size === 'number' ? file.size : null
       }
 
       if (this.dbUtils) {
-        const db = this.dbUtils.getDb()
-        await db.transaction(async (tx) => {
-          // Insert icon
-          await tx
-            .insert(fileExtensions)
-            .values({
-              fileId,
-              key: 'icon',
-              value: iconValue
-            })
-            .onConflictDoUpdate({
-              target: [fileExtensions.fileId, fileExtensions.key],
-              set: { value: iconValue }
-            })
-
-          // Insert meta
-          await tx
-            .insert(fileExtensions)
-            .values({
-              fileId,
-              key: ICON_META_EXTENSION_KEY,
-              value: JSON.stringify(meta)
-            })
-            .onConflictDoUpdate({
-              target: [fileExtensions.fileId, fileExtensions.key],
-              set: { value: JSON.stringify(meta) }
-            })
-        })
+        await persistFileIconCache(
+          {
+            dbUtils: this.dbUtils,
+            withDbWrite: (label, operation) => this.withDbWrite(label, operation)
+          },
+          fileId,
+          iconValue,
+          meta
+        )
       }
     } catch (error) {
       this.logWarn('Failed to extract icon', error, { path: filePath })
@@ -1573,24 +1639,55 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async ensureFileThumbnail(
     fileId: number,
     filePath: string,
-    file?: typeof filesSchema.$inferSelect
+    file?: typeof filesSchema.$inferSelect,
+    extensions?: Record<string, string>
   ): Promise<void> {
     if (this.pendingThumbnailExtractions.has(fileId)) {
       return
     }
+    if (file && this.shouldSkipThumbnailGeneration(file, extensions)) {
+      return
+    }
     if (file && !isThumbnailCandidate(file.extension, file.size)) {
+      const reason = getThumbnailUnsupportedReason(file.extension, file.size)
+      if (reason) {
+        await this.persistThumbnailStatus(fileId, file, {
+          status: 'unsupported',
+          reason,
+          durationMs: 0
+        })
+      }
       return
     }
 
     this.pendingThumbnailExtractions.add(fileId)
     try {
-      const thumbnail = await this.thumbnailWorker.generate(filePath)
-      if (!thumbnail || !this.dbUtils) {
+      const thumbnail = await this.thumbnailWorker.generate(filePath, {
+        extension: file?.extension,
+        sizeBytes: file?.size
+      })
+      if (!this.dbUtils) {
         return
       }
-      await this.withDbWrite('thumbnail.worker', () =>
-        this.dbUtils!.addFileExtensions([{ fileId, key: 'thumbnail', value: thumbnail }])
-      )
+      if (thumbnail.status === 'generated') {
+        await this.withDbWrite('thumbnail.worker', () =>
+          this.dbUtils!.addFileExtensions([
+            { fileId, key: 'thumbnail', value: thumbnail.path },
+            {
+              fileId,
+              key: THUMBNAIL_STATUS_KEY,
+              value: JSON.stringify({ status: 'generated', at: Date.now() })
+            }
+          ])
+        )
+        return
+      }
+      await this.persistThumbnailStatus(fileId, file, thumbnail)
+      this.logDebug('Thumbnail generation skipped', {
+        path: filePath,
+        status: thumbnail.status,
+        reason: thumbnail.reason
+      })
     } catch (error) {
       this.logWarn('Failed to generate thumbnail', error, { path: filePath })
     } finally {
@@ -1609,8 +1706,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const db = this.dbUtils.getDb()
 
-      // Build extension filter: WHERE extension IN ('.png', '.jpg', ...)
-      const imageExtensions = [...THUMBNAIL_EXTENSIONS].map((e) => `.${e}`)
+      const thumbnailExtensions = [...THUMBNAIL_EXTENSIONS].map((e) => `.${e}`)
+      const thumbnailExtension = alias(fileExtensions, 'thumbnail_extension')
+      const thumbnailStatusExtension = alias(fileExtensions, 'thumbnail_status_extension')
 
       // Find image files that don't have a thumbnail extension yet
       const candidates = await db
@@ -1618,48 +1716,98 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           id: filesSchema.id,
           path: filesSchema.path,
           extension: filesSchema.extension,
-          size: filesSchema.size
+          size: filesSchema.size,
+          mtime: filesSchema.mtime,
+          ctime: filesSchema.ctime,
+          statusValue: thumbnailStatusExtension.value
         })
         .from(filesSchema)
         .leftJoin(
-          fileExtensions,
-          and(eq(fileExtensions.fileId, filesSchema.id), eq(fileExtensions.key, 'thumbnail'))
+          thumbnailExtension,
+          and(
+            eq(thumbnailExtension.fileId, filesSchema.id),
+            eq(thumbnailExtension.key, 'thumbnail')
+          )
         )
-        .where(and(isNull(fileExtensions.value), inArray(filesSchema.extension, imageExtensions)))
-        .limit(500)
+        .leftJoin(
+          thumbnailStatusExtension,
+          and(
+            eq(thumbnailStatusExtension.fileId, filesSchema.id),
+            eq(thumbnailStatusExtension.key, THUMBNAIL_STATUS_KEY)
+          )
+        )
+        .where(
+          and(isNull(thumbnailExtension.value), inArray(filesSchema.extension, thumbnailExtensions))
+        )
+        .limit(1000)
 
       if (candidates.length === 0) return
 
       this.logDebug('Starting deferred thumbnail generation', { count: candidates.length })
       let generated = 0
+      let skipped = 0
 
       for (const file of candidates) {
         if (!this._thumbnailTaskRunning) break // allow cancellation
 
-        if (!isThumbnailCandidate(file.extension, file.size)) continue
+        if (
+          this.shouldSkipThumbnailGeneration(file, {
+            [THUMBNAIL_STATUS_KEY]: file.statusValue ?? ''
+          })
+        ) {
+          skipped++
+          continue
+        }
+
+        if (!isThumbnailCandidate(file.extension, file.size)) {
+          const reason = getThumbnailUnsupportedReason(file.extension, file.size)
+          if (typeof file.id === 'number' && reason) {
+            await this.persistThumbnailStatus(file.id, file, {
+              status: 'unsupported',
+              reason,
+              durationMs: 0
+            })
+          }
+          skipped++
+          continue
+        }
 
         // Yield to event loop before each thumbnail
         await new Promise<void>((resolve) => setImmediate(resolve))
         await appTaskGate.waitForIdle()
 
-        let thumbnail: string | null = null
+        let thumbnail: ThumbnailGenerationResult | null = null
         try {
-          thumbnail = await this.thumbnailWorker.generate(file.path)
+          thumbnail = await this.thumbnailWorker.generate(file.path, {
+            extension: file.extension,
+            sizeBytes: file.size
+          })
         } catch (error) {
           this.logWarn('Thumbnail worker failed', error, { path: file.path })
         }
         if (thumbnail && typeof file.id === 'number') {
-          await this.withDbWrite('thumbnail.deferred', () =>
-            this.dbUtils!.addFileExtensions([
-              { fileId: file.id, key: 'thumbnail', value: thumbnail }
-            ])
-          )
-          generated++
+          if (thumbnail.status === 'generated') {
+            await this.withDbWrite('thumbnail.deferred', () =>
+              this.dbUtils!.addFileExtensions([
+                { fileId: file.id, key: 'thumbnail', value: thumbnail.path },
+                {
+                  fileId: file.id,
+                  key: THUMBNAIL_STATUS_KEY,
+                  value: JSON.stringify({ status: 'generated', at: Date.now() })
+                }
+              ])
+            )
+            generated++
+          } else {
+            await this.persistThumbnailStatus(file.id, file, thumbnail)
+            skipped++
+          }
         }
       }
 
       this.logDebug('Deferred thumbnail generation completed', {
         generated,
+        skipped,
         total: candidates.length
       })
     } catch (error) {
@@ -2770,7 +2918,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const rows = await this.dbUtils.getFileExtensionsByFileIds(fileIds, [
       'icon',
-      ICON_META_EXTENSION_KEY
+      FILE_ICON_META_EXTENSION_KEY
     ])
     const invalidIconFileIds: number[] = []
 
@@ -2782,9 +2930,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         } else {
           entry.icon = row.value
         }
-      } else if (row.key === ICON_META_EXTENSION_KEY && row.value) {
+      } else if (row.key === FILE_ICON_META_EXTENSION_KEY && row.value) {
         try {
-          const parsed = JSON.parse(row.value) as IconCacheMeta
+          const parsed = JSON.parse(row.value) as FileIconCacheMeta
           entry.meta = {
             mtime: typeof parsed?.mtime === 'number' ? parsed.mtime : null,
             size: typeof parsed?.size === 'number' ? parsed.size : null
@@ -3017,9 +3165,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         },
         (file) => {
           if (typeof file.id === 'number') {
-            this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-            })
+            this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
+              (error) => {
+                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+              }
+            )
           }
         }
       )
@@ -3100,9 +3250,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         },
         (file) => {
           if (typeof file.id === 'number') {
-            this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-            })
+            this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
+              (error) => {
+                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+              }
+            )
           }
         }
       )
@@ -3487,9 +3639,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           },
           (file) => {
             if (typeof file.id === 'number') {
-              this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
-                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-              })
+              this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
+                (error) => {
+                  this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+                }
+              )
             }
           }
         )

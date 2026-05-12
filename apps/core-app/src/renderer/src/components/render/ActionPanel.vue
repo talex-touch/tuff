@@ -2,6 +2,10 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+  COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
+} from '../../../../shared/events/corebox-scenes'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 
 export interface ActionItem {
@@ -64,6 +68,21 @@ const actions = computed<ActionItem[]>(() => {
       label: revealInFolderLabel.value,
       icon: 'i-ri-folder-open-line',
       shortcut: isMac.value ? '⌘⇧F' : 'Ctrl+Shift+F'
+    })
+  }
+
+  if (props.item.kind === 'image') {
+    list.push({
+      id: COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+      label: t('corebox.actions.translateImage', '翻译图片'),
+      icon: 'i-ri-translate-2',
+      shortcut: isMac.value ? '⌘⇧T' : 'Ctrl+Shift+T'
+    })
+    list.push({
+      id: COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
+      label: t('corebox.actions.translateImagePin', '翻译并置顶'),
+      icon: 'i-ri-window-line',
+      shortcut: isMac.value ? '⌘⌥T' : 'Ctrl+Alt+T'
     })
   }
 

@@ -6,7 +6,9 @@ const {
   accessibilityClientMock,
   ensureXdotoolAvailableMock,
   isXdotoolAvailableMock,
-  getSelectionCaptureCapabilityPatchMock
+  getSelectionCaptureCapabilityPatchMock,
+  runNexusSceneMock,
+  extractTranslatedTextFromSceneRunMock
 } = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(() => ({
     on: vi.fn(() => () => {}),
@@ -18,7 +20,37 @@ const {
   accessibilityClientMock: vi.fn(() => true),
   ensureXdotoolAvailableMock: vi.fn(async () => undefined),
   isXdotoolAvailableMock: vi.fn(async () => true),
-  getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'supported' }))
+  getSelectionCaptureCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'supported' })),
+  runNexusSceneMock: vi.fn(),
+  extractTranslatedTextFromSceneRunMock: vi.fn()
+}))
+
+vi.mock('node:module', () => ({
+  createRequire: vi.fn(() =>
+    vi.fn((moduleName: string) => {
+      if (moduleName === 'uiohook-napi') {
+        return {
+          uIOhook: {
+            on: vi.fn(),
+            off: vi.fn(),
+            start: vi.fn(),
+            stop: vi.fn(),
+            removeAllListeners: vi.fn()
+          },
+          UiohookKey: {
+            P: 25,
+            Shift: 42,
+            ShiftRight: 54,
+            Ctrl: 29,
+            CtrlRight: 3613,
+            Meta: 3675,
+            MetaRight: 3676
+          }
+        }
+      }
+      throw new Error(`Unexpected module require: ${moduleName}`)
+    })
+  )
 }))
 
 vi.mock('electron', () => ({
@@ -125,6 +157,11 @@ vi.mock('../platform/capability-adapter', () => ({
   getSelectionCaptureCapabilityPatch: getSelectionCaptureCapabilityPatchMock
 }))
 
+vi.mock('../nexus/scene-client', () => ({
+  runNexusScene: runNexusSceneMock,
+  extractTranslatedTextFromSceneRun: extractTranslatedTextFromSceneRunMock
+}))
+
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => ({})),
   saveMainConfig: vi.fn()
@@ -168,6 +205,8 @@ import { getMainConfig } from '../storage'
 afterEach(() => {
   vi.clearAllMocks()
   vi.mocked(getMainConfig).mockReturnValue({})
+  runNexusSceneMock.mockResolvedValue(null)
+  extractTranslatedTextFromSceneRunMock.mockReturnValue(null)
 })
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
@@ -599,6 +638,61 @@ describe('OmniPanel execute failure paths', () => {
       success: false,
       code: 'SELECTION_REQUIRED'
     })
+  })
+
+  it('routes builtin translate through Nexus scene and writes translated text', async () => {
+    runNexusSceneMock.mockResolvedValue({
+      runId: 'scene_run_1',
+      sceneId: 'corebox.selection.translate',
+      status: 'completed',
+      mode: 'execute',
+      output: { translatedText: '你好' }
+    })
+    extractTranslatedTextFromSceneRunMock.mockReturnValue('你好')
+
+    const { clipboard, shell } = await import('electron')
+    const module = new OmniPanelModule() as unknown as {
+      executeBuiltinFeature: (
+        featureId: string,
+        contextText: string,
+        source: 'manual'
+      ) => Promise<{ success: boolean; code?: string }>
+    }
+
+    const result = await module.executeBuiltinFeature('builtin.translate', 'hello', 'manual')
+
+    expect(result).toEqual({ success: true })
+    expect(runNexusSceneMock).toHaveBeenCalledWith('corebox.selection.translate', {
+      input: {
+        text: 'hello',
+        sourceLang: 'auto',
+        targetLang: 'zh'
+      },
+      capability: 'text.translate'
+    })
+    expect(clipboard.writeText).toHaveBeenCalledWith('你好')
+    expect(shell.openExternal).not.toHaveBeenCalled()
+  })
+
+  it('falls back to browser translate when Nexus scene is unavailable', async () => {
+    runNexusSceneMock.mockResolvedValue(null)
+    extractTranslatedTextFromSceneRunMock.mockReturnValue(null)
+
+    const { shell } = await import('electron')
+    const module = new OmniPanelModule() as unknown as {
+      executeBuiltinFeature: (
+        featureId: string,
+        contextText: string,
+        source: 'manual'
+      ) => Promise<{ success: boolean; code?: string }>
+    }
+
+    const result = await module.executeBuiltinFeature('builtin.translate', 'hello world', 'manual')
+
+    expect(result).toEqual({ success: true })
+    expect(shell.openExternal).toHaveBeenCalledWith(
+      'https://translate.google.com/?sl=auto&tl=zh-CN&text=hello%20world&op=translate'
+    )
   })
 
   it('returns PLUGIN_NOT_FOUND when plugin feature target plugin is missing', async () => {

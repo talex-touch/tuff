@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { requestJson } from '~/utils/request'
 
 interface TrackingCodeResponse {
   code: string
@@ -33,7 +34,7 @@ export function useWatermarkTrackingCode() {
     state.value.status = 'loading'
     state.value.error = null
     try {
-      const response = await $fetch<TrackingCodeResponse>('/api/watermark/tracking', {
+      const response = await requestJson<TrackingCodeResponse>('/api/watermark/tracking', {
         method: 'POST',
         body: { device_id: deviceId.value },
       })

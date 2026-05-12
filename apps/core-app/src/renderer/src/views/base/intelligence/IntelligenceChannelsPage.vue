@@ -16,7 +16,7 @@ import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
-import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 
@@ -66,7 +66,7 @@ function isNexusPreferredProvider(provider: {
 }
 
 function toNexusFallbackProvider(): IntelligenceProviderConfig {
-  const baseUrl = `${getAuthBaseUrl().replace(/\/+$/, '')}/v1`
+  const baseUrl = `${getRuntimeNexusBaseUrl().replace(/\/+$/, '')}/v1`
   return {
     id: TUFF_NEXUS_PROVIDER_ID,
     type: IntelligenceProviderType.CUSTOM,

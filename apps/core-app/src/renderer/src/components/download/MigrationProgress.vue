@@ -1,50 +1,29 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type {
+  DownloadMigrationProgressPayload,
+  DownloadMigrationResultPayload
+} from '@talex-touch/utils/transport/events'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-
-interface MigrationProgress {
-  phase: 'scanning' | 'migrating' | 'validating' | 'complete' | 'error'
-  current: number
-  total: number
-  message: string
-  percentage: number
-}
-
-interface MigrationResult {
-  success: boolean
-  migratedTasks: number
-  migratedHistory: number
-  migratedConfig: boolean
-  errors: string[]
-  duration: number
-}
 
 const visible = ref(false)
 const transport = useTuffTransport()
 const { t } = useI18n()
 
-const downloadMigrationProgressEvent = defineRawEvent<MigrationProgress, void>(
-  'download:migration-progress'
-)
-const downloadMigrationResultEvent = defineRawEvent<MigrationResult, void>(
-  'download:migration-result'
-)
-
 let disposeProgressListener: (() => void) | null = null
 let disposeResultListener: (() => void) | null = null
 
-const progress = ref<MigrationProgress>({
+const progress = ref<DownloadMigrationProgressPayload>({
   phase: 'scanning',
   current: 0,
   total: 100,
   message: '',
   percentage: 0
 })
-const result = ref<MigrationResult | null>(null)
+const result = ref<DownloadMigrationResultPayload | null>(null)
 
 const phases = [
   { key: 'scanning', icon: 'icon-search' },
@@ -111,11 +90,11 @@ async function handleRetry() {
   }
 }
 
-function handleProgress(_event: unknown, data: MigrationProgress) {
+function handleProgress(_event: unknown, data: DownloadMigrationProgressPayload) {
   progress.value = data
 }
 
-function handleResult(_event: unknown, data: MigrationResult) {
+function handleResult(_event: unknown, data: DownloadMigrationResultPayload) {
   result.value = data
 }
 
@@ -133,10 +112,10 @@ async function checkMigrationNeeded() {
 
 onMounted(() => {
   try {
-    disposeProgressListener = transport.on(downloadMigrationProgressEvent, (payload) => {
+    disposeProgressListener = transport.on(DownloadEvents.migration.progress, (payload) => {
       handleProgress(undefined, payload)
     })
-    disposeResultListener = transport.on(downloadMigrationResultEvent, (payload) => {
+    disposeResultListener = transport.on(DownloadEvents.migration.result, (payload) => {
       handleResult(undefined, payload)
     })
   } catch (error) {

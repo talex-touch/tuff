@@ -1,271 +1,9 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-
-interface ProviderRow {
-  id: string
-  name: string
-  display_name: string
-  vendor: string
-  status: string
-  auth_type: string
-  auth_ref: string | null
-  owner_scope: string
-  owner_id: string | null
-  description: string | null
-  endpoint: string | null
-  region: string | null
-  metadata: string | null
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-
-interface CapabilityRow {
-  id: string
-  provider_id: string
-  capability: string
-  schema_ref: string | null
-  metering: string | null
-  constraints_json: string | null
-  metadata: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface CredentialRow {
-  auth_ref: string
-  purpose: string
-  encrypted_value: string
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-
-class MockStatement {
-  private args: any[] = []
-
-  constructor(
-    private readonly db: MockD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...args: any[]) {
-    this.args = args
-    return this
-  }
-
-  async run() {
-    return this.db.run(this.sql, this.args)
-  }
-
-  async first<T = any>() {
-    return this.db.first(this.sql, this.args) as T
-  }
-
-  async all<T = any>() {
-    return { results: this.db.all(this.sql, this.args) as T[] }
-  }
-}
-
-class MockD1Database {
-  providers = new Map<string, ProviderRow>()
-  capabilities = new Map<string, CapabilityRow>()
-  credentials = new Map<string, CredentialRow>()
-
-  prepare(sql: string) {
-    return new MockStatement(this, sql)
-  }
-
-  run(sql: string, args: any[]) {
-    if (sql.includes('CREATE TABLE') || sql.includes('CREATE INDEX')) {
-      return { meta: { changes: 0 } }
-    }
-
-    if (sql.includes('INSERT INTO provider_registry')) {
-      const [
-        id,
-        name,
-        displayName,
-        vendor,
-        status,
-        authType,
-        authRef,
-        ownerScope,
-        ownerId,
-        description,
-        endpoint,
-        region,
-        metadata,
-        createdBy,
-        createdAt,
-        updatedAt,
-      ] = args
-      this.providers.set(String(id), {
-        id: String(id),
-        name: String(name),
-        display_name: String(displayName),
-        vendor: String(vendor),
-        status: String(status),
-        auth_type: String(authType),
-        auth_ref: authRef == null ? null : String(authRef),
-        owner_scope: String(ownerScope),
-        owner_id: ownerId == null ? null : String(ownerId),
-        description: description == null ? null : String(description),
-        endpoint: endpoint == null ? null : String(endpoint),
-        region: region == null ? null : String(region),
-        metadata: metadata == null ? null : String(metadata),
-        created_by: String(createdBy),
-        created_at: String(createdAt),
-        updated_at: String(updatedAt),
-      })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT INTO provider_capabilities')) {
-      const [id, providerId, capability, schemaRef, metering, constraintsJson, metadata, createdAt, updatedAt] = args
-      this.capabilities.set(String(id), {
-        id: String(id),
-        provider_id: String(providerId),
-        capability: String(capability),
-        schema_ref: schemaRef == null ? null : String(schemaRef),
-        metering: metering == null ? null : String(metering),
-        constraints_json: constraintsJson == null ? null : String(constraintsJson),
-        metadata: metadata == null ? null : String(metadata),
-        created_at: String(createdAt),
-        updated_at: String(updatedAt),
-      })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT INTO provider_secure_store')) {
-      const [authRef, purpose, encryptedValue, createdBy, createdAt, updatedAt] = args
-      this.credentials.set(`${String(authRef)}:${String(purpose)}`, {
-        auth_ref: String(authRef),
-        purpose: String(purpose),
-        encrypted_value: String(encryptedValue),
-        created_by: String(createdBy),
-        created_at: String(createdAt),
-        updated_at: String(updatedAt),
-      })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('UPDATE provider_registry')) {
-      const [
-        name,
-        displayName,
-        vendor,
-        status,
-        authType,
-        authRef,
-        ownerScope,
-        ownerId,
-        description,
-        endpoint,
-        region,
-        metadata,
-        updatedAt,
-        id,
-      ] = args
-      const existing = this.providers.get(String(id))
-      if (!existing)
-        return { meta: { changes: 0 } }
-      this.providers.set(String(id), {
-        ...existing,
-        name: String(name),
-        display_name: String(displayName),
-        vendor: String(vendor),
-        status: String(status),
-        auth_type: String(authType),
-        auth_ref: authRef == null ? null : String(authRef),
-        owner_scope: String(ownerScope),
-        owner_id: ownerId == null ? null : String(ownerId),
-        description: description == null ? null : String(description),
-        endpoint: endpoint == null ? null : String(endpoint),
-        region: region == null ? null : String(region),
-        metadata: metadata == null ? null : String(metadata),
-        updated_at: String(updatedAt),
-      })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('DELETE FROM provider_capabilities')) {
-      const providerId = String(args[0])
-      for (const [id, row] of [...this.capabilities.entries()]) {
-        if (row.provider_id === providerId)
-          this.capabilities.delete(id)
-      }
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('DELETE FROM provider_registry')) {
-      const id = String(args[0])
-      this.providers.delete(id)
-      return { meta: { changes: 1 } }
-    }
-
-    return { meta: { changes: 0 } }
-  }
-
-  first(sql: string, args: any[]) {
-    if (sql.includes('FROM provider_registry') && sql.includes('WHERE id = ?')) {
-      return this.providers.get(String(args[0])) ?? null
-    }
-    if (sql.includes('FROM provider_secure_store')) {
-      return this.credentials.get(`${String(args[0])}:${String(args[1])}`) ?? null
-    }
-    return null
-  }
-
-  all(sql: string, args: any[]) {
-    if (sql.includes('FROM provider_registry')) {
-      return this.filterProviders(sql, args)
-    }
-
-    if (sql.includes('FROM provider_capabilities')) {
-      return this.filterCapabilities(sql, args)
-    }
-
-    return []
-  }
-
-  private filterProviders(sql: string, args: any[]) {
-    const filterCandidates: Array<[string, keyof ProviderRow]> = [
-      ['vendor = ?', 'vendor'],
-      ['status = ?', 'status'],
-      ['owner_scope = ?', 'owner_scope'],
-    ]
-    const filters = filterCandidates.filter(([fragment]) => sql.includes(fragment))
-
-    return [...this.providers.values()]
-      .filter(row => filters.every(([, column], index) => String((row as any)[column]) === String(args[index])))
-      .sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }
-
-  private filterCapabilities(sql: string, args: any[]) {
-    let rows = [...this.capabilities.values()]
-
-    if (sql.includes('provider_id IN')) {
-      const providerIds = new Set(args.map(String))
-      rows = rows.filter(row => providerIds.has(row.provider_id))
-    }
-
-    if (sql.includes('c.provider_id = ?')) {
-      rows = rows.filter(row => row.provider_id === String(args.shift()))
-    }
-
-    if (sql.includes('c.capability = ?')) {
-      rows = rows.filter(row => row.capability === String(args.shift()))
-    }
-
-    if (sql.includes('p.vendor = ?')) {
-      const vendor = String(args.shift())
-      const providerIds = new Set([...this.providers.values()].filter(row => row.vendor === vendor).map(row => row.id))
-      rows = rows.filter(row => providerIds.has(row.provider_id))
-    }
-
-    return rows.sort((a, b) => a.capability.localeCompare(b.capability))
-  }
-}
+import {
+  MockD1Database,
+  makeProviderRegistryEvent,
+  tencentTranslateProviderBody,
+} from './provider-registry-test-utils'
 
 const authMocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),
@@ -293,6 +31,15 @@ const networkMocks = vi.hoisted(() => ({
   request: vi.fn(),
 }))
 
+const healthMocks = vi.hoisted(() => ({
+  recordProviderHealthCheck: vi.fn(),
+}))
+
+const intelligenceHealthMocks = vi.hoisted(() => ({
+  checkIntelligenceProviderRegistryMirror: vi.fn(),
+  isIntelligenceProviderRegistryMirror: vi.fn((provider: any) => provider.metadata?.source === 'intelligence'),
+}))
+
 vi.mock('h3', async () => {
   const actual = await vi.importActual<typeof import('h3')>('h3')
   return {
@@ -307,6 +54,8 @@ vi.mock('../../../utils/auth', () => authMocks)
 vi.mock('../../../utils/cloudflare', () => ({
   readCloudflareBindings: () => state.db ? { DB: state.db } : undefined,
 }))
+vi.mock('../../../utils/providerHealthStore', () => healthMocks)
+vi.mock('../../../utils/intelligenceProviderHealthCheck', () => intelligenceHealthMocks)
 vi.mock('#imports', () => importsMocks)
 vi.mock('@talex-touch/utils/network', () => ({
   networkClient: {
@@ -321,6 +70,9 @@ let listProvidersHandler: (event: any) => Promise<any>
 let patchProviderHandler: (event: any) => Promise<any>
 let deleteProviderHandler: (event: any) => Promise<any>
 let listCapabilitiesHandler: (event: any) => Promise<any>
+let createCapabilityHandler: (event: any) => Promise<any>
+let patchCapabilityHandler: (event: any) => Promise<any>
+let deleteCapabilityHandler: (event: any) => Promise<any>
 let tencentProviderUtils: typeof import('../../../utils/tencentMachineTranslationProvider')
 
 beforeAll(async () => {
@@ -332,50 +84,13 @@ beforeAll(async () => {
   patchProviderHandler = (await import('./providers/[id].patch')).default as (event: any) => Promise<any>
   deleteProviderHandler = (await import('./providers/[id].delete')).default as (event: any) => Promise<any>
   listCapabilitiesHandler = (await import('./capabilities.get')).default as (event: any) => Promise<any>
+  createCapabilityHandler = (await import('./providers/[id]/capabilities.post')).default as (event: any) => Promise<any>
+  patchCapabilityHandler = (await import('./providers/[id]/capabilities/[capabilityId].patch')).default as (event: any) => Promise<any>
+  deleteCapabilityHandler = (await import('./providers/[id]/capabilities/[capabilityId].delete')).default as (event: any) => Promise<any>
   tencentProviderUtils = await import('../../../utils/tencentMachineTranslationProvider')
 })
 
-function makeEvent() {
-  return {
-    path: '/api/dashboard/provider-registry/providers',
-    node: { req: { url: '/api/dashboard/provider-registry/providers' } },
-    context: { params: {} },
-  }
-}
-
-function tencentTranslateProviderBody() {
-  return {
-    name: 'tencent-cloud-mt-main',
-    displayName: 'Tencent Cloud Machine Translation',
-    vendor: 'tencent-cloud',
-    status: 'enabled',
-    authType: 'secret_pair',
-    authRef: 'secure://providers/tencent-cloud-mt-main',
-    ownerScope: 'system',
-    endpoint: 'https://tmt.tencentcloudapi.com',
-    region: 'ap-shanghai',
-    metadata: {
-      prdScene: 'screenshot-translation',
-    },
-    capabilities: [
-      {
-        capability: 'text.translate',
-        schemaRef: 'nexus://schemas/provider/text-translate.v1',
-        metering: { unit: 'character' },
-        constraints: { maxTextLength: 5000 },
-      },
-      {
-        capability: 'image.translate',
-        schemaRef: 'nexus://schemas/provider/image-translate.v1',
-        metering: { unit: 'image' },
-      },
-      {
-        capability: 'image.translate.e2e',
-        schemaRef: 'nexus://schemas/provider/image-translate-e2e.v1',
-      },
-    ],
-  }
-}
+const makeEvent = makeProviderRegistryEvent
 
 describe('/api/dashboard/provider-registry', () => {
   beforeEach(() => {
@@ -402,6 +117,19 @@ describe('/api/dashboard/provider-registry', () => {
       },
       url: 'https://tmt.tencentcloudapi.com',
       ok: true,
+    })
+    healthMocks.recordProviderHealthCheck.mockResolvedValue(null)
+    intelligenceHealthMocks.isIntelligenceProviderRegistryMirror.mockImplementation(
+      (provider: any) => provider.metadata?.source === 'intelligence',
+    )
+    intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror.mockResolvedValue({
+      success: true,
+      providerId: 'prv_ai_registry',
+      capability: 'chat.completion',
+      latency: 33,
+      endpoint: 'langchain:openai:chat',
+      requestId: 'trace_ai_probe',
+      message: 'Probe completed.',
     })
     h3Mocks.getQuery.mockReturnValue({})
     h3Mocks.getRouterParam.mockReturnValue('')
@@ -602,10 +330,24 @@ describe('/api/dashboard/provider-registry', () => {
     h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
     h3Mocks.readBody.mockResolvedValue({
       status: 'degraded',
+      metadata: {
+        prdScene: 'screenshot-translation',
+        owner: 'ops',
+      },
       capabilities: [
         {
           capability: 'text.translate',
           schemaRef: 'nexus://schemas/provider/text-translate.v1',
+          metering: {
+            unit: 'character',
+            unitCost: 0.01,
+          },
+          constraints: {
+            maxTextLength: 3000,
+          },
+          metadata: {
+            qualityTier: 'standard',
+          },
         },
       ],
     })
@@ -615,9 +357,204 @@ describe('/api/dashboard/provider-registry', () => {
     expect(result.provider).toMatchObject({
       id: created.provider.id,
       status: 'degraded',
-      capabilities: [{ capability: 'text.translate' }],
+      metadata: {
+        prdScene: 'screenshot-translation',
+        owner: 'ops',
+      },
+      capabilities: [
+        {
+          capability: 'text.translate',
+          metering: {
+            unit: 'character',
+            unitCost: 0.01,
+          },
+          constraints: {
+            maxTextLength: 3000,
+          },
+          metadata: {
+            qualityTier: 'standard',
+          },
+        },
+      ],
     })
     expect(result.provider.capabilities).toHaveLength(1)
+  })
+
+  it('可以通过独立 API 新增 provider capability', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.getRouterParam.mockImplementation((_event, name) => {
+      if (name === 'id')
+        return created.provider.id
+      return ''
+    })
+    h3Mocks.readBody.mockResolvedValue({
+      capability: 'vision.ocr',
+      schemaRef: 'nexus://schemas/provider/vision-ocr.v1',
+      metering: { unit: 'image' },
+      constraints: { maxImageBytes: 5_242_880 },
+      metadata: { providerModel: 'ocr-v1' },
+    })
+
+    const result = await createCapabilityHandler(makeEvent())
+    h3Mocks.getQuery.mockReturnValue({ providerId: created.provider.id })
+    const listed = await listCapabilitiesHandler(makeEvent())
+
+    expect(result.capability).toMatchObject({
+      providerId: created.provider.id,
+      capability: 'vision.ocr',
+      schemaRef: 'nexus://schemas/provider/vision-ocr.v1',
+      metering: { unit: 'image' },
+      constraints: { maxImageBytes: 5_242_880 },
+      metadata: { providerModel: 'ocr-v1' },
+    })
+    expect(listed.capabilities.map((item: any) => item.capability)).toEqual([
+      'image.translate',
+      'image.translate.e2e',
+      'text.translate',
+      'vision.ocr',
+    ])
+  })
+
+  it('独立 capability API 可以局部更新 schemaRef、metering、constraints 与 metadata', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+    const textCapability = created.provider.capabilities.find((item: any) => item.capability === 'text.translate')
+
+    h3Mocks.getRouterParam.mockImplementation((_event, name) => {
+      if (name === 'id')
+        return created.provider.id
+      if (name === 'capabilityId')
+        return textCapability.id
+      return ''
+    })
+    h3Mocks.readBody.mockResolvedValue({
+      schemaRef: 'nexus://schemas/provider/text-translate.v2',
+      metering: {
+        unit: 'character',
+        unitCost: 0.02,
+      },
+      constraints: {
+        maxTextLength: 8000,
+        sourceLanguages: ['auto', 'en'],
+      },
+      metadata: {
+        qualityTier: 'premium',
+      },
+    })
+
+    const result = await patchCapabilityHandler(makeEvent())
+
+    expect(result.capability).toMatchObject({
+      id: textCapability.id,
+      providerId: created.provider.id,
+      capability: 'text.translate',
+      schemaRef: 'nexus://schemas/provider/text-translate.v2',
+      metering: {
+        unit: 'character',
+        unitCost: 0.02,
+      },
+      constraints: {
+        maxTextLength: 8000,
+        sourceLanguages: ['auto', 'en'],
+      },
+      metadata: {
+        qualityTier: 'premium',
+      },
+    })
+  })
+
+  it('独立 capability API 可以删除单个 capability 而不影响同 provider 其他能力', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+    const imageCapability = created.provider.capabilities.find((item: any) => item.capability === 'image.translate')
+
+    h3Mocks.getRouterParam.mockImplementation((_event, name) => {
+      if (name === 'id')
+        return created.provider.id
+      if (name === 'capabilityId')
+        return imageCapability.id
+      return ''
+    })
+
+    const deleted = await deleteCapabilityHandler(makeEvent())
+    h3Mocks.getQuery.mockReturnValue({ providerId: created.provider.id })
+    const listed = await listCapabilitiesHandler(makeEvent())
+
+    expect(deleted).toEqual({ success: true })
+    expect(listed.capabilities.map((item: any) => item.capability)).toEqual([
+      'image.translate.e2e',
+      'text.translate',
+    ])
+  })
+
+  it('独立 capability API 对不存在 provider 或 capability 返回 404', async () => {
+    h3Mocks.getRouterParam.mockImplementation((_event, name) => {
+      if (name === 'id')
+        return 'missing-provider'
+      return ''
+    })
+    h3Mocks.readBody.mockResolvedValue({
+      capability: 'vision.ocr',
+    })
+
+    await expect(createCapabilityHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Provider registry entry not found.',
+    })
+
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+    h3Mocks.getRouterParam.mockImplementation((_event, name) => {
+      if (name === 'id')
+        return created.provider.id
+      if (name === 'capabilityId')
+        return 'missing-capability'
+      return ''
+    })
+    h3Mocks.readBody.mockResolvedValue({ metadata: { qualityTier: 'premium' } })
+
+    await expect(patchCapabilityHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Provider capability not found.',
+    })
+    await expect(deleteCapabilityHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Provider capability not found.',
+    })
+  })
+
+  it('独立 capability API 拒绝重复 capability', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+    const imageCapability = created.provider.capabilities.find((item: any) => item.capability === 'image.translate')
+
+    h3Mocks.getRouterParam.mockImplementation((_event, name) => {
+      if (name === 'id')
+        return created.provider.id
+      if (name === 'capabilityId')
+        return imageCapability.id
+      return ''
+    })
+    h3Mocks.readBody.mockResolvedValue({
+      capability: 'text.translate',
+    })
+
+    await expect(patchCapabilityHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 409,
+      statusMessage: 'Provider capability already exists.',
+    })
+
+    h3Mocks.readBody.mockResolvedValue({
+      capability: 'text.translate',
+      schemaRef: 'nexus://schemas/provider/text-translate.v1',
+    })
+
+    await expect(createCapabilityHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 409,
+      statusMessage: 'Provider capability already exists.',
+    })
   })
 
   it('腾讯云机器翻译 provider check 会解析 authRef 并注入 TC3 签名请求', async () => {
@@ -648,6 +585,16 @@ describe('/api/dashboard/provider-registry', () => {
       requestId: 'req-1',
     })
     expect(JSON.stringify(result)).not.toContain('secret-key-unit-test')
+    expect(healthMocks.recordProviderHealthCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: created.provider.id }),
+      expect.objectContaining({
+        success: true,
+        providerId: created.provider.id,
+        capability: 'text.translate',
+        requestId: 'req-1',
+      }),
+    )
     expect(request).toMatchObject({
       method: 'POST',
       url: 'https://tmt.tencentcloudapi.com',
@@ -762,6 +709,230 @@ describe('/api/dashboard/provider-registry', () => {
         message: 'secret id not found',
       }),
     })
+  })
+
+  it('AI registry mirror provider check 复用 intelligence provider 探活并记录 health', async () => {
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'ip_ai_provider_1',
+      displayName: 'OpenAI Main',
+      vendor: 'openai',
+      status: 'enabled',
+      authType: 'api_key',
+      authRef: 'secure://providers/intelligence-ip_ai_provider_1',
+      ownerScope: 'user',
+      ownerId: 'admin_1',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: {
+        source: 'intelligence',
+        intelligenceProviderId: 'ip_ai_provider_1',
+        intelligenceType: 'openai',
+      },
+      capabilities: [
+        {
+          capability: 'chat.completion',
+          schemaRef: 'nexus://schemas/provider/chat-completion.v1',
+          metering: { unit: 'token' },
+        },
+      ],
+    })
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+    h3Mocks.readBody.mockResolvedValue({
+      capability: 'chat.completion',
+      model: 'gpt-4.1-mini',
+      prompt: 'ping',
+      timeoutMs: 7000,
+    })
+    intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror.mockResolvedValueOnce({
+      success: true,
+      providerId: created.provider.id,
+      capability: 'chat.completion',
+      latency: 33,
+      endpoint: 'langchain:openai:chat',
+      requestId: 'trace_ai_probe',
+      message: 'Probe completed.',
+    })
+
+    const result = await checkProviderHandler(makeEvent())
+
+    expect(intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror).toHaveBeenCalledWith(
+      expect.anything(),
+      'admin_1',
+      expect.objectContaining({
+        id: created.provider.id,
+        metadata: expect.objectContaining({
+          source: 'intelligence',
+          intelligenceProviderId: 'ip_ai_provider_1',
+        }),
+      }),
+      {
+        capability: 'chat.completion',
+        model: 'gpt-4.1-mini',
+        prompt: 'ping',
+        timeoutMs: 7000,
+      },
+    )
+    expect(result).toMatchObject({
+      success: true,
+      providerId: created.provider.id,
+      capability: 'chat.completion',
+      endpoint: 'langchain:openai:chat',
+      requestId: 'trace_ai_probe',
+    })
+    expect(healthMocks.recordProviderHealthCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: created.provider.id, vendor: 'openai' }),
+      expect.objectContaining({
+        success: true,
+        providerId: created.provider.id,
+        capability: 'chat.completion',
+      }),
+    )
+  })
+
+  it('AI registry mirror provider check 支持 vision.ocr probe 输入透传', async () => {
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'ip_ai_vision_provider',
+      displayName: 'OpenAI Vision',
+      vendor: 'openai',
+      status: 'enabled',
+      authType: 'api_key',
+      authRef: 'secure://providers/intelligence-ip_ai_vision_provider',
+      ownerScope: 'user',
+      ownerId: 'admin_1',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: {
+        source: 'intelligence',
+        intelligenceProviderId: 'ip_ai_vision_provider',
+        intelligenceType: 'openai',
+      },
+      capabilities: [
+        {
+          capability: 'vision.ocr',
+          schemaRef: 'nexus://schemas/provider/vision-ocr.v1',
+          metering: { unit: 'image' },
+        },
+      ],
+    })
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+    h3Mocks.readBody.mockResolvedValue({
+      capability: 'vision.ocr',
+      imageDataUrl: 'data:image/png;base64,abc123',
+      language: 'en',
+      prompt: 'ocr probe',
+      timeoutMs: 7000,
+    })
+    intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror.mockResolvedValueOnce({
+      success: true,
+      providerId: created.provider.id,
+      capability: 'vision.ocr',
+      latency: 41,
+      endpoint: 'https://api.openai.com/v1',
+      requestId: 'req_ocr_probe',
+      message: 'Intelligence vision OCR check succeeded.',
+    })
+
+    const result = await checkProviderHandler(makeEvent())
+
+    expect(intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror).toHaveBeenCalledWith(
+      expect.anything(),
+      'admin_1',
+      expect.objectContaining({ id: created.provider.id }),
+      {
+        capability: 'vision.ocr',
+        model: undefined,
+        prompt: 'ocr probe',
+        imageDataUrl: 'data:image/png;base64,abc123',
+        imageBase64: undefined,
+        language: 'en',
+        timeoutMs: 7000,
+      },
+    )
+    expect(result).toMatchObject({
+      success: true,
+      providerId: created.provider.id,
+      capability: 'vision.ocr',
+      requestId: 'req_ocr_probe',
+    })
+    expect(healthMocks.recordProviderHealthCheck).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: created.provider.id, vendor: 'openai' }),
+      expect.objectContaining({
+        capability: 'vision.ocr',
+        requestId: 'req_ocr_probe',
+      }),
+    )
+  })
+
+  it('腾讯云图片翻译 adapter 将标准 payload 转换为 ImageTranslateLLM 请求', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: {
+        Response: {
+          Data: 'translated-image-base64',
+          Source: 'auto',
+          Target: 'zh',
+          SourceText: 'hello',
+          TargetText: '你好',
+          Angle: 0,
+          TransDetails: [{ source: 'hello', target: '你好' }],
+          RequestId: 'req-image-translate',
+        },
+      },
+      url: 'https://tmt.tencentcloudapi.com',
+      ok: true,
+    })
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.readBody.mockResolvedValue({
+      authRef: 'secure://providers/tencent-cloud-mt-main',
+      authType: 'secret_pair',
+      credentials: {
+        secretId: 'AKID-unit-test',
+        secretKey: 'secret-key-unit-test',
+      },
+    })
+    await storeCredentialHandler(makeEvent())
+
+    const result = await tencentProviderUtils.invokeTencentImageTranslate(makeEvent() as any, created.provider, {
+      imageBase64: 'source-image-base64',
+      targetLang: 'zh',
+    }, 'image.translate.e2e')
+    const request = networkMocks.request.mock.calls.at(-1)?.[0]
+
+    expect(result).toMatchObject({
+      translatedImageBase64: 'translated-image-base64',
+      sourceLang: 'auto',
+      targetLang: 'zh',
+      sourceText: 'hello',
+      targetText: '你好',
+      providerRequestId: 'req-image-translate',
+      usage: {
+        unit: 'image',
+        quantity: 1,
+        billable: true,
+        estimated: true,
+      },
+    })
+    expect(JSON.stringify(result)).not.toContain('secret-key-unit-test')
+    expect(request).toMatchObject({
+      method: 'POST',
+      url: 'https://tmt.tencentcloudapi.com',
+      headers: expect.objectContaining({
+        Authorization: expect.stringContaining('TC3-HMAC-SHA256'),
+        'X-TC-Action': 'ImageTranslateLLM',
+        'X-TC-Version': '2018-03-21',
+        'X-TC-Region': 'ap-shanghai',
+      }),
+    })
+    expect(request.body).toContain('"Data":"source-image-base64"')
+    expect(request.body).toContain('"Target":"zh"')
   })
 
   it('删除 provider 时同步删除 capabilities', async () => {

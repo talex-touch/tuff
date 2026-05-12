@@ -19,6 +19,10 @@ import type {
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import {
+  FILE_WORKER_IDLE_SHUTDOWN_MS,
+  IdleWorkerShutdownController
+} from '../../addon/files/workers/idle-worker-shutdown'
 
 const log = getLogger('search-index-worker')
 
@@ -95,6 +99,12 @@ export class SearchIndexWorkerClient {
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
   private initPromise: Promise<void> | null = null
+  private dbPath: string | null = null
+  private readonly idleShutdown = new IdleWorkerShutdownController({
+    timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
+    shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
+    shutdown: () => this.terminateWorker({ keepInitState: true })
+  })
 
   /**
    * Initialize the worker with a database path.
@@ -102,6 +112,7 @@ export class SearchIndexWorkerClient {
    * Safe to call multiple times — subsequent calls are no-ops.
    */
   async init(dbPath: string): Promise<void> {
+    this.dbPath = dbPath
     if (this.initPromise) {
       return this.initPromise
     }
@@ -207,9 +218,11 @@ export class SearchIndexWorkerClient {
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
+    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
+    this.scheduleIdleShutdown()
     return {
       name: 'search-index',
       threadId: worker?.threadId ?? null,
@@ -223,15 +236,15 @@ export class SearchIndexWorkerClient {
   }
 
   shutdown(): void {
-    this.worker?.terminate()
-    this.worker = null
-    this.workerStartedAt = null
-    this.initPromise = null
+    this.terminateWorker({ keepInitState: false })
   }
 
   // ---------- Internal ----------
 
   private async ensureInitialized(): Promise<void> {
+    if (!this.initPromise && this.dbPath) {
+      await this.init(this.dbPath)
+    }
     if (!this.initPromise) {
       throw new Error('SearchIndexWorkerClient not initialized — call init(dbPath) first')
     }
@@ -239,6 +252,7 @@ export class SearchIndexWorkerClient {
   }
 
   private ensureWorker(): Worker {
+    this.idleShutdown.cancel()
     if (this.worker) return this.worker
 
     const workerPath = path.join(__dirname, 'search-index-worker.js')
@@ -247,7 +261,7 @@ export class SearchIndexWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (code !== 0) {
+      if (this.worker === worker && code !== 0) {
         this.handleWorkerError(new Error(`SearchIndexWorker exited with code ${code}`))
       }
     })
@@ -287,6 +301,7 @@ export class SearchIndexWorkerClient {
       clearTimeout(pending.timeout)
       pending.resolve(message.metrics)
       this.metricsPending.delete(message.requestId)
+      this.scheduleIdleShutdown()
       return
     }
 
@@ -303,6 +318,7 @@ export class SearchIndexWorkerClient {
         error: null
       }
       pending.resolve(message.result)
+      this.scheduleIdleShutdown()
       return
     }
 
@@ -317,6 +333,7 @@ export class SearchIndexWorkerClient {
         error: message.error
       }
       pending.reject(new Error(message.error))
+      this.scheduleIdleShutdown()
     }
   }
 
@@ -333,10 +350,7 @@ export class SearchIndexWorkerClient {
     }
     this.metricsPending.clear()
 
-    this.worker?.terminate()
-    this.worker = null
-    this.workerStartedAt = null
-    this.initPromise = null
+    this.terminateWorker({ keepInitState: true })
     this.lastError = error.message
     log.warn('[SearchIndexWorkerClient] Worker failed, will restart on demand', { error })
   }
@@ -354,6 +368,7 @@ export class SearchIndexWorkerClient {
       const timeout = setTimeout(() => {
         this.metricsPending.delete(requestId)
         resolve(null)
+        this.scheduleIdleShutdown()
       }, 300)
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({ type: 'metrics', requestId })
@@ -388,5 +403,25 @@ export class SearchIndexWorkerClient {
     const deltaMs = (deltaUser + deltaSystem) / 1000
     const percent = (deltaMs / elapsedMs) * 100
     return Number.isFinite(percent) ? Math.max(0, percent) : null
+  }
+
+  private scheduleIdleShutdown(): void {
+    if (!this.worker || this.pending.size > 0 || this.metricsPending.size > 0) {
+      return
+    }
+
+    this.idleShutdown.schedule()
+  }
+
+  private terminateWorker(options: { keepInitState: boolean }): void {
+    this.idleShutdown.cancel()
+    this.worker?.terminate()
+    this.worker = null
+    this.workerStartedAt = null
+    this.lastMetricsSample = null
+    this.initPromise = null
+    if (!options.keepInitState) {
+      this.dbPath = null
+    }
   }
 }

@@ -9,7 +9,11 @@ import {
   scanDirectory as globalScanDirectory
 } from '@talex-touch/utils/common/file-scan-utils'
 import { WHITELISTED_EXTENSIONS } from './constants'
-import { THUMBNAIL_EXTENSIONS, normalizeExtension } from './thumbnail-config'
+import {
+  THUMBNAIL_EXTENSIONS,
+  VIDEO_THUMBNAIL_EXTENSIONS,
+  normalizeExtension
+} from './thumbnail-config'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -63,22 +67,20 @@ export function mapFileToTuffItem(
 
   let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
 
-  if (_extensions.thumbnail && !_extensions.thumbnail.startsWith('data:')) {
+  if (_extensions.thumbnail) {
     // Use pre-generated thumbnail for fast display
     icon = {
       type: 'url',
-      value: toTfileUrl(_extensions.thumbnail)
+      value: _extensions.thumbnail.startsWith('data:')
+        ? _extensions.thumbnail
+        : toTfileUrl(_extensions.thumbnail)
     }
-  } else if (
-    DIRECT_IMAGE_EXTENSIONS.has(extension) &&
-    THUMBNAIL_EXTENSIONS.has(extension) &&
-    onMissingThumbnail
-  ) {
+  } else if (THUMBNAIL_EXTENSIONS.has(extension) && onMissingThumbnail) {
     // Prefer placeholder until thumbnail is ready to avoid blocking IO
     onMissingThumbnail?.(file)
     icon = {
       type: 'class',
-      value: 'i-ri-image-line'
+      value: VIDEO_THUMBNAIL_EXTENSIONS.has(extension) ? 'i-ri-video-line' : 'i-ri-image-line'
     }
   } else if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
     icon = {

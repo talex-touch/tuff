@@ -1,4 +1,4 @@
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent, defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 export interface OmniPanelShowRequest {
   /**
@@ -143,19 +143,22 @@ export const omniPanelContextEvent = defineRawEvent<OmniPanelContextPayload, voi
   'omni-panel:context'
 )
 
-export const omniPanelFeatureListEvent = defineRawEvent<void, OmniPanelFeatureListResponse>(
-  'omni-panel:feature:list'
-)
+export const omniPanelFeatureListEvent = defineEvent('omni-panel')
+  .module('feature')
+  .event('list')
+  .define<void, OmniPanelFeatureListResponse>()
 
-export const omniPanelFeatureReorderEvent = defineRawEvent<OmniPanelFeatureReorderRequest, void>(
-  'omni-panel:feature:reorder'
-)
+export const omniPanelFeatureReorderEvent = defineEvent('omni-panel')
+  .module('feature')
+  .event('reorder')
+  .define<OmniPanelFeatureReorderRequest, void>()
 
-export const omniPanelFeatureExecuteEvent = defineRawEvent<
-  OmniPanelFeatureExecuteRequest,
-  OmniPanelFeatureExecuteResponse
->('omni-panel:feature:execute')
+export const omniPanelFeatureExecuteEvent = defineEvent('omni-panel')
+  .module('feature')
+  .event('execute')
+  .define<OmniPanelFeatureExecuteRequest, OmniPanelFeatureExecuteResponse>()
 
-export const omniPanelFeatureRefreshEvent = defineRawEvent<OmniPanelFeatureRefreshPayload, void>(
-  'omni-panel:feature:refresh'
-)
+export const omniPanelFeatureRefreshEvent = defineEvent('omni-panel')
+  .module('feature')
+  .event('refresh')
+  .define<OmniPanelFeatureRefreshPayload, void>()

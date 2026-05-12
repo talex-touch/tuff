@@ -48,8 +48,14 @@ import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { shortcutModule } from '../global-shortcon'
+import { extractTranslatedTextFromSceneRun, runNexusScene } from '../nexus/scene-client'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig, saveMainConfig } from '../storage'
+import {
+  OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS,
+  OMNI_PANEL_BUILTIN_FEATURE_MAP,
+  OMNI_PANEL_EXECUTE_ERROR_MESSAGES
+} from './omni-panel-builtin-features'
 import {
   omniPanelContextEvent,
   omniPanelFeatureExecuteEvent,
@@ -85,6 +91,7 @@ const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
 ]
 const COPY_COMMAND_TIMEOUT_MS = 900
 const COPY_RESULT_POLL_DELAY_MS = 120
+const SELECTION_TRANSLATE_SCENE_ID = 'corebox.selection.translate'
 
 interface SelectionCaptureResult {
   text: string
@@ -93,56 +100,6 @@ interface SelectionCaptureResult {
   issueMessage?: string
   limitations?: string[]
 }
-
-const EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteErrorCode, string> = {
-  INVALID_PAYLOAD: 'Invalid execute payload',
-  INVALID_FEATURE: 'Invalid feature id',
-  FEATURE_NOT_FOUND: 'Feature not found',
-  FEATURE_UNAVAILABLE: 'Feature is unavailable',
-  SELECTION_REQUIRED: 'Selected text is required',
-  COREBOX_UNAVAILABLE: 'CoreBox window is unavailable',
-  COREBOX_TRANSFER_FAILED: 'Failed to transfer context to CoreBox',
-  SYSTEM_TARGET_NOT_IMPLEMENTED: 'System transfer target is unavailable for this feature',
-  PLUGIN_NOT_FOUND: 'Plugin not found',
-  FEATURE_EXECUTION_FAILED: 'Failed to execute feature',
-  UNKNOWN_BUILTIN: 'Unknown builtin feature',
-  INTERNAL_ERROR: 'Internal error'
-}
-
-const BUILTIN_FEATURE_DEFINITIONS = [
-  {
-    id: 'builtin.translate',
-    title: '快速翻译',
-    subtitle: '将选中文本发送到翻译页面',
-    icon: { type: 'class', value: 'i-ri-translate-2' } as OmniPanelFeatureIconPayload,
-    target: 'system' as const
-  },
-  {
-    id: 'builtin.search',
-    title: '网页搜索',
-    subtitle: '用浏览器搜索选中文本',
-    icon: { type: 'class', value: 'i-ri-search-line' } as OmniPanelFeatureIconPayload,
-    target: 'system' as const
-  },
-  {
-    id: 'builtin.corebox-search',
-    title: '在 CoreBox 中搜索',
-    subtitle: '回到启动器继续执行动作',
-    icon: { type: 'class', value: 'i-ri-command-line' } as OmniPanelFeatureIconPayload,
-    target: 'corebox' as const
-  },
-  {
-    id: 'builtin.copy',
-    title: '复制文本',
-    subtitle: '把当前文本写回剪贴板',
-    icon: { type: 'class', value: 'i-ri-file-copy-line' } as OmniPanelFeatureIconPayload,
-    target: 'system' as const
-  }
-] as const
-
-const BUILTIN_FEATURE_MAP: Map<string, (typeof BUILTIN_FEATURE_DEFINITIONS)[number]> = new Map(
-  BUILTIN_FEATURE_DEFINITIONS.map((item) => [item.id, item] as const)
-)
 
 interface InputHookEvent {
   button?: number
@@ -509,7 +466,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private createBuiltinRegistryItem(
-    definition: (typeof BUILTIN_FEATURE_DEFINITIONS)[number],
+    definition: (typeof OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS)[number],
     order: number
   ): OmniPanelFeatureRegistryItem {
     const now = Date.now()
@@ -538,8 +495,8 @@ export class OmniPanelModule extends BaseModule {
     }
 
     let changed = false
-    for (let i = 0; i < BUILTIN_FEATURE_DEFINITIONS.length; i++) {
-      const builtin = BUILTIN_FEATURE_DEFINITIONS[i]
+    for (let i = 0; i < OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS.length; i++) {
+      const builtin = OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS[i]
       const existing = byId.get(builtin.id)
       if (!existing) {
         byId.set(builtin.id, this.createBuiltinRegistryItem(builtin, i))
@@ -928,7 +885,7 @@ export class OmniPanelModule extends BaseModule {
     item: OmniPanelFeatureRegistryItem
   ): OmniPanelFeatureItemPayload {
     if (item.source !== 'plugin') {
-      const builtin = BUILTIN_FEATURE_MAP.get(item.id)
+      const builtin = OMNI_PANEL_BUILTIN_FEATURE_MAP.get(item.id)
       return {
         ...item,
         title: builtin?.title ?? item.title,
@@ -1034,7 +991,8 @@ export class OmniPanelModule extends BaseModule {
     if (resolvedItem.unavailable) {
       return this.buildExecuteError(
         'FEATURE_UNAVAILABLE',
-        resolvedItem.unavailableReason?.message || EXECUTE_ERROR_MESSAGES.FEATURE_UNAVAILABLE
+        resolvedItem.unavailableReason?.message ||
+          OMNI_PANEL_EXECUTE_ERROR_MESSAGES.FEATURE_UNAVAILABLE
       )
     }
 
@@ -1121,7 +1079,7 @@ export class OmniPanelModule extends BaseModule {
     return {
       success: false,
       code,
-      error: error || EXECUTE_ERROR_MESSAGES[code]
+      error: error || OMNI_PANEL_EXECUTE_ERROR_MESSAGES[code]
     }
   }
 
@@ -1136,6 +1094,12 @@ export class OmniPanelModule extends BaseModule {
       if (!text) {
         return this.buildExecuteError('SELECTION_REQUIRED')
       }
+
+      const sceneResult = await this.executeSelectionTranslateScene(text)
+      if (sceneResult.success) {
+        return sceneResult
+      }
+
       const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(text)}&op=translate`
       await shell.openExternal(url)
       return { success: true }
@@ -1165,6 +1129,36 @@ export class OmniPanelModule extends BaseModule {
     return this.buildExecuteError('UNKNOWN_BUILTIN')
   }
 
+  private async executeSelectionTranslateScene(
+    text: string
+  ): Promise<OmniPanelFeatureExecuteResponse> {
+    try {
+      const run = await runNexusScene(SELECTION_TRANSLATE_SCENE_ID, {
+        input: {
+          text,
+          sourceLang: 'auto',
+          targetLang: 'zh'
+        },
+        capability: 'text.translate'
+      })
+      const translatedText = extractTranslatedTextFromSceneRun(run)
+      if (!translatedText) {
+        return { success: false }
+      }
+
+      clipboard.writeText(translatedText)
+      return { success: true }
+    } catch (error) {
+      omniPanelLog.warn('Nexus selection translate scene failed; falling back to browser', {
+        error,
+        meta: {
+          sceneId: SELECTION_TRANSLATE_SCENE_ID
+        }
+      })
+      return { success: false }
+    }
+  }
+
   private async executeCoreBoxTransfer(
     contextText: string
   ): Promise<OmniPanelFeatureExecuteResponse> {
@@ -1184,7 +1178,9 @@ export class OmniPanelModule extends BaseModule {
     } catch (error) {
       return this.buildExecuteError(
         'COREBOX_TRANSFER_FAILED',
-        error instanceof Error ? error.message : EXECUTE_ERROR_MESSAGES.COREBOX_TRANSFER_FAILED
+        error instanceof Error
+          ? error.message
+          : OMNI_PANEL_EXECUTE_ERROR_MESSAGES.COREBOX_TRANSFER_FAILED
       )
     }
   }
@@ -1211,7 +1207,9 @@ export class OmniPanelModule extends BaseModule {
     } catch (error) {
       return this.buildExecuteError(
         'FEATURE_EXECUTION_FAILED',
-        error instanceof Error ? error.message : EXECUTE_ERROR_MESSAGES.FEATURE_EXECUTION_FAILED
+        error instanceof Error
+          ? error.message
+          : OMNI_PANEL_EXECUTE_ERROR_MESSAGES.FEATURE_EXECUTION_FAILED
       )
     }
   }

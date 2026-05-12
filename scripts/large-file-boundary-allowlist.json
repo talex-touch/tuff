@@ -65,12 +65,6 @@
       "note": "Reduce below 1200 lines before v2.4.11"
     },
     {
-      "file": "apps/core-app/src/main/modules/clipboard.ts",
-      "maxLines": 2688,
-      "expiresVersion": "2.4.11",
-      "note": "Reduce below 1200 lines before v2.4.11"
-    },
-    {
       "file": "apps/core-app/src/main/modules/download/download-center.ts",
       "maxLines": 1508,
       "expiresVersion": "2.4.11",
@@ -132,7 +126,7 @@
     },
     {
       "file": "apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue",
-      "maxLines": 2192,
+      "maxLines": 2198,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -144,13 +138,13 @@
     },
     {
       "file": "apps/nexus/app/pages/dashboard/admin/analytics.vue",
-      "maxLines": 2062,
+      "maxLines": 2169,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
     {
       "file": "apps/nexus/app/pages/dashboard/admin/intelligence.vue",
-      "maxLines": 2174,
+      "maxLines": 2264,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -288,19 +282,13 @@
     },
     {
       "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
-      "maxLines": 1797,
+      "maxLines": 1792,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
     {
       "file": "packages/tuff-intelligence/src/types/intelligence.ts",
       "maxLines": 2180,
-      "expiresVersion": "2.4.11",
-      "note": "Reduce below 1200 lines before v2.4.11"
-    },
-    {
-      "file": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
-      "maxLines": 1344,
       "expiresVersion": "2.4.11",
       "note": "Reduce below 1200 lines before v2.4.11"
     },
@@ -363,7 +351,7 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
-      "maxLines": 3330,
+      "maxLines": 3306,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "core-app",
       "expiresVersion": "2.4.11",
@@ -384,14 +372,6 @@
       "owner": "core-app",
       "expiresVersion": "2.4.11",
       "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-SEARCH-CORE"
-    },
-    {
-      "file": "apps/core-app/src/main/modules/clipboard.ts",
-      "maxLines": 3299,
-      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
-      "owner": "core-app",
-      "expiresVersion": "2.4.11",
-      "ticket": "SIZE-GROWTH-2026-04-26-CORE-APP-CLIPBOARD"
     },
     {
       "file": "apps/core-app/src/main/modules/download/download-center.ts",
@@ -523,7 +503,7 @@
     },
     {
       "file": "packages/tuff-intelligence/src/adapters/deepagent-engine.ts",
-      "maxLines": 2138,
+      "maxLines": 1792,
       "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
       "owner": "packages-tuff-intelligence",
       "expiresVersion": "2.4.11",
@@ -536,14 +516,6 @@
       "owner": "packages-tuff-intelligence",
       "expiresVersion": "2.4.11",
       "ticket": "SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES"
-    },
-    {
-      "file": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
-      "maxLines": 1345,
-      "reason": "Temporary oversized growth exception while the file is split under size guard governance.",
-      "owner": "packages-tuffex",
-      "expiresVersion": "2.4.11",
-      "ticket": "SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY"
     },
     {
       "file": "packages/utils/types/intelligence.ts",

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex'
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   pageTransition: {
@@ -111,7 +112,7 @@ async function fetchAudits(options: { resetPage?: boolean } = {}) {
   loading.value = true
   error.value = null
   try {
-    const res = await $fetch<{ audits: AdminAudit[], pagination: Pagination }>('/api/admin/audits', {
+    const res = await requestJson<{ audits: AdminAudit[], pagination: Pagination }>('/api/admin/audits', {
       query: buildQuery(),
     })
     audits.value = res.audits ?? []

@@ -1,3 +1,5 @@
+import type { AppDisplayNameQuality } from './app-types'
+
 export function normalizeDisplayName(value: string | null | undefined): string {
   if (typeof value !== 'string') return ''
   return value.trim()
@@ -45,7 +47,11 @@ export function resolveDisplayName(
 
 export function shouldUpdateDisplayName(
   currentDisplayName: string | null | undefined,
-  incomingDisplayName: string | null | undefined
+  incomingDisplayName: string | null | undefined,
+  options?: {
+    currentQuality?: AppDisplayNameQuality | null
+    incomingQuality?: AppDisplayNameQuality | null
+  }
 ): boolean {
   const normalizedIncoming = normalizeDisplayName(incomingDisplayName)
   if (!normalizedIncoming) return false
@@ -55,5 +61,42 @@ export function shouldUpdateDisplayName(
   if (!normalizedCurrent) return true
   if (isProbablyCorruptedDisplayName(normalizedCurrent)) return true
 
+  const currentQualityRank = resolveDisplayNameQualityRank(options?.currentQuality)
+  const incomingQualityRank = resolveDisplayNameQualityRank(options?.incomingQuality)
+  if (currentQualityRank !== null && incomingQualityRank !== null) {
+    if (incomingQualityRank < currentQualityRank) return false
+    if (incomingQualityRank > currentQualityRank) {
+      return normalizedIncoming !== normalizedCurrent
+    }
+  } else if (shouldUpgradeDisplayNameQuality(options?.currentQuality, options?.incomingQuality)) {
+    return normalizedIncoming !== normalizedCurrent
+  }
+
   return normalizedIncoming !== normalizedCurrent
+}
+
+const DISPLAY_NAME_QUALITY_RANK: Record<AppDisplayNameQuality, number> = {
+  fallback: 0,
+  filename: 1,
+  registry: 2,
+  manifest: 3,
+  localized: 4,
+  system: 5
+}
+
+export function shouldUpgradeDisplayNameQuality(
+  currentQuality: AppDisplayNameQuality | null | undefined,
+  incomingQuality: AppDisplayNameQuality | null | undefined
+): boolean {
+  if (!incomingQuality) return false
+  const currentRank = resolveDisplayNameQualityRank(currentQuality) ?? -1
+  const incomingRank = resolveDisplayNameQualityRank(incomingQuality)
+  if (incomingRank === null) return false
+  return incomingRank > currentRank
+}
+
+function resolveDisplayNameQualityRank(
+  quality: AppDisplayNameQuality | null | undefined
+): number | null {
+  return quality ? DISPLAY_NAME_QUALITY_RANK[quality] : null
 }

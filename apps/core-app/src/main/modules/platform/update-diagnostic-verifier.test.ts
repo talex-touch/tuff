@@ -21,6 +21,7 @@ function buildEvidence(
       channel: AppPreviewChannel.RELEASE,
       frequency: 'everyday',
       autoDownload: true,
+      autoInstallDownloadedUpdates: false,
       rendererOverrideEnabled: false
     },
     status: {
@@ -28,6 +29,11 @@ function buildEvidence(
       downloadReady: true,
       downloadReadyVersion: 'v2.4.10',
       downloadTaskId: 'task-update-1'
+    },
+    installedVersion: {
+      current: null,
+      expected: 'v2.4.10',
+      matchesExpected: null
     },
     runtimeTarget: {
       platform: 'win32',
@@ -58,6 +64,7 @@ function buildEvidence(
       readyToInstall: true,
       installMode: 'windows-installer-handoff',
       requiresUserConfirmation: true,
+      autoInstallDownloadedUpdates: false,
       unattendedAutoInstallEnabled: false
     },
     manualRegression: {
@@ -69,6 +76,7 @@ function buildEvidence(
       suggestedEvidenceFields: {
         channel: AppPreviewChannel.RELEASE,
         autoDownload: true,
+        autoInstallDownloadedUpdates: false,
         downloadReadyVersion: 'v2.4.10',
         downloadTaskId: 'task-update-1',
         platform: 'win32',
@@ -116,7 +124,8 @@ describe('update-diagnostic-verifier', () => {
       settings: {
         ...buildEvidence().settings,
         enabled: false,
-        autoDownload: false
+        autoDownload: false,
+        autoInstallDownloadedUpdates: false
       },
       status: {
         lastCheck: null,
@@ -135,6 +144,7 @@ describe('update-diagnostic-verifier', () => {
         readyToInstall: false,
         installMode: 'not-ready',
         requiresUserConfirmation: false,
+        autoInstallDownloadedUpdates: false,
         unattendedAutoInstallEnabled: false,
         blocker: 'no-download-ready'
       },
@@ -143,6 +153,7 @@ describe('update-diagnostic-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.RELEASE,
           autoDownload: false,
+          autoInstallDownloadedUpdates: false,
           downloadReadyVersion: null,
           downloadTaskId: null,
           platform: 'darwin',
@@ -200,6 +211,7 @@ describe('update-diagnostic-verifier', () => {
           readyToInstall: false,
           installMode: 'not-ready',
           requiresUserConfirmation: false,
+          autoInstallDownloadedUpdates: false,
           unattendedAutoInstallEnabled: false,
           blocker: 'no-download-ready'
         },
@@ -212,6 +224,7 @@ describe('update-diagnostic-verifier', () => {
           suggestedEvidenceFields: {
             channel: AppPreviewChannel.RELEASE,
             autoDownload: true,
+            autoInstallDownloadedUpdates: false,
             downloadReadyVersion: null,
             downloadTaskId: null,
             platform: 'win32',
@@ -242,6 +255,7 @@ describe('update-diagnostic-verifier', () => {
         readyToInstall: true,
         installMode: 'manual-installer',
         requiresUserConfirmation: true,
+        autoInstallDownloadedUpdates: false,
         unattendedAutoInstallEnabled: false
       },
       manualRegression: {
@@ -249,6 +263,7 @@ describe('update-diagnostic-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.BETA,
           autoDownload: false,
+          autoInstallDownloadedUpdates: true,
           downloadReadyVersion: 'v0.0.0',
           downloadTaskId: 'stale-task',
           platform: 'darwin',
@@ -266,6 +281,7 @@ describe('update-diagnostic-verifier', () => {
       'update cached release matchingAssetCount exceeds totalAssetCount',
       'update suggested channel field does not match settings',
       'update suggested autoDownload field does not match settings',
+      'update suggested autoInstallDownloadedUpdates field does not match settings',
       'update suggested downloadReadyVersion field does not match status',
       'update suggested downloadTaskId field does not match status',
       'update suggested platform field does not match runtime target',
@@ -283,5 +299,292 @@ describe('update-diagnostic-verifier', () => {
 
     expect(verified.gate.passed).toBe(true)
     expect(verified.kind).toBe('update-diagnostic-evidence')
+  })
+
+  it('passes automatic Windows installer handoff gates when explicitly enabled', () => {
+    const gate = evaluateUpdateDiagnosticEvidence(
+      buildEvidence({
+        installedVersion: {
+          current: '2.4.10',
+          expected: 'v2.4.10',
+          matchesExpected: true
+        },
+        settings: {
+          ...buildEvidence().settings,
+          autoInstallDownloadedUpdates: true
+        },
+        verdict: {
+          downloadReady: true,
+          readyToInstall: true,
+          installMode: 'windows-auto-installer-handoff',
+          requiresUserConfirmation: false,
+          autoInstallDownloadedUpdates: true,
+          unattendedAutoInstallEnabled: true
+        },
+        manualRegression: {
+          ...buildEvidence().manualRegression,
+          suggestedEvidenceFields: {
+            ...buildEvidence().manualRegression.suggestedEvidenceFields,
+            autoInstallDownloadedUpdates: true,
+            installMode: 'windows-auto-installer-handoff'
+          }
+        }
+      }),
+      {
+        requireAutoInstallEnabled: true,
+        requireUnattendedEnabled: true,
+        requireInstallMode: ['windows-auto-installer-handoff'],
+        requireInstalledVersionMatchesTarget: true
+      }
+    )
+
+    expect(gate).toEqual({
+      passed: true,
+      failures: [],
+      warnings: []
+    })
+  })
+
+  it('fails installed version match gate when post-install version evidence is missing or stale', () => {
+    expect(
+      evaluateUpdateDiagnosticEvidence(buildEvidence(), {
+        requireInstalledVersionMatchesTarget: true
+      }).failures
+    ).toEqual(['update installed version match evidence is missing'])
+
+    expect(
+      evaluateUpdateDiagnosticEvidence(
+        buildEvidence({
+          installedVersion: {
+            current: '2.4.9',
+            expected: 'v2.4.10',
+            matchesExpected: false
+          }
+        }),
+        {
+          requireInstalledVersion: true,
+          requireInstalledVersionMatchesTarget: true
+        }
+      ).failures
+    ).toEqual(['update installed version mismatch: expected v2.4.10, got 2.4.9'])
+  })
+
+  it('treats blank installed version fields as missing evidence', () => {
+    expect(
+      evaluateUpdateDiagnosticEvidence(
+        buildEvidence({
+          installedVersion: {
+            current: '   ',
+            expected: '  ',
+            matchesExpected: true
+          }
+        }),
+        {
+          requireInstalledVersion: true,
+          requireInstalledVersionMatchesTarget: true
+        }
+      ).failures
+    ).toEqual([
+      'update installedVersion matchesExpected is true without current version',
+      'update installedVersion matchesExpected is true without expected version',
+      'update installed version evidence is missing',
+      'update installed version match evidence is missing'
+    ])
+  })
+
+  it('rejects automatic Windows installer handoff without an automatic download task id', () => {
+    expect(
+      evaluateUpdateDiagnosticEvidence(
+        buildEvidence({
+          installedVersion: {
+            current: '2.4.10',
+            expected: 'v2.4.10',
+            matchesExpected: true
+          },
+          settings: {
+            ...buildEvidence().settings,
+            autoInstallDownloadedUpdates: true
+          },
+          status: {
+            ...buildEvidence().status,
+            downloadTaskId: null
+          },
+          verdict: {
+            downloadReady: true,
+            readyToInstall: true,
+            installMode: 'windows-auto-installer-handoff',
+            requiresUserConfirmation: false,
+            autoInstallDownloadedUpdates: true,
+            unattendedAutoInstallEnabled: true
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              autoInstallDownloadedUpdates: true,
+              downloadTaskId: null,
+              installMode: 'windows-auto-installer-handoff'
+            }
+          }
+        })
+      ).failures
+    ).toEqual(['update automatic installer handoff mode requires automatic download task id'])
+  })
+
+  it('rejects inconsistent installed version match evidence', () => {
+    expect(
+      evaluateUpdateDiagnosticEvidence(
+        buildEvidence({
+          installedVersion: {
+            current: '2.4.9',
+            expected: 'v2.4.10',
+            matchesExpected: true
+          }
+        })
+      ).failures
+    ).toEqual(['update installedVersion matchesExpected does not match current/expected versions'])
+  })
+
+  it('rejects installed version evidence that points at a different update target', () => {
+    expect(
+      evaluateUpdateDiagnosticEvidence(
+        buildEvidence({
+          installedVersion: {
+            current: '2.4.9',
+            expected: 'v2.4.9',
+            matchesExpected: true
+          }
+        }),
+        {
+          requireInstalledVersionMatchesTarget: true
+        }
+      ).failures
+    ).toEqual(['update installedVersion expected does not match update target version'])
+  })
+
+  it('rejects cached release and matching asset drift from runtime target', () => {
+    const evidence = buildEvidence({
+      cachedRelease: {
+        ...buildEvidence().cachedRelease!,
+        tag: 'v2.4.9',
+        channel: AppPreviewChannel.BETA,
+        matchingAssets: [
+          {
+            name: 'Tuff-2.4.9-arm64.dmg',
+            platform: 'darwin',
+            arch: 'arm64',
+            size: 0,
+            hasChecksum: true
+          }
+        ]
+      },
+      manualRegression: {
+        ...buildEvidence().manualRegression,
+        suggestedEvidenceFields: {
+          ...buildEvidence().manualRegression.suggestedEvidenceFields,
+          cachedReleaseTag: 'v2.4.9',
+          matchingAssetNames: ['Tuff-2.4.9-arm64.dmg']
+        }
+      }
+    })
+
+    expect(evaluateUpdateDiagnosticEvidence(evidence).failures).toEqual([
+      'update cached release tag does not match downloadReadyVersion',
+      'update cached release channel does not match settings',
+      'update matching asset platform does not match runtime target',
+      'update matching asset arch does not match runtime target',
+      'update matching asset size is invalid'
+    ])
+  })
+
+  it('rejects Windows installer handoff modes on non-Windows runtime targets', () => {
+    const evidence = buildEvidence({
+      runtimeTarget: {
+        platform: 'darwin',
+        arch: 'x64',
+        isMacAutoInstallPlatform: false
+      },
+      cachedRelease: {
+        ...buildEvidence().cachedRelease!,
+        matchingAssets: [
+          {
+            name: 'Tuff-2.4.10.dmg',
+            platform: 'darwin',
+            arch: 'x64',
+            size: 128_000_000,
+            hasChecksum: true
+          }
+        ]
+      },
+      manualRegression: {
+        ...buildEvidence().manualRegression,
+        suggestedEvidenceFields: {
+          ...buildEvidence().manualRegression.suggestedEvidenceFields,
+          platform: 'darwin',
+          matchingAssetNames: ['Tuff-2.4.10.dmg']
+        }
+      }
+    })
+
+    expect(evaluateUpdateDiagnosticEvidence(evidence).failures).toEqual([
+      'update Windows installer handoff mode requires win32 runtime target'
+    ])
+  })
+
+  it('rejects inconsistent Windows installer handoff modes', () => {
+    const manualConflict = evaluateUpdateDiagnosticEvidence(
+      buildEvidence({
+        settings: {
+          ...buildEvidence().settings,
+          autoInstallDownloadedUpdates: true
+        },
+        verdict: {
+          ...buildEvidence().verdict,
+          installMode: 'windows-installer-handoff',
+          requiresUserConfirmation: false,
+          autoInstallDownloadedUpdates: true,
+          unattendedAutoInstallEnabled: true
+        },
+        manualRegression: {
+          ...buildEvidence().manualRegression,
+          suggestedEvidenceFields: {
+            ...buildEvidence().manualRegression.suggestedEvidenceFields,
+            autoInstallDownloadedUpdates: true,
+            installMode: 'windows-installer-handoff'
+          }
+        }
+      })
+    )
+
+    expect(manualConflict.failures).toEqual([
+      'update manual installer handoff mode requires user confirmation',
+      'update manual installer handoff mode conflicts with autoInstallDownloadedUpdates',
+      'update manual installer handoff mode must not enable unattended auto install'
+    ])
+
+    const autoConflict = evaluateUpdateDiagnosticEvidence(
+      buildEvidence({
+        verdict: {
+          ...buildEvidence().verdict,
+          installMode: 'windows-auto-installer-handoff',
+          requiresUserConfirmation: true,
+          autoInstallDownloadedUpdates: false,
+          unattendedAutoInstallEnabled: false
+        },
+        manualRegression: {
+          ...buildEvidence().manualRegression,
+          suggestedEvidenceFields: {
+            ...buildEvidence().manualRegression.suggestedEvidenceFields,
+            installMode: 'windows-auto-installer-handoff'
+          }
+        }
+      })
+    )
+
+    expect(autoConflict.failures).toEqual([
+      'update automatic installer handoff mode requires autoInstallDownloadedUpdates',
+      'update automatic installer handoff mode must not require user confirmation',
+      'update automatic installer handoff mode requires unattended auto install'
+    ])
   })
 })

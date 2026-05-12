@@ -187,6 +187,26 @@ describe('runtime module manifest contract', () => {
     )
   })
 
+  it('skips unresolved optional platform packages in packaged runtime closure', async () => {
+    const paths = createTempWorkspace()
+
+    await createPackage(paths.workspaceNodeModules, 'runtime-root', {
+      optionalDependencies: {
+        'missing-platform-runtime': '1.0.0'
+      }
+    })
+
+    const {
+      collectPackagedRuntimeModuleEntries
+    } = require('../../../scripts/build-target/runtime-modules.js')
+    const entries = collectPackagedRuntimeModuleEntries(['runtime-root'], {
+      ...paths,
+      rootSourceDir: paths.projectRoot
+    })
+
+    expect(entries.map((entry: { name: string }) => entry.name)).toEqual(['runtime-root'])
+  })
+
   it('fails fast when the target esbuild binary is missing from packaged resources', () => {
     const paths = createTempWorkspace()
     const resourcesDir = path.join(paths.root, 'dist/mac-arm64/tuff.app/Contents/Resources')

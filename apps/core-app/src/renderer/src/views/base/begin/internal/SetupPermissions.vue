@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SetupPermissions">
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
 import { inject, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -30,10 +30,14 @@ const step: StepFunction = inject('step')!
 const transport = useTuffTransport()
 const { isMac: isMacOS, isWindows } = useRendererPlatform()
 
-const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
-  'system:permission:check'
-)
-const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
+const systemPermissionCheck = defineEvent('system')
+  .module('permission')
+  .event('check')
+  .define<string, SystemPermissionCheckResult>()
+const systemPermissionRequest = defineEvent('system')
+  .module('permission')
+  .event('request')
+  .define<string, boolean>()
 
 // Permission states
 const permissions = ref({

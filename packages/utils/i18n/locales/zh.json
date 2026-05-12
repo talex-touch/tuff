@@ -33,7 +33,8 @@
       "system": "系统",
       "intelligence": "Intelligence 能力",
       "storage": "存储",
-      "window": "窗口"
+      "window": "窗口",
+      "media": "媒体"
     },
     "risk": {
       "low": "低风险",
@@ -43,7 +44,9 @@
     "fs": {
       "read": { "name": "读取文件", "desc": "读取用户文件系统中的文件" },
       "write": { "name": "写入文件", "desc": "创建、修改或删除用户文件" },
-      "execute": { "name": "执行文件", "desc": "运行可执行文件或脚本" }
+      "execute": { "name": "执行文件", "desc": "运行可执行文件或脚本" },
+      "tfile": { "name": "临时文件引用", "desc": "访问应用管理的临时文件引用" },
+      "index": { "name": "文件索引", "desc": "查询和管理本地文件索引" }
     },
     "clipboard": {
       "read": { "name": "读取剪贴板", "desc": "访问剪贴板中的内容" },
@@ -72,6 +75,9 @@
     "window": {
       "create": { "name": "创建窗口", "desc": "创建新窗口或视图" },
       "capture": { "name": "屏幕截图", "desc": "捕获屏幕内容" }
+    },
+    "media": {
+      "read": { "name": "读取媒体", "desc": "读取媒体元数据和缩略图" }
     },
     "grant": "授予",
     "revoke": "撤销",

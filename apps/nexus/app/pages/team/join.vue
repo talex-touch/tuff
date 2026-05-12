@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 
@@ -62,7 +63,7 @@ watch(
 
     previewPending.value = true
     try {
-      preview.value = await $fetch<InvitePreview>(`/api/team/invite/${encodeURIComponent(trimmed)}`)
+      preview.value = await rawFetch<InvitePreview>(`/api/team/invite/${encodeURIComponent(trimmed)}`)
     }
     catch (error: any) {
       errorMessage.value = error?.data?.statusMessage || error?.message || 'Failed to load invite preview'
@@ -90,7 +91,7 @@ async function joinTeam(): Promise<void> {
   success.value = false
 
   try {
-    await $fetch('/api/team/join', {
+    await rawFetch('/api/team/join', {
       method: 'POST',
       body: { code: code.value.trim() },
     })

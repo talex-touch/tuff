@@ -193,18 +193,8 @@
           "expiresVersion": "2.4.11"
         },
         {
-          "file": "apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts",
-          "maxCount": 3,
-          "expiresVersion": "2.4.11"
-        },
-        {
           "file": "apps/pilot/app/pages/cms/system/pilot-settings.vue",
           "maxCount": 6,
-          "expiresVersion": "2.4.11"
-        },
-        {
-          "file": "apps/pilot/app/pages/index.vue",
-          "maxCount": 1,
           "expiresVersion": "2.4.11"
         },
         {
@@ -215,16 +205,6 @@
         {
           "file": "apps/pilot/server/utils/__tests__/auth.test.ts",
           "maxCount": 2,
-          "expiresVersion": "2.4.11"
-        },
-        {
-          "file": "apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts",
-          "maxCount": 5,
-          "expiresVersion": "2.4.11"
-        },
-        {
-          "file": "apps/pilot/server/utils/__tests__/legacy-stream-input.test.ts",
-          "maxCount": 7,
           "expiresVersion": "2.4.11"
         },
         {
@@ -245,11 +225,6 @@
         {
           "file": "apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts",
           "maxCount": 4,
-          "expiresVersion": "2.4.11"
-        },
-        {
-          "file": "apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts",
-          "maxCount": 12,
           "expiresVersion": "2.4.11"
         },
         {

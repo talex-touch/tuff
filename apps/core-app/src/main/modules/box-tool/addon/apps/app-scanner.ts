@@ -322,7 +322,7 @@ export class AppScanner {
             if (
               spotlightName &&
               spotlightName !== '(null)' &&
-              spotlightName !== currentDisplayName
+              (spotlightName !== currentDisplayName || app.displayNameQuality !== 'system')
             ) {
               appScannerLog.debug(
                 formatLog(
@@ -337,7 +337,9 @@ export class AppScanner {
               updatedCount++
               updatedApps.push({
                 ...app,
-                displayName: spotlightName
+                displayName: spotlightName,
+                displayNameSource: 'mdls:kMDItemDisplayName',
+                displayNameQuality: 'system'
               })
             }
           }
@@ -368,10 +370,15 @@ export class AppScanner {
               if (
                 spotlightName &&
                 spotlightName !== '(null)' &&
-                spotlightName !== app.displayName
+                (spotlightName !== app.displayName || app.displayNameQuality !== 'system')
               ) {
                 updatedCount++
-                updatedApps.push({ ...app, displayName: spotlightName })
+                updatedApps.push({
+                  ...app,
+                  displayName: spotlightName,
+                  displayNameSource: 'mdls:kMDItemDisplayName',
+                  displayNameQuality: 'system'
+                })
               }
             } catch {
               // 忽略单个应用的错误

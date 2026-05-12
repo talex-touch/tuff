@@ -16,6 +16,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
@@ -38,6 +39,7 @@ const downloadSdk = useDownloadSdk()
 const downloadStatusDisposers: Array<() => void> = []
 const { platform, isMac } = useRendererPlatform()
 const settingUpdateLog = createRendererLogger('SettingUpdate')
+const { startupInfo } = useStartupInfo()
 
 const { appStates } = useAppState()
 const {
@@ -54,6 +56,7 @@ const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
 const autoDownloadEnabled = ref<boolean>(true)
+const autoInstallDownloadedUpdatesEnabled = ref(false)
 const rendererOverrideEnabled = ref(false)
 const lastCheck = ref<number | null>(null)
 const downloadReady = ref(false)
@@ -66,10 +69,12 @@ const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
+const autoInstallSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
 const isMacAutoInstallPlatform = computed(() => isMac.value)
+const isWindowsPlatform = computed(() => platform.value === 'win32')
 
 const channelOptions = computed(() => {
   return [
@@ -135,6 +140,11 @@ const autoDownloadDescription = computed(() => {
   return isMacAutoInstallPlatform.value
     ? t('settings.settingUpdate.autoDownloadDesc')
     : t('settings.settingUpdate.autoDownloadDescManual')
+})
+const autoInstallDescription = computed(() => {
+  return autoDownloadEnabled.value
+    ? t('settings.settingUpdate.autoInstallDownloadedUpdatesDesc')
+    : t('settings.settingUpdate.autoInstallDownloadedUpdatesDescDisabled')
 })
 const installActionDescription = computed(() => {
   return isMacAutoInstallPlatform.value
@@ -204,6 +214,7 @@ async function loadSettings(): Promise<void> {
       normalizeStoredUpdateChannel(fetched.updateChannel) ?? AppPreviewChannel.RELEASE
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = fetched.autoDownload ?? true
+    autoInstallDownloadedUpdatesEnabled.value = fetched.autoInstallDownloadedUpdates ?? false
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
     await refreshStatus()
@@ -223,6 +234,7 @@ async function refreshStatus(): Promise<void> {
       downloadReady?: boolean
       downloadReadyVersion?: string | null
       downloadTaskId?: string | null
+      autoInstallDownloadedUpdates?: boolean
     }
 
     if (typeof status.lastCheck === 'number') {
@@ -247,6 +259,12 @@ async function refreshStatus(): Promise<void> {
     if (!downloadReady.value) {
       downloadReadyVersion.value = null
       downloadTaskId.value = null
+    }
+    if (typeof status.autoInstallDownloadedUpdates === 'boolean') {
+      autoInstallDownloadedUpdatesEnabled.value = status.autoInstallDownloadedUpdates
+      if (settings.value) {
+        settings.value.autoInstallDownloadedUpdates = status.autoInstallDownloadedUpdates
+      }
     }
   } catch (error) {
     settingUpdateLog.warn('Failed to refresh status', error)
@@ -323,6 +341,25 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     autoDownloadSaving.value = false
+  }
+}
+
+async function handleAutoInstallChange(value: boolean): Promise<void> {
+  if (!settings.value || autoInstallSaving.value) return
+
+  const previous = autoInstallDownloadedUpdatesEnabled.value
+  autoInstallDownloadedUpdatesEnabled.value = value
+  autoInstallSaving.value = true
+  try {
+    await updateSettings({ autoInstallDownloadedUpdates: value })
+    settings.value.autoInstallDownloadedUpdates = value
+    toast.success(t('settings.settingUpdate.messages.autoInstallDownloadedUpdatesSaved'))
+  } catch (error) {
+    settingUpdateLog.error('Failed to update automatic installer handoff', error)
+    autoInstallDownloadedUpdatesEnabled.value = previous
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
+  } finally {
+    autoInstallSaving.value = false
   }
 }
 
@@ -430,7 +467,8 @@ function buildCurrentUpdateEvidence() {
     cachedAssets: cachedAssets.value,
     platform: platform.value,
     arch: getRuntimeArch(),
-    isMacAutoInstallPlatform: isMacAutoInstallPlatform.value
+    isMacAutoInstallPlatform: isMacAutoInstallPlatform.value,
+    currentVersion: startupInfo.value?.version ?? null
   })
 }
 
@@ -551,6 +589,17 @@ function openAssetsDialog(): void {
       active-icon="i-carbon-download"
       :disabled="fetching || autoDownloadSaving"
       @update:model-value="handleAutoDownloadChange"
+    />
+
+    <tuff-block-switch
+      v-if="showAdvancedSettings && isWindowsPlatform"
+      v-model="autoInstallDownloadedUpdatesEnabled"
+      :title="t('settings.settingUpdate.autoInstallDownloadedUpdatesTitle')"
+      :description="autoInstallDescription"
+      default-icon="i-carbon-install"
+      active-icon="i-carbon-install"
+      :disabled="fetching || autoInstallSaving || !autoDownloadEnabled"
+      @update:model-value="handleAutoInstallChange"
     />
 
     <tuff-block-switch

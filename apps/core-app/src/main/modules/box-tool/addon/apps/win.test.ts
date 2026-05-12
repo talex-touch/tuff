@@ -161,6 +161,10 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Calculator',
+      displayName: 'Calculator',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-uwp',
       path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
       launchKind: 'uwp',
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
@@ -188,6 +192,10 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Codex',
+      displayName: 'Codex',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-path',
       path: appPath,
       launchKind: 'path',
       launchTarget: appPath,
@@ -262,6 +270,10 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Weixin',
+      displayName: '微信',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-path',
       path: appPath,
       launchKind: 'path',
       launchTarget: appPath,
@@ -355,12 +367,22 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Calculator',
-      displayName: 'Calculator Deluxe',
+      displayName: 'Calculator',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-uwp',
       description: 'Fast calculations',
       bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
       launchKind: 'uwp',
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
     })
+    expect(apps[0].alternateNames).toEqual(
+      expect.arrayContaining([
+        'Calculator Deluxe',
+        'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
+        'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+      ])
+    )
     expect(apps[0].icon).toBe('data:image/png;base64,3q2+7w==')
   })
 
@@ -395,6 +417,9 @@ describe('win app scanner', () => {
     expect(apps[0]).toMatchObject({
       name: 'Foo',
       displayName: 'Foo',
+      displayNameSource: 'registry',
+      displayNameQuality: 'registry',
+      identityKind: 'windows-path',
       description: 'Foo Inc.',
       path: targetPath,
       launchKind: 'path',

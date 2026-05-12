@@ -66,11 +66,6 @@ vi.mock('@talex-touch/utils/common/storage/entity/app-settings', () => ({
   }
 }))
 
-vi.mock('@talex-touch/utils/env', () => ({
-  getTuffBaseUrl: vi.fn(() => 'https://example.test'),
-  isDevEnv: vi.fn(() => false)
-}))
-
 vi.mock('@talex-touch/utils/transport/event/builder', () => ({
   defineRawEvent: vi.fn((name: string) => ({
     toEventName: () => name
@@ -112,6 +107,11 @@ vi.mock('../network', () => ({
   }))
 }))
 
+vi.mock('../nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: vi.fn(() => 'https://example.test'),
+  getRuntimeServerMode: vi.fn(() => 'production')
+}))
+
 vi.mock('../storage', () => ({
   getMainConfig: getMainConfigMock,
   saveMainConfig: saveMainConfigMock,
@@ -136,7 +136,7 @@ type MockAppSetting = {
     enabled: boolean
   }
   dev: {
-    authServer: 'production' | 'local'
+    runtimeServer: 'production' | 'local'
   }
 }
 
@@ -159,7 +159,7 @@ function createAppSetting(): MockAppSetting {
       enabled: false
     },
     dev: {
-      authServer: 'production'
+      runtimeServer: 'production'
     }
   }
 }

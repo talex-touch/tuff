@@ -3,6 +3,7 @@ import type { DataTableColumn } from '@talex-touch/tuffex'
 import { TxButton, TxDataTable, TxStatusBadge } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: 'dashboard',
@@ -96,7 +97,7 @@ interface StorageDetailsResponse {
 
 const { data, pending, error, refresh } = await useAsyncData<StorageStatusResponse | null>(
   'dashboard-storage-status',
-  async () => await $fetch<StorageStatusResponse>('/api/dashboard/storage/status'),
+  async () => await requestJson<StorageStatusResponse>('/api/dashboard/storage/status'),
   {
     default: () => null,
     server: false,
@@ -111,7 +112,7 @@ const {
 } = await useAsyncData<StorageRecentSessionsResponse>(
   'dashboard-storage-recent-sessions',
   async () =>
-    await $fetch<StorageRecentSessionsResponse>('/api/dashboard/storage/sessions', {
+    await requestJson<StorageRecentSessionsResponse>('/api/dashboard/storage/sessions', {
       query: { limit: 24 }
     }),
   {
@@ -380,7 +381,7 @@ async function loadSyncDetails(force = false): Promise<void> {
   detailsLoading.value = true
   detailsError.value = ''
   try {
-    detailsData.value = await $fetch<StorageDetailsResponse>('/api/dashboard/storage/details', {
+    detailsData.value = await requestJson<StorageDetailsResponse>('/api/dashboard/storage/details', {
       query: { limit: 120 }
     })
   } catch (error) {

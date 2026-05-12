@@ -7,6 +7,12 @@ const { execFileSafeMock } = vi.hoisted(() => ({
   execFileSafeMock: vi.fn()
 }))
 
+vi.mock('electron', () => ({
+  app: {
+    getPath: vi.fn(() => path.join(os.tmpdir(), 'darwin-app-icon-cache-test-user-data'))
+  }
+}))
+
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
   execFileSafe: execFileSafeMock
 }))
@@ -22,7 +28,7 @@ async function loadSubject() {
 async function createTempAppBundle(
   name: string,
   plistDisplayName: string,
-  options?: { localizedDisplayName?: string }
+  options?: { localizedDisplayName?: string; localizedDir?: string; iconFile?: string }
 ): Promise<string> {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'darwin-app-test-'))
   const appPath = path.join(tmpRoot, `${name}.app`)
@@ -41,12 +47,25 @@ async function createTempAppBundle(
   <string>${name}</string>
   <key>CFBundleIdentifier</key>
   <string>com.example.${name.toLowerCase()}</string>
+  ${
+    options?.iconFile
+      ? `<key>CFBundleIconFile</key>
+  <string>${options.iconFile}</string>`
+      : ''
+  }
 </dict>
 </plist>`
   )
 
+  if (options?.iconFile) {
+    const iconFile = options.iconFile.endsWith('.icns')
+      ? options.iconFile
+      : `${options.iconFile}.icns`
+    await fs.writeFile(path.join(resourcesPath, iconFile), 'icns')
+  }
+
   if (options?.localizedDisplayName) {
-    const localizedDir = path.join(resourcesPath, 'zh-Hans.lproj')
+    const localizedDir = path.join(resourcesPath, options.localizedDir ?? 'zh-Hans.lproj')
     await fs.mkdir(localizedDir, { recursive: true })
     await fs.writeFile(
       path.join(localizedDir, 'InfoPlist.strings'),
@@ -59,10 +78,19 @@ async function createTempAppBundle(
 
 describe('darwin app info', () => {
   const tempRoots: string[] = []
+  const cacheRoot = path.join(os.tmpdir(), 'darwin-app-icon-cache-test-user-data')
 
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    execFileSafeMock.mockImplementation(async (_command: string, args: string[]) => {
+      const outputIndex = args.indexOf('--out')
+      if (outputIndex >= 0 && args[outputIndex + 1]) {
+        await fs.mkdir(path.dirname(args[outputIndex + 1]), { recursive: true })
+        await fs.writeFile(args[outputIndex + 1], 'png')
+      }
+      return { stdout: '', stderr: '' }
+    })
   })
 
   afterEach(async () => {
@@ -71,6 +99,7 @@ describe('darwin app info', () => {
         .splice(0)
         .map(async (tempRoot) => await fs.rm(tempRoot, { recursive: true, force: true }))
     )
+    await fs.rm(cacheRoot, { recursive: true, force: true })
   })
 
   it('does not call mdls during fresh app info scan', async () => {
@@ -106,6 +135,9 @@ describe('darwin app info', () => {
       expect.objectContaining({
         name: 'WeChat',
         displayName: '微信',
+        displayNameSource: 'InfoPlist.strings',
+        displayNameQuality: 'localized',
+        identityKind: 'macos-path',
         bundleId: 'com.example.wechat',
         path: appPath
       })
@@ -130,6 +162,80 @@ describe('darwin app info', () => {
         alternateNames: expect.arrayContaining(['NeteaseMusic', 'NeteaseMusic 2'])
       })
     )
+    expect(execFileSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('reads zh_CN InfoPlist.strings for WeChat developer tools', async () => {
+    const tempRoot = await createTempAppBundle('wechatwebdevtools', 'wechatwebdevtools', {
+      localizedDisplayName: '微信开发者工具',
+      localizedDir: 'zh_CN.lproj'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'wechatwebdevtools.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo).toEqual(
+      expect.objectContaining({
+        name: 'wechatwebdevtools',
+        displayName: '微信开发者工具',
+        displayNameSource: 'InfoPlist.strings',
+        displayNameQuality: 'localized',
+        identityKind: 'macos-path',
+        alternateNames: expect.arrayContaining(['wechatwebdevtools'])
+      })
+    )
+    expect(execFileSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('generates stable hashed png app icon cache from bundle icon resources', async () => {
+    const tempRoot = await createTempAppBundle('WeChat', 'WeChat', {
+      iconFile: 'AppIcon'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'WeChat.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo?.icon).toMatch(/cache\/app-icons\/darwin\/[a-f0-9]{32}\.png$/)
+    expect(path.basename(appInfo?.icon ?? '')).not.toContain('WeChat')
+    expect(execFileSafeMock).toHaveBeenCalledWith(
+      'sips',
+      expect.arrayContaining([
+        path.join(appPath, 'Contents', 'Resources', 'AppIcon.icns'),
+        '--out',
+        appInfo?.icon
+      ])
+    )
+  })
+
+  it('reuses existing app icon cache without running sips again', async () => {
+    const tempRoot = await createTempAppBundle('Preview', 'Preview', {
+      iconFile: 'PreviewIcon'
+    })
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'Preview.app')
+
+    const { getAppInfo } = await loadSubject()
+    const firstAppInfo = await getAppInfo(appPath)
+    execFileSafeMock.mockClear()
+    const secondAppInfo = await getAppInfo(appPath)
+
+    expect(secondAppInfo?.icon).toBe(firstAppInfo?.icon)
+    expect(execFileSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('returns empty icon when app has no icon resources', async () => {
+    const tempRoot = await createTempAppBundle('NoIcon', 'NoIcon')
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'NoIcon.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(appInfo?.icon).toBe('')
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 })

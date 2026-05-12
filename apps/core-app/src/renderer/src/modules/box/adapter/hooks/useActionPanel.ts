@@ -6,6 +6,11 @@ import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/eve
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import {
+  COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+  COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
+  coreBoxImageTranslateEvent
+} from '../../../../../../shared/events/corebox-scenes'
 import { devLog } from '~/utils/dev-log'
 
 interface UseActionPanelOptions {
@@ -86,6 +91,31 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
       case 'flow-transfer':
         if (openFlowSelector) openFlowSelector(targetItem)
         break
+      case COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID: {
+        const response = await transport.send(coreBoxImageTranslateEvent, {
+          item: JSON.parse(JSON.stringify(targetItem)),
+          targetLang: 'zh'
+        })
+        if (response?.success) {
+          toast.success(t('corebox.imageTranslated', '图片翻译已写入剪贴板'))
+        } else {
+          toast.error(response?.error || t('corebox.imageTranslateFailed', '图片翻译失败'))
+        }
+        break
+      }
+      case COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID: {
+        const response = await transport.send(coreBoxImageTranslateEvent, {
+          item: JSON.parse(JSON.stringify(targetItem)),
+          targetLang: 'zh',
+          openPinWindow: true
+        })
+        if (response?.success) {
+          toast.success(t('corebox.imageTranslatePinned', '图片翻译已置顶'))
+        } else {
+          toast.error(response?.error || t('corebox.imageTranslateFailed', '图片翻译失败'))
+        }
+        break
+      }
       default:
         devLog('[useActionPanel] Fallback execute for MetaOverlay action:', actionId, targetItem.id)
         try {

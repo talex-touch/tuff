@@ -69,6 +69,56 @@ export function evaluateEverythingDiagnosticEvidence(
     return { passed: false, failures, warnings }
   }
 
+  const expectedReady = evidence.status.enabled && evidence.status.available
+  if (evidence.verdict.ready !== expectedReady) {
+    failures.push('Everything verdict ready does not match status')
+  }
+
+  if (evidence.status.available && evidence.status.backend === 'unavailable') {
+    failures.push('Everything status is available with unavailable backend')
+  }
+
+  if (
+    evidence.status.available &&
+    !evidence.status.fallbackChain.includes(evidence.status.backend)
+  ) {
+    failures.push('Everything active backend is missing from fallback chain')
+  }
+
+  if (evidence.status.health === 'healthy' && !evidence.status.available) {
+    failures.push('Everything health is healthy while backend is unavailable')
+  }
+
+  if (evidence.status.available && evidence.status.errorCode) {
+    failures.push('Everything available status still has an errorCode')
+  }
+
+  if (evidence.status.available && evidence.status.lastBackendError) {
+    failures.push('Everything available status still has a backend error')
+  }
+
+  if (evidence.status.available && evidence.status.backendAttemptErrors[evidence.status.backend]) {
+    failures.push('Everything active backend has a recorded attempt error')
+  }
+
+  const fallbackBackends = new Set(evidence.status.fallbackChain)
+  for (const [backend, error] of Object.entries(evidence.status.backendAttemptErrors)) {
+    if (!fallbackBackends.has(backend as EverythingStatusResponse['backend'])) {
+      failures.push(`Everything backend attempt error is outside fallback chain: ${backend}`)
+    }
+    if (typeof error !== 'string' || error.trim().length === 0) {
+      failures.push(`Everything backend attempt error message is empty: ${backend}`)
+    }
+  }
+
+  if (evidence.status.backend === 'cli' && evidence.status.available && !evidence.status.esPath) {
+    failures.push('Everything CLI backend is missing esPath')
+  }
+
+  if (evidence.status.backend === 'cli' && evidence.status.available && !evidence.status.version) {
+    failures.push('Everything CLI backend is missing version')
+  }
+
   if (evidence.verdict.backend !== evidence.status.backend) {
     failures.push(
       `Everything verdict backend mismatch: expected ${evidence.status.backend}, got ${evidence.verdict.backend}`
@@ -85,6 +135,10 @@ export function evaluateEverythingDiagnosticEvidence(
     failures.push(
       `Everything verdict errorCode mismatch: expected ${evidence.status.errorCode ?? 'null'}, got ${evidence.verdict.errorCode ?? 'null'}`
     )
+  }
+  const hasBackendAttemptErrors = Object.keys(evidence.status.backendAttemptErrors).length > 0
+  if (evidence.verdict.hasBackendAttemptErrors !== hasBackendAttemptErrors) {
+    failures.push('Everything verdict backend attempt error flag does not match status')
   }
 
   const suggested = evidence.manualRegression.suggestedEvidenceFields
@@ -146,9 +200,8 @@ export function evaluateEverythingDiagnosticEvidence(
     failures.push('Everything esPath is missing')
   }
 
-  const fallbackChain = new Set(evidence.status.fallbackChain)
   const missingBackends =
-    options.requireFallbackChain?.filter((backend) => !fallbackChain.has(backend)) ?? []
+    options.requireFallbackChain?.filter((backend) => !fallbackBackends.has(backend)) ?? []
   if (missingBackends.length > 0) {
     failures.push(`Everything fallback chain missing: ${missingBackends.join(', ')}`)
   }

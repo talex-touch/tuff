@@ -10,12 +10,15 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Checks for disallowed file changes (lock files)
   - Lints markdown files
   - Runs typecheck on the entire monorepo
+  - Uses read-only `pull_request` on `main` / `master`; workflows that execute PR code must not use `pull_request_target`
 
 - **`build-and-release.yml`** - Build and release workflow for Electron app
   - Builds the application for multiple platforms
   - Creates releases and uploads artifacts
   - Generates `tuff-release-manifest.json` for updater validation
   - Syncs Release metadata/assets to Nexus APIs (tag push only)
+  - Supports explicit `beta`, `snapshot`, and `release` manual build types; `v*-beta*` tags are published as pre-releases with BETA runtime metadata and snapshot packaging policy
+  - Uploads only release assets and updater metadata from each platform job, not the full unpacked `dist`
   - Notes sync priority (tag push): `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → GitHub release body fallback
   - 若配置 `NEXUS_SYNC_BASE_URL` 或 `ADMIN_CF_ACCESS_CLIENT_ID` / `ADMIN_CF_ACCESS_CLIENT_SECRET`，则仍会正常执行完整 Nexus 同步链路
   - `sync-nexus-release` 仅在 `POST /api/releases` 返回精确的重复 tag 错误时才转 `PATCH`；其余非 2xx 会按真实错误失败
@@ -25,7 +28,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Adds/removes labels based on PR content
 
 - **`release-drafter.yml`** - Release draft automation
-  - Updates the release draft on `main` pushes / merged PRs
+  - Updates the release draft on `main` / `master` pushes and merged PRs
 
 - Contributors README automation was retired on `2026-04-22`
   - The previous `readme-contributors.yml` workflow kept generating duplicate README PRs on `master` pushes, so it was disabled and removed to keep the official PR queue stable

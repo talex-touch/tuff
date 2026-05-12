@@ -1,13 +1,40 @@
 import type { StoreProviderDefinition, StoreSourcesPayload } from '@talex-touch/utils/store'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTpexApiBase, NEXUS_BASE_URL } from '@talex-touch/utils/env'
-import { DEFAULT_STORE_PROVIDERS, STORE_SOURCES_STORAGE_KEY } from '@talex-touch/utils/store'
+import {
+  createDefaultStoreProviders,
+  DEFAULT_STORE_PROVIDERS,
+  STORE_SOURCES_STORAGE_KEY
+} from '@talex-touch/utils/store'
+import { getRuntimeNexusBaseUrl } from '../modules/nexus/runtime-base'
 import { getMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
 import { appTaskGate } from './app-task-gate'
 import { performStoreHttpRequest } from './store-http.service'
 
 const log = createLogger('StoreApiService')
+
+function normalizeOfficialRuntimeSources(
+  sources: StoreProviderDefinition[],
+  baseUrl = getRuntimeNexusBaseUrl()
+): StoreProviderDefinition[] {
+  const runtimeNexus = createDefaultStoreProviders(baseUrl).find((item) => item.id === 'tuff-nexus')
+  if (!runtimeNexus) return sources
+
+  return sources.map((source) => {
+    if (source.id !== 'tuff-nexus' || source.isOfficial !== true) {
+      return source
+    }
+
+    return {
+      ...source,
+      url: runtimeNexus.url,
+      config: {
+        ...(source.config ?? {}),
+        apiUrl: runtimeNexus.config?.apiUrl
+      }
+    }
+  })
+}
 
 /**
  * Get all configured store sources from user storage
@@ -16,12 +43,12 @@ export function getStoreSources(): StoreProviderDefinition[] {
   try {
     const payload = getMainConfig(STORE_SOURCES_STORAGE_KEY) as StoreSourcesPayload | null
     if (payload?.sources && Array.isArray(payload.sources)) {
-      return payload.sources
+      return normalizeOfficialRuntimeSources(payload.sources)
     }
   } catch (error) {
     log.warn('Failed to read store sources from storage', { error })
   }
-  return DEFAULT_STORE_PROVIDERS
+  return normalizeOfficialRuntimeSources(DEFAULT_STORE_PROVIDERS)
 }
 
 /**
@@ -39,8 +66,7 @@ export function getEnabledApiSources(): StoreProviderDefinition[] {
  * Prioritizes enabled tpexApi sources by priority, falls back to defaults
  */
 function getDefaultStoreBaseUrl(): string {
-  const envBase = getTpexApiBase()
-  if (envBase) return envBase
+  const runtimeBase = getRuntimeNexusBaseUrl()
 
   // Get enabled API sources sorted by priority
   const sources = getEnabledApiSources()
@@ -48,11 +74,15 @@ function getDefaultStoreBaseUrl(): string {
     .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
 
   // Return the highest priority source URL
-  if (sources.length > 0 && sources[0]!.url) {
-    return sources[0]!.url.replace(/\/$/, '')
+  if (sources.length > 0) {
+    const source = sources[0]!
+    const sourceUrl = source.url
+    if (sourceUrl && (source.id !== 'tuff-nexus' || source.isOfficial !== true)) {
+      return sourceUrl.replace(/\/$/, '')
+    }
   }
 
-  return NEXUS_BASE_URL
+  return runtimeBase
 }
 
 const DEFAULT_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000 // 24 hours

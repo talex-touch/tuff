@@ -8,6 +8,7 @@ import type {
 import { networkClient } from '@talex-touch/utils/network'
 import { TuffInput, TxBaseSurface, TxButton, TxCard, TxCollapse, TxCollapseItem, TxGlowText, TxSkeleton, TxSpinner, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson } from '~/utils/request'
 
 interface LabConversationItem {
   id: string
@@ -628,7 +629,7 @@ async function loadSessionHistory(targetSessionId: string) {
   }
   historyLoading.value = true
   try {
-    const data = await $fetch<{ traces: unknown[] }>('/api/admin/intelligence-agent/session/trace', {
+    const data = await requestJson<{ traces: unknown[] }>('/api/admin/intelligence-agent/session/trace', {
       query: {
         sessionId: targetSessionId,
         fromSeq: 1,
@@ -685,7 +686,7 @@ async function updateSessionQuery(nextSessionId?: string) {
 async function fetchSessionHistoryList() {
   historyListLoading.value = true
   try {
-    const data = await $fetch<{ sessions: LabSessionHistoryItem[] }>('/api/admin/intelligence-agent/session/history', {
+    const data = await requestJson<{ sessions: LabSessionHistoryItem[] }>('/api/admin/intelligence-agent/session/history', {
       query: { limit: 40 },
     })
     sessionHistoryList.value = data.sessions || []
@@ -759,10 +760,10 @@ async function loadPromptRegistryData() {
   promptRegistryError.value = ''
   try {
     const [promptData, bindingData] = await Promise.all([
-      $fetch<{ prompts: IntelligencePromptRecord[] }>('/api/admin/intelligence-agent/prompts', {
+      requestJson<{ prompts: IntelligencePromptRecord[] }>('/api/admin/intelligence-agent/prompts', {
         query: { limit: 400 },
       }),
-      $fetch<{ bindings: IntelligencePromptBinding[] }>('/api/admin/intelligence-agent/prompt-bindings'),
+      requestJson<{ bindings: IntelligencePromptBinding[] }>('/api/admin/intelligence-agent/prompt-bindings'),
     ])
     promptRecords.value = (promptData.prompts || []).slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     promptBindings.value = bindingData.bindings || []
@@ -796,7 +797,7 @@ async function savePromptRegistryRecord() {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompts', {
+    await requestJson('/api/admin/intelligence-agent/prompts', {
       method: 'POST',
       body: {
         record: {
@@ -827,7 +828,7 @@ async function removePromptRegistryRecord(record: IntelligencePromptRecord) {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompts', {
+    await requestJson('/api/admin/intelligence-agent/prompts', {
       method: 'DELETE',
       body: {
         id: record.id,
@@ -856,7 +857,7 @@ async function savePromptRegistryBinding() {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompt-bindings', {
+    await requestJson('/api/admin/intelligence-agent/prompt-bindings', {
       method: 'POST',
       body: {
         binding: {
@@ -883,7 +884,7 @@ async function removePromptRegistryBinding(binding: IntelligencePromptBinding) {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompt-bindings', {
+    await requestJson('/api/admin/intelligence-agent/prompt-bindings', {
       method: 'DELETE',
       body: {
         capabilityId: binding.capabilityId,
@@ -1196,7 +1197,7 @@ async function handleApproval(ticket: TuffIntelligenceApprovalTicket, approved: 
   approving.value = true
   errorMessage.value = ''
   try {
-    const response = await $fetch<{
+    const response = await requestJson<{
       ticket: TuffIntelligenceApprovalTicket
       result?: { output?: unknown }
     }>('/api/admin/intelligence-agent/tool/approve', {

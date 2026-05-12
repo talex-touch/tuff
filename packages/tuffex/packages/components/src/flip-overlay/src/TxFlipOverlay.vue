@@ -1,152 +1,3 @@
-<script lang="ts">
-const STACK_MATCH_PIXEL_THRESHOLD = 8
-const STACK_MATCH_RATIO_THRESHOLD = 0.05
-const STACK_LAYER_OFFSET_Y = -18
-const STACK_LAYER_SCALE_STEP = 0.05
-const STACK_LAYER_MAX_DEPTH = 3
-const STACK_OPACITY_BY_DEPTH = [1, 0.92, 0.78, 0.62, 0.38, 0.16, 0] as const
-const STACK_STATE_EPSILON = 0.001
-
-interface FlipOverlayStackEntry {
-  id: string
-  zIndex: number
-  openSequence: number
-  width: number
-  height: number
-  visible: boolean
-  globalMask: boolean
-  maskClass: string
-}
-
-const overlayStackRegistry = new Map<string, FlipOverlayStackEntry>()
-const overlayStackSubscribers = new Set<() => void>()
-let overlayStackVersion = 0
-let overlayInstanceSeed = 0
-let overlayOpenSequenceSeed = 0
-let sharedGlobalMaskElement: HTMLDivElement | null = null
-
-function canUseDom(): boolean {
-  return typeof window !== 'undefined' && typeof document !== 'undefined'
-}
-
-function resolveVisibleStackBounds(entries: FlipOverlayStackEntry[]): { minZIndex: number, topEntry: FlipOverlayStackEntry } | null {
-  if (entries.length === 0)
-    return null
-
-  let minZIndex = entries[0]!.zIndex
-  for (const entry of entries) {
-    if (entry.zIndex < minZIndex)
-      minZIndex = entry.zIndex
-  }
-
-  return {
-    minZIndex,
-    topEntry: entries[entries.length - 1]!,
-  }
-}
-
-function removeSharedGlobalMaskElement(): void {
-  if (!sharedGlobalMaskElement)
-    return
-  sharedGlobalMaskElement.remove()
-  sharedGlobalMaskElement = null
-}
-
-function ensureSharedGlobalMaskElement(): HTMLDivElement | null {
-  if (!canUseDom())
-    return null
-
-  if (!sharedGlobalMaskElement) {
-    sharedGlobalMaskElement = document.createElement('div')
-    sharedGlobalMaskElement.className = 'TxFlipOverlay-GlobalMask'
-    document.body.appendChild(sharedGlobalMaskElement)
-  }
-
-  return sharedGlobalMaskElement
-}
-
-function applySharedGlobalMaskState(): void {
-  if (!canUseDom())
-    return
-
-  const visibleEntries = getVisibleOverlayStackEntries()
-  const bounds = resolveVisibleStackBounds(visibleEntries)
-
-  // Single-overlay baseline keeps the local mask transition owned by the overlay instance.
-  if (!bounds || visibleEntries.length <= 1 || !bounds.topEntry.globalMask) {
-    removeSharedGlobalMaskElement()
-    return
-  }
-
-  const maskElement = ensureSharedGlobalMaskElement()
-  if (!maskElement)
-    return
-
-  maskElement.className = 'TxFlipOverlay-GlobalMask'
-  maskElement.style.zIndex = String(Math.max(0, bounds.minZIndex - 1))
-  maskElement.style.opacity = '1'
-}
-
-function markOverlayStackChanged(): void {
-  overlayStackVersion += 1
-  applySharedGlobalMaskState()
-  overlayStackSubscribers.forEach((listener) => {
-    try {
-      listener()
-    }
-    catch {
-      // ignore subscriber errors
-    }
-  })
-}
-
-function subscribeOverlayStackChanged(listener: () => void): () => void {
-  overlayStackSubscribers.add(listener)
-  return () => overlayStackSubscribers.delete(listener)
-}
-
-function getOverlayStackVersion(): number {
-  return overlayStackVersion
-}
-
-function getVisibleOverlayStackEntries(): FlipOverlayStackEntry[] {
-  return Array
-    .from(overlayStackRegistry.values())
-    .filter(entry => entry.visible)
-    .sort((a, b) => {
-      if (a.zIndex !== b.zIndex)
-        return a.zIndex - b.zIndex
-      return a.openSequence - b.openSequence
-    })
-}
-
-function isOverlaySizeMatched(current: FlipOverlayStackEntry, above: FlipOverlayStackEntry): boolean {
-  const widthDelta = Math.abs(current.width - above.width)
-  const heightDelta = Math.abs(current.height - above.height)
-  const widthTolerance = Math.max(STACK_MATCH_PIXEL_THRESHOLD, above.width * STACK_MATCH_RATIO_THRESHOLD)
-  const heightTolerance = Math.max(STACK_MATCH_PIXEL_THRESHOLD, above.height * STACK_MATCH_RATIO_THRESHOLD)
-  return widthDelta <= widthTolerance && heightDelta <= heightTolerance
-}
-
-function resolveStackOpacity(depth: number): number {
-  if (depth < 0)
-    return 1
-  if (depth >= STACK_OPACITY_BY_DEPTH.length)
-    return 0
-  return STACK_OPACITY_BY_DEPTH[depth] ?? 0
-}
-
-function nextOverlayInstanceId(): string {
-  overlayInstanceSeed += 1
-  return `tx-flip-overlay-${overlayInstanceSeed}`
-}
-
-function nextOverlayOpenSequence(): number {
-  overlayOpenSequenceSeed += 1
-  return overlayOpenSequenceSeed
-}
-</script>
-
 <script setup lang="ts">
 import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps } from './types'
@@ -157,6 +8,22 @@ import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import {
+  getOverlayStackVersion,
+  getVisibleOverlayStackEntries,
+  isOverlaySizeMatched,
+  nextOverlayInstanceId,
+  nextOverlayOpenSequence,
+  removeOverlayStackEntry,
+  resolveStackOpacity,
+  STACK_LAYER_MAX_DEPTH,
+  STACK_LAYER_OFFSET_Y,
+  STACK_LAYER_SCALE_STEP,
+  STACK_STATE_EPSILON,
+  subscribeOverlayStackChanged,
+  upsertOverlayStackEntry,
+  type FlipOverlayStackEntry,
+} from './flip-overlay-stack'
 
 defineOptions({
   name: 'TxFlipOverlay',
@@ -549,28 +416,11 @@ function upsertStackEntry(): void {
     maskClass: props.maskClass,
   }
 
-  const previousEntry = overlayStackRegistry.get(instanceId)
-  if (previousEntry
-    && previousEntry.zIndex === nextEntry.zIndex
-    && previousEntry.openSequence === nextEntry.openSequence
-    && previousEntry.width === nextEntry.width
-    && previousEntry.height === nextEntry.height
-    && previousEntry.visible === nextEntry.visible
-    && previousEntry.globalMask === nextEntry.globalMask
-    && previousEntry.maskClass === nextEntry.maskClass) {
-    return
-  }
-
-  overlayStackRegistry.set(instanceId, nextEntry)
-  markOverlayStackChanged()
+  upsertOverlayStackEntry(nextEntry)
 }
 
 function removeStackEntry(): void {
-  if (!overlayStackRegistry.has(instanceId))
-    return
-
-  overlayStackRegistry.delete(instanceId)
-  markOverlayStackChanged()
+  removeOverlayStackEntry(instanceId)
 }
 
 function applyStackCardState(forceImmediate = false): void {

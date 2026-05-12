@@ -92,6 +92,14 @@ export interface ProviderCapabilityInput {
   metadata?: unknown
 }
 
+export interface UpdateProviderCapabilityInput {
+  capability?: unknown
+  schemaRef?: unknown
+  metering?: unknown
+  constraints?: unknown
+  metadata?: unknown
+}
+
 export interface CreateProviderRegistryInput {
   name: unknown
   displayName?: unknown
@@ -312,6 +320,37 @@ function parseJsonObject(value: string | null): Record<string, unknown> | null {
   }
 }
 
+function normalizeProviderCapabilityInput(input: ProviderCapabilityInput, field: string): NormalizedProviderCapabilityInput {
+  const capability = assertNonEmptyString(input.capability, `${field}.capability`, 120)
+  const metering = normalizeOptionalJsonObject(input.metering, `${field}.metering`)
+  const constraints = normalizeOptionalJsonObject(input.constraints, `${field}.constraints`)
+  const metadata = normalizeOptionalJsonObject(input.metadata, `${field}.metadata`)
+
+  return {
+    capability,
+    schemaRef: normalizeOptionalString(input.schemaRef, `${field}.schemaRef`, 255),
+    metering: metering.data,
+    meteringJson: metering.json,
+    constraints: constraints.data,
+    constraintsJson: constraints.json,
+    metadata: metadata.data,
+    metadataJson: metadata.json,
+  }
+}
+
+function normalizeProviderCapabilityPatch(
+  existing: ProviderCapabilityRecord,
+  input: UpdateProviderCapabilityInput,
+): NormalizedProviderCapabilityInput {
+  return normalizeProviderCapabilityInput({
+    capability: input.capability === undefined ? existing.capability : input.capability,
+    schemaRef: input.schemaRef === undefined ? existing.schemaRef : input.schemaRef,
+    metering: input.metering === undefined ? existing.metering : input.metering,
+    constraints: input.constraints === undefined ? existing.constraints : input.constraints,
+    metadata: input.metadata === undefined ? existing.metadata : input.metadata,
+  }, 'capability')
+}
+
 function normalizeCapabilities(value: unknown): NormalizedProviderCapabilityInput[] {
   if (value == null)
     return []
@@ -326,26 +365,12 @@ function normalizeCapabilities(value: unknown): NormalizedProviderCapabilityInpu
     }
 
     const input = item as ProviderCapabilityInput
-    const capability = assertNonEmptyString(input.capability, `capabilities[${index}].capability`, 120)
-    if (seen.has(capability)) {
+    const capability = normalizeProviderCapabilityInput(input, `capabilities[${index}]`)
+    if (seen.has(capability.capability)) {
       throw createError({ statusCode: 400, statusMessage: `capabilities[${index}].capability is duplicated.` })
     }
-    seen.add(capability)
-
-    const metering = normalizeOptionalJsonObject(input.metering, `capabilities[${index}].metering`)
-    const constraints = normalizeOptionalJsonObject(input.constraints, `capabilities[${index}].constraints`)
-    const metadata = normalizeOptionalJsonObject(input.metadata, `capabilities[${index}].metadata`)
-
-    return {
-      capability,
-      schemaRef: normalizeOptionalString(input.schemaRef, `capabilities[${index}].schemaRef`, 255),
-      metering: metering.data,
-      meteringJson: metering.json,
-      constraints: constraints.data,
-      constraintsJson: constraints.json,
-      metadata: metadata.data,
-      metadataJson: metadata.json,
-    }
+    seen.add(capability.capability)
+    return capability
   })
 }
 
@@ -513,6 +538,44 @@ async function replaceProviderCapabilities(
       now,
       now,
     ).run()
+  }
+}
+
+async function getProviderCapabilityRecord(
+  db: D1Database,
+  providerId: string,
+  capabilityId: string,
+): Promise<ProviderCapabilityRecord | null> {
+  const row = await db.prepare(`
+    SELECT id, provider_id, capability, schema_ref, metering, constraints_json, metadata, created_at, updated_at
+    FROM ${CAPABILITIES_TABLE}
+    WHERE provider_id = ?1 AND id = ?2;
+  `).bind(providerId, capabilityId).first<ProviderCapabilityRow>()
+
+  return row ? mapCapability(row) : null
+}
+
+async function touchProviderUpdatedAt(db: D1Database, providerId: string, now: string) {
+  await db.prepare(`
+    UPDATE ${PROVIDERS_TABLE}
+    SET updated_at = ?1
+    WHERE id = ?2;
+  `).bind(now, providerId).run()
+}
+
+async function assertProviderCapabilityNotDuplicated(
+  event: H3Event,
+  providerId: string,
+  capability: string,
+  ignoreCapabilityId?: string,
+) {
+  const existing = await listProviderCapabilities(event, { providerId, capability })
+  const duplicated = existing.some(item => item.id !== ignoreCapabilityId)
+  if (duplicated) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Provider capability already exists.',
+    })
   }
 }
 
@@ -717,4 +780,115 @@ export async function listProviderCapabilities(
   `).bind(...values).all<ProviderCapabilityRow>()
 
   return (results ?? []).map(mapCapability)
+}
+
+export async function createProviderCapability(
+  event: H3Event,
+  providerId: string,
+  input: ProviderCapabilityInput,
+): Promise<ProviderCapabilityRecord | null> {
+  const existingProvider = await getProviderRegistryEntry(event, providerId)
+  if (!existingProvider)
+    return null
+
+  const db = getD1Database(event)
+  await ensureProviderRegistrySchema(db)
+
+  const normalized = normalizeProviderCapabilityInput(input, 'capability')
+  await assertProviderCapabilityNotDuplicated(event, existingProvider.id, normalized.capability)
+
+  const id = randomUUID()
+  const now = new Date().toISOString()
+  await db.prepare(`
+    INSERT INTO ${CAPABILITIES_TABLE} (
+      id, provider_id, capability, schema_ref, metering, constraints_json, metadata, created_at, updated_at
+    )
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);
+  `).bind(
+    id,
+    existingProvider.id,
+    normalized.capability,
+    normalized.schemaRef,
+    normalized.meteringJson,
+    normalized.constraintsJson,
+    normalized.metadataJson,
+    now,
+    now,
+  ).run()
+  await touchProviderUpdatedAt(db, existingProvider.id, now)
+
+  return await getProviderCapabilityRecord(db, existingProvider.id, id)
+}
+
+export async function updateProviderCapability(
+  event: H3Event,
+  providerId: string,
+  capabilityId: string,
+  input: UpdateProviderCapabilityInput,
+): Promise<ProviderCapabilityRecord | null> {
+  const existingProvider = await getProviderRegistryEntry(event, providerId)
+  if (!existingProvider)
+    return null
+
+  const db = getD1Database(event)
+  await ensureProviderRegistrySchema(db)
+
+  const safeCapabilityId = assertNonEmptyString(capabilityId, 'capabilityId', 120)
+  const existing = await getProviderCapabilityRecord(db, existingProvider.id, safeCapabilityId)
+  if (!existing)
+    return null
+
+  const normalized = normalizeProviderCapabilityPatch(existing, input)
+  await assertProviderCapabilityNotDuplicated(event, existingProvider.id, normalized.capability, existing.id)
+
+  const now = new Date().toISOString()
+  await db.prepare(`
+    UPDATE ${CAPABILITIES_TABLE}
+    SET capability = ?1,
+      schema_ref = ?2,
+      metering = ?3,
+      constraints_json = ?4,
+      metadata = ?5,
+      updated_at = ?6
+    WHERE provider_id = ?7 AND id = ?8;
+  `).bind(
+    normalized.capability,
+    normalized.schemaRef,
+    normalized.meteringJson,
+    normalized.constraintsJson,
+    normalized.metadataJson,
+    now,
+    existingProvider.id,
+    existing.id,
+  ).run()
+  await touchProviderUpdatedAt(db, existingProvider.id, now)
+
+  return await getProviderCapabilityRecord(db, existingProvider.id, existing.id)
+}
+
+export async function deleteProviderCapability(
+  event: H3Event,
+  providerId: string,
+  capabilityId: string,
+): Promise<boolean> {
+  const existingProvider = await getProviderRegistryEntry(event, providerId)
+  if (!existingProvider)
+    return false
+
+  const db = getD1Database(event)
+  await ensureProviderRegistrySchema(db)
+
+  const safeCapabilityId = assertNonEmptyString(capabilityId, 'capabilityId', 120)
+  const existing = await getProviderCapabilityRecord(db, existingProvider.id, safeCapabilityId)
+  if (!existing)
+    return false
+
+  const now = new Date().toISOString()
+  await db.prepare(`
+    DELETE FROM ${CAPABILITIES_TABLE}
+    WHERE provider_id = ?1 AND id = ?2;
+  `).bind(existingProvider.id, existing.id).run()
+  await touchProviderUpdatedAt(db, existingProvider.id, now)
+
+  return true
 }

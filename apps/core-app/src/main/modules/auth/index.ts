@@ -7,7 +7,6 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
-import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { randomUUID, createHash } from 'node:crypto'
@@ -21,6 +20,7 @@ import {
 } from '../../utils/secure-store'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 const authLog = getLogger('auth')
@@ -33,7 +33,6 @@ const MACHINE_CODE_VERSION = 'mc_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
-const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
 type AuthStateListener = (state: AuthState) => void
 
@@ -195,9 +194,7 @@ export function getDevicePlatform(): string | null {
 }
 
 function resolveAuthBaseUrl(): string {
-  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
-  const localAuth = isDevEnv() && appSettings?.dev?.authServer === 'local'
-  return localAuth ? LOCAL_AUTH_BASE_URL : getTuffBaseUrl()
+  return getRuntimeNexusBaseUrl()
 }
 
 function normalizeBearerToken(token: string): string {
@@ -762,11 +759,8 @@ async function resolveFingerprintHash(): Promise<string> {
 }
 
 async function attestCurrentDevice(): Promise<boolean> {
-  if (isDevEnv()) {
-    const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
-    if (appSettings?.dev?.authServer === 'local') {
-      return true
-    }
+  if (getRuntimeServerMode() === 'local') {
+    return true
   }
 
   const token = authToken

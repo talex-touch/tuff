@@ -338,6 +338,13 @@ function collectMissingTargets(summaries: Array<{ targets: WindowsTargetProbe[] 
   )
 }
 
+function hasMatchingProbeSample(target: string, probe: WindowsTargetProbe | undefined): boolean {
+  if (!probe?.found || probe.matchCount <= 0) return false
+
+  const normalizedTarget = normalizeProbeText(target)
+  return probe.samples.some((sample) => normalizeProbeText(sample).includes(normalizedTarget))
+}
+
 export function evaluateWindowsCapabilityEvidence(
   evidence: Omit<WindowsCapabilityEvidence, 'gate' | 'status'>,
   options: WindowsCapabilityGateOptions = {}
@@ -404,10 +411,19 @@ export function evaluateWindowsCapabilityEvidence(
   }
 
   if (options.requireEverythingTargets) {
+    const everythingQuery = evidence.checks.everything.query
+    if (
+      !everythingQuery ||
+      !everythingQuery.available ||
+      everythingQuery.exitCode !== 0 ||
+      everythingQuery.resultCount <= 0
+    ) {
+      failures.push('Everything query evidence did not return results')
+    }
     const targetProbes = evidence.checks.everything.targets ?? []
     const missingEverythingTargets = evidence.targets.filter((target) => {
       const probe = targetProbes.find((item) => item.target === target)
-      return !probe?.found
+      return !hasMatchingProbeSample(target, probe)
     })
     if (missingEverythingTargets.length > 0) {
       failures.push(`Everything targets not found: ${missingEverythingTargets.join(', ')}`)

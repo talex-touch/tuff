@@ -1,63 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { WindowsAcceptanceManifest } from './windows-acceptance-manifest-verifier'
+import { buildManifest } from './windows-acceptance-manifest-test-utils'
 import {
   WINDOWS_REQUIRED_CASE_IDS,
   evaluateWindowsAcceptanceManifest,
-  validateWindowsAcceptanceCaseEvidence,
-  validateWindowsAcceptancePerformanceEvidence,
   verifyWindowsAcceptanceManifest
 } from './windows-acceptance-manifest-verifier'
-import type { AppIndexDiagnosticEvidencePayload } from './app-index-diagnostic-verifier'
-import type { WindowsCapabilityEvidence } from './windows-capability-evidence'
-
-function buildManifest(
-  overrides: Partial<WindowsAcceptanceManifest> = {}
-): WindowsAcceptanceManifest {
-  return {
-    schema: 'windows-acceptance-manifest/v1',
-    generatedAt: '2026-05-10T10:00:00.000Z',
-    platform: 'win32',
-    verification: {
-      recommendedCommand:
-        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCommonAppTargets WeChat,Codex,"Apple Music"'
-    },
-    cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => ({
-      caseId,
-      status: 'passed',
-      requiredForRelease: true,
-      evidence: [
-        {
-          path: `evidence/${caseId}.json`,
-          verifierCommand: `pnpm -C "apps/core-app" run verify -- --case ${caseId}`
-        }
-      ]
-    })),
-    performance: {
-      searchTraceStatsPath: 'evidence/search-trace-stats.json',
-      searchTraceVerifierCommand:
-        'pnpm -C "apps/core-app" run search:trace:verify -- --input evidence/search-trace-stats.json --minSamples 200 --strict',
-      clipboardStressSummaryPath: 'evidence/clipboard-stress-summary.json',
-      clipboardStressVerifierCommand:
-        'pnpm -C "apps/core-app" run clipboard:stress:verify -- --input evidence/clipboard-stress-summary.json'
-    },
-    manualChecks: {
-      commonAppLaunch: {
-        targets: ['WeChat', 'Codex', 'Apple Music'],
-        passedTargets: ['WeChat', 'Codex', 'Apple Music'],
-        checks: ['WeChat', 'Codex', 'Apple Music'].map((target) => ({
-          target,
-          searchHit: true,
-          displayNameCorrect: true,
-          iconCorrect: true,
-          launchSucceeded: true,
-          coreBoxHiddenAfterLaunch: true
-        }))
-      }
-    },
-    ...overrides
-  }
-}
-
 describe('windows-acceptance-manifest-verifier', () => {
   it('passes a complete Windows acceptance manifest', () => {
     const gate = evaluateWindowsAcceptanceManifest(buildManifest(), {
@@ -66,6 +13,10 @@ describe('windows-acceptance-manifest-verifier', () => {
       requireSearchTrace: true,
       requireClipboardStress: true,
       requireCommonAppLaunchDetails: true,
+      requireCopiedAppPathManualChecks: true,
+      requireUpdateInstallManualChecks: true,
+      requireDivisionBoxDetachedWidgetManualChecks: true,
+      requireTimeAwareRecommendationManualChecks: true,
       requireCommonAppTargets: ['WeChat', 'Codex', 'Apple Music']
     })
 
@@ -115,12 +66,15 @@ describe('windows-acceptance-manifest-verifier', () => {
       'required Windows case is not marked requiredForRelease: windows-app-scan-uwp',
       'required Windows case evidence path is missing: windows-app-scan-uwp',
       'required Windows case verifier command is missing: windows-app-scan-uwp',
+      'required Windows case is missing: windows-copied-app-path-index',
       'required Windows case is missing: windows-third-party-app-launch',
       'required Windows case is missing: windows-shortcut-launch-args',
       'required Windows case is missing: windows-tray-update-plugin-install-exit',
       'search trace stats path is missing',
+      'search trace stats command is missing',
       'search trace verifier command is missing',
       'clipboard stress summary path is missing',
+      'clipboard stress command is missing',
       'clipboard stress verifier command is missing',
       'common app launch targets missing: Codex, Apple Music'
     ])
@@ -201,6 +155,103 @@ describe('windows-acceptance-manifest-verifier', () => {
     )
   })
 
+  it('accepts automatic Windows update verifier command gate flags', () => {
+    const manifest = buildManifest({
+      cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
+        if (caseId !== 'windows-tray-update-plugin-install-exit') {
+          return {
+            caseId,
+            status: 'passed' as const,
+            requiredForRelease: true,
+            evidence: [
+              {
+                path: `evidence/${caseId}.json`,
+                verifierCommand: `pnpm -C "apps/core-app" run verify -- --case ${caseId}`
+              }
+            ]
+          }
+        }
+
+        return {
+          caseId,
+          status: 'passed' as const,
+          requiredForRelease: true,
+          evidence: [
+            {
+              path: 'evidence/windows-tray-update-plugin-install-exit-capability.json',
+              verifierCommand:
+                'pnpm -C "apps/core-app" run windows:capability:verify -- --input evidence/windows-tray-update-plugin-install-exit-capability.json --requireInstallerHandoff --strict'
+            },
+            {
+              path: 'evidence/windows-tray-update-plugin-install-exit-update.json',
+              verifierCommand:
+                'pnpm -C "apps/core-app" run update:diagnostic:verify -- --input evidence/windows-tray-update-plugin-install-exit-update.json --requireAutoDownload --requireDownloadReady --requireReadyToInstall --requirePlatform win32 --requireInstallMode windows-auto-installer-handoff --requireAutoInstallEnabled --requireUnattendedEnabled --requireInstalledVersionMatchesTarget --requireMatchingAsset --requireChecksums --requireCaseIds windows-tray-update-plugin-install-exit'
+            }
+          ]
+        }
+      })
+    })
+
+    const gate = evaluateWindowsAcceptanceManifest(manifest, {
+      requireVerifierCommand: true,
+      requireVerifierCommandGateFlags: true
+    })
+
+    expect(gate.failures).not.toContain(
+      'required Windows case Update diagnostic verifier command is missing release gate flags: windows-tray-update-plugin-install-exit'
+    )
+  })
+
+  it('accepts copied app path index verifier command gate flags', () => {
+    const manifest = buildManifest({
+      cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
+        if (caseId !== 'windows-copied-app-path-index') {
+          return {
+            caseId,
+            status: 'passed' as const,
+            requiredForRelease: true,
+            evidence: [
+              {
+                path: `evidence/${caseId}.json`,
+                verifierCommand: `pnpm -C "apps/core-app" run verify -- --case ${caseId}`
+              }
+            ]
+          }
+        }
+
+        return {
+          caseId,
+          status: 'passed' as const,
+          requiredForRelease: true,
+          evidence: [
+            {
+              path: 'evidence/windows-copied-app-path-index-capability.json',
+              verifierCommand:
+                'pnpm -C "apps/core-app" run windows:capability:verify -- --input evidence/windows-copied-app-path-index-capability.json --requireTargets --requireRegistryFallback --requireShortcutMetadata --strict'
+            },
+            {
+              path: 'evidence/windows-copied-app-path-index-app-index.json',
+              verifierCommand:
+                'pnpm -C "apps/core-app" run app-index:diagnostic:verify -- --input evidence/windows-copied-app-path-index-app-index.json --requireSuccess --requireQueryHit --requireLaunchKind path,shortcut --requireLaunchTarget --requireCleanDisplayName --requireIcon --requireManagedEntry --requireReindex --requireCaseIds windows-copied-app-path-index'
+            }
+          ]
+        }
+      })
+    })
+
+    const gate = evaluateWindowsAcceptanceManifest(manifest, {
+      requireVerifierCommand: true,
+      requireVerifierCommandGateFlags: true
+    })
+
+    expect(gate.failures).not.toContain(
+      'required Windows case Windows capability verifier command is missing release gate flags: windows-copied-app-path-index'
+    )
+    expect(gate.failures).not.toContain(
+      'required Windows case App Index diagnostic verifier command is missing release gate flags: windows-copied-app-path-index'
+    )
+  })
+
   it('requires performance verifier commands to carry release budgets when requested', () => {
     const gate = evaluateWindowsAcceptanceManifest(buildManifest(), {
       requireSearchTrace: true,
@@ -209,9 +260,38 @@ describe('windows-acceptance-manifest-verifier', () => {
     })
 
     expect(gate.failures).toContain('search trace verifier command is missing release gate flags')
+    expect(gate.failures).not.toContain('search trace stats command is missing release gate flags')
     expect(gate.failures).toContain(
       'clipboard stress verifier command is missing release gate flags'
     )
+    expect(gate.failures).not.toContain('clipboard stress command is missing release gate flags')
+  })
+
+  it('requires performance sampling commands to carry release budgets when present', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        performance: {
+          searchTraceStatsPath: 'evidence/search-trace-stats.json',
+          searchTraceStatsCommand:
+            'pnpm -C "apps/core-app" run search:trace:stats -- --input evidence/search.log --output evidence/search-trace-stats.json --strict',
+          searchTraceVerifierCommand:
+            'pnpm -C "apps/core-app" run search:trace:verify -- --input evidence/search-trace-stats.json --minSamples 200 --maxFirstResultP95Ms 800 --maxSessionEndP95Ms 1200 --maxSlowRatio 0.1 --strict',
+          clipboardStressSummaryPath: 'evidence/clipboard-stress-summary.json',
+          clipboardStressCommand:
+            'pnpm -C "apps/core-app" run clipboard:stress -- --durationMs 10000 --intervals 500 --output evidence/clipboard-stress-summary.json',
+          clipboardStressVerifierCommand:
+            'pnpm -C "apps/core-app" run clipboard:stress:verify -- --input evidence/clipboard-stress-summary.json --minDurationMs 120000 --requireIntervals 500,250 --maxP95SchedulerDelayMs 100 --maxSchedulerDelayMs 300 --maxRealtimeQueuedPeak 2 --maxDroppedCount 0 --strict'
+        }
+      }),
+      {
+        requireSearchTrace: true,
+        requireClipboardStress: true,
+        requireVerifierCommandGateFlags: true
+      }
+    )
+
+    expect(gate.failures).toContain('search trace stats command is missing release gate flags')
+    expect(gate.failures).toContain('clipboard stress command is missing release gate flags')
   })
 
   it('requires clipboard stress verifier commands to enforce schema strictness', () => {
@@ -219,9 +299,13 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         performance: {
           searchTraceStatsPath: 'evidence/search-trace-stats.json',
+          searchTraceStatsCommand:
+            'pnpm -C "apps/core-app" run search:trace:stats -- --input evidence/search.log --output evidence/search-trace-stats.json --minSamples 200 --maxFirstResultP95Ms 800 --maxSessionEndP95Ms 1200 --maxSlowRatio 0.1 --strict',
           searchTraceVerifierCommand:
             'pnpm -C "apps/core-app" run search:trace:verify -- --input evidence/search-trace-stats.json --minSamples 200 --maxFirstResultP95Ms 800 --maxSessionEndP95Ms 1200 --maxSlowRatio 0.1 --strict',
           clipboardStressSummaryPath: 'evidence/clipboard-stress-summary.json',
+          clipboardStressCommand:
+            'pnpm -C "apps/core-app" run clipboard:stress -- --durationMs 120000 --intervals 500,250 --output evidence/clipboard-stress-summary.json',
           clipboardStressVerifierCommand:
             'pnpm -C "apps/core-app" run clipboard:stress:verify -- --input evidence/clipboard-stress-summary.json --minDurationMs 120000 --requireIntervals 500,250 --maxP95SchedulerDelayMs 100 --maxSchedulerDelayMs 300 --maxRealtimeQueuedPeak 2 --maxDroppedCount 0'
         }
@@ -285,12 +369,708 @@ describe('windows-acceptance-manifest-verifier', () => {
     ])
   })
 
+  it('requires the recommended acceptance command to enforce input path matching', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        verification: {
+          recommendedCommand:
+            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+        }
+      }),
+      {
+        requireRecommendedCommandGateFlags: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'Windows acceptance recommended command is missing release gate flags'
+    ])
+  })
+
+  it('requires the recommended acceptance command to reject empty evidence files', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        verification: {
+          recommendedCommand:
+            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+        }
+      }),
+      {
+        requireRecommendedCommandGateFlags: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'Windows acceptance recommended command is missing release gate flags'
+    ])
+  })
+
+  it('requires the recommended acceptance command to reject incomplete manual evidence', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        verification: {
+          recommendedCommand:
+            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+        }
+      }),
+      {
+        requireRecommendedCommandGateFlags: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'Windows acceptance recommended command is missing release gate flags'
+    ])
+  })
+
   it('accepts a recommended acceptance command with release gate flags', () => {
     const gate = evaluateWindowsAcceptanceManifest(buildManifest(), {
       requireRecommendedCommandGateFlags: true
     })
 
     expect(gate.failures).toEqual([])
+  })
+
+  it('requires Windows update install manual checks when requested', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: {
+            updateDiagnosticEvidencePath: '',
+            installerPath: '',
+            installerMode: '',
+            uacPromptObserved: true,
+            uacPromptEvidence: '',
+            installerLaunched: true,
+            appExitedForInstall: false,
+            appExitEvidence: '',
+            installerExited: false,
+            installerExitEvidence: '',
+            installedVersionVerified: true,
+            installedVersionEvidence: '',
+            appRelaunchSucceeded: true,
+            appRelaunchEvidence: '',
+            failureRollbackVerified: false,
+            failureRollbackEvidence: '',
+            evidencePath: 'evidence/manual/windows-update-install.md'
+          }
+        }
+      }),
+      {
+        requireUpdateInstallManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'Windows update app exit before install was not verified',
+      'Windows update installer exit was not verified',
+      'Windows update failure rollback was not verified',
+      'Windows update diagnostic evidence path is missing',
+      'Windows update installer path is missing',
+      'Windows update installer mode is missing',
+      'Windows update UAC prompt evidence is missing',
+      'Windows update app exit evidence is missing',
+      'Windows update installer exit evidence is missing',
+      'Windows update installed version evidence is missing',
+      'Windows update app relaunch evidence is missing',
+      'Windows update failure rollback evidence is missing'
+    ])
+  })
+
+  it('requires Windows update install structured evidence even when booleans pass', () => {
+    const completeCheck = buildManifest().manualChecks!.updateInstall!
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: {
+            ...completeCheck,
+            updateDiagnosticEvidencePath: '',
+            installerPath: '',
+            installerMode: '',
+            uacPromptEvidence: '',
+            appExitEvidence: '',
+            installerExitEvidence: '',
+            installedVersionEvidence: '',
+            appRelaunchEvidence: '',
+            failureRollbackEvidence: ''
+          }
+        }
+      }),
+      {
+        requireUpdateInstallManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'Windows update diagnostic evidence path is missing',
+      'Windows update installer path is missing',
+      'Windows update installer mode is missing',
+      'Windows update UAC prompt evidence is missing',
+      'Windows update app exit evidence is missing',
+      'Windows update installer exit evidence is missing',
+      'Windows update installed version evidence is missing',
+      'Windows update app relaunch evidence is missing',
+      'Windows update failure rollback evidence is missing'
+    ])
+  })
+
+  it('rejects generated placeholder values in structured manual evidence fields', () => {
+    const manifest = buildManifest({
+      manualChecks: {
+        ...buildManifest().manualChecks,
+        commonAppLaunch: {
+          targets: ['WeChat'],
+          passedTargets: ['WeChat'],
+          checks: [
+            {
+              target: 'WeChat',
+              searchQuery: '<search-query>',
+              searchHit: true,
+              displayNameCorrect: true,
+              observedDisplayName: '<observed-display-name>',
+              iconCorrect: true,
+              iconEvidence: '<icon-evidence>',
+              launchSucceeded: true,
+              observedLaunchTarget: '<observed-launch-target>',
+              coreBoxHiddenAfterLaunch: true,
+              coreBoxHiddenEvidence: '<corebox-hidden-evidence>',
+              evidencePath: 'evidence/manual/common-app-wechat.md'
+            }
+          ]
+        },
+        copiedAppPath: {
+          ...buildManifest().manualChecks!.copiedAppPath!,
+          copiedSource: '<copied-source-path-or-command>',
+          normalizedAppPath: '<normalized-app-path>',
+          addToLocalLaunchAreaAction: '<add-to-local-launch-area-action>',
+          localLaunchEntryEvidence: '<local-launch-entry-evidence>',
+          appIndexDiagnosticEvidencePath: '<app-index-diagnostic-evidence-path>',
+          searchQueryAfterReindex: '<search-query-after-reindex>',
+          indexedSearchResultEvidence: '<indexed-search-result-evidence>',
+          indexedResultLaunchEvidence: '<indexed-result-launch-evidence>'
+        },
+        updateInstall: {
+          ...buildManifest().manualChecks!.updateInstall!,
+          updateDiagnosticEvidencePath: '<update-diagnostic-evidence-path>',
+          installerPath: '<installer-path>',
+          installerMode: '<windows-installer-handoff-or-windows-auto-installer-handoff>',
+          uacPromptEvidence: '<uac-prompt-evidence>',
+          appExitEvidence: '<app-exit-evidence>',
+          installerExitEvidence: '<installer-exit-evidence>',
+          installedVersionEvidence: '<installed-version-evidence>',
+          appRelaunchEvidence: '<app-relaunch-evidence>',
+          failureRollbackEvidence: '<failure-rollback-evidence>'
+        },
+        divisionBoxDetachedWidget: {
+          ...buildManifest().manualChecks!.divisionBoxDetachedWidget!,
+          expectedFeaturePluginId: '<feature-plugin-id>',
+          observedSessionPluginId: '<observed-session-plugin-id>',
+          detachedUrlSource: '<detached-url-source-plugin-id>',
+          detachedUrlProviderSource: '<detached-url-provider-source>'
+        },
+        timeAwareRecommendation: {
+          ...buildManifest().manualChecks!.timeAwareRecommendation!,
+          morningTimeSlot: '<morning-time-slot>',
+          morningTopItemId: '<morning-top-item-id>',
+          morningTopSourceId: '<morning-top-source-id>',
+          morningRecommendationSource: '<morning-recommendation-source>',
+          afternoonTimeSlot: '<afternoon-time-slot>',
+          afternoonTopItemId: '<afternoon-top-item-id>',
+          afternoonTopSourceId: '<afternoon-top-source-id>',
+          afternoonRecommendationSource: '<afternoon-recommendation-source>',
+          dayOfWeek: -1,
+          frequentComparisonItemId: '<frequent-comparison-item-id>',
+          frequentComparisonSourceId: '<frequent-comparison-source-id>',
+          frequentComparisonRecommendationSource: '<frequent-comparison-recommendation-source>'
+        }
+      }
+    })
+
+    const gate = evaluateWindowsAcceptanceManifest(manifest, {
+      requireCommonAppLaunchDetails: true,
+      requireCopiedAppPathManualChecks: true,
+      requireUpdateInstallManualChecks: true,
+      requireDivisionBoxDetachedWidgetManualChecks: true,
+      requireTimeAwareRecommendationManualChecks: true,
+      requireCommonAppTargets: ['WeChat']
+    })
+
+    expect(gate.failures).toEqual([
+      'common app launch search query is missing: WeChat',
+      'common app launch observed display name is missing: WeChat',
+      'common app launch icon evidence is missing: WeChat',
+      'common app launch observed launch target is missing: WeChat',
+      'common app launch CoreBox hidden evidence is missing: WeChat',
+      'copied app path copied source is missing',
+      'copied app path normalized app path is missing',
+      'copied app path add-to-local-launch-area action evidence is missing',
+      'copied app path local launch entry evidence is missing',
+      'copied app path App Index diagnostic evidence path is missing',
+      'copied app path search query after reindex is missing',
+      'copied app path indexed search result evidence is missing',
+      'copied app path indexed result launch evidence is missing',
+      'Windows update diagnostic evidence path is missing',
+      'Windows update installer path is missing',
+      'Windows update installer mode is missing',
+      'Windows update UAC prompt evidence is missing',
+      'Windows update app exit evidence is missing',
+      'Windows update installer exit evidence is missing',
+      'Windows update installed version evidence is missing',
+      'Windows update app relaunch evidence is missing',
+      'Windows update failure rollback evidence is missing',
+      'DivisionBox detached widget expected feature pluginId is missing',
+      'DivisionBox detached widget observed session pluginId is missing',
+      'DivisionBox detached widget detached URL source pluginId is missing',
+      'DivisionBox detached widget detached URL providerSource is missing',
+      'time-aware recommendation morning timeSlot is missing',
+      'time-aware recommendation afternoon timeSlot is missing',
+      'time-aware recommendation dayOfWeek is missing or invalid',
+      'time-aware recommendation morning top itemId is missing',
+      'time-aware recommendation morning top sourceId is missing',
+      'time-aware recommendation afternoon top itemId is missing',
+      'time-aware recommendation afternoon top sourceId is missing',
+      'time-aware recommendation frequent comparison itemId is missing',
+      'time-aware recommendation frequent comparison sourceId is missing',
+      'time-aware recommendation morning recommendation source is missing',
+      'time-aware recommendation afternoon recommendation source is missing',
+      'time-aware recommendation frequent comparison source is missing'
+    ])
+  })
+
+  it('fails when Windows update install manual checks are missing', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch
+        }
+      }),
+      {
+        requireUpdateInstallManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual(['Windows update install manual check is missing'])
+  })
+
+  it('requires manual acceptance checks to include evidence paths', () => {
+    const completeManualChecks = buildManifest().manualChecks
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: {
+            targets: ['WeChat'],
+            passedTargets: ['WeChat'],
+            checks: [
+              {
+                ...completeManualChecks!.commonAppLaunch!.checks![0],
+                evidencePath: undefined
+              }
+            ]
+          },
+          copiedAppPath: {
+            ...completeManualChecks!.copiedAppPath!,
+            evidencePath: undefined
+          },
+          updateInstall: {
+            ...completeManualChecks!.updateInstall!,
+            evidencePath: undefined
+          },
+          divisionBoxDetachedWidget: {
+            ...completeManualChecks!.divisionBoxDetachedWidget!,
+            evidencePath: undefined
+          },
+          timeAwareRecommendation: {
+            ...completeManualChecks!.timeAwareRecommendation!,
+            evidencePath: undefined
+          }
+        }
+      }),
+      {
+        requireCommonAppLaunchDetails: true,
+        requireCommonAppTargets: ['WeChat'],
+        requireCopiedAppPathManualChecks: true,
+        requireUpdateInstallManualChecks: true,
+        requireDivisionBoxDetachedWidgetManualChecks: true,
+        requireTimeAwareRecommendationManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'common app launch evidence path is missing: WeChat',
+      'copied app path manual evidence path is missing',
+      'Windows update install manual evidence path is missing',
+      'DivisionBox detached widget manual evidence path is missing',
+      'time-aware recommendation manual evidence path is missing'
+    ])
+  })
+
+  it('rejects generated placeholder values in manual evidence paths', () => {
+    const completeManualChecks = buildManifest().manualChecks
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: {
+            targets: ['WeChat'],
+            passedTargets: ['WeChat'],
+            checks: [
+              {
+                ...completeManualChecks!.commonAppLaunch!.checks![0],
+                evidencePath: '<common-app-evidence-path>'
+              }
+            ]
+          },
+          copiedAppPath: {
+            ...completeManualChecks!.copiedAppPath!,
+            evidencePath: 'TODO'
+          },
+          updateInstall: {
+            ...completeManualChecks!.updateInstall!,
+            evidencePath: 'N/A'
+          },
+          divisionBoxDetachedWidget: {
+            ...completeManualChecks!.divisionBoxDetachedWidget!,
+            evidencePath: '-'
+          },
+          timeAwareRecommendation: {
+            ...completeManualChecks!.timeAwareRecommendation!,
+            evidencePath: '待补'
+          }
+        }
+      }),
+      {
+        requireCommonAppLaunchDetails: true,
+        requireCommonAppTargets: ['WeChat'],
+        requireCopiedAppPathManualChecks: true,
+        requireUpdateInstallManualChecks: true,
+        requireDivisionBoxDetachedWidgetManualChecks: true,
+        requireTimeAwareRecommendationManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'common app launch evidence path is missing: WeChat',
+      'copied app path manual evidence path is missing',
+      'Windows update install manual evidence path is missing',
+      'DivisionBox detached widget manual evidence path is missing',
+      'time-aware recommendation manual evidence path is missing'
+    ])
+  })
+
+  it('requires copied app path manual checks when requested', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          copiedAppPath: {
+            copiedPathCaptured: true,
+            copiedSource: '',
+            normalizedAppPath: '',
+            addToLocalLaunchAreaTriggered: false,
+            addToLocalLaunchAreaAction: '',
+            localLaunchEntryCreated: false,
+            localLaunchEntryEvidence: '',
+            reindexCompleted: true,
+            appIndexDiagnosticEvidencePath: '',
+            searchHitAfterReindex: false,
+            searchQueryAfterReindex: '',
+            indexedSearchResultEvidence: '',
+            launchSucceededFromIndexedResult: false,
+            indexedResultLaunchEvidence: '',
+            evidencePath: 'evidence/manual/copied-app-path-index.md'
+          }
+        }
+      }),
+      {
+        requireCopiedAppPathManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'copied app path add-to-local-launch-area action was not verified',
+      'copied app path local launch entry was not verified',
+      'copied app path search hit after reindex was not verified',
+      'copied app path launch from indexed result was not verified',
+      'copied app path copied source is missing',
+      'copied app path normalized app path is missing',
+      'copied app path add-to-local-launch-area action evidence is missing',
+      'copied app path local launch entry evidence is missing',
+      'copied app path App Index diagnostic evidence path is missing',
+      'copied app path search query after reindex is missing',
+      'copied app path indexed search result evidence is missing',
+      'copied app path indexed result launch evidence is missing'
+    ])
+  })
+
+  it('requires copied app path structured evidence even when booleans pass', () => {
+    const completeCheck = buildManifest().manualChecks!.copiedAppPath!
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          copiedAppPath: {
+            ...completeCheck,
+            copiedSource: '',
+            normalizedAppPath: '',
+            addToLocalLaunchAreaAction: '',
+            localLaunchEntryEvidence: '',
+            appIndexDiagnosticEvidencePath: '',
+            searchQueryAfterReindex: '',
+            indexedSearchResultEvidence: '',
+            indexedResultLaunchEvidence: ''
+          }
+        }
+      }),
+      {
+        requireCopiedAppPathManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'copied app path copied source is missing',
+      'copied app path normalized app path is missing',
+      'copied app path add-to-local-launch-area action evidence is missing',
+      'copied app path local launch entry evidence is missing',
+      'copied app path App Index diagnostic evidence path is missing',
+      'copied app path search query after reindex is missing',
+      'copied app path indexed search result evidence is missing',
+      'copied app path indexed result launch evidence is missing'
+    ])
+  })
+
+  it('fails when copied app path manual checks are missing', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch
+        }
+      }),
+      {
+        requireCopiedAppPathManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual(['copied app path manual check is missing'])
+  })
+
+  it('requires DivisionBox detached widget manual checks when requested', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall,
+          divisionBoxDetachedWidget: {
+            pluginFeatureSearchHit: true,
+            detachedWindowOpened: true,
+            pluginIdMatchesFeaturePlugin: false,
+            expectedFeaturePluginId: 'demo-plugin',
+            observedSessionPluginId: 'plugin-features',
+            detachedUrlSource: 'plugin-features',
+            detachedUrlProviderSource: 'demo-plugin',
+            initialStateHydrated: false,
+            detachedPayloadRestored: true,
+            widgetSurfaceRendered: true,
+            originalQueryPreserved: false,
+            noFallbackSearchMismatch: false,
+            evidencePath: 'evidence/manual/division-box-detached-widget.md'
+          }
+        }
+      }),
+      {
+        requireDivisionBoxDetachedWidgetManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'DivisionBox detached widget pluginId did not match feature plugin',
+      'DivisionBox detached widget initial state hydration was not verified',
+      'DivisionBox detached widget original query was not preserved',
+      'DivisionBox detached widget fallback search mismatch was not ruled out',
+      'DivisionBox detached widget observed session pluginId does not match expected',
+      'DivisionBox detached widget detached URL source does not match expected pluginId',
+      'DivisionBox detached widget detached URL providerSource is not plugin-features'
+    ])
+  })
+
+  it('fails when DivisionBox detached widget manual checks are missing', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall
+        }
+      }),
+      {
+        requireDivisionBoxDetachedWidgetManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual(['DivisionBox detached widget manual check is missing'])
+  })
+
+  it('requires DivisionBox detached widget identity fields even when booleans pass', () => {
+    const completeCheck = buildManifest().manualChecks!.divisionBoxDetachedWidget!
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall,
+          divisionBoxDetachedWidget: {
+            ...completeCheck,
+            expectedFeaturePluginId: '',
+            observedSessionPluginId: '',
+            detachedUrlSource: '',
+            detachedUrlProviderSource: ''
+          }
+        }
+      }),
+      {
+        requireDivisionBoxDetachedWidgetManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'DivisionBox detached widget expected feature pluginId is missing',
+      'DivisionBox detached widget observed session pluginId is missing',
+      'DivisionBox detached widget detached URL source pluginId is missing',
+      'DivisionBox detached widget detached URL providerSource is missing'
+    ])
+  })
+
+  it('requires time-aware recommendation manual checks when requested', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall,
+          divisionBoxDetachedWidget: buildManifest().manualChecks?.divisionBoxDetachedWidget,
+          timeAwareRecommendation: {
+            emptyQueryRecommendationsShown: true,
+            morningRecommendationCaptured: true,
+            morningTimeSlot: 'morning',
+            morningTopItemId: 'app-calendar',
+            morningTopSourceId: 'app-provider',
+            morningRecommendationSource: 'frequent',
+            afternoonRecommendationCaptured: false,
+            afternoonTimeSlot: 'morning',
+            afternoonTopItemId: 'app-calendar',
+            afternoonTopSourceId: 'app-provider',
+            afternoonRecommendationSource: 'context',
+            dayOfWeek: 8,
+            topRecommendationDiffersByTimeSlot: false,
+            frequencySignalRetained: true,
+            frequentComparisonItemId: '',
+            frequentComparisonSourceId: '',
+            frequentComparisonRecommendationSource: 'time-based',
+            timeSlotCacheSeparated: false,
+            evidencePath: 'evidence/manual/time-aware-recommendation.md'
+          }
+        }
+      }),
+      {
+        requireTimeAwareRecommendationManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'time-aware recommendation afternoon sample was not captured',
+      'time-aware recommendation top result did not differ by time slot',
+      'time-aware recommendation cache separation was not verified',
+      'time-aware recommendation morning and afternoon timeSlot are identical',
+      'time-aware recommendation dayOfWeek is missing or invalid',
+      'time-aware recommendation morning and afternoon top recommendation are identical',
+      'time-aware recommendation frequent comparison itemId is missing',
+      'time-aware recommendation frequent comparison sourceId is missing',
+      'time-aware recommendation morning source is not time-based',
+      'time-aware recommendation afternoon source is not time-based',
+      'time-aware recommendation frequent comparison source is not frequent'
+    ])
+  })
+
+  it('requires time-aware recommendation structured sample fields even when booleans pass', () => {
+    const completeCheck = buildManifest().manualChecks!.timeAwareRecommendation!
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall,
+          divisionBoxDetachedWidget: buildManifest().manualChecks?.divisionBoxDetachedWidget,
+          timeAwareRecommendation: {
+            ...completeCheck,
+            morningTimeSlot: '',
+            morningTopItemId: '',
+            morningTopSourceId: '',
+            morningRecommendationSource: '',
+            afternoonTimeSlot: '',
+            afternoonTopItemId: '',
+            afternoonTopSourceId: '',
+            afternoonRecommendationSource: '',
+            dayOfWeek: undefined,
+            frequentComparisonItemId: '',
+            frequentComparisonSourceId: '',
+            frequentComparisonRecommendationSource: ''
+          }
+        }
+      }),
+      {
+        requireTimeAwareRecommendationManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual([
+      'time-aware recommendation morning timeSlot is missing',
+      'time-aware recommendation afternoon timeSlot is missing',
+      'time-aware recommendation dayOfWeek is missing or invalid',
+      'time-aware recommendation morning top itemId is missing',
+      'time-aware recommendation morning top sourceId is missing',
+      'time-aware recommendation afternoon top itemId is missing',
+      'time-aware recommendation afternoon top sourceId is missing',
+      'time-aware recommendation frequent comparison itemId is missing',
+      'time-aware recommendation frequent comparison sourceId is missing',
+      'time-aware recommendation morning recommendation source is missing',
+      'time-aware recommendation afternoon recommendation source is missing',
+      'time-aware recommendation frequent comparison source is missing'
+    ])
+  })
+
+  it('requires time-aware recommendation manual evidence path when requested', () => {
+    const completeCheck = buildManifest().manualChecks!.timeAwareRecommendation!
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall,
+          divisionBoxDetachedWidget: buildManifest().manualChecks?.divisionBoxDetachedWidget,
+          timeAwareRecommendation: {
+            ...completeCheck,
+            evidencePath: ''
+          }
+        }
+      }),
+      {
+        requireTimeAwareRecommendationManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual(['time-aware recommendation manual evidence path is missing'])
+  })
+
+  it('fails when time-aware recommendation manual checks are missing', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: buildManifest().manualChecks?.commonAppLaunch,
+          updateInstall: buildManifest().manualChecks?.updateInstall,
+          divisionBoxDetachedWidget: buildManifest().manualChecks?.divisionBoxDetachedWidget
+        }
+      }),
+      {
+        requireTimeAwareRecommendationManualChecks: true
+      }
+    )
+
+    expect(gate.failures).toEqual(['time-aware recommendation manual check is missing'])
   })
 
   it('requires common app launch details when requested', () => {
@@ -320,365 +1100,57 @@ describe('windows-acceptance-manifest-verifier', () => {
     )
 
     expect(gate.failures).toEqual([
+      'common app launch search query is missing: WeChat',
       'common app launch display name not verified: WeChat',
+      'common app launch observed display name is missing: WeChat',
+      'common app launch icon evidence is missing: WeChat',
+      'common app launch observed launch target is missing: WeChat',
       'common app launch did not hide CoreBox: WeChat',
+      'common app launch CoreBox hidden evidence is missing: WeChat',
+      'common app launch evidence path is missing: WeChat',
       'common app launch detail is missing: Codex',
       'common app launch detail is missing: Apple Music'
     ])
   })
 
-  it('recomputes case-specific app-index gates instead of trusting embedded gate status', () => {
-    const weakEvidence: AppIndexDiagnosticEvidencePayload & { gate: { passed: true } } = {
-      schemaVersion: 1,
-      kind: 'app-index-diagnostic-evidence',
-      createdAt: '2026-05-10T10:00:00.000Z',
-      input: {
-        target: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-        query: 'calc'
-      },
-      diagnosis: {
-        success: true,
-        status: 'found',
-        target: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-        matchedStages: ['phrase']
-      },
-      app: {
-        id: 42,
-        path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-        name: 'Calculator',
-        displayName: 'Calculator',
-        rawDisplayName: 'Calculator',
-        displayNameStatus: 'clean',
-        bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
-        appIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-        launchKind: 'uwp',
-        launchTarget: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-        alternateNames: ['Calculator'],
-        entryEnabled: true
-      },
-      reindex: {
-        success: true,
-        status: 'updated',
-        path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
-      },
-      manualRegression: {
-        reusableCaseIds: ['windows-app-scan-uwp'],
-        suggestedEvidenceFields: {
-          target: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-          query: 'calc',
-          launchKind: 'uwp',
-          launchTarget: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-          bundleOrIdentity: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
-          matchedStages: ['phrase'],
-          reindexStatus: 'updated'
+  it('requires common app launch structured evidence even when booleans pass', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          commonAppLaunch: {
+            targets: ['WeChat'],
+            passedTargets: ['WeChat'],
+            checks: [
+              {
+                target: 'WeChat',
+                searchQuery: '',
+                searchHit: true,
+                displayNameCorrect: true,
+                observedDisplayName: '',
+                iconCorrect: true,
+                iconEvidence: '',
+                launchSucceeded: true,
+                observedLaunchTarget: '',
+                coreBoxHiddenAfterLaunch: true,
+                coreBoxHiddenEvidence: '',
+                evidencePath: 'evidence/manual/common-app-wechat.md'
+              }
+            ]
+          }
         }
-      },
-      gate: {
-        passed: true
+      }),
+      {
+        requireCommonAppLaunchDetails: true,
+        requireCommonAppTargets: ['WeChat']
       }
-    }
-
-    const result = validateWindowsAcceptanceCaseEvidence(
-      'windows-shortcut-launch-args',
-      weakEvidence
     )
 
-    expect(result).toMatchObject({
-      schemaKey: 'app-index-diagnostic',
-      schemaMismatch: false,
-      embeddedGatePassed: true,
-      recomputedGatePassed: false
-    })
-    expect(result.gateFailures).toEqual([
-      'diagnostic launchKind mismatch: expected shortcut, got uwp',
-      'diagnostic launchArgs are missing',
-      'diagnostic workingDirectory is missing',
-      'diagnostic reusable case ids missing: windows-shortcut-launch-args'
+    expect(gate.failures).toEqual([
+      'common app launch search query is missing: WeChat',
+      'common app launch observed display name is missing: WeChat',
+      'common app launch icon evidence is missing: WeChat',
+      'common app launch observed launch target is missing: WeChat',
+      'common app launch CoreBox hidden evidence is missing: WeChat'
     ])
-  })
-
-  it('recomputes Windows capability gates per required case', () => {
-    const evidence: WindowsCapabilityEvidence = {
-      schema: 'windows-capability-evidence/v1',
-      generatedAt: '2026-05-10T10:00:00.000Z',
-      platform: 'win32',
-      arch: 'x64',
-      status: 'passed',
-      targets: ['WeChat'],
-      checks: {
-        powershell: {
-          command: 'powershell',
-          available: true,
-          exitCode: 0,
-          durationMs: 10
-        },
-        everything: {
-          cliPaths: ['C:\\Program Files\\Everything\\es.exe'],
-          where: {
-            command: 'where es.exe',
-            available: true,
-            exitCode: 0,
-            durationMs: 10
-          },
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
-        },
-        startApps: {
-          count: 1,
-          uwpCount: 1,
-          desktopPathCount: 0,
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
-        },
-        registry: {
-          count: 1,
-          executableCandidateCount: 1,
-          skippedSystemComponentCount: 0,
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
-        },
-        startMenu: {
-          directoryCount: 1,
-          entryCount: 1,
-          lnkCount: 1,
-          apprefMsCount: 0,
-          exeCount: 0,
-          shortcutMetadataCount: 1,
-          shortcutWithArgumentsCount: 0,
-          shortcutWithWorkingDirectoryCount: 0,
-          uwpShortcutCount: 0,
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
-        }
-      },
-      gate: {
-        passed: true,
-        failures: [],
-        warnings: []
-      }
-    }
-
-    const result = validateWindowsAcceptanceCaseEvidence('windows-shortcut-launch-args', evidence)
-
-    expect(result.schemaKey).toBe('windows-capability')
-    expect(result.recomputedGatePassed).toBe(false)
-    expect(result.gateFailures).toEqual([
-      'Start Menu shortcut arguments were not resolved',
-      'Start Menu shortcut workingDirectory was not resolved'
-    ])
-  })
-
-  it('recomputes performance gates with release thresholds', () => {
-    const result = validateWindowsAcceptancePerformanceEvidence('search-trace-stats', {
-      schema: 'search-trace-stats/v1',
-      minSamples: 1,
-      slowThresholdMs: 800,
-      enoughSamples: true,
-      sessionCount: 1,
-      pairedSessionCount: 1,
-      missingFirstResultSessionCount: 0,
-      missingSessionEndSessionCount: 0,
-      firstResult: {
-        event: 'first.result',
-        sampleCount: 1,
-        avgMs: 20,
-        p50Ms: 20,
-        p95Ms: 20,
-        p99Ms: 20,
-        maxMs: 20,
-        slowCount: 0,
-        slowRatio: 0
-      },
-      sessionEnd: {
-        event: 'session.end',
-        sampleCount: 1,
-        avgMs: 30,
-        p50Ms: 30,
-        p95Ms: 30,
-        p99Ms: 30,
-        maxMs: 30,
-        slowCount: 0,
-        slowRatio: 0
-      },
-      providerSlow: [],
-      gate: {
-        passed: true,
-        failures: []
-      }
-    })
-
-    expect(result.schemaKey).toBe('search-trace-stats')
-    expect(result.embeddedGatePassed).toBe(true)
-    expect(result.recomputedGatePassed).toBe(false)
-    expect(result.gateFailures).toEqual(['paired sessions 1 < minSamples 200'])
-  })
-
-  it('rejects search trace performance evidence that only satisfies sample count', () => {
-    const result = validateWindowsAcceptancePerformanceEvidence('search-trace-stats', {
-      schema: 'search-trace-stats/v1',
-      minSamples: 200,
-      slowThresholdMs: 800,
-      enoughSamples: true,
-      sessionCount: 200,
-      pairedSessionCount: 200,
-      missingFirstResultSessionCount: 0,
-      missingSessionEndSessionCount: 0,
-      firstResult: {
-        event: 'first.result',
-        sampleCount: 200,
-        avgMs: 900,
-        p50Ms: 700,
-        p95Ms: 950,
-        p99Ms: 1_200,
-        maxMs: 1_500,
-        slowCount: 30,
-        slowRatio: 0.15
-      },
-      sessionEnd: {
-        event: 'session.end',
-        sampleCount: 200,
-        avgMs: 1_200,
-        p50Ms: 900,
-        p95Ms: 1_400,
-        p99Ms: 1_800,
-        maxMs: 2_000,
-        slowCount: 40,
-        slowRatio: 0.2
-      },
-      providerSlow: [],
-      gate: {
-        passed: true,
-        failures: []
-      }
-    })
-
-    expect(result.recomputedGatePassed).toBe(false)
-    expect(result.gateFailures).toEqual([
-      'first.result p95 950 > 800',
-      'session.end p95 1400 > 1200',
-      'first.result slowRatio 0.15 > 0.1',
-      'session.end slowRatio 0.2 > 0.1'
-    ])
-  })
-
-  it('rejects clipboard stress evidence that only satisfies duration and interval coverage', () => {
-    const result = validateWindowsAcceptancePerformanceEvidence('clipboard-stress-summary', {
-      schema: 'clipboard-stress-summary/v1',
-      generatedAt: '2026-05-10T10:00:00.000Z',
-      results: [
-        {
-          intervalMs: 500,
-          durationMs: 120_000,
-          queueDepthPeak: {
-            realtime: { queued: 3, inFlight: 1 }
-          },
-          clipboard: {
-            count: 240,
-            schedulerDelaySampleCount: 240,
-            avgSchedulerDelayMs: 80,
-            p95SchedulerDelayMs: 130,
-            lastSchedulerDelayMs: 20,
-            maxSchedulerDelayMs: 350,
-            lastDurationMs: 20,
-            maxDurationMs: 80,
-            droppedCount: 1,
-            coalescedCount: 0,
-            timeoutCount: 0,
-            errorCount: 0
-          }
-        },
-        {
-          intervalMs: 250,
-          durationMs: 120_000,
-          queueDepthPeak: {
-            realtime: { queued: 1, inFlight: 1 }
-          },
-          clipboard: {
-            count: 480,
-            schedulerDelaySampleCount: 480,
-            avgSchedulerDelayMs: 20,
-            p95SchedulerDelayMs: 60,
-            lastSchedulerDelayMs: 10,
-            maxSchedulerDelayMs: 100,
-            lastDurationMs: 10,
-            maxDurationMs: 40,
-            droppedCount: 0,
-            coalescedCount: 0,
-            timeoutCount: 0,
-            errorCount: 0
-          }
-        }
-      ],
-      gate: {
-        passed: true,
-        failures: []
-      }
-    })
-
-    expect(result.recomputedGatePassed).toBe(false)
-    expect(result.gateFailures).toEqual([
-      'interval 500ms p95 scheduler delay 130 > 100',
-      'interval 500ms max scheduler delay 350 > 300',
-      'interval 500ms realtime queue peak 3 > 2',
-      'interval 500ms dropped count 1 > 0'
-    ])
-  })
-
-  it('rejects clipboard stress evidence without the strict schema marker', () => {
-    const result = validateWindowsAcceptancePerformanceEvidence('clipboard-stress-summary', {
-      generatedAt: '2026-05-10T10:00:00.000Z',
-      results: [
-        {
-          intervalMs: 500,
-          durationMs: 120_000,
-          queueDepthPeak: {
-            realtime: { queued: 1, inFlight: 1 }
-          },
-          clipboard: {
-            count: 240,
-            schedulerDelaySampleCount: 240,
-            avgSchedulerDelayMs: 20,
-            p95SchedulerDelayMs: 60,
-            lastSchedulerDelayMs: 10,
-            maxSchedulerDelayMs: 100,
-            lastDurationMs: 10,
-            maxDurationMs: 40,
-            droppedCount: 0,
-            coalescedCount: 0,
-            timeoutCount: 0,
-            errorCount: 0
-          }
-        },
-        {
-          intervalMs: 250,
-          durationMs: 120_000,
-          queueDepthPeak: {
-            realtime: { queued: 1, inFlight: 1 }
-          },
-          clipboard: {
-            count: 480,
-            schedulerDelaySampleCount: 480,
-            avgSchedulerDelayMs: 20,
-            p95SchedulerDelayMs: 60,
-            lastSchedulerDelayMs: 10,
-            maxSchedulerDelayMs: 100,
-            lastDurationMs: 10,
-            maxDurationMs: 40,
-            droppedCount: 0,
-            coalescedCount: 0,
-            timeoutCount: 0,
-            errorCount: 0
-          }
-        }
-      ],
-      gate: {
-        passed: true,
-        failures: []
-      }
-    })
-
-    expect(result).toMatchObject({
-      schemaKey: null,
-      schemaMismatch: true,
-      embeddedGatePassed: true,
-      recomputedGatePassed: true,
-      gateFailures: []
-    })
   })
 })

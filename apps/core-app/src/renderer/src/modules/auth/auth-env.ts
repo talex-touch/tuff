@@ -1,9 +1,7 @@
-import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { appSetting } from '~/modules/storage/app-storage'
+import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '~/modules/nexus/runtime-base'
 
-const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 const transport = useTuffTransport()
 
 const AUTH_SECURE_KEYS = {
@@ -15,11 +13,11 @@ const AUTH_SECURE_KEYS = {
 export type AuthSensitiveKey = keyof typeof AUTH_SECURE_KEYS
 
 export function isLocalAuthMode(): boolean {
-  return isDevEnv() && appSetting?.dev?.authServer === 'local'
+  return getRuntimeServerMode() === 'local'
 }
 
 export function getAuthBaseUrl(): string {
-  return isLocalAuthMode() ? LOCAL_AUTH_BASE_URL : getTuffBaseUrl()
+  return getRuntimeNexusBaseUrl()
 }
 
 function normalizeSecureValue(rawValue: string | null | undefined): string | null {

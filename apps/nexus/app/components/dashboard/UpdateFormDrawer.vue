@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
 import Drawer from '~/components/ui/Drawer.vue'
+import { requestJson } from '~/utils/request'
 
 interface UpdateFormState {
   type: 'news' | 'announcement' | 'config' | 'data'
@@ -163,7 +164,7 @@ async function submit() {
       : '/api/dashboard/updates'
     const method = props.mode === 'edit' ? 'PATCH' : 'POST'
 
-    await $fetch(endpoint, { method, body: payload })
+    await requestJson(endpoint, { method, body: payload })
     emit('saved')
     emit('close')
   }

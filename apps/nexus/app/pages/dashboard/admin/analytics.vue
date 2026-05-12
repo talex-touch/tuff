@@ -2,6 +2,7 @@
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxSpinner } from '@talex-touch/tuffex'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 import type { DocAnalyticsResponse } from '~/types/docs-engagement'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   pageTransition: {
@@ -385,7 +386,7 @@ async function fetchAnalytics() {
   loading.value = true
   error.value = null
   try {
-    const data = await $fetch<AnalyticsData>(`/api/admin/analytics?days=${selectedDays.value}`)
+    const data = await requestJson<AnalyticsData>(`/api/admin/analytics?days=${selectedDays.value}`)
     analytics.value = data
   }
   catch (e: any) {
@@ -400,7 +401,7 @@ async function fetchGeoAnalytics() {
   geoLoading.value = true
   geoError.value = null
   try {
-    const data = await $fetch<GeoAnalyticsData>('/api/admin/analytics/geo', {
+    const data = await requestJson<GeoAnalyticsData>('/api/admin/analytics/geo', {
       query: {
         days: selectedDays.value,
         country: selectedGeoCountry.value || undefined,
@@ -421,7 +422,7 @@ async function fetchDocsAnalytics() {
   docsLoading.value = true
   docsError.value = null
   try {
-    const data = await $fetch<DocAnalyticsResponse>('/api/admin/analytics/docs', {
+    const data = await requestJson<DocAnalyticsResponse>('/api/admin/analytics/docs', {
       query: {
         days: selectedDays.value,
         path: docsPath.value.trim() || undefined,
@@ -443,7 +444,7 @@ async function fetchIntelligenceAnalytics() {
   intelligenceLoading.value = true
   intelligenceError.value = null
   try {
-    const data = await $fetch<IntelligenceAnalyticsData>('/api/admin/analytics/intelligence', {
+    const data = await requestJson<IntelligenceAnalyticsData>('/api/admin/analytics/intelligence', {
       query: {
         days: selectedDays.value,
       },
@@ -463,7 +464,7 @@ async function fetchMessages() {
   messagesLoading.value = true
   messagesError.value = null
   try {
-    const data = await $fetch<{ messages: TelemetryMessage[] }>('/api/telemetry/messages?limit=12')
+    const data = await requestJson<{ messages: TelemetryMessage[] }>('/api/telemetry/messages?limit=12')
     messages.value = data.messages ?? []
   }
   catch (e: any) {
@@ -484,7 +485,7 @@ async function fetchExchangeHistory() {
       if (!/^[A-Z]{3}$/.test(normalizedTarget)) {
         throw new Error('Invalid target currency code.')
       }
-      const data = await $fetch<{ items?: ExchangeRateHistoryItem[] }>('/api/exchange/history', {
+      const data = await requestJson<{ items?: ExchangeRateHistoryItem[] }>('/api/exchange/history', {
         query: {
           target: normalizedTarget,
           limit: exchangeLimit.value,
@@ -494,7 +495,7 @@ async function fetchExchangeHistory() {
       exchangeSnapshots.value = []
     }
     else {
-      const data = await $fetch<{ items?: ExchangeRateSnapshotSummary[] }>('/api/exchange/history', {
+      const data = await requestJson<{ items?: ExchangeRateSnapshotSummary[] }>('/api/exchange/history', {
         query: {
           limit: exchangeLimit.value,
           includePayload: exchangeIncludePayload.value ? 'true' : undefined,

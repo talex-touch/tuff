@@ -1,6 +1,6 @@
 # PRD: Nexus Provider 聚合与 Scene 编排重构
 
-> 更新时间: 2026-05-09
+> 更新时间: 2026-05-11
 > 状态: Architecture PRD / Partial Implementation
 > 适用范围: `apps/nexus`、`apps/core-app`、`packages/*`
 
@@ -147,6 +147,8 @@ Strategy 描述 Provider 选择规则。
 - `lowest_latency`: 优先低延迟。
 - `balanced`: 综合成本、延迟、成功率与可用性。
 - `manual`: 用户或管理员显式选择。
+
+当前最小实现已让 strategy 参与 Scene Orchestrator 路由：`priority/manual` 使用 priority、weight、providerId 排序；`least_cost` 读取 binding constraints 或 provider capability metering/metadata 中的成本字段；`lowest_latency` 读取 `provider_health_checks` 最新 latency；`balanced` 综合成本、延迟与权重后再回退到 priority 排序。完整 success rate、配额、区域、语言质量与动态 `pricingRef` 成本估算仍属于后续策略层增强。
 
 ```ts
 interface StrategyDescriptor {
@@ -489,16 +491,28 @@ interface SceneRunResult<TOutput> {
 - 已新增 `/api/dashboard/provider-registry/providers*` 与 `/api/dashboard/provider-registry/capabilities` dashboard admin API，首批只保存 `authRef`，拒绝 `apiKey`、`secretId`、`secretKey`、token 等明文凭证字段。
 - 已补 `provider-registry.api.test.ts`，覆盖腾讯云机器翻译样例 provider 的 `text.translate`、`image.translate`、`image.translate.e2e` capability 登记、列表、更新、删除与明文密钥拒绝。
 - 已新增 `apps/nexus/server/utils/providerCredentialStore.ts` 与 `/api/dashboard/provider-registry/credentials`，将 `secure://providers/*` 凭证写入 D1 `provider_secure_store` AES-GCM envelope；生产环境必须配置 `PROVIDER_REGISTRY_SECURE_STORE_KEY` 或同名 Cloudflare binding，非生产缺省只允许 degraded fallback。
-- 已新增 `apps/nexus/server/utils/tencentMachineTranslationProvider.ts` 与 `/api/dashboard/provider-registry/providers/:id/check`，首版支持腾讯云机器翻译 `secret_pair + text.translate` live check，运行时从 secure store 解析凭证并注入 TC3-HMAC-SHA256 `TextTranslate` 请求，不泄露 secret、不自动改 provider status。
+- 已新增 `apps/nexus/server/utils/tencentMachineTranslationProvider.ts` 与 `/api/dashboard/provider-registry/providers/:id/check`，支持腾讯云机器翻译 `secret_pair + text.translate` live check，并提供 `text.translate`、`image.translate` 与 `image.translate.e2e` runtime adapter；运行时从 secure store 解析凭证并注入 TC3-HMAC-SHA256 `TextTranslate` / `ImageTranslateLLM` 请求，不泄露 secret、不自动改 provider status。
 - 已新增 `apps/nexus/server/utils/sceneRegistryStore.ts`，提供 `scene_registry` 与 `scene_strategy_bindings` D1 表、scene CRUD、required capability、strategy mode、fallback 和 provider capability binding 管理。
 - 已新增 `/api/dashboard/provider-registry/scenes*` dashboard admin API，并补 `scene-registry.api.test.ts` 覆盖截图翻译 scene、strategy binding、重复 binding 拒绝、更新与删除。
-- 已新增 `apps/nexus/app/pages/dashboard/admin/provider-registry.vue` 与 Dashboard 导航入口，提供 Providers / Capabilities / Scenes 三视图、Provider 创建/状态/删除、Capability 只读查看、Scene 创建/状态/删除、strategy binding 基础管理、腾讯云凭证绑定与 provider check。
-- 本阶段仍不包含图片翻译、端到端图片翻译、Scene Orchestrator 执行器、Metering ledger 或汇率/AI provider 迁移。
+- 已新增 `apps/nexus/app/pages/dashboard/admin/provider-registry.vue` 与 Dashboard 导航入口，提供 Providers / Capabilities / Scenes 三视图、Provider 创建/状态/删除、Capability 只读查看、Scene 创建/状态/删除、Scene dry-run/execute 测试面板、strategy binding 基础管理、腾讯云凭证绑定与 provider check。
+- Dashboard Provider/Scene 卡片已提供深编辑面板；Provider 基础字段仍走 Provider PATCH，Provider capability 新增/更新/删除已接入 `providers/:id/capabilities/*` 独立 API，避免编辑 capability 时整体替换 Provider capabilities；Scene strategy、meteringPolicy、auditPolicy、metadata、binding weight/status/constraints/metadata 继续通过 Scene PATCH 深编辑。
+- 已新增 `apps/nexus/server/utils/sceneOrchestrator.ts`、`/api/dashboard/provider-registry/scenes/:id/run` 与普通登录态 `/api/v1/scenes/:id/run`，提供 Scene run 最小执行合同，返回 output、trace、usage、selected、candidates 与 fallbackTrail。
+- 腾讯云机器翻译 adapter 已覆盖 `text.translate` 与基于官方 `ImageTranslateLLM` 的 `image.translate` / `image.translate.e2e` 最小执行路径，统一返回 providerRequestId、latency 与 usage。
+- 汇率 `fx.rate.latest` / `fx.convert` 已接入 Scene Orchestrator 默认 adapter，复用现有 `exchangeRateService`，通过 `exchange-rate` vendor provider 产出统一 output、`fx_quote` usage、providerRequestId、latency、trace 与 ledger；CoreBox 汇率预览以及 `/api/exchange/latest` / `/api/exchange/convert` 已优先走 `corebox.fx.convert` / `corebox.fx.latest` Scene，未登录、Scene 不可用或 Scene 输出无效时保留兼容 fallback。
+- CoreApp 已新增 Nexus Scene client，OmniPanel 划词翻译优先走 `corebox.selection.translate` 的 `text.translate` Scene；未登录、Scene 不可用或执行失败时降级到浏览器翻译。
+- CoreBox 剪贴板图片项已新增“翻译图片”和“翻译并置顶”动作，主进程通过 Nexus Scene client 调用 `corebox.screenshot.translate` 的 direct `image.translate.e2e` 路径，并支持将翻译后的图片写回系统剪贴板或打开 always-on-top 图片窗口；renderer 不直接持有 app token 或 Provider 私有配置。
+- 已新增 `apps/nexus/server/utils/providerUsageLedgerStore.ts`、Dashboard `/api/dashboard/provider-registry/usage` 与 Provider Registry Usage 视图，Scene run 的 dry-run、成功执行和标准失败路径都会写入 `provider_usage_ledger` 安全元数据；只保存 runId、scene/provider/capability、usage、error、trace、fallbackTrail、selected 等审计信息，不保存用户输入、截图/图片、翻译输出、完整 provider 响应或凭证引用。
+- 已新增 `apps/nexus/server/utils/providerHealthStore.ts`、Dashboard `/api/dashboard/provider-registry/health` 与 Provider Registry Health 视图；腾讯云机器翻译 check 与 AI provider mirror 的 `chat.completion` / `vision.ocr` check 会写入 `provider_health_checks`，保留 latency、requestId、errorCode/errorMessage 与 degradedReason 历史。
+- Scene Orchestrator strategy 已最小参与路由，覆盖 `priority/manual`、`least_cost`、`lowest_latency` 与 `balanced`；`least_cost` 读取 binding/capability 成本字段，`lowest_latency` 读取最新 health latency，`balanced` 综合成本、延迟与权重。
+- 已新增 `apps/nexus/server/utils/intelligenceProviderRegistryBridge.ts`，在 Nexus dashboard Intelligence provider 创建/更新/删除时同步维护通用 Provider Registry 镜像；`text.chat` 归一为 `chat.completion`，保留 `text.summarize` / `vision.ocr` 能力域，API key 只写 `provider_secure_store` 并通过 `authRef` 引用，不写入 provider metadata。
+- Intelligence provider 管理列表、普通用户 sync、模型列表、credits 模型列表、连接测试、provider probe、Admin Chat、Docs Assistant 与 Lab runtime 已统一通过 bridge 合并读取旧 `intelligence_providers` 记录与 registry-only 镜像；API key 获取优先旧表，缺失时从 secure store 解析镜像 `authRef`。
+- 已新增 `apps/nexus/server/utils/intelligenceProviderHealthCheck.ts`，Provider Registry `providers/:id/check` 可识别 Intelligence mirror 并复用 Lab provider probe 对 `chat.completion` 执行探活，探活结果统一写入 Provider Health 历史。
+- 本阶段已补 `vision.ocr -> text.translate -> overlay.render` 的 Scene 链式编排、本地 `overlay.render` 客户端 overlay payload、OpenAI-compatible Intelligence mirror 的默认 `vision.ocr` adapter，以及 Dashboard Admin Provider Registry 触发的系统级 `overlay.render` provider / `corebox.screenshot.translate` Scene 幂等 seed；seed 只追加缺失的 system binding，不把 user-scope AI mirror OCR 自动绑定进 system Scene。仍不包含旧 `intelligence_providers` 表退场、user-scope AI mirror OCR 自动绑定策略，或 success rate、配额与动态 `pricingRef` 等高级策略。
 
 ### Phase 2: 迁移汇率与 AI providers
 
-- 将 `exchangeRateService` 映射为 `fx.rate.latest` / `fx.convert`。
-- 将 Nexus dashboard AI providers 迁移到通用 Provider registry。
+- 将 `exchangeRateService` 映射为 `fx.rate.latest` / `fx.convert`；当前 Scene adapter、CoreBox 汇率入口与 `/api/exchange/*` Scene 优先链路已完成，保留兼容 fallback。
+- 将 Nexus dashboard AI providers 迁移到通用 Provider registry；当前写入侧镜像、读取侧 bridge 与 registry check 已覆盖 dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime/health，后续需补旧 `intelligence_providers` 表退场、迁移脚本与回滚策略。
 - 保持外部 API 兼容，内部路由切到 Scene / Provider 模型。
 - 补齐迁移测试：汇率 latest / convert、AI provider list / probe / chat scene。
 
@@ -508,13 +522,13 @@ interface SceneRunResult<TOutput> {
 - 接入文本翻译 capability。
 - 接入图片翻译与端到端图片翻译 capability。
 - 首个云厂商样例使用腾讯云机器翻译，但 adapter 不绑定供应商特性到 Scene。
-- CoreBox 划词翻译、截图翻译、图片 pin window 只调用 Scene，不直接持有 provider 选择逻辑。
+- CoreBox 划词翻译、截图翻译、图片 pin window 只调用 Scene，不直接持有 provider 选择逻辑；当前 pin window 已覆盖 direct `image.translate.e2e` 输出展示，并可消费 composed `overlay.render` 客户端 overlay payload。
 
 ### Phase 4: Scene 配置、路由、审计、计费统一
 
 - 实现 Scene 配置页，支持 capability path 与 provider strategy。
 - 统一调用 trace、用量 ledger、fallback trail 与成本估算。
-- CoreBox 截图翻译、划词翻译、汇率换算、AI Chat 统一通过 Scene 执行。
+- CoreBox 截图翻译、划词翻译、汇率换算、AI Chat 统一通过 Scene 执行；汇率换算在桌面未登录或 Scene 不可用时保留本地汇率 fallback。
 - 完成 fallback trail、usage ledger、provider health 与 admin 可观测页面的最小闭环。
 
 ## 10. 验收标准
@@ -525,7 +539,7 @@ interface SceneRunResult<TOutput> {
 - 汇率、AI、文本翻译、图片/截图翻译不再各自维护孤立 provider model。
 - Nexus 可以新增腾讯云机器翻译这类 translation/vision provider 配置，并把 capability 绑定到截图翻译、划词翻译和图片翻译 Scene。
 - 一个 Provider 可声明多个 capability，Scene 可组合多个 capability。
-- 截图翻译支持两条策略：`image.translate.e2e` 与 `vision.ocr + text.translate + overlay.render`。
+- 截图翻译支持两条策略：`image.translate.e2e` 与 `vision.ocr + text.translate + overlay.render`；composed 链式编排、OpenAI-compatible AI mirror OCR adapter、系统级本地 `overlay.render` provider 与 `corebox.screenshot.translate` Scene seed 已具备，user-scope AI mirror OCR 自动绑定仍需单独设计权限边界。
 - CoreBox 汇率换算、划词翻译、截图翻译、AI Chat、图片翻译 pin window 均通过 Scene API 执行。
 
 ### 10.2 质量验收
@@ -590,7 +604,7 @@ interface SceneRunResult<TOutput> {
 
 - [ ] 功能验收：Provider registry、Capability catalog、Scene Orchestrator、Strategy、Metering、Audit 入口存在且互相连通。
 - [ ] 迁移验收：汇率、AI providers、文本翻译、图片/截图翻译均映射到统一 Provider registry，不再新增孤立供应商模型。
-- [ ] 场景验收：`corebox.screenshot.translate` 同时支持 direct 与 composed path，并可查询 fallback trail。
+- [ ] 场景验收：`corebox.screenshot.translate` 已可通过 Dashboard Admin seed 入口获得默认本地 overlay provider 与 Scene；仍需真实 provider 组合验证 direct 与 composed path，并可查询 fallback trail。
 - [ ] 安全验收：密钥只进入安全存储引用；usage / audit 不记录原始内容。
 - [ ] 质量验收：最近路径 typecheck / test 通过；文档 guard 通过或记录既有失败。
 - [ ] 文档验收：README / TODO / CHANGES / INDEX / Roadmap / Quality Baseline 与 Nexus 开发文档同步。

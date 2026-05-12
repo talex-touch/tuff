@@ -1,5 +1,5 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { bindCouponToUser } from '../../utils/pilot-compat-payment'
+import { bindCouponToUser } from '../../utils/pilot-payment-service'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {

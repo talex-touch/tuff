@@ -13,6 +13,10 @@ describe('update tag helpers', () => {
     expect(defaultUpdateSettings.autoDownload).toBe(true)
   })
 
+  it('keeps automatic installer handoff disabled by default', () => {
+    expect(defaultUpdateSettings.autoInstallDownloadedUpdates).toBe(false)
+  })
+
   describe('resolveUpdateChannelLabel', () => {
     it('defaults to release when label is empty', () => {
       expect(resolveUpdateChannelLabel()).toBe(AppPreviewChannel.RELEASE)

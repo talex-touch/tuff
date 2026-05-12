@@ -32,6 +32,7 @@ Options:
   --requireBundleOrIdentity   Require app.bundleId or app.appIdentity.
   --requireCleanDisplayName   Require clean or fallback displayName status.
   --requireIcon               Require app.iconPresent=true.
+  --requireManagedEntry       Require entrySource=manual and entryEnabled=true.
   --requireReindex            Require successful reindex summary.
   --requireCaseIds <csv>      Require reusable manual regression case ids.
   --compact                   Print single-line JSON.
@@ -111,6 +112,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireIcon') {
       options.requireIcon = true
+      continue
+    }
+    if (arg === '--requireManagedEntry') {
+      options.requireManagedEntry = true
       continue
     }
     if (arg === '--requireReindex') {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+import { useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
@@ -89,9 +90,9 @@ const { deviceId: currentDeviceId } = useDeviceIdentity()
 
 const rangeDays = 7
 
-const { data: telemetryData, pending: telemetryPending, error: telemetryError, refresh: refreshTelemetry } = useFetch<TelemetryOverviewResponse>('/api/dashboard/telemetry/me?days=7')
-const { data: loginHistoryData, pending: historyPending, error: historyError, refresh: refreshHistory } = useFetch<LoginHistoryItem[]>('/api/login-history')
-const { data: devicesData, pending: devicesPending, error: devicesError, refresh: refreshDevices } = useFetch<DeviceItem[]>('/api/devices')
+const { data: telemetryData, pending: telemetryPending, error: telemetryError, refresh: refreshTelemetry } = useTypedFetch<TelemetryOverviewResponse>('/api/dashboard/telemetry/me?days=7')
+const { data: loginHistoryData, pending: historyPending, error: historyError, refresh: refreshHistory } = useTypedFetch<LoginHistoryItem[]>('/api/login-history')
+const { data: devicesData, pending: devicesPending, error: devicesError, refresh: refreshDevices } = useTypedFetch<DeviceItem[]>('/api/devices')
 
 const fallbackName = computed(() => t('dashboard.header.defaultName'))
 const greetingName = computed(() => {
@@ -112,8 +113,8 @@ const regionNames = computed(() => {
   }
 })
 
-const allTelemetryPoints = computed(() => telemetryData.value?.daily ?? [])
-const currentTelemetryPoints = computed(() => allTelemetryPoints.value.slice(-rangeDays))
+const allTelemetryPoints = computed<TelemetryDailyPoint[]>(() => telemetryData.value?.daily ?? [])
+const currentTelemetryPoints = computed<TelemetryDailyPoint[]>(() => allTelemetryPoints.value.slice(-rangeDays))
 
 const historyItems = computed(() => loginHistoryData.value ?? [])
 const deviceItems = computed(() => devicesData.value ?? [])

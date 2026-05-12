@@ -8,16 +8,15 @@ import type {
 import type { TpexDetailResponse } from '@talex-touch/utils/plugin/providers/tpex-provider'
 import os from 'node:os'
 import path from 'node:path'
-import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { getEnabledApiSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
+import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile } from './utils'
 
-const DEFAULT_TPEX_API = NEXUS_BASE_URL
 const tpexProviderLog = createProviderLogger(PluginProviderType.TPEX)
 
 /**
@@ -35,7 +34,7 @@ function getPrimaryApiBase(): string {
   } catch {
     // Storage not ready yet, use default
   }
-  return DEFAULT_TPEX_API
+  return getRuntimeNexusBaseUrl()
 }
 
 async function peekTpexManifest(tpexPath: string): Promise<IManifest | undefined> {

@@ -51,4 +51,18 @@ describe('update-action-controller', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('Missing update task id')
   })
+
+  it('installs through download center when task id is provided in non-mac mode', async () => {
+    const { controller, deps } = createController()
+    const result = await controller.handleInstall({ taskId: 'task-1' })
+
+    expect(result.success).toBe(true)
+    expect(deps.withDownloadCenterInstall).toHaveBeenCalledWith('task-1')
+    expect(deps.reportUpdateTelemetry).toHaveBeenCalledWith('install_started', {
+      channel: AppPreviewChannel.RELEASE,
+      source: 'TestSource',
+      taskId: 'task-1',
+      itemKind: 'manual'
+    })
+  })
 })

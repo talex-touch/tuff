@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex'
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
@@ -124,7 +125,7 @@ async function fetchUsers(options: { resetPage?: boolean } = {}) {
   loading.value = true
   error.value = null
   try {
-    const res = await $fetch<{ users: AdminUser[], pagination: Pagination }>('/api/admin/users', {
+    const res = await rawFetch<{ users: AdminUser[], pagination: Pagination }>('/api/admin/users', {
       query: buildQuery(),
     })
     users.value = res.users ?? []
@@ -163,7 +164,7 @@ async function updateUserRole(entry: AdminUser) {
   const nextRole = entry.role === 'admin' ? 'user' : 'admin'
   actionPendingId.value = entry.id
   try {
-    const res = await $fetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/role`, {
+    const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/role`, {
       method: 'PATCH',
       body: { role: nextRole },
     })
@@ -186,7 +187,7 @@ async function updateUserStatus(entry: AdminUser) {
   const nextStatus = entry.status === 'active' ? 'disabled' : 'active'
   actionPendingId.value = entry.id
   try {
-    const res = await $fetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/status`, {
+    const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/status`, {
       method: 'PATCH',
       body: { status: nextStatus },
     })

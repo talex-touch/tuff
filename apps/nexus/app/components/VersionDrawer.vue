@@ -9,6 +9,7 @@ import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson } from '~/utils/request'
 
 interface Props {
   isOpen: boolean
@@ -102,7 +103,7 @@ async function handlePackageChange(files: FileUploaderFile[]) {
     const previewFormData = new FormData()
     previewFormData.append('package', file)
 
-    const result = await $fetch<TpexPackagePreviewResult>('/api/dashboard/plugins/package/preview', {
+    const result = await requestJson<TpexPackagePreviewResult>('/api/dashboard/plugins/package/preview', {
       method: 'POST',
       body: previewFormData,
     })

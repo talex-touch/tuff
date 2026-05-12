@@ -42,6 +42,7 @@ export interface ClipboardApplyPayload {
     id?: number
     type?: 'text' | 'image' | 'files'
     content?: string
+    rawContent?: string | null
   }
   text?: string
   html?: string | null

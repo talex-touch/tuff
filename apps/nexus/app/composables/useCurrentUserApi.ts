@@ -43,20 +43,20 @@ type RequestLike = (request: string, options?: RequestOptions) => Promise<unknow
 const USER_ME_ENDPOINT = '/api/user/me'
 const USER_PROFILE_ENDPOINT = '/api/user/profile'
 
+function resolveRequest(request?: RequestLike): RequestLike {
+  if (request)
+    return request
+  if (import.meta.server)
+    return useRequestFetch() as RequestLike
+  return $fetch as RequestLike
+}
+
 export async function fetchCurrentUserProfile(request?: RequestLike) {
-  const result = request
-    ? await request(USER_ME_ENDPOINT, { cache: 'no-store' })
-    : import.meta.server
-      ? await useRequestFetch()(USER_ME_ENDPOINT, { cache: 'no-store' })
-      : await $fetch(USER_ME_ENDPOINT, { cache: 'no-store' })
+  const result = await resolveRequest(request)(USER_ME_ENDPOINT, { cache: 'no-store' })
   return result as CurrentUserProfile | null
 }
 
 export async function patchCurrentUserProfile(payload: CurrentUserProfilePatch, request?: RequestLike) {
-  const result = request
-    ? await request(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
-    : import.meta.server
-      ? await useRequestFetch()(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
-      : await $fetch(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
+  const result = await resolveRequest(request)(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
   return result as CurrentUserProfile | null
 }

@@ -11,7 +11,7 @@
 - CoreApp 平台能力已集中到 runtime patch 口径，macOS / Windows / Linux 的限制会通过 `supportLevel / issueCode / reason / limitations` 暴露，不再静默冒充 supported。
 - Windows App 索引、Everything、Start Menu、UWP、registry uninstall 与启动参数链路已有较多回归覆盖，但仍缺真实 Windows 设备体验证据。
 - Linux 目前是 documented best-effort：`xdotool` 与 desktop environment 是明确依赖，不应作为 `2.4.10` blocker。
-- 当前最大工程风险不再是单一 legacy runtime 分支，而是 retained raw event 定义、Pilot 假数据/兼容支付、插件侧 localStorage 持久化、以及若干超长多职责模块。
+- 当前最大工程风险不再是单一 legacy runtime 分支，而是 retained raw event 定义、Pilot 假数据/兼容支付、插件侧 localStorage 持久化、以及若干超长多职责模块。复核口径需要区分“生产 raw send 违规”和“保留的 raw event 定义”：本次扫描未发现生产 `channel.send('x:y')` / `transport.send('x:y')` 直连违规，`ipcRenderer.sendSync` 仅剩负向测试断言；但仍有 342 处 `defineRawEvent` 定义需要后续迁移或解释。
 
 质量判断：主线架构方向正确，但 `2.4.11` 前必须把“假值成功、隐式兼容、不可观测降级”继续收口，否则跨平台体验会在真实设备上表现为不可解释失败。
 
@@ -66,7 +66,7 @@
 
 ### P0：Pilot 兼容支付仍使用 mock 微信 URL / DUMMY 订单
 
-文件：`apps/pilot/server/utils/pilot-compat-payment.ts`、`apps/pilot/server/api/order/price/dummy.get.ts`
+文件：`apps/pilot/server/utils/pilot-payment-service.ts`、`apps/pilot/server/api/order/price/dummy.get.ts`
 
 事实：
 
@@ -105,8 +105,9 @@
 
 事实：
 
-- `apps/core-app/src` 与 `packages` 中约有 340 处 `defineRawEvent` 命中。
-- 这与当前文档中的 `raw channel 13/46` 不是同一指标：后者更接近 raw `channel.send('x:y')` 违规面，前者是 retained non-conforming event 定义面。
+- `apps/core-app/src`、`packages` 与 `plugins` 当前扫描到 342 处 `defineRawEvent` 命中。
+- `channel.send('x:y')` / `transport.send('x:y')` 生产直连扫描未见命中；`ipcRenderer.sendSync` 仅剩 `plugin-channel-send-sync-hard-cut.test.ts` 的负向断言。
+- 这与当前文档中的 `raw channel 13/46` 不是同一指标：后者更接近历史 raw send violation 清册，前者是 retained non-conforming event definition 面。
 
 风险：
 
@@ -123,10 +124,10 @@
 当前抽样行数：
 
 - `apps/core-app/src/main/modules/clipboard.ts`：3343 行。
-- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`：2589 行。
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`：2728 行。
 - `apps/core-app/src/main/modules/plugin/plugin.ts`：2230 行。
-- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`：3328 行。
-- `apps/core-app/src/main/modules/update/update-system.ts`：1636 行。
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`：3323 行。
+- `apps/core-app/src/main/modules/update/update-system.ts`：1689 行。
 
 风险：
 
