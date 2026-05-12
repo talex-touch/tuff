@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-05-11
+> 更新时间: 2026-05-12
 
 ## 快速入口
 
@@ -19,9 +19,9 @@
 
 ---
 
-## 单一口径快照（2026-05-11）
+## 单一口径快照（2026-05-12）
 
-- 当前工作区基线：`2.4.10-beta.18`。
+- 当前工作区基线：`2.4.10-beta.19`。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
 - 当前版本 Windows 发版 gate：功能实现与本地 verifier 已进入收口态，但发版必须先补齐 Windows 真机 evidence 与性能 evidence；最终 acceptance 必须覆盖常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并完成 Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。
@@ -142,7 +142,7 @@
 
 - Core App 性能诊断增强：`Clipboard` 慢路径新增 phase 级别分解、告警分级与原因码，并接入 `Perf summary`/`polling diagnostics` 聚合视图。
 - Core App 性能链路降载：`file-index progress stream` 增加发送节流（latest-wins + 阶段优先），`Perf summary` 新增 `phaseAlertCode TopN` 聚合口径。
-- `2.4.10-beta.18` 当前基线与 Windows App 索引回归推进。
+- `2.4.10-beta.19` 当前基线与 Windows App 索引回归推进。
 - Native transport V1：`@talex-touch/tuff-native/screenshot`、`NativeEvents.capabilities/screenshot/fileIndex/file/media`、CoreApp `NativeCapabilitiesModule` 与 CoreBox “截图并复制”内置动作；文件索引/文件/媒体 V1 复用现有服务并以 `tfile`/metadata 传输，不迁移 OCR/Clipboard。
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。

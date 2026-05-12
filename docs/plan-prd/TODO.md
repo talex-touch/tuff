@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-05-11
+> 更新时间: 2026-05-12
 
 ---
 
@@ -9,7 +9,7 @@
 
 | 主题 | 当前事实 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 版本主线 | 当前工作区基线为 `2.4.10-beta.18` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| 版本主线 | 当前工作区基线为 `2.4.10-beta.19` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | 2.4.10 Windows 发版 gate | 功能实现与本地 verifier 已进入收口态；缺口集中在 Windows 真机 evidence、性能采样与 Release Evidence 写入 | 在 Windows 真机补齐 acceptance manifest 强门禁、常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并写入 Nexus Release Evidence；任一项缺失均阻塞当前版本发版 | `TODO` / `README` / `INDEX` / `CHANGES` / `Quality Baseline` |
 | Windows App 索引 | Start Menu、UWP、registry uninstall 与 `launchArgs/workingDirectory` 已有回归覆盖，但仍缺真实 Windows 设备体验证据 | `2.4.10` 完成微信/Codex/Apple Music 等真实应用搜索与启动验证，并记录失败证据 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），清册退场目标统一前移到 `2.4.11` | 清册中的 `2.4.11` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
@@ -34,6 +34,20 @@
 ---
 
 ## 🔧 当前执行清单（2 周）
+
+### 当前治理版发版暂存清单（2026-05-11）
+
+> 目标：当前治理版本可按“guard 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
+
+- [ ] 发版前最小复核：重新执行 `node "scripts/check-doc-governance.mjs" --strict true --json`、`pnpm compat:registry:guard`、`node "scripts/check-large-file-boundaries.mjs" --report`、`git diff --check`，并记录命令结果。
+- [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。
+- [ ] Windows 真机 release evidence：补齐 acceptance manifest、Everything target probe、App Index diagnostic、常见 App 启动、复制 app path、本地启动区索引、更新安装、DivisionBox detached widget、分时推荐、search trace 与 clipboard stress 证据。
+- [ ] 搜索性能验收：在真实设备采样 `200` 次查询，生成 `search-trace-stats/v1`，确认 `first.result/session.end` P95 与 slowRatio 达标。
+- [ ] Clipboard stress 验收：执行 `120000ms` 压测并用 `clipboard:stress:verify --strict` 复核 scheduler delay、realtime queue、drop/timeout/error。
+- [ ] Release Evidence 写入：拿到 `release:evidence` API key 或管理员登录态后，将 docs guard、平台 matrix、CoreApp targeted tests 与真机 evidence 写入 Nexus。
+- [ ] macOS / Linux 平台补证：`2.4.11` 前完成 macOS 阻塞级回归；Linux 只记录 best-effort smoke 与桌面环境限制。
+- [ ] Provider Registry 后续：补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略、success rate / quota / dynamic pricingRef 策略。
+- [ ] 2.5.0 AI/workflow 后续：继续拆 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板。
 
 ### 剩余工作区提交拆分清单（2026-05-11）
 
@@ -1078,9 +1092,9 @@
 | 统计项 | 数值 |
 | --- | --- |
 | 已完成 (`- [x]`) | 309 |
-| 未完成 (`- [ ]`) | 49 |
-| 总计 | 358 |
-| 完成率 | 86% |
+| 未完成 (`- [ ]`) | 58 |
+| 总计 | 367 |
+| 完成率 | 84% |
 
 > 统计时间: 2026-05-11（按本文件实时 checkbox 计数）。
 

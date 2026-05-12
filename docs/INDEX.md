@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-11
+> 更新时间：2026-05-12
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -27,14 +27,14 @@
 - `plan-prd` 子域：`03-features 32`、`docs 20`、`04-implementation 17`、`01-project 12`、`05-archive 11`、`02-architecture 8`、`06-ecosystem 4`。
 - 统计口径历史快照：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前路线以六主文档与 `TODO/CHANGES` 为准。
 
-## 状态快照（2026-05-11，统一口径）
+## 状态快照（2026-05-12，统一口径）
 
-- **当前工作区基线**：`2.4.10-beta.18`（根包与 CoreApp 对齐）。
+- **当前工作区基线**：`2.4.10-beta.19`（根包与 CoreApp 对齐）。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；不把全部跨平台回归压进 `2.4.10`。
 - **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence：Windows acceptance manifest 最终强门禁、微信/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测都必须通过；Nexus Release Evidence 写入闭环仍是发版阻塞项。
 - **2.4.11 必解门槛**：剩余 Windows/macOS 阻塞级人工回归、Linux best-effort 记录、Release Evidence 写入闭环、legacy/compat/size 清册退场项必须关闭或显式降权。
 - **User-managed launcher foundation（2026-04-22）**：`appIndex` typed domain 已新增 `listEntries / upsertEntry / removeEntry / setEntryEnabled`，settings SDK 与 main channel handler 全链路接通；`app-provider` 复用现有 `files + file_extensions` 支持 user-managed launcher entry，并继续走搜索与启动链路。
-- **应用搜索诊断与重建（2026-04-26）**：`settingsSdk.appIndex` 已新增 `diagnose / reindex`，高级设置中的应用索引区可按路径、bundleId 或名称查看单个应用的 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
+- **应用搜索诊断与重建（2026-04-26）**：`settingsSdk.appIndex` 已新增 `diagnose / reindex`，高级设置中的应用索引区可按路径、bundleId、名称或搜索词查看单个应用的 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
 - **Release Evidence API（2026-04-26）**：Nexus 新增 `/api/admin/release-evidence/*`，作为 CoreApp 回归、文档门禁与平台阻塞矩阵的 D1 证据入口；管理员登录态或 `release:evidence` API key 可写入。
 - **macOS 中文应用名召回修复（2026-04-26）**：应用扫描会保留本地化名称为 `alternateNames`，关键词同步与搜索后处理都会使用中文、全拼与首字母，避免 Spotlight 英文显示名优先时漏召回“网易云音乐”等应用。
 - **CoreApp 2.4.11 前置口径（2026-05-08）**：当前主线切换为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；剩余跨平台回归与清册退场项统一列入 `2.4.11` 必解清单。

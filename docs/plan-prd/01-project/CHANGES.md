@@ -1,9 +1,79 @@
 # 变更日志
 
-> 更新时间: 2026-05-11
-> 说明: 主文件仅保留近 30 天（2026-04-11 ~ 2026-05-11）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-12
+> 说明: 主文件仅保留近 30 天（2026-04-12 ~ 2026-05-12）详细记录；更早历史已按月归档。
+
+## 2026-05-12
+
+### refactor(core-app): unify Nexus runtime API server resolver
+
+- `packages/utils/env`
+- `apps/core-app/src/main/modules/nexus/runtime-base.ts`
+- `apps/core-app/src/renderer/src/modules/nexus/runtime-base.ts`
+  - Core App runtime API 服务器选择统一收敛到 `resolveTuffNexusBaseUrl()`，唯一外部覆盖变量为 `TUFF_NEXUS_BASE_URL`。
+  - 登录、同步、Telemetry/Analytics、插件商店、Agent Store、远程 preset 与 Nexus Intelligence 默认通道统一使用同一 runtime API base。
+  - 不再因 dev/unpackaged 自动切到 `localhost:3200`；local 只由设置页“运行时 API 服务器”或显式 env 覆盖触发。
+  - `dev.authServer` 持久化值启动/读取时只读迁移到 `dev.runtimeServer`，后续代码不再写入 auth 专用字段。
+  - 更新源、About 协议/许可等官网外链保持官方 `https://tuff.tagzxia.com`，不跟随 runtime API server mode。
+  - 旧 runtime API env 读取已移除：`VITE_NEXUS_URL`、`NEXUS_API_BASE`、`NEXUS_API_BASE_LOCAL`、`TPEX_API_BASE`、`AUTH_ORIGIN`、`TUFF_LOCAL_BASE_URL`。
+
+### fix(core-app): serialize file icon cache writes
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-icon-cache-service.ts`
+  - 文件搜索懒加载图标持久化不再直接开启 libSQL transaction，改为复用 `withDbWrite` + `addFileExtensions` 的统一串行写入和 SQLite busy 重试路径。
+  - 覆盖 `SQLITE_BUSY_SNAPSHOT` 场景下 icon/iconMeta cache 写入与搜索读请求并发时的数据库锁冲突。
+  - 补充 `file-provider-icon-cache-service` 定向单测验证 icon cache 写入必须经过串行 DB write path。
+
+### release(core-app): prepare 2.4.10-beta.19 test package
+
+- `package.json`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将当前工作区基线同步到 `2.4.10-beta.19`，用于 Windows App 索引、App 图标缓存稳定性与 macOS `.app` 文件预览过滤的 beta 测试包准备。
+  - 发版口径仍保持 beta/snapshot：Windows 真机 release evidence、性能采样与 Nexus Release Evidence 写入仍是正式 `2.4.10` blocker。
+
+### refactor(core-app): keep app provider size guard clean
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-metadata-sync.ts`
+  - 将 AppProvider 的 alternateNames/icon drift 与 stale extension key 纯判断迁出到 metadata sync helper，主类继续保留应用索引编排和 DB 写入职责。
+  - `app-provider.ts` 回到 `3305` 行，低于当前 `3306` growth exception cap，避免 beta19 前触发 changed size guard。
+
+### fix(core-app): move app search diagnostic into settings modal
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppDiagnostic.vue`
+  - 高级设置中的“应用搜索诊断”改为列表入口，点击后打开独立弹窗承载单输入框、诊断、重建与证据导出操作。
+  - 单输入框同时支持路径、bundleId、显示名与搜索词；前端会用同一个输入值执行目标定位与 query stage 诊断。
+  - query stage 卡片可点击查看候选详情；N-gram 阶段会显示候选 `itemId` 与 `overlap`，便于定位短词/模糊召回来源。
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
+  - 诊断目标直接匹配失败时，会用输入值走 app 搜索索引召回并反查应用记录，支持 `weixin` 等搜索词直接定位目标应用。
+  - 诊断目标定位新增已入库关键词反查路径，支持 `wx` 这类短别名直接映射到应用 itemId，避免搜索词已入库但诊断返回 `target-not-found`。
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - 更新应用搜索诊断说明与占位文案，明确统一输入框支持多种查询格式。
+- 诊断面板样式收回组件内，避免父级文件索引设置页继续承担弹窗内容布局。
 
 ## 2026-05-11
+
+### fix(core-app): keep macOS app bundles out of file preview results
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+  - macOS Spotlight 文件搜索不再把 `.app` bundle 输出为普通 `file` item，避免 CoreBox 中 QQ/WeChat 等应用命中后进入文件预览面板。
+  - 应用结果仍由 AppProvider 负责输出，保持 CoreBox item payload 结构不变。
+  - 补充 `native-file-search-provider` 定向单测覆盖 `.app` bundle 路径识别与 Spotlight 搜索结果过滤。
+
+### fix(core-app): stabilize CoreBox app icon cache
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+  - macOS app 图标缓存迁移到稳定 userData cache，并使用 bundle/app path hash 命名，避免系统临时目录清理后 CoreBox 持续加载失效 `tfile` 路径。
+  - AppProvider 增加 icon drift 检测与旧 icon extension 清理；搜索结果构建时对缺失本地图标降级为 class fallback，不再向 renderer 输出失效图标 URL。
+  - 补充 darwin/app-provider/search-processing-service 定向单测覆盖缓存生成复用、失效 icon 同步与搜索 fallback。
 
 ### refactor(tuff-intelligence): split DeepAgent input builders
 
@@ -14,7 +84,7 @@
   - 将 DeepAgent 的 TurnState 附件归一、chat message content 构造、Responses input 构造与模型上下文消息过滤迁出到 `deepagent-input.ts`，engine 保留 transport fallback、SSE 解析、LangChain/DeepAgent 调用与错误封装职责。
   - 保持 `deepagent-engine.ts` 的 `buildChatMessageContent`、`buildResponsesInput`、`resolveAttachmentImageUrl` 导出路径不变，避免影响现有 `pilot-server` 入口与服务端调用。
   - `deepagent-engine.ts` 从 `2137` 行降到 `1791` 行，DeepAgent growth exception cap 从 `2138` 收紧到 `1792`，继续阻断回涨。
-  - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/adapters/deepagent-input.test.ts"` 通过（`3 tests`）；Pilot message shape 回归、定向 ESLint、`size:guard --changed` 与 `pnpm -C "packages/tuff-intelligence" run build` 通过。
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/adapters/deepagent-input.test.ts"` 通过（`3 tests`）；定向 ESLint、`size:guard --changed` 与 `pnpm -C "packages/tuff-intelligence" run build` 通过。
 
 ### refactor(core-app): split app provider source scanner
 
