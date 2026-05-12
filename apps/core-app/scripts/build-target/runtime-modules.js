@@ -28,6 +28,9 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     { name: 'retry', location: 'resources' },
     { name: '@vue/compiler-sfc', location: 'resources' },
     { name: 'esbuild', location: 'resources' },
+    { name: 'sharp', location: 'resources' },
+    { name: 'ffmpeg-static', location: 'resources' },
+    { name: 'ffprobe-static', location: 'resources' },
     { name: 'langsmith', location: 'resources' },
     { name: 'compressing', location: 'resources' }
   ],

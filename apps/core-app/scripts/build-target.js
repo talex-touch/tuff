@@ -425,7 +425,7 @@ function build() {
     const skipInstallAppDeps = process.env.SKIP_INSTALL_APP_DEPS === 'true';
 
   if (!target) {
-    console.error('Missing build target. Usage: node build-target.js --target=win|mac|linux [--type=snapshot|release]');
+    console.error('Missing build target. Usage: node build-target.js --target=win|mac|linux [--type=beta|snapshot|release]');
     process.exit(1);
   }
 
@@ -440,17 +440,16 @@ function build() {
     console.warn(`Warning: Could not read package.json: ${err.message}`);
   }
 
-  // Auto-detect build type from version if beta
-  // Beta versions always use snapshot build, regardless of explicit type
+  // Auto-detect build type from version if beta.
+  // Beta releases keep BETA runtime metadata while reusing the snapshot packaging line.
   let finalBuildType = (type || 'release').toLowerCase();
   const runtimeVersion = packageVersion;
 
   if (isBetaVersion(packageVersion)) {
     console.log(`\n✓ Beta version detected: ${packageVersion}`);
-    // Force snapshot build for beta versions
-    finalBuildType = 'snapshot';
-    console.log(`  → Auto-switching to snapshot build (beta versions always use snapshot)`);
-    if (type && type.toLowerCase() !== 'snapshot') {
+    finalBuildType = 'beta';
+    console.log(`  → Using beta build metadata with snapshot packaging policy`);
+    if (type && !['beta', 'snapshot'].includes(type.toLowerCase())) {
       console.log(`  → Note: Explicit --type=${type} was overridden for beta version`);
     }
   } else {
@@ -458,7 +457,19 @@ function build() {
     finalBuildType = (type || 'release').toLowerCase();
   }
 
+  const supportedBuildTypes = ['beta', 'snapshot', 'release'];
+  if (!supportedBuildTypes.includes(finalBuildType)) {
+    console.error(`Unsupported build type "${finalBuildType}". Supported types: ${supportedBuildTypes.join(', ')}`);
+    process.exit(1);
+  }
+
+  if (finalBuildType === 'beta' && !isBetaVersion(packageVersion)) {
+    console.error(`Beta build requires a beta package version. Current version: ${packageVersion}`);
+    process.exit(1);
+  }
+
   const buildType = finalBuildType;
+  const builderType = buildType === 'beta' ? 'snapshot' : buildType;
   const normalizedTarget = target.toLowerCase();
 
   const supportedTargets = ['win', 'mac', 'linux'];
@@ -468,6 +479,9 @@ function build() {
   }
 
   console.log(`Preparing ${buildType} build for ${normalizedTarget}...`);
+  if (builderType !== buildType) {
+    console.log(`  → Builder packaging type: ${builderType}`);
+  }
 
   let builderVersion = packageVersion;
   if (isBetaVersion(packageVersion) && normalizedTarget === 'win') {
@@ -717,7 +731,7 @@ function build() {
     console.log('[build-target] Enabled macOS LSUIElement via explicit build flag');
   }
 
-  const publishPolicy = publish || (buildType === 'snapshot' ? 'never' : undefined);
+  const publishPolicy = publish || (builderType === 'snapshot' ? 'never' : undefined);
   if (publishPolicy) {
     builderArgs.push(`--publish=${publishPolicy}`);
   }
