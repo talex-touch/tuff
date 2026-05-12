@@ -8,13 +8,9 @@ vi.mock('../modules/storage', () => ({
   getMainConfig: getMainConfigMock
 }))
 
-vi.mock('@talex-touch/utils/env', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@talex-touch/utils/env')>()
-  return {
-    ...actual,
-    getTpexApiBase: () => ''
-  }
-})
+vi.mock('../modules/nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: () => 'https://runtime.example.test'
+}))
 
 import {
   DEFAULT_STORE_PROVIDERS,
@@ -56,7 +52,19 @@ describe('store-api hard-cut storage', () => {
       .mockReturnValueOnce(undefined)
       .mockReturnValueOnce({ version: 1, sources: null })
 
-    expect(getStoreSources()).toEqual(DEFAULT_STORE_PROVIDERS)
-    expect(getStoreSources()).toEqual(DEFAULT_STORE_PROVIDERS)
+    const expectedDefaults = DEFAULT_STORE_PROVIDERS.map((source) =>
+      source.id === 'tuff-nexus'
+        ? expect.objectContaining({
+            id: 'tuff-nexus',
+            url: 'https://runtime.example.test',
+            config: expect.objectContaining({
+              apiUrl: 'https://runtime.example.test/api/store/plugins'
+            })
+          })
+        : source
+    )
+
+    expect(getStoreSources()).toEqual(expectedDefaults)
+    expect(getStoreSources()).toEqual(expectedDefaults)
   })
 })

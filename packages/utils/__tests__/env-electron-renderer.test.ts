@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { isElectronRenderer } from '../env'
+import {
+  NEXUS_BASE_URL,
+  NEXUS_LOCAL_BASE_URL,
+  resolveTuffNexusBaseUrl,
+  TUFF_NEXUS_BASE_URL_ENV,
+  isElectronRenderer
+} from '../env'
 
 const originalProcess = globalThis.process
 const originalWindow = globalThis.window
@@ -33,5 +39,45 @@ describe('env electron renderer detection', () => {
     ;(globalThis as { electron?: unknown }).electron = undefined
 
     expect(isElectronRenderer()).toBe(false)
+  })
+})
+
+describe('resolveTuffNexusBaseUrl', () => {
+  it('uses official Nexus by default', () => {
+    expect(resolveTuffNexusBaseUrl({ env: {} })).toBe(NEXUS_BASE_URL)
+  })
+
+  it('uses local Nexus only for explicit local runtime mode', () => {
+    expect(resolveTuffNexusBaseUrl({ runtimeServer: 'local', env: {} })).toBe(
+      NEXUS_LOCAL_BASE_URL
+    )
+  })
+
+  it('prefers TUFF_NEXUS_BASE_URL and normalizes trailing slashes', () => {
+    expect(
+      resolveTuffNexusBaseUrl({
+        runtimeServer: 'local',
+        env: {
+          [TUFF_NEXUS_BASE_URL_ENV]: 'https://runtime.example.test///'
+        }
+      })
+    ).toBe('https://runtime.example.test')
+  })
+
+  it('ignores removed legacy Nexus env names', () => {
+    const legacyEnv = {
+      [['VITE', 'NEXUS', 'URL'].join('_')]: 'http://legacy-vite.test',
+      [['NEXUS', 'API', 'BASE'].join('_')]: 'http://legacy-api.test',
+      [['NEXUS', 'API', 'BASE', 'LOCAL'].join('_')]: 'http://legacy-local.test',
+      [['TPEX', 'API', 'BASE'].join('_')]: 'http://legacy-tpex.test',
+      [['AUTH', 'ORIGIN'].join('_')]: 'http://legacy-auth.test',
+      [['TUFF', 'LOCAL', 'BASE', 'URL'].join('_')]: 'http://legacy-local-base.test'
+    }
+
+    expect(
+      resolveTuffNexusBaseUrl({
+        env: legacyEnv
+      })
+    ).toBe(NEXUS_BASE_URL)
   })
 })

@@ -1,6 +1,6 @@
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { getAuthToken } from '../auth'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl } from './runtime-base'
 
 export interface NexusSceneRunRequest {
   input?: unknown
@@ -43,7 +43,7 @@ function normalizeBearerToken(token: string): string {
 function buildSceneRunUrl(sceneId: string): string {
   return new URL(
     `/api/v1/scenes/${encodeURIComponent(sceneId)}/run`,
-    `${getTuffBaseUrl()}/`
+    `${getRuntimeNexusBaseUrl()}/`
   ).toString()
 }
 

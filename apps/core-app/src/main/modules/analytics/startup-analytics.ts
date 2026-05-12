@@ -17,17 +17,13 @@ import os from 'node:os'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import {
-  getBooleanEnv,
-  getEnvOrDefault,
-  getTelemetryApiBase,
-  normalizeBaseUrl
-} from '@talex-touch/utils/env'
+import { getBooleanEnv } from '@talex-touch/utils/env'
 import { app } from 'electron'
 import { createLogger } from '../../utils/logger'
 import { shouldDowngradeRemoteFailure } from '../../utils/network-log-noise'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig } from '../storage'
 import { ReportQueueStore } from './report-queue-store'
 import { getOrCreateTelemetryClientId } from './telemetry-client'
@@ -562,21 +558,12 @@ export class StartupAnalytics {
       return
     }
 
-    const isLocal = !app.isPackaged || process.env.NODE_ENV === 'development'
-
     let url = endpoint || this.config.reportEndpoint
     if (!url) {
-      if (isLocal) {
-        const localBase = normalizeBaseUrl(
-          getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200')
-        )
-        url = `${localBase}/api/telemetry/record`
-      } else {
-        try {
-          url = `${getTelemetryApiBase()}/api/telemetry/record`
-        } catch {
-          url = undefined
-        }
+      try {
+        url = `${getRuntimeNexusBaseUrl()}/api/telemetry/record`
+      } catch {
+        url = undefined
       }
     }
     if (!url) {

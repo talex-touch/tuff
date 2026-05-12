@@ -13,8 +13,8 @@ vi.mock('../network', () => ({
   getNetworkService: () => networkMocks
 }))
 
-vi.mock('@talex-touch/utils/env', () => ({
-  getTuffBaseUrl: () => 'https://nexus.example.com'
+vi.mock('./runtime-base', () => ({
+  getRuntimeNexusBaseUrl: () => 'https://nexus.example.com'
 }))
 
 import {

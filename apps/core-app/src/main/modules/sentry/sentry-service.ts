@@ -14,7 +14,6 @@ import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport/main'
 import { app, BrowserWindow } from 'electron'
 import { innerRootPath } from '../../core/precore'
@@ -30,6 +29,7 @@ import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
 import { ReportQueueStore } from '../analytics/report-queue-store'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
 
@@ -168,11 +168,11 @@ function getEnvironmentContext(): Record<string, unknown> {
 }
 
 function resolveTelemetryApiBase(): string {
-  const isLocal = !app.isPackaged || process.env.NODE_ENV === 'development'
-  if (isLocal) {
-    return normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200'))
-  }
-  return getTelemetryApiBase()
+  return getRuntimeNexusBaseUrl()
+}
+
+function resolveTelemetryBatchEndpoint(): string {
+  return `${resolveTelemetryApiBase()}/api/telemetry/batch`
 }
 
 /**
@@ -1134,8 +1134,7 @@ export class SentryServiceModule extends BaseModule {
 
     const events = [...this.nexusTelemetryBuffer]
     this.nexusTelemetryBuffer = []
-    const apiBase = resolveTelemetryApiBase()
-    const url = `${apiBase}/api/telemetry/batch`
+    const url = resolveTelemetryBatchEndpoint()
     const payload: Record<string, unknown> = {
       eventType: 'telemetry_batch',
       metadata: {
@@ -1193,6 +1192,7 @@ export class SentryServiceModule extends BaseModule {
     if (!items.length) return
 
     for (const item of items) {
+      const endpoint = resolveTelemetryBatchEndpoint()
       if (!this.isNexusBatchPayload(item.payload)) {
         continue
       }
@@ -1220,7 +1220,7 @@ export class SentryServiceModule extends BaseModule {
         }
         const response = await getNetworkService().request<string>({
           method: 'POST',
-          url: item.endpoint,
+          url: endpoint,
           headers,
           body: JSON.stringify({
             events,
@@ -1243,7 +1243,7 @@ export class SentryServiceModule extends BaseModule {
             status: response.status,
             statusText: response.statusText,
             error: errorText,
-            url: item.endpoint
+            url: endpoint
           })
           await store.markAttempt(item.id, `${response.status}:${errorText}`)
           continue
@@ -1261,7 +1261,7 @@ export class SentryServiceModule extends BaseModule {
         const errorMessage = error instanceof Error ? error.message : String(error)
         this.recordTelemetryFailure('Telemetry upload exception', {
           error: errorMessage,
-          url: item.endpoint
+          url: endpoint
         })
         await store.markAttempt(item.id, errorMessage)
       }

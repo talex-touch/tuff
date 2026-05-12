@@ -26,7 +26,8 @@ import {
   writeCliConfig,
 } from '@talex-touch/tuff-cli-core'
 import {
-  getEnvOrDefault,
+  NEXUS_LOCAL_BASE_URL,
+  TUFF_NEXUS_BASE_URL_ENV,
   getTuffBaseUrl,
   normalizeBaseUrl,
   setRuntimeEnv,
@@ -65,7 +66,7 @@ _________  _   _  _____  _____
 
 const OFFICIAL_SITE_URL = 'https://tuff.tagzxia.com'
 const GITHUB_REPO_URL = 'https://github.com/talex-touch/tuff'
-const DEFAULT_LOCAL_BASE_URL = 'http://localhost:3200'
+const DEFAULT_LOCAL_BASE_URL = NEXUS_LOCAL_BASE_URL
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 const CLI_COMMAND_NAME = resolveCliCommandName()
@@ -102,20 +103,13 @@ function resolveCliCommandName(): string {
 }
 
 function resolveLocalBaseUrl(): string {
-  const envUrl = getEnvOrDefault(
-    'TUFF_LOCAL_BASE_URL',
-    getEnvOrDefault(
-      'NEXUS_API_BASE_LOCAL',
-      getEnvOrDefault('AUTH_ORIGIN', DEFAULT_LOCAL_BASE_URL),
-    ),
-  )
-  return normalizeBaseUrl(envUrl)
+  return normalizeBaseUrl(DEFAULT_LOCAL_BASE_URL)
 }
 
 function applyLocalRuntime(): void {
   const localBaseUrl = resolveLocalBaseUrl()
   setRuntimeEnv({
-    VITE_NEXUS_URL: localBaseUrl,
+    [TUFF_NEXUS_BASE_URL_ENV]: localBaseUrl,
   })
 }
 
@@ -1001,7 +995,7 @@ async function runSettingsMenu(): Promise<'logout' | void> {
           )
           if (useLocal) {
             setRuntimeEnv({
-              VITE_NEXUS_URL: localBase,
+              [TUFF_NEXUS_BASE_URL_ENV]: localBase,
             })
             cliLocalMode = true
             cliCustomBase = true
@@ -1227,7 +1221,7 @@ async function main() {
   if (apiBase) {
     const normalized = normalizeBaseUrl(apiBase)
     setRuntimeEnv({
-      VITE_NEXUS_URL: normalized,
+      [TUFF_NEXUS_BASE_URL_ENV]: normalized,
     })
   }
   else if (local) {

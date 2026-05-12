@@ -1,6 +1,6 @@
 # Core App Startup and Runtime Env Reference
 
-> Updated: 2026-04-23
+> Updated: 2026-05-12
 > Scope: actual `process.env` / `import.meta.env` usage in `apps/core-app/src`
 
 ## Startup Incident Summary (Changes 1 + 2)
@@ -61,6 +61,7 @@
 | `BUILD_TYPE` | build channel for Sentry and runtime labeling |
 | `TUFF_ENABLE_ASSISTANT_EXPERIMENT` | gates Assistant startup module |
 | `TUFF_ENABLE_RENDERER_OVERRIDE` | enables renderer override package |
+| `TUFF_NEXUS_BASE_URL` | explicit Core App runtime Nexus API base override; takes precedence over server mode settings |
 | `TUFF_DISABLE_NATIVE_OCR` | disables local OCR provider |
 | `TUFF_RELEASE_API_URL` | overrides release verification API base |
 | `TUFF_BUILD_SIGNATURE_URL` | overrides build signature URL |
@@ -94,6 +95,13 @@
 
 No pending cleanup candidates right now (all previously listed high/medium/low items have been completed).
 
+## Nexus Runtime API Server Resolution
+
+- Core App runtime API base resolution is centralized in `packages/utils/env.resolveTuffNexusBaseUrl()`. The only external override variable is `TUFF_NEXUS_BASE_URL`.
+- Resolution precedence is fixed: explicit `TUFF_NEXUS_BASE_URL` > Settings runtime API server set to local > official `https://tuff.tagzxia.com`.
+- Local mode defaults to `http://localhost:3200`, but dev/unpackaged runtime no longer enables local automatically. Local requires an explicit settings toggle or `TUFF_NEXUS_BASE_URL`.
+- Website, docs, Dashboard links, and update sources keep the official online URL by default and do not follow runtime API server mode.
+
 ## Completed Cleanup
 
 - `trace-warnings`: removed runtime `process.env` assignment in `src/main/polyfills.ts` (2026-03-23).
@@ -103,3 +111,4 @@ No pending cleanup candidates right now (all previously listed high/medium/low i
 - `TUFF_RELEASE_SIGNATURE_*` aliases: removed legacy alias lookup; normalized to `TUFF_UPDATE_*` (2026-03-23).
 - `TUFF_OMNIPANEL_SMOKE`: removed startup smoke env gate and related probe logic (2026-03-23).
 - `USE_LOCAL_NEXUS`: removed PluginStoreService local Nexus env special-case; normalized to `getTpexApiBase()` (2026-03-23).
+- `VITE_NEXUS_URL` / `NEXUS_API_BASE` / `NEXUS_API_BASE_LOCAL` / `TPEX_API_BASE` / `AUTH_ORIGIN` / `TUFF_LOCAL_BASE_URL`: no longer participate in Core App runtime API base resolution; use `TUFF_NEXUS_BASE_URL` instead (2026-05-12).

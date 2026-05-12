@@ -156,7 +156,7 @@ const _appSettingOriginData = {
   },
   dev: {
     autoCloseDev: true,
-    authServer: 'production' as 'production' | 'local',
+    runtimeServer: 'production' as 'production' | 'local',
     developerMode: false,
     advancedSettings: false,
   },

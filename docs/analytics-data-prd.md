@@ -105,7 +105,7 @@
 - 性能数据上报：EventLoop lag 与 IPC slow 按窗口与事件维度聚合后上报 Nexus。
 - TelemetryClient（待实现）：支持重试、退避、网络不可用降级。
 - 重放防护：批量记录唯一批次 ID 与时间窗口。
-- 本地优先：开发环境默认走本地 Nexus（`http://localhost:3200`），线上走 `NEXUS_API_BASE`。
+- Runtime API 基址统一走 Nexus runtime resolver：默认官方 Nexus；仅设置页显式选择 local 或 `TUFF_NEXUS_BASE_URL` 显式覆盖时才使用本地/自定义地址，开发环境不再自动回退 `localhost:3200`。
 - 失败提示：上报失败需在设置页提示 + 消息中心记录；成功后自动清空队列。
 
 ## 官网/文档

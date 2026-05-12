@@ -26,7 +26,6 @@ import type { AnalyticsMessageStore } from './message-store'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
@@ -39,6 +38,7 @@ import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, subscribeAuthState } from '../auth'
 import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig } from '../storage'
 import { SystemSampler } from './collectors/system-sampler'
@@ -444,12 +444,8 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private resolveMessageEndpoint(): string | null {
-    const isLocal = !app.isPackaged || process.env.NODE_ENV === 'development'
-    if (isLocal) {
-      return `${normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE_LOCAL', 'http://localhost:3200'))}/api/telemetry/messages`
-    }
     try {
-      return `${getTelemetryApiBase()}/api/telemetry/messages`
+      return `${getRuntimeNexusBaseUrl()}/api/telemetry/messages`
     } catch {
       return null
     }

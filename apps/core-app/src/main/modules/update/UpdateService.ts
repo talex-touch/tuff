@@ -19,7 +19,7 @@ import {
   resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
@@ -1837,7 +1837,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (configured) {
       return configured.replace(/\/$/, '')
     }
-    return getTuffBaseUrl()
+    return NEXUS_BASE_URL
   }
 
   private async persistRelease(
@@ -2062,7 +2062,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       source: {
         type: UpdateProviderType.OFFICIAL,
         name: 'Nexus Releases',
-        url: getTuffBaseUrl(),
+        url: NEXUS_BASE_URL,
         enabled: true,
         priority: 1
       },

@@ -1,4 +1,8 @@
 export const NEXUS_BASE_URL = 'https://tuff.tagzxia.com'
+export const NEXUS_LOCAL_BASE_URL = 'http://localhost:3200'
+export const TUFF_NEXUS_BASE_URL_ENV = 'TUFF_NEXUS_BASE_URL'
+
+export type TuffNexusRuntimeServer = 'production' | 'local'
 
 export interface EnvLike {
   [key: string]: unknown
@@ -141,21 +145,43 @@ export function isProdEnv(): boolean {
 }
 
 export function normalizeBaseUrl(input: string): string {
-  return input.replace(/\/$/, '')
+  return input.trim().replace(/\/+$/, '')
+}
+
+function readEnvValue(env: EnvLike | undefined, key: string): string | undefined {
+  if (!env)
+    return getEnv(key)
+  const value = env[key]
+  if (typeof value === 'string')
+    return value
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value)
+  return undefined
+}
+
+export interface TuffNexusBaseUrlOptions {
+  runtimeServer?: TuffNexusRuntimeServer
+  env?: EnvLike
+}
+
+export function resolveTuffNexusBaseUrl(options: TuffNexusBaseUrlOptions = {}): string {
+  const explicit = readEnvValue(options.env, TUFF_NEXUS_BASE_URL_ENV)?.trim()
+  if (explicit)
+    return normalizeBaseUrl(explicit)
+
+  return options.runtimeServer === 'local'
+    ? normalizeBaseUrl(NEXUS_LOCAL_BASE_URL)
+    : normalizeBaseUrl(NEXUS_BASE_URL)
 }
 
 export function getTuffBaseUrl(): string {
-  return normalizeBaseUrl(getEnvOrDefault('VITE_NEXUS_URL', NEXUS_BASE_URL))
+  return resolveTuffNexusBaseUrl()
 }
 
 export function getTelemetryApiBase(): string {
-  const url = normalizeBaseUrl(getEnvOrDefault('NEXUS_API_BASE', NEXUS_BASE_URL))
-  if (!url) {
-    throw new Error('Telemetry API base URL is not configured')
-  }
-  return url
+  return resolveTuffNexusBaseUrl()
 }
 
 export function getTpexApiBase(): string {
-  return normalizeBaseUrl(getEnvOrDefault('TPEX_API_BASE', NEXUS_BASE_URL))
+  return resolveTuffNexusBaseUrl()
 }
