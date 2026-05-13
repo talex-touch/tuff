@@ -261,7 +261,7 @@ export class BoxItemManager {
    * @returns 匹配的 items 数组
    */
   getBySource(source: string): TuffItem[] {
-    return Array.from(this.items.values()).filter((item) => item.source?.id === source)
+    return Array.from(this.items.values()).filter((item) => this.matchesSource(item, source))
   }
 
   /**
@@ -283,7 +283,7 @@ export class BoxItemManager {
       // 清空指定来源
       const toDelete: string[] = []
       this.items.forEach((item, id) => {
-        if (item.source?.id === source) {
+        if (this.matchesSource(item, source)) {
           toDelete.push(id)
         }
       })
@@ -372,6 +372,10 @@ export class BoxItemManager {
       }
       this.handleSyncRequest()
     })
+  }
+
+  private matchesSource(item: TuffItem, source: string): boolean {
+    return item.source?.id === source || item.meta?.pluginName === source
   }
 
   /**
