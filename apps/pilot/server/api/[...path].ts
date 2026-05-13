@@ -1,3 +1,4 @@
+import { defineEventHandler } from 'h3'
 import { quotaNotImplemented } from '../utils/quota-api'
 
 export default defineEventHandler((event) => {
@@ -6,5 +7,5 @@ export default defineEventHandler((event) => {
     ? pathParam.join('/')
     : String(pathParam || '')
 
-  return quotaNotImplemented(`M0 未实现接口: /api/${path}`)
+  return quotaNotImplemented(event, `M0 未实现接口: /api/${path}`)
 })
