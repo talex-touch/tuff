@@ -101,4 +101,41 @@ describe('plugin-features-adapter', () => {
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
     vi.mocked(searchEngineCore.getActivationState).mockReturnValue(null)
   })
+
+  it('forwards empty input to active push features', async () => {
+    const adapter = new PluginFeaturesAdapter()
+    const pushFeature = { ...createFeature(), push: true }
+    const triggerFeature = vi.fn(async () => true)
+    const triggerInputChanged = vi.fn()
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeature: vi.fn(() => pushFeature),
+      triggerFeature,
+      triggerInputChanged
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+    vi.mocked(searchEngineCore.getActivationState).mockReturnValue([
+      {
+        id: 'plugin-features',
+        meta: {
+          pluginName: 'test-plugin',
+          featureId: pushFeature.id
+        }
+      }
+    ] as any)
+
+    const query = { text: '', inputs: [] }
+    const result = await adapter.handleActiveFeatureInput({
+      input: '',
+      query,
+      source: 'keyboard'
+    } as any)
+
+    expect(result).toBe(true)
+    expect(triggerFeature).toHaveBeenCalledWith(pushFeature, query)
+    expect(triggerInputChanged).toHaveBeenCalledWith(pushFeature, query)
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+    vi.mocked(searchEngineCore.getActivationState).mockReturnValue(null)
+  })
 })

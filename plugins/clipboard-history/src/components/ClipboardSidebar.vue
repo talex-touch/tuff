@@ -13,7 +13,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'select', item: PluginClipboardItem): void
-  (event: 'load-more'): void
+  (event: 'loadMore'): void
 }>()
 
 function onScroll(event: Event): void {
@@ -23,7 +23,7 @@ function onScroll(event: Event): void {
   }
 
   if (target.scrollTop + target.clientHeight >= target.scrollHeight - 48) {
-    emit('load-more')
+    emit('loadMore')
   }
 }
 </script>
@@ -32,17 +32,25 @@ function onScroll(event: Event): void {
   <aside class="clipboard-sidebar" @scroll.passive="onScroll">
     <template v-if="loading && sections.length === 0">
       <div class="list-empty">
-        <div class="empty-icon">⌛</div>
+        <div class="empty-icon">
+          ⌛
+        </div>
         <p>正在读取剪贴历史</p>
-        <p class="empty-hint">稍等一下，最近的记录会很快出现在这里。</p>
+        <p class="empty-hint">
+          稍等一下，最近的记录会很快出现在这里。
+        </p>
       </div>
     </template>
 
     <template v-else-if="sections.length === 0">
       <div class="list-empty">
-        <div class="empty-icon">📋</div>
+        <div class="empty-icon">
+          📋
+        </div>
         <p>暂无剪贴内容</p>
-        <p class="empty-hint">复制一些文本或图片后会出现在这里。</p>
+        <p class="empty-hint">
+          复制一些文本或图片后会出现在这里。
+        </p>
       </div>
     </template>
 
@@ -82,8 +90,12 @@ function onScroll(event: Event): void {
         </ol>
       </section>
 
-      <div v-if="loadingMore" class="list-footnote">正在加载更多记录…</div>
-      <div v-else-if="!hasMore" class="list-footnote">已经到底了</div>
+      <div v-if="loadingMore" class="list-footnote">
+        正在加载更多记录…
+      </div>
+      <div v-else-if="!hasMore" class="list-footnote">
+        已经到底了
+      </div>
     </template>
   </aside>
 </template>

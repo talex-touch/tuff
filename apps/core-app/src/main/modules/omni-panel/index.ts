@@ -179,6 +179,8 @@ interface ExecutePayloadValidationResult {
   response?: OmniPanelFeatureExecuteResponse
 }
 
+type QuitStateProvider = { isQuitting?: boolean }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -307,6 +309,7 @@ export class OmniPanelModule extends BaseModule {
   }
   private handlingInstallEventPlugins = new Set<string>()
   private destroying = false
+  private touchApp: QuitStateProvider | null = null
 
   constructor() {
     super(OmniPanelModule.key, { create: false })
@@ -314,6 +317,7 @@ export class OmniPanelModule extends BaseModule {
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.destroying = false
+    this.touchApp = (ctx.runtime?.app ?? ctx.app) as QuitStateProvider
     const channel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
     const keyManager =
@@ -366,6 +370,7 @@ export class OmniPanelModule extends BaseModule {
     this.eventDisposers = []
 
     this.transport = null
+    this.touchApp = null
 
     if (this.panelWindow && !this.panelWindow.window.isDestroyed()) {
       this.panelWindow.window.close()
@@ -1813,7 +1818,7 @@ export class OmniPanelModule extends BaseModule {
     if (this.destroying) {
       return true
     }
-    return (globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true
+    return this.touchApp?.isQuitting === true
   }
 
   private canUseInputHook(): boolean {

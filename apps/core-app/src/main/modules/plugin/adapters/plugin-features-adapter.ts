@@ -116,7 +116,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       source: payload.source
     })
 
-    if (!hasContent) {
+    if (!hasContent && !feature.push) {
       return true
     }
 

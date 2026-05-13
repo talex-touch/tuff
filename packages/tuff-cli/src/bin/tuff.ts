@@ -26,11 +26,11 @@ import {
   writeCliConfig,
 } from '@talex-touch/tuff-cli-core'
 import {
-  NEXUS_LOCAL_BASE_URL,
-  TUFF_NEXUS_BASE_URL_ENV,
   getTuffBaseUrl,
+  NEXUS_LOCAL_BASE_URL,
   normalizeBaseUrl,
   setRuntimeEnv,
+  TUFF_NEXUS_BASE_URL_ENV,
 } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
 import { runCreate } from '../cli/commands'
