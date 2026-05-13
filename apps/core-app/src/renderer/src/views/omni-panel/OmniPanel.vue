@@ -20,9 +20,11 @@ import OmniPanelActionList from './components/OmniPanelActionList.vue'
 import OmniPanelSearchBar from './components/OmniPanelSearchBar.vue'
 import { filterOmniPanelFeatures } from './filter-features'
 import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
+import { createRendererLogger } from '../../utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const omniPanelLog = createRendererLogger('OmniPanel')
 const ACTION_GRID_COLUMNS = 3
 
 const selectedText = ref('')
@@ -98,7 +100,7 @@ async function loadFeatures(): Promise<void> {
     features.value = Array.isArray(payload?.features) ? payload.features : []
     focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, features.value.length)
   } catch (error) {
-    console.error('[OmniPanel] Failed to load features:', error)
+    omniPanelLog.error('Failed to load features', error)
     toast.error(t('corebox.omniPanel.loadFailed'))
   } finally {
     loading.value = false
@@ -138,7 +140,7 @@ async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> 
       toast.error(resolveExecuteErrorMessage(response))
     }
   } catch (error) {
-    console.error('[OmniPanel] Failed to execute feature:', error)
+    omniPanelLog.error('Failed to execute feature', error)
     toast.error(t('corebox.omniPanel.executeFailed'))
   } finally {
     executingId.value = null

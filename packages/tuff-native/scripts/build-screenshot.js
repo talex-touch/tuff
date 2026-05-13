@@ -1,16 +1,17 @@
 'use strict'
 
+const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
-const { spawnSync } = require('node:child_process')
+const process = require('node:process')
 
 const rootDir = path.resolve(__dirname, '..')
 const crateDir = path.join(rootDir, 'native-screenshot')
 const releaseDir = path.join(crateDir, 'target', 'release')
 const outDir = path.join(rootDir, 'build', 'Release')
 
-const platformLibraryName =
-  process.platform === 'win32'
+const platformLibraryName
+  = process.platform === 'win32'
     ? 'tuff_native_screenshot.dll'
     : process.platform === 'darwin'
       ? 'libtuff_native_screenshot.dylib'

@@ -2,7 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import ClipboardActionBar from './ClipboardActionBar.vue'
 
-describe('ClipboardActionBar', () => {
+describe('clipboardActionBar', () => {
   it('disables all actions when no item is selected', () => {
     const wrapper = mount(ClipboardActionBar, {
       props: {

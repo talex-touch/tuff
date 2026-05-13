@@ -20,10 +20,10 @@
 
 ---
 
-## 单一口径快照（2026-05-12）
+## 单一口径快照（2026-05-13）
 
-- 当前工作区基线：`2.4.10-beta.19`。
-- 发布准备：`2.4.10-beta.19` 已补中英文 release notes；`build-and-release` 显式支持 `beta` 类型并保持 pre-release 语义，CI/CD 统一 Node `22.16.0` / pnpm `10.32.1`，PR CI 收窄为只读 `pull_request`，release artifact 只上传发布资产与 updater metadata。
+- 当前工作区基线：`2.4.10-beta.21`。
+- 发布准备：`2.4.10-beta.21` 已补中英文 release notes；`build-and-release` 仍支持 tag push 触发 beta pre-release，`v2.4.10-beta.20` 已存在，下一次新 beta 需使用 `v2.4.10-beta.21`。本轮已收口 OmniPanel Gate 与 Utils Package CI 当前可见阻断，并验证 macOS beta build；完整 `quality:pr` 仍被 `apps/pilot` 既有 lint 债务阻断，不得宣称全仓 PR gate 已绿。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
 - 当前版本 Windows 发版 gate：功能实现与本地 verifier 已进入收口态，但发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是先在 Windows 真机生成 acceptance collection plan，再逐项补齐常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并完成 Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。
@@ -57,7 +57,7 @@
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
-- 跨平台兼容复核（2026-05-12）：2026-05-10 报告中的 Pilot stat 假值、mock payment 默认成功与 touch-image localStorage 历史持久化已收口；CoreApp 平台能力保持显式 degraded/unsupported 合同，生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；相关边界已迁入 ESLint / transport boundary test。
+- 跨平台兼容复核（2026-05-13）：2026-05-10 报告中的 Pilot stat 假值、mock payment 默认成功与 touch-image localStorage 历史持久化已收口；CoreApp 平台能力保持显式 degraded/unsupported 合同，生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试扫描口径为 `<=265`；相关边界已迁入 ESLint / transport boundary test。
 - Native transport V1 已从截图首切扩展为 `capabilities / screenshot / file-index / file / media` 五域：`NativeEvents.screenshot` 事件名保持不变，新增 `native:capabilities:*`、`native:file-index:*`、`native:file:*`、`native:media:*`；CoreApp `NativeCapabilitiesModule` 桥接现有 fileProvider/Everything status、文件 stat/open/reveal/tfile 与图片/视频媒体 metadata/thumbnail，大资源默认返回短期 `tfile://` 引用；媒体 thumbnail 已复用 FileProvider thumbnail worker，图片/HEIC 走 `sharp`，视频走内置 ffmpeg 抽帧，ffmpeg 不可用时 `media.thumbnail` 显式 degraded 且图片缩略图继续可用；插件调用必须按域声明 `window.capture`、`fs.index`、`fs.read` 或 `media.read`。
 - 架构治理切片（2026-05-11）：Transport boundary test 已拆出 `rawSendViolations / retainedRawEventDefinitions / typedMigrationCandidates`；Pilot stat 固定假值与 mock 支付默认成功已收口；`plugins/touch-image` 图片历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行；`app-provider.ts` 已拆出 path helper 与 source scanner facade；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper；质量入口已统一为 ESLint、typecheck、targeted tests 与 build。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
@@ -148,7 +148,7 @@
 
 - Core App 性能诊断增强：`Clipboard` 慢路径新增 phase 级别分解、告警分级与原因码，并接入 `Perf summary`/`polling diagnostics` 聚合视图。
 - Core App 性能链路降载：`file-index progress stream` 增加发送节流（latest-wins + 阶段优先），`Perf summary` 新增 `phaseAlertCode TopN` 聚合口径。
-- `2.4.10-beta.19` 当前基线与 Windows App 索引回归推进。
+- `2.4.10-beta.21` 当前基线与 Windows App 索引回归推进。
 - Native transport V1：`@talex-touch/tuff-native/screenshot`、`NativeEvents.capabilities/screenshot/fileIndex/file/media`、CoreApp `NativeCapabilitiesModule` 与 CoreBox “截图并复制”内置动作；文件索引/文件/媒体 V1 复用现有服务并以 `tfile`/metadata 传输，媒体 thumbnail 覆盖图片、HEIC 与常见视频，不迁移 OCR/Clipboard。
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。

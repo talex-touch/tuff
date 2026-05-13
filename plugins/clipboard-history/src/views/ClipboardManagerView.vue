@@ -5,8 +5,8 @@ import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import ClipboardActionBar from '~/components/ClipboardActionBar.vue'
 import ClipboardDetail from '~/components/ClipboardDetail.vue'
 import ClipboardSidebar from '~/components/ClipboardSidebar.vue'
+import type { ClipboardFilter } from '~/utils/clipboard-items'
 import {
-  type ClipboardFilter,
   buildClipboardWritePayload,
   groupClipboardItems,
   resolveDetailImageSrc,
@@ -274,14 +274,18 @@ watch(filter, async () => {
         </aside>
 
         <section class="holder-main">
-          <div v-if="errorMessage" class="error-banner inline-error">{{ errorMessage }}</div>
+          <div v-if="errorMessage" class="error-banner inline-error">
+            {{ errorMessage }}
+          </div>
           <ClipboardDetail :item="selectedItem" />
         </section>
       </div>
 
       <section v-else class="empty-canvas">
         <div class="empty-state">
-          <div class="empty-state-icon">{{ loading ? '⌛' : '📋' }}</div>
+          <div class="empty-state-icon">
+            {{ loading ? '⌛' : '📋' }}
+          </div>
           <h2>{{ loading ? '正在读取剪贴历史' : '暂无剪贴内容' }}</h2>
           <p>{{ loading ? '稍等一下，最近的记录会很快出现在这里。' : '复制一些文本或图片后会出现在这里。' }}</p>
           <div v-if="errorMessage" class="error-banner centered-error">

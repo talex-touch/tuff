@@ -18,7 +18,9 @@ defineProps<{
     <div class="preview-surface" :class="{ empty: !item }">
       <template v-if="!item">
         <div class="list-empty">
-          <div class="empty-icon">↗</div>
+          <div class="empty-icon">
+            ↗
+          </div>
           <p>在左侧选择一条剪贴记录以查看详情</p>
         </div>
       </template>
@@ -45,14 +47,18 @@ defineProps<{
 
       <template v-else>
         <ul class="file-list">
-          <li v-for="file in parseFileList(item?.content)" :key="file">{{ file }}</li>
+          <li v-for="file in parseFileList(item?.content)" :key="file">
+            {{ file }}
+          </li>
         </ul>
       </template>
     </div>
 
     <div v-if="item" class="info-surface">
       <div class="detail-heading">
-        <p class="eyebrow">{{ getClipboardTypeLabel(item) }}</p>
+        <p class="eyebrow">
+          {{ getClipboardTypeLabel(item) }}
+        </p>
         <h2>{{ getClipboardTitle(item) }}</h2>
       </div>
 

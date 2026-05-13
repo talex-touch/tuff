@@ -36,10 +36,12 @@ describe('tuff-native screenshot contract', () => {
       expect(support.supported).toBe(false)
       expect(support.reason).toBe('disabled-by-env')
       expect(() => nativeScreenshot.listDisplays()).toThrow(/disabled/i)
-    } finally {
+    }
+    finally {
       if (previous === undefined) {
         delete process.env[DISABLE_FLAG]
-      } else {
+      }
+      else {
         process.env[DISABLE_FLAG] = previous
       }
     }
