@@ -5,6 +5,54 @@
 
 ## 2026-05-13
 
+### fix(core-app): auto-repair derived search FTS metadata failures
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.schema-repair.test.ts`
+  - `search_index` FTS5 元数据读取失败时先探测 `sqlite_master`，仅在主库元数据仍可读时自动重建派生 FTS 表，并设置 `didMigrate` 触发文件索引全量重扫。
+  - 主库元数据不可读时停止自动修复并保留原始错误，避免把 SQLite I/O/corruption 问题误判为可丢弃索引。
+  - 补充回归测试固定“派生索引可自愈、主库异常不自愈”的边界。
+
+### fix(plugin): gate stale CoreBox push items after disable
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `plugin.feature` / `boxItems` 的 push、batch push、update、remove 增加插件运行态门禁，插件非 `ENABLED/ACTIVE` 时忽略旧异步任务的写入，避免禁用后继续推送 CoreBox items。
+  - 插件禁用流程增加 feature controller abort 与 CoreBox pushed items 清理，阻止已触发 feature 的延迟请求在 disable 后污染结果区。
+  - `BoxItemManager.clear/getBySource` 支持按 `item.meta.pluginName` 匹配，修复 `source.id=plugin-features` 等共享 source 场景下按插件名清不掉旧 items 的问题。
+
+### fix(cli): secure local auth token file permissions
+
+- `packages/tuff-cli-core/src/auth.ts`
+- `packages/tuff-cli-core/src/cli-credential-store.ts`
+- `packages/tuff-cli-core/src/publish.ts`
+- `packages/tuff-cli-core/src/__tests__/auth.test.ts`
+- `packages/unplugin-export-plugin/src/core/auth.ts`
+- `packages/unplugin-export-plugin/src/core/cli-credential-store.ts`
+- `packages/unplugin-export-plugin/src/core/publish.ts`
+- `packages/unplugin-export-plugin/src/__tests__/auth.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 为两个 CLI 包各自新增本地 `CliCredentialStore`，统一 `auth.json` 的 read/write/clear/getPath，`logout()` 改为走 auth store 的 clear 路径。
+  - `saveAuthToken()` 写入后在 POSIX/macOS/Linux 尽量将配置目录收紧为 `0700`、token 文件收紧为 `0600`；读取旧 JSON 时发现 group/other 权限过宽会 best-effort 修复。
+  - Windows 不伪造 ACL 安全完成，仅对用户目录外的 token path 给出 best-effort ACL 提醒；`TUFF_AUTH_TOKEN` 继续作为 CI / 无头环境 fallback。
+  - 本轮不引入 Keychain / Credential Locker / libsecret 依赖，第二阶段再接系统级 credential store。
+
+### fix(pilot): retire compat placeholder success responses
+
+- `apps/pilot/server/utils/quota-api.ts`
+- `apps/pilot/server/api/livechat/random.get.ts`
+- `apps/pilot/server/api/aigc/prompts/detail/[id]/index.get.ts`
+- `apps/pilot/server/api/[...path].ts`
+- `apps/pilot/server/api/__tests__/compat-placeholder-contract.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 `quotaUnavailable()`，保持 Pilot 既有 `{ code, message, data }` 响应体，同时设置真实 HTTP status，并统一返回 `status=unavailable`、`reason` 与可选 `migrationTarget`。
+  - `livechat/random` 在无 `wechat.livechat` 数据时不再返回可消费的 `exempted` 问答占位，改为 HTTP `503` 与 `wechat_livechat_data_unavailable`。
+  - 旧 `aigc/prompts/detail/:id` M1 占位接口改为 HTTP `410`，明确迁移到 `/api/aigc/prompts/:id`。
+  - catch-all 未实现接口不再只在 body 内写 `code=501`，同步设置 HTTP `501`，避免调用方按 2xx 误判成功。
+
 ### fix(tuff-cli): align sdkapi marker hard-cut
 
 - `packages/tuff-cli/tsup.config.ts`

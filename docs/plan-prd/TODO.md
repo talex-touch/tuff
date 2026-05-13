@@ -53,6 +53,7 @@
 - [x] Quick Launch 搜索引擎补全隔离：进入 `Google / Bing / DuckDuckGo 搜索引擎` 后，域名形态输入仍保持搜索 suggestion 模式，Tab completion 只补 query/suggestion，不再突出 URL 打开候选。
 - [x] Quick Launch 搜索引擎图标：`Google / Bing / DuckDuckGo` engine config 已内置对应 SVG，动态 feature 与搜索 suggestion 结果展示各自引擎图标。
 - [x] Quick Launch 搜索模式旧结果清理：远程 suggestion 仅在进入 `网页搜索` / `搜索引擎` feature 后刷新；active query 变化或清空输入会立即清理旧结果，旧请求晚返回不再覆盖当前搜索项。
+- [x] 插件禁用后 CoreBox push items 门禁：`plugin.feature` / `boxItems` 写入只允许 `ENABLED/ACTIVE` 插件执行，禁用时 abort feature controllers 并按 `meta.pluginName` 清理共享 source 的旧 pushed items。
 - [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
 
 ### 当前治理版发版暂存清单（2026-05-13）
@@ -837,8 +838,8 @@
 - [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.4.11` release blocker。
 - [ ] Release Evidence 写入闭环：具备 `release:evidence` API key 或管理员登录态后，将 documentation review、平台 matrix 与 CoreApp 定向回归结果写入 Nexus。
 - [ ] Legacy/compat 业务债务退场：`2.4.11` 前必须关闭或显式降权剩余旧 storage protocol、旧 SDK bypass、retained raw definition 等真实业务债务。
-- [ ] Pilot 兼容占位响应退场：`livechat/random` 空数据、prompt detail M1 占位与 catch-all 未实现接口必须返回明确 HTTP status、`unavailable + reason` 或 migration target；前端不得把 `exempted` 占位响应当作真实业务数据。
-- [ ] CLI token storage 安全收口：`packages/tuff-cli-core` 与 `packages/unplugin-export-plugin` 的 token JSON 先补 `0600` / Windows ACL 验证，再抽 `CliCredentialStore` 接 Keychain / Credential Locker / libsecret；保留 `TUFF_AUTH_TOKEN` 作为 CI 无头路径。
+- [x] Pilot 兼容占位响应退场：`livechat/random` 空数据改为 HTTP `503` + `unavailable`，prompt detail M1 占位改为 HTTP `410` + migration target，catch-all 未实现接口同步设置 HTTP `501`；已补 API 合同测试，前端不再会把这三类占位响应当作真实业务数据。
+- [x] CLI token storage 最小安全收口：`packages/tuff-cli-core` 与 `packages/unplugin-export-plugin` 已抽本地 `CliCredentialStore`，继续保留 `auth.json` 位置与 `TUFF_AUTH_TOKEN` CI 无头路径；POSIX 写入后收紧目录 `0700` / 文件 `0600`，读取旧文件时自动修复过宽权限，Windows 仅做 best-effort ACL 提醒，不伪造安全存储完成。后续 Keychain / Credential Locker / libsecret 接入另列第二阶段。
 - [ ] 插件 provider secret 收口：`touch-translation` 的 `apiKey/secretKey` 不再进入普通 `providers_config` plugin storage；普通配置只保留 provider metadata，密钥进入统一 plugin secret capability。
 - [ ] 插件 shell capability 统一诊断：`touch-system-actions`、`touch-quick-actions`、`touch-window-manager`、`touch-workspace-scripts` 等命令能力必须暴露 platform、permission、unsupported/degraded reason 与审计字段；高风险 shell 字符串优先替换为参数化 `execFile` 或 `safe-shell`。
 - [ ] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
