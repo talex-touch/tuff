@@ -1,7 +1,19 @@
 # 变更日志
 
-> 更新时间: 2026-05-08
-> 说明: 主文件仅保留近 30 天（2026-04-08 ~ 2026-05-08）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-09
+> 说明: 主文件仅保留近 30 天（2026-04-09 ~ 2026-05-09）详细记录；更早历史已按月归档。
+
+## 2026-05-09
+
+### feat(core-app/nexus): collect provider-level search performance telemetry
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/*`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+  - CoreBox 搜索 telemetry 改为在最终 `session.end` 聚合上报一次，补齐 `firstResultMs/firstResultCount`、provider timing/result/status、error/timeout 计数与匿名 query length 场景字段；继续禁止上传搜索明文。
+  - `search-gather` 纯 fast provider 完成路径也会记录 provider timing，避免本地 analytics 对 fast-only 搜索漏采。
+  - Nexus telemetry 聚合新增 first-result、慢查询、provider error/timeout/slow 与 provider P95 近似查询；Admin Analytics 的 Search 页新增 Provider Performance 表，展示 calls/avg/P95/max/results/errors/timeouts/slow rate。
+  - 新增 CoreApp search telemetry 与 Nexus provider 聚合定向测试；当前环境缺少已安装依赖，`vitest` 命令因 `Command "vitest" not found` 未能执行。
 
 ## 2026-05-08
 

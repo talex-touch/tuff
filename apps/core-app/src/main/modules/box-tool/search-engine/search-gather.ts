@@ -62,6 +62,14 @@ function countItems(results: TuffSearchResult[]): number {
   return results.reduce((acc, curr) => acc + curr.items.length, 0)
 }
 
+function recordGatherSearchMetrics(totalDuration: number, sourceStats: ExtendedSourceStat[]): void {
+  const providerTimings = sourceStats.reduce<Record<string, number>>((acc, stat) => {
+    acc[stat.providerId || stat.providerName] = stat.duration
+    return acc
+  }, {})
+  analyticsModule.recordSearchMetrics(totalDuration, providerTimings)
+}
+
 /**
  * Creates a search controller that manages the lifecycle of a search operation.
  * @param callback - The function that executes the search logic.
@@ -288,11 +296,7 @@ function createLayeredSearchController(
           `${countItems(allResults)} items in ${totalDuration.toFixed(1)}ms`
         )
 
-        const providerTimings = sourceStats.reduce<Record<string, number>>((acc, stat) => {
-          acc[stat.providerId || stat.providerName] = stat.duration
-          return acc
-        }, {})
-        analyticsModule.recordSearchMetrics(totalDuration, providerTimings)
+        recordGatherSearchMetrics(totalDuration, sourceStats)
 
         onUpdate({
           newResults: [],
@@ -305,6 +309,7 @@ function createLayeredSearchController(
     } else if (!isAborted && deferredProviders.length === 0) {
       // No deferred providers, search is already complete
       searchLogger.logSearchPhase('Search Complete', 'No deferred providers')
+      recordGatherSearchMetrics(performance.now() - startTime, sourceStats)
     }
 
     resolve(countItems(allResults))

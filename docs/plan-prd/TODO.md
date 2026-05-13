@@ -687,6 +687,7 @@
   - 2026-05-08 已将 core-app 13 个 `size-growth-exception` 收敛为后续小任务口径；优先拆分候选为 `clipboard.ts`（capture/history/transport/autopaste）、`search-core.ts`（routing/provider orchestration/cache-result merge）、`plugin-module.ts`（lifecycle/runtime repair/surface wiring/registry）。
 - [ ] CoreApp 验证收口：补跑 `typecheck:node` / `typecheck:web` / 定向测试并记录证据。
 - [ ] 搜索性能验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
+  - 2026-05-09 已接通跨机器匿名搜索 telemetry 聚合：CoreApp 最终 `session.end` 上报 `firstResultMs/providerTimings/providerResults/providerStatus`，Nexus Admin Analytics Search 页新增 Provider Performance 表，支持查看 calls/avg/P95/max/results/errors/timeouts/slow rate；仍需真实设备样本跑满 200 次验收。
 - [ ] 启动搜索压测：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”，产出 2 分钟窗口内 lag/P95 证据。
 - [ ] 文档治理：第二批历史文档统一加“历史/待重写”头标，Telemetry/Search/Transport/DivisionBox 长文档改造为 TL;DR 分层模板。
 - [ ] Transport Wave A：MessagePort 高频通道迁移 + `sendSync` 清理。
@@ -865,6 +866,7 @@
 - [x] 启动降载：analytics 写入失败指数退避；clipboard 在索引高压下动态降频并增加图片落库去抖。
 - [x] 观测增强：队列分级深度、标签等待统计、drop/circuit 状态与 `SQLITE_BUSY` 比例输出。
 - [x] 新增单测：`db-write-scheduler.test.ts` 覆盖优先级、丢弃策略、熔断开启/恢复。
+- [x] 搜索性能上报链路补强：CoreBox 搜索最终态匿名上报 first-result 与 provider 明细，Nexus 聚合 provider slow/error/timeout/P95，并在 Admin Analytics Search 页展示 Provider Performance。
 - [ ] 压测验收：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”并产出 2 分钟窗口内 lag/P95 证据。
 
 ---
