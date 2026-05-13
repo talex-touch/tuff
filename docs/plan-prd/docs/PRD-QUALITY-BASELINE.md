@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-05-12
+> 更新时间：2026-05-13
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -12,12 +12,13 @@
 
 - 文档盘点历史快照参考：`docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前优先级路线以六主文档、`TODO` 与 `CHANGES` 为准。
 - 主线动作必须同步六文档：`INDEX / README / TODO / CHANGES / Roadmap / Quality Baseline`。
-- 当前主线动作为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；`Nexus 设备授权风控` 保留实施文档与历史入口，Phase 1 频控/冷却/审计/长期授权时间窗/可信设备白名单已完成，非当前主线。
+- 当前主线动作为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；但正式 gate 的立即动作已收紧为 Windows 真机 evidence 闭环：先生成 acceptance collection plan，再补 case/manual/performance evidence，随后跑 `windows:acceptance:verify` final gate 并写入 Nexus Release Evidence；`Nexus 设备授权风控` 保留实施文档与历史入口，Phase 1 频控/冷却/审计/长期授权时间窗/可信设备白名单已完成，非当前主线。
 - 2026-05-12 跨平台兼容与占位实现复核已新增：`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`；`2026-05-10` 审计保留为历史基线，当前 PRD 必须继续区分真实 unavailable、开发 mock 与生产假值成功，并把 Windows/macOS 真机 evidence、CLI token storage、retained raw definition 与 `compat-file=5` 作为后续收口口径。
-- 2026-05-11 架构治理切片已新增并收紧：transport guard 独立输出 raw send / retained raw definition / typed candidate，当前三段 typed candidate 为 `0`，retained raw definition 上限为 `264`；Pilot stat 与 mock payment 假成功路径已门控；插件图片历史路径不得继续长期写 renderer `localStorage`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`update-system.ts` 与 `omni-panel/index.ts` 已拆出纯 utility/helper 并退出 grown list，CoreApp 当前不在 grown list；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders，growth exception cap 收紧到 `1792`；`app-provider.test.ts` 已拆出测试 harness 并退出 grown list；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 state composable 并降到阈值以下；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，`lint/lint:fix` 只负责 ESLint 与 intelligence check，架构债务由 `architecture:guard` / `release:guard` 承载。
+- 2026-05-13 执行顺序补充：`2.4.10` 正式 gate 前不得把 `2.5.0` AI/workflow、Provider Registry 高级策略、retained raw definition 后续迁移或 SRP 大拆分扩大为当前 release blocker；这些事项保留在 `2.4.11` / `2.5.0` 后续，当前只允许围绕 Windows 真机采证、性能采样、Release Evidence 与必要 bugfix 推进。
+- 2026-05-11 架构治理切片已新增并收紧：transport guard 独立输出 raw send / retained raw definition / typed candidate，当前三段 typed candidate 为 `0`，retained raw definition 上限为 `264`；Pilot stat 与 mock payment 假成功路径已门控；插件图片历史路径不得继续长期写 renderer `localStorage`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`update-system.ts` 与 `omni-panel/index.ts` 已拆出纯 utility/helper 并退出 grown list，CoreApp 当前不在 grown list；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders，growth exception cap 收紧到 `1792`；`app-provider.test.ts` 已拆出测试 harness 并退出 grown list；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 state composable 并降到阈值以下；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 质量入口已统一，`lint/lint:fix` 只负责 ESLint 与 intelligence check，架构债务由 `quality:pr` / `quality:release` 承载。
 - 2026-05-11 Nexus Intelligence provider 已镜像到 Provider Registry；Provider metadata 不保存明文 API key，密钥只通过 secure store `authRef` 绑定；dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已统一经 bridge 合并读取旧表与 registry mirror，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史，OpenAI-compatible AI mirror 已可通过 Scene 默认 adapter 执行 `vision.ocr`；Dashboard Admin Provider Registry 已补系统级本地 `overlay.render` provider 与 `corebox.screenshot.translate` Scene 的幂等 seed 入口，且不会把 user-scope AI mirror OCR 自动绑入 system Scene；旧表退场、user-scope AI mirror OCR 绑定策略与高级策略仍是后续门禁。
 - 2026-05-12 CI/CD warning 迁移已建立：GitHub Actions JavaScript Action `uses:` 依赖统一到 Node 24-compatible major baseline，项目业务 Node runtime 继续保持 `22.16.0`；后续 CI warning 收口不得通过 `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过。
-- 文档门禁升级前置保持不变：连续 5 次 `pnpm docs:guard` 零告警 + 连续 2 周无口径漂移。
+- 文档治理不再使用脚本强校验；行为/接口/架构变化仍必须按 AGENTS.md 同步活跃入口文档。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
 
@@ -45,13 +46,10 @@
 ### 3.1 类型与调用约束
 - 不得新增未类型化的跨层通信。
 - 优先复用 domain SDK，禁止新增 raw event 字符串分发。
-- 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前退场目标 `2.4.11`）。
-- `legacy:guard` 仅允许在 `scripts/lib/legacy-keyword-exceptions.mjs` 中登记非兼容分支例外（框架固定 API 字段、上游错误文本签名、负向 lint 禁止项）；真实生产分支 key、迁移读取路径与文件名债务仍必须进入 allowlist + compatibility registry。
-- 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败；文件名 `compat`、`shim/shims` 只按独立命名段匹配，且 `shim/shims` 排除 declaration-only `.d.ts`，避免 `compatible`、`shimmer` 等业务词和 ambient declaration typing 误入兼容债务。
-- 强制启用分层 `size:guard`：重构期默认模式阻断新增超长文件与已登记文件继续增长，历史未增长超长债务只报告；`size:guard:report` 只输出全量报告且不失败，`size:guard:changed` 阻断 changed files 新增/增长，`size:guard:strict` 用于 release/milestone 全量阻断；仅允许通过 `growthExceptions` 临时豁免，并要求同步 `CHANGES + compatibility registry`。
-- 强制启用统一 guard 基础库：`legacy/compat/size/network` 脚本必须复用 `scripts/lib/*` 公共扫描/版本能力，禁止重复实现目录遍历与版本比较逻辑。
-- 强制启用 CoreApp runtime console 门禁：`pnpm console:guard` 冻结 `apps/core-app` main/preload/renderer 现存 `console.*` 边界，新增 raw console 或扩散命中数量一律失败；logger sink、显式 debug gate 与专项诊断器只能通过 allowlist 承载。
-- 强制启用 CoreApp runtime boundary 门禁：`pnpm -C "apps/core-app" run runtime:guard` 冻结宽松 Electron WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*`；允许项只能落在命名 window security profile、preload 或内部 channel adapter。
+- 兼容边界统一迁移到 ESLint：禁止新增 `channel.send('x:y')`、legacy transport/permission/channel import、旧 storage protocol、旧 SDK bypass 或伪成功兼容分支；确需例外只能通过明确 scoped ESLint override 承载并说明退场原因。
+- runtime console / runtime boundary 统一迁移到 ESLint：CoreApp `main/preload/renderer` 新增裸 `console.*`、宽松 WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*` 均视为质量回退。
+- 网络边界统一由 ESLint 承担：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network` 或明确注入的网络客户端。
+- 不再维护 compatibility registry / legacy allowlist / size allowlist；文件行数治理回到 code review 与普通 SRP 重构任务，发布质量入口以 `quality:pr` / `quality:release` 为准。
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 - CoreApp `2.4.11` 前置门禁：清册中的 `2.4.11` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 - Windows Everything 目标验收门禁：`windows:capability:verify --requireEverythingTargets` 必须同时复核基础 Everything 查询成功、目标 probe 命中、`matchCount` 为正，且至少一条 sample 文本包含目标关键词；禁止仅凭手工填写的 `found=true` 或不匹配样本通过。
@@ -67,9 +65,9 @@
 - Nexus Provider / Scene 类 PRD 必须保持 Provider 与 Scene 解耦：新增供应商只进入 Provider registry，新增使用场景只进入 Scene，不允许新增孤立 provider model 或绕过 typed transport/domain SDK。
 - 2.5.0 AI 类 PRD 必须保持桌面入口收口边界：Stable 能力只承诺文本 + OCR；Workflow / Pilot 联动必须标为 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 必须标为 Experimental 或 2.5.x 后续，禁止作为 2.5.0 稳定承诺。
 - 假值治理门禁：生产 API / dashboard / runtime 不得默认返回 Mock CPU、固定磁盘/内存、mock 支付 URL、伪成功空结果；开发 mock 必须由显式环境变量或配置开关启用，关闭时返回明确错误码与 reason。
-- Transport 统计门禁：文档和 guard 必须区分 raw send violation 与 retained raw event definition；新增符合 `namespace/module/action` 结构的事件必须使用 typed builder；当前三段 migration candidate 必须保持 `0`，下载迁移 push events 以 `DownloadEvents.migration.progress/result` 为 typed registry SoT。
+- Transport 统计门禁：文档和测试必须区分 raw send violation 与 retained raw event definition；新增符合 `namespace/module/action` 结构的事件必须使用 typed builder；当前三段 migration candidate 必须保持 `0`，下载迁移 push events 以 `DownloadEvents.migration.progress/result` 为 typed registry SoT。
 - CI/CD Action runtime 门禁：`.github/workflows` 中 JavaScript Actions 必须使用 Node 24-compatible major；保留项目业务 `node-version: 22.16.0`，禁止把 Actions runtime warning 迁移处理成业务 Node 版本升级。
-- SRP/size 收敛门禁：超长模块每完成一个行为等价切片就必须同步降低对应 allowlist / growth exception cap；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；Tuffex `TxFlipOverlay.vue` stack helper 切片已把组件降到 `1194` 行并清退 size exception；Nexus `provider-registry.vue` 已拆出 admin composable 并降到 `999` 行，`provider-registry.api.test.ts` 已拆出测试 helper 并降到 `951` 行；CoreApp Windows acceptance verifier 已拆出 command requirements、case/performance evidence spec 与 manifest test helper，`windows-acceptance-manifest-verifier.ts` 降到 `1136` 行，`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行；`recommendation-engine.ts` 已拆出 `recommendation-utils.ts` 并降到 `1869` 行；`search-core.ts` 已拆出 `search-core-utils.ts` 并降到 `2475` 行；`app-provider.test.ts` 已拆出 `app-provider-test-harness.ts` 并降到 `1400` 行；`app-provider.ts` 已拆出 `app-provider-path-utils.ts` 与 `app-provider-source-scanner.ts` 并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 `deepagent-input.ts` 并降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已拆出 `update-asset-utils.ts` 并降到 `1610` 行；`omni-panel/index.ts` 已拆出 `omni-panel-builtin-features.ts` 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 `usePlaygroundState.ts` 并降到 `919` 行；Nexus `useSignIn.ts` 已拆出 `sign-in-redirect-utils.ts` 并降到 `1538` 行，`assistant.post.ts` 已拆出 `requestAuditMeta.ts` 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已拆出 `tuffIntelligenceLabTools.ts` 并降到 `3408` 行，`telemetryStore.ts` 已拆出 `telemetrySanitizer.ts` 并降到 `1502` 行，`en.ts/zh.ts` 已拆出 legal shard 并低于 exception cap；当前 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`，后续治理聚焦剩余业务闭环与 Windows 真机 evidence。
+- SRP/size 收敛要求：超长模块后续通过 code review、targeted refactor 与最近路径测试控制回潮；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行；Tuffex `TxFlipOverlay.vue` stack helper 切片已把组件降到 `1194` 行并清退 size exception；Nexus `provider-registry.vue` 已拆出 admin composable 并降到 `999` 行，`provider-registry.api.test.ts` 已拆出测试 helper 并降到 `951` 行；CoreApp Windows acceptance verifier 已拆出 command requirements、case/performance evidence spec 与 manifest test helper，`windows-acceptance-manifest-verifier.ts` 降到 `1136` 行，`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行；`recommendation-engine.ts` 已拆出 `recommendation-utils.ts` 并降到 `1869` 行；`search-core.ts` 已拆出 `search-core-utils.ts` 并降到 `2475` 行；`app-provider.test.ts` 已拆出 `app-provider-test-harness.ts` 并降到 `1400` 行；`app-provider.ts` 已拆出 `app-provider-path-utils.ts` 与 `app-provider-source-scanner.ts` 并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 `deepagent-input.ts` 并降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已拆出 `update-asset-utils.ts` 并降到 `1610` 行；`omni-panel/index.ts` 已拆出 `omni-panel-builtin-features.ts` 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 `usePlaygroundState.ts` 并降到 `919` 行；Nexus `useSignIn.ts` 已拆出 `sign-in-redirect-utils.ts` 并降到 `1538` 行，`assistant.post.ts` 已拆出 `requestAuditMeta.ts` 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已拆出 `tuffIntelligenceLabTools.ts` 并降到 `3408` 行，`telemetryStore.ts` 已拆出 `telemetrySanitizer.ts` 并降到 `1502` 行，`en.ts/zh.ts` 已拆出 legal shard 并低于 exception cap；当前 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`，后续治理聚焦剩余业务闭环与 Windows 真机 evidence。
 
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
@@ -88,14 +86,14 @@
 - 禁止敏感信息明文落地到 localStorage/JSON/日志。
 - AI Provider 配置中，provider metadata 可进入普通配置，API Key / secret 必须进入 secure-store 或以 `authRef` 表示；审计默认不得保存完整 prompt / response。
 - 插件侧本地文件路径历史、图片路径、token、key 等敏感元数据不得长期保存在 renderer `localStorage`；必须使用插件 storage SDK、SQLite SoT 或加密引用，并提供清理策略。
-- CoreApp secure-store 必须优先使用系统安全存储；系统后端不可用时只允许使用本机随机 `local-secret` 派生密钥的本地密文 fallback，禁止因降级写入明文 token/key/seed。
+- CoreApp secure-store 不再调用系统安全存储 / Keychain，必须统一使用本机随机 `local-secret` root 密钥派生用途密钥并写入本地密文 envelope，禁止写入明文 token/key/seed。
 - `deviceId` 只能作为设备标识或可选 AAD，不得作为密钥材料；local secret 损坏或丢失且已有本地密文时必须进入 `unavailable`，不得静默生成新 secret 覆盖旧数据。
 - Sync 输出仍必须只包含 `payload_enc` / `payload_ref` 等密文引用，旧 `b64:` 仅保留只读迁移语义并触发重写，禁止重新引入明文业务 JSON 同步。
 
 ### 3.5 文档约束
 - PRD 状态变化（进行中/完成/归档）必须同步 `README.md` 与 `TODO.md`。
 - 对外行为变化必须同步 Nexus 对应开发文档。
-- 推荐统一验收入口：`pnpm quality:gate`（`architecture:guard + network:guard + test:targeted + typecheck(node/web)`）；release/milestone 使用 `pnpm release:guard` 追加 strict size 与 strict docs。
+- 推荐统一验收入口：PR 使用 `pnpm quality:pr`（lint + targeted tests + CoreApp typecheck）；release/milestone 使用 `pnpm quality:release`（lint + typecheck:all + targeted tests + CoreApp build）。
 
 ## 4. 项目质量审查优化计划（2026-05-12 复核）
 
@@ -105,7 +103,7 @@
 
 | 阶段 | 目标 | 验收要求 |
 | --- | --- | --- |
-| Phase 0 | `2.4.10` 收口，只补 Windows 真机证据，不扩大兼容层 | Windows App 索引、更新安装、DivisionBox detached widget、复制 app path 等 acceptance manifest 留证；macOS/Linux 不因本阶段降级或新增兼容分支 |
+| Phase 0 | `2.4.10` 收口，只补 Windows 真机证据，不扩大兼容层 | 先生成 Windows acceptance collection plan，再完成 Windows App 索引、更新安装、DivisionBox detached widget、复制 app path、search trace `200` 样本、clipboard stress `120000ms` 与 Nexus Release Evidence 留证；macOS/Linux 不因本阶段降级或新增兼容分支 |
 | Phase 1 | `2.4.11` blocker 清零 | `compat-file=5` 退场评估、retained raw definition 高频路径迁移、CLI token storage 安全收口、插件命令能力统一 degraded/unsupported 诊断与 Linux best-effort 证据归档必须完成或显式降权 |
 | Phase 2 | Transport / SDK 收口 | 区分生产 raw send violation 与 retained `defineRawEvent` definition；优先收口 CoreBox、terminal、auth、sync、opener 等高频/高敏路径 |
 | Phase 3 | SRP 结构拆分 | 优先拆分 `clipboard.ts`、`search-core.ts`、`plugin.ts/plugin-module`、`app-provider.ts`；每次拆分保持外部契约兼容并补最近路径测试 |
@@ -114,15 +112,12 @@
 
 ### 4.2 审查门禁
 
-**文档/治理类变更至少运行：**
+**文档/治理类变更至少执行：**
 - `git diff --check`
-- `pnpm docs:guard`
-- `pnpm docs:guard:strict`
+- 人工复核活跃入口文档是否同步（README / TODO / CHANGES / INDEX / Roadmap / Quality Baseline 中至少对应项）
 
 **兼容/运行时边界相关代码变更至少追加：**
-- `pnpm compat:registry:guard`
-- `pnpm -C "apps/core-app" run runtime:guard`
-- `node scripts/check-legacy-boundaries.mjs`
+- `pnpm lint`
 - 最近路径 typecheck / lint / vitest，若环境缺依赖必须记录阻塞原因
 
 **涉及 storage / sync / secret / payment / AI provider 的变更必须额外确认：**
@@ -141,7 +136,7 @@
 **Documented best-effort / non-blocking：**
 - Linux `xdotool`、desktop environment、权限模型或发行版差异导致的不可用，但必须有用户可见 reason 与 smoke 记录。
 - macOS Automation/Accessibility、Windows foreground/PowerShell/Everything 等平台依赖不可用，但必须返回 degraded/unsupported 合同，不得伪成功。
-- 超长模块 SRP 拆分不得用大爆炸式重构阻塞主线；按小任务推进，并在 size/compat registry 或 TODO 中保留责任边界。
+- 超长模块 SRP 拆分不得用大爆炸式重构阻塞主线；按小任务推进，并在 size/ESLint compatibility boundary rules 或 TODO 中保留责任边界。
 
 ## 5. 验收执行模板（建议复制到 PRD）
 
@@ -270,13 +265,13 @@
 | 统一入口 | `@talex-touch/utils/network`（request/file/guard） | 已落地 |
 | 覆盖范围 | `apps/core-app + apps/nexus + apps/pilot + packages + plugins` | 已收口 |
 | 业务层 direct `fetch/axios` | 0（network 套件内部除外） | 已达标 |
-| root 门禁 | `pnpm run network:guard`（全仓） | 已硬禁 |
+| root 门禁 | `pnpm run ESLint network-boundary rules`（全仓） | 已硬禁 |
 | ESLint 规则 | `no-restricted-imports(axios)` + `no-restricted-syntax(fetch)` | 已补齐关键 workspace |
 
 **质量约束落地**
 - Renderer（Electron）网络请求必须通过 Main 网关或统一 NetworkSDK，不允许直连扩散。
 - 本地文件读取统一走 network file API（`readText/readBinary/toTfileUrl`），避免分散路径解析策略。
-- 任意 workspace 新增 direct `fetch/axios` 视为门禁失败（CI fail），不得以临时 allowlist 作为长期方案。
+- 任意 workspace 新增 direct `fetch/axios` 视为门禁失败（CI fail），不得以临时 ESLint override 作为长期方案。
 
 ### 7.7 2.4.9 插件完善主线（2026-03-15）
 
@@ -308,7 +303,7 @@
 **质量约束落地**
 - 风控策略调整必须同时更新实施文档与 `CHANGES`，形成同日证据闭环。
 - 豁免必须具备责任人、时间窗和原因，不允许全局无限期豁免。
-- 文档门禁仍保持 `docs:guard` report-only，strict 升级需满足连续零告警前置条件。
+- 文档治理不再使用 report-only/strict 脚本门禁，改为变更时人工复核活跃入口文档一致性。
 
 ### 7.9 CoreApp 2.4.10 / 2.4.11 前置治理（2026-05-08）
 
@@ -344,7 +339,7 @@
 - Scene 只声明业务意图、capability path、strategy、meteringPolicy 与 auditPolicy；不得硬编码供应商价格、密钥、endpoint 或特殊鉴权逻辑。
 - Provider adapter 只做标准 capability payload 与供应商 API 的协议转换，并标准化错误码、usage、latency 与 providerRequestId。
 - Metering / Audit 必须记录 fallback trail、usage、错误码与 degraded reason，但不得保存原始截图、图片、完整 prompt、完整翻译文本或模型响应。
-- 后续实现变更必须同步 `README / TODO / CHANGES / INDEX / Roadmap / Quality Baseline` 至少对应入口，并补最近路径 typecheck/test/docs guard 证据。
+- 后续实现变更必须同步 `README / TODO / CHANGES / INDEX / Roadmap / Quality Baseline` 至少对应入口，并补最近路径 typecheck/test/documentation review 证据。
 
 ### 7.10.1 Tuff 2.5.0 AI 桌面入口收口 PRD（2026-05-10）
 
@@ -414,9 +409,9 @@
 | 关停超时保险 | `before-quit` 新增默认 `8s` timeout guard，超时/异常后继续退出 | 已收口 |
 | 卸载观测 | `ModuleUnloadObservation` 记录 `reason/appClosing/duration/failedCount` | 已落地 |
 | 运行时上下文 | 生命周期统一注入 `ctx.runtime`（`MainRuntimeContext`） | 已落地 |
-| 全局耦合守卫 | 新增 `guard:global-app` + allowlist，阻止 `src/main/**` 新增 `$app` 直接读取 | 已落地 |
+| 全局耦合守卫 | `$app` 直接读取限制已迁入 CoreApp ESLint runtime boundary rules | 已落地 |
 | 结构治理首轮 | plugin/file/update 完成首轮服务拆分，外部契约保持不变 | 已落地 |
-| 回归子集 | `pnpm test:core-main` 聚合主进程关键测试 + `typecheck:node` + `guard:global-app` | 已通过 |
+| 回归子集 | Core main 定向测试 + `typecheck:node` + ESLint runtime boundary rules | 已通过 |
 
 **质量约束落地**
 - 主进程退出流程必须具备“可等待 + 可超时脱困”双保险，禁止因单个 `before-quit` handler 阻塞导致无法退出。
@@ -429,14 +424,14 @@
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| guard 公共库 | `scripts/lib/scan-config.mjs`、`file-scan.mjs`、`version-utils.mjs` | 已落地 |
-| 网络门禁入口 | root `check-network-boundaries.mjs` 支持 `--scope` | 已落地 |
-| CoreApp 网络门禁 | 改为复用 root 脚本，删除重复实现 | 已收口 |
+| 历史 guard 公共库 | `scripts/lib/scan-config.mjs`、`file-scan.mjs`、`version-utils.mjs` 曾承载扫描复用；当前 guard 脚本已退场 | historical |
+| 网络边界入口 | direct `fetch/axios` 限制已迁入 ESLint | 已落地 |
+| CoreApp 网络边界 | 改为 ESLint 统一约束，删除重复 guard 实现 | 已收口 |
 | 构建脚本拆分 | `build-target/postprocess-mac.js` 从主脚本抽离 | 已落地 |
 
 **质量约束落地**
-- 门禁脚本必须共享同一套扫描与版本比较基础能力，避免“规则一致、实现漂移”。
-- 同类质量门禁仅允许一个实现来源；workspace 侧脚本优先复用 root 实现（通过 `--scope` 等参数化）。
+- 可表达为静态代码约束的边界必须优先进入 ESLint，避免维护重复扫描脚本。
+- 同类质量规则仅允许一个实现来源；workspace 侧优先复用各自 ESLint 配置与 root lint 入口。
 - 大体量编排脚本必须按“编排层 + 平台实现层”拆分，降低单文件风险与回归成本。
 - 桌面打包链路必须校验 `PACKAGED_RUNTIME_MODULES` 完整运行时依赖闭包真实进入产物可解析路径（`app.asar` 或 `resources/node_modules`）；当前基线含 `ms`、`@sentry/electron` 及其 Sentry/OpenTelemetry 闭包、`require-in-the-middle`、`module-details-from-path`，以及 `@langchain/core` 当前已知高风险缺包 `p-retry`、`retry`、`langsmith`、`mustache`、`camelcase`、`decamelize`、`ansi-styles`、`@cfworker/json-schema`，再加上 `compressing -> tar-stream -> readable-stream` 当前已知缺包 `process-nextick-args`、`core-util-is`、`inherits`、`string_decoder`、`util-deprecate`、`once`、`wrappy` 与 `typed-array-buffer` 相关辅助包，禁止产出“可安装但主进程启动即崩”的坏包。
 - CoreApp runtime dependency 打包链路只能从 `apps/core-app/scripts/build-target/runtime-modules.js` 的 runtime module manifest / closure helper 获取 root 清单、平台 native 清单与传递依赖闭包；`ensure-runtime-modules`、`ensure-platform-modules`、`afterPack` 与 packaged verifier 禁止再各自实现模块发现/闭包递归。

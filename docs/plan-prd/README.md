@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档入口（压缩版）
-> 更新时间: 2026-05-12
+> 更新时间: 2026-05-13
 
 ## 快速入口
 
@@ -25,7 +25,7 @@
 - 当前工作区基线：`2.4.10-beta.19`。
 - 发布准备：`2.4.10-beta.19` 已补中英文 release notes；`build-and-release` 显式支持 `beta` 类型并保持 pre-release 语义，CI/CD 统一 Node `22.16.0` / pnpm `10.32.1`，PR CI 收窄为只读 `pull_request`，release artifact 只上传发布资产与 updater metadata。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
-- 当前版本 Windows 发版 gate：功能实现与本地 verifier 已进入收口态，但发版必须先补齐 Windows 真机 evidence 与性能 evidence；最终 acceptance 必须覆盖常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并完成 Nexus Release Evidence 写入。
+- 当前版本 Windows 发版 gate：功能实现与本地 verifier 已进入收口态，但发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是先在 Windows 真机生成 acceptance collection plan，再逐项补齐常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并完成 Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。
 - Nexus 设备授权风控 Phase 1 已落地：设备码申请频控、连续 reject/cancel 冷却、request/approve/reject/cancel/revoke/trust/untrust 审计日志、长期授权后端时间窗与可信设备显式白名单已接入。
 - Nexus Provider 聚合与 Scene 编排进入架构蓝图：后续汇率、AI 大模型、文本翻译、图片/截图翻译统一进入 Provider registry，Scene 按 capability 自由组合与路由。
@@ -54,13 +54,13 @@
 - 发布开关已就位：`TUFF_DB_AUX_ENABLED`、`TUFF_DB_QOS_ENABLED`、`TUFF_STARTUP_DEGRADE_ENABLED`，支持灰度与快速回滚。
 - Legacy/兼容/结构治理已切换到“统一实施 PRD + 五工作包并行”口径（不再使用 Phase 1-3 决策叙事）。
 - 治理基线：`legacy 81/184`、`raw channel 13/46`、超长文件（主线）`47`。
-- 跨平台兼容复核（2026-05-12）：2026-05-10 报告中的 Pilot stat 假值、mock payment 默认成功与 touch-image localStorage 历史持久化已收口；CoreApp 平台能力保持显式 degraded/unsupported 合同，生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；本轮 `compat:registry:guard`、`runtime:guard`、`docs:guard`、`transport-event-boundary.test.ts` 已通过。
+- 跨平台兼容复核（2026-05-12）：2026-05-10 报告中的 Pilot stat 假值、mock payment 默认成功与 touch-image localStorage 历史持久化已收口；CoreApp 平台能力保持显式 degraded/unsupported 合同，生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；相关边界已迁入 ESLint / transport boundary test。
 - Native transport V1 已从截图首切扩展为 `capabilities / screenshot / file-index / file / media` 五域：`NativeEvents.screenshot` 事件名保持不变，新增 `native:capabilities:*`、`native:file-index:*`、`native:file:*`、`native:media:*`；CoreApp `NativeCapabilitiesModule` 桥接现有 fileProvider/Everything status、文件 stat/open/reveal/tfile 与图片/视频媒体 metadata/thumbnail，大资源默认返回短期 `tfile://` 引用；媒体 thumbnail 已复用 FileProvider thumbnail worker，图片/HEIC 走 `sharp`，视频走内置 ffmpeg 抽帧，ffmpeg 不可用时 `media.thumbnail` 显式 degraded 且图片缩略图继续可用；插件调用必须按域声明 `window.capture`、`fs.index`、`fs.read` 或 `media.read`。
-- 架构治理切片（2026-05-11）：Transport boundary test 已拆出 `rawSendViolations / retainedRawEventDefinitions / typedMigrationCandidates`；Pilot stat 固定假值与 mock 支付默认成功已收口；`plugins/touch-image` 图片历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，`lint/lint:fix` 不再串全量架构债务，`size:guard:strict` 保留 release 红线。
+- 架构治理切片（2026-05-11）：Transport boundary test 已拆出 `rawSendViolations / retainedRawEventDefinitions / typedMigrationCandidates`；Pilot stat 固定假值与 mock 支付默认成功已收口；`plugins/touch-image` 图片历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行；`app-provider.ts` 已拆出 path helper 与 source scanner facade；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper；质量入口已统一为 ESLint、typecheck、targeted tests 与 build。
 - `apps/core-app` 已完成“兼容债立即硬切”首轮并行治理：`window.$channel` 业务入口清零、legacy storage 事件协议清零、权限 `sdkapi` legacy 放行移除、更新/平台识别收敛为显式 `unsupported` 策略。
 - CoreApp Sync payload 已从旧 `b64:` Base64 载荷升级为 main 侧 AES-GCM `enc:v1` 真密文；`payload_enc/payload_ref` wire shape 保持不变，`meta_plain` 仅保留非业务元数据，旧 `b64:` 只作为迁移读取 fallback。
 - Nexus Release Evidence API 继续作为平台回归、文档门禁与阻塞矩阵采集入口；CI 写入使用 `release:evidence` API key。
-- 当前下一动作：`2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；Linux best-effort 口径复核继续作为非阻塞记录。
+- 当前下一动作：围绕 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，优先执行 Windows 真机采证闭环（acceptance collection plan → case/manual/performance evidence → final verify → Nexus Release Evidence）；Linux best-effort 口径复核继续作为非阻塞记录。
 - `2.4.11` 前置口径：关闭或降权 CoreApp 剩余 legacy/compat 债务，补齐 Windows/macOS release-blocking 回归证据；Linux 保留 documented best-effort，不作为 `2.4.10` blocker。
 - `2.4.8` 主线：OmniPanel Gate 已完成（historical）。
 - `v2.4.7` Gate：A/B/C/D/E 已完成（historical），不重发版。
@@ -78,10 +78,11 @@
 
 ## 当前主线（2 周）
 
-1. P0：Windows App 索引与启动体验收口（Start Menu、UWP、registry uninstall、`launchArgs/workingDirectory`、真实 Windows 设备验证）。
-2. P0：基础 legacy/compat 收口（清册退场目标统一为 `2.4.11`，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass）。
-3. P1：文档治理收尾（TODO 按版本分层、第二批历史头标 + TL;DR 分层）。
-4. P1：`Nexus 设备授权风控` 保留实施文档与验收入口，Phase 1 主体已完成。
+1. P0：Windows 真机采证闭环（先生成 acceptance collection plan，再补齐 case/manual/performance evidence，最后跑 final verify 并写入 Nexus Release Evidence）。
+2. P0：Windows App 索引与启动体验收口（Start Menu、UWP、registry uninstall、`launchArgs/workingDirectory`、真实 Windows 设备验证）。
+3. P0：基础 legacy/compat 收口（清册退场目标统一为 `2.4.11`，禁止新增 legacy/raw channel/旧 storage/旧 SDK bypass）。
+4. P1：文档治理收尾（TODO 按版本分层、第二批历史头标 + TL;DR 分层）。
+5. P1：`Nexus 设备授权风控` 保留实施文档与验收入口，Phase 1 主体已完成。
 
 ---
 
@@ -102,6 +103,7 @@
 
 ### P0（2.4.10）
 
+- 2.4.10 Windows 真机 evidence 闭环：acceptance manifest、common app launch、copied app path、Everything target probe、update install、DivisionBox detached widget、time-aware recommendation、search trace `200` 样本、clipboard stress `120000ms` 与 Nexus Release Evidence 写入。
 - 2.4.10 Windows App 索引与基础 legacy/compat 收口。
 
 ### P1（2.4.11 必须解决）
@@ -109,10 +111,10 @@
 - Windows/macOS 阻塞级人工回归证据闭环。
 - Linux documented best-effort smoke 与限制说明。
 - Release Evidence 写入凭证/CI 证据闭环。
-- `legacy/compat/size` 清册中过期到 `2.4.11` 的条目关闭或显式降权。
+- `2.4.11` 前关闭或显式降权剩余 legacy/compat 业务债务。
 - Transport Wave A：MessagePort 高频通道迁移、`sendSync` 清理、retained raw event 分批 typed builder 迁移；当前 `typedMigrationCandidates` 为 `0`，下一批聚焦 CoreBox / terminal / auth / sync / opener 的保留理由与可迁移清单。
 - Pilot Wave B：存量 typecheck/lint 清理与渠道矩阵回归。
-- 架构 Wave C：优先 `plugin-module/search-core/file-provider` 剩余 SRP 拆分，并随切片降低对应 size allowlist；重构期 `size:guard` 默认阻断新增/增长并报告历史未增长债务，report/changed/release strict 模式分别用于全量审计、本地变更防回潮和发布收口；`clipboard.ts` 已低于 1200 行并清退 exception，`app-provider.ts` 已完成 source scanner 第一切片，后续进入 launch resolver / metadata enrichment 或转入 `plugin-module/search-core/file-provider`。
+- 架构 Wave C：优先 `plugin-module/search-core/file-provider` 剩余 SRP 拆分；文件行数治理不再作为脚本门禁，后续通过 code review、普通重构任务与最近路径测试控制回潮。
 
 ### P2+
 
@@ -133,9 +135,7 @@
   - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
   - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
   - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
-- 每次文档改动后至少运行：
-  - `pnpm docs:guard`
-  - `pnpm docs:guard:strict`
+- 每次行为/接口/架构改动后，按 AGENTS.md 同步至少一个活跃入口文档；文档改动后执行人工一致性复核。
 - 历史事实优先进入 `CHANGES` 归档，不在入口文档重复叙事。
 
 ---
@@ -149,7 +149,7 @@
 - Pilot 合并升级 V2：`/` 统一入口、`/pilot` 兼容跳转、`Quota Auto` 自动路由与渠道评比。
 - CLI Phase1+2：`tuff-cli` 主入口、`tuff-cli-core` 核心迁移、`unplugin` shim 兼容。
 - Pilot Chat/Turn 新协议：`turns/stream/messages` 路由与会话级串行队列。
-- 文档治理门禁：`docs:guard` / `docs:guard:strict`；2026-03-17 文档盘点仅保留历史统计口径，当前路线以本页、`TODO` 与 `CHANGES` 为准。
+- 文档治理：不再使用脚本强校验；2026-03-17 文档盘点仅保留历史统计口径，当前路线以本页、`TODO` 与 `CHANGES` 为准。
 
 详见：[CHANGES](./01-project/CHANGES.md)
 

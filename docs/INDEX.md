@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-12
+> 更新时间：2026-05-13
 > 本页仅保留入口与高价值快照；历史细节以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主要入口
@@ -33,7 +33,8 @@
 - **当前工作区基线**：`2.4.10-beta.19`（根包与 CoreApp 对齐）。
 - **2.4.10-beta.19 发布准备（2026-05-12）**：`build-and-release` 已补显式 beta release type，tag 触发可从 `v*-beta*` 自动进入 beta 预发布语义；CI/CD 统一 Node `22.16.0` 与 pnpm `10.32.1`，PR CI 改为只读 `pull_request`，release artifact 上传范围收窄到安装包、压缩包与 updater metadata；`notes/update_2.4.10-beta.19.{zh,en}.md` 已补齐，当前仍是 beta 测试包。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；不把全部跨平台回归压进 `2.4.10`。
-- **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence：Windows acceptance manifest 最终强门禁、微信/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测都必须通过；Nexus Release Evidence 写入闭环仍是发版阻塞项。
+- **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是在 Windows 真机生成 acceptance collection plan，并按同一清单补齐 Windows acceptance manifest 最终强门禁、微信/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测；Nexus Release Evidence 写入闭环仍是发版阻塞项。
+- **立即执行顺序（2026-05-13）**：先确认工作区本地噪声不混入提交，再生成 Windows acceptance collection plan，随后采集 case/manual/performance evidence，运行 `windows:acceptance:verify` final gate，最后写入 Nexus Release Evidence；`2.5.0` AI、Provider Registry 高级策略与 SRP 大拆分不得抢占正式 `2.4.10` gate。
 - **2.4.11 必解门槛**：剩余 Windows/macOS 阻塞级人工回归、Linux best-effort 记录、Release Evidence 写入闭环、legacy/compat/size 清册退场项必须关闭或显式降权。
 - **User-managed launcher foundation（2026-04-22）**：`appIndex` typed domain 已新增 `listEntries / upsertEntry / removeEntry / setEntryEnabled`，settings SDK 与 main channel handler 全链路接通；`app-provider` 复用现有 `files + file_extensions` 支持 user-managed launcher entry，并继续走搜索与启动链路。
 - **应用搜索诊断与重建（2026-04-26）**：`settingsSdk.appIndex` 已新增 `diagnose / reindex`，高级设置中的应用索引区可按路径、bundleId、名称或搜索词查看单个应用的 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
@@ -85,9 +86,9 @@
 - **Nexus AI Provider Registry check（2026-05-11）**：Intelligence provider registry mirror 已接入 Provider Registry check，Dashboard 可对 `chat.completion` 与 `vision.ocr` 执行探活并写入 `provider_health_checks`，Health 视图可继续统一查询 latency/error/degraded reason；`vision.ocr` 探活复用 OpenAI-compatible OCR adapter，不再用 chat probe 代替。
 - **Nexus Provider/Scene 默认 seed（2026-05-11）**：Dashboard Admin Provider Registry 页面加载前会幂等触发默认 seed，创建系统级本地 `custom-local-overlay` provider 与 `corebox.screenshot.translate` Scene，并只追加缺失的 system binding；不会把 user-scope AI mirror OCR provider 自动绑定进 system Scene，避免个人凭证跨用户误用。
 - **跨平台兼容与占位实现复核（2026-05-12）**：2026-05-10 报告中的 Pilot stat 假值、payment mock 默认成功与 touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 上限冻结为 `<=264`；剩余重点是 Windows/macOS 真机证据、Linux best-effort 记录、`compat-file=5`、CLI token 明文 JSON 与超长模块 SRP 拆分。
-- **架构治理切片（2026-05-11）**：Transport guard 已拆出 raw send / retained raw definition / typed migration candidate 三类指标，retained raw definition 上限收紧为 `264`；Pilot `/system/serve/stat` 已改真实运行时指标，mock 支付默认成功由 `PILOT_PAYMENT_MODE=mock` 门控；`plugins/touch-image` 图片历史迁入 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，lint 不再被历史 size debt 阻塞，release 仍走 strict guard。
+- **架构治理切片（2026-05-11）**：Transport boundary test 已拆出 raw send / retained raw definition / typed migration candidate 三类指标，retained raw definition 上限收紧为 `264`；Pilot `/system/serve/stat` 已改真实运行时指标，mock 支付默认成功由 `PILOT_PAYMENT_MODE=mock` 门控；`plugins/touch-image` 图片历史迁入 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts`、`app-provider.ts`、Tuffex `TxFlipOverlay.vue` 等已完成 SRP 拆分切片；质量入口统一为 ESLint、typecheck、targeted tests 与 build，release 走 `quality:release`。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
-- **治理基线（主线代码域）**：`legacy 81/184`、raw `channel.send('x:y') 13/46`、超长文件（>=1200）`47`。
+- **治理基线（主线代码域）**：legacy/raw channel 继续通过 ESLint 与 transport boundary tests 防回潮；文件行数治理回到 code review 与普通重构任务。
 - **发布快照证据**：见 `CHANGES` 中 `v2.4.9-beta.4` 基线条目（含 commit/tag/CI run 链接）。
 - **2.4.8 主线 Gate（historical）**：OmniPanel 稳定版 MVP 已落地（真实窗口 smoke CI + 失败路径回归 + 触发稳定性回归）。
 - **v2.4.7 发布门禁**：Gate A/B/C/D/E 已完成（Gate E 为 historical，Gate D 已通过手动 `workflow_dispatch(sync_tag=v2.4.7)` 收口）。

@@ -5,6 +5,34 @@
 
 ## 2026-05-13
 
+### chore(quality): retire guard infrastructure and consolidate ESLint gates
+
+- `package.json`
+- `.github/workflows/ci.yml`
+- `apps/core-app/{package.json,eslint.config.mjs}`
+- `scripts/check-{legacy-boundaries,compatibility-debt-registry,large-file-boundaries,doc-governance,network-boundaries,coreapp-runtime-boundaries,runtime-console-boundaries,main-global-app-usage,intelligence-no-todo}.mjs`
+- `scripts/{legacy-boundary-allowlist,large-file-boundary-allowlist,runtime-console-allowlist,main-global-app-allowlist}.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - Retired infrastructure guard scripts and their baselines/registries from the project quality chain.
+  - Root quality scripts now keep only `lint`, `lint:fix`, `lint:changed`, `typecheck`, `typecheck:all`, `test:targeted`, `quality:pr`, and `quality:release`; `lint` / `lint:fix` run ESLint only, and lint-staged no longer runs changed-file size guard.
+  - Migrated network, runtime, console, i18n global, raw IPC, old sync API, legacy import/literal, loose WebPreferences, and `$app` boundaries into ESLint rules / overrides.
+  - PR CI now runs `pnpm quality:pr` and no longer includes report-only docs guard; package reusable CI remains on lint/typecheck/test/build parameters.
+  - Updated active quality/roadmap docs to use the ESLint + typecheck + targeted tests + build baseline; historical archive/old CHANGES entries are intentionally not bulk rewritten.
+
+### fix(core-app): avoid plugin install confirmation race
+
+- `apps/core-app/src/main/modules/plugin/{install-queue.ts,install-queue.test.ts}`
+  - 插件安装队列在发送确认请求前先登记 task resolver，避免前端在 `sendToWindow` 尚未返回时立即回传确认响应导致响应被丢弃。
+  - 补充权限确认竞态回归测试，覆盖确认响应早于确认发送 Promise resolve 的路径，防止商店安装按钮长期停留在“等待确认”。
+
+### fix(plugin): remove browser open prelude process dependency
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `packages/test/src/plugins/{browser-open.test.ts,plugin-loader.ts}`
+  - `touch-browser-open` Prelude 不再在顶层读取 `process.platform`，改用 `node:os` 获取当前平台，避免生产插件沙箱未注入 `process` 时启用失败。
+  - 版本升级至 `1.0.1`，用于修复已发布 `1.0.0` 在 CoreBox 插件生命周期 enable 阶段的 `ReferenceError: process is not defined`。
+  - 单测补充无 `process` 全局的插件沙箱加载回归，固定动态搜索引擎 feature 构建不依赖 Node `process` 全局。
+
 ### feat(plugin): add quick launch search engine mode
 
 - `plugins/touch-browser-open/{manifest.json,index.js}`
@@ -17,9 +45,12 @@
 ### fix(core-app): prefer packaged macOS tray template icon
 
 - `apps/core-app/electron-builder.yml`
+- `apps/core-app/scripts/build-target/after-pack.js`
 - `apps/core-app/src/main/modules/tray/{tray-icon-provider,tray-manager}.ts`
-  - macOS 包 `Info.plist` 固化 `LSUIElement=true`，与 tray-first / hide Dock 产品形态对齐，避免只靠运行时 `setActivationPolicy('accessory')` 导致 Dock、菜单栏与状态栏身份不稳定。
+  - macOS 包 `Info.plist` 固化 `LSUIElement=true`，并在 `afterPack` 对主 App `Info.plist` 做兜底写入与 fail-fast 校验；避免 builder 配置或 CLI 覆盖未生效时，系统设置「菜单栏」列表完全不登记 `tuff`。
   - macOS Dock 显隐时同步切换 activation policy：需要显示 Dock 时使用 `regular`，仅托盘驻留时使用 `accessory`，避免 `LSUIElement` 包身份下只调用 `app.dock.show()` 的不完整状态。
+  - 将 `TrayManager` 启动顺序提前到 Intelligence/Auth/Sync 等可能触发 Keychain 或网络等待的模块之前，避免 macOS agent 包在后续模块初始化卡住时尚未创建菜单栏项。
+  - 新增 `TUFF_DEV_TRAY_AGENT=1` dev-only 开关，用于在 `pnpm core:dev` 下测试 macOS tray-first / accessory agent 行为；默认 dev 仍保持强制 `regular`，避免影响日常调试 Dock 可见性。
   - macOS 托盘图标改为优先使用已打包的 `TrayIconTemplate.png` / `tray_icon_22x22.png` / `tray_icon.png` 资源，内置 Base64 template icon 仅作为资源缺失时的 fallback，避免状态栏项在部分 macOS 菜单栏/状态栏管理环境中创建后不可见或 bounds 异常。
   - `TrayManager` 在托盘创建成功后记录 `platform`、`bounds` 与 resolved `iconPath`，后续可直接从日志判断 `trayReady` 与状态栏定位问题，减少 macOS 真机排查歧义。
 
@@ -2118,11 +2149,11 @@
 - `packages/utils/transport/events/app.ts`
 - `packages/utils/transport/events/types/app.ts`
 - `packages/utils/transport/sdk/domains/app.ts`
-  - Secure store now treats Electron `safeStorage` as the preferred backend and falls back to a per-runtime `config/local-secret.v1.key` local AES-256-GCM backend when the system credential store is unavailable.
-  - Auth token, sync payload key, and machine seed storage now pass explicit purposes (`auth-token`, `sync-payload-key`, `machine-seed`) and no longer enter reboot-losing session mode just because `safeStorage` is unavailable.
+  - Secure store no longer calls Electron `safeStorage` / system Keychain. It now always uses a per-runtime `config/local-secret.v1.key` local root secret with AES-256-GCM envelopes, avoiding startup-time system credential prompts.
+  - Auth token, sync payload key, and machine seed storage continue to pass explicit purposes (`auth-token`, `sync-payload-key`, `machine-seed`) and stay encrypted at rest by the local root secret.
   - Credential persistence now defaults to enabled; old default-disabled settings migrate to persistent protection unless the user has explicitly overridden the setting.
-  - Sync payload encryption continues to emit only `payload_enc` / `payload_ref`; legacy `b64:` payloads remain read-only migration input and encrypted key registration now records the actual wrapping backend.
-  - Settings/transport diagnostics expose secure-store health (`safe-storage`, `local-secret`, or `unavailable`) so local encrypted fallback is visible without pretending it is equivalent to the system credential store.
+  - Sync payload encryption continues to emit only `payload_enc` / `payload_ref`; legacy `b64:` payloads remain read-only migration input and encrypted key registration now records the local-secret wrapping backend.
+  - Settings/transport diagnostics expose secure-store health (`local-secret` or `unavailable`) and no longer report or initialize a system credential-store backend.
 
 ### fix(core-app): restore opt-in secure storage and plugin icons
 

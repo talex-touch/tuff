@@ -16,8 +16,8 @@
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），清册退场目标统一前移到 `2.4.11` | 清册中的 `2.4.11` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | CoreApp 平台适配 | `2.4.11` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | Native transport / 截图 | Rust/xcap screenshot addon 已作为首个能力落地；`NativeEvents` 已扩展为 `capabilities`、`screenshot`、`file-index`、`file`、`media` 五域，默认以 `tfile`/metadata 传输大资源；CoreApp `NativeCapabilitiesModule` 已桥接 fileProvider/Everything status、文件 stat/open/reveal/tfile、图片/视频媒体 metadata/thumbnail；媒体 thumbnail 与 FileProvider 复用统一 thumbnail worker，图片/HEIC 使用 `sharp`，常见视频使用内置 ffmpeg 抽帧，生成结果落本地 cache 并通过 `tfile://` 展示；插件侧强制 `window.capture` / `fs.index` / `fs.read` / `media.read` 权限 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort 真机 smoke；打包预览需确认 `sharp`、ffmpeg/ffprobe 在产物中可执行；后续 OCR/前台窗口/Clipboard 是否收敛到 `native:*:*` 仍需按能力成熟度分批决策 | `TODO` / `README` / `CHANGES` |
-| 跨平台/假实现审计 | 2026-05-12 复核确认 Pilot stat 假值、mock payment 默认成功、touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试口径冻结为 `<=264`；`compat:registry:guard` / `runtime:guard` / `docs:guard` 已通过 | `2.4.11` 前继续补 Windows/macOS 真机证据、关闭 `compat-file=5` 与 2.4.11 清册项、梳理 retained raw definition 保留理由，并推进 `plugin-module/file-provider` SRP 拆分 | `report` / `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
-| 架构治理切片 | Transport guard 已拆出 raw send / retained raw definition / typed candidate 指标；Pilot stat 假值与 mock 支付默认成功已收口；touch-image 历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 已迁出并降到 `1143` 行、清退 size exception；`recommendation-engine.ts` 已拆出纯 utility 并低于 exception cap；`search-core.ts` 已拆出纯 helper 并低于 exception cap；`app-provider.ts` 已拆出 path helper 与 source scanner facade 并降到 `3305` 行、growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders 并降到 `1791` 行、growth exception cap 收紧到 `1792`；`update-system.ts` 已拆出 update asset utility 并低于 baseline；`omni-panel/index.ts` 已拆出 builtin definitions 并低于 exception cap；`sdk-compat.ts` 与 Pilot `pilot-compat-*` 已完成物理命名 hard-cut；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper并清退 size exception；Nexus Provider Registry 页面/API 测试、CoreApp Windows acceptance verifier/test、AppProvider test harness、`intelligence-uikit` playground、Nexus `useSignIn.ts`、docs assistant API、Intelligence Lab tools、telemetry sanitizer 与 locale legal shard 已完成 SRP 拆分并退出 grown list，CoreApp 当前不在 grown list，`newOversizedFiles=0`，`grownOversizedFiles=0`，`cleanupCandidates=0`；registry 当前 `36` 条、`compat-file=5`；重构期 guard 已分层，lint 不再串全量架构债务，`size:guard:strict` 保留 release 红线 | 下一步转入剩余业务闭环与 Windows 真机 evidence，不再有新增/增长超长文件阻塞 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 跨平台/假实现审计 | 2026-05-12 复核确认 Pilot stat 假值、mock payment 默认成功、touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试口径冻结为 `<=264`；相关边界已迁入 ESLint / transport boundary test | `2.4.11` 前继续补 Windows/macOS 真机证据、关闭剩余 legacy/compat 业务债务、梳理 retained raw definition 保留理由，并推进 `plugin-module/file-provider` SRP 拆分 | `report` / `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 架构治理切片 | Transport boundary test 已拆出 raw send / retained raw definition / typed candidate 指标；Pilot stat 假值与 mock 支付默认成功已收口；touch-image 历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 已迁出并降到 `1143` 行；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`deepagent-engine.ts`、`update-system.ts`、`omni-panel/index.ts`、Tuffex `TxFlipOverlay.vue` 与多个 Nexus 模块已完成 SRP 拆分；质量入口已统一为 ESLint、typecheck、targeted tests 与 build | 下一步转入剩余业务闭环与 Windows 真机 evidence；文件行数治理通过 code review 与普通重构任务继续推进 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | 2.5.0 AI 板块 | Plan PRD 已锁定为“桌面 AI 入口收口版本”，CoreBox AI Ask 最小 Stable 切片已接入 `text.chat` 与剪贴板图片 `vision.ocr -> text.chat`，CoreBox / OmniPanel 是主入口，Workflow 是主要执行载体，Pilot 是增强能力来源，Nexus Provider/Scene 作为后续架构约束 | 继续拆分 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板；不得扩大到全量多模态或 Scene runtime 编排 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | Nexus Provider Registry | `authRef` 已接 D1 密文 secure store，Dashboard 可绑定腾讯云 `secret_pair`，`providers/:id/check` 可执行腾讯云机器翻译 `text.translate` live check，Provider capability 已支持独立 create/update/delete API，Provider 编辑面板新增/更新/删除 capability 已走独立 API 而非整体替换，Scene 卡片可 dry-run/execute 当前绑定并可深编辑 Scene policy 与 binding constraints，Dashboard Admin Provider Registry 加载时已可幂等 seed 系统级 `custom-local-overlay` provider、`corebox.screenshot.translate` Scene 与缺失的 system binding；CoreApp OmniPanel 划词翻译、CoreBox 剪贴板图片 direct 截图翻译及置顶窗口、CoreBox 汇率预览以及 `/api/exchange/latest` / `/api/exchange/convert` 已接普通登录态 Scene runtime API；汇率 `fx.rate.latest/fx.convert` 已有 Scene adapter；Intelligence provider 创建/更新/删除已同步维护 Provider Registry 镜像，能力归一为 `chat.completion` / `text.summarize` / `vision.ocr`，API key 只写 `provider_secure_store`，dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已经由 bridge 合并读取旧表与 registry-only 镜像，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史；OpenAI-compatible AI mirror 已有默认 `vision.ocr` adapter；composed capability 链式编排已支持 `vision.ocr -> text.translate -> overlay.render` 输出传递，置顶窗口可消费本地 `overlay.render` 客户端 overlay payload；Scene run 已写入 `provider_usage_ledger` 安全元数据并可在 Dashboard Usage 视图查询；Provider check 已写入 `provider_health_checks` 并可在 Dashboard Health 视图查询 latency/error/degraded reason；Scene strategy 已最小参与路由，覆盖 `priority/manual`、`least_cost`、`lowest_latency` 与 `balanced` | 补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略，以及 success rate、配额、动态 pricingRef 成本估算等高级策略；生产必须配置 `PROVIDER_REGISTRY_SECURE_STORE_KEY` | `TODO` / `README` / `CHANGES` / Provider Scene PRD |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
@@ -45,22 +45,22 @@
 - [ ] 按 collection plan 逐项采集 Windows 证据：capability evidence、Everything target probe、App Index diagnostic、common app launch、copied app path、update install、DivisionBox detached widget、time-aware recommendation。
 - [ ] 采集性能证据：`search-trace` 真实查询 `200` 样本生成 `search-trace-stats/v1`；执行 `clipboard:stress` `120000ms` 并用 `clipboard:stress:verify --strict` 复核。
 - [ ] 运行最终强门禁：`pnpm -C "apps/core-app" run windows:acceptance:verify`，并确保 case evidence、manual evidence、performance evidence 均非空、非占位且 gate 通过。
-- [ ] 写入 Nexus Release Evidence：拿到 `release:evidence` API key 或管理员登录态后，写入 docs guard、platform matrix、CoreApp targeted tests、Windows 真机 evidence 与性能 evidence；凭证缺失时只能保持 blocked，不得伪造闭环。
+- [ ] 写入 Nexus Release Evidence：拿到 `release:evidence` API key 或管理员登录态后，写入 documentation review、platform matrix、CoreApp targeted tests、Windows 真机 evidence 与性能 evidence；凭证缺失时只能保持 blocked，不得伪造闭环。
 - [ ] 暂缓抢主线的新功能：`2.5.0` AI/workflow、Provider Registry 高级策略、SRP 大拆分只保留规划，不在 Windows release gate 通过前扩大为当前发版 blocker。
 - [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
 - [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
 
 ### 当前治理版发版暂存清单（2026-05-13）
 
-> 目标：当前治理版本可按“guard 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
+> 目标：当前治理版本可按“quality 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
-- [ ] 发版前最小复核：重新执行 `node "scripts/check-doc-governance.mjs" --strict true --json`、`pnpm compat:registry:guard`、`node "scripts/check-large-file-boundaries.mjs" --report`、`git diff --check`，并记录命令结果。
+- [ ] 发版前最小复核：重新执行 `pnpm quality:release` 与 `git diff --check`，并记录命令结果；如完整 build 环境缺失，则至少执行 `pnpm lint`、`pnpm typecheck:all`、`pnpm test:targeted` 并记录阻塞原因。
 - [x] `2.4.10-beta.19` beta 发布准备：补齐 `notes/update_2.4.10-beta.19.{zh,en}.md`、显式 `build:beta:*` 脚本与 `build-and-release` beta release type；真实 tag/push 仍需用户确认后执行。
 - [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。
 - [ ] Windows 真机 release evidence：补齐 acceptance manifest、Everything target probe、App Index diagnostic、常见 App 启动、复制 app path、本地启动区索引、更新安装、DivisionBox detached widget、分时推荐、search trace 与 clipboard stress 证据。
 - [ ] 搜索性能验收：在真实设备采样 `200` 次查询，生成 `search-trace-stats/v1`，确认 `first.result/session.end` P95 与 slowRatio 达标。
 - [ ] Clipboard stress 验收：执行 `120000ms` 压测并用 `clipboard:stress:verify --strict` 复核 scheduler delay、realtime queue、drop/timeout/error。
-- [ ] Release Evidence 写入：拿到 `release:evidence` API key 或管理员登录态后，将 docs guard、平台 matrix、CoreApp targeted tests 与真机 evidence 写入 Nexus。
+- [ ] Release Evidence 写入：拿到 `release:evidence` API key 或管理员登录态后，将 documentation review、平台 matrix、CoreApp targeted tests 与真机 evidence 写入 Nexus。
 - [ ] macOS / Linux 平台补证：`2.4.11` 前完成 macOS 阻塞级回归；Linux 只记录 best-effort smoke 与桌面环境限制。
 - [ ] Provider Registry 后续：补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略、success rate / quota / dynamic pricingRef 策略。
 - [ ] 2.5.0 AI/workflow 后续：继续拆 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板。
@@ -87,18 +87,18 @@
 - [x] Clipboard module split：
   - 范围：`apps/core-app/src/main/modules/clipboard.ts`、`apps/core-app/src/main/modules/clipboard/clipboard-autopaste-automation*`、`clipboard-capture-freshness*`、`clipboard-history-persistence*`、`clipboard-image-persistence*`、`clipboard-transport-handlers*`、`clipboard-polling-policy*`、`clipboard-native-watcher*`、`clipboard-meta-persistence*`、`clipboard-stage-b-enrichment*`、`clipboard-capture-pipeline*`、`clipboard-request-normalizer.ts`。
   - 结果：`clipboard.ts` 已降到 `1143` 行并清退 size exception；外部事件名、payload、action result 与 DB schema 保持兼容。
-  - 已验证：Clipboard 定向测试 `11 files / 37 tests`、CoreApp node typecheck、定向 ESLint、`size:guard --changed` 与 `size:guard --report`。
+  - 已验证：Clipboard 定向测试 `11 files / 37 tests`、CoreApp node typecheck、定向 ESLint、`targeted ESLint` 与 code review / targeted refactor。
 - [ ] Nexus Intelligence provider dot-route hard-cut：
   - 范围：`apps/nexus/server/api/dashboard/intelligence/providers/**`、`intelligence-route-compat` middleware 删除、`migrate.post.ts` 与相关测试。
   - 下一步：先跑 intelligence provider/migration targeted tests，再与 Provider Registry 已提交批次保持边界清晰。
 - [ ] SDK hard-cut / plugin legacy channel：
-  - 范围：`apps/core-app/src/main/modules/plugin/*`、`sdkapi-hard-cut-gate.ts`、`packages/utils/plugin/index.ts`、`plugins/clipboard-history` raw channel 脚本、`scripts/legacy-boundary-allowlist.json`。
-  - 下一步：跑 plugin-loader / sdkapi / legacy guard / compat registry 后再提交；这是架构性批次，不要混入 UI 或 docs 迁移。
-- [ ] Guard/size/lint 分层与脚本：
-  - 范围：root `package.json`、`scripts/check-large-file-boundaries.mjs`、`scripts/run-eslint-changed.mjs`、size/legacy allowlist。
-  - 下一步：确认 `pnpm size:guard:changed`、`pnpm compat:registry:guard`、`pnpm legacy:guard` 的期望口径，再独立提交。
+  - 范围：`apps/core-app/src/main/modules/plugin/*`、`sdkapi-hard-cut-gate.ts`、`packages/utils/plugin/index.ts`、`plugins/clipboard-history` raw channel 脚本。
+  - 下一步：跑 plugin-loader / sdkapi / ESLint / 最近路径测试后再提交；这是架构性批次，不要混入 UI 或 docs 迁移。
+- [x] Guard 退场与 ESLint 统一：
+  - 范围：root `package.json`、CI、CoreApp ESLint runtime/network/console 边界、legacy/compat/size/docs guard 脚本与基线清理。
+  - 结果：质量入口收敛为 `lint`、`lint:fix`、`lint:changed`、`typecheck`、`typecheck:all`、`test:targeted`、`quality:pr`、`quality:release`。
 - [ ] Tuffex FlipOverlay SRP：
-  - 范围：`TxFlipOverlay.vue`、`flip-overlay-stack.ts`、size allowlist/registry 清理。
+  - 范围：`TxFlipOverlay.vue`、`flip-overlay-stack.ts`。
   - 下一步：跑 tuffex 相关测试或最小组件测试后提交。
 
 #### 需先修复或拆分
@@ -198,7 +198,7 @@
   - `createIntelligenceClient()` 与插件 `intelligence` SDK 不再暴露 deprecated `chat` alias，聊天能力只保留 `chatLangChain()` / `invoke('text.chat', ...)` 主路径。
 - [x] Tuff Intelligence trace replay hard-cut：
   - `tuff-intelligence-runtime` 不再为缺失 `seq` 的 pre-v3 trace 自动合成 replay 序号，`queryTrace(fromSeq)` 只返回具备真实 `seq` 的 v3 trace event。
-  - 新增 trace 事件继续基于当前最大真实 `seq` 单调递增；已移除对应 legacy registry / allowlist 项，防止旧 trace 回填重新进入 agent replay 主链路。
+  - 新增 trace 事件继续基于当前最大真实 `seq` 单调递增；已移除对应 legacy historical registry / ESLint override 项，防止旧 trace 回填重新进入 agent replay 主链路。
 - [x] Nexus SDK 官网入口 hard-cut：
   - 首页 SDK marquee 与全局功能搜索不再展示 `Channel SDK / useChannel()`，IPC 推荐入口只保留 `TuffTransport / useTuffTransport()`。
   - API 总索引 quick start 删除 `useChannel()` 初始化；独立 Channel 文档已改为 retired 迁移映射页，不再提供 `useChannel()` / `usePluginRendererChannel()` quick start 或可复制教程。
@@ -218,7 +218,7 @@
   - 已补 `permission-status.test.ts`，固定 pre-object permission arrays 被忽略，避免旧 manifest 形态绕过当前声明结构。
 - [x] Analytics 启动指标旧事件 hard-cut：
   - `AppEvents.analytics.getCurrent/getHistory/getSummary/report`、settings SDK 同名包装与主进程 handler 下线，启动性能摘要统一进入 `analytics.getSnapshot` 的 `metrics.startup`。
-  - 设置 About 页不再调用旧 summary 事件；`packages/utils/transport/events/app.ts` 对应 registry / allowlist 项已移除。
+  - 设置 About 页不再调用旧 summary 事件；`packages/utils/transport/events/app.ts` 对应 historical registry / ESLint override 项已移除。
 - [x] Workflow / Everything web typecheck 阻塞解除：
   - `useWorkflowEditor.test.ts` 保存 payload 断言显式收窄为 `WorkflowDefinition`，继续固定空 agent step 保存时回填 `builtin.workflow-agent`。
   - `setting-everything-state.test.ts` fixture 补齐当前 `EverythingStatusResponse.backendAttemptErrors` 契约，`typecheck:web` 恢复通过；Clipboard macOS 旧格式注释已改为中性 wording 并移除清册项。
@@ -233,10 +233,10 @@
   - DB hydrate 定义/运行记录读取路径复用同一 normalizer，历史脏行不会绕过保存期 hard-cut 重新进入 editor / run resume。
 - [x] DivisionBox actor 测试清册噪声清理：
   - `ipc.actor.test.ts` 的旧 `pluginId` fixture 命名改为中性 `ignored-plugin-field`，保留“corebox actor 不从 pluginId 误推断插件”的行为断言。
-  - 移除对应 legacy allowlist / compatibility registry 行，`legacy-keyword` 降至 `58 files / 172 hits`。
+  - 移除对应 legacy historical allowlist / registry 行，`legacy-keyword` 降至 `58 files / 172 hits`。
 - [x] CoreApp retired 入口测试命名清理：
   - CommonChannel / Clipboard / OmniPanel / PluginLoader / Update channel 测试中用于断言旧入口已退役或 sdkapi 阻断的 `legacy` 命名改为 `retired` / `below-floor`。
-  - 移除 5 条 stale legacy allowlist / compatibility registry 行，`legacy-keyword` 降至 `53 files / 167 hits`。
+  - 移除 5 条 stale legacy historical allowlist / registry 行，`legacy-keyword` 降至 `53 files / 167 hits`。
 - [x] Pilot auth retired 入口测试命名清理：
   - `auth.test.ts` 中旧 header/cookie/bearer fixture 从 `legacy_*` 改为 `retired_*`，继续固定这些直传身份输入不会绕过设备访客身份。
   - 移除对应 stale registry 行，减少 legacy keyword 清册噪声。
@@ -273,7 +273,7 @@
   - 移除对应 stale registry 行。
 - [x] Pilot system message production 变量命名清理：
   - `pilot-system-message-response.ts` 中保留持久化可见 system message 的局部集合从 legacy 命名改为 persisted visible 命名，消息投影与合并行为不变。
-  - 同步移除 `history/index.ts` 的 stale legacy allowlist 行，保持清册与上一轮清理结果一致。
+  - 同步移除 `history/index.ts` 的 stale legacy ESLint override 行，保持清册与上一轮清理结果一致。
 - [x] Utils CoreBox DSL icon 注释口径清理：
   - `TuffMeta.icon` TSDoc 从 legacy icon identifier 改为当前 icon identifier，保留轻量 class name 透传语义与接口字段不变。
 - [x] CoreApp/Nexus Vue I18n 清册说明校准：
@@ -282,28 +282,28 @@
   - `analytics/README.md` 与 `docs/analytics-data-prd.md` 的搜索性能接入说明从 legacy 搜索改为 current layered fast/deferred provider timing 口径，运行时代码不变。
 - [x] Pilot datasource gateway 非分支 legacy 噪声清理：
   - `pilot-admin-datasource-config.ts` 注释与测试标题/样例域名/env key 改为 historical/retired 口径；`legacy-gateway` provider id 作为真实生产分支 key 保留。
-  - allowlist maxCount 从 production `5 -> 2`、test `8 -> 2` 收紧，registry 行改为明确 branch-key 债务说明。
+  - ESLint override maxCount 从 production `5 -> 2`、test `8 -> 2` 收紧，registry 行改为明确 branch-key 债务说明。
 - [x] Pilot capability historical field 内部命名清理：
   - `resolvePilotCapabilities` / `resolvePilotModelCapabilities` / `normalizeCapabilitiesForm` 的内部参数从 legacy 命名改为 historicalFields，保留 `allowWebsearch` 等历史字段回填契约不变。
   - 移除 `pilot-admin-routing-config.ts`、`usePilotRoutingAdmin.ts`、`pilot-capability-meta.ts` 对应 legacy-keyword registry 行。
 - [x] Pilot quota history payload 局部命名清理：
   - `quota-history-store.ts` 中 base64 历史 payload 迁移的局部变量从 legacy 改为 historicalPayload，JSON 迁移行为不变。
-  - 移除对应 legacy-keyword allowlist / compatibility registry 行。
+  - 移除对应 legacy-keyword historical allowlist / registry 行。
 - [x] CoreApp download migration guide wording 清理：
   - `download/MIGRATION_GUIDE.md` 的用户可读说明从 Legacy download 改为 historical download，强调旧导入已移出运行时路径。
 - [x] CoreApp plugin runtime repair 诊断命名清理：
   - `plugin-runtime-repair` 的旧 widget shared import drift 检测 code/test wording 从 legacy 改为 retired，仍继续扫描 `../shared/translation-shared.cjs` 漂移输入。
-  - 移除 runtime repair 实现与测试对应 legacy-keyword allowlist / compatibility registry 行。
+  - 移除 runtime repair 实现与测试对应 legacy-keyword historical allowlist / registry 行。
 - [x] Packages test tsconfig 注释口径清理：
   - `packages/test/tsconfig.json` 的 TypeScript 模板注释从 legacy experimental decorators 改为 TypeScript experimental decorators，不改变编译配置。
 - [x] Pilot channel removed adapter hard-cut：
   - `pilot-admin-channel-config.ts` 不再把旧 adapter 输入值静默归一为 `openai`；未知 adapter 会作为 invalid channel 被拒绝保存/加载，并在 rejected channels 中标记 `adapter`。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
   - `legacy-keyword` 官方统计降至 `7 files / 10 hits`。
 - [x] Pilot stream status event hard-cut：
   - `createTitleSseResponse()` 不再发送 `status_updated` 状态事件，标题流只输出 completion chunks + `[DONE]`。
   - `usePilotChatPage.ts` 删除 `status_updated` 与 `error + TOOL_APPROVAL_REQUIRED` 旧事件兼容分支，审批等待只走当前 `turn.approval_required` 事件。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
   - `legacy-keyword` 官方统计降至 `6 files / 9 hits`。
 - [x] Tuffex DataTable sorting accessibility baseline：
   - `TxDataTable` 的可排序表头补齐 `scope="col"`、`tabindex`、`aria-sort` 与 Enter/Space 键盘触发，鼠标与键盘排序共用同一当前排序状态。
@@ -473,42 +473,42 @@
   - registry 行改为明确“上游错误文本匹配”，避免误标为项目兼容分支。
 - [x] Legacy guard 非兼容分支例外收口：
   - 新增 `scripts/lib/legacy-keyword-exceptions.mjs`，仅过滤 Vue I18n `legacy: false` 固定 API 字段、DeepAgent 上游 `legacy protocol` 错误文本签名、`packages/utils` 负向 lint 禁止项。
-  - 移除对应 5 条 legacy allowlist / compatibility registry 行，真实生产分支 key、迁移读取路径与文件名债务仍保留清册登记。
+  - 移除对应 5 条 legacy historical allowlist / registry 行，真实生产分支 key、迁移读取路径与文件名债务仍保留清册登记。
   - `legacy-keyword` 官方统计降至 `12 files / 18 hits`。
 - [x] Pilot websearch provider id hard-cut：
   - 历史 `gatewayBaseUrl/apiKeyRef` 字段 hydration 时直接映射到当前 `searxng-main` provider，`pilot-tool-gateway` 不再按 `legacy-gateway` id 分支选择 connector。
-  - 移除 datasource / tool gateway 实现与测试对应 4 条 legacy allowlist / compatibility registry 行。
+  - 移除 datasource / tool gateway 实现与测试对应 4 条 legacy historical allowlist / registry 行。
   - `legacy-keyword` 官方统计降至 `8 files / 11 hits`。
 - [x] Nexus team context 测试清册噪声清理：
   - `team-context.test.ts` 中组织团队 fixture 名称从 `Legacy Org` 改为中性 `Standalone Org`，保留“非协作套餐 owner 仍可解散组织团队”的行为断言。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] Utils system SDK 测试清册噪声清理：
   - `system-sdk.test.ts` 的 failure path 仍固定 typed transport 抛错时不回退 raw channel，但测试标题改为 `retired raw channel`，不再占用 legacy 关键词清册。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] Plugin install queue sdkapi 测试清册噪声清理：
   - `install-queue.test.ts` 中低于 sdkapi floor 的插件 fixture 从 `touch-legacy` 改为 `touch-below-floor`，继续固定未声明 `sdkapi >= 251212` 时安装在 finalize 前失败。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] App provider keyword sync 测试清册噪声清理：
   - `app-provider.test.ts` 的稳定态 keyword sync 回归标题改为 `retired app item ids`，继续固定同步时不重复调用 `removeItems()`。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] Storage subscription 测试清册噪声清理：
   - `packages/test` 的 storage subscription 回归标题与错误消息改为 `retired channel`，继续固定 typed storage transport 优先且不使用旧 channel snapshot。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] Preset export v1 hard-cut：
   - `validatePresetData()` 仅接受当前 `PRESET_EXPORT_VERSION=2`，`version=1` 与未来未知版本都返回 invalid，不再以 warning/兼容方式继续导入。
-  - `preset-export-types.test.ts` 改为固定 v1 payload 被拒绝，并移除对应 legacy allowlist / compatibility registry 行。
+  - `preset-export-types.test.ts` 改为固定 v1 payload 被拒绝，并移除对应 legacy historical allowlist / registry 行。
 - [x] Renderer storage boundary 测试清册噪声清理：
   - `app-storage-boundary.test.ts` 的局部变量与测试标题改为 `retired` wording，继续固定旧 storage channel import 只允许存在于 bootstrap shim 文件内。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] Unplugin CLI shim 测试清册噪声清理：
   - `cli-shim.test.ts` 的测试描述改为 `retired cli shim`，继续固定 deprecated wrapper 只输出弃用提示并转发到 `tuff-cli`。
-  - 移除对应 legacy-keyword allowlist / compatibility registry 行；文件名自身仍作为 compat-file 清册项保留，等待 `2.4.11` 退场窗口处理。
+  - 移除对应 legacy-keyword historical allowlist / registry 行；文件名自身仍作为 compat-file 清册项保留，等待 `2.4.11` 退场窗口处理。
 - [x] Pilot route/model admin UI 清册噪声清理：
   - `route-combos.vue` 与 `model-groups.vue` 中“当前保存值已禁用/不存在”的临时选项状态从 `legacyStatus` 改为 `retiredStatus`，保留 disabled placeholder 展示逻辑。
-  - 移除对应 legacy allowlist / compatibility registry 行。
+  - 移除对应 legacy historical allowlist / registry 行。
 - [x] PermissionStore SQLite-only 测试清册噪声清理：
   - `permission-store.test.ts` 的 JSON fixture 命名与测试标题改为 `retired` wording，继续固定 SQLite 初始化不会导入旧 JSON snapshot、backend unavailable 时不会恢复 JSON fallback。
-  - 移除测试文件对应 legacy allowlist / compatibility registry 行；`permission-store.ts` 的 read-once migration exception 仍单独登记。
+  - 移除测试文件对应 legacy historical allowlist / registry 行；`permission-store.ts` 的 read-once migration exception 仍单独登记。
 - [x] Plugin channel `sendSync` hard-cut：
   - `packages/utils/plugin/channel.ts` 与 generated plugin prelude 不再调用 `ipcRenderer.sendSync('@plugin-process-message', ...)`；旧 `sendSync` 表面保留为显式 hard-cut error（`plugin_channel_send_sync_removed`）。
   - `PluginChannelClient` / `IPluginRendererChannel` 的 SDK 类型面不再暴露 `sendSync`；Channel API 文档同步改为 retired 说明，不再展示同步调用示例。
@@ -752,8 +752,8 @@
   - 旧 `b64:` 仅作为 pull migration fallback 读取；读取后标记 dirty，下一次 push 自动升级为 `enc:v1`。
   - renderer `sync-item-mapper` 退为拒写兼容壳，避免第二套 Base64 实现重新接入生产同步。
   - 已补定向回归：sync crypto/wire、AccountStorage token 不落盘、renderer platform 优先级、legacy language migration。
-  - 迁移读取内部标记已改为 `requiresMigrationRewrite`，并清理测试文案噪声；`legacy-boundary` 与 `compat:registry:guard` 重新通过。
-  - compatibility registry 已移除无当前扫描命中的 cleanup candidate 行；`pnpm compat:registry:guard` 当前通过且无 cleanup warning。
+  - 迁移读取内部标记已改为 `requiresMigrationRewrite`，并清理测试文案噪声；`legacy-boundary` 与 ESLint compatibility boundary rules 重新通过。
+  - ESLint compatibility boundary rules 已移除无当前扫描命中的 cleanup candidate 行；`pnpm lint` 当前通过且无 cleanup warning。
   - `compat-file` 扫描已将 `compat`、`shim/shims` 收紧为独立命名段，并对 declaration-only `.d.ts` 排除 `shim` 噪声；移除 `ShimmerText.vue`、`shims*.d.ts` 与 `langchain-openai-compatible-provider.ts` 的误伤登记；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名，当前真实 `compat-file` 降至 `5`。
   - 下载迁移 progress/result push 事件已进入 shared typed `DownloadEvents.migration.progress/result` registry，`MigrationProgress.vue` 不再本地 `defineRawEvent('download:migration-*')`。
   - Language localStorage snapshot 迁移读取路径已硬切，初始化只读取 typed app settings / browser / Intl；旧 `app-language` 与 `app-follow-system-language` 仅保留 retired key cleanup，不再作为偏好来源。
@@ -765,7 +765,7 @@
   - renderer `sync-item-mapper` 仅保留插件 storage qualified-name helper，retired sync payload API 由 main 侧真实实现承载。
 - [ ] CoreApp 后续兼容/跨平台专项：
   - [x] 2026-05-06 首轮 runtime 边界收口：新增 `WindowSecurityProfile`，主窗口/CoreBox/OmniPanel/Assistant/MetaOverlay 切到 app-grade baseline；插件 `WebContentsView` / DivisionBox 仅通过显式 `compat-plugin-view` 保留兼容。
-  - [x] 2026-05-06 raw IPC 底座冻结：`@main-process-message` / `@plugin-process-message` 集中到内部 adapter，renderer `window.touchChannel` 仅保留 deprecated bootstrap bridge；新增 `runtime:guard` 拦截裸 IPC、宽松 WebPreferences、旧 i18n 与旧 `/api/sync/*`。
+  - [x] 2026-05-06 raw IPC 底座冻结：`@main-process-message` / `@plugin-process-message` 集中到内部 adapter，renderer `window.touchChannel` 仅保留 deprecated bootstrap bridge；新增 ESLint runtime boundary rules 拦截裸 IPC、宽松 WebPreferences、旧 i18n 与旧 `/api/sync/*`。
   - [x] 2026-05-06 跨平台 capability 合同补强：macOS Automation、Windows PowerShell、Linux `xdotool`、native share mail-only 与 permission deep-link degraded/unsupported path 均有 `issueCode/reason/limitations` 回归。
   - [x] 2026-05-10 跨平台兼容与占位实现审计报告已落地：`docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md`。
   - [x] 2026-05-12 复核报告已落地：`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`；旧报告中的 Pilot stat、payment mock、touch-image storage 三项已按代码复核为收口态，当前剩余重点转为 Windows/macOS 真实证据、`compat-file=5`、retained raw definition 保留理由、CLI token 明文 JSON 与 `plugin-module/file-provider` SRP 拆分。
@@ -780,13 +780,13 @@
 ### 2.4.10 当前优先：Windows App 索引 + 基础 legacy/compat
 
 - [x] 基础 legacy 清理阻塞：清册中的 core-app `2.4.11` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
-  - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 allowlist / registry。
+  - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 ESLint overrides where justified。
   - 插件 channel bridge 移除 legacy header 语义；DivisionBox dead `flow-trigger` 事件面已物理删除；Nexus store 旧 manifest/path fallback 已改为结构化错误。
   - permission JSON->SQLite、dev data root migration、theme localStorage migration 仍作为 read-once / marker-gated migration exception 保留；2026-05-08 已补明确退场条件与回归证据要求，禁止扩散为新的 runtime storage 依赖。
   - 2026-05-08 Intelligence Workflow 页面与 `useWorkflowEditor()` 硬编码文案已迁移到 `zh-CN/en-US` i18n；FileProvider 两处 `[DEBUG]` 日志前缀和 DEBUG 注释已清理，索引调度逻辑不变。
   - 2026-05-08 `compat-plugin-view`、raw IPC adapter 与 `window.touchChannel` 仅维持现有白名单边界；本轮未新增 legacy/raw channel 消费方。
-- [x] Auth secure store 分层降级：`useSecureStorage` 缺省启用凭证持久保护，旧默认关闭配置会迁移到开启（用户显式关闭除外）；Electron `safeStorage` 不可用时使用 `config/local-secret.v1.key` 本地 AES-GCM fallback，只有 `unavailable` 才进入 session-only。
-- [x] Sync secure payload key 降级兼容：`sync-payload-key` 通过 secure-store 分层持久化，注册包装记录真实 backend，旧 `b64:` 仍只作为 decrypt + rewrite 迁移输入。
+- [x] Auth secure store 本地 root 密钥策略：`useSecureStorage` 缺省启用凭证持久保护，旧默认关闭配置会迁移到开启（用户显式关闭除外）；CoreApp 不再调用 Electron `safeStorage` / 系统 Keychain，统一使用 `config/local-secret.v1.key` 本机随机 root 密钥保护 auth token / machine seed，只有 local secret 不可用才进入 session-only。
+- [x] Sync secure payload key 本地持久化：`sync-payload-key` 通过 secure-store 的 local-secret backend 持久化并注册包装 backend，旧 `b64:` 仍只作为 decrypt + rewrite 迁移输入；旧 `safe-storage` envelope 不再解密，以避免启动期触发系统凭证库。
 - [x] Plugin icon 基础兼容修复：插件 manifest `file` 图标优先从插件目录解析，补 `src/assets` / `public` source-layout 候选；CoreApp `TuffIcon colorful=true` 直接保留 SVG 原色渲染，避免本地 SVG 读取失败导致破图。
 - [x] Plugin channel sandbox 兼容修复：旧插件 channel/prelude 与 renderer channel reply 统一用 `ipcRenderer.send(...)`，避免 sandbox 事件对象缺少 `sender.send`。
 - [x] CoreApp node typecheck 当前阻塞解除：renderer storage transport 测试 typing 与 Windows file-provider index runtime service 未使用类字段已收口。
@@ -819,20 +819,20 @@
 - [ ] Windows 常见应用搜索启动验证：微信、Codex、Apple Music 至少三类真实应用完成“可搜索、可显示正确名称/图标、可启动、CoreBox 可立即隐藏”验证；`windows:acceptance:template` 已生成 `manualChecks.commonAppLaunch.checks[]` 占位，最终复核使用 `windows:acceptance:verify --requireCommonAppLaunchDetails --requireCommonAppTargets WeChat,Codex,"Apple Music"` 卡住五项布尔检查。
   - 2026-05-11 acceptance 结构化字段已收紧：每个 common app check 必须填写 `searchQuery / observedDisplayName / iconEvidence / observedLaunchTarget / coreBoxHiddenEvidence`；最终 gate 会在五项布尔检查之外复核这些字段非空。
   - 2026-05-11 手工证据字段已收紧：每个目标 App 必须填写 observed display name、icon evidence、observed launch target 与 CoreBox hidden evidence，不能只用泛截图替代显示名/图标/隐藏验证。
-- [ ] `2.4.10` 文档证据闭环：每轮清理同步 `CHANGES + TODO + compatibility registry`，并优先保留本地可复现命令；Release Evidence 凭证缺失时不伪造远端写入。
+- [ ] `2.4.10` 文档证据闭环：每轮清理同步 `CHANGES + TODO + ESLint compatibility boundary rules`，并优先保留本地可复现命令；Release Evidence 凭证缺失时不伪造远端写入。
 
 ### 2.4.11 必须解决的问题
 
 - [ ] Windows 阻塞级回归：Everything/文件搜索、应用扫描/UWP、托盘状态、更新包匹配、插件权限拦截、安装/卸载、退出资源释放。
 - [ ] macOS 阻塞级回归：首次引导权限、OmniPanel Accessibility 门控、native-share 标记、托盘/dock 行为、更新安装、插件权限拦截、退出资源释放。
 - [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.4.11` release blocker。
-- [ ] Release Evidence 写入闭环：具备 `release:evidence` API key 或管理员登录态后，将 docs guard、平台 matrix 与 CoreApp 定向回归结果写入 Nexus。
-- [ ] Legacy/compat/size 清册退场：`scripts/legacy-boundary-allowlist.json`、`scripts/large-file-boundary-allowlist.json` 与 `compatibility-debt-registry.csv` 中 `2.4.11` 退场项必须关闭或显式降权。
+- [ ] Release Evidence 写入闭环：具备 `release:evidence` API key 或管理员登录态后，将 documentation review、平台 matrix 与 CoreApp 定向回归结果写入 Nexus。
+- [ ] Legacy/compat 业务债务退场：`2.4.11` 前必须关闭或显式降权剩余旧 storage protocol、旧 SDK bypass、retained raw definition 等真实业务债务。
 - [ ] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
   - 2026-05-08 已将 core-app 13 个 `size-growth-exception` 收敛为后续小任务口径；优先拆分候选为 `clipboard.ts`（capture/history/transport/autopaste）、`search-core.ts`（routing/provider orchestration/cache-result merge）、`plugin-module.ts`（lifecycle/runtime repair/surface wiring/registry）。
   - 2026-05-11 已完成 `clipboard.ts` 十块切片：capture freshness / diff helper / freshness store 迁到 `clipboard-capture-freshness.ts`，history persistence / cache / query / favorite/delete/image URL 迁到 `clipboard-history-persistence.ts`，typed transport handler 注册与 stream fanout 迁到 `clipboard-transport-handlers.ts`，copy/apply/paste 自动化与失败通知迁到 `clipboard-autopaste-automation.ts`，live image read / temp namespace / orphan cleanup / native image reconstruction 迁到 `clipboard-image-persistence.ts`，polling interval / 低电量策略迁到 `clipboard-polling-policy.ts`，native watcher env/load/start-stop 迁到 `clipboard-native-watcher.ts`，meta DB write / queue pressure/drop/fk 处理迁到 `clipboard-meta-persistence.ts`，stage-B enrichment 迁到 `clipboard-stage-b-enrichment.ts`，capture/persist 主流程迁到 `clipboard-capture-pipeline.ts`；`clipboard.ts` 已降到 `1143` 行并清退 size exception。
   - 2026-05-11 已清零 new oversized：Nexus `provider-registry.vue` 降到 `999` 行、`provider-registry.api.test.ts` 降到 `951` 行；CoreApp `windows-acceptance-manifest-verifier.ts` 降到 `1136` 行、`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行，并拆出 `windows-acceptance-command-requirements.ts`、`windows-acceptance-evidence-verifier.test.ts` 与 manifest test helper。
-  - 2026-05-11 `recommendation-engine.ts` 的错误日志 meta、day bucket、time context boost/relevance score 已迁到 `recommendation-utils.ts`，主文件降到 `1869` 行并退出 grown list；`search-core.ts` 的 provider/filter/cache key/telemetry/scene 纯 helper 已迁到 `search-core-utils.ts`，主文件降到 `2475` 行并退出 grown list；`app-provider.test.ts` 已迁出 hoisted mock/test harness 并降到 `1400` 行；`app-provider.ts` 已迁出 UWP/path/managed-entry 纯 helper与 source scanner facade，并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已迁出附件归一、chat content 与 Responses input builder 到 `deepagent-input.ts`，主文件降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已迁出 update asset 打分/分类 helper 并降到 `1610` 行；`omni-panel/index.ts` 已迁出 builtin definitions 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已迁出 playground state composable 并降到 `919` 行；Nexus `useSignIn.ts` 已迁出 redirect helper 并降到 `1538` 行，`assistant.post.ts` 已迁出 request audit meta helper 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已迁出 Lab tool execution helper 并降到 `3408` 行，`telemetryStore.ts` 已迁出 telemetry sanitizer 并降到 `1502` 行，Nexus locale 已迁出 legal shard 并使 `en.ts/zh.ts` 低于 exception cap；`node scripts/check-large-file-boundaries.mjs --report` 当前 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`。
+  - 2026-05-11 `recommendation-engine.ts` 的错误日志 meta、day bucket、time context boost/relevance score 已迁到 `recommendation-utils.ts`，主文件降到 `1869` 行并退出 grown list；`search-core.ts` 的 provider/filter/cache key/telemetry/scene 纯 helper 已迁到 `search-core-utils.ts`，主文件降到 `2475` 行并退出 grown list；`app-provider.test.ts` 已迁出 hoisted mock/test harness 并降到 `1400` 行；`app-provider.ts` 已迁出 UWP/path/managed-entry 纯 helper与 source scanner facade，并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已迁出附件归一、chat content 与 Responses input builder 到 `deepagent-input.ts`，主文件降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已迁出 update asset 打分/分类 helper 并降到 `1610` 行；`omni-panel/index.ts` 已迁出 builtin definitions 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已迁出 playground state composable 并降到 `919` 行；Nexus `useSignIn.ts` 已迁出 redirect helper 并降到 `1538` 行，`assistant.post.ts` 已迁出 request audit meta helper 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已迁出 Lab tool execution helper 并降到 `3408` 行，`telemetryStore.ts` 已迁出 telemetry sanitizer 并降到 `1502` 行，Nexus locale 已迁出 legal shard 并使 `en.ts/zh.ts` 低于 exception cap；当前文件行数治理结果仅作为历史记录；后续通过 code review 与普通重构任务继续推进。
 - [x] CoreApp 验证收口：补跑 `typecheck:node` / `typecheck:web` / 定向测试并记录证据。
   - 2026-05-11 本地验证补证：`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（tuffex build 阶段仍输出既有 deprecation / dts 诊断噪声但命令返回 0）；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard/clipboard-request-normalizer.test.ts" "src/main/modules/clipboard/clipboard-freshness.test.ts" "src/main/modules/clipboard/clipboard-capture-freshness.test.ts" "src/main/modules/platform/windows-acceptance-verify-script.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts" "src/renderer/src/modules/box/adapter/hooks/useDetach.test.ts" "src/main/modules/division-box/session.test.ts"` 通过（`67 tests`）。
 - [ ] 搜索性能验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
@@ -849,13 +849,13 @@
 - [x] Plugin storage 治理第一切片：`plugins/touch-image` 图片历史路径已从 renderer `localStorage` 写入迁到 plugin storage SDK，固定 50 条上限，补一次性旧数据迁移、缩略图失败剔除与清理入口。
 - [ ] 架构 Wave C：`plugin-module/search-core/file-provider` SRP 拆分。
   - 2026-04-26 Nexus 证据入口：新增 `/api/admin/release-evidence/*`，支持 run 创建/分页/详情、item upsert、平台阻塞 matrix 与 `doc-guard` 快速写入；管理员登录态或 `release:evidence` API key 可写入，CI 默认走 API key。
-  - 2026-04-27 写入阻塞：当前本地环境未提供 `release:evidence` API key 或管理员登录态，只能先把 docs guard、Nexus build/smoke 与本机 CoreApp 验证结果同步到 `CHANGES`；拿到凭证后按同一证据载荷写入 `/api/admin/release-evidence/doc-guard` 与 matrix。
+  - 2026-04-27 写入阻塞：当前本地环境未提供 `release:evidence` API key 或管理员登录态，只能先把 documentation review、Nexus build/smoke 与本机 CoreApp 验证结果同步到 `CHANGES`；拿到凭证后按同一证据载荷写入 `/api/admin/release-evidence/doc-guard` 与 matrix。
   - 2026-04-27 matrix caseId 固化：Windows required 使用 `windows-everything-file-search` / `windows-app-scan-uwp` / `windows-third-party-app-launch` / `windows-shortcut-launch-args` / `windows-tray-update-plugin-install-exit`；macOS required 使用 `macos-first-run-permissions` / `macos-omnipanel-accessibility` / `macos-native-share-tray-dock-update` / `macos-plugin-permission-install-update` / `macos-exit-resource-release`；Linux 仅写 `linux-best-effort-smoke` 且 `requiredForRelease=false`。
   - 2026-05-06 matrix 口径回归补强：Release Evidence API 测试已覆盖 Windows failed required case 进入 blockers、macOS passed required case 通过、Linux `best_effort + requiredForRelease=false` 不阻塞 release。
-  - 2026-04-20 自动门禁：`git diff --check`、`pnpm docs:guard`、`pnpm docs:guard:strict`、`pnpm compat:registry:guard`、`node scripts/check-legacy-boundaries.mjs`、`pnpm network:guard` 已通过；`pnpm legacy:guard` 在 legacy/compat 子门禁通过后被既有 `size:guard` 大文件基线漂移拦截；CoreApp typecheck/test 待本地依赖安装后补证。
+  - 2026-04-20 自动门禁：`git diff --check`、文档人工复核与相关 lint 曾通过；该历史记录中的 guard 命令已退场，当前质量入口以 `pnpm lint` / `pnpm quality:pr` / `pnpm quality:release` 为准。
   - 2026-04-22 CoreApp 补证：补齐 `EverythingProvider` 的 `SDK -> CLI -> file-provider` 双重失效同次查询回退回归；`git diff --check`、`pnpm -C "apps/core-app" run typecheck`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/channel/common.test.ts"` 已通过。
-  - 2026-04-23 renderer 权限中心死分支清理：删除未使用且仍保留旧 SDK “跳过权限校验”语义的 `PermissionStatusCard` / `PermissionRequestDialog` / `usePluginPermission`，同步移除 `PermissionStatusCard` 清册条目，并补齐当前 `compatibility-debt-registry` 漂移项；`pnpm -C "apps/core-app" run typecheck:web`、`pnpm compat:registry:guard`、`git diff --check` 已通过。
-  - 2026-04-23 SearchLogger 旧配置键清理：`search-engine-logs-enabled` runtime fallback 已改成启动迁移到 `app-setting.ini`，并同步移除 `search-logger.ts` 的 compatibility registry 条目；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/storage/search-engine-logs-setting-transfer.test.ts" "src/main/modules/box-tool/search-engine/search-logger.burst.test.ts"`、`pnpm -C "apps/core-app" run typecheck:node` 待本轮 `git diff --check` / `pnpm compat:registry:guard` 一并复核。
+  - 2026-04-23 renderer 权限中心死分支清理：删除未使用且仍保留旧 SDK “跳过权限校验”语义的 `PermissionStatusCard` / `PermissionRequestDialog` / `usePluginPermission`，同步移除历史清册条目；`pnpm -C "apps/core-app" run typecheck:web`、`pnpm lint`、`git diff --check` 已通过。
+  - 2026-04-23 SearchLogger 旧配置键清理：`search-engine-logs-enabled` runtime fallback 已改成启动迁移到 `app-setting.ini`，并同步移除 `search-logger.ts` 的 ESLint compatibility boundary rules 条目；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/storage/search-engine-logs-setting-transfer.test.ts" "src/main/modules/box-tool/search-engine/search-logger.burst.test.ts"`、`pnpm -C "apps/core-app" run typecheck:node` 待本轮 `git diff --check` / `pnpm lint` 一并复核。
   - 2026-04-26 CoreApp capability 语义收口：FlowBus 未注册 delivery handler 的 target 改为 `TARGET_OFFLINE`，插件投递异常不再被吞成 delivered；`platform.flow-transfer` / `platform.division-box` / active-app 改为条件型 best-effort，并删除过度乐观的 `isActiveAppCapabilityAvailable()`；macOS notification 支持态不再误报为 granted。定向回归：`permission-checker.test.ts`、`capability-runtime.test.ts`、`flow-bus.test.ts`、`flow-trigger.test.ts` 已通过。
 
 ### A. 文档治理（本轮）
@@ -864,13 +864,12 @@
 - [x] 六主文档“下一动作”统一为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，剩余未闭环项进入 `2.4.11` 必解清单。
 - [x] `CHANGES` 完成“近 30 天主文件 + 历史月度归档”拆分。
 - [x] `README/INDEX` 入口压缩为高价值快照。
-- [x] Phase 0：新增 `legacy:guard`（冻结新增 `legacy` 分支与 `channel.send('x:y')` raw event）。
-- [x] Phase 0：建立 `scripts/legacy-boundary-allowlist.json`，存量兼容债务全部附 `expiresVersion=2.4.11`。
-- [x] 统一治理 SoT：新增 `docs/plan-prd/docs/compatibility-debt-registry.csv`（固定字段与 owner/expires/test_case）。
-- [x] 统一治理门禁：新增 `pnpm compat:registry:guard` + `pnpm size:guard`，并并入 `pnpm legacy:guard`。
-- [x] 重构期 Guard 分层：`lint/lint:fix` 已与架构门禁解耦；`size:guard` 默认阻断新增/增长并报告历史未增长债务，`size:guard:report` 只输出全量报告，`size:guard:changed` 阻断 changed files 新增/增长，`size:guard:strict` 保留 release/milestone 全量阻断；`legacy:guard` 不再因历史 size debt 失败。
-- [x] 统一主线验收入口：新增 `pnpm quality:gate` 聚合命令（`legacy/network/test:targeted/typecheck/docs`）。
-- [x] 超长文件冻结：新增 `scripts/large-file-boundary-allowlist.json`（主线基线 `47` 个）。
+- [x] Phase 0：新增 ESLint legacy-boundary rules（冻结新增 `legacy` 分支与 `channel.send('x:y')` raw event）。
+- [x] Phase 0：曾建立 legacy/compat/size guard 与清册，用于迁移期冻结存量债务。
+- [x] 统一治理 SoT：迁移期 compatibility registry 已完成历史作用，当前边界约束迁入 ESLint。
+- [x] 统一治理门禁：当前质量入口已收敛为 `lint`、`lint:changed`、`typecheck`、`test:targeted`、`quality:pr` 与 `quality:release`。
+- [x] 重构期质量入口统一：`lint/lint:fix` 已与架构债务扫描解耦；文件行数治理回到 code review 与普通重构任务；release/milestone 使用 `quality:release`。
+- [x] 统一主线验收入口：新增 `pnpm quality:pr` 聚合命令（lint + targeted tests + CoreApp typecheck）。
 - [x] 主线隔离：root workspace 与 root lint 默认仅覆盖 `core-app/nexus/pilot/packages/plugins`。
 - [x] Sync 兼容壳行为固化：补充 `/api/sync/pull|push` 返回 410 的自动化测试断言。
 - [x] 债务扫描口径显式化：主线改为显式白名单 + 漏扫报错 + `scanScope` 摘要输出。
@@ -890,7 +889,7 @@
 - [x] Tuffex Switch 官网契约硬裁切：Nexus 英文 Switch API 移除不存在的 `loading/medium` 口径，改为真实 `small/default/large` 尺寸、disabled 阻断与 update/change 事件说明。
 - [x] Tuffex Button 语义 tone 契约补证：`type` 保留为当前 semantic tone alias，不再描述为 legacy/兼容旧用法；Nexus 中英文 Button 文档与 tuffex docs 同步说明 `variant` 优先、`type=text` 映射 `ghost`，并由 `button.test.ts` 固定映射行为。
 - [x] Tuffex FlipOverlay 组件源码兼容噪声清理：单 overlay mask 注释改为当前 baseline 描述，不再使用 backward-compatible 叙述；`flip-overlay.test.ts` 继续固定多层 stack/透明度行为。
-- [x] Tuffex FlipOverlay size exception 清退：`TxFlipOverlay.vue` 的 stack registry / shared global mask 逻辑迁出到 `flip-overlay-stack.ts`，组件从 `1344` 行降到 `1194` 行并低于 1200 阈值；`SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY` 已从 allowlist 与 registry 删除。
+- [x] Tuffex FlipOverlay size exception 清退：`TxFlipOverlay.vue` 的 stack registry / shared global mask 逻辑迁出到 `flip-overlay-stack.ts`，组件从 `1344` 行降到 `1194` 行并低于 1200 阈值；`SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY` 已从 ESLint override 与 registry 删除。
 - [x] Phase 1：速率限制、冷却窗口、审计日志与长期授权时间窗落地。
   - 新增 `auth_device_auth_audits` 结构化审计表，覆盖 request/approve/reject/cancel/revoke/trust/untrust；`GET /api/devices/audits` 可查询当前用户设备授权时间线。
   - `start`/`approve` 复用 `evaluateDeviceAuthRateLimit()`，按 10 分钟窗口约束 `device/IP/user`，并在连续 reject/cancel 达阈值后返回 `429 + retryAfterSeconds` 冷却。
@@ -900,8 +899,8 @@
 
 ### C. 文档门禁节奏
 
-- [x] `docs:guard` 已在 CI 以 report-only 运行。
-- [ ] 连续 5 次 `docs:guard` 零告警（升级 strict 前置条件之一）。
+- [x] manual documentation review 已在 CI 以 report-only 运行。
+- [ ] 连续 5 次 manual documentation review 零告警（升级 strict 前置条件之一）。
 - [ ] 连续 2 周无“状态回退/口径漂移”冲突。
 - [ ] 达成条件后将 CI 从 report-only 升级为 strict 阻塞。
 
@@ -909,15 +908,15 @@
 
 - 回滚触发条件：
   - `apps/nexus` 在 Sentry server config 加载路径上出现异常（启动失败或配置未生效）。
-  - `compat:registry:guard` 出现非预期 coverage 回退。
+  - ESLint compatibility boundary rules 出现非预期 coverage 回退。
 - 回滚步骤（提交粒度）：
   - 文件名回滚：`apps/nexus/sentry.server.config.ts` 按需恢复到异常旧名路径，仅用于应急回退验证。
   - 清册回滚：恢复本轮清理的两条 registry 行（`apps/pilot/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
-  - 脚本回滚：撤销 `check-compatibility-debt-registry.mjs` 中 `registry-only domain` 改动。
+  - 脚本回滚：按当前 ESLint 规则回滚对应 compatibility boundary 配置。
 - 回滚后必跑：
-  - `pnpm compat:registry:guard`
-  - `pnpm legacy:guard`
-  - `pnpm quality:gate`
+  - `pnpm lint`
+  - `pnpm lint`
+  - `pnpm quality:pr`
 
 ### E. Transport Legacy 清退清单（启动项，目标 2.4.11）
 
@@ -938,7 +937,7 @@
 - 验收口径：
   - [x] `legacy-transport-import` = `0 files / 0 hits`。
   - [x] CoreApp renderer storage consumer import boundary 已由 `app-storage-boundary.test.ts` 固化。
-  - `pnpm quality:gate` 全绿且无新增兼容债务。
+  - `pnpm quality:pr` 全绿且无新增兼容债务。
 
 ### F. Pilot / Intelligence 长尾（已下沉）
 
@@ -978,14 +977,14 @@
 - 已完成 `$app` 去耦首轮：
   - 生命周期上下文新增 `ctx.runtime`（`MainRuntimeContext`）。
   - `plugin-module`、`UpdateService` 首批改为 runtime 注入读取，保留 1 迭代过渡兼容告警。
-  - 新增静态守卫：`pnpm guard:global-app`，防止 `src/main/**` 新增 `$app` 直接读取。
+  - 新增静态守卫：CoreApp ESLint runtime boundary rules，防止 `src/main/**` 新增 `$app` 直接读取。
 - 已完成结构治理首轮（保持外部契约不变）：
   - `plugin-module` 抽取编排/IO 服务（orchestrator + io service）。
   - `file-provider` 抽取路径/查询服务。
   - `UpdateService` 抽取检查/下载/安装 action controller。
   - direct tests 已补齐并纳入 `pnpm test:core-main` 子集门禁。
 - 下一轮待推进（P2）：
-  - 继续压缩 `$app` allowlist 存量命中；
+  - 继续压缩 `$app` ESLint override 存量命中；
   - `plugin-module/file-provider/UpdateService` 进一步按编排层 + 领域层 + IO 层深拆，补齐剩余 direct tests。
 
 ### S. Core-App 兼容层激进硬切（2026-04-18）
@@ -1126,4 +1125,4 @@
 1. 完成 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口` 文档化与清册闭环。
 2. 按 Windows/macOS 阻塞级回归清单补齐人工证据；Linux 仅记录 best-effort smoke。
 3. `Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
-4. `docs:guard` 连续零告警后，再升级 strict 阻塞策略。
+4. manual documentation review 连续零告警后，再升级 strict 阻塞策略。
