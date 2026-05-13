@@ -7,6 +7,7 @@
 
 ### fix(tuff-cli): align sdkapi marker hard-cut
 
+- `packages/tuff-cli/tsup.config.ts`
 - `packages/utils/plugin/sdk-version.ts`
 - `packages/utils/__tests__/permission-status.test.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
@@ -16,6 +17,7 @@
   - 补齐权限状态与插件 loader 回归：非 canonical `260421` 在权限评估前不再授予权限，并在运行时进入 `SDKAPI_BLOCKED`，不再作为可加载历史例外。
   - 同步 Manifest 参考文档的支持列表，避免开发者继续把 `260421` 当作可声明 marker。
   - CLI Package CI 的 path filter 补充 `packages/utils/**` 与 workflow 文件自身，确保共享 SDK 兼容性改动会重新触发 `tuff-cli-core` lint/test/build。
+  - `tuff-cli` tsup external 补齐 `@vue/compiler-sfc` 可选模板引擎，避免打包 CLI core 时把 Vue SFC 编译器的可选 `require()` 当成硬依赖解析。
 
 ### chore(release): prepare 2.4.10 beta CI readiness
 
