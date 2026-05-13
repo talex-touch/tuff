@@ -73,6 +73,105 @@ afterEach(() => {
 })
 
 describe('app launcher', () => {
+  it('opens Windows .lnk shortcuts through shell before parsing target metadata', async () => {
+    shellOpenPathMock.mockResolvedValue('')
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Shortcut App',
+          path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+          launchArgs: '--profile work'
+        })
+      )
+    ).resolves.toEqual({ status: 'success' })
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith(
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk'
+    )
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to shortcut target when shell opening a Windows .lnk fails', async () => {
+    vi.useFakeTimers()
+    shellOpenPathMock.mockResolvedValue('shell failed')
+    spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())
+
+    const launchPromise = withPlatform('win32', () =>
+      launchApp({
+        name: 'Shortcut App',
+        path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
+        launchKind: 'shortcut',
+        launchTarget: 'C:\\Program Files\\Foo\\Foo.exe'
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(2500)
+    await expect(launchPromise).resolves.toEqual({ status: 'handedOff' })
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith(
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk'
+    )
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'C:\\Program Files\\Foo\\Foo.exe',
+      [],
+      expect.objectContaining({ cwd: 'C:\\Program Files\\Foo' })
+    )
+    expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
+  })
+
+  it('launches Windows command scripts through cmd.exe', async () => {
+    vi.useFakeTimers()
+    spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())
+
+    const launchPromise = withPlatform('win32', () =>
+      launchApp({
+        name: 'Script App',
+        path: 'C:\\Tools\\run.cmd',
+        launchKind: 'shortcut',
+        launchTarget: 'C:\\Tools\\run.cmd',
+        launchArgs: '--flag "two words"'
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(2500)
+    await expect(launchPromise).resolves.toEqual({ status: 'handedOff' })
+
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'cmd.exe',
+      ['/d', '/s', '/c', 'C:\\Tools\\run.cmd', '--flag', 'two words'],
+      expect.objectContaining({ cwd: 'C:\\Tools' })
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('launches Windows PowerShell scripts through powershell.exe', async () => {
+    vi.useFakeTimers()
+    spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())
+
+    const launchPromise = withPlatform('win32', () =>
+      launchApp({
+        name: 'PowerShell App',
+        path: 'C:\\Tools\\run.ps1',
+        launchKind: 'shortcut',
+        launchTarget: 'C:\\Tools\\run.ps1',
+        launchArgs: '-Name demo'
+      })
+    )
+
+    await vi.advanceTimersByTimeAsync(2500)
+    await expect(launchPromise).resolves.toEqual({ status: 'handedOff' })
+
+    expect(spawnSafeMock).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'C:\\Tools\\run.ps1', '-Name', 'demo'],
+      expect.objectContaining({ cwd: 'C:\\Tools' })
+    )
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
   it('launches Windows executable paths with executable directory as cwd', async () => {
     vi.useFakeTimers()
     spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())

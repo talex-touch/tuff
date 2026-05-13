@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import type { ScannedAppInfo } from './app-types'
 import { parseStringList, serializeStringList } from './app-utils'
 
 export function hasStringListDrift(
@@ -6,6 +7,28 @@ export function hasStringListDrift(
   nextValues: string[] | undefined
 ): boolean {
   return serializeStringList(parseStringList(currentValue)) !== serializeStringList(nextValues)
+}
+
+export function hasAppLaunchMetadataDrift(
+  extensions: Record<string, string | null>,
+  scannedApp: Pick<
+    ScannedAppInfo,
+    | 'launchKind'
+    | 'launchTarget'
+    | 'launchArgs'
+    | 'workingDirectory'
+    | 'displayPath'
+    | 'description'
+  >
+): boolean {
+  return (
+    (extensions.launchKind || '') !== (scannedApp.launchKind || '') ||
+    (extensions.launchTarget || '') !== (scannedApp.launchTarget || '') ||
+    (extensions.launchArgs || '') !== (scannedApp.launchArgs || '') ||
+    (extensions.workingDirectory || '') !== (scannedApp.workingDirectory || '') ||
+    (extensions.displayPath || '') !== (scannedApp.displayPath || '') ||
+    (extensions.description || '') !== (scannedApp.description || '')
+  )
 }
 
 export function hasAppIconDrift(

@@ -98,6 +98,7 @@ import { matchNoisySystemAppRule } from './app-noise-filter'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
 import {
   hasAppIconDrift,
+  hasAppLaunchMetadataDrift,
   hasStringListDrift,
   resolveMissingScannedExtensionKeys
 } from './app-provider-metadata-sync'
@@ -1161,7 +1162,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           scannedApp.alternateNames
         )
         const hasIconDrift = hasAppIconDrift(dbApp.extensions.icon, scannedApp.icon)
-        if (!hasDisplayNameDrift && !hasAlternateNamesDrift && !hasIconDrift) {
+        const hasLaunchMetadataDrift = hasAppLaunchMetadataDrift(dbApp.extensions, scannedApp)
+        if (
+          !hasDisplayNameDrift &&
+          !hasAlternateNamesDrift &&
+          !hasIconDrift &&
+          !hasLaunchMetadataDrift
+        ) {
           return null
         }
         return {
@@ -1738,12 +1745,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           scannedApp.alternateNames
         )
         const hasIconDrift = hasAppIconDrift(dbApp.extensions.icon, scannedApp.icon)
+        const hasLaunchMetadataDrift = hasAppLaunchMetadataDrift(dbApp.extensions, scannedApp)
         if (
           scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime() ||
           hasDisplayNameDrift ||
           hasNameDrift ||
           hasAlternateNamesDrift ||
-          hasIconDrift
+          hasIconDrift ||
+          hasLaunchMetadataDrift
         ) {
           toUpdate.push({
             fileId: dbApp.id,
