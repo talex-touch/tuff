@@ -266,6 +266,71 @@ describe('TuffIntelligenceSDK invoke', () => {
     expect(secondProviderVision).toHaveBeenCalledOnce()
   })
 
+  it('falls back when Nexus default provider requires sign-in', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM, IntelligenceProviderType.LOCAL]
+    })
+
+    const nexusChat = vi.fn().mockRejectedValue(new Error('NEXUS_AUTH_REQUIRED'))
+    const localChat = vi.fn().mockResolvedValue({
+      result: 'fallback chat',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'local-chat',
+      latency: 8,
+      traceId: 'trace-local-chat',
+      provider: IntelligenceProviderType.LOCAL
+    })
+
+    const nexusProvider = createProvider(
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 1,
+        apiKey: 'guest',
+        capabilities: ['text.chat'],
+        metadata: { origin: 'tuff-nexus', tokenMode: 'guest' }
+      },
+      vi.fn()
+    )
+    nexusProvider.chat = nexusChat
+
+    const localProvider = createProvider(
+      {
+        id: 'local-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Local Chat',
+        enabled: true,
+        priority: 2,
+        models: ['local-chat'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    localProvider.chat = localChat
+
+    setIntelligenceProviderManager(new FakeProviderManager([nexusProvider, localProvider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const result = await sdk.invoke<string>('text.chat', {
+      messages: [{ role: 'user', content: 'hello' }]
+    })
+
+    expect(result.result).toBe('fallback chat')
+    expect(nexusChat).toHaveBeenCalledOnce()
+    expect(localChat).toHaveBeenCalledOnce()
+  })
+
   it('renders routing prompt template before chat invoke', async () => {
     intelligenceCapabilityRegistry.register({
       id: 'text.chat',

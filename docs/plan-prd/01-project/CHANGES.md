@@ -5,6 +5,19 @@
 
 ## 2026-05-13
 
+### feat(ai): add Nexus authenticated intelligence invoke path
+
+- `apps/nexus/server/api/v1/intelligence/invoke.post.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/core-app/src/main/modules/ai/providers/{nexus-provider.ts,custom-provider.ts}`
+- `apps/core-app/src/main/modules/ai/{intelligence-service.ts,intelligence-config.ts,intelligence-module.ts,provider-factory.ts,provider-factory.test.ts,provider-runtime.ts,provider-runtime-shared.ts,provider-runtime.test.ts,provider-models.ts,provider-models.test.ts}`
+- `apps/core-app/src/main/modules/ai/providers/nexus-provider.test.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.test.ts`
+- `apps/nexus/server/api/v1/intelligence/invoke.api.test.ts`
+  - dev/2.5.0 首个 AI 基础切片落地：Nexus 新增登录态 `/api/v1/intelligence/invoke`，复用现有 Intelligence Provider 选择、Provider Registry mirror、secure-store credential、审计与 fallback 逻辑，不新增明文 key 存储。
+  - CoreApp 新增 `NexusProvider` adapter，并在 `CUSTOM` provider factory 中对 `tuff-nexus-default` / `metadata.origin=tuff-nexus` 分流；官方 app 登录后使用注入的 app token 自动调用 Nexus AI，未登录时返回 `NEXUS_AUTH_REQUIRED` 让本地 SDK fallback 到其它 provider。
+  - Stable 范围保持文本 + OCR：`text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`；Scene runtime 全量产品化仍留在 2.5.x 后续。
+
 ### chore(release): prepare 2.4.10 beta CI readiness
 
 - `package.json`

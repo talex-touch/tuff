@@ -12,9 +12,9 @@ import {
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
-import { getAuthToken } from '../auth'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { tuffIntelligence } from './intelligence-sdk'
+import { normalizeProviderForRuntime, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime'
 
 const SUPPORTED_PROVIDER_TYPES = new Set([
   'openai',
@@ -24,7 +24,6 @@ const SUPPORTED_PROVIDER_TYPES = new Set([
   'local',
   'custom'
 ])
-const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 const INTELLIGENCE_DEFAULT_VERSION = 2
 const DEFAULT_PROMPT_VERSION = '1.0.0'
 
@@ -260,13 +259,6 @@ function resolveCapabilityPromptTemplate(
   return capability?.promptTemplate
 }
 
-function toNexusApiKey(token: string | null): string | undefined {
-  if (!token) return undefined
-  const trimmed = token.trim()
-  if (!trimmed) return undefined
-  return trimmed.replace(/^Bearer\s+/i, '')
-}
-
 function createDefaultPersistedConfig(): IntelligenceSDKPersistedConfig {
   const config: IntelligenceSDKPersistedConfig = {
     providers: cloneValue(DEFAULT_PROVIDERS),
@@ -384,7 +376,6 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
   const normalizedStrategy =
     normalizeStrategyId(stored.globalConfig?.defaultStrategy) ?? 'adaptive-default'
 
-  const authToken = toNexusApiKey(getAuthToken())
   const providers = (stored.providers ?? [])
     .filter((provider) => {
       if (!SUPPORTED_PROVIDER_TYPES.has(provider.type)) {
@@ -392,22 +383,7 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
       }
       return true
     })
-    .map((provider) => {
-      if (provider.id !== TUFF_NEXUS_PROVIDER_ID) {
-        return provider
-      }
-      return {
-        ...provider,
-        enabled: true,
-        apiKey: authToken || provider.apiKey || 'guest',
-        metadata: {
-          ...(provider.metadata || {}),
-          origin: 'tuff-nexus',
-          tokenInjected: Boolean(authToken),
-          tokenMode: authToken ? 'auth' : 'guest'
-        }
-      }
-    })
+    .map(normalizeProviderForRuntime)
 
   const nativeOcrDisabledByEnv = process.env.TUFF_DISABLE_NATIVE_OCR === '1'
   const hasInternalProvider = providers.some(

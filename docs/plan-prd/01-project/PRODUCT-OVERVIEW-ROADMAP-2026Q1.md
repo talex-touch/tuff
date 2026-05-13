@@ -49,6 +49,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 2.5.0 AI 板块定位为桌面 AI 入口收口版本：CoreBox / OmniPanel 是用户主入口，Pilot 作为高级 Chat / DeepAgent 增强能力来源。
 - Stable 只承诺文本 + OCR：`text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`。
 - CoreBox AI Ask 已先落最小 Stable 切片：文本问题走 `text.chat`，剪贴板图片在空文本或显式 `ai` 提问时走 `vision.ocr -> text.chat`，并带用户可见状态、失败提示、权限检查与审计 metadata。
+- dev/2.5.0 首切新增登录态 Nexus AI invoke：CoreApp 默认 `tuff-nexus-default` provider 通过 `/api/v1/intelligence/invoke` 调 Nexus Intelligence Provider / Provider Registry mirror 与 secure-store credential；未登录时显式 `NEXUS_AUTH_REQUIRED` 并 fallback 到其它可用 provider。
 - 下个版本重点交付 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与剪贴板整理/会议纪要/文本批处理 3 个 P0 模板。
 - Skills Pack、Background Automations 与 Pilot 联动保持 Beta；Assistant、多模态生成编辑、多 Agent 长任务面板与 Nexus Scene runtime orchestration 保持 Experimental / 2.5.x 后续。
 - Provider metadata 可普通存储，API Key / secret 必须通过 secure-store 或 `authRef` 引用；审计默认不保存完整 prompt / response。
