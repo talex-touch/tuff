@@ -1,14 +1,7 @@
 import { Buffer } from 'node:buffer'
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  hkdfSync,
-  randomBytes
-} from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 
@@ -17,8 +10,7 @@ export const LOCAL_SECRET_FILE = 'local-secret.v1.key'
 export const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 
 type WarnHandler = (message: string, error: unknown) => void
-type ElectronSafeStorage = (typeof import('electron'))['safeStorage']
-export type SecureStoreBackend = 'safe-storage' | 'local-secret' | 'unavailable'
+export type SecureStoreBackend = 'local-secret' | 'unavailable'
 export type SecureStorePurpose = 'auth-token' | 'sync-payload-key' | 'machine-seed' | string
 
 export interface SecureStoreHealth {
@@ -30,7 +22,7 @@ export interface SecureStoreHealth {
 
 interface SecureStoreEnvelope {
   v: 1
-  backend: Exclude<SecureStoreBackend, 'unavailable'>
+  backend: 'local-secret' | 'safe-storage'
   alg: 'A256GCM'
   kid: string
   n: string
@@ -44,21 +36,10 @@ interface ResolvedSecureStoreBackend {
   degraded: boolean
 }
 
-const requireFromCurrentModule = createRequire(import.meta.url)
 const AES_256_KEY_BYTES = 32
 const AES_GCM_NONCE_BYTES = 12
 const AES_GCM_TAG_BYTES = 16
-const SAFE_STORAGE_ROOT_KEY = '__secure_store_root_v1'
 const DEFAULT_PURPOSE: SecureStorePurpose = 'default'
-
-function resolveSafeStorage(): ElectronSafeStorage | null {
-  try {
-    const electron = requireFromCurrentModule('electron') as typeof import('electron')
-    return electron.safeStorage ?? null
-  } catch {
-    return null
-  }
-}
 
 function normalizeSecureStoreKey(rawKey: string): string {
   const key = rawKey.trim()
@@ -169,6 +150,11 @@ async function readLocalSecret(rootPath: string): Promise<Buffer | null> {
   }
 }
 
+async function hasLocalSecretEnvelope(rootPath: string, warn?: WarnHandler): Promise<boolean> {
+  const store = await readSecureStoreFile(rootPath, warn)
+  return Object.values(store).some((value) => tryParseEnvelope(value)?.backend === 'local-secret')
+}
+
 async function getOrCreateLocalSecret(rootPath: string, warn?: WarnHandler): Promise<Buffer> {
   const existing = await readLocalSecret(rootPath)
   if (existing) {
@@ -207,82 +193,29 @@ async function requireLocalSecret(rootPath: string): Promise<Buffer> {
   return secret
 }
 
-async function getSafeStorageRootSecret(
-  safeStorage: ElectronSafeStorage,
-  rootPath: string,
-  warn?: WarnHandler
-): Promise<Buffer> {
-  const store = await readSecureStoreFile(rootPath, warn)
-  const encrypted = store[SAFE_STORAGE_ROOT_KEY]
-
-  if (encrypted) {
-    const decrypted = safeStorage.decryptString(fromBase64(encrypted))
-    const secret = fromBase64(decrypted)
-    if (secret.byteLength !== AES_256_KEY_BYTES) {
-      throw new Error('SAFE_STORAGE_ROOT_SECRET_INVALID')
-    }
-    return secret
-  }
-
-  const secret = randomBytes(AES_256_KEY_BYTES)
-  store[SAFE_STORAGE_ROOT_KEY] = safeStorage.encryptString(toBase64(secret)).toString('base64')
-  await writeSecureStoreFile(rootPath, store)
-  return secret
-}
-
 async function resolveSecureStoreBackend(
   rootPath: string,
-  preferredBackend?: SecureStoreBackend,
   warn?: WarnHandler
 ): Promise<ResolvedSecureStoreBackend> {
-  const safeStorage = resolveSafeStorage()
-  const canUseSafeStorage =
-    safeStorage?.isEncryptionAvailable() === true && preferredBackend !== 'local-secret'
-
-  if (canUseSafeStorage && safeStorage) {
-    try {
-      return {
-        backend: 'safe-storage',
-        secret: await getSafeStorageRootSecret(safeStorage, rootPath, warn),
-        degraded: false
-      }
-    } catch (error) {
-      if (preferredBackend === 'safe-storage') {
-        throw error
-      }
-      warn?.('Safe storage backend failed, falling back to local secret', error)
-    }
-  }
-
   return {
     backend: 'local-secret',
-    secret: await getOrCreateLocalSecret(rootPath),
+    secret: await getOrCreateLocalSecret(rootPath, warn),
     degraded: true
   }
 }
 
 async function resolveBackendForEnvelope(
   rootPath: string,
-  backend: SecureStoreEnvelope['backend'],
-  warn?: WarnHandler
+  backend: SecureStoreEnvelope['backend']
 ): Promise<ResolvedSecureStoreBackend> {
-  if (backend === 'local-secret') {
-    return {
-      backend: 'local-secret',
-      secret: await requireLocalSecret(rootPath),
-      degraded: true
-    }
-  }
-
-  const safeStorage = resolveSafeStorage()
-  if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
-    throw new Error('SAFE_STORAGE_UNAVAILABLE')
+  if (backend !== 'local-secret') {
+    throw new Error('SECURE_STORE_BACKEND_UNSUPPORTED')
   }
 
   return {
-    backend: 'safe-storage',
-    secret: await getSafeStorageRootSecret(safeStorage, rootPath, warn),
-    degraded: false
+    backend: 'local-secret',
+    secret: await requireLocalSecret(rootPath),
+    degraded: true
   }
 }
 
@@ -333,7 +266,7 @@ function tryParseEnvelope(raw: string): SecureStoreEnvelope | null {
     const parsed = JSON.parse(raw) as Partial<SecureStoreEnvelope>
     if (
       parsed?.v === 1 &&
-      (parsed.backend === 'safe-storage' || parsed.backend === 'local-secret') &&
+      (parsed.backend === 'local-secret' || parsed.backend === 'safe-storage') &&
       parsed.alg === 'A256GCM' &&
       typeof parsed.kid === 'string' &&
       typeof parsed.n === 'string' &&
@@ -343,24 +276,18 @@ function tryParseEnvelope(raw: string): SecureStoreEnvelope | null {
       return parsed as SecureStoreEnvelope
     }
   } catch {
-    // Previous safeStorage values are plain base64 strings, not JSON envelopes.
+    // Previous values may not be JSON envelopes.
   }
   return null
-}
-
-async function hasLocalSecretEnvelope(rootPath: string, warn?: WarnHandler): Promise<boolean> {
-  const store = await readSecureStoreFile(rootPath, warn)
-  return Object.values(store).some((value) => tryParseEnvelope(value)?.backend === 'local-secret')
 }
 
 async function decryptEnvelope(
   rootPath: string,
   rawKey: string,
   envelope: SecureStoreEnvelope,
-  purpose?: SecureStorePurpose,
-  warn?: WarnHandler
+  purpose?: SecureStorePurpose
 ): Promise<string> {
-  const backend = await resolveBackendForEnvelope(rootPath, envelope.backend, warn)
+  const backend = await resolveBackendForEnvelope(rootPath, envelope.backend)
   const keyId = getKeyId(backend.secret, rawKey, purpose)
   if (envelope.kid !== keyId) {
     throw new Error('SECURE_STORE_KEY_ID_MISMATCH')
@@ -383,40 +310,12 @@ async function decryptEnvelope(
 }
 
 export async function getSecureStoreHealth(rootPath?: string): Promise<SecureStoreHealth> {
-  const safeStorage = resolveSafeStorage()
-  if (safeStorage?.isEncryptionAvailable() === true) {
-    if (!rootPath) {
-      return { backend: 'safe-storage', available: true, degraded: false }
-    }
-    try {
-      await getSafeStorageRootSecret(safeStorage, rootPath)
-      return { backend: 'safe-storage', available: true, degraded: false }
-    } catch (error) {
-      try {
-        await getOrCreateLocalSecret(rootPath)
-        return {
-          backend: 'local-secret',
-          available: true,
-          degraded: true,
-          reason: error instanceof Error ? error.message : 'Safe storage backend failed'
-        }
-      } catch (fallbackError) {
-        return {
-          backend: 'unavailable',
-          available: false,
-          degraded: true,
-          reason: fallbackError instanceof Error ? fallbackError.message : 'Secure store unavailable'
-        }
-      }
-    }
-  }
-
   if (!rootPath) {
     return {
       backend: 'unavailable',
       available: false,
       degraded: true,
-      reason: 'Root path is required for local encrypted fallback'
+      reason: 'Root path is required for local encrypted storage'
     }
   }
 
@@ -426,23 +325,19 @@ export async function getSecureStoreHealth(rootPath?: string): Promise<SecureSto
       backend: 'local-secret',
       available: true,
       degraded: true,
-      reason: 'System safeStorage is unavailable'
+      reason: 'Using local root secret; system credential storage is disabled'
     }
   } catch (error) {
     return {
       backend: 'unavailable',
       available: false,
       degraded: true,
-      reason: error instanceof Error ? error.message : 'Local encrypted fallback unavailable'
+      reason: error instanceof Error ? error.message : 'Local encrypted storage unavailable'
     }
   }
 }
 
 export function isSecureStoreAvailable(rootPath?: string): boolean {
-  const safeStorage = resolveSafeStorage()
-  if (safeStorage?.isEncryptionAvailable() === true) {
-    return true
-  }
   if (!rootPath) {
     return false
   }
@@ -463,7 +358,7 @@ export async function wrapSecureStoreValue(
   warn?: WarnHandler
 ): Promise<{ backend: Exclude<SecureStoreBackend, 'unavailable'>; value: string } | null> {
   try {
-    const backend = await resolveSecureStoreBackend(rootPath, undefined, warn)
+    const backend = await resolveSecureStoreBackend(rootPath, warn)
     return {
       backend: backend.backend,
       value: encodeEnvelope(backend.backend, backend.secret, rawKey, value, purpose)
@@ -490,24 +385,14 @@ export async function getSecureStoreValue(
   }
 
   const envelope = tryParseEnvelope(encrypted)
-  if (envelope) {
-    try {
-      return await decryptEnvelope(rootPath, key, envelope, purpose, warn)
-    } catch (error) {
-      warn?.('Failed to decrypt secure store envelope', error)
-      return null
-    }
-  }
-
-  const safeStorage = resolveSafeStorage()
-  if (!safeStorage || !safeStorage.isEncryptionAvailable()) {
+  if (!envelope) {
     return null
   }
 
   try {
-    return safeStorage.decryptString(fromBase64(encrypted))
+    return await decryptEnvelope(rootPath, key, envelope, purpose)
   } catch (error) {
-    warn?.('Failed to decrypt secure store value', error)
+    warn?.('Failed to decrypt secure store envelope', error)
     return null
   }
 }
@@ -530,7 +415,7 @@ export async function setSecureStoreValue(
   }
 
   try {
-    const backend = await resolveSecureStoreBackend(rootPath, undefined, warn)
+    const backend = await resolveSecureStoreBackend(rootPath, warn)
     store[key] = encodeEnvelope(backend.backend, backend.secret, key, value, purpose)
     await writeSecureStoreFile(rootPath, store)
     return true

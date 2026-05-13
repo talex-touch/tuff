@@ -263,7 +263,7 @@ async function loadAuthToken(): Promise<void> {
       reason: secureStoreHealth.reason
     })
   } else if (secureStoreHealth.degraded) {
-    authLog.warn('System safeStorage unavailable; auth uses local encrypted fallback', {
+    authLog.info('Auth uses local encrypted secure store', {
       backend: secureStoreHealth.backend,
       reason: secureStoreHealth.reason
     })

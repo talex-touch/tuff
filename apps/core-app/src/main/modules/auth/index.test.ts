@@ -178,9 +178,10 @@ describe('auth secure storage preference', () => {
     })
     subscribeMainConfigMock.mockReturnValue(vi.fn())
     getSecureStoreHealthMock.mockResolvedValue({
-      backend: 'safe-storage',
+      backend: 'local-secret',
       available: true,
-      degraded: false
+      degraded: true,
+      reason: 'Using local root secret; system credential storage is disabled'
     })
     getSecureStoreValueMock.mockResolvedValue(null)
     setSecureStoreValueMock.mockResolvedValue(true)
@@ -352,12 +353,12 @@ describe('auth secure storage preference', () => {
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
   })
 
-  it('keeps persistent auth token when system safeStorage falls back to local secret', async () => {
+  it('keeps persistent auth token with local root secret storage', async () => {
     getSecureStoreHealthMock.mockResolvedValue({
       backend: 'local-secret',
       available: true,
       degraded: true,
-      reason: 'System safeStorage is unavailable'
+      reason: 'Using local root secret; system credential storage is disabled'
     })
     getSecureStoreValueMock.mockResolvedValue('fallback-token')
 
