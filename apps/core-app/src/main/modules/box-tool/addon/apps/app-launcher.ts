@@ -92,6 +92,11 @@ function isWindowsPowerShellFile(target: string): boolean {
   )
 }
 
+function resolveWindowsShortcutShellPaths(request: AppLaunchRequest): string[] {
+  const candidates = [request.path, request.launchTarget].filter(isWindowsShortcutFile)
+  return Array.from(new Set(candidates))
+}
+
 function isAllowedProtocolLaunch(target: string): boolean {
   return /^steam:\/\/rungameid\/\d+$/i.test(target.trim())
 }
@@ -208,11 +213,23 @@ async function launchSpawnCommand(
 export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOutcome> {
   try {
     if (request.launchKind === 'shortcut') {
-      if (isWindowsShortcutFile(request.path)) {
-        appLauncherLog.info(`Opening Windows shortcut via shell: ${request.path}`)
-        const shellOutcome = await launchShellPath(request.path)
-        if (shellOutcome.status !== 'failed') {
-          return shellOutcome
+      const shortcutShellPaths = resolveWindowsShortcutShellPaths(request)
+      if (shortcutShellPaths.length > 0) {
+        let lastShellOutcome: AppLaunchOutcome | null = null
+        for (const shortcutShellPath of shortcutShellPaths) {
+          appLauncherLog.info(`Opening Windows shortcut via shell: ${shortcutShellPath}`)
+          lastShellOutcome = await launchShellPath(shortcutShellPath)
+          if (lastShellOutcome.status !== 'failed') {
+            return lastShellOutcome
+          }
+        }
+        if (isWindowsShortcutFile(request.launchTarget)) {
+          const failedOutcome = lastShellOutcome || {
+            status: 'failed' as const,
+            error: 'shell shortcut launch failed'
+          }
+          notifyLaunchFailure(request, failedOutcome.error || 'shell shortcut launch failed')
+          return failedOutcome
         }
         appLauncherLog.warn(
           `Shell shortcut launch failed, falling back to target: ${request.launchTarget}`

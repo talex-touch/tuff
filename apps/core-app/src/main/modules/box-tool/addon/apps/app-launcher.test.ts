@@ -129,6 +129,62 @@ describe('app launcher', () => {
     expect(showInternalSystemNotificationMock).not.toHaveBeenCalled()
   })
 
+  it('opens Windows launchTarget .lnk through shell without spawning it', async () => {
+    shellOpenPathMock.mockResolvedValue('')
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Manual Shortcut App',
+          path: 'C:\\Launchers\\Foo.lnk',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Launchers\\Foo.lnk'
+        })
+      )
+    ).resolves.toEqual({ status: 'success' })
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('C:\\Launchers\\Foo.lnk')
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('tries launchTarget .lnk through shell when source .lnk shell open fails', async () => {
+    shellOpenPathMock.mockResolvedValueOnce('source failed').mockResolvedValueOnce('')
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Nested Shortcut App',
+          path: 'C:\\Start Menu\\Nested.lnk',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Launchers\\Nested Target.lnk'
+        })
+      )
+    ).resolves.toEqual({ status: 'success' })
+
+    expect(shellOpenPathMock).toHaveBeenNthCalledWith(1, 'C:\\Start Menu\\Nested.lnk')
+    expect(shellOpenPathMock).toHaveBeenNthCalledWith(2, 'C:\\Launchers\\Nested Target.lnk')
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('does not spawn Windows launchTarget .lnk when shell handoff fails', async () => {
+    shellOpenPathMock.mockResolvedValue('shell failed')
+
+    await expect(
+      withPlatform('win32', () =>
+        launchApp({
+          name: 'Manual Shortcut App',
+          path: 'C:\\Launchers\\Foo.lnk',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Launchers\\Foo.lnk'
+        })
+      )
+    ).resolves.toEqual({ status: 'failed', error: 'shell failed' })
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('C:\\Launchers\\Foo.lnk')
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+    expect(showInternalSystemNotificationMock).toHaveBeenCalled()
+  })
+
   it('launches Windows command scripts through cmd.exe', async () => {
     vi.useFakeTimers()
     spawnSafeMock.mockReturnValue(createDetachedChildProcessMock())
