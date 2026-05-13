@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const browserPlugin = loadPluginModule(new URL('../../../../plugins/touch-browser-open/index.js', import.meta.url))
 const { __test: browserTest } = browserPlugin
@@ -131,6 +131,18 @@ describe('browser open plugin', () => {
     ])
     expect(features.every(feature => feature.push)).toBe(true)
     expect(features.every(feature => feature.acceptedInputTypes.includes('text'))).toBe(true)
+  })
+
+  it('loads in plugin sandbox without process global', () => {
+    const pluginModule = loadPluginModule(browserPluginUrl, createPluginGlobals({
+      process: withoutGlobal(),
+    }))
+    const features = pluginModule.__test.buildSearchEngineFeatures({
+      defaultEngine: 'google',
+      enabledEngines: ['google'],
+    })
+
+    expect(features.map(feature => feature.id)).toEqual(['search-engine-google'])
   })
 
   it('keeps short engine aliases out of dynamic feature command tokens', () => {

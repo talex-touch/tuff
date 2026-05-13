@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 type GlobalOverrides = Record<string, unknown>
+const DELETE_GLOBAL = Symbol('delete-global')
 
 interface NodeModuleCtor {
   new (id?: string): {
@@ -27,6 +28,10 @@ function withGlobalOverrides<T>(overrides: GlobalOverrides | undefined, task: ()
   for (const [key, value] of Object.entries(overrides)) {
     const existed = Object.prototype.hasOwnProperty.call(globalThis, key)
     previous.set(key, { existed, value: (globalThis as Record<string, unknown>)[key] })
+    if (value === DELETE_GLOBAL) {
+      delete (globalThis as Record<string, unknown>)[key]
+      continue
+    }
     ;(globalThis as Record<string, unknown>)[key] = value
   }
 
@@ -43,6 +48,10 @@ function withGlobalOverrides<T>(overrides: GlobalOverrides | undefined, task: ()
       ;(globalThis as Record<string, unknown>)[key] = snapshot.value
     }
   }
+}
+
+export function withoutGlobal(): symbol {
+  return DELETE_GLOBAL
 }
 
 function compileCommonJsModule<T>(filename: string): T {

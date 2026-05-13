@@ -1,5 +1,6 @@
 const { plugin, clipboard, logger, TuffItemBuilder, permission, features } = globalThis
 const { execFile, spawn } = require('node:child_process')
+const os = require('node:os')
 const fetchImpl = globalThis.fetch
 
 const PLUGIN_NAME = 'touch-browser-open'
@@ -71,6 +72,17 @@ SEARCH_ENGINES.forEach((engine) => {
 let dynamicSearchFeaturesInitialized = false
 let networkPermissionGranted = null
 let latestFeatureRequestSeq = 0
+let activeSearchMode = null
+let unsubscribeSearchInput = null
+
+function getRuntimePlatform() {
+  const platform = typeof os?.platform === 'function' ? os.platform() : ''
+  if (platform === 'win32' || platform === 'darwin' || platform === 'linux')
+    return platform
+  return 'unsupported'
+}
+
+const CURRENT_PLATFORM = getRuntimePlatform()
 
 const MAC_BROWSER_CANDIDATES = [
   { id: 'safari', name: 'Safari', target: 'Safari' },
@@ -82,9 +94,9 @@ const MAC_BROWSER_CANDIDATES = [
 ]
 
 const SUPPORTED_PLATFORM_FLAGS = {
-  win32: process.platform === 'win32',
-  darwin: process.platform === 'darwin',
-  linux: process.platform === 'linux',
+  win32: CURRENT_PLATFORM === 'win32',
+  darwin: CURRENT_PLATFORM === 'darwin',
+  linux: CURRENT_PLATFORM === 'linux',
 }
 
 const WIN_BROWSER_CANDIDATES = [
@@ -289,6 +301,45 @@ function resolveEngineFromFeatureId(featureId) {
   if (!id.startsWith(SEARCH_ENGINE_FEATURE_PREFIX))
     return null
   return getSearchEngine(id.slice(SEARCH_ENGINE_FEATURE_PREFIX.length))
+}
+
+function resolveActiveSearchMode(featureId) {
+  const engine = resolveEngineFromFeatureId(featureId)
+  if (engine)
+    return { featureId: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`, engine }
+
+  if (featureId === WEB_SEARCH_FEATURE_ID) {
+    return {
+      featureId: WEB_SEARCH_FEATURE_ID,
+      engine: activeSearchMode?.engine || getSearchEngine(DEFAULT_SEARCH_SETTINGS.defaultEngine),
+    }
+  }
+
+  return null
+}
+
+function stopSearchInputSession() {
+  if (typeof unsubscribeSearchInput === 'function') {
+    unsubscribeSearchInput()
+  }
+  unsubscribeSearchInput = null
+  activeSearchMode = null
+}
+
+function startSearchInputSession(featureId, engine) {
+  activeSearchMode = { featureId, engine }
+  if (unsubscribeSearchInput || typeof plugin?.feature?.onInputChange !== 'function')
+    return
+
+  unsubscribeSearchInput = plugin.feature.onInputChange((input) => {
+    const mode = activeSearchMode
+    if (!mode)
+      return
+    void enterSearchEngineMode(mode.engine, input, undefined, {
+      featureId: mode.featureId,
+      preserveInput: true,
+    })
+  })
 }
 
 function extractEngineModeQuery(engine, input) {
@@ -510,9 +561,9 @@ async function detectBrowsersWin() {
 }
 
 async function detectBrowsers() {
-  if (process.platform === 'darwin')
+  if (CURRENT_PLATFORM === 'darwin')
     return detectBrowsersMac()
-  if (process.platform === 'win32')
+  if (CURRENT_PLATFORM === 'win32')
     return detectBrowsersWin()
   return []
 }
@@ -755,17 +806,17 @@ async function openWithWindows(url, browserTarget) {
 }
 
 async function executeOpenAction(url, browserTarget) {
-  if (process.platform === 'darwin') {
+  if (CURRENT_PLATFORM === 'darwin') {
     openWithMac(url, browserTarget)
     return
   }
 
-  if (process.platform === 'win32') {
+  if (CURRENT_PLATFORM === 'win32') {
     await openWithWindows(url, browserTarget)
     return
   }
 
-  if (process.platform === 'linux' && !browserTarget) {
+  if (CURRENT_PLATFORM === 'linux' && !browserTarget) {
     const child = spawn('xdg-open', [url], {
       detached: true,
       stdio: 'ignore',
@@ -831,14 +882,18 @@ async function loadSuggestions(engine, query, signal) {
   return parseEngineSuggestions(engine.id, payload)
 }
 
-async function enterSearchEngineMode(engine, query, signal) {
+async function enterSearchEngineMode(engine, query, signal, options = {}) {
   const requestSeq = beginFeatureRequest()
   const text = normalizeSearchText(query)
-  await plugin.box?.showInput?.()
-  await plugin.box?.allowInput?.()
-  await plugin.box?.setInput?.(text)
+  const featureId = options.featureId || `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
 
-  await pushFeatureItems(buildSearchItems(`${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`, engine, text), requestSeq)
+  if (!options.preserveInput) {
+    await plugin.box?.showInput?.()
+    await plugin.box?.allowInput?.()
+    await plugin.box?.setInput?.(text)
+  }
+
+  await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
 
   if (!text)
     return true
@@ -847,12 +902,12 @@ async function enterSearchEngineMode(engine, query, signal) {
     const suggestions = await loadSuggestions(engine, text, signal)
     if (!isCurrentFeatureRequest(requestSeq, signal))
       return true
-    await pushFeatureItems(buildSearchItems(`${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`, engine, text, suggestions), requestSeq)
+    await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
   }
   catch (error) {
     if (!isCurrentFeatureRequest(requestSeq, signal))
       return true
-    await pushFeatureItems(buildSearchItems(`${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`, engine, text, [], {
+    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
       warning: error?.message || '网络请求失败，仅保留直接搜索',
     }), requestSeq)
   }
@@ -1069,14 +1124,23 @@ const pluginLifecycle = {
     if (engine) {
       if (!signal)
         return true
-      return enterSearchEngineMode(engine, extractEngineModeQuery(engine, getQueryText(query)), signal)
+      const modeFeatureId = `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
+      startSearchInputSession(modeFeatureId, engine)
+      return enterSearchEngineMode(engine, extractEngineModeQuery(engine, getQueryText(query)), signal, {
+        featureId: modeFeatureId,
+      })
     }
 
     if (featureId === WEB_SEARCH_FEATURE_ID) {
       if (!signal)
         return true
+      const settings = await loadSearchSettings()
+      const parsed = parseSearchQuery(getQueryText(query), settings)
+      startSearchInputSession(featureId, parsed.engine)
       return handleWebSearchFeature(featureId, query, signal)
     }
+
+    stopSearchInputSession()
 
     if (featureId !== ACTION_ID)
       return false
@@ -1120,6 +1184,7 @@ const pluginLifecycle = {
       }
 
       if (actionId === 'search-web') {
+        stopSearchInputSession()
         await executeOpenAction(url, null)
         plugin.box?.hide?.()
         return { externalAction: true }
@@ -1157,6 +1222,11 @@ const pluginLifecycle = {
         message: error?.message || '执行失败',
       }
     }
+  },
+
+  onFeatureDeactivated(featureId) {
+    if (resolveActiveSearchMode(featureId))
+      stopSearchInputSession()
   },
 }
 
