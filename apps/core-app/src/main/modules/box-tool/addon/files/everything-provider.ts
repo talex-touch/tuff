@@ -3,9 +3,11 @@ import type {
   IProviderActivate,
   ISearchProvider,
   TuffItem,
+  TuffMeta,
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
+import type { FileSearchContextCandidate } from '@talex-touch/utils/transport/events/types/core-box'
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
@@ -34,76 +36,25 @@ import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
+import { EverythingDiagnosticsTracker, toEverythingResultSample } from './everything-diagnostics'
+import {
+  createAbortPromise,
+  EverythingSearchFallbackError,
+  getErrorCode,
+  getErrorMessage,
+  isAbortError,
+  isRecord,
+  isSearchFallbackError,
+  throwIfAborted
+} from './everything-errors'
+import { EverythingIconCache } from './everything-icon-cache'
 import { fileProvider } from './file-provider'
 import { mapFileToTuffItem } from './utils'
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
-
-const getErrorCode = (error: unknown): string | undefined => {
-  if (!isRecord(error)) return undefined
-  return typeof error.code === 'string' ? error.code : undefined
-}
-
-const getErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
-
-class EverythingSearchAbortedError extends Error {
-  readonly code = 'ABORT_ERR'
-
-  constructor() {
-    super('Everything search aborted')
-    this.name = 'AbortError'
-  }
-}
-
-class EverythingSearchFallbackError extends Error {
-  readonly code: string | null
-
-  constructor(message: string, code: string | null = null) {
-    super(message)
-    this.name = 'EverythingSearchFallbackError'
-    this.code = code
-  }
-}
-
-function isAbortError(error: unknown): boolean {
-  if (error instanceof EverythingSearchAbortedError) {
-    return true
-  }
-  if (!isRecord(error)) {
-    return false
-  }
-  return error.name === 'AbortError' || error.code === 'ABORT_ERR' || error.code === 'ABORTED'
-}
-
-function isSearchFallbackError(error: unknown): error is EverythingSearchFallbackError {
-  return error instanceof EverythingSearchFallbackError
-}
-
-function throwIfAborted(signal?: AbortSignal): void {
-  if (signal?.aborted) {
-    throw new EverythingSearchAbortedError()
-  }
-}
-
-function createAbortPromise<T = never>(signal?: AbortSignal): Promise<T> | null {
-  if (!signal) {
-    return null
-  }
-  if (signal.aborted) {
-    return Promise.reject(new EverythingSearchAbortedError())
-  }
-  return new Promise<T>((_, reject) => {
-    signal.addEventListener('abort', () => reject(new EverythingSearchAbortedError()), {
-      once: true
-    })
-  })
-}
+const EVERYTHING_ICON_WARMUP_LIMIT = 12
 
 function usesWindowsSeparators(filePath: string): boolean {
   return filePath.includes('\\')
@@ -135,6 +86,12 @@ interface EverythingSdkAddon {
   search?: (query: string, options?: { maxResults?: number }) => unknown
   query?: (query: string, options?: { maxResults?: number }) => unknown
   getVersion?: () => string
+}
+
+const EVERYTHING_TEST_QUERY = '*.txt'
+
+type EverythingFileSearchMeta = TuffMeta & {
+  fileSearchContext?: FileSearchContextCandidate
 }
 
 /**
@@ -171,6 +128,17 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private readonly diagnosticsTracker = new EverythingDiagnosticsTracker()
+  private readonly iconCache = new EverythingIconCache()
+  readonly iconExtractions = { clear: () => this.iconCache.clear() }
+
+  get diagnostics() {
+    return this.diagnosticsTracker.snapshot()
+  }
+
+  set diagnostics(value) {
+    this.diagnosticsTracker.replace(value)
+  }
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
     if (meta) {
@@ -359,7 +327,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       lastBackendError: this.lastBackendError,
       backendAttemptErrors: this.backendAttemptErrors,
       fallbackChain: this.fallbackChain,
-      lastChecked: this.lastChecked
+      lastChecked: this.lastChecked,
+      diagnostics: this.diagnosticsTracker.snapshot()
     }
   }
 
@@ -426,29 +395,40 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         return {
           success: false,
           backend: this.backend,
-          error: 'Everything is not available or disabled'
+          health: this.getHealthStatus().health,
+          query: EVERYTHING_TEST_QUERY,
+          error: 'Everything is not available or disabled',
+          backendAttempts: this.diagnosticsTracker.snapshot(),
+          durationByStage: this.diagnosticsTracker.durationByStage()
         }
       }
 
       const testStart = performance.now()
       try {
-        const results = await this.searchEverything('*.txt', 10)
+        const results = await this.searchEverything(EVERYTHING_TEST_QUERY, 10)
         const duration = performance.now() - testStart
 
         return {
           success: true,
           backend: this.backend,
           health: this.getHealthStatus().health,
+          query: EVERYTHING_TEST_QUERY,
           resultCount: results.length,
-          duration: Math.round(duration)
+          duration: Math.round(duration),
+          sample: toEverythingResultSample(results[0] ?? null),
+          backendAttempts: this.diagnosticsTracker.snapshot(),
+          durationByStage: this.diagnosticsTracker.durationByStage()
         }
       } catch (error: unknown) {
         return {
           success: false,
           backend: this.backend,
           health: this.getHealthStatus().health,
+          query: EVERYTHING_TEST_QUERY,
           errorCode: getErrorCode(error) || (isAbortError(error) ? 'ABORT_ERR' : null),
-          error: getErrorMessage(error)
+          error: getErrorMessage(error),
+          backendAttempts: this.diagnosticsTracker.snapshot(),
+          durationByStage: this.diagnosticsTracker.durationByStage()
         }
       }
     })
@@ -460,6 +440,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.lastBackendError = null
     this.lastBackendErrorCode = null
     this.backendAttemptErrors = {}
+    this.diagnosticsTracker.reset()
     this.esPath = null
     this.everythingVersion = null
     this.sdkAddon = null
@@ -476,6 +457,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async tryInitializeSdkBackend(): Promise<boolean> {
+    const startedAt = performance.now()
     const envPath = process.env.TALEX_EVERYTHING_SDK_PATH?.trim()
     const resourcesPath = typeof process.resourcesPath === 'string' ? process.resourcesPath : ''
     const candidates = [
@@ -496,6 +478,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       const supportsSearch = typeof addon.search === 'function' || typeof addon.query === 'function'
       if (!supportsSearch) {
+        this.diagnosticsTracker.record({
+          stage: 'sdk-load',
+          status: 'failed',
+          backend: 'sdk-napi',
+          startedAt,
+          target: candidate,
+          error: 'Everything SDK loaded but search method is missing',
+          attempts: candidates.length
+        })
         this.logWarn('Everything SDK loaded but search method is missing', undefined, {
           candidate
         })
@@ -508,6 +499,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.esPath = candidate
       this.everythingVersion =
         typeof addon.getVersion === 'function' ? addon.getVersion() : this.everythingVersion
+      this.diagnosticsTracker.record({
+        stage: 'sdk-load',
+        status: 'success',
+        backend: 'sdk-napi',
+        startedAt,
+        target: candidate,
+        attempts: candidates.length
+      })
 
       this.logInfo('Everything SDK backend ready', {
         backend: this.backend,
@@ -517,6 +516,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return true
     }
 
+    this.diagnosticsTracker.record({
+      stage: 'sdk-load',
+      status: 'failed',
+      backend: 'sdk-napi',
+      startedAt,
+      error: this.lastBackendError || 'No loadable Everything SDK candidate found',
+      errorCode: this.lastBackendErrorCode,
+      attempts: candidates.length
+    })
     return false
   }
 
@@ -554,16 +562,32 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async tryInitializeCliBackend(): Promise<boolean> {
+    const startedAt = performance.now()
     try {
       await this.detectEverything()
       this.backend = 'cli'
       this.isAvailable = true
       this.lastBackendError = null
+      this.diagnosticsTracker.record({
+        stage: 'cli-detect',
+        status: 'success',
+        backend: 'cli',
+        startedAt,
+        target: this.esPath
+      })
       return true
     } catch (error) {
       this.lastBackendError = getErrorMessage(error)
       this.lastBackendErrorCode = getErrorCode(error) ?? null
       this.backendAttemptErrors.cli = this.lastBackendError
+      this.diagnosticsTracker.record({
+        stage: 'cli-detect',
+        status: 'failed',
+        backend: 'cli',
+        startedAt,
+        error: this.lastBackendError,
+        errorCode: this.lastBackendErrorCode
+      })
       this.logWarn('Everything CLI backend unavailable', error)
       return false
     }
@@ -667,20 +691,43 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       throw new TypeError('Everything SDK search method is not available')
     }
 
-    const searchPromise = Promise.resolve(
-      searchFn.call(this.sdkAddon, query, {
-        maxResults
-      })
-    )
-    const abortPromise = createAbortPromise<unknown>(signal)
-    const rawResults = await (abortPromise
-      ? Promise.race([searchPromise, abortPromise])
-      : searchPromise)
+    let rawResults: unknown
+    try {
+      const searchPromise = Promise.resolve(
+        searchFn.call(this.sdkAddon, query, {
+          maxResults
+        })
+      )
+      const abortPromise = createAbortPromise<unknown>(signal)
+      rawResults = await (abortPromise
+        ? Promise.race([searchPromise, abortPromise])
+        : searchPromise)
+    } catch (error) {
+      if (!isAbortError(error)) {
+        this.diagnosticsTracker.record({
+          stage: 'sdk-query',
+          status: 'failed',
+          backend: 'sdk-napi',
+          startedAt: searchStart,
+          target: query,
+          error: getErrorMessage(error),
+          errorCode: getErrorCode(error) ?? null
+        })
+      }
+      throw error
+    }
 
     throwIfAborted(signal)
 
     const results = this.parseEverythingSdkOutput(rawResults)
 
+    this.diagnosticsTracker.record({
+      stage: 'sdk-query',
+      status: 'success',
+      backend: 'sdk-napi',
+      startedAt: searchStart,
+      target: query
+    })
     this.logDebug('Everything SDK search completed', {
       query,
       results: results.length,
@@ -816,6 +863,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       throwIfAborted(signal)
       const results = this.parseEverythingOutput(stdout)
 
+      this.diagnosticsTracker.record({
+        stage: 'cli-query',
+        status: 'success',
+        backend: 'cli',
+        startedAt: searchStart,
+        target: query
+      })
       this.logDebug('Everything CLI search completed', {
         query,
         results: results.length,
@@ -832,6 +886,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       this.lastBackendError = errorMessage
       this.lastBackendErrorCode = errorCode
+      this.diagnosticsTracker.record({
+        stage: 'cli-query',
+        status: 'failed',
+        backend: 'cli',
+        startedAt: searchStart,
+        target: query,
+        error: errorMessage,
+        errorCode
+      })
 
       if (errorCode === 'ETIMEDOUT') {
         this.logWarn('Everything CLI search timed out', error, { query })
@@ -980,6 +1043,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       // Convert Everything results to TuffItems
       const now = Date.now()
+      let scheduledIconWarmups = 0
       const items = results.map((result, index) => {
         // Create a file object compatible with mapFileToTuffItem
         const fileObj = {
@@ -997,7 +1061,20 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           content: null,
           embeddingStatus: 'none' as const
         }
-        const tuffItem = mapFileToTuffItem(fileObj, {}, this.id, this.name)
+        const cachedIcon = this.iconCache.get(result.path)
+
+        const tuffItem = mapFileToTuffItem(
+          fileObj,
+          cachedIcon ? { icon: cachedIcon } : {},
+          this.id,
+          this.name,
+          cachedIcon || result.isDir || scheduledIconWarmups >= EVERYTHING_ICON_WARMUP_LIMIT
+            ? undefined
+            : (file) => {
+                scheduledIconWarmups += 1
+                void this.iconCache.ensure(file.path)
+              }
+        )
         tuffItem.meta = {
           ...tuffItem.meta,
           file: {
@@ -1024,11 +1101,33 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
             query: searchText
           }
         }
+        const fileSearchMeta: EverythingFileSearchMeta = {
+          ...(tuffItem.meta as EverythingFileSearchMeta | undefined),
+          fileSearchContext: {
+            path: result.path,
+            name: result.name,
+            extension: result.extension,
+            size: result.size,
+            mtime: result.mtime.toISOString(),
+            isDir: result.isDir,
+            source: 'everything',
+            backend: this.backend,
+            score: finalScore
+          }
+        }
+        tuffItem.meta = fileSearchMeta as TuffMeta
 
         const normalized = normalizeTuffItemLocalAssets(tuffItem, {
           dropMissingFile: false,
           fallbackKind: result.isDir ? 'folder' : 'file'
         })
+        if (cachedIcon && normalized.missingPaths.length > 0) {
+          this.iconCache.delete(result.path)
+          if (!result.isDir && scheduledIconWarmups < EVERYTHING_ICON_WARMUP_LIMIT) {
+            scheduledIconWarmups += 1
+            void this.iconCache.ensure(result.path)
+          }
+        }
         return normalized.item ?? tuffItem
       })
 

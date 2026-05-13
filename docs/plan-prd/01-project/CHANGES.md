@@ -14,6 +14,26 @@
   - 搜索建议新增 `network.internet` 可选权限；权限缺失、网络失败或请求取消时保留直接搜索项，不阻塞用户搜索。
   - URL/域名打开仍由原 `browser-open` 路径处理，普通网页搜索走默认搜索引擎兜底。
 
+### fix(core-app): prefer packaged macOS tray template icon
+
+- `apps/core-app/electron-builder.yml`
+- `apps/core-app/src/main/modules/tray/{tray-icon-provider,tray-manager}.ts`
+  - macOS 包 `Info.plist` 固化 `LSUIElement=true`，与 tray-first / hide Dock 产品形态对齐，避免只靠运行时 `setActivationPolicy('accessory')` 导致 Dock、菜单栏与状态栏身份不稳定。
+  - macOS Dock 显隐时同步切换 activation policy：需要显示 Dock 时使用 `regular`，仅托盘驻留时使用 `accessory`，避免 `LSUIElement` 包身份下只调用 `app.dock.show()` 的不完整状态。
+  - macOS 托盘图标改为优先使用已打包的 `TrayIconTemplate.png` / `tray_icon_22x22.png` / `tray_icon.png` 资源，内置 Base64 template icon 仅作为资源缺失时的 fallback，避免状态栏项在部分 macOS 菜单栏/状态栏管理环境中创建后不可见或 bounds 异常。
+  - `TrayManager` 在托盘创建成功后记录 `platform`、`bounds` 与 resolved `iconPath`，后续可直接从日志判断 `trayReady` 与状态栏定位问题，减少 macOS 真机排查歧义。
+
+### docs(project): lock immediate Windows evidence execution order
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将“当前最需要做的事”落地为明确执行顺序：先确认工作区本地噪声不混入提交，再在 Windows 真机生成 acceptance collection plan，随后采集 case/manual/performance evidence，运行 `windows:acceptance:verify` final gate，最后写入 Nexus Release Evidence。
+  - 明确 `2.4.10` 正式 gate 前不得扩大功能范围；`2.5.0` AI/workflow、Provider Registry 高级策略、retained raw definition 后续迁移与 SRP 大拆分继续保留在 `2.4.11` / `2.5.0` 后续，不得抢占当前发版 blocker。
+  - 同步六主文档日期与口径，强调缺少真实 Windows evidence、性能样本或 Release Evidence 写入时，正式 `2.4.10` 结论只能保持 blocked。
+
 ## 2026-05-12
 
 ### ci(workflows): migrate GitHub Actions runtime to Node 24 baseline
@@ -38,6 +58,13 @@
   - 新增 2026-05-12 跨平台兼容与占位实现复核报告，确认 2026-05-10 P0/P1 假成功路径已基本收口：Pilot runtime metrics、mock payment 显式环境门控、`touch-image` 图片历史迁入 plugin storage SDK。
   - 同步六主文档入口，把当前 release blocker 收敛为 Windows/macOS 真机 evidence；后续 `2.4.11` 聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
   - 清理 `app-provider.test.ts` 测试标题中的非行为性 legacy 关键词噪声，保持断言不变并恢复 `compat:registry:guard` 绿线。
+
+### fix(core-app): launch Windows executable apps from install directory
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.test.ts`
+  - Windows `.exe`/`.com` app launches now use the app process launcher instead of `shell.openPath`, and default `cwd` to the executable directory when no explicit working directory is provided.
+  - This keeps apps such as WeChat/Weixin aligned with their installed runtime assumptions, while non-executable paths still use the shell opener.
 
 ### fix(core-app): skip unresolved optional packaged runtime modules
 
@@ -1928,6 +1955,27 @@
   - 新增 CoreApp search telemetry 与 Nexus provider 聚合定向测试；当前环境缺少已安装依赖，`vitest` 命令因 `Command "vitest" not found` 未能执行。
 
 ## 2026-05-09
+
+### fix(core-app): restore Windows app discovery for WeChat and Codex
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - Windows `Get-StartApps` desktop AppIDs that use known-folder GUID prefixes now resolve to real filesystem paths before app classification, so WeChat is indexed and launched as a desktop app instead of being misclassified as UWP.
+  - Start Menu shortcuts keep priority over duplicate desktop entries discovered through `Get-StartApps`; registry entries remain fallback-only when a target is already claimed.
+  - Codex/MSIX entries remain UWP apps with stable `uwp:*` identities, `.uwp` search-index extension metadata, and keyword coverage for `codex`.
+
+## 2026-05-09
+
+### feat(core-app): deepen Windows Everything diagnostics and context bridge
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/shared/events/everything.ts`
+  - Everything status/test IPC now reports per-stage diagnostics for SDK load, SDK query, CLI detect, and CLI query, including timing and error metadata.
+  - Settings Everything page shows backend diagnostic stages in addition to active backend, health, fallback chain, and backend errors.
+  - Everything search results now attach `meta.fileSearchContext` with safe local file metadata for Flow/Intelligence consumers; no file content is read or persisted.
+  - Windows native self-check output now includes backend, timing, result count, sample, and `errorCode` fields for smoke evidence.
 
 ### fix(core-app): restore Windows app discovery for WeChat and Codex
 

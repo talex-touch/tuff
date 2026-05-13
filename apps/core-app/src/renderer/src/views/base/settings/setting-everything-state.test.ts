@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { EverythingStatusResponse } from '../../../../../shared/events/everything'
 import {
+  getEverythingDiagnosticStages,
   resolveEverythingStatusColor,
   resolveEverythingStatusTextKey,
+  shouldShowEverythingDiagnostics,
   shouldShowEverythingInstallGuide,
   shouldShowEverythingToggle
 } from './setting-everything-state'
@@ -41,6 +43,7 @@ describe('setting-everything state helpers', () => {
     expect(resolveEverythingStatusColor(disabledUnavailable)).toBe('text-yellow-500')
     expect(shouldShowEverythingToggle(disabledUnavailable)).toBe(true)
     expect(shouldShowEverythingInstallGuide(disabledUnavailable)).toBe(false)
+    expect(shouldShowEverythingDiagnostics(disabledUnavailable)).toBe(false)
   })
 
   it('shows install guide only when Everything is enabled but unavailable', () => {
@@ -59,10 +62,42 @@ describe('setting-everything state helpers', () => {
     expect(shouldShowEverythingInstallGuide(enabledUnavailable)).toBe(true)
   })
 
+  it('shows diagnostics when backend stage summaries are present', () => {
+    const status = buildStatus({
+      diagnostics: {
+        lastUpdated: Date.now(),
+        stages: {
+          'sdk-load': {
+            stage: 'sdk-load',
+            status: 'failed',
+            backend: 'sdk-napi',
+            error: 'module missing',
+            errorCode: 'MODULE_NOT_FOUND',
+            duration: 12,
+            timestamp: Date.now()
+          },
+          'cli-detect': {
+            stage: 'cli-detect',
+            status: 'success',
+            backend: 'cli',
+            target: 'es.exe',
+            duration: 20,
+            timestamp: Date.now()
+          }
+        }
+      }
+    })
+
+    expect(shouldShowEverythingDiagnostics(status)).toBe(true)
+    expect(getEverythingDiagnosticStages(status)).toEqual(['sdk-load', 'cli-detect'])
+  })
+
   it('keeps loading state minimal before the first status response arrives', () => {
     expect(resolveEverythingStatusTextKey(null)).toBe('settings.settingEverything.statusChecking')
     expect(resolveEverythingStatusColor(null)).toBe('text-gray-500')
     expect(shouldShowEverythingToggle(null)).toBe(false)
     expect(shouldShowEverythingInstallGuide(null)).toBe(false)
+    expect(shouldShowEverythingDiagnostics(null)).toBe(false)
+    expect(getEverythingDiagnosticStages(null)).toEqual([])
   })
 })

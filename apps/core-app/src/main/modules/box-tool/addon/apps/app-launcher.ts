@@ -1,5 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import type { AppLaunchKind } from './app-types'
+import path from 'node:path'
+import process from 'node:process'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { shell } from 'electron'
 import { notificationModule } from '../../../notification'
@@ -8,6 +10,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 
 const appLauncherLog = getLogger('app-launcher')
 const EARLY_EXIT_OBSERVATION_MS = 2500
+const WINDOWS_DIRECT_EXECUTABLE_EXTENSIONS = new Set(['.exe', '.com'])
 
 export interface AppLaunchRequest {
   name?: string
@@ -60,6 +63,27 @@ function toErrorMessage(error: unknown): string {
 
 function getAppDisplayName(request: AppLaunchRequest): string {
   return request.name || request.launchTarget || request.path
+}
+
+function isWindowsDirectExecutable(target: string): boolean {
+  return (
+    process.platform === 'win32' &&
+    WINDOWS_DIRECT_EXECUTABLE_EXTENSIONS.has(path.win32.extname(target).toLowerCase())
+  )
+}
+
+function getWindowsExecutableDirectory(target: string): string | undefined {
+  const directory = path.win32.dirname(target)
+  return directory && directory !== '.' && directory !== target ? directory : undefined
+}
+
+function resolveSpawnWorkingDirectory(request: AppLaunchRequest): string | undefined {
+  return (
+    request.workingDirectory ||
+    (isWindowsDirectExecutable(request.launchTarget)
+      ? getWindowsExecutableDirectory(request.launchTarget)
+      : undefined)
+  )
 }
 
 function notifyLaunchFailure(request: AppLaunchRequest, error: string): void {
@@ -154,7 +178,7 @@ export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOut
       const outcome = await launchSpawnCommand(
         request.launchTarget,
         splitLaunchArgs(request.launchArgs),
-        { cwd: request.workingDirectory }
+        { cwd: resolveSpawnWorkingDirectory(request) }
       )
       if (outcome.status === 'failed' && outcome.error) {
         notifyLaunchFailure(request, outcome.error)
@@ -166,6 +190,19 @@ export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOut
       const explorerTarget = `shell:AppsFolder\\${request.launchTarget}`
       appLauncherLog.info(`Launching Windows Store app: ${explorerTarget}`)
       const outcome = await launchSpawnCommand('explorer.exe', [explorerTarget])
+      if (outcome.status === 'failed' && outcome.error) {
+        notifyLaunchFailure(request, outcome.error)
+      }
+      return outcome
+    }
+
+    if (isWindowsDirectExecutable(request.launchTarget)) {
+      appLauncherLog.info(`Launching Windows executable app: ${request.launchTarget}`)
+      const outcome = await launchSpawnCommand(
+        request.launchTarget,
+        splitLaunchArgs(request.launchArgs),
+        { cwd: resolveSpawnWorkingDirectory(request) }
+      )
       if (outcome.status === 'failed' && outcome.error) {
         notifyLaunchFailure(request, outcome.error)
       }

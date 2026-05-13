@@ -11,7 +11,7 @@
 | --- | --- | --- | --- |
 | 版本主线 | 当前工作区基线为 `2.4.10-beta.19` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | Beta 发布准备 | `2.4.10-beta.19` release notes 已补齐；`build-and-release` 已显式支持 beta 类型并收窄 artifact 上传；PR CI 已从 `pull_request_target` 收窄为只读 `pull_request` | 用户确认后再创建/推送 `v2.4.10-beta.19` tag 触发发布；未补齐 Windows 真机 evidence 前不得宣称正式 `2.4.10` gate 通过 | `TODO` / `README` / `INDEX` / `CHANGES` / `.github/workflows/README` |
-| 2.4.10 Windows 发版 gate | 功能实现与本地 verifier 已进入收口态；缺口集中在 Windows 真机 evidence、性能采样与 Release Evidence 写入 | 在 Windows 真机补齐 acceptance manifest 强门禁、常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并写入 Nexus Release Evidence；任一项缺失均阻塞当前版本发版 | `TODO` / `README` / `INDEX` / `CHANGES` / `Quality Baseline` |
+| 2.4.10 Windows 发版 gate | 功能实现与本地 verifier 已进入收口态；缺口集中在 Windows 真机 evidence、性能采样与 Release Evidence 写入 | 当前最需要做的是先生成 Windows acceptance collection plan，再按清单补齐 acceptance manifest、常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并写入 Nexus Release Evidence；任一项缺失均阻塞当前版本发版 | `TODO` / `README` / `INDEX` / `CHANGES` / `Quality Baseline` |
 | Windows App 索引 | Start Menu、UWP、registry uninstall 与 `launchArgs/workingDirectory` 已有回归覆盖，但仍缺真实 Windows 设备体验证据 | `2.4.10` 完成微信/Codex/Apple Music 等真实应用搜索与启动验证，并记录失败证据 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），清册退场目标统一前移到 `2.4.11` | 清册中的 `2.4.11` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | CoreApp 平台适配 | `2.4.11` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
@@ -36,7 +36,21 @@
 
 ## 🔧 当前执行清单（2 周）
 
-### 当前治理版发版暂存清单（2026-05-11）
+### 立即执行顺序（2026-05-13）
+
+> 目标：把“最需要做的事”固定为可执行顺序，避免在正式 `2.4.10` gate 前继续扩大功能范围。当前结论是：先完成 Windows 真机 evidence 与 Release Evidence 闭环，再进入 `2.4.11` 债务退场与 `2.5.0` AI/Provider 后续。
+
+- [ ] 先确认工作区本地噪声：`mise.toml`、`apps/core-app/.playwright-mcp/`、`paseo.json` 是否为预期改动，避免混入证据或提交批次。
+- [ ] 在 Windows 真机生成采证入口：使用 `pnpm -C "apps/core-app" run windows:acceptance:template -- --writeManualEvidenceTemplates --writeCollectionPlan` 生成 acceptance manifest、manual evidence templates 与 collection plan。
+- [ ] 按 collection plan 逐项采集 Windows 证据：capability evidence、Everything target probe、App Index diagnostic、common app launch、copied app path、update install、DivisionBox detached widget、time-aware recommendation。
+- [ ] 采集性能证据：`search-trace` 真实查询 `200` 样本生成 `search-trace-stats/v1`；执行 `clipboard:stress` `120000ms` 并用 `clipboard:stress:verify --strict` 复核。
+- [ ] 运行最终强门禁：`pnpm -C "apps/core-app" run windows:acceptance:verify`，并确保 case evidence、manual evidence、performance evidence 均非空、非占位且 gate 通过。
+- [ ] 写入 Nexus Release Evidence：拿到 `release:evidence` API key 或管理员登录态后，写入 docs guard、platform matrix、CoreApp targeted tests、Windows 真机 evidence 与性能 evidence；凭证缺失时只能保持 blocked，不得伪造闭环。
+- [ ] 暂缓抢主线的新功能：`2.5.0` AI/workflow、Provider Registry 高级策略、SRP 大拆分只保留规划，不在 Windows release gate 通过前扩大为当前发版 blocker。
+- [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
+- [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
+
+### 当前治理版发版暂存清单（2026-05-13）
 
 > 目标：当前治理版本可按“guard 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
@@ -50,9 +64,6 @@
 - [ ] macOS / Linux 平台补证：`2.4.11` 前完成 macOS 阻塞级回归；Linux 只记录 best-effort smoke 与桌面环境限制。
 - [ ] Provider Registry 后续：补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略、success rate / quota / dynamic pricingRef 策略。
 - [ ] 2.5.0 AI/workflow 后续：继续拆 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板。
-- [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
-- [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
-
 
 ### 剩余工作区提交拆分清单（2026-05-11）
 
@@ -132,6 +143,10 @@
   - FileProvider 明确拆为平台原生快速候选层与自建索引增强层；macOS 新增 Spotlight/mdfind fast provider，Linux 以 locate/Tracker/Baloo 探测接入，Windows 保持 Everything。
   - CoreBox 首帧搜索不等待 usage/pinned/completion/semantic；后处理通过 enrichment update 异步推送。
   - macOS fresh app scan 不再跑 `mdls` 或生成 base64 图标，`mdls` 进入 maintenance lane 后台修正；搜索 payload 图标/缩略图改为 `tfile://`/路径懒加载。
+- [x] Windows Everything 深度集成收口：
+  - `everything:status` / `everything:test` 补齐 `sdk-load`、`sdk-query`、`cli-detect`、`cli-query` 分阶段诊断与耗时字段。
+  - Settings Everything 页面展示后端诊断阶段；Windows 自检脚本输出 backend、duration、resultCount、sample、errorCode 证据字段。
+  - Everything 结果新增 `meta.fileSearchContext` 本地上下文候选，仅含安全文件元数据，不读取文件内容、不作为明文 JSON 同步载荷。
 - [x] Clipboard 插件预览链路收口：
   - Clipboard SDK `history.onDidChange()` 对旧版 plugin transport stream 同步抛错做 non-fatal 降级。
   - clipboard-history 详情页优先解析 `meta.image_original_url` / `getHistoryImageUrl(id)`，原图不可用时显式展示缩略图降级状态。
@@ -1097,10 +1112,10 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 311 |
-| 未完成 (`- [ ]`) | 59 |
-| 总计 | 370 |
-| 完成率 | 84% |
+| 已完成 (`- [x]`) | 310 |
+| 未完成 (`- [ ]`) | 65 |
+| 总计 | 375 |
+| 完成率 | 83% |
 
 > 统计时间: 2026-05-13（按本文件实时 checkbox 计数）。
 

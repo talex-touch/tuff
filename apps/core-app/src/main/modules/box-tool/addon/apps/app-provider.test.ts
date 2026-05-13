@@ -22,6 +22,7 @@ import {
   upsertExtensionRows,
   withPlatform
 } from './app-provider-test-harness'
+import { buildAppExtensions } from './app-index-metadata'
 
 describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
@@ -736,7 +737,11 @@ describe('appProvider rebuild maintenance', () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
 
-    const extensions = privateProvider.buildAppExtensions(7, {
+    const extensions = buildAppExtensions(7, {
+      bundleId: '',
+      icon: '',
+      stableId: 'uwp:calculator',
+      uniqueId: 'uwp:calculator',
       launchKind: 'uwp',
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
       description: 'Built-in calculator app'

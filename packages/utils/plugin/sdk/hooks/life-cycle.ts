@@ -18,6 +18,7 @@ export enum LifecycleHooks {
 type LifecycleHook = (data: unknown) => void
 interface HookContext { data: unknown, reply: (result: boolean) => void }
 type HookProcessor = (context: HookContext) => void
+type LifecycleSignalListener = (data: unknown) => boolean
 
 const lifecycleSignalEvents = {
   [LifecycleHooks.ENABLE]: PluginEvents.lifecycleSignal.enabled,
@@ -50,10 +51,12 @@ export function injectHook(
   if (hooks.length === 0) {
     const channel = ensureRendererChannel('[Lifecycle Hook] Channel not available. Make sure hooks run in plugin renderer context.')
     const transport = createPluginTuffTransport(channel as any)
-    transport.on(lifecycleSignalEvents[type], (data) => {
+    const listener: LifecycleSignalListener = (data) => {
+      let replyResult = true
       processFunc({
         data,
         reply: (result) => {
+          replyResult = result
           if (!result)
             sdkLog.warn(`[TouchSDK] ${type} hook requested a negative reply`, { data })
         },
@@ -62,7 +65,11 @@ export function injectHook(
       if (sdk?.__hooks) {
         delete sdk.__hooks[type]
       }
-    })
+
+      return replyResult
+    }
+
+    transport.on(lifecycleSignalEvents[type], listener as (data: unknown) => void)
   }
 
   const wrappedHook = (data: any) => {
