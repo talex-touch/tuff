@@ -16,6 +16,7 @@
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象入口
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 Plan PRD
+- `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md` - 跨平台兼容与占位/假实现深度复核报告
 - `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md` - 跨平台兼容与占位/假实现复核报告
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析
 - `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` - 跨平台兼容与占位/假实现审计报告（历史基线）
@@ -31,8 +32,8 @@
 
 ## 状态快照（2026-05-13，统一口径）
 
-- **当前工作区基线**：`2.4.10-beta.21`（根包与 CoreApp 对齐）。
-- **2.4.10-beta.21 发布准备（2026-05-13）**：`build-and-release` 支持 tag push 触发 beta pre-release；`v2.4.10-beta.20` 已存在，下一次新 beta 需使用 `v2.4.10-beta.21`。本轮已补 `notes/update_2.4.10-beta.21.{zh,en}.md`，收口 OmniPanel Gate 与 Utils Package CI 当前可见阻断，并验证 macOS beta build；完整 `quality:pr` 仍被 `apps/pilot` 既有 lint 债务阻断。
+- **当前工作区基线**：`2.4.10-beta.22`（根包与 CoreApp 对齐）。
+- **2.4.10-beta.22 发布准备（2026-05-13）**：`build-and-release` 支持 tag push 触发 beta pre-release；`v2.4.10-beta.21` 已存在，下一次新 beta 使用 `v2.4.10-beta.22`。本轮已补 `notes/update_2.4.10-beta.22.{zh,en}.md`，合入 Widget/CLI 最新修复、兼容性复核记录，并延续 OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果；完整 `quality:pr` 仍被 `apps/pilot` 既有 lint 债务阻断。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；Windows App Search & Launch Beta 已开始落地应用索引管理页、Steam 最小 provider 与 `protocol` 启动白名单；不把全部跨平台回归压进 `2.4.10`。
 - **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是在 Windows 真机生成 acceptance collection plan，并按同一清单补齐 Windows acceptance manifest 最终强门禁、微信/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测；Nexus Release Evidence 写入闭环仍是发版阻塞项。
 - **立即执行顺序（2026-05-13）**：先确认工作区本地噪声不混入提交，再生成 Windows acceptance collection plan，随后采集 case/manual/performance evidence，运行 `windows:acceptance:verify` final gate，最后写入 Nexus Release Evidence；`2.5.0` AI、Provider Registry 高级策略与 SRP 大拆分不得抢占正式 `2.4.10` gate。
@@ -87,7 +88,7 @@
 - **Nexus composed 截图翻译编排（2026-05-10）**：Scene Orchestrator 已支持 `vision.ocr -> text.translate -> overlay.render` 链式输出传递，图片置顶窗口可消费本地 `overlay.render` 客户端 overlay payload；OpenAI-compatible Intelligence mirror 已有默认 `vision.ocr` adapter，Dashboard Admin seed 已补系统级 overlay provider 与截图翻译 Scene 默认配置；生产闭环仍需补 user-scope AI mirror OCR 绑定策略、旧 AI provider 表退场与高级策略。
 - **Nexus AI Provider Registry check（2026-05-11）**：Intelligence provider registry mirror 已接入 Provider Registry check，Dashboard 可对 `chat.completion` 与 `vision.ocr` 执行探活并写入 `provider_health_checks`，Health 视图可继续统一查询 latency/error/degraded reason；`vision.ocr` 探活复用 OpenAI-compatible OCR adapter，不再用 chat probe 代替。
 - **Nexus Provider/Scene 默认 seed（2026-05-11）**：Dashboard Admin Provider Registry 页面加载前会幂等触发默认 seed，创建系统级本地 `custom-local-overlay` provider 与 `corebox.screenshot.translate` Scene，并只追加缺失的 system binding；不会把 user-scope AI mirror OCR provider 自动绑定进 system Scene，避免个人凭证跨用户误用。
-- **跨平台兼容与占位实现复核（2026-05-13）**：2026-05-10 报告中的 Pilot stat 假值、payment mock 默认成功与 touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 当前扫描上限为 `<=265`；剩余重点是 Windows/macOS 真机证据、Linux best-effort 记录、`compat-file=5`、CLI token 明文 JSON 与超长模块 SRP 拆分。
+- **跨平台兼容与占位实现深度复核（2026-05-13）**：新增 `cross-platform-compat-placeholder-deep-review-2026-05-13.md`；2026-05-10 报告中的 Pilot stat 假值、payment mock 默认成功与 touch-image localStorage 历史持久化已收口，CoreApp 平台能力、sync 密文载荷与 Linux unsupported reason 口径保持稳定；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 当前测试上限为 `265`。剩余重点是 Windows/macOS 真机证据、Linux best-effort 记录、Pilot 兼容占位响应、CLI token 明文 JSON、插件 provider secret 普通 storage、插件 shell capability 诊断与超长模块 SRP 拆分。
 - **架构治理切片（2026-05-13）**：Transport boundary test 已拆出 raw send / retained raw definition / typed migration candidate 三类指标，retained raw definition 当前基线为 `265`；Pilot `/system/serve/stat` 已改真实运行时指标，mock 支付默认成功由 `PILOT_PAYMENT_MODE=mock` 门控；`plugins/touch-image` 图片历史迁入 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts`、`app-provider.ts`、Tuffex `TxFlipOverlay.vue` 等已完成 SRP 拆分切片；质量入口统一为 ESLint、typecheck、targeted tests 与 build，release 走 `quality:release`。
 - **CoreApp 启动异步化缺口分析（2026-05-13）**：专项报告已归档到 `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md`；当前结论是启动仍受 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path、renderer mount 前等待 storage/plugin store 影响。后续按 renderer plugin store 后台化、非首屏模块后台化、Database critical/background 拆分与 Search provider 后台 ready 推进，不抢当前 `2.4.10` Windows evidence gate。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
@@ -132,12 +133,12 @@
 
 | 文档 | 当前状态 | 下一动作 |
 | --- | --- | --- |
-| `docs/plan-prd/TODO.md` | 已同步到 2026-05-11 | 推进 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，并维护 `2.4.11` 必解清单与 Nexus Provider 后续阶段 |
-| `docs/plan-prd/README.md` | 已同步到 2026-05-11 | 维护 `2.4.10` 当前主线、`2.4.11` 未闭环能力与 Nexus Provider 架构蓝图口径 |
-| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-05-11 | 按锁定顺序推进 Windows App 索引、基础兼容治理、后续跨平台回归与 Provider 聚合规划 |
+| `docs/plan-prd/TODO.md` | 已同步到 2026-05-13 | 推进 `2.4.10` Windows 真机 evidence；`2.4.11` 收口 Pilot 占位、CLI token、插件 secret/command capability |
+| `docs/plan-prd/README.md` | 已同步到 2026-05-13 | 维护 `2.4.10` 当前主线、`2.4.11` 未闭环能力与 Nexus Provider 架构蓝图口径 |
+| `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` | 已同步到 2026-05-13 | 按锁定顺序推进 Windows evidence、基础兼容治理、后续跨平台回归与 Provider 聚合规划 |
 | `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` | Gate A/B/C/D/E 已完成（D/E historical，2026-03-16 已复核） | 保留证据链并切换到 `2.4.9` 后续主线 |
-| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-05-11 | `2.4.11` 前关闭或降权 legacy/compat/size 债务，Windows/macOS 为 release-blocking；活跃 PRD 保持目标/验收/质量/回滚结构 |
-| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-05-11 | 持续记录 `2.4.10` 主线、`2.4.11` 必解清单与 Nexus Provider PRD 证据 |
+| `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` | 已同步到 2026-05-13 | `2.4.11` 前关闭或降权 legacy/compat/size 债务，Windows/macOS 为 release-blocking；活跃 PRD 保持目标/验收/质量/回滚结构 |
+| `docs/plan-prd/01-project/CHANGES.md` | 已同步到 2026-05-13 | 持续记录 `2.4.10` 主线、`2.4.11` 必解清单与 Nexus Provider PRD 证据 |
 | `docs/INDEX.md` | 本页（入口+快照）已压缩 | 仅维护导航与高价值快照 |
 
 ## 归档与降权

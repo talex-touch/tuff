@@ -19,17 +19,29 @@
   - CLI Package CI 的 path filter 补充 `packages/utils/**` 与 workflow 文件自身，确保共享 SDK 兼容性改动会重新触发 `tuff-cli-core` lint/test/build。
   - `tuff-cli` tsup external 补齐 `@vue/compiler-sfc` 可选模板引擎，避免打包 CLI core 时把 Vue SFC 编译器的可选 `require()` 当成硬依赖解析。
 
-### chore(release): prepare 2.4.10 beta CI readiness
+### docs(project): add compatibility deep review
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 归档跨平台兼容与占位实现深度复核：CoreApp 平台能力、sync 密文载荷、Linux unsupported reason 与 transport boundary 当前稳定；`transport-event-boundary.test.ts` 通过，typed migration candidate 保持 `0`，retained raw definition 当前测试上限为 `265`。
+  - 明确剩余 `2.4.11` 风险：Pilot 兼容占位成功响应、CLI token 明文 JSON、插件 provider secret 普通 storage、插件 shell capability 诊断与生产样式大文件 SRP。
+  - 同步活跃入口文档，把当前下一步继续固定为 `2.4.10` Windows 真机 evidence；不把 Pilot/CLI/插件 secret/SRP 扩大为正式 `2.4.10` gate blocker。
+
+### chore(release): prepare 2.4.10 beta.22 CI readiness
 
 - `package.json`
 - `apps/core-app/package.json`
-- `notes/update_2.4.10-beta.21.{zh,en}.md`
+- `notes/update_2.4.10-beta.22.{zh,en}.md`
 - `apps/core-app/src/main/modules/omni-panel/index.ts`
 - `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
 - `packages/utils/__tests__/transport-event-boundary.test.ts`
 - `plugins/clipboard-history/eslint.config.mjs`
 - `plugins/touch-dev-utils/eslint.config.mjs`
-  - 版本基线推进到 `2.4.10-beta.21`，用于避开已发布的 `v2.4.10-beta.20` tag，并补齐对应中英文 beta release notes。
+  - 版本基线推进到 `2.4.10-beta.22`，用于避开已存在的 `v2.4.10-beta.21` tag，并补齐对应中英文 beta release notes。
   - 收口远端 `master` 最新失败的 OmniPanel Gate：主进程模块不再读取 `globalThis.$app`，渲染端错误输出统一走 renderer logger。
   - 收口 Utils Package CI 的 transport boundary 扫描基线：当前 retained raw definition 为 `265`，raw send violation 仍只允许既有 allowlist，typed migration candidate 保持 `0`。
   - 补齐 `clipboard-history` / `touch-dev-utils` 插件本地 ESLint 配置，并修正 clipboard history 事件命名、组件格式与相关工具脚本 lint 阻断，确保 beta 发布相关质量门禁可复跑。

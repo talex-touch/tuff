@@ -83,4 +83,4 @@
 1. `core-app`：继续清理剩余 `compat-file 5`，优先评估 download migration 命名与 `polyfills.ts` 的退场条件。
 2. `core-app`：继续拆 `clipboard.ts` autopaste、`search-core.ts` 与 `app-provider.ts`，按行为等价切片降低 size cap。
 3. `nexus`：拆分 `tuffIntelligenceLabService.ts`、locale 与 auth store 超长报告项。
-4. `packages-utils`：retained raw definition 当前上限保持 `<=265`，继续把符合 typed builder 结构的事件分批迁入 typed registry。
+4. `packages-utils`：retained raw definition 当前测试上限为 `265`，继续把符合 typed builder 结构的事件分批迁入 typed registry。
