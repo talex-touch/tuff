@@ -81,8 +81,7 @@ export class TrayManager extends BaseModule {
   private applyActivationPolicy(): void {
     const hideDock = this.getHideDockConfig()
     const startSilent = this.getStartSilentConfig()
-    const shouldUseAccessory =
-      this.shouldShowTray() && !this.shouldForceRegularInDev() && (hideDock || startSilent)
+    const shouldUseAccessory = this.shouldShowTray() && (hideDock || startSilent)
     this.setMacActivationPolicy(shouldUseAccessory ? 'accessory' : 'regular')
   }
 
@@ -346,17 +345,6 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private shouldForceRegularInDev(): boolean {
-    if (process.platform !== 'darwin') return false
-    if (app.isPackaged) return false
-    if (this.isDevTrayAgentModeEnabled()) return false
-    return this.getHideDockConfig() || this.getStartSilentConfig()
-  }
-
-  private isDevTrayAgentModeEnabled(): boolean {
-    return process.env.TUFF_DEV_TRAY_AGENT === '1'
-  }
-
   /**
    * Setup Dock icon on macOS
    * 在 macOS 上设置 Dock 图标
@@ -391,7 +379,7 @@ export class TrayManager extends BaseModule {
     const hasDivisionBox = this.hasActiveDivisionBox()
     const trayAvailable = this.shouldShowTray() && this.tray !== null
 
-    if (this.shouldForceRegularInDev() || !trayAvailable) {
+    if (!trayAvailable) {
       this.setMacActivationPolicy('regular')
       app.dock?.show()
       return

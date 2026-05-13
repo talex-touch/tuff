@@ -50,7 +50,7 @@
   - macOS 包 `Info.plist` 固化 `LSUIElement=true`，并在 `afterPack` 对主 App `Info.plist` 做兜底写入与 fail-fast 校验；避免 builder 配置或 CLI 覆盖未生效时，系统设置「菜单栏」列表完全不登记 `tuff`。
   - macOS Dock 显隐时同步切换 activation policy：需要显示 Dock 时使用 `regular`，仅托盘驻留时使用 `accessory`，避免 `LSUIElement` 包身份下只调用 `app.dock.show()` 的不完整状态。
   - 将 `TrayManager` 启动顺序提前到 Intelligence/Auth/Sync 等可能触发 Keychain 或网络等待的模块之前，避免 macOS agent 包在后续模块初始化卡住时尚未创建菜单栏项。
-  - 新增 `TUFF_DEV_TRAY_AGENT=1` dev-only 开关，用于在 `pnpm core:dev` 下测试 macOS tray-first / accessory agent 行为；默认 dev 仍保持强制 `regular`，避免影响日常调试 Dock 可见性。
+  - dev 与 packaged macOS 在 tray-first / accessory agent 行为上保持一致：不再通过 dev 环境强制 `regular`，便于默认 `pnpm core:dev` 直接验证菜单栏托盘链路。
   - macOS 托盘图标改为优先使用已打包的 `TrayIconTemplate.png` / `tray_icon_22x22.png` / `tray_icon.png` 资源，内置 Base64 template icon 仅作为资源缺失时的 fallback，避免状态栏项在部分 macOS 菜单栏/状态栏管理环境中创建后不可见或 bounds 异常。
   - `TrayManager` 在托盘创建成功后记录 `platform`、`bounds` 与 resolved `iconPath`，后续可直接从日志判断 `trayReady` 与状态栏定位问题，减少 macOS 真机排查歧义。
 
