@@ -12,6 +12,11 @@
   - Windows App 启动路径继续收紧 ShellExecute 语义：当 `launchTarget` 本身为 `.lnk`（常见于手动添加/复制路径入口）时，直接交由 `shell.openPath(.lnk)` 启动，避免 Node `spawn` 快捷方式导致部分应用无响应或失败。
   - 保留原始 Start Menu `.lnk` 的 shell handoff 与失败后 target fallback 行为；同时用定向测试覆盖 `.lnk`、`.cmd`、`.ps1`、普通 exe 与协议启动。
 
+### test(core-app): cover app provider launch metadata sync
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-metadata-sync.test.ts`
+  - 补充 AppProvider metadata sync 测试，固定 `launchArgs`、`workingDirectory`、`displayPath`、`description` 作为扫描可清理/可检测的启动元数据，降低旧索引残留错误启动参数的风险。
+
 ### feat(plugin): add search engine icons for quick launch
 
 - `plugins/touch-browser-open/{manifest.json,index.js,assets/search-engines/*.svg}`
