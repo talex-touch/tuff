@@ -409,6 +409,10 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const feature = plugin?.getFeature(featureId)
 
         if (plugin && feature && this.isPluginActive(plugin)) {
+          if (feature.push) {
+            return TuffFactory.createSearchResult(query).setActivate(activationState).build()
+          }
+
           if (!query.text) {
             const allFeatures = plugin
               .getFeatures()

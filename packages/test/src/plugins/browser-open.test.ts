@@ -7,9 +7,11 @@ const browserPluginUrl = new URL('../../../../plugins/touch-browser-open/index.j
 
 class FakeBuilder {
   item: Record<string, unknown>
+  basic: Record<string, unknown>
 
   constructor(id: string) {
     this.item = { id }
+    this.basic = {}
   }
 
   setSource() {
@@ -18,15 +20,18 @@ class FakeBuilder {
 
   setTitle(title: string) {
     this.item.title = title
+    this.basic.title = title
     return this
   }
 
   setSubtitle(subtitle: string) {
     this.item.subtitle = subtitle
+    this.basic.subtitle = subtitle
     return this
   }
 
-  setIcon() {
+  setIcon(icon: Record<string, unknown>) {
+    this.basic.icon = icon
     return this
   }
 
@@ -36,6 +41,10 @@ class FakeBuilder {
   }
 
   build() {
+    this.item.render = {
+      mode: 'default',
+      basic: this.basic,
+    }
     return this.item
   }
 }
@@ -129,6 +138,10 @@ describe('browser open plugin', () => {
       'search-engine-google',
       'search-engine-duckduckgo',
     ])
+    expect(features.map(feature => feature.icon.value)).toEqual([
+      'assets/search-engines/google.svg',
+      'assets/search-engines/duckduckgo.svg',
+    ])
     expect(features.every(feature => feature.push)).toBe(true)
     expect(features.every(feature => feature.acceptedInputTypes.includes('text'))).toBe(true)
   })
@@ -186,6 +199,10 @@ describe('browser open plugin', () => {
       'tuff plugins',
     ])
     expect((items[0].meta as any).payload.url).toBe('https://www.google.com/search?q=tuff%20app')
+    expect((items[0] as any).render.completion).toBe('tuff app')
+    expect((items[1] as any).render.completion).toBe('tuff plugins')
+    expect((items[0] as any).render.basic.icon.value).toBe('assets/search-engines/google.svg')
+    expect((items[1] as any).render.basic.icon.value).toBe('assets/search-engines/google.svg')
   })
 
   it('extracts remaining query after choosing an engine feature', () => {
@@ -333,5 +350,125 @@ describe('browser open plugin', () => {
     await pluginModule.onFeatureTriggered('search-engine-google', 'google tuff app', null, controller.signal)
 
     expect(items.map(item => item.title)).toEqual(['Google 搜索：tuff app'])
+  })
+
+  it('keeps engine mode as search suggestions while input looks like a domain', async () => {
+    const items: Array<{ title?: string, meta?: any, render?: any }> = []
+    let inputHandler: ((input: string) => void) | null = null
+    const setInput = vi.fn()
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      fetch: vi.fn(async () => ({
+        ok: true,
+        json: async () => ['example.com', ['example.com pricing', 'example.com login']],
+      })),
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+      plugin: {
+        box: {
+          showInput: vi.fn(),
+          allowInput: vi.fn(),
+          setInput,
+          hide: vi.fn(),
+        },
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, meta?: any, render?: any }>) { items.push(...next) },
+          onInputChange(handler: (input: string) => void) {
+            inputHandler = handler
+            return vi.fn()
+          },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎', null, new AbortController().signal)
+    setInput.mockClear()
+    inputHandler?.('example.com')
+    await vi.waitFor(() => {
+      expect(items.map(item => item.title)).toEqual([
+        'Google 搜索：example.com',
+        'example.com pricing',
+        'example.com login',
+      ])
+    })
+
+    expect(setInput).not.toHaveBeenCalled()
+    expect(items.every(item => item.meta?.actionId === 'search-web')).toBe(true)
+    expect(items.map(item => item.render?.completion)).toEqual([
+      'example.com',
+      'example.com pricing',
+      'example.com login',
+    ])
+  })
+
+  it('aborts stale suggestion requests when engine input changes quickly', async () => {
+    const items: Array<{ title?: string }> = []
+    let inputHandler: ((input: string) => void) | null = null
+    const firstFetch = new Promise((_resolve, reject) => {
+      setTimeout(() => reject(new Error('stale request should be aborted')), 20)
+    })
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        json: async () => ['start', []],
+      }))
+      .mockImplementationOnce(async (_url, init) => {
+        init.signal.addEventListener('abort', () => {})
+        return firstFetch
+      })
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        json: async () => ['new', ['new suggestion']],
+      }))
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      fetch,
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+      plugin: {
+        box: {
+          showInput: vi.fn(),
+          allowInput: vi.fn(),
+          setInput: vi.fn(),
+          hide: vi.fn(),
+        },
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
+          onInputChange(handler: (input: string) => void) {
+            inputHandler = handler
+            return vi.fn()
+          },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎 start', null, new AbortController().signal)
+    inputHandler?.('old')
+    inputHandler?.('new')
+
+    await vi.waitFor(() => {
+      expect(items.map(item => item.title)).toEqual([
+        'Google 搜索：new',
+        'new suggestion',
+      ])
+    })
+    expect(items.map(item => item.title)).not.toContain('搜索建议不可用')
   })
 })

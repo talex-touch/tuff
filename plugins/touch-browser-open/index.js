@@ -22,6 +22,7 @@ const SEARCH_ENGINES = [
     id: 'google',
     name: 'Google',
     featureName: 'Google 搜索引擎',
+    icon: { type: 'file', value: 'assets/search-engines/google.svg' },
     keywords: ['google', 'g', '谷歌', 'google 搜索', 'Google 搜索引擎', '谷歌搜索', '谷歌 搜索'],
     commands: ['google', 'g', '谷歌'],
     buildSearchUrl: query => `https://www.google.com/search?q=${encodeURIComponent(query)}`,
@@ -34,6 +35,7 @@ const SEARCH_ENGINES = [
     id: 'bing',
     name: 'Bing',
     featureName: 'Bing 搜索引擎',
+    icon: { type: 'file', value: 'assets/search-engines/bing.svg' },
     keywords: ['bing', '必应', 'bing 搜索', 'Bing 搜索引擎', '必应搜索', '必应 搜索'],
     commands: ['bing', '必应'],
     buildSearchUrl: query => `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
@@ -46,6 +48,7 @@ const SEARCH_ENGINES = [
     id: 'duckduckgo',
     name: 'DuckDuckGo',
     featureName: 'DuckDuckGo 搜索引擎',
+    icon: { type: 'file', value: 'assets/search-engines/duckduckgo.svg' },
     keywords: ['duckduckgo', 'ddg', 'duck', 'DuckDuckGo 搜索引擎', 'duckduckgo 搜索', 'ddg 搜索'],
     commands: ['duckduckgo', 'ddg', 'duck'],
     buildSearchUrl: query => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
@@ -74,6 +77,7 @@ let networkPermissionGranted = null
 let latestFeatureRequestSeq = 0
 let activeSearchMode = null
 let unsubscribeSearchInput = null
+let activeSearchRequestController = null
 
 function getRuntimePlatform() {
   const platform = typeof os?.platform === 'function' ? os.platform() : ''
@@ -281,7 +285,7 @@ function buildSearchEngineFeatures(settings = DEFAULT_SEARCH_SETTINGS) {
     id: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`,
     name: engine.featureName,
     desc: `进入 ${engine.name} 搜索模式`,
-    icon: ICON,
+    icon: engine.icon,
     keywords: getSearchEngineFeatureKeywords(engine),
     push: true,
     priority: 8,
@@ -324,6 +328,7 @@ function stopSearchInputSession() {
   }
   unsubscribeSearchInput = null
   activeSearchMode = null
+  abortActiveSearchRequest()
 }
 
 function startSearchInputSession(featureId, engine) {
@@ -668,12 +673,12 @@ function resolveGroupOrder({ quickActions, recommendedItems, recentItems, tips }
   return order
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function buildInfoItem({ id, featureId, title, subtitle, icon = ICON }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
-    .setIcon(ICON)
+    .setIcon(icon)
     .setMeta({ pluginName: PLUGIN_NAME, featureId })
     .build()
 }
@@ -687,12 +692,12 @@ function buildSectionHeader(featureId, sectionId, title, subtitle) {
   })
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, icon = ICON }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
-    .setIcon(ICON)
+    .setIcon(icon)
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
@@ -704,11 +709,12 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
 }
 
 function buildSearchActionItem({ id, featureId, engine, query, title, subtitle, suggestion = false }) {
-  return buildActionItem({
+  return applyCompletion(buildActionItem({
     id,
     featureId,
     title,
     subtitle,
+    icon: engine.icon,
     actionId: 'search-web',
     payload: {
       engineId: engine.id,
@@ -716,7 +722,7 @@ function buildSearchActionItem({ id, featureId, engine, query, title, subtitle, 
       suggestion,
       url: buildSearchUrl(engine.id, query),
     },
-  })
+  }), query)
 }
 
 function buildSearchItems(featureId, engine, query, suggestions = [], options = {}) {
@@ -729,6 +735,7 @@ function buildSearchItems(featureId, engine, query, suggestions = [], options = 
       featureId,
       title: `${engine.name} 搜索`,
       subtitle: '继续输入关键词以获取搜索建议',
+      icon: engine.icon,
     }))
     return items
   }
@@ -762,6 +769,7 @@ function buildSearchItems(featureId, engine, query, suggestions = [], options = 
       featureId,
       title: '搜索建议不可用',
       subtitle: truncateText(options.warning, 96),
+      icon: engine.icon,
     }))
   }
 
@@ -783,6 +791,43 @@ async function pushFeatureItems(items, requestSeq) {
   plugin.feature.clearItems()
   await plugin.feature.pushItems(items)
   return true
+}
+
+function abortActiveSearchRequest() {
+  if (!activeSearchRequestController)
+    return
+  activeSearchRequestController.abort()
+  activeSearchRequestController = null
+}
+
+function createSearchRequestSignal(parentSignal) {
+  abortActiveSearchRequest()
+
+  const controller = new AbortController()
+  activeSearchRequestController = controller
+
+  const abortFromParent = () => controller.abort()
+  if (parentSignal?.aborted) {
+    controller.abort()
+  }
+  else {
+    parentSignal?.addEventListener?.('abort', abortFromParent, { once: true })
+  }
+
+  return {
+    signal: controller.signal,
+    release() {
+      parentSignal?.removeEventListener?.('abort', abortFromParent)
+      if (activeSearchRequestController === controller)
+        activeSearchRequestController = null
+    },
+  }
+}
+
+function applyCompletion(item, completion) {
+  if (item?.render && typeof completion === 'string')
+    item.render.completion = completion
+  return item
 }
 
 function openWithMac(url, browserTarget) {
@@ -886,33 +931,39 @@ async function enterSearchEngineMode(engine, query, signal, options = {}) {
   const requestSeq = beginFeatureRequest()
   const text = normalizeSearchText(query)
   const featureId = options.featureId || `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
-
-  if (!options.preserveInput) {
-    await plugin.box?.showInput?.()
-    await plugin.box?.allowInput?.()
-    await plugin.box?.setInput?.(text)
-  }
-
-  await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
-
-  if (!text)
-    return true
+  const request = createSearchRequestSignal(signal)
 
   try {
-    const suggestions = await loadSuggestions(engine, text, signal)
-    if (!isCurrentFeatureRequest(requestSeq, signal))
-      return true
-    await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
-  }
-  catch (error) {
-    if (!isCurrentFeatureRequest(requestSeq, signal))
-      return true
-    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
-      warning: error?.message || '网络请求失败，仅保留直接搜索',
-    }), requestSeq)
-  }
+    if (!options.preserveInput) {
+      await plugin.box?.showInput?.()
+      await plugin.box?.allowInput?.()
+      await plugin.box?.setInput?.(text)
+    }
 
-  return true
+    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
+
+    if (!text)
+      return true
+
+    try {
+      const suggestions = await loadSuggestions(engine, text, request.signal)
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
+    }
+    catch (error) {
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
+        warning: error?.message || '网络请求失败，仅保留直接搜索',
+      }), requestSeq)
+    }
+
+    return true
+  }
+  finally {
+    request.release()
+  }
 }
 
 async function handleWebSearchFeature(featureId, query, signal) {
@@ -921,27 +972,33 @@ async function handleWebSearchFeature(featureId, query, signal) {
   const parsed = parseSearchQuery(getQueryText(query), settings)
   const engine = parsed.engine
   const text = parsed.query
-
-  await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
-
-  if (!text)
-    return true
+  const request = createSearchRequestSignal(signal)
 
   try {
-    const suggestions = await loadSuggestions(engine, text, signal)
-    if (!isCurrentFeatureRequest(requestSeq, signal))
-      return true
-    await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
-  }
-  catch (error) {
-    if (!isCurrentFeatureRequest(requestSeq, signal))
-      return true
-    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
-      warning: error?.message || '网络请求失败，仅保留直接搜索',
-    }), requestSeq)
-  }
+    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
 
-  return true
+    if (!text)
+      return true
+
+    try {
+      const suggestions = await loadSuggestions(engine, text, request.signal)
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
+    }
+    catch (error) {
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
+        warning: error?.message || '网络请求失败，仅保留直接搜索',
+      }), requestSeq)
+    }
+
+    return true
+  }
+  finally {
+    request.release()
+  }
 }
 
 async function registerSearchEngineFeatures() {
@@ -1125,9 +1182,11 @@ const pluginLifecycle = {
       if (!signal)
         return true
       const modeFeatureId = `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
+      const preserveInput = activeSearchMode?.featureId === modeFeatureId
       startSearchInputSession(modeFeatureId, engine)
       return enterSearchEngineMode(engine, extractEngineModeQuery(engine, getQueryText(query)), signal, {
         featureId: modeFeatureId,
+        preserveInput,
       })
     }
 
@@ -1136,8 +1195,14 @@ const pluginLifecycle = {
         return true
       const settings = await loadSearchSettings()
       const parsed = parseSearchQuery(getQueryText(query), settings)
+      const preserveInput = activeSearchMode?.featureId === featureId
       startSearchInputSession(featureId, parsed.engine)
-      return handleWebSearchFeature(featureId, query, signal)
+      if (!preserveInput)
+        return handleWebSearchFeature(featureId, query, signal)
+      return enterSearchEngineMode(parsed.engine, parsed.query, signal, {
+        featureId,
+        preserveInput: true,
+      })
     }
 
     stopSearchInputSession()
@@ -1224,10 +1289,6 @@ const pluginLifecycle = {
     }
   },
 
-  onFeatureDeactivated(featureId) {
-    if (resolveActiveSearchMode(featureId))
-      stopSearchInputSession()
-  },
 }
 
 module.exports = {
