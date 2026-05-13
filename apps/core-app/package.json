@@ -20,7 +20,7 @@
     "test:shortcut-lifecycle": "vitest run src/main/modules/global-shortcon.test.ts src/main/modules/division-box/shortcut-trigger.test.ts src/main/modules/omni-panel/index.test.ts",
     "smoke:omnipanel": "cross-env TUFF_OMNIPANEL_SMOKE=1 electron-vite preview",
     "start": "electron-vite preview",
-    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=8192' pnpm exec electron-vite dev",
+    "dev": "node scripts/dev-electron-wrapper.mjs",
     "build": "pnpm run typecheck && electron-vite build",
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
     "db:generate": "drizzle-kit generate",

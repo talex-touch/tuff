@@ -103,6 +103,7 @@ import {
   resolveMissingScannedExtensionKeys
 } from './app-provider-metadata-sync'
 import {
+  expandWindowsEnvironmentVariables,
   inferManagedEntryLaunchKind,
   isWindowsUwpAppId,
   isWindowsUwpShellPath,
@@ -909,17 +910,23 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (launchKind !== 'uwp') {
-      if (!path.isAbsolute(normalizedPath)) {
-        return { reason: 'path-not-absolute' }
-      }
-      if (!existsSync(normalizedPath)) {
-        return { reason: 'path-not-found' }
-      }
-      if (!path.isAbsolute(launchTarget)) {
-        return { reason: 'launch-target-not-absolute' }
-      }
-      if (!existsSync(launchTarget)) {
-        return { reason: 'launch-target-not-found' }
+      if (launchKind === 'protocol') {
+        if (!/^steam:\/\/rungameid\/\d+$/i.test(launchTarget)) {
+          return { reason: 'protocol-not-allowed' }
+        }
+      } else {
+        if (!path.isAbsolute(normalizedPath)) {
+          return { reason: 'path-not-absolute' }
+        }
+        if (!existsSync(normalizedPath)) {
+          return { reason: 'path-not-found' }
+        }
+        if (!path.isAbsolute(launchTarget)) {
+          return { reason: 'launch-target-not-absolute' }
+        }
+        if (!existsSync(launchTarget)) {
+          return { reason: 'launch-target-not-found' }
+        }
       }
     }
 
@@ -1545,7 +1552,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       extension:
         normalizedAppInfo.launchKind === 'uwp'
           ? '.uwp'
-          : path.extname(normalizedAppInfo.launchTarget || normalizedAppInfo.path).toLowerCase(),
+          : normalizedAppInfo.launchKind === 'protocol'
+            ? '.protocol'
+            : path.extname(normalizedAppInfo.launchTarget || normalizedAppInfo.path).toLowerCase(),
       aliases: aliasEntries,
       keywords: keywordEntries,
       tags: normalizeStringList([
@@ -1960,7 +1969,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     options?: { skipWatchCheck?: boolean; logIgnore?: boolean }
   ): string | null {
     if (!rawPath) return null
-    let appPath = rawPath
+    let appPath =
+      process.platform === 'win32' ? expandWindowsEnvironmentVariables(rawPath.trim()) : rawPath
 
     if (process.platform === 'win32') {
       if (isWindowsUwpShellPath(appPath)) {

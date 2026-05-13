@@ -1005,7 +1005,7 @@ export interface TuffMeta {
     /** 应用类别 */
     category?: string
     /** 启动类型 */
-    launchKind?: 'path' | 'shortcut' | 'uwp'
+    launchKind?: 'path' | 'shortcut' | 'uwp' | 'protocol'
     /** 启动目标 */
     launchTarget?: string
     /** 启动参数 */

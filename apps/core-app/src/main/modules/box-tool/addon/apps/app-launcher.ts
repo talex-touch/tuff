@@ -92,6 +92,10 @@ function isWindowsPowerShellFile(target: string): boolean {
   )
 }
 
+function isAllowedProtocolLaunch(target: string): boolean {
+  return /^steam:\/\/rungameid\/\d+$/i.test(target.trim())
+}
+
 function getWindowsExecutableDirectory(target: string): string | undefined {
   const directory = path.win32.dirname(target)
   return directory && directory !== '.' && directory !== target ? directory : undefined
@@ -268,6 +272,19 @@ export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOut
         notifyLaunchFailure(request, outcome.error)
       }
       return outcome
+    }
+
+    if (request.launchKind === 'protocol') {
+      if (!isAllowedProtocolLaunch(request.launchTarget)) {
+        const error = `Protocol launch is not allowed: ${request.launchTarget}`
+        appLauncherLog.warn(error)
+        notifyLaunchFailure(request, error)
+        return { status: 'failed', error }
+      }
+
+      appLauncherLog.info(`Launching protocol app: ${request.launchTarget}`)
+      await shell.openExternal(request.launchTarget)
+      return { status: 'success' }
     }
 
     if (isWindowsDirectExecutable(request.launchTarget)) {

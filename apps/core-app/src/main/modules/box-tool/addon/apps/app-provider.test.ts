@@ -260,6 +260,73 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
+  it('expands pasted Windows env var paths before app indexing', async () => {
+    await withPlatform('win32', async () => {
+      const originalLocalAppData = process.env.LOCALAPPDATA
+      process.env.LOCALAPPDATA = 'C:\\Users\\demo\\AppData\\Local'
+      try {
+        vi.resetModules()
+        const { appProvider } = await loadSubject()
+        const privateProvider = asPrivateProvider(appProvider)
+        const rawPath = '%LOCALAPPDATA%\\Programs\\Demo App\\Demo Tool.exe'
+        const expandedPath = 'C:\\Users\\demo\\AppData\\Local\\Programs\\Demo App\\Demo Tool.exe'
+        const appInfo = {
+          name: 'Demo Tool',
+          displayName: 'Demo Tool',
+          path: expandedPath,
+          icon: '',
+          bundleId: '',
+          uniqueId: expandedPath.toLowerCase(),
+          stableId: expandedPath.toLowerCase(),
+          launchKind: 'path' as const,
+          launchTarget: expandedPath,
+          lastModified: new Date('2026-05-13T00:00:00.000Z')
+        }
+
+        getAppInfoByPathMock.mockResolvedValue(appInfo)
+        ;(
+          privateProvider as typeof privateProvider & {
+            _waitForItemStable: (filePath: string) => Promise<boolean>
+          }
+        )._waitForItemStable = vi.fn(async () => true)
+        privateProvider.dbUtils = {
+          getFileByPath: vi.fn(async () => null),
+          getDb: () => ({
+            insert: vi.fn(() => ({
+              values: vi.fn(() => ({
+                returning: vi.fn(async () => [
+                  {
+                    id: 46,
+                    path: expandedPath,
+                    name: 'Demo Tool',
+                    displayName: 'Demo Tool',
+                    type: 'app',
+                    mtime: appInfo.lastModified,
+                    ctime: appInfo.lastModified
+                  }
+                ])
+              }))
+            })),
+            delete: vi.fn(() => ({ where: vi.fn(async () => undefined) }))
+          }),
+          addFileExtensions: vi.fn(async () => undefined)
+        }
+        privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+
+        const result = await appProvider.addAppByPath(rawPath)
+
+        expect(result).toEqual({ success: true, status: 'added', path: expandedPath })
+        expect(getAppInfoByPathMock).toHaveBeenCalledWith(expandedPath)
+      } finally {
+        if (originalLocalAppData === undefined) {
+          delete process.env.LOCALAPPDATA
+        } else {
+          process.env.LOCALAPPDATA = originalLocalAppData
+        }
+      }
+    })
+  })
+
   it('normalizes copied Windows UWP app ids before app indexing', async () => {
     await withPlatform('win32', async () => {
       vi.resetModules()

@@ -171,6 +171,7 @@ export function readAppIdentityKind(value: string | null | undefined): AppIdenti
     case 'windows-uwp':
     case 'windows-shortcut':
     case 'windows-path':
+    case 'windows-protocol':
     case 'linux-desktop':
     case 'fallback':
       return value

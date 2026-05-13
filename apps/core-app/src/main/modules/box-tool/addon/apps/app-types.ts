@@ -1,10 +1,11 @@
-export type AppLaunchKind = 'path' | 'shortcut' | 'uwp'
+export type AppLaunchKind = 'path' | 'shortcut' | 'uwp' | 'protocol'
 export type AppIdentityKind =
   | 'macos-path'
   | 'macos-bundle'
   | 'windows-uwp'
   | 'windows-shortcut'
   | 'windows-path'
+  | 'windows-protocol'
   | 'linux-desktop'
   | 'fallback'
 export type AppDisplayNameQuality =

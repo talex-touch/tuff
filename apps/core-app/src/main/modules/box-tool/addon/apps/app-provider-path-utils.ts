@@ -14,7 +14,36 @@ export function normalizeOptionalString(value: string | undefined): string | und
   return normalized ? normalized : undefined
 }
 
+function getWindowsEnvironmentValue(name: string): string | undefined {
+  const direct = process.env[name]
+  if (direct !== undefined) return direct
+
+  const matchedKey = Object.keys(process.env).find(
+    (key) => key.toLowerCase() === name.toLowerCase()
+  )
+  return matchedKey ? process.env[matchedKey] : undefined
+}
+
+export function expandWindowsEnvironmentVariables(value: string): string {
+  if (process.platform !== 'win32' || !value.includes('%')) return value
+
+  let expanded = value
+  for (let i = 0; i < 3; i += 1) {
+    const next = expanded.replace(/%([^%\s"'<>]+)%/g, (token, name: string) => {
+      const resolved = getWindowsEnvironmentValue(name)
+      return resolved && resolved.length > 0 ? resolved : token
+    })
+    if (next === expanded) break
+    expanded = next
+  }
+
+  return expanded
+}
+
 export function inferManagedEntryLaunchKind(targetPath: string): AppLaunchKind {
+  if (/^steam:\/\/rungameid\/\d+$/i.test(targetPath.trim())) {
+    return 'protocol'
+  }
   if (process.platform === 'darwin' && targetPath.endsWith('.app')) {
     return 'path'
   }

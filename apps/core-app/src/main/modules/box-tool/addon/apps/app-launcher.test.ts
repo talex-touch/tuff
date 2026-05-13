@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { shellOpenPathMock, spawnSafeMock, showInternalSystemNotificationMock } = vi.hoisted(() => ({
+const {
+  shellOpenExternalMock,
+  shellOpenPathMock,
+  spawnSafeMock,
+  showInternalSystemNotificationMock
+} = vi.hoisted(() => ({
+  shellOpenExternalMock: vi.fn(),
   shellOpenPathMock: vi.fn(),
   spawnSafeMock: vi.fn(),
   showInternalSystemNotificationMock: vi.fn()
@@ -8,6 +14,7 @@ const { shellOpenPathMock, spawnSafeMock, showInternalSystemNotificationMock } =
 
 vi.mock('electron', () => ({
   shell: {
+    openExternal: shellOpenExternalMock,
     openPath: shellOpenPathMock
   }
 }))
@@ -217,5 +224,36 @@ describe('app launcher', () => {
 
     expect(shellOpenPathMock).toHaveBeenCalledWith('C:\\Users\\demo\\doc.pdf')
     expect(spawnSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('launches allowed Steam protocol URLs through shell.openExternal', async () => {
+    shellOpenExternalMock.mockResolvedValue(undefined)
+
+    await expect(
+      launchApp({
+        name: 'Steam Game',
+        path: 'steam://rungameid/12345',
+        launchKind: 'protocol',
+        launchTarget: 'steam://rungameid/12345'
+      })
+    ).resolves.toEqual({ status: 'success' })
+
+    expect(shellOpenExternalMock).toHaveBeenCalledWith('steam://rungameid/12345')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+    expect(spawnSafeMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-Steam protocol launches', async () => {
+    await expect(
+      launchApp({
+        name: 'Bad Protocol',
+        path: 'https://example.com',
+        launchKind: 'protocol',
+        launchTarget: 'https://example.com'
+      })
+    ).resolves.toMatchObject({ status: 'failed' })
+
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+    expect(showInternalSystemNotificationMock).toHaveBeenCalled()
   })
 })

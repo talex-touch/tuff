@@ -7,6 +7,7 @@ import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { shell } from 'electron'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
 import { reportAppScanError } from './app-error-reporter'
+import { getSteamApps } from './steam-provider'
 import { createLogger } from '../../../../utils/logger'
 
 type AppInfo = ScannedAppInfo
@@ -769,7 +770,8 @@ export async function getApps(): Promise<AppInfo[]> {
   const allAppsPromises = [
     ...START_MENU_PATHS.map((item) => fileDisplay(item)),
     listWindowsStoreApps(),
-    listRegistryApps()
+    listRegistryApps(),
+    getSteamApps()
   ]
 
   const results = await Promise.allSettled(allAppsPromises)

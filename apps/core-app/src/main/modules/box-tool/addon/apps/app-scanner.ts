@@ -36,7 +36,12 @@ export class AppScanner {
       darwin: () => ['/Applications', path.join(process.env.HOME || '', 'Applications')],
       win32: () => [
         ...WINDOWS_START_MENU_PATHS,
-        path.join(process.env.LOCALAPPDATA || '', 'Programs')
+        path.join(process.env.LOCALAPPDATA || '', 'Programs'),
+        path.join(
+          process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+          'Steam',
+          'steamapps'
+        )
       ],
       linux: () => [
         '/usr/share/applications',

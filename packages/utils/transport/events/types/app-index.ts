@@ -22,7 +22,7 @@ export interface AppIndexAddPathResult {
   reason?: string;
 }
 
-export type AppIndexEntryLaunchKind = "path" | "shortcut" | "uwp";
+export type AppIndexEntryLaunchKind = "path" | "shortcut" | "uwp" | "protocol";
 
 export interface AppIndexManagedEntry {
   path: string;
@@ -85,6 +85,7 @@ export interface AppIndexDiagnosticApp {
     | "windows-uwp"
     | "windows-shortcut"
     | "windows-path"
+    | "windows-protocol"
     | "linux-desktop"
     | "fallback";
   displayNameSource?: string;
