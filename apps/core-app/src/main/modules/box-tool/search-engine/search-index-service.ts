@@ -101,6 +101,10 @@ interface SearchIndexLogBucket {
   flushTimer: ReturnType<typeof setTimeout> | null
 }
 
+interface SearchIndexColumnInfo {
+  name: string
+}
+
 export interface SearchIndexServiceOptions {
   /**
    * When true, bypass DbWriteScheduler and pacing delays.
@@ -657,14 +661,12 @@ export class SearchIndexService {
 
   private async createSearchIndexTable(): Promise<void> {
     // Check if the existing table has the content column (critical for content search).
-    const tableInfo = await this.db.all<{ name: string }>(
-      sql`SELECT name FROM pragma_table_xinfo('search_index')`
-    )
+    const tableInfo = await this.readSearchIndexColumns()
     const hasContent = tableInfo.some((col) => col.name === 'content')
 
     if (tableInfo.length > 0 && !hasContent) {
       // Table exists but lacks content column - must recreate for content search
-      await this.db.run(sql`DROP TABLE IF EXISTS search_index`)
+      await this.dropSearchIndexFtsTables()
       this.didMigrate = true
     }
 
@@ -680,6 +682,92 @@ export class SearchIndexService {
       content,
       tokenize = 'unicode61 remove_diacritics 2'
     )`)
+  }
+
+  private async readSearchIndexColumns(): Promise<SearchIndexColumnInfo[]> {
+    try {
+      return await this.db.all<SearchIndexColumnInfo>(
+        sql`SELECT name FROM pragma_table_xinfo('search_index')`
+      )
+    } catch (error) {
+      await this.ensurePrimaryDatabaseReadable(error)
+      searchIndexLog.warn('Search index metadata unreadable; recreating FTS5 table', {
+        error,
+        meta: this.toSqliteErrorMeta(error)
+      })
+      await this.repairSearchIndexFtsTables()
+      this.didMigrate = true
+      return []
+    }
+  }
+
+  private async ensurePrimaryDatabaseReadable(originalError: unknown): Promise<void> {
+    try {
+      await this.db.all(sql`SELECT name FROM sqlite_master LIMIT 1`)
+    } catch (probeError) {
+      searchIndexLog.error(
+        'Primary database metadata is unreadable; search index auto-repair aborted',
+        {
+          error: probeError,
+          meta: this.toSqliteErrorMeta(probeError)
+        }
+      )
+      throw originalError
+    }
+  }
+
+  private async dropSearchIndexFtsTables(): Promise<void> {
+    await this.db.run(sql`DROP TABLE IF EXISTS search_index`)
+  }
+
+  private async repairSearchIndexFtsTables(): Promise<void> {
+    try {
+      await this.dropSearchIndexFtsTables()
+      return
+    } catch (error) {
+      searchIndexLog.warn(
+        'Failed to drop search_index virtual table; clearing FTS5 shadow tables',
+        {
+          error,
+          meta: this.toSqliteErrorMeta(error)
+        }
+      )
+    }
+
+    const shadowTables = [
+      'search_index_data',
+      'search_index_idx',
+      'search_index_content',
+      'search_index_docsize',
+      'search_index_config'
+    ]
+    for (const table of shadowTables) {
+      await this.db.run(sql.raw(`DROP TABLE IF EXISTS ${table}`))
+    }
+    await this.dropSearchIndexFtsTables()
+  }
+
+  private toSqliteErrorMeta(error: unknown): Record<string, string | number | boolean | null> {
+    const meta: Record<string, string | number | boolean | null> = {}
+    if (!error || typeof error !== 'object') {
+      meta.error = String(error)
+      return meta
+    }
+    const record = error as {
+      code?: unknown
+      rawCode?: unknown
+      message?: unknown
+      cause?: unknown
+    }
+    if (typeof record.code === 'string') meta.code = record.code
+    if (typeof record.rawCode === 'number') meta.rawCode = record.rawCode
+    if (typeof record.message === 'string') meta.message = record.message
+    if (record.cause instanceof Error) {
+      meta.cause = record.cause.message
+    } else if (record.cause !== undefined) {
+      meta.cause = String(record.cause)
+    }
+    return meta
   }
 
   private async createFileFtsTable(): Promise<void> {
