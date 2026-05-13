@@ -5,6 +5,56 @@
 
 ## 2026-05-13
 
+### feat(plugin): add search engine icons for quick launch
+
+- `plugins/touch-browser-open/{manifest.json,index.js,assets/search-engines/*.svg}`
+- `packages/test/src/plugins/browser-open.test.ts`
+  - `Google / Bing / DuckDuckGo` 搜索引擎配置新增对应 SVG icon，动态 `搜索引擎` feature、直接搜索项、suggestion 与降级提示统一展示当前引擎图标。
+  - 单测固定动态搜索引擎 feature 与搜索结果 item 的 icon 来源，避免回退到通用插件 logo。
+  - 版本升级至 `1.0.3`，用于发布搜索引擎图标更新。
+
+### feat(core-app): add Windows app index manager and Steam protocol launch
+
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingFileIndex.vue,SettingFileIndexAppIndexManager.vue}`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-launcher.ts,app-provider.ts,app-provider-path-utils.ts,app-scanner.ts,steam-provider.ts,win.ts}`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-launcher.test.ts,app-provider.test.ts,steam-provider.test.ts,win.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/{README.md,TODO.md}`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 文件索引高级设置新增“本地启动区 / 应用索引管理”，复用 `settingsSdk.appIndex.listEntries/addPath/setEntryEnabled/removeEntry/diagnose/reindex`，支持选择 `.exe/.lnk/.appref-ms`、粘贴 Windows `%ENV%` 路径、UWP shell path 与裸 AppID；添加成功后立即触发关键词重建与诊断，避免重启后才可搜索。
+  - `AppIndexEntryLaunchKind` / `ScannedAppInfo.launchKind` / CoreBox app DSL 扩展 `protocol`，AppLauncher 新增协议启动白名单，仅允许 `steam://rungameid/<numeric>` 并通过 `shell.openExternal()` 启动，拒绝其他协议。
+  - Windows AppProvider 扫描链路新增 Steam provider，解析注册表/常见 Steam 根、`libraryfolders.vdf` 与 `appmanifest_*.acf`，以 `bundleId=steam:<appid>`、`launchKind=protocol`、`launchTarget=steam://rungameid/<appid>` 索引游戏；不扫描游戏 exe、不引入通用游戏平台抽象。
+  - 补充 Steam parser、AppLauncher protocol 分支、Windows/AppProvider 最近路径回归；Windows 真机 UWP/Store、Steam 与手动条目搜索启动闭环仍需按 acceptance evidence 采集。
+
+### docs(core-app): record startup async blocking analysis
+
+- `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 归档 CoreApp 启动异步化与首屏卡顿静态分析，确认当前启动仍受 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path、Search provider 启动后集中抢资源，以及 renderer mount 前等待 storage/plugin store 影响。
+  - 明确后续治理顺序：P0 先将 renderer plugin store 初始化移到 mount 后后台执行；P1 将 Extension/Sentry/Intelligence/Update/Clipboard/DownloadCenter 等改为 handler-first + background runtime；P2 拆分 Database critical/background；P3 将 Everything/FileProvider 等搜索 provider 后台 ready。
+  - 该项仅记录分析与后续计划，不改变当前 `2.4.10` Windows evidence gate 优先级。
+
+### fix(plugin): isolate quick launch search engine completion mode
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `packages/utils/plugin/sdk/feature-sdk.ts`
+- `packages/test/src/plugins/browser-open.test.ts`
+- `packages/utils/__tests__/plugin-sdk-lifecycle.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.test.ts`
+  - `touch-browser-open` 搜索引擎 feature 激活后持续订阅 CoreBox 输入变化，输入 `example.com` 这类域名形态内容时仍只展示对应引擎的直接搜索项与 suggestion，不再退回 URL 打开候选。
+  - 搜索 action 显式写入 `render.completion`，Tab 补全只补关键词或 suggestion 本身，避免补成 `Google 搜索：<query>` 标题。
+  - CoreBox active push feature 空 query 时不再由 `plugin-features` 自动回填插件功能列表，避免搜索模式清空输入后突出 `browser-open` / 域名打开入口。
+  - 修复 Feature SDK 对空字符串 `core-box:input-change` payload 的解析，清空输入时不再把 payload 对象传给插件。
+  - 版本升级至 `1.0.2`，用于修复已发布 `1.0.1` 的搜索引擎模式补全隔离问题。
+
 ### chore(quality): retire guard infrastructure and consolidate ESLint gates
 
 - `package.json`
@@ -53,6 +103,8 @@
   - dev 与 packaged macOS 在 tray-first / accessory agent 行为上保持一致：不再通过 dev 环境强制 `regular`，便于默认 `pnpm core:dev` 直接验证菜单栏托盘链路。
   - macOS 托盘图标改为优先使用已打包的 `TrayIconTemplate.png` / `tray_icon_22x22.png` / `tray_icon.png` 资源，内置 Base64 template icon 仅作为资源缺失时的 fallback，避免状态栏项在部分 macOS 菜单栏/状态栏管理环境中创建后不可见或 bounds 异常。
   - 替换 macOS tray template 资源为更明确的圆角方框 + `T` mask，避免旧资源仅显示为极小浅色圆点，Tray 已创建但视觉上几乎不可见。
+  - macOS Tray 初始化顺序调整为先创建 status item、再同步 activation policy，并在创建后延迟复查 bounds；若仍出现 `height=0` 的无效布局，则自动重建一次 Tray 并记录恢复日志。
+  - `pnpm core:dev` 默认改用本地生成的 Tuff Dev Electron bundle（`com.tagzxia.app.tuff.dev` + `LSUIElement=true` + ad-hoc sign），避免 stock `Electron.app` / `com.github.Electron` 身份导致 macOS「菜单栏」设置和 tray agent 行为与 packaged app 不一致；dev bundle 保留 `CFBundleExecutable=Electron`，确保 Electron 仍按 dev-server / `tuff-dev` 数据目录运行。
   - `TrayManager` 在托盘创建成功后记录 `platform`、`bounds` 与 resolved `iconPath`，后续可直接从日志判断 `trayReady` 与状态栏定位问题，减少 macOS 真机排查歧义。
 
 ### docs(project): lock immediate Windows evidence execution order

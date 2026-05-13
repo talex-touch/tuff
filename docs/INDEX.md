@@ -17,6 +17,7 @@
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 Plan PRD
 - `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md` - 跨平台兼容与占位/假实现复核报告
+- `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析
 - `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` - 跨平台兼容与占位/假实现审计报告（历史基线）
 - `docs/engineering/README.md` - 工程过程资料索引（plans / issues / code-review / reports）
 - `docs/plan-prd/01-project/CHANGES.md` - 全历史变更记录（唯一历史源）
@@ -32,12 +33,13 @@
 
 - **当前工作区基线**：`2.4.10-beta.19`（根包与 CoreApp 对齐）。
 - **2.4.10-beta.19 发布准备（2026-05-12）**：`build-and-release` 已补显式 beta release type，tag 触发可从 `v*-beta*` 自动进入 beta 预发布语义；CI/CD 统一 Node `22.16.0` 与 pnpm `10.32.1`，PR CI 改为只读 `pull_request`，release artifact 上传范围收窄到安装包、压缩包与 updater metadata；`notes/update_2.4.10-beta.19.{zh,en}.md` 已补齐，当前仍是 beta 测试包。
-- **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；不把全部跨平台回归压进 `2.4.10`。
+- **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；Windows App Search & Launch Beta 已开始落地应用索引管理页、Steam 最小 provider 与 `protocol` 启动白名单；不把全部跨平台回归压进 `2.4.10`。
 - **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是在 Windows 真机生成 acceptance collection plan，并按同一清单补齐 Windows acceptance manifest 最终强门禁、微信/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测；Nexus Release Evidence 写入闭环仍是发版阻塞项。
 - **立即执行顺序（2026-05-13）**：先确认工作区本地噪声不混入提交，再生成 Windows acceptance collection plan，随后采集 case/manual/performance evidence，运行 `windows:acceptance:verify` final gate，最后写入 Nexus Release Evidence；`2.5.0` AI、Provider Registry 高级策略与 SRP 大拆分不得抢占正式 `2.4.10` gate。
 - **2.4.11 必解门槛**：剩余 Windows/macOS 阻塞级人工回归、Linux best-effort 记录、Release Evidence 写入闭环、legacy/compat/size 清册退场项必须关闭或显式降权。
 - **User-managed launcher foundation（2026-04-22）**：`appIndex` typed domain 已新增 `listEntries / upsertEntry / removeEntry / setEntryEnabled`，settings SDK 与 main channel handler 全链路接通；`app-provider` 复用现有 `files + file_extensions` 支持 user-managed launcher entry，并继续走搜索与启动链路。
-- **应用搜索诊断与重建（2026-04-26）**：`settingsSdk.appIndex` 已新增 `diagnose / reindex`，高级设置中的应用索引区可按路径、bundleId、名称或搜索词查看单个应用的 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
+- **应用索引管理与诊断（2026-05-13）**：文件索引高级设置新增“本地启动区 / 应用索引管理”，复用 `settingsSdk.appIndex.listEntries/addPath/setEntryEnabled/removeEntry/diagnose/reindex` 管理手动应用条目；支持选择 `.exe/.lnk/.appref-ms`、粘贴 `%ENV%` 路径/UWP shell path/裸 AppID，添加后立即触发关键词重建与诊断；既有应用搜索诊断可按路径、bundleId、名称或搜索词查看 `displayName / alternateNames / keywords` 与 precise / prefix / FTS / N-gram / subsequence 命中情况，并支持单项关键词重建或重新扫描。
+- **Steam 最小支持（2026-05-13）**：Windows AppProvider 扫描链路新增 Steam provider，解析注册表/常见 Steam 根、`libraryfolders.vdf` 与 `appmanifest_*.acf`，索引为 `bundleId=steam:<appid>`、`launchKind=protocol`、`launchTarget=steam://rungameid/<appid>`；AppLauncher 仅白名单允许 `steam://rungameid/<numeric>` 并通过 `shell.openExternal` 启动。
 - **Release Evidence API（2026-04-26）**：Nexus 新增 `/api/admin/release-evidence/*`，作为 CoreApp 回归、文档门禁与平台阻塞矩阵的 D1 证据入口；管理员登录态或 `release:evidence` API key 可写入。
 - **macOS 中文应用名召回修复（2026-04-26）**：应用扫描会保留本地化名称为 `alternateNames`，关键词同步与搜索后处理都会使用中文、全拼与首字母，避免 Spotlight 英文显示名优先时漏召回“网易云音乐”等应用。
 - **CoreApp 2.4.11 前置口径（2026-05-08）**：当前主线切换为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`；剩余跨平台回归与清册退场项统一列入 `2.4.11` 必解清单。
@@ -87,6 +89,7 @@
 - **Nexus Provider/Scene 默认 seed（2026-05-11）**：Dashboard Admin Provider Registry 页面加载前会幂等触发默认 seed，创建系统级本地 `custom-local-overlay` provider 与 `corebox.screenshot.translate` Scene，并只追加缺失的 system binding；不会把 user-scope AI mirror OCR provider 自动绑定进 system Scene，避免个人凭证跨用户误用。
 - **跨平台兼容与占位实现复核（2026-05-12）**：2026-05-10 报告中的 Pilot stat 假值、payment mock 默认成功与 touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 上限冻结为 `<=264`；剩余重点是 Windows/macOS 真机证据、Linux best-effort 记录、`compat-file=5`、CLI token 明文 JSON 与超长模块 SRP 拆分。
 - **架构治理切片（2026-05-11）**：Transport boundary test 已拆出 raw send / retained raw definition / typed migration candidate 三类指标，retained raw definition 上限收紧为 `264`；Pilot `/system/serve/stat` 已改真实运行时指标，mock 支付默认成功由 `PILOT_PAYMENT_MODE=mock` 门控；`plugins/touch-image` 图片历史迁入 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts`、`app-provider.ts`、Tuffex `TxFlipOverlay.vue` 等已完成 SRP 拆分切片；质量入口统一为 ESLint、typecheck、targeted tests 与 build，release 走 `quality:release`。
+- **CoreApp 启动异步化缺口分析（2026-05-13）**：专项报告已归档到 `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md`；当前结论是启动仍受 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path、renderer mount 前等待 storage/plugin store 影响。后续按 renderer plugin store 后台化、非首屏模块后台化、Database critical/background 拆分与 Search provider 后台 ready 推进，不抢当前 `2.4.10` Windows evidence gate。
 - **CoreApp 启动搜索卡顿治理（2026-03-24）**：已落地双库隔离（aux DB）、写入 QoS（priority/drop/circuit）、索引热路径 worker 单写者与启动期降载；可通过 `TUFF_DB_AUX_ENABLED/TUFF_DB_QOS_ENABLED/TUFF_STARTUP_DEGRADE_ENABLED` 灰度与回滚。
 - **治理基线（主线代码域）**：legacy/raw channel 继续通过 ESLint 与 transport boundary tests 防回潮；文件行数治理回到 code review 与普通重构任务。
 - **发布快照证据**：见 `CHANGES` 中 `v2.4.9-beta.4` 基线条目（含 commit/tag/CI run 链接）。
