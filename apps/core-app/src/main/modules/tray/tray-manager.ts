@@ -83,14 +83,16 @@ export class TrayManager extends BaseModule {
     const startSilent = this.getStartSilentConfig()
     const shouldUseAccessory =
       this.shouldShowTray() && !this.shouldForceRegularInDev() && (hideDock || startSilent)
-    const normalized: 'regular' | 'accessory' = shouldUseAccessory ? 'accessory' : 'regular'
+    this.setMacActivationPolicy(shouldUseAccessory ? 'accessory' : 'regular')
+  }
 
+  private setMacActivationPolicy(policy: 'regular' | 'accessory'): void {
     try {
-      app.setActivationPolicy(normalized)
-      trayManagerLog.info('Activation policy updated', { meta: { policy: normalized } })
+      app.setActivationPolicy(policy)
+      trayManagerLog.info('Activation policy updated', { meta: { policy } })
     } catch (error) {
       trayManagerLog.warn('Failed to set activation policy', {
-        meta: { policy: normalized, error }
+        meta: { policy, error }
       })
     }
   }
@@ -113,6 +115,13 @@ export class TrayManager extends BaseModule {
       this.tray.setToolTip('tuff')
       this.bindTrayEvents()
       this.updateMenu()
+      trayManagerLog.info('Tray initialized', {
+        meta: {
+          platform: process.platform,
+          bounds: this.tray.getBounds?.(),
+          iconPath: TrayIconProvider.getIconPath()
+        }
+      })
     } catch (error) {
       trayManagerLog.error('Failed to initialize tray', { error })
     }
@@ -340,7 +349,12 @@ export class TrayManager extends BaseModule {
   private shouldForceRegularInDev(): boolean {
     if (process.platform !== 'darwin') return false
     if (app.isPackaged) return false
+    if (this.isDevTrayAgentModeEnabled()) return false
     return this.getHideDockConfig() || this.getStartSilentConfig()
+  }
+
+  private isDevTrayAgentModeEnabled(): boolean {
+    return process.env.TUFF_DEV_TRAY_AGENT === '1'
   }
 
   /**
@@ -378,21 +392,25 @@ export class TrayManager extends BaseModule {
     const trayAvailable = this.shouldShowTray() && this.tray !== null
 
     if (this.shouldForceRegularInDev() || !trayAvailable) {
-      app.setActivationPolicy('regular')
+      this.setMacActivationPolicy('regular')
       app.dock?.show()
       return
     }
 
-    if (hideDock) {
-      if (mainWindow.isVisible() || hasDivisionBox) {
-        app.dock?.show()
-      } else {
-        app.dock?.hide()
-      }
+    if (!hideDock) {
+      this.setMacActivationPolicy('regular')
+      app.dock?.show()
       return
     }
 
-    app.dock?.show()
+    if (mainWindow.isVisible() || hasDivisionBox) {
+      this.setMacActivationPolicy('regular')
+      app.dock?.show()
+      return
+    }
+
+    this.setMacActivationPolicy('accessory')
+    app.dock?.hide()
   }
 
   public getRuntimeSettingsSnapshot(): {
