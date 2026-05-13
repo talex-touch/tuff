@@ -183,6 +183,15 @@
   - 同步六主文档入口，把当前 release blocker 收敛为 Windows/macOS 真机 evidence；后续 `2.4.11` 聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
   - 清理 `app-provider.test.ts` 测试标题中的非行为性 legacy 关键词噪声，保持断言不变并恢复 `compat:registry:guard` 绿线。
 
+### feat(plugin): precompile production widgets in plugin packages
+
+- `packages/tuff-cli-core/src/exporter.ts`
+- `apps/core-app/src/main/modules/plugin/widget/{widget-manager,widget-transform}.ts`
+- `packages/utils/plugin/widget.ts`
+  - `tuff builder` now precompiles manifest widget features into `widgets/.compiled/*.cjs` and records `build.widgets` metadata in the packaged manifest.
+  - Core App packaged runtime prefers precompiled widget output and disables runtime widget compilation unless dev/source mode or `TUFF_WIDGET_RUNTIME_COMPILE` explicitly enables fallback.
+  - Widget compiler service `EPIPE` failures are classified as `WIDGET_COMPILER_SERVICE_UNAVAILABLE`; dev/source mode retries once.
+
 ### fix(core-app): launch Windows executable apps from install directory
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`

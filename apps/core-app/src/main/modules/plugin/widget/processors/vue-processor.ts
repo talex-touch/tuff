@@ -5,6 +5,7 @@ import type {
   IWidgetProcessor,
   WidgetCompilationContext
 } from '../widget-processor'
+import { WIDGET_ALLOWED_PACKAGES, isAllowedWidgetModule } from '@talex-touch/utils/plugin/widget'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { pushWidgetFeatureIssue } from '../widget-issue'
 import {
@@ -17,16 +18,11 @@ import {
  * Allowed packages in widget sandbox
  * Widget 沙箱中允许的包
  */
-const ALLOWED_PACKAGES = [
-  'vue',
-  '@talex-touch/utils',
-  '@talex-touch/utils/plugin',
-  '@talex-touch/utils/plugin/sdk',
-  '@talex-touch/utils/core-box',
-  '@talex-touch/utils/transport',
-  '@talex-touch/utils/common',
-  '@talex-touch/utils/types'
-] as const
+const ALLOWED_PACKAGES = WIDGET_ALLOWED_PACKAGES
+
+function ensureVueDependency(dependencies: string[]): string[] {
+  return dependencies.includes('vue') ? dependencies : ['vue', ...dependencies]
+}
 
 /**
  * Vue widget processor
@@ -204,16 +200,21 @@ module.exports = __component
       return {
         code: transformed.code,
         styles,
-        dependencies: validation.allowedImports
+        dependencies: ensureVueDependency(validation.allowedImports)
       }
     } catch (error) {
+      const code = classifyWidgetCompileError(error)
+      if (code === 'WIDGET_COMPILER_SERVICE_UNAVAILABLE') {
+        throw error
+      }
+
       plugin.logger.debug(
         `[WidgetVueProcessor] ❌ Compilation failed for widget "${source.widgetId}":`,
         error as Error
       )
 
       pushWidgetFeatureIssue(plugin, feature, {
-        code: classifyWidgetCompileError(error),
+        code,
         message: `Failed to compile Vue widget: ${(error as Error).message}`,
         meta: {
           error: (error as Error).stack,
@@ -231,12 +232,7 @@ module.exports = __component
    */
   private isAllowedModule(module: string): boolean {
     // Relative imports are not supported (for now)
-    if (module.startsWith('.') || module.startsWith('/')) {
-      return false
-    }
-
-    // Check if module matches any allowed package
-    return ALLOWED_PACKAGES.some((pkg) => module === pkg || module.startsWith(`${pkg}/`))
+    return isAllowedWidgetModule(module)
   }
 
   /**

@@ -9,6 +9,7 @@ import type {
 import type {
   IFeatureLifeCycle,
   IPlatform,
+  IPluginBuildInfo,
   IPluginDev,
   IPluginFeature,
   IPluginWebview,
@@ -294,6 +295,7 @@ export class TouchPlugin implements ITouchPlugin {
   platforms: IPlatform
   category?: string
   meta?: PluginMeta
+  build?: IPluginBuildInfo
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
@@ -364,6 +366,7 @@ export class TouchPlugin implements ITouchPlugin {
       desc: this.desc,
       category: this.category,
       meta: this.meta,
+      build: this.build,
       icon: {
         type: this.icon.type,
         value: this.icon.value,

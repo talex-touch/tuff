@@ -52,6 +52,7 @@
 - runtime console / runtime boundary 统一迁移到 ESLint：CoreApp `main/preload/renderer` 新增裸 `console.*`、宽松 WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*` 均视为质量回退。
 - 网络边界统一由 ESLint 承担：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network` 或明确注入的网络客户端。
 - 不再维护 compatibility registry / legacy allowlist / size allowlist；文件行数治理回到 code review 与普通 SRP 重构任务，发布质量入口以 `quality:pr` / `quality:release` 为准。
+- Widget production gate: packaged plugins must ship precompiled widget artifacts in `widgets/.compiled/` with `build.widgets` manifest metadata; packaged CoreApp must not rely on startup runtime widget compilation unless an explicit debug fallback is enabled.
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 - CoreApp `2.4.11` 前置门禁：清册中的 `2.4.11` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 - Windows Everything 目标验收门禁：`windows:capability:verify --requireEverythingTargets` 必须同时复核基础 Everything 查询成功、目标 probe 命中、`matchCount` 为正，且至少一条 sample 文本包含目标关键词；禁止仅凭手工填写的 `found=true` 或不匹配样本通过。

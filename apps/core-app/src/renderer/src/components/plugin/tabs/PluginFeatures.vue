@@ -3,6 +3,7 @@ import type { TuffItem } from '@talex-touch/utils'
 import type { ComponentPublicInstance } from 'vue'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { WidgetPrecompiledManifestEntry } from '@talex-touch/utils/plugin/widget'
 import { resolveI18nMessage } from '@talex-touch/utils/i18n'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
@@ -10,6 +11,7 @@ import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
@@ -52,6 +54,7 @@ const totalCommands = computed(() =>
 )
 
 const { t } = useI18n()
+const pluginFeaturesLog = createRendererLogger('PluginFeatures')
 const isPluginDev = computed(() => Boolean(props.plugin?.dev?.enable))
 const isDevDisconnected = computed(() => props.plugin?.status === EPluginStatus.DEV_DISCONNECTED)
 const isOperationDisabled = computed(
@@ -625,6 +628,9 @@ function resolveWidgetStatus(feature?: PluginFeatureWithCommandsData | null): st
   if (!feature || !getWidgetPath(feature)) {
     return t('plugin.features.widget.statusMissing')
   }
+  if (resolvePrecompiledWidgetEntry(feature)) {
+    return 'precompiled'
+  }
   return isPluginDev.value
     ? t('plugin.features.widget.statusDev')
     : t('plugin.features.widget.statusRelease')
@@ -667,11 +673,31 @@ function resolveWidgetSourceFilePath(
 }
 
 function resolveWidgetCompiledPath(feature?: PluginFeatureWithCommandsData | null): string | null {
+  const precompiled = resolvePrecompiledWidgetEntry(feature)
+  const pluginPath = pluginPaths.value?.pluginPath
+  if (precompiled?.compiledPath && pluginPath) {
+    return joinPaths(pluginPath, precompiled.compiledPath)
+  }
+
   const tempPath = pluginPaths.value?.tempPath
   const widgetId = getWidgetId(feature)
   if (!tempPath || !widgetId) return null
   const safeId = widgetId.replace(/[^a-zA-Z0-9._-]/g, '_')
   return joinPaths(tempPath, 'widgets', `${safeId}.cjs`)
+}
+
+function resolvePrecompiledWidgetEntry(feature?: PluginFeatureWithCommandsData | null): {
+  featureId?: string
+  widgetId?: string
+  compiledPath?: string
+} | null {
+  if (!feature || !props.plugin?.build || !Array.isArray(props.plugin.build.widgets)) return null
+  const widgetId = getWidgetId(feature)
+  return (
+    props.plugin.build.widgets.find((entry: WidgetPrecompiledManifestEntry) => {
+      return entry?.featureId === feature.id || entry?.widgetId === widgetId
+    }) ?? null
+  )
 }
 
 async function copyToClipboard(value?: string | null): Promise<void> {
@@ -680,7 +706,7 @@ async function copyToClipboard(value?: string | null): Promise<void> {
     await navigator.clipboard.writeText(value)
     toast.success(t('corebox.copied'))
   } catch (error) {
-    console.error('[PluginFeatures] Failed to copy path:', error)
+    pluginFeaturesLog.error('Failed to copy path:', error)
     toast.error(t('plugin.features.widget.copyFailed'))
   }
 }
@@ -693,7 +719,7 @@ async function revealWidgetFile(pathValue?: string | null): Promise<void> {
       toast.warning(t('plugin.features.widget.openFailed'))
     }
   } catch (error) {
-    console.error('[PluginFeatures] Failed to reveal widget file:', error)
+    pluginFeaturesLog.error('Failed to reveal widget file:', error)
     toast.warning(t('plugin.features.widget.openFailed'))
   }
 }
@@ -708,8 +734,8 @@ async function handleReconnect(): Promise<void> {
   try {
     await pluginSDK.reconnectDevServer(props.plugin.name)
   } catch (error) {
-    console.error(
-      `[PluginFeatures] Failed to reconnect dev server for plugin "${props.plugin.name}":`,
+    pluginFeaturesLog.error(
+      `Failed to reconnect dev server for plugin "${props.plugin.name}":`,
       error
     )
   } finally {

@@ -48,6 +48,7 @@
 - [ ] 运行最终强门禁：`pnpm -C "apps/core-app" run windows:acceptance:verify`，并确保 case evidence、manual evidence、performance evidence 均非空、非占位且 gate 通过。
 - [ ] 写入 Nexus Release Evidence：拿到 `release:evidence` API key 或管理员登录态后，写入 documentation review、platform matrix、CoreApp targeted tests、Windows 真机 evidence 与性能 evidence；凭证缺失时只能保持 blocked，不得伪造闭环。
 - [ ] 暂缓抢主线的新功能：`2.5.0` AI/workflow、Provider Registry 高级策略、SRP 大拆分只保留规划，不在 Windows release gate 通过前扩大为当前发版 blocker。
+- [x] Widget production precompile gate: `tuff builder` now emits `widgets/.compiled/*.cjs` plus `build.widgets` metadata, and packaged CoreApp prefers precompiled widgets instead of startup runtime compilation.
 - [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
 - [x] Quick Launch 搜索引擎补全隔离：进入 `Google / Bing / DuckDuckGo 搜索引擎` 后，域名形态输入仍保持搜索 suggestion 模式，Tab completion 只补 query/suggestion，不再突出 URL 打开候选。
 - [x] Quick Launch 搜索引擎图标：`Google / Bing / DuckDuckGo` engine config 已内置对应 SVG，动态 feature 与搜索 suggestion 结果展示各自引擎图标。
@@ -59,7 +60,7 @@
 > 目标：当前治理版本可按“quality 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
 - [ ] 发版前最小复核：重新执行 `pnpm quality:release` 与 `git diff --check`，并记录命令结果；如完整 build 环境缺失，则至少执行 `pnpm lint`、`pnpm typecheck:all`、`pnpm test:targeted` 并记录阻塞原因。
-- [x] `2.4.10-beta.21` beta 发布准备：补齐 `notes/update_2.4.10-beta.21.{zh,en}.md`，确认 `build-and-release` tag push 会进入 beta pre-release 语义；真实 commit/push/tag 仍需用户确认后执行。
+- [x] `2.4.10-beta.21` beta 发布准备：补齐 `notes/update_2.4.10-beta.21.{zh,en}.md`，确认 `build-and-release` tag push 会进入 beta pre-release 语义；真实 commit/push/tag 仍需用户确认后执行.
 - [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。
 - [ ] Windows 真机 release evidence：补齐 acceptance manifest、Everything target probe、App Index diagnostic、常见 App 启动、复制 app path、本地启动区索引、应用索引管理页手动条目、UWP/Store、Steam 最小支持、更新安装、DivisionBox detached widget、分时推荐、search trace 与 clipboard stress 证据。
 - [ ] 搜索性能验收：在真实设备采样 `200` 次查询，生成 `search-trace-stats/v1`，确认 `first.result/session.end` P95 与 slowRatio 达标。

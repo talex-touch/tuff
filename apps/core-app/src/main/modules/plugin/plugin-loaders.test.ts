@@ -256,6 +256,44 @@ describe('createPluginLoader', () => {
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 
+  it('sanitizes manifest build metadata before exposing runtime plugin state', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      build: {
+        widgets: [
+          {
+            featureId: 'translate',
+            widgetId: 'touch-translation::translate',
+            sourcePath: 'widgets/panel.vue',
+            compiledPath: 'widgets/.compiled/panel.cjs',
+            hash: 'abc',
+            styles: '',
+            compiledAt: 1
+          }
+        ],
+        internalOnly: { token: 'secret' }
+      }
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = await loader.load()
+
+    expect(plugin.build).toEqual({
+      widgets: [
+        expect.objectContaining({
+          featureId: 'translate',
+          widgetId: 'touch-translation::translate'
+        })
+      ]
+    })
+    expect(plugin.build).not.toHaveProperty('internalOnly')
+  })
+
   it('marks plugins below the enforced sdkapi floor as blocked load failures', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',

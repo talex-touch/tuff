@@ -7,6 +7,7 @@ import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
+import type { WidgetPrecompiledManifestEntry } from './widget'
 
 import type {
   PluginInstallRequest,
@@ -89,6 +90,11 @@ export interface IPluginDev {
 
 export type IPluginWebview<TWindow = unknown> = Map<number, TWindow>
 
+export interface IPluginBuildInfo {
+  widgets?: WidgetPrecompiledManifestEntry[]
+  [key: string]: unknown
+}
+
 /**
  * SDK API version for plugin hard-cut runtime gating.
  * Format: YYMMDD (e.g., 251212 = 2025-12-12)
@@ -109,6 +115,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    */
   category?: string
   meta?: PluginMeta
+  build?: IPluginBuildInfo
   features: IPluginFeature[]
   issues: PluginIssue[]
   divisionBoxConfig?: import('../types/division-box').ManifestDivisionBoxConfig
