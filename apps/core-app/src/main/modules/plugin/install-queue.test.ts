@@ -134,6 +134,69 @@ describe('PluginInstallQueue permission confirmation', () => {
     )
   })
 
+  it('accepts confirmation responses emitted before the confirm send resolves', async () => {
+    const installRequest: PluginInstallRequest = {
+      source: 'https://example.com/plugin.tpex',
+      metadata: { trusted: true }
+    }
+
+    const prepared = {
+      request: installRequest,
+      providerResult: {
+        provider: 'tpex',
+        official: false,
+        metadata: {}
+      },
+      manifest: {
+        name: 'touch-demo',
+        version: '1.0.0',
+        sdkapi: CURRENT_SDK_VERSION
+      }
+    } as unknown as PreparedPluginInstall
+
+    const installer = {
+      prepareInstall: vi.fn().mockResolvedValue(prepared),
+      finalizeInstall: vi.fn().mockResolvedValue({
+        manifest: prepared.manifest,
+        providerResult: prepared.providerResult
+      }),
+      discardPrepared: vi.fn().mockResolvedValue(undefined)
+    } as unknown as PluginInstaller
+
+    let queue: PluginInstallQueue
+    const transport = {
+      sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
+        if (event === PluginEvents.install.confirm) {
+          queue.handleConfirmResponse({
+            taskId: (payload as PluginInstallConfirmRequest).taskId,
+            decision: 'accept',
+            grantMode: 'always'
+          })
+        }
+      })
+    } as unknown as ITuffTransportMain
+
+    queue = new PluginInstallQueue(installer, transport, 1, {
+      resolvePermissionConfirmation: () => ({
+        taskId: '',
+        kind: 'permissions',
+        pluginId: 'touch-demo',
+        pluginName: 'touch-demo',
+        permissions: {
+          required: ['fs.read'],
+          optional: [],
+          reasons: { 'fs.read': 'read plugin files' }
+        }
+      })
+    })
+
+    const result = await queue.enqueue(installRequest)
+
+    expect(result.status).toBe('success')
+    expect(installer.finalizeInstall).toHaveBeenCalled()
+    expect(installer.discardPrepared).not.toHaveBeenCalled()
+  })
+
   it('fails install when permission confirmation is rejected', async () => {
     const { queue, confirmRequests, installRequest, installer } = createQueue()
     const installPromise = queue.enqueue(installRequest)

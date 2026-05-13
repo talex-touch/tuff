@@ -337,9 +337,7 @@ export class PluginInstallQueue {
 
     this.emitProgress(task, 'awaiting-confirmation', { progress: 100 })
 
-    await this.transport.sendToWindow(this.targetWindowId, PluginEvents.install.confirm, request)
-
-    return await new Promise<PluginInstallConfirmResponse>((resolve, reject) => {
+    const confirmationPromise = new Promise<PluginInstallConfirmResponse>((resolve, reject) => {
       this.confirmResolvers.set(task.id, {
         resolve: (response) => resolve(response),
         reject: async (reason) => {
@@ -365,6 +363,15 @@ export class PluginInstallQueue {
         }
       })
     })
+
+    try {
+      await this.transport.sendToWindow(this.targetWindowId, PluginEvents.install.confirm, request)
+    } catch (error) {
+      this.confirmResolvers.delete(task.id)
+      throw error
+    }
+
+    return await confirmationPromise
   }
 
   private emitProgress(
