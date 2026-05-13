@@ -2699,7 +2699,7 @@
     "clipboardHistory": "Clipboard History",
     "terminal": "Terminal",
     "settings": "Settings",
-    "about": "About Talex Touch",
+    "about": "About Tuff",
     "version": "Version {version}",
     "checkUpdate": "Check for Updates",
     "checkUpdateAvailable": "Check for Updates • New Version Available",
@@ -2707,8 +2707,8 @@
     "openDataDir": "Open Data Directory",
     "visitWebsite": "Visit Website",
     "restart": "Restart Application",
-    "quit": "Quit Talex Touch",
-    "tooltip": "Talex Touch"
+    "quit": "Quit Tuff",
+    "tooltip": "Tuff"
   },
   "downloadErrors": {
     "network_error": "Network connection failed, please check your network settings and try again",

@@ -16,6 +16,7 @@ import {
   WindowShownEvent
 } from '../../core/eventbus/touch-event'
 import { useAliveTarget } from '../../hooks/use-electron-guard'
+import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
@@ -113,7 +114,7 @@ export class TrayManager extends BaseModule {
       }
 
       this.tray = new Tray(icon)
-      this.tray.setToolTip('tuff')
+      this.tray.setToolTip(t('tray.tooltip'))
       this.bindTrayEvents()
       this.updateMenu()
 

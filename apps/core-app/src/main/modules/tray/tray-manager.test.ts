@@ -1,38 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock } = vi.hoisted(() => ({
-  appMock: {
-    on: vi.fn(),
-    off: vi.fn(),
-    removeListener: vi.fn(),
-    setActivationPolicy: vi.fn(),
-    getLocale: vi.fn(() => 'en-US'),
-    isPackaged: false,
-    dock: {
-      show: vi.fn(),
-      hide: vi.fn(),
-      setIcon: vi.fn(),
-      setBadge: vi.fn()
-    }
-  },
-  touchEventBusMock: {
-    on: vi.fn(),
-    off: vi.fn(),
-    emit: vi.fn()
-  },
-  getMainConfigMock: vi.fn(() => ({
-    setup: {
-      showTray: true,
-      hideDock: false
+const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock, trayInstances } =
+  vi.hoisted(() => ({
+    trayInstances: [] as Array<{
+      setToolTip: ReturnType<typeof vi.fn>
+      on: ReturnType<typeof vi.fn>
+      setContextMenu: ReturnType<typeof vi.fn>
+      getBounds: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }>,
+    appMock: {
+      on: vi.fn(),
+      off: vi.fn(),
+      removeListener: vi.fn(),
+      setActivationPolicy: vi.fn(),
+      getLocale: vi.fn(() => 'en-US'),
+      getVersion: vi.fn(() => '0.0.0-test'),
+      isPackaged: false,
+      dock: {
+        show: vi.fn(),
+        hide: vi.fn(),
+        setIcon: vi.fn(),
+        setBadge: vi.fn()
+      }
     },
-    window: {
-      startSilent: false
-    }
-  })),
-  getDockIconMock: vi.fn(() => ({
-    isEmpty: vi.fn(() => false)
+    touchEventBusMock: {
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn()
+    },
+    getMainConfigMock: vi.fn(() => ({
+      setup: {
+        showTray: true,
+        hideDock: false
+      },
+      window: {
+        startSilent: false
+      }
+    })),
+    getDockIconMock: vi.fn(() => ({
+      isEmpty: vi.fn(() => false)
+    }))
   }))
-}))
 
 vi.mock('electron', async (importOriginal) => {
   const original = await importOriginal<any>()
@@ -65,7 +74,24 @@ vi.mock('electron', async (importOriginal) => {
   return {
     ...electronModule,
     app: appMock,
-    Tray: class {},
+    Menu: {
+      buildFromTemplate: vi.fn((template) => template)
+    },
+    shell: {
+      openPath: vi.fn(),
+      openExternal: vi.fn()
+    },
+    Tray: class {
+      setToolTip = vi.fn()
+      on = vi.fn()
+      setContextMenu = vi.fn()
+      getBounds = vi.fn(() => ({ x: 0, y: 0, width: 22, height: 22 }))
+      destroy = vi.fn()
+
+      constructor() {
+        trayInstances.push(this)
+      }
+    },
     ipcMain,
     MessageChannelMain: electronModule?.MessageChannelMain ?? MockMessageChannelMain
   }
@@ -102,6 +128,7 @@ vi.mock('./tray-icon-provider', () => ({
       isEmpty: vi.fn(() => false),
       setTemplateImage: vi.fn()
     })),
+    getIconPath: vi.fn(() => '/tmp/tray-icon.png'),
     getDockIcon: getDockIconMock
   }
 }))
@@ -111,6 +138,7 @@ import { TrayManager } from './tray-manager'
 describe('TrayManager', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    trayInstances.length = 0
     appMock.on.mockReset()
     appMock.off.mockReset()
     appMock.removeListener.mockReset()
@@ -275,6 +303,44 @@ describe('TrayManager', () => {
     expect(trayManager.initializeTray.mock.invocationCallOrder[0]).toBeLessThan(
       trayManager.updateDockVisibility.mock.invocationCallOrder[0]
     )
+  })
+
+  it('uses localized tray tooltip when initializing tray', () => {
+    const mainWindow = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      isVisible: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isFocused: vi.fn(() => false),
+      webContents: {}
+    }
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        channel: unknown
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      menuBuilder: { setTouchApp: (touchApp: unknown) => void }
+      initializeTray: () => void
+    }
+
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      channel: {},
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.menuBuilder.setTouchApp(trayManager.touchApp)
+
+    trayManager.initializeTray()
+
+    expect(trayInstances[0]?.setToolTip).toHaveBeenCalledWith('Tuff')
   })
 
   it('returns real runtime tray snapshot values', () => {

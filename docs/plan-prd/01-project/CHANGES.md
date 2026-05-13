@@ -106,6 +106,7 @@
   - macOS Tray 初始化顺序调整为先创建 status item、再同步 activation policy，并在创建后延迟复查 bounds；若仍出现 `height=0` 的无效布局，则自动重建一次 Tray 并记录恢复日志。
   - `pnpm core:dev` 默认改用本地生成的 Tuff Dev Electron bundle（`com.tagzxia.app.tuff.dev` + `LSUIElement=true` + ad-hoc sign），避免 stock `Electron.app` / `com.github.Electron` 身份导致 macOS「菜单栏」设置和 tray agent 行为与 packaged app 不一致；dev bundle 保留 `CFBundleExecutable=Electron`，确保 Electron 仍按 dev-server / `tuff-dev` 数据目录运行。
   - `TrayManager` 在托盘创建成功后记录 `platform`、`bounds` 与 resolved `iconPath`，后续可直接从日志判断 `trayReady` 与状态栏定位问题，减少 macOS 真机排查歧义。
+  - Tray tooltip 与菜单展示文案统一走 `tray.*` i18n key，并将托盘菜单中的旧品牌名对齐为 `Tuff`。
 
 ### docs(project): lock immediate Windows evidence execution order
 
