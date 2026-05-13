@@ -44,6 +44,7 @@
 ### 3.1 类型与调用约束
 - 不得新增未类型化的跨层通信。
 - 优先复用 domain SDK，禁止新增 raw event 字符串分发。
+- Widget production gate: packaged plugins must ship precompiled widget artifacts in `widgets/.compiled/` with `build.widgets` manifest metadata; packaged CoreApp must not rely on startup runtime widget compilation unless an explicit debug fallback is enabled.
 - 强制启用 `legacy:guard`：禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支命中；新增兼容债务必须进入白名单并附退场版本（当前退场目标 `2.4.11`）。
 - `legacy:guard` 仅允许在 `scripts/lib/legacy-keyword-exceptions.mjs` 中登记非兼容分支例外（框架固定 API 字段、上游错误文本签名、负向 lint 禁止项）；真实生产分支 key、迁移读取路径与文件名债务仍必须进入 allowlist + compatibility registry。
 - 强制启用 `compat:registry:guard`：兼容债务清册（`docs/plan-prd/docs/compatibility-debt-registry.csv`）必须完整覆盖存量命中，缺字段/缺条目/过期未清理均失败；文件名 `compat`、`shim/shims` 只按独立命名段匹配，且 `shim/shims` 排除 declaration-only `.d.ts`，避免 `compatible`、`shimmer` 等业务词和 ambient declaration typing 误入兼容债务。

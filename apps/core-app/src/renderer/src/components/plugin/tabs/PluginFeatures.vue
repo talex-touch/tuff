@@ -625,6 +625,9 @@ function resolveWidgetStatus(feature?: PluginFeatureWithCommandsData | null): st
   if (!feature || !getWidgetPath(feature)) {
     return t('plugin.features.widget.statusMissing')
   }
+  if (resolvePrecompiledWidgetEntry(feature)) {
+    return 'precompiled'
+  }
   return isPluginDev.value
     ? t('plugin.features.widget.statusDev')
     : t('plugin.features.widget.statusRelease')
@@ -667,11 +670,31 @@ function resolveWidgetSourceFilePath(
 }
 
 function resolveWidgetCompiledPath(feature?: PluginFeatureWithCommandsData | null): string | null {
+  const precompiled = resolvePrecompiledWidgetEntry(feature)
+  const pluginPath = pluginPaths.value?.pluginPath
+  if (precompiled?.compiledPath && pluginPath) {
+    return joinPaths(pluginPath, precompiled.compiledPath)
+  }
+
   const tempPath = pluginPaths.value?.tempPath
   const widgetId = getWidgetId(feature)
   if (!tempPath || !widgetId) return null
   const safeId = widgetId.replace(/[^a-zA-Z0-9._-]/g, '_')
   return joinPaths(tempPath, 'widgets', `${safeId}.cjs`)
+}
+
+function resolvePrecompiledWidgetEntry(feature?: PluginFeatureWithCommandsData | null): {
+  featureId?: string
+  widgetId?: string
+  compiledPath?: string
+} | null {
+  if (!feature || !props.plugin?.build || !Array.isArray(props.plugin.build.widgets)) return null
+  const widgetId = getWidgetId(feature)
+  return (
+    props.plugin.build.widgets.find((entry: any) => {
+      return entry?.featureId === feature.id || entry?.widgetId === widgetId
+    }) ?? null
+  )
 }
 
 async function copyToClipboard(value?: string | null): Promise<void> {

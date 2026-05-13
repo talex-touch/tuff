@@ -5,6 +5,15 @@
 
 ## 2026-05-12
 
+### feat(plugin): precompile production widgets in plugin packages
+
+- `packages/tuff-cli-core/src/exporter.ts`
+- `apps/core-app/src/main/modules/plugin/widget/{widget-manager,widget-transform}.ts`
+- `packages/utils/plugin/widget.ts`
+  - `tuff builder` now precompiles manifest widget features into `widgets/.compiled/*.cjs` and records `build.widgets` metadata in the packaged manifest.
+  - Core App packaged runtime prefers precompiled widget output and disables runtime widget compilation unless dev/source mode or `TUFF_WIDGET_RUNTIME_COMPILE` explicitly enables fallback.
+  - Widget compiler service `EPIPE` failures are classified as `WIDGET_COMPILER_SERVICE_UNAVAILABLE`; dev/source mode retries once.
+
 ### fix(core-app): launch Windows executable apps from install directory
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`

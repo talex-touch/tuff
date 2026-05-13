@@ -1,6 +1,11 @@
 import type { ManifestDivisionBoxConfig } from '@talex-touch/utils'
 import type { ManifestPermissionReasons, ManifestPermissions } from '@talex-touch/utils/permission'
-import type { IPluginDev, IPluginFeature, SdkApiVersion } from '@talex-touch/utils/plugin'
+import type {
+  IPluginBuildInfo,
+  IPluginDev,
+  IPluginFeature,
+  SdkApiVersion
+} from '@talex-touch/utils/plugin'
 import type { TuffIconType } from '@talex-touch/utils/types/icon'
 import path from 'node:path'
 import {
@@ -41,6 +46,7 @@ interface PluginManifest {
     value: string
   }
   dev?: IPluginDev
+  build?: IPluginBuildInfo
   platforms?: Record<string, boolean>
   features?: IPluginFeature[]
   divisionBox?: ManifestDivisionBoxConfig
@@ -139,6 +145,7 @@ abstract class BasePluginLoader {
       })
     }
     this.touchPlugin.dev = normalizedDevConfig
+    this.touchPlugin.build = pluginInfo.build
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
     // Category (for UI grouping)

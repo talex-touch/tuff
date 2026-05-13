@@ -40,6 +40,7 @@
 
 > 目标：当前治理版本可按“guard 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
+- [x] Widget production precompile gate: `tuff builder` now emits `widgets/.compiled/*.cjs` plus `build.widgets` metadata, and packaged CoreApp prefers precompiled widgets instead of startup runtime compilation.
 - [ ] 发版前最小复核：重新执行 `node "scripts/check-doc-governance.mjs" --strict true --json`、`pnpm compat:registry:guard`、`node "scripts/check-large-file-boundaries.mjs" --report`、`git diff --check`，并记录命令结果。
 - [x] `2.4.10-beta.19` beta 发布准备：补齐 `notes/update_2.4.10-beta.19.{zh,en}.md`、显式 `build:beta:*` 脚本与 `build-and-release` beta release type；真实 tag/push 仍需用户确认后执行。
 - [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。

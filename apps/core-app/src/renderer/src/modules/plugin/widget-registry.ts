@@ -3,6 +3,7 @@ import type {
   WidgetRegistrationPayload
 } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
+import { WIDGET_ALLOWED_PACKAGES } from '@talex-touch/utils/plugin/widget'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
@@ -582,16 +583,7 @@ function resolveWidgetSourceType(filePath?: string): string {
 }
 
 // List of allowed packages that can be used in widgets
-const ALLOWED_PACKAGES = [
-  'vue',
-  '@talex-touch/utils',
-  '@talex-touch/utils/plugin',
-  '@talex-touch/utils/plugin/sdk',
-  '@talex-touch/utils/core-box',
-  '@talex-touch/utils/transport',
-  '@talex-touch/utils/common',
-  '@talex-touch/utils/types'
-]
+const ALLOWED_PACKAGES: readonly string[] = WIDGET_ALLOWED_PACKAGES
 
 // Pre-loaded module cache using ES imports
 const preloadedModuleCache: Record<string, unknown> = {

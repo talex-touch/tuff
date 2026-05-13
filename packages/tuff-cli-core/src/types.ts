@@ -50,6 +50,12 @@ export interface BuildConfig {
    * @default false
    */
   sourcemap?: boolean
+
+  /**
+   * Include experimental widget features in package precompilation.
+   * @default false
+   */
+  includeExperimentalWidgets?: boolean
 }
 
 export interface DevConfig {
@@ -189,6 +195,12 @@ export interface Options {
    * @default 10
    */
   maxSizeMB?: number
+
+  /**
+   * Include experimental widget features in package precompilation.
+   * @default false
+   */
+  includeExperimentalWidgets?: boolean
 
   /**
    * @deprecated Use `manifest` instead

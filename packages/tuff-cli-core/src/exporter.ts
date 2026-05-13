@@ -1,11 +1,22 @@
 /* eslint-disable no-console */
 import type { Options } from './types'
+import type { WidgetPrecompiledManifestEntry, WidgetPrecompiledMeta } from '@talex-touch/utils/plugin/widget'
 import process from 'node:process'
 import * as readline from 'node:readline'
 import cliProgress from 'cli-progress'
+import crypto from 'node:crypto'
+import { posix as posixPath } from 'node:path'
 import fs from 'fs-extra'
 import { globSync } from 'glob'
 import path from 'pathe'
+import {
+  WIDGET_ALLOWED_PACKAGES,
+  WIDGET_COMPILED_DIR,
+  isAllowedWidgetModule,
+  makeSafeWidgetFileId,
+  makeWidgetId
+} from '@talex-touch/utils/plugin/widget'
+import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { CompressLimit, TalexCompress } from './compress-util'
 import { generateFilesSha256, generateSignature } from './security-util'
 
@@ -22,6 +33,7 @@ const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manife
   minify: true,
   external: ['electron'],
   maxSizeMB: 10,
+  includeExperimentalWidgets: false,
   assets: undefined,
   versionSync: undefined,
 }
@@ -36,6 +48,25 @@ interface IndexBuildConfig {
 }
 
 type IndexConfigOverride = Partial<IndexBuildConfig>
+
+interface WidgetFeatureManifest {
+  id: string
+  experimental?: boolean
+  interaction?: {
+    type?: string
+    path?: string
+  }
+}
+
+interface WidgetCompileContext {
+  root: string
+  buildDir: string
+  widgetsDir: string
+  pluginName: string
+  feature: WidgetFeatureManifest
+}
+
+const WIDGET_SUPPORTED_EXTENSIONS = new Set(['.vue'])
 
 function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
   if (!source || typeof source !== 'object')
@@ -284,6 +315,213 @@ function resolveIndexBundleConfig(
   }
 }
 
+function normalizeWidgetPath(rawPath: string): string | null {
+  const normalized = rawPath.replace(/\\/g, '/').replace(/^\/+/, '')
+  const trimmed = normalized.replace(/^widgets\//, '')
+  return trimmed ? posixPath.normalize(trimmed) : null
+}
+
+function withWidgetExtension(rawPath: string): string {
+  return path.extname(rawPath) ? rawPath : `${rawPath}.vue`
+}
+
+function toPosixPath(value: string): string {
+  return value.split(path.sep).join('/')
+}
+
+function hashWidgetSource(source: string): string {
+  return crypto.createHash('sha256').update(source).digest('hex')
+}
+
+function collectWidgetImports(source: string): string[] {
+  const patterns = [
+    /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g,
+    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /export\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/g,
+    /import\s+['"]([^'"]+)['"]/g,
+  ]
+  const imports = new Set<string>()
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null
+    while ((match = pattern.exec(source)) !== null) {
+      imports.add(match[1])
+    }
+  }
+  return [...imports]
+}
+
+function validateWidgetDependencies(featureId: string, source: string): string[] {
+  const imports = collectWidgetImports(source)
+  const disallowed = imports.filter(moduleName => !isAllowedWidgetModule(moduleName))
+  if (disallowed.length) {
+    throw new Error(
+      `WIDGET_INVALID_DEPENDENCY: feature "${featureId}" imports unavailable module(s): ${disallowed.join(', ')}. Allowed packages: ${WIDGET_ALLOWED_PACKAGES.join(', ')}`,
+    )
+  }
+  return imports
+}
+
+function ensureVueDependency(dependencies: string[]): string[] {
+  return dependencies.includes('vue') ? dependencies : ['vue', ...dependencies]
+}
+
+function resolveWidgetSourceFile(context: WidgetCompileContext): {
+  sourcePath: string
+  sourceRelativePath: string
+} {
+  const interactionPath = context.feature.interaction?.path
+  if (typeof interactionPath !== 'string' || !interactionPath.trim()) {
+    throw new Error(`WIDGET_PATH_MISSING: feature "${context.feature.id}" has no widget interaction.path`)
+  }
+
+  const normalized = normalizeWidgetPath(interactionPath)
+  if (!normalized || normalized.startsWith('../') || posixPath.isAbsolute(normalized)) {
+    throw new Error(
+      `WIDGET_PATH_INVALID: feature "${context.feature.id}" widget path "${interactionPath}" is invalid`,
+    )
+  }
+
+  const sourceRelativePath = posixPath.join('widgets', withWidgetExtension(normalized))
+  const sourcePath = path.resolve(context.buildDir, sourceRelativePath)
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(
+      `WIDGET_NOT_FOUND: feature "${context.feature.id}" widget source "${sourceRelativePath}" does not exist`,
+    )
+  }
+
+  const ext = path.extname(sourcePath).toLowerCase()
+  if (!WIDGET_SUPPORTED_EXTENSIONS.has(ext)) {
+    throw new Error(
+      `WIDGET_UNSUPPORTED_TYPE: feature "${context.feature.id}" uses unsupported widget extension "${ext}"`,
+    )
+  }
+
+  return { sourcePath, sourceRelativePath }
+}
+
+function resolveWidgetLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'jsx' {
+  const normalized = lang?.toLowerCase()
+  if (normalized === 'ts') return 'ts'
+  if (normalized === 'tsx') return 'tsx'
+  if (normalized === 'jsx') return 'jsx'
+  return 'js'
+}
+
+async function compileWidgetForPackage(
+  context: WidgetCompileContext,
+): Promise<WidgetPrecompiledManifestEntry> {
+  const esbuild = await import('esbuild')
+  const { sourcePath, sourceRelativePath } = resolveWidgetSourceFile(context)
+  const source = fs.readFileSync(sourcePath, 'utf-8')
+  const dependencies = ensureVueDependency(validateWidgetDependencies(context.feature.id, source))
+  const widgetId = makeWidgetId(context.pluginName, context.feature.id)
+  const safeId = makeSafeWidgetFileId(widgetId)
+  const compiledRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.cjs`)
+  const metaRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.meta.json`)
+  const compiledPath = path.resolve(context.buildDir, compiledRelativePath)
+  const metaPath = path.resolve(context.buildDir, metaRelativePath)
+
+  const descriptor = parse(source, { filename: sourcePath }).descriptor
+  const scriptCode =
+    descriptor.script || descriptor.scriptSetup
+      ? compileScript(descriptor, {
+          id: widgetId,
+          inlineTemplate: false,
+        }).content
+      : 'export default {}'
+  const templateCode = descriptor.template
+    ? compileTemplate({
+        id: widgetId,
+        filename: sourcePath,
+        source: descriptor.template.content,
+        compilerOptions: {
+          mode: 'module',
+        },
+      }).code
+    : ''
+  const loader = resolveWidgetLoader(descriptor.script?.lang ?? descriptor.scriptSetup?.lang)
+  const finalBundle = `
+${scriptCode}
+${templateCode}
+const __component = exports.default || module.exports || {}
+if (__component && exports.render) {
+  __component.render = exports.render
+}
+module.exports = __component
+`
+  const transformed = await esbuild.transform(finalBundle, {
+    loader,
+    format: 'cjs',
+    target: 'node18',
+  })
+  const styles = descriptor.styles
+    .map(style => style.content || '')
+    .join('\n')
+    .trim()
+  const compiledAt = Date.now()
+  const hash = hashWidgetSource(source)
+  const meta: WidgetPrecompiledMeta = {
+    featureId: context.feature.id,
+    widgetId,
+    sourcePath: sourceRelativePath,
+    compiledPath: compiledRelativePath,
+    hash,
+    styles,
+    dependencies,
+    compiledAt,
+  }
+
+  fs.ensureDirSync(path.dirname(compiledPath))
+  fs.writeFileSync(compiledPath, transformed.code, 'utf-8')
+  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8')
+
+  return {
+    ...meta,
+    metaPath: metaRelativePath,
+  }
+}
+
+async function compilePackageWidgets(
+  manifest: IManifest,
+  buildDir: string,
+  opts: ReturnType<typeof resolveOptions>,
+  chalk: any,
+): Promise<WidgetPrecompiledManifestEntry[]> {
+  const features = Array.isArray(manifest.features) ? manifest.features : []
+  const widgetFeatures = features.filter(
+    (feature): feature is WidgetFeatureManifest =>
+      Boolean(feature?.id)
+      && feature.interaction?.type === 'widget'
+      && typeof feature.interaction?.path === 'string'
+      && (!feature.experimental || opts.includeExperimentalWidgets),
+  )
+
+  if (!widgetFeatures.length) {
+    return []
+  }
+
+  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Precompiling ${widgetFeatures.length} widget(s)...`))
+
+  const entries: WidgetPrecompiledManifestEntry[] = []
+  for (const feature of widgetFeatures) {
+    const entry = await compileWidgetForPackage({
+      root: opts.root,
+      buildDir,
+      widgetsDir: opts.widgetsDir,
+      pluginName: manifest.name,
+      feature,
+    })
+    entries.push(entry)
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.gray(` Precompiled widget ${feature.id} -> ${toPosixPath(entry.compiledPath)}`),
+    )
+  }
+
+  return entries
+}
+
 /**
  * Bundle index/ folder into a single index.js using esbuild
  */
@@ -461,6 +699,13 @@ export async function build(userOptions?: Options) {
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Generating manifest.json ...'))
 
   const manifest = genInit(buildDir, opts)
+  const compiledWidgets = await compilePackageWidgets(manifest, buildDir, opts, chalk)
+  if (compiledWidgets.length) {
+    manifest.build = {
+      ...(manifest.build ?? {}),
+      widgets: compiledWidgets,
+    }
+  }
 
   console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Manifest.json generated successfully!'))
 
@@ -484,6 +729,7 @@ interface IManifest {
   name: string
   version: string
   description: string
+  features?: WidgetFeatureManifest[]
   _files?: Record<string, string>
   _signature?: string
   dev: {
@@ -492,7 +738,7 @@ interface IManifest {
     source: boolean
   }
   build?: {
-    files: string[]
+    files?: string[]
     index?: {
       entry?: string
       format?: 'cjs' | 'esm'
@@ -501,7 +747,8 @@ interface IManifest {
       minify?: boolean
       sourcemap?: boolean
     }
-    secret: {
+    widgets?: WidgetPrecompiledManifestEntry[]
+    secret?: {
       pos: string
       addon: string[]
     }

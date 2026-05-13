@@ -12,6 +12,7 @@ import type {
   IWidgetProcessor,
   WidgetCompilationContext
 } from '../widget-processor'
+import { WIDGET_ALLOWED_PACKAGES, isAllowedWidgetModule } from '@talex-touch/utils/plugin/widget'
 import path from 'node:path'
 import { pushWidgetFeatureIssue } from '../widget-issue'
 import {
@@ -23,18 +24,7 @@ import {
 /**
  * Allowed packages in widget sandbox
  */
-const ALLOWED_PACKAGES = [
-  'vue',
-  'react',
-  'react-dom',
-  '@talex-touch/utils',
-  '@talex-touch/utils/plugin',
-  '@talex-touch/utils/plugin/sdk',
-  '@talex-touch/utils/core-box',
-  '@talex-touch/utils/transport',
-  '@talex-touch/utils/common',
-  '@talex-touch/utils/types'
-] as const
+const ALLOWED_PACKAGES = WIDGET_ALLOWED_PACKAGES
 
 /**
  * TSX/JSX Widget Processor
@@ -154,13 +144,18 @@ module.exports = __component
         dependencies: validation.allowedImports
       }
     } catch (error) {
+      const code = classifyWidgetCompileError(error)
+      if (code === 'WIDGET_COMPILER_SERVICE_UNAVAILABLE') {
+        throw error
+      }
+
       plugin.logger.debug(
         `[WidgetTsxProcessor] Compilation failed for widget "${source.widgetId}":`,
         error as Error
       )
 
       pushWidgetFeatureIssue(plugin, feature, {
-        code: classifyWidgetCompileError(error),
+        code,
         message: `Failed to compile TSX/JSX widget: ${(error as Error).message}`,
         meta: {
           error: (error as Error).stack,
@@ -176,10 +171,6 @@ module.exports = __component
    * Check if a module is allowed in the widget sandbox
    */
   private isAllowedModule(module: string): boolean {
-    if (module.startsWith('.') || module.startsWith('/')) {
-      return false
-    }
-
-    return ALLOWED_PACKAGES.some((pkg) => module === pkg || module.startsWith(`${pkg}/`))
+    return isAllowedWidgetModule(module)
   }
 }
