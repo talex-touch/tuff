@@ -11,9 +11,11 @@
 - `packages/utils/__tests__/permission-status.test.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
 - `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+- `.github/workflows/package-tuff-cli-ci.yml`
   - 从 SDK allowlist 移除临时保留的 `260421` 历史 marker，使共享 `checkSdkCompatibility()`、`tuff validate` 和 CoreApp runtime gate 重新保持同一 canonical marker 口径。
   - 补齐权限状态与插件 loader 回归：非 canonical `260421` 在权限评估前不再授予权限，并在运行时进入 `SDKAPI_BLOCKED`，不再作为可加载历史例外。
   - 同步 Manifest 参考文档的支持列表，避免开发者继续把 `260421` 当作可声明 marker。
+  - CLI Package CI 的 path filter 补充 `packages/utils/**` 与 workflow 文件自身，确保共享 SDK 兼容性改动会重新触发 `tuff-cli-core` lint/test/build。
 
 ### chore(release): prepare 2.4.10 beta CI readiness
 
