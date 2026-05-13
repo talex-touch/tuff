@@ -13,11 +13,12 @@
   "main": "index.js",
   "permissions": {
     "required": ["system.shell"],
-    "optional": ["clipboard.write"]
+    "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
     "system.shell": "调用系统命令打开浏览器",
-    "clipboard.write": "复制链接到剪贴板"
+    "clipboard.write": "复制链接到剪贴板",
+    "network.internet": "获取搜索引擎建议词"
   },
   "features": [
     {
@@ -41,6 +42,30 @@
         {
           "type": "over",
           "value": ["url", "link", "open", "浏览器", "网页"]
+        }
+      ]
+    },
+    {
+      "id": "web-search",
+      "name": "网页搜索",
+      "desc": "使用默认搜索引擎搜索输入内容",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["search", "web", "google", "bing", "duckduckgo", "搜索", "网页搜索"],
+      "push": true,
+      "priority": 1,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["search", "web", "google", "bing", "duckduckgo", "搜索", "网页搜索"]
         }
       ]
     }

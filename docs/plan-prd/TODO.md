@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-05-12
+> 更新时间: 2026-05-13
 
 ---
 
@@ -50,6 +50,9 @@
 - [ ] macOS / Linux 平台补证：`2.4.11` 前完成 macOS 阻塞级回归；Linux 只记录 best-effort smoke 与桌面环境限制。
 - [ ] Provider Registry 后续：补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略、success rate / quota / dynamic pricingRef 策略。
 - [ ] 2.5.0 AI/workflow 后续：继续拆 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板。
+- [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
+- [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
+
 
 ### 剩余工作区提交拆分清单（2026-05-11）
 
@@ -1094,12 +1097,12 @@
 
 | 统计项 | 数值 |
 | --- | --- |
-| 已完成 (`- [x]`) | 310 |
-| 未完成 (`- [ ]`) | 58 |
-| 总计 | 368 |
+| 已完成 (`- [x]`) | 311 |
+| 未完成 (`- [ ]`) | 59 |
+| 总计 | 370 |
 | 完成率 | 84% |
 
-> 统计时间: 2026-05-11（按本文件实时 checkbox 计数）。
+> 统计时间: 2026-05-13（按本文件实时 checkbox 计数）。
 
 ---
 

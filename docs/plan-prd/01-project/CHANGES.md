@@ -1,7 +1,18 @@
 # 变更日志
 
-> 更新时间: 2026-05-12
-> 说明: 主文件仅保留近 30 天（2026-04-12 ~ 2026-05-12）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-13
+> 说明: 主文件仅保留近 30 天（2026-04-13 ~ 2026-05-13）详细记录；更早历史已按月归档。
+
+## 2026-05-13
+
+### feat(plugin): add quick launch search engine mode
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `packages/test/src/plugins/browser-open.test.ts`
+  - `touch-browser-open` 新增 `web-search` 基础入口，并在插件初始化时动态注册 `Google / Bing / DuckDuckGo 搜索引擎` feature。
+  - 选择某个搜索引擎 feature 后保持 CoreBox 输入态，不进入独立页面；输入变化会刷新直接搜索项与远程 suggestion，执行后复用默认浏览器打开逻辑并隐藏 CoreBox。
+  - 搜索建议新增 `network.internet` 可选权限；权限缺失、网络失败或请求取消时保留直接搜索项，不阻塞用户搜索。
+  - URL/域名打开仍由原 `browser-open` 路径处理，普通网页搜索走默认搜索引擎兜底。
 
 ## 2026-05-12
 
