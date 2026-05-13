@@ -352,7 +352,7 @@ describe('createPluginLoader', () => {
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
   })
 
-  it('keeps the historical touch-dev-utils sdk marker loadable', async () => {
+  it('blocks non-canonical historical sdk markers', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-dev-utils',
       version: '1.0.0',
@@ -366,9 +366,9 @@ describe('createPluginLoader', () => {
     const loader = createPluginLoader('touch-dev-utils', pluginPath)
     const plugin = await loader.load()
 
-    expect(plugin.loadState).not.toBe('load_failed')
-    expect(plugin.loadError).toBeUndefined()
-    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(false)
+    expect(plugin.loadState).toBe('load_failed')
+    expect(plugin.loadError).toMatchObject({ code: 'SDKAPI_BLOCKED' })
+    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
   })
 
   it('creates loader plugin shells without eager data initialization', async () => {
