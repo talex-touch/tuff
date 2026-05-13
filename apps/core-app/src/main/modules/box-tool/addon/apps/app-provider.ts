@@ -2656,7 +2656,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private getMainWindow(): BrowserWindow | null {
-    const primary = ($app as { window?: { window?: BrowserWindow } }).window?.window
+    const primary = this.context?.touchApp.window.window
     if (primary && !primary.isDestroyed()) {
       return primary
     }

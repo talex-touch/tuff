@@ -245,7 +245,7 @@ describe('/api/admin/release-evidence', () => {
       caseId: 'docs-guard',
       status: 'passed',
       requiredForRelease: true,
-      evidence: { command: 'pnpm docs:guard', code: 0 },
+      evidence: { command: 'manual documentation review', code: 0 },
     })
     const result = await upsertItemHandler(makeEvent('/api/admin/release-evidence/runs/run/items', { runId: run.run.id }))
 
@@ -314,7 +314,7 @@ describe('/api/admin/release-evidence', () => {
     readBodyMock.mockResolvedValue({
       version: '2.5.0',
       status: 'passed',
-      evidence: { command: 'pnpm docs:guard', code: 0 },
+      evidence: { command: 'manual documentation review', code: 0 },
       notes: 'docs ok',
     })
 

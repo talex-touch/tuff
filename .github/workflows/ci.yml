@@ -62,8 +62,8 @@ jobs:
       - name: Lint markdown
         run: npx markdownlint-cli ${{ needs.job1.outputs.markdown_files }} --ignore node_modules
 
-  job_typecheck:
-    name: Typecheck
+  job_quality_pr:
+    name: PR Quality
     runs-on: ubuntu-latest
     needs: job1
     steps:
@@ -84,10 +84,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run typecheck
-        run: pnpm typecheck
-
-      - name: Run docs governance guard (report only)
-        if: ${{ always() }}
-        continue-on-error: true
-        run: pnpm docs:guard
+      - name: Run PR quality gate
+        run: pnpm quality:pr
