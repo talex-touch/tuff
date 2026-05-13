@@ -38,6 +38,8 @@ export class TrayManager extends BaseModule {
   private tray: Tray | null = null
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
+  private trayBoundsValidationTimer: NodeJS.Timeout | null = null
+  private trayBoundsRecoveryAttempted = false
   private appDisposers: Array<() => void> = []
   private windowDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
@@ -62,7 +64,6 @@ export class TrayManager extends BaseModule {
     this.syncWindowVisibilityState()
 
     if (process.platform === 'darwin') {
-      this.applyActivationPolicy()
       this.setupDockIcon()
     }
 
@@ -74,6 +75,7 @@ export class TrayManager extends BaseModule {
     }
 
     if (process.platform === 'darwin') {
+      this.applyActivationPolicy()
       this.updateDockVisibility()
     }
   }
@@ -114,22 +116,95 @@ export class TrayManager extends BaseModule {
       this.tray.setToolTip('tuff')
       this.bindTrayEvents()
       this.updateMenu()
-      trayManagerLog.info('Tray initialized', {
-        meta: {
-          platform: process.platform,
-          bounds: this.tray.getBounds?.(),
-          iconPath: TrayIconProvider.getIconPath()
-        }
-      })
+
+      const initialBounds = this.getTrayBounds()
+      const logMeta = {
+        platform: process.platform,
+        bounds: initialBounds,
+        iconPath: TrayIconProvider.getIconPath()
+      }
+      if (process.platform === 'darwin' && !this.isTrayBoundsVisible(initialBounds)) {
+        trayManagerLog.warn('Tray initialized with invalid bounds; scheduling layout validation', {
+          meta: logMeta
+        })
+      } else {
+        trayManagerLog.info('Tray initialized', { meta: logMeta })
+      }
+      this.scheduleTrayBoundsValidation()
     } catch (error) {
       trayManagerLog.error('Failed to initialize tray', { error })
     }
   }
 
   private destroyTray(): void {
+    this.clearTrayBoundsValidationTimer()
     if (!this.tray) return
     this.tray.destroy()
     this.tray = null
+  }
+
+  private getTrayBounds(): Electron.Rectangle | null {
+    try {
+      return this.tray?.getBounds?.() ?? null
+    } catch (error) {
+      trayManagerLog.warn('Failed to read tray bounds', { meta: { error } })
+      return null
+    }
+  }
+
+  private isTrayBoundsVisible(bounds: Electron.Rectangle | null): boolean {
+    return !!bounds && bounds.width > 0 && bounds.height > 0
+  }
+
+  private scheduleTrayBoundsValidation(): void {
+    if (process.platform !== 'darwin') return
+    this.clearTrayBoundsValidationTimer()
+
+    const timer = setTimeout(() => {
+      this.trayBoundsValidationTimer = null
+      this.validateTrayBoundsAfterLayout()
+    }, 600)
+    timer.unref?.()
+    this.trayBoundsValidationTimer = timer
+  }
+
+  private clearTrayBoundsValidationTimer(): void {
+    if (!this.trayBoundsValidationTimer) return
+    clearTimeout(this.trayBoundsValidationTimer)
+    this.trayBoundsValidationTimer = null
+  }
+
+  private validateTrayBoundsAfterLayout(): void {
+    if (!this.tray) return
+
+    const bounds = this.getTrayBounds()
+    if (this.isTrayBoundsVisible(bounds)) {
+      trayManagerLog.info('Tray bounds ready', { meta: { bounds } })
+      return
+    }
+
+    trayManagerLog.warn('Tray bounds invalid after layout', {
+      meta: {
+        bounds,
+        recoveryAttempted: this.trayBoundsRecoveryAttempted
+      }
+    })
+
+    if (this.trayBoundsRecoveryAttempted) return
+    this.trayBoundsRecoveryAttempted = true
+    this.recreateTrayAfterInvalidBounds(bounds)
+  }
+
+  private recreateTrayAfterInvalidBounds(previousBounds: Electron.Rectangle | null): void {
+    try {
+      trayManagerLog.warn('Recreating tray after invalid bounds', { meta: { previousBounds } })
+      this.tray?.destroy()
+      this.tray = null
+      this.initializeTray()
+      this.updateDockVisibility()
+    } catch (error) {
+      trayManagerLog.error('Failed to recreate tray after invalid bounds', { error })
+    }
   }
 
   private shouldShowTray(): boolean {
