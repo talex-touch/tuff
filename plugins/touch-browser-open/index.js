@@ -75,8 +75,8 @@ SEARCH_ENGINES.forEach((engine) => {
 let dynamicSearchFeaturesInitialized = false
 let networkPermissionGranted = null
 let latestFeatureRequestSeq = 0
+let latestFeatureRequestIdentity = null
 let activeSearchMode = null
-let unsubscribeSearchInput = null
 let activeSearchRequestController = null
 
 function getRuntimePlatform() {
@@ -307,44 +307,14 @@ function resolveEngineFromFeatureId(featureId) {
   return getSearchEngine(id.slice(SEARCH_ENGINE_FEATURE_PREFIX.length))
 }
 
-function resolveActiveSearchMode(featureId) {
-  const engine = resolveEngineFromFeatureId(featureId)
-  if (engine)
-    return { featureId: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`, engine }
-
-  if (featureId === WEB_SEARCH_FEATURE_ID) {
-    return {
-      featureId: WEB_SEARCH_FEATURE_ID,
-      engine: activeSearchMode?.engine || getSearchEngine(DEFAULT_SEARCH_SETTINGS.defaultEngine),
-    }
-  }
-
-  return null
-}
-
 function stopSearchInputSession() {
-  if (typeof unsubscribeSearchInput === 'function') {
-    unsubscribeSearchInput()
-  }
-  unsubscribeSearchInput = null
   activeSearchMode = null
   abortActiveSearchRequest()
+  beginFeatureRequest()
 }
 
 function startSearchInputSession(featureId, engine) {
   activeSearchMode = { featureId, engine }
-  if (unsubscribeSearchInput || typeof plugin?.feature?.onInputChange !== 'function')
-    return
-
-  unsubscribeSearchInput = plugin.feature.onInputChange((input) => {
-    const mode = activeSearchMode
-    if (!mode)
-      return
-    void enterSearchEngineMode(mode.engine, input, undefined, {
-      featureId: mode.featureId,
-      preserveInput: true,
-    })
-  })
 }
 
 function extractEngineModeQuery(engine, input) {
@@ -776,17 +746,46 @@ function buildSearchItems(featureId, engine, query, suggestions = [], options = 
   return items
 }
 
-function beginFeatureRequest() {
+function beginFeatureRequest(identity = null) {
   latestFeatureRequestSeq += 1
+  latestFeatureRequestIdentity = identity
+    ? { ...identity, requestSeq: latestFeatureRequestSeq }
+    : null
   return latestFeatureRequestSeq
 }
 
-function isCurrentFeatureRequest(requestSeq, signal) {
-  return requestSeq === latestFeatureRequestSeq && !signal?.aborted
+function beginSearchFeatureRequest(featureId, engine, query) {
+  const normalizedQuery = normalizeSearchText(query)
+  const requestSeq = beginFeatureRequest({
+    featureId,
+    engineId: engine.id,
+    normalizedQuery,
+  })
+
+  return {
+    requestSeq,
+    featureId,
+    engineId: engine.id,
+    normalizedQuery,
+  }
 }
 
-async function pushFeatureItems(items, requestSeq) {
-  if (typeof requestSeq === 'number' && requestSeq !== latestFeatureRequestSeq)
+function isCurrentFeatureRequest(request, signal) {
+  const requestSeq = typeof request === 'number' ? request : request?.requestSeq
+  if (requestSeq !== latestFeatureRequestSeq || signal?.aborted)
+    return false
+
+  if (!request || typeof request === 'number')
+    return true
+
+  return latestFeatureRequestIdentity?.requestSeq === request.requestSeq
+    && latestFeatureRequestIdentity.featureId === request.featureId
+    && latestFeatureRequestIdentity.engineId === request.engineId
+    && latestFeatureRequestIdentity.normalizedQuery === request.normalizedQuery
+}
+
+async function pushFeatureItems(items, request) {
+  if (typeof request !== 'undefined' && !isCurrentFeatureRequest(request))
     return false
   plugin.feature.clearItems()
   await plugin.feature.pushItems(items)
@@ -928,10 +927,10 @@ async function loadSuggestions(engine, query, signal) {
 }
 
 async function enterSearchEngineMode(engine, query, signal, options = {}) {
-  const requestSeq = beginFeatureRequest()
   const text = normalizeSearchText(query)
   const featureId = options.featureId || `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
   const request = createSearchRequestSignal(signal)
+  const requestToken = beginSearchFeatureRequest(featureId, engine, text)
 
   try {
     if (!options.preserveInput) {
@@ -940,23 +939,23 @@ async function enterSearchEngineMode(engine, query, signal, options = {}) {
       await plugin.box?.setInput?.(text)
     }
 
-    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
+    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestToken)
 
     if (!text)
       return true
 
     try {
       const suggestions = await loadSuggestions(engine, text, request.signal)
-      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+      if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestToken)
     }
     catch (error) {
-      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+      if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
       await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
         warning: error?.message || '网络请求失败，仅保留直接搜索',
-      }), requestSeq)
+      }), requestToken)
     }
 
     return true
@@ -967,31 +966,31 @@ async function enterSearchEngineMode(engine, query, signal, options = {}) {
 }
 
 async function handleWebSearchFeature(featureId, query, signal) {
-  const requestSeq = beginFeatureRequest()
   const settings = await loadSearchSettings()
   const parsed = parseSearchQuery(getQueryText(query), settings)
   const engine = parsed.engine
   const text = parsed.query
   const request = createSearchRequestSignal(signal)
+  const requestToken = beginSearchFeatureRequest(featureId, engine, text)
 
   try {
-    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
+    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestToken)
 
     if (!text)
       return true
 
     try {
       const suggestions = await loadSuggestions(engine, text, request.signal)
-      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+      if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestToken)
     }
     catch (error) {
-      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+      if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
       await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
         warning: error?.message || '网络请求失败，仅保留直接搜索',
-      }), requestSeq)
+      }), requestToken)
     }
 
     return true

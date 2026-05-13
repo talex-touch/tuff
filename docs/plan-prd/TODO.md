@@ -51,6 +51,7 @@
 - [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
 - [x] Quick Launch 搜索引擎补全隔离：进入 `Google / Bing / DuckDuckGo 搜索引擎` 后，域名形态输入仍保持搜索 suggestion 模式，Tab completion 只补 query/suggestion，不再突出 URL 打开候选。
 - [x] Quick Launch 搜索引擎图标：`Google / Bing / DuckDuckGo` engine config 已内置对应 SVG，动态 feature 与搜索 suggestion 结果展示各自引擎图标。
+- [x] Quick Launch 搜索模式旧结果清理：远程 suggestion 仅在进入 `网页搜索` / `搜索引擎` feature 后刷新；active query 变化或清空输入会立即清理旧结果，旧请求晚返回不再覆盖当前搜索项。
 - [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
 
 ### 当前治理版发版暂存清单（2026-05-13）

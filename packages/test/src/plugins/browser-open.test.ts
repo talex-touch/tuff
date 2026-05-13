@@ -278,6 +278,43 @@ describe('browser open plugin', () => {
     ])
   })
 
+  it('does not subscribe to plugin input changes before active mode refresh', async () => {
+    const onInputChange = vi.fn()
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      fetch: vi.fn(async () => ({
+        ok: true,
+        json: async () => ['tuff', ['tuff app']],
+      })),
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+      plugin: {
+        box: {
+          showInput: vi.fn(),
+          allowInput: vi.fn(),
+          setInput: vi.fn(),
+          hide: vi.fn(),
+        },
+        feature: {
+          clearItems() {},
+          pushItems() {},
+          onInputChange,
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎 tuff', null, new AbortController().signal)
+
+    expect(onInputChange).not.toHaveBeenCalled()
+  })
+
   it('keeps direct search item when suggestions fail', async () => {
     const items: Array<{ title?: string }> = []
     const globals = createPluginGlobals({
@@ -354,7 +391,6 @@ describe('browser open plugin', () => {
 
   it('keeps engine mode as search suggestions while input looks like a domain', async () => {
     const items: Array<{ title?: string, meta?: any, render?: any }> = []
-    let inputHandler: ((input: string) => void) | null = null
     const setInput = vi.fn()
     const globals = createPluginGlobals({
       TuffItemBuilder: FakeBuilder,
@@ -376,10 +412,6 @@ describe('browser open plugin', () => {
         feature: {
           clearItems() { items.length = 0 },
           pushItems(next: Array<{ title?: string, meta?: any, render?: any }>) { items.push(...next) },
-          onInputChange(handler: (input: string) => void) {
-            inputHandler = handler
-            return vi.fn()
-          },
         },
         storage: {
           async getFile() { return null },
@@ -391,16 +423,14 @@ describe('browser open plugin', () => {
 
     await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎', null, new AbortController().signal)
     setInput.mockClear()
-    inputHandler?.('example.com')
-    await vi.waitFor(() => {
-      expect(items.map(item => item.title)).toEqual([
-        'Google 搜索：example.com',
-        'example.com pricing',
-        'example.com login',
-      ])
-    })
+    await pluginModule.onFeatureTriggered('search-engine-google', 'example.com', null, new AbortController().signal)
 
     expect(setInput).not.toHaveBeenCalled()
+    expect(items.map(item => item.title)).toEqual([
+      'Google 搜索：example.com',
+      'example.com pricing',
+      'example.com login',
+    ])
     expect(items.every(item => item.meta?.actionId === 'search-web')).toBe(true)
     expect(items.map(item => item.render?.completion)).toEqual([
       'example.com',
@@ -411,7 +441,6 @@ describe('browser open plugin', () => {
 
   it('aborts stale suggestion requests when engine input changes quickly', async () => {
     const items: Array<{ title?: string }> = []
-    let inputHandler: ((input: string) => void) | null = null
     const firstFetch = new Promise((_resolve, reject) => {
       setTimeout(() => reject(new Error('stale request should be aborted')), 20)
     })
@@ -446,10 +475,6 @@ describe('browser open plugin', () => {
         feature: {
           clearItems() { items.length = 0 },
           pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-          onInputChange(handler: (input: string) => void) {
-            inputHandler = handler
-            return vi.fn()
-          },
         },
         storage: {
           async getFile() { return null },
@@ -460,8 +485,8 @@ describe('browser open plugin', () => {
     const pluginModule = loadPluginModule(browserPluginUrl, globals)
 
     await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎 start', null, new AbortController().signal)
-    inputHandler?.('old')
-    inputHandler?.('new')
+    const oldRefresh = pluginModule.onFeatureTriggered('search-engine-google', 'old', null, new AbortController().signal)
+    const newRefresh = pluginModule.onFeatureTriggered('search-engine-google', 'new', null, new AbortController().signal)
 
     await vi.waitFor(() => {
       expect(items.map(item => item.title)).toEqual([
@@ -469,6 +494,106 @@ describe('browser open plugin', () => {
         'new suggestion',
       ])
     })
+    await Promise.all([oldRefresh, newRefresh])
     expect(items.map(item => item.title)).not.toContain('搜索建议不可用')
+  })
+
+  it('clears stale suggestions immediately when active query changes', async () => {
+    const items: Array<{ title?: string }> = []
+    let releaseFirstFetch: ((value: unknown) => void) | null = null
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(async () => new Promise((resolve) => {
+        releaseFirstFetch = resolve
+      }))
+      .mockImplementationOnce(async () => ({
+        ok: true,
+        json: async () => ['github 有道翻译', ['github 有道翻译 api']],
+      }))
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      fetch,
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+      plugin: {
+        box: {
+          showInput: vi.fn(),
+          allowInput: vi.fn(),
+          setInput: vi.fn(),
+          hide: vi.fn(),
+        },
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    const staleRefresh = pluginModule.onFeatureTriggered('search-engine-google', '有道翻译', null, new AbortController().signal)
+    await vi.waitFor(() => {
+      expect(items.map(item => item.title)).toEqual(['Google 搜索：有道翻译'])
+    })
+
+    const currentRefresh = pluginModule.onFeatureTriggered('search-engine-google', 'github 有道翻译', null, new AbortController().signal)
+    expect(items.map(item => item.title)).toEqual(['Google 搜索：github 有道翻译'])
+    releaseFirstFetch?.({
+      ok: true,
+      json: async () => ['有道翻译', ['有道翻译 官网']],
+    })
+    await Promise.all([staleRefresh, currentRefresh])
+
+    expect(items.map(item => item.title)).toEqual([
+      'Google 搜索：github 有道翻译',
+      'github 有道翻译 api',
+    ])
+  })
+
+  it('clears stale suggestions and shows engine empty state for empty active query', async () => {
+    const items: Array<{ title?: string }> = []
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      fetch: vi.fn(async () => ({
+        ok: true,
+        json: async () => ['有道翻译', ['有道翻译 官网']],
+      })),
+      permission: {
+        check: async () => true,
+        request: async () => true,
+      },
+      plugin: {
+        box: {
+          showInput: vi.fn(),
+          allowInput: vi.fn(),
+          setInput: vi.fn(),
+          hide: vi.fn(),
+        },
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    await pluginModule.onFeatureTriggered('search-engine-google', '有道翻译', null, new AbortController().signal)
+    expect(items.map(item => item.title)).toEqual([
+      'Google 搜索：有道翻译',
+      '有道翻译 官网',
+    ])
+
+    await pluginModule.onFeatureTriggered('search-engine-google', '', null, new AbortController().signal)
+
+    expect(items.map(item => item.title)).toEqual(['Google 搜索'])
   })
 })

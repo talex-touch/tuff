@@ -5,6 +5,17 @@
 
 ## 2026-05-13
 
+### fix(plugin): clear stale quick launch search suggestions
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `packages/test/src/plugins/browser-open.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.test.ts`
+  - Quick Launch 搜索引擎模式移除插件内部 `onInputChange` 双路订阅，统一由 CoreBox active push feature 触发输入刷新；未进入 `网页搜索` / `搜索引擎` feature 前不再主动拉远程 suggestion。
+  - 搜索模式每次 query 变化都会 abort 旧 suggestion 请求并立即清理结果区，只保留当前 query 的直接搜索项或当前引擎空态；旧请求晚返回、失败 warning 或降级提示均需匹配 `featureId + engineId + query + requestSeq` 后才允许落回 UI。
+  - CoreBox active push feature 空输入时仍转发给插件，确保清空关键词后插件可以清掉旧 suggestion，而非回填浏览器打开/域名候选。
+  - 版本升级至 `touch-browser-open@1.0.4`，用于修复已发布 `1.0.3` 的旧 suggestion 残留问题。
+
 ### fix(core-app): harden Windows shortcut app launch handoff
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
