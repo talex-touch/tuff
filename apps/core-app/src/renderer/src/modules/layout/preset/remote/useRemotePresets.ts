@@ -3,7 +3,7 @@ import { validatePresetData } from '@talex-touch/utils'
 import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 import { compareVersions } from '~/composables/store/useVersionCompare'
-import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { storeHttpRequest } from '~/modules/store/store-http-client'
 import { requestNexusWithAuth } from '~/modules/store/nexus-auth-client'
 import { getBuildInfo } from '~/utils/build-info'
@@ -77,7 +77,7 @@ function ensurePresetCompat(preset: PresetExportData): void {
 }
 
 export function useRemotePresets() {
-  const baseUrl = getAuthBaseUrl().replace(/\/$/, '')
+  const baseUrl = getRuntimeNexusBaseUrl().replace(/\/$/, '')
   const isFetching = ref(false)
   const isApplying = ref(false)
   const items = ref<RemotePresetSummary[]>([])

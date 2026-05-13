@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import type { DataTableColumn } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -106,11 +108,6 @@ const planOptions = [
   { value: 'TEAM', label: 'Team', color: 'text-green-500' },
 ]
 
-const subscriptionStatusStyles: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  expired: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-}
-
 const subscriptionStatusLabels: Record<string, string> = {
   active: t('dashboard.sections.subscriptions.status.active', 'Active'),
   expired: t('dashboard.sections.subscriptions.status.expired', 'Expired'),
@@ -140,12 +137,25 @@ const genForm = reactive({
   count: 1,
 })
 
-const codeStatusColors: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  exhausted: 'bg-black/[0.06] text-black/60 dark:bg-white/[0.08] dark:text-white/60',
-  expired: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-  revoked: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-}
+const subscriptionColumns = computed<DataTableColumn<AdminSubscription>[]>(() => [
+  { key: 'user', title: t('dashboard.sections.subscriptions.table.user', 'User'), width: '28%' },
+  { key: 'role', title: t('dashboard.sections.subscriptions.table.role', 'Role'), width: 120 },
+  { key: 'plan', title: t('dashboard.sections.subscriptions.table.plan', 'Plan'), width: 120 },
+  { key: 'status', title: t('dashboard.sections.subscriptions.table.status', 'Status'), width: 140 },
+  { key: 'activatedAt', title: t('dashboard.sections.subscriptions.table.activatedAt', 'Activated'), width: 150 },
+  { key: 'expiresAt', title: t('dashboard.sections.subscriptions.table.expiresAt', 'Expires'), width: 150 },
+])
+
+const codeColumns = computed<DataTableColumn<ActivationCode>[]>(() => [
+  { key: 'code', title: t('dashboard.sections.codes.table.code', 'Code'), width: 230 },
+  { key: 'plan', title: t('dashboard.sections.codes.table.plan', 'Plan'), width: 110 },
+  { key: 'duration', title: t('dashboard.sections.codes.table.duration', 'Duration'), width: 130 },
+  { key: 'uses', title: t('dashboard.sections.codes.table.uses', 'Uses'), width: 110 },
+  { key: 'status', title: t('dashboard.sections.codes.table.status', 'Status'), width: 130 },
+  { key: 'created', title: t('dashboard.sections.codes.table.created', 'Created'), width: 140 },
+  { key: 'expires', title: t('dashboard.sections.codes.table.expires', 'Expires'), width: 140 },
+  { key: 'actions', title: t('dashboard.sections.codes.table.actions', 'Actions'), width: 120 },
+])
 
 function buildSubscriptionQuery() {
   const query: Record<string, string | number> = {
@@ -168,7 +178,7 @@ async function fetchSubscriptions(options: { resetPage?: boolean } = {}) {
   subscriptionLoading.value = true
   subscriptionError.value = null
   try {
-    const res = await $fetch<{ subscriptions: AdminSubscription[], pagination: Pagination }>('/api/admin/subscriptions', {
+    const res = await rawFetch<{ subscriptions: AdminSubscription[], pagination: Pagination }>('/api/admin/subscriptions', {
       query: buildSubscriptionQuery(),
     })
     subscriptionList.value = res.subscriptions ?? []
@@ -191,7 +201,7 @@ async function fetchCodes() {
   codesLoading.value = true
   codesError.value = null
   try {
-    const res = await $fetch<{ codes: ActivationCode[] }>('/api/admin/codes')
+    const res = await rawFetch<{ codes: ActivationCode[] }>('/api/admin/codes')
     codes.value = res.codes
   }
   catch (e: any) {
@@ -206,7 +216,7 @@ async function generateCodes() {
   codesGenerating.value = true
   codesError.value = null
   try {
-    await $fetch('/api/admin/codes/generate', {
+    await rawFetch('/api/admin/codes/generate', {
       method: 'POST',
       body: genForm,
     })
@@ -242,6 +252,25 @@ function resolveSubscriptionStatus(item: AdminSubscription) {
   return item.subscription.isActive ? 'active' : 'expired'
 }
 
+function subscriptionStatusTone(item: AdminSubscription) {
+  return item.subscription.isActive ? 'success' : 'danger'
+}
+
+function codeStatusTone(status: string) {
+  switch (status) {
+    case 'active':
+      return 'success'
+    case 'expired':
+      return 'danger'
+    case 'revoked':
+      return 'warning'
+    case 'exhausted':
+      return 'muted'
+    default:
+      return 'info'
+  }
+}
+
 async function grantSubscription() {
   if (grantLoading.value)
     return
@@ -262,7 +291,7 @@ async function grantSubscription() {
     else
       payload.userId = target
 
-    await $fetch('/api/admin/subscriptions/grant', {
+    await rawFetch('/api/admin/subscriptions/grant', {
       method: 'POST',
       body: payload,
     })
@@ -324,7 +353,7 @@ async function revokeCode(code: ActivationCode) {
     return
   codesActionPendingId.value = code.id
   try {
-    await $fetch(`/api/admin/codes/${code.id}`, {
+    await rawFetch(`/api/admin/codes/${code.id}`, {
       method: 'PATCH',
       body: { status: 'revoked' },
     })
@@ -358,7 +387,7 @@ async function revokeCode(code: ActivationCode) {
           <label class="apple-section-title mb-1 block">
             {{ t('dashboard.sections.subscriptions.filters.searchLabel', 'Search') }}
           </label>
-          <Input
+          <TuffInput
             v-model="subscriptionFilters.q"
             type="text"
             autocomplete="off"
@@ -404,7 +433,7 @@ async function revokeCode(code: ActivationCode) {
           <label class="apple-section-title mb-1 block">
             {{ t('dashboard.sections.subscriptions.grant.targetLabel', 'User ID or Email') }}
           </label>
-          <Input
+          <TuffInput
             v-model="grantForm.target"
             type="text"
             autocomplete="off"
@@ -424,7 +453,7 @@ async function revokeCode(code: ActivationCode) {
           <label class="apple-section-title mb-1 block">
             {{ t('dashboard.sections.subscriptions.grant.durationLabel', 'Duration (days)') }}
           </label>
-          <Input v-model="grantForm.durationDays" type="number" min="1" max="3650" class="w-full" />
+          <TuffInput v-model="grantForm.durationDays" type="number" min="1" max="3650" class="w-full" />
         </div>
         <div class="flex items-end">
           <TxButton variant="primary" size="small" :disabled="grantLoading" @click="grantSubscription">
@@ -472,66 +501,39 @@ async function revokeCode(code: ActivationCode) {
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[760px]">
-          <thead class="bg-black/5 dark:bg-white/[0.04]">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.subscriptions.table.user', 'User') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.subscriptions.table.role', 'Role') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.subscriptions.table.plan', 'Plan') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.subscriptions.table.status', 'Status') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.subscriptions.table.activatedAt', 'Activated') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.subscriptions.table.expiresAt', 'Expires') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-            <tr v-for="entry in subscriptionList" :key="entry.user.id" class="transition hover:bg-black/[0.04] dark:hover:bg-white/[0.04]">
-              <td class="px-4 py-3">
-                <div class="space-y-1">
-                  <p class="font-medium text-black dark:text-white">
-                    {{ entry.user.name || '-' }}
-                  </p>
-                  <p class="text-xs text-black/60 dark:text-white/60">
-                    {{ entry.user.email }}
-                  </p>
-                </div>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/70 dark:text-white/70">
-                {{ entry.user.role }}
-              </td>
-              <td class="px-4 py-3">
-                <span class="font-medium" :class="resolvePlanStyle(entry.subscription.plan)?.color">
-                  {{ entry.subscription.plan }}
-                </span>
-              </td>
-              <td class="px-4 py-3">
-                <span
-                  class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                  :class="subscriptionStatusStyles[resolveSubscriptionStatus(entry)]"
-                >
-                  {{ subscriptionStatusLabels[resolveSubscriptionStatus(entry)] || resolveSubscriptionStatus(entry) }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ formatDate(entry.subscription.activatedAt) }}
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ formatDate(entry.subscription.expiresAt) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TxDataTable :columns="subscriptionColumns" :data="subscriptionList" :row-key="entry => entry.user.id" class="min-w-[760px]">
+          <template #cell-user="{ row: entry }">
+            <div class="space-y-1">
+              <p class="font-medium text-black dark:text-white">
+                {{ entry.user.name || '-' }}
+              </p>
+              <p class="text-xs text-black/60 dark:text-white/60">
+                {{ entry.user.email }}
+              </p>
+            </div>
+          </template>
+          <template #cell-role="{ row: entry }">
+            <span class="text-sm text-black/70 dark:text-white/70">{{ entry.user.role }}</span>
+          </template>
+          <template #cell-plan="{ row: entry }">
+            <span class="font-medium" :class="resolvePlanStyle(entry.subscription.plan)?.color">
+              {{ entry.subscription.plan }}
+            </span>
+          </template>
+          <template #cell-status="{ row: entry }">
+            <TxStatusBadge
+              :text="subscriptionStatusLabels[resolveSubscriptionStatus(entry)] || resolveSubscriptionStatus(entry)"
+              :status="subscriptionStatusTone(entry)"
+              size="sm"
+            />
+          </template>
+          <template #cell-activatedAt="{ row: entry }">
+            <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(entry.subscription.activatedAt) }}</span>
+          </template>
+          <template #cell-expiresAt="{ row: entry }">
+            <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(entry.subscription.expiresAt) }}</span>
+          </template>
+        </TxDataTable>
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">
@@ -574,22 +576,22 @@ async function revokeCode(code: ActivationCode) {
 
         <div>
           <label class="apple-section-title mb-1 block">Duration (days)</label>
-          <Input v-model="genForm.durationDays" type="number" min="1" max="365" class="w-full" />
+          <TuffInput v-model="genForm.durationDays" type="number" min="1" max="365" class="w-full" />
         </div>
 
         <div>
           <label class="apple-section-title mb-1 block">Max Uses</label>
-          <Input v-model="genForm.maxUses" type="number" min="1" max="1000" class="w-full" />
+          <TuffInput v-model="genForm.maxUses" type="number" min="1" max="1000" class="w-full" />
         </div>
 
         <div>
           <label class="apple-section-title mb-1 block">Expires In (days)</label>
-          <Input v-model="genForm.expiresInDays" type="number" min="1" max="365" class="w-full" />
+          <TuffInput v-model="genForm.expiresInDays" type="number" min="1" max="365" class="w-full" />
         </div>
 
         <div>
           <label class="apple-section-title mb-1 block">Count</label>
-          <Input v-model="genForm.count" type="number" min="1" max="100" class="w-full" />
+          <TuffInput v-model="genForm.count" type="number" min="1" max="100" class="w-full" />
         </div>
       </div>
 
@@ -635,82 +637,47 @@ async function revokeCode(code: ActivationCode) {
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[700px]">
-          <thead class="bg-black/5 dark:bg-white/[0.04]">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.code', 'Code') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.plan', 'Plan') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.duration', 'Duration') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.uses', 'Uses') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.status', 'Status') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.created', 'Created') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.expires', 'Expires') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.codes.table.actions', 'Actions') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-            <tr v-for="code in codes" :key="code.id" class="transition hover:bg-black/[0.04] dark:hover:bg-white/[0.04]">
-              <td class="px-4 py-3">
-                <div class="flex items-center gap-2">
-                  <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white">{{ code.code }}</code>
-                  <TxButton variant="bare" size="mini" native-type="button" icon="i-carbon-copy" class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70" :title="t('dashboard.sections.codes.copy', 'Copy')" @click="copyCode(code.code)" />
-                </div>
-              </td>
-              <td class="px-4 py-3">
-                <span class="font-medium" :class="resolvePlanStyle(code.plan)?.color">
-                  {{ code.plan }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ code.duration_days }} {{ t('dashboard.sections.codes.days', 'days') }}
-              </td>
-              <td class="px-4 py-3 text-sm text-black dark:text-white">
-                {{ code.uses }} / {{ code.max_uses }}
-              </td>
-              <td class="px-4 py-3">
-                <span
-                  class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                  :class="codeStatusColors[code.status] || 'bg-black/10 text-black/60 dark:bg-white/[0.08] dark:text-white/60'"
-                >
-                  {{ code.status }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ formatDate(code.created_at) }}
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ formatDate(code.expires_at) }}
-              </td>
-              <td class="px-4 py-3">
-                <TxButton
-                  v-if="code.status === 'active'"
-                  variant="secondary"
-                  size="mini"
-                  :disabled="codesActionPendingId === code.id"
-                  @click="revokeCode(code)"
-                >
-                  {{ t('dashboard.sections.codes.revoke', 'Revoke') }}
-                </TxButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TxDataTable :columns="codeColumns" :data="codes" row-key="id" class="min-w-[700px]">
+          <template #cell-code="{ row: code }">
+            <div class="flex items-center gap-2">
+              <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white">{{ code.code }}</code>
+              <TxButton variant="bare" size="mini" native-type="button" icon="i-carbon-copy" class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70" :title="t('dashboard.sections.codes.copy', 'Copy')" @click="copyCode(code.code)" />
+            </div>
+          </template>
+          <template #cell-plan="{ row: code }">
+            <span class="font-medium" :class="resolvePlanStyle(code.plan)?.color">
+              {{ code.plan }}
+            </span>
+          </template>
+          <template #cell-duration="{ row: code }">
+            <span class="text-sm text-black/60 dark:text-white/60">
+              {{ code.duration_days }} {{ t('dashboard.sections.codes.days', 'days') }}
+            </span>
+          </template>
+          <template #cell-uses="{ row: code }">
+            <span class="text-sm text-black dark:text-white">{{ code.uses }} / {{ code.max_uses }}</span>
+          </template>
+          <template #cell-status="{ row: code }">
+            <TxStatusBadge :text="code.status" :status="codeStatusTone(code.status)" size="sm" />
+          </template>
+          <template #cell-created="{ row: code }">
+            <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(code.created_at) }}</span>
+          </template>
+          <template #cell-expires="{ row: code }">
+            <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(code.expires_at) }}</span>
+          </template>
+          <template #cell-actions="{ row: code }">
+            <TxButton
+              v-if="code.status === 'active'"
+              variant="secondary"
+              size="mini"
+              :disabled="codesActionPendingId === code.id"
+              @click="revokeCode(code)"
+            >
+              {{ t('dashboard.sections.codes.revoke', 'Revoke') }}
+            </TxButton>
+          </template>
+        </TxDataTable>
       </div>
     </section>
   </div>

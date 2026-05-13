@@ -50,6 +50,7 @@ export class DivisionBoxManager {
   private static instance: DivisionBoxManager | null = null
   private readonly pollingService = PollingService.getInstance()
   private readonly memoryPressureTaskId = 'division-box.memory-pressure'
+  private memoryPressurePollingActive = false
 
   /** Map of all active sessions (sessionId -> DivisionBoxSession) */
   private sessions: Map<string, DivisionBoxSession>
@@ -66,9 +67,6 @@ export class DivisionBoxManager {
   private constructor() {
     this.sessions = new Map()
     this.lruCache = new LRUCache(RESOURCE_LIMITS.MAX_CACHED_SESSIONS)
-
-    // Initialize memory pressure handling
-    this.initializeMemoryPressureHandling()
   }
 
   /**
@@ -88,12 +86,11 @@ export class DivisionBoxManager {
    *
    * Listens for system memory pressure events and triggers cache eviction.
    */
-  private initializeMemoryPressureHandling(): void {
-    // Listen for memory pressure warnings (if available)
-    // Note: Electron doesn't have a direct memory pressure API,
-    // but we can monitor process memory usage
+  private ensureMemoryPressurePolling(): void {
+    if (this.memoryPressurePollingActive) {
+      return
+    }
 
-    // Set up periodic memory check (every 30 seconds)
     this.pollingService.register(
       this.memoryPressureTaskId,
       () => {
@@ -110,7 +107,30 @@ export class DivisionBoxManager {
       },
       { interval: 30, unit: 'seconds' }
     )
+    this.memoryPressurePollingActive = true
     this.pollingService.start()
+  }
+
+  private disableMemoryPressurePollingIfIdle(): void {
+    if (!this.memoryPressurePollingActive) {
+      return
+    }
+    if (this.sessions.size > 0 || this.lruCache.size() > 0) {
+      return
+    }
+    this.pollingService.unregister(this.memoryPressureTaskId)
+    this.memoryPressurePollingActive = false
+  }
+
+  private registerSessionCleanup(sessionId: string, session: DivisionBoxSession): void {
+    session.onStateChange((event) => {
+      if (event.newState !== DivisionBoxState.DESTROY) {
+        return
+      }
+      this.sessions.delete(sessionId)
+      this.lruCache.remove(sessionId)
+      this.disableMemoryPressurePollingIfIdle()
+    })
   }
 
   /**
@@ -201,6 +221,8 @@ export class DivisionBoxManager {
 
     // Register session
     this.sessions.set(sessionId, session)
+    this.ensureMemoryPressurePolling()
+    this.registerSessionCleanup(sessionId, session)
 
     // Register state change callback if provided (for IPC broadcasting)
     if (stateChangeCallback) {
@@ -218,6 +240,7 @@ export class DivisionBoxManager {
         } else if (event.newState === DivisionBoxState.DESTROY) {
           // Remove from cache when destroyed
           this.lruCache.remove(sessionId)
+          this.disableMemoryPressurePollingIfIdle()
         }
       })
     }
@@ -243,6 +266,7 @@ export class DivisionBoxManager {
     } catch (error) {
       // Clean up on error
       this.sessions.delete(sessionId)
+      this.disableMemoryPressurePollingIfIdle()
       throw error
     }
 
@@ -287,6 +311,8 @@ export class DivisionBoxManager {
 
     // Register session
     this.sessions.set(sessionId, session)
+    this.ensureMemoryPressurePolling()
+    this.registerSessionCleanup(sessionId, session)
 
     // Register state change callback if provided
     if (stateChangeCallback) {
@@ -302,6 +328,7 @@ export class DivisionBoxManager {
           this.lruCache.updateAccess(sessionId)
         } else if (event.newState === DivisionBoxState.DESTROY) {
           this.lruCache.remove(sessionId)
+          this.disableMemoryPressurePollingIfIdle()
         }
       })
     }
@@ -311,6 +338,7 @@ export class DivisionBoxManager {
       await session.createWindow()
     } catch (error) {
       this.sessions.delete(sessionId)
+      this.disableMemoryPressurePollingIfIdle()
       throw error
     }
 
@@ -366,6 +394,7 @@ export class DivisionBoxManager {
 
     // Destroy the session
     await session.destroy()
+    this.disableMemoryPressurePollingIfIdle()
 
     divisionBoxManagerLog.info('Destroyed session', { meta: { sessionId } })
   }
@@ -474,6 +503,7 @@ export class DivisionBoxManager {
     for (const sessionId of evictedIds) {
       this.sessions.delete(sessionId)
     }
+    this.disableMemoryPressurePollingIfIdle()
 
     divisionBoxManagerLog.info('Evicted cached sessions', {
       meta: {

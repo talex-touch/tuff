@@ -1,7 +1,15 @@
 <script setup lang="ts">
+import { requestJson } from '~/utils/request'
+
 const props = defineProps<{
   docPath: string
 }>()
+
+interface DocsFeedbackResponse {
+  helpful?: number
+  unhelpful?: number
+  userVote?: boolean | null
+}
 
 const { t, locale } = useI18n()
 const { user, isAuthenticated } = useAuthUser()
@@ -24,7 +32,7 @@ async function fetchFeedback() {
     const query: Record<string, string> = { path: normalizedPath.value }
     if (user.value?.id)
       query.userId = user.value.id
-    const result = await $fetch('/api/docs/feedback', { query })
+    const result = await requestJson<DocsFeedbackResponse>('/api/docs/feedback', { query })
     helpful.value = result.helpful ?? 0
     unhelpful.value = result.unhelpful ?? 0
     userVote.value = result.userVote ?? null
@@ -43,7 +51,7 @@ async function vote(isHelpful: boolean) {
 
   submitting.value = true
   try {
-    const result = await $fetch('/api/docs/feedback', {
+    const result = await requestJson<DocsFeedbackResponse>('/api/docs/feedback', {
       method: 'POST',
       body: { path: normalizedPath.value, helpful: isHelpful },
     })

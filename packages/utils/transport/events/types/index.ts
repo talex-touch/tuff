@@ -45,6 +45,9 @@ export * from './meta-overlay'
 // Network domain types
 export * from './network'
 
+// Native domain types
+export * from './native'
+
 // Notification domain types
 export * from './notification'
 

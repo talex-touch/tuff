@@ -4,6 +4,7 @@ import Modal from '~/components/ui/Modal.vue'
 import { useTurnstileWidget } from '~/composables/useTurnstileWidget'
 import { useWatermarkRisk } from '~/composables/useWatermarkRisk'
 import { useWatermarkToken } from '~/composables/useWatermarkToken'
+import { requestJson } from '~/utils/request'
 
 const { risk, clearRisk } = useWatermarkRisk()
 const { refresh } = useWatermarkToken()
@@ -27,7 +28,7 @@ async function verifyTurnstile(value: string) {
   verifying.value = true
   verifyError.value = ''
   try {
-    await $fetch('/api/watermark/turnstile/verify', {
+    await requestJson('/api/watermark/turnstile/verify', {
       method: 'POST',
       body: {
         token: value,

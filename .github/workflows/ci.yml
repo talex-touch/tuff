@@ -1,12 +1,17 @@
 name: CI
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - main
+      - master
 
 permissions:
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   job1:
@@ -18,7 +23,7 @@ jobs:
     steps:
 
       - name: Check Not Allowed File Changes
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v4
         id: filter_not_allowed
         with:
           list-files: json
@@ -28,36 +33,16 @@ jobs:
               - 'yarn.lock'
               - 'pnpm-lock.yaml'
 
-      # ref: https://github.com/github/docs/blob/main/.github/workflows/triage-unallowed-contributions.yml
-      - name: Comment About Changes We Can't Accept
+      - name: Fail on lockfile changes
         if: ${{ steps.filter_not_allowed.outputs.change == 'true' }}
-        uses: actions/github-script@v6
-        with:
-          script: |
-            let workflowFailMessage = "It looks like you've modified some files that we can't accept as contributions."
-            try {
-              const badFilesArr = [
-                'package-lock.json',
-                'yarn.lock',
-                'pnpm-lock.yaml',
-              ]
-              const badFiles = badFilesArr.join('\n- ')
-              const reviewMessage = `👋 Hey there spelunker. It looks like you've modified some files that we can't accept as contributions. The complete list of files we can't accept are:\n- ${badFiles}\n\nYou'll need to revert all of the files you changed in that list using [GitHub Desktop](https://docs.github.com/en/free-pro-team@latest/desktop/contributing-and-collaborating-using-github-desktop/managing-commits/reverting-a-commit) or \`git checkout origin/main <file name>\`. Once you get those files reverted, we can continue with the review process. :octocat:\n\nMore discussion:\n- https://github.com/electron-vite/electron-vite-vue/issues/192`
-              createdComment = await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.number,
-                body: reviewMessage,
-              })
-              workflowFailMessage = `${workflowFailMessage} Please see ${createdComment.data.html_url} for details.`
-            } catch(err) {
-              console.log("Error creating comment.", err)
-            }
-            core.setFailed(workflowFailMessage)
+        run: |
+          echo "Lockfile changes are not accepted in this PR workflow:"
+          echo '${{ steps.filter_not_allowed.outputs.change_files }}'
+          exit 1
 
       - name: Check Not Linted Markdown
         if: ${{ always() }}
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v4
         id: filter_markdown
         with:
           list-files: shell
@@ -72,30 +57,26 @@ jobs:
     if: ${{ always() && needs.job1.outputs.markdown_change == 'true' }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+        uses: actions/checkout@v6
 
       - name: Lint markdown
         run: npx markdownlint-cli ${{ needs.job1.outputs.markdown_files }} --ignore node_modules
 
-  job_typecheck:
-    name: Typecheck
+  job_quality_pr:
+    name: PR Quality
     runs-on: ubuntu-latest
     needs: job1
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
+        uses: actions/checkout@v6
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v6
         with:
-          version: 9
+          version: 10.32.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 22.16.0
           cache: pnpm
@@ -103,10 +84,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run typecheck
-        run: pnpm typecheck
-
-      - name: Run docs governance guard (report only)
-        if: ${{ always() }}
-        continue-on-error: true
-        run: pnpm docs:guard
+      - name: Run PR quality gate
+        run: pnpm quality:pr

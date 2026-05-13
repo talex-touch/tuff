@@ -3,12 +3,17 @@ import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-consta
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ScannedFileInfo } from './types'
 import path from 'node:path'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   isIndexableFile as globalIsIndexableFile,
   scanDirectory as globalScanDirectory
 } from '@talex-touch/utils/common/file-scan-utils'
 import { WHITELISTED_EXTENSIONS } from './constants'
-import { THUMBNAIL_EXTENSIONS, normalizeExtension } from './thumbnail-config'
+import {
+  THUMBNAIL_EXTENSIONS,
+  VIDEO_THUMBNAIL_EXTENSIONS,
+  normalizeExtension
+} from './thumbnail-config'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -66,28 +71,26 @@ export function mapFileToTuffItem(
     // Use pre-generated thumbnail for fast display
     icon = {
       type: 'url',
-      value: _extensions.thumbnail
+      value: _extensions.thumbnail.startsWith('data:')
+        ? _extensions.thumbnail
+        : toTfileUrl(_extensions.thumbnail)
     }
-  } else if (
-    DIRECT_IMAGE_EXTENSIONS.has(extension) &&
-    THUMBNAIL_EXTENSIONS.has(extension) &&
-    onMissingThumbnail
-  ) {
+  } else if (THUMBNAIL_EXTENSIONS.has(extension) && onMissingThumbnail) {
     // Prefer placeholder until thumbnail is ready to avoid blocking IO
     onMissingThumbnail?.(file)
     icon = {
       type: 'class',
-      value: 'i-ri-image-line'
+      value: VIDEO_THUMBNAIL_EXTENSIONS.has(extension) ? 'i-ri-video-line' : 'i-ri-image-line'
     }
   } else if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
     icon = {
       type: 'file',
       value: file.path
     }
-  } else if (_extensions.icon) {
+  } else if (_extensions.icon && !_extensions.icon.startsWith('data:')) {
     icon = {
       type: 'url',
-      value: _extensions.icon
+      value: toTfileUrl(_extensions.icon)
     }
   } else {
     // Trigger lazy load if callback provided

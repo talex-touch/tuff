@@ -1,5 +1,9 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { createSubscriptionOrder } from '../../utils/pilot-compat-payment'
+import {
+  createSubscriptionOrder,
+  getPaymentProviderUnavailablePayload,
+  PAYMENT_PROVIDER_UNAVAILABLE,
+} from '../../utils/pilot-payment-service'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 export default defineEventHandler(async (event) => {
@@ -11,13 +15,21 @@ export default defineEventHandler(async (event) => {
     return quotaError(400, 'type and time are required', null)
   }
 
-  const data = await createSubscriptionOrder(event, {
-    userId: auth.userId,
-    type,
-    time,
-    couponCode: String(body?.couponCode || ''),
-    paymentMethod: Number(body?.payMethod || 2),
-  })
+  try {
+    const data = await createSubscriptionOrder(event, {
+      userId: auth.userId,
+      type,
+      time,
+      couponCode: String(body?.couponCode || ''),
+      paymentMethod: Number(body?.payMethod || 2),
+    })
 
-  return quotaOk(data)
+    return quotaOk(data)
+  }
+  catch (error) {
+    if (error instanceof Error && error.message === PAYMENT_PROVIDER_UNAVAILABLE) {
+      return quotaError(503, PAYMENT_PROVIDER_UNAVAILABLE, getPaymentProviderUnavailablePayload())
+    }
+    throw error
+  }
 })

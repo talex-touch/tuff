@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useTypedFetch } from '~/utils/request'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -13,7 +14,7 @@ interface ComponentSyncRow {
 
 const { locale } = useI18n()
 
-const { data: componentDocs, pending, error } = await useFetch<ComponentSyncRow[]>(
+const { data: componentDocs, pending, error } = await useTypedFetch<ComponentSyncRow[]>(
   '/api/docs/component-sync',
   { key: 'docs-components-sync' },
 )

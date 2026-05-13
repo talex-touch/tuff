@@ -14,9 +14,9 @@ import {
   buildPilotCompletionExecutorBody,
   buildPilotCompletionStreamRequestPayload,
   shouldDropPilotCompletionStreamEvent,
-} from './legacy-stream-contract'
-import { resolvePilotUiStreamInput } from './legacy-stream-input'
-import { handlePilotCompletionExecutorResult } from './legacy-stream-sse'
+} from './pilot-stream-contract'
+import { resolvePilotUiStreamInput } from './pilot-stream-input'
+import { handlePilotCompletionExecutorResult } from './pilot-stream-sse'
 
 function parseJsonSafe<T>(value: string): T | null {
   try {

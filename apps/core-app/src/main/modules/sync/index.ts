@@ -13,12 +13,12 @@ import { CloudSyncError, CloudSyncSDK, StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import {
   getConfig as getMainStorageConfig,
   getMainConfig,
@@ -66,8 +66,6 @@ const STARTUP_PULL_TIMEOUT_MS = 8_000
 const NORMAL_PULL_TIMEOUT_MS = 20_000
 const RETRY_BACKOFF_MS = [5_000, 30_000, 120_000, 300_000, 600_000] as const
 
-const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
-
 const SYNC_STORAGE_KEYS = [
   StorageList.APP_SETTING,
   StorageList.OPENERS,
@@ -99,6 +97,7 @@ const lastSyncedSnapshots = new Map<string, unknown>()
 
 let started = false
 let sdk: CloudSyncSDK | null = null
+let sdkBaseUrl = ''
 let pullPromise: Promise<boolean> | null = null
 let pushPromise: Promise<boolean> | null = null
 let pushTimer: ReturnType<typeof setTimeout> | null = null
@@ -351,9 +350,7 @@ function markSyncError(payload: {
 }
 
 function resolveAuthBaseUrl(): string {
-  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
-  const localAuth = isDevEnv() && appSettings?.dev && appSettings.dev.authServer === 'local'
-  return localAuth ? LOCAL_AUTH_BASE_URL : getTuffBaseUrl()
+  return getRuntimeNexusBaseUrl()
 }
 
 async function resolveAuthToken(): Promise<string | null> {
@@ -365,12 +362,14 @@ async function resolveDeviceId(): Promise<string | null> {
 }
 
 function resolveSdk(): CloudSyncSDK {
-  if (sdk) {
+  const baseUrl = resolveAuthBaseUrl()
+  if (sdk && sdkBaseUrl === baseUrl) {
     return sdk
   }
 
+  sdkBaseUrl = baseUrl
   sdk = new CloudSyncSDK({
-    baseUrl: resolveAuthBaseUrl(),
+    baseUrl,
     getAuthToken: async () => {
       const token = await resolveAuthToken()
       if (!token) {
@@ -1621,6 +1620,17 @@ function stopAutoSync(reason = 'stop'): void {
 }
 
 function handleSyncEnabledChange(next: AppSetting): void {
+  const nextBaseUrl = getRuntimeNexusBaseUrl()
+  const baseChanged = Boolean(sdkBaseUrl && sdkBaseUrl !== nextBaseUrl)
+  if (baseChanged) {
+    sdk = null
+    sdkBaseUrl = ''
+    syncPayloadKeyRegistrationPromise = null
+    if (started) {
+      stopAutoSync('server-changed')
+    }
+  }
+
   const enabled = Boolean(next?.sync?.enabled)
   if (enabled && !started) {
     void startAutoSync()

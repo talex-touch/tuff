@@ -11,6 +11,10 @@ asarUnpack:
   - '**/*.dylib'
   - '**/*.dll'
   - '**/*.so'
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+  - '**/node_modules/ffmpeg-static/**'
+  - '**/node_modules/ffprobe-static/**'
 directories:
   app: .
   buildResources: build
@@ -78,6 +82,7 @@ nsis:
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
+    LSUIElement: true
     NSCameraUsageDescription: Application requests access to the device's camera.
     NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.

@@ -54,15 +54,8 @@ export class TrayIconProvider {
     return resized
   }
 
-  static getIcon(): Electron.NativeImage {
+  private static getResourceTrayIcon(): Electron.NativeImage {
     const iconNames = this.getPreferredTrayIconNames()
-
-    if (process.platform === 'darwin') {
-      const builtIn = this.createBuiltInMacTrayIcon()
-      if (!builtIn.isEmpty()) {
-        return builtIn
-      }
-    }
 
     for (const iconName of iconNames) {
       const iconPath = this.resolveResourcePath(iconName)
@@ -81,6 +74,22 @@ export class TrayIconProvider {
       }
 
       return image
+    }
+
+    return nativeImage.createEmpty()
+  }
+
+  static getIcon(): Electron.NativeImage {
+    const resourceIcon = this.getResourceTrayIcon()
+    if (!resourceIcon.isEmpty()) {
+      return resourceIcon
+    }
+
+    if (process.platform === 'darwin') {
+      const builtIn = this.createBuiltInMacTrayIcon()
+      if (!builtIn.isEmpty()) {
+        return builtIn
+      }
     }
 
     return nativeImage.createEmpty()

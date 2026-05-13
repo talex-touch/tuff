@@ -188,7 +188,14 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   let disposed = false
 
   const emitInput = (payload: any) => {
-    const input = payload?.input || payload?.query?.text || payload || ''
+    const input =
+      typeof payload?.input === 'string'
+        ? payload.input
+        : typeof payload?.query?.text === 'string'
+          ? payload.query.text
+          : typeof payload === 'string'
+            ? payload
+            : ''
     for (const handler of inputChangeHandlers) {
       try {
         handler(input)

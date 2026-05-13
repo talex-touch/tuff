@@ -12,7 +12,6 @@ import type { ModuleInitContext } from 'packages/utils/types/modules'
 import type { TouchApp } from '../../../core/touch-app'
 import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
-import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import {
@@ -43,6 +42,10 @@ import { getMainConfig, storageModule, subscribeMainConfig } from '../../storage
 import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import {
+  linuxNativeFileProvider,
+  macSpotlightFileProvider
+} from '../addon/files/native-file-search-provider'
 import { previewProvider } from '../addon/preview'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
@@ -61,6 +64,22 @@ import { TimeStatsAggregator } from './time-stats-aggregator'
 import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
+import {
+  buildProviderSummary,
+  buildProviderTelemetry,
+  buildSearchCacheKey,
+  getActivationKey,
+  isExplicitEverythingProviderFilter,
+  isExplicitFileCategoryFilter,
+  isExplicitFileProviderFilter,
+  matchesProviderFilter,
+  parseProviderFilter,
+  roundDuration,
+  resolveProviderCategory,
+  resolveSearchScene,
+  toQueryHash
+} from './search-core-utils'
+import type { ExtendedProviderStatus, SearchTraceSourceStat } from './search-core-utils'
 
 interface SearchCacheEntry {
   result: TuffSearchResult
@@ -87,59 +106,12 @@ const coreBoxIsPinnedEvent = defineRawEvent<
   { success: boolean; isPinned: boolean }
 >('core-box:is-pinned')
 
-/**
- * Provider filter aliases for @xxx syntax
- */
-const PROVIDER_ALIASES: Record<string, string[]> = {
-  file: [
-    'file-provider',
-    'file-index',
-    'files',
-    'fs',
-    'document',
-    'everything-provider',
-    'everything'
-  ],
-  app: ['app-provider', 'applications', 'apps'],
-  plugin: ['plugin-features', 'plugins', 'extension', 'extensions'],
-  preview: ['preview-provider']
-}
-
-const PROVIDER_CATEGORY_MAP: Record<string, string> = {
-  'app-provider': 'app',
-  'file-provider': 'file',
-  'everything-provider': 'file',
-  'plugin-features': 'plugin',
-  'preview-provider': 'preview'
-}
-
-const EVERYTHING_PROVIDER_FILTERS = new Set(['everything', 'everything-provider'])
-const FILE_PROVIDER_FILTERS = new Set(['file-provider', 'file-index'])
-const FILE_CATEGORY_FILTERS = new Set(['file', 'files', 'fs', 'document'])
-
 const PROVIDER_REFRACTORY_THRESHOLD = 2
 const PROVIDER_REFRACTORY_BASE_MS = 30_000
 const PROVIDER_REFRACTORY_MAX_MS = 5 * 60 * 1000
 const PROVIDER_HEALTH_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_JITTER_MS = 10 * 60 * 1000
-
-function resolveProviderCategory(providerId: string): string {
-  if (PROVIDER_CATEGORY_MAP[providerId]) return PROVIDER_CATEGORY_MAP[providerId]
-  if (providerId.includes('file')) return 'file'
-  if (providerId.includes('app')) return 'app'
-  if (providerId.includes('plugin')) return 'plugin'
-  return 'other'
-}
-
-/**
- * Parsed query with optional provider filter
- */
-interface ParsedSearchQuery {
-  raw: string
-  text: string
-  providerFilter?: string
-}
 
 interface SearchPipelineStageDurations {
   parseDuration: number
@@ -150,22 +122,6 @@ interface SearchPipelineStageDurations {
 interface QueryOrchestrationResult {
   providerFilter?: string
   cacheKey: string
-}
-
-type ExtendedProviderStatus = 'success' | 'timeout' | 'error' | 'aborted'
-
-type SearchTraceSourceStat = {
-  providerId?: string
-  provider?: string
-  status?: ExtendedProviderStatus
-  duration?: number
-  resultCount?: number
-}
-
-interface SearchTraceProviderSummary {
-  total: number
-  byStatus: Partial<Record<ExtendedProviderStatus, number>>
-  topSlow: Array<{ providerId: string; durationMs: number; status: string; resultCount: number }>
 }
 
 interface SearchFirstResultMetrics {
@@ -187,201 +143,6 @@ interface ProviderHealth {
   lastFailureAt?: number
   lastSuccessAt?: number
   blockedUntil?: number
-}
-
-/**
- * Parse search query for @xxx provider filter syntax
- */
-function parseProviderFilter(input: string): ParsedSearchQuery {
-  if (!input) return { raw: input, text: input }
-
-  const filterMatch = input.match(/^@([\w-]+)\s*(.*)$/)
-  if (filterMatch) {
-    return {
-      raw: input,
-      providerFilter: filterMatch[1].toLowerCase(),
-      text: filterMatch[2].trim()
-    }
-  }
-
-  return { raw: input, text: input }
-}
-
-/**
- * Check if a provider matches the filter
- */
-function matchesProviderFilter(providerId: string, filter: string): boolean {
-  const normalizedId = providerId.toLowerCase()
-  const normalizedFilter = filter.toLowerCase()
-
-  // Exact match
-  if (normalizedId === normalizedFilter) return true
-
-  // Partial match
-  if (normalizedId.includes(normalizedFilter)) return true
-
-  // Alias match
-  const aliases = PROVIDER_ALIASES[normalizedFilter]
-  if (aliases?.some((alias) => normalizedId.includes(alias))) return true
-
-  return false
-}
-
-function isExplicitEverythingProviderFilter(filter?: string): boolean {
-  return typeof filter === 'string' && EVERYTHING_PROVIDER_FILTERS.has(filter.toLowerCase())
-}
-
-function isExplicitFileProviderFilter(filter?: string): boolean {
-  return typeof filter === 'string' && FILE_PROVIDER_FILTERS.has(filter.toLowerCase())
-}
-
-function isExplicitFileCategoryFilter(filter?: string): boolean {
-  return typeof filter === 'string' && FILE_CATEGORY_FILTERS.has(filter.toLowerCase())
-}
-
-/**
- * Generates a unique key for an activation request.
- * For the plugin adapter, it combines the provider ID with the plugin name
- * to ensure that each plugin's activation is unique.
- * @param activation The activation object.
- * @returns A unique string key.
- */
-function getActivationKey(activation: IProviderActivate): string {
-  if (activation.id === 'plugin-features' && activation.meta?.pluginName) {
-    return `${activation.id}:${activation.meta.pluginName}`
-  }
-  return activation.id
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`
-  }
-  const record = value as Record<string, unknown>
-  return `{${Object.keys(record)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
-    .join(',')}}`
-}
-
-function hashCachePart(value: unknown): string {
-  return crypto.createHash('sha1').update(stableStringify(value)).digest('hex').slice(0, 16)
-}
-
-function buildSearchCacheKey(
-  query: TuffQuery,
-  providerFilter: string | undefined,
-  activatedProviders: Map<string, IProviderActivate> | null
-): string {
-  const rawQuery = query as unknown as Record<string, unknown>
-  const queryExtras: Record<string, unknown> = {}
-  for (const key of Object.keys(rawQuery).sort()) {
-    if (key === 'text' || key === 'inputs') {
-      continue
-    }
-    queryExtras[key] = rawQuery[key]
-  }
-
-  const inputs = (query.inputs ?? []).map((input) => {
-    const rawInput = input as unknown as Record<string, unknown>
-    return {
-      type: input.type,
-      contentHash: hashCachePart(rawInput.content ?? ''),
-      metaHash: hashCachePart(
-        Object.fromEntries(Object.entries(rawInput).filter(([key]) => key !== 'content'))
-      )
-    }
-  })
-
-  return hashCachePart({
-    text: query.text || '',
-    providerFilter: providerFilter || '',
-    activatedProviders: activatedProviders ? Array.from(activatedProviders.keys()).sort() : [],
-    inputs,
-    extras: queryExtras
-  })
-}
-
-function roundDuration(value: number | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined
-  }
-  return Math.max(0, Math.round(value))
-}
-
-function toQueryHash(text: string): string {
-  return crypto.createHash('sha1').update(text).digest('hex').slice(0, 12)
-}
-
-function buildProviderSummary(sourceStats: SearchTraceSourceStat[]): SearchTraceProviderSummary {
-  const byStatus: Partial<Record<ExtendedProviderStatus, number>> = {}
-  for (const stat of sourceStats) {
-    const status = stat.status ?? 'success'
-    byStatus[status] = (byStatus[status] ?? 0) + 1
-  }
-
-  const topSlow = sourceStats
-    .map((stat) => ({
-      providerId: stat.providerId || stat.provider || 'unknown',
-      durationMs: roundDuration(stat.duration) ?? 0,
-      status: stat.status ?? 'success',
-      resultCount: typeof stat.resultCount === 'number' ? stat.resultCount : 0
-    }))
-    .sort((a, b) => b.durationMs - a.durationMs)
-    .slice(0, 3)
-
-  return {
-    total: sourceStats.length,
-    byStatus,
-    topSlow
-  }
-}
-
-function resolveSearchScene(query: TuffQuery, inputTypes: string[]): string {
-  return inputTypes.includes('files')
-    ? 'clipboard-files'
-    : inputTypes.includes('image')
-      ? 'clipboard-image'
-      : inputTypes.includes('html')
-        ? 'clipboard-html'
-        : query.type === 'voice'
-          ? 'voice'
-          : 'text'
-}
-
-function buildProviderTelemetry(sourceStats: SearchTraceSourceStat[]): {
-  providerTimings: Record<string, number>
-  providerResults: Record<string, number>
-  providerStatus: Record<string, ExtendedProviderStatus>
-  providerErrorCount: number
-  providerTimeoutCount: number
-} {
-  const providerTimings: Record<string, number> = {}
-  const providerResults: Record<string, number> = {}
-  const providerStatus: Record<string, ExtendedProviderStatus> = {}
-  let providerErrorCount = 0
-  let providerTimeoutCount = 0
-
-  for (const stat of sourceStats) {
-    const providerId = stat.providerId || stat.provider || 'unknown'
-    const status = stat.status ?? 'success'
-    providerResults[providerId] = stat.resultCount || 0
-    providerTimings[providerId] = stat.duration || 0
-    providerStatus[providerId] = status
-    if (status === 'error') providerErrorCount += 1
-    if (status === 'timeout') providerTimeoutCount += 1
-  }
-
-  return {
-    providerTimings,
-    providerResults,
-    providerStatus,
-    providerErrorCount,
-    providerTimeoutCount
-  }
 }
 
 export class SearchEngineCore
@@ -473,11 +234,14 @@ export class SearchEngineCore
     this.registerProvider(systemActionsProvider)
     this.registerProvider(appProvider)
 
-    // Windows: Use Everything for fast file search, fallback to file-provider for indexing
-    // macOS/Linux: Use file-provider with full indexing
+    // Native providers provide fast first-frame candidates; file-provider remains the index/enrichment layer.
     if (process.platform === 'win32') {
       this.registerProvider(windowsShellFileProvider)
       this.registerProvider(everythingProvider)
+    } else if (process.platform === 'darwin') {
+      this.registerProvider(macSpotlightFileProvider)
+    } else if (process.platform === 'linux') {
+      this.registerProvider(linuxNativeFileProvider)
     }
     this.registerProvider(fileProvider)
 
@@ -1098,13 +862,15 @@ export class SearchEngineCore
     query,
     items,
     signal,
-    includeCompletion
+    includeCompletion,
+    enrichmentMode = 'full'
   }: {
     sessionId: string
     query: TuffQuery
     items: TuffItem[]
     signal: AbortSignal
     includeCompletion: boolean
+    enrichmentMode?: 'base' | 'full'
   }): Promise<{
     sortedItems: TuffItem[]
     sortingDuration: number
@@ -1116,14 +882,15 @@ export class SearchEngineCore
     const mergeRankContext = enterPerfContext('Search.pipeline.merge-rank', {
       sessionId,
       itemCount: items.length,
-      includeCompletion
+      includeCompletion,
+      enrichmentMode
     })
 
     try {
       let usageStatsDuration = 0
       let completionDuration = 0
 
-      if (includeCompletion) {
+      if (enrichmentMode === 'full' && includeCompletion) {
         const usageStatsStartedAt = performance.now()
         const usageStatsContext = enterPerfContext('Search.usageStats', {
           sessionId,
@@ -1158,7 +925,7 @@ export class SearchEngineCore
         }
 
         await Promise.all([usageStatsPromise, pinnedPromise, completionPromise])
-      } else {
+      } else if (enrichmentMode === 'full') {
         const usageStatsStartedAt = performance.now()
         const usageStatsContext = enterPerfContext('Search.usageStats', {
           sessionId,
@@ -1176,10 +943,15 @@ export class SearchEngineCore
         pinnedContext()
       }
 
-      const sortingContext = enterPerfContext('Search.sort', {
-        sessionId,
-        itemCount: items.length
-      })
+      const sortingContext = enterPerfContext(
+        'Search.sort',
+        {
+          sessionId,
+          itemCount: items.length,
+          enrichmentMode
+        },
+        { mode: 'blocking' }
+      )
       const sortingStartedAt = performance.now()
       let sortedItems: TuffItem[] = []
       try {
@@ -1199,6 +971,39 @@ export class SearchEngineCore
     } finally {
       mergeRankContext()
     }
+  }
+
+  private enrichAndPushSearchItems(
+    sessionId: string,
+    query: TuffQuery,
+    items: TuffItem[],
+    signal: AbortSignal,
+    sendUpdateToFrontend: (itemsToSend: TuffItem[]) => void
+  ): void {
+    if (items.length === 0 || signal.aborted) {
+      return
+    }
+
+    void this.mergeAndRankItems({
+      sessionId,
+      query,
+      items,
+      signal,
+      includeCompletion: true,
+      enrichmentMode: 'full'
+    })
+      .then(({ sortedItems }) => {
+        if (signal.aborted || this.latestSessionId !== sessionId) {
+          return
+        }
+        sendUpdateToFrontend(sortedItems)
+      })
+      .catch((error) => {
+        searchEngineLog.debug('Search enrichment skipped', {
+          error,
+          meta: { sessionId, itemCount: items.length }
+        })
+      })
   }
 
   async search(query: TuffQuery): Promise<TuffSearchResult> {
@@ -1534,7 +1339,8 @@ export class SearchEngineCore
                   query,
                   items: initialItems,
                   signal: gatherController!.signal,
-                  includeCompletion: true
+                  includeCompletion: false,
+                  enrichmentMode: 'base'
                 })
                 pipelineDurations.mergeRankDuration = mergeRankDuration
                 const sortedItems = this.appendCompatibilityNotice(
@@ -1566,6 +1372,13 @@ export class SearchEngineCore
                 this._recordSearchResults(sessionId, sortedItems).catch((error) => {
                   searchEngineLog.error('Failed to record search results', { error })
                 })
+                this.enrichAndPushSearchItems(
+                  sessionId,
+                  query,
+                  sortedItems,
+                  gatherController!.signal,
+                  sendUpdateToFrontend
+                )
                 this.logSearchTrace({
                   event: 'first.result',
                   sessionId,
@@ -1682,7 +1495,8 @@ export class SearchEngineCore
               query,
               items: initialItems,
               signal: gatherController!.signal,
-              includeCompletion: true
+              includeCompletion: false,
+              enrichmentMode: 'base'
             })
             pipelineDurations.mergeRankDuration = mergeRankDuration
             const sortedItems = this.appendCompatibilityNotice(
@@ -1715,6 +1529,13 @@ export class SearchEngineCore
             this._recordSearchResults(sessionId, sortedItems).catch((error) => {
               searchEngineLog.error('Failed to record search results', { error })
             })
+            this.enrichAndPushSearchItems(
+              sessionId,
+              query,
+              sortedItems,
+              gatherController!.signal,
+              sendUpdateToFrontend
+            )
             this.logSearchTrace({
               event: 'first.result',
               sessionId,
@@ -1758,10 +1579,18 @@ export class SearchEngineCore
               query,
               items: subsequentItems,
               signal: gatherController!.signal,
-              includeCompletion: false
+              includeCompletion: false,
+              enrichmentMode: 'base'
             })
             this._updateActivationState(update.newResults)
             sendUpdateToFrontend(sortedItems)
+            this.enrichAndPushSearchItems(
+              sessionId,
+              query,
+              sortedItems,
+              gatherController!.signal,
+              sendUpdateToFrontend
+            )
           }
         } catch (error) {
           finalizeWithError(error)

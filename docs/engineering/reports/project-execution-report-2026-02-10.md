@@ -145,7 +145,7 @@
 | `docs/plan-prd/` | PRD 文档中心 (README + TODO + 各功能 PRD) | ~35 |
 | `docs/plan-prd/05-archive/` | 已完成 PRD 归档 | 12 |
 | `docs/engineering/` | 工程报告 + 审计 + 标准 | ~15 |
-| `plan/` | 时间戳计划文件 | ~25 |
+| `docs/engineering/plans/` | 时间戳计划文件 | ~25 |
 | `apps/core-app/plan/` | 核心应用计划 | ~5 |
 
 ---
@@ -162,7 +162,7 @@
 
 4. **i18n key 清理**: 410 个候选 key 应安排清理，避免国际化包体积膨胀
 5. **TuffEx 构建**: 尽快跑通 `pnpm -C packages/tuffex build`，解除组件库阻塞
-6. **plan/ 目录索引**: 25+ 时间戳文件缺少索引，建议生成目录摘要
+6. **工程 plans 目录索引**: 25+ 时间戳文件缺少索引，建议生成目录摘要
 
 ### 长期建议
 

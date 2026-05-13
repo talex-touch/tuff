@@ -453,6 +453,7 @@ export class NotificationModule extends BaseModule {
 
   private showSystemNotification(request: NotificationRequest): void {
     const id = request.id ?? randomUUID()
+    this.dismissSystemNotification(id)
     this.systemRequests.set(id, request)
     if (!Notification.isSupported()) return
     const actions: SystemNotificationAction[] =

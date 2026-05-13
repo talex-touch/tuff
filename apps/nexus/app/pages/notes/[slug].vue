@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed } from 'vue'
 
 interface LocalizedText {
@@ -50,7 +51,7 @@ function resolveLocalizedText(content: LocalizedText | null | undefined): string
 
 const { data, pending, error } = await useAsyncData(
   () => `release-note-${slug.value}`,
-  () => $fetch<ReleaseNoteResponse>(`/api/notes/${encodeURIComponent(slug.value)}`),
+  () => rawFetch<ReleaseNoteResponse>(`/api/notes/${encodeURIComponent(slug.value)}`),
   {
     watch: [slug],
   },

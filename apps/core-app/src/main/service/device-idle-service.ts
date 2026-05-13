@@ -20,6 +20,7 @@ import {
 
 const execFileAsync = promisify(execFile)
 const deviceIdleLog = getLogger('device-idle-service')
+const BATTERY_STATUS_CACHE_TTL_MS = 30_000
 
 export interface DeviceIdleSettings extends BatteryPolicy {
   idleThresholdMs: number
@@ -64,6 +65,12 @@ export class DeviceIdleService {
   private settingsLoaded = false
   private storageReadyHooked = false
   private unsubscribeSettings: (() => void) | null = null
+  private batteryStatusCache: {
+    value: DeviceBatteryStatus | null
+    capturedAt: number
+    onBattery: boolean
+  } | null = null
+  private batteryStatusPending: Promise<DeviceBatteryStatus | null> | null = null
 
   private constructor() {
     this.ensureSettingsLoaded()
@@ -109,7 +116,7 @@ export class DeviceIdleService {
 
   async canRun(overrides?: Partial<DeviceIdlePolicy>): Promise<DeviceIdleDecision> {
     const policy = this.resolvePolicy(overrides)
-    const snapshot = await this.getSnapshot()
+    const idleMs = this.getSystemIdleMs()
     const now = Date.now()
     const forceAfterMs = policy.forceAfterMs ?? 0
     const forced =
@@ -118,9 +125,15 @@ export class DeviceIdleService {
       now - policy.lastRunAt >= forceAfterMs
 
     if (!forced) {
-      if (snapshot.idleMs !== null && snapshot.idleMs < policy.idleThresholdMs) {
+      if (idleMs !== null && idleMs < policy.idleThresholdMs) {
+        const snapshot = { idleMs, battery: null }
         return { allowed: false, reason: 'not-idle', snapshot }
       }
+    }
+
+    const snapshot = {
+      idleMs,
+      battery: await this.getBatteryStatus()
     }
 
     const batteryDecision = evaluateBatteryPolicy(snapshot.battery, policy)
@@ -143,24 +156,46 @@ export class DeviceIdleService {
   }
 
   async getBatteryStatus(): Promise<DeviceBatteryStatus | null> {
+    const now = Date.now()
+    const onBattery = this.safeIsOnBatteryPower()
+    if (
+      this.batteryStatusCache &&
+      this.batteryStatusCache.onBattery === onBattery &&
+      now - this.batteryStatusCache.capturedAt < BATTERY_STATUS_CACHE_TTL_MS
+    ) {
+      return this.batteryStatusCache.value
+    }
+
+    if (this.batteryStatusPending) {
+      return this.batteryStatusPending
+    }
+
+    this.batteryStatusPending = this.readBatteryStatus(onBattery).finally(() => {
+      this.batteryStatusPending = null
+    })
+
+    return this.batteryStatusPending
+  }
+
+  private async readBatteryStatus(onBattery: boolean): Promise<DeviceBatteryStatus | null> {
     try {
-      const onBattery = this.safeIsOnBatteryPower()
       const percent = await this.getBatteryPercent()
       if (percent !== null) {
-        return {
+        return this.rememberBatteryStatus({
           level: percent,
           charging: !onBattery,
           onBattery
-        }
+        })
       }
 
       if (onBattery) {
-        return { level: 0, charging: false, onBattery: true }
+        return this.rememberBatteryStatus({ level: 0, charging: false, onBattery: true })
       }
 
-      return { level: 100, charging: true, onBattery: false }
+      return this.rememberBatteryStatus({ level: 100, charging: true, onBattery: false })
     } catch (error) {
       deviceIdleLog.error('Failed to read battery status', { error })
+      this.batteryStatusCache = { value: null, capturedAt: Date.now(), onBattery }
       return null
     }
   }
@@ -171,6 +206,11 @@ export class DeviceIdleService {
 
   isOnBatteryPower(): boolean {
     return this.safeIsOnBatteryPower()
+  }
+
+  private rememberBatteryStatus(value: DeviceBatteryStatus): DeviceBatteryStatus {
+    this.batteryStatusCache = { value, capturedAt: Date.now(), onBattery: value.onBattery }
+    return value
   }
 
   private safeIsOnBatteryPower(): boolean {

@@ -1,5 +1,6 @@
 import type { ITuffTransport } from '../../types'
 import { AppEvents } from '../../events'
+import type { SecureStoreHealthResponse } from '../../events/types/app'
 
 export interface AppSdk {
   close: () => Promise<void>
@@ -14,6 +15,7 @@ export interface AppSdk {
   getPath: (name: string) => Promise<string | null>
   getSecureValue: (key: string) => Promise<string | null>
   setSecureValue: (key: string, value: string | null) => Promise<void>
+  getSecureStoreHealth: () => Promise<SecureStoreHealthResponse>
 
   openExternal: (url: string) => Promise<void>
   showInFolder: (path: string) => Promise<void>
@@ -37,6 +39,7 @@ export function createAppSdk(transport: ITuffTransport): AppSdk {
     getPath: name => transport.send(AppEvents.system.getPath, { name }),
     getSecureValue: key => transport.send(AppEvents.system.getSecureValue, { key }),
     setSecureValue: (key, value) => transport.send(AppEvents.system.setSecureValue, { key, value }),
+    getSecureStoreHealth: () => transport.send(AppEvents.system.getSecureStoreHealth),
 
     openExternal: url => transport.send(AppEvents.system.openExternal, { url }),
     showInFolder: path => transport.send(AppEvents.system.showInFolder, { path }),

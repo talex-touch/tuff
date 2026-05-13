@@ -7,7 +7,7 @@
 <script setup lang="ts" name="SettingAbout">
 import type { AnalyticsSnapshot } from '@talex-touch/utils/analytics'
 import { AppPreviewChannel } from '@talex-touch/utils'
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -49,8 +49,8 @@ interface StartupPerformanceSummary {
 const analyticsSnapshot = ref<AnalyticsSnapshot | null>(null)
 const showPerformanceDetails = ref(false)
 const updateChannel = ref<AppPreviewChannel | null>(null)
-const termsOfServiceUrl = `${getTuffBaseUrl()}/license`
-const softwareLicenseUrl = `${getTuffBaseUrl()}/protocol`
+const termsOfServiceUrl = `${NEXUS_BASE_URL}/license`
+const softwareLicenseUrl = `${NEXUS_BASE_URL}/protocol`
 const runtimeVersions = computed(() => {
   const info = processInfo.value as
     | { versions?: { electron?: string; v8?: string; chrome?: string; node?: string } }

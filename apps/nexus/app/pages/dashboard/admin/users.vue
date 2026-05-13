@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import type { DataTableColumn } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -81,12 +83,6 @@ const roleOptions = computed(() => ([
   { value: 'user', label: t('dashboard.sections.users.filters.roleUser', 'User') },
 ]))
 
-const statusStyles: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  disabled: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-  merged: 'bg-black/[0.06] text-black/60 dark:bg-white/[0.08] dark:text-white/60',
-}
-
 const statusLabels: Record<string, string> = {
   active: t('dashboard.sections.users.status.active', 'Active'),
   disabled: t('dashboard.sections.users.status.disabled', 'Disabled'),
@@ -98,6 +94,15 @@ const emailStateLabels: Record<string, string> = {
   unverified: t('dashboard.sections.users.emailState.unverified', 'Unverified'),
   missing: t('dashboard.sections.users.emailState.missing', 'Missing'),
 }
+
+const userColumns = computed<DataTableColumn<AdminUser>[]>(() => [
+  { key: 'user', title: t('dashboard.sections.users.table.user', 'User'), width: '28%' },
+  { key: 'role', title: t('dashboard.sections.users.table.role', 'Role'), width: 120 },
+  { key: 'status', title: t('dashboard.sections.users.table.status', 'Status'), width: 140 },
+  { key: 'emailState', title: t('dashboard.sections.users.table.emailState', 'Email'), width: 140 },
+  { key: 'createdAt', title: t('dashboard.sections.users.table.created', 'Created'), width: 140 },
+  { key: 'actions', title: t('dashboard.sections.users.table.actions', 'Actions'), width: 190 },
+])
 
 function buildQuery() {
   const query: Record<string, string | number> = {
@@ -120,7 +125,7 @@ async function fetchUsers(options: { resetPage?: boolean } = {}) {
   loading.value = true
   error.value = null
   try {
-    const res = await $fetch<{ users: AdminUser[], pagination: Pagination }>('/api/admin/users', {
+    const res = await rawFetch<{ users: AdminUser[], pagination: Pagination }>('/api/admin/users', {
       query: buildQuery(),
     })
     users.value = res.users ?? []
@@ -159,7 +164,7 @@ async function updateUserRole(entry: AdminUser) {
   const nextRole = entry.role === 'admin' ? 'user' : 'admin'
   actionPendingId.value = entry.id
   try {
-    const res = await $fetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/role`, {
+    const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/role`, {
       method: 'PATCH',
       body: { role: nextRole },
     })
@@ -182,7 +187,7 @@ async function updateUserStatus(entry: AdminUser) {
   const nextStatus = entry.status === 'active' ? 'disabled' : 'active'
   actionPendingId.value = entry.id
   try {
-    const res = await $fetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/status`, {
+    const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/status`, {
       method: 'PATCH',
       body: { status: nextStatus },
     })
@@ -254,7 +259,7 @@ onMounted(() => {
           <label class="apple-section-title mb-1 block">
             {{ t('dashboard.sections.users.filters.searchLabel', 'Search') }}
           </label>
-          <Input
+          <TuffInput
             v-model="filters.q"
             type="text"
             autocomplete="off"
@@ -320,85 +325,60 @@ onMounted(() => {
       </div>
 
       <div v-else class="overflow-x-auto">
-        <table class="w-full min-w-[760px]">
-          <thead class="bg-black/5 dark:bg-white/[0.04]">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.users.table.user', 'User') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.users.table.role', 'Role') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.users.table.status', 'Status') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.users.table.emailState', 'Email') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.users.table.created', 'Created') }}
-              </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
-                {{ t('dashboard.sections.users.table.actions', 'Actions') }}
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
-            <tr v-for="entry in users" :key="entry.id" class="transition hover:bg-black/[0.04] dark:hover:bg-white/[0.04]">
-              <td class="px-4 py-3">
-                <div class="space-y-1">
-                  <p class="font-medium text-black dark:text-white">
-                    {{ entry.name || '-' }}
-                  </p>
-                  <p class="text-xs text-black/60 dark:text-white/60">
-                    {{ entry.email }}
-                  </p>
-                </div>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/70 dark:text-white/70">
-                {{ entry.role }}
-              </td>
-              <td class="px-4 py-3">
-                <span
-                  class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                  :class="statusStyles[entry.status] || 'bg-black/10 text-black/60 dark:bg-white/[0.08] dark:text-white/60'"
-                >
-                  {{ statusLabels[entry.status] || entry.status }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-sm text-black/70 dark:text-white/70">
-                {{ emailStateLabels[entry.emailState] || entry.emailState }}
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                {{ formatDate(entry.createdAt) }}
-              </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
-                <div class="flex flex-wrap items-center gap-2">
-                  <TxButton
-                    variant="secondary"
-                    size="mini"
-                    :disabled="actionsLocked || entry.status === 'merged' || entry.id === user?.id"
-                    @click="updateUserRole(entry)"
-                  >
-                    {{ entry.role === 'admin'
-                      ? t('dashboard.sections.users.actions.demote', 'Demote')
-                      : t('dashboard.sections.users.actions.promote', 'Promote') }}
-                  </TxButton>
-                  <TxButton
-                    variant="secondary"
-                    size="mini"
-                    :disabled="actionsLocked || entry.status === 'merged' || entry.id === user?.id"
-                    @click="updateUserStatus(entry)"
-                  >
-                    {{ entry.status === 'active'
-                      ? t('dashboard.sections.users.actions.disable', 'Disable')
-                      : t('dashboard.sections.users.actions.enable', 'Enable') }}
-                  </TxButton>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TxDataTable :columns="userColumns" :data="users" row-key="id" class="min-w-[760px]">
+          <template #cell-user="{ row: entry }">
+            <div class="space-y-1">
+              <p class="font-medium text-black dark:text-white">
+                {{ entry.name || '-' }}
+              </p>
+              <p class="text-xs text-black/60 dark:text-white/60">
+                {{ entry.email }}
+              </p>
+            </div>
+          </template>
+          <template #cell-role="{ row: entry }">
+            <span class="text-sm text-black/70 dark:text-white/70">{{ entry.role }}</span>
+          </template>
+          <template #cell-status="{ row: entry }">
+            <TxStatusBadge
+              :text="statusLabels[entry.status] || entry.status"
+              :status="entry.status === 'active' ? 'success' : entry.status === 'disabled' ? 'danger' : 'muted'"
+              size="sm"
+            />
+          </template>
+          <template #cell-emailState="{ row: entry }">
+            <span class="text-sm text-black/70 dark:text-white/70">
+              {{ emailStateLabels[entry.emailState] || entry.emailState }}
+            </span>
+          </template>
+          <template #cell-createdAt="{ row: entry }">
+            <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(entry.createdAt) }}</span>
+          </template>
+          <template #cell-actions="{ row: entry }">
+            <div class="flex flex-wrap items-center gap-2">
+              <TxButton
+                variant="secondary"
+                size="mini"
+                :disabled="actionsLocked || entry.status === 'merged' || entry.id === user?.id"
+                @click="updateUserRole(entry)"
+              >
+                {{ entry.role === 'admin'
+                  ? t('dashboard.sections.users.actions.demote', 'Demote')
+                  : t('dashboard.sections.users.actions.promote', 'Promote') }}
+              </TxButton>
+              <TxButton
+                variant="secondary"
+                size="mini"
+                :disabled="actionsLocked || entry.status === 'merged' || entry.id === user?.id"
+                @click="updateUserStatus(entry)"
+              >
+                {{ entry.status === 'active'
+                  ? t('dashboard.sections.users.actions.disable', 'Disable')
+                  : t('dashboard.sections.users.actions.enable', 'Enable') }}
+              </TxButton>
+            </div>
+          </template>
+        </TxDataTable>
       </div>
 
       <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">

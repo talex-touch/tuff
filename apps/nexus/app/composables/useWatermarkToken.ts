@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { requestJson } from '~/utils/request'
 import { hashString } from '~/utils/watermark'
 import { useWatermarkRisk } from './useWatermarkRisk'
 
@@ -63,7 +64,7 @@ export function useWatermarkToken() {
     state.value.error = null
 
     try {
-      const response = await $fetch<WatermarkTokenResponse>('/api/watermark/issue', {
+      const response = await requestJson<WatermarkTokenResponse>('/api/watermark/issue', {
         method: 'POST',
         body: {
           session_id: state.value.sessionId,

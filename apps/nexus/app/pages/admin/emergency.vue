@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { requestJson } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 definePageMeta({
@@ -57,7 +58,7 @@ function getDeviceFingerprint(): string {
 async function initEmergency() {
   try {
     setWorking('Creating emergency session...')
-    const result = await $fetch<{
+    const result = await requestJson<{
       session_id: string
       webauthn_challenge: string
       expires_at: string
@@ -110,7 +111,7 @@ async function verifyEmergency() {
     }
 
     setWorking('Verifying emergency factors...')
-    const result = await $fetch<{
+    const result = await requestJson<{
       verified: boolean
       admin_id: string
       verify_nonce: string
@@ -146,7 +147,7 @@ async function issueEmergencyToken() {
 
   try {
     setWorking('Issuing emergency token...')
-    const result = await $fetch<{
+    const result = await requestJson<{
       admin_emergency_token: string
       expires_at: string
       scope: EmergencyScope[]
@@ -181,7 +182,7 @@ async function unblockByToken() {
 
   try {
     setWorking('Submitting unblock action...')
-    await $fetch('/api/admin/risk/actor.unblock', {
+    await requestJson('/api/admin/risk/actor.unblock', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${emergencyToken.value.trim()}`,
@@ -284,4 +285,3 @@ async function unblockByToken() {
     </div>
   </div>
 </template>
-

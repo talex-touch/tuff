@@ -31,6 +31,8 @@ export const SCOPE_GUARD_EXEMPT_FILES = new Set([
   'apps/nexus/content.config.ts',
   'apps/nexus/eslint.config.js',
   'apps/nexus/i18n/locales/en.ts',
+  'apps/nexus/i18n/locales/legal/en.ts',
+  'apps/nexus/i18n/locales/legal/zh.ts',
   'apps/nexus/i18n/locales/zh.ts',
   'apps/nexus/i18n.config.ts',
   'apps/nexus/nuxt.config.ts',

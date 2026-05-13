@@ -311,7 +311,7 @@ describe('releaseEvidenceStore', () => {
       caseId: 'docs-guard',
       status: 'passed',
       requiredForRelease: true,
-      evidence: { command: 'pnpm docs:guard' },
+      evidence: { command: 'manual documentation review' },
     })
 
     const matrix = await getReleaseEvidenceMatrix(event, '2.5.0')

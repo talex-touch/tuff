@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { requestJson } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 import { TxButton } from '@talex-touch/tuffex'
 
@@ -38,7 +39,7 @@ async function startStepUp() {
     const me = await fetchCurrentUserProfile()
     const email = typeof me?.email === 'string' ? me.email : ''
 
-    const options = await $fetch<any>(
+    const options = await requestJson<any>(
       '/api/passkeys/options',
       email ? { query: { email } } : undefined,
     )
@@ -66,7 +67,7 @@ async function startStepUp() {
     }
 
     const payload = serializeCredential(credential)
-    const { token } = await $fetch<{ token: string }>('/api/passkeys/verify', {
+    const { token } = await requestJson<{ token: string }>('/api/passkeys/verify', {
       method: 'POST',
       body: { credential: payload },
     })

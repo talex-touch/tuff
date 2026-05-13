@@ -1,7 +1,10 @@
 import type { ClipboardActionErrorCode } from '@talex-touch/utils/transport/events/types'
 
 export const MACOS_AUTOMATION_PERMISSION_MESSAGE =
-  '需要在“系统设置 -> 隐私与安全性 -> 自动化/辅助功能”允许 Tuff 控制 System Events。'
+  '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。'
+
+export const AUTO_PASTE_FAILED_MESSAGE =
+  '已写入剪贴板，但自动粘贴失败。请确认目标应用仍在前台，或手动按 Cmd/Ctrl+V。'
 
 export interface ClipboardApplyDiagnosticsPayload {
   item?: {
@@ -75,7 +78,7 @@ function parseFileList(content?: string | null): string[] {
 
 export function normalizeClipboardActionError(
   error: unknown,
-  fallbackMessage = '自动粘贴失败'
+  fallbackMessage?: string
 ): { code: ClipboardActionErrorCode; message: string; originalError: unknown } {
   if (error instanceof ClipboardActionRuntimeError) {
     return { code: error.code, message: error.message, originalError: error.originalError ?? error }
@@ -89,10 +92,10 @@ export function normalizeClipboardActionError(
     }
   }
 
-  const message = error instanceof Error ? error.message : String(error || fallbackMessage)
+  const message = error instanceof Error ? error.message : String(error || '')
   return {
     code: 'AUTO_PASTE_FAILED',
-    message: message || fallbackMessage,
+    message: fallbackMessage || message || AUTO_PASTE_FAILED_MESSAGE,
     originalError: error
   }
 }

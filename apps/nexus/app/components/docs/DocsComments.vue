@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { TxButton, TxAvatar } from '@talex-touch/tuffex'
+import { requestJson } from '~/utils/request'
 
 interface DocComment {
   id: string
@@ -9,6 +10,11 @@ interface DocComment {
   userImage: string | null
   content: string
   createdAt: number
+}
+
+interface DocCommentsResponse {
+  comments?: DocComment[]
+  comment?: DocComment
 }
 
 const props = defineProps<{
@@ -32,7 +38,7 @@ async function fetchComments() {
     return
   loading.value = true
   try {
-    const result = await $fetch('/api/docs/comments', {
+    const result = await requestJson<DocCommentsResponse>('/api/docs/comments', {
       method: 'GET',
       query: { path: normalizedPath.value },
     })
@@ -53,7 +59,7 @@ async function submitComment() {
 
   submitting.value = true
   try {
-    const result = await $fetch('/api/docs/comments', {
+    const result = await requestJson<DocCommentsResponse>('/api/docs/comments', {
       method: 'POST',
       body: { path: normalizedPath.value, content },
     })
@@ -72,7 +78,7 @@ async function submitComment() {
 
 async function deleteComment(commentId: string) {
   try {
-    await $fetch(`/api/docs/comments/${commentId}`, { method: 'DELETE' })
+    await requestJson(`/api/docs/comments/${commentId}`, { method: 'DELETE' })
     comments.value = comments.value.filter(c => c.id !== commentId)
   }
   catch (error) {

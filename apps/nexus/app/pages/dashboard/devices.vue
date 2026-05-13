@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
-import Input from '~/components/ui/Input.vue'
+import { TuffInput, TxButton } from '@talex-touch/tuffex'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
 
@@ -32,7 +32,7 @@ interface DeviceItem {
   lastLoginIpMasked?: string | null
 }
 
-const { data, pending, refresh } = useFetch<DeviceItem[]>('/api/devices')
+const { data, pending, refresh } = useTypedFetch<DeviceItem[]>('/api/devices')
 const actionLoading = ref(false)
 const editingId = ref<string | null>(null)
 const renameValue = ref('')
@@ -121,7 +121,7 @@ async function saveRename(device: DeviceItem) {
     return
   actionLoading.value = true
   try {
-    await $fetch('/api/devices/rename', {
+    await requestJson('/api/devices/rename', {
       method: 'POST',
       body: { deviceId: device.id, name: renameValue.value.trim() },
     })
@@ -143,7 +143,7 @@ async function revokeDevice(device: DeviceItem) {
     return
   actionLoading.value = true
   try {
-    await $fetch('/api/devices/revoke', {
+    await requestJson('/api/devices/revoke', {
       method: 'POST',
       body: { deviceId: device.id },
     })
@@ -160,7 +160,7 @@ async function revokeDevice(device: DeviceItem) {
 async function setTrusted(device: DeviceItem, trusted: boolean) {
   actionLoading.value = true
   try {
-    await $fetch('/api/devices/trust', {
+    await requestJson('/api/devices/trust', {
       method: 'POST',
       body: { deviceId: device.id, trusted },
     })
@@ -284,7 +284,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
           </div>
 
           <div v-if="editingId === device.id" class="flex flex-wrap items-center gap-2">
-            <Input v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
+            <TuffInput v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
             <TxButton size="small" :loading="actionLoading" @click="saveRename(device)">
               {{ t('common.save', '保存') }}
             </TxButton>

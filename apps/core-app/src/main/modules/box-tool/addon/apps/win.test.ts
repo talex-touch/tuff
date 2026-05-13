@@ -161,6 +161,10 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Calculator',
+      displayName: 'Calculator',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-uwp',
       path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
       launchKind: 'uwp',
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
@@ -188,11 +192,120 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Codex',
+      displayName: 'Codex',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-path',
       path: appPath,
       launchKind: 'path',
       launchTarget: appPath,
       displayPath: appPath,
       stableId: 'd:\\tools\\codex\\codex.exe'
+    })
+  })
+
+  it('includes ClickOnce appref-ms entries from Start Menu', async () => {
+    const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    const userStartMenuPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    const apprefPath = `${startMenuPath}\\Work Tool.appref-ms`
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === startMenuPath) return ['Work Tool.appref-ms']
+      if (dir === userStartMenuPath) return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === apprefPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    execFileSafeMock.mockResolvedValue({ stdout: '[]', stderr: '' })
+
+    const { getApps, getAppInfo } = await import('./win')
+    const apps = await getApps()
+    const appInfo = await getAppInfo(apprefPath)
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Work Tool',
+      path: apprefPath,
+      launchKind: 'path',
+      launchTarget: apprefPath,
+      displayPath: apprefPath,
+      stableId: 'c:\\programdata\\microsoft\\windows\\start menu\\programs\\work tool.appref-ms'
+    })
+    expect(appInfo).toMatchObject({
+      name: 'Work Tool',
+      path: apprefPath,
+      launchKind: 'path',
+      launchTarget: apprefPath
+    })
+    expect(readShortcutLinkMock).not.toHaveBeenCalled()
+  })
+
+  it('treats known-folder Get-StartApps AppId values as desktop apps', async () => {
+    const appPath = 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+
+    readdirMock.mockResolvedValue([])
+    statMock.mockImplementation(async (target: string) => {
+      if (target === appPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: '微信',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Weixin.exe'
+        },
+        {
+          Name: '卸载微信',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Uninstall.exe'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Weixin',
+      displayName: '微信',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-path',
+      path: appPath,
+      launchKind: 'path',
+      launchTarget: appPath,
+      displayPath: appPath,
+      stableId: 'c:\\program files\\tencent\\weixin\\weixin.exe'
+    })
+  })
+
+  it('keeps Codex as a UWP app from Get-StartApps output', async () => {
+    readdirMock.mockResolvedValue([])
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: 'Codex',
+          AppId: 'OpenAI.Codex_2p2nqsd0c76g0!App',
+          PackageFamilyName: 'OpenAI.Codex_2p2nqsd0c76g0'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: 'Codex',
+      displayName: 'Codex',
+      path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
+      launchKind: 'uwp',
+      launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App',
+      bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
+      stableId: 'uwp:openai.codex_2p2nqsd0c76g0!app'
     })
   })
 
@@ -254,12 +367,22 @@ describe('win app scanner', () => {
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
       name: 'Calculator',
-      displayName: 'Calculator Deluxe',
+      displayName: 'Calculator',
+      displayNameSource: 'Get-StartApps',
+      displayNameQuality: 'system',
+      identityKind: 'windows-uwp',
       description: 'Fast calculations',
       bundleId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
       launchKind: 'uwp',
       launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
     })
+    expect(apps[0].alternateNames).toEqual(
+      expect.arrayContaining([
+        'Calculator Deluxe',
+        'Microsoft.WindowsCalculator_8wekyb3d8bbwe',
+        'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+      ])
+    )
     expect(apps[0].icon).toBe('data:image/png;base64,3q2+7w==')
   })
 
@@ -294,6 +417,9 @@ describe('win app scanner', () => {
     expect(apps[0]).toMatchObject({
       name: 'Foo',
       displayName: 'Foo',
+      displayNameSource: 'registry',
+      displayNameQuality: 'registry',
+      identityKind: 'windows-path',
       description: 'Foo Inc.',
       path: targetPath,
       launchKind: 'path',
@@ -385,6 +511,50 @@ describe('win app scanner', () => {
 
     expect(apps).toHaveLength(0)
     expect(statMock).not.toHaveBeenCalledWith(expect.stringContaining('.exe'))
+  })
+
+  it('prefers Start Menu shortcuts over duplicate Get-StartApps desktop targets', async () => {
+    const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    const userStartMenuPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    const shortcutPath = `${startMenuPath}\\微信.lnk`
+    const targetPath = 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === startMenuPath) return ['微信.lnk']
+      if (dir === userStartMenuPath) return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if (target === shortcutPath || target === targetPath) return createFileStat()
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    readShortcutLinkMock.mockReturnValue({
+      target: targetPath,
+      args: '',
+      cwd: 'C:\\Program Files\\Tencent\\Weixin'
+    })
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: '微信',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Weixin.exe'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    const apps = await getApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0]).toMatchObject({
+      name: '微信',
+      path: shortcutPath,
+      launchKind: 'shortcut',
+      launchTarget: targetPath,
+      workingDirectory: 'C:\\Program Files\\Tencent\\Weixin',
+      stableId: 'shortcut:c:\\program files\\tencent\\weixin\\weixin.exe|'
+    })
   })
 
   it('prefers Start Menu entries over duplicate registry targets', async () => {

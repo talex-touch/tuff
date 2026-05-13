@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
+
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -43,7 +46,7 @@ function setOutput(value: unknown) {
 async function callRiskModeOverride() {
   busy.value = true
   try {
-    const data = await $fetch('/api/admin/risk/mode.override', {
+    const data = await rawFetch('/api/admin/risk/mode.override', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -68,7 +71,7 @@ async function callRiskActorUnblock() {
       .split('\n')
       .map(item => item.trim())
       .filter(Boolean)
-    const data = await $fetch('/api/admin/risk/actor.unblock', {
+    const data = await rawFetch('/api/admin/risk/actor.unblock', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -89,7 +92,7 @@ async function callRiskActorUnblock() {
 async function callRiskCaseReview() {
   busy.value = true
   try {
-    const data = await $fetch('/api/admin/risk/case.review', {
+    const data = await rawFetch('/api/admin/risk/case.review', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -113,7 +116,7 @@ async function callRiskCaseReview() {
 async function confirmPendingOperation() {
   busy.value = true
   try {
-    const data = await $fetch('/api/admin/risk/dual-control/confirm', {
+    const data = await rawFetch('/api/admin/risk/dual-control/confirm', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -156,12 +159,12 @@ async function confirmPendingOperation() {
 
     <section class="rounded-xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-black/10">
       <label class="mb-2 block text-xs text-black/60 dark:text-white/60">Step-up Login Token (x-login-token)</label>
-      <input
+      <TuffInput
         v-model="stepUpToken"
         type="text"
-        class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+        class="w-full"
         placeholder="Paste one-time passkey login token"
-      >
+      />
     </section>
 
     <div class="grid gap-4 xl:grid-cols-2">
@@ -169,91 +172,82 @@ async function confirmPendingOperation() {
         <h2 class="text-sm font-semibold">
           risk.mode.override
         </h2>
-        <select v-model="mode" class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20">
-          <option value="NORMAL">
-            NORMAL
-          </option>
-          <option value="ELEVATED">
-            ELEVATED
-          </option>
-          <option value="EXTREME">
-            EXTREME
-          </option>
-        </select>
-        <input
+        <TuffSelect v-model="mode" class="w-full">
+          <TuffSelectItem value="NORMAL" label="NORMAL" />
+          <TuffSelectItem value="ELEVATED" label="ELEVATED" />
+          <TuffSelectItem value="EXTREME" label="EXTREME" />
+        </TuffSelect>
+        <TuffInput
           v-model="modeReason"
           type="text"
-          class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          class="w-full"
           placeholder="reason"
-        >
-        <button :disabled="busy" class="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black" @click="callRiskModeOverride">
+        />
+        <TxButton variant="primary" :disabled="busy" @click="callRiskModeOverride">
           Submit mode override
-        </button>
+        </TxButton>
       </section>
 
       <section class="space-y-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-black/10">
         <h2 class="text-sm font-semibold">
           risk.actor.unblock
         </h2>
-        <textarea
+        <TuffInput
           v-model="actorInput"
-          rows="4"
-          class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          type="textarea"
+          :rows="4"
+          class="w-full"
           placeholder="one actor/ip per line"
         />
-        <button :disabled="busy" class="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black" @click="callRiskActorUnblock">
+        <TxButton variant="primary" :disabled="busy" @click="callRiskActorUnblock">
           Submit actor unblock
-        </button>
+        </TxButton>
       </section>
 
       <section class="space-y-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-black/10">
         <h2 class="text-sm font-semibold">
           risk.case.review (ip-ban-upsert)
         </h2>
-        <input
+        <TuffInput
           v-model="caseIp"
           type="text"
-          class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          class="w-full"
           placeholder="ip"
-        >
-        <input
+        />
+        <TuffInput
           v-model="caseReason"
           type="text"
-          class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          class="w-full"
           placeholder="reason"
-        >
-        <button :disabled="busy" class="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black" @click="callRiskCaseReview">
+        />
+        <TxButton variant="primary" :disabled="busy" @click="callRiskCaseReview">
           Submit case review
-        </button>
+        </TxButton>
       </section>
 
       <section class="space-y-3 rounded-xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-black/10">
         <h2 class="text-sm font-semibold">
           dual-control confirm
         </h2>
-        <input
+        <TuffInput
           v-model="pendingOperationId"
           type="text"
-          class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          class="w-full"
           placeholder="pending_operation_id"
-        >
-        <select v-model="pendingDecision" class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20">
-          <option value="confirm">
-            confirm
-          </option>
-          <option value="reject">
-            reject
-          </option>
-        </select>
-        <input
+        />
+        <TuffSelect v-model="pendingDecision" class="w-full">
+          <TuffSelectItem value="confirm" label="confirm" />
+          <TuffSelectItem value="reject" label="reject" />
+        </TuffSelect>
+        <TuffInput
           v-model="pendingReason"
           type="text"
-          class="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+          class="w-full"
           placeholder="reason"
-        >
-        <button :disabled="busy" class="rounded-lg bg-black px-4 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black" @click="confirmPendingOperation">
+        />
+        <TxButton variant="primary" :disabled="busy" @click="confirmPendingOperation">
           Submit dual-control decision
-        </button>
+        </TxButton>
       </section>
     </div>
 

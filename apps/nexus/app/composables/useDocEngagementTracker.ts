@@ -6,6 +6,7 @@ import type {
   DocSectionPayload,
   DocViewSessionResponse,
 } from '~/types/docs-engagement'
+import { requestJson } from '~/utils/request'
 
 const FLUSH_INTERVAL_MS = 15_000
 const ACTIVE_WINDOW_MS = 20_000
@@ -650,7 +651,7 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
 
     flushInFlight = true
     try {
-      await $fetch('/api/docs/engagement', {
+      await requestJson('/api/docs/engagement', {
         method: 'POST',
         body: requestBody,
       })
@@ -711,7 +712,7 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
 
     initInFlight = true
     try {
-      const result = await $fetch<DocViewSessionResponse>('/api/docs/view', {
+      const result = await requestJson<DocViewSessionResponse>('/api/docs/view', {
         method: 'POST',
         body: {
           path,

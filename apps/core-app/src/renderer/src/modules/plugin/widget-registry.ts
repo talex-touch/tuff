@@ -1,4 +1,7 @@
-import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
+import type {
+  WidgetFailurePayload,
+  WidgetRegistrationPayload
+} from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
@@ -13,43 +16,22 @@ import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import { devLog } from '~/utils/dev-log'
+import {
+  cacheWidgetRuntimeSource,
+  clearWidgetFailure,
+  clearWidgetRuntimeSource,
+  recordWidgetFailure
+} from './widget-diagnostics'
+
+export { getWidgetFailure, getWidgetRuntimeSnippet } from './widget-diagnostics'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
-const widgetRuntimeSources = new Map<string, string[]>()
 const widgetSetupStatePatchLogCache = new Set<string>()
-
-function cacheWidgetRuntimeSource(widgetId: string | undefined, code: string): void {
-  if (!widgetId) return
-  widgetRuntimeSources.set(widgetId, code.split('\n'))
-}
-
-function clearWidgetRuntimeSource(widgetId?: string): void {
-  if (!widgetId) return
-  widgetRuntimeSources.delete(widgetId)
-}
-
-export function getWidgetRuntimeSnippet(
-  widgetId: string,
-  line: number,
-  radius = 2
-): Array<{ line: number; text: string }> {
-  const lines = widgetRuntimeSources.get(widgetId)
-  if (!lines || !Number.isFinite(line) || line <= 0) return []
-  const start = Math.max(1, line - radius)
-  const end = Math.min(lines.length, line + radius)
-  const result: Array<{ line: number; text: string }> = []
-  for (let current = start; current <= end; current += 1) {
-    result.push({
-      line: current,
-      text: lines[current - 1] ?? ''
-    })
-  }
-  return result
-}
 const transport = useTuffTransport()
 const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
 const widgetUnregisterEvent = PluginEvents.widget.unregister
+const widgetFailedEvent = PluginEvents.widget.failed
 const isDev = import.meta.env?.DEV ?? false
 const pollingService = PollingService.getInstance()
 let transportBindingsReady = false
@@ -1023,6 +1005,7 @@ function injectStyles(widgetId: string, styles: string): void {
 
 async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
   try {
+    clearWidgetFailure(payload.widgetId)
     if (isDev) {
       devLog(
         `[WidgetRegistry] register widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1059,6 +1042,7 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
 
 async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
   try {
+    clearWidgetFailure(payload.widgetId)
     if (isDev) {
       devLog(
         `[WidgetRegistry] update widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1099,6 +1083,7 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
       devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
     }
     clearWidgetRuntimeSource(widgetId)
+    clearWidgetFailure(widgetId)
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)
     if (style) {
@@ -1111,12 +1096,22 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
   }
 }
 
+function handleWidgetFailed(payload: WidgetFailurePayload): void {
+  recordWidgetFailure(payload)
+  clearWidgetRuntimeSource(payload.widgetId)
+  unregisterCustomRenderer(payload.widgetId)
+  if (isDev) {
+    devLog(`[WidgetRegistry] widget failed ${payload.widgetId} (${payload.code})`, payload)
+  }
+}
+
 function bindTransportHandlers(): boolean {
   if (transportBindingsReady) return true
   const disposers: Array<() => void> = []
   try {
     disposers.push(transport.on(widgetRegisterEvent, handleWidgetRegister))
     disposers.push(transport.on(widgetUpdateEvent, handleWidgetUpdate))
+    disposers.push(transport.on(widgetFailedEvent, handleWidgetFailed))
     disposers.push(transport.on(widgetUnregisterEvent, handleWidgetUnregister))
     transportBindingsReady = true
     return true

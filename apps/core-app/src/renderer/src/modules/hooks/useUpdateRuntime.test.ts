@@ -150,6 +150,16 @@ async function loadTarget(options: LoadTargetOptions = {}) {
 }
 
 describe('useUpdateRuntime', () => {
+  it('uses auto download by default when settings are unavailable', async () => {
+    const { useUpdateRuntime, updateSdk } = await loadTarget()
+    updateSdk.getSettings.mockResolvedValue({ success: false, error: 'offline' })
+
+    const runtime = useUpdateRuntime()
+    const settings = await runtime.getUpdateSettings()
+
+    expect(settings.autoDownload).toBe(true)
+  })
+
   it('update install ack timeout 不再被视为已开始安装', async () => {
     const { useUpdateRuntime, toast, logger, MockTimeoutError } = await loadTarget({
       withTimeoutImpl: async () => {

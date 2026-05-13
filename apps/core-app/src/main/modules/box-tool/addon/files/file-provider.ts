@@ -26,7 +26,6 @@ import type { FileTypeTag } from './constants'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
 import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
-import type { WorkerStatusSnapshot } from './workers/worker-status'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -43,6 +42,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core/alias'
 import { app, shell } from 'electron'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
@@ -75,13 +75,20 @@ import {
   WHITELISTED_EXTENSIONS
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
-import { THUMBNAIL_EXTENSIONS, isThumbnailCandidate } from './thumbnail-config'
+import {
+  THUMBNAIL_EXTENSIONS,
+  getThumbnailUnsupportedReason,
+  isThumbnailCandidate
+} from './thumbnail-config'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { EmbeddingService } from './embedding-service'
 import { IconWorkerClient } from './workers/icon-worker-client'
-import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
+import {
+  ThumbnailWorkerClient,
+  type ThumbnailGenerationResult
+} from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
   SearchIndexWorkerClient,
@@ -92,6 +99,10 @@ import {
   shouldEmitProgressStreamImmediately
 } from './services/file-provider-progress-stream-service'
 import {
+  FileProviderWorkerStatusService,
+  type FileProviderWorkerStatusSnapshot
+} from './services/file-provider-worker-status-service'
+import {
   getWatchDepthForPath as resolveWatchDepthForPath,
   normalizeWatchPath
 } from './services/file-provider-path-service'
@@ -100,6 +111,11 @@ import {
   resolveExtensionsForTypeFilters as resolveFileProviderExtensionsForTypeFilters,
   resolveTypeTag as resolveFileProviderTypeTag
 } from './services/file-provider-search-service'
+import {
+  FILE_ICON_META_EXTENSION_KEY,
+  persistFileIconCache,
+  type FileIconCacheMeta
+} from './services/file-provider-icon-cache-service'
 import { FileProviderWatchService } from './services/file-provider-watch-service'
 import {
   FileProviderOpenerService,
@@ -109,13 +125,15 @@ import { FileProviderIndexRuntimeService } from './services/file-provider-index-
 import { type PersistEntry } from '../../search-engine/workers/search-index-worker-client'
 import FileSystemWatcher from '../../file-system-watcher'
 
-const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
 const SEMANTIC_TRIGGER_MIN_QUERY_LENGTH = 3
 const SEMANTIC_TRIGGER_MAX_CANDIDATES = 20
 const SEMANTIC_SEARCH_TIMEOUT_MS = 120
+const BACKGROUND_CONTENT_INDEX_MIN_BYTES = 5 * 1024 * 1024
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
+
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
   if (markerIndex === -1) {
@@ -136,15 +154,20 @@ interface IncrementalUpdatePayload {
   manual?: boolean
 }
 
-interface IconCacheMeta {
-  mtime: number | null
-  size: number | null
-}
-
 interface IconCacheEntry {
   icon?: string | null
-  meta?: IconCacheMeta
+  meta?: FileIconCacheMeta
 }
+
+interface ThumbnailStatusPayload {
+  status: 'failed' | 'unsupported'
+  reason: string
+  mtime: number | null
+  size: number | null
+  at: number
+}
+
+type ThumbnailFileSnapshot = Pick<typeof filesSchema.$inferSelect, 'mtime' | 'size'>
 
 interface FileUpdateRecord {
   id: number
@@ -292,6 +315,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly iconWorker = new IconWorkerClient()
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
   private searchIndexWorkerReady: Promise<boolean> | null = null
+  private readonly workerStatusService = new FileProviderWorkerStatusService()
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
 
@@ -724,6 +748,73 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return left === right
     }
     return Math.abs(left - right) <= this.timestampToleranceMs
+  }
+
+  private buildThumbnailStatus(
+    file: ThumbnailFileSnapshot | undefined,
+    result: Extract<ThumbnailGenerationResult, { status: 'failed' | 'unsupported' }>
+  ): string {
+    const payload: ThumbnailStatusPayload = {
+      status: result.status,
+      reason: result.reason,
+      mtime: file ? this.toTimestamp(file.mtime) : null,
+      size: file && typeof file.size === 'number' ? file.size : null,
+      at: Date.now()
+    }
+    return JSON.stringify(payload)
+  }
+
+  private parseThumbnailStatus(value: string | undefined): ThumbnailStatusPayload | null {
+    if (!value) return null
+    try {
+      const parsed = JSON.parse(value) as Partial<ThumbnailStatusPayload>
+      if (
+        (parsed.status !== 'failed' && parsed.status !== 'unsupported') ||
+        typeof parsed.reason !== 'string'
+      ) {
+        return null
+      }
+      return {
+        status: parsed.status,
+        reason: parsed.reason,
+        mtime: typeof parsed.mtime === 'number' ? parsed.mtime : null,
+        size: typeof parsed.size === 'number' ? parsed.size : null,
+        at: typeof parsed.at === 'number' ? parsed.at : 0
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private matchesThumbnailStatus(
+    file: ThumbnailFileSnapshot,
+    status: ThumbnailStatusPayload | null
+  ): boolean {
+    if (!status) return false
+    const fileMtime = this.toTimestamp(file.mtime)
+    const fileSize = typeof file.size === 'number' ? file.size : null
+    return status.mtime === fileMtime && status.size === fileSize
+  }
+
+  private shouldSkipThumbnailGeneration(
+    file: ThumbnailFileSnapshot,
+    extensions?: Record<string, string>
+  ): boolean {
+    const status = this.parseThumbnailStatus(extensions?.[THUMBNAIL_STATUS_KEY])
+    return this.matchesThumbnailStatus(file, status)
+  }
+
+  private async persistThumbnailStatus(
+    fileId: number,
+    file: ThumbnailFileSnapshot | undefined,
+    result: Extract<ThumbnailGenerationResult, { status: 'failed' | 'unsupported' }>
+  ): Promise<void> {
+    if (!this.dbUtils) return
+    await this.withDbWrite('thumbnail.status', () =>
+      this.dbUtils!.addFileExtensions([
+        { fileId, key: THUMBNAIL_STATUS_KEY, value: this.buildThumbnailStatus(file, result) }
+      ])
+    )
   }
 
   // private hasDiskFileChanged(
@@ -1384,9 +1475,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    const payload: IndexWorkerFile[] = files
-      .filter((file) => typeof file.id === 'number')
-      .map((file) => ({
+    const payload: IndexWorkerFile[] = []
+    const deferredPayload: IndexWorkerFile[] = []
+    for (const file of files) {
+      if (typeof file.id !== 'number') continue
+      const entry: IndexWorkerFile = {
         id: file.id as number,
         path: file.path,
         name: file.name,
@@ -1395,12 +1488,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         size: typeof file.size === 'number' ? file.size : null,
         mtime: this.toTimestamp(file.mtime) ?? Date.now(),
         ctime: this.toTimestamp(file.ctime) ?? Date.now()
-      }))
-
-    if (payload.length === 0) {
-      return
+      }
+      if ((entry.size ?? 0) >= BACKGROUND_CONTENT_INDEX_MIN_BYTES) {
+        deferredPayload.push(entry)
+      } else {
+        payload.push(entry)
+      }
     }
 
+    if (deferredPayload.length > 0) {
+      setTimeout(() => {
+        this.scheduleIndexWorkerChunks(deferredPayload, `${reason}:background-content`)
+      }, 5_000)
+    }
+
+    this.scheduleIndexWorkerChunks(payload, reason)
+  }
+
+  private scheduleIndexWorkerChunks(payload: IndexWorkerFile[], reason: string): void {
+    if (!this.databaseFilePath || payload.length === 0) {
+      return
+    }
     const chunkSize = 30
     for (let i = 0; i < payload.length; i += chunkSize) {
       const chunk = payload.slice(i, i + chunkSize)
@@ -1503,40 +1611,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return
       }
 
-      const meta: IconCacheMeta = {
+      const meta: FileIconCacheMeta = {
         mtime: file ? this.toTimestamp(file.mtime) : Date.now(),
         size: file && typeof file.size === 'number' ? file.size : null
       }
 
       if (this.dbUtils) {
-        const db = this.dbUtils.getDb()
-        await db.transaction(async (tx) => {
-          // Insert icon
-          await tx
-            .insert(fileExtensions)
-            .values({
-              fileId,
-              key: 'icon',
-              value: iconValue
-            })
-            .onConflictDoUpdate({
-              target: [fileExtensions.fileId, fileExtensions.key],
-              set: { value: iconValue }
-            })
-
-          // Insert meta
-          await tx
-            .insert(fileExtensions)
-            .values({
-              fileId,
-              key: ICON_META_EXTENSION_KEY,
-              value: JSON.stringify(meta)
-            })
-            .onConflictDoUpdate({
-              target: [fileExtensions.fileId, fileExtensions.key],
-              set: { value: JSON.stringify(meta) }
-            })
-        })
+        await persistFileIconCache(
+          {
+            dbUtils: this.dbUtils,
+            withDbWrite: (label, operation) => this.withDbWrite(label, operation)
+          },
+          fileId,
+          iconValue,
+          meta
+        )
       }
     } catch (error) {
       this.logWarn('Failed to extract icon', error, { path: filePath })
@@ -1550,24 +1639,55 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async ensureFileThumbnail(
     fileId: number,
     filePath: string,
-    file?: typeof filesSchema.$inferSelect
+    file?: typeof filesSchema.$inferSelect,
+    extensions?: Record<string, string>
   ): Promise<void> {
     if (this.pendingThumbnailExtractions.has(fileId)) {
       return
     }
+    if (file && this.shouldSkipThumbnailGeneration(file, extensions)) {
+      return
+    }
     if (file && !isThumbnailCandidate(file.extension, file.size)) {
+      const reason = getThumbnailUnsupportedReason(file.extension, file.size)
+      if (reason) {
+        await this.persistThumbnailStatus(fileId, file, {
+          status: 'unsupported',
+          reason,
+          durationMs: 0
+        })
+      }
       return
     }
 
     this.pendingThumbnailExtractions.add(fileId)
     try {
-      const thumbnail = await this.thumbnailWorker.generate(filePath)
-      if (!thumbnail || !this.dbUtils) {
+      const thumbnail = await this.thumbnailWorker.generate(filePath, {
+        extension: file?.extension,
+        sizeBytes: file?.size
+      })
+      if (!this.dbUtils) {
         return
       }
-      await this.withDbWrite('thumbnail.worker', () =>
-        this.dbUtils!.addFileExtensions([{ fileId, key: 'thumbnail', value: thumbnail }])
-      )
+      if (thumbnail.status === 'generated') {
+        await this.withDbWrite('thumbnail.worker', () =>
+          this.dbUtils!.addFileExtensions([
+            { fileId, key: 'thumbnail', value: thumbnail.path },
+            {
+              fileId,
+              key: THUMBNAIL_STATUS_KEY,
+              value: JSON.stringify({ status: 'generated', at: Date.now() })
+            }
+          ])
+        )
+        return
+      }
+      await this.persistThumbnailStatus(fileId, file, thumbnail)
+      this.logDebug('Thumbnail generation skipped', {
+        path: filePath,
+        status: thumbnail.status,
+        reason: thumbnail.reason
+      })
     } catch (error) {
       this.logWarn('Failed to generate thumbnail', error, { path: filePath })
     } finally {
@@ -1586,8 +1706,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const db = this.dbUtils.getDb()
 
-      // Build extension filter: WHERE extension IN ('.png', '.jpg', ...)
-      const imageExtensions = [...THUMBNAIL_EXTENSIONS].map((e) => `.${e}`)
+      const thumbnailExtensions = [...THUMBNAIL_EXTENSIONS].map((e) => `.${e}`)
+      const thumbnailExtension = alias(fileExtensions, 'thumbnail_extension')
+      const thumbnailStatusExtension = alias(fileExtensions, 'thumbnail_status_extension')
 
       // Find image files that don't have a thumbnail extension yet
       const candidates = await db
@@ -1595,48 +1716,98 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           id: filesSchema.id,
           path: filesSchema.path,
           extension: filesSchema.extension,
-          size: filesSchema.size
+          size: filesSchema.size,
+          mtime: filesSchema.mtime,
+          ctime: filesSchema.ctime,
+          statusValue: thumbnailStatusExtension.value
         })
         .from(filesSchema)
         .leftJoin(
-          fileExtensions,
-          and(eq(fileExtensions.fileId, filesSchema.id), eq(fileExtensions.key, 'thumbnail'))
+          thumbnailExtension,
+          and(
+            eq(thumbnailExtension.fileId, filesSchema.id),
+            eq(thumbnailExtension.key, 'thumbnail')
+          )
         )
-        .where(and(isNull(fileExtensions.value), inArray(filesSchema.extension, imageExtensions)))
-        .limit(500)
+        .leftJoin(
+          thumbnailStatusExtension,
+          and(
+            eq(thumbnailStatusExtension.fileId, filesSchema.id),
+            eq(thumbnailStatusExtension.key, THUMBNAIL_STATUS_KEY)
+          )
+        )
+        .where(
+          and(isNull(thumbnailExtension.value), inArray(filesSchema.extension, thumbnailExtensions))
+        )
+        .limit(1000)
 
       if (candidates.length === 0) return
 
       this.logDebug('Starting deferred thumbnail generation', { count: candidates.length })
       let generated = 0
+      let skipped = 0
 
       for (const file of candidates) {
         if (!this._thumbnailTaskRunning) break // allow cancellation
 
-        if (!isThumbnailCandidate(file.extension, file.size)) continue
+        if (
+          this.shouldSkipThumbnailGeneration(file, {
+            [THUMBNAIL_STATUS_KEY]: file.statusValue ?? ''
+          })
+        ) {
+          skipped++
+          continue
+        }
+
+        if (!isThumbnailCandidate(file.extension, file.size)) {
+          const reason = getThumbnailUnsupportedReason(file.extension, file.size)
+          if (typeof file.id === 'number' && reason) {
+            await this.persistThumbnailStatus(file.id, file, {
+              status: 'unsupported',
+              reason,
+              durationMs: 0
+            })
+          }
+          skipped++
+          continue
+        }
 
         // Yield to event loop before each thumbnail
         await new Promise<void>((resolve) => setImmediate(resolve))
         await appTaskGate.waitForIdle()
 
-        let thumbnail: string | null = null
+        let thumbnail: ThumbnailGenerationResult | null = null
         try {
-          thumbnail = await this.thumbnailWorker.generate(file.path)
+          thumbnail = await this.thumbnailWorker.generate(file.path, {
+            extension: file.extension,
+            sizeBytes: file.size
+          })
         } catch (error) {
           this.logWarn('Thumbnail worker failed', error, { path: file.path })
         }
         if (thumbnail && typeof file.id === 'number') {
-          await this.withDbWrite('thumbnail.deferred', () =>
-            this.dbUtils!.addFileExtensions([
-              { fileId: file.id, key: 'thumbnail', value: thumbnail }
-            ])
-          )
-          generated++
+          if (thumbnail.status === 'generated') {
+            await this.withDbWrite('thumbnail.deferred', () =>
+              this.dbUtils!.addFileExtensions([
+                { fileId: file.id, key: 'thumbnail', value: thumbnail.path },
+                {
+                  fileId: file.id,
+                  key: THUMBNAIL_STATUS_KEY,
+                  value: JSON.stringify({ status: 'generated', at: Date.now() })
+                }
+              ])
+            )
+            generated++
+          } else {
+            await this.persistThumbnailStatus(file.id, file, thumbnail)
+            skipped++
+          }
         }
       }
 
       this.logDebug('Deferred thumbnail generation completed', {
         generated,
+        skipped,
         total: candidates.length
       })
     } catch (error) {
@@ -2747,7 +2918,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const rows = await this.dbUtils.getFileExtensionsByFileIds(fileIds, [
       'icon',
-      ICON_META_EXTENSION_KEY
+      FILE_ICON_META_EXTENSION_KEY
     ])
     const invalidIconFileIds: number[] = []
 
@@ -2759,9 +2930,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         } else {
           entry.icon = row.value
         }
-      } else if (row.key === ICON_META_EXTENSION_KEY && row.value) {
+      } else if (row.key === FILE_ICON_META_EXTENSION_KEY && row.value) {
         try {
-          const parsed = JSON.parse(row.value) as IconCacheMeta
+          const parsed = JSON.parse(row.value) as FileIconCacheMeta
           entry.meta = {
             mtime: typeof parsed?.mtime === 'number' ? parsed.mtime : null,
             size: typeof parsed?.size === 'number' ? parsed.size : null
@@ -2994,9 +3165,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         },
         (file) => {
           if (typeof file.id === 'number') {
-            this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-            })
+            this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
+              (error) => {
+                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+              }
+            )
           }
         }
       )
@@ -3077,9 +3250,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         },
         (file) => {
           if (typeof file.id === 'number') {
-            this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-            })
+            this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
+              (error) => {
+                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+              }
+            )
           }
         }
       )
@@ -3174,35 +3349,35 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { summary, entries }
   }
 
-  public async getWorkerStatusSnapshot(): Promise<{
-    summary: { total: number; busy: number; idle: number; offline: number }
-    workers: WorkerStatusSnapshot[]
-  }> {
-    const workers = await Promise.all([
-      this.fileScanWorker.getStatus(),
-      this.fileIndexWorker.getStatus(),
-      this.reconcileWorker.getStatus(),
-      this.iconWorker.getStatus(),
-      this.thumbnailWorker.getStatus(),
-      this.searchIndexWorker.getStatus()
-    ])
-
-    const summary = workers.reduce(
-      (acc, worker) => {
-        acc.total += 1
-        if (worker.state === 'busy') {
-          acc.busy += 1
-        } else if (worker.state === 'idle') {
-          acc.idle += 1
-        } else {
-          acc.offline += 1
-        }
-        return acc
-      },
-      { total: 0, busy: 0, idle: 0, offline: 0 }
+  public async getWorkerStatusSnapshot(): Promise<FileProviderWorkerStatusSnapshot> {
+    return this.workerStatusService.getSnapshot(() =>
+      Promise.all([
+        this.fileScanWorker.getStatus(),
+        this.fileIndexWorker.getStatus(),
+        this.reconcileWorker.getStatus(),
+        this.iconWorker.getStatus(),
+        this.thumbnailWorker.getStatus(),
+        this.searchIndexWorker.getStatus()
+      ])
     )
+  }
 
-    return { summary, workers }
+  private scheduleSemanticEnrichment(normalizedQuery: string, candidateCount: number): void {
+    const shouldRunSemantic =
+      Boolean(this.embeddingService) &&
+      normalizedQuery.length >= SEMANTIC_TRIGGER_MIN_QUERY_LENGTH &&
+      candidateCount < SEMANTIC_TRIGGER_MAX_CANDIDATES
+
+    if (!shouldRunSemantic || !this.embeddingService) {
+      return
+    }
+
+    setTimeout(() => {
+      void this.embeddingService?.semanticSearch(normalizedQuery, 30).catch((error) => {
+        this.logWarn('Semantic enrichment failed', error)
+        return []
+      })
+    }, SEMANTIC_SEARCH_TIMEOUT_MS)
   }
 
   async onSearch(query: TuffQuery, _signal: AbortSignal): Promise<TuffSearchResult> {
@@ -3334,45 +3509,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const semanticScoreMap = new Map<string, number>()
-    const shouldRunSemantic =
-      Boolean(this.embeddingService) &&
-      normalizedQuery.length >= SEMANTIC_TRIGGER_MIN_QUERY_LENGTH &&
-      candidateIds.size < SEMANTIC_TRIGGER_MAX_CANDIDATES
-
-    if (shouldRunSemantic && this.embeddingService) {
-      let semanticTimedOut = false
-      let timeoutId: NodeJS.Timeout | null = null
-      const semanticTask = this.embeddingService
-        .semanticSearch(normalizedQuery, 30)
-        .catch((error) => {
-          this.logWarn('Semantic search failed, fallback to lexical recall only', error)
-          return []
-        })
-      const timeoutTask = new Promise<Array<{ sourceId: string; score: number }>>((resolve) => {
-        timeoutId = setTimeout(() => {
-          semanticTimedOut = true
-          resolve([])
-        }, SEMANTIC_SEARCH_TIMEOUT_MS)
-      })
-
-      const semanticMatches = await Promise.race([semanticTask, timeoutTask])
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
-
-      if (semanticTimedOut) {
-        this.logDebug('Semantic search skipped due to timeout budget', {
-          timeoutMs: SEMANTIC_SEARCH_TIMEOUT_MS,
-          queryLength: normalizedQuery.length
-        })
-      }
-
-      for (const match of semanticMatches) {
-        if (candidateIds.size >= maxCandidateCount) break
-        candidateIds.add(match.sourceId)
-        semanticScoreMap.set(match.sourceId, match.score)
-      }
-    }
+    this.scheduleSemanticEnrichment(normalizedQuery, candidateIds.size)
 
     if (candidateIds.size === 0) {
       return new TuffSearchResultBuilder(query).build()
@@ -3446,15 +3583,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const validPaths = Array.from(filesMap.keys())
-    const usageStart = performance.now()
-    const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(validPaths)
-    this.logDebug('Usage summary lookup completed', {
-      items: validPaths.length,
-      duration: formatDuration(performance.now() - usageStart)
-    })
-    const usageMap = new Map(usageSummaries.map((summary) => [summary.itemId, summary]))
-
     const ftsScoreMap = new Map<string, number>()
     for (const match of ftsMatches) {
       const normalizedScore = match.score > 0 ? 1 / (match.score + 1) : 1
@@ -3476,16 +3604,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const scoredItems = Array.from(filesMap.values())
       .map(({ file, extensions }) => {
         const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
-        const usage = usageMap.get(file.path)
-        const lastUsed = usage ? new Date(usage.lastUsed).getTime() : 0
-        const daysSinceLastUsed = lastUsed > 0 ? (now - lastUsed) / (1000 * 3600 * 24) : Infinity
-        const lastUsedScore = lastUsed > 0 ? Math.exp(-0.1 * daysSinceLastUsed) : 0
-
         const lastModified = new Date(file.mtime).getTime()
         const daysSinceLastModified = (now - lastModified) / (1000 * 3600 * 24)
         const lastModifiedScore = Math.exp(-0.05 * daysSinceLastModified)
 
-        const frequencyScore = usage ? Math.log10(usage.clickCount + 1) / 2 : 0
+        const lastUsedScore = 0
+        const frequencyScore = 0
         const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
         const ftsScore = ftsScoreMap.get(file.path) ?? 0
         const semanticScore = semanticScoreMap.get(file.path) ?? 0
@@ -3515,9 +3639,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           },
           (file) => {
             if (typeof file.id === 'number') {
-              this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
-                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
-              })
+              this.ensureFileThumbnail(file.id, file.path, file, sanitizedExtensions).catch(
+                (error) => {
+                  this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+                }
+              )
             }
           }
         )
@@ -3542,16 +3668,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           tuffItem.meta = {}
         }
 
-        if (usage) {
-          tuffItem.meta.usage = {
-            clickCount: usage.clickCount ?? 0,
-            lastUsed: usage.lastUsed ? new Date(usage.lastUsed).toISOString() : undefined
-          }
-        } else {
-          tuffItem.meta.usage = {
-            clickCount: 0
-          }
-        }
+        tuffItem.meta.usage = { clickCount: 0 }
 
         const extensionMeta = tuffItem.meta.extension ?? {}
         tuffItem.meta.extension = {

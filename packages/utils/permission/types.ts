@@ -15,6 +15,7 @@ export enum PermissionCategory {
   INTELLIGENCE = 'intelligence',
   STORAGE = 'storage',
   WINDOW = 'window',
+  MEDIA = 'media',
 }
 
 /**

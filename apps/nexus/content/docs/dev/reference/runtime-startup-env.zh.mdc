@@ -1,6 +1,6 @@
 # Core App 启动链路与运行时变量参考
 
-> 更新时间：2026-04-23
+> 更新时间：2026-05-12
 > 范围：`apps/core-app/src` 中 `process.env` / `import.meta.env` 的实际引用
 
 ## 启动异常梳理（本次 1+2 变更）
@@ -61,6 +61,7 @@
 | `BUILD_TYPE` | 构建类型（Sentry environment/release 等） | `src/main/modules/sentry/*`、`app-provider.ts` |
 | `TUFF_ENABLE_ASSISTANT_EXPERIMENT` | Assistant 模块是否进入启动编排 | `src/main/index.ts` |
 | `TUFF_ENABLE_RENDERER_OVERRIDE` | 是否允许 renderer override 包生效 | `src/main/core/touch-app.ts`、`src/main/modules/update/update-system.ts` |
+| `TUFF_NEXUS_BASE_URL` | Core App 运行时 Nexus API 基地址显式覆盖；优先级高于设置页 server mode | `packages/utils/env`、Core App Nexus runtime resolver |
 | `TUFF_DISABLE_NATIVE_OCR` | 关闭本地 OCR provider | `src/main/modules/ai/intelligence-config.ts` |
 | `TUFF_RELEASE_API_URL` | 构建验签元数据 API 基地址覆盖 | `src/main/modules/build-verification/index.ts` |
 | `TUFF_BUILD_SIGNATURE_URL` | 构建验签签名文件 URL 强制覆盖 | `src/main/modules/build-verification/index.ts` |
@@ -108,6 +109,13 @@
 
 当前暂无待清理候选（前述高/中/低优先项已全部完成收敛）。
 
+## Nexus Runtime API 服务器解析
+
+- Core App 运行时 API 统一由 `packages/utils/env.resolveTuffNexusBaseUrl()` 解析，唯一外部覆盖变量是 `TUFF_NEXUS_BASE_URL`。
+- 解析优先级固定为：`TUFF_NEXUS_BASE_URL` 显式覆盖 > 设置页“运行时 API 服务器”为 local > 官方地址 `https://tuff.tagzxia.com`。
+- local 模式默认地址为 `http://localhost:3200`，但不会再因为 dev/unpackaged 自动启用；必须由设置页 local 或 `TUFF_NEXUS_BASE_URL` 显式指定。
+- 官网、文档、Dashboard、更新源等外链默认值继续使用官方线上地址，不跟随运行时 API server mode。
+
 ## 已完成清理项
 
 - `trace-warnings`：已从 `src/main/polyfills.ts` 移除运行时 `process.env` 写入（2026-03-23）。
@@ -117,3 +125,4 @@
 - `TUFF_RELEASE_SIGNATURE_KEY_URL` / `TUFF_RELEASE_SIGNATURE_PUBLIC_KEY_URL`：已从签名公钥 URL 解析中移除兼容别名，统一 `TUFF_UPDATE_*`（2026-03-23）。
 - `TUFF_OMNIPANEL_SMOKE`：已移除启动期 OmniPanel 冒烟探针 env gate 与对应逻辑（2026-03-23）。
 - `USE_LOCAL_NEXUS`：已移除 PluginStoreService 的本地 Nexus env 特判，统一走 `getTpexApiBase()`（2026-03-23）。
+- `VITE_NEXUS_URL` / `NEXUS_API_BASE` / `NEXUS_API_BASE_LOCAL` / `TPEX_API_BASE` / `AUTH_ORIGIN` / `TUFF_LOCAL_BASE_URL`：已停止作为 Core App runtime API 地址解析输入，统一迁移到 `TUFF_NEXUS_BASE_URL`（2026-05-12）。

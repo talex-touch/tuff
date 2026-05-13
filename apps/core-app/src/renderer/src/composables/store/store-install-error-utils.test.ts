@@ -52,6 +52,12 @@ describe('resolveStoreInstallFailureReason', () => {
         translate
       )
     ).toBe('store.installation.reasons.sdkapiOutdated:{"declared":"251211","minimum":"251212"}')
+    expect(
+      resolveStoreInstallFailureReason(
+        'Plugin "demo" is blocked by the sdkapi hard-cut gate.',
+        translate
+      )
+    ).toBe('store.installation.reasons.sdkapiBlocked:null')
   })
 
   it('preserves unknown messages for diagnostics', () => {

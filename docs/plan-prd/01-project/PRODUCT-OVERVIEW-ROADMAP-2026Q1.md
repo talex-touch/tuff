@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-05-08
+> 更新时间：2026-05-13
 > 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -39,20 +39,54 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 面向 Node Server 运行时提供长会话能力：SSE、checkpoint、pause/resume、`fromSeq` 补播。
 - Pilot 路由 V2（模型目录 + 路由组合 + 渠道负载均衡）进入可观测运行态：可记录 `queue/ttft/total/success` 并驱动 `Quota Auto` 自动选路。
 
+### G6. Nexus Provider 目标（可聚合）
+- Nexus 升级为统一 Provider 聚合中心，Provider 独立声明 `Capability`，Scene 按使用场景自由组合能力与路由策略。
+- 首版覆盖汇率、AI 大模型、文本翻译、图片/截图翻译；`exchangeRateService` 与 Nexus dashboard AI providers 后续迁移到通用 Provider registry。
+- 截图翻译、划词翻译、CoreBox 汇率换算、AI Chat 与图片翻译 pin window 统一通过 Scene 编排、Strategy fallback、Metering 与 Audit 记录执行。
+- Provider registry 只保存结构化元数据与 `authRef`，密钥留在系统安全存储；Usage Ledger / Audit Trace 不保存原始截图、图片、完整 prompt 或完整模型响应。
+
+### G6.5 2.5.0 AI 目标（桌面入口收口）
+- 2.5.0 AI 板块定位为桌面 AI 入口收口版本：CoreBox / OmniPanel 是用户主入口，Pilot 作为高级 Chat / DeepAgent 增强能力来源。
+- Stable 只承诺文本 + OCR：`text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`。
+- CoreBox AI Ask 已先落最小 Stable 切片：文本问题走 `text.chat`，剪贴板图片在空文本或显式 `ai` 提问时走 `vision.ocr -> text.chat`，并带用户可见状态、失败提示、权限检查与审计 metadata。
+- 下个版本重点交付 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与剪贴板整理/会议纪要/文本批处理 3 个 P0 模板。
+- Skills Pack、Background Automations 与 Pilot 联动保持 Beta；Assistant、多模态生成编辑、多 Agent 长任务面板与 Nexus Scene runtime orchestration 保持 Experimental / 2.5.x 后续。
+- Provider metadata 可普通存储，API Key / secret 必须通过 secure-store 或 `authRef` 引用；审计默认不保存完整 prompt / response。
+
+### G7. 跨平台与真实能力目标（可解释）
+- Windows/macOS release-blocking 能力必须有真实设备证据，Linux 保持 documented best-effort 且用户可见限制原因。
+- 生产 API 禁止返回固定假值成功；能力不可用时必须返回 `unavailable + reason` 或显式错误码。
+- 插件与 renderer 持久化不得绕过 Storage/Security 规则保存敏感本地路径、token、key 或业务明文。
+- 2026-05-12 CI warning 迁移：GitHub Actions `uses:` 依赖已统一到 Node 24-compatible major baseline，消除 Node.js 20 action runtime deprecation warning；项目业务 Node runtime 仍固定为 `22.16.0`。
+- 2026-05-12 发布链路收口：`build-and-release` 已显式支持 beta release type，`v*-beta*` tag 会进入 beta/pre-release 语义；CoreApp beta build 保留 `BETA` runtime metadata 并复用 snapshot packaging policy；主 PR CI 已从 `pull_request_target` 收窄为只读 `pull_request`，release artifact 上传只保留发布资产与 updater metadata。
+- 2026-05-13 执行顺序已收紧：`2.4.10` 当前不再扩大功能范围，先完成 Windows acceptance collection plan、case/manual/performance evidence、`windows:acceptance:verify` final gate 与 Nexus Release Evidence 写入；Windows App Search & Launch Beta 的应用索引管理页、Steam 最小 provider 与 `protocol` 启动白名单已进入实现态，但 UWP/Store、Steam、手动条目搜索启动闭环仍必须补 Windows 真机 evidence；`2.5.0` AI、Provider Registry 高级策略、retained raw definition 后续迁移与 SRP 大拆分均不得抢占正式 `2.4.10` gate。
+- 2026-05-13 CoreApp 启动异步化缺口已归档：`docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` 确认当前仍存在 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path、Search provider 启动后集中抢资源，以及 renderer mount 前等待 storage/plugin store 的问题；该项不抢当前 Windows evidence gate，后续按 P0 renderer plugin store 后台化、P1 非首屏模块 handler-first + background runtime、P2 Database critical/background 拆分、P3 Search provider 后台 ready 推进。
+- 2026-05-11 治理切片已在第一治理切片基础上继续推进：`system:permission:*` / `omni-panel:feature:*` 三段 retained raw event 已无损迁到 typed builder，`typedMigrationCandidates` 当前为 `0`，retained raw definition 按测试扫描口径冻结为 `<=264`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 质量入口已统一，lint 不再串全量架构债务，release 仍走 strict size/docs 门禁。
+
 ## 3. 质量约束（全项目强制）
 
 ### 3.1 代码质量门禁
 - 不允许新增未类型约束的跨层调用（禁止新增 raw event 直连）。
 - 新增模块必须提供最小可回归验证（lint/typecheck/test 至少 1 项）。
 - 不得通过“关闭规则/降级配置”绕过质量问题（除非有明确豁免文档）。
-- 兼容债务冻结门禁：`legacy:guard` 必须通过，禁止新增 `channel.send('x:y')` 与新增 `legacy` 分支；存量债务仅允许白名单承载并附 `expiresVersion`（当前退场目标 `2.4.11`）。`2.4.11` 前 CoreApp 清册项必须关闭或显式降权，不得保留未说明的旧 storage protocol、旧 SDK bypass 或伪成功兼容分支。
-- legacy 关键词例外只允许登记框架 API 固定字段、上游错误文本签名与负向 lint 禁止项；真实运行兼容分支、迁移读取路径和文件名债务仍必须由 allowlist + compatibility registry 承载。
-- runtime console 冻结门禁：`pnpm console:guard` 必须通过，CoreApp `main/preload/renderer` 新增裸 `console.*` 或扩大现有命中数视为质量回退；仅允许 logger sink、显式 debug gate、专项诊断器通过 allowlist 保留。
-- 兼容债务清册门禁：`compatibility-debt-registry.csv` 必须覆盖全部存量兼容债务；新增债务无登记禁止合入。
+- 兼容边界统一迁移到 ESLint：禁止新增 `channel.send('x:y')`、legacy transport/permission/channel import、旧 storage protocol、旧 SDK bypass 或伪成功兼容分支；确需例外只能通过明确 scoped ESLint override 承载并说明退场原因。
+- runtime console / runtime boundary 统一迁移到 ESLint：CoreApp `main/preload/renderer` 新增裸 `console.*`、宽松 WebPreferences、裸 `ipcRenderer/ipcMain`、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*` 视为质量回退。
+- 不再维护 compatibility registry / legacy allowlist / size allowlist；文件行数治理回到 code review 与普通 SRP 重构任务，发布质量入口以 `quality:pr` / `quality:release` 为准。
 - CoreApp 平台适配门禁：`2.4.11` 前 Windows/macOS 为 release-blocking，必须完成搜索、应用扫描、托盘、更新、插件权限、安装卸载、退出释放回归；Linux 保留 `xdotool` / desktop environment documented best-effort，不作为 `2.4.10` blocker。
-- 超长文件门禁：`size:guard` 必须通过，阈值 `>=1200` 的存量文件禁止继续增长，新增超长文件禁止合入。
-- 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），并由 root `network:guard` + ESLint 双门禁拦截。
-- 门禁脚本工程约束：`legacy/compat/size/network` 共享 `scripts/lib/*` 基础能力；workspace 侧门禁优先复用 root 实现（参数化 scope），禁止重复维护同类脚本。
+- CoreApp 启动关键路径约束：新增或调整启动期能力时，首屏前不得引入非必要 plugin list RPC、extension load、telemetry hydrate、agent/workflow runtime、update cache hydrate、OCR/native watcher 或长耗时同步 FS/DB 操作；必须采用 handler-first + background runtime，确需留在 critical path 的任务要记录依赖理由、耗时预算与回滚策略。
+- Windows Everything target evidence 门禁：`--requireEverythingTargets` 必须复核基础 Everything 查询返回结果、目标 probe 命中、`matchCount` 为正，且至少一条 sample 文本包含目标关键词，避免弱 JSON 证据替代真实目标查询。
+- Windows App Index diagnostic evidence 门禁：`app-index:diagnostic:verify` 与 acceptance case 复算必须从 stage targetHit / target itemId / matchCount 重新推导 query hit，并复核 input、diagnosis、suggested fields、app 与 reindex path 指向同一目标，避免只手工填写 `matchedStages` 或 caseId 的弱 JSON 通过。
+- Windows copied app path 门禁：`windows:acceptance:verify` 最终命令必须携带 `--requireCopiedAppPathManualChecks` 与 `--requireCompletedManualEvidence`，用 checklist 全勾选且模板关键 Evidence 字段逐项填写的手工证据补齐复制源、加入本地启动区 action、reindex、indexed search result 与 indexed result launch evidence。
+- Windows common app launch 门禁：微信/Codex/Apple Music 等目标 App 的手工 evidence 必须覆盖 observed display name、icon evidence、launch target、CoreBox hidden evidence、search query 与截图/录屏，禁止只靠布尔项或泛截图完成验收。
+- Windows manual evidence 门禁：DivisionBox detached widget 必须在手工证据中记录 observed/expected pluginId、`detachedPayload` itemId/query 与 no-fallback 日志摘录；分时推荐必须记录 `timeSlot/dayOfWeek` cache key 与 recommendation trace 摘录，禁止只用泛化日志或截图替代关键事实。
+- Windows update evidence 门禁：自动 installer handoff evidence 必须带非空 `downloadTaskId`，并用 `--requireInstalledVersionMatchesTarget` 复核安装后版本与下载目标版本一致，拒绝 cached release tag/channel 或 matching asset platform/arch/size 与 runtime target 漂移的 JSON。
+- Windows update manual evidence 门禁：更新安装 Markdown 必须覆盖 UAC prompt、app exit、installer exit、installed version、app relaunch 与 failure rollback evidence，禁止只用 installer path/mode 或截图替代安装闭环。
+- Windows performance evidence 门禁：`search-trace-stats/v1` 和 `clipboard-stress-summary/v1` 除 release 阈值外还必须通过计数一致性复算，拒绝 paired/sample/slow counter 漂移、无有效 clipboard 采样或 scheduler sample 超过 count 的弱证据。
+- 假值/占位实现门禁：生产路径不得返回硬编码 Mock CPU、固定磁盘/内存、mock 支付 URL 等“假值成功”；开发 mock 必须由显式环境开关门控，不可用能力必须暴露 unavailable reason。
+- retained raw event 指标门禁：`raw channel send` 违规与 retained `defineRawEvent` definition 分开统计；新增可 typed builder 表达的事件不得继续使用 raw definition；当前三段 migration candidate 必须保持 `0`。
+- SRP/size 治理不再作为脚本门禁：后续通过 code review、targeted refactor 与最近路径测试控制大文件回潮。
+- 网络边界硬约束：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network`（network 套件内部除外），由 ESLint 拦截。
+- 统一质量入口：PR 使用 `pnpm quality:pr`，release/milestone 使用 `pnpm quality:release`。
 - 桌面打包质量门禁必须覆盖 `PACKAGED_RUNTIME_MODULES` 的完整运行时依赖闭包；runtime module root 清单、平台 native 清单与闭包解析统一来源于 `apps/core-app/scripts/build-target/runtime-modules.js`，`ensure-runtime-modules`、`ensure-platform-modules`、`afterPack` 与 packaged verifier 不得各自维护模块发现逻辑。当前基线至少覆盖 Sentry/OpenTelemetry、LangChain 关键依赖（`@langchain/core`、`p-retry`、`retry`、`langsmith`）与 `compressing -> tar-stream -> readable-stream` 缺包闭包真实进入可解析产物路径，并以 hoisted/transitive dependency smoke contract 固定 pnpm 漏包场景。
 - 对于显式落在 `resources/node_modules`，或因 asar 缺包被 promoted 到 `resources/node_modules` 的运行时模块，质量门禁必须递归校验其 dependencies 与必需 peer 闭包也位于 `resources/node_modules`，禁止“根模块存在但其二级/peer 依赖仍从 asar 漏解析”。
 - 对于主进程在运行时直接加载的普通第三方包，质量门禁必须校验其传递依赖闭包已进入 `app.asar` 或 `resources/node_modules`，禁止留下只打进根包、未带闭包的半残产物。
@@ -69,15 +103,21 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 版本发布必须附带最小变更说明与风险说明。
 - 桌面构建产物必须附带运行时依赖完整性校验，关键主进程依赖链缺失时应在构建阶段直接失败，而不是留到用户启动时暴露。
 - beta / snapshot 标签发布必须保持 pre-release 语义，避免预发布资产进入稳定发布通道。
+- CI/CD JavaScript Action runtime 必须保持 Node 24-compatible major baseline；不得通过 `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过 warning，且不得把该迁移误解为项目业务 Node 版本升级。
 
 ### 3.4 文档约束
 - 功能行为变化需同步 `README.md` / `plan-prd` / `docs/INDEX.md` 至少一处。
 - 活跃 PRD 必须包含“最终目标、验收标准、质量约束、回滚策略”。
 
-### 3.5 文档治理执行锚点（2026-05-08）
+### 3.5 文档治理执行锚点（2026-05-09）
 - 文档盘点历史快照保留在 `docs/plan-prd/docs/DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md`；当前下一步路线以六主文档、`TODO` 与 `CHANGES` 为准。
-- 当前执行优先级调整为：先完成 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`，再在 `2.4.11` 关闭剩余 Windows/macOS 阻塞级回归、Release Evidence 与清册退场项；`Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
-- 升级 strict 前置条件固定：连续 5 次 `docs:guard` 零告警 + 连续 2 周无口径漂移。
+- 当前执行优先级调整为：先完成 `2.4.10` Windows 真机 evidence 闭环（acceptance collection plan、case/manual/performance evidence、final verify、Nexus Release Evidence），再在 `2.4.11` 关闭剩余 Windows/macOS 阻塞级回归、Release Evidence 与清册退场项；`Nexus 设备授权风控` 保留实施文档与历史入口，降为非当前主线。
+- Nexus Provider 聚合与 Scene 编排已进入架构蓝图；后续实现必须遵守 Provider/Scene 解耦、typed transport/domain SDK、Storage/Sync 与 Metering/Audit 边界。
+- 2.5.0 AI Plan PRD 已锁定：CoreBox AI Ask 最小 Stable 切片已落地；后续实现必须继续交付 CoreBox / OmniPanel 桌面入口闭环、OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue 与 P0 模板，禁止将范围扩大到全量多模态、Assistant 默认启用或 Nexus Scene runtime 编排。
+- 2026-05-12 跨平台兼容与占位实现复核已落地：`cross-platform-compat-placeholder-audit-2026-05-10.md` 保留为历史基线，当前执行口径以 `cross-platform-compat-placeholder-review-2026-05-12.md` 与 `TODO.md` 为准；Pilot 假值成功、mock payment 默认成功与 `touch-image` renderer localStorage 长期持久化已收口，`2.4.10` release blocker 收敛为 Windows/macOS 真机 evidence，`2.4.11` 后续聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
+- 2026-05-11 架构治理切片已继续落地：Pilot stat 改真实 runtime metrics，mock payment 必须显式 `PILOT_PAYMENT_MODE=mock`，touch-image 图片历史迁入 plugin storage SDK，Transport boundary test 输出 raw send / retained raw definition / typed candidate 独立指标；三段 typed candidate 清零，`clipboard.ts` 已降到 `1143` 行并清退 size exception，`app-provider.ts` source scanner 第一切片完成并收紧 growth exception cap。
+- 2026-05-11 Nexus AI provider 已同步镜像到 Provider Registry，API key 只进入 secure store 并通过 `authRef` 引用；dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已统一走 `listIntelligenceProvidersWithRegistryMirrors` / secure-store fallback，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史；OpenAI-compatible AI mirror 已可通过 Scene 默认 adapter 执行 `vision.ocr`；Dashboard Admin Provider Registry 已补系统级本地 `overlay.render` provider 与 `corebox.screenshot.translate` Scene 的幂等 seed 入口；下一步是旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略与高级策略。
+- 文档质量不再由脚本强校验；仍按 AGENTS.md 要求在行为/接口/架构变化时同步活跃入口文档。
 
 ## 4. 8 周路线图（建议执行窗口：2026-02-23 ~ 2026-04-19）
 
@@ -91,7 +131,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
   - 质量闸门：
   - `pnpm -C "apps/core-app" run typecheck:node` 通过；
   - `pnpm -C "apps/core-app" run typecheck:web` 通过。
-  - `pnpm legacy:guard`（含 `compat:registry:guard` + `size:guard`）通过。
+  - `pnpm lint` 与 `pnpm quality:pr` 通过；release/milestone 追加 `pnpm quality:release`。
 
 ### Week 2：SDK Hard-Cut（E 批次）
 - 目标：清理 renderer 侧主要直连调用点。
@@ -103,7 +143,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 质量闸门：
   - 新增迁移点无 raw event；
   - 定向 lint + 回归测试通过。
-- 进展（2026-03-12）：Network 相关 renderer/main/plugin 直连调用已完成全仓收口，root `network:guard` 已硬禁生效。
+- 进展（2026-03-12）：Network 相关 renderer/main/plugin 直连调用已完成全仓收口，root `ESLint network-boundary rules` 已硬禁生效。
 
 ### Week 3：SDK Hard-Cut（F 批次）
 - 目标：清理 main/plugin 侧 legacy 分支并收口导出。
@@ -193,6 +233,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 - **状态（2026-04-20）**：插件完善主线已收口；当前主线切换为 `2.4.10 Windows App 索引 + 基础 legacy/compat 收口`。
 - **Nexus 风控状态**：`docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` 保留为实施入口与历史证据；Phase 1 频控、冷却、审计日志、长期授权后端时间窗与可信设备显式白名单已完成，不再作为当前主线。
+- **Nexus Provider 聚合状态**：`docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` 已作为架构蓝图入口；Phase 1 文档化已固定 Provider / Capability / Scene / Strategy / Metering、迁移映射、错误码、数据表草案、质量约束与验收清单。后续不再为汇率、AI、翻译分别建立孤立供应商模型，而是统一进入 Provider registry 并由 Scene 编排消费。
+- **2.5.0 AI 状态**：`docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` 已作为 AI 板块主 Plan PRD；版本定位为桌面 AI 入口收口，Stable 只承诺文本 + OCR；下个版本重点落地 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与剪贴板整理/会议纪要/文本批处理模板；Skills / Background Automations / Pilot 联动为 Beta，Assistant、多模态生成编辑、多 Agent 长任务面板与 Nexus Scene runtime 编排不进入 2.5.0 必交付范围。
 - **完成项**：
   - 权限中心 Phase 5：`PermissionStore` 切换 SQLite 主存储，支持 `JSON -> SQLite` 一次性迁移与失败只读回退；
   - 安装链路权限确认：安装阶段支持 `always/session/deny` 三分支并显式失败反馈；

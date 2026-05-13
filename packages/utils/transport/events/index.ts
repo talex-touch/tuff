@@ -173,7 +173,9 @@ import type {
   DownloadGetTaskStatusResponse,
   DownloadGetTempStatsResponse,
   DownloadMigrationNeededResponse,
+  DownloadMigrationProgressPayload,
   DownloadMigrationRetryResponse,
+  DownloadMigrationResultPayload,
   DownloadMigrationStartResponse,
   DownloadMigrationStatusResponse,
   DownloadNotificationClickedPayload,
@@ -230,6 +232,34 @@ import type {
   NetworkRequestResponse,
   NetworkToTfileRequest,
 } from "./types/network";
+import type {
+  NativeCapabilitiesListRequest,
+  NativeCapabilityGetRequest,
+  NativeCapabilityStatus,
+  NativeFileActionResult,
+  NativeFileIndexAddPathRequest,
+  NativeFileIndexAddPathResult,
+  NativeFileIndexProgress,
+  NativeFileIndexQueryRequest,
+  NativeFileIndexQueryResult,
+  NativeFileIndexRebuildRequest,
+  NativeFileIndexRebuildResult,
+  NativeFileIndexStats,
+  NativeFileIndexStatus,
+  NativeFileIndexSupport,
+  NativeFilePathRequest,
+  NativeFileResourceRequest,
+  NativeFileStatResult,
+  NativeFileTfileResult,
+  NativeMediaProbeRequest,
+  NativeMediaProbeResult,
+  NativeMediaThumbnailRequest,
+  NativeResourceRef,
+  NativeScreenshotCaptureRequest,
+  NativeScreenshotCaptureResult,
+  NativeScreenshotDisplay,
+  NativeScreenshotSupport,
+} from "./types/native";
 
 // ============================================================================
 // Store Events
@@ -393,7 +423,10 @@ import type {
   PluginUnloadRequest,
 } from "./types/plugin";
 
-import type { WidgetRegistrationPayload } from "../../plugin/widget";
+import type {
+  WidgetFailurePayload,
+  WidgetRegistrationPayload,
+} from "../../plugin/widget";
 
 // ============================================================================
 // Sentry Events
@@ -656,6 +689,16 @@ export const DownloadEvents = {
       .module("migration")
       .event("status")
       .define<void, DownloadMigrationStatusResponse>(),
+
+    progress: defineEvent("download")
+      .module("migration")
+      .event("progress")
+      .define<DownloadMigrationProgressPayload, void>(),
+
+    result: defineEvent("download")
+      .module("migration")
+      .event("result")
+      .define<DownloadMigrationResultPayload, void>(),
   },
 
   push: {
@@ -1472,6 +1515,10 @@ export const PluginEvents = {
       .module("widget")
       .event("update")
       .define<WidgetRegistrationPayload, void>(),
+    failed: defineEvent("plugin")
+      .module("widget")
+      .event("failed")
+      .define<WidgetFailurePayload, void>(),
     unregister: defineEvent("plugin")
       .module("widget")
       .event("unregister")
@@ -1887,6 +1934,113 @@ export const NetworkEvents = {
       NetworkConfigUpdateRequest,
       NetworkConfigGetResponse
     >("network:update-config"),
+  },
+} as const;
+
+// ============================================================================
+// Native Events
+// ============================================================================
+
+export const NativeEvents = {
+  capabilities: {
+    list: defineEvent("native")
+      .module("capabilities")
+      .event("list")
+      .define<NativeCapabilitiesListRequest | void, NativeCapabilityStatus[]>(),
+    get: defineEvent("native")
+      .module("capabilities")
+      .event("get")
+      .define<NativeCapabilityGetRequest, NativeCapabilityStatus>(),
+  },
+
+  screenshot: {
+    getSupport: defineEvent("native")
+      .module("screenshot")
+      .event("get-support")
+      .define<void, NativeScreenshotSupport>(),
+    listDisplays: defineEvent("native")
+      .module("screenshot")
+      .event("list-displays")
+      .define<void, NativeScreenshotDisplay[]>(),
+    capture: defineEvent("native")
+      .module("screenshot")
+      .event("capture")
+      .define<NativeScreenshotCaptureRequest | void, NativeScreenshotCaptureResult>(),
+  },
+
+  fileIndex: {
+    getSupport: defineEvent("native")
+      .module("file-index")
+      .event("get-support")
+      .define<void, NativeFileIndexSupport>(),
+    getStatus: defineEvent("native")
+      .module("file-index")
+      .event("get-status")
+      .define<void, NativeFileIndexStatus>(),
+    getStats: defineEvent("native")
+      .module("file-index")
+      .event("get-stats")
+      .define<void, NativeFileIndexStats>(),
+    query: defineEvent("native")
+      .module("file-index")
+      .event("query")
+      .define<NativeFileIndexQueryRequest, NativeFileIndexQueryResult>(),
+    rebuild: defineEvent("native")
+      .module("file-index")
+      .event("rebuild")
+      .define<NativeFileIndexRebuildRequest | void, NativeFileIndexRebuildResult>(),
+    addPath: defineEvent("native")
+      .module("file-index")
+      .event("add-path")
+      .define<NativeFileIndexAddPathRequest, NativeFileIndexAddPathResult>(),
+    progress: defineEvent("native")
+      .module("file-index")
+      .event("progress")
+      .define<void, AsyncIterable<NativeFileIndexProgress>>({
+        stream: { enabled: true },
+      }),
+  },
+
+  file: {
+    stat: defineEvent("native")
+      .module("file")
+      .event("stat")
+      .define<NativeFilePathRequest, NativeFileStatResult>(),
+    reveal: defineEvent("native")
+      .module("file")
+      .event("reveal")
+      .define<NativeFilePathRequest, NativeFileActionResult>(),
+    open: defineEvent("native")
+      .module("file")
+      .event("open")
+      .define<NativeFilePathRequest, NativeFileActionResult>(),
+    getIcon: defineEvent("native")
+      .module("file")
+      .event("get-icon")
+      .define<NativeFileResourceRequest, NativeResourceRef>(),
+    getThumbnail: defineEvent("native")
+      .module("file")
+      .event("get-thumbnail")
+      .define<NativeFileResourceRequest, NativeResourceRef>(),
+    toTfile: defineEvent("native")
+      .module("file")
+      .event("to-tfile")
+      .define<NativeFilePathRequest, NativeFileTfileResult>(),
+  },
+
+  media: {
+    getSupport: defineEvent("native")
+      .module("media")
+      .event("get-support")
+      .define<void, NativeCapabilityStatus>(),
+    probe: defineEvent("native")
+      .module("media")
+      .event("probe")
+      .define<NativeMediaProbeRequest, NativeMediaProbeResult>(),
+    getThumbnail: defineEvent("native")
+      .module("media")
+      .event("get-thumbnail")
+      .define<NativeMediaThumbnailRequest, NativeResourceRef>(),
   },
 } as const;
 
@@ -2506,6 +2660,7 @@ export const TuffEvents = {
   plugin: PluginEvents,
   store: StoreEvents,
   network: NetworkEvents,
+  native: NativeEvents,
   notification: NotificationEvents,
   permission: PermissionEvents,
   platform: PlatformEvents,

@@ -42,6 +42,17 @@ import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getNetworkService } from '../network'
+import { launchWindowsInstaller } from './services/windows-installer-strategy'
+import {
+  calculateUpdateAssetScore,
+  isAuxiliaryUpdateComponentAsset,
+  isUpdateChecksumAsset,
+  isUpdateManifestAsset,
+  isUpdateMetadataAsset,
+  isUpdateSignatureAsset,
+  normalizeUpdateAssetKey,
+  stripUpdateSignatureSuffix
+} from './update-asset-utils'
 
 /**
  * Version information interface
@@ -59,6 +70,7 @@ interface VersionInfo {
  */
 interface UpdateSystemConfig {
   autoDownload: boolean
+  autoInstallDownloadedUpdates: boolean
   autoCheck: boolean
   checkFrequency: 'startup' | 'daily' | 'weekly' | 'never'
   ignoredVersions: string[]
@@ -81,6 +93,10 @@ interface RendererOverrideState {
   lastError?: string
   sourceTag?: string
   sha256?: string
+}
+
+interface UpdateDownloadOptions {
+  autoInstallOnComplete?: boolean
 }
 
 /**
@@ -135,6 +151,7 @@ export class UpdateSystem {
   private readonly signatureVerifier = new SignatureVerifier()
   private readonly storageRoot: string
   private readonly messageStore = getAnalyticsMessageStore()
+  private readonly autoInstallOnCompleteTaskIds = new Set<string>()
 
   /** Channel priority for version comparison (lower = more stable) */
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
@@ -154,7 +171,8 @@ export class UpdateSystem {
     this.currentVersion = this.parseVersion(getAppVersionSafe())
     this.storageRoot = config?.storageRoot ?? app.getPath('userData')
     this.config = {
-      autoDownload: false,
+      autoDownload: true,
+      autoInstallDownloadedUpdates: false,
       autoCheck: true,
       checkFrequency: 'startup',
       ignoredVersions: [],
@@ -244,13 +262,16 @@ export class UpdateSystem {
    * @param release - GitHub release to download
    * @returns Task ID of the download
    */
-  async downloadUpdate(release: GitHubRelease): Promise<string> {
+  async downloadUpdate(
+    release: GitHubRelease,
+    options: UpdateDownloadOptions = {}
+  ): Promise<string> {
     try {
       const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
 
       const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
       if (reusableTaskId) {
-        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
+        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name, options)
         updateSystemLog.info('Reusing existing update task', {
           meta: {
             tag: resolvedRelease.tag_name,
@@ -288,7 +309,7 @@ export class UpdateSystem {
       const taskId = await this.downloadCenterModule.addTask(request)
 
       // Set up listener for download completion
-      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
+      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name, options)
 
       void this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest).catch((error) => {
         updateSystemLog.warn('Renderer override background scheduling failed', {
@@ -380,9 +401,16 @@ export class UpdateSystem {
    * Set up listener for download completion to show notification
    * @private
    */
-  private setupDownloadCompletionListener(taskId: string, version: string): void {
+  private setupDownloadCompletionListener(
+    taskId: string,
+    version: string,
+    options: UpdateDownloadOptions = {}
+  ): void {
     // Listen for download completion event
     const pollTaskId = `update-system.download.${taskId}`
+    if (this.shouldAutoInstallOnComplete(options)) {
+      this.autoInstallOnCompleteTaskIds.add(taskId)
+    }
     if (this.pollingService.isRegistered(pollTaskId)) {
       this.pollingService.unregister(pollTaskId)
     }
@@ -394,11 +422,29 @@ export class UpdateSystem {
 
         if (!task) {
           this.pollingService.unregister(pollTaskId)
+          this.autoInstallOnCompleteTaskIds.delete(taskId)
           return
         }
 
         if (task.status === 'completed') {
           this.pollingService.unregister(pollTaskId)
+
+          if (this.autoInstallOnCompleteTaskIds.delete(taskId)) {
+            void this.installUpdate(taskId).catch((error) => {
+              updateSystemLog.warn('Automatic Windows installer handoff failed', {
+                error,
+                meta: { taskId, version }
+              })
+              this.messageStore.add({
+                source: 'update',
+                severity: 'error',
+                title: 'Automatic update install failed',
+                message: error instanceof Error ? error.message : String(error),
+                meta: { taskId, version }
+              })
+            })
+            return
+          }
 
           // Show update download complete notification
           if (this.notificationService) {
@@ -406,11 +452,20 @@ export class UpdateSystem {
           }
         } else if (task.status === 'failed' || task.status === 'cancelled') {
           this.pollingService.unregister(pollTaskId)
+          this.autoInstallOnCompleteTaskIds.delete(taskId)
         }
       },
       { interval: 1, unit: 'seconds' }
     )
     this.pollingService.start()
+  }
+
+  private shouldAutoInstallOnComplete(options: UpdateDownloadOptions): boolean {
+    return (
+      options.autoInstallOnComplete === true &&
+      this.config.autoInstallDownloadedUpdates === true &&
+      process.platform === 'win32'
+    )
   }
 
   private async maybeScheduleRendererOverrideDownload(
@@ -562,8 +617,10 @@ export class UpdateSystem {
   }
 
   private resolveAssetByName(assets: ReleaseAsset[], name: string): ReleaseAsset | null {
-    const key = this.normalizeAssetKey(name)
-    return assets.find((asset) => this.normalizeAssetKey(String(asset?.name || '')) === key) ?? null
+    const key = normalizeUpdateAssetKey(name)
+    return (
+      assets.find((asset) => normalizeUpdateAssetKey(String(asset?.name || '')) === key) ?? null
+    )
   }
 
   private resolveAssetUrl(asset: ReleaseAsset): string | null {
@@ -1043,14 +1100,14 @@ export class UpdateSystem {
     for (const asset of release.assets as ReleaseAsset[]) {
       const name = String(asset?.name || '')
       if (name) {
-        assetMap.set(this.normalizeAssetKey(name), asset)
+        assetMap.set(normalizeUpdateAssetKey(name), asset)
       }
     }
 
     const manifestMap = new Map<string, UpdateReleaseArtifact>()
     for (const artifact of manifest.artifacts) {
       if (artifact?.name) {
-        manifestMap.set(this.normalizeAssetKey(artifact.name), artifact)
+        manifestMap.set(normalizeUpdateAssetKey(artifact.name), artifact)
       }
     }
 
@@ -1059,7 +1116,7 @@ export class UpdateSystem {
       if (!name) {
         continue
       }
-      const manifestEntry = manifestMap.get(this.normalizeAssetKey(name))
+      const manifestEntry = manifestMap.get(normalizeUpdateAssetKey(name))
       if (!manifestEntry) {
         continue
       }
@@ -1070,7 +1127,7 @@ export class UpdateSystem {
       asset.coreRange = manifestEntry.coreRange
 
       if (manifestEntry.signature) {
-        const signatureAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signature))
+        const signatureAsset = assetMap.get(normalizeUpdateAssetKey(manifestEntry.signature))
         const signatureUrl = signatureAsset?.browser_download_url || signatureAsset?.url
         if (signatureUrl) {
           asset.signatureUrl = signatureUrl
@@ -1078,7 +1135,7 @@ export class UpdateSystem {
       }
 
       if (manifestEntry.signatureKey) {
-        const signatureKeyAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signatureKey))
+        const signatureKeyAsset = assetMap.get(normalizeUpdateAssetKey(manifestEntry.signatureKey))
         const signatureKeyUrl = signatureKeyAsset?.browser_download_url || signatureKeyAsset?.url
         if (signatureKeyUrl) {
           asset.signatureKeyUrl = signatureKeyUrl
@@ -1093,7 +1150,7 @@ export class UpdateSystem {
     assets: ReleaseAsset[]
   ): Promise<UpdateReleaseManifest | null> {
     const manifestAsset = assets.find(
-      (asset) => this.normalizeAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
+      (asset) => normalizeUpdateAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
     )
     if (!manifestAsset) {
       return null
@@ -1244,10 +1301,10 @@ export class UpdateSystem {
         continue
       }
 
-      if (this.isSignatureAsset(name)) {
+      if (isUpdateSignatureAsset(name)) {
         const url = asset.browser_download_url || asset.url
         if (url) {
-          signatureMap.set(this.normalizeAssetKey(this.stripSignatureSuffix(name)), url)
+          signatureMap.set(normalizeUpdateAssetKey(stripUpdateSignatureSuffix(name)), url)
         }
       }
     }
@@ -1261,10 +1318,10 @@ export class UpdateSystem {
       }
 
       if (
-        this.isSignatureAsset(name) ||
-        this.isChecksumAsset(name) ||
-        this.isManifestAsset(name) ||
-        this.isMetadataAsset(name)
+        isUpdateSignatureAsset(name) ||
+        isUpdateChecksumAsset(name) ||
+        isUpdateManifestAsset(name) ||
+        isUpdateMetadataAsset(name)
       ) {
         continue
       }
@@ -1275,7 +1332,7 @@ export class UpdateSystem {
         continue
       }
 
-      if (!asset.component && this.isAuxiliaryComponentAsset(normalizedName)) {
+      if (!asset.component && isAuxiliaryUpdateComponentAsset(normalizedName)) {
         continue
       }
 
@@ -1299,7 +1356,7 @@ export class UpdateSystem {
         continue
       }
 
-      const signatureUrl = asset.signatureUrl || signatureMap.get(this.normalizeAssetKey(name))
+      const signatureUrl = asset.signatureUrl || signatureMap.get(normalizeUpdateAssetKey(name))
       const signatureKeyUrl = asset.signatureKeyUrl
       const checksum =
         typeof asset.sha256 === 'string'
@@ -1323,7 +1380,7 @@ export class UpdateSystem {
 
       candidates.push({
         asset: candidate,
-        score: target.priority * 1000 + this.calculateAssetScore(normalizedName, asset, platform)
+        score: target.priority * 1000 + calculateUpdateAssetScore(normalizedName, asset, platform)
       })
     }
 
@@ -1339,103 +1396,6 @@ export class UpdateSystem {
     })
 
     return candidates[0].asset
-  }
-
-  private calculateAssetScore(filename: string, asset: ReleaseAsset, platform: string): number {
-    let score = 0
-
-    if (asset.component === 'core') {
-      score += 200
-    }
-
-    if (filename.includes('tuff')) {
-      score += 20
-    }
-
-    if (filename.includes('latest-release')) {
-      score += 10
-    }
-
-    score += this.getInstallerExtensionScore(filename, platform)
-
-    return score
-  }
-
-  private getInstallerExtensionScore(filename: string, platform: string): number {
-    if (platform === 'darwin') {
-      if (filename.endsWith('.app.zip')) return 180
-      if (filename.endsWith('.dmg')) return 140
-      if (filename.endsWith('.pkg')) return 130
-      if (filename.endsWith('.zip')) return 90
-      return 0
-    }
-
-    if (platform === 'win32') {
-      if (filename.endsWith('.exe')) return 140
-      if (filename.endsWith('.msi')) return 130
-      if (filename.endsWith('.zip')) return 90
-      if (filename.endsWith('.7z')) return 80
-      return 0
-    }
-
-    if (filename.endsWith('.appimage')) return 140
-    if (filename.endsWith('.deb')) return 130
-    if (filename.endsWith('.rpm')) return 120
-    if (filename.endsWith('.tar.gz') || filename.endsWith('.tgz')) return 100
-    if (filename.endsWith('.zip')) return 80
-    return 0
-  }
-
-  private isManifestAsset(filename: string): boolean {
-    return this.normalizeAssetKey(filename) === UPDATE_RELEASE_MANIFEST_NAME
-  }
-
-  private isMetadataAsset(filename: string): boolean {
-    const lower = filename.toLowerCase()
-
-    return (
-      lower.endsWith('.yml') ||
-      lower.endsWith('.yaml') ||
-      lower.endsWith('.json') ||
-      lower.endsWith('.blockmap') ||
-      lower.includes('builder-debug')
-    )
-  }
-
-  private isAuxiliaryComponentAsset(filename: string): boolean {
-    return (
-      filename.includes('renderer') ||
-      filename.includes('extensions') ||
-      filename.includes('extension')
-    )
-  }
-
-  private isSignatureAsset(filename: string): boolean {
-    const lower = filename.toLowerCase()
-    return lower.endsWith('.sig') || lower.endsWith('.sig.txt') || lower.endsWith('.asc')
-  }
-
-  private stripSignatureSuffix(filename: string): string {
-    return filename.replace(/\.(sig|asc)(\.txt)?$/i, '')
-  }
-
-  private isChecksumAsset(filename: string): boolean {
-    const lower = filename.toLowerCase()
-    return (
-      lower.endsWith('.sha256') ||
-      lower.endsWith('.sha1') ||
-      lower.endsWith('.md5') ||
-      lower.endsWith('.sha256.txt') ||
-      lower.endsWith('.sha1.txt') ||
-      lower.endsWith('.md5.txt') ||
-      lower.endsWith('.sha256sum') ||
-      lower.endsWith('.sha1sum') ||
-      lower.endsWith('.md5sum')
-    )
-  }
-
-  private normalizeAssetKey(filename: string): string {
-    return filename.toLowerCase()
   }
 
   /**
@@ -1483,6 +1443,22 @@ export class UpdateSystem {
     const filePath = path.join(destination, filename)
     if (process.platform === 'darwin' && (await this.tryInstallMacAppBundle(filePath))) {
       return
+    }
+    if (process.platform === 'win32') {
+      const launchResult = launchWindowsInstaller(filePath, {
+        spawn,
+        requestAppQuit: (reason) => this.requestAppQuit(reason)
+      })
+      if (launchResult.launched) {
+        updateSystemLog.info('Started Windows installer', {
+          meta: {
+            path: filePath,
+            type: launchResult.command?.type,
+            command: launchResult.command?.command
+          }
+        })
+        return
+      }
     }
     await shell.openPath(filePath)
     updateSystemLog.info('Opened installer', { meta: { path: filePath } })

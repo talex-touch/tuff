@@ -10,12 +10,15 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Checks for disallowed file changes (lock files)
   - Lints markdown files
   - Runs typecheck on the entire monorepo
+  - Uses read-only `pull_request` on `main` / `master`; workflows that execute PR code must not use `pull_request_target`
 
 - **`build-and-release.yml`** - Build and release workflow for Electron app
   - Builds the application for multiple platforms
   - Creates releases and uploads artifacts
   - Generates `tuff-release-manifest.json` for updater validation
   - Syncs Release metadata/assets to Nexus APIs (tag push only)
+  - Supports explicit `beta`, `snapshot`, and `release` manual build types; `v*-beta*` tags are published as pre-releases with BETA runtime metadata and snapshot packaging policy
+  - Uploads only release assets and updater metadata from each platform job, not the full unpacked `dist`
   - Notes sync priority (tag push): `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → GitHub release body fallback
   - 若配置 `NEXUS_SYNC_BASE_URL` 或 `ADMIN_CF_ACCESS_CLIENT_ID` / `ADMIN_CF_ACCESS_CLIENT_SECRET`，则仍会正常执行完整 Nexus 同步链路
   - `sync-nexus-release` 仅在 `POST /api/releases` 返回精确的重复 tag 错误时才转 `PATCH`；其余非 2xx 会按真实错误失败
@@ -25,7 +28,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Adds/removes labels based on PR content
 
 - **`release-drafter.yml`** - Release draft automation
-  - Updates the release draft on `main` pushes / merged PRs
+  - Updates the release draft on `main` / `master` pushes and merged PRs
 
 - Contributors README automation was retired on `2026-04-22`
   - The previous `readme-contributors.yml` workflow kept generating duplicate README PRs on `master` pushes, so it was disabled and removed to keep the official PR queue stable
@@ -163,6 +166,7 @@ jobs:
 3. **Conditional Steps**: Only enable steps (lint, test, build) that your package actually supports
 4. **Custom Commands**: Override default commands if your package uses different script names
 5. **Node Version**: Keep Node.js version consistent with the main app (currently 22.16.0)
+6. **Action Runtime**: Keep JavaScript actions on Node 24-compatible major versions; this is separate from the project `node-version` and must not be handled by changing the app runtime away from 22.16.0
 
 ## Workflow Execution Order
 
@@ -189,5 +193,6 @@ For package workflows:
 When updating:
 - Keep Node.js version in sync with Volta configuration
 - Update PNPM version when upgrading in the project
+- Review all `uses:` action majors against the current GitHub Actions runtime baseline; avoid `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` and do not use `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` as a long-term fix
 - Review and update path filters when restructuring packages
 - Test workflow changes in a feature branch first

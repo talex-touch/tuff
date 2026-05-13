@@ -20,6 +20,11 @@
       "types": "./everything.d.ts",
       "require": "./everything.js",
       "default": "./everything.js"
+    },
+    "./screenshot": {
+      "types": "./screenshot.d.ts",
+      "require": "./screenshot.js",
+      "default": "./screenshot.js"
     }
   },
   "files": [
@@ -27,15 +32,20 @@
     "index.d.ts",
     "native-loader.js",
     "binding.gyp",
+    "scripts/build-screenshot.js",
     "native/src",
+    "native-screenshot",
     "build/Release/*.node",
     "everything.js",
     "everything.d.ts",
+    "screenshot.js",
+    "screenshot.d.ts",
     "native/src/everything/addon.cc"
   ],
   "gypfile": true,
   "scripts": {
     "build": "node-gyp rebuild",
+    "build:screenshot": "node scripts/build-screenshot.js",
     "rebuild": "node-gyp rebuild",
     "check:everything": "node scripts/everything-selfcheck.js"
   },

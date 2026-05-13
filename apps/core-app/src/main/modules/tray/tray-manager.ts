@@ -16,6 +16,7 @@ import {
   WindowShownEvent
 } from '../../core/eventbus/touch-event'
 import { useAliveTarget } from '../../hooks/use-electron-guard'
+import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
@@ -38,6 +39,8 @@ export class TrayManager extends BaseModule {
   private tray: Tray | null = null
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
+  private trayBoundsValidationTimer: NodeJS.Timeout | null = null
+  private trayBoundsRecoveryAttempted = false
   private appDisposers: Array<() => void> = []
   private windowDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
@@ -62,7 +65,6 @@ export class TrayManager extends BaseModule {
     this.syncWindowVisibilityState()
 
     if (process.platform === 'darwin') {
-      this.applyActivationPolicy()
       this.setupDockIcon()
     }
 
@@ -74,6 +76,7 @@ export class TrayManager extends BaseModule {
     }
 
     if (process.platform === 'darwin') {
+      this.applyActivationPolicy()
       this.updateDockVisibility()
     }
   }
@@ -81,16 +84,17 @@ export class TrayManager extends BaseModule {
   private applyActivationPolicy(): void {
     const hideDock = this.getHideDockConfig()
     const startSilent = this.getStartSilentConfig()
-    const shouldUseAccessory =
-      this.shouldShowTray() && !this.shouldForceRegularInDev() && (hideDock || startSilent)
-    const normalized: 'regular' | 'accessory' = shouldUseAccessory ? 'accessory' : 'regular'
+    const shouldUseAccessory = this.shouldShowTray() && (hideDock || startSilent)
+    this.setMacActivationPolicy(shouldUseAccessory ? 'accessory' : 'regular')
+  }
 
+  private setMacActivationPolicy(policy: 'regular' | 'accessory'): void {
     try {
-      app.setActivationPolicy(normalized)
-      trayManagerLog.info('Activation policy updated', { meta: { policy: normalized } })
+      app.setActivationPolicy(policy)
+      trayManagerLog.info('Activation policy updated', { meta: { policy } })
     } catch (error) {
       trayManagerLog.warn('Failed to set activation policy', {
-        meta: { policy: normalized, error }
+        meta: { policy, error }
       })
     }
   }
@@ -110,18 +114,98 @@ export class TrayManager extends BaseModule {
       }
 
       this.tray = new Tray(icon)
-      this.tray.setToolTip('tuff')
+      this.tray.setToolTip(t('tray.tooltip'))
       this.bindTrayEvents()
       this.updateMenu()
+
+      const initialBounds = this.getTrayBounds()
+      const logMeta = {
+        platform: process.platform,
+        bounds: initialBounds,
+        iconPath: TrayIconProvider.getIconPath()
+      }
+      if (process.platform === 'darwin' && !this.isTrayBoundsVisible(initialBounds)) {
+        trayManagerLog.warn('Tray initialized with invalid bounds; scheduling layout validation', {
+          meta: logMeta
+        })
+      } else {
+        trayManagerLog.info('Tray initialized', { meta: logMeta })
+      }
+      this.scheduleTrayBoundsValidation()
     } catch (error) {
       trayManagerLog.error('Failed to initialize tray', { error })
     }
   }
 
   private destroyTray(): void {
+    this.clearTrayBoundsValidationTimer()
     if (!this.tray) return
     this.tray.destroy()
     this.tray = null
+  }
+
+  private getTrayBounds(): Electron.Rectangle | null {
+    try {
+      return this.tray?.getBounds?.() ?? null
+    } catch (error) {
+      trayManagerLog.warn('Failed to read tray bounds', { meta: { error } })
+      return null
+    }
+  }
+
+  private isTrayBoundsVisible(bounds: Electron.Rectangle | null): boolean {
+    return !!bounds && bounds.width > 0 && bounds.height > 0
+  }
+
+  private scheduleTrayBoundsValidation(): void {
+    if (process.platform !== 'darwin') return
+    this.clearTrayBoundsValidationTimer()
+
+    const timer = setTimeout(() => {
+      this.trayBoundsValidationTimer = null
+      this.validateTrayBoundsAfterLayout()
+    }, 600)
+    timer.unref?.()
+    this.trayBoundsValidationTimer = timer
+  }
+
+  private clearTrayBoundsValidationTimer(): void {
+    if (!this.trayBoundsValidationTimer) return
+    clearTimeout(this.trayBoundsValidationTimer)
+    this.trayBoundsValidationTimer = null
+  }
+
+  private validateTrayBoundsAfterLayout(): void {
+    if (!this.tray) return
+
+    const bounds = this.getTrayBounds()
+    if (this.isTrayBoundsVisible(bounds)) {
+      trayManagerLog.info('Tray bounds ready', { meta: { bounds } })
+      return
+    }
+
+    trayManagerLog.warn('Tray bounds invalid after layout', {
+      meta: {
+        bounds,
+        recoveryAttempted: this.trayBoundsRecoveryAttempted
+      }
+    })
+
+    if (this.trayBoundsRecoveryAttempted) return
+    this.trayBoundsRecoveryAttempted = true
+    this.recreateTrayAfterInvalidBounds(bounds)
+  }
+
+  private recreateTrayAfterInvalidBounds(previousBounds: Electron.Rectangle | null): void {
+    try {
+      trayManagerLog.warn('Recreating tray after invalid bounds', { meta: { previousBounds } })
+      this.tray?.destroy()
+      this.tray = null
+      this.initializeTray()
+      this.updateDockVisibility()
+    } catch (error) {
+      trayManagerLog.error('Failed to recreate tray after invalid bounds', { error })
+    }
   }
 
   private shouldShowTray(): boolean {
@@ -337,12 +421,6 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private shouldForceRegularInDev(): boolean {
-    if (process.platform !== 'darwin') return false
-    if (app.isPackaged) return false
-    return this.getHideDockConfig() || this.getStartSilentConfig()
-  }
-
   /**
    * Setup Dock icon on macOS
    * 在 macOS 上设置 Dock 图标
@@ -377,22 +455,26 @@ export class TrayManager extends BaseModule {
     const hasDivisionBox = this.hasActiveDivisionBox()
     const trayAvailable = this.shouldShowTray() && this.tray !== null
 
-    if (this.shouldForceRegularInDev() || !trayAvailable) {
-      app.setActivationPolicy('regular')
+    if (!trayAvailable) {
+      this.setMacActivationPolicy('regular')
       app.dock?.show()
       return
     }
 
-    if (hideDock) {
-      if (mainWindow.isVisible() || hasDivisionBox) {
-        app.dock?.show()
-      } else {
-        app.dock?.hide()
-      }
+    if (!hideDock) {
+      this.setMacActivationPolicy('regular')
+      app.dock?.show()
       return
     }
 
-    app.dock?.show()
+    if (mainWindow.isVisible() || hasDivisionBox) {
+      this.setMacActivationPolicy('regular')
+      app.dock?.show()
+      return
+    }
+
+    this.setMacActivationPolicy('accessory')
+    app.dock?.hide()
   }
 
   public getRuntimeSettingsSnapshot(): {

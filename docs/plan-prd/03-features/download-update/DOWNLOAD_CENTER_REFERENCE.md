@@ -169,13 +169,13 @@ interface DownloadConfig {
 ### 迁移系统
 ```typescript
 // 检查是否需要迁移
-const needed = await invoke('download:check-migration-needed')
+const needed = await downloadSdk.checkMigrationNeeded()
 
 // 执行迁移
-invoke('download:start-migration')
+await downloadSdk.startMigration()
 
 // 监听进度
-on('download:migration-progress', (progress) => {
+transport.on(DownloadEvents.migration.progress, (progress) => {
   console.log(`${progress.phase}: ${progress.percentage}%`)
 })
 ```

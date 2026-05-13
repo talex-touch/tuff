@@ -13,8 +13,12 @@ import type {
   WidgetCompilationContext
 } from '../widget-processor'
 import path from 'node:path'
-import { transform } from 'esbuild'
 import { pushWidgetFeatureIssue } from '../widget-issue'
+import {
+  classifyWidgetCompileError,
+  resolveWidgetCompileCauseCode,
+  transformWidgetSource
+} from '../widget-transform'
 
 /**
  * Allowed packages in widget sandbox
@@ -127,7 +131,7 @@ export class WidgetScriptProcessor implements IWidgetProcessor {
       let compiledCode = source.source
       if (!isPrecompiled) {
         // Step 3: Transform with esbuild
-        const transformed = await transform(source.source, {
+        const transformed = await transformWidgetSource(source.source, {
           loader,
           format: 'cjs',
           target: 'node18'
@@ -159,9 +163,12 @@ module.exports = __component
       )
 
       pushWidgetFeatureIssue(plugin, feature, {
-        code: 'WIDGET_COMPILE_FAILED',
+        code: classifyWidgetCompileError(error),
         message: `Failed to compile script widget: ${(error as Error).message}`,
-        meta: { error: (error as Error).stack }
+        meta: {
+          error: (error as Error).stack,
+          causeCode: resolveWidgetCompileCauseCode(error)
+        }
       })
 
       return null

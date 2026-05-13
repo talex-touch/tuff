@@ -2,6 +2,7 @@
 import { TxButton, TxSpinner } from '@talex-touch/tuffex'
 import { hasNavigator } from '@talex-touch/utils/env'
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: false,
@@ -106,7 +107,7 @@ async function reportPresence(state: 'opened' | 'heartbeat' | 'closed', keepaliv
       if (sent)
         return
     }
-    await $fetch('/api/app-auth/device/presence', {
+    await requestJson('/api/app-auth/device/presence', {
       method: 'POST',
       body: payload,
     })
@@ -165,7 +166,7 @@ async function loadInfo() {
   }
   state.value = 'loading'
   try {
-    const info = await $fetch<{
+    const info = await requestJson<{
       status?: string
       grantType?: string
       deviceName?: string
@@ -238,7 +239,7 @@ async function approve() {
   }
   state.value = 'loading'
   try {
-    await $fetch('/api/app-auth/device/approve', {
+    await requestJson('/api/app-auth/device/approve', {
       method: 'POST',
       body: { code: code.value, grantType: grantType.value },
     })
@@ -256,7 +257,7 @@ async function cancel() {
     return
   state.value = 'loading'
   try {
-    await $fetch('/api/app-auth/device/cancel', {
+    await requestJson('/api/app-auth/device/cancel', {
       method: 'POST',
       body: { code: code.value },
     })

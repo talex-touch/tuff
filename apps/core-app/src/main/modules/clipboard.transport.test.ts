@@ -19,6 +19,10 @@ const RETIRED_CLIPBOARD_EVENT_NAMES = [
   'clipboard:query'
 ] as const
 
+const notificationModuleMock = vi.hoisted(() => ({
+  showInternalSystemNotification: vi.fn()
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp'),
@@ -91,6 +95,18 @@ vi.mock('electron', () => ({
     openExternal: vi.fn()
   }
 }))
+
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      existsSync: vi.fn((filePath: string) => filePath.startsWith('/tmp/clipboard/images/'))
+    },
+    existsSync: vi.fn((filePath: string) => filePath.startsWith('/tmp/clipboard/images/'))
+  }
+})
 
 vi.mock('../utils/logger', () => ({
   createLogger: vi.fn(() => ({
@@ -279,6 +295,10 @@ vi.mock('./permission', () => ({
   getPermissionModule: vi.fn(() => null)
 }))
 
+vi.mock('./notification', () => ({
+  notificationModule: notificationModuleMock
+}))
+
 vi.mock('./platform/capability-adapter', () => ({
   getAutoPasteCapabilityPatch: vi.fn(async () => ({
     supportLevel: 'supported'
@@ -392,6 +412,48 @@ describe('ClipboardModule transport registration', () => {
     for (const retiredEvent of RETIRED_CLIPBOARD_EVENT_NAMES) {
       expect(registeredEvents).not.toContain(retiredEvent)
     }
+  })
+})
+
+describe('ClipboardModule auto-paste failure notification', () => {
+  it('sends a deduped system notification when auto-paste fails', async () => {
+    const error = new Error('Command failed: osascript')
+    Object.assign(error, {
+      stderr: 'execution error: 未获得授权将Apple事件发送给System Events。 (-1743)'
+    })
+    const module = new ClipboardModule() as unknown as {
+      toActionFailureResult: (
+        error: unknown,
+        logMessage: string,
+        meta: Record<string, unknown>,
+        fallbackMessage?: string,
+        options?: { notify?: boolean }
+      ) => { success: boolean; message?: string; code?: string }
+    }
+
+    const result = module.toActionFailureResult(
+      error,
+      'Clipboard apply failed',
+      { platform: 'darwin' },
+      undefined,
+      { notify: true }
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
+      message:
+        '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。'
+    })
+    expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith({
+      id: 'clipboard-auto-paste-failed:MACOS_AUTOMATION_PERMISSION_DENIED',
+      title: '自动粘贴失败',
+      message:
+        '自动粘贴失败：需要在“系统设置 -> 隐私与安全性 -> 自动化”中允许 Tuff 控制 System Events。',
+      level: 'error',
+      dedupeKey: 'clipboard-auto-paste-failed:MACOS_AUTOMATION_PERMISSION_DENIED',
+      system: { silent: false }
+    })
   })
 })
 

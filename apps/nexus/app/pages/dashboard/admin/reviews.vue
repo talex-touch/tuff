@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
@@ -84,7 +85,7 @@ async function loadPendingReviews(options: { reset?: boolean } = {}) {
     pagination.offset = 0
 
   try {
-    const response = await $fetch<PendingReviewResponse>('/api/admin/store/reviews/pending', {
+    const response = await rawFetch<PendingReviewResponse>('/api/admin/store/reviews/pending', {
       query: {
         limit: pagination.limit,
         offset,
@@ -125,7 +126,7 @@ async function updateReviewStatus(review: PendingReview, status: 'approved' | 'r
   actionError.value = null
 
   try {
-    await $fetch(`/api/admin/store/reviews/${review.id}/status`, {
+    await rawFetch(`/api/admin/store/reviews/${review.id}/status`, {
       method: 'PATCH',
       body: { status },
     })

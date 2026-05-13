@@ -24,6 +24,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 import SettingFileIndexAppDiagnostic from './SettingFileIndexAppDiagnostic.vue'
+import SettingFileIndexAppIndexManager from './SettingFileIndexAppIndexManager.vue'
 import {
   formatDeviceBatteryStatus,
   formatDeviceIdleDuration,
@@ -761,6 +762,7 @@ async function triggerRebuild() {
   </TuffGroupBlock>
 
   <TuffGroupBlock
+    v-if="showAdvancedSettings"
     :name="t('settings.settingFileIndex.policyGroupTitle')"
     :description="t('settings.settingFileIndex.policyGroupDesc')"
     default-icon="i-carbon-timer"
@@ -1082,6 +1084,8 @@ async function triggerRebuild() {
         </div>
       </template>
     </TuffBlockInput>
+
+    <SettingFileIndexAppIndexManager />
 
     <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import type { DataTableColumn } from '@talex-touch/tuffex'
+import { TxButton, TxDataTable, TxStatusBadge } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: 'dashboard',
@@ -60,6 +62,8 @@ interface StorageRecentSessionsResponse {
   generated_at: string
 }
 
+type StorageRecentSession = StorageRecentSessionsResponse['sessions'][number]
+
 interface StorageDetailsResponse {
   summary: {
     total_items: number
@@ -93,7 +97,7 @@ interface StorageDetailsResponse {
 
 const { data, pending, error, refresh } = await useAsyncData<StorageStatusResponse | null>(
   'dashboard-storage-status',
-  async () => await $fetch<StorageStatusResponse>('/api/dashboard/storage/status'),
+  async () => await requestJson<StorageStatusResponse>('/api/dashboard/storage/status'),
   {
     default: () => null,
     server: false,
@@ -108,7 +112,7 @@ const {
 } = await useAsyncData<StorageRecentSessionsResponse>(
   'dashboard-storage-recent-sessions',
   async () =>
-    await $fetch<StorageRecentSessionsResponse>('/api/dashboard/storage/sessions', {
+    await requestJson<StorageRecentSessionsResponse>('/api/dashboard/storage/sessions', {
       query: { limit: 24 }
     }),
   {
@@ -123,6 +127,14 @@ const quotas = computed(() => data.value?.quotas ?? null)
 const keyrings = computed(() => data.value?.keyrings ?? [])
 const session = computed(() => data.value?.session ?? null)
 const recentSessions = computed(() => recentSessionsData.value?.sessions ?? [])
+const recentSessionRows = computed(() => recentSessions.value.slice(0, 12))
+const recentSessionColumns = computed<DataTableColumn<StorageRecentSession>[]>(() => [
+  { key: 'deviceId', title: t('dashboard.storage.deviceId', 'Device ID'), width: 180 },
+  { key: 'type', title: t('dashboard.storage.type', 'Type'), width: 120 },
+  { key: 'status', title: t('dashboard.storage.status', 'Status'), width: 120 },
+  { key: 'timestamp', title: t('dashboard.storage.timestamp', 'Timestamp'), width: 190 },
+  { key: 'action', title: t('dashboard.storage.action', 'Action'), width: 100 },
+])
 
 const storageUsagePercent = computed(() => {
   const quota = quotas.value
@@ -297,26 +309,28 @@ function maskDeviceId(deviceId: string): string {
   return `${normalized.slice(0, 7)}...${normalized.slice(-6)}`
 }
 
-function resolveSessionType(item: StorageRecentSessionsResponse['sessions'][number]): string {
+function resolveSessionType(item: StorageRecentSession): string {
   return item.op_type === 'delete'
     ? t('dashboard.storage.sessionTypeDelete', 'Delete')
     : t('dashboard.storage.sessionTypePush', 'Push')
 }
 
-function resolveSessionTypeIcon(item: StorageRecentSessionsResponse['sessions'][number]): string {
+function resolveSessionTypeIcon(item: StorageRecentSession): string {
   return item.op_type === 'delete' ? 'i-carbon-trash-can' : 'i-carbon-arrow-up-right'
 }
 
-function resolveSessionStatusText(item: StorageRecentSessionsResponse['sessions'][number]): string {
+function resolveSessionStatusText(item: StorageRecentSession): string {
   return item.status === 'failed'
     ? t('dashboard.storage.statusFailed', 'Failed')
     : t('dashboard.storage.statusSuccess', 'Success')
 }
 
-function resolveSessionStatusClass(item: StorageRecentSessionsResponse['sessions'][number]): string {
-  return item.status === 'failed'
-    ? 'StorageSessionStatusBadge--failed'
-    : 'StorageSessionStatusBadge--success'
+function resolveSessionStatus(item: StorageRecentSession): 'success' | 'danger' {
+  return item.status === 'failed' ? 'danger' : 'success'
+}
+
+function resolveSessionRowKey(item: StorageRecentSession): string {
+  return `${item.cursor}-${item.item_id}`
 }
 
 async function refreshAll(): Promise<void> {
@@ -367,7 +381,7 @@ async function loadSyncDetails(force = false): Promise<void> {
   detailsLoading.value = true
   detailsError.value = ''
   try {
-    detailsData.value = await $fetch<StorageDetailsResponse>('/api/dashboard/storage/details', {
+    detailsData.value = await requestJson<StorageDetailsResponse>('/api/dashboard/storage/details', {
       query: { limit: 120 }
     })
   } catch (error) {
@@ -572,53 +586,39 @@ watch(showDetailsOverlay, (open) => {
       </p>
 
       <div class="StorageSessionTableWrap">
-        <table class="StorageSessionTable">
-          <thead>
-            <tr>
-              <th>{{ t('dashboard.storage.deviceId', 'Device ID') }}</th>
-              <th>{{ t('dashboard.storage.type', 'Type') }}</th>
-              <th>{{ t('dashboard.storage.status', 'Status') }}</th>
-              <th>{{ t('dashboard.storage.timestamp', 'Timestamp') }}</th>
-              <th>{{ t('dashboard.storage.action', 'Action') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in recentSessions.slice(0, 12)" :key="`${item.cursor}-${item.item_id}`">
-              <td class="StorageSessionTable-Device">
-                {{ maskDeviceId(item.device_id) }}
-              </td>
-              <td>
-                <span class="StorageSessionType">
-                  <span :class="[resolveSessionTypeIcon(item), 'StorageSessionType-Icon']" />
-                  {{ resolveSessionType(item) }}
-                </span>
-              </td>
-              <td>
-                <span :class="['StorageSessionStatusBadge', resolveSessionStatusClass(item)]">
-                  {{ resolveSessionStatusText(item) }}
-                </span>
-              </td>
-              <td>
-                <div class="StorageSessionTable-Time">
-                  {{ formatTime(item.updated_at) }}
-                </div>
-                <div class="StorageSessionTable-Relative">
-                  {{ formatRelativeTime(item.updated_at) }}
-                </div>
-              </td>
-              <td>
-                <TxButton variant="flat" size="mini" @click="handleOpenSyncDetails">
-                  {{ t('dashboard.storage.view', 'View') }}
-                </TxButton>
-              </td>
-            </tr>
-            <tr v-if="!recentSessions.length">
-              <td colspan="5" class="StorageSessionTable-Empty">
-                {{ t('dashboard.storage.sessionEmpty', '暂无会话记录') }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <TxDataTable
+          :columns="recentSessionColumns"
+          :data="recentSessionRows"
+          :row-key="resolveSessionRowKey"
+          :empty-text="t('dashboard.storage.sessionEmpty', '暂无会话记录')"
+          class="StorageSessionDataTable"
+        >
+          <template #cell-deviceId="{ row: item }">
+            <span class="StorageSessionTable-Device">{{ maskDeviceId(item.device_id) }}</span>
+          </template>
+          <template #cell-type="{ row: item }">
+            <span class="StorageSessionType">
+              <span :class="[resolveSessionTypeIcon(item), 'StorageSessionType-Icon']" />
+              {{ resolveSessionType(item) }}
+            </span>
+          </template>
+          <template #cell-status="{ row: item }">
+            <TxStatusBadge :text="resolveSessionStatusText(item)" :status="resolveSessionStatus(item)" size="sm" />
+          </template>
+          <template #cell-timestamp="{ row: item }">
+            <div class="StorageSessionTable-Time">
+              {{ formatTime(item.updated_at) }}
+            </div>
+            <div class="StorageSessionTable-Relative">
+              {{ formatRelativeTime(item.updated_at) }}
+            </div>
+          </template>
+          <template #cell-action>
+            <TxButton variant="flat" size="mini" @click="handleOpenSyncDetails">
+              {{ t('dashboard.storage.view', 'View') }}
+            </TxButton>
+          </template>
+        </TxDataTable>
       </div>
     </section>
 
@@ -1088,34 +1088,10 @@ watch(showDetailsOverlay, (open) => {
 .StorageSessionTableWrap {
   margin-top: 12px;
   overflow-x: auto;
-  border-radius: 12px;
-  border: 1px solid var(--tx-border-color-lighter);
 }
 
-.StorageSessionTable {
-  width: 100%;
-  border-collapse: collapse;
+.StorageSessionDataTable {
   min-width: 780px;
-}
-
-.StorageSessionTable th,
-.StorageSessionTable td {
-  padding: 12px 14px;
-  text-align: left;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-  font-size: 13px;
-}
-
-.StorageSessionTable th {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tx-text-color-secondary);
-  background: color-mix(in srgb, var(--tx-bg-color-secondary) 76%, transparent);
-}
-
-.StorageSessionTable tbody tr:last-child td {
-  border-bottom: none;
 }
 
 .StorageSessionTable-Device {
@@ -1133,23 +1109,6 @@ watch(showDetailsOverlay, (open) => {
   color: var(--tx-text-color-secondary);
 }
 
-.StorageSessionStatusBadge {
-  border-radius: 7px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.StorageSessionStatusBadge--success {
-  color: #15803d;
-  background: color-mix(in srgb, #22c55e 20%, transparent);
-}
-
-.StorageSessionStatusBadge--failed {
-  color: #b91c1c;
-  background: color-mix(in srgb, #ef4444 18%, transparent);
-}
-
 .StorageSessionTable-Time {
   color: var(--tx-text-color-primary);
 }
@@ -1158,12 +1117,6 @@ watch(showDetailsOverlay, (open) => {
   margin-top: 2px;
   font-size: 11px;
   color: var(--tx-text-color-secondary);
-}
-
-.StorageSessionTable-Empty {
-  text-align: center !important;
-  color: var(--tx-text-color-secondary);
-  padding: 20px 14px !important;
 }
 
 .StorageKeyringEmpty {

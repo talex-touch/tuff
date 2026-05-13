@@ -3,6 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
+import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 export interface AppConfigureData {
   icon?: string | ITuffIcon
@@ -26,13 +27,13 @@ const emits = defineEmits<{
 const { t } = useI18n()
 const appSdk = useAppSdk()
 
-const displayIcon = computed(() => {
+const displayIcon = computed<ITuffIcon | null>(() => {
   const icon = props.data.icon
-  if (typeof icon === 'string') return icon
+  if (typeof icon === 'string') return { type: 'url', value: icon }
   if (icon && typeof icon === 'object' && 'value' in icon) {
-    return icon.value as string
+    return icon
   }
-  return ''
+  return null
 })
 
 function handleLaunch(): void {
@@ -50,7 +51,7 @@ function handleHelp(): void {
   <div class="AppConfigure">
     <div class="AppConfigure-Head">
       <div class="AppConfigure-Head-Left">
-        <img v-if="displayIcon" :src="displayIcon" alt="Application Logo" />
+        <PluginIcon v-if="displayIcon" :icon="displayIcon" alt="Application Logo" />
       </div>
       <div class="AppConfigure-Head-Right">
         <div class="AppConfigure-Head-Right-Top">
@@ -121,6 +122,10 @@ function handleHelp(): void {
     justify-content: center;
 
     height: 100%;
+
+    .TuffIcon {
+      font-size: 32px;
+    }
   }
 
   &-Right {

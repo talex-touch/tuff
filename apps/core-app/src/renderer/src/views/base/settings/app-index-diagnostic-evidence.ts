@@ -18,7 +18,8 @@ export type AppIndexDiagnosticStageKey = (typeof APP_INDEX_DIAGNOSTIC_STAGE_KEYS
 
 export const APP_INDEX_DIAGNOSTIC_REGRESSION_CASE_IDS = [
   'windows-app-scan-uwp',
-  'windows-third-party-app-launch'
+  'windows-third-party-app-launch',
+  'windows-shortcut-launch-args'
 ] as const
 
 export interface AppIndexDiagnosticEvidenceStage {
@@ -56,7 +57,11 @@ export interface AppIndexDiagnosticEvidencePayload {
       query: string | null
       launchKind?: string
       launchTarget?: string
+      launchArgs?: string
+      workingDirectory?: string
       bundleOrIdentity?: string
+      displayNameStatus?: string
+      iconPresent?: boolean
       matchedStages: AppIndexDiagnosticStageKey[]
       reindexStatus?: AppIndexReindexResult['status']
     }
@@ -102,7 +107,11 @@ export function buildAppIndexDiagnosticEvidencePayload(options: {
         query: inputQuery,
         launchKind: options.diagnosis.app?.launchKind,
         launchTarget: options.diagnosis.app?.launchTarget,
+        launchArgs: options.diagnosis.app?.launchArgs,
+        workingDirectory: options.diagnosis.app?.workingDirectory,
         bundleOrIdentity: options.diagnosis.app?.bundleId || options.diagnosis.app?.appIdentity,
+        displayNameStatus: options.diagnosis.app?.displayNameStatus,
+        iconPresent: options.diagnosis.app?.iconPresent,
         matchedStages,
         reindexStatus: options.reindex?.status
       }

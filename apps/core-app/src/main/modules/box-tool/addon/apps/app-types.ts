@@ -1,4 +1,20 @@
-export type AppLaunchKind = 'path' | 'shortcut' | 'uwp'
+export type AppLaunchKind = 'path' | 'shortcut' | 'uwp' | 'protocol'
+export type AppIdentityKind =
+  | 'macos-path'
+  | 'macos-bundle'
+  | 'windows-uwp'
+  | 'windows-shortcut'
+  | 'windows-path'
+  | 'windows-protocol'
+  | 'linux-desktop'
+  | 'fallback'
+export type AppDisplayNameQuality =
+  | 'localized'
+  | 'system'
+  | 'manifest'
+  | 'registry'
+  | 'filename'
+  | 'fallback'
 
 export interface ScannedAppInfo {
   name: string
@@ -14,6 +30,9 @@ export interface ScannedAppInfo {
   displayPath?: string
   lastModified: Date
   displayName?: string
+  displayNameSource?: string
+  displayNameQuality?: AppDisplayNameQuality
+  identityKind?: AppIdentityKind
   fileName?: string
   alternateNames?: string[]
   description?: string

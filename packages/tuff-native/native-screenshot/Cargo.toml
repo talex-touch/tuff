@@ -1,0 +1,17 @@
+[package]
+name = "tuff-native-screenshot"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+name = "tuff_native_screenshot"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+napi = { version = "3.8.6", default-features = false, features = ["napi4"] }
+napi-derive = "3.5.5"
+xcap = "0.9.4"
+
+[build-dependencies]
+napi-build = "2.2.3"

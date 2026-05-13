@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 import { useDivisionBoxStore } from '../store/division-box'
 
 /**
@@ -13,8 +15,8 @@ interface Props {
   /** Display title */
   title: string
 
-  /** Icon (iconify format or class) */
-  icon?: string
+  /** Icon (iconify format, class, or TuffIcon object) */
+  icon?: string | ITuffIcon
 }
 
 const props = defineProps<Props>()
@@ -33,6 +35,7 @@ const store = useDivisionBoxStore()
 // Computed
 const iconClass = computed(() => {
   if (!props.icon) return ''
+  if (typeof props.icon !== 'string') return ''
 
   // If it's already a class (starts with 'i-' or contains space), use it directly
   if (props.icon.startsWith('i-') || props.icon.includes(' ')) {
@@ -42,6 +45,11 @@ const iconClass = computed(() => {
   // Otherwise, assume it's an iconify format (e.g., 'ri:magic-line')
   // Convert to UnoCSS format: 'ri:magic-line' -> 'i-ri-magic-line'
   return `i-${props.icon.replace(':', '-')}`
+})
+
+const tuffIcon = computed<ITuffIcon | null>(() => {
+  if (!props.icon || typeof props.icon === 'string') return null
+  return props.icon
 })
 
 const isPinned = computed(() => {
@@ -62,7 +70,8 @@ function handlePin() {
   <div class="division-box-header">
     <div class="header-left">
       <!-- Icon -->
-      <i v-if="icon" :class="iconClass" class="header-icon" />
+      <TuffIcon v-if="tuffIcon" :icon="tuffIcon" :alt="title" colorful class="header-icon" />
+      <i v-else-if="iconClass" :class="iconClass" class="header-icon" />
 
       <!-- Title -->
       <span class="header-title">{{ title }}</span>

@@ -5,7 +5,7 @@ import * as fs from 'node:fs'
 import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { Notification, shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 
@@ -21,18 +21,22 @@ export enum PermissionStatus {
   GRANTED = 'granted',
   DENIED = 'denied',
   NOT_DETERMINED = 'notDetermined',
-  UNSUPPORTED = 'unsupported'
+  UNSUPPORTED = 'unsupported',
+  UNVERIFIABLE = 'unverifiable'
 }
 
-const systemPermissionCheckEvent = defineRawEvent<string, PermissionCheckResult>(
-  'system:permission:check'
-)
-const systemPermissionRequestEvent = defineRawEvent<PermissionType, boolean>(
-  'system:permission:request'
-)
-const systemPermissionOpenSettingsEvent = defineRawEvent<void, boolean>(
-  'system:permission:open-settings'
-)
+const systemPermissionCheckEvent = defineEvent('system')
+  .module('permission')
+  .event('check')
+  .define<string, PermissionCheckResult>()
+const systemPermissionRequestEvent = defineEvent('system')
+  .module('permission')
+  .event('request')
+  .define<PermissionType, boolean>()
+const systemPermissionOpenSettingsEvent = defineEvent('system')
+  .module('permission')
+  .event('open-settings')
+  .define<void, boolean>()
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const permissionCheckerLog = getLogger('permission-checker')
@@ -128,10 +132,10 @@ export class PermissionChecker {
     if (process.platform === 'darwin') {
       if (Notification.isSupported()) {
         return {
-          status: PermissionStatus.NOT_DETERMINED,
+          status: PermissionStatus.UNVERIFIABLE,
           canRequest: true,
           message:
-            'Native notifications are supported, but macOS notification permission cannot be verified programmatically.'
+            'Native notifications are supported, but macOS notification permission is not readable from Electron. Please confirm it in System Settings.'
         }
       }
       return {

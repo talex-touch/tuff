@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { $fetch as rawFetch } from 'ofetch'
 import { TxButton, TxLoadingState, TxTooltip } from '@talex-touch/tuffex'
 import { defineComponent, h, render } from 'vue'
 import { toast, Toaster } from 'vue-sonner'
@@ -9,6 +10,7 @@ import type {
   DocAnalyticsResponse,
 } from '~/types/docs-engagement'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { useTypedFetch } from '~/utils/request'
 
 definePageMeta({
   layout: 'docs',
@@ -138,7 +140,7 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
   }
 }
 
-const { data: doc, status } = await useFetch<Record<string, any> | null>(
+const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
   '/api/docs/page',
   {
     key: requestKey,
@@ -184,7 +186,7 @@ const viewState = computed(() => {
   return 'not-found'
 })
 
-const { data: navigationTree } = await useFetch<any[]>(
+const { data: navigationTree } = await useTypedFetch<any[]>(
   '/api/docs/navigation',
   {
     key: 'docs:navigation',
@@ -1358,7 +1360,7 @@ async function loadDocsAnalyticsOverlay(force = false) {
   docsAnalyticsLoading.value = true
   docsAnalyticsError.value = null
   try {
-    const response = await $fetch<DocAnalyticsResponse>('/api/admin/analytics/docs', {
+    const response = await rawFetch<DocAnalyticsResponse>('/api/admin/analytics/docs', {
       query: {
         days: Math.max(7, Math.min(90, Math.round(docsAnalyticsOptions.days))),
         path: docAnalyticsPath.value,
@@ -1605,7 +1607,7 @@ async function fetchViewCount() {
     return
 
   try {
-    const result = await $fetch('/api/docs/view', {
+    const result = await rawFetch<{ views: number }>('/api/docs/view', {
       method: 'GET',
       query: { path: docPath.value },
     })

@@ -5,8 +5,9 @@ import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { shell } from 'electron'
-import type { ScannedAppInfo } from './app-types'
+import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
 import { reportAppScanError } from './app-error-reporter'
+import { getSteamApps } from './steam-provider'
 import { createLogger } from '../../../../utils/logger'
 
 type AppInfo = ScannedAppInfo
@@ -28,6 +29,12 @@ type UwpManifestMetadata = {
   logoRelativePath?: string
 }
 
+type DesktopAppDisplayNameMetadata = {
+  preferredDisplayName?: string
+  displayNameSource?: string
+  displayNameQuality?: AppDisplayNameQuality
+}
+
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons-win')
 const APPX_MANIFEST_NAME = 'AppxManifest.xml'
 export const START_MENU_PATHS = [
@@ -35,8 +42,22 @@ export const START_MENU_PATHS = [
   path.join(os.homedir(), 'AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs')
 ]
 const WINDOWS_STORE_DISPLAY_PATH = 'Windows Store'
+const WINDOWS_DESKTOP_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
 const REGISTRY_DISPLAY_ICON_EXE_PATTERN = /"([^"]+\.exe)"|([^",]+\.exe)/i
 const REGISTRY_EXE_PRIORITY = ['app', 'launcher', 'client', 'desktop']
+const KNOWN_FOLDER_GUID_PATH_PATTERN = /^\{([0-9a-f-]{36})\}[\\/](.+)$/i
+const KNOWN_FOLDER_PATH_RESOLVERS: Record<string, () => string> = {
+  '6d809377-6af0-444b-8957-a3773f02200e': () =>
+    process.env.ProgramW6432 || process.env.ProgramFiles || 'C:\\Program Files',
+  '905e63b6-c1bf-494e-b29c-65b732d3d21a': () => process.env.ProgramFiles || 'C:\\Program Files',
+  '7c5a40ef-a0fb-4bfc-874a-c0f2e0b9fa8e': () =>
+    process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+  'f1b32785-6fba-4fcf-9d55-7b8e7f157091': () =>
+    process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData\\Local'),
+  '3eb685db-65f9-4cf6-a03a-e3ef65729f3d': () =>
+    process.env.APPDATA || path.join(os.homedir(), 'AppData\\Roaming'),
+  '62ab5d82-fdc1-4dc3-a9dd-070d1d495d97': () => process.env.ProgramData || 'C:\\ProgramData'
+}
 const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'Square44x44Logo',
   'SmallLogo',
@@ -68,8 +89,77 @@ function buildUwpShellPath(appId: string): string {
   return `shell:AppsFolder\\${appId}`
 }
 
+function normalizeAlternateNames(
+  values: Array<string | null | undefined>,
+  displayName?: string
+): string[] | undefined {
+  const displayNameKey = displayName?.trim().toLowerCase()
+  const seen = new Set<string>()
+  const names: string[] = []
+
+  for (const value of values) {
+    const normalized = value?.trim()
+    if (!normalized) continue
+    const key = normalized.toLowerCase()
+    if (key === displayNameKey || seen.has(key)) continue
+    seen.add(key)
+    names.push(normalized)
+  }
+
+  return names.length > 0 ? names : undefined
+}
+
+function resolveWindowsDisplayName(
+  candidates: Array<{
+    value: string | null | undefined
+    source: string
+    quality: AppDisplayNameQuality
+  }>,
+  fallbackName: string
+): {
+  displayName: string
+  displayNameSource: string
+  displayNameQuality: AppDisplayNameQuality
+} {
+  const matched = candidates.find((candidate) => candidate.value?.trim())
+  if (matched?.value) {
+    return {
+      displayName: matched.value.trim(),
+      displayNameSource: matched.source,
+      displayNameQuality: matched.quality
+    }
+  }
+
+  return {
+    displayName: fallbackName,
+    displayNameSource: 'fallback',
+    displayNameQuality: 'fallback'
+  }
+}
+
 function isWindowsAbsolutePath(value: string): boolean {
   return /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')
+}
+
+function normalizeWindowsQuotedPath(value?: string): string {
+  return (value || '').trim().replace(/^["']|["']$/g, '')
+}
+
+function resolveKnownFolderGuidPath(value: string): string | null {
+  const match = value.match(KNOWN_FOLDER_GUID_PATH_PATTERN)
+  if (!match) return null
+
+  const resolver = KNOWN_FOLDER_PATH_RESOLVERS[match[1].toLowerCase()]
+  if (!resolver) return null
+
+  return path.join(resolver(), match[2])
+}
+
+function resolveStartAppDesktopPath(appId: string): string | null {
+  const normalized = normalizeWindowsQuotedPath(appId)
+  if (!normalized) return null
+  if (isWindowsAbsolutePath(normalized)) return normalized
+  return resolveKnownFolderGuidPath(normalized)
 }
 
 function buildIconCacheKey(value: string): string {
@@ -356,10 +446,20 @@ async function buildUwpAppInfo(
   const logoPath = installLocation
     ? await resolveUwpLogoFilePath(installLocation, manifestMetadata?.logoRelativePath)
     : null
+  const displayNameMeta = resolveWindowsDisplayName(
+    [
+      { value: options.fallbackName, source: 'Get-StartApps', quality: 'system' },
+      { value: manifestMetadata?.displayName, source: 'AppxManifest', quality: 'manifest' }
+    ],
+    appId
+  )
 
   return {
     name: options.fallbackName,
-    displayName: manifestMetadata?.displayName || options.fallbackName,
+    displayName: displayNameMeta.displayName,
+    displayNameSource: displayNameMeta.displayNameSource,
+    displayNameQuality: displayNameMeta.displayNameQuality,
+    identityKind: 'windows-uwp',
     description: manifestMetadata?.description,
     path: buildUwpShellPath(appId),
     icon: logoPath ? await readImageAsDataUrl(logoPath) : '',
@@ -369,6 +469,10 @@ async function buildUwpAppInfo(
     launchKind: 'uwp',
     launchTarget: appId,
     displayPath: WINDOWS_STORE_DISPLAY_PATH,
+    alternateNames: normalizeAlternateNames(
+      [manifestMetadata?.displayName, packageFamilyName, appId, buildUwpShellPath(appId)],
+      displayNameMeta.displayName
+    ),
     lastModified: options.lastModified
   }
 }
@@ -381,13 +485,26 @@ async function listWindowsStoreApps(): Promise<AppInfo[]> {
       const name = parseStartAppField(entry, ['name', 'Name'])
       if (!appId || !name) return null
 
-      if (isWindowsAbsolutePath(appId)) {
-        const stats = await fs.stat(appId).catch(() => null)
+      const desktopPath = resolveStartAppDesktopPath(appId)
+      if (desktopPath) {
+        const stats = await fs.stat(desktopPath).catch(() => null)
         if (!stats?.isFile()) {
           return null
         }
-        return await buildDesktopAppInfo(appId, path.basename(appId), stats)
+        return await buildDesktopAppInfo(
+          desktopPath,
+          path.basename(desktopPath),
+          stats,
+          undefined,
+          {
+            preferredDisplayName: name,
+            displayNameSource: 'Get-StartApps',
+            displayNameQuality: 'system'
+          }
+        )
       }
+
+      if (!appId.includes('!')) return null
 
       return await buildUwpAppInfo(appId, {
         fallbackName: name,
@@ -464,7 +581,9 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
   if (record.systemComponent === 1 || record.releaseType || record.parentKeyName) return null
 
   const iconExePath = parseRegistryExePath(record.displayIcon)
-  const installExePath = await findExecutableInInstallLocation(record.installLocation?.trim())
+  const installExePath = await findExecutableInInstallLocation(
+    normalizeWindowsQuotedPath(record.installLocation)
+  )
   const targetPath = iconExePath || installExePath
   if (!targetPath || shouldSkipAppTarget(targetPath)) return null
 
@@ -473,10 +592,14 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
 
   const stableId = `registry:${buildPathStableId(targetPath)}`
   const icon = await getAppIcon(targetPath, stableId)
+  const fileName = path.basename(targetPath, path.extname(targetPath))
 
   return {
     name: displayName,
     displayName,
+    displayNameSource: 'registry',
+    displayNameQuality: 'registry',
+    identityKind: 'windows-path',
     description: record.publisher?.trim() || undefined,
     path: targetPath,
     icon,
@@ -486,6 +609,7 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
     launchKind: 'path',
     launchTarget: targetPath,
     displayPath: targetPath,
+    alternateNames: normalizeAlternateNames([fileName, targetPath], displayName),
     lastModified: stats.mtime
   }
 }
@@ -529,7 +653,8 @@ async function buildDesktopAppInfo(
   sourcePath: string,
   fileName: string,
   stats: Awaited<ReturnType<typeof fs.stat>>,
-  shortcutDetails?: ShortcutDetails
+  shortcutDetails?: ShortcutDetails,
+  displayNameMetadata?: DesktopAppDisplayNameMetadata
 ): Promise<AppInfo | null> {
   const isShortcut = fileName.endsWith('.lnk')
   const targetPath = shortcutDetails?.target || sourcePath
@@ -556,9 +681,27 @@ async function buildDesktopAppInfo(
   const iconSource = shortcutDetails?.icon?.trim() || targetPath
   const icon = await getAppIcon(iconSource, stableId)
   const targetStats = await fs.stat(targetPath).catch(() => stats)
+  const sourceBaseName = path.basename(fileName, path.extname(fileName))
+  const targetBaseName = path.basename(targetPath, path.extname(targetPath))
+  const displayNameMeta = resolveWindowsDisplayName(
+    [
+      {
+        value: displayNameMetadata?.preferredDisplayName,
+        source: displayNameMetadata?.displayNameSource ?? 'system',
+        quality: displayNameMetadata?.displayNameQuality ?? 'system'
+      },
+      { value: sourceBaseName, source: isShortcut ? 'shortcut' : 'filename', quality: 'filename' },
+      { value: targetBaseName, source: 'target-filename', quality: 'filename' }
+    ],
+    sourceBaseName || targetBaseName || targetPath
+  )
 
   return {
-    name: path.basename(fileName, path.extname(fileName)),
+    name: sourceBaseName,
+    displayName: displayNameMeta.displayName,
+    displayNameSource: displayNameMeta.displayNameSource,
+    displayNameQuality: displayNameMeta.displayNameQuality,
+    identityKind: launchKind === 'shortcut' ? 'windows-shortcut' : 'windows-path',
     path: isShortcut ? sourcePath : targetPath,
     icon,
     bundleId: '',
@@ -569,6 +712,16 @@ async function buildDesktopAppInfo(
     launchArgs,
     workingDirectory,
     displayPath: targetPath,
+    alternateNames: normalizeAlternateNames(
+      [
+        displayNameMetadata?.preferredDisplayName,
+        sourceBaseName,
+        targetBaseName,
+        sourcePath,
+        targetPath
+      ],
+      displayNameMeta.displayName
+    ),
     lastModified: targetStats.mtime
   }
 }
@@ -581,7 +734,10 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
       const fileDir = path.join(filePath, fileName)
       try {
         const stats = await fs.stat(fileDir)
-        if (stats.isFile() && (fileName.endsWith('.lnk') || fileName.endsWith('.exe'))) {
+        if (
+          stats.isFile() &&
+          WINDOWS_DESKTOP_APP_EXTENSIONS.has(path.extname(fileName).toLowerCase())
+        ) {
           let appDetail: ShortcutDetails | undefined
           if (fileName.endsWith('.lnk')) {
             try {
@@ -614,7 +770,8 @@ export async function getApps(): Promise<AppInfo[]> {
   const allAppsPromises = [
     ...START_MENU_PATHS.map((item) => fileDisplay(item)),
     listWindowsStoreApps(),
-    listRegistryApps()
+    listRegistryApps(),
+    getSteamApps()
   ]
 
   const results = await Promise.allSettled(allAppsPromises)
@@ -631,8 +788,13 @@ export async function getApps(): Promise<AppInfo[]> {
 
   for (const app of allApps) {
     const launchTarget = app.launchTarget ? buildPathStableId(app.launchTarget) : ''
+    const isDirectPathDuplicate =
+      app.launchKind === 'path' &&
+      launchTarget &&
+      claimedLaunchTargets.has(launchTarget) &&
+      app.stableId === launchTarget
     if (
-      app.stableId?.startsWith('registry:') &&
+      (app.stableId?.startsWith('registry:') || isDirectPathDuplicate) &&
       launchTarget &&
       claimedLaunchTargets.has(launchTarget)
     ) {
@@ -667,16 +829,17 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
       })
     }
 
-    const stats = await fs.stat(filePath)
+    const appPath = resolveStartAppDesktopPath(filePath) || filePath
+    const stats = await fs.stat(appPath)
     if (!stats.isFile()) return null
 
-    const fileName = path.basename(filePath)
-    if (!fileName.endsWith('.lnk') && !fileName.endsWith('.exe')) {
+    const fileName = path.basename(appPath)
+    if (!WINDOWS_DESKTOP_APP_EXTENSIONS.has(path.extname(fileName).toLowerCase())) {
       return null
     }
 
-    const appDetail = fileName.endsWith('.lnk') ? shell.readShortcutLink(filePath) : undefined
-    return await buildDesktopAppInfo(filePath, fileName, stats, appDetail)
+    const appDetail = fileName.endsWith('.lnk') ? shell.readShortcutLink(appPath) : undefined
+    return await buildDesktopAppInfo(appPath, fileName, stats, appDetail)
   } catch (error) {
     windowsAppLog.warn('Failed to get app info', {
       error,

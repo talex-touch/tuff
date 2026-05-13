@@ -67,6 +67,28 @@ describe('plugin sdk lifecycle', () => {
     expect(onInput).toHaveBeenCalledTimes(1)
   })
 
+  it('feature sdk preserves empty input change payloads', async () => {
+    const { channel, emit } = createMockChannel()
+    const sdk = createFeatureSDK(
+      {
+        pushItems: vi.fn(),
+        update: vi.fn(),
+        remove: vi.fn(),
+        clear: vi.fn(),
+        getItems: vi.fn(() => []),
+      },
+      channel as any,
+    )
+    const onInput = vi.fn()
+    sdk.onInputChange(onInput)
+
+    await emit('core-box:input-change', { input: '', query: { text: 'fallback' } })
+    await emit('core-box:input-change', { query: { text: '' } })
+
+    expect(onInput).toHaveBeenNthCalledWith(1, '')
+    expect(onInput).toHaveBeenNthCalledWith(2, '')
+  })
+
   it('feature sdk rejects retired plugin key event listener surface', () => {
     const { channel, listenerCount } = createMockChannel()
     const sdk = createFeatureSDK(

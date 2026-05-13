@@ -2,9 +2,15 @@
 import type { IProviderActivate } from '@talex-touch/utils'
 import type { IUseSearch } from '~/modules/box/adapter/types'
 
-defineProps<{
-  providers: IUseSearch['activeActivations']['value']
-}>()
+const props = withDefaults(
+  defineProps<{
+    providers: IUseSearch['activeActivations']['value']
+    closable?: boolean
+  }>(),
+  {
+    closable: true
+  }
+)
 
 const emit = defineEmits<{
   (e: 'deactivate-provider', id: string): void
@@ -16,14 +22,19 @@ function getUniqueKey(provider: IProviderActivate): string {
   }
   return provider.id
 }
+
+function hasVice(provider: IProviderActivate): boolean {
+  return Boolean(provider.meta?.feature || props.closable)
+}
 </script>
 
 <template>
   <div class="ActivatedProvidersContainer">
     <div
-      v-for="provider in providers"
+      v-for="provider in props.providers"
       :key="getUniqueKey(provider)"
       class="activated-provider-pill"
+      :class="{ 'has-vice': hasVice(provider) }"
     >
       <div class="Activated-Provider-PillMajor">
         <PluginIcon
@@ -34,9 +45,10 @@ function getUniqueKey(provider: IProviderActivate): string {
           provider.name || provider.meta?.pluginName || provider.id
         }}</span>
       </div>
-      <div class="Activated-Provider-PillVice">
+      <div v-if="hasVice(provider)" class="Activated-Provider-PillVice">
         <span v-if="provider.meta?.feature">{{ provider.meta.feature.render?.basic?.title }}</span>
         <div
+          v-if="props.closable"
           cursor-pointer
           i-carbon-close
           @click="emit('deactivate-provider', getUniqueKey(provider))"
@@ -123,5 +135,16 @@ function getUniqueKey(provider: IProviderActivate): string {
   border-radius: 12px;
   border: 1px solid var(--tx-color-primary-light-5);
   overflow: hidden;
+
+  &:not(.has-vice) {
+    .Activated-Provider-PillMajor {
+      margin-right: 0;
+
+      &::after {
+        border-radius: 12px;
+        background: var(--tx-color-primary-light-7);
+      }
+    }
+  }
 }
 </style>

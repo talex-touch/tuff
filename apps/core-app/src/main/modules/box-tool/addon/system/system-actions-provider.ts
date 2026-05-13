@@ -21,10 +21,16 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { installDevPluginFromPath } from '../../../plugin/dev-plugin-installer'
 import { pluginModule } from '../../../plugin/plugin-module'
+import { getNativeScreenshotService } from '../../../native-capabilities/screenshot-service'
 import { appProvider } from '../apps/app-provider'
 import { fileProvider } from '../files/file-provider'
 
-type SystemActionType = 'dev-plugin' | 'tpex-plugin' | 'app-index' | 'file-index'
+type SystemActionType =
+  | 'dev-plugin'
+  | 'tpex-plugin'
+  | 'app-index'
+  | 'file-index'
+  | 'screenshot-cursor-display'
 
 interface SystemActionMeta {
   action: SystemActionType
@@ -40,10 +46,24 @@ interface ResolvedAction {
 
 const MAX_ACTION_ITEMS = 6
 const systemActionsLog = getLogger('system-actions-provider')
+const SCREENSHOT_ACTION_PATH = 'native:screenshot:cursor-display:copy'
+const SCREENSHOT_ACTION_KEYWORDS = [
+  'screenshot',
+  'screen shot',
+  'capture screen',
+  'snip',
+  '截图',
+  '截屏',
+  '屏幕截图'
+]
 const WINDOWS_APP_EXTENSIONS = new Set(['.exe', '.lnk', '.appref-ms'])
 const LINUX_APP_EXTENSIONS = new Set(['.desktop', '.appimage'])
 const FILE_URL_PATTERN = /\b(?:file|tfile):\/\/[^\s"'<>]+/gi
-const QUOTED_PATH_PATTERN = /(['"])(\/[^'"]+|[a-zA-Z]:\\[^'"]+)\1/g
+const WINDOWS_SHELL_APP_PATTERN = /\bshell:AppsFolder\\[^\s"'<>]+/gi
+const WINDOWS_UWP_APP_ID_PATTERN = /\b[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+\b/g
+const WINDOWS_DRIVE_PATH_START_PATTERN = /[a-zA-Z]:\\/g
+const WINDOWS_ENV_PATH_START_PATTERN = /%[^%\s"'<>]+%[\\/]/g
+const QUOTED_PATH_PATTERN = /(['"])(\/[^'"]+|[a-zA-Z]:\\[^'"]+|%[^%\s"'<>]+%[\\/][^'"]+)\1/g
 const UNQUOTED_PATH_PATTERN = /(?:~\/|\/|[a-zA-Z]:\\)[^\s'"]+/g
 
 const ACTION_ICON_MAP: Record<SystemActionType, { type: 'class'; value: string }> = {
@@ -53,7 +73,8 @@ const ACTION_ICON_MAP: Record<SystemActionType, { type: 'class'; value: string }
   },
   'tpex-plugin': { type: 'class', value: 'i-carbon-package-node' },
   'app-index': { type: 'class', value: 'i-carbon-app' },
-  'file-index': { type: 'class', value: 'i-carbon-folders' }
+  'file-index': { type: 'class', value: 'i-carbon-folders' },
+  'screenshot-cursor-display': { type: 'class', value: 'i-carbon-screen' }
 }
 
 type ChannelKeyManagerHolder = {
@@ -76,6 +97,32 @@ function expandHome(value: string): string {
     return path.join(os.homedir(), value.slice(2))
   }
   return value
+}
+
+function getWindowsEnvironmentValue(name: string): string | undefined {
+  const direct = process.env[name]
+  if (direct !== undefined) return direct
+
+  const matchedKey = Object.keys(process.env).find(
+    (key) => key.toLowerCase() === name.toLowerCase()
+  )
+  return matchedKey ? process.env[matchedKey] : undefined
+}
+
+function expandWindowsEnvironmentVariables(value: string): string {
+  if (process.platform !== 'win32' || !value.includes('%')) return value
+
+  let expanded = value
+  for (let i = 0; i < 3; i += 1) {
+    const next = expanded.replace(/%([^%\s"'<>]+)%/g, (token, name: string) => {
+      const resolved = getWindowsEnvironmentValue(name)
+      return resolved && resolved.length > 0 ? resolved : token
+    })
+    if (next === expanded) break
+    expanded = next
+  }
+
+  return expanded
 }
 
 function decodeStable(value: string): string {
@@ -134,6 +181,14 @@ function normalizeCandidatePath(raw: string): string | null {
   const trimmed = stripOuterQuotes(raw.trim())
   if (!trimmed) return null
 
+  if (isWindowsShellAppPath(trimmed)) {
+    return process.platform === 'win32' ? trimmed : null
+  }
+
+  if (isWindowsUwpAppId(trimmed)) {
+    return process.platform === 'win32' ? `shell:AppsFolder\\${trimmed}` : null
+  }
+
   let candidate = trimmed
   if (/^tfile:/i.test(candidate)) {
     const resolved = resolveTfilePath(candidate)
@@ -147,9 +202,20 @@ function normalizeCandidatePath(raw: string): string | null {
     }
   }
 
-  candidate = expandHome(candidate)
+  candidate = expandWindowsEnvironmentVariables(expandHome(candidate))
+  if (process.platform === 'win32' && /^[a-zA-Z]:[\\/]/.test(candidate)) {
+    return path.win32.normalize(candidate)
+  }
   if (!path.isAbsolute(candidate)) return null
   return path.normalize(candidate)
+}
+
+function isWindowsShellAppPath(value: string): boolean {
+  return /^shell:AppsFolder\\[^\s"'<>]+$/i.test(value)
+}
+
+function isWindowsUwpAppId(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]+_[A-Za-z0-9]+![A-Za-z0-9._-]+$/.test(value)
 }
 
 function splitLines(value: string): string[] {
@@ -157,6 +223,28 @@ function splitLines(value: string): string[] {
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+async function extractExistingWindowsAppPath(raw: string): Promise<string | null> {
+  if (process.platform !== 'win32') return null
+
+  const trimmed = expandWindowsEnvironmentVariables(stripOuterQuotes(raw.trim()))
+  if (!/^[a-zA-Z]:[\\/]/.test(trimmed)) return null
+
+  const lower = trimmed.toLowerCase()
+  const extensionMatches = [...lower.matchAll(/\.(?:exe|lnk|appref-ms)\b/g)]
+  for (const match of extensionMatches) {
+    if (match.index === undefined) continue
+    const candidate = trimmed.slice(0, match.index + match[0].length)
+    try {
+      const stats = await fs.stat(candidate)
+      if (stats.isFile()) return path.win32.normalize(candidate)
+    } catch {
+      // Continue probing shorter executable-looking prefixes.
+    }
+  }
+
+  return null
 }
 
 function extractTextCandidates(value: string): string[] {
@@ -175,6 +263,27 @@ function extractTextCandidates(value: string): string[] {
     pushCandidate(match[0])
   }
 
+  for (const match of trimmed.matchAll(WINDOWS_SHELL_APP_PATTERN)) {
+    pushCandidate(match[0])
+  }
+
+  for (const match of trimmed.matchAll(WINDOWS_UWP_APP_ID_PATTERN)) {
+    pushCandidate(match[0])
+  }
+
+  if (process.platform === 'win32') {
+    for (const line of splitLines(value)) {
+      for (const match of line.matchAll(WINDOWS_DRIVE_PATH_START_PATTERN)) {
+        if (match.index === undefined) continue
+        pushCandidate(line.slice(match.index))
+      }
+      for (const match of line.matchAll(WINDOWS_ENV_PATH_START_PATTERN)) {
+        if (match.index === undefined) continue
+        pushCandidate(line.slice(match.index))
+      }
+    }
+  }
+
   for (const match of trimmed.matchAll(QUOTED_PATH_PATTERN)) {
     pushCandidate(match[2])
   }
@@ -188,6 +297,21 @@ function extractTextCandidates(value: string): string[] {
   }
 
   return results
+}
+
+async function expandWindowsCommandLineCandidates(candidates: string[]): Promise<string[]> {
+  if (process.platform !== 'win32') return candidates
+
+  const expanded: string[] = []
+  for (const candidate of candidates) {
+    expanded.push(candidate)
+    const appPath = await extractExistingWindowsAppPath(candidate)
+    if (appPath) {
+      expanded.push(appPath)
+    }
+  }
+
+  return expanded
 }
 
 function parseFilesInput(raw: string): string[] {
@@ -254,12 +378,20 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       return this.createEmptyResult(query, startTime)
     }
 
-    const candidates = this.collectCandidatePaths(query)
+    const candidates = await this.collectCandidatePaths(query)
     if (candidates.length === 0) {
+      const screenshotAction = this.buildScreenshotActionFromQuery(query)
+      if (screenshotAction) {
+        return this.createResult(query, startTime, [this.buildActionItem(screenshotAction)])
+      }
       return this.createEmptyResult(query, startTime)
     }
 
     const items: TuffItem[] = []
+    const screenshotAction = this.buildScreenshotActionFromQuery(query)
+    if (screenshotAction) {
+      items.push(this.buildActionItem(screenshotAction))
+    }
 
     for (const candidate of candidates) {
       if (signal.aborted) break
@@ -269,20 +401,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       if (items.length >= MAX_ACTION_ITEMS) break
     }
 
-    const duration = performance.now() - startTime
-    return new TuffSearchResultBuilder(query)
-      .setItems(items)
-      .setDuration(duration)
-      .setSources([
-        {
-          providerId: this.id,
-          providerName: this.name ?? this.id,
-          duration,
-          resultCount: items.length,
-          status: 'success'
-        }
-      ])
-      .build()
+    return this.createResult(query, startTime, items)
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
@@ -352,6 +471,14 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
           })
           break
         }
+        case 'screenshot-cursor-display': {
+          await getNativeScreenshotService().capture({
+            target: 'cursor-display',
+            output: 'tfile',
+            writeClipboard: true
+          })
+          break
+        }
       }
     } catch (error) {
       systemActionsLog.warn('System action execution failed', { error })
@@ -360,7 +487,39 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     return null
   }
 
-  private collectCandidatePaths(query: TuffQuery): string[] {
+  private async collectCandidatePaths(query: TuffQuery): Promise<string[]> {
+    const candidates = await expandWindowsCommandLineCandidates(this.collectRawCandidates(query))
+
+    const normalized: string[] = []
+    const seen = new Set<string>()
+    for (const candidate of candidates) {
+      const normalizedPath = normalizeCandidatePath(candidate)
+      if (!normalizedPath) continue
+      const key = process.platform === 'win32' ? normalizedPath.toLowerCase() : normalizedPath
+      if (seen.has(key)) continue
+      seen.add(key)
+      normalized.push(normalizedPath)
+    }
+
+    return normalized.slice(0, MAX_ACTION_ITEMS)
+  }
+
+  private buildScreenshotActionFromQuery(query: TuffQuery): ResolvedAction | null {
+    const text = (query.text ?? '').trim().toLowerCase()
+    if (!text) return null
+
+    const matched = SCREENSHOT_ACTION_KEYWORDS.some((keyword) => text.includes(keyword))
+    if (!matched) return null
+
+    return {
+      type: 'screenshot-cursor-display',
+      path: SCREENSHOT_ACTION_PATH,
+      displayName: 'cursor-display',
+      displayPath: SCREENSHOT_ACTION_PATH
+    }
+  }
+
+  private collectRawCandidates(query: TuffQuery): string[] {
     const candidates: string[] = []
     const inputs = query.inputs ?? []
 
@@ -377,21 +536,20 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       candidates.push(...extractTextCandidates(query.text))
     }
 
-    const normalized: string[] = []
-    const seen = new Set<string>()
-    for (const candidate of candidates) {
-      const normalizedPath = normalizeCandidatePath(candidate)
-      if (!normalizedPath) continue
-      const key = process.platform === 'win32' ? normalizedPath.toLowerCase() : normalizedPath
-      if (seen.has(key)) continue
-      seen.add(key)
-      normalized.push(normalizedPath)
-    }
-
-    return normalized.slice(0, MAX_ACTION_ITEMS)
+    return candidates
   }
 
   private async resolveAction(candidate: string): Promise<ResolvedAction | null> {
+    if (isWindowsShellAppPath(candidate)) {
+      const displayName = candidate.replace(/^shell:AppsFolder\\/i, '')
+      return {
+        type: 'app-index',
+        path: candidate,
+        displayName,
+        displayPath: candidate
+      }
+    }
+
     let stats: Awaited<ReturnType<typeof fs.stat>> | null = null
     try {
       stats = await fs.stat(candidate)
@@ -549,13 +707,15 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       'dev-plugin': 'corebox.systemActions.addDevPluginTitle',
       'tpex-plugin': 'corebox.systemActions.addTpexPluginTitle',
       'app-index': 'corebox.systemActions.addAppIndexTitle',
-      'file-index': 'corebox.systemActions.addFileIndexTitle'
+      'file-index': 'corebox.systemActions.addFileIndexTitle',
+      'screenshot-cursor-display': 'corebox.systemActions.screenshotCursorDisplayTitle'
     }
     const subtitleKeyMap: Record<SystemActionType, string> = {
       'dev-plugin': 'corebox.systemActions.addDevPluginSubtitle',
       'tpex-plugin': 'corebox.systemActions.addTpexPluginSubtitle',
       'app-index': 'corebox.systemActions.addAppIndexSubtitle',
-      'file-index': 'corebox.systemActions.addFileIndexSubtitle'
+      'file-index': 'corebox.systemActions.addFileIndexSubtitle',
+      'screenshot-cursor-display': 'corebox.systemActions.screenshotCursorDisplaySubtitle'
     }
 
     const title = i18nMsgWithParams(titleKeyMap[action.type], { name: action.displayName })
@@ -586,15 +746,24 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
   }
 
   private createEmptyResult(query: TuffQuery, startedAt: number): TuffSearchResult {
+    return this.createResult(query, startedAt, [])
+  }
+
+  private createResult(
+    query: TuffQuery,
+    startedAt: number,
+    items: TuffItem[]
+  ): TuffSearchResult {
     const duration = performance.now() - startedAt
     return new TuffSearchResultBuilder(query)
+      .setItems(items)
       .setDuration(duration)
       .setSources([
         {
           providerId: this.id,
           providerName: this.name ?? this.id,
           duration,
-          resultCount: 0,
+          resultCount: items.length,
           status: 'success'
         }
       ])

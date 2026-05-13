@@ -18,6 +18,13 @@ export type PollingTaskLane =
 
 export type PollingTaskBackpressure = 'strict_fifo' | 'latest_wins' | 'coalesce'
 
+export interface PollingPressureOptions {
+  reason: string
+  until?: number
+  laneMultipliers?: Partial<Record<PollingTaskLane, number>>
+  concurrencyCaps?: Partial<Record<PollingTaskLane, number>>
+}
+
 const DEFAULT_LANE_CONCURRENCY: Record<PollingTaskLane, number> = {
   critical: 3,
   realtime: 2,
@@ -77,6 +84,10 @@ interface ActiveTaskState {
   lane: PollingTaskLane
 }
 
+interface ActivePressureState extends PollingPressureOptions {
+  createdAt: number
+}
+
 function createDefaultStats(): PollingTaskStats {
   return {
     count: 0,
@@ -105,6 +116,7 @@ export class PollingService {
   private taskInFlightCount = new Map<string, number>()
   private runSequence = 0
   private queueSequence = 0
+  private pressureStates = new Map<string, ActivePressureState>()
 
   private laneStates = new Map<PollingTaskLane, LaneState>([
     ['critical', { queue: [], inFlight: 0, pendingByDedupe: new Map() }],
@@ -167,9 +179,10 @@ export class PollingService {
 
   private computeNextRunMs(task: PollingTask, now: number): number {
     // Skip catch-up bursts after pauses/sleep: schedule from "now" if already overdue.
-    let next = task.nextRunMs + task.intervalMs
+    const effectiveIntervalMs = this.getEffectiveIntervalMs(task)
+    let next = task.nextRunMs + effectiveIntervalMs
     if (next <= now) {
-      next = now + task.intervalMs
+      next = now + effectiveIntervalMs
     }
     return next + this.randomJitter(task.jitterMs)
   }
@@ -184,6 +197,77 @@ export class PollingService {
     const created = createDefaultStats()
     this.taskStats.set(taskId, created)
     return created
+  }
+
+  private pruneExpiredPressures(now = Date.now()): void {
+    for (const [reason, pressure] of this.pressureStates.entries()) {
+      if (typeof pressure.until === 'number' && pressure.until <= now) {
+        this.pressureStates.delete(reason)
+      }
+    }
+  }
+
+  private getEffectiveIntervalMs(task: PollingTask): number {
+    this.pruneExpiredPressures()
+    let multiplier = 1
+    for (const pressure of this.pressureStates.values()) {
+      const laneMultiplier = pressure.laneMultipliers?.[task.lane]
+      if (typeof laneMultiplier === 'number' && Number.isFinite(laneMultiplier)) {
+        multiplier = Math.max(multiplier, Math.max(0.1, laneMultiplier))
+      }
+    }
+    return Math.max(1, Math.floor(task.intervalMs * multiplier))
+  }
+
+  private getEffectiveLaneConcurrency(lane: PollingTaskLane): number {
+    this.pruneExpiredPressures()
+    let concurrency = DEFAULT_LANE_CONCURRENCY[lane]
+    for (const pressure of this.pressureStates.values()) {
+      const cap = pressure.concurrencyCaps?.[lane]
+      if (typeof cap === 'number' && Number.isFinite(cap)) {
+        concurrency = Math.min(concurrency, Math.max(1, Math.floor(cap)))
+      }
+    }
+    return Math.max(1, concurrency)
+  }
+
+  public setGlobalPressure(options: PollingPressureOptions): void {
+    const reason = typeof options.reason === 'string' ? options.reason.trim() : ''
+    if (!reason) {
+      return
+    }
+
+    const now = Date.now()
+    this.pressureStates.set(reason, {
+      reason,
+      until:
+        typeof options.until === 'number' && Number.isFinite(options.until)
+          ? Math.max(now, options.until)
+          : undefined,
+      laneMultipliers: options.laneMultipliers,
+      concurrencyCaps: options.concurrencyCaps,
+      createdAt: now
+    })
+
+    if (this.isRunning) {
+      this._reschedule()
+      for (const lane of this.laneStates.keys()) {
+        this.pumpLane(lane)
+      }
+    }
+  }
+
+  public clearGlobalPressure(reason: string): void {
+    if (!reason) {
+      return
+    }
+    this.pressureStates.delete(reason)
+    if (this.isRunning) {
+      this._reschedule()
+      for (const lane of this.laneStates.keys()) {
+        this.pumpLane(lane)
+      }
+    }
   }
 
   /**
@@ -406,6 +490,7 @@ export class PollingService {
     }
 
     const now = Date.now()
+    this.pruneExpiredPressures(now)
     const nextTask = Array.from(this.tasks.values()).reduce((prev, curr) =>
       prev.nextRunMs < curr.nextRunMs ? prev : curr
     )
@@ -471,7 +556,7 @@ export class PollingService {
     if (!this.isRunning) return
 
     const laneState = this.getLaneState(lane)
-    const laneConcurrency = DEFAULT_LANE_CONCURRENCY[lane]
+    const laneConcurrency = this.getEffectiveLaneConcurrency(lane)
 
     while (laneState.inFlight < laneConcurrency && laneState.queue.length > 0) {
       const queued = laneState.queue.shift()!
@@ -637,8 +722,16 @@ export class PollingService {
     droppedCount: number
     coalescedCount: number
     startAttempts: Array<{ caller: string, count: number, ageMs: number }>
+    pressures: Array<{
+      reason: string
+      ageMs: number
+      remainingMs?: number
+      laneMultipliers?: Partial<Record<PollingTaskLane, number>>
+      concurrencyCaps?: Partial<Record<PollingTaskLane, number>>
+    }>
   } {
     const now = Date.now()
+    this.pruneExpiredPressures(now)
     const activeTasks = Array.from(this.activeTasks.values())
       .map((active) => ({
         id: active.taskId,
@@ -714,13 +807,25 @@ export class PollingService {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5)
 
+    const pressures = Array.from(this.pressureStates.values())
+      .map((pressure) => ({
+        reason: pressure.reason,
+        ageMs: Math.max(0, now - pressure.createdAt),
+        remainingMs:
+          typeof pressure.until === 'number' ? Math.max(0, pressure.until - now) : undefined,
+        laneMultipliers: pressure.laneMultipliers,
+        concurrencyCaps: pressure.concurrencyCaps
+      }))
+      .sort((a, b) => b.ageMs - a.ageMs)
+
     return {
       activeTasks,
       recentTasks,
       queueDepthByLane,
       droppedCount,
       coalescedCount,
-      startAttempts
+      startAttempts,
+      pressures
     }
   }
 

@@ -80,6 +80,7 @@ interface MutableEverythingProvider {
   initializationError: Error | null
   lastBackendError: string | null
   backendAttemptErrors: Record<string, string>
+  diagnostics: { stages: Record<string, unknown>; lastUpdated: number | null }
   sdkAddon: unknown
   esPath: string | null
   iconCache: Map<string, string>
@@ -108,10 +109,19 @@ interface MutableEverythingProvider {
     items?: Array<{
       render?: {
         basic?: {
+          title?: string
           icon?: {
             type?: string
             value?: string
           }
+        }
+      }
+      meta?: {
+        fileSearchContext?: {
+          path?: string
+          source?: string
+          backend?: string
+          score?: number
         }
       }
     }>
@@ -156,6 +166,7 @@ afterEach(() => {
   provider.initializationError = null
   provider.lastBackendError = null
   provider.backendAttemptErrors = {}
+  provider.diagnostics = { stages: {}, lastUpdated: null }
   provider.sdkAddon = null
   provider.esPath = null
   provider.iconCache.clear()
@@ -284,7 +295,29 @@ describe('everything-provider fallback chain', () => {
     ])
   })
 
-  it('warms and reuses cached icons for Everything results across searches', async () => {
+  it('attaches AI-safe file context metadata to Everything results', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    provider.isEnabled = true
+
+    vi.spyOn(provider, 'searchEverything').mockResolvedValue([buildResult('C:/demo.txt')])
+
+    const result = await withPlatform('win32', () =>
+      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
+    )
+
+    expect(result.items?.[0]?.meta?.fileSearchContext).toEqual(
+      expect.objectContaining({
+        path: 'C:/demo.txt',
+        source: 'everything',
+        backend: 'cli',
+        score: expect.any(Number)
+      })
+    )
+  })
+
+  it('returns slim Everything results and warms icons without inline icon payloads', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
@@ -297,10 +330,12 @@ describe('everything-provider fallback chain', () => {
       provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
     )
 
-    expect(first.items?.[0]?.render?.basic?.icon).toEqual({
+    const icon = first.items?.[0]?.render?.basic?.icon
+    expect(icon).toEqual({
       type: 'class',
       value: 'i-ri-file-line'
     })
+    expect(icon?.value?.startsWith('data:')).toBe(false)
 
     await Promise.resolve()
     await Promise.resolve()
@@ -309,10 +344,10 @@ describe('everything-provider fallback chain', () => {
       provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
     )
 
-    expect(second.items?.[0]?.render?.basic?.icon?.type).toBe('url')
-    expect(second.items?.[0]?.render?.basic?.icon?.value).toBe(
-      'data:image/png;base64,aWNvbi1ieXRlcw=='
-    )
+    expect(second.items?.[0]?.render?.basic?.icon).toEqual({
+      type: 'class',
+      value: 'i-ri-file-line'
+    })
     expect(iconWorkerExtract).toHaveBeenCalledTimes(1)
     expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)
   })
@@ -332,6 +367,31 @@ describe('everything-provider fallback chain', () => {
     await expect(searchPromise).rejects.toMatchObject({ name: 'AbortError' })
     expect(provider.backend).toBe('sdk-napi')
     expect(provider.isAvailable).toBe(true)
+  })
+
+  it('records SDK query diagnostics when SDK runtime search fails', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'sdk-napi'
+    provider.isAvailable = true
+    provider.sdkAddon = {
+      search: vi.fn(() => {
+        throw new Error('sdk runtime failed')
+      })
+    }
+
+    vi.spyOn(provider, 'ensureCliFallback').mockRejectedValue(new Error('fallback blocked'))
+
+    await expect(provider.searchEverything('demo', 10)).rejects.toThrow('fallback blocked')
+
+    expect(provider.diagnostics.stages['sdk-query']).toEqual(
+      expect.objectContaining({
+        stage: 'sdk-query',
+        status: 'failed',
+        backend: 'sdk-napi',
+        target: 'demo',
+        error: 'sdk runtime failed'
+      })
+    )
   })
 
   it('refreshes backend state when status request asks for manual recheck', async () => {
@@ -477,6 +537,9 @@ describe('everything-provider fallback chain', () => {
           success: boolean
           error?: string
           backend?: string
+          query?: string
+          backendAttempts?: unknown
+          durationByStage?: unknown
         }>)
       | undefined
 
@@ -486,7 +549,19 @@ describe('everything-provider fallback chain', () => {
       expect.objectContaining({
         success: false,
         error: 'spawn failed',
-        backend: 'unavailable'
+        backend: 'unavailable',
+        query: '*.txt',
+        backendAttempts: expect.objectContaining({
+          stages: expect.objectContaining({
+            'cli-query': expect.objectContaining({
+              status: 'failed',
+              error: 'spawn failed'
+            })
+          })
+        }),
+        durationByStage: expect.objectContaining({
+          'cli-query': expect.any(Number)
+        })
       })
     )
   })

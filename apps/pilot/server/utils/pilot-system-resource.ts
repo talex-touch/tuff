@@ -10,7 +10,7 @@ import {
   ensureSystemDeptSeed,
   ensureSystemMenuSeed,
   ensureSystemRoleSeed,
-} from './pilot-compat-seeds'
+} from './pilot-system-seeds'
 
 export type PilotSystemResource
   = 'users'

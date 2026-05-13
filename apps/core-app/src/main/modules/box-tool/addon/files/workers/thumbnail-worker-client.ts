@@ -4,12 +4,15 @@ import type {
   WorkerStatusSnapshot,
   WorkerTaskSnapshot
 } from './worker-status'
+import type { ThumbnailGeneratedResult, ThumbnailGenerationResult } from '../thumbnail-service'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { tempFileService } from '../../../../../service/temp-file.service'
+import { FILE_WORKER_IDLE_SHUTDOWN_MS, IdleWorkerShutdownController } from './idle-worker-shutdown'
 
 interface PendingThumbnail {
-  resolve: (value: string | null) => void
+  resolve: (value: ThumbnailGenerationResult) => void
   reject: (error: Error) => void
   startedAt: number
 }
@@ -20,11 +23,28 @@ interface PendingMetrics {
 }
 
 type WorkerMessage =
-  | { type: 'done'; taskId: string; thumbnail: string | null }
+  | { type: 'done'; taskId: string; thumbnail: ThumbnailGenerationResult }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
 
 const fileProviderLog = getLogger('file-provider')
+const FILE_THUMBNAIL_NAMESPACE = 'file/thumbnails'
+const FILE_THUMBNAIL_RETENTION_MS = 7 * 24 * 60 * 60_000
+let thumbnailNamespaceRegistered = false
+
+function ensureThumbnailNamespace(): string {
+  if (!thumbnailNamespaceRegistered) {
+    tempFileService.registerNamespace({
+      namespace: FILE_THUMBNAIL_NAMESPACE,
+      retentionMs: FILE_THUMBNAIL_RETENTION_MS
+    })
+    tempFileService.startCleanup()
+    thumbnailNamespaceRegistered = true
+  }
+  return tempFileService.resolveNamespaceDir(FILE_THUMBNAIL_NAMESPACE)
+}
+
+export type { ThumbnailGenerationResult, ThumbnailGeneratedResult }
 
 export class ThumbnailWorkerClient {
   private worker: Worker | null = null
@@ -35,27 +55,44 @@ export class ThumbnailWorkerClient {
   private workerStartedAt: number | null = null
   private lastMetricsSample: { at: number; cpuUsage: WorkerMetricsPayload['cpuUsage'] } | null =
     null
+  private readonly idleShutdown = new IdleWorkerShutdownController({
+    timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
+    shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
+    shutdown: () => this.terminateWorker()
+  })
 
-  async generate(filePath: string): Promise<string | null> {
+  async generate(
+    filePath: string,
+    options: {
+      extension?: string | null
+      sizeBytes?: number | null
+    } = {}
+  ): Promise<ThumbnailGenerationResult> {
     const taskId = `thumbnail-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const worker = this.ensureWorker()
+    const outputDir = ensureThumbnailNamespace()
 
-    return new Promise<string | null>((resolve, reject) => {
+    return new Promise<ThumbnailGenerationResult>((resolve, reject) => {
       this.pending.set(taskId, { resolve, reject, startedAt })
 
       worker.postMessage({
         type: 'thumbnail',
         taskId,
-        filePath
+        filePath,
+        outputDir,
+        extension: options.extension,
+        sizeBytes: options.sizeBytes
       })
     })
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
+    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
+    this.scheduleIdleShutdown()
     return {
       name: 'thumbnail',
       threadId: worker?.threadId ?? null,
@@ -69,12 +106,11 @@ export class ThumbnailWorkerClient {
   }
 
   shutdown(): void {
-    this.worker?.terminate()
-    this.worker = null
-    this.workerStartedAt = null
+    this.terminateWorker()
   }
 
   private ensureWorker(): Worker {
+    this.idleShutdown.cancel()
     if (this.worker) return this.worker
 
     const workerPath = path.join(__dirname, 'thumbnail-worker.js')
@@ -83,7 +119,7 @@ export class ThumbnailWorkerClient {
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
     worker.on('error', (error) => this.handleWorkerError(error))
     worker.on('exit', (code) => {
-      if (code !== 0) {
+      if (this.worker === worker && code !== 0) {
         this.handleWorkerError(new Error(`ThumbnailWorker exited with code ${code}`))
       }
     })
@@ -100,6 +136,7 @@ export class ThumbnailWorkerClient {
       clearTimeout(pending.timeout)
       pending.resolve(message.metrics)
       this.metricsPending.delete(message.requestId)
+      this.scheduleIdleShutdown()
       return
     }
 
@@ -108,7 +145,7 @@ export class ThumbnailWorkerClient {
 
     if (message.type === 'done') {
       this.pending.delete(message.taskId)
-      pending.resolve(message.thumbnail ?? null)
+      pending.resolve(message.thumbnail)
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
@@ -116,6 +153,7 @@ export class ThumbnailWorkerClient {
         durationMs: Date.now() - pending.startedAt,
         error: null
       }
+      this.scheduleIdleShutdown()
       return
     }
 
@@ -130,6 +168,7 @@ export class ThumbnailWorkerClient {
         error: message.error
       }
       pending.reject(new Error(message.error))
+      this.scheduleIdleShutdown()
     }
   }
 
@@ -147,9 +186,7 @@ export class ThumbnailWorkerClient {
       }
       this.metricsPending.clear()
     }
-    this.worker?.terminate()
-    this.worker = null
-    this.workerStartedAt = null
+    this.terminateWorker()
     this.lastError = error.message
     fileProviderLog.warn('[ThumbnailWorker] Worker failed, will restart on demand', {
       error
@@ -164,6 +201,7 @@ export class ThumbnailWorkerClient {
       const timeout = setTimeout(() => {
         this.metricsPending.delete(requestId)
         resolve(null)
+        this.scheduleIdleShutdown()
       }, 300)
       this.metricsPending.set(requestId, { resolve, timeout })
       worker.postMessage({
@@ -201,5 +239,21 @@ export class ThumbnailWorkerClient {
     const deltaMs = (deltaUser + deltaSystem) / 1000
     const percent = (deltaMs / elapsedMs) * 100
     return Number.isFinite(percent) ? Math.max(0, percent) : null
+  }
+
+  private scheduleIdleShutdown(): void {
+    if (!this.worker || this.pending.size > 0 || this.metricsPending.size > 0) {
+      return
+    }
+
+    this.idleShutdown.schedule()
+  }
+
+  private terminateWorker(): void {
+    this.idleShutdown.cancel()
+    this.worker?.terminate()
+    this.worker = null
+    this.workerStartedAt = null
+    this.lastMetricsSample = null
   }
 }

@@ -27,6 +27,10 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     { name: 'mustache', location: 'resources' },
     { name: 'retry', location: 'resources' },
     { name: '@vue/compiler-sfc', location: 'resources' },
+    { name: 'esbuild', location: 'resources' },
+    { name: 'sharp', location: 'resources' },
+    { name: 'ffmpeg-static', location: 'resources' },
+    { name: 'ffprobe-static', location: 'resources' },
     { name: 'langsmith', location: 'resources' },
     { name: 'compressing', location: 'resources' }
   ],
@@ -47,16 +51,17 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     ],
     modules: {
       darwin: {
-        arm64: ['@libsql/darwin-arm64'],
-        x64: ['@libsql/darwin-x64']
+        arm64: ['@libsql/darwin-arm64', '@esbuild/darwin-arm64'],
+        x64: ['@libsql/darwin-x64', '@esbuild/darwin-x64']
       },
       linux: {
-        x64: ['@libsql/linux-x64-gnu', '@libsql/linux-x64-musl'],
-        arm64: ['@libsql/linux-arm64-gnu', '@libsql/linux-arm64-musl'],
+        x64: ['@libsql/linux-x64-gnu', '@libsql/linux-x64-musl', '@esbuild/linux-x64'],
+        arm64: ['@libsql/linux-arm64-gnu', '@libsql/linux-arm64-musl', '@esbuild/linux-arm64'],
         arm: ['@libsql/linux-arm-gnueabihf', '@libsql/linux-arm-musleabihf']
       },
       win32: {
-        x64: ['@libsql/win32-x64-msvc']
+        x64: ['@libsql/win32-x64-msvc', '@esbuild/win32-x64'],
+        arm64: ['@esbuild/win32-arm64']
       }
     }
   }
@@ -573,7 +578,7 @@ function collectPackagedRuntimeModuleEntries(
     ...options,
     dependencyTypes: options.dependencyTypes || ['dependencies', 'optionalDependencies'],
     dedupeBy: options.dedupeBy || 'name',
-    missingDependencyStrategy: options.missingDependencyStrategy || 'throw'
+    missingDependencyStrategy: options.missingDependencyStrategy || 'skip-optional'
   }).modules
 }
 
@@ -623,6 +628,70 @@ function findPackagedResourcesDir(searchRoot, logPrefix = '[runtime-modules]') {
   }
 
   return path.dirname(asarPath)
+}
+
+function resolveEsbuildBinarySubpath(moduleName) {
+  if (!moduleName.startsWith('@esbuild/')) {
+    return null
+  }
+
+  return moduleName.startsWith('@esbuild/win32-') ? 'esbuild.exe' : path.join('bin', 'esbuild')
+}
+
+function isExecutableFile(filePath, platformKey) {
+  try {
+    const stat = fs.statSync(filePath)
+    if (!stat.isFile()) {
+      return false
+    }
+    if (platformKey === 'win32') {
+      return true
+    }
+    return (stat.mode & 0o111) !== 0
+  } catch {
+    return false
+  }
+}
+
+function verifyPackagedEsbuildBinaries(searchRoot, targetPlatform, targetArch, options = {}) {
+  const logPrefix = options.logPrefix || '[runtime-modules]'
+  const resourcesDir = options.resourcesDir || findPackagedResourcesDir(searchRoot, logPrefix)
+  if (!resourcesDir) {
+    return []
+  }
+
+  const platformRuntime = resolvePlatformRuntimeModules(targetPlatform, targetArch, options)
+  const esbuildModules = platformRuntime.rootModules.filter((moduleName) =>
+    moduleName.startsWith('@esbuild/')
+  )
+
+  if (esbuildModules.length === 0) {
+    throw new Error(
+      `${logPrefix} No esbuild platform package declared for ${platformRuntime.platformKey}/${platformRuntime.archKey}`
+    )
+  }
+
+  const invalid = []
+  const verified = []
+  for (const moduleName of esbuildModules) {
+    const binarySubpath = resolveEsbuildBinarySubpath(moduleName)
+    if (!binarySubpath) continue
+    const binaryPath = path.join(resourcesDir, 'node_modules', moduleName, binarySubpath)
+    if (!isExecutableFile(binaryPath, platformRuntime.platformKey)) {
+      invalid.push(`${moduleName}/${binarySubpath}`)
+      continue
+    }
+    verified.push(moduleName)
+  }
+
+  if (invalid.length > 0) {
+    throw new Error(
+      `${logPrefix} Packaged esbuild binary missing or not executable in resources/node_modules for ${platformRuntime.platformKey}/${platformRuntime.archKey}: ${invalid.join(', ')}. Ensure esbuild and the target @esbuild/* platform package are copied to resources/node_modules outside app.asar.`
+    )
+  }
+
+  console.log(`${logPrefix} Verified packaged esbuild binaries: ${verified.join(', ')}`)
+  return verified
 }
 
 function copyRuntimeModuleToNodeModules(moduleEntry, options = {}) {
@@ -825,6 +894,7 @@ module.exports = {
   resolvePlatformRuntimeModules,
   resolveRuntimeModuleDir,
   resolveRuntimeModuleTargetDir,
+  verifyPackagedEsbuildBinaries,
   syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
 }

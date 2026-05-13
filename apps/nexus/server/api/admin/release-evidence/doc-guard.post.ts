@@ -21,8 +21,8 @@ export default defineEventHandler(async (event) => {
     status,
     requiredForRelease: true,
     evidence: body?.evidence ?? {
-      command: 'pnpm docs:guard',
-      summary: 'docs guard result recorded',
+      command: 'manual documentation review',
+      summary: 'documentation review result recorded',
     },
     notes: body?.notes,
   }

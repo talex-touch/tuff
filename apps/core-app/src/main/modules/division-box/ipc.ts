@@ -51,6 +51,15 @@ function validateConfig(config: unknown): { valid: boolean; error?: string } {
     return { valid: false, error: 'Invalid "keepAlive" field. Must be a boolean' }
   }
 
+  if (
+    candidate.initialState !== undefined &&
+    (!candidate.initialState ||
+      typeof candidate.initialState !== 'object' ||
+      Array.isArray(candidate.initialState))
+  ) {
+    return { valid: false, error: 'Invalid "initialState" field. Must be an object' }
+  }
+
   return { valid: true }
 }
 

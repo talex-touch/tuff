@@ -7,6 +7,10 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
+import {
+  COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+  COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
+} from '../../../../../../shared/events/corebox-scenes'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
@@ -191,11 +195,6 @@ const INPUT_EDIT_SHORTCUT_KEYS = new Set(['a', 'c', 'v', 'x', 'z', 'y'])
  */
 const COREBOX_DETACH_EVENT = 'corebox:detach-item'
 
-/**
- * Event name for triggering Flow transfer
- */
-const COREBOX_FLOW_EVENT = 'corebox:flow-item'
-
 // Helper functions for MetaOverlay
 const isMac = rendererPlatformState.isMac
 
@@ -248,6 +247,37 @@ function generateBuiltinActions(item: TuffItem): MetaAction[] {
           icon: { type: 'class', value: 'i-ri-folder-open-line' }
         },
         shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F',
+        group: '操作'
+      },
+      handler: 'builtin',
+      priority: 0
+    })
+  }
+
+  if (item.kind === 'image') {
+    actions.push({
+      id: COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
+      render: {
+        basic: {
+          title: '翻译图片',
+          subtitle: '通过 Nexus 场景翻译图片内容',
+          icon: { type: 'class', value: 'i-ri-translate-2' }
+        },
+        shortcut: isMac ? '⌘⇧T' : 'Ctrl+Shift+T',
+        group: '操作'
+      },
+      handler: 'builtin',
+      priority: 0
+    })
+    actions.push({
+      id: COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
+      render: {
+        basic: {
+          title: '翻译并置顶',
+          subtitle: '通过 Nexus 场景翻译图片并打开置顶窗口',
+          icon: { type: 'class', value: 'i-ri-window-line' }
+        },
+        shortcut: isMac ? '⌘⌥T' : 'Ctrl+Alt+T',
         group: '操作'
       },
       handler: 'builtin',
@@ -341,6 +371,12 @@ function resolveQuickActionsItem(
       featureId
     }
   }
+}
+
+function resolveActiveFeatureItem(activations: IProviderActivate[] | null): TuffItem | null {
+  const feature = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
+    ?.feature
+  return feature && typeof feature === 'object' ? (feature as TuffItem) : null
 }
 
 function isInputEditingShortcut(event: KeyboardEvent): boolean {
@@ -706,24 +742,29 @@ export function useKeyboard(
        * With Shift: Opens Flow selector to transfer data to another plugin
        */
       if ((event.metaKey || event.ctrlKey) && !event.altKey) {
-        const currentItem = res.value[boxOptions.focus]
-        if (!currentItem) {
-          event.preventDefault()
-          return
-        }
+        const activeFeature = resolveActiveFeatureItem(activeActivations.value)
+        const currentItem = activeFeature ?? res.value[boxOptions.focus]
 
         if (event.shiftKey) {
+          if (!currentItem) {
+            event.preventDefault()
+            return
+          }
           // Command+Shift+D: Flow transfer to another plugin
           window.dispatchEvent(
-            new CustomEvent(COREBOX_FLOW_EVENT, {
+            new CustomEvent('corebox:flow-item', {
               detail: { item: currentItem, query: searchVal.value }
             })
           )
         } else {
           // Command+D: Detach to DivisionBox
+          if (!activeFeature) {
+            event.preventDefault()
+            return
+          }
           window.dispatchEvent(
             new CustomEvent(COREBOX_DETACH_EVENT, {
-              detail: { item: currentItem, query: searchVal.value }
+              detail: { item: activeFeature, query: searchVal.value }
             })
           )
         }

@@ -36,7 +36,12 @@ export class AppScanner {
       darwin: () => ['/Applications', path.join(process.env.HOME || '', 'Applications')],
       win32: () => [
         ...WINDOWS_START_MENU_PATHS,
-        path.join(process.env.LOCALAPPDATA || '', 'Programs')
+        path.join(process.env.LOCALAPPDATA || '', 'Programs'),
+        path.join(
+          process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+          'Steam',
+          'steamapps'
+        )
       ],
       linux: () => [
         '/usr/share/applications',
@@ -322,7 +327,7 @@ export class AppScanner {
             if (
               spotlightName &&
               spotlightName !== '(null)' &&
-              spotlightName !== currentDisplayName
+              (spotlightName !== currentDisplayName || app.displayNameQuality !== 'system')
             ) {
               appScannerLog.debug(
                 formatLog(
@@ -337,7 +342,9 @@ export class AppScanner {
               updatedCount++
               updatedApps.push({
                 ...app,
-                displayName: spotlightName
+                displayName: spotlightName,
+                displayNameSource: 'mdls:kMDItemDisplayName',
+                displayNameQuality: 'system'
               })
             }
           }
@@ -368,10 +375,15 @@ export class AppScanner {
               if (
                 spotlightName &&
                 spotlightName !== '(null)' &&
-                spotlightName !== app.displayName
+                (spotlightName !== app.displayName || app.displayNameQuality !== 'system')
               ) {
                 updatedCount++
-                updatedApps.push({ ...app, displayName: spotlightName })
+                updatedApps.push({
+                  ...app,
+                  displayName: spotlightName,
+                  displayNameSource: 'mdls:kMDItemDisplayName',
+                  displayNameQuality: 'system'
+                })
               }
             } catch {
               // 忽略单个应用的错误

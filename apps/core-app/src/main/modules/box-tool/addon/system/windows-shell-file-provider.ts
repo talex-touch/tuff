@@ -13,14 +13,23 @@ import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { i18nMsg } from '@talex-touch/utils/i18n'
+import { pinyin } from 'pinyin-pro'
+import { calculateHighlights, type Range } from '../apps/highlighting-service'
 
 interface WindowsShellEntry {
   id: string
   target: string
+  title: string
   titleKey: string
   subtitleKey: string
   icon: string
   aliases: string[]
+}
+
+interface WindowsShellMatch {
+  entry: WindowsShellEntry
+  highlights: Range[]
+  score: number
 }
 
 interface WindowsShellEntryMeta {
@@ -30,11 +39,13 @@ interface WindowsShellEntryMeta {
 
 const windowsShellFileLog = getLogger('windows-shell-file-provider')
 const CJK_PATTERN = /[\u3400-\u9fff]/
+const PINYIN_PARTICLE_PATTERN = /[的之]/g
 
 const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'this-pc',
     target: 'shell:MyComputerFolder',
+    title: '此电脑',
     titleKey: 'corebox.windowsShell.thisPc.title',
     subtitleKey: 'corebox.windowsShell.thisPc.subtitle',
     icon: 'i-ri-computer-line',
@@ -53,6 +64,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'recycle-bin',
     target: 'shell:RecycleBinFolder',
+    title: '回收站',
     titleKey: 'corebox.windowsShell.recycleBin.title',
     subtitleKey: 'corebox.windowsShell.recycleBin.subtitle',
     icon: 'i-ri-delete-bin-6-line',
@@ -61,6 +73,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'network',
     target: 'shell:NetworkPlacesFolder',
+    title: '网络',
     titleKey: 'corebox.windowsShell.network.title',
     subtitleKey: 'corebox.windowsShell.network.subtitle',
     icon: 'i-ri-router-line',
@@ -69,6 +82,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'control-panel',
     target: 'shell:ControlPanelFolder',
+    title: '控制面板',
     titleKey: 'corebox.windowsShell.controlPanel.title',
     subtitleKey: 'corebox.windowsShell.controlPanel.subtitle',
     icon: 'i-ri-settings-3-line',
@@ -77,6 +91,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'user-folder',
     target: 'shell:Profile',
+    title: '用户文件夹',
     titleKey: 'corebox.windowsShell.userFolder.title',
     subtitleKey: 'corebox.windowsShell.userFolder.subtitle',
     icon: 'i-ri-user-3-line',
@@ -85,6 +100,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'desktop',
     target: 'shell:Desktop',
+    title: '桌面',
     titleKey: 'corebox.windowsShell.desktop.title',
     subtitleKey: 'corebox.windowsShell.desktop.subtitle',
     icon: 'i-ri-layout-grid-line',
@@ -93,6 +109,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'downloads',
     target: 'shell:Downloads',
+    title: '下载',
     titleKey: 'corebox.windowsShell.downloads.title',
     subtitleKey: 'corebox.windowsShell.downloads.subtitle',
     icon: 'i-ri-download-2-line',
@@ -101,6 +118,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'documents',
     target: 'shell:Personal',
+    title: '文档',
     titleKey: 'corebox.windowsShell.documents.title',
     subtitleKey: 'corebox.windowsShell.documents.subtitle',
     icon: 'i-ri-file-text-line',
@@ -109,6 +127,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'pictures',
     target: 'shell:My Pictures',
+    title: '图片',
     titleKey: 'corebox.windowsShell.pictures.title',
     subtitleKey: 'corebox.windowsShell.pictures.subtitle',
     icon: 'i-ri-image-line',
@@ -117,6 +136,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'music',
     target: 'shell:My Music',
+    title: '音乐',
     titleKey: 'corebox.windowsShell.music.title',
     subtitleKey: 'corebox.windowsShell.music.subtitle',
     icon: 'i-ri-music-2-line',
@@ -125,6 +145,7 @@ const WINDOWS_SHELL_ENTRIES: WindowsShellEntry[] = [
   {
     id: 'videos',
     target: 'shell:My Video',
+    title: '视频',
     titleKey: 'corebox.windowsShell.videos.title',
     subtitleKey: 'corebox.windowsShell.videos.subtitle',
     icon: 'i-ri-video-line',
@@ -137,6 +158,22 @@ function normalizeShellQuery(value: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\s_-]+/g, '')
+}
+
+function resolvePinyinTokens(value: string): string[] {
+  if (!CJK_PATTERN.test(value)) return []
+
+  const values = [value, value.replace(PINYIN_PARTICLE_PATTERN, '')].filter(Boolean)
+  const tokens = new Set<string>()
+
+  for (const item of values) {
+    tokens.add(pinyin(item, { toneType: 'none' }).replace(/\s/g, '').toLowerCase())
+    tokens.add(
+      pinyin(item, { pattern: 'first', toneType: 'none' }).replace(/\s/g, '').toLowerCase()
+    )
+  }
+
+  return Array.from(tokens).filter(Boolean)
 }
 
 function getWindowsShellEntryMeta(item: TuffItem): WindowsShellEntryMeta | null {
@@ -176,7 +213,7 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
       return this.createEmptyResult(query, startTime)
     }
 
-    const items = this.matchEntries(rawText).map((entry) => this.buildEntryItem(entry))
+    const items = this.matchEntries(rawText).map((match) => this.buildEntryItem(match))
     const duration = performance.now() - startTime
 
     return new TuffSearchResultBuilder(query)
@@ -218,27 +255,75 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
     return null
   }
 
-  private matchEntries(rawText: string): WindowsShellEntry[] {
+  private matchEntries(rawText: string): WindowsShellMatch[] {
     const normalizedQuery = normalizeShellQuery(rawText)
     if (!normalizedQuery) return []
 
-    return WINDOWS_SHELL_ENTRIES.filter((entry) =>
-      entry.aliases.some((alias) => {
-        const normalizedAlias = normalizeShellQuery(alias)
-        const allowsPartial =
-          normalizedQuery.length >= 3 ||
-          (normalizedQuery.length >= 2 && CJK_PATTERN.test(normalizedQuery))
-        return (
-          normalizedAlias === normalizedQuery ||
-          (allowsPartial &&
-            (normalizedAlias.includes(normalizedQuery) ||
-              normalizedQuery.includes(normalizedAlias)))
-        )
-      })
+    return WINDOWS_SHELL_ENTRIES.map((entry) => this.matchEntry(entry, rawText, normalizedQuery))
+      .filter((match): match is WindowsShellMatch => Boolean(match))
+      .sort((left, right) => right.score - left.score)
+  }
+
+  private matchEntry(
+    entry: WindowsShellEntry,
+    rawText: string,
+    normalizedQuery: string
+  ): WindowsShellMatch | null {
+    const titleHighlights = calculateHighlights(entry.title, rawText, false)
+    if (titleHighlights?.length) {
+      return {
+        entry,
+        highlights: titleHighlights,
+        score: 0.98
+      }
+    }
+
+    const titlePinyinTokens = resolvePinyinTokens(entry.title)
+    const matchedTitlePinyin = titlePinyinTokens.some(
+      (token) => token === normalizedQuery || token.includes(normalizedQuery)
+    )
+    if (matchedTitlePinyin) {
+      return {
+        entry,
+        highlights: [{ start: 0, end: entry.title.length }],
+        score: 0.9
+      }
+    }
+
+    const aliasMatched = entry.aliases.some((alias) => this.matchesAlias(alias, normalizedQuery))
+    if (!aliasMatched) {
+      return null
+    }
+
+    return {
+      entry,
+      highlights: [],
+      score: 0.8
+    }
+  }
+
+  private matchesAlias(alias: string, normalizedQuery: string): boolean {
+    const normalizedAlias = normalizeShellQuery(alias)
+    const allowsPartial =
+      normalizedQuery.length >= 3 ||
+      (normalizedQuery.length >= 2 && CJK_PATTERN.test(normalizedQuery))
+
+    if (
+      normalizedAlias === normalizedQuery ||
+      (allowsPartial &&
+        (normalizedAlias.includes(normalizedQuery) || normalizedQuery.includes(normalizedAlias)))
+    ) {
+      return true
+    }
+
+    return resolvePinyinTokens(alias).some(
+      (token) => token === normalizedQuery || token.includes(normalizedQuery)
     )
   }
 
-  private buildEntryItem(entry: WindowsShellEntry): TuffItem {
+  private buildEntryItem(match: WindowsShellMatch): TuffItem {
+    const { entry, highlights, score } = match
+
     return new TuffItemBuilder(`${this.id}:${entry.id}`, this.type, this.id)
       .setKind('folder')
       .setTitle(i18nMsg(entry.titleKey))
@@ -260,6 +345,7 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
       ])
       .setMeta({
         extension: {
+          matchResult: highlights,
           searchTokens: entry.aliases,
           windowsShellEntry: {
             id: entry.id,
@@ -267,7 +353,7 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
           }
         }
       })
-      .setFinalScore(0.95)
+      .setFinalScore(score)
       .build()
   }
 

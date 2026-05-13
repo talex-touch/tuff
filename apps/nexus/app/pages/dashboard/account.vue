@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { TxAutoSizer, TxCard, TxButton, TxTabItem, TxTabs, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
+import type { FileUploaderFile } from '@talex-touch/tuffex'
+import { TuffInput, TxAutoSizer, TxButton, TxCard, TxFileUploader, TxTabItem, TxTabs, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'
-import Input from '~/components/ui/Input.vue'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import {
   buildOauthCallbackUrl,
@@ -12,6 +12,7 @@ import {
 } from '~/composables/useOauthContext'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { useTypedFetch } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 defineI18nRoute(false)
@@ -30,7 +31,8 @@ const activeLoginTab = ref<LoginTabKey>('methods')
 const loginTabSizerRef = ref<any>(null)
 const manageOverlayVisible = ref(false)
 const manageOverlaySource = ref<HTMLElement | null>(null)
-const avatarInputRef = ref<HTMLInputElement | null>(null)
+const avatarUploaderRef = ref<{ pick: () => void } | null>(null)
+const avatarFiles = ref<FileUploaderFile[]>([])
 
 const linkingGithub = ref(false)
 const linkingLinuxdo = ref(false)
@@ -127,7 +129,7 @@ function boundMessage(provider: OauthProvider, accountId?: string | null) {
 
 // OAuth bind feedback is handled on the sign-in page now.
 
-const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
+const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useTypedFetch<any[]>('/api/login-history')
 const handleRefreshHistory = () => refreshHistory()
 
 const emailState = computed(() => user.value?.emailState ?? 'unverified')
@@ -168,7 +170,7 @@ function handlePlanAction() {
 }
 
 function triggerAvatarSelect() {
-  avatarInputRef.value?.click()
+  avatarUploaderRef.value?.pick()
 }
 
 async function fileToDataUrl(file: File): Promise<string> {
@@ -180,11 +182,12 @@ async function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-async function handleAvatarChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || !user.value)
+async function handleAvatarFilesChange(files: FileUploaderFile[]) {
+  avatarFiles.value = files
+  const file = files[0]?.file
+  if (!file || !user.value) {
     return
+  }
 
   avatarUploading.value = true
   profileMessage.value = ''
@@ -199,7 +202,7 @@ async function handleAvatarChange(event: Event) {
   }
   finally {
     avatarUploading.value = false
-    input.value = ''
+    avatarFiles.value = []
   }
 }
 
@@ -281,7 +284,7 @@ async function unbindOauth(provider: OauthProvider) {
 
   loadingState.value = true
   try {
-    await $fetch(`/api/user/linked-accounts/${provider}`, { method: 'DELETE' })
+    await requestJson(`/api/user/linked-accounts/${provider}`, { method: 'DELETE' })
     await refresh()
   }
   catch (error: any) {
@@ -320,7 +323,7 @@ async function handlePasskeyRegister() {
   passkeyLoading.value = true
   passkeyMessage.value = ''
   try {
-    const options = await $fetch<any>('/api/passkeys/register-options', { method: 'POST' })
+    const options = await requestJson<any>('/api/passkeys/register-options', { method: 'POST' })
     const publicKey: PublicKeyCredentialCreationOptions = {
       ...options,
       challenge: base64UrlToBuffer(options.challenge),
@@ -335,7 +338,7 @@ async function handlePasskeyRegister() {
       return
     }
     const payload = serializeCredential(credential)
-    await $fetch('/api/passkeys/register-verify', {
+    await requestJson('/api/passkeys/register-verify', {
       method: 'POST',
       body: { credential: payload },
     })
@@ -617,13 +620,19 @@ function formatHistoryTime(value: string) {
                 <TxButton size="small" variant="secondary" :loading="avatarUploading" @click="triggerAvatarSelect">
                   {{ t('dashboard.account.changeAvatar', '修改头像') }}
                 </TxButton>
-                <input
-                  ref="avatarInputRef"
-                  type="file"
-                  accept="image/*"
+                <TxFileUploader
+                  ref="avatarUploaderRef"
+                  v-model="avatarFiles"
                   class="hidden"
-                  @change="handleAvatarChange"
-                >
+                  :multiple="false"
+                  :max="1"
+                  accept="image/*"
+                  :disabled="avatarUploading"
+                  :button-text="t('dashboard.account.changeAvatar', '修改头像')"
+                  :drop-text="t('dashboard.account.changeAvatar', '修改头像')"
+                  :hint-text="t('dashboard.account.avatarUploadHint', '选择图片作为头像')"
+                  @change="handleAvatarFilesChange"
+                />
               </div>
             </div>
 
@@ -632,7 +641,7 @@ function formatHistoryTime(value: string) {
                 <label class="text-xs text-black/60 dark:text-white/60">
                   {{ t('dashboard.account.displayName', '显示名称') }}
                 </label>
-                <Input v-model="displayName" type="text" :placeholder="t('dashboard.account.displayNamePlaceholder', '输入显示名称')" />
+                <TuffInput v-model="displayName" type="text" :placeholder="t('dashboard.account.displayNamePlaceholder', '输入显示名称')" />
               </div>
               <div class="space-y-2 rounded-xl border border-black/[0.08] p-3 dark:border-white/[0.12]">
                 <p class="text-xs text-black/60 dark:text-white/60">

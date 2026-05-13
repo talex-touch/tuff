@@ -1,5 +1,6 @@
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../../core/eventbus/touch-event'
 import type { ITouchEvent } from '@talex-touch/utils'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import path from 'node:path'
 import type { FileIndexBatteryStatus } from '@talex-touch/utils/transport/events/types'
 import { StorageList } from '@talex-touch/utils'
@@ -10,6 +11,8 @@ import {
 } from '../../../../../service/background-task-service'
 import { deviceIdleService } from '../../../../../service/device-idle-service'
 import { createFailedFilesCleanupTask } from '../../../../../service/failed-files-cleanup-task'
+import { scanProgress } from '../../../../../db/schema'
+import type * as schema from '../../../../../db/schema'
 import type { DbUtils } from '../../../../../db/utils'
 import { formatDuration } from '../../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../../storage'
@@ -23,6 +26,19 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanIdleThresholdMs: 60 * 60 * 1000,
   autoScanCheckIntervalMs: 5 * 60 * 1000,
   extraPaths: []
+}
+
+function toTimestamp(value: unknown): number | null {
+  const timestamp =
+    value instanceof Date
+      ? value.getTime()
+      : typeof value === 'number'
+        ? value
+        : typeof value === 'string'
+          ? Date.parse(value)
+          : null
+
+  return timestamp !== null && Number.isFinite(timestamp) ? timestamp : null
 }
 
 export interface FileProviderWatchServiceDeps {
@@ -218,7 +234,8 @@ export class FileProviderWatchService {
       taskTimeoutMs: 30 * 60 * 1000
     })
 
-    const cleanupTask = createFailedFilesCleanupTask(dbUtils.getDb() as any, {
+    const db = dbUtils.getDb() as LibSQLDatabase<typeof schema>
+    const cleanupTask = createFailedFilesCleanupTask(db, {
       maxRetryAge: 24 * 60 * 60 * 1000,
       batchSize: 100,
       maxRetries: 3
@@ -265,16 +282,16 @@ export class FileProviderWatchService {
       return { newPaths: [], stalePaths: [], lastScannedAt: null }
     }
 
-    const db = dbUtils.getDb() as any
-    const completedScans = await db.select().from('scan_progress')
+    const db = dbUtils.getDb()
+    const completedScans = await db.select().from(scanProgress)
     const completedMap = new Map<string, number>()
     let lastScannedAt: number | null = null
 
     for (const scan of completedScans) {
-      const timestamp = typeof scan?.lastScanned === 'string' ? Date.parse(scan.lastScanned) : null
-      if (timestamp && Number.isFinite(timestamp)) {
+      const timestamp = toTimestamp(scan?.lastScanned)
+      if (timestamp !== null) {
         completedMap.set(scan.path, timestamp)
-        if (!lastScannedAt || timestamp > lastScannedAt) {
+        if (lastScannedAt === null || timestamp > lastScannedAt) {
           lastScannedAt = timestamp
         }
       }

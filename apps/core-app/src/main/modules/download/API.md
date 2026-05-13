@@ -334,8 +334,8 @@ updateConfig(config: Partial<UpdateSystemConfig>): void
 'download:notification-clicked' → { taskId: string, action: string }
 
 // Migration events
-'download:migration-progress' → MigrationProgress
-'download:migration-result' → MigrationResult
+'download:migration:progress' → MigrationProgress
+'download:migration:result' → MigrationResult
 ```
 
 ### Update System Channels

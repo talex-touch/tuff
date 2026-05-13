@@ -6,7 +6,14 @@ vi.mock('electron', () => ({
   app: {
     getVersion: () => '1.0.0',
     isPackaged: false
-  }
+  },
+  ipcMain: {
+    handle: vi.fn(),
+    on: vi.fn(),
+    removeHandler: vi.fn(),
+    removeListener: vi.fn()
+  },
+  MessageChannelMain: vi.fn()
 }))
 
 vi.mock('node:os', async (importOriginal) => {
@@ -39,11 +46,13 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
   return {
     ...actual,
     getBooleanEnv: () => true,
-    getEnvOrDefault: (_key: string, fallback: string) => fallback,
-    getTelemetryApiBase: () => 'http://example.test',
-    normalizeBaseUrl: (value: string) => value
+    getEnvOrDefault: (_key: string, fallback: string) => fallback
   }
 })
+
+vi.mock('../nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: () => 'http://example.test'
+}))
 
 vi.mock('./telemetry-client', () => ({
   getOrCreateTelemetryClientId: () => 'client-1'

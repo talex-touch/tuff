@@ -4,9 +4,13 @@ import { PollingService } from '../common/utils/polling'
 type PollingServiceTestAccess = {
   stop: (reason?: string) => void
   unregister: (id: string) => void
+  clearGlobalPressure: (reason: string) => void
   tasks: Map<string, unknown>
-  laneStates: Map<string, { queue: unknown[]; inFlight: number }>
+  laneStates: Map<string, { queue: unknown[]; inFlight: number; pendingByDedupe: Map<string, unknown> }>
   taskStats: Map<string, Record<string, number>>
+  taskInFlightCount: Map<string, number>
+  activeTasks: Map<string, unknown>
+  pressureStates: Map<string, unknown>
 }
 
 function getService(): PollingServiceTestAccess {
@@ -19,6 +23,16 @@ function resetServiceState(): void {
   for (const key of Array.from(service.tasks.keys())) {
     service.unregister(key)
   }
+  for (const reason of Array.from(service.pressureStates.keys())) {
+    service.clearGlobalPressure(reason)
+  }
+  for (const state of service.laneStates.values()) {
+    state.queue.length = 0
+    state.inFlight = 0
+    state.pendingByDedupe.clear()
+  }
+  service.taskInFlightCount.clear()
+  service.activeTasks.clear()
 }
 
 describe('PollingService lanes and backpressure', () => {
@@ -133,5 +147,87 @@ describe('PollingService lanes and backpressure', () => {
 
     expect(runs).toBeGreaterThan(0)
     expect(task?.lane).toBe('serial')
+  })
+
+  it('applies global pressure multipliers and expires them from diagnostics', async () => {
+    const service = PollingService.getInstance()
+    let runs = 0
+
+    service.register(
+      'test.pressure.interval',
+      () => {
+        runs += 1
+      },
+      {
+        interval: 10,
+        unit: 'milliseconds',
+        runImmediately: true,
+        lane: 'io'
+      }
+    )
+
+    service.setGlobalPressure({
+      reason: 'unit-test-pressure',
+      until: Date.now() + 45,
+      laneMultipliers: { io: 5 },
+      concurrencyCaps: { io: 1 }
+    })
+
+    service.start()
+    await vi.advanceTimersByTimeAsync(35)
+
+    expect(runs).toBe(1)
+    expect(service.getDiagnostics().pressures).toEqual([
+      expect.objectContaining({
+        reason: 'unit-test-pressure',
+        laneMultipliers: { io: 5 },
+        concurrencyCaps: { io: 1 }
+      })
+    ])
+
+    await vi.advanceTimersByTimeAsync(25)
+
+    expect(runs).toBeGreaterThan(1)
+    expect(service.getDiagnostics().pressures).toEqual([])
+  })
+
+  it('caps lane concurrency while pressure is active', async () => {
+    const service = PollingService.getInstance()
+    let peakInFlight = 0
+    let currentInFlight = 0
+
+    for (let index = 0; index < 3; index += 1) {
+      service.register(
+        `test.pressure.concurrent.${index}`,
+        async () => {
+          currentInFlight += 1
+          peakInFlight = Math.max(peakInFlight, currentInFlight)
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 50)
+          })
+          currentInFlight -= 1
+        },
+        {
+          interval: 10,
+          unit: 'milliseconds',
+          runImmediately: true,
+          lane: 'io'
+        }
+      )
+    }
+
+    service.setGlobalPressure({
+      reason: 'unit-test-concurrency-cap',
+      until: Date.now() + 100,
+      concurrencyCaps: { io: 1 }
+    })
+    service.start()
+
+    await vi.advanceTimersByTimeAsync(25)
+    expect(peakInFlight).toBe(1)
+
+    service.clearGlobalPressure('unit-test-concurrency-cap')
+    await vi.advanceTimersByTimeAsync(60)
+    expect(peakInFlight).toBeGreaterThan(1)
   })
 })

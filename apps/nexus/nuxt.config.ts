@@ -22,6 +22,7 @@ const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/co
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
+const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken)
@@ -49,6 +50,10 @@ const watermarkFeatureEnabled = isEnvFlagEnabled(
 const riskControlFeatureEnabled = isEnvFlagEnabled(
   process.env.NUXT_PUBLIC_RISK_CONTROL_ENABLED || process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED,
 )
+const nitroTypegenRouteExcludes = [
+  '/api/dashboard/provider-registry/providers/:id/capabilities',
+  '/api/dashboard/provider-registry/providers/:id/capabilities/:capabilityId',
+]
 
 export default defineNuxtConfig({
   modules: [
@@ -162,6 +167,9 @@ export default defineNuxtConfig({
       historyRetentionDays: Number(process.env.EXCHANGE_RATE_HISTORY_RETENTION_DAYS || 0),
       storeRateRows: process.env.EXCHANGE_RATE_STORE_RATE_ROWS !== 'false',
     },
+    providerRegistry: {
+      secureStoreKey: process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY,
+    },
     releaseDownload: {
       secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || authSecret,
       signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),
@@ -232,8 +240,15 @@ export default defineNuxtConfig({
   nitro: {
     minify: !disableNitroMinify,
     sourceMap: !disableNitroSourceMap,
+    hooks: {
+      'types:extend'(types) {
+        for (const route of nitroTypegenRouteExcludes)
+          delete types.routes[route]
+      },
+    },
     alias: {
       '@panva/hkdf': hkdfCompatEntry,
+      'next-auth/core': nextAuthCoreEntry,
     },
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     ...(useCloudflareDev
@@ -267,6 +282,7 @@ export default defineNuxtConfig({
     resolve: {
       alias: [
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
+        { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
         ...(useWorkspaceSource

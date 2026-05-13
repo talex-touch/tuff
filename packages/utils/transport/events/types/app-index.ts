@@ -22,7 +22,7 @@ export interface AppIndexAddPathResult {
   reason?: string;
 }
 
-export type AppIndexEntryLaunchKind = "path" | "shortcut" | "uwp";
+export type AppIndexEntryLaunchKind = "path" | "shortcut" | "uwp" | "protocol";
 
 export interface AppIndexManagedEntry {
   path: string;
@@ -77,6 +77,26 @@ export interface AppIndexDiagnosticApp {
   path: string;
   name: string;
   displayName?: string;
+  rawDisplayName?: string;
+  displayNameStatus?: "clean" | "fallback" | "missing";
+  identityKind?:
+    | "macos-path"
+    | "macos-bundle"
+    | "windows-uwp"
+    | "windows-shortcut"
+    | "windows-path"
+    | "windows-protocol"
+    | "linux-desktop"
+    | "fallback";
+  displayNameSource?: string;
+  displayNameQuality?:
+    | "localized"
+    | "system"
+    | "manifest"
+    | "registry"
+    | "filename"
+    | "fallback";
+  iconPresent?: boolean;
   fileName?: string;
   bundleId?: string;
   appIdentity?: string;

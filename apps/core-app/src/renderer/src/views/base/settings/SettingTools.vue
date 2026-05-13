@@ -9,7 +9,7 @@ import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { TxButton, TxInput, TxSelectItem } from '@talex-touch/tuffex'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -40,6 +40,7 @@ const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
@@ -52,7 +53,12 @@ const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
 const OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS = [300, 450, 600, 800, 1000, 1200, 1500] as const
 const DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS = 600
 
-type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
+type SystemPermissionStatus =
+  | 'granted'
+  | 'denied'
+  | 'notDetermined'
+  | 'unsupported'
+  | 'unverifiable'
 
 interface SystemPermissionCheckResult {
   status: SystemPermissionStatus
@@ -60,9 +66,10 @@ interface SystemPermissionCheckResult {
   message?: string
 }
 
-const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
-  'system:permission:check'
-)
+const systemPermissionCheck = defineEvent('system')
+  .module('permission')
+  .event('check')
+  .define<string, SystemPermissionCheckResult>()
 const omniPanelAccessibilityGranted = ref<boolean | null>(null)
 
 function parseSelectNumber(value: unknown): number | null {
@@ -622,6 +629,7 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSlot>
 
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.omniPanel.mouseLongPressDurationMs"
       :title="t('settingTools.omniPanelMouseLongPressDuration')"
       :description="t('settingTools.omniPanelMouseLongPressDurationDesc')"
@@ -691,6 +699,7 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSelect>
 
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.tools.clipboardPolling.interval"
       :title="t('settingTools.clipboardPollingInterval')"
       :description="t('settingTools.clipboardPollingIntervalDesc')"
@@ -705,7 +714,7 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
     </TuffBlockSelect>
 
-    <template v-if="appSetting?.dev?.advancedSettings">
+    <template v-if="showAdvancedSettings">
       <TuffBlockSwitch
         v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
         :title="t('settingTools.clipboardPollingLowBattery')"
@@ -756,6 +765,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Recommendation Max Items select -->
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.recommendation.maxItems"
       :title="t('settingTools.recommendationMaxItems')"
       :description="t('settingTools.recommendationMaxItemsDesc')"

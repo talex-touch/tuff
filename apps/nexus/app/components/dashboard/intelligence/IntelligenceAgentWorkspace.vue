@@ -8,6 +8,7 @@ import type {
 import { networkClient } from '@talex-touch/utils/network'
 import { TuffInput, TxBaseSurface, TxButton, TxCard, TxCollapse, TxCollapseItem, TxGlowText, TxSkeleton, TxSpinner, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson } from '~/utils/request'
 
 interface LabConversationItem {
   id: string
@@ -628,7 +629,7 @@ async function loadSessionHistory(targetSessionId: string) {
   }
   historyLoading.value = true
   try {
-    const data = await $fetch<{ traces: unknown[] }>('/api/admin/intelligence-agent/session/trace', {
+    const data = await requestJson<{ traces: unknown[] }>('/api/admin/intelligence-agent/session/trace', {
       query: {
         sessionId: targetSessionId,
         fromSeq: 1,
@@ -685,7 +686,7 @@ async function updateSessionQuery(nextSessionId?: string) {
 async function fetchSessionHistoryList() {
   historyListLoading.value = true
   try {
-    const data = await $fetch<{ sessions: LabSessionHistoryItem[] }>('/api/admin/intelligence-agent/session/history', {
+    const data = await requestJson<{ sessions: LabSessionHistoryItem[] }>('/api/admin/intelligence-agent/session/history', {
       query: { limit: 40 },
     })
     sessionHistoryList.value = data.sessions || []
@@ -759,10 +760,10 @@ async function loadPromptRegistryData() {
   promptRegistryError.value = ''
   try {
     const [promptData, bindingData] = await Promise.all([
-      $fetch<{ prompts: IntelligencePromptRecord[] }>('/api/admin/intelligence-agent/prompts', {
+      requestJson<{ prompts: IntelligencePromptRecord[] }>('/api/admin/intelligence-agent/prompts', {
         query: { limit: 400 },
       }),
-      $fetch<{ bindings: IntelligencePromptBinding[] }>('/api/admin/intelligence-agent/prompt-bindings'),
+      requestJson<{ bindings: IntelligencePromptBinding[] }>('/api/admin/intelligence-agent/prompt-bindings'),
     ])
     promptRecords.value = (promptData.prompts || []).slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     promptBindings.value = bindingData.bindings || []
@@ -796,7 +797,7 @@ async function savePromptRegistryRecord() {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompts', {
+    await requestJson('/api/admin/intelligence-agent/prompts', {
       method: 'POST',
       body: {
         record: {
@@ -827,7 +828,7 @@ async function removePromptRegistryRecord(record: IntelligencePromptRecord) {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompts', {
+    await requestJson('/api/admin/intelligence-agent/prompts', {
       method: 'DELETE',
       body: {
         id: record.id,
@@ -856,7 +857,7 @@ async function savePromptRegistryBinding() {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompt-bindings', {
+    await requestJson('/api/admin/intelligence-agent/prompt-bindings', {
       method: 'POST',
       body: {
         binding: {
@@ -883,7 +884,7 @@ async function removePromptRegistryBinding(binding: IntelligencePromptBinding) {
   promptRegistrySaving.value = true
   promptRegistryError.value = ''
   try {
-    await $fetch('/api/admin/intelligence-agent/prompt-bindings', {
+    await requestJson('/api/admin/intelligence-agent/prompt-bindings', {
       method: 'DELETE',
       body: {
         capabilityId: binding.capabilityId,
@@ -1196,7 +1197,7 @@ async function handleApproval(ticket: TuffIntelligenceApprovalTicket, approved: 
   approving.value = true
   errorMessage.value = ''
   try {
-    const response = await $fetch<{
+    const response = await requestJson<{
       ticket: TuffIntelligenceApprovalTicket
       result?: { output?: unknown }
     }>('/api/admin/intelligence-agent/tool/approve', {
@@ -1339,8 +1340,9 @@ onBeforeUnmount(() => {
               class="ti-lab__chat-item"
             >
               <template v-if="item.role === 'system'">
-                <button
-                  type="button"
+                <TxButton
+                  variant="bare"
+                  native-type="button"
                   class="ti-lab__system-line-toggle"
                   @click="toggleSystemDetail(item.id)"
                 >
@@ -1362,7 +1364,7 @@ onBeforeUnmount(() => {
                     class="ti-lab__system-expand-icon"
                     :class="{ 'ti-lab__system-expand-icon--visible': isSystemDetailExpanded(item.id) }"
                   >{{ isSystemDetailExpanded(item.id) ? '▾' : '▸' }}</span>
-                </button>
+                </TxButton>
                 <div v-if="isSystemDetailExpanded(item.id)" class="ti-lab__system-detail">
                   <p class="ti-lab__system-detail-summary">
                     {{ resolveConversationText(item) }}
@@ -1608,9 +1610,10 @@ onBeforeUnmount(() => {
                       :key="item.seq"
                       class="ti-lab__trace-node"
                     >
-                      <button
+                      <TxButton
                         class="ti-lab__trace-node-button"
-                        type="button"
+                        variant="bare"
+                        native-type="button"
                         @click="selectTraceEvent(item)"
                       >
                         <TxTimelineItem
@@ -1623,7 +1626,7 @@ onBeforeUnmount(() => {
                             {{ item.message || '-' }}
                           </div>
                         </TxTimelineItem>
-                      </button>
+                      </TxButton>
                     </div>
                   </TxTimeline>
                 </div>
@@ -1682,9 +1685,11 @@ onBeforeUnmount(() => {
                   :key="item.sessionId"
                   class="ti-lab__history-item rounded-xl px-3 py-3"
                 >
-                  <button
+                  <TxButton
                     class="w-full text-left"
-                    type="button"
+                    variant="bare"
+                    block
+                    native-type="button"
                     @click="() => void selectHistorySession(item)"
                   >
                     <p class="text-xs font-medium">
@@ -1696,7 +1701,7 @@ onBeforeUnmount(() => {
                     <p class="ti-lab__muted text-[11px]">
                       {{ t('dashboard.intelligenceLab.history.counts', { pending: item.pendingActions, completed: item.completedActions, failed: item.failedActions }) }}
                     </p>
-                  </button>
+                  </TxButton>
                 </li>
               </ul>
             </div>
@@ -1739,10 +1744,11 @@ onBeforeUnmount(() => {
                     <TuffInput v-model="promptForm.status" type="text" placeholder="status: active/deprecated" />
                     <TuffInput v-model="promptForm.channel" type="text" placeholder="channel: stable/latest" />
                   </div>
-                  <textarea
+                  <TuffInput
                     v-model="promptForm.template"
+                    type="textarea"
                     class="ti-lab__prompt-textarea"
-                    rows="6"
+                    :rows="6"
                     placeholder="Prompt template (supports mustache variables)"
                   />
                   <div class="flex items-center gap-2">

@@ -80,7 +80,7 @@ import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
-import { getPluginSdkCompatibilityGate } from './sdk-compat'
+import { getPluginSdkHardCutGate } from './sdkapi-hard-cut-gate'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
@@ -160,14 +160,19 @@ async function precompilePluginWidgets(plugin: TouchPlugin): Promise<void> {
     try {
       const result = await widgetManager.registerWidget(plugin, feature)
       if (!result) {
-        plugin.issues.push({
-          type: 'warning',
-          message: `Widget compile skipped for feature "${feature.id}" (${feature.interaction?.path ?? 'unknown'})`,
-          source: `feature:${feature.id}`,
-          code: 'WIDGET_COMPILE_SKIPPED',
-          suggestion: 'Check widget interaction.path and widget source file.',
-          timestamp: Date.now()
-        })
+        const hasWidgetIssue = plugin.issues.some(
+          (issue) => issue.source === `feature:${feature.id}` && issue.code?.startsWith('WIDGET_')
+        )
+        if (!hasWidgetIssue) {
+          plugin.issues.push({
+            type: 'warning',
+            message: `Widget compile skipped for feature "${feature.id}" (${feature.interaction?.path ?? 'unknown'})`,
+            source: `feature:${feature.id}`,
+            code: 'WIDGET_COMPILE_SKIPPED',
+            suggestion: 'Check widget interaction.path and widget source file.',
+            timestamp: Date.now()
+          })
+        }
         plugin.logger.debug(
           `[Widget] Compile skipped for feature "${feature.id}" (${feature.interaction?.path})`
         )
@@ -811,7 +816,7 @@ function createPluginModuleInternal(
     },
     resolvePermissionConfirmation: async ({ request, manifest, clientMetadata }) => {
       if (!manifest?.name) return null
-      const sdkGate = getPluginSdkCompatibilityGate(manifest.name, manifest.sdkapi)
+      const sdkGate = getPluginSdkHardCutGate(manifest.name, manifest.sdkapi)
       if (sdkGate.blocked) {
         throw new Error(sdkGate.message)
       }

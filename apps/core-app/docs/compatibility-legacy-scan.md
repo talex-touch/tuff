@@ -118,7 +118,7 @@
 - `DbWriteScheduler` 已删除 `droppable` 兼容入口；clipboard、OCR、usage-stats、query completions 等调用方已切到显式 `dropPolicy/maxQueueWaitMs`。
 - `useUpdateRuntime.ts` 不再把 `update:install` 请求超时包装成“已开始安装”；当前只提示等待系统接管确认，避免 optimistic success。
 - `WidgetFrame.vue` 的空态已拆分为加载中、renderer 缺失与渲染失败，不再统一显示“Widget 暂未就绪”。
-- root 新增 `pnpm console:guard`，冻结 CoreApp `main/preload/renderer` 现存 raw `console.*` 边界；新增 console 点位或扩大命中数会直接失败。
+- root 新增 ESLint `no-console` rules，冻结 CoreApp `main/preload/renderer` 现存 raw `console.*` 边界；新增 console 点位或扩大命中数会直接失败。
 - `apps/core-app/eslint.config.mjs` 已新增 renderer 平台直读限制，除 `modules/platform/renderer-platform.ts` 外不得继续直接访问 `navigator.platform` / `navigator.userAgent` / `process.platform`。
 - `plugin-sdk.ts`、`nexus-store-provider.ts`、`useUpdateRuntime.ts`、`useAppLifecycle.ts`、`sentry-renderer.ts` 与 `WidgetFrame.vue` 的 raw console 已收口到统一 renderer logger。
 - 删除未引用的 `futureCenter*` i18n 规划文案键，避免语言资源继续暗示假路线图入口。

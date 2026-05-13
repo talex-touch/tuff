@@ -330,9 +330,26 @@ export interface TuffMeta {
   }
 
   /**
+   * Minimal local file context that AI/Flow consumers may use without reading file contents.
+   */
+  fileSearchContext?: FileSearchContextCandidate
+
+  /**
    * Additional metadata.
    */
   [key: string]: unknown
+}
+
+export interface FileSearchContextCandidate {
+  path: string
+  name: string
+  extension: string
+  size: number
+  mtime: string
+  isDir: boolean
+  source: 'everything' | 'file-provider'
+  backend?: string
+  score?: number
 }
 
 /**

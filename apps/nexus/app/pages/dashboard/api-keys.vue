@@ -3,6 +3,7 @@ import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPopperDialog } from 
 import type { TxSelectValue } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { requestJson } from '~/utils/request'
 
 definePageMeta({
   layout: 'dashboard',
@@ -75,7 +76,7 @@ async function fetchKeys() {
   loading.value = true
   error.value = null
   try {
-    const data = await $fetch<{ keys: ApiKey[] }>('/api/dashboard/api-keys')
+    const data = await requestJson<{ keys: ApiKey[] }>('/api/dashboard/api-keys')
     keys.value = data.keys
   }
   catch (e: any) {
@@ -101,7 +102,7 @@ async function createKey() {
 
   creating.value = true
   try {
-    const data = await $fetch<NewKeyResponse>('/api/dashboard/api-keys', {
+    const data = await requestJson<NewKeyResponse>('/api/dashboard/api-keys', {
       method: 'POST',
       body: {
         name: newKeyName.value.trim(),
@@ -143,7 +144,7 @@ async function confirmDeleteKey(): Promise<boolean> {
   if (!pendingDeleteKeyId.value)
     return true
   try {
-    await $fetch(`/api/dashboard/api-keys/${pendingDeleteKeyId.value}`, { method: 'DELETE' })
+    await requestJson(`/api/dashboard/api-keys/${pendingDeleteKeyId.value}`, { method: 'DELETE' })
     await fetchKeys()
   }
   catch (e: any) {

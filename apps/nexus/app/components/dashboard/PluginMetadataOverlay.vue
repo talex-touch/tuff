@@ -2,10 +2,7 @@
 import type { FileUploaderFile } from '@talex-touch/tuffex'
 import { computed, reactive } from 'vue'
 import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
-import { TxButton } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
-import Input from '~/components/ui/Input.vue'
-import Switch from '~/components/ui/Switch.vue'
+import { TuffInput, TuffSwitch, TxButton } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 interface PluginCategoryOption {
@@ -135,7 +132,7 @@ function handlePackageChange(files: FileUploaderFile[]) {
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
                   {{ t('dashboard.sections.plugins.form.identifier') }}
-                  <Input
+                  <TuffInput
                     v-model="form.slug"
                     :disabled="mode === 'edit'"
                     placeholder="com.example.plugin"
@@ -147,7 +144,7 @@ function handlePackageChange(files: FileUploaderFile[]) {
                 </label>
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
                   {{ t('dashboard.sections.plugins.form.name') }}
-                  <Input v-model="form.name" required />
+                  <TuffInput v-model="form.name" required />
                 </label>
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
                   {{ t('dashboard.sections.plugins.form.category') }}
@@ -162,7 +159,7 @@ function handlePackageChange(files: FileUploaderFile[]) {
                 </label>
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
                   {{ t('dashboard.sections.plugins.form.summary') }}
-                  <Input v-model="form.summary" type="textarea" :rows="3" required />
+                  <TuffInput v-model="form.summary" type="textarea" :rows="3" required />
                 </label>
                 <div class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
                   <span>{{ t('dashboard.sections.plugins.form.icon') }}</span>
@@ -189,14 +186,16 @@ function handlePackageChange(files: FileUploaderFile[]) {
                           @change="handleIconChange"
                         />
                       </label>
-                      <FlatButton
+                      <TxButton
                         v-if="mode === 'edit' && (form.iconPreviewUrl || editingPluginHasIcon)"
+                        variant="secondary"
+                        size="mini"
                         class="text-[11px] font-semibold uppercase tracking-wide"
                         @click="emit('removeIcon')"
                       >
                         <span class="i-carbon-trash-can text-xs" />
                         {{ t('dashboard.sections.plugins.form.iconRemove') }}
-                      </FlatButton>
+                      </TxButton>
                       <p class="max-w-xs leading-relaxed">
                         {{ t('dashboard.sections.plugins.form.iconHelp') }}
                       </p>
@@ -299,7 +298,7 @@ function handlePackageChange(files: FileUploaderFile[]) {
                 </div>
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
                   {{ t('dashboard.sections.plugins.form.homepage') }}
-                  <Input v-model="form.homepage" placeholder="https://github.com/..." />
+                  <TuffInput v-model="form.homepage" placeholder="https://github.com/..." />
                 </label>
                 <div
                   v-if="mode === 'edit'"
@@ -312,18 +311,18 @@ function handlePackageChange(files: FileUploaderFile[]) {
                 </div>
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
                   {{ t('dashboard.sections.plugins.form.badges') }}
-                  <Input v-model="form.badges" placeholder="featured, stable" />
+                  <TuffInput v-model="form.badges" placeholder="featured, stable" />
                 </label>
                 <label
                   v-if="isAdmin"
                   class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60"
                 >
-                  <Switch v-model="form.isOfficial" />
+                  <TuffSwitch v-model="form.isOfficial" />
                   {{ t('dashboard.sections.plugins.form.isOfficial') }}
                 </label>
                 <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
                   {{ t('dashboard.sections.plugins.form.readme') }}
-                  <Input v-model="form.readme" type="textarea" :rows="8" required />
+                  <TuffInput v-model="form.readme" type="textarea" :rows="8" required />
                   <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
                     {{ t('dashboard.sections.plugins.form.readmeHelp') }}
                   </span>

@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
 import Drawer from '~/components/ui/Drawer.vue'
-import FlatButton from '~/components/ui/FlatButton.vue'
-import Input from '~/components/ui/Input.vue'
+import { requestJson } from '~/utils/request'
 
 interface UpdateFormState {
   type: 'news' | 'announcement' | 'config' | 'data'
@@ -165,7 +164,7 @@ async function submit() {
       : '/api/dashboard/updates'
     const method = props.mode === 'edit' ? 'PATCH' : 'POST'
 
-    await $fetch(endpoint, { method, body: payload })
+    await requestJson(endpoint, { method, body: payload })
     emit('saved')
     emit('close')
   }
@@ -201,42 +200,22 @@ async function submit() {
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.updates.form.type') }}
             </label>
-            <select
-              v-model="form.type"
-              class="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-black/80 outline-none transition focus:border-primary/60 dark:border-white/10 dark:bg-white/5 dark:text-white"
-            >
-              <option value="news">
-                {{ t('dashboard.sections.updates.form.typeNews') }}
-              </option>
-              <option value="announcement">
-                {{ t('dashboard.sections.updates.form.typeAnnouncement') }}
-              </option>
-              <option value="config">
-                {{ t('dashboard.sections.updates.form.typeConfig') }}
-              </option>
-              <option value="data">
-                {{ t('dashboard.sections.updates.form.typeData') }}
-              </option>
-            </select>
+            <TuffSelect v-model="form.type" class="w-full">
+              <TuffSelectItem value="news" :label="t('dashboard.sections.updates.form.typeNews')" />
+              <TuffSelectItem value="announcement" :label="t('dashboard.sections.updates.form.typeAnnouncement')" />
+              <TuffSelectItem value="config" :label="t('dashboard.sections.updates.form.typeConfig')" />
+              <TuffSelectItem value="data" :label="t('dashboard.sections.updates.form.typeData')" />
+            </TuffSelect>
           </div>
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.updates.form.scope') }}
             </label>
-            <select
-              v-model="form.scope"
-              class="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-black/80 outline-none transition focus:border-primary/60 dark:border-white/10 dark:bg-white/5 dark:text-white"
-            >
-              <option value="web">
-                {{ t('dashboard.sections.updates.form.scopeWeb') }}
-              </option>
-              <option value="system">
-                {{ t('dashboard.sections.updates.form.scopeSystem') }}
-              </option>
-              <option value="both">
-                {{ t('dashboard.sections.updates.form.scopeBoth') }}
-              </option>
-            </select>
+            <TuffSelect v-model="form.scope" class="w-full">
+              <TuffSelectItem value="web" :label="t('dashboard.sections.updates.form.scopeWeb')" />
+              <TuffSelectItem value="system" :label="t('dashboard.sections.updates.form.scopeSystem')" />
+              <TuffSelectItem value="both" :label="t('dashboard.sections.updates.form.scopeBoth')" />
+            </TuffSelect>
           </div>
         </div>
 
@@ -244,7 +223,7 @@ async function submit() {
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.channels') }}
           </label>
-          <Input
+          <TuffInput
             v-model="form.channels"
             type="text"
             :placeholder="t('dashboard.sections.updates.form.channelsPlaceholder')"
@@ -256,13 +235,13 @@ async function submit() {
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.updates.form.titleZh') }}
             </label>
-            <Input v-model="form.titleZh" type="text" />
+            <TuffInput v-model="form.titleZh" type="text" />
           </div>
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.updates.form.titleEn') }}
             </label>
-            <Input v-model="form.titleEn" type="text" />
+            <TuffInput v-model="form.titleEn" type="text" />
           </div>
         </div>
 
@@ -270,7 +249,7 @@ async function submit() {
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.date') }}
           </label>
-          <Input v-model="form.timestamp" type="date" required />
+          <TuffInput v-model="form.timestamp" type="date" required />
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
@@ -278,13 +257,13 @@ async function submit() {
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.updates.form.summaryZh') }}
             </label>
-            <Input v-model="form.summaryZh" type="textarea" :rows="4" />
+            <TuffInput v-model="form.summaryZh" type="textarea" :rows="4" />
           </div>
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.updates.form.summaryEn') }}
             </label>
-            <Input v-model="form.summaryEn" type="textarea" :rows="4" />
+            <TuffInput v-model="form.summaryEn" type="textarea" :rows="4" />
           </div>
         </div>
 
@@ -292,21 +271,21 @@ async function submit() {
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.tags') }}
           </label>
-          <Input v-model="form.tags" type="text" placeholder="release, roadmap" />
+          <TuffInput v-model="form.tags" type="text" placeholder="release, roadmap" />
         </div>
 
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.link') }}
           </label>
-          <Input v-model="form.link" type="text" placeholder="https://" required />
+          <TuffInput v-model="form.link" type="text" placeholder="https://" required />
         </div>
 
         <div class="flex flex-col gap-1.5">
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.payload') }}
           </label>
-          <Input
+          <TuffInput
             v-model="form.payload"
             type="textarea"
             :rows="6"
@@ -318,7 +297,7 @@ async function submit() {
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.payloadVersion') }}
           </label>
-          <Input v-model="form.payloadVersion" type="text" :placeholder="t('dashboard.sections.updates.form.payloadVersionPlaceholder')" />
+          <TuffInput v-model="form.payloadVersion" type="text" :placeholder="t('dashboard.sections.updates.form.payloadVersionPlaceholder')" />
         </div>
 
         <p v-if="error" class="rounded-md bg-red-50 p-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
@@ -329,9 +308,9 @@ async function submit() {
 
     <template #footer>
       <div class="flex items-center justify-end gap-2">
-        <FlatButton @click="emit('close')">
+        <TxButton variant="secondary" @click="emit('close')">
           {{ t('dashboard.sections.updates.closeButton') }}
-        </FlatButton>
+        </TxButton>
         <TxButton :disabled="saving" @click="submit">
           <span v-if="saving" class="i-carbon-circle-dash mr-1 animate-spin" />
           {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit') : t('dashboard.sections.updates.updateSubmit') }}

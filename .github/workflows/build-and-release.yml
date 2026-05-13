@@ -7,9 +7,10 @@ on:
       release_type:
         description: Release type
         required: true
-        default: snapshot
+        default: beta
         type: choice
         options:
+          - beta
           - snapshot
           - release
       sync_tag:
@@ -22,11 +23,24 @@ on:
     tags:
       - v*.*.*
 
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-release:
     name: Build and Release Tuff App
     runs-on: ${{ matrix.os }}
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.sync_tag == ''
+    permissions:
+      contents: read
+
+    env:
+      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+      BUILD_PUBLISH: never
 
     strategy:
       fail-fast: false
@@ -35,10 +49,10 @@ jobs:
 
     steps:
       - name: Check out git repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python (for native dependencies)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -46,13 +60,20 @@ jobs:
         run: |
           python -m pip install setuptools
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
         with:
-          node-version: '22'
+          version: 10.32.1
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22.16.0'
+          cache: pnpm
 
       - name: Install Dependencies
-        run: npm install -g pnpm && pnpm i && pnpm approve-builds
+        run: pnpm install --frozen-lockfile && pnpm approve-builds --all
 
       - name: Fix Binary Permissions
         if: matrix.os == 'ubuntu-latest'
@@ -72,7 +93,14 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "push" ]; then
             # 标签触发：从标签提取版本信息
-            echo "type=release" >> $GITHUB_OUTPUT
+            REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
+            if [[ "$REF_NAME_LOWER" == *"beta"* ]]; then
+              echo "type=beta" >> $GITHUB_OUTPUT
+            elif [[ "$REF_NAME_LOWER" == *"snapshot"* ]]; then
+              echo "type=snapshot" >> $GITHUB_OUTPUT
+            else
+              echo "type=release" >> $GITHUB_OUTPUT
+            fi
             echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
             echo "version=${REF_NAME#v}" >> $GITHUB_OUTPUT
           else
@@ -110,10 +138,6 @@ jobs:
           # GitHub Actions 自动提供 GITHUB_SHA
           echo "GITHUB_SHA is set: ${{ github.sha }}"
           echo "Setting Electron download/cache mirrors..."
-          echo "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/" >> "$GITHUB_ENV"
-          echo "ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/" >> "$GITHUB_ENV"
-          echo "ELECTRON_CACHE=${GITHUB_WORKSPACE}/.cache/electron" >> "$GITHUB_ENV"
-          echo "ELECTRON_BUILDER_CACHE=${GITHUB_WORKSPACE}/.cache/electron-builder" >> "$GITHUB_ENV"
           # TUFF_ENCRYPTION_KEY 从 secrets 中获取，如果不存在则为空（非官方构建）
           if [ -n "${{ secrets.TUFF_ENCRYPTION_KEY }}" ]; then
             echo "TUFF_ENCRYPTION_KEY is set (official build)"
@@ -321,7 +345,29 @@ jobs:
           # 执行构建
           BUILD_FAILED=false
           set +e  # Temporarily disable exit on error to capture build failure
-          if [ "$RELEASE_TYPE" = "snapshot" ]; then
+          if [ "$RELEASE_TYPE" = "beta" ]; then
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              echo "Building Windows beta..."
+              echo "Running: pnpm build:beta:win"
+              pnpm build:beta:win || {
+                BUILD_FAILED=true
+                echo "ERROR: Windows beta build failed with exit code $?"
+              }
+            elif [ "$RUNNER_OS" = "macOS" ]; then
+              echo "Building macOS beta..."
+              echo "Using NODE_OPTIONS=--max-old-space-size=6144 for macOS beta build"
+              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:beta:mac || {
+                BUILD_FAILED=true
+                echo "ERROR: macOS beta build failed with exit code $?"
+              }
+            else
+              echo "Building Linux beta..."
+              pnpm build:beta:linux || {
+                BUILD_FAILED=true
+                echo "ERROR: Linux beta build failed with exit code $?"
+              }
+            fi
+          elif [ "$RELEASE_TYPE" = "snapshot" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
               echo "Building Windows snapshot..."
               echo "Running: pnpm build:snapshot:win"
@@ -556,11 +602,20 @@ jobs:
           }
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.os }}-${{ steps.release-type.outputs.type }}
-          path: apps/core-app/dist
+          path: |
+            apps/core-app/dist/**/*-setup.exe
+            apps/core-app/dist/**/*.dmg
+            apps/core-app/dist/**/*.AppImage
+            apps/core-app/dist/**/*.deb
+            apps/core-app/dist/**/*.snap
+            apps/core-app/dist/**/*.zip
+            apps/core-app/dist/**/latest*.yml
+            apps/core-app/dist/**/builder-debug.yml
           retention-days: 30
+          if-no-files-found: error
 
       - name: Cleanup Artifacts for Windows
         if: matrix.os == 'windows-latest'
@@ -601,6 +656,8 @@ jobs:
     needs: build-and-release
     runs-on: ubuntu-latest
     if: needs.build-and-release.result == 'success'
+    permissions:
+      contents: write
 
     steps:
       - name: Check Build Results
@@ -611,7 +668,7 @@ jobs:
           echo "Linux: ${{ needs.build-and-release.result == 'success' }}"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -681,7 +738,7 @@ jobs:
             echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
             echo "tag=manual-build-$TIMESTAMP" >> $GITHUB_OUTPUT
             echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
-            if [ "$RELEASE_TYPE" = "snapshot" ]; then
+            if [ "$RELEASE_TYPE" = "snapshot" ] || [ "$RELEASE_TYPE" = "beta" ]; then
               echo "prerelease=true" >> $GITHUB_OUTPUT
             else
               echo "prerelease=false" >> $GITHUB_OUTPUT
@@ -851,7 +908,7 @@ jobs:
 
       - name: Create Release
         id: create-release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release-info.outputs.tag }}
           name: ${{ steps.release-info.outputs.name }}
@@ -948,6 +1005,8 @@ jobs:
     name: Sync Nexus Release
     needs: create-release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: >
       always() && (
         (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.create-release.result == 'success')
@@ -997,12 +1056,12 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '22.16.0'
 
       - name: Fetch GitHub release metadata
         run: |

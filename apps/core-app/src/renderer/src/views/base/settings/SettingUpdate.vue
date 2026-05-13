@@ -16,15 +16,22 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
+import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
+import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
 } from '~/modules/update/channel'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
+import {
+  buildUpdateDiagnosticEvidenceFilename,
+  buildUpdateDiagnosticEvidencePayload,
+  formatUpdateDiagnosticEvidenceJson
+} from './update-diagnostic-evidence'
 
 const { t } = useI18n()
 const githubProvider = new GithubUpdateProvider()
@@ -32,6 +39,7 @@ const downloadSdk = useDownloadSdk()
 const downloadStatusDisposers: Array<() => void> = []
 const { platform, isMac } = useRendererPlatform()
 const settingUpdateLog = createRendererLogger('SettingUpdate')
+const { startupInfo } = useStartupInfo()
 
 const { appStates } = useAppState()
 const {
@@ -47,7 +55,8 @@ const {
 const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
-const autoDownloadEnabled = ref<boolean>(false)
+const autoDownloadEnabled = ref<boolean>(true)
+const autoInstallDownloadedUpdatesEnabled = ref(false)
 const rendererOverrideEnabled = ref(false)
 const lastCheck = ref<number | null>(null)
 const downloadReady = ref(false)
@@ -60,10 +69,12 @@ const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
+const autoInstallSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
 const isMacAutoInstallPlatform = computed(() => isMac.value)
+const isWindowsPlatform = computed(() => platform.value === 'win32')
 
 const channelOptions = computed(() => {
   return [
@@ -83,6 +94,7 @@ const frequencyOptions = computed(() => [
 
 const channelSelectDisabled = computed(() => fetching.value || channelSaving.value)
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
 const statusDescription = computed(() => {
   if (fetching.value || manualChecking.value) return t('settings.settingUpdate.status.loading')
@@ -129,6 +141,11 @@ const autoDownloadDescription = computed(() => {
     ? t('settings.settingUpdate.autoDownloadDesc')
     : t('settings.settingUpdate.autoDownloadDescManual')
 })
+const autoInstallDescription = computed(() => {
+  return autoDownloadEnabled.value
+    ? t('settings.settingUpdate.autoInstallDownloadedUpdatesDesc')
+    : t('settings.settingUpdate.autoInstallDownloadedUpdatesDescDisabled')
+})
 const installActionDescription = computed(() => {
   return isMacAutoInstallPlatform.value
     ? t('settings.settingUpdate.actionsDesc')
@@ -150,7 +167,7 @@ const cachedAssets = computed(() => {
     return [] as DownloadAsset[]
   }
   const assets = githubProvider.getDownloadAssets(cachedRelease.value.release)
-  const arch = getPreloadProcessInfo()?.arch
+  const arch = getRuntimeArch()
   if (!arch) {
     return [] as DownloadAsset[]
   }
@@ -196,7 +213,8 @@ async function loadSettings(): Promise<void> {
     selectedChannel.value =
       normalizeStoredUpdateChannel(fetched.updateChannel) ?? AppPreviewChannel.RELEASE
     selectedFrequency.value = fetched.frequency
-    autoDownloadEnabled.value = fetched.autoDownload ?? false
+    autoDownloadEnabled.value = fetched.autoDownload ?? true
+    autoInstallDownloadedUpdatesEnabled.value = fetched.autoInstallDownloadedUpdates ?? false
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
     await refreshStatus()
@@ -216,6 +234,7 @@ async function refreshStatus(): Promise<void> {
       downloadReady?: boolean
       downloadReadyVersion?: string | null
       downloadTaskId?: string | null
+      autoInstallDownloadedUpdates?: boolean
     }
 
     if (typeof status.lastCheck === 'number') {
@@ -240,6 +259,12 @@ async function refreshStatus(): Promise<void> {
     if (!downloadReady.value) {
       downloadReadyVersion.value = null
       downloadTaskId.value = null
+    }
+    if (typeof status.autoInstallDownloadedUpdates === 'boolean') {
+      autoInstallDownloadedUpdatesEnabled.value = status.autoInstallDownloadedUpdates
+      if (settings.value) {
+        settings.value.autoInstallDownloadedUpdates = status.autoInstallDownloadedUpdates
+      }
     }
   } catch (error) {
     settingUpdateLog.warn('Failed to refresh status', error)
@@ -316,6 +341,25 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     autoDownloadSaving.value = false
+  }
+}
+
+async function handleAutoInstallChange(value: boolean): Promise<void> {
+  if (!settings.value || autoInstallSaving.value) return
+
+  const previous = autoInstallDownloadedUpdatesEnabled.value
+  autoInstallDownloadedUpdatesEnabled.value = value
+  autoInstallSaving.value = true
+  try {
+    await updateSettings({ autoInstallDownloadedUpdates: value })
+    settings.value.autoInstallDownloadedUpdates = value
+    toast.success(t('settings.settingUpdate.messages.autoInstallDownloadedUpdatesSaved'))
+  } catch (error) {
+    settingUpdateLog.error('Failed to update automatic installer handoff', error)
+    autoInstallDownloadedUpdatesEnabled.value = previous
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
+  } finally {
+    autoInstallSaving.value = false
   }
 }
 
@@ -402,6 +446,67 @@ async function handleCopyAssetUrl(asset: DownloadAsset): Promise<void> {
   }
 }
 
+function getRuntimeArch(): string | null {
+  return getPreloadProcessInfo()?.arch ?? null
+}
+
+function buildCurrentUpdateEvidence() {
+  if (fetching.value && !settings.value) {
+    return null
+  }
+
+  return buildUpdateDiagnosticEvidencePayload({
+    settings: settings.value,
+    status: {
+      lastCheck: lastCheck.value,
+      downloadReady: downloadReady.value,
+      downloadReadyVersion: downloadReadyVersion.value,
+      downloadTaskId: downloadTaskId.value
+    },
+    cachedRelease: cachedRelease.value,
+    cachedAssets: cachedAssets.value,
+    platform: platform.value,
+    arch: getRuntimeArch(),
+    isMacAutoInstallPlatform: isMacAutoInstallPlatform.value,
+    currentVersion: startupInfo.value?.version ?? null
+  })
+}
+
+async function copyUpdateEvidence(): Promise<void> {
+  const payload = buildCurrentUpdateEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingUpdate.evidenceMissing'))
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(formatUpdateDiagnosticEvidenceJson(payload))
+    toast.success(t('settings.settingUpdate.evidenceCopied'))
+  } catch (error) {
+    settingUpdateLog.error('Failed to copy update diagnostic evidence', error)
+    toast.error(t('settings.settingUpdate.evidenceCopyFailed'))
+  }
+}
+
+function saveUpdateEvidence(): void {
+  const payload = buildCurrentUpdateEvidence()
+  if (!payload) {
+    toast.error(t('settings.settingUpdate.evidenceMissing'))
+    return
+  }
+
+  const blob = new Blob([formatUpdateDiagnosticEvidenceJson(payload)], {
+    type: 'application/json;charset=utf-8'
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = buildUpdateDiagnosticEvidenceFilename(payload)
+  link.click()
+  URL.revokeObjectURL(url)
+  toast.success(t('settings.settingUpdate.evidenceSaved'))
+}
+
 function formatTimestamp(value: number): string {
   return new Date(value).toLocaleString()
 }
@@ -446,33 +551,35 @@ function openAssetsDialog(): void {
     active-icon="i-carbon-upgrade"
     memory-name="setting-update"
   >
-    <TuffBlockSelect
-      v-model="selectedChannel"
-      :title="t('settings.settingUpdate.channelTitle')"
-      :description="t('settings.settingUpdate.channelDesc')"
-      default-icon="i-carbon-software"
-      active-icon="i-carbon-software-resource"
-      :disabled="channelSelectDisabled"
-      @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
-    >
-      <TxSelectItem v-for="item in channelOptions" :key="item.value" :value="item.value">
-        {{ item.label }}
-      </TxSelectItem>
-    </TuffBlockSelect>
+    <template v-if="showAdvancedSettings">
+      <TuffBlockSelect
+        v-model="selectedChannel"
+        :title="t('settings.settingUpdate.channelTitle')"
+        :description="t('settings.settingUpdate.channelDesc')"
+        default-icon="i-carbon-software"
+        active-icon="i-carbon-software-resource"
+        :disabled="channelSelectDisabled"
+        @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
+      >
+        <TxSelectItem v-for="item in channelOptions" :key="item.value" :value="item.value">
+          {{ item.label }}
+        </TxSelectItem>
+      </TuffBlockSelect>
 
-    <TuffBlockSelect
-      v-model="selectedFrequency"
-      :title="t('settings.settingUpdate.frequencyTitle')"
-      :description="t('settings.settingUpdate.frequencyDesc')"
-      default-icon="i-carbon-reminder"
-      active-icon="i-carbon-reminder-medical"
-      :disabled="frequencySelectDisabled"
-      @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
-    >
-      <TxSelectItem v-for="freq in frequencyOptions" :key="freq.value" :value="freq.value">
-        {{ freq.label }}
-      </TxSelectItem>
-    </TuffBlockSelect>
+      <TuffBlockSelect
+        v-model="selectedFrequency"
+        :title="t('settings.settingUpdate.frequencyTitle')"
+        :description="t('settings.settingUpdate.frequencyDesc')"
+        default-icon="i-carbon-reminder"
+        active-icon="i-carbon-reminder-medical"
+        :disabled="frequencySelectDisabled"
+        @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
+      >
+        <TxSelectItem v-for="freq in frequencyOptions" :key="freq.value" :value="freq.value">
+          {{ freq.label }}
+        </TxSelectItem>
+      </TuffBlockSelect>
+    </template>
 
     <tuff-block-switch
       v-model="autoDownloadEnabled"
@@ -485,6 +592,18 @@ function openAssetsDialog(): void {
     />
 
     <tuff-block-switch
+      v-if="showAdvancedSettings && isWindowsPlatform"
+      v-model="autoInstallDownloadedUpdatesEnabled"
+      :title="t('settings.settingUpdate.autoInstallDownloadedUpdatesTitle')"
+      :description="autoInstallDescription"
+      default-icon="i-carbon-install"
+      active-icon="i-carbon-install"
+      :disabled="fetching || autoInstallSaving || !autoDownloadEnabled"
+      @update:model-value="handleAutoInstallChange"
+    />
+
+    <tuff-block-switch
+      v-if="showAdvancedSettings"
       v-model="rendererOverrideEnabled"
       :title="t('settings.settingUpdate.rendererOverrideTitle')"
       :description="t('settings.settingUpdate.rendererOverrideDesc')"
@@ -546,6 +665,23 @@ function openAssetsDialog(): void {
       <TxButton variant="flat" type="primary" @click="openAssetsDialog">
         {{ t('settings.settingUpdate.assetsOpen') }}
       </TxButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="showAdvancedSettings"
+      :title="t('settings.settingUpdate.evidenceTitle')"
+      :description="t('settings.settingUpdate.evidenceDesc')"
+      default-icon="i-carbon-document-export"
+      active-icon="i-carbon-document-export"
+    >
+      <div class="evidence-actions">
+        <TxButton variant="flat" @click="copyUpdateEvidence">
+          {{ t('settings.settingUpdate.copyEvidence') }}
+        </TxButton>
+        <TxButton variant="flat" @click="saveUpdateEvidence">
+          {{ t('settings.settingUpdate.saveEvidence') }}
+        </TxButton>
+      </div>
     </TuffBlockSlot>
   </TuffGroupBlock>
 
@@ -668,5 +804,11 @@ function openAssetsDialog(): void {
 .asset-actions {
   display: flex;
   gap: 8px;
+}
+
+.evidence-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 </style>

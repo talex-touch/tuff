@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxPagination, TxPopperDialog, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
+import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 definePageMeta({
@@ -45,6 +46,24 @@ interface Provider {
   metadata: Record<string, any> | null
   createdAt: string
   updatedAt: string
+}
+
+interface MigrationItem {
+  providerId: string
+  providerName: string
+  action: string
+  registryProviderId: string | null
+  migratedApiKey: boolean
+  reason: string | null
+}
+
+interface MigrationResult {
+  dryRun: boolean
+  total: number
+  migrated: number
+  skipped: number
+  failed: number
+  items: MigrationItem[]
 }
 
 interface Settings {
@@ -152,6 +171,9 @@ const settings = ref<Settings>({
 })
 const loading = ref(true)
 const error = ref<string | null>(null)
+const migrationLoading = ref(false)
+const migrationError = ref<string | null>(null)
+const migrationResult = ref<MigrationResult | null>(null)
 const settingsSaving = ref(false)
 const auditLogs = ref<AuditLog[]>([])
 const auditLoading = ref(false)
@@ -220,7 +242,8 @@ async function fetchProviders() {
   loading.value = true
   error.value = null
   try {
-    const data = await $fetch<{ providers: Provider[] }>('/api/dashboard/intelligence/providers')
+    const providerEndpoint: string = '/api/dashboard/intelligence/providers'
+    const data = await rawFetch<{ providers: Provider[] }>(providerEndpoint)
     providers.value = data.providers
   }
   catch (e: any) {
@@ -231,9 +254,29 @@ async function fetchProviders() {
   }
 }
 
+async function runProviderRegistryMigration(dryRun: boolean) {
+  migrationLoading.value = true
+  migrationError.value = null
+  try {
+    const result = await rawFetch<{ migration: MigrationResult }>('/api/dashboard/intelligence/providers/migrate', {
+      method: 'POST',
+      body: { dryRun },
+    })
+    migrationResult.value = result.migration
+    if (!dryRun)
+      await fetchProviders()
+  }
+  catch (e: any) {
+    migrationError.value = e.data?.message || e.data?.statusMessage || 'Failed to migrate providers'
+  }
+  finally {
+    migrationLoading.value = false
+  }
+}
+
 async function fetchSettings() {
   try {
-    const data = await $fetch<{ settings: Settings }>('/api/dashboard/intelligence/settings')
+    const data = await rawFetch<{ settings: Settings }>('/api/dashboard/intelligence/settings')
     if (data.settings)
       settings.value = { ...settings.value, ...data.settings }
   }
@@ -244,7 +287,7 @@ async function fetchAudits() {
   auditLoading.value = true
   auditError.value = null
   try {
-    const data = await $fetch<{ audits: AuditLog[]; total: number }>('/api/dashboard/intelligence/audits', {
+    const data = await rawFetch<{ audits: AuditLog[]; total: number }>('/api/dashboard/intelligence/audits', {
       query: {
         limit: auditPageSize.value,
         page: auditPage.value,
@@ -271,7 +314,7 @@ async function fetchOverview() {
   overviewLoading.value = true
   overviewError.value = null
   try {
-    const data = await $fetch<OverviewData>('/api/dashboard/intelligence/overview')
+    const data = await rawFetch<OverviewData>('/api/dashboard/intelligence/overview')
     overviewData.value = data
   }
   catch (e: any) {
@@ -289,7 +332,7 @@ async function fetchUserUsage() {
   userUsageLoading.value = true
   userUsageError.value = null
   try {
-    const data = await $fetch<{ ok: boolean; result?: UsageResult; error?: string }>('/api/dashboard/intelligence/usage', {
+    const data = await rawFetch<{ ok: boolean; result?: UsageResult; error?: string }>('/api/dashboard/intelligence/usage', {
       query: { userId },
     })
     if (!data.ok)
@@ -310,7 +353,7 @@ async function fetchIpBans() {
   ipBanLoading.value = true
   ipBanError.value = null
   try {
-    const data = await $fetch<{ bans: IpBan[] }>('/api/dashboard/intelligence/ip-bans', { query: { limit: 100 } })
+    const data = await rawFetch<{ bans: IpBan[] }>('/api/dashboard/intelligence/ip-bans', { query: { limit: 100 } })
     ipBans.value = data.bans || []
   }
   catch (e: any) {
@@ -336,7 +379,7 @@ async function addIpBan() {
   ipBanLoading.value = true
   ipBanError.value = null
   try {
-    await $fetch('/api/dashboard/intelligence/ip-bans', {
+    await rawFetch('/api/dashboard/intelligence/ip-bans', {
       method: 'POST',
       headers: ipBanAuthHeaders(),
       body: {
@@ -368,7 +411,7 @@ async function toggleIpBan(ban: IpBan) {
   ipBanLoading.value = true
   ipBanError.value = null
   try {
-    await $fetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, {
+    await rawFetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, {
       method: 'PATCH',
       headers: ipBanAuthHeaders(),
       body: { enabled: !ban.enabled },
@@ -395,7 +438,7 @@ async function removeIpBan(ban: IpBan) {
   ipBanLoading.value = true
   ipBanError.value = null
   try {
-    await $fetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, {
+    await rawFetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, {
       method: 'DELETE',
       headers: ipBanAuthHeaders(),
     })
@@ -422,7 +465,7 @@ async function fetchUsage(options: { resetPage?: boolean } = {}) {
   usageLoading.value = true
   usageError.value = null
   try {
-    const result = await $fetch<{
+    const result = await rawFetch<{
       month: string
       totalUsed: number
       totalQuota: number
@@ -458,7 +501,7 @@ async function fetchLedger(options: { resetPage?: boolean } = {}) {
   ledgerLoading.value = true
   ledgerError.value = null
   try {
-    const result = await $fetch<{
+    const result = await rawFetch<{
       entries: CreditLedgerItem[]
       pagination: Pagination
     }>('/api/admin/credits/ledger', {
@@ -617,13 +660,13 @@ async function submitForm() {
       body.apiKey = form.apiKey.trim()
 
     if (formMode.value === 'create') {
-      await $fetch('/api/dashboard/intelligence/providers', {
+      await rawFetch('/api/dashboard/intelligence/providers', {
         method: 'POST',
         body,
       })
     }
     else if (editingId.value) {
-      await $fetch(`/api/dashboard/intelligence/providers/${editingId.value}`, {
+      await rawFetch(`/api/dashboard/intelligence/providers/${editingId.value}`, {
         method: 'PATCH',
         body,
       })
@@ -643,7 +686,7 @@ async function submitForm() {
 // ── Toggle enabled ──
 async function toggleProvider(provider: Provider) {
   try {
-    await $fetch(`/api/dashboard/intelligence/providers/${provider.id}`, {
+    await rawFetch(`/api/dashboard/intelligence/providers/${provider.id}`, {
       method: 'PATCH',
       body: { enabled: !provider.enabled },
     })
@@ -704,7 +747,7 @@ async function postJsonStrict<T>(
   url: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const response = await $fetch.raw<T | string>(url, {
+  const response = await rawFetch.raw<T | string>(url, {
     method: 'POST',
     body,
     ignoreResponseError: true,
@@ -815,7 +858,7 @@ async function fetchFormModels() {
     }
     else {
       // For create mode, use a temporary test via the models endpoint
-      const data = await $fetch<{ models: string[] }>('/api/dashboard/intelligence/models', {
+      const data = await rawFetch<{ models: string[] }>('/api/dashboard/intelligence/models', {
         method: 'POST',
         body: {
           ...body,
@@ -849,7 +892,7 @@ async function confirmDelete(): Promise<boolean> {
   if (!pendingDeleteId.value)
     return true
   try {
-    await $fetch(`/api/dashboard/intelligence/providers/${pendingDeleteId.value}`, { method: 'DELETE' })
+    await rawFetch(`/api/dashboard/intelligence/providers/${pendingDeleteId.value}`, { method: 'DELETE' })
     await fetchProviders()
   }
   catch (e: any) {
@@ -893,7 +936,7 @@ const DeleteConfirmDialog = defineComponent({
 async function saveSettings() {
   settingsSaving.value = true
   try {
-    await $fetch('/api/dashboard/intelligence/settings', {
+    await rawFetch('/api/dashboard/intelligence/settings', {
       method: 'POST',
       body: settings.value,
     })
@@ -1270,15 +1313,59 @@ function formatEndpointCandidates(list?: string[]) {
 
         <div class="space-y-6">
           <section class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="apple-heading-sm">
-          {{ t('dashboard.sections.intelligence.providers.title') }}
-        </h2>
-        <TxButton v-if="providers.length" ref="addTriggerRef" variant="primary" size="small" @click="openCreateForm(addTriggerRef?.$el || null)">
-          <span class="i-carbon-add mr-1 text-base" />
-          {{ t('dashboard.sections.intelligence.providers.addButton') }}
-        </TxButton>
-      </div>
+            <div class="flex items-center justify-between">
+              <h2 class="apple-heading-sm">
+                {{ t('dashboard.sections.intelligence.providers.title') }}
+              </h2>
+              <TxButton v-if="providers.length" ref="addTriggerRef" variant="primary" size="small" @click="openCreateForm(addTriggerRef?.$el || null)">
+                <span class="i-carbon-add mr-1 text-base" />
+                {{ t('dashboard.sections.intelligence.providers.addButton') }}
+              </TxButton>
+            </div>
+
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-medium text-black dark:text-white">
+                    {{ t('dashboard.sections.intelligence.providers.migration.title', 'Provider Registry 迁移') }}
+                  </p>
+                  <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.sections.intelligence.providers.migration.subtitle', '将旧 intelligence_providers 镜像到通用 Provider Registry 与 secure store；不会删除旧表。') }}
+                  </p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <TxButton variant="secondary" size="mini" :disabled="migrationLoading" @click="runProviderRegistryMigration(true)">
+                    {{ t('dashboard.sections.intelligence.providers.migration.dryRun', 'Dry run') }}
+                  </TxButton>
+                  <TxButton variant="primary" size="mini" :disabled="migrationLoading" @click="runProviderRegistryMigration(false)">
+                    {{ t('dashboard.sections.intelligence.providers.migration.execute', '执行迁移') }}
+                  </TxButton>
+                </div>
+              </div>
+              <div v-if="migrationLoading" class="mt-3 flex items-center gap-2 text-xs text-black/45 dark:text-white/45">
+                <TxSpinner :size="14" />
+                {{ t('dashboard.sections.intelligence.providers.migration.running', '迁移检查中…') }}
+              </div>
+              <div v-if="migrationError" class="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-xs text-red-500">
+                {{ migrationError }}
+              </div>
+              <div v-if="migrationResult" class="mt-3 space-y-2 text-xs">
+                <div class="flex flex-wrap gap-3 text-black/50 dark:text-white/50">
+                  <span>{{ t('dashboard.sections.intelligence.providers.migration.mode', '模式') }}: {{ migrationResult.dryRun ? 'dry-run' : 'execute' }}</span>
+                  <span>{{ t('dashboard.sections.intelligence.providers.migration.total', '总数') }}: {{ migrationResult.total }}</span>
+                  <span>{{ t('dashboard.sections.intelligence.providers.migration.migrated', '已迁移') }}: {{ migrationResult.migrated }}</span>
+                  <span>{{ t('dashboard.sections.intelligence.providers.migration.failed', '失败') }}: {{ migrationResult.failed }}</span>
+                </div>
+                <div v-if="migrationResult.items.length" class="max-h-40 overflow-auto rounded-xl bg-black/[0.03] p-3 font-mono text-[11px] text-black/55 dark:bg-white/[0.04] dark:text-white/55">
+                  <div v-for="item in migrationResult.items" :key="item.providerId" class="flex flex-wrap gap-x-2 gap-y-1">
+                    <span>{{ item.providerName }}</span>
+                    <span>{{ item.action }}</span>
+                    <span v-if="item.registryProviderId">-&gt; {{ item.registryProviderId }}</span>
+                    <span v-if="item.reason">({{ item.reason }})</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
       <!-- Loading -->
       <div v-if="loading" class="space-y-3 py-4">
@@ -1842,11 +1929,12 @@ function formatEndpointCandidates(list?: string[]) {
                     {{ fetchingFormModels ? t('dashboard.sections.intelligence.form.fetchingModels') : t('dashboard.sections.intelligence.form.fetchModels') }}
                   </TxButton>
                 </div>
-                <textarea
+                <TuffInput
                   v-model="form.models"
+                  type="textarea"
                   :placeholder="t('dashboard.sections.intelligence.form.modelsPlaceholder')"
-                  rows="4"
-                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                  :rows="4"
+                  class="w-full"
                 />
                 <p class="text-[11px] text-black/30 dark:text-white/30">
                   {{ t('dashboard.sections.intelligence.form.modelsHint') }}
@@ -1874,11 +1962,12 @@ function formatEndpointCandidates(list?: string[]) {
                 <label class="text-xs text-black/60 dark:text-white/60">
                   {{ t('dashboard.sections.intelligence.form.instructions') }}
                 </label>
-                <textarea
+                <TuffInput
                   v-model="form.instructions"
+                  type="textarea"
                   :placeholder="t('dashboard.sections.intelligence.form.instructionsPlaceholder')"
-                  rows="2"
-                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                  :rows="2"
+                  class="w-full"
                 />
               </div>
 
@@ -1979,11 +2068,12 @@ function formatEndpointCandidates(list?: string[]) {
                 <label class="text-xs text-black/60 dark:text-white/60">
                   {{ t('dashboard.sections.intelligence.providers.probe.prompt') }}
                 </label>
-                <textarea
+                <TuffInput
                   v-model="probePrompt"
+                  type="textarea"
                   :placeholder="t('dashboard.sections.intelligence.providers.probe.promptPlaceholder')"
-                  rows="4"
-                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                  :rows="4"
+                  class="w-full"
                 />
               </div>
 

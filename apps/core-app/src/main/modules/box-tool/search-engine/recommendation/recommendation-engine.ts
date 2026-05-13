@@ -14,8 +14,15 @@ import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
+import {
+  DAY_MS,
+  calculateTimeRelevanceScore,
+  toDayBucket,
+  toErrorMeta
+} from './recommendation-utils'
 
-const DAY_MS = 86_400_000
+export { calculateTimeContextBoost, calculateTimeRelevanceScore } from './recommendation-utils'
+
 const TREND_HISTORY_DAYS = 30
 const TREND_RECENT_DAYS = 7
 const TREND_BACKFILL_INTERVAL_SECONDS = 2
@@ -27,39 +34,6 @@ const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 const recommendationLog = createLogger('RecommendationEngine')
 
-type LogMeta = Record<string, string | number | boolean | null | undefined>
-
-function toPrimitive(value: unknown): string | number | boolean | null | undefined {
-  if (value == null) return value
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value
-  }
-  return String(value)
-}
-
-function toErrorMeta(error: unknown): LogMeta {
-  if (error instanceof Error) {
-    const node = error as Error & { code?: unknown; cause?: unknown }
-    const cause =
-      node.cause && typeof node.cause === 'object'
-        ? (node.cause as { code?: unknown; rawCode?: unknown; message?: unknown })
-        : null
-    return {
-      name: node.name,
-      message: node.message,
-      code: toPrimitive(node.code),
-      causeCode: toPrimitive(cause?.code),
-      causeRawCode: toPrimitive(cause?.rawCode),
-      causeMessage: toPrimitive(cause?.message)
-    }
-  }
-  return { message: String(error) }
-}
-
-function toDayBucket(timestampMs: number): number {
-  return Math.floor(timestampMs / DAY_MS)
-}
-
 export class RecommendationEngine {
   private contextProvider: ContextProvider
   private itemRebuilder: ItemRebuilder
@@ -68,6 +42,7 @@ export class RecommendationEngine {
     items: TuffItem[]
     timestamp: number
     context: ContextSignal
+    cacheKey: string
   } | null = null
 
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
@@ -535,11 +510,15 @@ export class RecommendationEngine {
 
     const contextStartedAt = performance.now()
     const context = await this.contextProvider.getCurrentContext()
+    const contextCacheKey = this.contextProvider.generateCacheKey(context)
     const contextDuration = performance.now() - contextStartedAt
 
     if (!options.forceRefresh && this.recommendationCache) {
       const cacheAge = Date.now() - this.recommendationCache.timestamp
-      if (cacheAge < this.CACHE_DURATION_MS) {
+      if (
+        cacheAge < this.CACHE_DURATION_MS &&
+        this.recommendationCache.cacheKey === contextCacheKey
+      ) {
         recommendationLog.debug('Memory cache hit', {
           meta: {
             cacheAgeSeconds: Number((cacheAge / 1000).toFixed(1)),
@@ -613,7 +592,8 @@ export class RecommendationEngine {
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
-        context
+        context,
+        cacheKey: contextCacheKey
       }
 
       this.recordRecommendationPerf('recommendation.total', {
@@ -656,7 +636,8 @@ export class RecommendationEngine {
       this.recommendationCache = {
         items: finalItems,
         timestamp: Date.now(),
-        context
+        context,
+        cacheKey: contextCacheKey
       }
 
       this.recordRecommendationPerf('recommendation.total', {
@@ -731,7 +712,8 @@ export class RecommendationEngine {
     this.recommendationCache = {
       items: combinedItems,
       timestamp: Date.now(),
-      context
+      context,
+      cacheKey: contextCacheKey
     }
 
     const containerLayout = this.buildContainerLayout(options, combinedItems)
@@ -1277,20 +1259,7 @@ export class RecommendationEngine {
     itemTimeStats: ParsedItemTimeStats,
     currentTime: TimePattern
   ): number {
-    const slotUsage = itemTimeStats.timeSlotDistribution[currentTime.timeSlot]
-    const totalUsage = Object.values(itemTimeStats.timeSlotDistribution).reduce((a, b) => a + b, 0)
-
-    if (totalUsage === 0) return 0
-
-    // 当前时段的使用占比
-    const slotRatio = slotUsage / totalUsage
-
-    // 星期几的加权
-    const dayUsage = itemTimeStats.dayOfWeekDistribution[currentTime.dayOfWeek]
-    const avgDayUsage = itemTimeStats.dayOfWeekDistribution.reduce((a, b) => a + b, 0) / 7
-    const dayFactor = dayUsage / (avgDayUsage || 1)
-
-    return slotRatio * 100 * dayFactor
+    return calculateTimeRelevanceScore(itemTimeStats, currentTime)
   }
 
   /**
@@ -1699,14 +1668,23 @@ export class RecommendationEngine {
    * 去重候选项
    */
   private deduplicateCandidates(candidates: CandidateItem[]): CandidateItem[] {
-    const seen = new Set<string>()
+    const seen = new Map<string, CandidateItem>()
     const result: CandidateItem[] = []
 
     for (const candidate of candidates) {
       const key = `${candidate.sourceId}:${candidate.itemId}`
-      if (!seen.has(key)) {
-        seen.add(key)
+      const existing = seen.get(key)
+      if (!existing) {
+        seen.set(key, candidate)
         result.push(candidate)
+        continue
+      }
+
+      if (!existing.timeStats && candidate.timeStats) {
+        existing.timeStats = candidate.timeStats
+      }
+      if (candidate.source === 'time-based') {
+        existing.source = 'time-based'
       }
     }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SetupPermissions">
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
 import { inject, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -15,6 +15,7 @@ import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import {
   type SystemPermissionCheckResult,
+  type SystemPermissionStatus,
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
 import Done from './Done.vue'
@@ -29,30 +30,34 @@ const step: StepFunction = inject('step')!
 const transport = useTuffTransport()
 const { isMac: isMacOS, isWindows } = useRendererPlatform()
 
-const systemPermissionCheck = defineRawEvent<string, SystemPermissionCheckResult>(
-  'system:permission:check'
-)
-const systemPermissionRequest = defineRawEvent<string, boolean>('system:permission:request')
+const systemPermissionCheck = defineEvent('system')
+  .module('permission')
+  .event('check')
+  .define<string, SystemPermissionCheckResult>()
+const systemPermissionRequest = defineEvent('system')
+  .module('permission')
+  .event('request')
+  .define<string, boolean>()
 
 // Permission states
 const permissions = ref({
   fileAccess: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: true // File access is required
   },
   accessibility: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: false // Optional
   },
   notifications: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: false // Optional
   },
   adminPrivileges: {
-    status: 'notDetermined' as 'granted' | 'denied' | 'notDetermined' | 'unsupported',
+    status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     required: false // Optional
   }
@@ -333,6 +338,8 @@ function getStatusText(status: string): string {
       return t('setupPermissions.statusDenied')
     case 'notDetermined':
       return t('setupPermissions.statusNotDetermined')
+    case 'unverifiable':
+      return t('setupPermissions.statusUnverifiable')
     case 'unsupported':
       return t('setupPermissions.statusUnsupported')
     default:
@@ -348,6 +355,8 @@ function getStatusIconClass(status: string): string {
       return 'i-carbon-close-outline'
     case 'notDetermined':
       return 'i-carbon-help'
+    case 'unverifiable':
+      return 'i-carbon-information'
     case 'unsupported':
       return 'i-carbon-minimize'
     default:

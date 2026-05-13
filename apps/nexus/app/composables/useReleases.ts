@@ -1,5 +1,6 @@
 import type { Ref } from 'vue'
 import { hasNavigator } from '@talex-touch/utils/env'
+import { requestJson } from '~/utils/request'
 
 export type ReleaseChannel = 'RELEASE' | 'BETA' | 'SNAPSHOT'
 export type ReleaseStatus = 'draft' | 'published' | 'archived'
@@ -152,7 +153,7 @@ export function useReleases() {
       const queryString = params.toString()
       const url = `/api/releases${queryString ? `?${queryString}` : ''}`
 
-      const data = await $fetch<ReleasesResponse>(url)
+      const data = await requestJson<ReleasesResponse>(url)
       const normalized = data.releases.map(normalizeRelease)
       releases.value = normalized
       return normalized
@@ -180,7 +181,7 @@ export function useReleases() {
       if (platform)
         params.set('platform', platform)
 
-      const data = await $fetch<LatestReleaseResponse>(`/api/releases/latest?${params.toString()}`)
+      const data = await requestJson<LatestReleaseResponse>(`/api/releases/latest?${params.toString()}`)
       return data.release ? normalizeRelease(data.release) : null
     }
     catch (err) {
@@ -198,7 +199,7 @@ export function useReleases() {
     error.value = null
 
     try {
-      const data = await $fetch<ReleaseResponse>(`/api/releases/${encodeURIComponent(tag)}`)
+      const data = await requestJson<ReleaseResponse>(`/api/releases/${encodeURIComponent(tag)}`)
       return data.release ? normalizeRelease(data.release) : null
     }
     catch (err) {

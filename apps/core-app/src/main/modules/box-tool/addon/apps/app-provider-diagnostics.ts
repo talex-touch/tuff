@@ -15,6 +15,11 @@ import type { createDbUtils } from '../../../../db/utils'
 import { files as filesSchema, keywordMappings } from '../../../../db/schema'
 import type { ScannedAppInfo } from './app-types'
 import { normalizeStringList } from './app-utils'
+import {
+  isProbablyCorruptedDisplayName,
+  normalizeDisplayName,
+  resolveDisplayName
+} from './display-name-sync-utils'
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
@@ -38,6 +43,9 @@ export interface AppProviderDiagnosticsContext {
 }
 
 const APP_IDENTITY_EXTENSION_KEY = 'appIdentity'
+const APP_IDENTITY_KIND_EXTENSION_KEY = 'identityKind'
+const APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY = 'displayNameSource'
+const APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY = 'displayNameQuality'
 const APP_ENTRY_SOURCE_EXTENSION_KEY = 'entrySource'
 const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 
@@ -93,6 +101,20 @@ async function findDiagnosticApp(
     .filter((match): match is DiagnosticAppMatch => match.score > 0)
     .sort((left, right) => right.score - left.score)
 
+  if (matches.length === 0) {
+    const keywordMatches = await findDiagnosticAppByStoredKeyword(
+      context,
+      target,
+      appsWithExtensions
+    )
+    matches.push(...keywordMatches)
+  }
+
+  if (matches.length === 0) {
+    const searchMatches = await findDiagnosticAppBySearchIndex(context, target, appsWithExtensions)
+    matches.push(...searchMatches)
+  }
+
   const best = matches[0]
   if (!best) return null
 
@@ -100,6 +122,80 @@ async function findDiagnosticApp(
     app: best.app,
     candidates: matches.slice(0, 8).map((match) => match.app)
   }
+}
+
+async function findDiagnosticAppByStoredKeyword(
+  context: AppProviderDiagnosticsContext,
+  target: string,
+  apps: DbAppWithExtensions[]
+): Promise<DiagnosticAppMatch[]> {
+  if (!context.dbUtils) return []
+
+  const raw = normalizeOptionalString(target)
+  if (!raw) return []
+
+  const keywords = normalizeStringList([raw, raw.toLowerCase()])
+  if (keywords.length === 0) return []
+
+  const db = context.dbUtils.getDb()
+  const rows = await db
+    .select({
+      itemId: keywordMappings.itemId,
+      priority: keywordMappings.priority
+    })
+    .from(keywordMappings)
+    .where(
+      and(eq(keywordMappings.providerId, context.id), inArray(keywordMappings.keyword, keywords))
+    )
+    .limit(100)
+
+  const candidateScores = new Map<string, number>()
+  for (const row of rows) {
+    candidateScores.set(
+      row.itemId,
+      Math.max(candidateScores.get(row.itemId) ?? 0, 76 + row.priority)
+    )
+  }
+
+  return matchDiagnosticAppsByItemScore(context, apps, candidateScores)
+}
+
+async function findDiagnosticAppBySearchIndex(
+  context: AppProviderDiagnosticsContext,
+  target: string,
+  apps: DbAppWithExtensions[]
+): Promise<DiagnosticAppMatch[]> {
+  const raw = normalizeOptionalString(target)
+  if (!raw || !context.searchIndex) return []
+
+  const stages = await diagnoseAppQuery(context, raw, [])
+  const candidateItemIds = stages?.candidateItemIds ?? []
+  const candidateScores = new Map<string, number>()
+
+  candidateItemIds.forEach((itemId, index) => {
+    candidateScores.set(itemId, Math.max(candidateScores.get(itemId) ?? 0, 58 - index))
+  })
+
+  for (const match of stages?.stages.precise.matches ?? []) {
+    candidateScores.set(match.itemId, Math.max(candidateScores.get(match.itemId) ?? 0, 72))
+  }
+
+  return matchDiagnosticAppsByItemScore(context, apps, candidateScores)
+}
+
+function matchDiagnosticAppsByItemScore(
+  context: AppProviderDiagnosticsContext,
+  apps: DbAppWithExtensions[],
+  candidateScores: Map<string, number>
+): DiagnosticAppMatch[] {
+  return apps
+    .map((app) => {
+      const itemIds = resolveAppItemIds(context.mapDbAppToScannedInfo(app))
+      const score = Math.max(0, ...itemIds.map((itemId) => candidateScores.get(itemId) ?? 0))
+      return { app, score }
+    })
+    .filter((match): match is DiagnosticAppMatch => match.score > 0)
+    .sort((left, right) => right.score - left.score)
 }
 
 function scoreDiagnosticTarget(
@@ -120,6 +216,7 @@ function scoreDiagnosticTarget(
     [app.displayName, 94],
     [app.name, 92],
     [appInfo.fileName, 90],
+    [appInfo.launchTarget, 89],
     [fileBaseName, 88],
     ...alternateNames.map((name): [string, number] => [name, 86])
   ]
@@ -135,6 +232,7 @@ function scoreDiagnosticTarget(
     [app.name, 68],
     [appInfo.fileName, 66],
     [fileBaseName, 64],
+    [appInfo.launchTarget, 50],
     ...alternateNames.map((name): [string, number] => [name, 62]),
     [app.path, 48],
     [app.extensions.bundleId, 44],
@@ -155,11 +253,25 @@ function toDiagnosticApp(
   app: DbAppWithExtensions
 ): AppIndexDiagnosticApp {
   const appInfo = context.mapDbAppToScannedInfo(app)
+  const rawDisplayName = normalizeDisplayName(app.displayName)
+  const resolvedDisplayName = resolveDisplayName(app.displayName, app.name)
+  const displayNameStatus = resolveDisplayNameStatus(app.displayName, app.name, resolvedDisplayName)
+
   return {
     id: app.id,
     path: app.path,
     name: app.name,
-    displayName: app.displayName || undefined,
+    displayName: resolvedDisplayName || undefined,
+    rawDisplayName: rawDisplayName || undefined,
+    displayNameStatus,
+    identityKind: app.extensions[
+      APP_IDENTITY_KIND_EXTENSION_KEY
+    ] as AppIndexDiagnosticApp['identityKind'],
+    displayNameSource: app.extensions[APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY] || undefined,
+    displayNameQuality: app.extensions[
+      APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY
+    ] as AppIndexDiagnosticApp['displayNameQuality'],
+    iconPresent: Boolean(appInfo.icon?.trim()),
     fileName: appInfo.fileName,
     bundleId: app.extensions.bundleId || undefined,
     appIdentity: app.extensions[APP_IDENTITY_EXTENSION_KEY] || undefined,
@@ -173,6 +285,21 @@ function toDiagnosticApp(
     entrySource: app.extensions[APP_ENTRY_SOURCE_EXTENSION_KEY] || undefined,
     entryEnabled: isManagedEntryEnabledExtensionMap(app.extensions)
   }
+}
+
+function resolveDisplayNameStatus(
+  displayName: string | null | undefined,
+  fallbackName: string | null | undefined,
+  resolvedDisplayName: string
+): AppIndexDiagnosticApp['displayNameStatus'] {
+  const normalizedDisplayName = normalizeDisplayName(displayName)
+  if (normalizedDisplayName && normalizedDisplayName === resolvedDisplayName) {
+    return 'clean'
+  }
+  if (isProbablyCorruptedDisplayName(normalizedDisplayName) && normalizeDisplayName(fallbackName)) {
+    return 'fallback'
+  }
+  return normalizedDisplayName ? 'fallback' : 'missing'
 }
 
 async function loadStoredKeywordEntries(

@@ -1,14 +1,92 @@
-const { plugin, clipboard, logger, TuffItemBuilder, permission } = globalThis
+const { plugin, clipboard, logger, TuffItemBuilder, permission, features } = globalThis
 const { execFile, spawn } = require('node:child_process')
+const os = require('node:os')
+const fetchImpl = globalThis.fetch
 
 const PLUGIN_NAME = 'touch-browser-open'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'browser-open'
+const WEB_SEARCH_FEATURE_ID = 'web-search'
+const SEARCH_ENGINE_FEATURE_PREFIX = 'search-engine-'
+const SEARCH_SETTINGS_FILE = 'search-settings.json'
 const RECENT_FILE = 'recent-browsers.json'
 const RECENT_MAX_ITEMS = 20
 const RECENT_SHOW_LIMIT = 5
 const RECENT_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const SUGGEST_TIMEOUT_MS = 2500
+const SUGGEST_LIMIT = 6
+
+const SEARCH_ENGINES = [
+  {
+    id: 'google',
+    name: 'Google',
+    featureName: 'Google 搜索引擎',
+    icon: { type: 'file', value: 'assets/search-engines/google.svg' },
+    keywords: ['google', 'g', '谷歌', 'google 搜索', 'Google 搜索引擎', '谷歌搜索', '谷歌 搜索'],
+    commands: ['google', 'g', '谷歌'],
+    buildSearchUrl: query => `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+    buildSuggestUrl: query => `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`,
+    parseSuggestions(payload) {
+      return Array.isArray(payload?.[1]) ? payload[1] : []
+    },
+  },
+  {
+    id: 'bing',
+    name: 'Bing',
+    featureName: 'Bing 搜索引擎',
+    icon: { type: 'file', value: 'assets/search-engines/bing.svg' },
+    keywords: ['bing', '必应', 'bing 搜索', 'Bing 搜索引擎', '必应搜索', '必应 搜索'],
+    commands: ['bing', '必应'],
+    buildSearchUrl: query => `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
+    buildSuggestUrl: query => `https://www.bing.com/osjson.aspx?query=${encodeURIComponent(query)}`,
+    parseSuggestions(payload) {
+      return Array.isArray(payload?.[1]) ? payload[1] : []
+    },
+  },
+  {
+    id: 'duckduckgo',
+    name: 'DuckDuckGo',
+    featureName: 'DuckDuckGo 搜索引擎',
+    icon: { type: 'file', value: 'assets/search-engines/duckduckgo.svg' },
+    keywords: ['duckduckgo', 'ddg', 'duck', 'DuckDuckGo 搜索引擎', 'duckduckgo 搜索', 'ddg 搜索'],
+    commands: ['duckduckgo', 'ddg', 'duck'],
+    buildSearchUrl: query => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+    buildSuggestUrl: query => `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&type=list`,
+    parseSuggestions(payload) {
+      if (!Array.isArray(payload))
+        return []
+      return payload.map(item => item?.phrase)
+    },
+  },
+]
+
+const SEARCH_ENGINE_IDS = SEARCH_ENGINES.map(engine => engine.id)
+const DEFAULT_SEARCH_SETTINGS = {
+  defaultEngine: 'google',
+  enabledEngines: SEARCH_ENGINE_IDS,
+}
+const SEARCH_ENGINE_BY_ID = new Map(SEARCH_ENGINES.map(engine => [engine.id, engine]))
+const SEARCH_COMMAND_TO_ENGINE = new Map()
+SEARCH_ENGINES.forEach((engine) => {
+  engine.commands.forEach(command => SEARCH_COMMAND_TO_ENGINE.set(command.toLowerCase(), engine.id))
+})
+
+let dynamicSearchFeaturesInitialized = false
+let networkPermissionGranted = null
+let latestFeatureRequestSeq = 0
+let activeSearchMode = null
+let unsubscribeSearchInput = null
+let activeSearchRequestController = null
+
+function getRuntimePlatform() {
+  const platform = typeof os?.platform === 'function' ? os.platform() : ''
+  if (platform === 'win32' || platform === 'darwin' || platform === 'linux')
+    return platform
+  return 'unsupported'
+}
+
+const CURRENT_PLATFORM = getRuntimePlatform()
 
 const MAC_BROWSER_CANDIDATES = [
   { id: 'safari', name: 'Safari', target: 'Safari' },
@@ -18,6 +96,12 @@ const MAC_BROWSER_CANDIDATES = [
   { id: 'brave', name: 'Brave', target: 'Brave Browser' },
   { id: 'opera', name: 'Opera', target: 'Opera' },
 ]
+
+const SUPPORTED_PLATFORM_FLAGS = {
+  win32: CURRENT_PLATFORM === 'win32',
+  darwin: CURRENT_PLATFORM === 'darwin',
+  linux: CURRENT_PLATFORM === 'linux',
+}
 
 const WIN_BROWSER_CANDIDATES = [
   {
@@ -89,6 +173,202 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
+function normalizeSearchText(value) {
+  return normalizeText(value).replace(/\s+/g, ' ')
+}
+
+function uniqNormalizedTexts(values, limit = SUGGEST_LIMIT) {
+  const seen = new Set()
+  const result = []
+  for (const value of values || []) {
+    const text = normalizeSearchText(value)
+    const key = text.toLowerCase()
+    if (!text || seen.has(key))
+      continue
+    seen.add(key)
+    result.push(text)
+    if (result.length >= limit)
+      break
+  }
+  return result
+}
+
+function getSearchEngine(engineId) {
+  return SEARCH_ENGINE_BY_ID.get(engineId) || SEARCH_ENGINE_BY_ID.get(DEFAULT_SEARCH_SETTINGS.defaultEngine)
+}
+
+function normalizeSearchSettings(raw) {
+  const payload = raw && typeof raw === 'object' ? raw : {}
+  const enabled = Array.isArray(payload.enabledEngines)
+    ? payload.enabledEngines.filter(id => SEARCH_ENGINE_BY_ID.has(id))
+    : DEFAULT_SEARCH_SETTINGS.enabledEngines
+  const enabledEngines = enabled.length > 0 ? Array.from(new Set(enabled)) : DEFAULT_SEARCH_SETTINGS.enabledEngines
+  const defaultEngine = enabledEngines.includes(payload.defaultEngine)
+    ? payload.defaultEngine
+    : enabledEngines[0] || DEFAULT_SEARCH_SETTINGS.defaultEngine
+
+  return {
+    defaultEngine,
+    enabledEngines,
+  }
+}
+
+async function loadSearchSettings() {
+  if (!plugin?.storage?.getFile)
+    return normalizeSearchSettings(null)
+
+  try {
+    return normalizeSearchSettings(await plugin.storage.getFile(SEARCH_SETTINGS_FILE))
+  }
+  catch {
+    return normalizeSearchSettings(null)
+  }
+}
+
+function resolveEnabledSearchEngines(settings) {
+  const normalized = normalizeSearchSettings(settings)
+  return normalized.enabledEngines
+    .map(id => SEARCH_ENGINE_BY_ID.get(id))
+    .filter(Boolean)
+}
+
+function parseSearchQuery(input, settings = DEFAULT_SEARCH_SETTINGS) {
+  const rawText = normalizeSearchText(input)
+  if (!rawText)
+    return { engine: getSearchEngine(settings.defaultEngine), query: '', explicit: false }
+
+  const [firstToken = '', ...rest] = rawText.split(' ')
+  const command = firstToken.toLowerCase()
+  const explicitEngineId = SEARCH_COMMAND_TO_ENGINE.get(command)
+  if (explicitEngineId) {
+    return {
+      engine: getSearchEngine(explicitEngineId),
+      query: normalizeSearchText(rest.join(' ')),
+      explicit: true,
+      command: firstToken,
+    }
+  }
+
+  return {
+    engine: getSearchEngine(settings.defaultEngine),
+    query: rawText,
+    explicit: false,
+  }
+}
+
+function buildSearchUrl(engineId, query) {
+  const engine = getSearchEngine(engineId)
+  const text = normalizeSearchText(query)
+  if (!engine || !text)
+    return null
+  return engine.buildSearchUrl(text)
+}
+
+function parseEngineSuggestions(engineId, payload) {
+  const engine = getSearchEngine(engineId)
+  if (!engine)
+    return []
+  return uniqNormalizedTexts(engine.parseSuggestions(payload), SUGGEST_LIMIT)
+}
+
+function getSearchEngineFeatureKeywords(engine) {
+  return engine.keywords.filter(keyword => normalizeSearchText(keyword).length > 1)
+}
+
+function getSearchEngineFeatureCommandTokens(engine) {
+  const tokens = [engine.featureName, ...engine.keywords.filter(keyword => /搜索|引擎/i.test(keyword))]
+  return uniqNormalizedTexts(tokens, tokens.length)
+}
+
+function buildSearchEngineFeatures(settings = DEFAULT_SEARCH_SETTINGS) {
+  return resolveEnabledSearchEngines(settings).map(engine => ({
+    id: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`,
+    name: engine.featureName,
+    desc: `进入 ${engine.name} 搜索模式`,
+    icon: engine.icon,
+    keywords: getSearchEngineFeatureKeywords(engine),
+    push: true,
+    priority: 8,
+    acceptedInputTypes: ['text'],
+    platform: SUPPORTED_PLATFORM_FLAGS,
+    commands: [
+      {
+        type: 'contain',
+        value: getSearchEngineFeatureCommandTokens(engine),
+      },
+    ],
+  }))
+}
+
+function resolveEngineFromFeatureId(featureId) {
+  const id = normalizeText(featureId)
+  if (!id.startsWith(SEARCH_ENGINE_FEATURE_PREFIX))
+    return null
+  return getSearchEngine(id.slice(SEARCH_ENGINE_FEATURE_PREFIX.length))
+}
+
+function resolveActiveSearchMode(featureId) {
+  const engine = resolveEngineFromFeatureId(featureId)
+  if (engine)
+    return { featureId: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`, engine }
+
+  if (featureId === WEB_SEARCH_FEATURE_ID) {
+    return {
+      featureId: WEB_SEARCH_FEATURE_ID,
+      engine: activeSearchMode?.engine || getSearchEngine(DEFAULT_SEARCH_SETTINGS.defaultEngine),
+    }
+  }
+
+  return null
+}
+
+function stopSearchInputSession() {
+  if (typeof unsubscribeSearchInput === 'function') {
+    unsubscribeSearchInput()
+  }
+  unsubscribeSearchInput = null
+  activeSearchMode = null
+  abortActiveSearchRequest()
+}
+
+function startSearchInputSession(featureId, engine) {
+  activeSearchMode = { featureId, engine }
+  if (unsubscribeSearchInput || typeof plugin?.feature?.onInputChange !== 'function')
+    return
+
+  unsubscribeSearchInput = plugin.feature.onInputChange((input) => {
+    const mode = activeSearchMode
+    if (!mode)
+      return
+    void enterSearchEngineMode(mode.engine, input, undefined, {
+      featureId: mode.featureId,
+      preserveInput: true,
+    })
+  })
+}
+
+function extractEngineModeQuery(engine, input) {
+  const text = normalizeSearchText(input)
+  if (!engine || !text)
+    return ''
+
+  const lower = text.toLowerCase()
+  const tokens = Array.from(new Set([engine.featureName, ...engine.keywords, ...engine.commands]))
+    .map(token => normalizeSearchText(token))
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length)
+
+  for (const token of tokens) {
+    const normalizedToken = token.toLowerCase()
+    if (lower === normalizedToken)
+      return ''
+    if (lower.startsWith(`${normalizedToken} `))
+      return normalizeSearchText(text.slice(token.length))
+  }
+
+  return text
+}
+
 function isLikelyUrlInput(text) {
   const value = normalizeText(text)
   if (!value)
@@ -131,6 +411,13 @@ async function ensurePermission(permissionId, reason) {
     return true
   const granted = await permission.request(permissionId, reason)
   return Boolean(granted)
+}
+
+async function ensureNetworkPermission() {
+  if (networkPermissionGranted !== null)
+    return networkPermissionGranted
+  networkPermissionGranted = await ensurePermission('network.internet', '需要网络权限以获取搜索建议')
+  return networkPermissionGranted
 }
 
 function execFileAsync(command, args) {
@@ -279,9 +566,9 @@ async function detectBrowsersWin() {
 }
 
 async function detectBrowsers() {
-  if (process.platform === 'darwin')
+  if (CURRENT_PLATFORM === 'darwin')
     return detectBrowsersMac()
-  if (process.platform === 'win32')
+  if (CURRENT_PLATFORM === 'win32')
     return detectBrowsersWin()
   return []
 }
@@ -386,12 +673,12 @@ function resolveGroupOrder({ quickActions, recommendedItems, recentItems, tips }
   return order
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function buildInfoItem({ id, featureId, title, subtitle, icon = ICON }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
-    .setIcon(ICON)
+    .setIcon(icon)
     .setMeta({ pluginName: PLUGIN_NAME, featureId })
     .build()
 }
@@ -405,12 +692,12 @@ function buildSectionHeader(featureId, sectionId, title, subtitle) {
   })
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, icon = ICON }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
-    .setIcon(ICON)
+    .setIcon(icon)
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
@@ -419,6 +706,128 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       payload,
     })
     .build()
+}
+
+function buildSearchActionItem({ id, featureId, engine, query, title, subtitle, suggestion = false }) {
+  return applyCompletion(buildActionItem({
+    id,
+    featureId,
+    title,
+    subtitle,
+    icon: engine.icon,
+    actionId: 'search-web',
+    payload: {
+      engineId: engine.id,
+      query,
+      suggestion,
+      url: buildSearchUrl(engine.id, query),
+    },
+  }), query)
+}
+
+function buildSearchItems(featureId, engine, query, suggestions = [], options = {}) {
+  const items = []
+  const normalizedQuery = normalizeSearchText(query)
+
+  if (!normalizedQuery) {
+    items.push(buildInfoItem({
+      id: `${featureId}-search-empty`,
+      featureId,
+      title: `${engine.name} 搜索`,
+      subtitle: '继续输入关键词以获取搜索建议',
+      icon: engine.icon,
+    }))
+    return items
+  }
+
+  items.push(buildSearchActionItem({
+    id: `${featureId}-search-direct`,
+    featureId,
+    engine,
+    query: normalizedQuery,
+    title: `${engine.name} 搜索：${truncateText(normalizedQuery, 48)}`,
+    subtitle: truncateText(buildSearchUrl(engine.id, normalizedQuery), 88),
+  }))
+
+  uniqNormalizedTexts(suggestions).forEach((suggestion, index) => {
+    if (suggestion.toLowerCase() === normalizedQuery.toLowerCase())
+      return
+    items.push(buildSearchActionItem({
+      id: `${featureId}-suggestion-${index}`,
+      featureId,
+      engine,
+      query: suggestion,
+      title: suggestion,
+      subtitle: `${engine.name} 搜索建议`,
+      suggestion: true,
+    }))
+  })
+
+  if (options.warning) {
+    items.push(buildInfoItem({
+      id: `${featureId}-suggestion-warning`,
+      featureId,
+      title: '搜索建议不可用',
+      subtitle: truncateText(options.warning, 96),
+      icon: engine.icon,
+    }))
+  }
+
+  return items
+}
+
+function beginFeatureRequest() {
+  latestFeatureRequestSeq += 1
+  return latestFeatureRequestSeq
+}
+
+function isCurrentFeatureRequest(requestSeq, signal) {
+  return requestSeq === latestFeatureRequestSeq && !signal?.aborted
+}
+
+async function pushFeatureItems(items, requestSeq) {
+  if (typeof requestSeq === 'number' && requestSeq !== latestFeatureRequestSeq)
+    return false
+  plugin.feature.clearItems()
+  await plugin.feature.pushItems(items)
+  return true
+}
+
+function abortActiveSearchRequest() {
+  if (!activeSearchRequestController)
+    return
+  activeSearchRequestController.abort()
+  activeSearchRequestController = null
+}
+
+function createSearchRequestSignal(parentSignal) {
+  abortActiveSearchRequest()
+
+  const controller = new AbortController()
+  activeSearchRequestController = controller
+
+  const abortFromParent = () => controller.abort()
+  if (parentSignal?.aborted) {
+    controller.abort()
+  }
+  else {
+    parentSignal?.addEventListener?.('abort', abortFromParent, { once: true })
+  }
+
+  return {
+    signal: controller.signal,
+    release() {
+      parentSignal?.removeEventListener?.('abort', abortFromParent)
+      if (activeSearchRequestController === controller)
+        activeSearchRequestController = null
+    },
+  }
+}
+
+function applyCompletion(item, completion) {
+  if (item?.render && typeof completion === 'string')
+    item.render.completion = completion
+  return item
 }
 
 function openWithMac(url, browserTarget) {
@@ -442,13 +851,22 @@ async function openWithWindows(url, browserTarget) {
 }
 
 async function executeOpenAction(url, browserTarget) {
-  if (process.platform === 'darwin') {
+  if (CURRENT_PLATFORM === 'darwin') {
     openWithMac(url, browserTarget)
     return
   }
 
-  if (process.platform === 'win32') {
+  if (CURRENT_PLATFORM === 'win32') {
     await openWithWindows(url, browserTarget)
+    return
+  }
+
+  if (CURRENT_PLATFORM === 'linux' && !browserTarget) {
+    const child = spawn('xdg-open', [url], {
+      detached: true,
+      stdio: 'ignore',
+    })
+    child.unref()
     return
   }
 
@@ -467,154 +885,332 @@ async function tryCopyUrl(url) {
   return true
 }
 
-const pluginLifecycle = {
-  async onFeatureTriggered(featureId, query) {
-    try {
-      const hasShell = await ensurePermission('system.shell', '需要系统命令权限以打开浏览器')
-      if (!hasShell) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-no-permission`,
-            featureId,
-            title: '缺少 system.shell 权限',
-            subtitle: '授予权限后可执行浏览器打开动作',
-          }),
-        ])
-        return true
-      }
+async function fetchJsonWithTimeout(url, signal, timeoutMs = SUGGEST_TIMEOUT_MS) {
+  if (typeof fetchImpl !== 'function')
+    throw new Error('当前运行时不支持 fetch')
 
-      const input = getQueryText(query)
-      const url = normalizeUrlInput(input)
-      const hasInput = normalizeText(input).length > 0
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
 
-      if (!url) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-input-tip`,
-            featureId,
-            title: hasInput ? 'URL 格式不正确' : '请输入 URL',
-            subtitle: hasInput ? '示例：https://example.com' : '支持 example.com 或 https://example.com',
-          }),
-          buildInfoItem({
-            id: `${featureId}-input-guide`,
-            featureId,
-            title: '快捷提示',
-            subtitle: '可输入域名后回车，自动补全 https://',
-          }),
-        ])
-        return true
-      }
+  const abortFromParent = () => controller.abort()
+  if (signal?.aborted)
+    controller.abort()
+  signal?.addEventListener?.('abort', abortFromParent, { once: true })
 
-      const availableBrowsers = await detectBrowsers()
-      const recentBrowsers = await loadRecentBrowsers()
-      const recommendedItems = availableBrowsers.map((browser, index) =>
-        buildActionItem({
-          id: `${featureId}-browser-${browser.id}-${index}`,
-          featureId,
-          title: `用 ${browser.name} 打开`,
-          subtitle: truncateText(url, 72),
-          actionId: 'open-browser',
-          payload: { url, browser },
-        }),
-      )
+  try {
+    const response = await fetchImpl(url, {
+      signal: controller.signal,
+      headers: {
+        accept: 'application/json,text/javascript,*/*;q=0.8',
+      },
+    })
+    if (!response.ok)
+      throw new Error(`建议请求失败：HTTP ${response.status}`)
+    return await response.json()
+  }
+  finally {
+    clearTimeout(timer)
+    signal?.removeEventListener?.('abort', abortFromParent)
+  }
+}
 
-      const recentItems = mergeRecentBrowsers(availableBrowsers, recentBrowsers).map((browser, index) =>
-        buildActionItem({
-          id: `${featureId}-recent-${browser.id}-${index}`,
-          featureId,
-          title: `最近 · ${browser.name}`,
-          subtitle: truncateText(url, 72),
-          actionId: 'open-browser',
-          payload: { url, browser },
-        }),
-      )
+async function loadSuggestions(engine, query, signal) {
+  const text = normalizeSearchText(query)
+  if (!engine || !text)
+    return []
 
-      const quickActions = [
-        buildActionItem({
-          id: `${featureId}-quick-default`,
-          featureId,
-          title: '默认浏览器打开',
-          subtitle: truncateText(url, 72),
-          actionId: 'default-open',
-          payload: { url },
-        }),
-        buildActionItem({
-          id: `${featureId}-quick-copy`,
-          featureId,
-          title: '复制 URL',
-          subtitle: truncateText(url, 72),
-          actionId: 'copy-url',
-          payload: { url },
-        }),
-      ]
+  const canUseNetwork = await ensureNetworkPermission()
+  if (!canUseNetwork)
+    throw new Error('缺少 network.internet 权限')
 
-      const tips = [
-        buildInfoItem({
-          id: `${featureId}-tip`,
-          featureId,
-          title: '安全提示',
-          subtitle: '请先确认域名可信再打开链接',
-        }),
-      ]
+  const payload = await fetchJsonWithTimeout(engine.buildSuggestUrl(text), signal)
+  return parseEngineSuggestions(engine.id, payload)
+}
 
-      if (recommendedItems.length === 0) {
-        tips.unshift(buildInfoItem({
-          id: `${featureId}-no-browser`,
-          featureId,
-          title: '未检测到可用浏览器',
-          subtitle: '可先尝试默认浏览器打开',
-        }))
-      }
+async function enterSearchEngineMode(engine, query, signal, options = {}) {
+  const requestSeq = beginFeatureRequest()
+  const text = normalizeSearchText(query)
+  const featureId = options.featureId || `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
+  const request = createSearchRequestSignal(signal)
 
-      const groupOrder = resolveGroupOrder({
-        quickActions,
-        recommendedItems,
-        recentItems,
-        tips,
-      })
+  try {
+    if (!options.preserveInput) {
+      await plugin.box?.showInput?.()
+      await plugin.box?.allowInput?.()
+      await plugin.box?.setInput?.(text)
+    }
 
-      const items = []
-      groupOrder.forEach((groupId) => {
-        if (groupId === 'quick') {
-          items.push(buildSectionHeader(featureId, 'quick', '快捷动作', '默认打开 / 复制 URL'))
-          items.push(...quickActions)
-        }
+    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
 
-        if (groupId === 'recommended') {
-          items.push(buildSectionHeader(featureId, 'recommended', '推荐浏览器', '按当前系统可用浏览器展示'))
-          items.push(...recommendedItems)
-        }
-
-        if (groupId === 'recent') {
-          items.push(buildSectionHeader(featureId, 'recent', '最近浏览器', `最多 ${RECENT_SHOW_LIMIT} 条`))
-          items.push(...recentItems)
-        }
-
-        if (groupId === 'tips') {
-          items.push(buildSectionHeader(featureId, 'tips', '提示区', '权限 / 输入 / 安全'))
-          items.push(...tips)
-        }
-      })
-
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
+    if (!text)
       return true
+
+    try {
+      const suggestions = await loadSuggestions(engine, text, request.signal)
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
     }
     catch (error) {
-      logger?.error?.('[touch-browser-open] Failed to handle feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
+        warning: error?.message || '网络请求失败，仅保留直接搜索',
+      }), requestSeq)
+    }
+
+    return true
+  }
+  finally {
+    request.release()
+  }
+}
+
+async function handleWebSearchFeature(featureId, query, signal) {
+  const requestSeq = beginFeatureRequest()
+  const settings = await loadSearchSettings()
+  const parsed = parseSearchQuery(getQueryText(query), settings)
+  const engine = parsed.engine
+  const text = parsed.query
+  const request = createSearchRequestSignal(signal)
+
+  try {
+    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestSeq)
+
+    if (!text)
+      return true
+
+    try {
+      const suggestions = await loadSuggestions(engine, text, request.signal)
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestSeq)
+    }
+    catch (error) {
+      if (!isCurrentFeatureRequest(requestSeq, request.signal))
+        return true
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
+        warning: error?.message || '网络请求失败，仅保留直接搜索',
+      }), requestSeq)
+    }
+
+    return true
+  }
+  finally {
+    request.release()
+  }
+}
+
+async function registerSearchEngineFeatures() {
+  if (dynamicSearchFeaturesInitialized)
+    return 0
+
+  dynamicSearchFeaturesInitialized = true
+  if (!features?.addFeature)
+    return 0
+
+  const settings = await loadSearchSettings()
+  let addedCount = 0
+  buildSearchEngineFeatures(settings).forEach((feature) => {
+    if (typeof features.getFeature === 'function' && features.getFeature(feature.id))
+      return
+    if (features.addFeature(feature))
+      addedCount += 1
+  })
+
+  return addedCount
+}
+
+async function handleBrowserOpenFeature(featureId, query) {
+  const requestSeq = beginFeatureRequest()
+
+  try {
+    const hasShell = await ensurePermission('system.shell', '需要系统命令权限以打开浏览器')
+    if (!hasShell) {
+      await pushFeatureItems([
         buildInfoItem({
-          id: `${featureId}-error`,
+          id: `${featureId}-no-permission`,
           featureId,
-          title: '浏览器打开失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
+          title: '缺少 system.shell 权限',
+          subtitle: '授予权限后可执行浏览器打开动作',
         }),
-      ])
+      ], requestSeq)
       return true
     }
+
+    const input = getQueryText(query)
+    const url = normalizeUrlInput(input)
+    const hasInput = normalizeText(input).length > 0
+
+    if (!url) {
+      await pushFeatureItems([
+        buildInfoItem({
+          id: `${featureId}-input-tip`,
+          featureId,
+          title: hasInput ? 'URL 格式不正确' : '请输入 URL',
+          subtitle: hasInput ? '示例：https://example.com' : '支持 example.com 或 https://example.com',
+        }),
+        buildInfoItem({
+          id: `${featureId}-input-guide`,
+          featureId,
+          title: '快捷提示',
+          subtitle: '可输入域名后回车，自动补全 https://',
+        }),
+      ], requestSeq)
+      return true
+    }
+
+    const availableBrowsers = await detectBrowsers()
+    const recentBrowsers = await loadRecentBrowsers()
+    const recommendedItems = availableBrowsers.map((browser, index) =>
+      buildActionItem({
+        id: `${featureId}-browser-${browser.id}-${index}`,
+        featureId,
+        title: `用 ${browser.name} 打开`,
+        subtitle: truncateText(url, 72),
+        actionId: 'open-browser',
+        payload: { url, browser },
+      }),
+    )
+
+    const recentItems = mergeRecentBrowsers(availableBrowsers, recentBrowsers).map((browser, index) =>
+      buildActionItem({
+        id: `${featureId}-recent-${browser.id}-${index}`,
+        featureId,
+        title: `最近 · ${browser.name}`,
+        subtitle: truncateText(url, 72),
+        actionId: 'open-browser',
+        payload: { url, browser },
+      }),
+    )
+
+    const quickActions = [
+      buildActionItem({
+        id: `${featureId}-quick-default`,
+        featureId,
+        title: '默认浏览器打开',
+        subtitle: truncateText(url, 72),
+        actionId: 'default-open',
+        payload: { url },
+      }),
+      buildActionItem({
+        id: `${featureId}-quick-copy`,
+        featureId,
+        title: '复制 URL',
+        subtitle: truncateText(url, 72),
+        actionId: 'copy-url',
+        payload: { url },
+      }),
+    ]
+
+    const tips = [
+      buildInfoItem({
+        id: `${featureId}-tip`,
+        featureId,
+        title: '安全提示',
+        subtitle: '请先确认域名可信再打开链接',
+      }),
+    ]
+
+    if (recommendedItems.length === 0) {
+      tips.unshift(buildInfoItem({
+        id: `${featureId}-no-browser`,
+        featureId,
+        title: '未检测到可用浏览器',
+        subtitle: '可先尝试默认浏览器打开',
+      }))
+    }
+
+    const groupOrder = resolveGroupOrder({
+      quickActions,
+      recommendedItems,
+      recentItems,
+      tips,
+    })
+
+    const items = []
+    groupOrder.forEach((groupId) => {
+      if (groupId === 'quick') {
+        items.push(buildSectionHeader(featureId, 'quick', '快捷动作', '默认打开 / 复制 URL'))
+        items.push(...quickActions)
+      }
+
+      if (groupId === 'recommended') {
+        items.push(buildSectionHeader(featureId, 'recommended', '推荐浏览器', '按当前系统可用浏览器展示'))
+        items.push(...recommendedItems)
+      }
+
+      if (groupId === 'recent') {
+        items.push(buildSectionHeader(featureId, 'recent', '最近浏览器', `最多 ${RECENT_SHOW_LIMIT} 条`))
+        items.push(...recentItems)
+      }
+
+      if (groupId === 'tips') {
+        items.push(buildSectionHeader(featureId, 'tips', '提示区', '权限 / 输入 / 安全'))
+        items.push(...tips)
+      }
+    })
+
+    await pushFeatureItems(items, requestSeq)
+    return true
+  }
+  catch (error) {
+    logger?.error?.('[touch-browser-open] Failed to handle feature', error)
+    await pushFeatureItems([
+      buildInfoItem({
+        id: `${featureId}-error`,
+        featureId,
+        title: '浏览器打开失败',
+        subtitle: truncateText(error?.message || '未知错误', 120),
+      }),
+    ], requestSeq)
+    return true
+  }
+}
+
+const pluginLifecycle = {
+  async onInit() {
+    const addedCount = await registerSearchEngineFeatures()
+    if (addedCount > 0) {
+      logger?.info?.(`[touch-browser-open] Registered ${addedCount} search engine features`)
+    }
+  },
+
+  async onFeatureTriggered(featureId, query, _feature, signal) {
+    const engine = resolveEngineFromFeatureId(featureId)
+    if (engine) {
+      if (!signal)
+        return true
+      const modeFeatureId = `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
+      const preserveInput = activeSearchMode?.featureId === modeFeatureId
+      startSearchInputSession(modeFeatureId, engine)
+      return enterSearchEngineMode(engine, extractEngineModeQuery(engine, getQueryText(query)), signal, {
+        featureId: modeFeatureId,
+        preserveInput,
+      })
+    }
+
+    if (featureId === WEB_SEARCH_FEATURE_ID) {
+      if (!signal)
+        return true
+      const settings = await loadSearchSettings()
+      const parsed = parseSearchQuery(getQueryText(query), settings)
+      const preserveInput = activeSearchMode?.featureId === featureId
+      startSearchInputSession(featureId, parsed.engine)
+      if (!preserveInput)
+        return handleWebSearchFeature(featureId, query, signal)
+      return enterSearchEngineMode(parsed.engine, parsed.query, signal, {
+        featureId,
+        preserveInput: true,
+      })
+    }
+
+    stopSearchInputSession()
+
+    if (featureId !== ACTION_ID)
+      return false
+
+    return handleBrowserOpenFeature(featureId, query)
   },
 
   async onItemAction(item) {
@@ -624,8 +1220,11 @@ const pluginLifecycle = {
     const actionId = item.meta?.actionId
     const payload = item.meta?.payload || {}
     const url = normalizeUrlInput(payload.url)
+      || (actionId === 'search-web' ? buildSearchUrl(payload.engineId, payload.query) : null)
     if (!actionId || !url)
       return
+
+    beginFeatureRequest()
 
     const hasShell = await ensurePermission('system.shell', '需要系统命令权限以打开浏览器')
     if (!hasShell)
@@ -646,6 +1245,13 @@ const pluginLifecycle = {
 
       if (actionId === 'default-open') {
         await executeOpenAction(url, null)
+        return { externalAction: true }
+      }
+
+      if (actionId === 'search-web') {
+        stopSearchInputSession()
+        await executeOpenAction(url, null)
+        plugin.box?.hide?.()
         return { externalAction: true }
       }
 
@@ -682,15 +1288,23 @@ const pluginLifecycle = {
       }
     }
   },
+
 }
 
 module.exports = {
   ...pluginLifecycle,
   __test: {
     buildWindowsOpenScript,
+    buildSearchEngineFeatures,
+    buildSearchItems,
+    buildSearchUrl,
+    extractEngineModeQuery,
     isLikelyUrlInput,
     mergeRecentBrowsers,
     normalizeUrlInput,
+    normalizeSearchSettings,
+    parseEngineSuggestions,
+    parseSearchQuery,
     parseRecentBrowsers,
     resolveGroupOrder,
     touchRecentBrowser,

@@ -4,6 +4,7 @@ import { TxButton, TxSpinner } from '@talex-touch/tuffex'
 import { toast } from 'vue-sonner'
 import Input from '~/components/ui/Input.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 interface AdminBootstrapStatus {
   enabled: boolean
@@ -34,7 +35,7 @@ const {
   pending: statusPending,
   error: statusError,
   refresh: refreshStatus,
-} = await useFetch<AdminBootstrapStatus>('/api/admin-bootstrap/status', {
+} = await useTypedFetch<AdminBootstrapStatus>('/api/admin-bootstrap/status', {
   cache: 'no-store',
 })
 
@@ -100,7 +101,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await $fetch('/api/admin-bootstrap/promote', {
+    await requestJson('/api/admin-bootstrap/promote', {
       method: 'POST',
       body: {
         secret: secret.value,

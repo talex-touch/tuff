@@ -6,8 +6,12 @@ import type {
   WidgetCompilationContext
 } from '../widget-processor'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
-import { transform } from 'esbuild'
 import { pushWidgetFeatureIssue } from '../widget-issue'
+import {
+  classifyWidgetCompileError,
+  resolveWidgetCompileCauseCode,
+  transformWidgetSource
+} from '../widget-transform'
 
 /**
  * Allowed packages in widget sandbox
@@ -181,7 +185,7 @@ module.exports = __component
 `
 
       // Step 7: Transform with esbuild
-      const transformed = await transform(finalBundle, {
+      const transformed = await transformWidgetSource(finalBundle, {
         loader,
         format: 'cjs',
         target: 'node18'
@@ -209,9 +213,12 @@ module.exports = __component
       )
 
       pushWidgetFeatureIssue(plugin, feature, {
-        code: 'WIDGET_COMPILE_FAILED',
+        code: classifyWidgetCompileError(error),
         message: `Failed to compile Vue widget: ${(error as Error).message}`,
-        meta: { error: (error as Error).stack }
+        meta: {
+          error: (error as Error).stack,
+          causeCode: resolveWidgetCompileCauseCode(error)
+        }
       })
 
       return null

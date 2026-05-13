@@ -27,6 +27,7 @@ export type UpdateGetStatusResponse = UpdateOpResponse<{
   downloadReady?: boolean
   downloadReadyVersion?: string | null
   downloadTaskId?: string | null
+  autoInstallDownloadedUpdates?: boolean
 }>
 
 export interface UpdateCachedReleaseRequest {

@@ -1,5 +1,9 @@
 import { requirePilotAuth } from '../../utils/auth'
-import { createDummyOrder } from '../../utils/pilot-compat-payment'
+import {
+  createDummyOrder,
+  getPaymentProviderUnavailablePayload,
+  PAYMENT_PROVIDER_UNAVAILABLE,
+} from '../../utils/pilot-payment-service'
 import { quotaError, quotaOk } from '../../utils/quota-api'
 
 interface DummyOrderBody {
@@ -16,12 +20,20 @@ export default defineEventHandler(async (event) => {
     return quotaError(400, 'value must be a positive number', null)
   }
 
-  const data = await createDummyOrder(event, {
-    userId: auth.userId,
-    value,
-    couponCode: String(body?.couponCode || ''),
-    paymentMethod: Number(body?.payMethod || 2),
-  })
+  try {
+    const data = await createDummyOrder(event, {
+      userId: auth.userId,
+      value,
+      couponCode: String(body?.couponCode || ''),
+      paymentMethod: Number(body?.payMethod || 2),
+    })
 
-  return quotaOk(data)
+    return quotaOk(data)
+  }
+  catch (error) {
+    if (error instanceof Error && error.message === PAYMENT_PROVIDER_UNAVAILABLE) {
+      return quotaError(503, PAYMENT_PROVIDER_UNAVAILABLE, getPaymentProviderUnavailablePayload())
+    }
+    throw error
+  }
 })

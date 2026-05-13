@@ -10,6 +10,7 @@ import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -27,20 +28,30 @@ const settingsSdk = useSettingsSdk()
 const settingFileIndexDiagnosticLog = createRendererLogger('SettingFileIndexAppDiagnostic')
 
 const appDiagnosticTarget = ref('')
-const appDiagnosticQuery = ref('')
 const appDiagnosticLoading = ref(false)
 const appDiagnosticReindexMode = ref<AppIndexReindexRequest['mode'] | null>(null)
 const appDiagnosticResult = ref<AppIndexDiagnoseResult | null>(null)
 const appDiagnosticLastReindexResult = ref<AppIndexReindexResult | null>(null)
+const appDiagnosticDialogVisible = ref(false)
+const selectedAppDiagnosticStage = ref<AppIndexDiagnosticStageKey | null>(null)
 const appDiagnosticEvidenceReady = computed(() => Boolean(appDiagnosticResult.value))
+const selectedAppDiagnosticStageData = computed(() => {
+  if (!selectedAppDiagnosticStage.value) return null
+
+  return {
+    key: selectedAppDiagnosticStage.value,
+    stage: getAppDiagnosticStage(appDiagnosticResult.value, selectedAppDiagnosticStage.value)
+  }
+})
+
+function openAppDiagnosticDialog() {
+  appDiagnosticDialogVisible.value = true
+}
 
 function updateAppDiagnosticTarget(value: string | number) {
   appDiagnosticTarget.value = String(value ?? '')
   appDiagnosticLastReindexResult.value = null
-}
-
-function updateAppDiagnosticQuery(value: string | number) {
-  appDiagnosticQuery.value = String(value ?? '')
+  selectedAppDiagnosticStage.value = null
 }
 
 function normalizeAppDiagnosticTarget() {
@@ -95,12 +106,27 @@ function getAppDiagnosticStageDetail(stage: AppIndexDiagnosticStage | undefined)
   })
 }
 
+function selectAppDiagnosticStage(key: AppIndexDiagnosticStageKey) {
+  selectedAppDiagnosticStage.value = selectedAppDiagnosticStage.value === key ? null : key
+}
+
+function formatAppDiagnosticStageMatch(match: AppIndexDiagnosticStage['matches'][number]) {
+  const details = [
+    match.keyword ? `keyword=${match.keyword}` : '',
+    typeof match.priority === 'number' ? `priority=${match.priority}` : '',
+    typeof match.score === 'number' ? `score=${match.score}` : '',
+    typeof match.overlapCount === 'number' ? `overlap=${match.overlapCount}` : ''
+  ].filter(Boolean)
+
+  return details.length > 0 ? details.join(' · ') : '-'
+}
+
 function buildCurrentAppDiagnosticEvidence() {
   if (!appDiagnosticResult.value) return null
 
   return buildAppIndexDiagnosticEvidencePayload({
     target: normalizeAppDiagnosticTarget(),
-    query: appDiagnosticQuery.value.trim(),
+    query: normalizeAppDiagnosticTarget(),
     diagnosis: appDiagnosticResult.value,
     reindex: appDiagnosticLastReindexResult.value
   })
@@ -152,8 +178,9 @@ async function runAppSearchDiagnostic(options: { silent?: boolean } = {}) {
   try {
     appDiagnosticResult.value = await settingsSdk.appIndex.diagnose({
       target,
-      query: appDiagnosticQuery.value.trim() || undefined
+      query: target
     })
+    selectedAppDiagnosticStage.value = null
 
     if (!appDiagnosticResult.value.success && !options.silent) {
       toast.error(
@@ -255,20 +282,29 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
     :description="t('settings.settingFileIndex.appDiagnosticDesc')"
     default-icon="i-carbon-debug"
     active-icon="i-carbon-debug"
+    @click="openAppDiagnosticDialog"
+  >
+    <TxButton variant="flat" size="sm" @click.stop="openAppDiagnosticDialog">
+      <div class="i-carbon-launch text-12px" />
+      <span>{{ t('common.open') }}</span>
+    </TxButton>
+  </TuffBlockSlot>
+
+  <TModal
+    v-model="appDiagnosticDialogVisible"
+    :title="t('settings.settingFileIndex.appDiagnosticTitle')"
+    width="min(92vw, 860px)"
   >
     <div class="app-diagnostic">
+      <p class="app-diagnostic-desc">
+        {{ t('settings.settingFileIndex.appDiagnosticDesc') }}
+      </p>
       <div class="app-diagnostic-form">
         <TxInput
           :model-value="appDiagnosticTarget"
           :placeholder="t('settings.settingFileIndex.appDiagnosticTargetPlaceholder')"
           class="app-diagnostic-input"
           @update:model-value="updateAppDiagnosticTarget"
-        />
-        <TxInput
-          :model-value="appDiagnosticQuery"
-          :placeholder="t('settings.settingFileIndex.appDiagnosticQueryPlaceholder')"
-          class="app-diagnostic-input"
-          @update:model-value="updateAppDiagnosticQuery"
         />
       </div>
 
@@ -393,11 +429,16 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
               }}
             </div>
             <div class="app-diagnostic-stage-list">
-              <div
+              <button
                 v-for="stageKey in APP_INDEX_DIAGNOSTIC_STAGE_KEYS"
                 :key="stageKey"
+                type="button"
                 class="app-diagnostic-stage"
-                :class="`is-${getAppDiagnosticStageTone(getAppDiagnosticStage(appDiagnosticResult, stageKey))}`"
+                :class="[
+                  `is-${getAppDiagnosticStageTone(getAppDiagnosticStage(appDiagnosticResult, stageKey))}`,
+                  { 'is-selected': selectedAppDiagnosticStage === stageKey }
+                ]"
+                @click="selectAppDiagnosticStage(stageKey)"
               >
                 <strong>{{ getAppDiagnosticStageLabel(stageKey) }}</strong>
                 <span>
@@ -414,6 +455,44 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
                     )
                   }}
                 </small>
+              </button>
+            </div>
+
+            <div v-if="selectedAppDiagnosticStageData" class="app-diagnostic-stage-detail">
+              <div class="app-diagnostic-stage-detail-header">
+                <strong>
+                  {{
+                    t('settings.settingFileIndex.appDiagnosticStageDetailTitle', {
+                      stage: getAppDiagnosticStageLabel(selectedAppDiagnosticStageData.key)
+                    })
+                  }}
+                </strong>
+                <span>
+                  {{
+                    t('settings.settingFileIndex.appDiagnosticStageMatches', {
+                      count: selectedAppDiagnosticStageData.stage?.matches.length ?? 0
+                    })
+                  }}
+                </span>
+              </div>
+              <div
+                v-if="selectedAppDiagnosticStageData.stage?.matches.length"
+                class="app-diagnostic-stage-match-list"
+              >
+                <div
+                  v-for="(match, matchIndex) in selectedAppDiagnosticStageData.stage.matches"
+                  :key="`${match.itemId}-${matchIndex}`"
+                  class="app-diagnostic-stage-match"
+                >
+                  <strong>{{ match.itemId }}</strong>
+                  <span>{{ formatAppDiagnosticStageMatch(match) }}</span>
+                </div>
+              </div>
+              <div v-else class="app-diagnostic-stage-empty">
+                {{
+                  selectedAppDiagnosticStageData.stage?.reason ||
+                  t('settings.settingFileIndex.appDiagnosticEmpty')
+                }}
               </div>
             </div>
           </div>
@@ -429,5 +508,252 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
         </div>
       </div>
     </div>
-  </TuffBlockSlot>
+  </TModal>
 </template>
+
+<style scoped>
+.app-diagnostic {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-height: min(72vh, 680px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.app-diagnostic-desc {
+  margin: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.app-diagnostic-form {
+  display: flex;
+}
+
+.app-diagnostic-input {
+  min-width: 0;
+  width: 100%;
+}
+
+.app-diagnostic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.app-diagnostic-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--tx-border-color-light);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 68%, transparent);
+}
+
+.app-diagnostic-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.app-diagnostic-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-diagnostic-header strong,
+.app-diagnostic-grid strong {
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.app-diagnostic-header span {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.app-diagnostic-status {
+  flex: none;
+  padding: 3px 8px;
+  border-radius: 8px;
+  color: #34c759;
+  background: rgba(52, 199, 89, 0.12);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app-diagnostic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-diagnostic-grid > div {
+  min-width: 0;
+}
+
+.app-diagnostic-grid span,
+.app-diagnostic-query {
+  display: block;
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+}
+
+.app-diagnostic-grid p {
+  margin: 3px 0 0;
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.app-diagnostic-stages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-diagnostic-stage-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.app-diagnostic-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--stage-color);
+  background: color-mix(in srgb, var(--stage-color) 10%, transparent);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.app-diagnostic-stage:hover,
+.app-diagnostic-stage.is-selected {
+  background: color-mix(in srgb, var(--stage-color) 18%, transparent);
+}
+
+.app-diagnostic-stage.is-selected {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-color) 22%, transparent);
+}
+
+.app-diagnostic-stage.is-hit {
+  --stage-color: rgba(52, 199, 89, 0.5);
+}
+
+.app-diagnostic-stage.is-miss {
+  --stage-color: rgba(255, 59, 48, 0.46);
+}
+
+.app-diagnostic-stage.is-skipped {
+  --stage-color: rgba(142, 142, 147, 0.35);
+}
+
+.app-diagnostic-stage strong {
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+}
+
+.app-diagnostic-stage span {
+  color: var(--tx-text-color-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app-diagnostic-stage small {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.app-diagnostic-stage-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--tx-border-color-light);
+  background: color-mix(in srgb, var(--tx-fill-color) 70%, transparent);
+}
+
+.app-diagnostic-stage-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.app-diagnostic-stage-detail-header strong {
+  color: var(--tx-text-color-primary);
+  font-size: 12px;
+}
+
+.app-diagnostic-stage-detail-header span,
+.app-diagnostic-stage-empty {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+}
+
+.app-diagnostic-stage-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.app-diagnostic-stage-match {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 70%, transparent);
+}
+
+.app-diagnostic-stage-match strong {
+  color: var(--tx-text-color-primary);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.app-diagnostic-stage-match span {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+.app-diagnostic-error {
+  color: #ff3b30;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+@media (max-width: 720px) {
+  .app-diagnostic-grid,
+  .app-diagnostic-stage-list {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

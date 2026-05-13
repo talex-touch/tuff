@@ -7,6 +7,22 @@ const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'intelligence-action'
 const DEFAULT_FEATURE_ID = 'intelligence-ask'
 const MAX_HISTORY_MESSAGES = 10
+const MAX_DRAFTS = 20
+const MAX_OCR_CONTEXT_CHARS = 4000
+const CALLER_ID = `plugin:${PLUGIN_NAME}`
+const ENTRY_ID = 'corebox.ai-ask'
+const INPUT_TYPE_TEXT = 'text'
+const INPUT_TYPE_IMAGE = 'image'
+
+const AI_ERROR_MESSAGES = {
+  PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic',
+  OCR_EMPTY: 'OCR 未识别到可用文字',
+  PROVIDER_UNAVAILABLE: 'Provider 不可用，请检查默认模型或 BYOK 配置',
+  QUOTA_EXCEEDED: 'AI 配额不足，请稍后重试或调整用量',
+  MODEL_UNSUPPORTED: '当前模型不支持该能力，请切换支持 text.chat / vision.ocr 的模型',
+  EMPTY_RESPONSE: 'AI 未返回可用内容',
+  UNKNOWN: 'AI 调用失败',
+}
 
 const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
 const conversationSessions = new Map()
@@ -35,13 +51,19 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
+function hasAiPrefix(raw) {
+  return /^(?:@?ai|\/ai|智能|问答)(?:[\s:：，,。?？]|$)/i.test(normalizeText(raw))
+}
+
 function normalizePrompt(raw) {
   const input = normalizeText(raw)
   if (!input)
     return ''
 
   const withoutPrefix = input.replace(/^(?:@?ai|\/ai|智能|问答)[\s:：，,。?？]*/i, '')
-  return normalizeText(withoutPrefix || input)
+  if (withoutPrefix !== input)
+    return normalizeText(withoutPrefix)
+  return input
 }
 
 function resolveFeatureId(featureId) {
@@ -92,20 +114,64 @@ function getSession(featureId) {
       history: [],
       activeRequestId: '',
       uiRequestId: '',
+      drafts: new Map(),
     })
   }
 
   return conversationSessions.get(resolvedFeatureId)
 }
 
-function buildInvokePayload(prompt, history = []) {
+function truncateForContext(value, max = MAX_OCR_CONTEXT_CHARS) {
+  const text = normalizeText(value)
+  if (text.length <= max)
+    return text
+  return text.slice(0, max)
+}
+
+function buildUserMessageContent(prompt, context = {}) {
+  const normalizedPrompt = normalizeText(prompt)
+  const ocrText = truncateForContext(context.ocrText)
+
+  if (!ocrText)
+    return normalizedPrompt
+
+  const task = normalizedPrompt || '请总结剪贴板图片中的文字。'
+  return `${task}\n\n以下是剪贴板图片的 OCR 文本，请只基于这些文字回答：\n${ocrText}`
+}
+
+function buildInvokePayload(prompt, history = [], context = {}) {
   const normalizedHistory = normalizeHistory(history)
   return {
     messages: [
       { role: 'system', content: AI_SYSTEM_PROMPT },
       ...normalizedHistory,
-      { role: 'user', content: prompt },
+      { role: 'user', content: buildUserMessageContent(prompt, context) },
     ],
+  }
+}
+
+function buildOcrPayload(imageDataUrl) {
+  return {
+    source: {
+      type: 'data-url',
+      dataUrl: imageDataUrl,
+    },
+    language: 'zh-CN',
+    includeLayout: false,
+    includeKeywords: false,
+  }
+}
+
+function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [] }) {
+  return {
+    metadata: {
+      caller: CALLER_ID,
+      entry: ENTRY_ID,
+      featureId: resolveFeatureId(featureId),
+      requestId,
+      inputKinds: Array.from(new Set(inputKinds.filter(Boolean))),
+      capabilityId,
+    },
   }
 }
 
@@ -116,6 +182,68 @@ function mapInvokeResult(result, prompt, requestId) {
     answer: normalizeText(result?.result),
     provider: normalizeText(result?.provider),
     model: normalizeText(result?.model),
+  }
+}
+
+function toErrorMessage(error) {
+  if (!error)
+    return ''
+  if (typeof error === 'string')
+    return error
+  return normalizeText(error.message || String(error))
+}
+
+function createPluginError(code, message) {
+  const error = new Error(message || AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN)
+  error.code = code
+  return error
+}
+
+function normalizeInvokeError(error) {
+  const rawCode = normalizeText(error?.code).toUpperCase()
+  const rawMessage = toErrorMessage(error)
+  const lower = rawMessage.toLowerCase()
+
+  let code = AI_ERROR_MESSAGES[rawCode] ? rawCode : 'UNKNOWN'
+  if (code === 'UNKNOWN') {
+    if (
+      lower.includes('permission')
+      || lower.includes('denied')
+      || lower.includes('intelligence.basic')
+    ) {
+      code = 'PERMISSION_DENIED'
+    }
+    else if (lower.includes('quota') || lower.includes('rate limit') || lower.includes('too many')) {
+      code = 'QUOTA_EXCEEDED'
+    }
+    else if (
+      lower.includes('unsupported')
+      || lower.includes('not supported')
+      || lower.includes('capability not supported')
+      || lower.includes('model does not support')
+    ) {
+      code = 'MODEL_UNSUPPORTED'
+    }
+    else if (
+      lower.includes('provider')
+      || lower.includes('api key')
+      || lower.includes('not configured')
+      || lower.includes('provider_config_unavailable')
+      || lower.includes('no enabled providers')
+      || lower.includes('no providers available')
+    ) {
+      code = 'PROVIDER_UNAVAILABLE'
+    }
+    else if (lower.includes('empty response') || lower.includes('未返回可用内容')) {
+      code = 'EMPTY_RESPONSE'
+    }
+  }
+
+  const fallback = AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN
+  const detail = rawMessage && rawMessage !== fallback ? `：${truncateText(rawMessage, 120)}` : ''
+  return {
+    code,
+    message: `${fallback}${detail}`,
   }
 }
 
@@ -131,7 +259,7 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
-function buildInfoItem({ id, featureId, title, subtitle, payload, actionId }) {
+function buildInfoItem({ id, featureId, title, subtitle, payload, actionId, status }) {
   const builder = new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -141,6 +269,7 @@ function buildInfoItem({ id, featureId, title, subtitle, payload, actionId }) {
   const meta = {
     pluginName: PLUGIN_NAME,
     featureId,
+    status,
   }
 
   if (actionId) {
@@ -156,28 +285,49 @@ function buildPlaceholderItem(featureId) {
   return buildInfoItem({
     id: `${featureId}-placeholder`,
     featureId,
-    title: '输入问题后回车发送',
-    subtitle: '示例：ai 帮我总结今天待办',
+    title: '输入问题或复制图片后提问',
+    subtitle: '示例：ai 帮我总结今天待办；复制图片后可先 OCR 再回答',
+    status: 'empty',
   })
 }
 
-function buildSendItem(featureId, prompt) {
+function resolveDisplayPrompt(prompt, hasImage) {
+  const normalizedPrompt = normalizePrompt(prompt)
+  if (normalizedPrompt)
+    return normalizedPrompt
+  return hasImage ? '分析剪贴板图片' : ''
+}
+
+function buildSendItem(featureId, draft) {
+  const hasImage = Boolean(draft.imageDataUrl || draft.ocrText)
+  const prompt = resolveDisplayPrompt(draft.prompt, hasImage)
+  const subtitle = hasImage
+    ? '按回车先 OCR，再发送到 AI'
+    : '按回车发送到 AI'
+
   return buildInfoItem({
     id: `${featureId}-send`,
     featureId,
     title: prompt,
-    subtitle: '按回车发送到 AI',
+    subtitle,
     actionId: 'send',
-    payload: { prompt },
+    payload: {
+      prompt: draft.prompt,
+      draftId: draft.draftId,
+      inputKinds: draft.inputKinds,
+    },
+    status: 'ready-to-send',
   })
 }
 
-function buildPendingItem(featureId, prompt, requestId) {
+function buildPendingItem(featureId, prompt, requestId, stage = 'chat') {
+  const isOcr = stage === 'ocr'
   return buildInfoItem({
-    id: `${featureId}-pending-${requestId}`,
+    id: `${featureId}-${isOcr ? 'ocr-pending' : 'chat-pending'}-${requestId}`,
     featureId,
     title: prompt,
-    subtitle: 'AI 正在思考…',
+    subtitle: isOcr ? '正在识别剪贴板图片…' : 'AI 正在思考…',
+    status: isOcr ? 'ocr-pending' : 'chat-pending',
   })
 }
 
@@ -195,40 +345,184 @@ function buildReadyItem(featureId, state) {
       prompt: state.prompt,
       answer: state.answer,
     },
+    status: 'ready',
   })
 }
 
-function buildErrorItem(featureId, prompt, message, history = []) {
+function buildErrorItem(featureId, prompt, error, history = [], retryContext = {}) {
+  const normalizedError = typeof error === 'object' && error?.code && error?.message
+    ? error
+    : normalizeInvokeError(error)
+
   return buildInfoItem({
     id: `${featureId}-error-${Date.now()}`,
     featureId,
     title: prompt || 'AI 请求失败',
-    subtitle: truncateText(message || '未知错误', 96),
+    subtitle: truncateText(`${normalizedError.code} · ${normalizedError.message}`, 120),
     actionId: 'retry',
     payload: {
       prompt,
       history: cloneHistory(history),
+      draftId: retryContext.draftId,
+      inputKinds: retryContext.inputKinds,
     },
+    status: 'error',
   })
 }
 
-async function dispatchPrompt({ featureId, prompt, requestId, historySnapshot }) {
+function getQueryInputs(query) {
+  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs))
+    return []
+  return query.inputs
+}
+
+function extractImageDataUrl(query) {
+  const imageInput = getQueryInputs(query).find((input) => {
+    return input?.type === INPUT_TYPE_IMAGE
+      && typeof input?.content === 'string'
+      && input.content.startsWith('data:image/')
+  })
+  return imageInput?.content || ''
+}
+
+function extractInputKinds(query) {
+  const inputKinds = new Set()
+  if (normalizeText(getQueryText(query)))
+    inputKinds.add(INPUT_TYPE_TEXT)
+
+  for (const input of getQueryInputs(query)) {
+    if (typeof input?.type === 'string' && input.type.trim()) {
+      inputKinds.add(input.type.trim())
+    }
+  }
+
+  return Array.from(inputKinds)
+}
+
+function extractQueryContext(query) {
+  const rawText = getQueryText(query)
+  const prompt = normalizePrompt(rawText)
+  const imageDataUrl = extractImageDataUrl(query)
+  const shouldUseOcr = Boolean(imageDataUrl && (!prompt || hasAiPrefix(rawText)))
+
+  return {
+    rawText,
+    prompt,
+    imageDataUrl: shouldUseOcr ? imageDataUrl : '',
+    inputKinds: extractInputKinds(query),
+  }
+}
+
+function storeDraft(session, draft) {
+  const draftId = draft.draftId || crypto.randomUUID()
+  const normalizedDraft = {
+    draftId,
+    prompt: normalizePrompt(draft.prompt),
+    imageDataUrl: normalizeText(draft.imageDataUrl),
+    ocrText: normalizeText(draft.ocrText),
+    inputKinds: Array.isArray(draft.inputKinds) ? draft.inputKinds.filter(Boolean) : [],
+  }
+  session.drafts.set(draftId, normalizedDraft)
+
+  while (session.drafts.size > MAX_DRAFTS) {
+    const firstKey = session.drafts.keys().next().value
+    session.drafts.delete(firstKey)
+  }
+
+  return normalizedDraft
+}
+
+function resolveDraft(session, payload, prompt) {
+  const draftId = normalizeText(payload?.draftId)
+  if (draftId && session.drafts.has(draftId)) {
+    return session.drafts.get(draftId)
+  }
+
+  return storeDraft(session, {
+    draftId,
+    prompt,
+    inputKinds: Array.isArray(payload?.inputKinds) ? payload.inputKinds : [],
+  })
+}
+
+async function dispatchPrompt({
+  featureId,
+  prompt,
+  requestId,
+  historySnapshot,
+  imageDataUrl,
+  ocrText,
+  inputKinds,
+  draftId,
+}) {
   const resolvedFeatureId = resolveFeatureId(featureId)
   const normalizedPrompt = normalizePrompt(prompt)
   const session = getSession(resolvedFeatureId)
   const resolvedHistory = cloneHistory(historySnapshot)
+  let resolvedOcrText = normalizeText(ocrText)
+  const displayPrompt = resolveDisplayPrompt(
+    normalizedPrompt,
+    Boolean(imageDataUrl || resolvedOcrText),
+  )
 
-  if (!normalizedPrompt)
+  if (!displayPrompt)
     return
 
   try {
     const client = resolveIntelligenceClient()
-    const payload = buildInvokePayload(normalizedPrompt, resolvedHistory)
-    const result = await client.invoke('text.chat', payload)
-    const mapped = mapInvokeResult(result, normalizedPrompt, requestId)
+
+    if (imageDataUrl && !resolvedOcrText) {
+      const ocrPayload = buildOcrPayload(imageDataUrl)
+      const ocrResult = await client.invoke(
+        'vision.ocr',
+        ocrPayload,
+        buildInvokeOptions({
+          featureId: resolvedFeatureId,
+          requestId,
+          capabilityId: 'vision.ocr',
+          inputKinds,
+        }),
+      )
+      resolvedOcrText = normalizeText(ocrResult?.result?.text)
+
+      if (!resolvedOcrText) {
+        throw createPluginError('OCR_EMPTY')
+      }
+
+      if (!canCommitResponse(session, requestId))
+        return
+
+      if (draftId && session.drafts.has(draftId)) {
+        storeDraft(session, {
+          draftId,
+          prompt: normalizedPrompt,
+          ocrText: resolvedOcrText,
+          inputKinds,
+        })
+      }
+
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildPendingItem(resolvedFeatureId, displayPrompt, requestId, 'chat'),
+      ])
+    }
+
+    const chatPrompt = normalizedPrompt || '请总结剪贴板图片中的文字。'
+    const payload = buildInvokePayload(chatPrompt, resolvedHistory, { ocrText: resolvedOcrText })
+    const result = await client.invoke(
+      'text.chat',
+      payload,
+      buildInvokeOptions({
+        featureId: resolvedFeatureId,
+        requestId,
+        capabilityId: 'text.chat',
+        inputKinds,
+      }),
+    )
+    const mapped = mapInvokeResult(result, displayPrompt, requestId)
 
     if (!mapped.answer) {
-      throw new Error('AI 未返回可用内容')
+      throw createPluginError('EMPTY_RESPONSE')
     }
 
     if (!canCommitResponse(session, requestId))
@@ -236,7 +530,7 @@ async function dispatchPrompt({ featureId, prompt, requestId, historySnapshot })
 
     session.history = keepNewestBusinessMessages([
       ...resolvedHistory,
-      { role: 'user', content: normalizedPrompt },
+      { role: 'user', content: displayPrompt },
       { role: 'assistant', content: mapped.answer },
     ])
     session.activeRequestId = ''
@@ -251,10 +545,14 @@ async function dispatchPrompt({ featureId, prompt, requestId, historySnapshot })
 
     session.activeRequestId = ''
     session.uiRequestId = requestId
+    const normalizedError = normalizeInvokeError(error)
     logger?.error?.('[touch-intelligence] invoke failed', error)
     plugin.feature.clearItems()
     plugin.feature.pushItems([
-      buildErrorItem(resolvedFeatureId, normalizedPrompt, error?.message || 'AI 调用失败', resolvedHistory),
+      buildErrorItem(resolvedFeatureId, displayPrompt, normalizedError, resolvedHistory, {
+        draftId,
+        inputKinds,
+      }),
     ])
   }
 }
@@ -275,23 +573,26 @@ const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
       const resolvedFeatureId = resolveFeatureId(featureId)
-      const prompt = normalizePrompt(getQueryText(query))
+      const session = getSession(resolvedFeatureId)
+      const queryContext = extractQueryContext(query)
 
       plugin.feature.clearItems()
 
-      if (!prompt) {
+      if (!queryContext.prompt && !queryContext.imageDataUrl) {
         plugin.feature.pushItems([buildPlaceholderItem(resolvedFeatureId)])
         return true
       }
 
-      plugin.feature.pushItems([buildSendItem(resolvedFeatureId, prompt)])
+      const draft = storeDraft(session, queryContext)
+      plugin.feature.pushItems([buildSendItem(resolvedFeatureId, draft)])
       return true
     }
     catch (error) {
+      const normalizedError = normalizeInvokeError(error)
       logger?.error?.('[touch-intelligence] Failed to handle feature', error)
       plugin.feature.clearItems()
       plugin.feature.pushItems([
-        buildErrorItem(featureId, '', error?.message || '未知错误'),
+        buildErrorItem(featureId, '', normalizedError),
       ])
       return true
     }
@@ -326,12 +627,32 @@ const pluginLifecycle = {
       }
 
       if (actionId === 'send' || actionId === 'retry') {
-        if (!prompt)
+        const draft = resolveDraft(session, payload, prompt)
+        const hasImageContext = Boolean(draft.imageDataUrl || draft.ocrText)
+        const displayPrompt = resolveDisplayPrompt(draft.prompt, hasImageContext)
+
+        if (!displayPrompt)
           return
 
-        const hasPermission = await ensurePermission('intelligence.basic', '需要 AI 权限以执行智能问答')
-        if (!hasPermission)
-          return
+        const hasPermission = await ensurePermission(
+          'intelligence.basic',
+          '需要 AI 权限以执行智能问答',
+        )
+        if (!hasPermission) {
+          const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
+          plugin.feature.clearItems()
+          plugin.feature.pushItems([
+            buildErrorItem(featureId, displayPrompt, normalizedError, [], {
+              draftId: draft.draftId,
+              inputKinds: draft.inputKinds,
+            }),
+          ])
+          return {
+            externalAction: true,
+            success: false,
+            message: normalizedError.message,
+          }
+        }
 
         const historySnapshot = actionId === 'retry' && Array.isArray(payload.history)
           ? cloneHistory(payload.history)
@@ -340,12 +661,23 @@ const pluginLifecycle = {
         const requestId = crypto.randomUUID()
         markPendingRequest(session, requestId)
         plugin.feature.clearItems()
-        plugin.feature.pushItems([buildPendingItem(featureId, prompt, requestId)])
+        plugin.feature.pushItems([
+          buildPendingItem(
+            featureId,
+            displayPrompt,
+            requestId,
+            draft.imageDataUrl ? 'ocr' : 'chat',
+          ),
+        ])
         void dispatchPrompt({
           featureId,
-          prompt,
+          prompt: draft.prompt,
           requestId,
           historySnapshot,
+          imageDataUrl: draft.imageDataUrl,
+          ocrText: draft.ocrText,
+          inputKinds: draft.inputKinds,
+          draftId: draft.draftId,
         })
         return { externalAction: true }
       }
@@ -360,7 +692,13 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     buildInvokePayload,
+    buildInvokeOptions,
+    buildOcrPayload,
+    extractImageDataUrl,
+    extractInputKinds,
+    extractQueryContext,
     mapInvokeResult,
+    normalizeInvokeError,
     normalizePrompt,
   },
 }

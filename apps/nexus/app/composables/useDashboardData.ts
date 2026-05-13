@@ -1,10 +1,19 @@
 import type { DashboardPluginResponse } from '~/types/dashboard-plugin'
 import { computed } from 'vue'
 
-type RequestLike = typeof $fetch
+interface RequestOptions {
+  timeout?: number
+  [key: string]: unknown
+}
+
+type RequestLike = <T>(request: string, options?: RequestOptions) => Promise<T>
 
 function resolveRequest(): RequestLike {
-  return (import.meta.server ? useRequestFetch() : $fetch) as RequestLike
+  if (import.meta.server) {
+    const getRequestFetch = useRequestFetch as unknown as () => RequestLike
+    return getRequestFetch()
+  }
+  return $fetch as unknown as RequestLike
 }
 
 interface LocalizedText {

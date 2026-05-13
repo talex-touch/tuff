@@ -1,9 +1,2045 @@
 # 变更日志
 
-> 更新时间: 2026-05-09
-> 说明: 主文件仅保留近 30 天（2026-04-09 ~ 2026-05-09）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-13
+> 说明: 主文件仅保留近 30 天（2026-04-13 ~ 2026-05-13）详细记录；更早历史已按月归档。
+
+## 2026-05-13
+
+### fix(core-app): harden Windows shortcut app launch handoff
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.test.ts`
+  - Windows App 启动路径继续收紧 ShellExecute 语义：当 `launchTarget` 本身为 `.lnk`（常见于手动添加/复制路径入口）时，直接交由 `shell.openPath(.lnk)` 启动，避免 Node `spawn` 快捷方式导致部分应用无响应或失败。
+  - 保留原始 Start Menu `.lnk` 的 shell handoff 与失败后 target fallback 行为；同时用定向测试覆盖 `.lnk`、`.cmd`、`.ps1`、普通 exe 与协议启动。
+
+### test(core-app): cover app provider launch metadata sync
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-metadata-sync.test.ts`
+  - 补充 AppProvider metadata sync 测试，固定 `launchArgs`、`workingDirectory`、`displayPath`、`description` 作为扫描可清理/可检测的启动元数据，降低旧索引残留错误启动参数的风险。
+
+### feat(plugin): add search engine icons for quick launch
+
+- `plugins/touch-browser-open/{manifest.json,index.js,assets/search-engines/*.svg}`
+- `packages/test/src/plugins/browser-open.test.ts`
+  - `Google / Bing / DuckDuckGo` 搜索引擎配置新增对应 SVG icon，动态 `搜索引擎` feature、直接搜索项、suggestion 与降级提示统一展示当前引擎图标。
+  - 单测固定动态搜索引擎 feature 与搜索结果 item 的 icon 来源，避免回退到通用插件 logo。
+  - 版本升级至 `1.0.3`，用于发布搜索引擎图标更新。
+
+### feat(core-app): add Windows app index manager and Steam protocol launch
+
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingFileIndex.vue,SettingFileIndexAppIndexManager.vue}`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-launcher.ts,app-provider.ts,app-provider-path-utils.ts,app-scanner.ts,steam-provider.ts,win.ts}`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-launcher.test.ts,app-provider.test.ts,steam-provider.test.ts,win.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/{README.md,TODO.md}`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 文件索引高级设置新增“本地启动区 / 应用索引管理”，复用 `settingsSdk.appIndex.listEntries/addPath/setEntryEnabled/removeEntry/diagnose/reindex`，支持选择 `.exe/.lnk/.appref-ms`、粘贴 Windows `%ENV%` 路径、UWP shell path 与裸 AppID；添加成功后立即触发关键词重建与诊断，避免重启后才可搜索。
+  - `AppIndexEntryLaunchKind` / `ScannedAppInfo.launchKind` / CoreBox app DSL 扩展 `protocol`，AppLauncher 新增协议启动白名单，仅允许 `steam://rungameid/<numeric>` 并通过 `shell.openExternal()` 启动，拒绝其他协议。
+  - Windows AppProvider 扫描链路新增 Steam provider，解析注册表/常见 Steam 根、`libraryfolders.vdf` 与 `appmanifest_*.acf`，以 `bundleId=steam:<appid>`、`launchKind=protocol`、`launchTarget=steam://rungameid/<appid>` 索引游戏；不扫描游戏 exe、不引入通用游戏平台抽象。
+  - 补充 Steam parser、AppLauncher protocol 分支、Windows/AppProvider 最近路径回归；Windows 真机 UWP/Store、Steam 与手动条目搜索启动闭环仍需按 acceptance evidence 采集。
+
+### docs(core-app): record startup async blocking analysis
+
+- `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 归档 CoreApp 启动异步化与首屏卡顿静态分析，确认当前启动仍受 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path、Search provider 启动后集中抢资源，以及 renderer mount 前等待 storage/plugin store 影响。
+  - 明确后续治理顺序：P0 先将 renderer plugin store 初始化移到 mount 后后台执行；P1 将 Extension/Sentry/Intelligence/Update/Clipboard/DownloadCenter 等改为 handler-first + background runtime；P2 拆分 Database critical/background；P3 将 Everything/FileProvider 等搜索 provider 后台 ready。
+  - 该项仅记录分析与后续计划，不改变当前 `2.4.10` Windows evidence gate 优先级。
+
+### fix(plugin): isolate quick launch search engine completion mode
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `packages/utils/plugin/sdk/feature-sdk.ts`
+- `packages/test/src/plugins/browser-open.test.ts`
+- `packages/utils/__tests__/plugin-sdk-lifecycle.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.test.ts`
+  - `touch-browser-open` 搜索引擎 feature 激活后持续订阅 CoreBox 输入变化，输入 `example.com` 这类域名形态内容时仍只展示对应引擎的直接搜索项与 suggestion，不再退回 URL 打开候选。
+  - 搜索 action 显式写入 `render.completion`，Tab 补全只补关键词或 suggestion 本身，避免补成 `Google 搜索：<query>` 标题。
+  - CoreBox active push feature 空 query 时不再由 `plugin-features` 自动回填插件功能列表，避免搜索模式清空输入后突出 `browser-open` / 域名打开入口。
+  - 修复 Feature SDK 对空字符串 `core-box:input-change` payload 的解析，清空输入时不再把 payload 对象传给插件。
+  - 版本升级至 `1.0.2`，用于修复已发布 `1.0.1` 的搜索引擎模式补全隔离问题。
+
+### chore(quality): retire guard infrastructure and consolidate ESLint gates
+
+- `package.json`
+- `.github/workflows/ci.yml`
+- `apps/core-app/{package.json,eslint.config.mjs}`
+- `scripts/check-{legacy-boundaries,compatibility-debt-registry,large-file-boundaries,doc-governance,network-boundaries,coreapp-runtime-boundaries,runtime-console-boundaries,main-global-app-usage,intelligence-no-todo}.mjs`
+- `scripts/{legacy-boundary-allowlist,large-file-boundary-allowlist,runtime-console-allowlist,main-global-app-allowlist}.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - Retired infrastructure guard scripts and their baselines/registries from the project quality chain.
+  - Root quality scripts now keep only `lint`, `lint:fix`, `lint:changed`, `typecheck`, `typecheck:all`, `test:targeted`, `quality:pr`, and `quality:release`; `lint` / `lint:fix` run ESLint only, and lint-staged no longer runs changed-file size guard.
+  - Migrated network, runtime, console, i18n global, raw IPC, old sync API, legacy import/literal, loose WebPreferences, and `$app` boundaries into ESLint rules / overrides.
+  - PR CI now runs `pnpm quality:pr` and no longer includes report-only docs guard; package reusable CI remains on lint/typecheck/test/build parameters.
+  - Updated active quality/roadmap docs to use the ESLint + typecheck + targeted tests + build baseline; historical archive/old CHANGES entries are intentionally not bulk rewritten.
+
+### fix(core-app): avoid plugin install confirmation race
+
+- `apps/core-app/src/main/modules/plugin/{install-queue.ts,install-queue.test.ts}`
+  - 插件安装队列在发送确认请求前先登记 task resolver，避免前端在 `sendToWindow` 尚未返回时立即回传确认响应导致响应被丢弃。
+  - 补充权限确认竞态回归测试，覆盖确认响应早于确认发送 Promise resolve 的路径，防止商店安装按钮长期停留在“等待确认”。
+
+### fix(plugin): remove browser open prelude process dependency
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `packages/test/src/plugins/{browser-open.test.ts,plugin-loader.ts}`
+  - `touch-browser-open` Prelude 不再在顶层读取 `process.platform`，改用 `node:os` 获取当前平台，避免生产插件沙箱未注入 `process` 时启用失败。
+  - 版本升级至 `1.0.1`，用于修复已发布 `1.0.0` 在 CoreBox 插件生命周期 enable 阶段的 `ReferenceError: process is not defined`。
+  - 单测补充无 `process` 全局的插件沙箱加载回归，固定动态搜索引擎 feature 构建不依赖 Node `process` 全局。
+
+### feat(plugin): add quick launch search engine mode
+
+- `plugins/touch-browser-open/{manifest.json,index.js}`
+- `packages/test/src/plugins/browser-open.test.ts`
+  - `touch-browser-open` 新增 `web-search` 基础入口，并在插件初始化时动态注册 `Google / Bing / DuckDuckGo 搜索引擎` feature。
+  - 选择某个搜索引擎 feature 后保持 CoreBox 输入态，不进入独立页面；输入变化会刷新直接搜索项与远程 suggestion，执行后复用默认浏览器打开逻辑并隐藏 CoreBox。
+  - 搜索建议新增 `network.internet` 可选权限；权限缺失、网络失败或请求取消时保留直接搜索项，不阻塞用户搜索。
+  - URL/域名打开仍由原 `browser-open` 路径处理，普通网页搜索走默认搜索引擎兜底。
+
+### fix(core-app): prefer packaged macOS tray template icon
+
+- `apps/core-app/electron-builder.yml`
+- `apps/core-app/scripts/build-target/after-pack.js`
+- `apps/core-app/src/main/modules/tray/{tray-icon-provider,tray-manager}.ts`
+  - macOS 包 `Info.plist` 固化 `LSUIElement=true`，并在 `afterPack` 对主 App `Info.plist` 做兜底写入与 fail-fast 校验；避免 builder 配置或 CLI 覆盖未生效时，系统设置「菜单栏」列表完全不登记 `tuff`。
+  - macOS Dock 显隐时同步切换 activation policy：需要显示 Dock 时使用 `regular`，仅托盘驻留时使用 `accessory`，避免 `LSUIElement` 包身份下只调用 `app.dock.show()` 的不完整状态。
+  - 将 `TrayManager` 启动顺序提前到 Intelligence/Auth/Sync 等可能触发 Keychain 或网络等待的模块之前，避免 macOS agent 包在后续模块初始化卡住时尚未创建菜单栏项。
+  - dev 与 packaged macOS 在 tray-first / accessory agent 行为上保持一致：不再通过 dev 环境强制 `regular`，便于默认 `pnpm core:dev` 直接验证菜单栏托盘链路。
+  - macOS 托盘图标改为优先使用已打包的 `TrayIconTemplate.png` / `tray_icon_22x22.png` / `tray_icon.png` 资源，内置 Base64 template icon 仅作为资源缺失时的 fallback，避免状态栏项在部分 macOS 菜单栏/状态栏管理环境中创建后不可见或 bounds 异常。
+  - 替换 macOS tray template 资源为更明确的圆角方框 + `T` mask，避免旧资源仅显示为极小浅色圆点，Tray 已创建但视觉上几乎不可见。
+  - macOS Tray 初始化顺序调整为先创建 status item、再同步 activation policy，并在创建后延迟复查 bounds；若仍出现 `height=0` 的无效布局，则自动重建一次 Tray 并记录恢复日志。
+  - `pnpm core:dev` 默认改用本地生成的 Tuff Dev Electron bundle（`com.tagzxia.app.tuff.dev` + `LSUIElement=true` + ad-hoc sign），避免 stock `Electron.app` / `com.github.Electron` 身份导致 macOS「菜单栏」设置和 tray agent 行为与 packaged app 不一致；dev bundle 保留 `CFBundleExecutable=Electron`，确保 Electron 仍按 dev-server / `tuff-dev` 数据目录运行。
+  - `TrayManager` 在托盘创建成功后记录 `platform`、`bounds` 与 resolved `iconPath`，后续可直接从日志判断 `trayReady` 与状态栏定位问题，减少 macOS 真机排查歧义。
+  - Tray tooltip 与菜单展示文案统一走 `tray.*` i18n key，并将托盘菜单中的旧品牌名对齐为 `Tuff`。
+
+### docs(project): lock immediate Windows evidence execution order
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将“当前最需要做的事”落地为明确执行顺序：先确认工作区本地噪声不混入提交，再在 Windows 真机生成 acceptance collection plan，随后采集 case/manual/performance evidence，运行 `windows:acceptance:verify` final gate，最后写入 Nexus Release Evidence。
+  - 明确 `2.4.10` 正式 gate 前不得扩大功能范围；`2.5.0` AI/workflow、Provider Registry 高级策略、retained raw definition 后续迁移与 SRP 大拆分继续保留在 `2.4.11` / `2.5.0` 后续，不得抢占当前发版 blocker。
+  - 同步六主文档日期与口径，强调缺少真实 Windows evidence、性能样本或 Release Evidence 写入时，正式 `2.4.10` 结论只能保持 blocked。
+
+## 2026-05-12
+
+### ci(workflows): migrate GitHub Actions runtime to Node 24 baseline
+
+- `.github/workflows/*.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将 CI、package publish、release、Pilot image、PR label 与 release drafter workflow 的 JavaScript Actions 统一升级到 Node 24-compatible major baseline，消除 Node.js 20 action runtime deprecation warning。
+  - 保持项目业务 Node runtime 为 `22.16.0`，明确 Action runtime 迁移不得通过升级业务 Node、`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过。
+  - 发布链路 `build-and-release` 同步升级 upload/download artifact 与 release action，后续仍需通过 beta/draft release run 验证三端 artifact、GitHub Release 与 Nexus sync annotations。
+
+### docs(project): refresh cross-platform compatibility review
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+  - 新增 2026-05-12 跨平台兼容与占位实现复核报告，确认 2026-05-10 P0/P1 假成功路径已基本收口：Pilot runtime metrics、mock payment 显式环境门控、`touch-image` 图片历史迁入 plugin storage SDK。
+  - 同步六主文档入口，把当前 release blocker 收敛为 Windows/macOS 真机 evidence；后续 `2.4.11` 聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
+  - 清理 `app-provider.test.ts` 测试标题中的非行为性 legacy 关键词噪声，保持断言不变并恢复 `compat:registry:guard` 绿线。
+
+### fix(core-app): launch Windows executable apps from install directory
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.test.ts`
+  - Windows `.exe`/`.com` app launches now use the app process launcher instead of `shell.openPath`, and default `cwd` to the executable directory when no explicit working directory is provided.
+  - This keeps apps such as WeChat/Weixin aligned with their installed runtime assumptions, while non-executable paths still use the shell opener.
+
+### fix(core-app): skip unresolved optional packaged runtime modules
+
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `apps/core-app/src/main/core/runtime-modules.contract.test.ts`
+  - Packaged runtime closure 对缺失的 `optionalDependencies` 恢复 skip-optional 策略，避免 `esbuild` 等包声明的非目标平台 optional package（如 `@esbuild/aix-ppc64`）在 CI 打包时被误判为必须依赖。
+  - 目标平台 `@esbuild/*` 二进制仍由 `verifyPackagedEsbuildBinaries()` fail-fast 校验，确保实际运行平台需要的 compiler binary 必须进入 `resources/node_modules` 且可执行。
+  - 补充 runtime modules contract，固定 packaged closure 不会因缺失 optional platform package 失败。
+
+### fix(core-app): scope macOS Spotlight file search
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+  - macOS Spotlight fast file search 改为只在默认用户文件目录与 `FILE_INDEX_SETTINGS.extraPaths` 内执行，并对返回结果做二次 scope 过滤。
+  - 系统框架内部资源（如 `/System/Library/PrivateFrameworks` 下的 Safari/MapsUI 图标）不再作为普通文件结果展示，避免 CoreBox 渲染时触发 `tfile://` 403 噪音。
+
+### fix(core-app): generate indexed media thumbnails
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/{thumbnail-config,thumbnail-service,utils,file-provider}.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/{thumbnail-worker,thumbnail-worker-client}.ts`
+- `apps/core-app/src/main/modules/native-capabilities/{index,native-file-service}.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/electron-builder.yml`
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+  - FileProvider 缩略图生成从 Electron `nativeImage` worker 直连切到统一 thumbnail service；图片/HEIC/TIFF/WebP 等使用 `sharp`，视频使用 `ffmpeg-static`/`ffprobe-static` 抽帧后统一输出本地 JPEG cache。
+  - 索引封面不再把新生成结果写入长期 data URL；`file_extensions.thumbnail` 保存本地 cache 路径，搜索展示继续通过 `tfile://` 渲染，历史合法 data URL 仍兼容。
+  - 图片与视频分别使用 50MB / 2GB 上限；失败或不支持结果写入 `thumbnailStatus`，文件 `mtime/size` 未变化时跳过重复生成，降低损坏媒体和 Photos Library 类路径的重复 warning。
+  - `native:media:get-thumbnail` 与 CoreBox 搜索复用同一 thumbnail worker；`media.thumbnail` capability 已标注图片+视频支持，ffmpeg 不可用时显式 degraded 但图片缩略图不受影响。
+  - 打包清单补充 `sharp`、`@img`、`ffmpeg-static`、`ffprobe-static` 的 asar unpack/runtime modules，避免 native binary 或可执行文件被打包到不可执行位置。
+
+### fix(core-app): normalize app identity and display-name indexing
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-provider,app-scanner,darwin,win,display-name-sync-utils}.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/*.{test,ts}`
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - AppProvider 将搜索索引 itemId 收敛到 canonical `appIdentity`，重建关键词前会清理 path/bundleId/launchTarget 等历史 itemId，避免同一 app 在 `search_index` 中分裂成多条记录。
+  - 应用扫描新增 `identityKind`、`displayNameSource`、`displayNameQuality` 元数据并持久化到 `file_extensions`，诊断接口同步暴露这些字段；Windows desktop app 允许没有 `bundleId`。
+  - macOS 新鲜扫描优先读取 `InfoPlist.strings` 本地化名称，mdls 增量扫描会覆盖旧的 filename/manifest fallback；已有 localized/system 名称不会被低质量来源降级。
+  - Windows UWP 使用 AUMID canonical identity、PFN 作为可选 bundle alias；desktop/shortcut 将 Start Menu 名称、shortcut 名、target exe/path 合并到 aliases。
+  - 设置页文案区分“文件索引重建”和“应用关键词/元数据重扫”，避免误以为文件索引重建会刷新 app 展示名。
+
+### ci(release): harden beta release workflow
+
+- `.github/workflows/build-and-release.yml`
+- `.github/workflows/ci.yml`
+- `.github/workflows/package-ci.yml`
+- `.github/workflows/package-*-publish.yml`
+- `.github/workflows/{omnipanel-gate,package-utils-ci,package-unplugin-ci,pilot-ci,release-drafter}.yml`
+- `package.json`
+- `apps/core-app/package.json`
+- `apps/core-app/scripts/build-target.js`
+- `notes/update_2.4.10-beta.19.{zh,en}.md`
+  - `build-and-release` 新增显式 `beta` release type，手动触发默认 beta；tag 触发会从 `v*-beta*` / `*snapshot*` 自动推导 beta/snapshot/release 构建类型，避免 beta tag 进入 release 分支。
+  - CoreApp 新增 `build:beta` / `build:beta:{win,mac,linux}`，根 workspace 同步新增平台脚本；beta 版本保留 `BETA` 运行时 metadata，但继续复用 snapshot packaging policy 与 Windows builder metadata 兼容转换。
+  - 发布构建统一 Node `22.16.0`、pnpm `10.32.1`、frozen lockfile install 与 `pnpm approve-builds --all`；上传 artifact 收窄到安装包、压缩包和 updater metadata，减少 release 汇总下载体积。
+  - `build-and-release` 增加 workflow concurrency 与 job 最小权限；`sync-nexus-release` 保留 `contents: read`，Release 创建 job 只在需要上传 release 时授予 `contents: write`。
+  - 主 PR CI 从 `pull_request_target` 改为只读 `pull_request`，不再 checkout PR head 时携带写权限；主线分支过滤覆盖 `main/master`。
+  - reusable package CI 与 package publish workflow 统一 `pnpm/action-setup@v4`；`omnipanel-gate`、utils/unplugin package CI、Pilot CI 与 Release Drafter 补齐 `master/main` 触发口径。
+  - 补齐 `2.4.10-beta.19` 中英文 release notes，明确该版本仍为 beta 测试包，不宣称 Windows 真机 acceptance、性能采样和 Nexus Release Evidence 已完成。
+
+### refactor(core-app): unify Nexus runtime API server resolver
+
+- `packages/utils/env`
+- `apps/core-app/src/main/modules/nexus/runtime-base.ts`
+- `apps/core-app/src/renderer/src/modules/nexus/runtime-base.ts`
+  - Core App runtime API 服务器选择统一收敛到 `resolveTuffNexusBaseUrl()`，唯一外部覆盖变量为 `TUFF_NEXUS_BASE_URL`。
+  - 登录、同步、Telemetry/Analytics、插件商店、Agent Store、远程 preset 与 Nexus Intelligence 默认通道统一使用同一 runtime API base。
+  - 不再因 dev/unpackaged 自动切到 `localhost:3200`；local 只由设置页“运行时 API 服务器”或显式 env 覆盖触发。
+  - `dev.authServer` 持久化值启动/读取时只读迁移到 `dev.runtimeServer`，后续代码不再写入 auth 专用字段。
+  - 更新源、About 协议/许可等官网外链保持官方 `https://tuff.tagzxia.com`，不跟随 runtime API server mode。
+  - 旧 runtime API env 读取已移除：`VITE_NEXUS_URL`、`NEXUS_API_BASE`、`NEXUS_API_BASE_LOCAL`、`TPEX_API_BASE`、`AUTH_ORIGIN`、`TUFF_LOCAL_BASE_URL`。
+
+### fix(core-app): serialize file icon cache writes
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-icon-cache-service.ts`
+  - 文件搜索懒加载图标持久化不再直接开启 libSQL transaction，改为复用 `withDbWrite` + `addFileExtensions` 的统一串行写入和 SQLite busy 重试路径。
+  - 覆盖 `SQLITE_BUSY_SNAPSHOT` 场景下 icon/iconMeta cache 写入与搜索读请求并发时的数据库锁冲突。
+  - 补充 `file-provider-icon-cache-service` 定向单测验证 icon cache 写入必须经过串行 DB write path。
+
+### release(core-app): prepare 2.4.10-beta.19 test package
+
+- `package.json`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将当前工作区基线同步到 `2.4.10-beta.19`，用于 Windows App 索引、App 图标缓存稳定性与 macOS `.app` 文件预览过滤的 beta 测试包准备。
+  - 发版口径仍保持 beta/snapshot：Windows 真机 release evidence、性能采样与 Nexus Release Evidence 写入仍是正式 `2.4.10` blocker。
+
+### refactor(core-app): keep app provider size guard clean
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-metadata-sync.ts`
+  - 将 AppProvider 的 alternateNames/icon drift 与 stale extension key 纯判断迁出到 metadata sync helper，主类继续保留应用索引编排和 DB 写入职责。
+  - `app-provider.ts` 回到 `3305` 行，低于当前 `3306` growth exception cap，避免 beta19 前触发 changed size guard。
+
+### fix(core-app): move app search diagnostic into settings modal
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppDiagnostic.vue`
+  - 高级设置中的“应用搜索诊断”改为列表入口，点击后打开独立弹窗承载单输入框、诊断、重建与证据导出操作。
+  - 单输入框同时支持路径、bundleId、显示名与搜索词；前端会用同一个输入值执行目标定位与 query stage 诊断。
+  - query stage 卡片可点击查看候选详情；N-gram 阶段会显示候选 `itemId` 与 `overlap`，便于定位短词/模糊召回来源。
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
+  - 诊断目标直接匹配失败时，会用输入值走 app 搜索索引召回并反查应用记录，支持 `weixin` 等搜索词直接定位目标应用。
+  - 诊断目标定位新增已入库关键词反查路径，支持 `wx` 这类短别名直接映射到应用 itemId，避免搜索词已入库但诊断返回 `target-not-found`。
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - 更新应用搜索诊断说明与占位文案，明确统一输入框支持多种查询格式。
+- 诊断面板样式收回组件内，避免父级文件索引设置页继续承担弹窗内容布局。
+
+## 2026-05-11
+
+### fix(core-app): keep macOS app bundles out of file preview results
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+  - macOS Spotlight 文件搜索不再把 `.app` bundle 输出为普通 `file` item，避免 CoreBox 中 QQ/WeChat 等应用命中后进入文件预览面板。
+  - 应用结果仍由 AppProvider 负责输出，保持 CoreBox item payload 结构不变。
+  - 补充 `native-file-search-provider` 定向单测覆盖 `.app` bundle 路径识别与 Spotlight 搜索结果过滤。
+
+### fix(core-app): stabilize CoreBox app icon cache
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+  - macOS app 图标缓存迁移到稳定 userData cache，并使用 bundle/app path hash 命名，避免系统临时目录清理后 CoreBox 持续加载失效 `tfile` 路径。
+  - AppProvider 增加 icon drift 检测与旧 icon extension 清理；搜索结果构建时对缺失本地图标降级为 class fallback，不再向 renderer 输出失效图标 URL。
+  - 补充 darwin/app-provider/search-processing-service 定向单测覆盖缓存生成复用、失效 icon 同步与搜索 fallback。
+
+### refactor(tuff-intelligence): split DeepAgent input builders
+
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-input.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-input.test.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - 将 DeepAgent 的 TurnState 附件归一、chat message content 构造、Responses input 构造与模型上下文消息过滤迁出到 `deepagent-input.ts`，engine 保留 transport fallback、SSE 解析、LangChain/DeepAgent 调用与错误封装职责。
+  - 保持 `deepagent-engine.ts` 的 `buildChatMessageContent`、`buildResponsesInput`、`resolveAttachmentImageUrl` 导出路径不变，避免影响现有 `pilot-server` 入口与服务端调用。
+  - `deepagent-engine.ts` 从 `2137` 行降到 `1791` 行，DeepAgent growth exception cap 从 `2138` 收紧到 `1792`，继续阻断回涨。
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/adapters/deepagent-input.test.ts"` 通过（`3 tests`）；定向 ESLint、`size:guard --changed` 与 `pnpm -C "packages/tuff-intelligence" run build` 通过。
+
+### refactor(core-app): split app provider source scanner
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-source-scanner.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - 将 AppProvider 的 scanned app 加载、scanned app key map、DB app scanned/manual partition 与 missing icon 记录编排迁出到 `AppProviderSourceScanner`。
+  - 保持 AppProvider search result shape、launch 行为、缓存 key、索引 schema 与外部 provider id 不变；本轮不触碰 launch resolver 与 metadata enrichment。
+  - `app-provider.ts` 从 `3324` 行降到 `3305` 行，growth exception cap 从 `3330` 收紧到 `3306`，继续阻断回涨。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts"` 通过（`28 tests`）；CoreApp node typecheck、定向 ESLint 与 `size:guard --changed` 通过。
+
+### refactor(core-app): extract clipboard capture pipeline
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-capture-pipeline.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-capture-pipeline.test.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-polling-policy.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-native-watcher.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-meta-persistence.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-stage-b-enrichment.ts`
+- `apps/nexus/i18n/locales/{en,zh}.ts`
+- `apps/nexus/i18n/locales/legal/{en,zh}.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - 将 clipboard capture/persist 主流程迁出到 `ClipboardCapturePipeline`，`ClipboardModule` 保留模块生命周期、调度、transport 与服务编排。
+  - 同轮完成 polling policy、native watcher、meta persistence 与 stage-B enrichment helper 接入，保持 `ClipboardEvents.*` 外部事件名、payload、action result 与 history DB schema 不变。
+  - 补充 capture pipeline 文本剪贴板持久化、meta、Stage-B 队列与 plugin forward 回归测试。
+  - Nexus legal i18n 从主 locale 文件拆到 `locales/legal/*`，降低 locale 主文件体积并保持 `license/privacy/protocol` key 不变。
+  - `clipboard.ts` 已降到 `1143` 行，低于 `1200` 阈值，并从 size allowlist 与 growth exception 中清退。
+  - 验证：11 个 Clipboard 定向测试（`37 tests`）、CoreApp node typecheck、定向 ESLint、`size:guard --changed` 与 `size:guard --report` 通过。
+
+### refactor(nexus): split sign-in redirect helpers and docs assistant audit meta
+
+- `apps/nexus/app/composables/useSignIn.ts`
+- `apps/nexus/app/composables/sign-in-redirect-utils.ts`
+- `apps/nexus/server/api/docs/assistant.post.ts`
+- `apps/nexus/server/utils/requestAuditMeta.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabTools.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/utils/telemetrySanitizer.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/legal/en.ts`
+- `apps/nexus/i18n/locales/legal/zh.ts`
+- `scripts/lib/scan-config.mjs`
+  - 将登录 composable 中 OAuth redirect 查询值读取、URL-like 解析与 auth-noise redirect fallback 归一迁出到 `sign-in-redirect-utils.ts`，`useSignIn.ts` 保留登录/注册/OAuth/Turnstile/passkey 编排职责。
+  - 将 docs assistant API 中 request IP/country audit metadata 解析迁出到 `requestAuditMeta.ts`，handler 保留认证、session、provider 调用、credit 与 audit 编排职责。
+  - 将 Intelligence Lab 的工具常量、支持工具列表、account/credits/subscription/language/theme 工具执行与输入归一迁出到 `tuffIntelligenceLabTools.ts`，Lab service 保留 orchestration、checkpoint、stream 与审批编排。
+  - 将 telemetry input/type/sanitizer、provider status/value 归一、feature/search metadata 清洗和 quarantine stringify 迁出到 `telemetrySanitizer.ts`，`telemetryStore.ts` 保留 D1 schema、写入、daily stat 与 analytics 查询职责。
+  - 将 Nexus `license/privacy/protocol` 静态法律文案迁出到 `locales/legal/*` shard，原 `license.*` / `privacy.*` / `protocol.*` key 通过 `...legal` 保持不变；scope guard 对这两个 i18n shard 按现有 locale 文件同类豁免。
+  - `useSignIn.ts` 从 `1584` 行降到 `1538` 行，`assistant.post.ts` 从 `1792` 行降到 `1762` 行，`tuffIntelligenceLabService.ts` 从 `3658` 行降到 `3408` 行，`telemetryStore.ts` 从 `1985` 行降到 `1502` 行；四者均退出 `grownOversizedFiles`，当前 `node scripts/check-large-file-boundaries.mjs --report` 显示 `newOversizedFiles=0`、`grownOversizedFiles=2`。
+  - 验证：Nexus 定向 ESLint、`telemetryStore.test.ts`、`vue-tsc --noEmit --pretty false` 通过；`node scripts/check-large-file-boundaries.mjs --report` 通过。
+
+### refactor(core-app): split OmniPanel builtin definitions
+
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/omni-panel-builtin-features.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+  - 将 OmniPanel 内置 feature 定义、内置 feature map 与执行错误消息迁出到 `omni-panel-builtin-features.ts`，主模块保留 registry 初始化、执行分发与 input hook 生命周期。
+  - `index.test.ts` 对 `uiohook-napi` 改为纯 JS stub，避免单测在无 Accessibility 权限环境真实加载 native hook 导致 worker IPC 崩溃。
+  - `omni-panel/index.ts` 从 `1885` 行降到 `1845` 行，低于当前 exception cap `1868`；CoreApp 当前不再出现在 `grownOversizedFiles` 列表。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/omni-panel/index.test.ts"` 通过（`20 tests`）；定向 ESLint 通过。
+
+### refactor(core-app): split update asset utilities
+
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/main/modules/update/update-asset-utils.ts`
+  - 将更新资产打分、安装包后缀优先级、manifest/metadata/signature/checksum/auxiliary asset 分类与签名后缀归一迁出到 `update-asset-utils.ts`。
+  - `update-system.ts` 从 `1697` 行降到 `1610` 行，低于当前 baseline `1674`，该文件退出 `grownOversizedFiles`。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/update/update-system.test.ts"` 通过（`4 tests`）；定向 ESLint 通过。
+
+### refactor(core-app): split app provider path helpers
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-path-utils.ts`
+  - 将 AppProvider 中 UWP shell path/app id 判断、可选字符串归一化与 managed entry launch kind 推断迁出到 `app-provider-path-utils.ts`。
+  - `app-provider.ts` 从 `3341` 行降到 `3324` 行，低于当前 exception cap `3330`，该文件退出 `grownOversizedFiles`。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts"` 通过（`28 tests`）；定向 ESLint 通过（仅保留测试文件既有 `no-explicit-any` warnings）。
+
+### refactor(core-app): split app provider test harness
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-test-harness.ts`
+  - 将 AppProvider 测试的 hoisted mocks、平台切换、subject loader、deferred/flush helper、extension row helper 与私有测试类型迁出到 `app-provider-test-harness.ts`。
+  - 保持 28 个 AppProvider 回归用例主体、断言与 mock 目标不变；`app-provider.test.ts` 从 `1806` 行降到 `1400` 行，低于当前 exception cap `1517`，该文件退出 `grownOversizedFiles`。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts"` 通过（`28 tests`）；定向 ESLint 通过（保留测试文件既有 `no-explicit-any` warnings）。
+
+### refactor(core-app): split SearchCore utilities
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core-utils.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.trace.test.ts`
+  - 将 SearchCore 中 provider alias/filter/category、filter parser/matcher、activation key、stable cache key/hash、duration rounding、query hash、provider summary/telemetry 与 scene resolver 等纯 helper 迁出到 `search-core-utils.ts`。
+  - `search-core.ts` 从超过 exception cap 的 grown 状态降到 `2475` 行，低于当前 cap `2581`，该文件退出 `grownOversizedFiles`。
+  - 验证：定向 ESLint 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/modules/box-tool/search-engine/search-core.trace.test.ts"` 通过（`8 tests`）。
+
+### refactor(intelligence-uikit): split playground state
+
+- `packages/intelligence-uikit/src/playground/App.vue`
+- `packages/intelligence-uikit/src/playground/usePlaygroundState.ts`
+  - 将 playground 的 mock timeline、live DeepAgent 状态、设置持久化、播放控制与本地 invoke client 迁出到 `usePlaygroundState.ts`，`App.vue` 保留组件导入、模板与样式。
+  - `App.vue` 从 `1643` 行降到 `919` 行，低于 `1200` 阈值；`node scripts/check-large-file-boundaries.mjs --report` 当前显示 `newOversizedFiles=0`、`grownOversizedFiles=13`。
+  - 验证：`pnpm -C "packages/intelligence-uikit" exec eslint "src/playground/App.vue" "src/playground/usePlaygroundState.ts"` 通过；`pnpm -C "packages/intelligence-uikit" run typecheck` 通过。
+
+### refactor(core-app): split clipboard image persistence
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-image-persistence.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-image-persistence.test.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-autopaste-automation.ts`
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Clipboard 第五个 SRP 切片完成：live image read、临时图片 namespace 注册、orphan cleanup 与 native image source reconstruction 迁出到 `clipboard-image-persistence.ts`。
+  - 主模块继续保留 clipboard monitor / Stage-B 编排；`ClipboardEvents.readImage/write/apply/copyAndPaste` 外部事件名、payload、返回 shape 与图片历史存储 schema 保持兼容。
+  - `clipboard-autopaste-automation.ts` 复用 image persistence 的 source reconstruction，避免图片恢复逻辑重复。
+  - `clipboard.ts` 从 `1960` cap 继续降到 `1825` cap，`large-file-boundary-allowlist` 中对应 entry 与 growth exception cap 同步收紧。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard/clipboard-image-persistence.test.ts" "src/main/modules/clipboard/clipboard-autopaste-automation.test.ts" "src/main/modules/clipboard/clipboard-transport-handlers.test.ts" "src/main/modules/clipboard/clipboard-history-persistence.test.ts" "src/main/modules/clipboard/clipboard-capture-freshness.test.ts" "src/main/modules/clipboard/clipboard-freshness.test.ts"` 通过（`23 tests`）；定向 ESLint、`node --check` 与 `size:guard --changed` 通过。
+
+### refactor(core-app): split recommendation engine utilities
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-utils.ts`
+  - 将 recommendation engine 中无副作用的错误日志 meta 归一、day bucket 与 time-context boost / relevance score 迁出到 `recommendation-utils.ts`。
+  - 保持 `recommendation-engine.ts` 对 `calculateTimeContextBoost` / `calculateTimeRelevanceScore` 的 re-export，现有测试与外部引用无需迁移。
+  - `recommendation-engine.ts` 从 `1930` 行降到 `1869` 行，`node scripts/check-large-file-boundaries.mjs --report` 中 `grownOversizedFiles` 从 `15` 降到 `14`，该文件不再超过 exception cap。
+  - 验证：定向 ESLint 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts"` 通过（`7 tests`）。
+
+### refactor(core-app): split clipboard autopaste automation
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-autopaste-automation.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-autopaste-automation.test.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-request-normalizer.ts`
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Clipboard 第四个 SRP 切片完成：copy/apply/paste 自动化、history apply action result、auto paste capability check、CoreBox hide、平台 paste shortcut、失败通知与 clipboard item 写入迁出到 `clipboard-autopaste-automation.ts`。
+  - 主模块保留 transport wiring、history persistence、monitoring 与 Stage-B 编排；外部 `ClipboardEvents.apply/copyAndPaste/write` payload、action result code/message、storage schema 与事件名保持兼容。
+  - `clipboard.ts` 从 `2282` 行降到 `1960` 行，`large-file-boundary-allowlist` 中对应 entry 与 growth exception cap 同步收紧到 `1960`。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard/clipboard-autopaste-automation.test.ts" "src/main/modules/clipboard/clipboard-transport-handlers.test.ts" "src/main/modules/clipboard/clipboard-history-persistence.test.ts" "src/main/modules/clipboard/clipboard-capture-freshness.test.ts" "src/main/modules/clipboard/clipboard-freshness.test.ts"`、定向 ESLint、`size:guard --changed` 与 helper `node --check` 通过；CoreApp node typecheck 仍被当前并行 shared/scripts TS6307 与 `update-diagnostic-verifier.ts` nullability 阻断，本轮 clipboard 相关类型错误已清零。
+
+### docs(release): promote Windows evidence and performance checks to 2.4.10 gate
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将当前版本 Windows 发版 gate 明确写入入口文档、TODO 与质量基线：功能实现与本地 verifier 进入收口态，但当前版本仍必须等待 Windows 真机 evidence、性能 evidence 与 Nexus Release Evidence 写入。
+  - 发版阻塞项固定为 Windows acceptance manifest 最终强门禁、常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测与 Release Evidence 写入闭环。
+
+### refactor(core-app): split Windows acceptance verifier size debt
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-command-requirements.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-evidence-verifier.test.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-test-utils.ts`
+  - Windows acceptance release command requirements、search trace / clipboard stress 固定预算迁出到独立 command requirements 模块，manifest verifier 保留 schema 判定、case/performance gate 复算与 manifest 汇总评估职责。
+  - acceptance 测试拆分为 manifest gate 规则与 case/performance evidence 复算两个 spec，通用 manifest fixture 下沉到测试 helper，避免单个测试文件继续承载全部验收场景。
+  - `windows-acceptance-manifest-verifier.ts` 降到 `1136` 行，`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行，新增 evidence spec 为 `753` 行；`node scripts/check-large-file-boundaries.mjs --report` 显示 `newOversizedFiles=0`。
+  - 验证：定向 ESLint 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts" "src/main/modules/platform/windows-acceptance-evidence-verifier.test.ts"` 通过（`45 tests`）。
+
+### fix(core-app): restore app icon image rendering
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/renderer/src/views/base/application/AppConfigure.vue`
+  - App provider 搜索结果保留 `data:image/...` 图标，继续将本地路径归一化为 `tfile://`，空图标沿用原 fallback 路径。
+  - Application 详情页 logo 改为复用统一 `PluginIcon/TuffIcon` 渲染链，避免直接 `<img>` 绕过 `tfile/file/data/url` 处理导致 app 图片加载失败。
+
+### refactor(nexus): split provider registry admin helpers and harden typed fetches
+
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/provider-registry-test-utils.ts`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/admin/reviews.vue`
+- `apps/nexus/app/pages/dashboard/admin/risk.vue`
+- `apps/nexus/app/pages/dashboard/admin/subscriptions.vue`
+- `apps/nexus/app/pages/dashboard/admin/users.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/pages/notes/[slug].vue`
+- `apps/nexus/app/pages/team/join.vue`
+  - Provider Registry Admin 页面的类型、选项常量、表单工厂与纯 helper 迁出到 `provider-registry-admin.ts`，页面状态、API action、edit/run panel 管理与 admin redirect 迁出到 `useProviderRegistryAdmin.ts`。
+  - `provider-registry.vue` 从约 `2026` 行降到 `999` 行，低于 `1200` 行 size guard 阈值；`node scripts/check-large-file-boundaries.mjs --report` 中 `oversizedFiles` 从 `58` 降到 `57`，该页面不再出现在 new oversized 列表。
+  - Provider Registry API 测试的 Mock D1、row 类型、event factory 与腾讯云 provider fixture 迁出到 `provider-registry-test-utils.ts`，`provider-registry.api.test.ts` 从 `1313` 行降到 `951` 行，同样低于 `1200` 行阈值。
+  - Nexus 页面内易触发 Nuxt typed route 递归推导的 `$fetch` 调用统一改为 `ofetch` `rawFetch`，不改变 URL、method、query、body 或响应处理语义。
+  - 验证：`pnpm -C "apps/nexus" run typecheck` 通过；定向 ESLint 与 Provider Registry API Vitest 通过；`node scripts/check-large-file-boundaries.mjs --report` 显示 `oversizedFiles=56`、`newOversizedFiles=3`。
+
+### test(core-app): hard-cut Everything diagnostic legacy fixture wording
+
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.test.ts`
+  - Everything diagnostic malformed backend attempt 测试中的造数名称从 `legacy-sdk` 改为中性 `retired-sdk`，避免测试 fixture 重新触发 legacy keyword 清册。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/everything-diagnostic-verifier.test.ts"` 通过；`pnpm compat:registry:guard` 恢复 `legacy-keyword=0`。
+
+### fix(core-app): preserve time-based recommendation source on dedupe
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Recommendation candidates 去重时，如果同一 App 先由 frequent 进入候选、后续又由 time-based 命中，会继续保留后续 `timeStats`，并把最终 candidate `source` 提升为 `time-based`。
+  - 这样排序层和 UI/验收 evidence 看到的 `meta.recommendation.source` 一致，早/午分时命中的推荐不会只显示成普通 frequent 推荐。
+  - 更新推荐引擎回归，固定 `morning-app` 在同一候选集内压过高频 `plain-app` 后，最终 metadata 标记为 `time-based`。
+
+### fix(core-app): boost app alias prefix intent in search sorting
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - App `searchTokens` 的前缀命中现在也作为明确 App intent 加权，覆盖 `vscod -> vscode` 这类用户输入别名前缀时想启动 App 的场景。
+  - 前缀别名 bonus 低于精确别名 token，继续保留极高频可见标题 plugin feature 通过行为学习前置的边界。
+  - 新增 `tuff-sorter` 回归：`Visual Studio Code` 的 `vscod` 前缀别名命中会排在中等频次 `Vscod Tools` plugin feature 可见标题前。
+
+### feat(core-app): expand native transport v1 domains
+
+- `packages/utils/transport/events/types/native.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/native.ts`
+- `packages/utils/permission/*`
+- `apps/core-app/src/main/modules/native-capabilities/*`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `NativeEvents` 从 screenshot 首切扩展为 `capabilities`、`screenshot`、`file-index`、`file`、`media` 五域，新增 `NativeCapabilityStatus`、`NativeResourceRef` 与 `NativeOperationResult` 类型；`createNativeSdk()` 同步暴露 `capabilities/fileIndex/file/media` 子 SDK。
+  - CoreApp `NativeCapabilitiesModule` 复用现有 `fileProvider` / `everythingProvider` / `tempFileService` / thumbnail worker，桥接 file-index status/stats/query/rebuild/add-path/progress、文件 stat/open/reveal/icon/thumbnail/tfile 与媒体 metadata/thumbnail；V1 不重写索引、不迁移 OCR/Clipboard、不做媒体转码。
+  - 权限映射补齐 `native:screenshot:* -> window.capture`、`native:file-index:* -> fs.index`、`native:file:* -> fs.read`、`native:media:* -> media.read`，并新增 `fs.index` / `media.read` permission 定义与 i18n 文案。
+  - 大资源默认返回短期 `tfile://` 引用和 metadata，`data-url` 只保留为显式请求输出。
+
+### refactor(tuffex): split FlipOverlay stack registry
+
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-stack.ts`
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - `TxFlipOverlay.vue` 的 stack registry、共享全局 mask、stack opacity/size matching 与 overlay instance/open sequence 逻辑迁出到 `flip-overlay-stack.ts`，组件 SFC 保留渲染状态、动画编排、body lock 与模板样式职责。
+  - `TxFlipOverlay.vue` 从 `1344` 行降到 `1194` 行，低于 `1200` 行 size guard 阈值；清退 `SIZE-GROWTH-2026-05-08-TUFFEX-FLIP-OVERLAY` 的 allowlist baseline/growth exception 与 registry 条目。
+  - 现有多层 stack、透明度、mask owner、body lock 与 prevent accidental close 行为不变，继续由 `flip-overlay.test.ts` 覆盖。
+
+### test(core-app): reject placeholder Windows acceptance fields
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Windows acceptance manifest 的结构化手工字段新增统一填充值校验，`manualChecks.commonAppLaunch / copiedAppPath / updateInstall / divisionBoxDetachedWidget / timeAwareRecommendation` 的必填字符串字段不再接受 `<...>` 模板占位、`N/A` / `NA` / `none` / `TODO` / `TBD` / `-` / `待补` / `无`。
+  - 这些 manual check 的 `evidencePath` 同步纳入占位拒绝，避免只启用结构化 manual gate、暂未启用文件存在校验时，用 `<manual-evidence-path>` / `TODO` / `N/A` 等路径占位绕过。
+  - `windows:acceptance:verify --requireCompletedManualEvidence` 的 Markdown `## Evidence` 必填 label 同步拒绝 `<...>` 模板占位，和 manifest 结构化字段保持同一实际证据口径。
+  - `dayOfWeek` 继续走 `0..6` 数字门禁；占位拒绝只收口字符串证据字段，保持现有 manifest schema 简单。
+  - 新增回归覆盖生成模板占位值被最终手工 gate 当作缺失处理，避免只把模板原样归档后通过 Windows 真机 acceptance。
+
+### refactor(governance): hard-cut sdkapi and pilot compat filenames
+
+- `apps/core-app/src/main/modules/plugin/sdkapi-hard-cut-gate.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/pilot/server/utils/pilot-aigc-service.ts`
+- `apps/pilot/server/utils/pilot-payment-service.ts`
+- `apps/pilot/server/utils/pilot-system-seeds.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/docs/DEBT-GOVERNANCE-BOARD-2026-03-17.md`
+- `docs/plan-prd/docs/DEBT-GOVERNANCE-EXECUTION-CHECKLIST-2026-03-17.md`
+  - 插件 sdkapi gate 文件从 `sdk-compat.ts` 物理硬切为 `sdkapi-hard-cut-gate.ts`，内部导出同步从 `getPluginSdkCompatibilityGate()` / `PluginSdkCompatibilityGate` 改为 `getPluginSdkHardCutGate()` / `PluginSdkHardCutGate`，行为仍保持缺失、非法、过低或未支持 `sdkapi` 直接阻断。
+  - Pilot 三个 `pilot-compat-*` utility 文件改为领域服务命名：`pilot-aigc-service.ts`、`pilot-payment-service.ts`、`pilot-system-seeds.ts`，只更新 import，不新增兼容 re-export 壳。
+  - `compatibility-debt-registry.csv` 清退对应 4 条 `compat-file`，当时 registry 降为 `37` 条、`compat-file=5`；治理看板与执行清单同步从 2026-03 旧快照对齐到当前 SoT。
+
+### test(core-app): require structured Windows update install evidence
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `manualChecks.updateInstall` 新增结构化 `updateDiagnosticEvidencePath / installerPath / installerMode / uacPromptEvidence / appExitEvidence / installerExitEvidence / installedVersionEvidence / appRelaunchEvidence / failureRollbackEvidence` 字段。
+  - `windows:acceptance:verify --requireUpdateInstallManualChecks` 现在会在布尔项之外复核这些字段非空，避免 Windows 更新安装验收只勾选 UAC/退出/版本/重启/回滚而没有可复核证据。
+  - `windows:acceptance:template` 生成的 update install 手工证据头部同步增加对应填写位。
+
+### test(core-app): require structured copied app path evidence
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `manualChecks.copiedAppPath` 新增结构化 `copiedSource / normalizedAppPath / addToLocalLaunchAreaAction / localLaunchEntryEvidence / appIndexDiagnosticEvidencePath / searchQueryAfterReindex / indexedSearchResultEvidence / indexedResultLaunchEvidence` 字段。
+  - `windows:acceptance:verify --requireCopiedAppPathManualChecks` 现在会在布尔项之外复核这些字段非空，避免复制 app path 验收只勾选 action/reindex/search/launch 却没有可复核复制源、本地启动区条目、App Index 诊断、搜索结果与启动证据。
+  - `windows:acceptance:template` 生成的 copied app path 手工证据头部同步增加对应填写位。
+
+### refactor(core-app): split clipboard transport handlers
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-transport-handlers.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-transport-handlers.test.ts`
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Clipboard 第三个 SRP 切片完成：typed query/mutation/read/stream handler 注册与 change stream fanout 迁出到 `clipboard-transport-handlers.ts`，主模块通过回调注入 history/read/write/apply 能力，继续保留实际 clipboard 写入与 autopaste 业务逻辑。
+  - 外部 `ClipboardEvents.*` 事件名、request/response payload、stream payload 与 storage schema 保持不变；新测试固定 history response shape、permission enforcement 入口、change stream fanout 与 disposer 清理。
+  - `clipboard.ts` 从 `2457` 行降到 `2282` 行，`large-file-boundary-allowlist` 中对应 entry 与 growth exception cap 同步收紧到 `2282`。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard/clipboard-transport-handlers.test.ts" "src/main/modules/clipboard/clipboard-history-persistence.test.ts" "src/main/modules/clipboard/clipboard-capture-freshness.test.ts" "src/main/modules/clipboard/clipboard-freshness.test.ts"`、定向 ESLint、`size:guard --changed` 与 helper `node --check` 通过。
+
+### test(core-app): require structured common app launch evidence
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `manualChecks.commonAppLaunch.checks[]` 新增结构化 `searchQuery / observedDisplayName / iconEvidence / observedLaunchTarget / coreBoxHiddenEvidence` 字段。
+  - `windows:acceptance:verify --requireCommonAppLaunchDetails` 现在会在布尔项之外复核这些字段非空，避免常见 App 启动验收只勾选可搜/可启动/隐藏而缺少可复核查询、显示名、图标、启动目标与隐藏证据。
+  - `windows:acceptance:template` 生成的 common app 手工证据头部同步增加对应填写位。
+
+### refactor(core-app): type download migration push events
+
+- `packages/utils/transport/events/types/download.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/renderer/src/components/download/MigrationProgress.vue`
+- `apps/core-app/src/main/modules/download/API.md`
+- `docs/plan-prd/03-features/download-update/DOWNLOAD_CENTER_REFERENCE.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `DownloadEvents.migration` 新增 typed `progress` / `result` push events 与共享 payload 类型，事件名统一为 `download:migration:progress` / `download:migration:result`。
+  - `MigrationProgress.vue` 移除局部 `defineRawEvent('download:migration-*')`，改用 shared `DownloadEvents.migration.progress/result`，避免符合 typed builder 结构的下载迁移事件继续停留在 renderer 私有 raw 定义里。
+  - CoreApp 下载 API 与下载中心参考文档同步改为 domain SDK / typed event 示例，不再公开旧 `download:migration-progress` raw listener 写法。
+  - `transport-event-boundary.test.ts` 新增断言，固定下载迁移 push events 已纳入 typed event registry；retained raw definition 上限按当前扫描口径从 `266` 收紧到 `264`。
+
+### chore(core-app): clarify sdkapi hard-cut wording
+
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `packages/utils/plugin/index.ts`
+- `apps/core-app/src/renderer/src/composables/store/store-install-error-utils.ts`
+- `apps/core-app/src/renderer/src/composables/store/store-install-error-utils.test.ts`
+  - 插件 `sdkapi` 注释与 fallback error message 从 compatibility checking/gate 改为 hard-cut runtime gating，避免把当前“缺失/过低/未知 sdkapi 直接阻断”的策略描述成软兼容层。
+  - Store install error reason 解析删除旧 `sdkapi compatibility gate` 文案分支，改为当前 `sdkapi hard-cut gate` 文案并补回归。
+  - 后续已在同日治理切片中完成物理文件名与导出名 hard-cut；当前入口为 `sdkapi-hard-cut-gate.ts` 的 `getPluginSdkHardCutGate()`。
+
+### test(core-app): require structured time-aware recommendation evidence
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-manual-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `manualChecks.timeAwareRecommendation` 新增结构化 `morningTimeSlot / afternoonTimeSlot / dayOfWeek / morningTopItemId/sourceId / afternoonTopItemId/sourceId / frequentComparisonItemId/sourceId` 字段。
+  - `windows:acceptance:verify --requireTimeAwareRecommendationManualChecks` 现在会复核早/午 timeSlot 不同、dayOfWeek 合法、早/午 top recommendation 不同且频率对照项存在，避免只勾选布尔项或只填截图就通过分时推荐验收。
+  - 结构化字段新增早/午 `recommendationSource` 与 frequent comparison `recommendationSource`，最终 gate 要求早/午来源为 `time-based`、频率对照来源为 `frequent`，避免只证明 provider source 相同或截图不同，却没有证明分时推荐信号实际命中。
+  - 手工 evidence 模板同步补充早/午 top item/source 与 frequent comparison item/source 字段，和 manifest 结构化字段保持一致。
+
+### chore(governance): tighten compat filename shim marker
+
+- `scripts/check-compatibility-debt-registry.mjs`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `compat-file` 扫描中 `compat`、`shim/shims` 只按独立命名段匹配，其中 `shim/shims` 还会排除 declaration-only `.d.ts`。
+  - 移除 `ShimmerText.vue`、declaration-only `shims*.d.ts` 与 `langchain-openai-compatible-provider.ts` 的误伤 registry 行；组件名中的 `shimmer`、Vue ambient typing 和 OpenAI-compatible provider 领域术语不再被当作兼容债务，避免为治理噪声做无意义物理改名。
+
+### test(core-app): require detached widget URL identity in acceptance
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-manual-evidence.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `manualChecks.divisionBoxDetachedWidget` 新增结构化 `expectedFeaturePluginId / observedSessionPluginId / detachedUrlSource / detachedUrlProviderSource` 字段。
+  - `windows:acceptance:verify --requireDivisionBoxDetachedWidgetManualChecks` 现在会直接复核 observed session pluginId 与 detached URL `source` 都等于真实 feature pluginId，并要求 `providerSource=plugin-features`，避免只勾选布尔项或只在 Markdown 中泛化描述就通过 detached widget 验收。
+  - 手工 evidence 模板同步新增 `Detached URL source pluginId` 与 `Detached URL providerSource` 字段，和 manifest 结构化字段保持一致。
+
+### test(core-app): require managed entry for copied app path diagnostics
+
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.test.ts`
+- `apps/core-app/scripts/app-index-diagnostic-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `app-index:diagnostic:verify` 新增 `--requireManagedEntry`，要求诊断 app 同时具备 `entrySource=manual` 与 `entryEnabled=true`。
+  - `windows-copied-app-path-index` acceptance 模板的 app-index verifier command 默认携带该门禁，避免复制 app path 链路只证明普通 scanned/path app 可搜可启动，却未证明它已经写入本地启动区 managed entry。
+  - Windows acceptance 复算层与 verifier-command gate 同步要求 copied-path app-index 子证据启用 `--requireManagedEntry`，防止手写 manifest 漏掉 managed entry 门禁仍通过 release flag 检查。
+
+### test(core-app): cover Chinese app title sort intent
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 补充中文 App 查询排序回归：查询 `微信` 时，App 标题精确/前缀命中会排在中等频次、同样可见标题命中的 `微信工具箱` plugin feature 前。
+  - 该用例固定 Windows 常见中文 App 名搜索意图，避免后续排序优化只覆盖英文 word/prefix 场景而让中文 App 被中等频 feature 抢首位。
+
+### test(core-app): cover shortcut property target app-index action
+
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 补充复制 app path 入口的 Windows 快捷方式属性页文本回归：`Target: "C:\\...\\Demo Tool.exe" --profile work` 这类多行复制内容会提取真实 `.exe` 路径，并继续生成 app-index action。
+  - 该回归固定用户从快捷方式属性、终端或说明文档复制带 label/参数的应用启动目标后，仍能触发 add-to-local-launch-area 并进入本地启动区索引链路。
+
+### test(core-app): generate Windows acceptance collection plan
+
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `windows:acceptance:template` 新增 `--writeCollectionPlan`，在 manifest 旁按 evidenceDir 非覆盖式生成 `WINDOWS_ACCEPTANCE_COLLECTION_PLAN.md`，把 case evidence path、单项 verifier command、search trace / clipboard stress 采集与复核命令、manual evidence path 和最终 recommended gate 汇总到一个真机采集清单。
+  - collection plan 直接从 manifest 结构渲染，不维护第二套 gate 字符串；case verifier 与性能 verifier 命令会替换为 manifest 中的实际 evidence path，并为 capability evidence 输出 `windows:capability:evidence --output ...` 采集命令；只保留 `<core-app-log-file>` / `<downloaded-installer-path>` 这类必须由真机采证人提供的输入占位符，避免 Windows 真机采证时从 TODO 长段落手工拼命令导致漏掉强门禁或路径漂移。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/windows-acceptance-verify-script.test.ts"` 通过（`15 tests`）；`pnpm -C "apps/core-app" run typecheck:node`、`pnpm docs:guard` 与 scoped `git diff --check` 通过；临时执行 `windows-acceptance-template --writeCollectionPlan` 已生成包含实际 case gate 路径、性能采样、manual evidence 与 final gate 的 collection plan。
+
+### refactor(core-app): split clipboard history persistence
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-history-persistence.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-history-persistence.test.ts`
+- `scripts/check-large-file-boundaries.mjs`
+- `scripts/large-file-boundary-allowlist.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Clipboard 第二个 SRP 切片完成：history persistence / cache / query / favorite-delete / image URL 归一化迁出到 `clipboard-history-persistence.ts`，主模块保留 transport 与 autopaste 编排入口，不改外部事件名、payload 或 storage schema。
+  - 新 helper 通过注入 `deleteImageFile / isWithinTempBaseDir / normalizeRenderableSource` 保持生产路径图片清理和 renderable URL 过滤行为，同时避免纯逻辑测试依赖 Electron app runtime。
+  - `clipboard.ts` 从 `3020` 行降到 `2457` 行，`large-file-boundary-allowlist` 中对应 entry 与 growth exception cap 同步收紧到 `2457`。
+  - `size:guard` 的 growth exception registry sync 改为解析 compatibility registry CSV 的路径列，不再依赖带双引号的脆弱字符串包含判断，避免清册格式变化误报 invalidConfig。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard/clipboard-history-persistence.test.ts" "src/main/modules/clipboard/clipboard-capture-freshness.test.ts" "src/main/modules/clipboard/clipboard-freshness.test.ts"`、定向 ESLint、`size:guard --changed` 与 `git diff --check` 通过；2026-05-11 补跑 `pnpm -C "apps/core-app" run typecheck:node` 通过，`pnpm -C "apps/core-app" run typecheck:web` 通过（tuffex build 阶段仍输出既有 deprecation / dts 诊断噪声但命令返回 0），CoreApp 定向回归 67 tests 通过。
+
+### test(core-app): require identity fields for manual Windows evidence
+
+- `apps/core-app/scripts/windows-acceptance-manual-evidence.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - DivisionBox detached widget manual evidence 不再只要求泛化 `Logs`，改为逐项要求 observed/expected pluginId、`detachedPayload` itemId/query 与 no-fallback 日志摘录，确保真机证据能直接复核 session 身份、payload 水合与原始 query 保留。
+  - 分时推荐 manual evidence 增加 `timeSlot/dayOfWeek` cache key 与 recommendation trace 摘录字段，避免只填早/午推荐截图但无法复核缓存隔离。
+  - 模板头部同步增加 Feature pluginId / Observed session pluginId 与早/午 time slot / dayOfWeek 填写位；回归固定字段清单，防止后续模板与 verifier label 漂移。
+
+### test(core-app): require visible common app evidence fields
+
+- `apps/core-app/scripts/windows-acceptance-manual-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - Common app launch manual evidence 从“截图 + 查询 + 启动目标”收紧为与五项体验检查对齐：search query、observed display name、icon evidence、observed launch target、CoreBox hidden evidence 与截图/录屏都必须填写非占位值。
+  - 模板到 verifier 的集成回归同步更新，确保 `windows:acceptance:template --writeManualEvidenceTemplates` 生成的 common app 空模板会报告缺失 display name、icon 与 CoreBox hidden evidence。
+
+### test(core-app): require copied path and update manual evidence action fields
+
+- `apps/core-app/scripts/windows-acceptance-manual-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - Copied app path manual evidence 增加 add-to-local-launch-area action、indexed search result 与 indexed result launch evidence 字段，和复制源、本地启动区条目、reindex、搜索命中、启动闭环逐项对齐。
+  - Windows update install manual evidence 增加 UAC prompt、app exit、installer exit、installed version、app relaunch 与 failure rollback evidence 字段，避免只填写 installer path/mode 与截图就误收。
+  - `windows-acceptance-verify-script.test.ts` 固定新增字段，并继续证明空模板会逐项报告缺失 Evidence label。
+
+### fix(core-app): mark copied app path additions as managed launch entries
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `appProvider.addAppByPath()` 现在把用户从复制 app path 触发的添加写成本地启动区 managed entry，落库时补 `entrySource=manual` 与 `entryEnabled=1`，确保后续 `listManagedEntries()`、rebuild 保留逻辑和索引重建都能识别该条目。
+  - 文件系统实时扫描仍保持普通 scanned app 路径，不会被误标记为 manual entry，避免 Start Menu / watcher 扫描污染用户本地启动区清单。
+  - 补充回归：Windows UWP `shell:AppsFolder\\...` 与裸 `PackageFamily!App` 经 `addAppByPath()` 添加后都会带 manual entry 标记；ClickOnce `.appref-ms` watcher 变更不会带 manual 标记。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" "src/main/modules/box-tool/addon/system/system-actions-provider.test.ts" "src/main/modules/platform/app-index-diagnostic-verifier.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过（`84 tests`）。
+
+### fix(core-app): guard Windows auto installer handoff at UpdateSystem layer
+
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/main/modules/update/update-system.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `UpdateSystem` 自动安装接管现在同时要求 `autoInstallOnComplete=true`、`autoInstallDownloadedUpdates=true` 与 Windows 平台，避免未来调用方误传自动下载标记时绕过高级设置开关。
+  - 补充回归：高级设置开启但用户手动下载仍只提示下载完成；自动下载标记存在但高级设置关闭也不会启动 NSIS/MSI handoff；只有两项同时满足时才 detached 启动安装器并退出应用。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/update/update-system.test.ts" "src/main/modules/update/services/windows-installer-strategy.test.ts" "src/main/modules/platform/update-diagnostic-verifier.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts" "src/renderer/src/views/base/settings/update-diagnostic-evidence.test.ts"` 通过（`60 tests`）。
+
+### refactor(governance): layer guards and decouple lint
+
+- `scripts/check-large-file-boundaries.mjs`
+- `scripts/run-eslint-changed.mjs`
+- `package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `size:guard` 调整为重构期默认分层模式，继续输出 `mode / oversizedFiles / newOversizedFiles / grownOversizedFiles / expiredDebt / cleanupCandidates`；默认阻断新增超长文件与已登记文件继续增长，但不因历史未增长 size debt 阻断日常开发。
+  - 新增 `size:guard:changed`、`size:guard:report` 与 `size:guard:strict`：changed 模式用于 lint-staged / 本地变更防回潮，report 模式只输出全量报告且不失败，strict 模式保留 release/milestone 全量阻断。
+  - `legacy:guard` 不再串 `size:guard`，避免历史超长文件漂移让 legacy/raw-channel/runtime 边界检查失真；新增 `architecture:guard` 与 `release:guard` 分别承载重构期与发布期门禁。
+  - `lint` / `lint:fix` 只跑 ESLint 与 `intelligence:check`，新增 `lint:changed` 只检查 git changed JS/TS/Vue 文件；lint-staged 保持 eslint fix，并追加 changed size guard。
+  - 验证：`node scripts/check-large-file-boundaries.mjs --report` 返回 0；默认 `size:guard` 与 `--strict` 会阻断当前 dirty worktree 中确实新增/增长的超长文件；显式限定本轮脚本文件的 `--changed` 返回 0；`node scripts/run-eslint-changed.mjs` 返回 0（存在既有 warning）；docs guard 与 diff check 已复核文档同步。
+
+### ref(pilot): hard-cut physical legacy stream filenames
+
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/pilot-stream-contract.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/pilot-stream-input.ts`
+- `apps/pilot/app/composables/api/base/v1/aigc/completion/pilot-stream-sse.ts`
+- `apps/pilot/server/utils/__tests__/pilot-completion-stream-contract.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-stream-input.test.ts`
+- `apps/pilot/server/utils/__tests__/pilot-run-event-card.test.ts`
+- `packages/tuff-intelligence/src/business/pilot/run-event-card.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `scripts/legacy-boundary-allowlist.json`
+- `docs/plan-prd/TODO.md`
+  - 完成此前待确认的 Pilot 物理文件名 hard-cut：`legacy-stream-*` 改为 `pilot-stream-*`，run-event-card 实现改为当前 `run-event-card.ts` 路径。
+  - `pilot-legacy-run-event-card.test.ts` 同步重命名为 `pilot-run-event-card.test.ts`，删除最后一条 Pilot run-event-card 测试文件名 compat-file 清册项。
+  - 更新 Pilot app、server 测试与 `@talex-touch/tuff-intelligence/pilot` barrel 的 import/export，删除对应 stale compatibility registry 与 legacy allowlist 记录。
+  - 清理 compatibility registry 中已不再被扫描命中的 stale compat-file rows，同时保留 registry-only migration / size-growth exception rows。
+  - `node "scripts/check-legacy-boundaries.mjs"` 已降为 `legacy-keyword: files=0, hits=0`。
+
+### ref(nexus): hard-cut intelligence provider dot-route compatibility shells
+
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id]/probe.post.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id]/test.post.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `docs/plan-prd/TODO.md`
+  - 删除旧 `/api/dashboard/intelligence/providers/:id.probe` 与 `:id.test` 的 410 compatibility route shells，以及对应 `intelligence-route-compat` middleware/test。
+  - Nexus Intelligence provider health check 仅保留当前 slash-route `/providers/:id/probe` 与 `/providers/:id/test` 主路径。
+  - 移除对应 `compat-file` registry 行，继续减少 Nexus 官网/API compatibility shell 面。
+
+### test(unplugin-export-plugin): hard-cut retired CLI test filename
+
+- `packages/unplugin-export-plugin/src/__tests__/retired-cli-entry.test.ts`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 将 `cli-shim.test.ts` 物理重命名为 `retired-cli-entry.test.ts`，测试描述同步为 retired CLI entry。
+  - 删除对应 `compat-file` registry 行；测试仍覆盖 deprecated `tuff` wrapper 转发到 `@talex-touch/tuff-cli` 的断言。
+
+### chore(clipboard-history): hard-cut raw channel guard script filename
+
+- `plugins/clipboard-history/scripts/assert-no-raw-channels.mjs`
+- `plugins/clipboard-history/package.json`
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+  - 将构建后 raw channel 扫描脚本从 `assert-no-legacy-channels.mjs` 物理重命名为 `assert-no-raw-channels.mjs`。
+  - 插件 `build` 命令同步使用当前脚本名，删除对应 `compat-file` registry 行。
+
+### test(intelligence-uikit): hard-cut pilot mapping test filename
+
+- `packages/intelligence-uikit/src/__tests__/pilot-mapping.test.ts`
+- `packages/intelligence-uikit/README.md`
+  - 将新增 Pilot UI Kit 映射测试从 `pilot-adapter.test.ts` 物理重命名为 `pilot-mapping.test.ts`，避免把纯模型映射测试登记为 compat-file 债务。
+  - README 当前章节同步改为 `Pilot mapping 边界`，保持包入口语义聚焦在数据映射而非兼容 adapter。
+
+### feat(intelligence-uikit): add AI UI Kit workspace package
+
+- `packages/intelligence-uikit` 新增 `@talex-touch/intelligence-uikit` 私有 workspace 包。
+- 首批落地 `TxAi*` 组件骨架，覆盖 Foundation / Conversation / Content / Tool-Agent 四层。
+- 增加 `@talex-touch/intelligence-uikit/pilot` 子入口，提供 Pilot block/message 到 AI UI Kit 模型的映射。
+- README 固化组件矩阵、迁移阶段、动效扩展规范与 Pilot 替换边界。
+
+### test(core-app): harden Everything backend diagnostic fields
+
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Everything diagnostic evidence 复算新增 backend-specific 一致性：available 状态不得残留 `errorCode` / `lastBackendError`，active backend 不得仍记录 attempt error。
+  - CLI backend 可用时必须带 `esPath` 与 version，避免只把 backend 标成 `cli` 但没有可复核 CLI 路径/版本的弱证据通过 acceptance。
+  - 同步跑 Everything provider fallback 回归，确认 SDK runtime 失败、CLI fallback、CLI runtime 失败降级 file-provider 的既有行为未被 verifier 加固误伤。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/everything-diagnostic-verifier.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts" "src/main/modules/box-tool/addon/files/everything-provider.test.ts"` 通过（`57 tests`）。
+
+### fix(core-app): prefer exact app alias tokens over medium feature title matches
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - App 的精确 `searchTokens` 命中现在作为明确 App intent 加权，覆盖 `vsc` / `vscode` 这类用户想启动 App 的别名查询。
+  - 该加权仅适用于 `kind='app'` 且 token 精确等于 query，避免普通 token 前缀/包含召回扩大影响面，同时保留高频 feature 可见标题的自学习前置能力。
+  - 补充回归：`Visual Studio Code` 的 `vsc` 精确别名 token 命中会排在中等频次 `VSC Snippets` plugin feature 可见标题前；极高频 `VSC Snippets` 可见标题仍可通过行为学习排在 App 别名前。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts" "src/main/modules/box-tool/search-engine/search-trace-stats.test.ts" "src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts"` 通过（`25 tests`）；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### test(core-app): cover worker status sampling idle windows
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/asset-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/file-index-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/file-reconcile-worker-client.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/file-scan-worker-client.test.ts`
+  - 补充单写者 SearchIndex worker 的 idle shutdown 边界：`getStatus()` 发起 metrics 采样时必须取消旧 idle timer，metrics pending/timeout 期间不得终止 worker，采样结束后再重新计算完整 idle 窗口。
+  - 同步覆盖 scan/index/reconcile 文件任务 worker 与 icon/thumbnail asset worker 的状态采样路径，避免设置页/诊断页轮询 worker metrics 时与 60s 空闲退出互相干扰导致任务 worker 被过早终止。
+  - 该回归保护文件索引性能降载逻辑，确保状态采样 pending/timeout 期间 worker 保持存活，采样结束后再重新进入完整 idle window。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts" "src/main/modules/box-tool/addon/files/workers/idle-worker-shutdown.test.ts" "src/main/modules/box-tool/addon/files/workers/file-index-worker-client.test.ts" "src/main/modules/box-tool/addon/files/workers/file-reconcile-worker-client.test.ts" "src/main/modules/box-tool/addon/files/workers/file-scan-worker-client.test.ts" "src/main/modules/box-tool/addon/files/workers/asset-worker-client.test.ts"` 通过（`15 tests`）；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### test(core-app): require manual evidence key fields
+
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-manual-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `windows:acceptance:verify --requireCompletedManualEvidence` 从“存在 checklist 且无未勾选项”收紧为“checklist 全部勾选且 Evidence 区至少有一个非 Notes 的实际证据值”。
+  - 空 Evidence 字段、全勾选空模板以及 `N/A` / `TODO` / `-` 等占位值不再视为完成，避免手工证据 Markdown 只靠勾选通过最终 Windows acceptance。
+  - 脚本入口增加 import guard，便于直接测试 `isManualEvidenceComplete()` 而不触发 CLI main。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/windows-acceptance-verify-script.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过（`39 tests`）。
+
+### test(core-app): require manual evidence template fields
+
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `windows:acceptance:verify --requireCompletedManualEvidence` 继续从“至少一个非 Notes 证据值”收紧为“当前 manual evidence 模板要求的关键 Evidence 标签必须全部填入非占位值”。
+  - common app launch、copied app path、update install、DivisionBox detached widget 与 time-aware recommendation 都按各自模板字段校验，避免只填 Notes 或只填单个证据字段的 Markdown 被最终 acceptance 误收。
+  - manual evidence 字段定义抽成脚本共享常量，template 生成与 verify 校验共用同一组 label，避免模板字段名与验收门禁漂移。
+  - 补充 CLI 子进程回归：复制 app path 手工证据只填 `Copied source` 会失败，填齐 `Copied source` / `Normalized app path` / `Local launch entry` / `App Index diagnostic evidence path` / `Search query used after reindex` / `Screenshot or recording` 才通过。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/windows-acceptance-verify-script.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过（`45 tests`）；`pnpm -C "apps/core-app" run typecheck:node`、`pnpm docs:guard` 与 scoped `git diff --check` 通过。
+
+### test(core-app): report manual evidence missing labels
+
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-verify-script.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `windows:acceptance:verify --requireCompletedManualEvidence` 的失败项现在带出未勾选 checklist 数量与缺失 Evidence label，例如 `missing evidence fields: Normalized app path, Local launch entry`。
+  - 新增 `evaluateManualEvidenceCompletion()` 供测试与后续 CLI 诊断复用；`isManualEvidenceComplete()` 保持布尔兼容。
+  - 补充单测覆盖结构化失败原因与 CLI 输出，避免真机补证时只能看到泛化的 incomplete 报错；新增 template-to-verify 集成回归，证明 `windows:acceptance:template --writeManualEvidenceTemplates` 生成的 7 个 manual evidence 文件都会被 `windows:acceptance:verify --requireCompletedManualEvidence` 拒绝，并逐项断言 common app、copied app path、update install、DivisionBox detached widget 与 time-aware recommendation 的缺失字段。
+
+### test(core-app): harden app-index diagnostic evidence consistency
+
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.test.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `app-index:diagnostic:verify` 不再只信任 `diagnosis.matchedStages` 或 reusable caseId 字段；会从 `stages.*.targetHit` 重新推导命中阶段，并要求命中 stage 包含目标 `itemId`、`matchCount` 与 matches 数量一致；未运行 stage 不得携带命中或 matches，未命中 target 的 stage 不得携带 matches。
+  - 同步复核 input target、diagnosis target、manual suggested fields、app launch/icon/displayName 字段与 reindex path 是否指向同一个目标 App；成功 reindex 在存在 app 实体字段时必须对齐 app path/launchTarget/appIdentity/bundleId，避免复制 app path 或普通 App 索引验收被手工拼接的弱 JSON 误收。
+  - Windows acceptance 对 app-index diagnostic evidence 的 case 复算会继承该门禁，能直接暴露缺少 query stage 明细、stage 漂移或 reindex target 漂移。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/app-index-diagnostic-verifier.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过（`45 tests`）。
+
+### test(core-app): harden update diagnostic target evidence
+
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `update:diagnostic:verify` 进一步收紧 Windows update evidence 复算：`installedVersion.expected` 必须与 `downloadReadyVersion` / cached release tag 指向同一目标版本，避免安装后版本字段自洽但与下载目标脱节。
+  - installedVersion current/expected 统一 trim 后判定，空白字符串会按缺失证据处理，避免 `matchesExpected=true` 搭配空白版本绕过安装后版本 gate。
+  - `windows-auto-installer-handoff` evidence 必须保留非空 `downloadTaskId`，避免自动接管验收用缺少自动下载任务来源的 JSON 通过。
+  - cached release 会同时复核 tag 与 `downloadReadyVersion`、channel 与 settings、matching asset platform/arch 与 runtime target、asset size 为正，防止跨版本、跨渠道或跨平台资产 JSON 被 Windows acceptance 误收。
+  - 补充回归覆盖目标版本漂移、release/channel/asset 漂移，以及非 Windows runtime 伪造 Windows installer handoff mode。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/update-diagnostic-verifier.test.ts"` 通过（`13 tests`）。
+
+### test(core-app): harden Windows performance evidence counters
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-trace-stats.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-trace-stats.test.ts`
+- `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.ts`
+- `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.test.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `search:trace:verify` / Windows acceptance performance 复算新增内部计数一致性门禁：`pairedSessionCount` 不得超过 session 或 event sample count，`sessionCount` 必须等于 paired + missing counters，slowCount 不得超过 sampleCount，`enoughSamples` 必须与 min sample 结果一致。
+  - `search-trace-stats/v1` 进一步复核 `slowRatio` 必须等于 `slowCount / sampleCount`，且 P50/P95/P99/max 不得倒挂，避免手工拼接摘要只满足阈值字段却绕过真实分布。
+  - `clipboard:stress:verify` 新增 clipboard counter 自一致性门禁：count / schedulerDelaySampleCount / drop / timeout / error 等计数必须为非负整数，count 与 scheduler sample 不能为 0，scheduler sample 不能超过 clipboard count。
+  - `clipboard-stress-summary/v1` 进一步复核 scheduler delay 与 duration 指标单调性：avg/p95/last scheduler delay 不得超过 max scheduler delay，last duration 不得超过 max duration，避免手工拼接弱性能摘要。
+  - 补充 acceptance 回归覆盖 `gate.passed=true` 但性能计数自相矛盾的弱 JSON，避免只填阈值字段就通过最终 Windows evidence gate。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-trace-stats.test.ts" "src/main/modules/platform/clipboard-stress-verifier.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts" "src/main/modules/platform/update-diagnostic-verifier.test.ts"` 通过（`59 tests`）。
+
+### test(core-app): cover persisted time-aware recommendation cache
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - 分时推荐回归补齐持久化 `recommendation_cache` 隔离：早上 DB cache 命中后，下午会按 `afternoon|dayOfWeek` 重新查询 cache 并重新计算候选，不复用 `morning|dayOfWeek` 的结果。
+  - 现有覆盖已包含 production `ContextProvider.generateCacheKey()`、内存 cache timeSlot/dayOfWeek 隔离、weekday 空样本、time-based 去重保留和 morning/afternoon 首位变化；真实 Windows 设备手工证据仍通过 `--requireTimeAwareRecommendationManualChecks` 归档。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts" "src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts"` 通过（`17 tests`）。
+
+### test(core-app): harden Everything diagnostic readiness evidence
+
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `everything:diagnostic:verify` 新增基础状态一致性复算：`verdict.ready` 必须等于 `status.enabled && status.available`，available 状态不得搭配 `backend=unavailable`，active backend 必须出现在 fallback chain，`health=healthy` 不得与 unavailable backend 并存。
+  - backendAttemptErrors 进一步要求 key 来自 fallback chain 且错误文本非空，避免拼接未知 backend 或空错误字段的弱 JSON 通过 Everything diagnostic gate。
+  - 补充回归覆盖 ready/available/backend/fallback chain 被手工篡改的弱证据；acceptance 对 `windows-everything-file-search` 的 Everything diagnostic evidence 会沿用该复算结果。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/everything-diagnostic-verifier.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过（`42 tests`）。
+
+### test(core-app): gate copied app path manual acceptance
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Windows acceptance manifest 新增 `manualChecks.copiedAppPath` 与 `--requireCopiedAppPathManualChecks`，要求真实 Windows 设备记录复制源、add-to-local-launch-area 动作、本地启动区条目、reindex、搜索命中与从索引结果启动闭环。
+  - `windows:acceptance:template` 的 recommended command 已携带该 gate，并会生成 `manual/copied-app-path-index.md` 非覆盖式手工证据模板；`windows:acceptance:verify --requireExistingEvidenceFiles/--requireNonEmptyEvidenceFiles/--requireCompletedManualEvidence` 会同时校验该 manual evidence 文件存在、非空且 checklist 已完成。
+
+### feat(nexus): seed screenshot translation provider scene defaults
+
+- `apps/nexus/server/utils/providerSceneSeed.ts`
+- `apps/nexus/server/utils/providerSceneSeed.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/seed.post.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/seed.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Dashboard Admin Provider Registry 页面加载前新增 `/api/dashboard/provider-registry/seed` 管理员入口，幂等创建系统级本地 `custom-local-overlay` provider，并确保 `corebox.screenshot.translate` Scene 可发现。
+  - seed 只追加缺失的 system binding，不覆盖管理员已有 Scene policy、已有同 capability binding 或用户手工配置；同名 provider 缺少 `overlay.render` capability 时不会被误当成 seed provider。
+  - 默认 required capabilities 会按现有 provider 动态选择：composed 路径三件套齐全时使用 `vision.ocr -> text.translate -> overlay.render`，只有 direct 图片翻译 provider 时保持 `image.translate.e2e`，避免置顶图片默认链路被未配置 OCR 阻断。
+  - seed 不会把 user-scope AI mirror OCR provider 自动绑定进 system Scene，避免个人 API key 被系统级 Scene 跨用户误用；user-scope OCR binding 策略仍留待后续权限边界设计。
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/providerSceneSeed.test.ts" "server/api/dashboard/provider-registry/seed.api.test.ts"` 通过（`2 files / 7 tests`）。
+
+### test(core-app): verify Everything target probe samples
+
+- `apps/core-app/src/main/modules/platform/windows-capability-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-capability-evidence.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `windows:capability:verify --requireEverythingTargets` 不再只信任 `found=true`、正数 `matchCount` 与非空 samples；每个目标 probe 现在必须至少有一条样本文本包含目标关键词。
+  - 补充回归覆盖手工篡改 evidence 的弱证据：`target=WeChat` 但 samples 只包含 `C:\Tools\Other.exe` 时会失败为 `Everything targets not found: WeChat`。
+
+### feat(core-app): generate Windows manual evidence templates
+
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `windows:acceptance:template` 新增显式 opt-in 参数 `--writeManualEvidenceTemplates`，默认不写额外文件。
+  - 传参后会按 manifest 内 `manualChecks.*.evidencePath` 生成非覆盖式 Markdown 模板，覆盖 common app launch、copied app path、Windows update install、DivisionBox detached widget 与 time-aware recommendation。
+  - 生成模板只填验收 checklist 与证据占位，不自动把手工 gate 标为通过，仍需真实 Windows 设备回归后填写并由 `windows:acceptance:verify --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence` 复核。
+  - 验证：`pnpm -C "apps/core-app" run windows:acceptance:template -- --output <tmp>/windows-acceptance.json --evidenceDir evidence/windows --writeManualEvidenceTemplates --compact` 已生成 7 个 manual evidence Markdown。
+
+### test(core-app): gate time-aware recommendation acceptance checks
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - 推荐引擎回归补锁生产 `ContextProvider.generateCacheKey()`，确认 cache key 包含 `timeSlot/dayOfWeek`，避免只在 mock 里验证分时缓存隔离。
+  - Windows acceptance manifest 新增 `manualChecks.timeAwareRecommendation` 与 `--requireTimeAwareRecommendationManualChecks`，要求真实 Windows 设备归档空 query 推荐、早/午两个时段样本、首位推荐随时段变化、频率信号保留与 timeSlot/dayOfWeek 缓存隔离证据。
+  - `windows:acceptance:template` 的 recommended command 与 blocked 模板已携带该 gate，`windows:acceptance:verify --requireExistingEvidenceFiles/--requireNonEmptyEvidenceFiles/--requireCompletedManualEvidence` 会同时校验对应 manual evidence 文件存在、非空且 checklist 已完成。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts"` 与 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过。
+
+### feat(nexus): add OpenAI-compatible vision OCR scene adapter
+
+- `apps/nexus/server/utils/intelligenceVisionOcrProvider.ts`
+- `apps/nexus/server/utils/intelligenceVisionOcrProvider.test.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Scene Orchestrator 默认注册 `openai/deepseek/custom:vision.ocr` adapter，生产链路可用 Provider Registry 中的 OpenAI-compatible Intelligence mirror 执行云端 OCR。
+  - OCR adapter 从 `provider_secure_store` 通过 `authRef` 读取 API key，按 OpenAI-compatible `/chat/completions` 多模态请求发送 data URL 图片，标准化返回 `text/language/confidence/keywords/blocks/engine=cloud` 与 image usage。
+  - adapter 不把 API key、图片内容或完整 provider 响应写入 Provider metadata、health 或 ledger；Scene ledger 仍只保存安全 trace/usage/selection 元数据。
+  - composed 截图翻译测试已改为使用默认 OCR adapter 注册，不再依赖测试手动注册 `custom:vision.ocr`。
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/intelligenceVisionOcrProvider.test.ts" "server/utils/sceneOrchestrator.test.ts"` 通过（`2 files / 20 tests`）。
+
+### feat(nexus): route intelligence mirror provider checks through registry health
+
+- `apps/nexus/server/utils/intelligenceProviderHealthCheck.ts`
+- `apps/nexus/server/utils/intelligenceProviderHealthCheck.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/check.post.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Provider Registry `providers/:id/check` 现在会识别 Intelligence provider mirror，并复用 Lab provider probe 对 `chat.completion` 执行探活。
+  - `vision.ocr` check 不再用 chat probe 代替，改为调用 OpenAI-compatible OCR adapter；Dashboard/API 可传 `imageDataUrl` / `imageBase64` / `language` / `prompt` 做 OCR 专项探活，未传图片时使用内置极小 data URL 验证 provider 连通性。
+  - 探活结果继续走 `recordProviderHealthCheck()` 写入 `provider_health_checks`，Dashboard Health 视图可统一查询 AI mirror 与腾讯云 provider 的 latency、requestId、errorCode/errorMessage 与 degradedReason。
+  - AI mirror check 只使用 secure-store `authRef` 与 bridge fallback 获取凭证，不在 Provider metadata、health 记录或返回体中暴露 API key。
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "server/utils/intelligenceProviderHealthCheck.test.ts" "server/api/dashboard/provider-registry/provider-registry.api.test.ts"` 通过（`2 files / 28 tests`）。
+
+### refactor(governance): migrate retained typed events and split clipboard freshness
+
+- `docs/plan-prd/docs/compatibility-debt-registry.csv`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-capture-freshness.ts`
+- `apps/core-app/src/main/modules/clipboard/clipboard-capture-freshness.test.ts`
+- `scripts/large-file-boundary-allowlist.json`
+  - `plugin-features-adapter.test.ts` 已补入 compatibility registry，只登记清册，不改测试文件名或测试行为。
+  - `system:permission:*` 与 `omni-panel:feature:*` 三段 retained raw event 已在保持外部事件名不变的前提下切到 `defineEvent(namespace).module(module).event(action)`。
+  - Transport boundary test 继续分开输出 `rawSendViolations / retainedRawEventDefinitions / typedMigrationCandidates`，并将 retained raw definition 上限收紧到当时扫描口径 `266`，typed migration candidate 清零；同日后续下载迁移 push event typed registry 切片已进一步收紧到 `264`。
+  - Clipboard capture freshness 切片迁出到 `clipboard-capture-freshness.ts`，主模块只保留编排调用；`clipboard.ts` 从 `3343` 行降到 `3021` 行，并将对应 size growth exception 从 `3299` 收紧到 `3021`。
+  - 验证：transport boundary vitest、clipboard freshness/capture focused vitest 与 touched CoreApp eslint 通过；`size:guard` 仍被其他既有超长文件增长阻塞，clipboard 本轮不再超出自身 exception cap。
+
+## 2026-05-10
+
+### feat(core-app): add native screenshot transport slice
+
+- `packages/tuff-native/native-screenshot/*`
+- `packages/tuff-native/screenshot.js`
+- `packages/tuff-native/screenshot.d.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/native.ts`
+- `packages/utils/transport/sdk/domains/native.ts`
+- `apps/core-app/src/main/modules/native-capabilities/*`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 新增 Rust/NAPI-RS `xcap` screenshot addon，输出 PNG buffer，并通过 `@talex-touch/tuff-native/screenshot` 暴露 support、display list、display/region/cursor capture contract。
+  - 新增 `NativeEvents.screenshot` typed transport，固定 `native:screenshot:get-support`、`native:screenshot:list-displays`、`native:screenshot:capture`，并补 `createNativeSdk()`。
+  - CoreApp 新增 `NativeCapabilitiesModule` 与 `NativeScreenshotService`，统一插件 `window.capture` 权限、Electron 全局 DIP 坐标、native physical crop、`native/screenshots` 短期临时文件、`tfile://` 输出与可选剪贴板写入。
+  - CoreBox 新增“截图并复制”内置动作，默认捕获当前光标所在显示器并写入剪贴板；v1 不引入 Electron `desktopCapturer` fallback。
+  - 回归覆盖 native addon contract、transport SDK/event metadata、CoreApp service 坐标转换、权限校验、临时文件与剪贴板写入。
+
+### feat(nexus): add provider capability standalone admin API
+
+- `apps/nexus/server/utils/providerRegistryStore.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/capabilities.post.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/capabilities/[capabilityId].patch.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/capabilities/[capabilityId].delete.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - Provider Registry 新增 capability 独立 create/update/delete API，不再只能通过 Provider 整体 PATCH 替换 capabilities。
+  - 单条 capability 更新支持保留未传字段，并可维护 `schemaRef`、`metering`、`constraints` 与 `metadata`；重复 capability 统一返回 409。
+  - 回归测试补齐单独新增、局部更新、单独删除、不存在资源 404 与重复 capability 409。
+
+### feat(nexus): wire provider capability editor to standalone API
+
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - Dashboard Provider 编辑面板保留 Provider 基础字段 PATCH，但 capability 新增、更新和删除改为调用 `providers/:id/capabilities/*` 独立 API。
+  - Capability 编辑状态保留既有 `capabilityId`，删除已有能力时按 ID 调用 DELETE，新增能力调用 POST，已有能力调用 PATCH，避免通过 Provider 整体 PATCH 替换整组 capabilities。
+  - 保存前增加同一 Provider 内 capability 去重校验，减少 UI 侧无效请求。
+
+### feat(nexus): mirror intelligence providers into Provider Registry
+
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.ts`
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.test.ts`
+- `apps/nexus/server/utils/providerCredentialStore.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers.get.ts`
+- `apps/nexus/server/api/dashboard/intelligence/models.get.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/sync.get.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers.post.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id].patch.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id].delete.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id]/test.post.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/api/admin/intelligence/chat.ts`
+- `apps/nexus/server/api/docs/assistant.post.ts`
+- `apps/nexus/server/api/credits/models.get.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - Nexus dashboard Intelligence provider 创建、更新、删除时同步维护一条通用 Provider Registry 镜像，迁移期保持原 `/api/dashboard/intelligence/providers*` 外形不变。
+  - AI capability 统一归一到 Provider Registry 能力域：`text.chat -> chat.completion`，保留 `text.summarize`，本地 provider 补 `vision.ocr`。
+  - API key 写入 `provider_secure_store` 并通过 `secure://providers/intelligence-<id>` `authRef` 引用；Provider Registry metadata 只保存模型、默认模型、优先级、rate limit 与配置状态，不写入明文 API key。
+  - Intelligence provider 管理列表、普通用户 sync、模型列表、credits 模型列表、连接测试、provider probe、Admin Chat、Docs Assistant 与 Lab runtime 已统一走 bridge 合并读取旧表与 registry-only 镜像；API key 获取优先旧表，缺失时从 secure store 解析镜像 `authRef`。
+  - 当前阶段仍未完成旧 `intelligence_providers` 表退场、生产可用 `vision.ocr` provider 注册、success rate/配额/动态 `pricingRef` 高级策略；2026-05-11 后续切片已补 OpenAI-compatible AI mirror 的默认 `vision.ocr` Scene adapter。
+
+### refactor(governance): land first architecture convergence slice
+
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/pilot/server/api/system/serve/stat.get.ts`
+- `apps/pilot/server/utils/pilot-serve-stat.ts`
+- `apps/pilot/server/utils/__tests__/pilot-serve-stat.test.ts`
+- `apps/pilot/server/utils/pilot-compat-payment.ts`
+- `apps/pilot/server/utils/__tests__/pilot-payment-gate.test.ts`
+- `apps/pilot/server/api/order/subscribe.post.ts`
+- `apps/pilot/server/api/order/balance.post.ts`
+- `apps/pilot/server/api/order/target.get.ts`
+- `apps/pilot/server/api/order/price/dummy.get.ts`
+- `plugins/touch-image/src/App.vue`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Transport boundary test now reports `rawSendViolations`, `retainedRawEventDefinitions` and `typedMigrationCandidates` separately, keeping raw send regressions distinct from retained raw definitions.
+  - Pilot `/api/system/serve/stat` now uses Node runtime metrics and returns degraded/unavailable reason when collection is incomplete, removing fixed Mock CPU / disk / memory data.
+  - Pilot mock payment order paths are gated by `PILOT_PAYMENT_MODE=mock`; disabled environments return `PAYMENT_PROVIDER_UNAVAILABLE` instead of mock payment success URLs.
+  - `plugins/touch-image` image history moved from long-lived renderer `localStorage` writes to plugin storage SDK, capped at 50 entries, with one-time retired-key migration, failed thumbnail pruning and a clear-history entry.
+
+### docs(repo): consolidate engineering process files under docs
+
+- `docs/engineering/README.md`
+- `docs/engineering/plans/*`
+- `docs/engineering/issues/*`
+- `docs/engineering/code-review/*`
+- `docs/engineering/reports/*`
+- `docs/INDEX.md`
+- `docs/engineering/todo.md`
+- `docs/engineering/ARCHIVE.md`
+  - 将根目录 `plan/`、`issues/`、`codereview/` 与 `reports/` 迁移到 `docs/engineering/` 下的对应子目录，减少根目录噪音并保持工程过程资料集中。
+  - Release notes 相关 `notes/` 与 README 素材 `shots/` 暂不迁移，避免影响 GitHub release workflow 与 README 图片展示。
+  - 同步更新工程文档入口、TODO/归档说明与旧路径引用，后续新增工程过程资料优先放入 `docs/engineering/`。
+
+### feat(plugin): land CoreBox AI Ask stable slice
+
+- `plugins/touch-intelligence/index.js`
+- `plugins/touch-intelligence/manifest.json`
+- `packages/test/src/plugins/intelligence.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - CoreBox AI Ask 作为 2.5.0 AI Stable 首个最小可见切片落地；取舍上优先复用 `touch-intelligence` 现有 CoreBox 入口，OmniPanel 划词 AI 结果面板暂不进入本切片。
+  - `touch-intelligence` 新增 `text.chat` / `vision.ocr` 稳定链路：文本直接 Chat，剪贴板图片在图片空文本或显式 `ai` 提问时先 OCR，再把 OCR 文本作为 Chat 上下文。
+  - 插件结果项补齐 `empty / ready-to-send / ocr-pending / chat-pending / ready / error` 状态；provider 不可用、quota 不足、权限拒绝、模型不支持与 OCR 空结果均有用户可见错误码和重试 payload。
+  - `text.chat` 与 `vision.ocr` 调用统一带 `caller / entry / featureId / requestId / inputKinds / capabilityId` metadata，复用现有 Intelligence audit，不保存完整 prompt 或完整 response；复制回答仍要求 `clipboard.write`。
+
+### feat(nexus): compose screenshot translation scene pipeline
+
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `apps/core-app/src/main/modules/nexus/scene-client.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate-pin-window.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - Scene Orchestrator 对多 capability Scene 新增链式输入传递：`vision.ocr` 接原始图片，`text.translate` 优先消费 OCR `text/language`，`overlay.render` 消费原图、OCR blocks 与翻译输出。
+  - 新增默认 `custom:overlay.render` 本地 adapter，返回可审计的客户端 overlay payload 与非计费 `image` usage；不把云供应商 adapter 和 UI 渲染逻辑耦合。
+  - CoreApp Scene client 可从 composed `overlay.render` 子输出提取 `translatedImageBase64/sourceText/targetText/overlay`；图片置顶窗口可展示客户端 overlay 层。
+  - CoreBox “翻译图片”写回剪贴板继续强制 direct `image.translate.e2e`，避免 composed path 未生成真实 raster 图片时误写回原图；“翻译并置顶”交给 Scene 默认链，支持 direct 或 composed path。
+  - Dashboard Scene run 面板对多 capability Scene 默认使用 Scene default，不再自动只跑第一步 capability。
+  - 当前阶段仍需补生产可用 `vision.ocr` provider 注册与 AI provider 迁移；2026-05-11 后续切片已补 OpenAI-compatible AI mirror 的默认 `vision.ocr` Scene adapter 与 Dashboard Admin seed 入口，剩余为 user-scope AI mirror OCR 绑定策略与旧表退场。
+
+### docs(ai): expand 2.5.0 workflow and OmniPanel scenarios
+
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 将 2.5.0 AI 下个版本内容从“入口收口”细化为可执行场景包：OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与剪贴板整理/会议纪要/文本批处理 3 个 P0 模板。
+  - 固化 Tuff Intents / Action Manifest、Skills Pack、Background Automations 与 Pilot 高级 Chat / DeepAgent 联动为 Beta；Assistant、多 Agent 长任务面板、多模态生成编辑与 Nexus Scene runtime orchestration 保持 Experimental / 2.5.x 后续。
+  - 补充安全与验收口径：写剪贴板、写文件、调用插件、网络请求、命令执行等副作用必须进入 Review Queue 或审批票据；Workflow 模板不得内嵌 provider secret、明文 API Key 或不可审计脚本。
+
+### fix(core-app): include thumbnail worker in main build output
+
+- `apps/core-app/electron.vite.config.ts`
+  - Electron main build 新增 `thumbnail-worker` entry，并固定输出为 `out/main/thumbnail-worker.js`。
+  - 修复 FileProvider 生成图片缩略图时无法加载 `thumbnail-worker.js` 导致反复 `MODULE_NOT_FOUND` warning 的问题。
+  - 不改变 `ThumbnailWorkerClient` 运行时路径与缩略图任务行为，仅补齐缺失构建产物。
+
+### perf(core-app): idle shutdown search-index worker
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `SearchIndexWorkerClient` 复用 file worker idle shutdown controller，FTS/keyword/file progress 单写者 worker 在无 pending task/metrics 时 60 秒后自动退出。
+  - idle 退出只保留 `dbPath`，清空 worker/init promise；下一次写任务会重新创建 worker、重新执行 init，再派发 `removeItems` / `persistAndIndex` / `upsertFiles` 等真实写入，避免无索引写入时常驻线程。
+  - worker 异常后也保留 `dbPath` 以支持 on-demand restart，修正此前 “will restart on demand” 但 init 状态被清空导致后续写入无法自动恢复的边界。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts" "src/main/modules/box-tool/addon/files/workers/idle-worker-shutdown.test.ts"`。
+
+### docs(governance): land project quality review optimization plan
+
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 在质量基线中新增“项目质量审查优化计划”，把跨平台兼容、占位/假实现、transport 收口与 SRP 拆分审查结论固化为 Phase 0~3 治理顺序。
+  - 明确文档/治理、兼容/运行时边界、storage/sync/secret/payment/AI provider 相关变更的最小审查门禁。
+  - 固化 release-blocking 与 documented best-effort 判定规则，避免 Linux 平台限制、macOS/Windows 权限依赖、开发 mock 与生产假成功混为同一类风险。
+
+### docs(project): clarify search telemetry completion boundary
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - 将 CoreBox/Nexus 搜索 telemetry 状态明确为“上报、聚合、展示、类型与定向测试已完成”。
+  - 明确该状态不等同于真实性能验收完成；关闭验收仍需目标设备产出 200 条 `search-trace-stats/v1` 样本，并通过 `search:trace:verify -- --minSamples 200 --strict` 的样本数、P95 与 slowRatio 门禁。
+
+### test(core-app): add search trace stats output command to acceptance template
+
+- `apps/core-app/scripts/search-trace-stats.ts`
+- `apps/core-app/scripts/clipboard-polling-stress.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `search:trace:stats` 新增 `--output <path>`，可在保留 stdout 的同时直接写出 `search-trace-stats/v1` JSON，减少 Windows 真机采样时对 shell 重定向的依赖。
+  - Windows acceptance manifest 的 `performance` 新增可选 `searchTraceStatsCommand`，`windows:acceptance:template` 会生成从 CoreApp 日志到 stats JSON 的推荐命令，并带上 200 样本、P95 与 slowRatio release 阈值。
+  - `clipboard:stress` 新增 `--output <summary.json>` 精确输出入口，模板同步生成 `performance.clipboardStressCommand`，可直接写到 acceptance manifest 期望的 `clipboard-stress-summary.json`。
+  - `--requireVerifierCommandGateFlags` 会同时校验 search trace / clipboard stress 的采样命令和复核命令，避免只约束 verifier command 而采样命令仍使用弱阈值或短 duration。
+  - 这些命令只降低采样操作成本，不替代 `search:trace:verify`、`clipboard:stress:verify` 与 acceptance 层对归档 JSON 的硬门禁复算。
+
+### test(core-app): require manual acceptance evidence paths
+
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `manualChecks.commonAppLaunch.checks[]`、`manualChecks.updateInstall` 与 `manualChecks.divisionBoxDetachedWidget` 新增 `evidencePath` 字段，模板会生成 `evidence/windows/manual/*.md` 占位路径。
+  - 手工 gate 在布尔项全为 true 时仍要求 `evidencePath`，避免只勾选手工项而没有截图、日志、录屏或操作记录。
+  - `windows:acceptance:verify --requireExistingEvidenceFiles` 会同时校验 manual evidence path 指向的文件真实存在。
+  - `windows:acceptance:verify --requireNonEmptyEvidenceFiles` 会在存在性检查之后拒绝目录或 0 字节 case/performance/manual evidence 文件；`--requireCompletedManualEvidence` 会拒绝仍有未勾选项或没有 Markdown checklist 的手工证据；模板推荐命令与 recommended command gate 默认带上这两个参数，避免空占位文件或未完成模板被最终验收误收。
+
+### feat(core-app): gate DivisionBox detached widget acceptance checks
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Windows acceptance manifest 新增 `manualChecks.divisionBoxDetachedWidget`，结构化记录插件 widget 分离窗口的真机手工验收项。
+  - `windows:acceptance:verify` 新增 `--requireDivisionBoxDetachedWidgetManualChecks`，逐项要求插件 feature 可搜、分离窗口打开、session 使用真实 feature pluginId、`initialState.detachedPayload` 首帧水合、payload 恢复、widget surface 渲染、原始 query 保留且没有回退到错误搜索结果。
+  - `windows:acceptance:template` 的 recommended command 与 blocked 模板已携带该 gate，避免 DivisionBox detached widget 仅有单测而缺 release acceptance 证据槽位。
+
+### feat(core-app): add copied app path to Windows acceptance required cases
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Windows acceptance required cases 新增 `windows-copied-app-path-index`，把“复制 app path 加入本地启动区并进入 app-index”从普通第三方 App 启动验收中拆出。
+  - 该 case 要求 Windows capability evidence 与 App Index diagnostic evidence 同时存在并通过，App Index 侧固定 `path/shortcut` launchKind、launchTarget、clean/fallback displayName、icon、reindex 与专用 caseId。
+  - `windows:acceptance:template` 会生成对应 capability/app-index evidence path 与 verifier command，避免真机验收只覆盖 Start Menu/普通启动而漏掉复制路径入口。
+
+### feat(core-app): require Windows update install manual acceptance checks
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Windows acceptance manifest 新增 `manualChecks.updateInstall`，结构化记录 UAC、安装器启动/退出、应用退出释放占用、安装后版本、重启可用与失败回滚手工验收项。
+  - `windows:acceptance:verify` 新增 `--requireUpdateInstallManualChecks`，最终 gate 会逐项检查上述布尔项，缺失或未确认时输出明确失败原因。
+  - `windows:acceptance:template` 生成的 recommended command 已携带该 gate，并在模板中预填 blocked 状态的更新安装手工检查项，避免 Windows 自动安装证据漏掉 UAC/退出/回滚确认。
+
+### feat(core-app): gate Windows auto update post-install version evidence
+
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/update-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/update-diagnostic-evidence.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/scripts/update-diagnostic-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Update diagnostic evidence 新增可选 `installedVersion`，记录当前运行版本、目标更新版本与版本一致性判定。
+  - `update:diagnostic:verify` 新增 `--requireInstalledVersion` 与 `--requireInstalledVersionMatchesTarget`，可在 Windows 真机安装后把“运行版本已切到目标版本”纳入硬门禁。
+  - `windows:acceptance:template -- --updateInstallMode auto` 生成的自动安装 verifier command 已携带 `--requireInstalledVersionMatchesTarget`，acceptance verifier 的命令强度检查同步要求该 gate。
+  - `windows:acceptance:verify --requireEvidenceGatePassed` 的 update evidence 复算也会按 `verdict.installMode` 动态收紧：`windows-auto-installer-handoff` 必须通过安装后版本匹配，`windows-installer-handoff` 必须保留用户确认与 unattended disabled，避免只靠命令字段或 embedded gate 代理通过。
+  - 该 gate 只补安装后版本证据，不替代 UAC/权限提升、安装器退出与失败回滚的真机验收。
+
+### test(core-app): enforce Everything diagnostic backend attempt consistency
+
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.test.ts`
+- `apps/core-app/src/main/modules/platform/windows-capability-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-capability-evidence.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `everything-diagnostic-evidence` 复核新增 `verdict.hasBackendAttemptErrors` 与 `status.backendAttemptErrors` 的一致性检查，避免导出证据隐藏 sdk-napi/cli 后端尝试错误后仍被 acceptance 层误收。
+  - 保持正常 fallback chain 记录不降级：只要求 verdict 标记与实际错误记录一致，不要求健康 backend 必须没有历史尝试错误；Everything 目标查询命中继续由 Windows capability evidence target probe 和 acceptance case 复算归档。
+  - `windows:capability:verify --requireEverythingTargets` 进一步要求 Everything 基础查询命令成功且返回结果，并要求每个目标 probe 同时具备 `found=true`、正数 `matchCount` 与至少一条包含目标关键词的样本，避免手工构造 `found=true` 但没有查询输出或样本不匹配的弱证据通过。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/everything-diagnostic-verifier.test.ts" "src/main/modules/platform/windows-capability-evidence.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts"` 通过。
+
+### fix(core-app): expand Windows env app paths for clipboard app indexing
+
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - SystemActionsProvider 新增 Windows `%ENV%` 路径展开，支持 `%LOCALAPPDATA%` / `%USERPROFILE%` 等环境变量开头的 `.exe/.lnk/.appref-ms` app path。
+  - 文本候选提取可识别未加引号或带引号的 `%ENV%\\...` 命令行，并复用现有 app 可执行前缀探测，含空格和尾随参数时只把真实应用路径加入 `appProvider.addAppByPath()`。
+  - 未知环境变量保持原样，避免把不可解析输入误展开为错误路径。
+
+### perf(core-app): reclaim idle FileProvider task workers
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/idle-worker-shutdown.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/idle-worker-shutdown.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/file-scan-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/file-index-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/file-reconcile-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/icon-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/thumbnail-worker-client.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `IdleWorkerShutdownController`，统一处理 worker 空闲延迟回收，重复 schedule 不延长已有回收窗口，避免状态 metrics 采样让 worker 长期保活。
+  - `file-scan`、`file-index`、`file-reconcile`、`icon`、`thumbnail` 任务型 worker 在任务与 metrics 请求全部清空后延迟 60 秒自动终止，下一次任务继续按需重启。
+  - 预期终止后的非 0 exit 不再被误记为 worker failure；异常路径仍会 reject pending task、清空 metrics 请求并记录 warning。
+  - `SearchIndexWorkerClient` 后续已纳入安全空闲回收：退出时仅保留 `dbPath`，下一次写入前自动重新 init worker，避免破坏 `init(dbPath)` 门禁与 single-writer 写入语义。
+
+### feat(core-app): add guarded Windows automatic installer handoff
+
+- `packages/utils/types/update.ts`
+- `packages/utils/transport/events/types/update.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/main/modules/update/update-system.test.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/update-diagnostic-evidence.ts`
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/update-diagnostic-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `autoInstallDownloadedUpdates` 更新设置，默认 `false`；仅 Windows 高级设置可显式开启。
+  - 自动下载任务可携带 `autoInstallOnComplete` 标记，下载完成后才会自动调用现有 NSIS/MSI installer handoff 并退出应用；手动下载仍只显示下载完成通知，不会被自动接管。
+  - Update diagnostic evidence 新增 `windows-auto-installer-handoff` installMode、`autoInstallDownloadedUpdates` 与 `unattendedAutoInstallEnabled` 字段；`update:diagnostic:verify` 新增 `--requireAutoInstallEnabled` / `--requireUnattendedEnabled`，同时保持旧 evidence 缺字段时按自动安装关闭处理。
+  - Update diagnostic verifier 新增 Windows handoff 模式一致性校验：手动接管必须保持用户确认且不能标记 unattended，自动接管必须与 `autoInstallDownloadedUpdates` / `unattendedAutoInstallEnabled` 同时成立。
+  - `windows:acceptance:template -- --updateInstallMode auto` 可生成自动接管 update verifier command，acceptance verifier 的 command gate 同时接受手动接管与自动接管两套 release flags；默认模板仍保持手动 `windows-installer-handoff` gate。
+  - 当前仍需 Windows 真机验证 UAC/安装器退出/失败回滚与 acceptance manifest 证据归档，未把 Windows 更新自动安装闭环标记为完成。
+
+### feat(nexus): persist provider health checks
+
+- `apps/nexus/server/utils/providerHealthStore.ts`
+- `apps/nexus/server/utils/providerHealthStore.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/health.get.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/health.api.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/check.post.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - 新增 `provider_health_checks` D1 表与 store，记录 provider check 的 provider/capability、healthy/degraded/unhealthy、latency、endpoint、requestId、errorCode/errorMessage 和 degradedReason。
+  - 现有 `/api/dashboard/provider-registry/providers/:id/check` 在执行腾讯云机器翻译 live check 后自动写入健康历史；写入失败只记录服务端 warning，不改变 check 响应。
+  - 新增 Dashboard Admin `/api/dashboard/provider-registry/health` 查询接口与 Provider Registry Health 视图，展示最近检查的 latency、错误和 degraded reason。
+  - Scene Orchestrator 的 strategy 字段已进入最小路由逻辑：`priority/manual` 保持优先级/权重/providerId 排序，`least_cost` 读取 binding constraints 或 capability metering/metadata 成本字段，`lowest_latency` 读取最新 provider health latency，`balanced` 综合成本、延迟与权重后再回退到 priority 排序。
+  - Provider Registry Dashboard 新增 Provider/Scene 深编辑面板，复用现有 PATCH API，可更新 Provider 基础字段、capability metering/constraints/metadata，以及 Scene strategy、meteringPolicy、auditPolicy、metadata、binding weight/status/constraints/metadata；后端 API 回归已固定这些 JSON 字段会完整保存和返回。
+  - Scene Orchestrator 新增 `exchange-rate:fx.rate.latest` 与 `exchange-rate:fx.convert` 默认 adapter，复用现有 `exchangeRateService`，通过 Scene run 返回汇率快照/换算结果并写入 `fx_quote` usage、trace 与 ledger。
+  - CoreBox 汇率预览已优先调用 Nexus `corebox.fx.convert`；非 USD 交叉汇率先尝试 `corebox.fx.latest` 注入本地缓存后换算；未登录、Scene 不可用或调用失败时保留本地 `FxRateProvider` fallback。
+  - `/api/exchange/latest` 与 `/api/exchange/convert` 已新增 Scene bridge，优先执行 `corebox.fx.latest` / `corebox.fx.convert`，Scene 缺失、不可用或输出无效时回退原 `exchangeRateService` 并在响应里返回非破坏性的 `degradedReason`。
+  - CoreBox 图片动作新增“翻译并置顶”：主进程复用 direct `corebox.screenshot.translate` Scene 输出，在独立 always-on-top 图片窗口展示翻译结果；原“翻译图片”继续写回系统剪贴板。
+  - 当前仍未实现 composed `vision.ocr -> text.translate -> overlay.render` pipeline 与 AI provider 迁移。
+
+### feat(nexus): persist provider scene usage ledger
+
+- `apps/nexus/server/utils/providerUsageLedgerStore.ts`
+- `apps/nexus/server/utils/providerUsageLedgerStore.test.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/usage.get.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/usage.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - 新增 `provider_usage_ledger` D1 表与 store，将 Scene run 的 runId、sceneId、mode/status、providerId/capability、usage、error、trace、fallbackTrail、selected 安全元数据持久化。
+  - Scene Orchestrator 在 dry-run、成功执行和标准失败路径统一写 ledger；落库失败只记录服务端 warning，不改变用户侧 Scene run 结果。
+  - 新增 Dashboard Admin `/api/dashboard/provider-registry/usage` 查询接口与 Provider Registry Usage 视图，可查看最近 run 的 metering、provider ref、error、trace 与 fallback trail。
+  - Ledger 明确不保存用户输入、截图/图片、翻译输出或完整 provider 响应，凭证引用也不会进入 selected 审计 payload。
+  - 当前仍未实现 composed `vision.ocr -> text.translate -> overlay.render` pipeline、图片 pin window、Health check 与汇率/AI provider 迁移。
+
+### feat(core-app): route clipboard image translation through Nexus Scene
+
+- `apps/core-app/src/shared/events/corebox-scenes.ts`
+- `apps/core-app/src/main/modules/nexus/scene-client.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/renderer/src/components/render/ActionPanel.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+  - CoreBox 图片项动作面板新增“翻译图片”，仅对 `kind: image` 的剪贴板图片结果展示。
+  - 主进程新增 `core-box:image-translate` typed event 与图片翻译执行器：读取剪贴板图片原始本地内容，调用 Nexus `corebox.screenshot.translate` Scene 的 direct `image.translate.e2e` capability，并将翻译后的图片写回系统剪贴板。
+  - Nexus Scene client 增加 `translatedImageBase64/sourceText/targetText` 提取，保持 token 与 Provider 选择逻辑只在 main/runtime API 链路内。
+  - 当前仍未实现 composed `vision.ocr -> text.translate -> overlay.render` pipeline、图片 pin window、Health check 与汇率/AI provider 迁移。
+
+### perf(core-app): layer native file search and slim search payloads
+
+- `packages/utils/common/utils/polling.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+- `apps/core-app/src/main/core/channel-core.ts`
+  - 文件搜索改为平台原生 fast layer + 自建索引 enrichment layer：Windows 保持 Everything，macOS 新增 Spotlight/mdfind provider，Linux 按 locate/Tracker/Baloo 可用性探测接入，FileProvider 保留 FTS/内容索引慢层。
+  - CoreBox 首帧搜索只做基础排序，usage/pinned/completion/semantic 后处理改为异步 enrichment 推送，避免首帧被行为统计和补全权重拖慢。
+  - macOS AppScanner fresh scan 不再调用 `mdls` 或生成 base64 图标；`mdls` 保留后台 maintenance lane 修正 displayName，缺失 `Info.plist` 的无效 `.app` 直接跳过。
+  - 搜索结果图标/缩略图不再内联 base64，大字段统一瘦身为 `tfile://`/本地路径引用并由 renderer 懒加载；IPC 序列化新增大 payload 监控。
+
+### test(core-app): require app index icon evidence
+
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.test.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.test.ts`
+- `apps/core-app/scripts/app-index-diagnostic-verify.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - App Index diagnostic app 新增轻量 `iconPresent` 字段，只记录索引图标是否存在，不把图标本体写入验收 JSON。
+  - `app-index:diagnostic:verify` 新增 `--requireIcon`；Windows acceptance 的 app-index 子证据复算和模板 verifier command 都会要求该门禁，避免常见 App 真机验收只证明可搜/可启动但未覆盖索引图标缺失。
+
+### perf(core-app): apply CoreBox active polling pressure
+
+- `packages/utils/common/utils/polling.ts`
+- `packages/utils/__tests__/polling-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.test.ts`
+- `apps/core-app/src/main/utils/perf-context.ts`
+- `apps/core-app/src/main/utils/perf-monitor.ts`
+- `apps/core-app/src/main/utils/perf-context.test.ts`
+- `docs/plan-prd/README.md`
+  - `PollingService` 新增带 reason/TTL 的全局 pressure，可按 lane 放大轮询间隔并压低并发上限，诊断快照会暴露当前 pressure 便于排查后台争用。
+  - CoreBox 展示期间短时设置 `corebox-active` pressure，隐藏时清理；搜索交互窗口内会降低 realtime/io/maintenance/serial 后台 polling lane 的频率与并发，减少启动搜索和剪贴板/索引轮询竞争。
+  - `PerfContext` 慢上下文告警改为只在 `blocking` 模式或近期 event-loop lag 存在时输出，普通异步耗时不再单独刷慢上下文 warn，并把最近 lag 信息写入告警 meta。
+
+### test(core-app): require detailed common app launch acceptance
+
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - Windows acceptance manifest 的 `manualChecks.commonAppLaunch` 新增 `checks[]` 详情字段，可对 WeChat / Codex / Apple Music 等样本分别记录 `searchHit`、`displayNameCorrect`、`iconCorrect`、`launchSucceeded` 与 `coreBoxHiddenAfterLaunch`。
+  - `windows:acceptance:verify` 新增 `--requireCommonAppLaunchDetails`，最终强门禁会要求每个 common app target 都完成五项确认；`windows:acceptance:template` 会生成对应占位并把该参数写入 `verification.recommendedCommand`，避免只填 `passedTargets` 就绕过真实启动体验验收。
+
+### test(core-app): require strict clipboard stress evidence in Windows acceptance
+
+- `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.ts`
+- `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.test.ts`
+- `apps/core-app/scripts/clipboard-stress-verify.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - `clipboard:stress:verify` 新增 `--strict`，用于强制 `clipboard-stress-summary/v1` schema；Windows acceptance 复算 clipboard stress 性能证据时也启用 strict schema 校验。
+  - `windows:acceptance:template` 生成的 clipboard stress verifier command 会自动携带 `--strict`；`--requireVerifierCommandGateFlags` 也会要求 manifest 内 clipboard stress verifier command 带上该参数，避免非标准 summary 或弱 schema 子证据被最终验收误收。
+
+### docs(ai): add Tuff 2.5.0 AI desktop entry plan PRD
+
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 新增 2.5.0 AI 板块主 PRD，版本定位为“桌面 AI 入口收口版本”，优先收口 CoreBox / OmniPanel 的用户可感知 AI 场景，不把 2.5.0 定义为大规模 AI runtime 重写或单纯 Nexus Provider/Scene 底座建设。
+  - 锁定 Stable / Beta / Experimental 分级：Stable 只承诺 `text.chat`、翻译、摘要、改写、代码解释/审查与 `vision.ocr`；Workflow 模板与 Pilot 高级 Chat / DeepAgent 联动进入 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 进入 Experimental / 2.5.x 后续。
+  - 固化 Provider 安全合同：provider metadata 可进入普通配置，API Key / secret 必须进入 secure-store 或以 `authRef` 表示；审计默认只记录 traceId、provider、model、latency、usage 与 errorCode，不保存完整 prompt / response。
+  - 明确 2.5.0 不打断当前 `2.4.10 -> 2.4.11` legacy/compat 与跨平台回归门禁节奏。
+
+### docs(governance): add cross-platform compatibility and placeholder audit
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 新增跨平台兼容与占位/假实现审计报告，确认 CoreApp 平台能力已具备显式 degraded/unsupported 合同，Linux 保持 documented best-effort，Windows/macOS 仍需 release-blocking 人工证据。
+  - 锁定 P0 假值风险：Pilot `system/serve/stat` 仍返回 Mock CPU/固定资源数据，Pilot 兼容支付仍返回 `weixin://wxpay/pilot/mock/*` 与 `DUMMY` 订单形态；后续必须以真实 metrics 或显式 unavailable / mock-mode 门控替代。
+  - 锁定 P1 治理项：`plugins/touch-image` 图片历史路径仍直接落 renderer `localStorage`；本次复核生产 raw send 直连未见新增命中，但 retained `defineRawEvent` definition 仍有 342 处，需要与 raw send violation 分开统计；`clipboard/search-core/plugin/app-provider/update-system` 等超长模块继续作为 SRP 拆分优先候选。
+  - 同步 README、INDEX、TODO、路线图与质量基线入口；当前工作区基线校准为 `2.4.10-beta.18`。
+
+### fix(core-app): enable update auto-download by default
+
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `packages/utils/types/update.ts`
+- `packages/utils/__tests__/types/update.test.ts`
+  - Update 默认设置统一改为 `autoDownload: true`，首次安装或设置读取失败时会自动下载可用更新包；现有用户显式关闭仍通过持久化设置保留。
+  - 更新设置页保留“自动下载更新”开关，channel/frequency/renderer override 与诊断证据入口收进高级设置，降低普通用户默认配置噪音。
+  - 文件索引入口整体收进高级设置，普通设置页不再默认展示索引状态、重建入口与索引统计。
+  - 工具设置页的 OmniPanel 右键长按时长、剪贴板轮询间隔与推荐数量收进高级设置，普通模式仅保留常用行为开关。
+  - 当前 Windows 路径仍是下载完成后通过安装器安装；静默自动安装需要单独确认安装器参数、权限提升与回滚策略，尚未标记完成。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useUpdateRuntime.test.ts" "src/main/modules/update/services/update-action-controller.test.ts"` 通过；`pnpm -C "packages/utils" exec vitest run "__tests__/types/update.test.ts"` 通过。
+
+### test(core-app): add Windows capability evidence CLI
+
+- `apps/core-app/scripts/windows-capability-evidence.ts`
+- `apps/core-app/scripts/windows-capability-verify.ts`
+- `apps/core-app/src/main/modules/platform/windows-capability-evidence.ts`
+- `apps/core-app/src/main/modules/platform/windows-capability-evidence.test.ts`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `windows-capability-evidence/v1` 证据汇总与 `pnpm -C "apps/core-app" run windows:capability:evidence` 本地脚本，Windows 上采集 PowerShell 可用性、Everything CLI 路径/版本/轻量查询、Everything 目标关键词查询、`Get-StartApps` UWP/桌面路径计数、registry uninstall fallback 可执行候选、Start Menu `.lnk/.appref-ms/.exe` 入口、`.lnk` target/arguments/workingDirectory 与目标应用命中情况。
+  - 默认目标为 WeChat、Codex、Apple Music，也可用重复 `--target` 指定；`--requireEverything` / `--requireTargets` 可把缺失项升级为 gate failure，`--output` 可直接落盘 JSON 供真机验收归档。
+  - `--installer <path>` 会复用现有 `resolveWindowsInstallerCommand()` 生成 NSIS `/S` 或 MSI `msiexec.exe /i ... /passive /norestart` dry-run 证据；脚本不会启动安装器，且显式保留 `unattendedAutoInstallEnabled: false`，避免把用户触发安装 handoff 误标为下载完成后无人值守自动安装。
+  - 新增 `windows:capability:verify`，可从 evidence JSON 重新计算 gate，并用 `--requireEverything --requireEverythingTargets --requireTargets --requireUwp --requireRegistryFallback --requireShortcutMetadata --requireApprefMs --requireShortcutArguments --requireShortcutWorkingDirectory --requireInstallerHandoff` 把 Windows 真机验收项升级为硬门禁。
+  - 非 Windows 环境不会伪造通过，会输出 `status: "skipped"` 与 `platform <name> is not win32` warning，避免把本机 macOS smoke 当成 Windows 真机证据。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/windows-capability-evidence.test.ts"` 通过；`pnpm -C "apps/core-app" run windows:capability:evidence -- --compact --installer "C:/Downloads/tuff-2.4.10-setup.exe" --output "/private/tmp/windows-capability-evidence-smoke.json"` 与 `pnpm -C "apps/core-app" run windows:capability:verify -- --input "/private/tmp/windows-capability-evidence-smoke.json" --compact` 在当前 macOS 输出 skipped evidence 与 NSIS handoff dry-run。
+
+### test(core-app): add app index diagnostic evidence verifier
+
+- `apps/core-app/scripts/app-index-diagnostic-verify.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.test.ts`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `app-index:diagnostic:verify`，可对 Settings App Index diagnostic 导出的 `app-index-diagnostic-evidence` JSON 离线复核 target 命中、query matched stage、launchKind、launchTarget、bundle/appIdentity、reindex 与 reusable caseId。
+  - 该 verifier 只消费本地诊断 JSON，不写 Release Evidence、不触发扫描或启动应用；用于 Windows 真机完成 UWP/shortcut/path 搜索索引证据后做硬门禁复核。
+
+### test(core-app): add Everything diagnostic evidence verifier
+
+- `apps/core-app/scripts/everything-diagnostic-verify.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.test.ts`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `everything:diagnostic:verify`，可对 Settings Everything 导出的 `everything-diagnostic-evidence` JSON 离线复核 ready/enabled/available/backend/health/version/esPath/fallbackChain 与 reusable caseId。
+  - Everything diagnostic verifier 会拒绝 `verdict.backend/health/errorCode` 或 manual suggested fields 与 `status` 不一致的证据，避免手工拼接或过期 JSON 被 Windows acceptance manifest 误收。
+  - 该 verifier 只消费本地诊断 JSON，不触发 Everything 查询、不修改设置；用于 Windows 真机 Everything/文件搜索回归后把截图式证据升级为可重复 gate。
+
+### test(core-app): add update diagnostic evidence verifier
+
+- `apps/core-app/scripts/update-diagnostic-verify.ts`
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.test.ts`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `update:diagnostic:verify`，可对 Settings Update 导出的 `update-diagnostic-evidence` JSON 离线复核 autoDownload、downloadReady、readyToInstall、Windows installer handoff、用户确认、无人值守未开启、cached release、matching asset、checksum 与 reusable caseId。
+  - Update diagnostic verifier 会拒绝 `verdict.downloadReady/readyToInstall`、cached release matching asset 计数或 manual suggested fields 与源状态不一致的证据，避免过期或手工拼接 JSON 被 Windows acceptance manifest 误收。
+  - 该 verifier 只消费本地诊断 JSON，不启动安装器、不修改更新设置；用于 Windows 更新下载/安装 handoff 真机回归后把 JSON 证据升级为可重复 gate。
+
+### fix(core-app): align Everything diagnostic evidence case id
+
+- `apps/core-app/src/renderer/src/views/base/settings/everything-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/everything-diagnostic-evidence.test.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.test.ts`
+  - Everything diagnostic evidence 的 reusable caseId 从 `windows-everything-search` 对齐为 release matrix 固化的 `windows-everything-file-search`。
+  - 继续保留 `windows-file-search-fallback` 作为本地 fallback 诊断复用字段，避免 Windows 真机 Everything 证据后续归档时与矩阵 caseId 不一致。
+
+### test(core-app): extend app index diagnostic shortcut evidence
+
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.test.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.test.ts`
+- `apps/core-app/scripts/app-index-diagnostic-verify.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - App Index diagnostic evidence 的 reusable caseId 增加 release matrix 固化的 `windows-shortcut-launch-args`，并在 suggested evidence fields 中保留 shortcut `launchArgs` 与 `workingDirectory`。
+  - `app-index:diagnostic:verify` 新增 `--requireLaunchArgs` 与 `--requireWorkingDirectory`，用于 Windows 真机验证 Start Menu `.lnk` 启动参数和工作目录不会在复制路径加入索引或搜索启动链路中丢失。
+
+### fix(core-app): align update diagnostic evidence case id
+
+- `apps/core-app/src/renderer/src/views/base/settings/update-diagnostic-evidence.ts`
+- `apps/core-app/src/main/modules/platform/update-diagnostic-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - Update diagnostic evidence 的 reusable caseId 增加 release matrix 固化的 `windows-tray-update-plugin-install-exit`，保留 `windows-update-download-ready` / `windows-installer-handoff` 作为本地细分诊断字段。
+  - Windows 更新真机证据可用 `update:diagnostic:verify --requireCaseIds windows-tray-update-plugin-install-exit` 挂到现有平台阻塞矩阵。
+
+### test(core-app): add Windows acceptance manifest verifier
+
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `windows-acceptance-manifest/v1`、`windows:acceptance:template` 与 `windows:acceptance:verify`，可先生成 blocked 初始清单，再汇总复核 Windows required caseId、单项 evidence path/verifier command、search trace、clipboard stress 与常见 App 启动样本；模板会写入 `verification.recommendedCommand`，便于真机证据补齐后直接运行最终强门禁。
+  - 该 verifier 不替代单项 verifier，只负责防止真机验收漏掉 `windows-everything-file-search`、`windows-app-scan-uwp`、`windows-third-party-app-launch`、`windows-shortcut-launch-args`、`windows-tray-update-plugin-install-exit` 中任一 required case。
+  - CLI 新增 `--requireExistingEvidenceFiles`，会按 manifest 文件所在目录解析相对 case evidence path、search trace stats path 与 clipboard stress summary path 并校验文件存在，避免只填路径但未归档 JSON 的假通过。
+  - CLI 新增 `--requireEvidenceGatePassed`，会读取每个 case evidence JSON、search trace stats JSON 与 clipboard stress summary JSON 并要求 `gate.passed=true`，同时按 caseId 校验 case evidence 属于允许的 `windows-capability-evidence/v1` / app-index / Everything / update diagnostic schema，性能证据分别是 `search-trace-stats/v1` 与 `clipboard-stress-summary/v1`，避免失败或错误类型的 verifier 产物被 manifest 标成 passed。
+  - CLI 新增 `--requireCaseEvidenceSchemas`，会要求每个 required case 同时具备 Windows capability evidence 与对应专项 diagnostic evidence；仅挂宽泛 capability JSON 会被标记为弱证据，避免 Everything/App Index/Update 等专项验收被单一汇总证据替代。
+  - `windows:acceptance:verify` 在 evidence 文件缺失时只报告 missing，不再继续对同一路径追加 gate/schema mismatch 噪音，便于模板清单作为待办项使用。
+
+### test(core-app): tighten Windows acceptance evidence gates
+
+- `apps/core-app/scripts/windows-acceptance-verify.ts`
+- `apps/core-app/scripts/windows-acceptance-template.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.ts`
+- `apps/core-app/src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - `windows:acceptance:verify --requireEvidenceGatePassed` 不再只信任子证据 JSON 内已有的 `gate.passed=true`；acceptance 层会按 required case 重新执行关键硬门禁：Everything case 复核 Everything CLI/targets 与 Everything diagnostic，UWP case 复核 `launchKind=uwp`、bundle/appIdentity 与 UWP capability，第三方启动 case 复核 target/registry/shortcut metadata，shortcut args case 复核 `.lnk` arguments/workingDirectory，更新 case 复核 installer handoff、用户确认、unattended disabled、matching asset 与 checksum。
+  - search trace 与 clipboard stress 性能证据也由 acceptance 层复算固定预算：search trace 要求 200 paired sessions、first.result P95 ≤ 800ms、session.end P95 ≤ 1200ms、slowRatio ≤ 0.1；clipboard stress 要求 2 分钟 500/250ms、P95 scheduler delay ≤ 100ms、max scheduler delay ≤ 300ms、realtime queued peak ≤ 2、drop=0，避免用弱阈值生成的 `gate.passed=true` 误入最终 manifest。
+  - `windows:acceptance:template` 生成的 app-index/update/performance verifier command 已按 caseId 和 release budget 收紧：UWP case 要求 `--requireLaunchKind uwp --requireBundleOrIdentity --requireCaseIds windows-app-scan-uwp`，第三方启动 case 要求 `--requireCaseIds windows-third-party-app-launch`，shortcut case 要求 shortcut args/cwd，更新 case 额外要求 `--requireChecksums`，性能命令带上 P95、slowRatio 与 queue peak/drop 阈值。
+  - `windows:acceptance:verify` 新增 `--requireVerifierCommandGateFlags` 与 `--requireRecommendedCommandGateFlags`，会复核 manifest 内 case/performance verifier command 以及 `verification.recommendedCommand` 是否携带 `--input` 与 release 固定门禁参数；`windows:acceptance:template` 的 recommended command 默认开启这些检查，避免命令字段漂移成弱验收入口。
+  - `windows:acceptance:verify --requireEvidenceGatePassed` 的失败输出会带出子证据复算原因，例如 launchKind、bundle/appIdentity、reindex、checksum 或性能阈值，减少 Windows 真机证据回填时的二次定位成本。
+  - `windows:acceptance:verify` 新增 `--requireRecommendedCommandInputMatch`，会校验 `verification.recommendedCommand --input` 指回当前 manifest 文件；`windows:acceptance:template` 的 recommended command 默认开启该检查，避免清单移动或复制后继续指向旧验收文件。
+
+### test(core-app): add App Index displayName fallback evidence gate
+
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.ts`
+- `apps/core-app/scripts/app-index-diagnostic-verify.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `apps/core-app/src/main/modules/platform/app-index-diagnostic-verifier.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - App Index diagnostic app payload 新增可选 `rawDisplayName` 与 `displayNameStatus: clean | fallback | missing`，诊断层复用现有 corrupted displayName 判断和 fallback 逻辑，能把 Windows 坏 `display_name` 回退从运行时行为升级为可归档证据。
+  - `app-index:diagnostic:verify` 新增 `--requireCleanDisplayName`，允许 `clean` 或 `fallback`，拒绝缺失/未知状态；Windows acceptance app-index case 也会复算该门禁，避免真机验收只证明可启动但未覆盖坏显示名回退。
+  - `windows:acceptance:template` 生成的 app-index verifier command 均带 `--requireCleanDisplayName`，与 `TODO` 中 Windows App 索引真实设备验收命令保持一致。
+
+### fix(core-app): prefer visible app title matches over plugin feature token matches
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts`
+  - CoreBox 跨 provider 排序改为优先可见标题命中，plugin feature 的隐藏 `searchTokens/source.id` 命中降为低置信召回信号，避免搜索应用时被高频 plugin feature 抢占首位。
+  - 隐藏 token/source fallback 分数已低于真实标题子串命中；`Visual Studio Code` 这类 App 标题子串匹配不会再被高频 feature token 抢到首位。
+  - 隐藏 token/fuzzy-token/source fallback 召回会限制 frequency/recency 行为信号上限，避免极高历史次数或异常 recency 继续压过 App 可见标题命中；真实 feature 标题命中仍保留频率自学习前置能力。
+  - App 标题前缀/词首/子串命中新增有限 intent bonus，避免中等频次、同样可见标题命中的 plugin feature 在明确 App 搜索意图下抢占首位；`Visual Studio Code` 这类标题后续单词命中也按强可见标题匹配处理，极高频 feature 仍可通过行为学习前置。
+  - Plugin feature item 现在在 `meta.extension.source` 中保留 `token / fuzzy-token / name / command / input` 等匹配来源，排序器可区分“可见标题命中”和“隐藏 token 命中”。
+  - 保留高匹配 feature 与高频 feature 的自学习能力；当 feature 可见标题同样命中时，使用频率仍可推动其前置。
+  - 推荐引擎内存缓存新增 context cache key 校验，避免 morning/afternoon 等不同 `timeSlot/dayOfWeek` 上下文在 30 分钟 TTL 内复用旧推荐结果；同一 App 在当前 `timeSlot/dayOfWeek` 有历史使用记录时会获得时间上下文加权，候选去重也会保留后续 time-based 统计；当前 weekday 暂无样本时不再把时段相关性归零，并固定同一候选集在不同 `timeSlot` 下首位不同与 slot-only relevance 的回归，保证“不同时间推荐不同 App”的算法信号实际生效。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts" "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts" "src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts"` 通过。
+
+### fix(core-app): preserve plugin identity for detached widget sessions
+
+- `packages/utils/types/division-box.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+- `apps/core-app/src/main/modules/division-box/session.test.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/detached-division.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.test.ts`
+  - DivisionBox 分离插件 feature 时优先使用 `meta.pluginName` 作为 session `pluginId`，不再把 `plugin-features` provider id 误写成真实插件身份。
+  - Detached widget URL 的 `source` 改为真实插件 id，并用 `providerSource` 保留 `plugin-features` provider id；fallback 搜索过滤优先匹配 provider source，同时兼容旧 `source=plugin-features` 与新 `source=<pluginId>` URL，避免 session state 缺失时把真实插件身份和 provider 路由混淆。
+  - `DivisionBoxConfig` 新增 `initialState`，主进程 `DivisionBoxSession` 构造期会先水合 session KV；detached widget 会把 `detachedPayload` 放入初始状态，避免新窗口启动时先读到空 state 再回退搜索。
+  - DivisionBox IPC 对 `initialState` 增加对象校验，避免非对象 payload 进入 session 构造期。
+  - Widget feature 仍走 `tuff://detached` + `detachedPayload` 恢复链路，webcontent feature 仍走 `plugin://<pluginId>/<path>`；普通 app/file 搜索结果不会构造 detached session。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/adapter/hooks/useDetach.test.ts" "src/main/modules/division-box/session.test.ts" "src/main/modules/division-box/ipc.actor.test.ts" "src/main/modules/division-box/command-provider.test.ts"` 通过。
+
+### perf(core-app): lazy DivisionBox memory pressure polling
+
+- `apps/core-app/src/main/modules/division-box/manager.ts`
+- `apps/core-app/src/main/modules/division-box/manager.test.ts`
+  - DivisionBoxManager 不再在单例创建时立即注册 `division-box.memory-pressure`，避免没有 DivisionBox 窗口时仍常驻 30 秒内存轮询。
+  - 当创建 active/cached session 时按需注册内存压力轮询；最后一个 session 销毁、窗口关闭触发 destroy 或缓存驱逐清空后注销任务。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/division-box/manager.test.ts" "src/main/modules/division-box/session.test.ts" "src/main/modules/division-box/ipc.actor.test.ts" "src/main/modules/division-box/command-provider.test.ts" "src/main/modules/division-box/shortcut-trigger.test.ts" "src/renderer/src/modules/box/adapter/hooks/useDetach.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### test(core-app): cover copied app path app-index action
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.test.ts`
+  - 补齐 SystemActionsProvider 回归，固定剪贴板/Files 输入中的 `.exe/.lnk/.appref-ms/.app` 路径会生成“加入应用索引”动作。
+  - 固定 `file://` app URL 会先规范化成本地路径，再进入 app-index action；执行该动作时调用 `appProvider.addAppByPath()`，不会落到文件索引入口。
+  - Windows 文本复制入口补齐未加引号、含空格且带参数的 app 命令行探测，会按 `.exe/.lnk/.appref-ms` 前缀逐段验证已存在文件，再归一化为 app-index action。
+  - 复制 Windows UWP `shell:AppsFolder\\...` 虚拟路径或裸 `PackageFamily!App` AppID 时同样生成 app-index action；AppProvider 会把裸 AppID 归一化为 shell path，允许该虚拟路径进入 `addAppByPath()` 并跳过文件稳定性检查，交给 Windows scanner 解析 UWP app info。
+  - Windows ClickOnce `.appref-ms` 现在在 app-provider 与 Windows scanner 侧一并进入 app 索引链路，避免动作层允许但 `addAppByPath()` 拒绝；Start Menu 扫描、实时变更、单项解析和执行 action 均已有回归。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/win.test.ts" "src/main/modules/box-tool/addon/apps/app-provider.test.ts" "src/main/modules/box-tool/addon/system/system-actions-provider.test.ts"` 通过。
+
+### feat(core-app): add Windows installer handoff strategy
+
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/main/modules/update/services/windows-installer-strategy.ts`
+- `apps/core-app/src/main/modules/update/services/windows-installer-strategy.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/update-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/update-diagnostic-evidence.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Windows 更新安装从单纯 `shell.openPath()` 补强为可测安装器 handoff：NSIS `*-setup.exe` 使用 `/S`，MSI 使用 `msiexec.exe /i <path> /passive /norestart`。
+  - 安装器启动后复用现有 `requestAppQuit()` 退出当前应用，为安装程序释放文件占用；非 setup `.exe` 仍回落到 `shell.openPath()`，避免把裸可执行文件误当安装器。
+  - Settings Update 页新增 `update-diagnostic-evidence` 复制/保存入口，导出 update settings/status、downloadReady/downloadTaskId、cached release/assets、platform/arch 与安装接管模式，Windows 路径会显式记录 `windows-installer-handoff` 与 `unattendedAutoInstallEnabled: false`。
+  - 该改动只覆盖用户触发 install 后的安装启动策略；下载完成后无人值守自动安装仍需明确用户确认、UAC/权限提升与失败回滚策略后再打开。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/update/services/windows-installer-strategy.test.ts" "src/main/modules/update/services/update-action-controller.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/update-diagnostic-evidence.test.ts"` 通过；`pnpm -C "apps/core-app" exec tsc --noEmit -p tsconfig.node.json --composite false --pretty false` 通过。
+
+### perf(core-app): add backpressure for Everything icon warmup
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-worker-status-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider-worker-status.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/everything-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/everything-diagnostic-evidence.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Windows Everything 搜索结果的图标预热新增轻量背压：app task 活跃时跳过可选图标提取，后台图标提取最多保留 4 个并发任务，等待空闲最长 250ms，避免快速输入或应用忙碌时堆积 icon worker。
+  - FileProvider worker 状态快照从单纯 1 秒 TTL 缓存补强为 in-flight 去重；设置页/仪表盘并发刷新时复用同一个 metrics promise，失败不会污染缓存，减少 scan/index/reconcile/icon/thumbnail/search-index worker 的重复状态采样。
+  - 搜索命中、排序与打开文件行为不变；无缓存图标时继续先返回 class fallback，后续命中缓存后再使用真实图标。
+  - Everything 设置页新增 `everything-diagnostic-evidence` 复制/保存入口，导出当前 backend、health、fallbackChain、backendAttemptErrors、errorCode、lastBackendError 与手工回归 case id，便于 Windows 真机 Everything/文件搜索回归记录失败原因。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-worker-status.test.ts"` 通过。
+
+### perf(core-app): avoid battery probes before idle rejection
+
+- `apps/core-app/src/main/service/device-idle-service.ts`
+- `apps/core-app/src/main/service/device-idle-service.test.ts`
+  - `DeviceIdleService.canRun()` 改为先判断系统 idle，再按需读取电量；未达到 idle threshold 时直接返回 `not-idle`，不再触发 Windows PowerShell 电量查询。
+  - 电量状态新增 30 秒短 TTL 缓存与 in-flight 去重；同一 idle 窗口内的多个后台任务复用最近电量结果，冷启动并发读取也只触发一次外部电量探测，供电状态变化时立即失效并重读。
+  - `forceAfter` 仍可绕过 idle threshold，并继续执行电量策略检查，保持低电量保护不变。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/service/device-idle-service.test.ts"` 通过。
+
+### perf(core-app): cache file worker dashboard snapshots briefly
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-worker-status-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider-worker-status.test.ts`
+  - FileProvider worker 状态快照新增 1 秒短 TTL 缓存，TuffDashboard 短时间重复刷新时复用同一批 worker 状态，避免向 scan/index/reconcile/icon/thumbnail/search-index worker 重复发送 metrics 请求。
+  - worker 状态摘要提取为轻量 service，保持 summary 口径可测；缓存窗口很短，不影响手动刷新查看 worker 运行态。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-worker-status.test.ts"` 通过。
+
+### test(core-app): add reusable search trace performance summary
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-trace-stats.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-trace-stats.test.ts`
+- `apps/core-app/scripts/search-trace-stats.ts`
+- `apps/core-app/scripts/search-trace-verify.ts`
+- `apps/core-app/package.json`
+  - 新增 `search-trace-stats/v1` 统计口径，可直接解析现有 `search-trace/v1` 日志行里的 `first.result` 与 `session.end` 事件，输出样本量、P50/P95/P99、最大耗时、慢查询数量与慢查询占比。
+  - 统计结果新增 provider 慢源归因，会聚合慢 trace 详情中的 `providers.summary.topSlow`，输出 provider 级 sampleCount、P95、max、timeout/error 次数与结果数，便于 Windows 200 次采样后定位 Everything/file/app/plugin 哪类 provider 拖慢。
+  - 统计结果显式返回 `enoughSamples`、配对 session 数和缺失 first/end 的 session 数，避免把不足 200 次或不完整采样误判为性能验收通过。
+  - 新增 `pnpm -C "apps/core-app" run search:trace:stats -- --input <log-file> --strict` 本地统计入口，并支持 P95 / slowRatio 阈值参数，便于 Windows 真机采样后直接产出可复核 JSON 证据。
+  - 新增 `pnpm -C "apps/core-app" run search:trace:verify -- --input <stats.json> --minSamples 200 --strict` 复核入口，可对已归档 `search-trace-stats/v1` JSON 重新执行样本数、P95 与 slowRatio 硬门禁，避免采样结果只能人工判读。
+  - 该改动只提供可复用计算入口与门禁判断；真实 Windows 查询采样与 P95 证据仍需在设备上执行。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-trace-stats.test.ts"` 通过；`search:trace:stats` 与 `search:trace:verify` 使用 `/private/tmp/search-trace-smoke.log` / `/private/tmp/search-trace-stats-smoke.json` smoke 通过。
+
+### test(core-app): add clipboard stress summary verifier
+
+- `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.ts`
+- `apps/core-app/src/main/modules/platform/clipboard-stress-verifier.test.ts`
+- `apps/core-app/scripts/clipboard-stress-verify.ts`
+- `apps/core-app/package.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `clipboard:stress:verify`，读取 `clipboard:stress` 的 summary JSON，复核 2 分钟窗口、必需 interval、clipboard scheduler delay P95/max、realtime queue peak、drop/timeout/error。
+  - 该 verifier 只负责压测结果复核，不替代真实“全量索引 + 高频推荐 + 剪贴板图像轮询”设备压测；后续仍需在 Windows 目标设备上运行 `clipboard:stress` 并归档 summary。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/platform/clipboard-stress-verifier.test.ts"` 通过；`pnpm -C "apps/core-app" run clipboard:stress:verify -- --input "/private/tmp/clipboard-stress-summary-smoke.json" --minDurationMs 120000 --requireIntervals 500,250 --maxP95SchedulerDelayMs 100 --maxSchedulerDelayMs 200 --maxRealtimeQueuedPeak 2 --maxDroppedCount 0 --compact` 通过。
+
+### test(core-app): cover app-index diagnostic evidence failure payload
+
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-diagnostic-evidence.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppDiagnostic.vue`
+  - App Index diagnostic 已可复制/保存 `app-index-diagnostic-evidence` JSON，记录目标路径、launchKind/target、bundle/appIdentity、generated/stored keywords、precise/phrase/prefix/FTS/N-gram/subsequence 阶段命中、reindex 状态与手工回归 case id。
+  - 补充 not-found 失败证据回归，固定 `status/reason/matchedStages` 在未命中时仍会进入导出 payload，便于 Windows 真机验证时记录失败原因。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/app-index-diagnostic-evidence.test.ts"` 通过。
+
+### fix(core-app): gate file index idle policy behind advanced settings
+
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+- `apps/core-app/src/main/modules/update/{UpdateService,update-system}.ts`
+- `packages/utils/types/update.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - 文件索引设置页的后台索引策略分组改为仅在“高级设置”开启时显示，与应用索引调度和下载设置的高级显隐规则保持一致。
+  - Nexus 数据分析与存储入口同步收敛到高级设置开关下，并更新高级设置说明文案，减少默认设置页噪音。
+  - 应用更新页的更新渠道、检查频率与 Renderer Override 入口默认隐藏，仅在高级设置开启时显示；自动下载更新的默认配置改为启用。
 
 ## 2026-05-09
+
+### fix(core-app): restore file index auto scan eligibility query
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+  - File Index Auto Scan 的扫描资格检查改用 Drizzle `scanProgress` schema table object，避免字符串表名生成非法 `select  from ?` SQL。
+  - `lastScanned` 解析兼容 `Date`、`number` 与 `string`，避免已扫描路径因时间戳返回类型差异被误判为未扫描。
+
+### feat(nexus): add provider registry backend foundation
+
+- `apps/nexus/server/utils/providerRegistryStore.ts`
+- `apps/nexus/server/utils/sceneRegistryStore.ts`
+- `apps/nexus/server/utils/providerCredentialStore.ts`
+- `apps/nexus/server/utils/tencentMachineTranslationProvider.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/api/v1/scenes/[id]/run.post.ts`
+- `apps/nexus/server/api/v1/scenes/scene-runtime.api.test.ts`
+- `apps/core-app/src/main/modules/nexus/scene-client.ts`
+- `apps/core-app/src/main/modules/nexus/scene-client.test.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/*`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+  - 新增 Nexus 通用 Provider / Scene registry 后端基础，落地 `provider_registry`、`provider_capabilities`、`scene_registry` 与 `scene_strategy_bindings` D1 表、provider CRUD、capability 查询、scene CRUD、strategy binding 管理和 dashboard admin API。
+  - Provider 凭证仅接受 `authRef` 安全存储引用，`apiKey`、`secretId`、`secretKey`、token 等明文字段会在 API 输入边界被拒绝。
+  - 新增 Dashboard Admin 的 Provider Registry 配置页入口，提供 Providers / Capabilities / Scenes 三视图、Provider 创建/状态切换/删除、Capability 只读查看、Scene 创建/状态切换/删除、Scene dry-run/execute 测试面板和 strategy binding 基础管理。
+  - 补充 provider registry 与 scene registry API 回归，覆盖腾讯云机器翻译样例 provider 的 `text.translate`、`image.translate`、`image.translate.e2e` capability 登记，以及截图翻译 scene 的 provider capability binding、列表、更新和删除。
+  - Provider Registry `authRef` 已接入 Nexus D1 密文 secure store：新增 `/api/dashboard/provider-registry/credentials` 绑定接口，`provider_secure_store` 只保存 AES-GCM envelope，生产环境必须配置 `PROVIDER_REGISTRY_SECURE_STORE_KEY` 或同名 Cloudflare binding。
+  - 腾讯云机器翻译样例 provider 新增 `/api/dashboard/provider-registry/providers/:id/check`，解析 `secure://providers/*` 后注入 `secretId/secretKey` 执行 TC3-HMAC-SHA256 `TextTranslate` 轻量检查；返回 latency/requestId/error，不回写 provider status，不泄露凭证。
+  - 新增 Scene Orchestrator 最小执行合同与 `/api/dashboard/provider-registry/scenes/:id/run`：支持 dry-run、priority 候选选择、fallback enabled/disabled 执行、trace、fallbackTrail、usage 与标准错误返回。
+  - 新增普通登录态 `/api/v1/scenes/:id/run` runtime API，复用 Scene Orchestrator 但不要求 Dashboard Admin 权限，供 CoreApp 使用 app token 调用 Scene。
+  - 腾讯云机器翻译 adapter 已覆盖 `text.translate` 与基于官方 `ImageTranslateLLM` 的 `image.translate` / `image.translate.e2e`，将标准 payload 转为 TC3 签名请求并标准化 output、usage、providerRequestId 与 latency。
+  - CoreApp 新增 Nexus Scene client，OmniPanel 内置划词翻译优先调用 `corebox.selection.translate` 的 `text.translate` Scene；成功时将译文写入剪贴板，未登录、Scene 不可用或执行失败时继续降级到原有浏览器翻译入口。
+  - Dashboard Provider Registry 创建表单支持一次性写入腾讯云 `SecretId/SecretKey` 并立即清空输入；provider 卡片新增 Check 操作和最近一次检查结果；scene 卡片可输入 JSON、指定 capability/provider 并查看 trace/output/selection/fallbackTrail。当前仍不包含 CoreBox 截图翻译消费链路、composed pipeline、Metering ledger、Health check 或汇率/AI provider 迁移。
+
+### fix(core-app): clarify clipboard auto-paste and permission prompts
+
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/renderer/src/views/base/{settings/SettingSetup.vue,begin/internal/SetupPermissions.vue}`
+  - Clipboard 自动粘贴失败改由主进程统一发送 system notification，并使用稳定 `clipboard-auto-paste-failed:*` ID/dedupeKey 避免重复通知。
+  - macOS `System Events` 自动化权限失败文案从辅助功能中拆出，明确提示前往“系统设置 -> 隐私与安全性 -> 自动化”允许 Tuff 控制 System Events。
+  - macOS 通知权限检查不再把不可读取状态显示为“未检查”，改为 `unverifiable` 并在设置页提示需到系统设置确认。
+  - CoreBox clipboard apply 渲染侧开始识别 `{ success:false }` 返回值，避免 transport 正常返回失败结果时仍被当成成功。
+
+### fix(nexus): alias next-auth core for nitro builds
+
+- `apps/nexus/nuxt.config.ts`
+  - 为 Nitro 与 Vite resolve 增加 `next-auth/core` 到本地包入口的 alias，避免 Cloudflare / node-server 构建解析到不兼容入口。
+
+### fix(core-app): constrain DivisionBox detach to active features
+
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/views/box/{ActivatedProviders.vue,DivisionBoxHeader.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+  - CoreBox `Command/Ctrl+D` 不再对普通搜索结果创建 detached item，只有进入插件 feature 或已附加插件 UI view 后才允许分离窗口。
+  - DivisionBox header 的 active provider pill 关闭入口改为不可见，避免在分离窗口内误退出当前插件上下文。
+  - DivisionBox 分离成功后若 provider 状态清理失败，仅记录 warning，不再把已创建窗口误报为“分离失败”。
+  - DivisionBox 顶栏控制按钮改为固定点击区并通过 `TuffIcon size` 显式控制图标尺寸。
+  - Widget feature 分离恢复 `detachedPayload` 状态传递，独立窗口继续走 CoreBox widget renderer；DivisionBox icon contract 放宽为 `string | ITuffIcon`，避免 file/url 插件图标在分离后丢失。
+
+### docs(nexus): define provider aggregation and scene orchestration plan
+
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 新增 Nexus Provider 聚合与 Scene 编排重构权威 PRD，统一 `Provider / Capability / Scene / Strategy / Metering` 模型。
+  - 明确 `exchangeRateService` 后续迁移为 `fx.rate.latest/fx.convert` capability，Nexus dashboard AI providers 迁移为通用 Provider registry 的 `ai.*` / `chat.*` 能力域。
+  - 将文本翻译、图片翻译、截图翻译纳入同一 Provider registry，不再为每个场景新增孤立供应商配置。
+  - 明确 Nexus 当前没有截图翻译/图片翻译/腾讯云机器翻译的现成配置页；腾讯云机器翻译是新增 Provider 配置面的首个候选样例，同一 Provider 暴露 `text.translate`、`image.translate`、`image.translate.e2e` 等 capability，计量规则进入 Metering 而非 Scene 私有逻辑。
+  - 补齐范围/非目标、业务目标/工程目标、迁移映射、兼容边界、建议数据表、错误码基线、风险待决项与验收清单。
+  - 同步 README、INDEX、TODO、路线图与质量基线入口；Phase 1 文档化任务已标记完成，后续实现仍需补最近路径 typecheck/test/docs guard 证据。
 
 ### feat(core-app/nexus): collect provider-level search performance telemetry
 
@@ -16,6 +2052,25 @@
   - 新增 CoreApp search telemetry 与 Nexus provider 聚合定向测试；当前环境缺少已安装依赖，`vitest` 命令因 `Command "vitest" not found` 未能执行。
 
 ## 2026-05-08
+
+### fix(core-app): stabilize packaged widget compile pipeline
+
+- `apps/core-app/src/main/modules/plugin/widget/widget-transform.ts`
+- `apps/core-app/src/main/modules/plugin/widget/{widget-manager.ts,processors/*}`
+- `apps/core-app/scripts/build-target/{runtime-modules.js,build-target.js}`
+- `apps/core-app/src/renderer/src/{modules/plugin/widget-registry.ts,components/render/{CoreBoxRender,WidgetFrame}.vue}`
+- `packages/utils/{plugin/widget.ts,transport/events/index.ts}`
+  - Widget processor 统一改走懒加载 transform helper，生产包优先解析 `resources/node_modules/@esbuild/*` 与 `app.asar.unpacked` 中的真实二进制，`spawn ENOTDIR/ENOENT/EACCES` 归类为 `WIDGET_COMPILER_BINARY_UNAVAILABLE`。
+  - Runtime module manifest 将 `esbuild` 提升为 resources 运行时依赖，并显式声明 macOS/Linux/Windows x64/arm64 的 `@esbuild/*` 平台包；打包后校验缺失或不可执行二进制时 fail-fast。
+  - `WidgetManager` 保持已编译缓存优先，新增 `widgetId + hash` 短期失败缓存、结构化 issue meta 与 `plugin:widget:failed` payload，避免同一源码重复 transform 和刷屏日志。
+  - CoreBox custom renderer 未注册时仍进入 `WidgetFrame`，renderer 可见展示加载中、未注册、编译失败与渲染失败状态，不再只落到 debug `<pre>` 或空白。
+
+### fix(core-app): restore plugin issue dialog scrolling
+
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginIssues.vue`
+  - 插件问题弹层改为使用 `FlipDialog` body 的内建滚动边界，避免内容超过弹层高度时被外层 `overflow: hidden` 截断。
+  - `PluginIssues` 移除内嵌 `TouchScroll` 百分比高度依赖，问题列表随弹层内容自然撑开并由父级滚动。
 
 ### fix(core-app): hard-cut renderer storage bootstrap warnings
 
@@ -116,6 +2171,24 @@
   - CoreBox show-triggered clipboard scans are treated as `corebox-show-baseline`, so old clipboard content can update history/tags without being auto-filled.
   - Renderer AutoPaste no longer uses history `createdAt/timestamp` as copy freshness; it requires main-process eligibility and uses `freshnessBaseAt ?? observedAt` for TTL.
 
+### fix(core-app): add local encrypted fallback for secure store
+
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/sync/sync-payload-crypto.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-mcp-registry.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/transport/events/app.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `packages/utils/transport/sdk/domains/app.ts`
+  - Secure store no longer calls Electron `safeStorage` / system Keychain. It now always uses a per-runtime `config/local-secret.v1.key` local root secret with AES-256-GCM envelopes, avoiding startup-time system credential prompts.
+  - Auth token, sync payload key, and machine seed storage continue to pass explicit purposes (`auth-token`, `sync-payload-key`, `machine-seed`) and stay encrypted at rest by the local root secret.
+  - Credential persistence now defaults to enabled; old default-disabled settings migrate to persistent protection unless the user has explicitly overridden the setting.
+  - Sync payload encryption continues to emit only `payload_enc` / `payload_ref`; legacy `b64:` payloads remain read-only migration input and encrypted key registration now records the local-secret wrapping backend.
+  - Settings/transport diagnostics expose secure-store health (`local-secret` or `unavailable`) and no longer report or initialize a system credential-store backend.
+
 ### fix(core-app): restore opt-in secure storage and plugin icons
 
 - `packages/utils/common/storage/entity/app-settings.ts`
@@ -130,7 +2203,7 @@
 - `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
 - `packages/utils/__tests__/renderer-storage-transport.test.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
-  - Auth `useSecureStorage` now defaults to `false`; missing settings stay in session-only mode and no longer touch Electron `safeStorage` during cold startup or session-only token clear.
+  - Superseded by the 2026-05-09 secure-store backend split: credential persistence now defaults to enabled and `safeStorage` unavailability falls back to local encrypted storage instead of session-only mode.
   - Plugin `file` icons now resolve from plugin root first, then `src/...` and `public/<filename>` for source-layout plugins; dev-server URLs are only used after local candidates miss.
   - CoreApp icon rendering now preserves SVG color with direct `<img>` when `colorful=true`, and SVG text fetch failure no longer forces an error state when a direct local `tfile` render is available.
   - Electron sandbox renderer detection now recognizes preload-exposed `window.electron.ipcRenderer`, allowing local SVG reads through the network SDK in sandboxed renderer contexts.

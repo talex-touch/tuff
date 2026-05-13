@@ -1,12 +1,12 @@
 import { requireAdmin } from '../../../utils/auth'
-import { listProviders } from '../../../utils/intelligenceStore'
+import { listIntelligenceProvidersWithRegistryMirrors } from '../../../utils/intelligenceProviderRegistryBridge'
 
 /**
  * Returns available models for the current user, aggregated from all enabled providers.
  */
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdmin(event)
-  const providers = await listProviders(event, userId)
+  const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
 
   const models: Array<{
     id: string
