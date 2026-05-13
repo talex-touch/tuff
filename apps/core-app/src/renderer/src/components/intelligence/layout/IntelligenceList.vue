@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TuffListGroup } from '~/components/tuff/template/TuffListTemplate.vue'
 import TuffListTemplate from '~/components/tuff/template/TuffListTemplate.vue'
+import { useAuth } from '~/modules/auth/useAuth'
 import IntelligenceItem from './IntelligenceItem.vue'
 
 interface IntelligenceProviderConfig {
@@ -34,6 +35,7 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { isLoggedIn } = useAuth()
 const selectedId = ref<string | null>(props.selectedId || null)
 const normalizedQuery = computed(() => props.searchQuery?.trim().toLowerCase() ?? '')
 
@@ -132,6 +134,7 @@ function isProvider(item: unknown): item is IntelligenceProviderConfig {
           v-if="isProvider(item)"
           :provider="item"
           :is-selected="item.id === selectedId"
+          :is-logged-in="isLoggedIn"
           role="listitem"
           @click="handleItemClick(item.id)"
         />

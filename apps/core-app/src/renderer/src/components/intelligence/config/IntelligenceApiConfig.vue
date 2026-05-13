@@ -9,6 +9,7 @@ import { useI18n } from 'vue-i18n'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import { isNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 
 const props = defineProps<{
@@ -51,14 +52,6 @@ const baseUrlError = ref('')
 const testError = ref('')
 const testResult = ref('')
 const isTesting = ref(false)
-
-function isNexusManagedProvider(provider: IntelligenceProviderConfig): boolean {
-  if (provider.id === 'tuff-nexus-default') {
-    return true
-  }
-  const origin = provider.metadata?.origin
-  return typeof origin === 'string' && origin === 'tuff-nexus'
-}
 
 const requiresApiKey = computed(() => {
   if (props.modelValue.type === 'local') {
@@ -141,6 +134,7 @@ async function handleTest() {
       models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
       defaultModel: props.modelValue.defaultModel || undefined,
       instructions: props.modelValue.instructions || undefined,
+      metadata: props.modelValue.metadata ? { ...props.modelValue.metadata } : undefined,
       timeout: Number(props.modelValue.timeout) || 30000,
       rateLimit: props.modelValue.rateLimit
         ? {

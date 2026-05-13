@@ -4,8 +4,10 @@ import type {
   TuffItemBadge,
   TuffItemStatusDot
 } from '~/components/tuff/template/TuffItemTemplate.vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
+import { isNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -38,18 +40,11 @@ interface IntelligenceProviderConfig {
 const props = defineProps<{
   provider: IntelligenceProviderConfig
   isSelected: boolean
+  isLoggedIn?: boolean
 }>()
 
 const { t } = useI18n()
 const localEnabled = ref(props.provider.enabled)
-
-function isNexusManagedProvider(provider: IntelligenceProviderConfig): boolean {
-  if (provider.id === 'tuff-nexus-default') {
-    return true
-  }
-  const origin = provider.metadata?.origin
-  return typeof origin === 'string' && origin === 'tuff-nexus'
-}
 
 // Watch for external changes to provider.enabled
 watch(
@@ -85,11 +80,26 @@ const hasConfigError = computed(() => {
   return false
 })
 
+const providerSubtitle = computed(() => {
+  if (!isNexusManagedProvider(props.provider)) {
+    return props.provider.type
+  }
+  return props.isLoggedIn
+    ? t('intelligence.item.nexusAuthReady')
+    : t('intelligence.item.nexusAuthRequired')
+})
+
 // Error badge configuration
 const errorBadge = computed<TuffItemBadge>(() => ({
   text: t('intelligence.item.configError'),
   status: 'danger',
   icon: 'i-ri-error-warning-line'
+}))
+
+const nexusBadge = computed<TuffItemBadge>(() => ({
+  text: t('intelligence.item.nexusOfficial'),
+  status: props.isLoggedIn ? 'success' : 'info',
+  icon: 'i-carbon-cloud-service-management'
 }))
 
 // Status dot configuration
@@ -125,10 +135,10 @@ function handleClick() {
 <template>
   <TuffItemTemplate
     :title="provider.name"
-    :subtitle="provider.type"
+    :subtitle="providerSubtitle"
     :icon="getProviderIcon(provider.type)"
     :selected="isSelected"
-    :top-badge="hasConfigError ? errorBadge : undefined"
+    :top-badge="hasConfigError ? errorBadge : isNexusManagedProvider(provider) ? nexusBadge : undefined"
     :status-dot="statusDot"
     :aria-label="t('intelligence.item.selectProvider', { name: provider.name })"
     @click="handleClick"

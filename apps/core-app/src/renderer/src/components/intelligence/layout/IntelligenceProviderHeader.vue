@@ -6,6 +6,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -21,6 +22,7 @@ interface IntelligenceProviderConfig {
   type: IntelligenceProviderType | string
   name: string
   enabled: boolean
+  metadata?: Record<string, unknown>
   apiKey?: string
   baseUrl?: string
   models?: string[]
@@ -67,6 +69,10 @@ const localEnabled = computed({
   }
 })
 
+const isNexusManagedProvider = computed(() => {
+  return checkNexusManagedProvider(props.provider)
+})
+
 const providerIcon = computed<ITuffIcon>(() => {
   return providerIconMap[props.provider.type as IntelligenceProviderType] ?? defaultIcon
 })
@@ -101,6 +107,13 @@ function closeDeleteConfirm() {
         </h1>
         <p id="provider-type" class="text-sm text-gray-600 dark:text-gray-400">
           {{ provider.type }}
+        </p>
+        <p
+          v-if="isNexusManagedProvider"
+          class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-[var(--tx-color-primary)] bg-[var(--tx-color-primary-soft)]"
+        >
+          <i class="i-carbon-cloud-service-management" />
+          <span>{{ t('settings.intelligence.nexusOfficialProvider') }}</span>
         </p>
       </div>
     </div>

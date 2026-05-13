@@ -18,6 +18,16 @@
   - CoreApp 新增 `NexusProvider` adapter，并在 `CUSTOM` provider factory 中对 `tuff-nexus-default` / `metadata.origin=tuff-nexus` 分流；官方 app 登录后使用注入的 app token 自动调用 Nexus AI，未登录时返回 `NEXUS_AUTH_REQUIRED` 让本地 SDK fallback 到其它 provider。
   - Stable 范围保持文本 + OCR：`text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`；Scene runtime 全量产品化仍留在 2.5.x 后续。
 
+### feat(core-app): surface Nexus AI provider auth status
+
+- `apps/core-app/src/renderer/src/components/intelligence/layout/{IntelligenceInfo.vue,IntelligenceItem.vue,IntelligenceList.vue,IntelligenceProviderHeader.vue}`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `apps/core-app/src/renderer/src/modules/intelligence/{nexus-provider.ts,nexus-provider.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+  - Intelligence 渠道页新增 Nexus 官方托管状态展示：列表与详情页标识登录态是否可自动调用 Nexus，未登录时提供登录入口并说明 fallback 行为，避免用户误填本地 API Key。
+  - 设置页 provider 测试与模型拉取会保留 `metadata.origin=tuff-nexus`，Nexus-managed provider 不再要求用户填写本地 API Key。
+
 ### chore(release): prepare 2.4.10 beta CI readiness
 
 - `package.json`

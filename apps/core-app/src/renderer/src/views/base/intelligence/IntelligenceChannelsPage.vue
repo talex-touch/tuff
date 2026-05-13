@@ -16,6 +16,10 @@ import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
+import {
+  isNexusManagedProvider,
+  TUFF_NEXUS_PROVIDER_ID
+} from '~/modules/intelligence/nexus-provider'
 import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
@@ -23,7 +27,6 @@ import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 const { t } = useI18n()
 const transport = useTuffTransport()
 const aiClient = createIntelligenceClient(transport)
-const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 
 const {
   providers,
@@ -54,17 +57,6 @@ function normalizeProviderType(type: string): IntelligenceProviderType {
   }
 }
 
-function isNexusPreferredProvider(provider: {
-  id?: string
-  metadata?: Record<string, unknown> | null
-}): boolean {
-  if (provider.id === TUFF_NEXUS_PROVIDER_ID) {
-    return true
-  }
-  const origin = provider.metadata?.origin
-  return typeof origin === 'string' && origin === 'tuff-nexus'
-}
-
 function toNexusFallbackProvider(): IntelligenceProviderConfig {
   const baseUrl = `${getRuntimeNexusBaseUrl().replace(/\/+$/, '')}/v1`
   return {
@@ -88,7 +80,7 @@ function toNexusFallbackProvider(): IntelligenceProviderConfig {
 
 function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
   const normalizedType = normalizeProviderType(record.type)
-  const nexusPreferred = isNexusPreferredProvider(record)
+  const nexusPreferred = isNexusManagedProvider(record)
   const resolvedProviderId = nexusPreferred ? TUFF_NEXUS_PROVIDER_ID : record.id
   const existing = providers.value.find((item) => item.id === resolvedProviderId)
   const hasCredential =
