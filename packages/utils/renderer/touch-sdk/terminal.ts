@@ -1,15 +1,5 @@
 import type { ITuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-
-const terminalCreateEvent = defineRawEvent<{ command: string, args?: string[] }, { id: string }>(
-  'terminal:create',
-)
-const terminalWriteEvent = defineRawEvent<{ id: string, data: string }, void>('terminal:write')
-const terminalKillEvent = defineRawEvent<{ id: string }, void>('terminal:kill')
-const terminalDataEvent = defineRawEvent<{ id: string, data: string }, void>('terminal:data')
-const terminalExitEvent = defineRawEvent<{ id: string, exitCode: number | null }, void>(
-  'terminal:exit',
-)
+import { TerminalEvents } from '@talex-touch/utils/transport/events'
 
 type DataCallback = (data: string) => void
 type ExitCallback = (exitCode: number | null) => void
@@ -37,17 +27,17 @@ export class Terminal {
     // However, for simplicity in this refactor, we'll assume exec is called for a new, independent command.
     // A more robust implementation might track multiple concurrent processes.
 
-    const { id } = await this.transport.send(terminalCreateEvent, { command, args })
+    const { id } = await this.transport.send(TerminalEvents.session.create, { command, args })
     this.id = id
 
     // Re-register listeners for the new process ID
-    this.transport.on(terminalDataEvent, (payload) => {
+    this.transport.on(TerminalEvents.session.data, (payload) => {
       if (this.id === payload.id && this.onDataCallback) {
         this.onDataCallback(payload.data)
       }
     })
 
-    this.transport.on(terminalExitEvent, (payload) => {
+    this.transport.on(TerminalEvents.session.exit, (payload) => {
       if (this.id === payload.id && this.onExitCallback) {
         this.onExitCallback(payload.exitCode)
         this.id = null
@@ -64,7 +54,7 @@ export class Terminal {
    */
   public write(data: string): void {
     if (this.id) {
-      void this.transport.send(terminalWriteEvent, { id: this.id, data })
+      void this.transport.send(TerminalEvents.session.write, { id: this.id, data })
     }
   }
 
@@ -73,7 +63,7 @@ export class Terminal {
    */
   public kill(): void {
     if (this.id) {
-      void this.transport.send(terminalKillEvent, { id: this.id })
+      void this.transport.send(TerminalEvents.session.kill, { id: this.id })
       this.id = null
     }
   }

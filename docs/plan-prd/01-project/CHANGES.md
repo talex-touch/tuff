@@ -16,6 +16,52 @@
   - 关闭“后续批梳理/无损候选确认”与“wire-name 迁移方案”子项；下一步进入 `sync` 或 `terminal` 的 alias registry + dual listen 第一实施切片。
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` 通过（1 file / 4 tests）。
 
+### refactor(transport): migrate sync retained event aliases
+
+- `packages/utils/transport/events/sync.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/sync/index.ts`
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 shared `SyncEvents.lifecycle.start/stop/trigger` canonical typed events，对应 wire name 为 `sync:lifecycle:*`；保留 `SyncEvents.legacy.start/stop/trigger` 承载 `sync:start/stop/trigger` 兼容窗口。
+  - `SyncModule` main handler 同时监听 canonical 与 legacy alias，renderer `auto-sync-manager` 改为发送 canonical event，业务文件内局部 `defineRawEvent('sync:*')` 清零。
+  - `transport-domain-sdks.test.ts` 固定 sync canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `265` 收紧到 `264`，`typedCandidates` 保持 `0`。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 28 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
+### refactor(transport): migrate terminal retained event aliases
+
+- `packages/utils/transport/events/terminal.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/renderer/touch-sdk/terminal.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 shared `TerminalEvents.session.create/write/kill/data/exit` canonical typed events，对应 wire name 为 `terminal:session:*`；保留 `TerminalEvents.legacy.*` 承载 `terminal:create/write/kill/data/exit` 兼容窗口。
+  - `TerminalModule` main handler 对 create/write/kill 同时监听 canonical 与 legacy alias；data/exit push 在兼容窗口内同时广播 canonical 与 legacy，避免旧监听端丢事件。
+  - Renderer touch SDK `Terminal` 改为发送/监听 canonical event，业务文件内局部 `defineRawEvent('terminal:*')` 清零。
+  - `transport-domain-sdks.test.ts` 固定 terminal canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `264` 收紧到 `259`，`typedCandidates` 保持 `0`。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 29 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
+### feat(core-app): proxy authenticated Nexus uploads
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/renderer/src/modules/store/nexus-auth-client.ts`
+  - 新增 `auth:nexus-upload` 主进程代理，renderer 将 `FormData` 的普通字段与文件字节序列化后发送到主进程，由主进程重建 `FormData` 并注入 Nexus app token。
+  - `uploadNexusWithAuth()` 复用现有 Nexus 登录态，不把 token 暴露给 renderer，支持用户插件上传、包预览、版本 re-edit 等 multipart 请求。
+  - 上传文件 bytes 在主进程显式复制为 `ArrayBuffer` 后构造 `Blob`，避免 Node/Electron `BlobPart` 类型不兼容。
+
+### feat(nexus): support plugin API key publishing
+
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/dashboard/plugins*.ts`
+  - 新增 `requireAuthOrApiKey()`，Dashboard plugin 管理 API 可接受登录态或带 `plugin:read` / `plugin:publish` scope 的 API key。
+  - 插件创建接口支持同次提交 `initialVersion`、`initialChannel`、`initialChangelog` 与 package 文件，服务端创建 plugin 后立即发布初始版本；初始版本发布失败时回滚新建 plugin，避免孤儿草稿。
+  - Dashboard assets 创建表单不再先创建 plugin 再二次发布版本，改为一次 multipart 请求完成创建与首版发布。
+
 ### docs(plan): index 04-implementation draft status
 
 - `docs/plan-prd/04-implementation/README.md`

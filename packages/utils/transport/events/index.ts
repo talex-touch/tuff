@@ -463,6 +463,8 @@ import type {
   TransportPortUpgradeRequest,
   TransportPortUpgradeResponse,
 } from "./types/transport";
+import { SyncEvents } from "./sync";
+import { TerminalEvents } from "./terminal";
 
 // ============================================================================
 // Clipboard Events
@@ -2687,6 +2689,8 @@ export const TuffEvents = {
   agents: AgentsEvents,
   transport: TransportEvents,
   sentry: SentryEvents,
+  sync: SyncEvents,
+  terminal: TerminalEvents,
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
   metaOverlay: MetaOverlayEvents,
@@ -2695,4 +2699,4 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AppEvents, MetaOverlayEvents };
+export { AppEvents, MetaOverlayEvents, SyncEvents, TerminalEvents };

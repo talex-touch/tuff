@@ -7,6 +7,8 @@ import {
   PermissionEvents,
   PluginEvents,
   StorageEvents,
+  SyncEvents,
+  TerminalEvents,
   UpdateEvents,
 } from '../transport/events'
 import { AssistantEvents } from '../transport/events/assistant'
@@ -140,6 +142,42 @@ describe('transport domain sdk mappings', () => {
       module: 'storage',
       action: 'open-in-editor',
     })
+  })
+
+  it('sync lifecycle events expose canonical names and retained legacy aliases', () => {
+    expect(SyncEvents.lifecycle.start.toEventName()).toBe(
+      'sync:lifecycle:start',
+    )
+    expect(SyncEvents.lifecycle.start).toMatchObject({
+      namespace: 'sync',
+      module: 'lifecycle',
+      action: 'start',
+    })
+    expect(SyncEvents.lifecycle.trigger.toEventName()).toBe(
+      'sync:lifecycle:trigger',
+    )
+    expect(SyncEvents.legacy.start.toEventName()).toBe('sync:start')
+    expect(SyncEvents.legacy.stop.toEventName()).toBe('sync:stop')
+    expect(SyncEvents.legacy.trigger.toEventName()).toBe('sync:trigger')
+  })
+
+  it('terminal session events expose canonical names and retained legacy aliases', () => {
+    expect(TerminalEvents.session.create.toEventName()).toBe(
+      'terminal:session:create',
+    )
+    expect(TerminalEvents.session.create).toMatchObject({
+      namespace: 'terminal',
+      module: 'session',
+      action: 'create',
+    })
+    expect(TerminalEvents.session.data.toEventName()).toBe(
+      'terminal:session:data',
+    )
+    expect(TerminalEvents.legacy.create.toEventName()).toBe('terminal:create')
+    expect(TerminalEvents.legacy.write.toEventName()).toBe('terminal:write')
+    expect(TerminalEvents.legacy.kill.toEventName()).toBe('terminal:kill')
+    expect(TerminalEvents.legacy.data.toEventName()).toBe('terminal:data')
+    expect(TerminalEvents.legacy.exit.toEventName()).toBe('terminal:exit')
   })
 
   it('storage sdk maps app storage operations to typed storage events', async () => {

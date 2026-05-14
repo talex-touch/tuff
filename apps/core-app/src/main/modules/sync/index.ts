@@ -13,7 +13,7 @@ import { CloudSyncError, CloudSyncSDK, StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { SyncEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
@@ -109,34 +109,31 @@ let syncEnabledWatcherCleanup: (() => void) | null = null
 let authStateCleanup: (() => void) | null = null
 let syncPayloadKeyRegistrationPromise: Promise<void> | null = null
 
+function isSyncTestEnvironment(): boolean {
+  return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
+}
+
 export const __syncMigrationTestHooks = {
   resetDirtyStateForTest(): void {
-    if (process.env.NODE_ENV !== 'test') return
+    if (!isSyncTestEnvironment()) return
     dirtyStorages.clear()
     pendingBlobStorages.clear()
     clearPushTimers()
     setQueueDepthByBuffers()
   },
   markB64PayloadAppliedForTest(qualifiedName: string): void {
-    if (process.env.NODE_ENV !== 'test') return
+    if (!isSyncTestEnvironment()) return
     markB64MigrationPayloadForRepush(qualifiedName)
   },
   isDirtyForTest(qualifiedName: string): boolean {
-    if (process.env.NODE_ENV !== 'test') return false
+    if (!isSyncTestEnvironment()) return false
     return dirtyStorages.has(qualifiedName)
   },
   hasScheduledPushForTest(): boolean {
-    if (process.env.NODE_ENV !== 'test') return false
+    if (!isSyncTestEnvironment()) return false
     return Boolean(pushTimer)
   }
 }
-
-const syncStartEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:start')
-const syncStopEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:stop')
-const syncTriggerEvent = defineRawEvent<
-  { reason?: 'user' | 'focus' | 'online' },
-  { success: boolean }
->('sync:trigger')
 
 function isSyncStorageKey(name: string): boolean {
   return SYNC_STORAGE_KEYS.includes(name)
@@ -1668,26 +1665,35 @@ export class SyncModule extends BaseModule<TalexEvents> {
     transport = getTuffTransportMain(channel, keyManager)
 
     if (transport) {
+      const startHandler = async () => {
+        await startAutoSync()
+        return { success: true }
+      }
+      const stopHandler = (payload: { reason?: string } | undefined) => {
+        const reason = payload?.reason ? String(payload.reason) : 'stop'
+        stopAutoSync(reason)
+        return { success: true }
+      }
+      const triggerHandler = async (
+        payload: { reason?: 'user' | 'focus' | 'online' } | undefined
+      ) => {
+        const reason =
+          payload?.reason === 'online' || payload?.reason === 'focus' ? payload.reason : 'user'
+        await triggerManualSync(reason)
+        return { success: true }
+      }
+
       this.transportDisposers.push(
-        transport.on(syncStartEvent, async () => {
-          await startAutoSync()
-          return { success: true }
-        })
+        transport.on(SyncEvents.lifecycle.start, startHandler),
+        transport.on(SyncEvents.legacy.start, startHandler)
       )
       this.transportDisposers.push(
-        transport.on(syncStopEvent, (payload) => {
-          const reason = payload?.reason ? String(payload.reason) : 'stop'
-          stopAutoSync(reason)
-          return { success: true }
-        })
+        transport.on(SyncEvents.lifecycle.stop, stopHandler),
+        transport.on(SyncEvents.legacy.stop, stopHandler)
       )
       this.transportDisposers.push(
-        transport.on(syncTriggerEvent, async (payload) => {
-          const reason =
-            payload?.reason === 'online' || payload?.reason === 'focus' ? payload.reason : 'user'
-          await triggerManualSync(reason)
-          return { success: true }
-        })
+        transport.on(SyncEvents.lifecycle.trigger, triggerHandler),
+        transport.on(SyncEvents.legacy.trigger, triggerHandler)
       )
     }
 

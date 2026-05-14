@@ -19,7 +19,7 @@ const IGNORED_PATH_PARTS = new Set([
   'node_modules',
 ])
 
-const RETAINED_RAW_EVENT_DEFINITION_MAX = 265
+const RETAINED_RAW_EVENT_DEFINITION_MAX = 259
 
 const RAW_SEND_ALLOWLIST = new Set([
   'apps/core-app/src/main/modules/division-box/state-sync.ts:division-box:session-changed',
