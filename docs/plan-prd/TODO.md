@@ -873,7 +873,8 @@
 - [x] Transport Wave A 指标拆分：把 raw send violation 与 retained `defineRawEvent` definition 分开统计；2026-05-10 已在 `transport-event-boundary.test.ts` 输出 `rawSendViolations`、`retainedRawEventDefinitions` 与 `typedMigrationCandidates`，并继续禁止三段 typed-builder 形态新增 raw definition。
 - [x] Transport Wave A retained event 迁移第一批：2026-05-11 已迁移当前扫描到的三段 retained raw event：`system:permission:*` 与 `omni-panel:feature:*`，外部事件名保持不变；`typedMigrationCandidates` 当前为 `0`，retained raw definition 当前上限为 `265`。
 - [x] Transport Wave A retained event 迁移后续批梳理：2026-05-14 复核 CoreBox / terminal / auth / sync / opener 后确认该批共 `62` 个 retained raw definitions，`typedCandidates=0`；当前均为一段、二段或特殊命名事件，不存在不改 wire name 的 typed builder 迁移候选。已补跑 `pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` 通过（4 tests）。
-- [ ] Transport retained non-conforming event names 迁移方案：为 CoreBox / terminal / auth / sync / opener 的一段、二段或特殊事件名设计显式 wire-name 迁移策略；在兼容窗口、SDK alias 与主/渲染/插件调用点同步方案明确前，继续保留 raw definition。
+- [x] Transport retained non-conforming event names 迁移方案：2026-05-14 已新增 `docs/plan-prd/04-implementation/TransportRetainedEventWireNamePlan-260514.md`，明确 CoreBox / terminal / auth / sync / opener 的 canonical typed event 目标、legacy alias registry、双监听、legacy hit evidence 与 hard-cut 关闭条件。
+- [ ] Transport retained event 第一实施切片：优先从 `sync` 或 `terminal` 开始落地 alias registry + dual listen + canonical sender；迁移时保持 legacy wire name 兼容窗口，补 domain/main/renderer 定向测试并收紧 retained raw definition 上限。
 - [ ] AI Wave B：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
 - [x] AI Wave B 假值治理第一切片：`system/serve/stat` 已改用 Node runtime metrics，采集不完整时返回 degraded/unavailable reason；支付 mock/DUMMY 订单已由 `AIAPP_PAYMENT_MODE=mock` 门控，非 mock 环境返回 `PAYMENT_PROVIDER_UNAVAILABLE`。
 - [x] Plugin storage 治理第一切片：`plugins/touch-image` 图片历史路径已从 renderer `localStorage` 写入迁到 plugin storage SDK，固定 50 条上限，补一次性旧数据迁移、缩略图失败剔除与清理入口。

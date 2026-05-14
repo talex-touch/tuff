@@ -7,10 +7,13 @@
 
 ### docs(transport): close retained event follow-up scan
 
+- `docs/plan-prd/04-implementation/TransportRetainedEventWireNamePlan-260514.md`
+- `docs/plan-prd/04-implementation/README.md`
 - `docs/plan-prd/TODO.md`
   - 复核 Transport Wave A 后续批点名范围：CoreBox / terminal / auth / sync / opener 当前共 `62` 个 retained raw definitions，`typedCandidates=0`。
   - 该批事件均为一段、二段或特殊命名事件，例如 `sync:start`、`terminal:create`、`auth:get-state`、`core-box:ui-resume`、`@install-plugin`，直接迁到 typed builder 会改变 wire name 或 metadata 语义；本轮不改运行时 IPC 协议。
-  - 关闭“后续批梳理/无损候选确认”子项，并新增独立待办跟踪 retained non-conforming event names 的显式 wire-name 迁移方案。
+  - 新增 retained non-conforming event names wire-name 迁移方案，固定 canonical typed event 目标、legacy alias registry、双监听、legacy hit evidence 与 hard-cut 关闭条件；`04-implementation/README.md` 已登记为当前参考。
+  - 关闭“后续批梳理/无损候选确认”与“wire-name 迁移方案”子项；下一步进入 `sync` 或 `terminal` 的 alias registry + dual listen 第一实施切片。
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` 通过（1 file / 4 tests）。
 
 ### docs(plan): index 04-implementation draft status

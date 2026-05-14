@@ -27,6 +27,7 @@
 | `SqliteRetryRetrier260222.md` | 实施草案 | 继续推进前需先对照当前 `sqlite-retry` 与 `createRetrier` 实现，避免重复迁移。 |
 | `StorageUnified260111.md` | 历史参考 | Storage 双轨分析保留；当前 SoT 规则以 SQLite 本地权威源与密文 sync payload 约束为准。 |
 | `TaskScheduler260111.md` | 历史参考 | 调度模型保留为设计来源；当前周期任务优先复用 `PollingService` 与已落地的 startup/background gate。 |
+| `TransportRetainedEventWireNamePlan-260514.md` | 当前参考 | Transport retained non-conforming event names 的 wire-name 迁移方案；后续按 alias registry、双监听、发送端切换与 hard-cut evidence 分批实施。 |
 | `TuffTransportMigration260111.md` | 历史参考 / 待重写 | 已补 TL;DR；当前边界以 typed event boundary、retained raw definition 清册与 Wave A 为准。 |
 | `TuffTransportPortPlan260111.md` | 方案参考 | 可作为 MessagePort/Port 抽象后续输入；不得替代当前 Transport Wave A 验收。 |
 | `WidgetSandboxIsolation260221.md` | 历史参考 / 待重写 | 部分能力已落地；当前 widget 验收以 DivisionBox detached widget 真机 evidence 为准。 |
