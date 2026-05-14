@@ -5,6 +5,23 @@
 
 ## 2026-05-14
 
+### fix(core-app): enable sanitized telemetry upload by default
+
+- `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/sentry/telemetry-sanitizer.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.test.ts`
+- `apps/core-app/src/renderer/src/modules/sentry/sentry-renderer.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Nexus/Sentry telemetry 默认开启，用户仍可在设置中手动关闭；登录后仅关联稳定用户 ID，不上传邮箱/用户名/设备指纹。
+  - 新增端侧 Nexus telemetry sanitizer，搜索上报继续禁止搜索明文，仅保留 `firstResultMs/providerTimings/providerResults/providerStatus/queryLength` 等脱敏性能字段；feature/performance metadata 改为 allowlist。
+  - Sentry `beforeSend` 增加隐私收口，上传前剔除 request、breadcrumbs、extra、modules、server name、stack frame 文件路径/上下文/变量，并将 message/exception value 统一脱敏。
+  - 设置页文案同步说明默认开启、登录关联用户 ID、可手动关闭，以及不会上传搜索明文、文件路径、剪贴板内容、邮箱、密钥、prompt/response 等敏感数据。
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 与 `pnpm -C "apps/core-app" run typecheck:web` 已恢复通过（web 仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
 ### docs(transport): close retained event follow-up scan
 
 - `docs/plan-prd/04-implementation/TransportRetainedEventWireNamePlan-260514.md`
