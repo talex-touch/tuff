@@ -23,8 +23,7 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import {
   ProviderDeactivatedEvent,
   TalexEvents,
@@ -94,18 +93,6 @@ const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 const searchEngineLog = getLogger('search-engine')
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
-const coreBoxGetRecommendationsEvent = defineRawEvent<
-  { limit?: number; forceRefresh?: boolean },
-  { items: TuffItem[]; duration: number; fromCache: boolean; error?: string }
->('core-box:get-recommendations')
-const coreBoxAggregateTimeStatsEvent = defineRawEvent<void, { success: boolean; error?: string }>(
-  'core-box:aggregate-time-stats'
-)
-const coreBoxIsPinnedEvent = defineRawEvent<
-  { sourceId: string; itemId: string },
-  { success: boolean; isPinned: boolean }
->('core-box:is-pinned')
-
 const PROVIDER_REFRACTORY_THRESHOLD = 2
 const PROVIDER_REFRACTORY_BASE_MS = 30_000
 const PROVIDER_REFRACTORY_MAX_MS = 5 * 60 * 1000
@@ -2395,7 +2382,7 @@ export class SearchEngineCore
       return instance.getActivationState()
     })
 
-    transport.on(coreBoxGetRecommendationsEvent, async (data) => {
+    const handleGetRecommendations = async (data?: { limit?: number; forceRefresh?: boolean }) => {
       if (!instance.recommendationEngine) {
         return { items: [], duration: 0, fromCache: false }
       }
@@ -2416,9 +2403,12 @@ export class SearchEngineCore
         searchEngineLog.error('Failed to get recommendations', { error })
         return { items: [], duration: 0, fromCache: false, error: String(error) }
       }
-    })
+    }
 
-    transport.on(coreBoxAggregateTimeStatsEvent, async () => {
+    transport.on(CoreBoxRetainedEvents.recommendation.get, handleGetRecommendations)
+    transport.on(CoreBoxRetainedEvents.legacy.getRecommendations, handleGetRecommendations)
+
+    const handleAggregateTimeStats = async () => {
       if (!instance.timeStatsAggregator) {
         return { success: false, error: 'TimeStatsAggregator not initialized' }
       }
@@ -2430,7 +2420,10 @@ export class SearchEngineCore
         searchEngineLog.error('Failed to aggregate time stats', { error })
         return { success: false, error: String(error) }
       }
-    })
+    }
+
+    transport.on(CoreBoxRetainedEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
+    transport.on(CoreBoxRetainedEvents.legacy.aggregateTimeStats, handleAggregateTimeStats)
 
     transport.on(CoreBoxEvents.item.togglePin, async (data) => {
       if (!instance.dbUtils) {
@@ -2448,20 +2441,27 @@ export class SearchEngineCore
       }
     })
 
-    transport.on(coreBoxIsPinnedEvent, async (data) => {
+    const handleIsPinned = async (data?: { sourceId?: string; itemId?: string }) => {
       if (!instance.dbUtils) {
         return { success: false, isPinned: false }
       }
 
       try {
-        const { sourceId, itemId } = data
+        const sourceId = data?.sourceId
+        const itemId = data?.itemId
+        if (!sourceId || !itemId) {
+          return { success: false, isPinned: false }
+        }
         const isPinned = await instance.dbUtils.isPinned(sourceId, itemId)
         return { success: true, isPinned }
       } catch (error) {
         searchEngineLog.error('Failed to check pin status', { error })
         return { success: false, isPinned: false }
       }
-    })
+    }
+
+    transport.on(CoreBoxRetainedEvents.recommendation.isPinned, handleIsPinned)
+    transport.on(CoreBoxRetainedEvents.legacy.isPinned, handleIsPinned)
   }
 
   destroy(): void {

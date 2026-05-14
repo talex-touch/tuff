@@ -22,6 +22,18 @@
   - 设置页文案同步说明默认开启、登录关联用户 ID、可手动关闭，以及不会上传搜索明文、文件路径、剪贴板内容、邮箱、密钥、prompt/response 等敏感数据。
   - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 与 `pnpm -C "apps/core-app" run typecheck:web` 已恢复通过（web 仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
 
+### fix(nexus): polish dashboard asset publishing flows
+
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/dashboard/DashboardAssetIcon.vue`
+- `apps/nexus/app/components/assets/create/AssetPluginFormStep.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+  - Dashboard 发布物列表改用专用 icon 渲染器，对暗色主题下的深色单色图标自动反白，保留彩色图标原色；状态 badge 文案禁止换行。
+  - 修复版本 tag 使用错误 prop 导致“最新版”列仅显示空蓝胶囊的问题，改为 `TxTag.label` 并按通道映射颜色。
+  - 创建发布物插件表单拆为 Package / Metadata / Content 三步，降低单屏表单复杂度，并保留上传包自动解析 manifest/readme 的流程。
+  - API Key 创建弹窗权限项从 label 包裹改为按钮卡片 + checkbox，修复点击/框选不明确的问题。
+  - 验证：`pnpm -C "apps/nexus" exec vue-tsc --noEmit --pretty false` 通过。
+
 ### docs(transport): close retained event follow-up scan
 
 - `docs/plan-prd/04-implementation/TransportRetainedEventWireNamePlan-260514.md`
@@ -62,7 +74,7 @@
   - `transport-domain-sdks.test.ts` 固定 terminal canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `264` 收紧到 `259`，`typedCandidates` 保持 `0`。
   - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 29 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
 
-### ref(transport): migrate opener retained event aliases
+### refactor(transport): migrate opener retained event aliases
 
 - `packages/utils/transport/events/opener.ts`
 - `packages/utils/transport/events/index.ts`
@@ -97,6 +109,65 @@
   - `transport-domain-sdks.test.ts` 固定 auth/account canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `256` 收紧到 `241`，`typedCandidates` 保持 `0`。
   - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 31 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
 
+### refactor(transport): migrate corebox retained event aliases
+
+- `packages/utils/transport/events/core-box-retained.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/components/render/CoreBoxRender.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 shared `CoreBoxRetainedEvents` canonical typed events，覆盖 beginner shortcut、input focus、preview history、preview copy、action panel open 与 meta overlay action/flow；保留 `legacy` aliases 承载 `corebox:*`、`beginner:*`、`meta-overlay:*` 兼容窗口。
+  - 主进程 CoreBox / MetaOverlay 发送端改为 canonical + legacy 双发；renderer 监听端保留双监听；DOM `CustomEvent` 触发点改为从 shared event 定义取事件名并双发，避免业务层继续散落本批 legacy wire name。
+  - `transport-domain-sdks.test.ts` 固定 CoreBox retained canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `241` 收紧到 `239`，`typedCandidates` 保持 `0`。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 32 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
+### refactor(transport): migrate corebox ui resume retained aliases
+
+- `packages/utils/transport/events/core-box-retained.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `docs/plan-prd/TODO.md`
+  - `core-box:ui-resume` 新增 canonical `core-box:ui:resume` 并保留 legacy `core-box:ui-resume` 双发，插件 UI 兼容窗口不变。
+  - `core-box:allow-input` legacy alias 收敛到 shared `CoreBoxRetainedEvents.legacy.allowInput`，canonical 路径继续复用既有 `CoreBoxEvents.inputMonitoring.allow`。
+  - MetaOverlay `toggle-pin` 删除局部 `defineRawEvent('core-box:toggle-pin')`，改用现有 shared `CoreBoxEvents.item.togglePin`，避免重复 registry。
+  - `transport-domain-sdks.test.ts` 固定 `ui.resume` canonical 与 `allowInput/uiResume` legacy alias；`transport-event-boundary.test.ts` retained raw definition 上限从 `239` 收紧到 `238`。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 32 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
+### refactor(transport): migrate corebox recommendation retained aliases
+
+- `packages/utils/transport/events/core-box-retained.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 canonical `CoreBoxRetainedEvents.recommendation.get/aggregateTimeStats/isPinned`，对应 wire name 为 `core-box:recommendation:get`、`core-box:recommendation:aggregate-time-stats`、`core-box:recommendation:is-pinned`。
+  - 保留 legacy aliases 承载 `core-box:get-recommendations`、`core-box:aggregate-time-stats`、`core-box:is-pinned`；`search-core` 同时监听 canonical 与 legacy，现有 wire name 兼容窗口不变。
+  - `transport-domain-sdks.test.ts` 固定 recommendation canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限保持 `238`，因为本轮是局部 raw definition 迁入 shared alias registry 而非 hard-cut 删除。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 32 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
+### refactor(transport): migrate corebox ui control retained aliases
+
+- `packages/utils/transport/events/core-box-retained.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/TODO.md`
+  - CoreBox UI control `show/hide/expand/focus-window` 新增 canonical `core-box:ui:*` typed events，并保留 legacy aliases 承载旧 `core-box:show/hide/expand/focus-window` wire names。
+  - `CoreBoxEvents.ui.show/hide/expand/focusWindow` 改向 canonical definitions；main IPC 对 canonical 与 legacy 双监听，插件 SDK 与 renderer 调用点默认走 canonical。
+  - `transport-domain-sdks.test.ts` 固定 UI control canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限保持 `238`，因为本轮是 shared raw definition 迁入 retained legacy registry 而非 hard-cut 删除。
+
 ### feat(core-app): proxy authenticated Nexus uploads
 
 - `apps/core-app/src/main/modules/auth/index.ts`
@@ -108,11 +179,29 @@
 ### feat(nexus): support plugin API key publishing
 
 - `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
 - `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/dashboard/api-keys*.ts`
 - `apps/nexus/server/api/dashboard/plugins*.ts`
   - 新增 `requireAuthOrApiKey()`，Dashboard plugin 管理 API 可接受登录态或带 `plugin:read` / `plugin:publish` scope 的 API key。
   - 插件创建接口支持同次提交 `initialVersion`、`initialChannel`、`initialChangelog` 与 package 文件，服务端创建 plugin 后立即发布初始版本；初始版本发布失败时回滚新建 plugin，避免孤儿草稿。
   - Dashboard assets 创建表单不再先创建 plugin 再二次发布版本，改为一次 multipart 请求完成创建与首版发布。
+  - API Key Dashboard 改为普通登录用户可创建插件发布 key；非管理员请求会过滤 `release:*` scope，UI 不再展示已退役 `release:sync`。
+
+### feat(core-app): add in-app plugin publisher workspace
+
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StorePublisher.vue`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/composables/store/useUserPlugins.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - CoreApp Store 新增 `/store/publisher` 发布管理 tab，可查看自己的 Nexus 发布物、状态统计、版本列表与 timeline。
+  - App 内发布管理支持上传 `.tpex` 解析 manifest/readme、创建插件并初始化首版、为已有插件发布新版本、重新提交 rejected 版本、删除未 approved 版本、编辑插件元数据、提交/撤回审核，并保留“在 Nexus 打开”兜底入口。
+  - 发布上传复用 `auth:nexus-upload`，renderer 不持有 Nexus token；multipart 文件 payload 使用 ArrayBuffer 传递，避免把大文件转成 number array。
+  - 发布表单新增 i18n 基础校验与删除版本确认，Nexus JSON 错误会优先解析 `statusMessage/message` 以便 App 内展示可读错误。
+  - Store 详情弹窗内容区新增安装/更新按钮兜底，避免 header action 不可见时无法安装；README markdown 深色模式颜色改为跟随 Tuffex token，修复 dark theme 下内容发黑不可读。
+  - Auth 回调成功后会主动刷新登录态并校验 profile，可获取 token 但 `/api/v1/auth/me` 超时/不可用时不再假成功或卡在“登录中”；Auth profile 与 Store HTTP 统一网络请求增加明确 timeout 与 GET 重试。
 
 ### docs(plan): index 04-implementation draft status
 

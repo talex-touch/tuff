@@ -119,8 +119,6 @@ import type {
   CoreBoxUIViewStateResponse,
   DeactivateProviderRequest,
   EnterUIModeRequest,
-  ExpandOptions,
-  FocusWindowResponse,
   GetInputResponse,
   GetProviderDetailsRequest,
   IProviderActivate,
@@ -464,6 +462,7 @@ import type {
   TransportPortUpgradeResponse,
 } from "./types/transport";
 import { AccountEvents, AuthEvents } from "./auth";
+import { CoreBoxRetainedEvents } from "./core-box-retained";
 import { SyncEvents } from "./sync";
 import { TerminalEvents } from "./terminal";
 import { OpenerEvents } from "./opener";
@@ -993,24 +992,22 @@ export const CoreBoxEvents = {
     /**
      * Show the CoreBox window.
      */
-    show: defineRawEvent<void, void>("core-box:show"),
+    show: CoreBoxRetainedEvents.ui.show,
 
     /**
      * Hide the CoreBox window.
      */
-    hide: defineRawEvent<void, void>("core-box:hide"),
+    hide: CoreBoxRetainedEvents.ui.hide,
 
     /**
      * Expand or collapse the CoreBox.
      */
-    expand: defineRawEvent<ExpandOptions | number, void>("core-box:expand"),
+    expand: CoreBoxRetainedEvents.ui.expand,
 
     /**
      * Focus the CoreBox window.
      */
-    focusWindow: defineRawEvent<void, FocusWindowResponse>(
-      "core-box:focus-window",
-    ),
+    focusWindow: CoreBoxRetainedEvents.ui.focusWindow,
 
     /**
      * Forward a key event to the attached UI view.
@@ -2680,6 +2677,7 @@ export const TransportEvents = {
 export const TuffEvents = {
   app: AppEvents,
   coreBox: CoreBoxEvents,
+  coreBoxRetained: CoreBoxRetainedEvents,
   storage: StorageEvents,
   plugin: PluginEvents,
   store: StoreEvents,
@@ -2704,4 +2702,4 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AccountEvents, AppEvents, AuthEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };
+export { AccountEvents, AppEvents, AuthEvents, CoreBoxRetainedEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };

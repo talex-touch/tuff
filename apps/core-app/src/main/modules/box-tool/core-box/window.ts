@@ -11,9 +11,12 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import {
+  CoreBoxEvents,
+  CoreBoxRetainedEvents,
+  PluginEvents
+} from '@talex-touch/utils/transport/events'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -41,13 +44,6 @@ import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
 import { viewCacheManager } from './view-cache'
 import { getLiveViewWebContents } from './web-contents-view-guard'
 
-interface CoreBoxUiResumePayload {
-  source: string
-  featureId?: string | number
-  url: string
-}
-
-const coreBoxUiResumeEvent = defineRawEvent<CoreBoxUiResumePayload, void>('core-box:ui-resume')
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 const COREBOX_MIN_HEIGHT = 64
 
@@ -1099,7 +1095,7 @@ export class WindowManager {
               .catch(() => {})
           }
 
-          this.broadcastPluginMessage(plugin.name, coreBoxUiResumeEvent.toEventName(), {
+          this.broadcastCoreBoxUiResume(plugin.name, {
             source: 'cache',
             featureId: feature?.id,
             url: cached.url
@@ -1321,7 +1317,7 @@ export class WindowManager {
           source: 'initial'
         })
 
-        this.broadcastPluginMessage(plugin.name, coreBoxUiResumeEvent.toEventName(), {
+        this.broadcastCoreBoxUiResume(plugin.name, {
           source: 'attach',
           featureId: feature?.id,
           url
@@ -1331,7 +1327,7 @@ export class WindowManager {
 
     if (!query && plugin) {
       this.uiView.webContents.once('dom-ready', () => {
-        this.broadcastPluginMessage(plugin.name, coreBoxUiResumeEvent.toEventName(), {
+        this.broadcastCoreBoxUiResume(plugin.name, {
           source: 'attach',
           featureId: feature?.id,
           url
@@ -1465,6 +1461,22 @@ export class WindowManager {
 
   private broadcastPluginMessage(pluginName: string, eventName: string, data?: unknown): void {
     this.touchApp.channel.broadcastPlugin(pluginName, eventName, data)
+  }
+
+  private broadcastCoreBoxUiResume(
+    pluginName: string,
+    payload: {
+      source: string
+      featureId?: string | number
+      url: string
+    }
+  ): void {
+    this.broadcastPluginMessage(pluginName, CoreBoxRetainedEvents.ui.resume.toEventName(), payload)
+    this.broadcastPluginMessage(
+      pluginName,
+      CoreBoxRetainedEvents.legacy.uiResume.toEventName(),
+      payload
+    )
   }
 
   public getUIView(): WebContentsView | undefined {

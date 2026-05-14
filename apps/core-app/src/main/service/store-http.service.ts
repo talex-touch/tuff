@@ -2,6 +2,8 @@ import type { StoreHttpRequestOptions, StoreHttpResponse } from '@talex-touch/ut
 import { getNetworkService } from '../modules/network'
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
+const DEFAULT_STORE_HTTP_TIMEOUT_MS = 20_000
+const STORE_HTTP_RETRY_DELAY_MS = 800
 
 function normalizeHeaders(headers: Record<string, unknown> | undefined): Record<string, string> {
   const normalized: Record<string, string> = {}
@@ -37,6 +39,60 @@ function mapResponseType(
   return 'json'
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableStoreHttpError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message || ''
+  return (
+    message.includes('NETWORK_TIMEOUT') ||
+    message.includes('NETWORK_COOLDOWN') ||
+    message.includes('fetch failed') ||
+    message.includes('ECONNRESET') ||
+    message.includes('ETIMEDOUT')
+  )
+}
+
+function toStoreHttpError(error: unknown): Error {
+  if (error instanceof Error && error.message.startsWith('STORE_HTTP_')) {
+    return error
+  }
+
+  if (error instanceof Error && error.message.startsWith('NETWORK_HTTP_STATUS_')) {
+    const status = error.message.replace('NETWORK_HTTP_STATUS_', '')
+    return new Error(`STORE_HTTP_STATUS_${status}`)
+  }
+
+  const message = error instanceof Error ? error.message : ''
+  return new Error(message.length > 0 ? message : 'STORE_HTTP_REQUEST_FAILED')
+}
+
+async function executeStoreHttpRequest<T = unknown>(
+  options: StoreHttpRequestOptions,
+  method: string,
+  timeout: number
+): Promise<StoreHttpResponse<T>> {
+  const response = await getNetworkService().request<T>({
+    url: options.url,
+    method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
+    headers: options.headers,
+    query: options.params,
+    body: options.data,
+    timeoutMs: timeout,
+    responseType: mapResponseType(options.responseType)
+  })
+
+  return {
+    status: response.status,
+    statusText: response.statusText,
+    headers: normalizeHeaders(response.headers),
+    data: response.data,
+    url: response.url || options.url
+  }
+}
+
 export async function performStoreHttpRequest<T = unknown>(
   options: StoreHttpRequestOptions
 ): Promise<StoreHttpResponse<T>> {
@@ -56,37 +112,22 @@ export async function performStoreHttpRequest<T = unknown>(
   }
 
   const method = (options.method ?? 'GET').toUpperCase()
-  const timeout = typeof options.timeout === 'number' ? options.timeout : 15_000
+  const timeout =
+    typeof options.timeout === 'number' ? options.timeout : DEFAULT_STORE_HTTP_TIMEOUT_MS
 
   try {
-    const response = await getNetworkService().request<T>({
-      url: options.url,
-      method: method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS',
-      headers: options.headers,
-      query: options.params,
-      body: options.data,
-      timeoutMs: timeout,
-      responseType: mapResponseType(options.responseType)
-    })
-
-    return {
-      status: response.status,
-      statusText: response.statusText,
-      headers: normalizeHeaders(response.headers),
-      data: response.data,
-      url: response.url || options.url
-    }
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message.startsWith('STORE_HTTP_')) {
-      throw error
+    return await executeStoreHttpRequest<T>(options, method, timeout)
+  } catch (firstError: unknown) {
+    let error = firstError
+    if (method === 'GET' && isRetryableStoreHttpError(firstError)) {
+      await delay(STORE_HTTP_RETRY_DELAY_MS)
+      try {
+        return await executeStoreHttpRequest<T>(options, method, timeout)
+      } catch (retryError) {
+        error = retryError
+      }
     }
 
-    if (error instanceof Error && error.message.startsWith('NETWORK_HTTP_STATUS_')) {
-      const status = error.message.replace('NETWORK_HTTP_STATUS_', '')
-      throw new Error(`STORE_HTTP_STATUS_${status}`)
-    }
-
-    const message = error instanceof Error ? error.message : ''
-    throw new Error(message.length > 0 ? message : 'STORE_HTTP_REQUEST_FAILED')
+    throw toStoreHttpError(error)
   }
 }
