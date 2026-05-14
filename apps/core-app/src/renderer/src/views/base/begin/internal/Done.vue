@@ -177,7 +177,7 @@ onMounted(() => {
   armDoneShortcut()
 
   const removeCanonicalShortcutListener = transport.on(
-    CoreBoxRetainedEvents.beginner.shortcutTriggered,
+    CoreBoxEvents.beginner.shortcutTriggered,
     () => {
       void runShortcutFinishFlow()
     }

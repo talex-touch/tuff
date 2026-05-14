@@ -612,6 +612,13 @@ export class WindowManager {
       void transport
         .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
         .catch(() => {})
+      void transport
+        .sendTo(
+          window.window.webContents,
+          CoreBoxRetainedEvents.legacy.shortcutTriggered,
+          undefined
+        )
+        .catch(() => {})
     }
 
     setTimeout(() => {
@@ -1471,7 +1478,7 @@ export class WindowManager {
       url: string
     }
   ): void {
-    this.broadcastPluginMessage(pluginName, CoreBoxRetainedEvents.ui.resume.toEventName(), payload)
+    this.broadcastPluginMessage(pluginName, CoreBoxEvents.ui.resume.toEventName(), payload)
     this.broadcastPluginMessage(
       pluginName,
       CoreBoxRetainedEvents.legacy.uiResume.toEventName(),

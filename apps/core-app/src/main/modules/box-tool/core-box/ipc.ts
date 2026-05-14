@@ -266,11 +266,14 @@ export class IpcManager {
       })
     )
 
+    const handleGetInput = async () => {
+      const input = await this.requestInputValue()
+      return { input }
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.input.get, handleGetInput))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.input.get, async () => {
-        const input = await this.requestInputValue()
-        return { input }
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.getInput, handleGetInput)
     )
 
     this.transportDisposers.push(
@@ -289,124 +292,158 @@ export class IpcManager {
       })
     )
 
+    const handleSetInput = async (request: SetInputRequest) => {
+      const value = typeof request?.value === 'string' ? request.value : ''
+      await this.sendInputValueToRenderer(value)
+      return { value }
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.input.set, handleSetInput))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.input.set, async (request: SetInputRequest) => {
-        const value = typeof request?.value === 'string' ? request.value : ''
-        await this.sendInputValueToRenderer(value)
-        return { value }
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.setInput, handleSetInput)
     )
 
+    const handleSetQuery = async (request: SetInputRequest) => {
+      const value = typeof request?.value === 'string' ? request.value : ''
+      await this.sendInputValueToRenderer(value)
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.input.setQuery, handleSetQuery))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.input.setQuery, async (request: SetInputRequest) => {
-        const value = typeof request?.value === 'string' ? request.value : ''
-        await this.sendInputValueToRenderer(value)
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.setQuery, handleSetQuery)
     )
 
+    const handleClearInput = async () => {
+      await this.sendInputValueToRenderer('')
+      return { cleared: true }
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.input.clear, handleClearInput))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.input.clear, async () => {
-        await this.sendInputValueToRenderer('')
-        return { cleared: true }
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.clearInput, handleClearInput)
     )
 
+    const handleSetInputVisibility = async (request: SetInputVisibilityRequest) => {
+      await this.setInputVisibility(Boolean(request?.visible))
+    }
+
     this.transportDisposers.push(
-      transport.on(
-        CoreBoxEvents.input.setVisibility,
-        async (request: SetInputVisibilityRequest) => {
-          await this.setInputVisibility(Boolean(request?.visible))
-        }
-      )
+      transport.on(CoreBoxEvents.input.setVisibility, handleSetInputVisibility)
+    )
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.setInputVisibility, handleSetInputVisibility)
     )
 
-    this.transportDisposers.push(
-      transport.on(
-        CoreBoxEvents.provider.deactivate,
-        async (request: DeactivateProviderRequest) => {
-          const { id } = request
-          if (id?.startsWith('plugin-features:')) {
-            const pluginName = id.substring('plugin-features:'.length)
-            const boxItemManager = getBoxItemManager()
-            boxItemManager.clear(pluginName)
-          }
-
-          searchEngineCore.deactivateProvider(id)
-          return this.getActiveProvidersState()
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      transport.on(CoreBoxEvents.provider.deactivateAll, async () => {
+    const handleDeactivateProvider = async (request: DeactivateProviderRequest) => {
+      const { id } = request
+      if (id?.startsWith('plugin-features:')) {
+        const pluginName = id.substring('plugin-features:'.length)
         const boxItemManager = getBoxItemManager()
-        boxItemManager.clear()
-        searchEngineCore.deactivateProviders()
-        return { activeProviders: [] } satisfies ActivationState
-      })
+        boxItemManager.clear(pluginName)
+      }
+
+      searchEngineCore.deactivateProvider(id)
+      return this.getActiveProvidersState()
+    }
+
+    const handleDeactivateAllProviders = async () => {
+      const boxItemManager = getBoxItemManager()
+      boxItemManager.clear()
+      searchEngineCore.deactivateProviders()
+      return { activeProviders: [] } satisfies ActivationState
+    }
+
+    const handleGetProviderDetails = async (request: GetProviderDetailsRequest) => {
+      const { providerIds } = request
+      if (!providerIds || providerIds.length === 0) {
+        return []
+      }
+
+      const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
+      const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
+        id: p.id,
+        name: p.name ?? p.id,
+        icon: p.icon
+      }))
+
+      const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
+      const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
+
+      const pluginDetails: ProviderDetail[] = pluginIdsToFetch
+        .map((id): ProviderDetail | null => {
+          const plugin = pluginModule.pluginManager!.plugins.get(id)
+          if (!plugin) return null
+          return {
+            id: plugin.name,
+            name: plugin.name,
+            icon: plugin.icon
+          }
+        })
+        .filter((p): p is ProviderDetail => p !== null)
+
+      return [...nativeProviderDetails, ...pluginDetails]
+    }
+
+    this.transportDisposers.push(
+      transport.on(CoreBoxEvents.provider.deactivate, handleDeactivateProvider)
+    )
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.deactivateProvider, handleDeactivateProvider)
+    )
+
+    this.transportDisposers.push(
+      transport.on(CoreBoxEvents.provider.deactivateAll, handleDeactivateAllProviders)
+    )
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.deactivateProviders, handleDeactivateAllProviders)
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.getActivated, async () => this.getActiveProvidersState())
     )
-
     this.transportDisposers.push(
-      transport.on(
-        CoreBoxEvents.provider.getDetails,
-        async (request: GetProviderDetailsRequest) => {
-          const { providerIds } = request
-          if (!providerIds || providerIds.length === 0) {
-            return []
-          }
-
-          const nativeProviders = searchEngineCore.getProvidersByIds(providerIds)
-          const nativeProviderDetails: ProviderDetail[] = nativeProviders.map((p) => ({
-            id: p.id,
-            name: p.name ?? p.id,
-            icon: p.icon
-          }))
-
-          const nativeProviderIds = new Set(nativeProviders.map((p) => p.id))
-          const pluginIdsToFetch = providerIds.filter((id) => !nativeProviderIds.has(id))
-
-          const pluginDetails: ProviderDetail[] = pluginIdsToFetch
-            .map((id): ProviderDetail | null => {
-              const plugin = pluginModule.pluginManager!.plugins.get(id)
-              if (!plugin) return null
-              return {
-                id: plugin.name,
-                name: plugin.name,
-                icon: plugin.icon
-              }
-            })
-            .filter((p): p is ProviderDetail => p !== null)
-
-          return [...nativeProviderDetails, ...pluginDetails]
-        }
+      transport.on(CoreBoxRetainedEvents.legacy.getActivatedProviders, async () =>
+        this.getActiveProvidersState()
       )
     )
 
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.uiMode.enter, (request: EnterUIModeRequest) => {
-        const { url } = request
-        if (url) {
-          coreBoxManager.enterUIMode(url)
-        }
-      })
+      transport.on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
+    )
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.getProviderDetails, handleGetProviderDetails)
     )
 
+    const handleEnterUIMode = (request: EnterUIModeRequest) => {
+      const { url } = request
+      if (url) {
+        coreBoxManager.enterUIMode(url)
+      }
+    }
+
+    const handleExitUIMode = () => {
+      coreBoxManager.exitUIMode()
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.enter, handleEnterUIMode))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.uiMode.exit, () => {
-        coreBoxManager.exitUIMode()
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.enterUIMode, handleEnterUIMode)
     )
 
+    this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.exit, handleExitUIMode))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.clipboard.allow, (request: AllowClipboardRequest) => {
-        const types = request?.types ?? 0
-        windowManager.enableClipboardMonitoring(types)
-        return { enabled: true, types }
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.exitUIMode, handleExitUIMode)
+    )
+
+    const handleAllowClipboard = (request: AllowClipboardRequest) => {
+      const types = request?.types ?? 0
+      windowManager.enableClipboardMonitoring(types)
+      return { enabled: true, types }
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.clipboard.allow, handleAllowClipboard))
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.allowClipboard, handleAllowClipboard)
     )
 
     this.transportDisposers.push(
@@ -424,7 +461,21 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.hideInput, async () => {
+        await this.setInputVisibility(false)
+        return { hidden: true }
+      })
+    )
+
+    this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.showInput, async () => {
+        await this.setInputVisibility(true)
+        return { shown: true }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.showInput, async () => {
         await this.setInputVisibility(true)
         return { shown: true }
       })
@@ -437,40 +488,51 @@ export class IpcManager {
       })
     )
 
+    const handleSetHeight = (payload: { height: number }) => {
+      const { height } = payload
+      if (typeof height !== 'number' || height < 60 || height > 650) {
+        throw new Error('Invalid height (must be 60-650)')
+      }
+
+      if (height > 60 && coreBoxManager.isCollapsed) {
+        coreBoxManager.markExpanded()
+      }
+
+      windowManager.setHeight(height)
+      return { height }
+    }
+
+    const handleGetBounds = () => {
+      const win = windowManager.current?.window
+      if (!win || win.isDestroyed()) {
+        throw new Error('No window available')
+      }
+      return { bounds: win.getBounds() }
+    }
+
+    const handleSetPositionOffset = (payload: { topPercent?: number }) => {
+      const { topPercent } = payload
+      if (typeof topPercent === 'number') {
+        windowManager.setPositionOffset(topPercent)
+      }
+      return { topPercent }
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.layout.setHeight, handleSetHeight))
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.layout.setHeight, (payload) => {
-        const { height } = payload
-        if (typeof height !== 'number' || height < 60 || height > 650) {
-          throw new Error('Invalid height (must be 60-650)')
-        }
+      transport.on(CoreBoxRetainedEvents.legacy.setHeight, handleSetHeight)
+    )
 
-        if (height > 60 && coreBoxManager.isCollapsed) {
-          coreBoxManager.markExpanded()
-        }
-
-        windowManager.setHeight(height)
-        return { height }
-      })
+    this.transportDisposers.push(transport.on(CoreBoxEvents.layout.getBounds, handleGetBounds))
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.getBounds, handleGetBounds)
     )
 
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.layout.getBounds, () => {
-        const win = windowManager.current?.window
-        if (!win || win.isDestroyed()) {
-          throw new Error('No window available')
-        }
-        return { bounds: win.getBounds() }
-      })
+      transport.on(CoreBoxEvents.layout.setPositionOffset, handleSetPositionOffset)
     )
-
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.layout.setPositionOffset, (payload) => {
-        const { topPercent } = payload
-        if (typeof topPercent === 'number') {
-          windowManager.setPositionOffset(topPercent)
-        }
-        return { topPercent }
-      })
+      transport.on(CoreBoxRetainedEvents.legacy.setPositionOffset, handleSetPositionOffset)
     )
 
     this.transportDisposers.push(

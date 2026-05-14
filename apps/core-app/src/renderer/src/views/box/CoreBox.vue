@@ -410,7 +410,7 @@ const previewHistory = usePreviewHistory({
 })
 
 // Handle UI mode exit event from main process (ESC pressed in plugin UI view)
-const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, (payload) => {
+const handleUIModeExited = (payload?: { resetInput?: boolean }) => {
   logDebug('[CoreBox] UI mode exited from main process, deactivating providers')
   deactivateAllProviders().catch((error) => {
     logDebug('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
@@ -424,7 +424,12 @@ const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, (payload) 
   setTimeout(() => {
     boxInputRef.value?.focus()
   }, 150)
-})
+}
+const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, handleUIModeExited)
+const unregLegacyUIModeExited = transport.on(
+  CoreBoxRetainedEvents.legacy.uiModeExited,
+  handleUIModeExited
+)
 
 async function deactivateProviderVoid(id?: string): Promise<void> {
   await deactivateProvider(id)
@@ -447,7 +452,7 @@ const actionPanel = useActionPanel({
 })
 
 // Channel: focus input
-const unregFocusInput = transport.on(CoreBoxRetainedEvents.input.focus, () => focusInput())
+const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusInput())
 const unregLegacyFocusInput = transport.on(CoreBoxRetainedEvents.legacy.focusInput, () =>
   focusInput()
 )
@@ -460,6 +465,7 @@ onBeforeUnmount(() => {
   cleanupClipboard()
   cleanupVisibility()
   unregUIModeExited()
+  unregLegacyUIModeExited()
   unregFocusInput()
   unregLegacyFocusInput()
   if (resWatchTimerId !== null) {

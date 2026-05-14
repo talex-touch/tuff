@@ -93,11 +93,7 @@ export class CoreBoxModule extends BaseModule {
               mainWindow.focus()
               if (beginnerState?.shortcutArmed === true && this.transport) {
                 void this.transport
-                  .sendToWindow(
-                    mainWindow.id,
-                    CoreBoxRetainedEvents.beginner.shortcutTriggered,
-                    undefined
-                  )
+                  .sendToWindow(mainWindow.id, CoreBoxEvents.beginner.shortcutTriggered, undefined)
                   .catch((error) => {
                     coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
                   })

@@ -482,7 +482,7 @@ export class MetaOverlayManager {
       const channel = touchApp.channel
       const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
       void transport
-        .sendToPlugin(pluginId, CoreBoxRetainedEvents.metaOverlay.actionExecuted, {
+        .sendToPlugin(pluginId, CoreBoxEvents.metaOverlay.actionExecuted, {
           actionId,
           item: targetItem,
           pluginId
@@ -510,7 +510,7 @@ export class MetaOverlayManager {
         const channel = touchApp.channel
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport
-          .sendTo(coreBoxWebContents, CoreBoxRetainedEvents.metaOverlay.itemAction, {
+          .sendTo(coreBoxWebContents, CoreBoxEvents.metaOverlay.itemAction, {
             actionId,
             item: targetItem
           })
@@ -577,7 +577,7 @@ export class MetaOverlayManager {
         break
       }
       case 'flow-transfer': {
-        void transport.sendTo(coreBoxWebContents, CoreBoxRetainedEvents.metaOverlay.flowTransfer, {
+        void transport.sendTo(coreBoxWebContents, CoreBoxEvents.metaOverlay.flowTransfer, {
           item
         })
         void transport.sendTo(

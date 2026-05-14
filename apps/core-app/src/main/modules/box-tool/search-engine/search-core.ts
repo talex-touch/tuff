@@ -2405,7 +2405,7 @@ export class SearchEngineCore
       }
     }
 
-    transport.on(CoreBoxRetainedEvents.recommendation.get, handleGetRecommendations)
+    transport.on(CoreBoxEvents.recommendation.get, handleGetRecommendations)
     transport.on(CoreBoxRetainedEvents.legacy.getRecommendations, handleGetRecommendations)
 
     const handleAggregateTimeStats = async () => {
@@ -2422,7 +2422,7 @@ export class SearchEngineCore
       }
     }
 
-    transport.on(CoreBoxRetainedEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
+    transport.on(CoreBoxEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
     transport.on(CoreBoxRetainedEvents.legacy.aggregateTimeStats, handleAggregateTimeStats)
 
     transport.on(CoreBoxEvents.item.togglePin, async (data) => {
@@ -2460,7 +2460,7 @@ export class SearchEngineCore
       }
     }
 
-    transport.on(CoreBoxRetainedEvents.recommendation.isPinned, handleIsPinned)
+    transport.on(CoreBoxEvents.recommendation.isPinned, handleIsPinned)
     transport.on(CoreBoxRetainedEvents.legacy.isPinned, handleIsPinned)
   }
 

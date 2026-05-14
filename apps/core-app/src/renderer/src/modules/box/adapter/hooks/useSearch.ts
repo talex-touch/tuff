@@ -909,7 +909,7 @@ export function useSearch(
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
     const nextValue = typeof value === 'string' ? value : ''
     searchVal.value = nextValue
-    window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.input.focus.toEventName()))
+    window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
     window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.legacy.focusInput.toEventName()))
   })
 

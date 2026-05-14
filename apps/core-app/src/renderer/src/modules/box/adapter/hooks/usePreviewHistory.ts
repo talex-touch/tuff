@@ -1,5 +1,9 @@
 import type { Ref } from 'vue'
-import { ClipboardEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import {
+  ClipboardEvents,
+  CoreBoxEvents,
+  CoreBoxRetainedEvents
+} from '@talex-touch/utils/transport/events'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
@@ -167,9 +171,9 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   }
 
   // Channel listeners
-  const unregShow = transport.on(CoreBoxRetainedEvents.previewHistory.show, () => open())
+  const unregShow = transport.on(CoreBoxEvents.previewHistory.show, () => open())
   const unregLegacyShow = transport.on(CoreBoxRetainedEvents.legacy.showHistory, () => open())
-  const unregHide = transport.on(CoreBoxRetainedEvents.previewHistory.hide, () => close())
+  const unregHide = transport.on(CoreBoxEvents.previewHistory.hide, () => close())
   const unregLegacyHide = transport.on(CoreBoxRetainedEvents.legacy.hideHistory, () => close())
   let lastCopyPreviewValue = ''
   const copyPreviewHandler = async (payload: { value?: string }) => {
@@ -186,7 +190,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
       toast.error('复制失败')
     }
   }
-  const unregCopy = transport.on(CoreBoxRetainedEvents.preview.copy, copyPreviewHandler)
+  const unregCopy = transport.on(CoreBoxEvents.preview.copy, copyPreviewHandler)
   const unregLegacyCopy = transport.on(CoreBoxRetainedEvents.legacy.copyPreview, copyPreviewHandler)
 
   void transport

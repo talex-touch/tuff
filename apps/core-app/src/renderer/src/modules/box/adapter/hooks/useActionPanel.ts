@@ -149,13 +149,13 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     })
     void executeAction(data.actionId, data.item)
   }
-  const unregOpen = transport.on(CoreBoxRetainedEvents.actionPanel.open, openActionPanelHandler)
+  const unregOpen = transport.on(CoreBoxEvents.actionPanel.open, openActionPanelHandler)
   const unregLegacyOpen = transport.on(
     CoreBoxRetainedEvents.legacy.openActionPanel,
     openActionPanelHandler
   )
   const unregMetaOverlayAction = transport.on(
-    CoreBoxRetainedEvents.metaOverlay.itemAction,
+    CoreBoxEvents.metaOverlay.itemAction,
     metaOverlayActionHandler
   )
   const unregLegacyMetaOverlayAction = transport.on(

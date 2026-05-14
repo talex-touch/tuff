@@ -2,7 +2,7 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardOptions } from './types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { useDocumentVisibility } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -50,6 +50,12 @@ export function useVisibility(options: UseVisibilityOptions) {
   const unregisterShortcutTrigger = transport.on(CoreBoxEvents.ui.shortcutTriggered, () => {
     wasTriggeredByShortcut.value = true
   })
+  const unregisterLegacyShortcutTrigger = transport.on(
+    CoreBoxRetainedEvents.legacy.shortcutTriggered,
+    () => {
+      wasTriggeredByShortcut.value = true
+    }
+  )
   const unregisterCoreBoxTrigger = transport.on(CoreBoxEvents.ui.trigger, (payload) => {
     if (!payload || typeof payload !== 'object') return
     const show = (payload as { show?: unknown }).show
@@ -132,6 +138,7 @@ export function useVisibility(options: UseVisibilityOptions) {
     checkAutoClear,
     cleanup: () => {
       unregisterShortcutTrigger?.()
+      unregisterLegacyShortcutTrigger?.()
       unregisterCoreBoxTrigger?.()
     }
   }

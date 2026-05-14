@@ -5,6 +5,7 @@ import {
   AccountEvents,
   AuthEvents,
   ClipboardEvents,
+  CoreBoxEvents,
   CoreBoxRetainedEvents,
   NativeEvents,
   OpenerEvents,
@@ -257,7 +258,13 @@ describe('transport domain sdk mappings', () => {
     expect(CoreBoxRetainedEvents.beginner.shortcutTriggered.toEventName()).toBe(
       'beginner:shortcut:triggered',
     )
+    expect(CoreBoxEvents.beginner.shortcutTriggered.toEventName()).toBe(
+      'beginner:shortcut:triggered',
+    )
     expect(CoreBoxRetainedEvents.input.focus.toEventName()).toBe(
+      'core-box:input:focus',
+    )
+    expect(CoreBoxEvents.input.focus.toEventName()).toBe(
       'core-box:input:focus',
     )
     expect(CoreBoxRetainedEvents.input.focus).toMatchObject({
@@ -266,6 +273,9 @@ describe('transport domain sdk mappings', () => {
       action: 'focus',
     })
     expect(CoreBoxRetainedEvents.ui.resume.toEventName()).toBe(
+      'core-box:ui:resume',
+    )
+    expect(CoreBoxEvents.ui.resume.toEventName()).toBe(
       'core-box:ui:resume',
     )
     expect(CoreBoxRetainedEvents.ui.show.toEventName()).toBe(
@@ -279,6 +289,9 @@ describe('transport domain sdk mappings', () => {
     )
     expect(CoreBoxRetainedEvents.ui.focusWindow.toEventName()).toBe(
       'core-box:ui:focus-window',
+    )
+    expect(CoreBoxRetainedEvents.ui.forwardKeyEvent.toEventName()).toBe(
+      'core-box:ui:forward-key-event',
     )
     expect(CoreBoxRetainedEvents.ui.getUIViewState.toEventName()).toBe(
       'core-box:ui:get-ui-view-state',
@@ -300,6 +313,87 @@ describe('transport domain sdk mappings', () => {
       module: 'ui',
       action: 'focus-window',
     })
+    expect(CoreBoxRetainedEvents.input.get.toEventName()).toBe(
+      'core-box:input:get',
+    )
+    expect(CoreBoxRetainedEvents.input.set.toEventName()).toBe(
+      'core-box:input:set',
+    )
+    expect(CoreBoxRetainedEvents.input.clear.toEventName()).toBe(
+      'core-box:input:clear',
+    )
+    expect(CoreBoxRetainedEvents.input.setQuery.toEventName()).toBe(
+      'core-box:input:set-query',
+    )
+    expect(CoreBoxRetainedEvents.input.setVisibility.toEventName()).toBe(
+      'core-box:input:set-visibility',
+    )
+    expect(CoreBoxRetainedEvents.input.requestValue.toEventName()).toBe(
+      'core-box:input:request-value',
+    )
+    expect(CoreBoxRetainedEvents.input.set).toMatchObject({
+      namespace: 'core-box',
+      module: 'input',
+      action: 'set',
+    })
+    expect(CoreBoxRetainedEvents.inputMonitoring.allow.toEventName()).toBe(
+      'core-box:input-monitoring:allow',
+    )
+    expect(CoreBoxRetainedEvents.inputMonitoring.allow).toMatchObject({
+      namespace: 'core-box',
+      module: 'input-monitoring',
+      action: 'allow',
+    })
+    expect(CoreBoxRetainedEvents.clipboard.allow.toEventName()).toBe(
+      'core-box:clipboard:allow',
+    )
+    expect(CoreBoxRetainedEvents.clipboard.allow).toMatchObject({
+      namespace: 'core-box',
+      module: 'clipboard',
+      action: 'allow',
+    })
+    expect(CoreBoxRetainedEvents.provider.deactivate.toEventName()).toBe(
+      'core-box:provider:deactivate',
+    )
+    expect(CoreBoxRetainedEvents.provider.deactivateAll.toEventName()).toBe(
+      'core-box:provider:deactivate-all',
+    )
+    expect(CoreBoxRetainedEvents.provider.getActivated.toEventName()).toBe(
+      'core-box:provider:get-activated',
+    )
+    expect(CoreBoxRetainedEvents.provider.getDetails.toEventName()).toBe(
+      'core-box:provider:get-details',
+    )
+    expect(CoreBoxRetainedEvents.provider.deactivate).toMatchObject({
+      namespace: 'core-box',
+      module: 'provider',
+      action: 'deactivate',
+    })
+    expect(CoreBoxRetainedEvents.layout.setHeight.toEventName()).toBe(
+      'core-box:layout:set-height',
+    )
+    expect(CoreBoxRetainedEvents.layout.setPositionOffset.toEventName()).toBe(
+      'core-box:layout:set-position-offset',
+    )
+    expect(CoreBoxRetainedEvents.layout.getBounds.toEventName()).toBe(
+      'core-box:layout:get-bounds',
+    )
+    expect(CoreBoxRetainedEvents.layout.setHeight).toMatchObject({
+      namespace: 'core-box',
+      module: 'layout',
+      action: 'set-height',
+    })
+    expect(CoreBoxRetainedEvents.uiMode.enter.toEventName()).toBe(
+      'core-box:ui-mode:enter',
+    )
+    expect(CoreBoxRetainedEvents.uiMode.exit.toEventName()).toBe(
+      'core-box:ui-mode:exit',
+    )
+    expect(CoreBoxRetainedEvents.uiMode.enter).toMatchObject({
+      namespace: 'core-box',
+      module: 'ui-mode',
+      action: 'enter',
+    })
     expect(CoreBoxRetainedEvents.recommendation.get.toEventName()).toBe(
       'core-box:recommendation:get',
     )
@@ -309,23 +403,71 @@ describe('transport domain sdk mappings', () => {
     expect(CoreBoxRetainedEvents.recommendation.isPinned.toEventName()).toBe(
       'core-box:recommendation:is-pinned',
     )
+    expect(CoreBoxEvents.recommendation.get.toEventName()).toBe(
+      'core-box:recommendation:get',
+    )
+    expect(CoreBoxEvents.recommendation.aggregateTimeStats.toEventName()).toBe(
+      'core-box:recommendation:aggregate-time-stats',
+    )
+    expect(CoreBoxEvents.recommendation.isPinned.toEventName()).toBe(
+      'core-box:recommendation:is-pinned',
+    )
     expect(CoreBoxRetainedEvents.previewHistory.show.toEventName()).toBe(
       'core-box:preview-history:show',
     )
+    expect(CoreBoxEvents.previewHistory.show.toEventName()).toBe(
+      'core-box:preview-history:show',
+    )
+    expect(CoreBoxEvents.previewHistory.hide.toEventName()).toBe(
+      'core-box:preview-history:hide',
+    )
     expect(CoreBoxRetainedEvents.preview.copy.toEventName()).toBe(
+      'core-box:preview:copy',
+    )
+    expect(CoreBoxEvents.preview.copy.toEventName()).toBe(
       'core-box:preview:copy',
     )
     expect(CoreBoxRetainedEvents.actionPanel.open.toEventName()).toBe(
       'core-box:action-panel:open',
     )
+    expect(CoreBoxEvents.actionPanel.open.toEventName()).toBe(
+      'core-box:action-panel:open',
+    )
     expect(CoreBoxRetainedEvents.metaOverlay.itemAction.toEventName()).toBe(
       'core-box:meta-overlay:item-action',
+    )
+    expect(CoreBoxEvents.metaOverlay.actionExecuted.toEventName()).toBe(
+      'core-box:meta-overlay:action-executed',
+    )
+    expect(CoreBoxEvents.metaOverlay.itemAction.toEventName()).toBe(
+      'core-box:meta-overlay:item-action',
+    )
+    expect(CoreBoxEvents.metaOverlay.flowTransfer.toEventName()).toBe(
+      'core-box:meta-overlay:flow-transfer',
     )
     expect(CoreBoxRetainedEvents.legacy.beginnerShortcutTriggered.toEventName()).toBe(
       'beginner:shortcut-triggered',
     )
     expect(CoreBoxRetainedEvents.legacy.focusInput.toEventName()).toBe(
       'corebox:focus-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.getInput.toEventName()).toBe(
+      'core-box:get-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.setInput.toEventName()).toBe(
+      'core-box:set-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.clearInput.toEventName()).toBe(
+      'core-box:clear-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.setQuery.toEventName()).toBe(
+      'core-box:set-query',
+    )
+    expect(CoreBoxRetainedEvents.legacy.setInputVisibility.toEventName()).toBe(
+      'core-box:set-input-visibility',
+    )
+    expect(CoreBoxRetainedEvents.legacy.requestInputValue.toEventName()).toBe(
+      'core-box:request-input-value',
     )
     expect(CoreBoxRetainedEvents.legacy.openActionPanel.toEventName()).toBe(
       'corebox:open-action-panel',
@@ -345,6 +487,9 @@ describe('transport domain sdk mappings', () => {
     expect(CoreBoxRetainedEvents.legacy.focusWindow.toEventName()).toBe(
       'core-box:focus-window',
     )
+    expect(CoreBoxRetainedEvents.legacy.forwardKeyEvent.toEventName()).toBe(
+      'core-box:forward-key-event',
+    )
     expect(CoreBoxRetainedEvents.legacy.getUIViewState.toEventName()).toBe(
       'core-box:get-ui-view-state',
     )
@@ -360,8 +505,38 @@ describe('transport domain sdk mappings', () => {
     expect(CoreBoxRetainedEvents.legacy.showInput.toEventName()).toBe(
       'core-box:show-input',
     )
+    expect(CoreBoxRetainedEvents.legacy.setHeight.toEventName()).toBe(
+      'core-box:set-height',
+    )
+    expect(CoreBoxRetainedEvents.legacy.setPositionOffset.toEventName()).toBe(
+      'core-box:set-position-offset',
+    )
+    expect(CoreBoxRetainedEvents.legacy.getBounds.toEventName()).toBe(
+      'core-box:get-bounds',
+    )
+    expect(CoreBoxRetainedEvents.legacy.enterUIMode.toEventName()).toBe(
+      'core-box:enter-ui-mode',
+    )
+    expect(CoreBoxRetainedEvents.legacy.exitUIMode.toEventName()).toBe(
+      'core-box:exit-ui-mode',
+    )
     expect(CoreBoxRetainedEvents.legacy.allowInput.toEventName()).toBe(
       'core-box:allow-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.allowClipboard.toEventName()).toBe(
+      'core-box:allow-clipboard',
+    )
+    expect(CoreBoxRetainedEvents.legacy.deactivateProvider.toEventName()).toBe(
+      'core-box:deactivate-provider',
+    )
+    expect(CoreBoxRetainedEvents.legacy.deactivateProviders.toEventName()).toBe(
+      'core-box:deactivate-providers',
+    )
+    expect(CoreBoxRetainedEvents.legacy.getActivatedProviders.toEventName()).toBe(
+      'core-box:get-activated-providers',
+    )
+    expect(CoreBoxRetainedEvents.legacy.getProviderDetails.toEventName()).toBe(
+      'core-box:get-provider-details',
     )
     expect(CoreBoxRetainedEvents.legacy.uiResume.toEventName()).toBe(
       'core-box:ui-resume',
