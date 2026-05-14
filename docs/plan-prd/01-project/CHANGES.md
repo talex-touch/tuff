@@ -5,6 +5,23 @@
 
 ## 2026-05-14
 
+### feat(ai): charge Nexus invoke credits and surface usage
+
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts`
+- `apps/nexus/server/api/v1/intelligence/invoke.api.test.ts`
+- `apps/core-app/src/renderer/src/modules/nexus/credits-summary*.ts`
+- `apps/core-app/src/renderer/src/components/account/CreditsSummaryBlock.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Nexus `/api/v1/intelligence/invoke` 成功返回模型结果后按 `usage.totalTokens` 调用 `consumeCredits(..., 'intelligence-invoke', metadata)`，metadata 只保留 `capabilityId/providerId/providerName/providerType/model/traceId/tokens/promptTokens/completionTokens/source=core-app` 等安全字段。
+  - provider 调用失败与 `totalTokens <= 0` 不扣 credits；`Team credits exceeded.` / `User credits exceeded.` 映射为 `402 CREDITS_EXCEEDED`，避免落成 500。
+  - CoreApp 新增 credits summary 归一化与复用展示块，通过既有 `AuthEvents.nexus.request` / `fetchNexusWithAuth('/api/credits/summary')` 获取权威数据，不在 renderer 处理裸 token。
+  - 设置页登录后展示个人剩余、已用、总额度与团队池剩余；Intelligence 首页展示同一摘要并提示 Nexus 官方 provider 调用按 `totalTokens` 消耗额度。模型倍率与 dynamic `pricingRef` 保留给 Provider Registry Phase 4。
+
 ### docs(transport): close retained event follow-up scan
 
 - `docs/plan-prd/04-implementation/TransportRetainedEventWireNamePlan-260514.md`
