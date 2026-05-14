@@ -9,6 +9,10 @@ import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import {
+  lockFlipOverlayBodyScroll,
+  unlockFlipOverlayBodyScroll,
+} from './flip-overlay-body-scroll-lock'
+import {
   getOverlayStackVersion,
   getVisibleOverlayStackEntries,
   isOverlaySizeMatched,
@@ -247,10 +251,6 @@ const surfaceOpacity = computed(() => {
   return Math.max(0, Math.min(1, value))
 })
 
-const bodyLockCountKey = 'txFlipOverlayLockCount'
-const bodyLockOverflowKey = 'txFlipOverlayLockOverflow'
-const bodyLockPaddingKey = 'txFlipOverlayLockPaddingRight'
-
 const transitionName = computed(() => props.transitionName || 'TxFlipOverlay-Mask')
 const useMaskCssTransition = computed(() => {
   if (!visible.value)
@@ -470,54 +470,6 @@ function applyStackCardState(forceImmediate = false): void {
       stackTween = null
     },
   })
-}
-
-function lockBodyScroll(): void {
-  if (!hasWindow())
-    return
-
-  const body = window.document.body
-  if (!body)
-    return
-
-  const currentCount = Number.parseInt(body.dataset[bodyLockCountKey] || '0', 10)
-
-  if (currentCount === 0) {
-    body.dataset[bodyLockOverflowKey] = body.style.overflow || ''
-    body.dataset[bodyLockPaddingKey] = body.style.paddingRight || ''
-
-    const scrollbarWidth = window.innerWidth - window.document.documentElement.clientWidth
-    body.style.overflow = 'hidden'
-    if (scrollbarWidth > 0)
-      body.style.paddingRight = `${scrollbarWidth}px`
-  }
-
-  body.dataset[bodyLockCountKey] = String(currentCount + 1)
-}
-
-function unlockBodyScroll(): void {
-  if (!hasWindow())
-    return
-
-  const body = window.document.body
-  if (!body)
-    return
-
-  const currentCount = Number.parseInt(body.dataset[bodyLockCountKey] || '0', 10)
-  if (currentCount <= 0)
-    return
-
-  const nextCount = currentCount - 1
-  if (nextCount === 0) {
-    body.style.overflow = body.dataset[bodyLockOverflowKey] || ''
-    body.style.paddingRight = body.dataset[bodyLockPaddingKey] || ''
-    delete body.dataset[bodyLockCountKey]
-    delete body.dataset[bodyLockOverflowKey]
-    delete body.dataset[bodyLockPaddingKey]
-    return
-  }
-
-  body.dataset[bodyLockCountKey] = String(nextCount)
 }
 
 function resolveSource(): void {
@@ -844,12 +796,12 @@ watch(
   visible,
   (value) => {
     if (value && !bodyScrollLocked.value) {
-      lockBodyScroll()
+      lockFlipOverlayBodyScroll()
       bodyScrollLocked.value = true
       return
     }
     if (!value && bodyScrollLocked.value) {
-      unlockBodyScroll()
+      unlockFlipOverlayBodyScroll()
       bodyScrollLocked.value = false
     }
   },
@@ -878,7 +830,7 @@ onBeforeUnmount(() => {
   clearBlockedCloseWarning()
   removeStackEntry()
   if (bodyScrollLocked.value) {
-    unlockBodyScroll()
+    unlockFlipOverlayBodyScroll()
     bodyScrollLocked.value = false
   }
 })
