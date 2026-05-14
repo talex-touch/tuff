@@ -1,5 +1,9 @@
 # Everything SDK 集成 PRD
 
+> 状态: 历史参考（Windows 专项深度材料）
+> 替代入口: `EVERYTHING-SDK-INTEGRATION-PRD.md`、`docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 说明: 本文保留 Everything SDK 完整设计与实现追溯；当前执行边界仍以压缩版入口、Windows 真机 evidence 与 acceptance verifier 为准。
+
 ## 概述
 
 集成 [Everything SDK](https://www.voidtools.com/support/everything/sdk/) 为 Windows 提供即时文件搜索。Everything 是 Windows 上最快的文件搜索工具，基于 NTFS 索引可实现亚毫秒级查询。

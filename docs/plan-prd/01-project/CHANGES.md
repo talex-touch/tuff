@@ -5,15 +5,60 @@
 
 ## 2026-05-14
 
+### docs(transport): close retained event follow-up scan
+
+- `docs/plan-prd/TODO.md`
+  - 复核 Transport Wave A 后续批点名范围：CoreBox / terminal / auth / sync / opener 当前共 `62` 个 retained raw definitions，`typedCandidates=0`。
+  - 该批事件均为一段、二段或特殊命名事件，例如 `sync:start`、`terminal:create`、`auth:get-state`、`core-box:ui-resume`、`@install-plugin`，直接迁到 typed builder 会改变 wire name 或 metadata 语义；本轮不改运行时 IPC 协议。
+  - 关闭“后续批梳理/无损候选确认”子项，并新增独立待办跟踪 retained non-conforming event names 的显式 wire-name 迁移方案。
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` 通过（1 file / 4 tests）。
+
 ### docs(plan): index 04-implementation draft status
 
 - `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/03-features/tuff-transport/API-REFERENCE.deep-dive-2026-03.md`
+- `docs/plan-prd/03-features/tuff-transport/IMPLEMENTATION-GUIDE.deep-dive-2026-03.md`
+- `docs/plan-prd/docs/DIVISION_BOX_API.deep-dive-2026-03.md`
+- `docs/plan-prd/docs/DIVISION_BOX_GUIDE.deep-dive-2026-03.md`
+- `docs/plan-prd/docs/DIVISION_BOX_MANIFEST.deep-dive-2026-03.md`
+- `docs/plan-prd/02-architecture/telemetry-error-reporting-system-prd.deep-dive-2026-03.md`
+- `docs/plan-prd/02-architecture/intelligence-agents-system-prd.deep-dive-2026-03.md`
+- `docs/plan-prd/03-features/search/quick-launch-and-search-optimization-prd.deep-dive-2026-03.md`
+- `docs/plan-prd/03-features/search/EVERYTHING-SDK-INTEGRATION-PRD.deep-dive-2026-03.md`
 - `docs/plan-prd/TODO.md`
 - `docs/INDEX.md`
 - `docs/plan-prd/README.md`
   - 新增 `04-implementation` 目录级状态索引，逐项清点 17 个实施文档，并标注 `当前参考 / 历史参考 / 待重写 / Runbook / 参考资料` 有效边界。
-  - 将 `04-implementation` Draft 清点子项关闭；抽样复核 `docs/INDEX.md` 与 `docs/plan-prd/README.md` 的本地 Markdown 链接目标均存在；第二批历史文档头标仍保留未完成，文档治理总项不整体关闭。
-  - 验证：文档改动，无运行时代码变更；`git diff --check` 通过。
+  - 第二批历史头标先处理 TuffTransport、DivisionBox、Telemetry、Search 与 Agents deep-dive 小批次，明确深入文档只作历史参考；Everything 与 Agents 压缩入口仍保持活跃，当前验收回到压缩版入口、typed event boundary、Transport Wave A、detached widget 真机 evidence、Windows acceptance evidence 与 Agents 回归证据。
+  - 将 `04-implementation` Draft 清点子项关闭；抽样复核 `docs/INDEX.md` 与 `docs/plan-prd/README.md` 的本地 Markdown 链接目标均存在；9 个 `*.deep-dive-2026-03.md` 均已补状态头标，文档治理本轮命名范围关闭。
+  - 验证：文档改动，无运行时代码变更；本地链接抽样脚本通过；`find "docs/plan-prd" -type f -name "*.deep-dive-2026-03.md"` 返回 9 个且均有 `状态` 头标；`git diff --check` 通过。
+
+### test(intelligence-uikit): close package validation evidence
+
+- `docs/plan-prd/TODO.md`
+  - 补跑 `packages/intelligence-uikit` 新包的 exports/components 测试、typecheck 与 lint，确认该包当前验证闭环可本地复现。
+  - 已验证：`pnpm -C "packages/intelligence-uikit" run test` 通过（2 files / 6 tests）；`pnpm -C "packages/intelligence-uikit" run typecheck` 通过；`pnpm -C "packages/intelligence-uikit" run lint` 通过。
+
+### docs(plan): record oversized file split plan
+
+- `docs/plan-prd/docs/SIZE-GROWTH-SPLIT-PLAN-2026-05-14.md`
+- `docs/plan-prd/TODO.md`
+  - 只读复核当前超 1200 行候选文件，确认 `clipboard.ts` 已降到 `1146` 行；新增拆分计划，覆盖 `plugin-module.ts`、`file-provider.ts`、`app-provider.ts`、`search-core.ts`、Nexus lab/auth/docs 与共享类型大文件的分批拆分方向和最小验证命令。
+  - 该项只满足“给出拆分计划”关闭条件，不做运行时代码拆分；后续按普通重构任务逐个 ownership 边界推进。
+
+### test(core-app): close local validation gate
+
+- `apps/core-app/src/renderer/src/App.vue`
+- `apps/core-app/src/main/modules/extension-loader.test.ts`
+- `apps/core-app/src/main/modules/sync/sync-b64-repush.test.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `App.vue` 补显式 `@vueuse/core` `until` import，修复 web typecheck 中 main runtime ready 等待逻辑的缺失符号。
+  - `extension-loader.test.ts` 改为等待后台 extension load 完成后再验证 destroy 反向卸载顺序，匹配 `ExtensionLoaderModule.start()` 后台加载语义。
+  - `sync-b64-repush.test.ts` 为迁移 marker 测试隔离 Electron、Sentry、precore、plugin module 与 storage 导入链，避免单元测试被真实启动链路副作用拖入。
+  - `widget-manager.test.ts` mock `chokidar.watch`，该测试只验证 widget 注册/预编译与失败缓存，不创建真实文件 watcher；全量 test 中的 `EMFILE: too many open files, watch` 阻塞已消失。
+  - 同步关闭 TODO 中“待 `extension-loader.test.ts` 类型错误修复后补跑 `typecheck:node`”旧门禁项；当前本地证据已覆盖该条件。
+  - 已验证：`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（tuffex build 阶段仍输出既有 `TouchScroll` dts 诊断与 deprecation 噪声但命令返回 0）；`pnpm -C "apps/core-app" run test` 通过（213 files / 979 tests）。
 
 ### feat(store): polish plugin marketplace cards and install feedback
 

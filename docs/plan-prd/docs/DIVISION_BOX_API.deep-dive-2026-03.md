@@ -1,5 +1,9 @@
 # DivisionBox API 文档
 
+> 状态: 历史参考 / 待按当前 detached widget evidence 与 typed SDK 口径重写
+> 替代入口: `DIVISION_BOX_API.md`、`docs/plan-prd/03-features/division-box-prd.md`、`docs/plan-prd/TODO.md`
+> 说明: 本文保留 2026-03 API 细节，不能替代当前 DivisionBox 真机验收与 typed transport 边界。
+
 ## 概述
 
 DivisionBox 是一个基于 Electron WebContentsView 的交互式容器系统,为插件 UI、系统工具和调试界面提供统一的浮动工作区平台。本文档详细介绍了 DivisionBox 的核心 API。

@@ -1,5 +1,9 @@
 # TuffTransport 实现指南
 
+> 状态: 历史参考 / 待按当前 typed event boundary 重写
+> 替代入口: `IMPLEMENTATION-GUIDE.md`、`API-REFERENCE.md`、`docs/plan-prd/TODO.md`
+> 说明: 本文保留 2026-03 阶段式迁移设计，不能替代当前 Transport Wave A / SDK hard-cut 验收口径。
+
 ## 1. 实现顺序
 
 ```

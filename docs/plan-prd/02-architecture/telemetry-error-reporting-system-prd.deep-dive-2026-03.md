@@ -1,5 +1,9 @@
 # 遥测与错误上报系统 PRD
 
+> 状态: 历史参考 / 待重写
+> 替代入口: `telemetry-error-reporting-system-prd.md`、`docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 说明: 本文保留 2024-12 到 2026-03 的完整观测系统设想，不能替代当前质量基线、Release Evidence 或真实设备性能证据。
+
 ## 文档概述
 
 | 项目 | 内容 |

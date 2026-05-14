@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档提炼的执行清单（压缩版）
-> 更新时间: 2026-05-13
+> 更新时间: 2026-05-14
 
 ---
 
@@ -124,9 +124,10 @@
 
 #### 需先修复或拆分
 
-- [ ] `packages/intelligence-uikit` 新包：
+- [x] `packages/intelligence-uikit` 新包：
   - 范围：`packages/intelligence-uikit/**`、`pnpm-lock.yaml` 中对应 importer、必要 root/package 配置。
-  - 下一步：先跑该包 exports/components/aiapp mapping tests；`pnpm-lock.yaml` 不能混入其它功能批次。
+  - 2026-05-14 本地补证：该包 exports/components 测试、typecheck 与 lint 均通过；当前无需混入 `pnpm-lock.yaml` 或其它功能批次。
+  - 已验证：`pnpm -C "packages/intelligence-uikit" run test`（2 files / 6 tests passed）；`pnpm -C "packages/intelligence-uikit" run typecheck`；`pnpm -C "packages/intelligence-uikit" run lint`。
 - [ ] `docs/engineering` 归档迁移：
   - 范围：根目录 `codereview/`、`issues/`、`plan/`、`reports/` 删除与 `docs/engineering/**` 新增、`docs/INDEX.md` / `docs/engineering/todo.md` / `docs/engineering/ARCHIVE.md` 同步。
   - 下一步：需要确认这是预期目录迁移；提交前检查路径引用不再指向旧根目录。
@@ -853,23 +854,26 @@
 - [x] CLI token storage 最小安全收口：`packages/tuff-cli-core` 与 `packages/unplugin-export-plugin` 已抽本地 `CliCredentialStore`，继续保留 `auth.json` 位置与 `TUFF_AUTH_TOKEN` CI 无头路径；POSIX 写入后收紧目录 `0700` / 文件 `0600`，读取旧文件时自动修复过宽权限，Windows 仅做 best-effort ACL 提醒，不伪造安全存储完成。后续 Keychain / Credential Locker / libsecret 接入另列第二阶段。
 - [ ] 插件 provider secret 收口：源码侧已新增 `plugin.storage.*Secret` typed events、`plugin.secret` / `usePluginSecret()` SDK 与 `touch-translation` 旧明文迁移；`apiKey/secretKey/secretId/token` 不再写入普通 `providers_config`，普通配置只保留 provider metadata。剩余动作：用户确认后重建并同步 `touch-translation` 运行时产物与 CoreApp 内置副本。
 - [ ] 插件 shell capability 统一诊断：源码侧已在 `touch-system-actions`、`touch-quick-actions`、`touch-window-manager`、`touch-workspace-scripts` 命令 item / 动态 feature meta 中统一暴露 `capability.id/type/platform/permission/status/reason/audit`；Linux 等不支持平台返回 `unsupported` 诊断，缺少 `system.shell` 权限返回 `permission-missing` 诊断，`safe-shell` 不可用时返回 `degraded` 诊断。固定系统命令继续优先走 `safe-shell`，窗口管理继续走参数化 `execFile`/`spawn`，用户工作区命令保留显式确认后的 `user-shell` 路径；已补插件定向测试覆盖诊断字段。剩余动作：用户确认后重建并同步 CoreApp 内置 `touch-quick-actions` 运行时副本。
-- [ ] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
+- [x] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
   - 2026-05-08 已将 core-app 13 个 `size-growth-exception` 收敛为后续小任务口径；优先拆分候选为 `clipboard.ts`（capture/history/transport/autopaste）、`search-core.ts`（routing/provider orchestration/cache-result merge）、`plugin-module.ts`（lifecycle/runtime repair/surface wiring/registry）。
   - 2026-05-11 已完成 `clipboard.ts` 十块切片：capture freshness / diff helper / freshness store 迁到 `clipboard-capture-freshness.ts`，history persistence / cache / query / favorite/delete/image URL 迁到 `clipboard-history-persistence.ts`，typed transport handler 注册与 stream fanout 迁到 `clipboard-transport-handlers.ts`，copy/apply/paste 自动化与失败通知迁到 `clipboard-autopaste-automation.ts`，live image read / temp namespace / orphan cleanup / native image reconstruction 迁到 `clipboard-image-persistence.ts`，polling interval / 低电量策略迁到 `clipboard-polling-policy.ts`，native watcher env/load/start-stop 迁到 `clipboard-native-watcher.ts`，meta DB write / queue pressure/drop/fk 处理迁到 `clipboard-meta-persistence.ts`，stage-B enrichment 迁到 `clipboard-stage-b-enrichment.ts`，capture/persist 主流程迁到 `clipboard-capture-pipeline.ts`；`clipboard.ts` 已降到 `1143` 行并清退 size exception。
   - 2026-05-11 已清零 new oversized：Nexus `provider-registry.vue` 降到 `999` 行、`provider-registry.api.test.ts` 降到 `951` 行；CoreApp `windows-acceptance-manifest-verifier.ts` 降到 `1136` 行、`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行，并拆出 `windows-acceptance-command-requirements.ts`、`windows-acceptance-evidence-verifier.test.ts` 与 manifest test helper。
   - 2026-05-11 `recommendation-engine.ts` 的错误日志 meta、day bucket、time context boost/relevance score 已迁到 `recommendation-utils.ts`，主文件降到 `1869` 行并退出 grown list；`search-core.ts` 的 provider/filter/cache key/telemetry/scene 纯 helper 已迁到 `search-core-utils.ts`，主文件降到 `2475` 行并退出 grown list；`app-provider.test.ts` 已迁出 hoisted mock/test harness 并降到 `1400` 行；`app-provider.ts` 已迁出 UWP/path/managed-entry 纯 helper与 source scanner facade，并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已迁出附件归一、chat content 与 Responses input builder 到 `deepagent-input.ts`，主文件降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已迁出 update asset 打分/分类 helper 并降到 `1610` 行；`omni-panel/index.ts` 已迁出 builtin definitions 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已迁出 playground state composable 并降到 `919` 行；Nexus `useSignIn.ts` 已迁出 redirect helper 并降到 `1538` 行，`assistant.post.ts` 已迁出 request audit meta helper 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已迁出 Lab tool execution helper 并降到 `3408` 行，`telemetryStore.ts` 已迁出 telemetry sanitizer 并降到 `1502` 行，Nexus locale 已迁出 legal shard 并使 `en.ts/zh.ts` 低于 exception cap；当前文件行数治理结果仅作为历史记录；后续通过 code review 与普通重构任务继续推进。
+  - 2026-05-14 已新增 `docs/plan-prd/docs/SIZE-GROWTH-SPLIT-PLAN-2026-05-14.md`，按当前行数快照为 `plugin-module.ts`、`file-provider.ts`、`app-provider.ts`、`search-core.ts`、Nexus lab/auth/docs 与共享类型大文件给出分批拆分方向和最小验证命令；`clipboard.ts` 当前为 `1146` 行，已低于阈值。
 - [x] CoreApp 验证收口：补跑 `typecheck:node` / `typecheck:web` / 定向测试并记录证据。
   - 2026-05-11 本地验证补证：`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（tuffex build 阶段仍输出既有 deprecation / dts 诊断噪声但命令返回 0）；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard/clipboard-request-normalizer.test.ts" "src/main/modules/clipboard/clipboard-freshness.test.ts" "src/main/modules/clipboard/clipboard-capture-freshness.test.ts" "src/main/modules/platform/windows-acceptance-verify-script.test.ts" "src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts" "src/renderer/src/modules/box/adapter/hooks/useDetach.test.ts" "src/main/modules/division-box/session.test.ts"` 通过（`67 tests`）。
+  - 2026-05-14 本地验证补证：修正 `App.vue` 缺失 `until` 显式 import；`extension-loader.test.ts` 适配后台加载完成后再验证 destroy 顺序；`sync-b64-repush.test.ts` 隔离 Electron/Sentry/precore/plugin/storage 导入链；`widget-manager.test.ts` mock `chokidar.watch`，避免 unit test 在全量并发中创建真实 watcher 触发 EMFILE。已验证：`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（tuffex build 阶段仍输出既有 `TouchScroll` dts 诊断与 deprecation 噪声但命令返回 0）；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/extension-loader.test.ts" "src/main/utils/local-renderable-assets.test.ts" "src/main/utils/perf-monitor.severe-lag.test.ts" "src/renderer/src/modules/hooks/useWorkflowEditor.test.ts" "src/renderer/src/modules/install/install-manager.test.ts" "src/renderer/src/modules/platform/renderer-platform.test.ts" "src/renderer/src/modules/layout/preset/remote/useRemotePresets.test.ts" "src/main/modules/sync/sync-b64-repush.test.ts"` 通过（8 files / 29 tests）；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/widget/widget-manager.test.ts"` 通过（5 tests）；`pnpm -C "apps/core-app" run test` 通过（213 files / 979 tests）。
 - [ ] 搜索性能验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
   - 2026-05-09 已接通跨机器匿名搜索 telemetry 聚合：CoreApp 最终 `session.end` 上报 `firstResultMs/providerTimings/providerResults/providerStatus`，Nexus Admin Analytics Search 页新增 Provider Performance 表，支持查看 calls/avg/P95/max/results/errors/timeouts/slow rate；仍需真实设备样本跑满 200 次验收。
   - 当前完成边界：上报、聚合、展示、类型与定向测试已完成；`search:trace:stats -- --input <core-app-log-file> --output <stats.json> --minSamples 200 --strict` 可从目标设备日志生成可归档 stats，Windows acceptance template 已输出 `performance.searchTraceStatsCommand`；验收关闭条件是目标设备产出 `search-trace-stats/v1`，并用 `search:trace:verify -- --minSamples 200 --strict` 通过样本数、P95、slowRatio 与内部 metric 自洽门禁。
 - [ ] 启动搜索压测：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”，产出 2 分钟窗口内 lag/P95 证据；`clipboard:stress:verify` 已可复核 `clipboard:stress` summary 的 2 分钟窗口、500/250ms interval、scheduler delay P95/max、realtime queue peak、drop/timeout/error 门禁，但真实设备压测尚未执行。
-- [ ] 文档治理：第二批历史文档统一加“历史/待重写”头标，Telemetry/Search/Transport/DivisionBox 长文档改造为 TL;DR 分层模板。
-  - 2026-05-14 分层入口切片：`telemetry-error-reporting-system-prd.md` 已具备压缩版 TL;DR；本轮补齐 `SEARCH-REFACTOR-PRD.md`、`TuffTransportMigration260111.md`、`division-box-prd.md` 的状态头标、TL;DR、当前边界与追溯入口。`04-implementation/README.md` 已完成目录级 Draft 清点与有效状态索引；第二批历史文档头标与链接抽样仍未完成，本项暂不整体关闭。
+- [x] 文档治理：第二批历史文档统一加“历史/待重写”头标，Telemetry/Search/Transport/DivisionBox 长文档改造为 TL;DR 分层模板。
+  - 2026-05-14 分层入口切片：`telemetry-error-reporting-system-prd.md` 已具备压缩版 TL;DR；本轮补齐 `SEARCH-REFACTOR-PRD.md`、`TuffTransportMigration260111.md`、`division-box-prd.md` 的状态头标、TL;DR、当前边界与追溯入口。`04-implementation/README.md` 已完成目录级 Draft 清点与有效状态索引；`docs/INDEX.md` 与 `docs/plan-prd/README.md` 本地链接抽样已通过。9 个 `*.deep-dive-2026-03.md` 均已补状态头标；文档治理本轮命名范围关闭。
 - [ ] Transport Wave A：MessagePort 高频通道迁移 + `sendSync` 清理。
 - [x] Transport Wave A 指标拆分：把 raw send violation 与 retained `defineRawEvent` definition 分开统计；2026-05-10 已在 `transport-event-boundary.test.ts` 输出 `rawSendViolations`、`retainedRawEventDefinitions` 与 `typedMigrationCandidates`，并继续禁止三段 typed-builder 形态新增 raw definition。
 - [x] Transport Wave A retained event 迁移第一批：2026-05-11 已迁移当前扫描到的三段 retained raw event：`system:permission:*` 与 `omni-panel:feature:*`，外部事件名保持不变；`typedMigrationCandidates` 当前为 `0`，retained raw definition 当前上限为 `265`。
-- [ ] Transport Wave A retained event 迁移后续批：继续梳理 CoreBox / terminal / auth / sync / opener；二段或特殊名称继续保留 raw definition，直到有明确 wire-name 迁移方案。
+- [x] Transport Wave A retained event 迁移后续批梳理：2026-05-14 复核 CoreBox / terminal / auth / sync / opener 后确认该批共 `62` 个 retained raw definitions，`typedCandidates=0`；当前均为一段、二段或特殊命名事件，不存在不改 wire name 的 typed builder 迁移候选。已补跑 `pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` 通过（4 tests）。
+- [ ] Transport retained non-conforming event names 迁移方案：为 CoreBox / terminal / auth / sync / opener 的一段、二段或特殊事件名设计显式 wire-name 迁移策略；在兼容窗口、SDK alias 与主/渲染/插件调用点同步方案明确前，继续保留 raw definition。
 - [ ] AI Wave B：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
 - [x] AI Wave B 假值治理第一切片：`system/serve/stat` 已改用 Node runtime metrics，采集不完整时返回 degraded/unavailable reason；支付 mock/DUMMY 订单已由 `AIAPP_PAYMENT_MODE=mock` 门控，非 mock 环境返回 `PAYMENT_PROVIDER_UNAVAILABLE`。
 - [x] Plugin storage 治理第一切片：`plugins/touch-image` 图片历史路径已从 renderer `localStorage` 写入迁到 plugin storage SDK，固定 50 条上限，补一次性旧数据迁移、缩略图失败剔除与清理入口。
@@ -901,7 +905,12 @@
 - [x] 债务扫描口径显式化：主线改为显式白名单 + 漏扫报错 + `scanScope` 摘要输出。
 - [x] 超长文件防漂移：`--write-baseline` 禁止自动上调，新增 `growthExceptions` 显式豁免机制。
 - [x] `TODO` 主文件完成入口重排，当前优先级与 `2.4.11` 必解问题独立维护。
-- [ ] 第二批历史文档统一加“历史/待重写”头标。
+- [x] 第二批历史文档统一加“历史/待重写”头标。
+  - 2026-05-14 第一小批：`03-features/tuff-transport/API-REFERENCE.deep-dive-2026-03.md` 与 `03-features/tuff-transport/IMPLEMENTATION-GUIDE.deep-dive-2026-03.md` 已补历史参考/待按当前 typed event boundary 重写头标，并指向压缩版入口与 TODO。
+  - 2026-05-14 第二小批：`docs/DIVISION_BOX_API.deep-dive-2026-03.md`、`docs/DIVISION_BOX_GUIDE.deep-dive-2026-03.md` 与 `docs/DIVISION_BOX_MANIFEST.deep-dive-2026-03.md` 已补历史参考/待按当前 detached widget evidence 与 typed SDK 口径重写头标，并指向压缩版入口与 TODO。
+  - 2026-05-14 第三小批：`02-architecture/telemetry-error-reporting-system-prd.deep-dive-2026-03.md`、`03-features/search/quick-launch-and-search-optimization-prd.deep-dive-2026-03.md` 与 `03-features/search/EVERYTHING-SDK-INTEGRATION-PRD.deep-dive-2026-03.md` 已补历史参考/待重写头标；Everything 压缩入口仍保持 Windows 专项活跃，真机 evidence 才是当前验收来源。
+  - 2026-05-14 第四小批：`02-architecture/intelligence-agents-system-prd.deep-dive-2026-03.md` 已补历史参考头标；Agents 压缩入口仍保持活跃，当前执行边界以回归证据与 typed SDK/transport 约束为准。
+  - 覆盖校验：`find "docs/plan-prd" -type f -name "*.deep-dive-2026-03.md"` 当前返回 9 个文件，均已在前 8 行内包含 `状态` 头标。
 
 ### B. Nexus 风控（已降权历史入口）
 
@@ -1022,7 +1031,8 @@
 - [x] 平台能力收敛：`native-share` 仅 macOS 标记 `supported`；Win/Linux 仅保留显式 `mail` 目标，不再冒充系统分享。
 - [x] 正式 UI 去占位：布局页不再展示 disabled “Coming Soon” 卡片；`Publish to Cloud` 按钮移除。
 - [x] 热点日志收敛：`file-provider` / `file-system-watcher` / `permission-store` / `tray-manager` / `file-protocol` 改走统一 logger。
-- [ ] 验证收口：待当前 worktree 安装 `apps/core-app/node_modules` 后补跑 `typecheck:node` / `typecheck:web` / `test` 并记录证据。
+- [x] 验证收口：当前 worktree 已补跑 `typecheck:node` / `typecheck:web` / `test` 并记录证据。
+  - 2026-05-14 复核：`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（tuffex build 仍打印既有 dts/deprecation 噪声但返回 0）；`pnpm -C "apps/core-app" run test` 通过（213 files / 979 tests）。
 
 ### O. CoreApp 文件索引稳态修复（2026-03-25）
 
@@ -1061,7 +1071,8 @@
 - [x] P2：`clipboard:stress` 新增 `--output <summary.json>` 精确输出入口，Windows acceptance template 已生成 `performance.clipboardStressCommand`，可直接产出 manifest 期望的 `clipboard-stress-summary.json`；真实性能验收仍需目标设备执行 2 分钟 500/250ms 压测并通过 `clipboard:stress:verify -- --strict`。
 - [x] 单测：新增 `search-activity.test.ts`，覆盖活跃窗口判定行为。
 - [ ] 验收：按 `search-trace` 采样 200 次真实查询，确认 `first.result/session.end` P95 与慢查询占比达标。
-- [ ] 门禁：待仓库既有 `extension-loader.test.ts` 类型错误修复后，补跑并记录 `typecheck:node` 全绿证据。
+- [x] 门禁：待仓库既有 `extension-loader.test.ts` 类型错误修复后，补跑并记录 `typecheck:node` 全绿证据。
+  - 2026-05-14 复核：`extension-loader.test.ts` 已适配后台加载语义；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run test` 通过（213 files / 979 tests）。
 
 ### R. 启动搜索卡顿永久治理（2026-03-24）
 

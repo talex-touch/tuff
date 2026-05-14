@@ -1,5 +1,9 @@
 # 智能代理（Intelligence Agents）系统设计文档 (v1.2)
 
+> 状态: 历史参考（Agents 详细架构材料）
+> 替代入口: `intelligence-agents-system-prd.md`、`docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 说明: 本文保留 2025-12 到 2026-03 的详细规划快照；当前执行边界仍以压缩版入口、Agents 回归证据与 typed SDK/transport 约束为准。
+
 > 更新: 2025-12-10 - 详细实现规划
 
 ## 概述

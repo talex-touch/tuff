@@ -1,5 +1,9 @@
 # DivisionBox 开发者指南
 
+> 状态: 历史参考 / 待按当前 detached widget evidence 与 typed SDK 口径重写
+> 替代入口: `DIVISION_BOX_GUIDE.md`、`docs/plan-prd/03-features/division-box-prd.md`、`docs/plan-prd/TODO.md`
+> 说明: 本文保留 2026-03 接入指南，不能替代当前 DivisionBox 真机验收与 typed transport 边界。
+
 ## 概述
 
 本指南帮助插件开发者快速接入 DivisionBox 系统,提供最佳实践、常见模式和故障排查方法。
@@ -1151,4 +1155,3 @@ async closeAllSessions() {
   - 完整的插件接入指南
   - 最佳实践和常见模式
   - 故障排查和调试技巧
-

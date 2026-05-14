@@ -1,5 +1,9 @@
 # 快速启动与搜索优化 PRD
 
+> 状态: 历史草案 / 待重写
+> 替代入口: `quick-launch-and-search-optimization-prd.md`、`docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 说明: 本文保留早期快速启动与搜索优化完整设想，不能替代当前 Quick Launch 真机验收、Windows App 索引验收或搜索性能 evidence。
+
 > **版本**: v1.0
 > **创建时间**: 2024-12
 > **状态**: 草案

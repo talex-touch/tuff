@@ -1,5 +1,9 @@
 # DivisionBox Manifest 配置文档
 
+> 状态: 历史参考 / 待按当前 detached widget evidence 与 typed SDK 口径重写
+> 替代入口: `DIVISION_BOX_MANIFEST.md`、`docs/plan-prd/03-features/division-box-prd.md`、`docs/plan-prd/TODO.md`
+> 说明: 本文保留 2026-03 Manifest 配置细节，不能替代当前 DivisionBox 真机验收与 typed transport 边界。
+
 ## 概述
 
 插件可以在 `manifest.json` 中声明 DivisionBox 配置,系统会自动解析并应用这些配置。这简化了插件的接入流程,无需在代码中手动配置每个参数。

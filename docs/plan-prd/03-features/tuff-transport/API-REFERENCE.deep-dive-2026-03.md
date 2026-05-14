@@ -1,5 +1,9 @@
 # TuffTransport API 参考
 
+> 状态: 历史参考 / 待按当前 typed event boundary 重写
+> 替代入口: `API-REFERENCE.md`、`IMPLEMENTATION-GUIDE.md`、`docs/plan-prd/TODO.md`
+> 说明: 本文保留 2026-03 深入 API 说明，不能替代当前 Transport Wave A / SDK hard-cut 验收口径。
+
 ## 快速开始
 
 ```typescript
