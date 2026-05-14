@@ -2168,6 +2168,14 @@
       "syncFromNexusFailed": "Failed to sync channels from Nexus.",
       "syncFromNexusAuthRequired": "Please sign in to sync channels from Nexus.",
       "nexusManagedApiKeyHint": "API key is managed by Nexus auth token.",
+      "nexusOfficialProvider": "Nexus managed official provider",
+      "nexusInvokeReadyTitle": "Nexus Intelligence is ready",
+      "nexusInvokeReadyDesc": "After app sign-in, official AI calls are routed through Nexus Intelligence Provider configuration.",
+      "nexusInvokeLoginTitle": "Sign in to enable Nexus AI",
+      "nexusInvokeLoginDesc": "After sign-in, the default channel uses Nexus managed invocation. Without sign-in it falls back to other available channels.",
+      "nexusInvokeAutoCall": "Current sign-in state can call Nexus AI automatically.",
+      "nexusInvokeFallback": "You are not signed in. Calls will fall back to other configured channels.",
+      "nexusInvokeLoginAction": "Sign in to Nexus",
       "deleteProvider": "Delete provider {name}",
       "deleteConfirmTitle": "Delete Provider",
       "deleteConfirmMessage": "Are you sure you want to delete provider \"{name}\"? This action cannot be undone.",
@@ -2899,7 +2907,10 @@
       "providersCount": "providers"
     },
     "item": {
-      "configError": "Configuration incomplete or invalid"
+      "configError": "Configuration incomplete or invalid",
+      "nexusOfficial": "Official",
+      "nexusAuthReady": "Nexus auth ready",
+      "nexusAuthRequired": "Nexus sign-in required"
     },
     "status": {
       "enabled": "Enabled",
@@ -3293,7 +3304,16 @@
       "coreboxUnavailable": "CoreBox is unavailable right now. Please retry shortly.",
       "toggleFailed": "Failed to update feature status.",
       "reorderFailed": "Failed to reorder features.",
-      "featureUnavailable": "This feature is currently unavailable. Check plugin status."
+      "featureUnavailable": "This feature is currently unavailable. Check plugin status.",
+      "aiRunning": "Generating result...",
+      "aiRetry": "Retry",
+      "aiCopy": "Copy",
+      "aiCopied": "AI result copied",
+      "aiCopyFailed": "Failed to copy AI result",
+      "aiReplaceClipboard": "Replace clipboard",
+      "aiConfirmReplaceClipboard": "Confirm replace",
+      "aiClipboardReplaced": "Clipboard replaced",
+      "aiNoTrace": "No trace yet"
     },
     "meta": {
       "defaultGroup": "Actions",

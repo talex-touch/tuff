@@ -1,6 +1,7 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getNetworkService } from '../network'
+import { isNexusManagedProvider } from './provider-runtime-shared'
 
 const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
   [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',
@@ -56,6 +57,10 @@ function normalizeModelEntries(entries: unknown[]): string[] {
 }
 
 export async function fetchProviderModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+  if (isNexusManagedProvider(provider)) {
+    return provider.models?.length ? [...new Set(provider.models)] : []
+  }
+
   if (provider.type === IntelligenceProviderType.LOCAL) {
     return provider.models?.length ? [...new Set(provider.models)] : []
   }

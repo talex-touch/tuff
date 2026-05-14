@@ -27,6 +27,41 @@ export const OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS = [
     target: 'system' as const
   },
   {
+    id: 'builtin.ai.translate',
+    title: 'AI 翻译',
+    subtitle: '预览译文后再复制或替换剪贴板',
+    icon: { type: 'class', value: 'i-ri-translate' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
+    id: 'builtin.ai.summarize',
+    title: 'AI 摘要',
+    subtitle: '生成选中文本的要点摘要',
+    icon: { type: 'class', value: 'i-ri-file-list-3-line' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
+    id: 'builtin.ai.rewrite',
+    title: 'AI 改写',
+    subtitle: '改写为更清晰自然的表达',
+    icon: { type: 'class', value: 'i-ri-edit-2-line' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
+    id: 'builtin.ai.explain',
+    title: 'AI 解释',
+    subtitle: '解释选中文本或代码片段',
+    icon: { type: 'class', value: 'i-ri-question-answer-line' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
+    id: 'builtin.ai.review',
+    title: 'AI Review',
+    subtitle: '预览代码 Review 建议',
+    icon: { type: 'class', value: 'i-ri-git-pull-request-line' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
     id: 'builtin.search',
     title: '网页搜索',
     subtitle: '用浏览器搜索选中文本',

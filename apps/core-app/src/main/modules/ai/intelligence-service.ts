@@ -11,7 +11,9 @@ import {
   setupConfigUpdateListener
 } from './intelligence-config'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
+import { createCustomProvider } from './provider-factory'
 import { fetchProviderModels } from './provider-models'
+import { normalizeProviderForRuntime } from './provider-runtime'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
 import { LocalProvider } from './providers/local-provider'
@@ -69,6 +71,7 @@ export function initIntelligenceSdkService(): void {
     IntelligenceProviderType.ANTHROPIC,
     (config) => new AnthropicProvider(config)
   )
+  manager.registerFactory(IntelligenceProviderType.CUSTOM, createCustomProvider)
   setIntelligenceProviderManager(manager)
   logInfo('Provider factories registered')
 
@@ -105,7 +108,7 @@ export function initIntelligenceSdkService(): void {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data
+      const provider = normalizeProviderForRuntime(data.provider)
       ensureIntelligenceConfigLoaded()
       // logInfo(`Testing provider ${provider.id}`) // Remove to reduce noise
       const result = await tuffIntelligence.testProvider(provider)
@@ -178,7 +181,7 @@ export function initIntelligenceSdkService(): void {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data
+      const provider = normalizeProviderForRuntime(data.provider)
       ensureIntelligenceConfigLoaded()
       logInfo(`Fetching models for provider ${provider.id}`)
       const models = await fetchProviderModels(provider)

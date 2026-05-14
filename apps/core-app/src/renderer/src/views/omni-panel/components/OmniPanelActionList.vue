@@ -31,10 +31,11 @@ const emit = defineEmits<{
 
 <style scoped lang="scss">
 .OmniPanelActionList {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  max-height: 188px;
+  gap: 6px;
   overflow-y: auto;
   padding-right: 2px;
   align-content: start;

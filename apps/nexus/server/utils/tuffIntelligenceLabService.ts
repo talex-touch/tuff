@@ -1,12 +1,14 @@
 import type {
   IntelligenceMessage,
+  IntelligenceUsageInfo,
   TuffIntelligenceApprovalTicket,
 } from '@talex-touch/tuff-intelligence'
-import type { H3Event } from 'h3'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { createError, type H3Event } from 'h3'
 import { getUserById } from './authStore'
 import { resolveProviderBaseUrl } from './intelligenceModels'
+import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import {
   getIntelligenceProviderApiKeyWithRegistryFallback,
   listIntelligenceProvidersWithRegistryMirrors,
@@ -40,6 +42,7 @@ import {
   SUPPORTED_TOOL_IDS,
   type ToolExecutionContext,
 } from './tuffIntelligenceLabTools'
+import { listProviderRegistryEntries, type ProviderRegistryRecord } from './providerRegistryStore'
 
 export type IntelligenceLabActionType = 'tool' | 'agent' | 'capability'
 
@@ -80,6 +83,7 @@ interface InvokeModelResult {
   endpoint: string
   status?: number
   latency: number
+  usage?: IntelligenceUsageInfo
 }
 
 interface InvokeModelOptions {
@@ -89,6 +93,13 @@ interface InvokeModelOptions {
   source?: string
   stage?: string
   sessionId?: string
+}
+
+interface NexusInvokeOptions extends InvokeModelOptions {
+  preferredProviderId?: string
+  allowedProviderIds?: string[]
+  modelPreference?: string[]
+  metadata?: Record<string, unknown>
 }
 
 interface InvokeModelAttemptError {
@@ -397,6 +408,48 @@ function extractText(value: unknown): string {
       return extractText(record.text)
   }
   return ''
+}
+
+function numberFrom(...candidates: unknown[]): number {
+  for (const item of candidates) {
+    if (typeof item === 'number' && Number.isFinite(item))
+      return item
+  }
+  return 0
+}
+
+function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsageInfo {
+  const usageMetadata = asRecord(rawMessage.usage_metadata)
+  const responseMetadata = asRecord(rawMessage.response_metadata)
+  const tokenUsage = asRecord(responseMetadata.tokenUsage)
+
+  const promptTokens = numberFrom(
+    usageMetadata.input_tokens,
+    usageMetadata.prompt_tokens,
+    usageMetadata.promptTokens,
+    tokenUsage.promptTokens,
+    tokenUsage.prompt_tokens,
+  )
+  const completionTokens = numberFrom(
+    usageMetadata.output_tokens,
+    usageMetadata.completion_tokens,
+    usageMetadata.completionTokens,
+    tokenUsage.completionTokens,
+    tokenUsage.completion_tokens,
+  )
+  const totalTokens = numberFrom(
+    usageMetadata.total_tokens,
+    usageMetadata.totalTokens,
+    tokenUsage.totalTokens,
+    tokenUsage.total_tokens,
+    promptTokens + completionTokens,
+  )
+
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  }
 }
 
 function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
@@ -764,6 +817,7 @@ async function invokeOpenAiCompatibleChat(
       endpoint: `langchain:${context.provider.type}:chat`,
       status: 200,
       latency: now() - startedAt,
+      usage: extractUsageInfo(asRecord(response)),
     }
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
@@ -825,6 +879,7 @@ async function invokeAnthropicChat(
       endpoint: 'langchain:anthropic:chat',
       status: 200,
       latency: now() - startedAt,
+      usage: extractUsageInfo(asRecord(response)),
     }
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
@@ -1077,6 +1132,317 @@ function normalizeMessages(messages: unknown): IntelligenceMessage[] {
       return { role, content }
     })
     .filter((message): message is IntelligenceMessage => Boolean(message))
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value))
+    return []
+  return value
+    .map(item => readOptionalString(item))
+    .filter((item): item is string => Boolean(item))
+}
+
+function parseJsonObject<T extends Record<string, unknown>>(raw: string, fallback: T): T {
+  const sanitized = sanitizeJsonContent(raw)
+  const candidates = [
+    sanitized,
+    sanitized.includes('{') && sanitized.includes('}')
+      ? sanitized.slice(sanitized.indexOf('{'), sanitized.lastIndexOf('}') + 1)
+      : '',
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        return { ...fallback, ...(parsed as Partial<T>) }
+    }
+    catch {
+      // Try the next candidate.
+    }
+  }
+  return fallback
+}
+
+function toPromptPayload(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {}
+}
+
+function buildCapabilityMessages(capabilityId: string, payload: unknown): IntelligenceMessage[] {
+  const record = toPromptPayload(payload)
+
+  if (capabilityId === 'text.chat' || capabilityId === 'chat.completion') {
+    const messages = normalizeMessages(record.messages)
+    if (messages.length <= 0) {
+      throw createError({ statusCode: 400, statusMessage: 'messages are required.' })
+    }
+    return messages
+  }
+
+  if (capabilityId === 'text.translate') {
+    const text = readOptionalString(record.text)
+    const targetLang = readOptionalString(record.targetLang)
+    if (!text || !targetLang) {
+      throw createError({ statusCode: 400, statusMessage: 'text and targetLang are required.' })
+    }
+    const sourceLang = readOptionalString(record.sourceLang) || 'auto'
+    return [
+      {
+        role: 'system',
+        content: `You are a professional translator. Translate from ${sourceLang} to ${targetLang}. Return only the translated text.`,
+      },
+      { role: 'user', content: text },
+    ]
+  }
+
+  if (capabilityId === 'text.summarize') {
+    const text = readOptionalString(record.text)
+    if (!text) {
+      throw createError({ statusCode: 400, statusMessage: 'text is required.' })
+    }
+    const style = readOptionalString(record.style) || 'concise'
+    const maxLength = readOptionalNumber(record.maxLength)
+    return [
+      {
+        role: 'system',
+        content: `You are a summarization assistant. Style: ${style}.${maxLength ? ` Keep it under ${maxLength} characters.` : ''} Return only the summary.`,
+      },
+      { role: 'user', content: text },
+    ]
+  }
+
+  if (capabilityId === 'text.rewrite') {
+    const text = readOptionalString(record.text)
+    if (!text) {
+      throw createError({ statusCode: 400, statusMessage: 'text is required.' })
+    }
+    const preserveKeywords = readStringArray(record.preserveKeywords)
+    return [
+      {
+        role: 'system',
+        content: [
+          `You are a writing assistant. Rewrite in a ${readOptionalString(record.style) || 'professional'} style with a ${readOptionalString(record.tone) || 'neutral'} tone.`,
+          readOptionalString(record.targetAudience)
+            ? `Target audience: ${readOptionalString(record.targetAudience)}.`
+            : '',
+          preserveKeywords.length ? `Preserve these keywords: ${preserveKeywords.join(', ')}.` : '',
+          'Return only the rewritten text.',
+        ].filter(Boolean).join(' '),
+      },
+      { role: 'user', content: text },
+    ]
+  }
+
+  if (capabilityId === 'code.explain') {
+    const code = readOptionalString(record.code)
+    if (!code) {
+      throw createError({ statusCode: 400, statusMessage: 'code is required.' })
+    }
+    return [
+      {
+        role: 'system',
+        content: `You are a code explanation assistant. Explain ${readOptionalString(record.language) || 'the'} code at ${readOptionalString(record.targetAudience) || 'intermediate'} level with ${readOptionalString(record.depth) || 'detailed'} depth. Return JSON: {"explanation":"...","summary":"...","keyPoints":[],"complexity":"simple|moderate|complex","concepts":[]}.`,
+      },
+      { role: 'user', content: code },
+    ]
+  }
+
+  if (capabilityId === 'code.review') {
+    const code = readOptionalString(record.code)
+    if (!code) {
+      throw createError({ statusCode: 400, statusMessage: 'code is required.' })
+    }
+    const focusAreas = readStringArray(record.focusAreas)
+    return [
+      {
+        role: 'system',
+        content: `You are a code reviewer. Focus on ${focusAreas.length ? focusAreas.join(', ') : 'security, performance, style, bugs, best-practices'}. Return JSON: {"summary":"...","score":0,"issues":[],"improvements":[]}.`,
+      },
+      {
+        role: 'user',
+        content: readOptionalString(record.context)
+          ? `Context:\n${readOptionalString(record.context)}\n\nCode:\n${code}`
+          : code,
+      },
+    ]
+  }
+
+  throw createError({ statusCode: 400, statusMessage: `Unsupported capability: ${capabilityId}` })
+}
+
+function normalizeCapabilityId(capabilityId: unknown): string {
+  if (typeof capabilityId !== 'string' || !capabilityId.trim()) {
+    throw createError({ statusCode: 400, statusMessage: 'capabilityId is required.' })
+  }
+  const normalized = capabilityId.trim()
+  return normalized === 'chat.completion' ? 'text.chat' : normalized
+}
+
+function normalizeUsage(usage?: IntelligenceUsageInfo): IntelligenceUsageInfo {
+  return {
+    promptTokens: usage?.promptTokens ?? 0,
+    completionTokens: usage?.completionTokens ?? 0,
+    totalTokens: usage?.totalTokens ?? 0,
+  }
+}
+
+function normalizeTextResult(capabilityId: string, content: string): unknown {
+  if (capabilityId === 'code.explain') {
+    return parseJsonObject(content, {
+      explanation: content,
+      summary: '',
+      keyPoints: [],
+    })
+  }
+  if (capabilityId === 'code.review') {
+    return parseJsonObject(content, {
+      summary: content,
+      score: 0,
+      issues: [],
+      improvements: [],
+    })
+  }
+  return content
+}
+
+function providerHasRegistryCapability(provider: ProviderRegistryRecord, capability: string): boolean {
+  return provider.capabilities.some(item => item.capability === capability)
+}
+
+async function resolveVisionOcrProvider(
+  event: H3Event,
+  userId: string,
+  providerId?: string,
+): Promise<ProviderRegistryRecord> {
+  const entries = await listProviderRegistryEntries(event)
+  const providers = entries
+    .filter(provider => provider.status === 'enabled')
+    .filter(provider => provider.ownerScope === 'system' || provider.ownerId === userId)
+    .filter(provider => providerHasRegistryCapability(provider, 'vision.ocr'))
+    .filter(provider => provider.metadata?.source === 'intelligence')
+
+  const selected = providerId
+    ? providers.find((provider) => {
+        const intelligenceProviderId = readOptionalString(provider.metadata?.intelligenceProviderId)
+        return provider.id === providerId || intelligenceProviderId === providerId
+      })
+    : providers.sort((a, b) => {
+        const aPriority = readOptionalNumber(a.metadata?.priority) ?? 999
+        const bPriority = readOptionalNumber(b.metadata?.priority) ?? 999
+        return aPriority - bPriority
+      })[0]
+
+  if (!selected) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: providerId
+        ? 'Target vision OCR provider not found.'
+        : 'No enabled vision OCR provider is available.',
+    })
+  }
+  return selected
+}
+
+export interface NexusIntelligenceInvokePayload {
+  capabilityId: string
+  payload?: unknown
+  options?: NexusInvokeOptions
+}
+
+export interface NexusIntelligenceInvokeResult {
+  capabilityId: string
+  result: unknown
+  usage: IntelligenceUsageInfo
+  model: string
+  latency: number
+  traceId: string
+  provider: string
+  metadata: {
+    nexus: true
+    providerName?: string
+    providerType?: string
+    fallbackCount: number
+    retryCount: number
+    attemptedProviders: string[]
+  }
+}
+
+export async function invokeIntelligenceCapability(
+  event: H3Event,
+  userId: string,
+  request: NexusIntelligenceInvokePayload,
+): Promise<NexusIntelligenceInvokeResult> {
+  const capabilityId = normalizeCapabilityId(request.capabilityId)
+  const options = request.options ?? {}
+  const model = options.model
+    || (Array.isArray(options.modelPreference) ? readOptionalString(options.modelPreference[0]) : undefined)
+  const providerId = options.providerId
+    || options.preferredProviderId
+    || undefined
+  const timeoutMs = options.timeoutMs
+    || readOptionalNumber(options.metadata?.timeout)
+
+  if (capabilityId === 'vision.ocr') {
+    const provider = await resolveVisionOcrProvider(event, userId, providerId)
+    const startedAt = now()
+    const ocr = await invokeIntelligenceVisionOcr(event, provider, request.payload)
+    return {
+      capabilityId,
+      result: ocr.output,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: readOptionalString(provider.metadata?.defaultModel) || 'vision-ocr',
+      latency: ocr.latencyMs || (now() - startedAt),
+      traceId: ocr.providerRequestId || createId('trace'),
+      provider: readOptionalString(provider.metadata?.intelligenceProviderId) || provider.id,
+      metadata: {
+        nexus: true,
+        providerName: provider.displayName,
+        providerType: readOptionalString(provider.metadata?.intelligenceType) || provider.vendor,
+        fallbackCount: 0,
+        retryCount: 0,
+        attemptedProviders: [provider.id],
+      },
+    }
+  }
+
+  const messages = buildCapabilityMessages(capabilityId, request.payload)
+  const invocation = await invokeModel(event, userId, {
+    providerId,
+    model,
+    timeoutMs,
+    messages,
+    source: 'core-app',
+    stage: `capability:${capabilityId}`,
+    sessionId: readOptionalString(options.metadata?.sessionId),
+  })
+
+  return {
+    capabilityId,
+    result: normalizeTextResult(capabilityId, invocation.result.content),
+    usage: normalizeUsage(invocation.result.usage),
+    model: invocation.result.model,
+    latency: invocation.result.latency,
+    traceId: invocation.result.traceId,
+    provider: invocation.context.provider.id,
+    metadata: {
+      nexus: true,
+      providerName: invocation.context.provider.name,
+      providerType: invocation.context.provider.type,
+      fallbackCount: invocation.fallbackCount,
+      retryCount: invocation.retryCount,
+      attemptedProviders: invocation.attemptedProviders,
+    },
+  }
 }
 
 async function analyzeIntentWithModel(

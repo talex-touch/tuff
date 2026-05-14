@@ -149,7 +149,21 @@
   - 复核 `apps/core-app/src/main/modules/plugin/sdkapi-hard-cut-gate.ts`、plugin loader / installer / preflight 与 `packages/utils` plugin channel 表面，确认缺失、非法、低于 floor 或未支持的 `sdkapi` 统一以 `SDKAPI_BLOCKED` 阻断。
   - 复核 `packages/utils/__tests__/plugin-channel-send-sync-hard-cut.test.ts` 与 `plugins/clipboard-history/scripts/assert-no-raw-channels.mjs`，确认 plugin channel `sendSync` 仍是 removed error，renderer SDK 类型面不再暴露 `sendSync`，clipboard-history 构建产物与 CoreApp 内置副本不含已禁止 raw clipboard/system channel 字符串。
   - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/plugin-preflight-helper.test.ts" "src/main/modules/plugin/plugin-installer.test.ts" "src/main/modules/plugin/install-queue.test.ts"` 通过；`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-channel-send-sync-hard-cut.test.ts"` 通过；`node "plugins/clipboard-history/scripts/assert-no-raw-channels.mjs"` 通过；CoreApp plugin 相关 ESLint 与 packages/utils plugin channel ESLint 均通过。
+### feat(core-app): add OmniPanel AI writing tools preview
 
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/shared/intelligence/{desktop-context-capsule.ts,desktop-context-capsule.test.ts}`
+- `apps/core-app/src/main/modules/omni-panel/{index.ts,omni-panel-builtin-features.ts,index.test.ts}`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/{OmniPanel.vue,ai-actions.ts,ai-actions.test.ts}`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/{OmniPanelActionItem.vue,OmniPanelActionList.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+- `apps/core-app/src/main/modules/ai/nexus-invoke-smoke.test.ts`
+  - OmniPanel 新增划词 AI MVP 动作：`builtin.ai.translate` -> `text.translate`、`builtin.ai.summarize` -> `text.summarize`、`builtin.ai.rewrite` -> `text.rewrite`、`builtin.ai.explain` -> `text.chat` / `code.explain`、`builtin.ai.review` -> `code.review`。
+  - AI 动作由 renderer 侧拦截并通过 `@talex-touch/tuff-intelligence` client 调用 typed `intelligence.invoke()`；结果进入 OmniPanel 预览面板，展示 provider、model、traceId，并提供 copy、retry、replace clipboard 二次确认，不再直接修改剪贴板或原文。
+  - OmniPanel context payload 新增 transient Desktop Context Capsule，统一携带 selection text、clipboard text、OCR text 预留、appName/windowTitle、source/capturedAt；原文仅作为 invoke 输入或内存态 context，不写入普通 storage 或审计 metadata。
+  - OmniPanel 触发后改为聚焦窗口，主进程 blur 与 renderer blur 都会隐藏；窗口尺寸、内部 icon、间距和 action list 已缩小并改为内部滚动，适配更紧凑的划词入口。
+  - 新增 Nexus invoke smoke：模拟登录态 token 时 `tuff-nexus-default` 命中 `/api/v1/intelligence/invoke`；未登录 guest 路径不发网络请求并 fallback 到本地 provider。
 ### perf(core-app): cache plugin store page state across tabs
 
 - `apps/core-app/src/renderer/src/composables/store/useStoreData.ts`
@@ -216,6 +230,29 @@
   - CoreApp 内置 `touch-quick-actions` 打包副本仍需用户确认后执行批量重建/同步；`docs/plan-prd/TODO.md` 暂不关闭该项。
 
 ## 2026-05-13
+
+### feat(ai): add Nexus authenticated intelligence invoke path
+
+- `apps/nexus/server/api/v1/intelligence/invoke.post.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/core-app/src/main/modules/ai/providers/{nexus-provider.ts,custom-provider.ts}`
+- `apps/core-app/src/main/modules/ai/{intelligence-service.ts,intelligence-config.ts,intelligence-module.ts,provider-factory.ts,provider-factory.test.ts,provider-runtime.ts,provider-runtime-shared.ts,provider-runtime.test.ts,provider-models.ts,provider-models.test.ts}`
+- `apps/core-app/src/main/modules/ai/providers/nexus-provider.test.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-sdk.test.ts`
+- `apps/nexus/server/api/v1/intelligence/invoke.api.test.ts`
+  - dev/2.5.0 首个 AI 基础切片落地：Nexus 新增登录态 `/api/v1/intelligence/invoke`，复用现有 Intelligence Provider 选择、Provider Registry mirror、secure-store credential、审计与 fallback 逻辑，不新增明文 key 存储。
+  - CoreApp 新增 `NexusProvider` adapter，并在 `CUSTOM` provider factory 中对 `tuff-nexus-default` / `metadata.origin=tuff-nexus` 分流；官方 app 登录后使用注入的 app token 自动调用 Nexus AI，未登录时返回 `NEXUS_AUTH_REQUIRED` 让本地 SDK fallback 到其它 provider。
+  - Stable 范围保持文本 + OCR：`text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`；Scene runtime 全量产品化仍留在 2.5.x 后续。
+
+### feat(core-app): surface Nexus AI provider auth status
+
+- `apps/core-app/src/renderer/src/components/intelligence/layout/{IntelligenceInfo.vue,IntelligenceItem.vue,IntelligenceList.vue,IntelligenceProviderHeader.vue}`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `apps/core-app/src/renderer/src/modules/intelligence/{nexus-provider.ts,nexus-provider.test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+  - Intelligence 渠道页新增 Nexus 官方托管状态展示：列表与详情页标识登录态是否可自动调用 Nexus，未登录时提供登录入口并说明 fallback 行为，避免用户误填本地 API Key。
+  - 设置页 provider 测试与模型拉取会保留 `metadata.origin=tuff-nexus`，Nexus-managed provider 不再要求用户填写本地 API Key。
 
 ### fix(plugin): route translation provider secrets through plugin secure storage
 

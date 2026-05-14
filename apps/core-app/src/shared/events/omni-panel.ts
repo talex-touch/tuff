@@ -1,4 +1,5 @@
 import { defineEvent, defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type { DesktopContextCapsule } from '../intelligence/desktop-context-capsule'
 
 export interface OmniPanelShowRequest {
   /**
@@ -31,6 +32,11 @@ export interface OmniPanelContextPayload {
   selectionIssueMessage?: string
   selectionLimitations?: string[]
   capturedAt: number
+  capsule?: OmniPanelDesktopContextCapsule
+}
+
+export type OmniPanelDesktopContextCapsule = DesktopContextCapsule & {
+  source: OmniPanelContextSource
 }
 
 export type OmniPanelFeatureSource = 'builtin' | 'plugin'

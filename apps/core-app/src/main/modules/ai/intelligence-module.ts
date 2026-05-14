@@ -27,7 +27,6 @@ import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
-import { getAuthToken } from '../auth'
 import { withPermission } from '../permission/channel-guard'
 import {
   agentManager,
@@ -47,7 +46,9 @@ import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepag
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
+import { createCustomProvider } from './provider-factory'
 import { fetchProviderModels } from './provider-models'
+import { normalizeProviderForRuntime } from './provider-runtime'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
 import { LocalProvider } from './providers/local-provider'
@@ -58,7 +59,6 @@ import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
 
 const intelligenceLog = createLogger('Intelligence')
-const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
 const INTELLIGENCE_STREAM_REPLAY_LIMIT = 1_000
 
@@ -202,36 +202,6 @@ interface IntelligenceWorkflowRunPayload {
   triggerType?: WorkflowTriggerType
   continueOnError?: boolean
   metadata?: Record<string, unknown>
-}
-
-function toNexusApiKey(token: string | null): string | undefined {
-  if (!token) return undefined
-  const trimmed = token.trim()
-  if (!trimmed) return undefined
-  return trimmed.replace(/^Bearer\s+/i, '')
-}
-
-function normalizeProviderForRuntime(
-  provider: IntelligenceProviderConfig
-): IntelligenceProviderConfig {
-  const origin = provider.metadata?.origin
-  const isNexusProvider = provider.id === TUFF_NEXUS_PROVIDER_ID || origin === 'tuff-nexus'
-  if (!isNexusProvider) {
-    return provider
-  }
-
-  const authToken = toNexusApiKey(getAuthToken())
-  return {
-    ...provider,
-    enabled: true,
-    apiKey: authToken || provider.apiKey || 'guest',
-    metadata: {
-      ...(provider.metadata || {}),
-      origin: 'tuff-nexus',
-      tokenInjected: Boolean(authToken),
-      tokenMode: authToken ? 'auth' : 'guest'
-    }
-  }
 }
 
 function normalizeFromSeq(value: unknown): number | undefined {
@@ -617,17 +587,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   /**
-   * 注册自定义 Provider Factory (OpenAI-compatible)
+   * 注册自定义 Provider Factory
    */
   private registerCustomProvider(): void {
     if (!this.manager) return
 
     intelligenceLog.info('Registering custom provider factory')
 
-    // Custom provider 使用 OpenAI-compatible 接口
     this.manager.registerFactory(IntelligenceProviderType.CUSTOM, (config) => {
       intelligenceLog.info(`Creating custom provider: ${config.id}`)
-      return new OpenAIProvider(config)
+      return createCustomProvider(config)
     })
 
     intelligenceLog.success('Custom provider factory registered')

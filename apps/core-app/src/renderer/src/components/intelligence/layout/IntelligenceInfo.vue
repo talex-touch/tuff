@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligenceInfo" setup>
 // import IntelligenceTestResults from './IntelligenceTestResults.vue'
 import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/tuff-intelligence'
+import { TxButton } from '@talex-touch/tuffex'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 /**
  * IntelligenceInfo Component
@@ -29,6 +30,8 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { useAuth } from '~/modules/auth/useAuth'
+import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
 import IntelligenceAdvancedConfig from '../config/IntelligenceAdvancedConfig.vue'
 import IntelligenceApiConfig from '../config/IntelligenceApiConfig.vue'
 import IntelligenceModelConfig from '../config/IntelligenceModelConfig.vue'
@@ -48,17 +51,37 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { isLoggedIn, loginWithBrowser, authLoadingState } = useAuth()
 
 const localProvider = ref<IntelligenceProviderConfig>({ ...props.provider })
 const testResult = ref<TestResult | null>(props.testResult || null)
 const isTesting = ref(props.isTesting || false)
 
 const isModelConfigDisabled = computed(() => {
+  if (isNexusManagedProvider.value) {
+    return false
+  }
   if (localProvider.value.type === 'local') {
     return false
   }
   return !localProvider.value.apiKey || localProvider.value.apiKey.trim().length === 0
 })
+
+const isNexusManagedProvider = computed(() => {
+  return checkNexusManagedProvider(localProvider.value)
+})
+
+const nexusStatusTitle = computed(() =>
+  isLoggedIn.value
+    ? t('settings.intelligence.nexusInvokeReadyTitle')
+    : t('settings.intelligence.nexusInvokeLoginTitle')
+)
+
+const nexusStatusDescription = computed(() =>
+  isLoggedIn.value
+    ? t('settings.intelligence.nexusInvokeReadyDesc')
+    : t('settings.intelligence.nexusInvokeLoginDesc')
+)
 
 watch(
   () => props.provider,
@@ -100,6 +123,10 @@ function handleChange() {
 
   emits('update', liveProvider ?? localProvider.value)
 }
+
+async function handleLogin() {
+  await loginWithBrowser()
+}
 </script>
 
 <template>
@@ -109,6 +136,50 @@ function handleChange() {
     </template>
 
     <div role="region" :aria-label="t('intelligence.info.configurationPanel')" tabindex="0">
+      <TuffGroupBlock
+        v-if="isNexusManagedProvider"
+        :name="nexusStatusTitle"
+        :description="nexusStatusDescription"
+        default-icon="i-carbon-cloud-service-management"
+        active-icon="i-carbon-cloud-service-management"
+        memory-name="aisdk-nexus-status"
+      >
+        <div class="nexus-status">
+          <div class="nexus-status__line">
+            <i
+              :class="
+                isLoggedIn
+                  ? 'i-carbon-checkmark-filled text-[var(--tx-color-success)]'
+                  : 'i-carbon-warning-filled text-[var(--tx-color-warning)]'
+              "
+            />
+            <span>
+              {{
+                isLoggedIn
+                  ? t('settings.intelligence.nexusInvokeAutoCall')
+                  : t('settings.intelligence.nexusInvokeFallback')
+              }}
+            </span>
+          </div>
+          <TxButton
+            v-if="!isLoggedIn"
+            class="nexus-status__login"
+            variant="flat"
+            native-type="button"
+            :disabled="authLoadingState.isLoggingIn"
+            :loading="authLoadingState.isLoggingIn"
+            @click="handleLogin"
+          >
+            <i
+              :class="
+                authLoadingState.isLoggingIn ? 'i-carbon-renew animate-spin' : 'i-carbon-login'
+              "
+            />
+            <span>{{ t('settings.intelligence.nexusInvokeLoginAction') }}</span>
+          </TxButton>
+        </div>
+      </TuffGroupBlock>
+
       <TuffGroupBlock
         :name="t('intelligence.config.api.title')"
         :description="t('intelligence.config.api.description')"
@@ -155,3 +226,39 @@ function handleChange() {
     </div>
   </TouchScroll>
 </template>
+
+<style lang="scss" scoped>
+.nexus-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.nexus-status__line {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tx-text-color-secondary);
+  font-size: 13px;
+}
+
+.nexus-status__login {
+  flex-shrink: 0;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>
