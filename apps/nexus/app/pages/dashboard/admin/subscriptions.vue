@@ -374,12 +374,14 @@ async function revokeCode(code: ActivationCode) {
   <div class="mx-auto max-w-5xl space-y-6">
     <div>
       <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.subscriptions.title', 'Subscription Management') }}
+        {{ t('dashboard.sections.menu.accounts', 'Account Management') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.subscriptions.subtitle', 'Manage plans, renewals, and activation codes.') }}
       </p>
     </div>
+
+    <AccountTabs />
 
     <section class="apple-card-lg p-5 space-y-4">
       <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px_180px_auto]">

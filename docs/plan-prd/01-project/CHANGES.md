@@ -13,6 +13,32 @@
 
 ## 2026-05-14
 
+### feat(nexus): streamline admin management surfaces
+
+- `apps/nexus/app/pages/dashboard/admin/users.vue`
+- `apps/nexus/server/api/admin/users/[id]/profile.patch.ts`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/components/dashboard/admin/AccountTabs.vue`
+- `apps/nexus/app/components/dashboard/admin/CommentTabs.vue`
+- `apps/nexus/app/pages/dashboard/admin/subscriptions.vue`
+- `apps/nexus/app/pages/dashboard/admin/reviews.vue`
+- `apps/nexus/app/pages/dashboard/admin/doc-comments.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+  - Nexus 管理员导航收敛：Intelligence Lab 与 AI 积分并入 Intelligence 分组入口，用户管理/订阅管理合并为账号管理 tabs，评论审核/文档评论合并为评论管理 tabs。
+  - 用户管理表格压缩为用户、权限状态、创建时间、编辑操作，避免长邮箱撑宽；行内权限/状态操作统一收进编辑 Drawer。
+  - 新增管理员用户资料编辑接口，Drawer 可编辑显示名、头像、语言、角色、状态，并可直接授予/续期订阅。
+
+### fix(ai): align tuff-intelligence transport events with TuffTransport
+
+- `packages/tuff-intelligence/src/transport/event/builder.ts`
+- `packages/tuff-intelligence/src/transport/types.ts`
+- `packages/tuff-intelligence/src/transport/event/builder.test.ts`
+- `packages/utils/transport/sdk/renderer-transport.ts`
+  - 修复 OmniPanel 调用 AI client 时，`@talex-touch/tuff-intelligence` 自有 event builder 只生成 `{ toEventName }`、缺少 `__brand: 'TuffEvent'` 等运行时字段，导致 `TuffRendererTransport.send` 拒绝 `intelligence:api:invoke` 的问题。
+  - Renderer transport 在非法 event 场景新增结构化诊断输出，包含 event 摘要、候选 eventName、payload/options 摘要与调用栈，便于后续定位 SDK/事件对象不兼容。
+
 ### feat(nexus): allow guarded CLI cross-IP authorization
 
 - `apps/nexus/server/utils/authStore.ts`

@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
-
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -9,8 +7,10 @@ definePageMeta({
 })
 
 defineI18nRoute(false)
+
+await navigateTo('/dashboard/admin/intelligence')
 </script>
 
 <template>
-  <IntelligenceAgentWorkspace />
+  <div />
 </template>

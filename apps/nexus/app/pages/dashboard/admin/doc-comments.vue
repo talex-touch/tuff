@@ -212,7 +212,7 @@ onMounted(() => {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="apple-heading-md">
-          {{ t('dashboard.sections.docComments.title', 'Doc Comments') }}
+          {{ t('dashboard.sections.menu.comments', 'Comment Management') }}
         </h1>
         <p class="mt-2 text-sm text-black/50 dark:text-white/50">
           {{ t('dashboard.sections.docComments.subtitle', 'Moderate and manage documentation comments.') }}
@@ -225,6 +225,8 @@ onMounted(() => {
         {{ t('dashboard.sections.docComments.analytics', 'View docs analytics') }}
       </NuxtLink>
     </div>
+
+    <CommentTabs />
 
     <section class="apple-card-lg p-5">
       <div>

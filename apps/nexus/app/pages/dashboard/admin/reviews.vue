@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { $fetch as rawFetch } from 'ofetch'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxSpinner } from '@talex-touch/tuffex'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 
@@ -152,12 +152,14 @@ onMounted(() => {
   <div class="mx-auto max-w-5xl space-y-6">
     <div>
       <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.reviews.title', 'Review Moderation') }}
+        {{ t('dashboard.sections.menu.comments', 'Comment Management') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.reviews.subtitle', 'Review and manage community feedback.') }}
       </p>
     </div>
+
+    <CommentTabs />
 
     <section class="apple-card-lg p-5">
       <div>

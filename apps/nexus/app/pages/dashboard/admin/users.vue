@@ -2,7 +2,7 @@
 import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxDataTable, TxDrawer, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -18,15 +18,11 @@ const { t } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
 
-// Admin check - redirect if not admin
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
+const isAdmin = computed(() => user.value?.role === 'admin')
 
 watch(isAdmin, (admin) => {
-  if (user.value && !admin) {
+  if (user.value && !admin)
     navigateTo('/dashboard/overview')
-  }
 }, { immediate: true })
 
 interface AdminUser {
@@ -49,10 +45,15 @@ interface Pagination {
   totalPages: number
 }
 
+type SubscriptionPlan = 'FREE' | 'PRO' | 'PLUS' | 'TEAM' | 'ENTERPRISE'
+
 const users = ref<AdminUser[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const actionPendingId = ref<string | null>(null)
+const editorOpen = ref(false)
+const selectedUser = ref<AdminUser | null>(null)
+const editorSaving = ref(false)
 const pagination = reactive<Pagination>({
   page: 1,
   limit: 20,
@@ -66,9 +67,21 @@ const filters = reactive({
   role: 'all',
 })
 
+const editorForm = reactive({
+  name: '',
+  image: '',
+  locale: 'none',
+  role: 'user',
+  status: 'active',
+  grantSubscription: false,
+  plan: 'PRO' as SubscriptionPlan,
+  durationDays: 365,
+})
+
 const hasPrev = computed(() => pagination.page > 1)
 const hasNext = computed(() => pagination.page < pagination.totalPages)
 const actionsLocked = computed(() => loading.value || actionPendingId.value !== null)
+const selectedUserLocked = computed(() => !selectedUser.value || selectedUser.value.status === 'merged' || selectedUser.value.id === user.value?.id)
 
 const statusOptions = computed(() => ([
   { value: 'all', label: t('dashboard.sections.users.filters.statusAll', 'All statuses') },
@@ -81,6 +94,20 @@ const roleOptions = computed(() => ([
   { value: 'all', label: t('dashboard.sections.users.filters.roleAll', 'All roles') },
   { value: 'admin', label: t('dashboard.sections.users.filters.roleAdmin', 'Admin') },
   { value: 'user', label: t('dashboard.sections.users.filters.roleUser', 'User') },
+]))
+
+const editRoleOptions = computed(() => roleOptions.value.filter(item => item.value !== 'all'))
+const editStatusOptions = computed(() => statusOptions.value.filter(item => item.value === 'active' || item.value === 'disabled'))
+const localeOptions = computed(() => ([
+  { value: 'none', label: t('dashboard.sections.users.editor.localeAuto', 'Auto') },
+  { value: 'zh', label: t('dashboard.sections.users.editor.localeZh', 'Chinese') },
+  { value: 'en', label: t('dashboard.sections.users.editor.localeEn', 'English') },
+]))
+const planOptions = computed(() => ([
+  { value: 'PRO', label: 'PRO' },
+  { value: 'PLUS', label: 'PLUS' },
+  { value: 'TEAM', label: 'TEAM' },
+  { value: 'ENTERPRISE', label: 'ENTERPRISE' },
 ]))
 
 const statusLabels: Record<string, string> = {
@@ -96,12 +123,10 @@ const emailStateLabels: Record<string, string> = {
 }
 
 const userColumns = computed<DataTableColumn<AdminUser>[]>(() => [
-  { key: 'user', title: t('dashboard.sections.users.table.user', 'User'), width: '28%' },
-  { key: 'role', title: t('dashboard.sections.users.table.role', 'Role'), width: 120 },
-  { key: 'status', title: t('dashboard.sections.users.table.status', 'Status'), width: 140 },
-  { key: 'emailState', title: t('dashboard.sections.users.table.emailState', 'Email'), width: 140 },
+  { key: 'user', title: t('dashboard.sections.users.table.user', 'User'), width: '46%' },
+  { key: 'access', title: t('dashboard.sections.users.table.access', 'Access'), width: 220 },
   { key: 'createdAt', title: t('dashboard.sections.users.table.created', 'Created'), width: 140 },
-  { key: 'actions', title: t('dashboard.sections.users.table.actions', 'Actions'), width: 190 },
+  { key: 'actions', title: t('dashboard.sections.users.table.actions', 'Actions'), width: 110 },
 ])
 
 function buildQuery() {
@@ -156,12 +181,26 @@ function formatDate(value: string | null) {
 
 function applyUserUpdate(updated: AdminUser) {
   users.value = users.value.map(entry => (entry.id === updated.id ? { ...entry, ...updated } : entry))
+  if (selectedUser.value?.id === updated.id)
+    selectedUser.value = { ...selectedUser.value, ...updated }
 }
 
-async function updateUserRole(entry: AdminUser) {
-  if (actionsLocked.value)
+function openEditor(entry: AdminUser) {
+  selectedUser.value = entry
+  editorForm.name = entry.name || ''
+  editorForm.image = entry.image || ''
+  editorForm.locale = entry.locale || 'none'
+  editorForm.role = entry.role === 'admin' ? 'admin' : 'user'
+  editorForm.status = entry.status === 'disabled' ? 'disabled' : 'active'
+  editorForm.grantSubscription = false
+  editorForm.plan = 'PRO'
+  editorForm.durationDays = 365
+  editorOpen.value = true
+}
+
+async function updateUserRole(entry: AdminUser, nextRole: string) {
+  if (actionsLocked.value || entry.role === nextRole)
     return
-  const nextRole = entry.role === 'admin' ? 'user' : 'admin'
   actionPendingId.value = entry.id
   try {
     const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/role`, {
@@ -175,16 +214,16 @@ async function updateUserRole(entry: AdminUser) {
   catch (err: any) {
     const fallback = t('dashboard.sections.users.actions.roleFailed', 'Failed to update role.')
     toast.warning(err?.data?.message || err?.message || fallback)
+    throw err
   }
   finally {
     actionPendingId.value = null
   }
 }
 
-async function updateUserStatus(entry: AdminUser) {
-  if (actionsLocked.value)
+async function updateUserStatus(entry: AdminUser, nextStatus: string) {
+  if (actionsLocked.value || entry.status === nextStatus)
     return
-  const nextStatus = entry.status === 'active' ? 'disabled' : 'active'
   actionPendingId.value = entry.id
   try {
     const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/status`, {
@@ -198,9 +237,71 @@ async function updateUserStatus(entry: AdminUser) {
   catch (err: any) {
     const fallback = t('dashboard.sections.users.actions.statusFailed', 'Failed to update status.')
     toast.warning(err?.data?.message || err?.message || fallback)
+    throw err
   }
   finally {
     actionPendingId.value = null
+  }
+}
+
+async function updateUserProfile(entry: AdminUser) {
+  const res = await rawFetch<{ user: AdminUser }>(`/api/admin/users/${entry.id}/profile`, {
+    method: 'PATCH',
+    body: {
+      name: editorForm.name.trim() || null,
+      image: editorForm.image.trim() || null,
+      locale: editorForm.locale === 'none' ? null : editorForm.locale,
+    },
+  })
+  if (res?.user)
+    applyUserUpdate(res.user)
+}
+
+async function grantSubscription(entry: AdminUser) {
+  await rawFetch('/api/admin/subscriptions/grant', {
+    method: 'POST',
+    body: {
+      userId: entry.id,
+      plan: editorForm.plan,
+      durationDays: Number(editorForm.durationDays),
+      expiresInDays: Number(editorForm.durationDays),
+    },
+  })
+}
+
+async function saveEditor() {
+  const entry = selectedUser.value
+  if (!entry || editorSaving.value)
+    return
+
+  if (entry.status === 'merged') {
+    toast.warning(t('dashboard.sections.users.editor.mergedLocked', 'Merged users cannot be edited.'))
+    return
+  }
+
+  editorSaving.value = true
+  try {
+    await updateUserProfile(entry)
+    if (!selectedUserLocked.value) {
+      await updateUserRole(entry, editorForm.role)
+      await updateUserStatus(entry, editorForm.status)
+    }
+    if (editorForm.grantSubscription) {
+      if (!Number.isFinite(Number(editorForm.durationDays)) || Number(editorForm.durationDays) <= 0)
+        throw new Error(t('dashboard.sections.users.editor.invalidDuration', 'Invalid subscription duration.'))
+      await grantSubscription(entry)
+      toast.success(t('dashboard.sections.users.editor.subscriptionSuccess', 'Subscription granted.'))
+    }
+    toast.success(t('dashboard.sections.users.editor.saveSuccess', 'User updated.'))
+    editorOpen.value = false
+    await fetchUsers()
+  }
+  catch (err: any) {
+    const fallback = t('dashboard.sections.users.editor.saveFailed', 'Failed to update user.')
+    toast.warning(err?.data?.message || err?.message || fallback)
+  }
+  finally {
+    editorSaving.value = false
   }
 }
 
@@ -246,12 +347,14 @@ onMounted(() => {
   <div class="mx-auto max-w-5xl space-y-6">
     <div>
       <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.users.title', 'User Management') }}
+        {{ t('dashboard.sections.menu.accounts', 'Account Management') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.users.subtitle', 'Manage access, roles, and account status across your organization.') }}
       </p>
     </div>
+
+    <AccountTabs />
 
     <section class="apple-card-lg p-5 space-y-4">
       <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px_180px_auto]">
@@ -325,58 +428,37 @@ onMounted(() => {
       </div>
 
       <div v-else class="overflow-x-auto">
-        <TxDataTable :columns="userColumns" :data="users" row-key="id" class="min-w-[760px]">
+        <TxDataTable :columns="userColumns" :data="users" row-key="id" class="min-w-[720px]">
           <template #cell-user="{ row: entry }">
-            <div class="space-y-1">
-              <p class="font-medium text-black dark:text-white">
+            <div class="min-w-0 space-y-1">
+              <p class="truncate font-medium text-black dark:text-white" :title="entry.name || '-'">
                 {{ entry.name || '-' }}
               </p>
-              <p class="text-xs text-black/60 dark:text-white/60">
+              <p class="max-w-[360px] truncate text-xs text-black/60 dark:text-white/60" :title="entry.email">
                 {{ entry.email }}
               </p>
             </div>
           </template>
-          <template #cell-role="{ row: entry }">
-            <span class="text-sm text-black/70 dark:text-white/70">{{ entry.role }}</span>
-          </template>
-          <template #cell-status="{ row: entry }">
-            <TxStatusBadge
-              :text="statusLabels[entry.status] || entry.status"
-              :status="entry.status === 'active' ? 'success' : entry.status === 'disabled' ? 'danger' : 'muted'"
-              size="sm"
-            />
-          </template>
-          <template #cell-emailState="{ row: entry }">
-            <span class="text-sm text-black/70 dark:text-white/70">
-              {{ emailStateLabels[entry.emailState] || entry.emailState }}
-            </span>
+          <template #cell-access="{ row: entry }">
+            <div class="flex flex-wrap items-center gap-2">
+              <TxStatusBadge :text="entry.role" :status="entry.role === 'admin' ? 'info' : 'muted'" size="sm" />
+              <TxStatusBadge
+                :text="statusLabels[entry.status] || entry.status"
+                :status="entry.status === 'active' ? 'success' : entry.status === 'disabled' ? 'danger' : 'muted'"
+                size="sm"
+              />
+              <span class="text-xs text-black/50 dark:text-white/50">
+                {{ emailStateLabels[entry.emailState] || entry.emailState }}
+              </span>
+            </div>
           </template>
           <template #cell-createdAt="{ row: entry }">
             <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(entry.createdAt) }}</span>
           </template>
           <template #cell-actions="{ row: entry }">
-            <div class="flex flex-wrap items-center gap-2">
-              <TxButton
-                variant="secondary"
-                size="mini"
-                :disabled="actionsLocked || entry.status === 'merged' || entry.id === user?.id"
-                @click="updateUserRole(entry)"
-              >
-                {{ entry.role === 'admin'
-                  ? t('dashboard.sections.users.actions.demote', 'Demote')
-                  : t('dashboard.sections.users.actions.promote', 'Promote') }}
-              </TxButton>
-              <TxButton
-                variant="secondary"
-                size="mini"
-                :disabled="actionsLocked || entry.status === 'merged' || entry.id === user?.id"
-                @click="updateUserStatus(entry)"
-              >
-                {{ entry.status === 'active'
-                  ? t('dashboard.sections.users.actions.disable', 'Disable')
-                  : t('dashboard.sections.users.actions.enable', 'Enable') }}
-              </TxButton>
-            </div>
+            <TxButton variant="secondary" size="mini" :disabled="actionsLocked" @click="openEditor(entry)">
+              {{ t('dashboard.sections.users.actions.edit', 'Edit') }}
+            </TxButton>
           </template>
         </TxDataTable>
       </div>
@@ -390,5 +472,116 @@ onMounted(() => {
         </TxButton>
       </div>
     </section>
+
+    <TxDrawer
+      v-model:visible="editorOpen"
+      :title="t('dashboard.sections.users.editor.title', 'Edit User')"
+      width="min(560px, 100vw)"
+    >
+      <div v-if="selectedUser" class="space-y-6">
+        <section class="rounded-2xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+          <p class="text-sm font-semibold text-black dark:text-white">
+            {{ selectedUser.name || selectedUser.email }}
+          </p>
+          <p class="mt-1 break-all text-xs text-black/50 dark:text-white/50">
+            {{ selectedUser.email }}
+          </p>
+          <p class="mt-2 break-all text-[11px] text-black/40 dark:text-white/40">
+            ID: {{ selectedUser.id }}
+          </p>
+        </section>
+
+        <section class="space-y-3">
+          <h3 class="apple-section-title">
+            {{ t('dashboard.sections.users.editor.profile', 'Profile') }}
+          </h3>
+          <div>
+            <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.users.editor.name', 'Display name') }}
+            </label>
+            <TuffInput v-model="editorForm.name" class="w-full" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.users.editor.image', 'Avatar URL') }}
+            </label>
+            <TuffInput v-model="editorForm.image" class="w-full" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.users.editor.locale', 'Locale') }}
+            </label>
+            <TuffSelect v-model="editorForm.locale" class="w-full">
+              <TuffSelectItem v-for="opt in localeOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+            </TuffSelect>
+          </div>
+        </section>
+
+        <section class="space-y-3">
+          <h3 class="apple-section-title">
+            {{ t('dashboard.sections.users.editor.access', 'Access') }}
+          </h3>
+          <p v-if="selectedUserLocked" class="rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
+            {{ selectedUser.status === 'merged'
+              ? t('dashboard.sections.users.editor.mergedLocked', 'Merged users cannot be edited.')
+              : t('dashboard.sections.users.editor.selfLocked', 'You cannot change your own role or status here.') }}
+          </p>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.users.table.role', 'Role') }}
+              </label>
+              <TuffSelect v-model="editorForm.role" class="w-full" :disabled="selectedUserLocked">
+                <TuffSelectItem v-for="opt in editRoleOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+              </TuffSelect>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.users.table.status', 'Status') }}
+              </label>
+              <TuffSelect v-model="editorForm.status" class="w-full" :disabled="selectedUserLocked">
+                <TuffSelectItem v-for="opt in editStatusOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+              </TuffSelect>
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="apple-section-title">
+              {{ t('dashboard.sections.users.editor.subscription', 'Subscription') }}
+            </h3>
+            <TxCheckbox v-model="editorForm.grantSubscription" :label="t('dashboard.sections.users.editor.grantSubscription', 'Grant / renew')" />
+          </div>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2" :class="!editorForm.grantSubscription ? 'opacity-50' : ''">
+            <div>
+              <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.users.editor.plan', 'Plan') }}
+              </label>
+              <TuffSelect v-model="editorForm.plan" class="w-full" :disabled="!editorForm.grantSubscription">
+                <TuffSelectItem v-for="opt in planOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+              </TuffSelect>
+            </div>
+            <div>
+              <label class="mb-1 block text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.users.editor.durationDays', 'Duration (days)') }}
+              </label>
+              <TuffInput v-model="editorForm.durationDays" type="number" class="w-full" :disabled="!editorForm.grantSubscription" />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end gap-2">
+          <TxButton variant="secondary" size="small" :disabled="editorSaving" @click="editorOpen = false">
+            {{ t('common.cancel', 'Cancel') }}
+          </TxButton>
+          <TxButton variant="primary" size="small" :loading="editorSaving" :disabled="editorSaving" @click="saveEditor">
+            {{ t('common.save', 'Save') }}
+          </TxButton>
+        </div>
+      </template>
+    </TxDrawer>
   </div>
 </template>
