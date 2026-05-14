@@ -44,10 +44,10 @@ function onKeyDown(e) {
   <div
     tabindex="0"
     class="FlatInput-Container fake-background"
-    :class="{ 'none-prefix': !$slots?.default, win: nonWin !== true, area }"
+    :class="{ 'none-prefix': !$slots?.default && !icon, win: nonWin !== true, area }"
     @keydown="onKeyDown"
   >
-    <span v-if="$slots.default" class="FlatInput-Prefix">
+    <span v-if="$slots.default || icon" class="FlatInput-Prefix">
       <slot>
         <RemixIcon :name="icon || ''" :style="'line'" />
       </slot>

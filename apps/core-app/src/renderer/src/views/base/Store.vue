@@ -13,12 +13,14 @@ import { useStoreData } from '~/composables/store/useStoreData'
 import { useStoreInstall } from '~/composables/store/useStoreInstall'
 import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
+import { createRendererLogger } from '~/utils/renderer-log'
 import StoreDetailOverlay from '~/views/base/store/StoreDetailOverlay.vue'
 import StoreSourceEditor from '~/views/base/store/StoreSourceEditor.vue'
 
 const router = useRouter()
 const route = useRoute()
 const platformSdk = usePlatformSdk()
+const storeLog = createRendererLogger('Store')
 
 type StoreTab = 'store' | 'installed' | 'docs' | 'cli'
 const TUFF_CLI_CAPABILITY_ID = 'platform.tuff-cli'
@@ -44,7 +46,7 @@ function isStoreDetailPath(path: string): boolean {
 
 const { plugins: storePlugins, stats: providerStats, loading, loadStorePlugins } = useStoreData()
 
-const { selectedTag, updateCategoryTags } = useStoreCategories(storePlugins)
+const { tags: categoryTags, updateCategoryTags } = useStoreCategories(storePlugins)
 
 const { handleInstall, getInstallTask } = useStoreInstall()
 
@@ -62,6 +64,8 @@ const selectedProviderId = ref<string | null>(null)
 const detailVisible = ref(false)
 const detailOverlaySource = ref<HTMLElement | null>(null)
 const viewType = ref<'grid' | 'list'>('grid')
+const installFilter = ref<'all' | 'not-installed' | 'installed'>('all')
+const categoryFilter = ref('')
 const initialTab: StoreTab = resolveTabByPath(route.path)
 const tabs = ref<StoreTab>(initialTab)
 const showCliTab = ref(false)
@@ -84,14 +88,18 @@ const providerStatsComputed = computed(() => {
 })
 
 const displayedPlugins = computed(() => {
-  const categoryFilter = selectedTag.value?.filter?.toLowerCase() ?? ''
+  const selectedCategory = categoryFilter.value.toLowerCase()
   const normalizedKey = searchKey.value.trim().toLowerCase()
 
   return storePlugins.value.filter((plugin) => {
     const pluginCategory = plugin.category?.toLowerCase() ?? ''
-    const matchesCategory = !categoryFilter || pluginCategory === categoryFilter
+    const matchesCategory = !selectedCategory || pluginCategory === selectedCategory
 
     if (!matchesCategory) return false
+
+    const installed = getPluginVersionStatus(plugin).isInstalled
+    if (installFilter.value === 'installed' && !installed) return false
+    if (installFilter.value === 'not-installed' && installed) return false
 
     if (!normalizedKey) return true
 
@@ -181,7 +189,7 @@ async function refreshCliTabVisibility(): Promise<void> {
     )
   } catch (error) {
     showCliTab.value = false
-    console.warn('[Store] Failed to check Tuff CLI capability:', error)
+    storeLog.warn('Failed to check Tuff CLI capability', error)
   }
 
   if (!showCliTab.value && tabs.value === 'cli') {
@@ -245,9 +253,12 @@ onMounted(() => {
     <StoreHeader
       v-model:tabs="tabs"
       v-model:view-type="viewType"
+      v-model:install-filter="installFilter"
+      v-model:category-filter="categoryFilter"
       :loading="loading"
       :sources-count="sourcesCount"
       :show-cli-tab="showCliTab"
+      :categories="categoryTags"
       :provider-stats="providerStatsComputed"
       :provider-details="providerStats"
       @refresh="loadStorePlugins(true)"

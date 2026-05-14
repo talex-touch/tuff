@@ -1,17 +1,18 @@
 <script setup lang="ts" name="StoreHeader">
 import type { StoreProviderResultMeta } from '@talex-touch/utils/store'
-import { TxButton, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
-import { ref } from 'vue'
+import { TxButton, TxRadio, TxRadioGroup, TxSelect, TxSelectItem } from '@talex-touch/tuffex'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
 import TLabelSelect from '~/components/base/select/TLabelSelect.vue'
 import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
 
-defineProps<{
+const props = defineProps<{
   loading: boolean
   sourcesCount: number
   showCliTab?: boolean
+  categories?: Array<{ tag: string; filter: string; label?: string }>
   providerStats?: {
     total: number
     success: number
@@ -49,7 +50,19 @@ function openSourceEditor(event?: MouseEvent): void {
 }
 
 const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
+const installFilter = defineModel<'all' | 'not-installed' | 'installed'>('installFilter', {
+  default: 'all'
+})
+const categoryFilter = defineModel<string>('categoryFilter', { default: '' })
 const tabs = defineModel<'store' | 'installed' | 'docs' | 'cli'>('tabs', { default: 'store' })
+
+const categoryOptions = computed(() => (props.categories?.length ? props.categories : []))
+
+function resolveCategoryLabel(category: { tag: string; label?: string }): string {
+  if (category.label) return category.label
+  const translated = t(category.tag)
+  return translated === category.tag ? category.tag : translated
+}
 </script>
 
 <template>
@@ -106,14 +119,35 @@ const tabs = defineModel<'store' | 'installed' | 'docs' | 'cli'>('tabs', { defau
     <div v-if="tabs === 'store'" flex items-center justify-between gap-4 px-4 py-2>
       <div flex items-center gap-3>
         <FlatCompletion
+          icon="search"
           :fetch="() => []"
           :placeholder="t('store.searchPlaceholder')"
           class="search-input"
           @search="handleSearch"
         />
+
+        <TxSelect
+          v-model="categoryFilter"
+          class="category-filter"
+          :placeholder="t('store.categories.all')"
+          :dropdown-max-height="260"
+        >
+          <TxSelectItem
+            v-for="category in categoryOptions"
+            :key="category.filter || 'all'"
+            :value="category.filter"
+            :label="resolveCategoryLabel(category)"
+          />
+        </TxSelect>
       </div>
 
       <div flex items-center gap-2>
+        <TLabelSelect v-model="installFilter">
+          <TLabelSelectItem value="all" icon="i-ri-apps-2-line" />
+          <TLabelSelectItem value="not-installed" icon="i-ri-download-line" />
+          <TLabelSelectItem value="installed" icon="i-ri-check-double-line" />
+        </TLabelSelect>
+
         <TLabelSelect v-model="viewType">
           <TLabelSelectItem value="grid" icon="i-carbon-table-split" />
           <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
@@ -177,6 +211,16 @@ const tabs = defineModel<'store' | 'installed' | 'docs' | 'cli'>('tabs', { defau
 .search-input :deep(.FlatInput-Container) {
   width: 280px;
   margin: 0;
+}
+
+.category-filter {
+  width: 132px;
+  min-width: 132px;
+}
+
+.category-filter :deep(.tx-input__inner) {
+  height: 32px;
+  font-size: 0.82rem;
 }
 
 .provider-status {
