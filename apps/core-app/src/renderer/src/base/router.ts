@@ -89,6 +89,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/store/publisher',
+    name: '$I18n:router.storePublisher',
+    component: withRouteComponentPerf('/store/publisher', () => import('../views/base/Store.vue')),
+    meta: {
+      index: 2,
+      keepAlive: true,
+      keepAliveKey: STORE_ROUTE_CACHE_KEY
+    }
+  },
+  {
     path: '/store/docs',
     name: '$I18n:router.storeDocs',
     component: withRouteComponentPerf('/store/docs', () => import('../views/base/Store.vue')),

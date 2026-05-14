@@ -721,7 +721,47 @@
     "statusSuccess": "成功",
     "statusFailed": "失败",
     "plugins": "个插件",
-    "noProviderData": "暂无数据源信息"
+    "noProviderData": "暂无数据源信息",
+    "publisher": {
+      "tab": "发布管理",
+      "title": "发布管理",
+      "subtitle": "在应用内管理你的 Nexus 插件发布、审核状态与版本。",
+      "newPlugin": "发布新插件",
+      "publishVersion": "发布版本",
+      "total": "总数",
+      "approved": "已上架",
+      "pending": "审核中",
+      "draft": "草稿",
+      "empty": "暂无发布物，上传 .tpex 初始化第一个版本。",
+      "details": "详情",
+      "submitReview": "提交审核",
+      "withdrawReview": "撤回审核",
+      "openNexus": "在 Nexus 打开",
+      "versions": "版本",
+      "noVersions": "暂无版本",
+      "timeline": "时间线",
+      "previewing": "正在解析包...",
+      "name": "名称",
+      "summary": "摘要",
+      "category": "分类",
+      "changelog": "变更说明",
+      "submit": "提交",
+      "reeditVersion": "重新提交版本",
+      "deleteVersion": "删除版本",
+      "editMetadata": "编辑元数据",
+      "deleteVersionConfirmTitle": "删除版本？",
+      "deleteVersionConfirmMessage": "该操作会删除这个未批准版本，删除后不可从发布管理中恢复。",
+      "validation": {
+        "packageRequired": "请上传 .tpex 插件包。",
+        "slugRequired": "请填写插件标识。",
+        "nameRequired": "请填写插件名称。",
+        "summaryRequired": "请填写插件简介。",
+        "categoryRequired": "请填写插件分类。",
+        "readmeRequired": "请填写 README。",
+        "versionRequired": "请填写版本号。",
+        "changelogRequired": "请填写更新日志。"
+      }
+    }
   },
   "auth": {
     "loginResumePrompt": {
@@ -1467,7 +1507,8 @@
     "intelligenceAudit": "智能审计",
     "intelligenceAgents": "智能代理",
     "intelligenceWorkflows": "智能工作流",
-    "metaOverlay": "元信息"
+    "metaOverlay": "元信息",
+    "storePublisher": "发布管理"
   },
   "textPreview": {
     "loading": "加载中...",
@@ -3028,7 +3069,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "audit": {
       "title": "审计设置",

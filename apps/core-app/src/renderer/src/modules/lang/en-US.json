@@ -721,7 +721,47 @@
     "statusSuccess": "Success",
     "statusFailed": "Failed",
     "plugins": "plugins",
-    "noProviderData": "No provider data available"
+    "noProviderData": "No provider data available",
+    "publisher": {
+      "tab": "Publisher",
+      "title": "Plugin Publishing",
+      "subtitle": "Manage your Nexus plugin releases, review states, and versions in app.",
+      "newPlugin": "Publish Plugin",
+      "publishVersion": "Publish Version",
+      "total": "Total",
+      "approved": "Approved",
+      "pending": "Pending",
+      "draft": "Draft",
+      "empty": "No releases yet. Upload a .tpex package to initialize the first version.",
+      "details": "Details",
+      "submitReview": "Submit Review",
+      "withdrawReview": "Withdraw Review",
+      "openNexus": "Open in Nexus",
+      "versions": "Versions",
+      "noVersions": "No versions",
+      "timeline": "Timeline",
+      "previewing": "Previewing package...",
+      "name": "Name",
+      "summary": "Summary",
+      "category": "Category",
+      "changelog": "Changelog",
+      "submit": "Submit",
+      "reeditVersion": "Re-edit Version",
+      "deleteVersion": "Delete Version",
+      "editMetadata": "Edit Metadata",
+      "deleteVersionConfirmTitle": "Delete version?",
+      "deleteVersionConfirmMessage": "This will delete the unapproved version and it cannot be restored from Publisher.",
+      "validation": {
+        "packageRequired": "Please upload a .tpex package.",
+        "slugRequired": "Plugin identifier is required.",
+        "nameRequired": "Plugin name is required.",
+        "summaryRequired": "Plugin summary is required.",
+        "categoryRequired": "Plugin category is required.",
+        "readmeRequired": "README is required.",
+        "versionRequired": "Version is required.",
+        "changelogRequired": "Changelog is required."
+      }
+    }
   },
   "auth": {
     "loginResumePrompt": {
@@ -1467,7 +1507,8 @@
     "intelligenceAudit": "Intelligence Audit",
     "intelligenceAgents": "Intelligence Agents",
     "intelligenceWorkflows": "Intelligence Workflows",
-    "metaOverlay": "Meta Overlay"
+    "metaOverlay": "Meta Overlay",
+    "storePublisher": "Publisher"
   },
   "textPreview": {
     "loading": "Loading...",
@@ -3036,7 +3077,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "audit": {
       "title": "Audit Settings",

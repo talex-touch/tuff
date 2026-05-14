@@ -54,7 +54,9 @@ const installFilter = defineModel<'all' | 'not-installed' | 'installed'>('instal
   default: 'all'
 })
 const categoryFilter = defineModel<string>('categoryFilter', { default: '' })
-const tabs = defineModel<'store' | 'installed' | 'docs' | 'cli'>('tabs', { default: 'store' })
+const tabs = defineModel<'store' | 'installed' | 'publisher' | 'docs' | 'cli'>('tabs', {
+  default: 'store'
+})
 
 const categoryOptions = computed(() => (props.categories?.length ? props.categories : []))
 
@@ -78,6 +80,7 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
       <TxRadioGroup v-model="tabs" glass>
         <TxRadio value="store" :label="t('flatNavBar.store')" />
         <TxRadio value="installed" :label="t('store.installed')" />
+        <TxRadio value="publisher" :label="t('store.publisher.tab')" />
         <TxRadio value="docs" :label="t('store.docs')" />
         <TxRadio v-if="showCliTab" value="cli" :label="t('store.cli')" />
       </TxRadioGroup>

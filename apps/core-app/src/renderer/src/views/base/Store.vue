@@ -22,12 +22,19 @@ const route = useRoute()
 const platformSdk = usePlatformSdk()
 const storeLog = createRendererLogger('Store')
 
-type StoreTab = 'store' | 'installed' | 'docs' | 'cli'
+type StoreTab = 'store' | 'installed' | 'publisher' | 'docs' | 'cli'
 const TUFF_CLI_CAPABILITY_ID = 'platform.tuff-cli'
-const STORE_BASE_PATHS = new Set(['/store', '/store/installed', '/store/docs', '/store/cli'])
+const STORE_BASE_PATHS = new Set([
+  '/store',
+  '/store/installed',
+  '/store/publisher',
+  '/store/docs',
+  '/store/cli'
+])
 
 function resolveTabByPath(path: string): StoreTab {
   if (path === '/store/installed') return 'installed'
+  if (path === '/store/publisher') return 'publisher'
   if (path === '/store/docs') return 'docs'
   if (path === '/store/cli') return 'cli'
   return 'store'
@@ -35,6 +42,7 @@ function resolveTabByPath(path: string): StoreTab {
 
 function resolvePathByTab(tab: StoreTab): string {
   if (tab === 'installed') return '/store/installed'
+  if (tab === 'publisher') return '/store/publisher'
   if (tab === 'docs') return '/store/docs'
   if (tab === 'cli') return '/store/cli'
   return '/store'
@@ -75,6 +83,7 @@ const sourcesCount = computed(() => sourcesState.sources.length)
 
 const PluginInstalled = defineAsyncComponent(() => import('~/views/base/Plugin.vue'))
 const StoreDocs = defineAsyncComponent(() => import('~/views/base/store/StoreDocs.vue'))
+const StorePublisher = defineAsyncComponent(() => import('~/views/base/store/StorePublisher.vue'))
 const StoreCliBeta = defineAsyncComponent(() => import('~/views/base/store/StoreCliBeta.vue'))
 
 const providerStatsComputed = computed(() => {
@@ -278,6 +287,7 @@ onMounted(() => {
         @install="onInstall"
         @open-detail="openPluginDetail"
       />
+      <StorePublisher v-else-if="tabs === 'publisher'" key="publisher" class="flex-1 min-h-0" />
       <StoreDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
       <StoreCliBeta v-else-if="tabs === 'cli'" key="cli" class="flex-1 min-h-0" />
       <PluginInstalled v-else key="installed" class="flex-1 min-h-0" />
