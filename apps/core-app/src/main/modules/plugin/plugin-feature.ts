@@ -78,9 +78,16 @@ export function loadPluginFeatureContextFromContent(
     vm.runInContext(scriptContent, sandbox)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    throw new Error(`Plugin script execution failed for ${plugin.name}: ${message}`, {
+    const wrapped = new Error(`Plugin script execution failed for ${plugin.name}: ${message}`, {
       cause: err
-    })
+    }) as Error & { code?: string; moduleId?: string; pluginName?: string }
+    if (err && typeof err === 'object') {
+      const cause = err as { code?: unknown; moduleId?: unknown; pluginName?: unknown }
+      if (typeof cause.code === 'string') wrapped.code = cause.code
+      if (typeof cause.moduleId === 'string') wrapped.moduleId = cause.moduleId
+      if (typeof cause.pluginName === 'string') wrapped.pluginName = cause.pluginName
+    }
+    throw wrapped
   }
 
   const exported = sandbox.module.exports

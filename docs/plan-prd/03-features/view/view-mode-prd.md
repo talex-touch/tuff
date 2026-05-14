@@ -1,169 +1,27 @@
-# PRD: 插件系统 "View Mode" 与开发模式增强 (v2.0)
+# View Mode PRD
 
-> 更新时间：2026-03-16  
-> 当前状态：Phase 2~4 已落地并完成安全回归；结构拆分项保留为后续债务清理项
+> 状态：历史 PRD / 压缩索引
+> 更新时间：2026-05-14
+> 完整快照：`./archive/view-mode-prd.full-2026-05-14.md`
 
-## 1. 背景与目标
+## TL;DR
 
-当前插件系统需要一种机制，允许插件开发者声明一个 `feature` 作为一种特殊的 **“视图模式” (View Mode)**。当用户触发此类 `feature` 时，系统应自动展开主窗口并加载一个由该插件提供的 Web UI 界面。
+本文原始版本记录插件 View Mode 能力设计。当前 View 生态长尾事项已进入长期债务池，不阻塞 `2.4.10` Windows release evidence。
 
-此功能需要一个高度健壮、安全且对开发者友好的实现，能够无缝支持 **生产环境** 和 **开发环境**，并能优雅地处理各种异常情况。
+## 历史有效结论
 
-### 1.1 最终目标
+- 插件 view 需要生命周期、安全矩阵、权限与资源释放规则。
+- 多窗口/嵌入式视图能力需要明确隔离边界。
+- View Mode 与 AttachUIView / Multi Attach View 应统一开发者体验。
 
-- View Mode 在生产/调试/源码开发三种模式下行为一致且可预测。
-- URL 构造、协议限制、manifest 覆盖逻辑可审计、可追踪。
-- Webview 生命周期清理可验证，不留残留监听或僵尸 view。
+## 当前项目口径
 
-### 1.2 质量约束
+- View Mode 长期事项：`plugin-core` 结构拆分、生命周期与安全矩阵回归补样本。
+- 新增 View 能力必须走 SDK/typed transport，不新增 raw channel。
+- UI 组件优先复用 tuffex。
 
-- 生产环境禁止加载 `http/https` 视图，必须走 `file://` + hash 路由。
-- `dev.source` 仅在全局允许且插件显式开启时生效，且必须显示 UI 警示。
-- 所有跨层调用必须走 typed transport/SDK，不允许 raw event 直连。
-- 生命周期清理必须在关闭时完成（Map 移除 + 事件解绑）。
+## 关联入口
 
-### 1.3 回滚与兼容策略
-
-- 提供功能开关，可强制回退到“仅本地 manifest + file://”模式。
-- 远程 manifest 覆盖失败时必须回退本地并记录 issue。
-- 对旧插件保持行为兼容，必要时仅禁用 dev.source。
-
-## 2. 核心功能需求 (Features)
-
-### 2.1. 声明式的视图模式
-
-- 插件应能在其 `manifest.json` 的 `feature` 定义中，通过一个 `interaction` 对象来声明一个视图。
-- **`interaction.path` 规范化**: 系统将自动规范化 `path` 值，为其添加缺失的前导斜杠 (`/`)。
-
-### 2.2. “混合模式”的插件加载机制
-
-- **权威来源**:
-  1.  **本地优先**: 加载流程始于本地 `plugins/<plugin-name>/manifest.json`。
-  2.  **远程覆盖**: 若 `dev.enable` 为 `true`，系统将尝试从 `dev.address + '/manifest.json'` 获取远程配置。
-  3.  **失败回退与警告**: 若远程配置获取失败，系统回退使用本地配置，并向 `plugin.issues` 添加一条包含 `code`、`suggestion` 和 `timestamp` 的详细警告。
-
-### 2.3. `dev.source` 开关
-
-- `dev.source: false` (调试模式): 加载本地资源，监听本地文件变更。
-- `dev.source: true` (源码开发模式):
-    - **安全开关**: 此模式需要一个全局的应用级设置“允许插件源码开发模式”和插件自身的 `dev.source: true` 同时开启才能激活。
-    - **加载策略**: 忽略本地资源，所有请求通过 HTTP 指向 `dev.address`。
-    - **UI警示**: 在此模式下打开的任何 `view` 窗口，顶部都必须显示一个不可关闭的红色横幅，提示用户“插件处于源码开发模式”。
-
-### 2.4. 智能且安全的视图 URL 构造
-
-- **源码开发模式 (`dev.source: true`)**:
-  - **URL**: `http://<dev.address><interaction.path>`
-- **其他模式 (调试/生产)**:
-  - **URL**: `file://<plugin_path>/index.html#<interaction.path>`
-  - **路由模式限制**: 在 `file://` 模式下，如果 `interaction.path` 存在，系统会强制使用 Hash 路由。若插件未使用 Hash Router，加载将被拒绝并上报 issue。
-- **生产环境协议限制**: 在生产环境中，系统将禁止加载任何 `http://` 或 `https://` 协议的插件视图，以防开发配置泄露。
-
-### 2.5. 健壮的 Webview 生命周期管理
-
-- **多实例追踪**: `IPluginWebview` 将被改造为 `Map<number, ...>` 结构，以追踪每个 `webContents` 实例及其关联的 `feature` 和上下文。
-- **内存泄漏防治**: 当 webview 窗口关闭时，系统必须确保从 Map 中移除其条目，并移除所有相关的事件监听器 (`win.removeAllListeners()`)。
-
-### 2.6. Dev Server 健康探测与断连处理
-
-- **心跳机制**: 对于 `dev.source: true` 的活跃插件，`PluginManager` 将启动一个定时器，通过请求 `/_tuff_devkit/update` 来探测 Dev Server 的健康状况。
-- **超时与重试**: 健康探测具有 1.5 秒超时和 1 次即时重试策略。
-- **断连处理**:
-  - 若探测失败，插件状态更新为 `DEV_DISCONNECTED`。
-  - 已打开的 `view` 窗口**不会被强行关闭**。
-  - 系统会向其发送 IPC 消息，触发视图内部UI提示“与开发服务器的连接已断开”。
-
-## 3. 架构与技术方案
-
-### 3.1. 类型定义增强 (`packages/utils/plugin/index.ts`)
-
-- **`IPluginDev`**: 增加 `source?: boolean` 并补充 TSDoc。
-- **`IFeatureInteraction`**: 补充 TSDoc，明确 `path` 的作用。
-- **`IPluginWebview`**: 改造为 `Map<number, { featureId: string; window: BrowserWindow; }>`。
-- **`PluginIssue`**: 扩展接口，增加 `code?: string`, `suggestion?: string`, `timestamp: number`。
-
-### 3.2. 代码结构重构 (`apps/core-app/src/main/plugins/`)
-
-- 将 `plugin-core.ts` 按职责拆分为 `plugin-manager.ts`, `plugin.ts`, `plugin-feature.ts`, `plugin-icon.ts` 和 `index.ts`。
-
-### 3.3. 流程图
-
-```mermaid
-graph TD
-    subgraph CoreBoxManager.execute
-        A[用户执行'多源翻译'] --> B{获取插件实例};
-        B --> C{生产环境 & URL是http?};
-        C -->|是| C_FAIL[拒绝执行, 上报错误];
-        C -->|否| D{检查 dev.enable & dev.source};
-        D -->|true & true (源码开发)| E[baseUrl = dev.address];
-        E --> F[finalUrl = baseUrl + normalize(path)];
-        D -->|其他情况| G[baseUrl = 'file://' + pluginPath + '/index.html'];
-        G --> H[finalUrl = baseUrl + '#' + normalize(path)];
-        F --> I[调用 enterUIMode(finalUrl)];
-        H --> I;
-    end
-
-    subgraph PluginManager.loadPlugin
-        J[读取本地 manifest] --> K{dev.enable === true?};
-        K -->|是| L[HTTP GET dev.address + '/manifest.json'];
-        L --> M{请求成功?};
-        M -->|是| N[使用远程 manifest 覆盖];
-        M -->|否| O[添加失败警告, 回退到本地];
-        K -->|否| P[使用本地 manifest];
-        N --> Q[继续加载];
-        O --> Q;
-        P --> Q;
-    end
-```
-
-### 3.4. 技术伪代码示例
-
-```ts
-// SDK 层: 根据环境拼装视图 URL
-function buildViewUrl(feature: Feature, env: RuntimeEnv) {
-  const path = normalizePath(feature.interaction?.path ?? '/')
-  if (env.production && /^https?:/.test(path)) {
-    throw new Error('PROTOCOL_NOT_ALLOWED')
-  }
-
-  if (env.dev.source) {
-    return `http://${env.dev.address}${path}`
-  }
-  return `file://${feature.pluginPath}/index.html#${path}`
-}
-```
-
-## 4. 实施计划 (TODO List)
-
-1.  **[ ] (结构) 拆分 `plugin-core.ts`**
-2.  **[x] (类型) 增强 `IPluginWebview`, `IPluginDev`, `PluginIssue` 等类型定义并添加 TSDoc（2026-03-15）**
-3.  **[x] (核心) 改造插件加载逻辑 (`plugin-manager.ts`)**，实现远程 manifest 覆盖、失败回退、日志规范化（2026-03-15）。
-4.  **[x] (核心) 实现 Dev Server 健康探测机制**，包括超时、重试和断连处理（2026-03-15）。
-5.  **[x] (核心) 改造 `CoreBoxManager` 执行逻辑 (`manager.ts`)**，实现安全的 URL 构造、协议限制和路由模式检查（2026-03-15）。
-6.  **[x] (配置) 配置 `touch-translation` 插件**，添加 `dev` 配置 (`source: true`) 和“多源翻译” `view` feature（2026-03-15）。
-
-### 4.1 已落地能力（Phase2~4）
-
-- 安全矩阵：协议限制、路径规范化、hash 路由、非法路径拦截、dev/prod 分支一致性回归完成。
-- 类型增强：`IPluginWebview`、`IPluginDev.source`、`PluginIssue` 关键字段（`code/suggestion/timestamp`）已在主流程保障可用。
-- 配置联动：`touch-translation` 已启用 `dev.source` 与 `multi-source-translate` view feature。
-- 文档对齐：对应 `TODO` 条目“View Mode 增强（安全 URL / 生产协议限制 + Phase4）”已标记完成（2026-03-15）。
-
-### 4.2 未闭环项
-
-- `plugin-core` 的结构级 SRP 拆分未在本轮执行（遵循“中档范围，不做大拆”决策）。
-- View Mode 仍需在后续债务波次继续做结构清理与可维护性优化。
-
-### 4.3 验收证据
-
-- 代码与测试：`apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`（边界回归补齐）。
-- 主线记录：`docs/plan-prd/01-project/CHANGES.md`（2026-03-15, 2.4.9 插件主线收口）。
-- 任务口径：`docs/plan-prd/TODO.md`（View Mode 条目与状态一致）。
-
-## 5. 验收标准
-
-- **功能**: `view` 模式在生产、调试、源码开发三种模式下均能按预期工作。
-- **健壮性**: Dev Server 启动失败、中途断开等异常情况能被系统优雅处理，并给出清晰的用户提示和日志记录。
-- **安全性**: 生产环境严格禁止加载 http 协议的视图；源码开发模式有明确的 UI 警示。
-- **开发者体验**: `interaction.path` 能够自动规范化；issue 日志提供清晰的错误码和建议。
-- **无内存泄漏**: 关闭 webview 窗口后，相关的 Map 条目和事件监听器被完全清理。
+- `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/TODO.md`

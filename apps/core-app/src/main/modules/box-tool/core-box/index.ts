@@ -4,8 +4,7 @@ import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/ev
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import {
   clearRegisteredMainRuntime,
   maybeGetRegisteredMainRuntime,
@@ -26,7 +25,6 @@ import { windowManager } from './window'
 const coreBoxLog = createLogger('CoreBox')
 const COREBOX_MIN_HEIGHT = 64
 const SEARCH_DIAGNOSTICS_BURST_DURATION_MS = 30_000
-const beginnerShortcutTriggeredEvent = defineRawEvent<void, void>('beginner:shortcut-triggered')
 const COREBOX_SHORTCUT_OWNER = 'module.corebox'
 
 export { getCoreBoxWindow } from './window'
@@ -95,7 +93,16 @@ export class CoreBoxModule extends BaseModule {
               mainWindow.focus()
               if (beginnerState?.shortcutArmed === true && this.transport) {
                 void this.transport
-                  .sendToWindow(mainWindow.id, beginnerShortcutTriggeredEvent, undefined)
+                  .sendToWindow(mainWindow.id, CoreBoxEvents.beginner.shortcutTriggered, undefined)
+                  .catch((error) => {
+                    coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
+                  })
+                void this.transport
+                  .sendToWindow(
+                    mainWindow.id,
+                    CoreBoxRetainedEvents.legacy.beginnerShortcutTriggered,
+                    undefined
+                  )
                   .catch((error) => {
                     coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
                   })

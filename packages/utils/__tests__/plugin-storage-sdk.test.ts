@@ -145,6 +145,7 @@ describe('Plugin Storage SDK', () => {
     await sdk.get('providers.baidu.secretKey')
     await sdk.set('providers.baidu.secretKey', 'secret-value')
     await sdk.delete('providers.baidu.secretKey')
+    await sdk.health()
 
     expect(mocks.send).toHaveBeenNthCalledWith(
       1,
@@ -160,6 +161,10 @@ describe('Plugin Storage SDK', () => {
       3,
       PluginEvents.storage.deleteSecret,
       { pluginName: 'demo-plugin', key: 'providers.baidu.secretKey' },
+    )
+    expect(mocks.send).toHaveBeenNthCalledWith(
+      4,
+      PluginEvents.storage.getSecretHealth,
     )
   })
 })

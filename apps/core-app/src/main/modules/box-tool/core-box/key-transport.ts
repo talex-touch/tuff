@@ -1,4 +1,5 @@
 import { createLogger } from '../../../utils/logger'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { coreBoxManager } from './manager'
 import { coreBoxTransport } from './transport/core-box-transport'
 import { windowManager } from './window'
@@ -61,12 +62,24 @@ class CoreBoxKeyTransport {
    * Registers IPC channels for keyboard event handling.
    */
   public register(): void {
-    coreBoxTransport.register<ForwardedKeyEvent>('main', 'core-box:forward-key-event', (data) =>
-      this.handleKeyEvent(data)
+    coreBoxTransport.register<ForwardedKeyEvent>(
+      'main',
+      CoreBoxEvents.ui.forwardKeyEvent.toEventName(),
+      (data) => this.handleKeyEvent(data)
+    )
+    coreBoxTransport.register<ForwardedKeyEvent>(
+      'main',
+      CoreBoxRetainedEvents.legacy.forwardKeyEvent.toEventName(),
+      (data) => this.handleKeyEvent(data)
     )
 
-    coreBoxTransport.register<void>('main', 'core-box:get-ui-view-state', () =>
+    coreBoxTransport.register<void>('main', CoreBoxEvents.ui.getUIViewState.toEventName(), () =>
       this.getUIViewState()
+    )
+    coreBoxTransport.register<void>(
+      'main',
+      CoreBoxRetainedEvents.legacy.getUIViewState.toEventName(),
+      () => this.getUIViewState()
     )
 
     keyTransportLog.info('Key transport channels registered')

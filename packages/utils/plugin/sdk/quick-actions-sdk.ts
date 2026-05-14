@@ -6,8 +6,7 @@
 
 import type { TuffItem, TuffQuickAction } from '../../core-box/tuff/tuff-dsl'
 import { createPluginTuffTransport } from '../../transport'
-import { defineRawEvent } from '../../transport/event/builder'
-import { MetaOverlayEvents } from '../../transport/events/meta-overlay'
+import { CoreBoxEvents, CoreBoxRetainedEvents, MetaOverlayEvents } from '../../transport/events'
 import { createDisposableBag } from '../../transport/sdk'
 
 /**
@@ -17,11 +16,6 @@ export type QuickActionExecuteHandler = (data: {
   actionId: string
   item: TuffItem
 }) => void
-
-const quickActionsExecutedEvent = defineRawEvent<
-  { pluginId: string, actionId: string, item: TuffItem },
-  void
->('meta-overlay:action-executed')
 
 /**
  * Quick Actions SDK interface for plugins
@@ -63,11 +57,22 @@ export function createQuickActionsSDK(channel: any, pluginId: string): QuickActi
   const transport = createPluginTuffTransport(channel)
   const disposables = createDisposableBag()
   let disposed = false
+  let lastExecuteKey = ''
+  let lastExecuteAt = 0
 
   const emitActionExecute = (data: { pluginId: string, actionId: string, item: TuffItem }) => {
     if (data.pluginId !== pluginId || !registeredActionIds.has(data.actionId)) {
       return
     }
+
+    const executeKey = `${data.pluginId}:${data.actionId}:${data.item.id ?? ''}`
+    const now = Date.now()
+    if (executeKey === lastExecuteKey && now - lastExecuteAt < 250) {
+      return
+    }
+
+    lastExecuteKey = executeKey
+    lastExecuteAt = now
 
     for (const handler of actionExecuteHandlers) {
       try {
@@ -107,7 +112,12 @@ export function createQuickActionsSDK(channel: any, pluginId: string): QuickActi
   }
 
   disposables.add(
-    transport.on(quickActionsExecutedEvent, (payload) => {
+    transport.on(CoreBoxEvents.metaOverlay.actionExecuted, (payload) => {
+      emitActionExecute(payload)
+    })
+  )
+  disposables.add(
+    transport.on(CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted, (payload) => {
       emitActionExecute(payload)
     })
   )

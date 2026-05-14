@@ -469,13 +469,13 @@ try {
     if (typeof forceRefreshOrOptions === 'boolean') {
       return {
         forceRefresh: forceRefreshOrOptions,
-        includeIcon: true
+        includeIcon: false
       }
     }
 
     return {
       forceRefresh: forceRefreshOrOptions.forceRefresh === true,
-      includeIcon: forceRefreshOrOptions.includeIcon !== false
+      includeIcon: forceRefreshOrOptions.includeIcon === true
     }
   }
 

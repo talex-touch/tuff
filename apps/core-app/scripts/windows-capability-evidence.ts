@@ -266,7 +266,7 @@ async function collectStartApps(timeoutMs: number) {
     '  [PSCustomObject]@{ Name = [string]$_.Name; AppID = [string]$_.AppId }',
     '}',
     '$apps | ConvertTo-Json -Compress'
-  ].join('; ')
+  ].join('\n')
   const result = await runPowerShell(script, timeoutMs)
   return result.exitCode === 0
     ? parsePowerShellJsonArray(result.stdout, normalizeStartAppRecord)
@@ -276,11 +276,7 @@ async function collectStartApps(timeoutMs: number) {
 async function collectRegistryApps(timeoutMs: number): Promise<WindowsRegistryAppRecord[]> {
   const script = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-    '$paths = @(',
-    "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
-    "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',",
-    "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'",
-    ')',
+    "$paths = @('HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', 'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*')",
     '$apps = foreach ($path in $paths) {',
     '  Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
     '    if (-not $_.DisplayName) { return }',
@@ -296,7 +292,7 @@ async function collectRegistryApps(timeoutMs: number): Promise<WindowsRegistryAp
     '  }',
     '}',
     '$apps | ConvertTo-Json -Compress'
-  ].join('; ')
+  ].join('\n')
   const result = await runPowerShell(script, timeoutMs)
   return result.exitCode === 0
     ? parsePowerShellJsonArray(result.stdout, normalizeRegistryAppRecord)
@@ -327,10 +323,7 @@ function normalizeStartMenuEntry(entry: Record<string, unknown>): WindowsStartMe
 async function collectStartMenuEntries(timeoutMs: number): Promise<WindowsStartMenuEntry[]> {
   const script = [
     '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-    '$roots = @(',
-    "  'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs',",
-    '  [System.IO.Path]::Combine($env:APPDATA, "Microsoft\\Windows\\Start Menu\\Programs")',
-    ')',
+    '$roots = @(\'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\', [System.IO.Path]::Combine($env:APPDATA, "Microsoft\\Windows\\Start Menu\\Programs"))',
     '$shell = New-Object -ComObject WScript.Shell',
     '$entries = foreach ($root in $roots) {',
     '  if (-not (Test-Path $root)) { continue }',
@@ -357,7 +350,7 @@ async function collectStartMenuEntries(timeoutMs: number): Promise<WindowsStartM
     '  }',
     '}',
     '$entries | ConvertTo-Json -Compress'
-  ].join('; ')
+  ].join('\n')
   const result = await runPowerShell(script, timeoutMs)
   return result.exitCode === 0
     ? parsePowerShellJsonArray(result.stdout, normalizeStartMenuEntry)

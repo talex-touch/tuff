@@ -8,7 +8,7 @@ import { TuffSearchResultBuilder } from '@talex-touch/utils'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { getMainConfig } from '../../storage'
@@ -239,6 +239,11 @@ export class CoreBoxManager {
         void transport.sendTo(coreBoxWindow.webContents, CoreBoxEvents.ui.uiModeExited, {
           resetInput: true
         })
+        void transport
+          .sendTo(coreBoxWindow.webContents, CoreBoxRetainedEvents.legacy.uiModeExited, {
+            resetInput: true
+          })
+          .catch(() => {})
 
         setTimeout(() => {
           if (!coreBoxWindow.isDestroyed()) {

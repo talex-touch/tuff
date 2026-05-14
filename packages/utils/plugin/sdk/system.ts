@@ -35,22 +35,24 @@ function getSystemChannel() {
 async function getTypedActiveAppSnapshotWithChannel(
   channel: ReturnType<typeof getSystemChannel>,
   forceRefresh: boolean,
+  includeIcon: boolean,
 ): Promise<ActiveAppSnapshot | null> {
   const transport = createPluginTuffTransport(channel as any)
-  const typed = await transport.send(AppEvents.system.getActiveApp, { forceRefresh })
+  const typed = await transport.send(AppEvents.system.getActiveApp, { forceRefresh, includeIcon })
   return normalizeActiveAppSnapshot(typed)
 }
 
 export async function getTypedActiveAppSnapshot(
-  options: { forceRefresh?: boolean } = {},
+  options: { forceRefresh?: boolean, includeIcon?: boolean } = {},
 ): Promise<ActiveAppSnapshot | null> {
   const channel = getSystemChannel()
   const forceRefresh = options.forceRefresh === true
-  return await getTypedActiveAppSnapshotWithChannel(channel, forceRefresh)
+  const includeIcon = options.includeIcon === true
+  return await getTypedActiveAppSnapshotWithChannel(channel, forceRefresh, includeIcon)
 }
 
 export async function getActiveAppSnapshot(
-  options: { forceRefresh?: boolean } = {},
+  options: { forceRefresh?: boolean, includeIcon?: boolean } = {},
 ): Promise<ActiveAppSnapshot | null> {
   return await getTypedActiveAppSnapshot(options)
 }

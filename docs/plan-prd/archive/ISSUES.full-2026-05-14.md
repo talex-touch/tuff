@@ -1,0 +1,549 @@
+# 项目问题与清理候选
+
+## 范围
+- 关注点：i18n 清理（core-app renderer i18n + utils $i18n 消息体系）。
+- 方法：对 `apps/core-app/src/renderer` 中的 Vue i18n key 做字符串字面量扫描，同时对 `packages/utils/i18n/message-keys.ts` 中 `*Keys` 使用做符号扫描。
+- 说明：
+  - 未使用列表为**候选**：动态 key（如计算属性）无法被检出。
+  - 仅文档引用表示 key 只出现在 `.md`，未在渲染进程代码中使用。
+
+## 概要
+- Core app 渲染进程 i18n keys：总计 1525，已用 1096，文档-only 19，未用候选 410。
+- utils $i18n 消息 keys：
+  - 已用分组：`DevServerKeys`, `FlowTransferKeys`。
+  - 未用分组：`PluginKeys`, `WidgetKeys`, `SystemKeys`, `PermissionKeys`。
+- 未使用的 i18n 文件：`apps/core-app/src/renderer/src/locales/*/download-migration.json`（无引用）。
+
+## 问题
+
+### i18n-unused：Core app 渲染进程 i18n keys（候选）
+- 范围：`apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- 证据：渲染进程代码中未发现这些 key 的字符串字面量引用。
+- 候选（代码未引用）：
+  - account.enter
+  - account.next
+  - account.remoteFail
+  - base.last_step
+  - base.step
+  - base.touchCaptcha.fail
+  - base.touchCaptcha.instruction
+  - base.touchCaptcha.title
+  - common.add
+  - common.delete
+  - common.edit
+  - common.error
+  - common.info
+  - common.open
+  - common.remove
+  - common.warning
+  - coreBox.intelligence.hotkey
+  - coreBox.intelligence.suggestionAction
+  - coreBox.intelligence.suggestionDesc
+  - coreBox.intelligence.suggestionTitle
+  - coreBox.sourceTypes.app
+  - coreBox.sourceTypes.application
+  - coreBox.sourceTypes.command
+  - coreBox.sourceTypes.data
+  - coreBox.sourceTypes.feature
+  - coreBox.sourceTypes.file
+  - coreBox.sourceTypes.plugin
+  - coreBox.sourceTypes.service
+  - coreBox.sourceTypes.system
+  - coreBox.sourceTypes.web
+  - download.cancelled
+  - download.completed_at
+  - download.error.checksum
+  - download.error.disk_full
+  - download.error.network
+  - download.error.permission
+  - download.error.timeout
+  - download.error.unknown
+  - download.folder_shown
+  - download.open_settings
+  - download.paused
+  - download.pending
+  - download.progress
+  - download.remaining
+  - download.resume_failed
+  - download.retry_all
+  - download.settings
+  - download.status.cancelled
+  - download.status.completed
+  - download.status.downloading
+  - download.status.failed
+  - download.status.paused
+  - download.status.pending
+  - download.task_resumed
+  - download.view_all
+  - downloadErrors.invalid_url
+  - email.correct
+  - email.enter
+  - emailVerify.content
+  - emailVerify.title
+  - error.server
+  - flatNavBar.dashboard
+  - intelligence.addCustomProvider
+  - intelligence.addModelPlaceholder
+  - intelligence.addProvider
+  - intelligence.advancedConfig
+  - intelligence.apiConfig
+  - intelligence.apiKey
+  - intelligence.apiKeyPlaceholder
+  - intelligence.audit.viewLogs
+  - intelligence.baseUrl
+  - intelligence.baseUrlPlaceholder
+  - intelligence.builtinProviders
+  - intelligence.compatible
+  - intelligence.config.advanced.description
+  - intelligence.config.advanced.priorityPlaceholder
+  - intelligence.config.api.testModelPlaceholder
+  - intelligence.config.model.instructionsPlaceholder
+  - intelligence.customCompatible
+  - intelligence.customProviders
+  - intelligence.disabled.message
+  - intelligence.enabled
+  - intelligence.global.cacheExpirationPlaceholder
+  - intelligence.list.providersCount
+  - intelligence.modelConfig
+  - intelligence.models
+  - intelligence.priority.label
+  - intelligence.providerName
+  - intelligence.providerNamePlaceholder
+  - intelligence.providerType
+  - intelligence.rateLimit
+  - intelligence.requestsPerMinute
+  - intelligence.test.button
+  - intelligence.test.error.message
+  - intelligence.test.error.title
+  - intelligence.test.latency
+  - intelligence.test.success.message
+  - intelligence.test.success.title
+  - intelligence.test.testing
+  - intelligence.testErrorMessage
+  - intelligence.testSuccessMessage
+  - intelligence.timeout
+  - intelligence.tokensPerMinute
+  - intelligence.unlimited
+  - layoutSection.layouts.flat
+  - layoutSection.layouts.simple
+  - store.detailDialog.backToMarket
+  - store.detailDialog.download
+  - store.detailDialog.notFound
+  - store.detailDialog.notFoundDesc
+  - store.detailDialog.viewDocs
+  - store.installing
+  - store.lastUpdated
+  - store.officialBadge
+  - store.subtitle
+  - store.tags.all
+  - store.tags.enhancement
+  - store.tags.feature
+  - store.tags.productivity
+  - store.tags.tools
+  - store.tags.ui
+  - store.tags.ux
+  - store.title
+  - store.updates.checkFailed
+  - store.updates.checking
+  - store.updates.noUpdates
+  - store.upgradeAvailable
+  - notifications.downloadFailedBody
+  - notifications.updateAvailableBody
+  - notifications.updateReadyBody
+  - plugin.actions.history
+  - plugin.details.copyPluginId
+  - plugin.details.description
+  - plugin.details.disabled
+  - plugin.details.enabled
+  - plugin.details.openInExplorer
+  - plugin.openFolder
+  - plugin.opening
+  - router.appSettings
+  - router.application
+  - router.plugin
+  - router.pluginMarket
+  - router.storagable
+  - router.styles
+  - router.theme
+  - settingAbout.rating.excellent
+  - settingAbout.rating.fair
+  - settingAbout.rating.good
+  - settingAbout.rating.poor
+  - settingAbout.systemInfoPlaceholder
+  - settingAbout.tabs.app
+  - settingAbout.tabs.system
+  - settingHeader.initTime
+  - settingHeader.version
+  - settingTools.shortcutLabels.core_box_aiQuickCall
+  - settingTools.shortcutLabels.core_box_toggle
+  - settingTools.shortcutLabels.flow_detach_to_divisionbox
+  - settingTools.shortcutLabels.flow_transfer_to_plugin
+  - settings.intelligence.addBinding
+  - settings.intelligence.addCustomProvider
+  - settings.intelligence.addFirstModel
+  - settings.intelligence.addModelPlaceholder
+  - settings.intelligence.addProvider
+  - settings.intelligence.advancedConfig
+  - settings.intelligence.apiConfig
+  - settings.intelligence.apiKey
+  - settings.intelligence.apiKeyPlaceholder
+  - settings.intelligence.baseUrl
+  - settings.intelligence.baseUrlPlaceholder
+  - settings.intelligence.builtinPrompts
+  - settings.intelligence.builtinProviders
+  - settings.intelligence.capabilitiesSection
+  - settings.intelligence.capabilityConfigDesc
+  - settings.intelligence.capabilityConfigTitle
+  - settings.intelligence.capabilityPageDesc
+  - settings.intelligence.capabilityPageTitle
+  - settings.intelligence.capabilityPromptLabel
+  - settings.intelligence.capabilityProviderLabel
+  - settings.intelligence.capabilityProvidersTotal
+  - settings.intelligence.capabilitySearchClear
+  - settings.intelligence.capabilitySearchLabel
+  - settings.intelligence.capabilityStat
+  - settings.intelligence.capabilityTestHint
+  - settings.intelligence.channelPageDesc
+  - settings.intelligence.channelPageTitle
+  - settings.intelligence.channelsSection
+  - settings.intelligence.compatible
+  - settings.intelligence.createNewPrompt
+  - settings.intelligence.customCompatible
+  - settings.intelligence.customPrompts
+  - settings.intelligence.customProviders
+  - settings.intelligence.disabled
+  - settings.intelligence.dragToReorder
+  - settings.intelligence.enabled
+  - settings.intelligence.futureCenterDesc
+  - settings.intelligence.futureCenterTitle
+  - settings.intelligence.futureCloudSync
+  - settings.intelligence.futureDownload
+  - settings.intelligence.futureTargetShare
+  - settings.intelligence.instructions
+  - settings.intelligence.instructionsPlaceholder
+  - settings.intelligence.landing.capabilities.cta
+  - settings.intelligence.landing.channels.cta
+  - settings.intelligence.landing.future.cta
+  - settings.intelligence.landing.prompts.cta
+  - settings.intelligence.logsSection
+  - settings.intelligence.managePrompts
+  - settings.intelligence.modelConfig
+  - settings.intelligence.modelOrder
+  - settings.intelligence.modelSelection
+  - settings.intelligence.models
+  - settings.intelligence.noModelsConfigured
+  - settings.intelligence.noProvider
+  - settings.intelligence.pageTitle
+  - settings.intelligence.priority
+  - settings.intelligence.priorityHigh
+  - settings.intelligence.priorityLow
+  - settings.intelligence.priorityMedium
+  - settings.intelligence.promptContentPlaceholder
+  - settings.intelligence.promptEditorLabel
+  - settings.intelligence.promptEditorPlaceholder
+  - settings.intelligence.promptMetaCreated
+  - settings.intelligence.promptMetaUpdated
+  - settings.intelligence.promptSearchLabel
+  - settings.intelligence.promptSelectedHint
+  - settings.intelligence.providerName
+  - settings.intelligence.providerNamePlaceholder
+  - settings.intelligence.providerSelection
+  - settings.intelligence.providerStat
+  - settings.intelligence.providerType
+  - settings.intelligence.rateLimit
+  - settings.intelligence.removeBinding
+  - settings.intelligence.requestsPerMinute
+  - settings.intelligence.selectPrompt
+  - settings.intelligence.test
+  - settings.intelligence.testErrorMessage
+  - settings.intelligence.testModel
+  - settings.intelligence.testSuccessMessage
+  - settings.intelligence.timeout
+  - settings.intelligence.tokensPerMinute
+  - settings.intelligence.unlimited
+  - settings.settingAISDK.addModelPlaceholder
+  - settings.settingAISDK.advancedConfig
+  - settings.settingAISDK.apiConfig
+  - settings.settingAISDK.apiKey
+  - settings.settingAISDK.apiKeyDesc
+  - settings.settingAISDK.apiKeyPlaceholder
+  - settings.settingAISDK.baseUrl
+  - settings.settingAISDK.baseUrlDesc
+  - settings.settingAISDK.baseUrlPlaceholder
+  - settings.settingAISDK.cacheExpiration
+  - settings.settingAISDK.cacheExpirationDesc
+  - settings.settingAISDK.defaultModel
+  - settings.settingAISDK.defaultModelDesc
+  - settings.settingAISDK.enableAudit
+  - settings.settingAISDK.enableAuditDesc
+  - settings.settingAISDK.enableCache
+  - settings.settingAISDK.enableCacheDesc
+  - settings.settingAISDK.enableProvider
+  - settings.settingAISDK.enableProviderDesc
+  - settings.settingAISDK.globalSettings
+  - settings.settingAISDK.groupDesc
+  - settings.settingAISDK.groupTitle
+  - settings.settingAISDK.instructions
+  - settings.settingAISDK.instructionsDesc
+  - settings.settingAISDK.instructionsPlaceholder
+  - settings.settingAISDK.latency
+  - settings.settingAISDK.modelConfig
+  - settings.settingAISDK.models
+  - settings.settingAISDK.modelsDesc
+  - settings.settingAISDK.priority
+  - settings.settingAISDK.priorityDesc
+  - settings.settingAISDK.priorityHigh
+  - settings.settingAISDK.priorityLow
+  - settings.settingAISDK.priorityMedium
+  - settings.settingAISDK.promptVariablesLabel
+  - settings.settingAISDK.promptVariablesPlaceholder
+  - settings.settingAISDK.rateLimit
+  - settings.settingAISDK.requestsPerDay
+  - settings.settingAISDK.requestsPerDayDesc
+  - settings.settingAISDK.requestsPerMinute
+  - settings.settingAISDK.requestsPerMinuteDesc
+  - settings.settingAISDK.selectModel
+  - settings.settingAISDK.selectProvider
+  - settings.settingAISDK.test
+  - settings.settingAISDK.testCapability
+  - settings.settingAISDK.testErrorMessage
+  - settings.settingAISDK.testFailed
+  - settings.settingAISDK.testSuccess
+  - settings.settingAISDK.testSuccessMessage
+  - settings.settingAISDK.testing
+  - settings.settingAISDK.timeout
+  - settings.settingAISDK.timeoutDesc
+  - settings.settingAISDK.timeoutPlaceholder
+  - settings.settingAISDK.tokensPerDay
+  - settings.settingAISDK.tokensPerDayDesc
+  - settings.settingAISDK.tokensPerMinute
+  - settings.settingAISDK.tokensPerMinuteDesc
+  - settings.settingAISDK.unlimited
+  - settings.settingAISDK.userMessageLabel
+  - settings.settingAISDK.userMessagePlaceholder
+  - settings.settingFileIndex.warningAlert
+  - settings.settingFileIndex.warningBattery
+  - settings.settingFileIndex.warningConfirm
+  - settings.settingFileIndex.warningIdle
+  - settings.settingFileIndex.warningPerformance
+  - settings.settingFileIndex.warningSearch
+  - settings.setup.fileIndexing
+  - settings.setup.indexingStage.cleanup
+  - settings.setup.indexingStage.completed
+  - settings.setup.indexingStage.idle
+  - settings.setup.indexingStage.indexing
+  - settings.setup.indexingStage.reconciliation
+  - settings.setup.indexingStage.scanning
+  - settings.setup.tabs.permissions
+  - settings.setup.tabs.settings
+  - settings.updateModal.publishedAt
+  - settings.updateModal.remindLater
+  - settings.updateModal.skip
+  - settings.updateModal.title
+  - settings.updateModal.updateNow
+  - setupPermissions.requiredPermission
+  - sign.fail
+  - signSucceed.loginContent
+  - signSucceed.loginTitle
+  - signSucceed.registerContent
+  - signSucceed.registerTitle
+  - signSucceed.startButton
+  - signView.copyright
+  - tagSection.copiedFiles
+  - tagSection.copiedHtml
+  - tagSection.copiedImage
+  - tagSection.copiedText
+  - textPreview.fileSize
+  - themePreference.Filter
+  - themePreference.Mica
+  - themeStyle.defaultTip
+  - themeStyle.filterTip
+  - themeStyle.folder
+  - themeStyle.micaTip
+  - tray.about
+  - tray.checkUpdate
+  - tray.checkUpdateAvailable
+  - tray.clipboardHistory
+  - tray.downloadCenter
+  - tray.downloadCenterWithCount
+  - tray.hideWindow
+  - tray.openCoreBox
+  - tray.openDataDir
+  - tray.quit
+  - tray.restart
+  - tray.settings
+  - tray.showWindow
+  - tray.terminal
+  - tray.tooltip
+  - tray.version
+  - tray.viewLogs
+  - tray.visitWebsite
+  - update.auto_check
+  - update.auto_download
+  - update.channel_beta
+  - update.channel_release
+  - update.channel_snapshot
+  - update.check_failed
+  - update.check_frequency
+  - update.check_now
+  - update.checking
+  - update.checking_update
+  - update.checksum_failed
+  - update.checksum_verified
+  - update.clear_ignored
+  - update.current
+  - update.custom_url
+  - update.download_failed
+  - update.download_progress
+  - update.download_size
+  - update.frequency_daily
+  - update.frequency_never
+  - update.frequency_startup
+  - update.frequency_weekly
+  - update.ignored_versions
+  - update.install_failed
+  - update.install_success
+  - update.installing
+  - update.last_checked
+  - update.latest
+  - update.no_update_available
+  - update.notify_on_available
+  - update.notify_on_downloaded
+  - update.release_date
+  - update.restart_later
+  - update.restart_now
+  - update.restart_required
+  - update.restart_to_update
+  - update.retry_download
+  - update.skip_version
+  - update.source_custom
+  - update.source_github
+  - update.source_official
+  - update.up_to_date
+  - update.update_available
+  - update.update_channel
+  - update.update_downloaded
+  - update.update_installed
+  - update.update_notification
+  - update.update_settings
+  - update.update_source
+  - update.verify_checksum
+  - update.version_info
+  - update.view_release_notes
+
+- 仅文档引用（只出现在 `.md`）：
+  - downloadErrors.cancelled
+  - downloadErrors.checksum_error
+  - downloadErrors.disk_space_error
+  - downloadErrors.file_not_found
+  - downloadErrors.network_error
+  - downloadErrors.permission_error
+  - downloadErrors.timeout_error
+  - downloadErrors.unknown_error
+  - notifications.downloadComplete
+  - notifications.downloadCompleteBody
+  - notifications.downloadFailed
+  - notifications.updateAvailable
+  - notifications.updateReady
+  - timeUnits.days
+  - timeUnits.daysAgo
+  - timeUnits.hours
+  - timeUnits.hoursAgo
+  - timeUnits.justNow
+  - timeUnits.minutesAgo
+
+### i18n-unused：运行时未使用的 message-keys 分组
+- 范围：`packages/utils/i18n/message-keys.ts`
+- 证据：`DevServerKeys` 与 `FlowTransferKeys` 在运行时代码中被引用，其余分组未引用。
+- 未使用分组（代码中未发现 `*Keys.` 引用）：
+  - PluginKeys (6 keys)
+  - WidgetKeys (4 keys)
+  - SystemKeys (4 keys)
+  - PermissionKeys (58 keys)
+
+#### PluginKeys
+- plugin.loadFailed
+- plugin.manifestInvalid
+- plugin.dependencyMissing
+- plugin.versionMismatch
+- plugin.permissionDenied
+- plugin.permissionMissing
+
+#### WidgetKeys
+- widget.compileFailed
+- widget.unsupportedType
+- widget.invalidDependency
+- widget.loadFailed
+
+#### SystemKeys
+- system.networkError
+- system.timeout
+- system.unknownError
+- system.operationCancelled
+
+#### PermissionKeys
+- permission.category.fs
+- permission.category.clipboard
+- permission.category.network
+- permission.category.system
+- permission.category.ai
+- permission.category.storage
+- permission.category.window
+- permission.risk.low
+- permission.risk.medium
+- permission.risk.high
+- permission.fs.read.name
+- permission.fs.read.desc
+- permission.fs.write.name
+- permission.fs.write.desc
+- permission.fs.execute.name
+- permission.fs.execute.desc
+- permission.clipboard.read.name
+- permission.clipboard.read.desc
+- permission.clipboard.write.name
+- permission.clipboard.write.desc
+- permission.network.local.name
+- permission.network.local.desc
+- permission.network.internet.name
+- permission.network.internet.desc
+- permission.network.download.name
+- permission.network.download.desc
+- permission.system.shell.name
+- permission.system.shell.desc
+- permission.system.notification.name
+- permission.system.notification.desc
+- permission.system.tray.name
+- permission.system.tray.desc
+- permission.ai.basic.name
+- permission.ai.basic.desc
+- permission.ai.advanced.name
+- permission.ai.advanced.desc
+- permission.ai.agents.name
+- permission.ai.agents.desc
+- permission.storage.plugin.name
+- permission.storage.plugin.desc
+- permission.storage.shared.name
+- permission.storage.shared.desc
+- permission.window.create.name
+- permission.window.create.desc
+- permission.window.capture.name
+- permission.window.capture.desc
+- permission.grant
+- permission.revoke
+- permission.granted
+- permission.denied
+- permission.required
+- permission.optional
+- permission.allowOnce
+- permission.allowAlways
+- permission.requestTitle
+- permission.requestDesc
+### i18n-unused：未引用的 locale 文件
+- `apps/core-app/src/renderer/src/locales/zh-CN/download-migration.json`
+- `apps/core-app/src/renderer/src/locales/en/download-migration.json`
+- 证据：代码库中没有 `download-migration` 相关引用。
+
+### i18n-duplicate：download.status key 被覆盖
+- 范围：`apps/core-app/src/renderer/src/modules/lang/en-US.json`, `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- 证据：`download.status` 同时定义为字符串与对象，后者覆盖前者。
+- 建议：拆分为 `download.statusLabel` + `download.statusMap`（或类似命名）以避免静默覆盖。
