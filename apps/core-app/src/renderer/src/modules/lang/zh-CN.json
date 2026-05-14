@@ -329,6 +329,26 @@
     "logoutFailed": "登出失败",
     "runtimeApiServer": "运行时 API 服务器"
   },
+  "creditsSummary": {
+    "title": "AI 积分",
+    "description": "查看 Nexus AI credits 的剩余、已用和总额度。",
+    "notice": "Nexus 官方 provider 调用会按模型返回的 totalTokens 消耗该额度。",
+    "loginRequired": "登录后可查看 credits 剩余和消耗。",
+    "loading": "正在获取 credits 信息。",
+    "empty": "暂无 credits 信息。",
+    "month": "计费月份：{month}",
+    "refresh": "刷新",
+    "openDashboard": "打开 Nexus",
+    "personalRemaining": "个人剩余",
+    "personalUsed": "个人已用",
+    "personalQuota": "个人总额",
+    "teamRemaining": "团队池剩余",
+    "loginTitle": "需要登录",
+    "loginDescription": "请先登录 Tuff 账户以读取 Nexus credits summary。",
+    "errorTitle": "Credits 信息不可用",
+    "retry": "重试",
+    "billingNoticeTitle": "计费提示"
+  },
   "userProfile": {
     "title": "账户",
     "unknownName": "用户",
