@@ -45,6 +45,23 @@ type NexusRequestPayload = {
   context?: string
 }
 
+type NexusUploadFilePayload = {
+  field: string
+  name: string
+  type?: string
+  data: ArrayBuffer | Uint8Array | number[]
+}
+
+type NexusUploadPayload = {
+  url?: string
+  path?: string
+  method?: string
+  headers?: Record<string, string>
+  fields?: Record<string, string>
+  files?: NexusUploadFilePayload[]
+  context?: string
+}
+
 type NexusResponsePayload = {
   status: number
   statusText: string
@@ -86,6 +103,9 @@ const authUpdateAvatarEvent = defineRawEvent<{ dataUrl: string }, AuthUser | nul
 const authAttestDeviceEvent = defineRawEvent<void, { success: boolean }>('auth:attest-device')
 const authNexusRequestEvent = defineRawEvent<NexusRequestPayload, NexusResponsePayload | null>(
   'auth:nexus-request'
+)
+const authNexusUploadEvent = defineRawEvent<NexusUploadPayload, NexusResponsePayload | null>(
+  'auth:nexus-upload'
 )
 const authStateChangedEvent = defineRawEvent<AuthState, void>('auth:state-changed')
 const authManualTokenEvent = defineRawEvent<
@@ -661,28 +681,60 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
   return true
 }
 
-async function performNexusRequest(
-  payload: NexusRequestPayload
-): Promise<NexusResponsePayload | null> {
-  const token = authToken
-  if (!token) {
-    return null
-  }
+function resolveNexusRequestUrl(payload: { url?: string; path?: string }): string {
   const rawUrl = payload.url
   const rawPath = payload.path
   if (!rawUrl && !rawPath) {
     throw new Error('Missing request url/path')
   }
-  const url = rawUrl ? rawUrl : new URL(rawPath ?? '', resolveAuthBaseUrl()).toString()
-  const method = (payload.method ? payload.method.toUpperCase() : 'GET') as NetworkMethod
-  const headers = new Headers(payload.headers ?? {})
-  headers.set('Authorization', normalizeBearerToken(token))
+  return rawUrl ? rawUrl : new URL(rawPath ?? '', resolveAuthBaseUrl()).toString()
+}
 
+function toUploadBytes(data: NexusUploadFilePayload['data']): Uint8Array {
+  if (data instanceof Uint8Array) {
+    return data
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data)
+  }
+  if (Array.isArray(data)) {
+    return new Uint8Array(data)
+  }
+  return new Uint8Array()
+}
+
+function toUploadBlobPart(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  return buffer
+}
+
+function buildNexusUploadFormData(payload: NexusUploadPayload): FormData {
+  const form = new FormData()
+  for (const [key, value] of Object.entries(payload.fields ?? {})) {
+    form.append(key, value)
+  }
+  for (const file of payload.files ?? []) {
+    const bytes = toUploadBytes(file.data)
+    const blob = new Blob([toUploadBlobPart(bytes)], {
+      type: file.type || 'application/octet-stream'
+    })
+    form.append(file.field, blob, file.name)
+  }
+  return form
+}
+
+async function executeNexusRequest(
+  url: string,
+  method: NetworkMethod,
+  headers: Headers,
+  body: unknown
+): Promise<NexusResponsePayload> {
   const response = await getNetworkService().request<string>({
     method,
     url,
     headers: Object.fromEntries(headers.entries()),
-    body: payload.body,
+    body,
     responseType: 'text',
     validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
   })
@@ -699,6 +751,37 @@ async function performNexusRequest(
     url: response.url || url,
     body: response.data ?? ''
   }
+}
+
+async function performNexusRequest(
+  payload: NexusRequestPayload
+): Promise<NexusResponsePayload | null> {
+  const token = authToken
+  if (!token) {
+    return null
+  }
+  const url = resolveNexusRequestUrl(payload)
+  const method = (payload.method ? payload.method.toUpperCase() : 'GET') as NetworkMethod
+  const headers = new Headers(payload.headers ?? {})
+  headers.set('Authorization', normalizeBearerToken(token))
+
+  return executeNexusRequest(url, method, headers, payload.body)
+}
+
+async function performNexusUpload(
+  payload: NexusUploadPayload
+): Promise<NexusResponsePayload | null> {
+  const token = authToken
+  if (!token) {
+    return null
+  }
+  const url = resolveNexusRequestUrl(payload)
+  const method = (payload.method ? payload.method.toUpperCase() : 'POST') as NetworkMethod
+  const headers = new Headers(payload.headers ?? {})
+  headers.delete('content-type')
+  headers.set('Authorization', normalizeBearerToken(token))
+
+  return executeNexusRequest(url, method, headers, buildNexusUploadFormData(payload))
 }
 
 async function getOrInitMachineSeed(appSettings: AppSetting): Promise<string> {
@@ -993,6 +1076,7 @@ export class AuthModule extends BaseModule<TalexEvents> {
         return { success }
       }),
       transport.on(authNexusRequestEvent, async (payload) => performNexusRequest(payload)),
+      transport.on(authNexusUploadEvent, async (payload) => performNexusUpload(payload)),
       transport.on(authManualTokenEvent, async (payload) => {
         const token =
           typeof payload?.appToken === 'string' && payload.appToken.trim()

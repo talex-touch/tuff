@@ -11,6 +11,23 @@ type NexusRequestPayload = {
   context?: string
 }
 
+type NexusUploadFilePayload = {
+  field: string
+  name: string
+  type?: string
+  data: ArrayBuffer
+}
+
+type NexusUploadPayload = {
+  url?: string
+  path?: string
+  method?: string
+  headers?: Record<string, string>
+  fields?: Record<string, string>
+  files?: NexusUploadFilePayload[]
+  context?: string
+}
+
 type NexusResponsePayload = {
   status: number
   statusText: string
@@ -22,6 +39,9 @@ type NexusResponsePayload = {
 const authNexusRequestEvent = defineRawEvent<NexusRequestPayload, NexusResponsePayload | null>(
   'auth:nexus-request'
 )
+const authNexusUploadEvent = defineRawEvent<NexusUploadPayload, NexusResponsePayload | null>(
+  'auth:nexus-upload'
+)
 
 export interface NexusAuthResponse {
   ok: boolean
@@ -31,6 +51,10 @@ export interface NexusAuthResponse {
   url: string
   json: <T = unknown>() => Promise<T>
   text: () => Promise<string>
+}
+
+function cloneArrayBuffer(buffer: ArrayBuffer): ArrayBuffer {
+  return buffer.slice(0)
 }
 
 function createResponse(payload: NexusResponsePayload): NexusAuthResponse {
@@ -79,6 +103,46 @@ function withQueryParams(url: string, params?: Record<string, unknown>): string 
     parsed.searchParams.set(key, String(value))
   }
   return parsed.toString()
+}
+
+async function fileToPayload(field: string, file: File): Promise<NexusUploadFilePayload> {
+  return {
+    field,
+    name: file.name,
+    type: file.type || 'application/octet-stream',
+    data: cloneArrayBuffer(await file.arrayBuffer())
+  }
+}
+
+export async function uploadNexusWithAuth(
+  path: string,
+  formData: FormData,
+  context: string = path,
+  method: 'POST' | 'PATCH' | 'PUT' = 'POST'
+): Promise<NexusAuthResponse | null> {
+  const transport = useTuffTransport()
+  const fields: Record<string, string> = {}
+  const files: NexusUploadFilePayload[] = []
+
+  for (const [key, value] of formData.entries()) {
+    if (value instanceof File) {
+      if (value.size > 0) files.push(await fileToPayload(key, value))
+    } else {
+      fields[key] = String(value)
+    }
+  }
+
+  const response = await transport.send(authNexusUploadEvent, {
+    path,
+    method,
+    fields,
+    files,
+    context
+  })
+  if (!response) {
+    return null
+  }
+  return createResponse(response)
 }
 
 export async function requestNexusWithAuth<T>(
