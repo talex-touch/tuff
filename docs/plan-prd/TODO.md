@@ -73,7 +73,7 @@
 - [x] CoreApp 启动异步化 P0：renderer 已将 `pluginStore.initialize()` 从 mount 前 await gate 移到 `app.mount()` 后后台执行，避免 plugin list RPC 与 install source 查询阻塞首屏；新增 renderer shell mount 前耗时与 plugin store 后台初始化耗时日志。已验证 `pnpm -C "apps/core-app" run typecheck:web` 返回 0（tuffex build 阶段仍输出既有 dts/deprecation 噪声）；真机冷/热启动前后耗时对比留到后续平台补证。
 - [ ] CoreApp 启动异步化 P1：将 `ExtensionLoader`、Sentry telemetry hydrate、Intelligence agent/workflow runtime、Update cache、Clipboard OCR/native watcher 等非首屏任务改为 handler-first + background runtime。
   - 2026-05-14 首个 P1 切片：`ExtensionLoaderModule` 已从 `onInit()` 串行同步读目录 + 逐个 `await loadExtension()` 改为 `onInit()` 只枚举扩展、`start()` 后台加载；destroy 会等待后台任务并卸载已加载扩展。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
-  - 2026-05-14 Sentry 切片：`SentryServiceModule` 的 telemetry upload stats hydrate 已从 `onInit()` await gate 改为后台 hydrate，shutdown flush 前等待已启动 hydrate，避免启动阻塞且不覆盖旧统计。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
+  - 2026-05-14 Sentry 切片：`SentryServiceModule` 的 telemetry upload stats hydrate 已从 `onInit()` await gate 改为后台 hydrate，shutdown flush 前等待已启动 hydrate；hydrate 合并会保留启动期新增计数与更新的 failure/upload 时间，避免后台读取旧记录覆盖内存新统计。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
   - 2026-05-14 UpdateService 切片：release cache hydrate 已从 `onInit()` await gate 改为后台读取；检查更新前和 destroy flush 前会等待已启动 hydrate，避免空缓存误触发网络请求或旧缓存覆盖新缓存。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
 - [ ] CoreApp 启动异步化 P2：拆分 `DatabaseModule` critical path 与 aux migration/health/WAL 后台任务，确保 `getAuxDb()` fallback primary DB 期间行为稳定。
 - [ ] CoreApp 启动异步化 P3：Everything backend detection、FileProvider search-index worker 与 filesystem watcher 改为后台 ready；搜索侧未 ready 返回 degraded/partial result。

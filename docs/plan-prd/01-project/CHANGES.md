@@ -17,14 +17,15 @@
 - `apps/core-app/src/renderer/src/main.ts`
 - `apps/core-app/src/main/modules/extension-loader.ts`
 - `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.test.ts`
 - `apps/core-app/src/main/modules/update/UpdateService.ts`
 - `docs/plan-prd/TODO.md`
   - Renderer bootstrap 不再在首屏 mount 前 `await pluginStore.initialize()`，避免 `pluginSDK.list()` 与插件 install source 查询阻塞 root container mount。
   - `app.mount('#app')` 完成后通过后台任务初始化 plugin store，保留 CoreBox / Assistant window 跳过逻辑，并记录 renderer shell mount 前耗时与 plugin store 后台初始化耗时。
   - `ExtensionLoaderModule` 不再在 `onInit()` 中同步读目录并串行 `await session.defaultSession.loadExtension()`；初始化阶段只枚举扩展，`start()` 后台加载，destroy 会等待后台任务后卸载已加载扩展。
-  - `SentryServiceModule` 的 telemetry upload stats hydrate 不再阻塞 `onInit()`；启动后后台读取历史统计，shutdown flush 前等待已启动 hydrate，避免关闭时覆盖旧统计。
+  - `SentryServiceModule` 的 telemetry upload stats hydrate 不再阻塞 `onInit()`；启动后后台读取历史统计，shutdown flush 前等待已启动 hydrate，并在合并时保留启动期新增计数与更新的 failure/upload 时间，避免后台旧记录覆盖内存新统计。
   - `UpdateServiceModule` 的 release cache hydrate 不再阻塞 `onInit()`；启动后后台读取缓存，检查更新前与 destroy 写缓存前等待已启动 hydrate，避免空缓存误触发网络请求或旧缓存覆盖新缓存。
-  - 已验证：`pnpm -C "apps/core-app" run typecheck:web` 返回 0；命令输出中仍包含 tuffex build 阶段既有 `TouchScroll` dts 诊断与 deprecation 噪声，但未阻断 typecheck。`pnpm -C "apps/core-app" run typecheck:node` 返回 0。
+  - 已验证：`pnpm -C "apps/core-app" run typecheck:web` 返回 0；命令输出中仍包含 tuffex build 阶段既有 `TouchScroll` dts 诊断与 deprecation 噪声，但未阻断 typecheck。`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node` 返回 0。
 
 ### fix(plugin): expose shell capability diagnostics for command plugins
 
