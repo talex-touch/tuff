@@ -19,8 +19,8 @@
 | P0-WIN-PERF | 补齐性能 evidence | 待执行 | `search-trace` 真实查询 `200` 样本生成 `search-trace-stats/v1`；执行 `clipboard:stress` `120000ms` 并用 `clipboard:stress:verify --strict` 复核。 |
 | P0-WIN-VERIFY | Windows final gate | 待执行 | 执行 `pnpm -C "apps/core-app" run windows:acceptance:verify`；case evidence、manual evidence、performance evidence 均非空、非占位且 gate 通过。 |
 | P0-REL-EVIDENCE | 写入 Nexus Release Evidence | 阻塞中 | 需要 `release:evidence` API key 或管理员登录态；写入 documentation review、platform matrix、CoreApp targeted tests、Windows 真机 evidence 与性能 evidence。凭证缺失时保持 blocked。 |
-| P0-FILE-PROVIDER | 恢复 FileProvider 编译边界 | 阻塞中 | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 当前为 0 行，`typecheck:node` 报 `file-provider.ts is not a module`；需确认是否为预期重构中间态，恢复 `fileProvider` 等价导出后复跑主进程 typecheck 与文件搜索最近路径验证。 |
-| P0-QUALITY | 发版前最小质量复核 | 未完成 | 至少复跑 `git diff --check`、`pnpm quality:release` 或最近路径替代命令。当前已知阻塞：`file-provider.ts` 0 字节导致 `typecheck:node` 失败；CoreApp 仍有既有 lint debt（restricted global、renderer console、raw IPC guard 等）。 |
+| P0-FILE-PROVIDER | 恢复 FileProvider 编译边界 | 已恢复 | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复到完整 `fileProvider` 导出；`pnpm -C "apps/core-app" run typecheck:node` 已通过。仍需按发版节奏补文件搜索最近路径验证。 |
+| P0-QUALITY | 发版前最小质量复核 | 未完成 | 至少复跑 `git diff --check`、`pnpm quality:release` 或最近路径替代命令。当前 `typecheck:node` 已恢复通过；CoreApp 仍有既有 lint debt（restricted global、renderer console、raw IPC guard 等）。 |
 
 ## P1 - 2.4.11 必须收口
 
@@ -29,9 +29,9 @@
 | P1-COMPAT | legacy/compat/size 债务关闭或降权 | 进行中 | 清册内 `2.4.11` 项关闭或记录降权理由；禁止新增 legacy/raw channel/旧 storage protocol/旧 SDK bypass。 |
 | P1-PLATFORM | Windows/macOS 阻塞级人工回归 | 待执行 | Windows/macOS 完成 release-blocking 手工回归；Linux 仅记录 best-effort smoke 与桌面环境限制。 |
 | P1-AI-COMPAT | AI 兼容占位成功响应退场 | 待执行 | `livechat/random`、prompt detail、catch-all 未实现接口改为明确 HTTP status、`unavailable + reason` 或迁移目标。 |
-| P1-SECRET | CLI 与插件 secret storage 收口 | 进行中 | CLI token 已通过 `CliCredentialStore` 做 POSIX `0700/0600` 权限缓解与 Windows ACL warning；`touch-translation` provider secret 已迁入 `usePluginSecret()` 并清理普通配置。仍需 OS Keychain/Credential Locker/libsecret backend、secure-store health UI 与遗留 secret 清理 evidence。 |
+| P1-SECRET | CLI 与插件 secret storage 收口 | 进行中 | CLI token 已通过 `CliCredentialStore` 做 POSIX `0700/0600` 权限缓解与 Windows ACL warning；`touch-translation` provider secret 已迁入 `usePluginSecret()` 并清理普通配置，配置弹窗已展示 secure-store available/degraded/unavailable health；插件侧已新增只读 `plugin.secret.health()` / `usePluginSecret().health()` 以暴露 secure-store degraded/unavailable 状态。仍需 OS Keychain/Credential Locker/libsecret backend 与遗留 secret 清理 evidence。 |
 | P1-SHELL-CAP | 插件 shell capability 统一诊断 | 待执行 | 系统动作、快捷动作、窗口管理、workspace scripts 等能力暴露 platform/permission/unsupported reason 与审计字段。 |
-| P1-TRANSPORT | Transport Wave A retained aliases 继续收口 | 进行中 | 已完成 sync/terminal/opener/auth/CoreBox UI、beginner shortcut、input focus、ui resume、forward key event、input command、input visibility/value request、input monitoring、clipboard allow、provider management、recommendation、preview history/copy、action panel、MetaOverlay bridge、layout control、uiMode enter/exit 等 alias 迁移切片；继续按 canonical event + legacy alias registry + dual listen 策略推进，禁止改变 wire name 语义。当前 `typecheck:node` 被 `file-provider.ts` 0 字节异常阻断，未获确认前不恢复该文件。 |
+| P1-TRANSPORT | Transport Wave A retained aliases 继续收口 | 进行中 | 已完成 sync/terminal/opener/auth/CoreBox UI、beginner shortcut、input focus、ui resume、forward key event、input command、input visibility/value request、input monitoring、clipboard allow、provider management、recommendation、preview history/copy、action panel、MetaOverlay bridge、layout control、uiMode enter/exit 等 alias 迁移切片；继续按 canonical event + legacy alias registry + dual listen 策略推进，禁止改变 wire name 语义。 |
 | P1-STARTUP | CoreApp 启动异步化补证 | 进行中 | P0/P1/P2/P3 代码切片已推进；仍需真实设备冷/热启动 benchmark、WAL/health 长尾与 UI 观感证据。 |
 
 ## P2 - 近期推进但不阻塞 2.4.10
