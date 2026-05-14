@@ -5,6 +5,30 @@
 
 ## 2026-05-14
 
+### feat(intelligence): add workflow Review Queue MVP
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.test.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Workflow 运行完成后，页面内 Review Queue 会从已完成步骤输出生成待审阅项，展示 step/capability/provider/model/trace 元数据与输出预览。
+  - 用户明确点击后才允许复制输出；替换剪贴板采用二次确认，首次点击只进入确认态，第二次点击才写入 `navigator.clipboard.writeText()`。
+  - 支持忽略队列项；当前状态仅保存在 Workflow 页面会话内，不新增 DB 表、不引入后台自动执行，也不扩大到文件写入或插件副作用。
+
+### feat(intelligence): add workflow Use Model step
+
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Workflow step kind 新增 `model`，作为 2.5.0 `Use Model` 最小节点；内置剪贴板整理模板改走 `model + text.chat`，不再为普通模型调用套 DeepAgent。
+  - `model` step 通过 `intelligence.invoke()` 调用 Stable capability 白名单：`text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`；`image.generate` 等非 Stable 能力会显式失败。
+  - 运行输出记录 `capabilityId / provider / model / usage / latency / traceId`，metadata 只携带 workflow/run/step/session 等审计字段，不引入 provider secret 或 raw IPC。
+  - Workflow 编辑器新增 Use Model 步骤入口，保存时保留 `prompt` 与 `input.capabilityId` 合同，并继续复用 typed Intelligence workflow SDK。
+
 ### perf(nexus): prerender docs routes and smooth docs switching
 
 - `apps/nexus/nuxt.config.ts`

@@ -281,6 +281,116 @@ describe('IntelligenceDeepAgentOrchestrationService', () => {
     )
   })
 
+  it('executes model workflow steps through stable intelligence.invoke capability routing', async () => {
+    mockInvoke.mockResolvedValue({
+      result: 'summary',
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      usage: {
+        promptTokens: 8,
+        completionTokens: 4,
+        totalTokens: 12
+      },
+      latency: 123,
+      traceId: 'trace-model'
+    })
+
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    const result = await service.executeWorkflowCapability(
+      {
+        steps: [
+          {
+            id: 'model-step',
+            kind: 'model',
+            prompt: 'Summarize this text',
+            input: {
+              capabilityId: 'text.summarize',
+              text: 'hello world',
+              outputFormat: 'markdown',
+              preferredProviderId: 'openai-default'
+            }
+          }
+        ]
+      },
+      {
+        metadata: {
+          sessionId: 'sess-model',
+          workingDirectory: '/tmp/workflow'
+        }
+      }
+    )
+
+    expect(result.result.status).toBe('completed')
+    expect(result.result.outputs).toMatchObject({
+      'model-step': {
+        result: 'summary',
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        usage: {
+          totalTokens: 12
+        },
+        latency: 123,
+        traceId: 'trace-model',
+        capabilityId: 'text.summarize'
+      }
+    })
+    expect(mockAdapterRun).not.toHaveBeenCalled()
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'text.summarize',
+      {
+        text: 'hello world'
+      },
+      expect.objectContaining({
+        preferredProviderId: 'openai-default',
+        metadata: expect.objectContaining({
+          caller: 'workflow.use-model',
+          source: 'intelligence.workflow.model',
+          workflowId: 'inline.workflow',
+          workflowRunId: expect.stringMatching(/^inline_/),
+          workflowStepId: 'model-step',
+          sessionId: 'sess-model'
+        })
+      })
+    )
+  })
+
+  it('rejects non-stable model workflow capabilities', async () => {
+    const { IntelligenceDeepAgentOrchestrationService } =
+      await import('./intelligence-deepagent-orchestration')
+    const service = new IntelligenceDeepAgentOrchestrationService()
+
+    await expect(
+      service.executeWorkflowCapability(
+        {
+          steps: [
+            {
+              id: 'image-step',
+              kind: 'model',
+              input: {
+                capabilityId: 'image.generate',
+                prompt: 'draw a chart'
+              }
+            }
+          ]
+        },
+        {
+          metadata: {
+            sessionId: 'sess-model-reject'
+          }
+        }
+      )
+    ).resolves.toMatchObject({
+      result: {
+        status: 'failed',
+        error: '[Intelligence] workflow model step image-step only supports stable capabilities'
+      }
+    })
+    expect(mockInvoke).not.toHaveBeenCalled()
+  })
+
   it('marks inline workflow as current workflow.execute contract', async () => {
     const { IntelligenceDeepAgentOrchestrationService } =
       await import('./intelligence-deepagent-orchestration')

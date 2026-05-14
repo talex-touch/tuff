@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { WorkflowDefinition, WorkflowRunRecord } from '@talex-touch/tuff-intelligence'
 import { IntelligenceWorkflowService } from './intelligence-workflow-service'
+
+vi.mock('../database', () => ({
+  databaseModule: {
+    getClient: vi.fn(),
+    getDb: vi.fn()
+  }
+}))
 
 type WorkflowNormalizer = (
   workflow: WorkflowDefinition,
@@ -162,6 +169,19 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
             toolId: 'clipboard.read',
             toolSource: 'mcp',
             prompt: 'Should not be kept'
+          },
+          {
+            id: 'model-step',
+            name: 'Use Model',
+            kind: 'model',
+            prompt: 'Summarize',
+            toolId: 'clipboard.read',
+            toolSource: 'mcp',
+            agentId: 'builtin.workflow-agent',
+            input: {
+              capabilityId: 'text.summarize',
+              text: 'hello'
+            }
           }
         ]
       })
@@ -183,6 +203,18 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
         toolId: undefined,
         toolSource: undefined,
         prompt: undefined
+      },
+      {
+        id: 'model-step',
+        kind: 'model',
+        prompt: 'Summarize',
+        toolId: undefined,
+        toolSource: undefined,
+        agentId: undefined,
+        input: {
+          capabilityId: 'text.summarize',
+          text: 'hello'
+        }
       }
     ])
   })

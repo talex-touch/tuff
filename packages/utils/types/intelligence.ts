@@ -60,7 +60,7 @@ export type IntelligenceToolRiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 export type ToolSource = 'builtin' | 'mcp'
 export type WorkflowTriggerType = 'manual' | 'clipboard.batch'
-export type WorkflowStepKind = 'prompt' | 'tool' | 'agent'
+export type WorkflowStepKind = 'prompt' | 'tool' | 'agent' | 'model'
 export type WorkflowRunStatus
   = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
 export type WorkflowStepStatus

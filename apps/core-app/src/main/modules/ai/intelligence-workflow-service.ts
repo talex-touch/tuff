@@ -97,7 +97,7 @@ function normalizeRunStatus(value: unknown): WorkflowRunStatus {
 }
 
 function normalizeWorkflowStepKind(value: unknown): WorkflowStepKind {
-  if (value === 'prompt' || value === 'tool' || value === 'agent') {
+  if (value === 'prompt' || value === 'tool' || value === 'agent' || value === 'model') {
     return value
   }
   throw new Error(`Unsupported workflow step kind: ${String(value || '')}`)
@@ -161,12 +161,13 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
       {
         id: 'organize-clipboard',
         name: '整理近期剪贴板',
-        kind: 'prompt',
+        kind: 'model',
         description:
           '读取最近的剪贴板内容，按主题或任务分组，输出简明摘要和一个适合再次复制的整理结果。',
         prompt:
           '你会收到近期剪贴板、前台应用和会话记忆。请把近期剪贴板按主题或任务分组，输出 Markdown，总结每组要点，并在结尾给出一个适合再次复制的整理结果代码块。',
         input: {
+          capabilityId: 'text.chat',
           outputFormat: 'markdown',
           includeCopyReadyBlock: true
         },
@@ -675,6 +676,16 @@ export class IntelligenceWorkflowService {
     const builtinTemplate = createClipboardOrganizerTemplate()
     const existing = await this.getWorkflow(builtinTemplate.id)
     if (existing) {
+      const firstStep = existing.steps[0]
+      if (
+        existing.metadata?.builtin === true &&
+        (firstStep?.kind !== 'model' || firstStep.input?.capabilityId !== 'text.chat')
+      ) {
+        await this.saveWorkflow({
+          ...builtinTemplate,
+          createdAt: existing.createdAt
+        })
+      }
       return
     }
     await this.saveWorkflow(builtinTemplate)
@@ -845,7 +856,8 @@ export class IntelligenceWorkflowService {
       toolSource: normalizedKind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
       toolId: normalizedKind === 'tool' ? toolId : undefined,
       agentId: normalizedKind === 'agent' ? agentId : undefined,
-      prompt: normalizedKind === 'prompt' ? step.prompt : undefined,
+      prompt:
+        normalizedKind === 'prompt' || normalizedKind === 'model' ? step.prompt : undefined,
       input: step.input ?? {},
       continueOnError: step.continueOnError === true,
       metadata: step.metadata ?? {}

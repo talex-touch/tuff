@@ -27,6 +27,13 @@ export type WorkflowValidationErrorCode =
   | 'trigger_config_json'
   | 'context_config_json'
 
+export type WorkflowReviewQueueItemStatus =
+  | 'pending'
+  | 'copied'
+  | 'clipboard_replaced'
+  | 'dismissed'
+  | 'failed'
+
 export class WorkflowValidationError extends Error {
   constructor(
     readonly code: WorkflowValidationErrorCode,
@@ -93,6 +100,25 @@ export interface BuiltinToolOption {
 export interface WorkflowRunViewModel extends WorkflowRunRecord {
   sessionId?: string
   pendingApprovals: TuffIntelligenceApprovalTicket[]
+}
+
+export interface WorkflowReviewQueueItem {
+  id: string
+  runId: string
+  workflowId: string
+  workflowName?: string
+  stepId: string
+  stepName?: string
+  capabilityId?: string
+  traceId?: string
+  provider?: string
+  model?: string
+  riskLevel: 'low' | 'medium'
+  text: string
+  preview: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+  createdAt: number
 }
 
 const BUILTIN_TOOL_OPTIONS: BuiltinToolOption[] = [
@@ -167,6 +193,46 @@ function safeJsonStringify(value: unknown): string {
   }
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function normalizeOutputText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+
+  const record = toRecord(value)
+  for (const key of ['text', 'result', 'content', 'summary', 'explanation', 'translatedText']) {
+    const item = record[key]
+    if (typeof item === 'string' && item.trim()) {
+      return item.trim()
+    }
+  }
+
+  if (record.result && typeof record.result === 'object') {
+    const nested = normalizeOutputText(record.result)
+    if (nested) {
+      return nested
+    }
+  }
+
+  if (Object.keys(record).length <= 0) {
+    return ''
+  }
+
+  return safeJsonStringify(record)
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return undefined
+}
+
 function parseJson(
   text: string,
   errorCode: WorkflowValidationErrorCode,
@@ -185,16 +251,26 @@ function parseJson(
 }
 
 function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): WorkflowStepDraft {
+  const defaultInput =
+    kind === 'model'
+      ? '{\n  "capabilityId": "text.chat",\n  "outputFormat": "markdown"\n}'
+      : '{\n  "outputFormat": "markdown"\n}'
+
   return {
     uid: createUid(),
     id: `step-${index + 1}`,
-    name: kind === 'agent' ? `Agent Step ${index + 1}` : `Step ${index + 1}`,
+    name:
+      kind === 'agent'
+        ? `Agent Step ${index + 1}`
+        : kind === 'model'
+          ? `Use Model ${index + 1}`
+          : `Step ${index + 1}`,
     kind,
     instruction: '',
     toolId: '',
     toolSource: 'builtin',
     agentId: kind === 'agent' ? DEFAULT_WORKFLOW_AGENT_ID : '',
-    input: '{\n  "outputFormat": "markdown"\n}',
+    input: defaultInput,
     continueOnError: false
   }
 }
@@ -251,7 +327,10 @@ function createDefaultWorkflowDraft(t: Translate): WorkflowDraft {
 }
 
 function mapStepToDraft(step: WorkflowDefinitionStep, index: number): WorkflowStepDraft {
-  const kind = step.kind === 'tool' || step.kind === 'prompt' ? step.kind : 'agent'
+  const kind =
+    step.kind === 'tool' || step.kind === 'prompt' || step.kind === 'model'
+      ? step.kind
+      : 'agent'
   return {
     uid: createUid(),
     id: step.id || `step-${index + 1}`,
@@ -318,6 +397,63 @@ function extractSessionId(run: WorkflowRunRecord | null | undefined): string | u
   return typeof sessionId === 'string' && sessionId.trim() ? sessionId : undefined
 }
 
+function buildReviewQueueItems(
+  run: WorkflowRunRecord | null | undefined,
+  itemState: Record<string, { status: WorkflowReviewQueueItemStatus; error?: string }>
+): WorkflowReviewQueueItem[] {
+  if (!run) {
+    return []
+  }
+
+  return (run.steps ?? [])
+    .filter((step) => step.status === 'completed' && step.output !== undefined)
+    .map((step, index): WorkflowReviewQueueItem | null => {
+      const text = normalizeOutputText(step.output)
+      if (!text) {
+        return null
+      }
+
+      const output = toRecord(step.output)
+      const input = toRecord(step.input)
+      const metadata = toRecord(step.metadata)
+      const stepId = String(step.workflowStepId || step.id || `step-${index + 1}`)
+      const id = `${run.id}:${stepId}`
+      const state = itemState[id]
+      const status = state?.status ?? 'pending'
+      if (status === 'dismissed') {
+        return null
+      }
+
+      return {
+        id,
+        runId: run.id,
+        workflowId: run.workflowId,
+        workflowName: run.workflowName,
+        stepId,
+        stepName: step.name,
+        capabilityId: firstString(output.capabilityId, input.capabilityId, metadata.capabilityId),
+        traceId: firstString(output.traceId, metadata.traceId),
+        provider: firstString(output.provider, metadata.provider),
+        model: firstString(output.model, metadata.model),
+        riskLevel: 'low',
+        text,
+        preview: text.length > 500 ? `${text.slice(0, 500)}...` : text,
+        status,
+        error: state?.error,
+        createdAt: step.completedAt ?? run.completedAt ?? run.startedAt
+      }
+    })
+    .filter((item): item is WorkflowReviewQueueItem => Boolean(item))
+}
+
+async function writeClipboardText(text: string): Promise<void> {
+  const clipboard = globalThis.navigator?.clipboard
+  if (!clipboard?.writeText) {
+    throw new Error('Clipboard write is not available')
+  }
+  await clipboard.writeText(text)
+}
+
 export function useWorkflowEditor() {
   const { t } = useI18nText()
   const intelligenceSdk = useIntelligenceSdk()
@@ -335,6 +471,8 @@ export function useWorkflowEditor() {
   const executionError = ref<string | null>(null)
   const agents = ref<AgentDescriptor[]>([])
   const sessionState = ref<TuffIntelligenceStateSnapshot | null>(null)
+  const reviewQueueState = ref<Record<string, { status: WorkflowReviewQueueItemStatus; error?: string }>>({})
+  const reviewQueueReplaceConfirmId = ref<string | null>(null)
 
   const agentOptions = computed(() =>
     agents.value.filter((agent) => agent.enabled !== false).sort((a, b) => a.id.localeCompare(b.id))
@@ -343,6 +481,7 @@ export function useWorkflowEditor() {
   const builtinToolOptions = computed(() => BUILTIN_TOOL_OPTIONS)
   const pendingApprovals = computed(() => sessionState.value?.pendingApprovals ?? [])
   const currentSessionId = computed(() => extractSessionId(currentRun.value))
+  const reviewQueueItems = computed(() => buildReviewQueueItems(currentRun.value, reviewQueueState.value))
 
   async function loadAgents(): Promise<void> {
     agents.value = await agentsSdk.listAll()
@@ -429,6 +568,68 @@ export function useWorkflowEditor() {
     currentRun.value = null
     sessionState.value = null
     executionError.value = null
+    reviewQueueReplaceConfirmId.value = null
+  }
+
+  function setReviewQueueItemStatus(
+    itemId: string,
+    status: WorkflowReviewQueueItemStatus,
+    error?: string
+  ): void {
+    reviewQueueState.value = {
+      ...reviewQueueState.value,
+      [itemId]: { status, error }
+    }
+  }
+
+  function getReviewQueueItem(itemId: string): WorkflowReviewQueueItem {
+    const item = reviewQueueItems.value.find((entry) => entry.id === itemId)
+    if (!item) {
+      throw new Error('Review queue item not found')
+    }
+    return item
+  }
+
+  async function copyReviewItemToClipboard(itemId: string): Promise<WorkflowReviewQueueItem> {
+    const item = getReviewQueueItem(itemId)
+    try {
+      await writeClipboardText(item.text)
+      setReviewQueueItemStatus(itemId, 'copied')
+      reviewQueueReplaceConfirmId.value = null
+      return { ...item, status: 'copied' }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setReviewQueueItemStatus(itemId, 'failed', message)
+      throw error
+    }
+  }
+
+  async function replaceClipboardWithReviewItem(
+    itemId: string
+  ): Promise<{ item: WorkflowReviewQueueItem; confirmed: boolean }> {
+    const item = getReviewQueueItem(itemId)
+    if (reviewQueueReplaceConfirmId.value !== itemId) {
+      reviewQueueReplaceConfirmId.value = itemId
+      return { item, confirmed: false }
+    }
+
+    try {
+      await writeClipboardText(item.text)
+      setReviewQueueItemStatus(itemId, 'clipboard_replaced')
+      reviewQueueReplaceConfirmId.value = null
+      return { item: { ...item, status: 'clipboard_replaced' }, confirmed: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setReviewQueueItemStatus(itemId, 'failed', message)
+      throw error
+    }
+  }
+
+  function dismissReviewItem(itemId: string): void {
+    setReviewQueueItemStatus(itemId, 'dismissed')
+    if (reviewQueueReplaceConfirmId.value === itemId) {
+      reviewQueueReplaceConfirmId.value = null
+    }
   }
 
   function buildWorkflowDefinition(): WorkflowDefinition {
@@ -492,7 +693,10 @@ export function useWorkflowEditor() {
         name: stepName,
         kind: step.kind,
         description: step.instruction.trim() || undefined,
-        prompt: step.kind === 'prompt' ? step.instruction.trim() || undefined : undefined,
+        prompt:
+          step.kind === 'prompt' || step.kind === 'model'
+            ? step.instruction.trim() || undefined
+            : undefined,
         toolId: step.kind === 'tool' ? step.toolId.trim() || undefined : undefined,
         toolSource: step.kind === 'tool' ? step.toolSource : undefined,
         agentId: step.kind === 'agent' ? step.agentId.trim() : undefined,
@@ -673,6 +877,8 @@ export function useWorkflowEditor() {
     builtinToolOptions,
     pendingApprovals,
     sessionState,
+    reviewQueueItems,
+    reviewQueueReplaceConfirmId,
     canDeleteCurrent,
     loadAgents,
     loadWorkflows,
@@ -685,6 +891,9 @@ export function useWorkflowEditor() {
     removeTrigger,
     updateToolSource,
     resetCurrentRun,
+    copyReviewItemToClipboard,
+    replaceClipboardWithReviewItem,
+    dismissReviewItem,
     saveWorkflow,
     deleteWorkflow,
     runWorkflow,
