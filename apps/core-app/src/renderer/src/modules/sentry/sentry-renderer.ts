@@ -139,12 +139,13 @@ function updateUserContext(user: { id?: string; username?: string } | null): voi
         return
       }
 
-      // Non-anonymous mode
+      // Non-anonymous mode: only attach the stable account ID.
       if (user && user.id) {
         Sentry.setUser({
           id: user.id,
-          username: user.username || undefined,
-          email: undefined // Never send email
+          username: undefined,
+          email: undefined,
+          ip_address: undefined
         })
       } else {
         Sentry.setUser(null)

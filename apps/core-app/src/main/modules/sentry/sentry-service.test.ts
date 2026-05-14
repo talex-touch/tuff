@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
+import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
 
 vi.mock('electron', () => ({
   app: {
@@ -68,6 +69,21 @@ vi.mock('../network', () => ({
 
 import { SentryServiceModule } from './sentry-service'
 
+type TestableSentryService = {
+  getTelemetryStatsStore: () => {
+    get: () => Promise<TelemetryUploadStatsRecord | null>
+    upsert: ReturnType<typeof vi.fn>
+  }
+  scheduleTelemetryStatsHydration: () => void
+  searchCount: number
+  totalNexusUploads: number
+  failedNexusUploads: number
+  lastNexusUploadTime: number
+  lastTelemetryFailureAt: number
+  lastTelemetryFailureMessage: string
+  persistTelemetryStats: () => Promise<void>
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
@@ -93,6 +109,126 @@ function telemetryRecord(
   }
 }
 
+describe('SentryServiceModule telemetry sanitizer', () => {
+  it('associates signed-in telemetry by user id without sending device fingerprint or sensitive fields', () => {
+    const event = sanitizeNexusTelemetryEvent({
+      eventType: 'search',
+      clientId: 'client-1',
+      userId: 'user_123',
+      platform: 'darwin',
+      version: '1.0.0',
+      searchQuery: 'private search text',
+      searchDurationMs: 120,
+      searchResultCount: 3,
+      providerTimings: {
+        app: 12,
+        file: 34
+      },
+      inputTypes: ['text'],
+      metadata: {
+        sessionId: 'session-1',
+        queryLength: 18,
+        queryText: 'secret query',
+        filePath: '/Users/me/private.txt',
+        providerResults: { app: 1, file: 2 },
+        providerStatus: { app: 'success', file: 'timeout' },
+        providerErrorCount: 0
+      },
+      isAnonymous: false
+    })
+
+    expect(event).toMatchObject({
+      userId: 'user_123',
+      isAnonymous: false,
+      searchQuery: undefined,
+      metadata: {
+        sessionId: 'session-1',
+        queryLength: 18,
+        providerResults: { app: 1, file: 2 },
+        providerStatus: { app: 'success', file: 'timeout' },
+        providerErrorCount: 0
+      }
+    })
+    expect(event).not.toHaveProperty('deviceFingerprint')
+    expect(event?.metadata).not.toHaveProperty('queryText')
+    expect(event?.metadata).not.toHaveProperty('filePath')
+  })
+
+  it('keeps anonymous telemetry anonymous even when a user id is present', () => {
+    const event = sanitizeNexusTelemetryEvent({
+      eventType: 'feature_use',
+      clientId: 'client-1',
+      userId: 'user_123',
+      platform: 'darwin',
+      version: '1.0.0',
+      metadata: {
+        action: 'execute',
+        sourceType: 'app',
+        featureId: 'feature-1',
+        email: 'user@example.com',
+        token: 'secret'
+      },
+      isAnonymous: true
+    })
+
+    expect(event).toMatchObject({
+      userId: undefined,
+      isAnonymous: true
+    })
+    expect(event?.metadata).toEqual({
+      action: 'execute',
+      sourceType: 'app',
+      featureId: 'feature-1'
+    })
+  })
+
+  it('removes Sentry request details, breadcrumbs and stack frame paths before upload', () => {
+    const event = sanitizeSentryEvent({
+      message: 'Failed to open /Users/me/private.txt with token=secret',
+      request: { url: 'https://example.com?token=secret' },
+      breadcrumbs: [{ message: 'secret breadcrumb' }],
+      extra: { token: 'secret' },
+      user: {
+        id: 'user_123',
+        email: 'user@example.com',
+        username: 'name',
+        ip_address: '127.0.0.1'
+      },
+      exception: {
+        values: [
+          {
+            type: 'Error',
+            value: 'private failure from /Users/me/private.txt',
+            stacktrace: {
+              frames: [
+                {
+                  filename: '/Users/me/project/file.ts',
+                  abs_path: '/Users/me/project/file.ts',
+                  context_line: 'const token = "secret"',
+                  function: 'run'
+                }
+              ]
+            }
+          }
+        ]
+      }
+    })
+
+    expect(event.request).toBeUndefined()
+    expect(event.breadcrumbs).toBeUndefined()
+    expect(event.extra).toBeUndefined()
+    expect(event.user).toEqual({
+      id: 'user_123',
+      username: undefined,
+      email: undefined,
+      ip_address: undefined
+    })
+    expect(event.message).toBe('redacted')
+    expect(event.exception?.values?.[0]?.value).toBe('redacted')
+    expect(event.exception?.values?.[0]?.stacktrace?.frames?.[0]).toEqual({ function: 'run' })
+  })
+})
+
 describe('SentryServiceModule telemetry stats hydration', () => {
   it('waits for hydration and preserves startup increments before persisting', async () => {
     const pendingRecord = deferred<TelemetryUploadStatsRecord | null>()
@@ -101,7 +237,7 @@ describe('SentryServiceModule telemetry stats hydration', () => {
       upsert: vi.fn()
     }
 
-    const service = new SentryServiceModule() as unknown as Record<string, any>
+    const service = new SentryServiceModule() as unknown as TestableSentryService
     service.getTelemetryStatsStore = () => store
 
     service.scheduleTelemetryStatsHydration()

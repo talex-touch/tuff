@@ -176,7 +176,7 @@ export const mainStorageRegistry = {
   }),
   [StorageList.SENTRY_CONFIG]: defineEntry<SentryConfig>({
     key: StorageList.SENTRY_CONFIG,
-    defaultValue: { enabled: false, anonymous: false },
+    defaultValue: { enabled: true, anonymous: false },
     normalize: normalizeObject
   }),
   [StorageList.NOTIFICATION_CENTER]: defineEntry<NotificationCenterStore>({
