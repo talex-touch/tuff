@@ -3296,7 +3296,16 @@
       "coreboxUnavailable": "CoreBox 当前不可用，请稍后重试。",
       "toggleFailed": "更新 Feature 状态失败。",
       "reorderFailed": "Feature 排序更新失败。",
-      "featureUnavailable": "该 Feature 当前不可用，请检查插件状态。"
+      "featureUnavailable": "该 Feature 当前不可用，请检查插件状态。",
+      "aiRunning": "正在生成结果...",
+      "aiRetry": "重试",
+      "aiCopy": "复制",
+      "aiCopied": "已复制 AI 结果",
+      "aiCopyFailed": "复制 AI 结果失败",
+      "aiReplaceClipboard": "替换剪贴板",
+      "aiConfirmReplaceClipboard": "确认替换",
+      "aiClipboardReplaced": "已替换剪贴板",
+      "aiNoTrace": "暂无 trace"
     },
     "meta": {
       "defaultGroup": "操作",

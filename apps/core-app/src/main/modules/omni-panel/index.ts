@@ -11,6 +11,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type {
   OmniPanelContextSource,
+  OmniPanelDesktopContextCapsule,
   OmniPanelContextPayload,
   OmniPanelFeatureExecuteErrorCode,
   OmniPanelFeatureIconPayload,
@@ -41,6 +42,7 @@ import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { getSelectionCaptureCapabilityPatch } from '../platform/capability-adapter'
+import { activeAppService } from '../system/active-app'
 import { sendPlatformShortcut } from '../system/desktop-shortcut'
 import { getXdotoolUnavailableReason } from '../system/linux-desktop-tools'
 import { TouchWindow } from '../../core/touch-window'
@@ -65,6 +67,7 @@ import {
   omniPanelHideEvent,
   omniPanelShowEvent
 } from '../../../shared/events/omni-panel'
+import { createDesktopContextCapsule } from '../../../shared/intelligence/desktop-context-capsule'
 import { createLogger } from '../../utils/logger'
 
 const omniPanelLog = createLogger('OmniPanel')
@@ -248,6 +251,42 @@ function normalizeContextSource(value: unknown): {
   return {
     source: 'unknown',
     sourceRaw: raw
+  }
+}
+
+function normalizeSelectionCaptureResult(value: unknown): SelectionCaptureResult {
+  if (!isRecord(value)) {
+    return {
+      text: '',
+      supportLevel: 'best_effort',
+      issueCode: 'failed',
+      issueMessage: 'Selection capture returned an invalid result.'
+    }
+  }
+
+  const supportLevel =
+    value.supportLevel === 'supported' ||
+    value.supportLevel === 'best_effort' ||
+    value.supportLevel === 'unsupported'
+      ? value.supportLevel
+      : 'best_effort'
+  const issueCode =
+    value.issueCode === 'disabled' ||
+    value.issueCode === 'empty' ||
+    value.issueCode === 'failed' ||
+    value.issueCode === 'unsupported'
+      ? value.issueCode
+      : undefined
+  const limitations = Array.isArray(value.limitations)
+    ? value.limitations.filter((item): item is string => typeof item === 'string')
+    : undefined
+
+  return {
+    text: typeof value.text === 'string' ? value.text : '',
+    supportLevel,
+    issueCode,
+    issueMessage: typeof value.issueMessage === 'string' ? value.issueMessage : undefined,
+    limitations
   }
 }
 
@@ -803,14 +842,24 @@ export class OmniPanelModule extends BaseModule {
     let captureResult: SelectionCaptureResult | undefined
 
     if (options?.captureSelection !== false) {
-      captureResult = await this.captureSelectionText()
+      captureResult = normalizeSelectionCaptureResult(await this.captureSelectionText())
       text = captureResult.text
     }
 
+    const capturedAt = Date.now()
+    const capsule = await this.buildDesktopContextCapsule(text, normalizedSource.source, capturedAt)
+
     this.positionWindowNearCursor(targetWindow)
-    targetWindow.window.showInactive()
+    targetWindow.window.show()
+    targetWindow.window.focus()
     this.isVisible = true
-    await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw, captureResult)
+    await this.pushContext(
+      text,
+      normalizedSource.source,
+      normalizedSource.sourceRaw,
+      captureResult,
+      capsule
+    )
     this.notifyFeatureRefresh('show')
   }
 
@@ -852,11 +901,13 @@ export class OmniPanelModule extends BaseModule {
     text: string,
     source: OmniPanelContextSource,
     sourceRaw?: string,
-    selectionCapture?: SelectionCaptureResult
+    selectionCapture?: SelectionCaptureResult,
+    capsule?: OmniPanelDesktopContextCapsule
   ): Promise<void> {
     if (!this.transport) return
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
 
+    const capturedAt = capsule?.capturedAt ?? Date.now()
     const payload: OmniPanelContextPayload = {
       text,
       hasSelection: text.trim().length > 0,
@@ -866,12 +917,51 @@ export class OmniPanelModule extends BaseModule {
       selectionIssueCode: selectionCapture?.issueCode,
       selectionIssueMessage: selectionCapture?.issueMessage,
       selectionLimitations: selectionCapture?.limitations,
-      capturedAt: Date.now()
+      capturedAt,
+      capsule: capsule ?? (await this.buildDesktopContextCapsule(text, source, capturedAt))
     }
     this.lastContext = payload
 
     await this.transport.sendTo(this.panelWindow.window.webContents, omniPanelContextEvent, payload)
     this.notifyFeatureRefresh('context-updated')
+  }
+
+  private async buildDesktopContextCapsule(
+    selectionText: string,
+    source: OmniPanelContextSource,
+    capturedAt: number
+  ): Promise<OmniPanelDesktopContextCapsule> {
+    const clipboardText = this.readClipboardTextForContext()
+    let appName: string | null = null
+    let windowTitle: string | null = null
+
+    try {
+      const activeApp = await activeAppService.getActiveApp({ includeIcon: false })
+      appName = activeApp?.displayName ?? activeApp?.identifier ?? null
+      windowTitle = activeApp?.windowTitle ?? null
+    } catch (error) {
+      omniPanelLog.debug('Failed to capture active app for OmniPanel context capsule', { error })
+    }
+
+    return createDesktopContextCapsule({
+      selectionText,
+      clipboardText,
+      ocrText: undefined,
+      capturedAt,
+      source,
+      appName,
+      windowTitle
+    }) as OmniPanelDesktopContextCapsule
+  }
+
+  private readClipboardTextForContext(): string | undefined {
+    try {
+      const text = clipboard.readText().trim()
+      return text || undefined
+    } catch (error) {
+      omniPanelLog.debug('Failed to read clipboard text for OmniPanel context capsule', { error })
+      return undefined
+    }
   }
 
   private buildFeatureListResponse(): OmniPanelFeatureListResponse {

@@ -53,7 +53,7 @@ const isExecuting = computed(() => props.executingId === props.item.id)
     >
       <span class="OmniPanelActionItem__body">
         <span class="OmniPanelActionItem__icon">
-          <TuffIcon :icon="icon" :size="24" />
+          <TuffIcon :icon="icon" :size="14" />
         </span>
       </span>
       <span class="OmniPanelActionItem__title">{{ item.title }}</span>
@@ -65,7 +65,7 @@ const isExecuting = computed(() => props.executingId === props.item.id)
 <style scoped lang="scss">
 .OmniPanelActionItem {
   position: relative;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--tx-border-color);
   background: var(--tx-fill-color-light);
   overflow: hidden;
@@ -92,13 +92,13 @@ const isExecuting = computed(() => props.executingId === props.item.id)
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 8px 6px;
+  padding: 5px 5px 4px;
 }
 
 .OmniPanelActionItem__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -109,10 +109,10 @@ const isExecuting = computed(() => props.executingId === props.item.id)
 .OmniPanelActionItem__title {
   width: 100%;
   margin: 0;
-  padding: 8px 8px 9px;
+  padding: 5px 4px 6px;
   border-top: 1px solid color-mix(in srgb, var(--tx-border-color) 76%, transparent);
   background: color-mix(in srgb, var(--tx-fill-color-light) 82%, transparent);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--tx-text-color-primary);
   text-align: center;
@@ -124,9 +124,9 @@ const isExecuting = computed(() => props.executingId === props.item.id)
 
 .OmniPanelActionItem__executing {
   position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 11px;
+  top: 4px;
+  right: 6px;
+  font-size: 9px;
   color: var(--tx-text-color-secondary);
   animation: blink 1.2s infinite;
 }

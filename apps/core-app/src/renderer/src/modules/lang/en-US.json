@@ -3304,7 +3304,16 @@
       "coreboxUnavailable": "CoreBox is unavailable right now. Please retry shortly.",
       "toggleFailed": "Failed to update feature status.",
       "reorderFailed": "Failed to reorder features.",
-      "featureUnavailable": "This feature is currently unavailable. Check plugin status."
+      "featureUnavailable": "This feature is currently unavailable. Check plugin status.",
+      "aiRunning": "Generating result...",
+      "aiRetry": "Retry",
+      "aiCopy": "Copy",
+      "aiCopied": "AI result copied",
+      "aiCopyFailed": "Failed to copy AI result",
+      "aiReplaceClipboard": "Replace clipboard",
+      "aiConfirmReplaceClipboard": "Confirm replace",
+      "aiClipboardReplaced": "Clipboard replaced",
+      "aiNoTrace": "No trace yet"
     },
     "meta": {
       "defaultGroup": "Actions",

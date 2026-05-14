@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const {
   getTuffTransportMainMock,
   loggerWarnMock,
+  touchWindowInstances,
   accessibilityClientMock,
   ensureXdotoolAvailableMock,
   isXdotoolAvailableMock,
@@ -17,6 +18,16 @@ const {
     sendToWindow: vi.fn()
   })),
   loggerWarnMock: vi.fn(),
+  touchWindowInstances: [] as Array<{
+    window: {
+      on: ReturnType<typeof vi.fn>
+      hide: ReturnType<typeof vi.fn>
+      show: ReturnType<typeof vi.fn>
+      focus: ReturnType<typeof vi.fn>
+      isVisible: () => boolean
+      isDestroyed: () => boolean
+    }
+  }>,
   accessibilityClientMock: vi.fn(() => true),
   ensureXdotoolAvailableMock: vi.fn(async () => undefined),
   isXdotoolAvailableMock: vi.fn(async () => true),
@@ -54,7 +65,7 @@ vi.mock('node:module', () => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { isPackaged: false },
+  app: { isPackaged: true },
   clipboard: {
     writeText: vi.fn(),
     readText: vi.fn(() => ''),
@@ -121,6 +132,10 @@ vi.mock('../../core/touch-window', () => ({
       webContents: {}
     }
 
+    constructor() {
+      touchWindowInstances.push(this)
+    }
+
     async loadFile(): Promise<void> {}
 
     async loadURL(): Promise<void> {}
@@ -155,6 +170,21 @@ vi.mock('../system/linux-desktop-tools', () => ({
 
 vi.mock('../platform/capability-adapter', () => ({
   getSelectionCaptureCapabilityPatch: getSelectionCaptureCapabilityPatchMock
+}))
+
+vi.mock('../system/active-app', () => ({
+  activeAppService: {
+    getActiveApp: vi.fn(async () => ({
+      identifier: 'com.example.editor',
+      displayName: 'Editor',
+      bundleId: 'com.example.editor',
+      executablePath: '/Applications/Editor.app',
+      processId: 42,
+      platform: 'macos',
+      windowTitle: 'Draft.md',
+      lastUpdated: 1
+    }))
+  }
 }))
 
 vi.mock('../nexus/scene-client', () => ({
@@ -204,6 +234,7 @@ import { getMainConfig } from '../storage'
 
 afterEach(() => {
   vi.clearAllMocks()
+  touchWindowInstances.length = 0
   vi.mocked(getMainConfig).mockReturnValue({})
   runNexusSceneMock.mockResolvedValue(null)
   extractTranslatedTextFromSceneRunMock.mockReturnValue(null)
@@ -239,6 +270,11 @@ describe('OmniPanelModule registry initialization', () => {
     expect(result.changed).toBe(true)
     expect(result.items.map((item) => item.id)).toEqual([
       'builtin.translate',
+      'builtin.ai.translate',
+      'builtin.ai.summarize',
+      'builtin.ai.rewrite',
+      'builtin.ai.explain',
+      'builtin.ai.review',
       'builtin.search',
       'builtin.corebox-search',
       'builtin.copy'
@@ -510,6 +546,31 @@ describe('OmniPanelModule hard-cut transport', () => {
 })
 
 describe('OmniPanel smoke', () => {
+  it('hides when the panel window loses focus', async () => {
+    const module = new OmniPanelModule() as unknown as {
+      ensureWindow: () => Promise<void>
+      panelWindow: { window: { hide: () => void; isVisible: () => boolean; isDestroyed: () => boolean } }
+      isVisible: boolean
+    }
+
+    await module.ensureWindow()
+
+    const panel = touchWindowInstances[0]
+    expect(panel).toBeTruthy()
+    const blurHandler = panel.window.on.mock.calls.find(([event]) => event === 'blur')?.[1] as
+      | (() => void)
+      | undefined
+    expect(blurHandler).toBeTypeOf('function')
+
+    module.panelWindow.window.isVisible = () => true
+    module.isVisible = true
+    panel.window.hide.mockClear()
+    blurHandler?.()
+
+    expect(panel.window.hide).toHaveBeenCalledTimes(1)
+    expect(module.isVisible).toBe(false)
+  })
+
   it('supports show -> execute builtin -> hide flow', async () => {
     const module = new OmniPanelModule() as unknown as {
       show: (options?: { captureSelection?: boolean; source?: string }) => Promise<void>
@@ -520,19 +581,21 @@ describe('OmniPanel smoke', () => {
       }) => Promise<{ success: boolean }>
       featureRegistry: Array<Record<string, unknown>>
       ensureWindow: () => Promise<{
-        window: { showInactive: () => void; isDestroyed: () => boolean }
+        window: { show: () => void; focus: () => void; isDestroyed: () => boolean }
       }>
       positionWindowNearCursor: () => void
-      pushContext: (text: string, source: string) => Promise<void>
+      pushContext: (...args: unknown[]) => Promise<void>
+      buildDesktopContextCapsule: (...args: unknown[]) => Promise<Record<string, unknown>>
       notifyFeatureRefresh: (reason: string) => void
-      captureSelectionText: () => Promise<string>
+      captureSelectionText: () => Promise<{ text: string; supportLevel: string }>
       resolveFeatureItemPayload: (...args: unknown[]) => unknown
       executeBuiltinFeature: (...args: unknown[]) => Promise<{ success: boolean }>
       hide: () => void
       transport: null | { sendTo: () => Promise<void> }
     }
 
-    const showInactiveMock = vi.fn()
+    const showMock = vi.fn()
+    const focusMock = vi.fn()
     const hideMock = vi.fn()
 
     module.transport = null
@@ -545,14 +608,23 @@ describe('OmniPanel smoke', () => {
     ]
     module.ensureWindow = vi.fn(async () => ({
       window: {
-        showInactive: showInactiveMock,
+        show: showMock,
+        focus: focusMock,
         isDestroyed: () => false
       }
     }))
     module.positionWindowNearCursor = vi.fn()
     module.pushContext = vi.fn(async () => {})
+    module.buildDesktopContextCapsule = vi.fn(async () => ({
+      selectionText: 'copied-text',
+      capturedAt: 1,
+      source: 'shortcut'
+    }))
     module.notifyFeatureRefresh = vi.fn()
-    module.captureSelectionText = vi.fn(async () => 'copied-text')
+    module.captureSelectionText = vi.fn(async () => ({
+      text: 'copied-text',
+      supportLevel: 'supported'
+    }))
     module.resolveFeatureItemPayload = vi.fn(
       (item: { id: string; source: string; target: string }) => ({
         ...item,
@@ -569,9 +641,55 @@ describe('OmniPanel smoke', () => {
       source: 'shortcut'
     })
 
-    expect(showInactiveMock).toHaveBeenCalledTimes(1)
+    expect(showMock).toHaveBeenCalledTimes(1)
+    expect(focusMock).toHaveBeenCalledTimes(1)
     expect(result.success).toBe(true)
     expect(hideMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('OmniPanel context capsule', () => {
+  it('pushes transient desktop context capsule without persistence', async () => {
+    const { clipboard } = await import('electron')
+    vi.mocked(clipboard.readText).mockReturnValue('clipboard text')
+    const transport = {
+      sendTo: vi.fn(async (_target: unknown, _event: unknown, _payload: unknown) => undefined)
+    }
+    const module = new OmniPanelModule() as unknown as {
+      transport: typeof transport
+      panelWindow: {
+        window: {
+          isDestroyed: () => boolean
+          webContents: object
+        }
+      }
+      pushContext: (text: string, source: 'manual') => Promise<void>
+      notifyFeatureRefresh: (reason: string) => void
+      lastContext: { capsule?: Record<string, unknown> }
+    }
+
+    module.transport = transport
+    module.panelWindow = {
+      window: {
+        isDestroyed: () => false,
+        webContents: {}
+      }
+    }
+    module.notifyFeatureRefresh = vi.fn()
+
+    await module.pushContext('selected text', 'manual')
+
+    const payload = transport.sendTo.mock.calls[0]?.[2] as unknown as {
+      capsule?: Record<string, unknown>
+    }
+    expect(payload.capsule).toMatchObject({
+      selectionText: 'selected text',
+      clipboardText: 'clipboard text',
+      appName: 'Editor',
+      windowTitle: 'Draft.md',
+      source: 'manual'
+    })
+    expect(module.lastContext.capsule).toMatchObject(payload.capsule!)
   })
 })
 
