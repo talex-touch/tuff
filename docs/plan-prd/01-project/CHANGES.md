@@ -5,6 +5,32 @@
 
 ## 2026-05-14
 
+### feat(plugin): bridge touch-intelligence to handoff sessions
+
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/intelligence.test.ts`
+- `apps/nexus/content/docs/guide/features/plugins/intelligence.{zh,en}.mdc`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `touch-intelligence` 发送 CoreBox AI Ask 前会确保稳定 `corebox_ai_ask_<featureId>` Intelligence Session，成功回答后把最近业务消息写入 `context.conversation`，用于后续恢复/接续。
+  - `text.chat` / `vision.ocr` 调用 metadata 增加 `sessionId`、`handoffSessionId` 与 `handoffSource=corebox.touch-intelligence`，保留原有 `caller/entry/featureId/requestId/inputKinds/capabilityId` 审计字段。
+  - 已验证：`corepack pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"` 通过（1 file / 13 tests）。
+
+### feat(intelligence): add native tool kit foundation
+
+- `packages/tuff-intelligence/src/tools/*`
+- `packages/tuff-intelligence/src/registry/capability-registry.ts`
+- `packages/tuff-intelligence/src/index.ts`
+- `packages/tuff-intelligence/README.md`
+- `packages/tuff-intelligence/package.json`
+- `pnpm-lock.yaml`
+  - 新增 Tuff-native Tool Kit 基础层，提供 `defineTuffTool()`、`createToolKit()`、`ToolKit.register/get/list/invoke/invokeTool()` 与 `toCapabilityManifest()` 兼容桥接。
+  - 工具输入/输出使用 Zod runtime schema 校验；工具调用统一返回结构化结果，并覆盖 `TOOL_NOT_FOUND`、`TOOL_INPUT_INVALID`、`TOOL_OUTPUT_INVALID`、`TOOL_APPROVAL_DENIED`、`TOOL_EXECUTION_FAILED` 错误码。
+  - 审批策略采用风险标记 + 可插拔 approval gate；默认 gate 阻断 `requiresApproval` 或 `high/critical` 工具，自定义 gate 可接入后续 HITL。
+  - `CapabilityRegistry.registerTool()` 支持直接注册 Tuff Tool，并修复 DeepAgent Responses 输入中未授权 system message 进入模型上下文的问题；包内全量测试恢复绿色。
+  - 已验证：`corepack pnpm -C "packages/tuff-intelligence" exec vitest run` 通过（5 files / 16 tests）；`corepack pnpm -C "packages/tuff-intelligence" run lint` 通过；`corepack pnpm -C "packages/tuff-intelligence" run build` 通过。
+
 ### feat(ai): charge Nexus invoke credits and surface usage
 
 - `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
