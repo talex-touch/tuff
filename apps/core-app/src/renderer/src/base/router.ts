@@ -29,6 +29,7 @@ const ROUTE_NAVIGATE_WARN_MS = 200
 const ROUTE_RENDER_WARN_MS = 350
 const isDev = isDevEnv()
 const ROUTE_COMPONENT_LOAD_WARN_MS = 150
+const STORE_ROUTE_CACHE_KEY = 'store-shell'
 
 function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
   const last = Array.isArray(route?.matched) ? route.matched[route.matched.length - 1] : null
@@ -73,7 +74,8 @@ const routes: RouteRecordRaw[] = [
     component: withRouteComponentPerf('/store', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
-      keepAlive: true
+      keepAlive: true,
+      keepAliveKey: STORE_ROUTE_CACHE_KEY
     }
   },
   {
@@ -82,7 +84,8 @@ const routes: RouteRecordRaw[] = [
     component: withRouteComponentPerf('/store/installed', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
-      keepAlive: true
+      keepAlive: true,
+      keepAliveKey: STORE_ROUTE_CACHE_KEY
     }
   },
   {
@@ -91,7 +94,8 @@ const routes: RouteRecordRaw[] = [
     component: withRouteComponentPerf('/store/docs', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
-      keepAlive: true
+      keepAlive: true,
+      keepAliveKey: STORE_ROUTE_CACHE_KEY
     }
   },
   {
@@ -100,7 +104,8 @@ const routes: RouteRecordRaw[] = [
     component: withRouteComponentPerf('/store/cli', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
-      keepAlive: true
+      keepAlive: true,
+      keepAliveKey: STORE_ROUTE_CACHE_KEY
     }
   },
   {
@@ -109,7 +114,9 @@ const routes: RouteRecordRaw[] = [
     component: withRouteComponentPerf('/store/:id', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
-      parentRoute: '/store'
+      parentRoute: '/store',
+      keepAlive: true,
+      keepAliveKey: STORE_ROUTE_CACHE_KEY
     }
   },
   {

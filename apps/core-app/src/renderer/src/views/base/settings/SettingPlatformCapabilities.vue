@@ -12,7 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffIcon from '~/components/base/TuffIcon.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 
@@ -159,7 +159,13 @@ onMounted(() => {
           />
         </div>
       </div>
-      <TxButton variant="flat" :disabled="loading" @click="loadCapabilities">
+      <TxButton
+        class="PlatformCapabilities-Refresh"
+        variant="flat"
+        :disabled="loading"
+        @click="loadCapabilities"
+      >
+        <div class="i-carbon-renew" />
         {{
           loading
             ? t('settings.settingPlatformCapabilities.loading')
@@ -184,34 +190,43 @@ onMounted(() => {
           <span>{{ group.label }}</span>
           <span class="PlatformCapabilities-GroupCount">{{ group.items.length }}</span>
         </div>
-        <TuffBlockSlot
-          v-for="item in group.items"
-          :key="item.id"
-          :title="item.name"
-          :description="item.description"
-          :default-icon="scopeIconMap[item.scope]"
-          :active-icon="scopeIconMap[item.scope]"
-          :icon-size="18"
-        >
-          <template #tags>
-            <TuffStatusBadge
-              size="sm"
-              :text="statusLabel(item.status)"
-              :status="statusTone(item.status)"
-            />
-            <TuffStatusBadge
-              size="sm"
-              :text="supportLabel(item.supportLevel)"
-              :status="supportTone(item.supportLevel)"
-            />
-            <TuffStatusBadge
-              v-if="item.sensitive"
-              size="sm"
-              :text="t('settings.settingPlatformCapabilities.tags.sensitive')"
-              status="warning"
-            />
-          </template>
-          <div class="PlatformCapabilities-Footer">
+        <article v-for="item in group.items" :key="item.id" class="PlatformCapabilities-Item">
+          <div class="PlatformCapabilities-ItemMain">
+            <span class="PlatformCapabilities-Icon">
+              <TuffIcon
+                :icon="{ type: 'class', value: scopeIconMap[item.scope] }"
+                :size="18"
+                :alt="scopeLabel(item.scope)"
+              />
+            </span>
+
+            <div class="PlatformCapabilities-Text">
+              <div class="PlatformCapabilities-TitleRow">
+                <h4>{{ item.name }}</h4>
+                <div class="PlatformCapabilities-Badges">
+                  <TuffStatusBadge
+                    size="sm"
+                    :text="statusLabel(item.status)"
+                    :status="statusTone(item.status)"
+                  />
+                  <TuffStatusBadge
+                    size="sm"
+                    :text="supportLabel(item.supportLevel)"
+                    :status="supportTone(item.supportLevel)"
+                  />
+                  <TuffStatusBadge
+                    v-if="item.sensitive"
+                    size="sm"
+                    :text="t('settings.settingPlatformCapabilities.tags.sensitive')"
+                    status="warning"
+                  />
+                </div>
+              </div>
+              <p>{{ item.description }}</p>
+            </div>
+          </div>
+
+          <div class="PlatformCapabilities-Detail">
             <div class="PlatformCapabilities-MetaRow">
               <span class="PlatformCapabilities-IdBadge">{{ item.id }}</span>
               <span v-if="item.issueCode" class="PlatformCapabilities-IdBadge">
@@ -239,7 +254,7 @@ onMounted(() => {
               </span>
             </div>
           </div>
-        </TuffBlockSlot>
+        </article>
       </div>
     </div>
   </TuffGroupBlock>
@@ -252,7 +267,8 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .PlatformCapabilities-Overview {
@@ -276,24 +292,33 @@ onMounted(() => {
   gap: 8px;
 }
 
+.PlatformCapabilities-Refresh {
+  flex: 0 0 auto;
+}
+
 .PlatformCapabilities-State {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--tx-fill-color-light);
+  margin: 12px 16px 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
   color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
+.PlatformCapabilities-List {
+  padding: 0 0 8px;
+}
+
 .PlatformCapabilities-Group {
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .PlatformCapabilities-GroupHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 6px;
-  margin-bottom: 6px;
+  padding: 0 18px;
+  margin-bottom: 8px;
   font-size: 12px;
   font-weight: 600;
   color: var(--tx-text-color-secondary);
@@ -307,6 +332,86 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.PlatformCapabilities-Item {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(260px, 42%);
+  gap: 20px;
+  align-items: flex-start;
+  min-height: 72px;
+  padding: 14px 18px;
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter) 72%, transparent);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+
+  &:hover {
+    background: color-mix(in srgb, var(--tx-fill-color-light) 52%, transparent);
+  }
+}
+
+.PlatformCapabilities-ItemMain {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.PlatformCapabilities-Icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  margin-top: 1px;
+  border-radius: 10px;
+  color: var(--tx-text-color-primary);
+  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
+}
+
+.PlatformCapabilities-Text {
+  min-width: 0;
+
+  p {
+    margin: 5px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--tx-text-color-secondary);
+  }
+}
+
+.PlatformCapabilities-TitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+
+  h4 {
+    margin: 0;
+    min-width: 0;
+    font-size: 14px;
+    line-height: 1.35;
+    font-weight: 600;
+    color: var(--tx-text-color-primary);
+  }
+}
+
+.PlatformCapabilities-Badges {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.PlatformCapabilities-Detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
 .PlatformCapabilities-IdBadge {
   display: inline-flex;
   align-items: center;
@@ -317,26 +422,24 @@ onMounted(() => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 11px;
   color: var(--tx-text-color-secondary);
-  max-width: 240px;
+  max-width: min(100%, 320px);
+  line-height: 1.35;
   word-break: break-all;
-}
-
-.PlatformCapabilities-Footer {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .PlatformCapabilities-MetaRow {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .PlatformCapabilities-Limitations {
   display: flex;
-  flex-wrap: wrap;
+  align-items: baseline;
   gap: 6px;
+  max-width: 100%;
   font-size: 11px;
   color: var(--tx-text-color-secondary);
 }
@@ -347,11 +450,45 @@ onMounted(() => {
 
 .PlatformCapabilities-LimitationsText {
   line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
+  .PlatformCapabilities-Item {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .PlatformCapabilities-Detail {
+    align-items: flex-start;
+    padding-left: 48px;
+  }
+
+  .PlatformCapabilities-MetaRow {
+    justify-content: flex-start;
+  }
+
+  .PlatformCapabilities-LimitationsText {
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .PlatformCapabilities-Toolbar,
+  .PlatformCapabilities-Item,
+  .PlatformCapabilities-GroupHeader {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .PlatformCapabilities-Detail {
+    padding-left: 0;
+  }
+
   .PlatformCapabilities-IdBadge {
-    max-width: 160px;
+    max-width: 100%;
   }
 }
 </style>
