@@ -8,6 +8,7 @@ import type { DashboardPlugin, DashboardPluginTimelineEvent, DashboardPluginVers
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import { computed, ref } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
+import DashboardAssetIcon from '~/components/dashboard/DashboardAssetIcon.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
 import ReviewOverlayDialog from '~/components/dashboard/ReviewModalOverlay.vue'
 import { TxButton, TxDataTable, TxStatusBadge, TxTag, TxTooltip } from '@talex-touch/tuffex'
@@ -142,10 +143,25 @@ function resolvePluginStatus(status: DashboardPlugin['status']): 'success' | 'wa
 
 function resolveChannelStatus(channel?: DashboardPluginVersion['channel']): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
   if (channel === 'RELEASE')
-    return 'info'
+    return 'success'
   if (channel === 'BETA')
     return 'warning'
   return 'muted'
+}
+
+function resolveToneColor(tone: 'success' | 'warning' | 'danger' | 'info' | 'muted') {
+  switch (tone) {
+    case 'success':
+      return 'var(--tx-color-success)'
+    case 'warning':
+      return 'var(--tx-color-warning)'
+    case 'danger':
+      return 'var(--tx-color-danger)'
+    case 'info':
+      return 'var(--tx-color-primary)'
+    default:
+      return 'var(--tx-text-color-secondary)'
+  }
 }
 
 function resolvePendingReviewStatus(item: PendingReviewItem): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
@@ -609,32 +625,16 @@ async function handleCreatePluginSubmit(data: PluginFormData) {
     else if (isAdmin.value)
       formData.append('isOfficial', 'false')
 
-    const result = await requestJson<{ plugin: { id: string } }>('/api/dashboard/plugins', {
+    if (data.packageFile && data.initialVersion) {
+      formData.append('initialVersion', data.initialVersion)
+      formData.append('initialChannel', data.initialChannel || 'SNAPSHOT')
+      formData.append('initialChangelog', data.initialChangelog || `Initial release v${data.initialVersion}`)
+    }
+
+    await requestJson<{ plugin: { id: string }, initialVersion?: unknown }>('/api/dashboard/plugins', {
       method: 'POST',
       body: formData,
     })
-
-    // Auto-publish initial version if package file was uploaded
-    if (data.packageFile && data.initialVersion) {
-      try {
-        const versionFormData = new FormData()
-        versionFormData.append('version', data.initialVersion)
-        versionFormData.append('channel', data.initialChannel || 'SNAPSHOT')
-        versionFormData.append('changelog', data.initialChangelog || `Initial release v${data.initialVersion}`)
-        versionFormData.append('package', data.packageFile)
-
-        if (homepage.length)
-          versionFormData.append('homepage', homepage)
-
-        await requestJson(`/api/dashboard/plugins/${result.plugin.id}/versions`, {
-          method: 'POST',
-          body: versionFormData,
-        })
-      }
-      catch (versionError) {
-        console.warn('Failed to auto-publish initial version:', versionError)
-      }
-    }
 
     await refreshPlugins()
     toast.success(t('dashboard.sections.plugins.createSuccess', 'Plugin created successfully'))
@@ -1092,10 +1092,13 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
               class="DashboardAssetMetaHeader"
               :title="item.plugin.name"
               :description="item.plugin.summary || item.plugin.slug"
-              :icon-url="item.plugin.iconUrl"
+              :icon-url="null"
               :icon-alt="item.plugin.name"
               :official="false"
             >
+              <template #icon>
+                <DashboardAssetIcon :icon-url="item.plugin.iconUrl" :title="item.plugin.name" :alt="item.plugin.name" />
+              </template>
               <template #title-extra>
                 <span
                   v-if="item.plugin.isOfficial"
@@ -1115,8 +1118,12 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </template>
           <template #cell-submission="{ row: item }">
             <div v-if="item.type === 'version' && item.version" class="flex flex-wrap items-center gap-2">
-              <TxTag :text="`v${item.version.version}`" :type="resolveChannelStatus(item.version.channel)" size="sm" />
-              <TxTag :text="item.version.channel" type="muted" size="sm" />
+              <TxTag
+                :label="`v${item.version.version}`"
+                :color="resolveToneColor(resolveChannelStatus(item.version.channel))"
+                size="sm"
+              />
+              <TxTag :label="item.version.channel" :color="resolveToneColor('muted')" size="sm" />
             </div>
             <TxStatusBadge
               v-else
@@ -1254,10 +1261,13 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 class="DashboardAssetMetaHeader"
                 :title="plugin.name"
                 :description="plugin.summary || plugin.slug"
-                :icon-url="plugin.iconUrl"
+                :icon-url="null"
                 :icon-alt="plugin.name"
                 :official="false"
               >
+                <template #icon>
+                  <DashboardAssetIcon :icon-url="plugin.iconUrl" :title="plugin.name" :alt="plugin.name" />
+                </template>
                 <template #title-extra>
                   <span
                     v-if="plugin.isOfficial"
@@ -1301,8 +1311,8 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 :anchor="{ placement: 'top', showArrow: true }"
               >
                 <TxTag
-                  :text="`v${plugin.latestVersion.version}`"
-                  :type="resolveChannelStatus(plugin.latestVersion.channel)"
+                  :label="`v${plugin.latestVersion.version}`"
+                  :color="resolveToneColor(resolveChannelStatus(plugin.latestVersion.channel))"
                   :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
                   size="sm"
                 />
@@ -1410,6 +1420,11 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
   width: 40px;
   height: 40px;
   border-radius: 12px;
+  background: color-mix(in srgb, var(--tx-fill-color, #f5f7fa) 82%, transparent);
+}
+
+:deep(.DashboardAssetMetaHeader .tx-status-badge__text) {
+  white-space: nowrap;
 }
 
 :deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Title) {

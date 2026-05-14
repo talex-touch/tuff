@@ -35,7 +35,31 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 type InputMode = 'upload' | 'manual'
+type PluginCreateStep = 'package' | 'metadata' | 'content'
+
 const inputMode = ref<InputMode>('upload')
+const activeStep = ref<PluginCreateStep>('package')
+const createSteps = computed<Array<{ key: PluginCreateStep, title: string, description: string }>>(() => [
+  {
+    key: 'package',
+    title: t('dashboard.sections.plugins.assetCreate.steps.package.title', 'Package'),
+    description: t('dashboard.sections.plugins.assetCreate.steps.package.description', 'Upload .tpex or choose manual input.'),
+  },
+  {
+    key: 'metadata',
+    title: t('dashboard.sections.plugins.assetCreate.steps.metadata.title', 'Metadata'),
+    description: t('dashboard.sections.plugins.assetCreate.steps.metadata.description', 'Confirm identifier, name, type, category, and icon.'),
+  },
+  {
+    key: 'content',
+    title: t('dashboard.sections.plugins.assetCreate.steps.content.title', 'Content'),
+    description: t('dashboard.sections.plugins.assetCreate.steps.content.description', 'Complete README and submit for review.'),
+  },
+])
+
+const activeStepIndex = computed(() => createSteps.value.findIndex(item => item.key === activeStep.value))
+const isFirstStep = computed(() => activeStepIndex.value <= 0)
+const isLastStep = computed(() => activeStepIndex.value === createSteps.value.length - 1)
 
 const formData = ref<PluginFormData>({
   slug: '',
@@ -97,6 +121,7 @@ function resetForm() {
   packageHasIcon.value = false
   iconFiles.value = []
   inputMode.value = 'upload'
+  activeStep.value = 'package'
 }
 
 watch(() => props.visible, async (visible) => {
@@ -252,16 +277,27 @@ const displayIconUrl = computed(() => {
 
 const hasIconPreview = computed(() => !!displayIconUrl.value)
 
-const canSubmit = computed(() => {
-  const { slug, name, summary, readme, category } = formData.value
+const hasValidMetadata = computed(() => {
+  const { slug, name, summary, category } = formData.value
   return (
     slug.trim().length > 0
     && PLUGIN_IDENTIFIER_PATTERN.test(slug.trim())
     && name.trim().length > 0
     && summary.trim().length > 0
-    && readme.trim().length > 0
     && isPluginCategoryId(category)
   )
+})
+
+const hasValidContent = computed(() => formData.value.readme.trim().length > 0)
+
+const canSubmit = computed(() => hasValidMetadata.value && hasValidContent.value)
+
+const canContinue = computed(() => {
+  if (activeStep.value === 'package')
+    return !packageLoading.value
+  if (activeStep.value === 'metadata')
+    return hasValidMetadata.value
+  return canSubmit.value
 })
 
 const scrollWrapStyle = computed(() => ({
@@ -330,6 +366,7 @@ watch(scrollAreaHeight, () => {
 })
 
 watch(inputMode, () => scheduleLayoutMeasure())
+watch(activeStep, () => scheduleLayoutMeasure())
 watch([manifestPreview, packageLoading, packageError], () => scheduleLayoutMeasure())
 watch(() => props.maxScrollHeight, () => {
   maxScrollableHeight.value = resolveMaxScrollableHeight()
@@ -354,6 +391,22 @@ onBeforeUnmount(() => {
   viewportResizeHandler = null
 })
 
+function goToPreviousStep() {
+  const previous = createSteps.value[activeStepIndex.value - 1]
+  if (!previous)
+    return
+  activeStep.value = previous.key
+}
+
+function goToNextStep() {
+  if (!canContinue.value)
+    return
+  const next = createSteps.value[activeStepIndex.value + 1]
+  if (!next)
+    return
+  activeStep.value = next.key
+}
+
 function onSubmit() {
   if (!canSubmit.value)
     return
@@ -364,31 +417,55 @@ function onSubmit() {
 <template>
   <div class="AssetPluginFormStep">
     <TxCard variant="plain" background="mask" :radius="18" :padding="16" class="AssetPluginFormStep-Card">
-      <div class="AssetPluginFormStep-Mode">
+      <div class="AssetPluginFormStep-Steps" aria-label="Create plugin steps">
         <button
+          v-for="(item, index) in createSteps"
+          :key="item.key"
           type="button"
-          class="AssetPluginFormStep-ModeBtn"
-          :class="inputMode === 'upload' ? 'is-active' : ''"
-          @click="inputMode = 'upload'"
+          class="AssetPluginFormStep-Step"
+          :class="{
+            'is-active': activeStep === item.key,
+            'is-complete': index < activeStepIndex,
+          }"
+          @click="activeStep = item.key"
         >
-          <span class="i-carbon-upload" />
-          {{ t('dashboard.sections.plugins.form.uploadPackage') }}
-        </button>
-        <button
-          type="button"
-          class="AssetPluginFormStep-ModeBtn"
-          :class="inputMode === 'manual' ? 'is-active' : ''"
-          @click="inputMode = 'manual'"
-        >
-          <span class="i-carbon-edit" />
-          {{ t('dashboard.sections.plugins.form.manualInput') }}
+          <span class="AssetPluginFormStep-StepIndex">
+            <span v-if="index < activeStepIndex" class="i-carbon-checkmark" />
+            <span v-else>{{ index + 1 }}</span>
+          </span>
+          <span class="min-w-0">
+            <span class="AssetPluginFormStep-StepTitle">{{ item.title }}</span>
+            <span class="AssetPluginFormStep-StepDesc">{{ item.description }}</span>
+          </span>
         </button>
       </div>
 
       <div class="AssetPluginFormStep-ScrollWrap" :style="scrollWrapStyle">
         <TxScroll native no-padding class="AssetPluginFormStep-Scroll" style="height: 100%;">
           <form ref="formContentRef" class="AssetPluginFormStep-Form space-y-6" @submit.prevent="onSubmit">
-          <div v-if="inputMode === 'upload'" class="space-y-4">
+          <div v-if="activeStep === 'package'" class="space-y-4">
+            <div class="AssetPluginFormStep-Mode">
+              <button
+                type="button"
+                class="AssetPluginFormStep-ModeBtn"
+                :class="inputMode === 'upload' ? 'is-active' : ''"
+                @click="inputMode = 'upload'"
+              >
+                <span class="i-carbon-upload" />
+                {{ t('dashboard.sections.plugins.form.uploadPackage') }}
+              </button>
+              <button
+                type="button"
+                class="AssetPluginFormStep-ModeBtn"
+                :class="inputMode === 'manual' ? 'is-active' : ''"
+                @click="inputMode = 'manual'"
+              >
+                <span class="i-carbon-edit" />
+                {{ t('dashboard.sections.plugins.form.manualInput') }}
+              </button>
+            </div>
+
+            <div v-if="inputMode === 'upload'" class="space-y-4">
             <div class="flex flex-col gap-2">
               <label class="apple-section-title">
                 {{ t('dashboard.sections.plugins.form.packageUpload') }}
@@ -433,14 +510,20 @@ function onSubmit() {
               </div>
             </div>
 
-            <div v-if="formData.initialVersion" class="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-              <p class="text-xs text-green-700 dark:text-green-300">
-                <span class="i-carbon-checkmark-filled mr-1" />
-                {{ t('dashboard.sections.plugins.form.autoPublishHint', { version: formData.initialVersion }) }}
-              </p>
+              <div v-if="formData.initialVersion" class="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+                <p class="text-xs text-green-700 dark:text-green-300">
+                  <span class="i-carbon-checkmark-filled mr-1" />
+                  {{ t('dashboard.sections.plugins.form.autoPublishHint', { version: formData.initialVersion }) }}
+                </p>
+              </div>
+            </div>
+
+            <div v-else class="rounded-xl border border-dashed border-black/10 bg-black/[0.02] p-5 text-sm text-black/55 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/55">
+              {{ t('dashboard.sections.plugins.assetCreate.manualFirstHint', 'Manual mode skips package parsing. Continue to fill metadata and upload an icon if needed.') }}
             </div>
           </div>
 
+          <template v-if="activeStep === 'metadata'">
           <div class="flex flex-col gap-2">
             <label class="apple-section-title">
               {{ t('dashboard.sections.plugins.form.identifier') }}
@@ -529,7 +612,9 @@ function onSubmit() {
               />
             </div>
           </div>
+          </template>
 
+          <template v-if="activeStep === 'content'">
           <div class="flex flex-col gap-2">
             <label class="apple-section-title">
               {{ t('dashboard.sections.plugins.form.readme') }}
@@ -537,7 +622,7 @@ function onSubmit() {
             <Input
               v-model="formData.readme"
               type="textarea"
-              :rows="6"
+              :rows="8"
               :placeholder="readmePreview || '# My Plugin\n\nDescribe your plugin here...'"
             />
           </div>
@@ -548,16 +633,33 @@ function onSubmit() {
               {{ t('dashboard.sections.plugins.form.isOfficial') }}
             </span>
           </label>
+          </template>
 
-          <div class="pt-4">
-            <TxButton block :disabled="loading || !canSubmit" native-type="submit" class="h-11 rounded-xl">
+          <div class="AssetPluginFormStep-Actions">
+            <TxButton
+              variant="secondary"
+              native-type="button"
+              :disabled="isFirstStep || loading"
+              @click="goToPreviousStep"
+            >
+              {{ t('dashboard.sections.plugins.assetCreate.back', 'Back') }}
+            </TxButton>
+            <TxButton
+              v-if="!isLastStep"
+              native-type="button"
+              :disabled="!canContinue || loading"
+              @click="goToNextStep"
+            >
+              {{ t('common.next', 'Next') }}
+            </TxButton>
+            <TxButton v-else :disabled="loading || !canSubmit" native-type="submit">
               <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
               {{ t('dashboard.sections.plugins.createSubmit') }}
             </TxButton>
-            <p v-if="error" class="mt-2 text-center text-xs text-red-500">
-              {{ error }}
-            </p>
           </div>
+          <p v-if="error" class="mt-2 text-center text-xs text-red-500">
+            {{ error }}
+          </p>
           </form>
         </TxScroll>
       </div>
@@ -574,6 +676,76 @@ function onSubmit() {
 .AssetPluginFormStep-Card {
   width: 100%;
   min-height: 0;
+}
+
+.AssetPluginFormStep-Steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.AssetPluginFormStep-Step {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  padding: 10px;
+  text-align: left;
+  color: rgba(0, 0, 0, 0.58);
+  background: rgba(0, 0, 0, 0.025);
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+
+  .dark & {
+    border-color: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.58);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  &.is-active,
+  &.is-complete {
+    border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 42%, transparent);
+    color: var(--tx-text-color-primary);
+    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 10%, transparent);
+  }
+}
+
+.AssetPluginFormStep-StepIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: currentColor;
+  background: rgba(0, 0, 0, 0.06);
+
+  .dark & {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.AssetPluginFormStep-StepTitle,
+.AssetPluginFormStep-StepDesc {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.AssetPluginFormStep-StepTitle {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.AssetPluginFormStep-StepDesc {
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.72;
 }
 
 .AssetPluginFormStep-Mode {
@@ -639,6 +811,18 @@ function onSubmit() {
   padding: 8px 4px 12px;
 }
 
+.AssetPluginFormStep-Actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  padding-top: 14px;
+
+  .dark & {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
 :deep(.AssetPluginFormStep-Scroll .tx-scroll__content) {
   padding: 0;
   min-height: auto;
@@ -648,6 +832,10 @@ function onSubmit() {
   .AssetPluginFormStep {
     width: 100%;
     padding: 6px 2px 0;
+  }
+
+  .AssetPluginFormStep-Steps {
+    grid-template-columns: 1fr;
   }
 
   .AssetPluginFormStep-ScrollWrap {
