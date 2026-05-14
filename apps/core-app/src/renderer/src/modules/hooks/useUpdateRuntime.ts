@@ -15,7 +15,7 @@ import {
   splitUpdateTag
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
-import { useDownloadSdk, useUpdateSdk } from '@talex-touch/utils/renderer'
+import { isMainWindow, useDownloadSdk, useUpdateSdk } from '@talex-touch/utils/renderer'
 import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
@@ -236,6 +236,10 @@ export function useUpdateRuntime() {
   const version = resolveVersion(startupInfo.value?.version || '0.0.0')
   let settingsCache = getDefaultSettings(version.channel)
 
+  function canShowUpdatePrompt(): boolean {
+    return isMainWindow()
+  }
+
   async function sendRequest<T>(
     channel: string,
     operation: () => Promise<T>,
@@ -435,6 +439,10 @@ export function useUpdateRuntime() {
     release: GitHubRelease,
     options?: { bypassSuppression?: boolean }
   ): Promise<boolean> {
+    if (!canShowUpdatePrompt()) {
+      return false
+    }
+
     const tag = release.tag_name
     if (!updateDialogSession.beginPresentation(tag, options)) {
       return false
@@ -490,6 +498,10 @@ export function useUpdateRuntime() {
   }
 
   async function checkApplicationUpgrade(force = false): Promise<UpdateCheckResult | undefined> {
+    if (!canShowUpdatePrompt()) {
+      return undefined
+    }
+
     try {
       loading.value = true
       error.value = null
@@ -674,6 +686,10 @@ export function useUpdateRuntime() {
   }
 
   function setupUpdateListener(): void {
+    if (!canShowUpdatePrompt()) {
+      return
+    }
+
     if (updateListenerInitialized) {
       return
     }

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 type LoadTargetOptions = {
   withTimeoutImpl?: (promise: Promise<unknown>, timeout: number) => Promise<unknown>
   installImpl?: ReturnType<typeof vi.fn>
+  isMainWindow?: boolean
 }
 
 async function loadTarget(options: LoadTargetOptions = {}) {
@@ -67,6 +68,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
   }))
 
   vi.doMock('@talex-touch/utils/renderer', () => ({
+    isMainWindow: () => options.isMainWindow ?? true,
     useUpdateSdk: () => updateSdk,
     useDownloadSdk: () => downloadSdk
   }))
@@ -190,5 +192,24 @@ describe('useUpdateRuntime', () => {
     expect(result).toBe(true)
     expect(updateSdk.install).toHaveBeenCalledWith({ taskId: 'task-2' })
     expect(toast.success).toHaveBeenCalledWith('settings.settingUpdate.messages.installStarted')
+  })
+
+  it('非主窗口不注册更新提示监听', async () => {
+    const { useUpdateRuntime, updateSdk } = await loadTarget({ isMainWindow: false })
+
+    const runtime = useUpdateRuntime()
+    runtime.setupUpdateListener()
+
+    expect(updateSdk.onAvailable).not.toHaveBeenCalled()
+  })
+
+  it('非主窗口不主动检查并弹出更新提示', async () => {
+    const { useUpdateRuntime, updateSdk } = await loadTarget({ isMainWindow: false })
+
+    const runtime = useUpdateRuntime()
+    const result = await runtime.checkApplicationUpgrade()
+
+    expect(result).toBeUndefined()
+    expect(updateSdk.check).not.toHaveBeenCalled()
   })
 })

@@ -13,7 +13,7 @@ const props = defineProps({
 
 const emit = defineEmits(['updateNow', 'skipVersion', 'remindLater'])
 const close = inject<() => void>('destroy')
-const { t } = useI18n()
+const { t, locale } = useI18n()
 function handleUpdateNow(): void {
   emit('updateNow')
   close?.()
@@ -38,7 +38,15 @@ const publishedAt = computed<string>(() => {
   if (!props.release?.published_at) return ''
 
   const date = new Date(props.release.published_at)
-  return Number.isNaN(date.getTime()) ? props.release.published_at : date.toLocaleString()
+  return Number.isNaN(date.getTime())
+    ? props.release.published_at
+    : new Intl.DateTimeFormat(locale.value, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date)
 })
 </script>
 

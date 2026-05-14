@@ -6,7 +6,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 interface DownloadProgress {
   percentage: number
@@ -54,12 +54,12 @@ const visible = computed({
 
 const dialogTitle = computed(() => {
   if (isDownloadComplete.value) {
-    return `🎉 ${t('update.update_ready')}`
+    return t('update.update_ready')
   }
   if (isDownloading.value) {
-    return `⏬ ${t('update.downloading_update')}`
+    return t('update.downloading_update')
   }
-  return `🎉 ${t('update.new_version_available')}`
+  return t('update.new_version_available')
 })
 
 const isDownloading = computed(() => {
@@ -126,11 +126,15 @@ function convertMarkdownToHtml(markdown: string): string {
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString)
-  return date.toLocaleDateString(undefined, {
+  if (Number.isNaN(date.getTime())) {
+    return dateString
+  }
+
+  return new Intl.DateTimeFormat(locale.value, {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
-  })
+  }).format(date)
 }
 
 function formatSize(bytes: number): string {

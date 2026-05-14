@@ -11,6 +11,7 @@ import VoicePanel from './views/assistant/VoicePanel.vue'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 import OmniPanel from './views/omni-panel/OmniPanel.vue'
+import { createRendererLogger } from './utils/renderer-log'
 
 const props = defineProps<{
   onReady: () => Promise<void>
@@ -20,16 +21,20 @@ const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
 const { startupContext, startupInfo } = useStartupInfo()
 const argMapper = useArgMapper()
+const entranceLog = createRendererLogger('AppEntrance')
 
 const appEntranceMode = computed<AppEntranceMode>(() => {
   return startupContext.value?.windowMode ?? 'MainApp'
+})
+const showUpdateIndicator = computed(() => {
+  return startupContext.value?.windowMode === 'MainApp' && appStates.hasUpdate
 })
 
 async function initializeEntrance(): Promise<void> {
   await entry(props.onReady)
   const mode = appEntranceMode.value
   if (mode === 'CoreBox' && argMapper.rawCoreType && import.meta.env.DEV) {
-    console.warn('[AppEntrance] Unknown coreType, fallback to CoreBox', {
+    entranceLog.warn('Unknown coreType, fallback to CoreBox', {
       rawCoreType: argMapper.rawCoreType
     })
   }
@@ -57,7 +62,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="AppEntrance absolute inset-0" :class="{ 'has-update': appStates.hasUpdate }">
+  <div class="AppEntrance absolute inset-0" :class="{ 'has-update': showUpdateIndicator }">
     <Toaster position="bottom-left" theme="system" rich-colors />
     <template v-if="appEntranceMode === 'MetaOverlay'">
       <MetaOverlay />
