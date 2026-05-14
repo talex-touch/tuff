@@ -230,6 +230,22 @@
   - 复核 `apps/core-app/src/main/modules/plugin/sdkapi-hard-cut-gate.ts`、plugin loader / installer / preflight 与 `packages/utils` plugin channel 表面，确认缺失、非法、低于 floor 或未支持的 `sdkapi` 统一以 `SDKAPI_BLOCKED` 阻断。
   - 复核 `packages/utils/__tests__/plugin-channel-send-sync-hard-cut.test.ts` 与 `plugins/clipboard-history/scripts/assert-no-raw-channels.mjs`，确认 plugin channel `sendSync` 仍是 removed error，renderer SDK 类型面不再暴露 `sendSync`，clipboard-history 构建产物与 CoreApp 内置副本不含已禁止 raw clipboard/system channel 字符串。
   - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/plugin-preflight-helper.test.ts" "src/main/modules/plugin/plugin-installer.test.ts" "src/main/modules/plugin/install-queue.test.ts"` 通过；`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-channel-send-sync-hard-cut.test.ts"` 通过；`node "plugins/clipboard-history/scripts/assert-no-raw-channels.mjs"` 通过；CoreApp plugin 相关 ESLint 与 packages/utils plugin channel ESLint 均通过。
+
+### feat(ai): add translation TTS beta path
+
+- `apps/core-app/src/main/modules/ai/{intelligence-sdk.ts,providers/langchain-openai-compatible-provider.ts,providers/nexus-provider.ts,intelligence-sdk.test.ts}`
+- `apps/core-app/src/main/modules/ai/{intelligence-tts-service.ts,intelligence-tts-service.test.ts,intelligence-module.ts}`
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/tuff-intelligence/src/{client.ts,transport/sdk/domains/intelligence.ts}`
+- `packages/utils/{types/intelligence.ts,intelligence/client.ts,plugin/sdk/intelligence.ts,renderer/hooks/use-intelligence.ts,transport/sdk/domains/intelligence.ts,__tests__/transport-domain-sdks.test.ts}`
+- `plugins/touch-translation/{index.js,index/main.ts,index/types.ts,index/providers/tuffintelligence.ts,src/types/translation.ts,src/providers/tuffintelligence-translate.ts,widgets/translate-panel.vue}`
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
+  - `audio.tts` 从仅配置态推进到 Beta 调用链：`TuffIntelligenceSDK.invoke('audio.tts')` 会分发到 provider `tts()`，Nexus provider 转发到 `/api/v1/intelligence/invoke`，OpenAI-compatible provider 实现 `/audio/speech` 最小 adapter 并返回 data URL 音频。
+  - `DEFAULT_CAPABILITIES['audio.tts']` 标记为 Beta，并优先走 `tuff-nexus-default`，OpenAI `tts-1/tts-1-hd` 作为可选 BYOK provider。
+  - 新增 typed `intelligence:api:tts-speak` / `intelligence.ttsSpeak()` 薄 API，统一封装 `audio.tts` 调用、音频 data URL 归一与进程内短期缓存；当前不引入 SQLite 持久缓存或后台队列。
+  - `touch-translation` 默认 Intelligence-first 翻译结果透传 `traceId/provider/model`；widget 新增“朗读”动作，通过插件 Intelligence SDK 调用 `ttsSpeak`，并把源翻译 `traceId` 放入 metadata，插件侧不接触 provider secret。
+  - 翻译插件权限检查拆分：仅启用外部翻译源时要求 `network.internet`；只使用 Tuff Intelligence 翻译/朗读时只要求 `intelligence.basic`。
+
 ### feat(core-app): add OmniPanel AI writing tools preview
 
 - `apps/core-app/src/shared/events/omni-panel.ts`
