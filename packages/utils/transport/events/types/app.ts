@@ -218,6 +218,12 @@ export interface GetActiveAppRequest {
    * When true, bypasses runtime cache and forces a fresh system query.
    */
   forceRefresh?: boolean
+
+  /**
+   * When true, include the foreground app icon in the response.
+   * Defaults to false because icon resolution may touch native UI APIs.
+   */
+  includeIcon?: boolean
 }
 
 /**

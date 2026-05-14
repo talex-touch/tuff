@@ -1386,7 +1386,10 @@ export class CommonChannelModule extends BaseModule {
         }
       }),
       transport.on(AppEvents.system.getActiveApp, async (payload) => {
-        return await activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
+        return await activeAppService.getActiveApp({
+          forceRefresh: payload?.forceRefresh === true,
+          includeIcon: payload?.includeIcon === true
+        })
       }),
       transport.on<SecureValueGetRequest, string | null>(
         AppEvents.system.getSecureValue,

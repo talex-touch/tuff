@@ -13,6 +13,30 @@
 
 ## 2026-05-14
 
+### fix(core-app): restore Windows PowerShell app source scans
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.test.ts`
+- `apps/core-app/scripts/windows-capability-evidence.ts`
+  - Windows app scanner and capability evidence scripts now pass PowerShell object-literal scripts with newline separators instead of semicolon-joining `[PSCustomObject]@{ ... }`, preventing parser failures that silently dropped `Get-StartApps`, registry, and Start Menu evidence.
+  - Real Windows scan smoke now finds Codex as `shell:AppsFolder\OpenAI.Codex_2p2nqsd0c76g0!App` with `launchKind=uwp`; `windows:capability:verify --requireTargets --requireUwp --strict` passes for the Codex target, with only the local `es.exe` Everything warning remaining.
+  - Added regression coverage so Windows PowerShell scan scripts do not reintroduce the invalid `@{;` form that previously caused Codex/UWP apps to miss the app index.
+
+### fix(core-app): contain prod feature native crash paths
+
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-require.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/system/active-app.ts`
+- `apps/core-app/src/main/modules/database/index.ts`
+- `packages/utils/plugin/sdk/system.ts`
+- `packages/utils/transport/events/types/app.ts`
+  - Plugin runtime now denies direct `electron`, `.node`, `@libsql/*`, `@crosscopy/clipboard`, and `extract-file-icon` imports with `PLUGIN_RUNTIME_DENIED_MODULE`, keeping failures scoped to the plugin/feature.
+  - Plugin `dialog`, `openUrl`, and `clipboard` globals remain compatible but now go through narrow main-process wrappers instead of exposing raw Electron objects.
+  - `system.getActiveApp` adds `includeIcon`; plugin transport and main channel default it to `false`, so `app.getFileIcon` only runs for explicit icon requests.
+  - WAL checkpoint now runs through DB maintenance scheduling and skips when the DB write queue or search-index worker is busy, logging `DB_WAL_CHECKPOINT_SKIPPED_BUSY`.
+  - Feature execution, widget registration, plugin lifecycle, and WAL checkpoint paths emit lightweight breadcrumbs without query text, clipboard text, or full file paths.
+
 ### ci(quality): scope PR lint to changed files
 
 - `package.json`

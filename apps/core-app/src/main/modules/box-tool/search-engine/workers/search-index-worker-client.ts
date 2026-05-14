@@ -235,6 +235,10 @@ export class SearchIndexWorkerClient {
     }
   }
 
+  hasPendingWork(): boolean {
+    return this.pending.size > 0
+  }
+
   shutdown(): void {
     this.terminateWorker({ keepInitState: false })
   }
