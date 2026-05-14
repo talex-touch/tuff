@@ -309,6 +309,32 @@ describe('win app scanner', () => {
     })
   })
 
+  it('keeps Windows PowerShell scan scripts parseable for object literals', async () => {
+    readdirMock.mockResolvedValue([])
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: 'Codex',
+          AppId: 'OpenAI.Codex_2p2nqsd0c76g0!App'
+        }
+      ],
+      registryApps: [
+        {
+          DisplayName: 'Codex',
+          DisplayIcon: 'C:\\Program Files\\Codex\\Codex.exe,0',
+          Publisher: 'OpenAI'
+        }
+      ]
+    })
+
+    const { getApps } = await import('./win')
+    await getApps()
+
+    const scripts = execFileSafeMock.mock.calls.map(([, args]) => args.at(-1))
+    expect(scripts).toEqual(expect.arrayContaining([expect.stringContaining('[PSCustomObject]@{')]))
+    expect(scripts).not.toEqual(expect.arrayContaining([expect.stringContaining('@{;')]))
+  })
+
   it('enriches Windows Store apps with manifest metadata and logo variants', async () => {
     const installLocation = 'C:\\Program Files\\WindowsApps\\Microsoft.WindowsCalculator'
     const manifestPath = `${installLocation}\\AppxManifest.xml`

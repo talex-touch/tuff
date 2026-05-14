@@ -302,7 +302,7 @@ async function getWindowsStoreRecords(): Promise<StartAppRecord[]> {
       '  }',
       '}',
       '$apps | ConvertTo-Json -Compress'
-    ].join('; ')
+    ].join('\n')
 
     const { stdout } = await execFileSafe(
       'powershell',
@@ -550,7 +550,7 @@ async function getRegistryAppRecords(): Promise<RegistryAppRecord[]> {
       '  }',
       '}',
       '$apps | ConvertTo-Json -Compress'
-    ].join('; ')
+    ].join('\n')
 
     const { stdout } = await execFileSafe(
       'powershell',
