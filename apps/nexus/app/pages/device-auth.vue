@@ -23,6 +23,18 @@ const grantType = ref<'short' | 'long'>('short')
 const longTermAvailable = ref(false)
 const longTermAllowed = ref(true)
 const longTermReason = ref<string | null>(null)
+const ipMismatchWarning = ref(false)
+const requestIp = ref<string | null>(null)
+const currentIp = ref<string | null>(null)
+const ipMismatchWarningText = computed(() => {
+  if (requestIp.value && currentIp.value) {
+    return t('auth.deviceAuthIpMismatchWarningWithIp', {
+      requestIp: requestIp.value,
+      currentIp: currentIp.value,
+    })
+  }
+  return t('auth.deviceAuthIpMismatchWarning', 'CLI 发起授权的 IP 与当前浏览器 IP 不一致。你已在设置中允许 CLI 跨 IP 授权，请确认这是你本人操作，切勿随意开启。')
+})
 const longTermReasonText = computed(() => {
   if (longTermReason.value === 'session_window')
     return t('auth.deviceAuthLongSessionWindow', '长期授权需要在重新登录后的 10 分钟内确认。')
@@ -175,6 +187,7 @@ async function loadInfo() {
       longTermAllowed?: boolean
       longTermReason?: string | null
       ipMismatch?: boolean
+      ipMismatchWarning?: boolean
       rejectReason?: string | null
       rejectMessage?: string | null
       requestIp?: string | null
@@ -212,6 +225,9 @@ async function loadInfo() {
       errorMessage.value = t('auth.deviceAuthIpMismatch', '授权来源 IP 与设备 IP 不一致，已拒绝。')
       return
     }
+    ipMismatchWarning.value = info?.ipMismatchWarning ?? false
+    requestIp.value = info?.requestIp ?? null
+    currentIp.value = info?.currentIp ?? null
     deviceName.value = info?.deviceName ?? ''
     devicePlatform.value = info?.devicePlatform ?? ''
     expiresAt.value = info?.expiresAt ?? ''
@@ -342,6 +358,10 @@ onUnmounted(() => {
           {{ deviceName || t('auth.deviceUnknown', '未知设备') }}
           <span v-if="devicePlatform"> · {{ devicePlatform }}</span>
         </p>
+        <div v-if="ipMismatchWarning" class="w-full flex items-start gap-3 border border-yellow-300/25 rounded-2xl bg-yellow-400/10 p-4 text-left text-xs text-yellow-100/95">
+          <span class="i-carbon-warning-alt mt-0.5 shrink-0 text-base text-yellow-200" />
+          <span>{{ ipMismatchWarningText }}</span>
+        </div>
         <div class="flex w-full flex-col gap-2">
           <TxButton
             size="lg"

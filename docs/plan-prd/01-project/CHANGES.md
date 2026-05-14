@@ -13,6 +13,22 @@
 
 ## 2026-05-14
 
+### feat(nexus): allow guarded CLI cross-IP authorization
+
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/dashboard/security-settings.get.ts`
+- `apps/nexus/server/api/dashboard/security-settings.patch.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/app/pages/dashboard/privacy.vue`
+- `apps/nexus/app/pages/device-auth.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+  - 新增账号级安全设置 `allowCliIpMismatch`，默认关闭；Dashboard 隐私/安全设置页提供“允许 CLI 跨 IP 授权”开关，开启前二次确认并明确警告不可随意开启。
+  - CLI 设备授权在请求 IP 与浏览器确认 IP 不一致时，默认仍拒绝；仅当当前账号开启该设置且请求来源为 `clientType=cli` 时放行，并在授权页展示高风险警告。
+  - App / External 授权不受该开关影响，仍保持 IP 不一致拒绝策略。
+  - 验证：`pnpm -C "apps/nexus" run typecheck` 通过（仅保留既有 Nuxt 自动导入重复 warning）。
+
 ### fix(core-app): restore Windows PowerShell app source scans
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
