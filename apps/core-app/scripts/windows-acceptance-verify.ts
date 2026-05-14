@@ -105,7 +105,7 @@ Options:
   --requireTimeAwareRecommendationManualChecks
                                  Require time-aware recommendation manual checks.
   --requireCommonAppTargets <csv>
-                                 Require launched app targets, e.g. WeChat,Codex,Apple Music.
+                                 Require launched app targets, e.g. ChatApp,Codex,Apple Music.
   --compact                      Print single-line JSON.
   --help                         Show this help.
 `)

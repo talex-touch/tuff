@@ -1,8 +1,8 @@
 # Talex Touch 一次性完整修复总方案（统一实施 PRD）
 
-> 更新时间：2026-03-16  
-> 范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`  
-> 目标版本窗口：`2.4.9-beta.4 -> 2.5.0`  
+> 更新时间：2026-03-16
+> 范围：`apps/core-app`、`apps/nexus`、`retired AI app`、`packages/*`、`plugins/*`
+> 目标版本窗口：`2.4.9-beta.4 -> 2.5.0`
 > 决策口径：**单一蓝图 + 并行工作包**，不使用 Phase 1-3 决策叙事。
 
 ## 1. 目标与边界
@@ -50,12 +50,12 @@
 
 ## 3. 统一治理硬约束（必须）
 
-1. 新增兼容债务必须进入清册，并带 `expires_version`。  
-2. 新增 legacy/raw event/legacy import 命中一律门禁失败。  
-3. 新增超长文件或既有超长文件增长一律门禁失败。  
-4. 插件 `sendSync` fallback 只保留过渡告警，不承载新能力。  
-5. renderer storage 写路径统一到 `StorageEvents.app.*`，legacy 仅读兼容/转发。  
-6. `/api/sync/*` 保持 `410` 语义，禁止恢复写路径。  
+1. 新增兼容债务必须进入清册，并带 `expires_version`。
+2. 新增 legacy/raw event/legacy import 命中一律门禁失败。
+3. 新增超长文件或既有超长文件增长一律门禁失败。
+4. 插件 `sendSync` fallback 只保留过渡告警，不承载新能力。
+5. renderer storage 写路径统一到 `StorageEvents.app.*`，legacy 仅读兼容/转发。
+6. `/api/sync/*` 保持 `410` 语义，禁止恢复写路径。
 7. 行为/接口/架构变化必须同步文档矩阵（README/TODO/CHANGES/INDEX/ROADMAP/QUALITY）。
 
 ## 4. 五个并行工作包（统一里程碑验收）
@@ -98,7 +98,7 @@
 
 - 目标：主线与影子应用默认解耦，质量门禁降噪。
 - 产出：
-  - `pnpm-workspace.yaml` 主线显式纳入（`core-app/nexus/pilot`），隔离 `g-*`、`quota-*`；
+  - `pnpm-workspace.yaml` 主线显式纳入（`core-app/nexus`），隔离 `g-*`、`quota-*`；
   - root `lint/lint:fix` 默认仅覆盖主线 apps + packages + plugins。
 - 验收：
   - 默认 lint/typecheck/guard 不再扫描影子应用；
@@ -123,7 +123,7 @@
 | M1 收口执行中 | 五工作包并行推进，按周更新清册与 CHANGES | 各域 owner | 无新增债务、无门禁回退 |
 | M2 版本清退门槛 | 到 `v2.5.0` 前完成主要兼容壳退场 | 架构 owner + 模块 owner | 过期债务归零 |
 
-> Owner 记录方式：清册 `owner` 字段按路径映射（`core-app`/`nexus`/`pilot`/`packages-*`/`plugin-*`）。
+> Owner 记录方式：清册 `owner` 字段按路径映射（`core-app`/`nexus`/`packages-*`/`plugin-*`）。
 
 ## 6. 对外接口影响（发布说明必填）
 

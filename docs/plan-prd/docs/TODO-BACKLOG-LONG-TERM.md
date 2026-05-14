@@ -7,8 +7,8 @@
 
 - [ ] Wave A（Transport）: MessagePort 高频通道迁移与 `sendSync` 清理。
 - [ ] Wave A（Transport）: 兼容层降权与 `transport/legacy` 使用面持续收敛。
-- [ ] Wave B（Pilot）: `apps/pilot` 存量 typecheck/lint 逐批清理。
-- [ ] Wave B（Pilot）: SSE 断线、鉴权与渠道矩阵集成回归补齐。
+- [ ] Wave B（AI）: `retired-ai-app` 存量 typecheck/lint 逐批清理。
+- [ ] Wave B（AI）: SSE 断线、鉴权与渠道矩阵集成回归补齐。
 - [ ] Wave C（SRP）: `plugin-module` 大文件职责拆分。
 - [ ] Wave C（SRP）: `search-core` 与 `file-provider` 继续拆分。
 - [ ] Storage: 配置域 SQLite SoT 迁移与 fallback 回归补齐。
@@ -29,16 +29,16 @@
 - [ ] DivisionBox: prepare/attach/detach 生命周期语义文档深化。
 - [ ] Intelligence Agents: Workflow 编辑器与高级协作能力。
 - [ ] Intelligence Agents: 记忆系统治理与回归补齐。
-- [ ] Pilot: strict 错误码端到端回归（HTTP status + SSE payload）。
-- [ ] Pilot: `/api/chat/sessions/:sessionId/stream` 反向代理持续分块 smoke。
-- [ ] Pilot: `PILOT_STRICT_MODE_UNAVAILABLE` 告警阈值与 7 天趋势看板。
+- [ ] AI: strict 错误码端到端回归（HTTP status + SSE payload）。
+- [ ] AI: `/api/chat/sessions/:sessionId/stream` 反向代理持续分块 smoke。
+- [ ] AI: `AIAPP_STRICT_MODE_UNAVAILABLE` 告警阈值与 7 天趋势看板。
 - [ ] Intelligence: `video.generate` 真实 Provider 运行时与端到端成功路径。
 
-## C1. Pilot / Intelligence 历史完成索引（2026-04-26 下沉）
+## C1. AI / Intelligence 历史完成索引（2026-04-26 下沉）
 
-- [x] Pilot 附件慢链路与 Admin 设置合并已完成：附件投递按 `id > https url > base64`，`/admin/*` 成为管理主入口。
-- [x] Pilot 路由 V2 与工具调用链路已完成：`/api/chat/sessions/:sessionId/stream` 为唯一执行入口，`run.audit`、审批票据、Websearch provider 池与图像意图闭环已落地。
-- [x] Pilot 旧 UI 会话卡片化与单流主链合并已完成：运行态卡片进入消息流，`fromSeq + follow` 按真实可恢复事件推进。
+- [x] AI 附件慢链路与 Admin 设置合并已完成：附件投递按 `id > https url > base64`，`/admin/*` 成为管理主入口。
+- [x] AI 路由 V2 与工具调用链路已完成：`/api/chat/sessions/:sessionId/stream` 为唯一执行入口，`run.audit`、审批票据、Websearch provider 池与图像意图闭环已落地。
+- [x] AI 旧 UI 会话卡片化与单流主链合并已完成：运行态卡片进入消息流，`fromSeq + follow` 按真实可恢复事件推进。
 - [x] Intelligence 多模态配置、Websearch 聚合和模型组能力治理已完成；未实现项仅保留 `video.generate` 真实运行时。
 
 ## D. 发布与生态

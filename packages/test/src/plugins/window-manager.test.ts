@@ -34,12 +34,12 @@ describe('window manager', () => {
       { name: 'Chrome', title: 'A', pid: 1, handle: 10 },
       { name: 'Chrome', title: 'B', pid: 1, handle: 10 },
       { name: 'Code', title: '', pid: 2, handle: 11 },
-      { name: 'WeChat', title: 'Chat', pid: 3, handle: 12 },
+      { name: 'ChatApp', title: 'Chat', pid: 3, handle: 12 },
     ])
 
     expect(items.length).toBe(2)
     expect(items[0].name).toBe('Chrome')
-    expect(items[1].name).toBe('WeChat')
+    expect(items[1].name).toBe('ChatApp')
   })
 
   it('merges recent windows with visible filtering', () => {
@@ -66,5 +66,38 @@ describe('window manager', () => {
     })
 
     expect(order).toEqual(['quick', 'front', 'recent', 'current'])
+  })
+
+  it('builds shell capability diagnostics for window actions', () => {
+    const capability = windowTest.buildActionCapability('window-manager', 'snap-left', {
+      platform: 'win32',
+      window: { handle: '100' },
+    })
+
+    expect(capability).toMatchObject({
+      id: 'system.shell',
+      type: 'shell',
+      platform: 'win32',
+      permission: 'system.shell',
+      status: 'available',
+      audit: {
+        pluginName: 'touch-window-manager',
+        featureId: 'window-manager',
+        actionId: 'snap-left',
+        commandKind: 'powershell',
+        requiresConfirmation: false,
+      },
+    })
+  })
+
+  it('marks unsupported platform diagnostics explicitly', () => {
+    const capability = windowTest.buildShellCapability({
+      featureId: 'window-manager',
+      actionId: 'list-windows',
+      platform: 'linux',
+    })
+
+    expect(capability.status).toBe('unsupported')
+    expect(capability.reason).toBe('platform:linux')
   })
 })

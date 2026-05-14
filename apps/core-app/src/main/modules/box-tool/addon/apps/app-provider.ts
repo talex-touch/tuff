@@ -341,6 +341,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
   private fullSyncRegistered = false
+  private startupIndexHealthCheckStarted = false
   private volatileLastFullSyncTime: number | null = null
   private maintenanceTaskQueue: Promise<void> = Promise.resolve()
   private maintenanceTaskMap = new Map<string, Promise<unknown>>()
@@ -379,6 +380,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.loadAppIndexSettings()
     this._scheduleStartupBackfill()
     this._scheduleFullSync()
+    this._scheduleStartupIndexHealthCheck()
 
     // 注意：补漏/全量同步会在后台触发关键词同步
     this._subscribeToFSEvents()
@@ -997,6 +999,70 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return trackedPromise
   }
 
+  private async getAppSearchIndexHealth(): Promise<{
+    appCount: number
+    indexedItemCount: number
+    healthy: boolean
+  }> {
+    if (!this.dbUtils || !this.searchIndex) {
+      return { appCount: 0, indexedItemCount: 0, healthy: false }
+    }
+
+    const [apps, indexedItemCount] = await Promise.all([
+      this.dbUtils.getFilesByType('app'),
+      this.searchIndex.countByProvider(this.id).catch((error) => {
+        logApp('Failed to count app search index rows', LogStyle.warning, {
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return 0
+      })
+    ])
+
+    return {
+      appCount: apps.length,
+      indexedItemCount,
+      healthy: apps.length > 0 && indexedItemCount > 0
+    }
+  }
+
+  private _scheduleStartupIndexHealthCheck(): void {
+    if (this.startupIndexHealthCheckStarted) return
+    this.startupIndexHealthCheckStarted = true
+
+    setTimeout(() => {
+      void this._ensureStartupIndexHealth()
+    }, 1000)
+  }
+
+  private async _ensureStartupIndexHealth(): Promise<void> {
+    if (!this.dbUtils || !this.searchIndex) {
+      return
+    }
+
+    try {
+      const health = await this.getAppSearchIndexHealth()
+      if (health.healthy) {
+        appProviderLog.debug('App search index health check passed', { meta: health })
+        return
+      }
+
+      logApp(
+        `App search index is empty or incomplete (apps=${chalk.cyan(
+          health.appCount
+        )}, indexed=${chalk.cyan(health.indexedItemCount)}), triggering startup backfill`,
+        LogStyle.warning
+      )
+
+      await this.waitForMainRendererReady()
+      await this._runStartupBackfill()
+      await this._setLastBackfillTime(Date.now())
+    } catch (error) {
+      logApp('Startup app index health check failed', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
   private _scheduleStartupBackfill(): void {
     if (!this.appIndexSettings.startupBackfillEnabled) {
       logApp('Startup backfill disabled, skipping', LogStyle.info)
@@ -1076,7 +1142,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         lastBackfillTime &&
         Date.now() - lastBackfillTime < STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS
       ) {
-        return { allowed: false, reason: 'recent-backfill' }
+        const health = await this.getAppSearchIndexHealth()
+        if (health.healthy) {
+          return { allowed: false, reason: 'recent-backfill' }
+        }
+        logApp(
+          `Ignoring recent-backfill guard because app search index is unhealthy (apps=${chalk.cyan(
+            health.appCount
+          )}, indexed=${chalk.cyan(health.indexedItemCount)})`,
+          LogStyle.warning
+        )
       }
     }
 
@@ -2434,7 +2509,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
-    // Subsequence recall: "nte" → "netease", "wc" → "wechat"
+    // Subsequence recall: "nte" → "netease", "wc" → "chatapp"
     // Catches cases where query chars appear in order but not contiguously
     const SUBSEQ_RECALL_THRESHOLD = 5
     if (candidateIds.size < SUBSEQ_RECALL_THRESHOLD && normalizedQuery.length >= 2) {

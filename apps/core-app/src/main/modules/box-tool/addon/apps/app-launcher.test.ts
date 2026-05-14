@@ -241,10 +241,10 @@ describe('app launcher', () => {
 
     const launchPromise = withPlatform('win32', () =>
       launchApp({
-        name: '微信',
-        path: 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe',
+        name: '聊天应用',
+        path: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe',
         launchKind: 'path',
-        launchTarget: 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+        launchTarget: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe'
       })
     )
 
@@ -252,10 +252,10 @@ describe('app launcher', () => {
     await expect(launchPromise).resolves.toEqual({ status: 'handedOff' })
 
     expect(spawnSafeMock).toHaveBeenCalledWith(
-      'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe',
+      'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe',
       [],
       expect.objectContaining({
-        cwd: 'C:\\Program Files\\Tencent\\Weixin',
+        cwd: 'C:\\Program Files\\Tencent\\ChatApp',
         detached: true,
         stdio: 'ignore',
         windowsHide: true

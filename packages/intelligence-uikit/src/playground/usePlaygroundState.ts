@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 type MockPhase = 'empty' | 'waiting' | 'streaming' | 'tool' | 'done' | 'error'
 type MockBranch = 'success' | 'error'
-type MockSession = 'pilot' | 'tools' | 'markdown'
+type MockSession = 'conversation' | 'tools' | 'markdown'
 type RunMode = 'mock' | 'live'
 type LiveTransport = 'auto' | 'responses' | 'chat.completions'
 
@@ -83,12 +83,12 @@ const DEFAULT_SETTINGS: PlaygroundSettings = {
 
 const sessionConfigs: MockSessionConfig[] = [
   {
-    id: 'pilot',
-    title: 'Pilot extraction',
+    id: 'conversation',
+    title: 'Conversation extraction',
     heading: 'Chat generation mockup',
     eyebrow: 'AI conversation surface',
-    prompt: '把 Pilot 的聊天体验抽成一组可以复用的 AI UI Kit，并保留动画调试入口。',
-    adapterName: 'Pilot Adapter',
+    prompt: '把 AI 聊天体验抽成一组可以复用的 AI UI Kit，并保留动画调试入口。',
+    adapterName: 'Conversation Adapter',
     adapterDescription: 'blocks normalized',
     suggestions: ['拆出消息 hover 工具栏', '补齐 markdown 段落 reveal', '模拟 tool-call collapse'],
     citations: [
@@ -180,7 +180,7 @@ function normalizeErrorMessage(error: unknown): string {
 
 export function usePlaygroundState() {
   const mockStartedAt = Date.now() - 240_000
-  const activeSession = ref<MockSession>('pilot')
+  const activeSession = ref<MockSession>('conversation')
   const branch = ref<MockBranch>('success')
   const timelineIndex = ref(3)
   const isPlaying = ref(false)
@@ -277,7 +277,7 @@ export function usePlaygroundState() {
     return {
       id: 'tool-search',
       type: 'tool',
-      name: session === 'tools' ? 'Tool result pipeline' : session === 'markdown' ? 'Markdown stream parser' : 'Pilot block timeline',
+      name: session === 'tools' ? 'Tool result pipeline' : session === 'markdown' ? 'Markdown stream parser' : 'Conversation block timeline',
       status,
       content: status === 'running'
         ? session === 'tools'
@@ -313,8 +313,8 @@ export function usePlaygroundState() {
               'return <TxAiStreamText motion="fade" streaming />',
             ].join('\n')
           : [
-              'const blocks = mapPilotChatBlocksToAiBlocks(pilotBlocks)',
-              'const message = mapPilotChatMessageToAiMessage(pilotMessage)',
+              'const blocks = mapAIChatBlocksToAiBlocks(conversationBlocks)',
+              'const message = mapAIChatMessageToAiMessage(conversationMessage)',
               '',
               'return <TxAiConversation messages={messages} generating />',
             ].join('\n'),
@@ -338,7 +338,7 @@ export function usePlaygroundState() {
         ? 'tool_result_card'
         : activeSession.value === 'markdown'
           ? 'markdown_stream_result'
-          : 'pilot_run_event_card',
+          : 'ai_run_event_card',
       content: activeSession.value === 'tools'
         ? '工具返回 2 个结果字段，1 个错误分支已准备。'
         : activeSession.value === 'markdown'
@@ -353,12 +353,12 @@ export function usePlaygroundState() {
       ? '正在拆分工具调用状态，先覆盖运行中、成功、失败和取消四种节点。'
       : activeSession.value === 'markdown'
         ? '正在拆分 markdown stream 的显示节奏，先确定逐字、逐段、代码块三层动画。'
-        : '正在拆分 Pilot 聊天页的可复用边界，先确定消息、内容、工具调用三条主线。'
+        : '正在拆分 AI 聊天页的可复用边界，先确定消息、内容、工具调用三条主线。'
     const thinkingText = activeSession.value === 'tools'
       ? '对比 run event card 和 result card 的职责，工具数据只做展示映射，不引入业务请求。'
       : activeSession.value === 'markdown'
         ? '逐字 fade 需要保留空格、标点和换行节奏，同时尊重 reduced motion。'
-        : '对比 ThChat、ChatItem、MilkdownRender 的职责，避免把 Pilot 业务状态带进 UI Kit。'
+        : '对比 ThChat、ChatItem、MilkdownRender 的职责，避免把 AI 业务状态带进 UI Kit。'
     const thoughtText = activeSession.value === 'tools'
       ? '工具卡负责状态语义、摘要和结果壳层；错误分支独立进入，方便调红色状态和恢复操作。'
       : activeSession.value === 'markdown'

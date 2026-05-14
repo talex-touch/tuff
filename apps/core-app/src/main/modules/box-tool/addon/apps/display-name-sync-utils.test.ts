@@ -21,7 +21,7 @@ describe('display-name-sync-utils', () => {
 
   it('allows display name quality upgrades', () => {
     expect(
-      shouldUpdateDisplayName('wechatwebdevtools', '微信开发者工具', {
+      shouldUpdateDisplayName('chatappdevtools', '聊天应用开发者工具', {
         currentQuality: 'filename',
         incomingQuality: 'localized'
       })
@@ -30,7 +30,7 @@ describe('display-name-sync-utils', () => {
 
   it('does not downgrade a localized display name to a lower quality fallback', () => {
     expect(
-      shouldUpdateDisplayName('微信开发者工具', 'wechatwebdevtools', {
+      shouldUpdateDisplayName('聊天应用开发者工具', 'chatappdevtools', {
         currentQuality: 'localized',
         incomingQuality: 'manifest'
       })
@@ -40,12 +40,12 @@ describe('display-name-sync-utils', () => {
   it('detects replacement-character display names from broken decoding', () => {
     expect(isProbablyCorruptedDisplayName('\u03A2\uFFFD\uFFFD')).toBe(true)
     expect(isProbablyCorruptedDisplayName('\u25A1\u25A1\u25A1')).toBe(true)
-    expect(isProbablyCorruptedDisplayName('WeChat')).toBe(false)
+    expect(isProbablyCorruptedDisplayName('ChatApp')).toBe(false)
   })
 
   it('repairs corrupted display names with a clean fallback name', () => {
-    expect(resolveDisplayName('\u03A2\uFFFD\uFFFD', 'WeChat')).toBe('WeChat')
-    expect(shouldUpdateDisplayName('\u03A2\uFFFD\uFFFD', 'WeChat')).toBe(true)
-    expect(shouldUpdateDisplayName('WeChat', '\u03A2\uFFFD\uFFFD')).toBe(false)
+    expect(resolveDisplayName('\u03A2\uFFFD\uFFFD', 'ChatApp')).toBe('ChatApp')
+    expect(shouldUpdateDisplayName('\u03A2\uFFFD\uFFFD', 'ChatApp')).toBe(true)
+    expect(shouldUpdateDisplayName('ChatApp', '\u03A2\uFFFD\uFFFD')).toBe(false)
   })
 })

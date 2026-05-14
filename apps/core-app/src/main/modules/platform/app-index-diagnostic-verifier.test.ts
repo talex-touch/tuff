@@ -133,13 +133,13 @@ describe('app-index-diagnostic-verifier', () => {
       diagnosis: {
         success: false,
         status: 'not-found',
-        target: 'WeChat',
+        target: 'ChatApp',
         reason: 'target-not-found',
         matchedStages: []
       },
       input: {
-        target: 'WeChat',
-        query: 'wechat'
+        target: 'ChatApp',
+        query: 'chatapp'
       },
       app: undefined,
       index: undefined,
@@ -152,8 +152,8 @@ describe('app-index-diagnostic-verifier', () => {
       manualRegression: {
         reusableCaseIds: ['windows-third-party-app-launch'],
         suggestedEvidenceFields: {
-          target: 'WeChat',
-          query: 'wechat',
+          target: 'ChatApp',
+          query: 'chatapp',
           matchedStages: []
         }
       }
@@ -312,49 +312,49 @@ describe('app-index-diagnostic-verifier', () => {
     const verified = verifyAppIndexDiagnosticEvidence(
       buildEvidence({
         input: {
-          target: 'WeChat',
-          query: 'wechat'
+          target: 'ChatApp',
+          query: 'chatapp'
         },
         diagnosis: {
           success: true,
           status: 'found',
-          target: 'WeChat',
+          target: 'ChatApp',
           matchedStages: ['phrase']
         },
         app: {
           id: 9,
-          path: 'D:\\Weixin\\Weixin.exe',
-          name: 'WeChat',
-          displayName: 'WeChat',
+          path: 'D:\\ChatApp\\ChatApp.exe',
+          name: 'ChatApp',
+          displayName: 'ChatApp',
           rawDisplayName: '\u03A2\uFFFD\uFFFD',
           displayNameStatus: 'fallback',
           iconPresent: true,
           launchKind: 'path',
-          launchTarget: 'D:\\Weixin\\Weixin.exe',
-          alternateNames: ['微信'],
+          launchTarget: 'D:\\ChatApp\\ChatApp.exe',
+          alternateNames: ['聊天应用'],
           entryEnabled: true
         },
         index: {
           itemId: 'app:9',
           itemIds: ['app:9'],
-          aliases: ['wechat'],
-          generatedKeywords: ['wechat'],
-          storedKeywords: ['wechat'],
-          storedKeywordEntries: [{ value: 'wechat', priority: 100 }]
+          aliases: ['chatapp'],
+          generatedKeywords: ['chatapp'],
+          storedKeywords: ['chatapp'],
+          storedKeywordEntries: [{ value: 'chatapp', priority: 100 }]
         },
         stages: buildStages('app:9', ['phrase']),
         reindex: {
           success: true,
           status: 'updated',
-          path: 'D:\\Weixin\\Weixin.exe'
+          path: 'D:\\ChatApp\\ChatApp.exe'
         },
         manualRegression: {
           reusableCaseIds: ['windows-third-party-app-launch'],
           suggestedEvidenceFields: {
-            target: 'WeChat',
-            query: 'wechat',
+            target: 'ChatApp',
+            query: 'chatapp',
             launchKind: 'path',
-            launchTarget: 'D:\\Weixin\\Weixin.exe',
+            launchTarget: 'D:\\ChatApp\\ChatApp.exe',
             displayNameStatus: 'fallback',
             iconPresent: true,
             matchedStages: ['phrase']
@@ -379,47 +379,47 @@ describe('app-index-diagnostic-verifier', () => {
       evaluateAppIndexDiagnosticEvidence(
         buildEvidence({
           input: {
-            target: 'WeChat',
-            query: 'wechat'
+            target: 'ChatApp',
+            query: 'chatapp'
           },
           diagnosis: {
             success: true,
             status: 'found',
-            target: 'WeChat',
+            target: 'ChatApp',
             matchedStages: ['phrase']
           },
           app: {
             id: 9,
-            path: 'D:\\Weixin\\Weixin.exe',
-            name: 'WeChat',
+            path: 'D:\\ChatApp\\ChatApp.exe',
+            name: 'ChatApp',
             displayName: '\u03A2\uFFFD\uFFFD',
             iconPresent: true,
             launchKind: 'path',
-            launchTarget: 'D:\\Weixin\\Weixin.exe',
+            launchTarget: 'D:\\ChatApp\\ChatApp.exe',
             alternateNames: [],
             entryEnabled: true
           },
           index: {
             itemId: 'app:9',
             itemIds: ['app:9'],
-            aliases: ['wechat'],
-            generatedKeywords: ['wechat'],
-            storedKeywords: ['wechat'],
-            storedKeywordEntries: [{ value: 'wechat', priority: 100 }]
+            aliases: ['chatapp'],
+            generatedKeywords: ['chatapp'],
+            storedKeywords: ['chatapp'],
+            storedKeywordEntries: [{ value: 'chatapp', priority: 100 }]
           },
           stages: buildStages('app:9', ['phrase']),
           reindex: {
             success: true,
             status: 'updated',
-            path: 'D:\\Weixin\\Weixin.exe'
+            path: 'D:\\ChatApp\\ChatApp.exe'
           },
           manualRegression: {
             reusableCaseIds: ['windows-third-party-app-launch'],
             suggestedEvidenceFields: {
-              target: 'WeChat',
-              query: 'wechat',
+              target: 'ChatApp',
+              query: 'chatapp',
               launchKind: 'path',
-              launchTarget: 'D:\\Weixin\\Weixin.exe',
+              launchTarget: 'D:\\ChatApp\\ChatApp.exe',
               iconPresent: true,
               matchedStages: ['phrase'],
               reindexStatus: 'updated'
@@ -436,49 +436,49 @@ describe('app-index-diagnostic-verifier', () => {
       evaluateAppIndexDiagnosticEvidence(
         buildEvidence({
           input: {
-            target: 'WeChat',
-            query: 'wechat'
+            target: 'ChatApp',
+            query: 'chatapp'
           },
           diagnosis: {
             success: true,
             status: 'found',
-            target: 'WeChat',
+            target: 'ChatApp',
             matchedStages: ['phrase']
           },
           app: {
             id: 9,
-            path: 'D:\\Weixin\\Weixin.exe',
-            name: 'WeChat',
-            displayName: 'WeChat',
-            rawDisplayName: 'WeChat',
+            path: 'D:\\ChatApp\\ChatApp.exe',
+            name: 'ChatApp',
+            displayName: 'ChatApp',
+            rawDisplayName: 'ChatApp',
             displayNameStatus: 'clean',
             iconPresent: false,
             launchKind: 'path',
-            launchTarget: 'D:\\Weixin\\Weixin.exe',
+            launchTarget: 'D:\\ChatApp\\ChatApp.exe',
             alternateNames: [],
             entryEnabled: true
           },
           index: {
             itemId: 'app:9',
             itemIds: ['app:9'],
-            aliases: ['wechat'],
-            generatedKeywords: ['wechat'],
-            storedKeywords: ['wechat'],
-            storedKeywordEntries: [{ value: 'wechat', priority: 100 }]
+            aliases: ['chatapp'],
+            generatedKeywords: ['chatapp'],
+            storedKeywords: ['chatapp'],
+            storedKeywordEntries: [{ value: 'chatapp', priority: 100 }]
           },
           stages: buildStages('app:9', ['phrase']),
           reindex: {
             success: true,
             status: 'updated',
-            path: 'D:\\Weixin\\Weixin.exe'
+            path: 'D:\\ChatApp\\ChatApp.exe'
           },
           manualRegression: {
             reusableCaseIds: ['windows-third-party-app-launch'],
             suggestedEvidenceFields: {
-              target: 'WeChat',
-              query: 'wechat',
+              target: 'ChatApp',
+              query: 'chatapp',
               launchKind: 'path',
-              launchTarget: 'D:\\Weixin\\Weixin.exe',
+              launchTarget: 'D:\\ChatApp\\ChatApp.exe',
               displayNameStatus: 'clean',
               iconPresent: false,
               matchedStages: ['phrase'],

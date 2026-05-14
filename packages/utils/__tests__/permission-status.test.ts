@@ -61,7 +61,7 @@ describe('permission status resolution', () => {
     expect(hasPermission(status, 'fs.read')).toBe(false)
   })
 
-  it('enforces permissions for the historical 260421 sdk marker', () => {
+  it('blocks unsupported sdkapi markers before granting permissions', () => {
     const status = getPluginPermissionStatus(
       'touch-dev-utils',
       260421,
@@ -72,9 +72,9 @@ describe('permission status resolution', () => {
       [],
     )
 
-    expect(status.enforcePermissions).toBe(true)
-    expect(status.missingRequired).toEqual(['fs.read'])
-    expect(generatePermissionIssue(status)?.code).toBe('PERMISSION_MISSING')
+    expect(status.enforcePermissions).toBe(false)
+    expect(hasPermission(status, 'fs.read')).toBe(false)
+    expect(generatePermissionIssue(status)).toBeNull()
   })
 
   it('ignores pre-object manifest permission arrays', () => {

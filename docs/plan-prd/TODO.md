@@ -9,21 +9,21 @@
 
 | 主题 | 当前事实 | 下一动作 | 强制同步文档 |
 | --- | --- | --- | --- |
-| 版本主线 | 当前工作区基线为 `2.4.10-beta.21` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
-| Beta 发布准备 | `2.4.10-beta.21` release notes 已补齐；`build-and-release` 支持 tag push 触发 beta pre-release；OmniPanel Gate 与 Utils Package CI 当前可见阻断已本地收口；macOS beta build 已本地验证 | 用户确认后再提交、推送并创建/推送 `v2.4.10-beta.21` tag 触发发布；完整 `quality:pr` 仍被 `apps/pilot` 既有 lint 债务阻断；未补齐 Windows 真机 evidence 前不得宣称正式 `2.4.10` gate 通过 | `TODO` / `README` / `INDEX` / `CHANGES` / `.github/workflows/README` |
+| 版本主线 | 当前工作区基线为 `2.4.10-beta.22` | `2.4.10` 优先解决 Windows App 索引与基础 legacy/compat；剩余未闭环项进入 `2.4.11` 必解清单 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Beta 发布准备 | `2.4.10-beta.22` release notes 已补齐；`build-and-release` 支持 tag push 触发 beta pre-release；Widget/CLI 最新修复与兼容性复核记录已合入；OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果延续有效 | 用户确认后再提交、推送并创建/推送 `v2.4.10-beta.22` tag 触发发布；完整 `quality:pr` 仍被 `retired-ai-app` 既有 lint 债务阻断；未补齐 Windows 真机 evidence 前不得宣称正式 `2.4.10` gate 通过 | `TODO` / `README` / `INDEX` / `CHANGES` / `.github/workflows/README` |
 | 2.4.10 Windows 发版 gate | 功能实现与本地 verifier 已进入收口态；缺口集中在 Windows 真机 evidence、性能采样与 Release Evidence 写入 | 当前最需要做的是先生成 Windows acceptance collection plan，再按清单补齐 acceptance manifest、常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并写入 Nexus Release Evidence；任一项缺失均阻塞当前版本发版 | `TODO` / `README` / `INDEX` / `CHANGES` / `Quality Baseline` |
-| Windows App 索引 | Start Menu、UWP、registry uninstall 与 `launchArgs/workingDirectory` 已有回归覆盖；应用索引管理页已复用 `settingsSdk.appIndex.*` 接入手动条目管理；Steam 最小 provider 与 `protocol` 启动白名单已实现 | `2.4.10` 完成微信/Codex/Apple Music/Steam/UWP/手动 `.exe/.lnk/.appref-ms` 的 Windows 真机搜索、诊断、启动与 CoreBox 隐藏证据 | `TODO` / `README` / `INDEX` / `CHANGES` |
+| Windows App 索引 | Start Menu、UWP、registry uninstall 与 `launchArgs/workingDirectory` 已有回归覆盖；应用索引管理页已复用 `settingsSdk.appIndex.*` 接入手动条目管理；Steam 最小 provider 与 `protocol` 启动白名单已实现 | `2.4.10` 完成聊天应用/Codex/Apple Music/Steam/UWP/手动 `.exe/.lnk/.appref-ms` 的 Windows 真机搜索、诊断、启动与 CoreBox 隐藏证据 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | Legacy/兼容/结构治理 | 已锁定统一实施 PRD（五工作包并行），清册退场目标统一前移到 `2.4.11` | 清册中的 `2.4.11` 项必须关闭或显式降权，不再新增 legacy 分支/raw channel/旧 storage protocol/旧 SDK bypass | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | CoreApp 平台适配 | `2.4.11` 前 Windows/macOS 为 release-blocking；Linux 保留 documented best-effort | Windows/macOS 完成阻塞级人工回归；Linux 仅记录 `xdotool` / desktop environment 限制与非阻塞 smoke | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | Native transport / 截图 | Rust/xcap screenshot addon 已作为首个能力落地；`NativeEvents` 已扩展为 `capabilities`、`screenshot`、`file-index`、`file`、`media` 五域，默认以 `tfile`/metadata 传输大资源；CoreApp `NativeCapabilitiesModule` 已桥接 fileProvider/Everything status、文件 stat/open/reveal/tfile、图片/视频媒体 metadata/thumbnail；媒体 thumbnail 与 FileProvider 复用统一 thumbnail worker，图片/HEIC 使用 `sharp`，常见视频使用内置 ffmpeg 抽帧，生成结果落本地 cache 并通过 `tfile://` 展示；插件侧强制 `window.capture` / `fs.index` / `fs.read` / `media.read` 权限 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort 真机 smoke；打包预览需确认 `sharp`、ffmpeg/ffprobe 在产物中可执行；后续 OCR/前台窗口/Clipboard 是否收敛到 `native:*:*` 仍需按能力成熟度分批决策 | `TODO` / `README` / `CHANGES` |
-| 跨平台/假实现审计 | 2026-05-13 复核确认 Pilot stat 假值、mock payment 默认成功、touch-image localStorage 历史持久化已收口；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 按测试口径为 `<=265`；相关边界已迁入 ESLint / transport boundary test | `2.4.11` 前继续补 Windows/macOS 真机证据、关闭剩余 legacy/compat 业务债务、梳理 retained raw definition 保留理由，并推进 `plugin-module/file-provider` SRP 拆分 | `report` / `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
-| 架构治理切片 | Transport boundary test 已拆出 raw send / retained raw definition / typed candidate 指标；Pilot stat 假值与 mock 支付默认成功已收口；touch-image 历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 已迁出并降到 `1143` 行；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`deepagent-engine.ts`、`update-system.ts`、`omni-panel/index.ts`、Tuffex `TxFlipOverlay.vue` 与多个 Nexus 模块已完成 SRP 拆分；质量入口已统一为 ESLint、typecheck、targeted tests 与 build | 下一步转入剩余业务闭环与 Windows 真机 evidence；文件行数治理通过 code review 与普通重构任务继续推进 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
-| 2.5.0 AI 板块 | dev/2.5.0 已开始实现登录态 Nexus AI invoke 与 OmniPanel Writing Tools MVP；CoreApp 默认 `tuff-nexus-default` provider 通过 `/api/v1/intelligence/invoke` 调 Nexus Intelligence Provider / Provider Registry mirror 与 secure-store 凭证，未登录显式失败并 fallback 到其它 provider；OmniPanel 已新增划词 AI 翻译/摘要/改写/解释/Review、结果预览面板、transient Desktop Context Capsule、copy/retry/replace clipboard 二次确认与 Nexus invoke smoke | 继续拆分 Workflow `Use Model` 节点、完整 Review Queue 与 3 个 P0 模板；不得扩大到全量多模态或 Scene runtime 全量编排 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 跨平台/假实现审计 | 2026-05-13 深度复核确认 AI stat 假值、mock payment 默认成功、touch-image localStorage 历史持久化已收口；CoreApp 平台能力、sync 密文载荷与 transport boundary 当前稳定；生产 raw send 直连未见新增命中，typed migration candidate 保持 `0`，retained raw definition 测试上限为 `265` | `2.4.10` 先补 Windows/macOS 真机证据；`2.4.11` 关闭 AI 兼容占位成功响应、CLI token 明文 JSON、插件 provider secret 普通 storage、插件 shell capability 诊断、retained raw definition 保留理由，并推进 `plugin-module/file-provider` SRP 拆分 | `report` / `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 架构治理切片 | Transport boundary test 已拆出 raw send / retained raw definition / typed candidate 指标；AI stat 假值与 mock 支付默认成功已收口；touch-image 历史已迁到 plugin storage SDK；`system:permission:*` / `omni-panel:feature:*` 已无损迁到 typed builder；`clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 已迁出并降到 `1143` 行；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`deepagent-engine.ts`、`update-system.ts`、`omni-panel/index.ts`、Tuffex `TxFlipOverlay.vue` 与多个 Nexus 模块已完成 SRP 拆分；质量入口已统一为 ESLint、typecheck、targeted tests 与 build | 下一步转入剩余业务闭环与 Windows 真机 evidence；文件行数治理通过 code review 与普通重构任务继续推进 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
+| 2.5.0 AI 板块 | dev/2.5.0 已开始实现登录态 Nexus AI invoke 与 OmniPanel Writing Tools MVP；CoreBox AI Ask 最小 Stable 切片已接入 `text.chat` 与剪贴板图片 `vision.ocr -> text.chat`；CoreApp 默认 `tuff-nexus-default` provider 通过 `/api/v1/intelligence/invoke` 调 Nexus Intelligence Provider / Provider Registry mirror 与 secure-store 凭证，未登录显式失败并 fallback 到其它 provider；OmniPanel 已新增划词 AI 翻译/摘要/改写/解释/Review、结果预览面板、transient Desktop Context Capsule、copy/retry/replace clipboard 二次确认与 Nexus invoke smoke | 继续拆分 Workflow `Use Model` 节点、完整 Review Queue 与 3 个 P0 模板；不得扩大到全量多模态或 Scene runtime 全量编排 | `TODO` / `README` / `INDEX` / `CHANGES` / `Roadmap` / `Quality Baseline` |
 | CoreApp 启动异步化 | 2026-05-13 静态排查确认启动卡顿主因是 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path，以及 renderer mount 前等待 storage/plugin store；专项报告已归档 | `2.4.10` gate 前只记录不抢主线；后续按 P0 renderer plugin store 后台化、P1 非首屏模块后台化、P2 Database critical/background 拆分、P3 Search provider 后台 ready 推进 | `TODO` / `README` / `INDEX` / `CHANGES` / `startup-analysis-report` |
 | Nexus Provider Registry | `authRef` 已接 D1 密文 secure store，Dashboard 可绑定腾讯云 `secret_pair`，`providers/:id/check` 可执行腾讯云机器翻译 `text.translate` live check，Provider capability 已支持独立 create/update/delete API，Provider 编辑面板新增/更新/删除 capability 已走独立 API 而非整体替换，Scene 卡片可 dry-run/execute 当前绑定并可深编辑 Scene policy 与 binding constraints，Dashboard Admin Provider Registry 加载时已可幂等 seed 系统级 `custom-local-overlay` provider、`corebox.screenshot.translate` Scene 与缺失的 system binding；CoreApp OmniPanel 划词翻译、CoreBox 剪贴板图片 direct 截图翻译及置顶窗口、CoreBox 汇率预览以及 `/api/exchange/latest` / `/api/exchange/convert` 已接普通登录态 Scene runtime API；汇率 `fx.rate.latest/fx.convert` 已有 Scene adapter；Intelligence provider 创建/更新/删除已同步维护 Provider Registry 镜像，能力归一为 `chat.completion` / `text.summarize` / `vision.ocr`，API key 只写 `provider_secure_store`，dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已经由 bridge 合并读取旧表与 registry-only 镜像，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史；OpenAI-compatible AI mirror 已有默认 `vision.ocr` adapter；composed capability 链式编排已支持 `vision.ocr -> text.translate -> overlay.render` 输出传递，置顶窗口可消费本地 `overlay.render` 客户端 overlay payload；Scene run 已写入 `provider_usage_ledger` 安全元数据并可在 Dashboard Usage 视图查询；Provider check 已写入 `provider_health_checks` 并可在 Dashboard Health 视图查询 latency/error/degraded reason；Scene strategy 已最小参与路由，覆盖 `priority/manual`、`least_cost`、`lowest_latency` 与 `balanced` | 补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略，以及 success rate、配额、动态 pricingRef 成本估算等高级策略；生产必须配置 `PROVIDER_REGISTRY_SECURE_STORE_KEY` | `TODO` / `README` / `CHANGES` / Provider Scene PRD |
 | 2.4.8 Gate | OmniPanel 稳定版 MVP 已完成（historical） | 保留历史验收证据，不再作为当前开发主线 | `TODO` / `README` / `INDEX` / `CHANGES` |
 | v2.4.7 Gate | A/B/C/D/E 全部完成（D/E historical） | 保留 run/manifest/sha256 证据链 | `TODO` / `README` / `Roadmap` / `Release Checklist` / `Quality Baseline` / `INDEX` |
-| Pilot Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径；首页默认 DeepAgent，legacy `$completion` 已收口为唯一前端主消费链 | 继续补齐 SSE 反向代理部署烟测与矩阵回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
+| AI Runtime | Node Server + Postgres/Redis + JWT Cookie 主路径；首页默认 DeepAgent，legacy `$completion` 已收口为唯一前端主消费链 | 继续补齐 SSE 反向代理部署烟测与矩阵回归 | `TODO` / `README` / `Roadmap` / `Quality Baseline` / `INDEX` |
 
 ---
 
@@ -48,10 +48,12 @@
 - [ ] 运行最终强门禁：`pnpm -C "apps/core-app" run windows:acceptance:verify`，并确保 case evidence、manual evidence、performance evidence 均非空、非占位且 gate 通过。
 - [ ] 写入 Nexus Release Evidence：拿到 `release:evidence` API key 或管理员登录态后，写入 documentation review、platform matrix、CoreApp targeted tests、Windows 真机 evidence 与性能 evidence；凭证缺失时只能保持 blocked，不得伪造闭环。
 - [ ] 暂缓抢主线的新功能：`2.5.0` AI/workflow、Provider Registry 高级策略、SRP 大拆分只保留规划，不在 Windows release gate 通过前扩大为当前发版 blocker。
+- [x] Widget production precompile gate: `tuff builder` now emits `widgets/.compiled/*.cjs` plus `build.widgets` metadata, and packaged CoreApp prefers precompiled widgets instead of startup runtime compilation.
 - [x] Quick Launch 搜索引擎模式：`touch-browser-open` 新增 `web-search` 入口与 `Google / Bing / DuckDuckGo 搜索引擎` 动态 feature；选择引擎后保持 CoreBox 输入态，实时展示远程 suggestion 与直接搜索项。
 - [x] Quick Launch 搜索引擎补全隔离：进入 `Google / Bing / DuckDuckGo 搜索引擎` 后，域名形态输入仍保持搜索 suggestion 模式，Tab completion 只补 query/suggestion，不再突出 URL 打开候选。
 - [x] Quick Launch 搜索引擎图标：`Google / Bing / DuckDuckGo` engine config 已内置对应 SVG，动态 feature 与搜索 suggestion 结果展示各自引擎图标。
 - [x] Quick Launch 搜索模式旧结果清理：远程 suggestion 仅在进入 `网页搜索` / `搜索引擎` feature 后刷新；active query 变化或清空输入会立即清理旧结果，旧请求晚返回不再覆盖当前搜索项。
+- [x] 插件禁用后 CoreBox push items 门禁：`plugin.feature` / `boxItems` 写入只允许 `ENABLED/ACTIVE` 插件执行，禁用时 abort feature controllers 并按 `meta.pluginName` 清理共享 source 的旧 pushed items。
 - [ ] Quick Launch 真机验收：在 macOS/Windows/Linux 分别验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。
 
 ### 当前治理版发版暂存清单（2026-05-13）
@@ -59,7 +61,7 @@
 > 目标：当前治理版本可按“quality 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
 - [ ] 发版前最小复核：重新执行 `pnpm quality:release` 与 `git diff --check`，并记录命令结果；如完整 build 环境缺失，则至少执行 `pnpm lint`、`pnpm typecheck:all`、`pnpm test:targeted` 并记录阻塞原因。
-- [x] `2.4.10-beta.21` beta 发布准备：补齐 `notes/update_2.4.10-beta.21.{zh,en}.md`，确认 `build-and-release` tag push 会进入 beta pre-release 语义；真实 commit/push/tag 仍需用户确认后执行。
+- [x] `2.4.10-beta.22` beta 发布准备：补齐 `notes/update_2.4.10-beta.22.{zh,en}.md`，确认 `build-and-release` tag push 会进入 beta pre-release 语义；真实 commit/push/tag 仍需用户确认后执行.
 - [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。
 - [ ] Windows 真机 release evidence：补齐 acceptance manifest、Everything target probe、App Index diagnostic、常见 App 启动、复制 app path、本地启动区索引、应用索引管理页手动条目、UWP/Store、Steam 最小支持、更新安装、DivisionBox detached widget、分时推荐、search trace 与 clipboard stress 证据。
 - [ ] 搜索性能验收：在真实设备采样 `200` 次查询，生成 `search-trace-stats/v1`，确认 `first.result/session.end` P95 与 slowRatio 达标。
@@ -69,8 +71,11 @@
 - [ ] Provider Registry 后续：补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略、success rate / quota / dynamic pricingRef 策略。
 - [x] 2.5.0 Nexus AI invoke 首切：新增 Nexus 登录态 `/api/v1/intelligence/invoke`，CoreApp `tuff-nexus-default` provider 通过 app token 自动调用 Nexus AI，未登录时显式失败并进入 SDK fallback。
 - [ ] 2.5.0 AI/workflow 后续：OmniPanel Writing Tools MVP 与 Desktop Context Capsule 最小版已落地；继续拆 Workflow `Use Model` 节点、完整 Review Queue 与 3 个 P0 模板。
-- [ ] CoreApp 启动异步化 P0：按 `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md`，先将 renderer `pluginStore.initialize()` 从 mount 前移到 mount 后后台执行，并记录 renderer mount 前耗时对比。
+- [x] CoreApp 启动异步化 P0：renderer 已将 `pluginStore.initialize()` 从 mount 前 await gate 移到 `app.mount()` 后后台执行，避免 plugin list RPC 与 install source 查询阻塞首屏；新增 renderer shell mount 前耗时与 plugin store 后台初始化耗时日志。已验证 `pnpm -C "apps/core-app" run typecheck:web` 返回 0（tuffex build 阶段仍输出既有 dts/deprecation 噪声）；真机冷/热启动前后耗时对比留到后续平台补证。
 - [ ] CoreApp 启动异步化 P1：将 `ExtensionLoader`、Sentry telemetry hydrate、Intelligence agent/workflow runtime、Update cache、Clipboard OCR/native watcher 等非首屏任务改为 handler-first + background runtime。
+  - 2026-05-14 首个 P1 切片：`ExtensionLoaderModule` 已从 `onInit()` 串行同步读目录 + 逐个 `await loadExtension()` 改为 `onInit()` 只枚举扩展、`start()` 后台加载；destroy 会等待后台任务并卸载已加载扩展。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
+  - 2026-05-14 Sentry 切片：`SentryServiceModule` 的 telemetry upload stats hydrate 已从 `onInit()` await gate 改为后台 hydrate，shutdown flush 前等待已启动 hydrate；hydrate 合并会保留启动期新增计数与更新的 failure/upload 时间，避免后台读取旧记录覆盖内存新统计。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
+  - 2026-05-14 UpdateService 切片：release cache hydrate 已从 `onInit()` await gate 改为后台读取；检查更新前和 destroy flush 前会等待已启动 hydrate，避免空缓存误触发网络请求或旧缓存覆盖新缓存。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
 - [ ] CoreApp 启动异步化 P2：拆分 `DatabaseModule` critical path 与 aux migration/health/WAL 后台任务，确保 `getAuxDb()` fallback primary DB 期间行为稳定。
 - [ ] CoreApp 启动异步化 P3：Everything backend detection、FileProvider search-index worker 与 filesystem watcher 改为后台 ready；搜索侧未 ready 返回 degraded/partial result。
 
@@ -114,7 +119,7 @@
 
 - [ ] `packages/intelligence-uikit` 新包：
   - 范围：`packages/intelligence-uikit/**`、`pnpm-lock.yaml` 中对应 importer、必要 root/package 配置。
-  - 下一步：先跑该包 exports/components/pilot mapping tests；`pnpm-lock.yaml` 不能混入其它功能批次。
+  - 下一步：先跑该包 exports/components/aiapp mapping tests；`pnpm-lock.yaml` 不能混入其它功能批次。
 - [ ] `docs/engineering` 归档迁移：
   - 范围：根目录 `codereview/`、`issues/`、`plan/`、`reports/` 删除与 `docs/engineering/**` 新增、`docs/INDEX.md` / `docs/engineering/todo.md` / `docs/engineering/ARCHIVE.md` 同步。
   - 下一步：需要确认这是预期目录迁移；提交前检查路径引用不再指向旧根目录。
@@ -246,42 +251,42 @@
 - [x] CoreApp retired 入口测试命名清理：
   - CommonChannel / Clipboard / OmniPanel / PluginLoader / Update channel 测试中用于断言旧入口已退役或 sdkapi 阻断的 `legacy` 命名改为 `retired` / `below-floor`。
   - 移除 5 条 stale legacy historical allowlist / registry 行，`legacy-keyword` 降至 `53 files / 167 hits`。
-- [x] Pilot auth retired 入口测试命名清理：
+- [x] AI auth retired 入口测试命名清理：
   - `auth.test.ts` 中旧 header/cookie/bearer fixture 从 `legacy_*` 改为 `retired_*`，继续固定这些直传身份输入不会绕过设备访客身份。
   - 移除对应 stale registry 行，减少 legacy keyword 清册噪声。
-- [x] Pilot workspace/replay fixture 命名清理：
-  - Pilot workspace-only 组件注释从 legacy chat surface 改为 current chat surface，不再把当前首页主消费面描述成旧链路。
-  - `pilot-stream-replay.test.ts` 与 `quota-conversation-snapshot.test.ts` 的样例 payload 从 `legacy` 改为 `retired`，断言语义不变。
+- [x] AI workspace/replay fixture 命名清理：
+  - AI workspace-only 组件注释从 legacy chat surface 改为 current chat surface，不再把当前首页主消费面描述成旧链路。
+  - `aiapp-stream-replay.test.ts` 与 `quota-conversation-snapshot.test.ts` 的样例 payload 从 `legacy` 改为 `retired`，断言语义不变。
   - 移除对应 5 条 stale registry 行，继续压缩 legacy keyword 清册噪声。
-- [x] Pilot channel model sync fixture 命名清理：
-  - `pilot-channel-model-sync.test.ts` 中预置模型样例从 `legacy-model` 改为 `retired-model`，继续固定“已有渠道模型保留 + 新发现模型追加”的同步契约。
+- [x] AI channel model sync fixture 命名清理：
+  - `aiapp-channel-model-sync.test.ts` 中预置模型样例从 `legacy-model` 改为 `retired-model`，继续固定“已有渠道模型保留 + 新发现模型追加”的同步契约。
   - 移除对应 stale registry 行，避免测试样例名继续占用 legacy keyword 清册。
-- [x] Pilot system message fixture 命名清理：
-  - `pilot-system-message-response.test.ts` 中 historical system row 场景从 legacy 命名改为 historical 命名，继续固定 trace projection 覆盖与无 trace 保留历史消息两条契约。
+- [x] AI system message fixture 命名清理：
+  - `aiapp-system-message-response.test.ts` 中 historical system row 场景从 legacy 命名改为 historical 命名，继续固定 trace projection 覆盖与无 trace 保留历史消息两条契约。
   - 移除对应 stale registry 行。
-- [x] Pilot tool gateway fixture 命名清理：
-  - `pilot-tool-gateway.test.ts` 中 unsupported adapter 与 provider-backed websearch 的非分支关键样例从 legacy 改为 retired 命名，继续固定失败分支与 gateway connector 调用契约。
+- [x] AI tool gateway fixture 命名清理：
+  - `aiapp-tool-gateway.test.ts` 中 unsupported adapter 与 provider-backed websearch 的非分支关键样例从 legacy 改为 retired 命名，继续固定失败分支与 gateway connector 调用契约。
   - `legacy-gateway` provider id 仍是生产分支 key，测试和 registry 保留该命中，等待后续实现层 hard-cut。
-- [x] Pilot capability meta 测试命名清理：
-  - `pilot-capability-meta.shared.test.ts` 中测试文案与无效 route combo 样例从 legacy 命名改为历史/retired 口径，继续固定显式 capabilities 优先于历史字段回填的契约。
-  - 生产 `pilot-capability-meta.ts` 的历史字段回填仍登记为真实待 hard-cut 债务。
-- [x] Pilot routing config 测试命名清理：
-  - `pilot-admin-routing-config.capabilities.test.ts` 与 `pilot-admin-routing-config.test.ts` 的旧字段回填测试改为历史字段口径，样例值从 legacy 改为 historical。
+- [x] AI capability meta 测试命名清理：
+  - `aiapp-capability-meta.shared.test.ts` 中测试文案与无效 route combo 样例从 legacy 命名改为历史/retired 口径，继续固定显式 capabilities 优先于历史字段回填的契约。
+  - 生产 `aiapp-capability-meta.ts` 的历史字段回填仍登记为真实待 hard-cut 债务。
+- [x] AI routing config 测试命名清理：
+  - `aiapp-admin-routing-config.capabilities.test.ts` 与 `aiapp-admin-routing-config.test.ts` 的旧字段回填测试改为历史字段口径，样例值从 legacy 改为 historical。
   - 继续覆盖 `intentNanoModelId` / `intentRouteComboId` 等历史兼容字段的迁移行为；生产实现债务仍单独登记。
-- [x] Pilot routing resolver intent 测试命名清理：
-  - `pilot-routing-resolver.intent.test.ts` 中 scenePolicies 优先级与缺失回退测试改为 historical route 口径，继续固定当前路由选择行为。
+- [x] AI routing resolver intent 测试命名清理：
+  - `aiapp-routing-resolver.intent.test.ts` 中 scenePolicies 优先级与缺失回退测试改为 historical route 口径，继续固定当前路由选择行为。
   - 生产历史 route fallback 债务仍由 routing config/resolver 实现登记跟踪。
-- [x] Pilot admin side nav 用户可见文案清理：
+- [x] AI admin side nav 用户可见文案清理：
   - `AdminSideNav.vue` 中 `Legacy CMS 已下线` 改为 `历史 CMS 已下线`，避免后台 UI 继续暴露 legacy 口径。
   - 移除对应 stale registry 行。
-- [x] Pilot workspace chat 注释口径清理：
-  - `usePilotChatPage.ts` 顶部注释从 legacy `$completion` 改为 current `$completion`，避免把当前首页主消费链路误写为旧链路。
+- [x] AI workspace chat 注释口径清理：
+  - `useAIChatPage.ts` 顶部注释从 legacy `$completion` 改为 current `$completion`，避免把当前首页主消费链路误写为旧链路。
   - 文件内 `status_updated` / error 兼容分支仍是真实待 hard-cut 债务，registry 行保留并改为精准说明。
-- [x] Pilot history meta 注释清理：
+- [x] AI history meta 注释清理：
   - `history/index.ts` 中无效 meta 兜底注释从 legacy meta 改为 historical meta，运行时解析行为不变。
   - 移除对应 stale registry 行。
-- [x] Pilot system message production 变量命名清理：
-  - `pilot-system-message-response.ts` 中保留持久化可见 system message 的局部集合从 legacy 命名改为 persisted visible 命名，消息投影与合并行为不变。
+- [x] AI system message production 变量命名清理：
+  - `aiapp-system-message-response.ts` 中保留持久化可见 system message 的局部集合从 legacy 命名改为 persisted visible 命名，消息投影与合并行为不变。
   - 同步移除 `history/index.ts` 的 stale legacy ESLint override 行，保持清册与上一轮清理结果一致。
 - [x] Utils CoreBox DSL icon 注释口径清理：
   - `TuffMeta.icon` TSDoc 从 legacy icon identifier 改为当前 icon identifier，保留轻量 class name 透传语义与接口字段不变。
@@ -289,13 +294,13 @@
   - `apps/core-app/src/renderer/src/modules/lang/i18n.ts` 与 `apps/nexus/app/i18n.config.ts` 的 `legacy: false` 均为 Vue I18n composition-mode 正式 API，不是项目兼容分支；registry 行已改为框架 API 例外说明。
 - [x] CoreApp analytics 搜索文档口径清理：
   - `analytics/README.md` 与 `docs/analytics-data-prd.md` 的搜索性能接入说明从 legacy 搜索改为 current layered fast/deferred provider timing 口径，运行时代码不变。
-- [x] Pilot datasource gateway 非分支 legacy 噪声清理：
-  - `pilot-admin-datasource-config.ts` 注释与测试标题/样例域名/env key 改为 historical/retired 口径；`legacy-gateway` provider id 作为真实生产分支 key 保留。
+- [x] AI datasource gateway 非分支 legacy 噪声清理：
+  - `aiapp-admin-datasource-config.ts` 注释与测试标题/样例域名/env key 改为 historical/retired 口径；`legacy-gateway` provider id 作为真实生产分支 key 保留。
   - ESLint override maxCount 从 production `5 -> 2`、test `8 -> 2` 收紧，registry 行改为明确 branch-key 债务说明。
-- [x] Pilot capability historical field 内部命名清理：
-  - `resolvePilotCapabilities` / `resolvePilotModelCapabilities` / `normalizeCapabilitiesForm` 的内部参数从 legacy 命名改为 historicalFields，保留 `allowWebsearch` 等历史字段回填契约不变。
-  - 移除 `pilot-admin-routing-config.ts`、`usePilotRoutingAdmin.ts`、`pilot-capability-meta.ts` 对应 legacy-keyword registry 行。
-- [x] Pilot quota history payload 局部命名清理：
+- [x] AI capability historical field 内部命名清理：
+  - `resolveAICapabilities` / `resolveAIModelCapabilities` / `normalizeCapabilitiesForm` 的内部参数从 legacy 命名改为 historicalFields，保留 `allowWebsearch` 等历史字段回填契约不变。
+  - 移除 `aiapp-admin-routing-config.ts`、`useAIRoutingAdmin.ts`、`aiapp-capability-meta.ts` 对应 legacy-keyword registry 行。
+- [x] AI quota history payload 局部命名清理：
   - `quota-history-store.ts` 中 base64 历史 payload 迁移的局部变量从 legacy 改为 historicalPayload，JSON 迁移行为不变。
   - 移除对应 legacy-keyword historical allowlist / registry 行。
 - [x] CoreApp download migration guide wording 清理：
@@ -305,13 +310,13 @@
   - 移除 runtime repair 实现与测试对应 legacy-keyword historical allowlist / registry 行。
 - [x] Packages test tsconfig 注释口径清理：
   - `packages/test/tsconfig.json` 的 TypeScript 模板注释从 legacy experimental decorators 改为 TypeScript experimental decorators，不改变编译配置。
-- [x] Pilot channel removed adapter hard-cut：
-  - `pilot-admin-channel-config.ts` 不再把旧 adapter 输入值静默归一为 `openai`；未知 adapter 会作为 invalid channel 被拒绝保存/加载，并在 rejected channels 中标记 `adapter`。
+- [x] AI channel removed adapter hard-cut：
+  - `aiapp-admin-channel-config.ts` 不再把旧 adapter 输入值静默归一为 `openai`；未知 adapter 会作为 invalid channel 被拒绝保存/加载，并在 rejected channels 中标记 `adapter`。
   - 移除对应 legacy historical allowlist / registry 行。
   - `legacy-keyword` 官方统计降至 `7 files / 10 hits`。
-- [x] Pilot stream status event hard-cut：
+- [x] AI stream status event hard-cut：
   - `createTitleSseResponse()` 不再发送 `status_updated` 状态事件，标题流只输出 completion chunks + `[DONE]`。
-  - `usePilotChatPage.ts` 删除 `status_updated` 与 `error + TOOL_APPROVAL_REQUIRED` 旧事件兼容分支，审批等待只走当前 `turn.approval_required` 事件。
+  - `useAIChatPage.ts` 删除 `status_updated` 与 `error + TOOL_APPROVAL_REQUIRED` 旧事件兼容分支，审批等待只走当前 `turn.approval_required` 事件。
   - 移除对应 legacy historical allowlist / registry 行。
   - `legacy-keyword` 官方统计降至 `6 files / 9 hits`。
 - [x] Tuffex DataTable sorting accessibility baseline：
@@ -484,8 +489,8 @@
   - 新增 `scripts/lib/legacy-keyword-exceptions.mjs`，仅过滤 Vue I18n `legacy: false` 固定 API 字段、DeepAgent 上游 `legacy protocol` 错误文本签名、`packages/utils` 负向 lint 禁止项。
   - 移除对应 5 条 legacy historical allowlist / registry 行，真实生产分支 key、迁移读取路径与文件名债务仍保留清册登记。
   - `legacy-keyword` 官方统计降至 `12 files / 18 hits`。
-- [x] Pilot websearch provider id hard-cut：
-  - 历史 `gatewayBaseUrl/apiKeyRef` 字段 hydration 时直接映射到当前 `searxng-main` provider，`pilot-tool-gateway` 不再按 `legacy-gateway` id 分支选择 connector。
+- [x] AI websearch provider id hard-cut：
+  - 历史 `gatewayBaseUrl/apiKeyRef` 字段 hydration 时直接映射到当前 `searxng-main` provider，`aiapp-tool-gateway` 不再按 `legacy-gateway` id 分支选择 connector。
   - 移除 datasource / tool gateway 实现与测试对应 4 条 legacy historical allowlist / registry 行。
   - `legacy-keyword` 官方统计降至 `8 files / 11 hits`。
 - [x] Nexus team context 测试清册噪声清理：
@@ -512,7 +517,7 @@
 - [x] Unplugin CLI shim 测试清册噪声清理：
   - `cli-shim.test.ts` 的测试描述改为 `retired cli shim`，继续固定 deprecated wrapper 只输出弃用提示并转发到 `tuff-cli`。
   - 移除对应 legacy-keyword historical allowlist / registry 行；文件名自身仍作为 compat-file 清册项保留，等待 `2.4.11` 退场窗口处理。
-- [x] Pilot route/model admin UI 清册噪声清理：
+- [x] AI route/model admin UI 清册噪声清理：
   - `route-combos.vue` 与 `model-groups.vue` 中“当前保存值已禁用/不存在”的临时选项状态从 `legacyStatus` 改为 `retiredStatus`，保留 disabled placeholder 展示逻辑。
   - 移除对应 legacy historical allowlist / registry 行。
 - [x] PermissionStore SQLite-only 测试清册噪声清理：
@@ -763,7 +768,7 @@
   - 已补定向回归：sync crypto/wire、AccountStorage token 不落盘、renderer platform 优先级、legacy language migration。
   - 迁移读取内部标记已改为 `requiresMigrationRewrite`，并清理测试文案噪声；`legacy-boundary` 与 ESLint compatibility boundary rules 重新通过。
   - ESLint compatibility boundary rules 已移除无当前扫描命中的 cleanup candidate 行；`pnpm lint` 当前通过且无 cleanup warning。
-  - `compat-file` 扫描已将 `compat`、`shim/shims` 收紧为独立命名段，并对 declaration-only `.d.ts` 排除 `shim` 噪声；移除 `ShimmerText.vue`、`shims*.d.ts` 与 `langchain-openai-compatible-provider.ts` 的误伤登记；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名，当前真实 `compat-file` 降至 `5`。
+  - `compat-file` 扫描已将 `compat`、`shim/shims` 收紧为独立命名段，并对 declaration-only `.d.ts` 排除 `shim` 噪声；移除 `ShimmerText.vue`、`shims*.d.ts` 与 `langchain-openai-compatible-provider.ts` 的误伤登记；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，AI `aiapp-compat-*` 已硬切为领域服务命名，当前真实 `compat-file` 降至 `5`。
   - 下载迁移 progress/result push 事件已进入 shared typed `DownloadEvents.migration.progress/result` registry，`MigrationProgress.vue` 不再本地 `defineRawEvent('download:migration-*')`。
   - Language localStorage snapshot 迁移读取路径已硬切，初始化只读取 typed app settings / browser / Intl；旧 `app-language` 与 `app-follow-system-language` 仅保留 retired key cleanup，不再作为偏好来源。
   - CoreApp renderer storage facade、Tuffex 集成策略与权限页 SDK blocked warning 的兼容命名噪声已清理，不改变运行时行为。
@@ -777,19 +782,19 @@
   - [x] 2026-05-06 raw IPC 底座冻结：`@main-process-message` / `@plugin-process-message` 集中到内部 adapter，renderer `window.touchChannel` 仅保留 deprecated bootstrap bridge；新增 ESLint runtime boundary rules 拦截裸 IPC、宽松 WebPreferences、旧 i18n 与旧 `/api/sync/*`。
   - [x] 2026-05-06 跨平台 capability 合同补强：macOS Automation、Windows PowerShell、Linux `xdotool`、native share mail-only 与 permission deep-link degraded/unsupported path 均有 `issueCode/reason/limitations` 回归。
   - [x] 2026-05-10 跨平台兼容与占位实现审计报告已落地：`docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md`。
-  - [x] 2026-05-12 复核报告已落地：`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`；旧报告中的 Pilot stat、payment mock、touch-image storage 三项已按代码复核为收口态，当前剩余重点转为 Windows/macOS 真实证据、`compat-file=5`、retained raw definition 保留理由、CLI token 明文 JSON 与 `plugin-module/file-provider` SRP 拆分。
+  - [x] 2026-05-12 复核报告已落地：`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`；旧报告中的 AI stat、payment mock、touch-image storage 三项已按代码复核为收口态，当前剩余重点转为 Windows/macOS 真实证据、`compat-file=5`、retained raw definition 保留理由、CLI token 明文 JSON 与 `plugin-module/file-provider` SRP 拆分。
   - [ ] 插件视图二阶段硬化：在插件 SDK/Surface 兼容验证后，把可迁移插件从 `compat-plugin-view` 逐步切到 `trusted-plugin-view`。
   - [ ] Linux documented best-effort：补齐真机 smoke 与 `xdotool` / desktop environment 用户提示截图证据。
 - [ ] CoreBox 第三方 App 非阻塞启动 Windows 真机验证：
   - 验证 `shortcut` 保留 `launchArgs / workingDirectory` 并在 CoreBox 立即隐藏后后台启动。
   - 验证 `uwp` 继续通过 `explorer.exe shell:AppsFolder\\...` handoff，早期失败会触发系统通知。
   - 2026-04-22 本地回归已补：`app-provider.test.ts` 覆盖 `shortcut` / `uwp` `onExecute` 异步 handoff，不等待后台观察窗口即可返回；仍需 Windows 真机补“窗口已隐藏 + 实际启动体验”。
-  - 2026-05-05 合并回归：Windows 应用索引补坏 `display_name` 回退、`Get-StartApps` 绝对路径桌面应用识别、Everything 后端尝试错误与 active-app 精简错误日志；仍需真机验证微信/Codex/Apple Music 搜索与启动。
+  - 2026-05-05 合并回归：Windows 应用索引补坏 `display_name` 回退、`Get-StartApps` 绝对路径桌面应用识别、Everything 后端尝试错误与 active-app 精简错误日志；仍需真机验证聊天应用/Codex/Apple Music 搜索与启动。
 
 ### 2.4.10 当前优先：Windows App 索引 + 基础 legacy/compat
 
 - [x] 基础 legacy 清理阻塞：清册中的 core-app `2.4.11` 项已关闭或显式降权；不得新增 `legacy` 分支、raw channel、旧 storage protocol、旧 SDK bypass。
-  - 已将 `apps/core-app/scripts` 与 `apps/pilot/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 ESLint overrides where justified。
+  - 已将 `apps/core-app/scripts` 与 `retired-ai-app/scripts` 纳入 `legacy/compat` 显式扫描范围，并手工补齐 ESLint overrides where justified。
   - 插件 channel bridge 移除 legacy header 语义；DivisionBox dead `flow-trigger` 事件面已物理删除；Nexus store 旧 manifest/path fallback 已改为结构化错误。
   - permission JSON->SQLite、dev data root migration、theme localStorage migration 仍作为 read-once / marker-gated migration exception 保留；2026-05-08 已补明确退场条件与回归证据要求，禁止扩散为新的 runtime storage 依赖。
   - 2026-05-08 Intelligence Workflow 页面与 `useWorkflowEditor()` 硬编码文案已迁移到 `zh-CN/en-US` i18n；FileProvider 两处 `[DEBUG]` 日志前缀和 DEBUG 注释已清理，索引调度逻辑不变。
@@ -809,7 +814,7 @@
   - 2026-05-11 acceptance 结构化字段已收紧：`manualChecks.copiedAppPath` 必须填写 copied source、normalized app path、add-to-local-launch-area action、本地启动区条目、App Index diagnostic evidence、reindex 后 search query、indexed search result 与 indexed result launch evidence；最终 gate 会在布尔项之外复核这些字段非空。
   - 2026-05-11 手工证据字段已收紧：归档 Markdown 必须填写 add-to-local-launch-area action、indexed search result 与 indexed result launch evidence，不能只用 app-index diagnostic path 替代用户实际启动闭环。
 - [x] Windows App 诊断证据导出：Settings App Index diagnostic 可复制/保存 `app-index-diagnostic-evidence` JSON，记录命中路径、launchKind/target、shortcut launchArgs/workingDirectory、bundle/appIdentity、`rawDisplayName/displayNameStatus`、`iconPresent`、generated/stored keywords、precise/phrase/prefix/FTS/N-gram/subsequence 阶段命中、reindex 状态与失败原因；`app-index:diagnostic:verify` 可离线复核 target 命中、query stage、launchKind、launchTarget、launchArgs、workingDirectory、bundle/appIdentity、clean/fallback displayName、索引图标存在、reindex 与 reusable caseId 门禁，并复算 `matchedStages` / stage targetHit / target itemId / matchCount、suggested fields 与 reindex path 的内部一致性，避免弱 JSON 伪造 query hit 或复制 app path 索引闭环；已补成功、not-found、坏 `display_name` fallback、缺图标与 stage 漂移证据 payload 回归。
-- [x] Windows 能力证据 CLI：新增 `pnpm -C "apps/core-app" run windows:capability:evidence -- --target WeChat --target Codex --target "Apple Music"`，输出 `windows-capability-evidence/v1`，汇总 PowerShell、Everything CLI、Everything 目标关键词查询、`Get-StartApps`、registry uninstall fallback、Start Menu `.lnk/.appref-ms/.exe`、`.lnk` target/arguments/workingDirectory 与目标应用命中情况；`--installer <path>` 只 dry-run 输出 NSIS/MSI handoff 命令并保持 `unattendedAutoInstallEnabled: false`，`windows:capability:verify` 可按 `--requireEverything --requireEverythingTargets --requireTargets --requireUwp --requireRegistryFallback --requireShortcutMetadata --requireApprefMs --requireShortcutArguments --requireShortcutWorkingDirectory --requireInstallerHandoff` 做硬门禁；Everything diagnostic 复算会同时拒绝 `ready` 与 enabled/available 不一致、available 但 backend=unavailable、active backend 不在 fallback chain、healthy 但 unavailable、available 状态仍残留 stale error、active backend 有 attempt error、backendAttemptErrors 不在 fallback chain 或错误文本为空、CLI backend 缺 `esPath/version` 的弱证据；当前 macOS 本机 smoke 输出 `skipped`，真实验收仍需 Windows 设备执行并归档 JSON。
+- [x] Windows 能力证据 CLI：新增 `pnpm -C "apps/core-app" run windows:capability:evidence -- --target ChatApp --target Codex --target "Apple Music"`，输出 `windows-capability-evidence/v1`，汇总 PowerShell、Everything CLI、Everything 目标关键词查询、`Get-StartApps`、registry uninstall fallback、Start Menu `.lnk/.appref-ms/.exe`、`.lnk` target/arguments/workingDirectory 与目标应用命中情况；`--installer <path>` 只 dry-run 输出 NSIS/MSI handoff 命令并保持 `unattendedAutoInstallEnabled: false`，`windows:capability:verify` 可按 `--requireEverything --requireEverythingTargets --requireTargets --requireUwp --requireRegistryFallback --requireShortcutMetadata --requireApprefMs --requireShortcutArguments --requireShortcutWorkingDirectory --requireInstallerHandoff` 做硬门禁；Everything diagnostic 复算会同时拒绝 `ready` 与 enabled/available 不一致、available 但 backend=unavailable、active backend 不在 fallback chain、healthy 但 unavailable、available 状态仍残留 stale error、active backend 有 attempt error、backendAttemptErrors 不在 fallback chain 或错误文本为空、CLI backend 缺 `esPath/version` 的弱证据；当前 macOS 本机 smoke 输出 `skipped`，真实验收仍需 Windows 设备执行并归档 JSON。
 - [x] Windows 验收 Manifest 复核：新增 `windows-acceptance-manifest/v1`、`windows:acceptance:template` 与 `windows:acceptance:verify`，可生成 blocked 初始清单并汇总复核 `windows-everything-file-search` / `windows-app-scan-uwp` / `windows-copied-app-path-index` / `windows-third-party-app-launch` / `windows-shortcut-launch-args` / `windows-tray-update-plugin-install-exit`，并要求每项包含 evidence path、verifier command、search trace、clipboard stress、更新安装手工项与常见 App 启动样本；其中 `windows-copied-app-path-index` 单独卡住复制 app path 加入本地启动区后的 app-index 诊断、`entrySource=manual / entryEnabled=true` managed entry 与 reindex 链路，`manualChecks.copiedAppPath` 还会卡住复制源、add-to-local-launch-area、本地启动区条目、reindex、搜索命中与从索引结果启动闭环；模板会写入 `verification.recommendedCommand` 作为最终强门禁命令；`--updateInstallMode auto` 可为更新 case 生成 `windows-auto-installer-handoff` 自动接管 verifier command，默认仍生成手动 `windows-installer-handoff` gate；`--writeManualEvidenceTemplates` 可按 `manualChecks.*.evidencePath` 非覆盖式写入 Markdown 手工证据模板；`--writeCollectionPlan` 可按 manifest 生成 `WINDOWS_ACCEPTANCE_COLLECTION_PLAN.md`，汇总 case evidence path、capability evidence 采集命令、替换为实际 evidence path 的 verifier command、性能采集/复核命令、manual evidence path 与最终 recommended gate，降低真机采证漏项；`--requireExistingEvidenceFiles` 可校验 case、性能证据与 manual evidence 文件真实存在，`--requireNonEmptyEvidenceFiles` 会拒绝目录或 0 字节 evidence 文件，`--requireCompletedManualEvidence` 会拒绝未勾选 checklist、无 checklist、Evidence 区缺少当前模板要求的关键字段或只填 `N/A/TODO/-` 等占位值的手工 Markdown，并输出未勾选数量与缺失 Evidence label；`--requireEvidenceGatePassed` 可要求 case evidence、search trace stats 与 clipboard stress summary JSON 的 `gate.passed=true`，并按 caseId 校验允许的 evidence schema/kind；acceptance 层会按 case 复算 Windows capability、App Index、Everything、Update、search trace 与 clipboard stress 的关键硬门禁，App Index 复算会拒绝 `matchedStages` 与 stage targetHit / target itemId / matchCount 不一致、suggested fields 与 app 不一致或 reindex path 漂移的 evidence，自动接管 update evidence 会按 `windows-auto-installer-handoff` 强制要求安装后版本与下载目标版本匹配，并复核 cached release tag/channel、matching asset 平台/架构/size 与 runtime target 一致，性能预算固定为 search trace 200 样本、first.result P95 ≤ 800ms、session.end P95 ≤ 1200ms、slowRatio ≤ 0.1，以及 clipboard stress 2 分钟 500/250ms、P95 ≤ 100ms、max scheduler ≤ 300ms、realtime queue peak ≤ 2、drop=0；search trace stats 会拒绝 paired/session/sample/slow counter 自相矛盾，clipboard stress summary 会拒绝无有效 clipboard 采样或 scheduler sample 超过 count；`clipboard:stress:verify` 最终命令必须携带 `--strict` 强制 `clipboard-stress-summary/v1` schema，避免弱参数或非标准 schema 子证据被误收；gate 失败会输出具体复算原因，便于定位 launchKind、bundle/appIdentity、query stage、reindex、checksum、安装后版本、release/asset 漂移、性能阈值或计数一致性缺口；`--requireCaseEvidenceSchemas` 可要求每个 required case 同时具备 Windows capability evidence 与对应专项 diagnostic evidence；`--requireVerifierCommandGateFlags` 可要求 manifest 内 verifier command、`performance.searchTraceStatsCommand` 与 `performance.clipboardStressCommand` 同步携带 release 固定门禁参数，并接受 update 手动接管/自动接管两套强 gate；`--requireRecommendedCommandGateFlags` 可要求 `verification.recommendedCommand` 同步携带最终强门禁参数、非空 evidence 文件门禁与 completed manual evidence 门禁；`--requireRecommendedCommandInputMatch` 可要求 recommended command 的 `--input` 指回当前 manifest 文件；`--requireCommonAppLaunchDetails` 可要求 common app 样本逐项确认可搜索、显示名正确、图标正确、可启动且启动后 CoreBox 立即隐藏，并要求每项写入 `evidencePath`；`--requireCopiedAppPathManualChecks` 可要求复制 app path 链路手工证据；`--requireUpdateInstallManualChecks` 可要求 Windows 更新 UAC、安装器启动/退出、应用退出释放占用、安装后版本、重启可用与失败回滚逐项确认并写入 `evidencePath`；`--requireDivisionBoxDetachedWidgetManualChecks` 可要求插件 widget 分离窗口逐项确认真实 pluginId、`initialState.detachedPayload` 水合、原始 query 保留、widget surface 渲染且未回退到错误搜索结果并写入 `evidencePath`；`--requireTimeAwareRecommendationManualChecks` 可要求空 query 推荐、早/午两个时段样本、首位推荐随时段变化、频率信号保留与 timeSlot/dayOfWeek 缓存隔离均写入模板关键字段证据。
   - 2026-05-11 acceptance 结构化字段、manual `evidencePath` 与 Markdown evidence 占位拒绝已补齐：`manualChecks.commonAppLaunch / copiedAppPath / updateInstall / divisionBoxDetachedWidget / timeAwareRecommendation` 的必填字符串字段、对应 `evidencePath`，以及 Markdown `## Evidence` 下的必填 label，不再接受 `<...>` 模板值、`N/A` / `NA` / `none` / `TODO` / `TBD` / `-` / `待补` / `无`，这些值会按缺失处理；`dayOfWeek` 继续要求 `0..6` 数字。
 - [ ] DivisionBox detached widget 真机验收：`useDetach.test.ts` 已覆盖 pluginId 与 `detachedPayload` 构造，Windows acceptance template 已生成 `manualChecks.divisionBoxDetachedWidget`；仍需在真实设备上从插件 feature 搜索结果分离 widget，确认分离窗口打开、session pluginId 为真实插件、首帧读取 `initialState.detachedPayload`、原始 query 保留、widget 内容正常渲染且无错误搜索回退，并使用 `windows:acceptance:verify --requireDivisionBoxDetachedWidgetManualChecks` 归档。
@@ -825,7 +830,7 @@
 - [ ] Windows 更新自动安装闭环：用户触发安装与受控自动 installer handoff 基础已补；默认 gate 仍用 `pnpm -C "apps/core-app" run update:diagnostic:verify -- --input <evidence.json> --requireAutoDownload --requireDownloadReady --requireReadyToInstall --requirePlatform win32 --requireInstallMode windows-installer-handoff --requireUserConfirmation --requireUnattendedDisabled --requireMatchingAsset --requireChecksums --requireCaseIds windows-tray-update-plugin-install-exit` 复核手动接管；开启自动接管的真机证据可用 `pnpm -C "apps/core-app" run windows:acceptance:template -- --updateInstallMode auto` 生成 manifest，并用 `--requireInstallMode windows-auto-installer-handoff --requireAutoInstallEnabled --requireUnattendedEnabled --requireInstalledVersionMatchesTarget` 复核 update evidence；acceptance case evidence 复算也会按 auto handoff 强制校验自动下载任务 id 非空、安装后版本匹配、目标版本一致、cached release channel/tag 与 matching asset runtime target 一致，避免只靠 verifier command 字段；仍需验证 UAC/权限提升、安装器退出、失败回滚与 acceptance manifest 归档后才可关闭。
   - 2026-05-11 acceptance 结构化字段已收紧：`manualChecks.updateInstall` 必须填写 update diagnostic evidence、installer path/mode、UAC、app exit、installer exit、installed version、app relaunch 与 failure rollback evidence；最终 gate 会在布尔项之外复核这些字段非空。
   - 2026-05-11 手工证据字段已收紧：更新安装 Markdown 必须填写 UAC prompt、app exit、installer exit、installed version、app relaunch 与 failure rollback evidence，不能只用 installer path/mode 或截图替代。
-- [ ] Windows 常见应用搜索启动验证：微信、Codex、Apple Music 至少三类真实应用完成“可搜索、可显示正确名称/图标、可启动、CoreBox 可立即隐藏”验证；`windows:acceptance:template` 已生成 `manualChecks.commonAppLaunch.checks[]` 占位，最终复核使用 `windows:acceptance:verify --requireCommonAppLaunchDetails --requireCommonAppTargets WeChat,Codex,"Apple Music"` 卡住五项布尔检查。
+- [ ] Windows 常见应用搜索启动验证：聊天应用、Codex、Apple Music 至少三类真实应用完成“可搜索、可显示正确名称/图标、可启动、CoreBox 可立即隐藏”验证；`windows:acceptance:template` 已生成 `manualChecks.commonAppLaunch.checks[]` 占位，最终复核使用 `windows:acceptance:verify --requireCommonAppLaunchDetails --requireCommonAppTargets ChatApp,Codex,"Apple Music"` 卡住五项布尔检查。
   - 2026-05-11 acceptance 结构化字段已收紧：每个 common app check 必须填写 `searchQuery / observedDisplayName / iconEvidence / observedLaunchTarget / coreBoxHiddenEvidence`；最终 gate 会在五项布尔检查之外复核这些字段非空。
   - 2026-05-11 手工证据字段已收紧：每个目标 App 必须填写 observed display name、icon evidence、observed launch target 与 CoreBox hidden evidence，不能只用泛截图替代显示名/图标/隐藏验证。
 - [ ] `2.4.10` 文档证据闭环：每轮清理同步 `CHANGES + TODO + ESLint compatibility boundary rules`，并优先保留本地可复现命令；Release Evidence 凭证缺失时不伪造远端写入。
@@ -837,6 +842,10 @@
 - [ ] Linux 非阻塞观察：记录 `xdotool` / desktop environment 限制与 smoke 结果；不作为 `2.4.11` release blocker。
 - [ ] Release Evidence 写入闭环：具备 `release:evidence` API key 或管理员登录态后，将 documentation review、平台 matrix 与 CoreApp 定向回归结果写入 Nexus。
 - [ ] Legacy/compat 业务债务退场：`2.4.11` 前必须关闭或显式降权剩余旧 storage protocol、旧 SDK bypass、retained raw definition 等真实业务债务。
+- [x] AI 兼容占位响应退场：`livechat/random` 空数据改为 HTTP `503` + `unavailable`，prompt detail M1 占位改为 HTTP `410` + migration target，catch-all 未实现接口同步设置 HTTP `501`；已补 API 合同测试，前端不再会把这三类占位响应当作真实业务数据。
+- [x] CLI token storage 最小安全收口：`packages/tuff-cli-core` 与 `packages/unplugin-export-plugin` 已抽本地 `CliCredentialStore`，继续保留 `auth.json` 位置与 `TUFF_AUTH_TOKEN` CI 无头路径；POSIX 写入后收紧目录 `0700` / 文件 `0600`，读取旧文件时自动修复过宽权限，Windows 仅做 best-effort ACL 提醒，不伪造安全存储完成。后续 Keychain / Credential Locker / libsecret 接入另列第二阶段。
+- [ ] 插件 provider secret 收口：源码侧已新增 `plugin.storage.*Secret` typed events、`plugin.secret` / `usePluginSecret()` SDK 与 `touch-translation` 旧明文迁移；`apiKey/secretKey/secretId/token` 不再写入普通 `providers_config`，普通配置只保留 provider metadata。剩余动作：用户确认后重建并同步 `touch-translation` 运行时产物与 CoreApp 内置副本。
+- [ ] 插件 shell capability 统一诊断：源码侧已在 `touch-system-actions`、`touch-quick-actions`、`touch-window-manager`、`touch-workspace-scripts` 命令 item / 动态 feature meta 中统一暴露 `capability.id/type/platform/permission/status/reason/audit`；Linux 等不支持平台返回 `unsupported` 诊断，缺少 `system.shell` 权限返回 `permission-missing` 诊断，`safe-shell` 不可用时返回 `degraded` 诊断。固定系统命令继续优先走 `safe-shell`，窗口管理继续走参数化 `execFile`/`spawn`，用户工作区命令保留显式确认后的 `user-shell` 路径；已补插件定向测试覆盖诊断字段。剩余动作：用户确认后重建并同步 CoreApp 内置 `touch-quick-actions` 运行时副本。
 - [ ] 超长文件治理：对仍高于 1200 行的 `growthExceptions` 文件给出拆分计划或降低到阈值以下。
   - 2026-05-08 已将 core-app 13 个 `size-growth-exception` 收敛为后续小任务口径；优先拆分候选为 `clipboard.ts`（capture/history/transport/autopaste）、`search-core.ts`（routing/provider orchestration/cache-result merge）、`plugin-module.ts`（lifecycle/runtime repair/surface wiring/registry）。
   - 2026-05-11 已完成 `clipboard.ts` 十块切片：capture freshness / diff helper / freshness store 迁到 `clipboard-capture-freshness.ts`，history persistence / cache / query / favorite/delete/image URL 迁到 `clipboard-history-persistence.ts`，typed transport handler 注册与 stream fanout 迁到 `clipboard-transport-handlers.ts`，copy/apply/paste 自动化与失败通知迁到 `clipboard-autopaste-automation.ts`，live image read / temp namespace / orphan cleanup / native image reconstruction 迁到 `clipboard-image-persistence.ts`，polling interval / 低电量策略迁到 `clipboard-polling-policy.ts`，native watcher env/load/start-stop 迁到 `clipboard-native-watcher.ts`，meta DB write / queue pressure/drop/fk 处理迁到 `clipboard-meta-persistence.ts`，stage-B enrichment 迁到 `clipboard-stage-b-enrichment.ts`，capture/persist 主流程迁到 `clipboard-capture-pipeline.ts`；`clipboard.ts` 已降到 `1143` 行并清退 size exception。
@@ -853,8 +862,8 @@
 - [x] Transport Wave A 指标拆分：把 raw send violation 与 retained `defineRawEvent` definition 分开统计；2026-05-10 已在 `transport-event-boundary.test.ts` 输出 `rawSendViolations`、`retainedRawEventDefinitions` 与 `typedMigrationCandidates`，并继续禁止三段 typed-builder 形态新增 raw definition。
 - [x] Transport Wave A retained event 迁移第一批：2026-05-11 已迁移当前扫描到的三段 retained raw event：`system:permission:*` 与 `omni-panel:feature:*`，外部事件名保持不变；`typedMigrationCandidates` 当前为 `0`，retained raw definition 当前上限为 `265`。
 - [ ] Transport Wave A retained event 迁移后续批：继续梳理 CoreBox / terminal / auth / sync / opener；二段或特殊名称继续保留 raw definition，直到有明确 wire-name 迁移方案。
-- [ ] Pilot Wave B：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
-- [x] Pilot Wave B 假值治理第一切片：`system/serve/stat` 已改用 Node runtime metrics，采集不完整时返回 degraded/unavailable reason；支付 mock/DUMMY 订单已由 `PILOT_PAYMENT_MODE=mock` 门控，非 mock 环境返回 `PAYMENT_PROVIDER_UNAVAILABLE`。
+- [ ] AI Wave B：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
+- [x] AI Wave B 假值治理第一切片：`system/serve/stat` 已改用 Node runtime metrics，采集不完整时返回 degraded/unavailable reason；支付 mock/DUMMY 订单已由 `AIAPP_PAYMENT_MODE=mock` 门控，非 mock 环境返回 `PAYMENT_PROVIDER_UNAVAILABLE`。
 - [x] Plugin storage 治理第一切片：`plugins/touch-image` 图片历史路径已从 renderer `localStorage` 写入迁到 plugin storage SDK，固定 50 条上限，补一次性旧数据迁移、缩略图失败剔除与清理入口。
 - [ ] 架构 Wave C：`plugin-module/search-core/file-provider` SRP 拆分。
   - 2026-04-26 Nexus 证据入口：新增 `/api/admin/release-evidence/*`，支持 run 创建/分页/详情、item upsert、平台阻塞 matrix 与 `doc-guard` 快速写入；管理员登录态或 `release:evidence` API key 可写入，CI 默认走 API key。
@@ -879,7 +888,7 @@
 - [x] 统一治理门禁：当前质量入口已收敛为 `lint`、`lint:changed`、`typecheck`、`test:targeted`、`quality:pr` 与 `quality:release`。
 - [x] 重构期质量入口统一：`lint/lint:fix` 已与架构债务扫描解耦；文件行数治理回到 code review 与普通重构任务；release/milestone 使用 `quality:release`。
 - [x] 统一主线验收入口：新增 `pnpm quality:pr` 聚合命令（lint + targeted tests + CoreApp typecheck）。
-- [x] 主线隔离：root workspace 与 root lint 默认仅覆盖 `core-app/nexus/pilot/packages/plugins`。
+- [x] 主线隔离：root workspace 与 root lint 默认仅覆盖 `core-app/nexus/aiapp/packages/plugins`。
 - [x] Sync 兼容壳行为固化：补充 `/api/sync/pull|push` 返回 410 的自动化测试断言。
 - [x] 债务扫描口径显式化：主线改为显式白名单 + 漏扫报错 + `scanScope` 摘要输出。
 - [x] 超长文件防漂移：`--write-baseline` 禁止自动上调，新增 `growthExceptions` 显式豁免机制。
@@ -920,7 +929,7 @@
   - ESLint compatibility boundary rules 出现非预期 coverage 回退。
 - 回滚步骤（提交粒度）：
   - 文件名回滚：`apps/nexus/sentry.server.config.ts` 按需恢复到异常旧名路径，仅用于应急回退验证。
-  - 清册回滚：恢复本轮清理的两条 registry 行（`apps/pilot/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
+  - 清册回滚：恢复本轮清理的两条 registry 行（`retired-ai-app/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
   - 脚本回滚：按当前 ESLint 规则回滚对应 compatibility boundary 配置。
 - 回滚后必跑：
   - `pnpm lint`
@@ -948,15 +957,15 @@
   - [x] CoreApp renderer storage consumer import boundary 已由 `app-storage-boundary.test.ts` 固化。
   - `pnpm quality:pr` 全绿且无新增兼容债务。
 
-### F. Pilot / Intelligence 长尾（已下沉）
+### F. AI / Intelligence 长尾（已下沉）
 
-- [x] Pilot 附件、管理配置、路由 V2、工具审计、Websearch、旧 UI 卡片流、多模态与模型组能力治理的历史完成事实已下沉到 `CHANGES` 与长期债务池，主清单不再展开逐项历史。
-- [ ] Pilot strict 错误码端到端回归、SSE 反向代理部署烟测、`video.generate` 真实运行时与严格模式线上观测继续由长期债务池承载。
+- [x] AI 附件、管理配置、路由 V2、工具审计、Websearch、旧 UI 卡片流、多模态与模型组能力治理的历史完成事实已下沉到 `CHANGES` 与长期债务池，主清单不再展开逐项历史。
+- [ ] AI strict 错误码端到端回归、SSE 反向代理部署烟测、`video.generate` 真实运行时与严格模式线上观测继续由长期债务池承载。
 - Tuff 2.5.0 AI Plan PRD：`docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
   - 版本定位：桌面 AI 入口收口，不做大规模 AI runtime 重写，也不把 Nexus Provider/Scene runtime 编排列为 2.5.0 必交付。
   - Stable：CoreBox AI Ask、OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule、默认 Nexus provider、BYOK 安全配置合同、审计用量最小字段。
   - P0 模板：剪贴板整理、会议纪要/摘要、文本批处理；模板必须支持保存、运行、历史、重跑与复制结果。
-  - Beta：Tuff Intents / Action Manifest、Skills Pack、Background Automations 与 Pilot 高级 Chat / DeepAgent 联动。
+  - Beta：Tuff Intents / Action Manifest、Skills Pack、Background Automations 与 AI 高级 Chat / DeepAgent 联动。
   - Experimental：Assistant 悬浮球/语音唤醒、多 Agent 长任务面板、image/audio/video 生成编辑、Nexus Scene runtime orchestration。
   - 安全前置：provider metadata 可普通存储，API Key / secret 必须走 secure-store 或 `authRef`；审计默认不保存完整 prompt / response。
 - 入口：`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
@@ -1034,7 +1043,7 @@
 - [x] P0：`file-provider` 语义检索改为预算内补召回（`query>=3 && candidate<20`）+ `120ms` 超时降级。
 - [x] P1：app/file 精确词匹配改为批量 `lookupByKeywords`，减少逐 term SQL round-trip。
 - [x] P1：`lookupBySubsequence` 增加扫描上限（默认 `2000` + SQL `LIMIT`），app 侧触发约束为 `candidate<5 && query<=8`。
-- [x] P1：跨 provider 排序优先可见标题命中，plugin feature 隐藏 token/source 命中降为低置信召回信号，并限制隐藏 token/fuzzy-token/source fallback 的 frequency/recency 行为信号上限；App 标题前缀/词首/子串命中和精确/前缀别名 token 命中获得 intent bonus，避免搜索 App 时被中等频次或异常 recency 的 feature 抢占首位，同时保留极高频可见 feature 的自学习前置能力；已补 App 标题前缀/词首/子串/精确别名 token 命中优先于 hidden token 与中等频次 feature 标题命中的 `tuff-sorter` 回归，2026-05-11 追加中文 App 查询回归：`微信` App 标题命中会排在中等频次 `微信工具箱` plugin feature 前，并补充 `vscod -> vscode` 这类别名前缀查询回归、极高频可见 feature 仍可排在 App 精确别名前的反向边界，以及 `plugin-features-adapter` 元数据回归。
+- [x] P1：跨 provider 排序优先可见标题命中，plugin feature 隐藏 token/source 命中降为低置信召回信号，并限制隐藏 token/fuzzy-token/source fallback 的 frequency/recency 行为信号上限；App 标题前缀/词首/子串命中和精确/前缀别名 token 命中获得 intent bonus，避免搜索 App 时被中等频次或异常 recency 的 feature 抢占首位，同时保留极高频可见 feature 的自学习前置能力；已补 App 标题前缀/词首/子串/精确别名 token 命中优先于 hidden token 与中等频次 feature 标题命中的 `tuff-sorter` 回归，2026-05-11 追加中文 App 查询回归：`聊天应用` App 标题命中会排在中等频次 `聊天应用工具箱` plugin feature 前，并补充 `vscod -> vscode` 这类别名前缀查询回归、极高频可见 feature 仍可排在 App 精确别名前的反向边界，以及 `plugin-features-adapter` 元数据回归。
 - [x] P1：推荐内存缓存按 context cache key 校验，跨 `timeSlot/dayOfWeek` 不复用旧推荐结果；同一 App 在当前 `timeSlot/dayOfWeek` 有历史使用记录时会获得时间上下文加权，且候选去重会保留后续 time-based 统计并把最终 recommendation source 提升为 `time-based`；当前 weekday 暂无样本时不再把时段相关性归零，保证不同时间段推荐不同 App 的信号能即时生效且可被 UI/验收证据识别；已补同一候选集在 morning/afternoon 下首位不同和 slot-only relevance 的推荐引擎回归。
 - [x] P2：后台重任务避让搜索活跃窗口（最近 `2s` 有 query 时跳过一轮，后续 idle 自动补跑）。
 - [x] P2：设备 idle gate 先判断系统 idle 再读取电量，not-idle 直接拒绝周期任务；电量状态增加 30 秒短 TTL 缓存与 in-flight 去重，并在供电状态变化时失效，避免 Windows 上后台索引/同步轮询反复触发 PowerShell 电量查询。
@@ -1067,7 +1076,7 @@
 ### 已处理
 
 - [x] `OMNIPANEL-FEATURE-HUB-PRD`：标记为 historical done（2.4.8 Gate）。
-- [x] `PILOT-NEXUS-OAUTH-CLI-TEST-PLAN`：改为“已落地 vs 未启动”结构。
+- [x] `AIAPP-NEXUS-OAUTH-CLI-TEST-PLAN`：改为“已落地 vs 未启动”结构。
 - [x] `TUFFCLI-INVENTORY`：切换为 `tuff-cli` 主入口口径。
 - [x] `NEXUS-SUBSCRIPTION-PRD` 与 `NEXUS-PLUGIN-COMMUNITY-PRD`：加历史降权头标。
 - [x] 新增长期债务池文档：`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`。
@@ -1083,7 +1092,7 @@
 ## 🌊 分波次债务推进（W2-W4）
 
 - [ ] Wave A（Transport）：MessagePort 高频通道迁移 + `sendSync` 清理。
-- [ ] Wave B（Pilot）：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
+- [ ] Wave B（AI）：存量 typecheck/lint 清理 + SSE/鉴权矩阵回归。
 - [ ] Wave C（架构质量）：`plugin-module/search-core/file-provider` SRP 拆分。
 - [ ] 每波固定产出：`CHANGES` 证据 + `TODO` 状态 + 可复现门禁命令集。
 
@@ -1096,15 +1105,15 @@
 - [x] `v2.4.7 Gate E`：按 historical done 关闭，不重发版。
 - [x] `2.4.9-beta.4`：发布基线与 CI 证据已固化。
 - [x] CLI Phase1+2：迁移完成，`2.4.x` shim 保留、`2.4.11` 退场。
-- [x] Pilot Chat/Turn 协议硬切：`/api/chat/sessions/:sessionId/stream` 为唯一主入口，`/api/v1/chat/sessions/:sessionId/{stream,turns}` 已物理删除；历史 `pilot_quota_history.value` 已完成 base64 -> JSON 迁移并统一 JSON 读写。
-- [x] Pilot run-event card 公共符号硬裁切：
-  - `projectPilotLegacyRunEventCard` / `resolvePilotLegacyRunEventCardKeys` / `PilotLegacyRunEventCard*` 公共导出已改为 `projectPilotRunEventCard` / `resolvePilotRunEventCardKeys` / `PilotRunEventCard*`。
-  - Pilot server quota snapshot、Pilot app stream card upsert 与对应测试已迁移到当前命名，测试文案不再描述 legacy pending key / legacy 时间线。
+- [x] AI Chat/Turn 协议硬切：`/api/chat/sessions/:sessionId/stream` 为唯一主入口，`/api/v1/chat/sessions/:sessionId/{stream,turns}` 已物理删除；历史 `aiapp_quota_history.value` 已完成 base64 -> JSON 迁移并统一 JSON 读写。
+- [x] AI run-event card 公共符号硬裁切：
+  - `projectAILegacyRunEventCard` / `resolveAILegacyRunEventCardKeys` / `AILegacyRunEventCard*` 公共导出已改为 `projectAIRunEventCard` / `resolveAIRunEventCardKeys` / `AIRunEventCard*`。
+  - AI server quota snapshot、AI app stream card upsert 与对应测试已迁移到当前命名，测试文案不再描述 legacy pending key / legacy 时间线。
   - 实现文件已从 `legacy-run-event-card.ts` 物理重命名为 `run-event-card.ts`，包级 barrel 改为当前路径；未继续暴露 Legacy 命名 API。
-- [x] Pilot completion stream 公共符号硬裁切：
-  - `buildLegacyCompletion*` / `resolveLegacyUiStreamInput` / `handleLegacyCompletionExecutorResult` / `resolveLegacyConversationSeqCursor` 等公共符号已改为 `buildPilotCompletion*` / `resolvePilotUiStreamInput` / `handlePilotCompletionExecutorResult` / `resolvePilotConversationSeqCursor`。
-  - Pilot app 主调用方、首页 replay cursor 与对应 stream contract/input 测试已迁移到当前命名；运行时 metadata source 从 `legacy-ui-completion*` 改为 `pilot-ui-completion*`。
-  - `legacy-stream-*` 文件与对应测试已物理重命名为 `pilot-stream-*` / `pilot-completion-stream-contract.test.ts` / `pilot-stream-input.test.ts`；不再新增 Legacy 命名 API。
+- [x] AI completion stream 公共符号硬裁切：
+  - `buildLegacyCompletion*` / `resolveLegacyUiStreamInput` / `handleLegacyCompletionExecutorResult` / `resolveLegacyConversationSeqCursor` 等公共符号已改为 `buildAICompletion*` / `resolveAIUiStreamInput` / `handleAICompletionExecutorResult` / `resolveAIConversationSeqCursor`。
+  - AI app 主调用方、首页 replay cursor 与对应 stream contract/input 测试已迁移到当前命名；运行时 metadata source 从 `legacy-ui-completion*` 改为 `aiapp-ui-completion*`。
+  - `legacy-stream-*` 文件与对应测试已物理重命名为 `aiapp-stream-*` / `aiapp-completion-stream-contract.test.ts` / `aiapp-stream-input.test.ts`；不再新增 Legacy 命名 API。
 - [x] Nexus Intelligence provider dot-route 兼容壳硬裁切：旧 `:id.probe` / `:id.test` 410 shell 与 `intelligence-route-compat` middleware/test 已删除，仅保留当前 slash-route 主路径。
 - [x] Startup Path Governance：启动 root path、目录创建、legacy dev data marker 迁移与启动观测已完成；详细实现留在 2026-03-23 历史记录。
 

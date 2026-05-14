@@ -86,7 +86,7 @@ describe('native-file-search-provider', () => {
     expect(__test__.isMacApplicationBundlePath('/Applications/QQ.app/Contents/Info.plist')).toBe(
       true
     )
-    expect(__test__.isMacApplicationBundlePath('/Users/demo/Apps/WeChat.APP')).toBe(true)
+    expect(__test__.isMacApplicationBundlePath('/Users/demo/Apps/ChatApp.APP')).toBe(true)
     expect(__test__.isMacApplicationBundlePath('/Users/demo/qq-notes.txt')).toBe(false)
     expect(__test__.isMacApplicationBundlePath('/Users/demo/My.app.backup/file.txt')).toBe(false)
   })

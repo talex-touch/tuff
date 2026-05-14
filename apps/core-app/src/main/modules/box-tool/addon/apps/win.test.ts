@@ -244,7 +244,7 @@ describe('win app scanner', () => {
   })
 
   it('treats known-folder Get-StartApps AppId values as desktop apps', async () => {
-    const appPath = 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+    const appPath = 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe'
 
     readdirMock.mockResolvedValue([])
     statMock.mockImplementation(async (target: string) => {
@@ -254,12 +254,12 @@ describe('win app scanner', () => {
     mockPowerShellOutputs({
       startApps: [
         {
-          Name: '微信',
-          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Weixin.exe'
+          Name: '聊天应用',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\ChatApp\\ChatApp.exe'
         },
         {
-          Name: '卸载微信',
-          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Uninstall.exe'
+          Name: '卸载聊天应用',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\ChatApp\\Uninstall.exe'
         }
       ]
     })
@@ -269,8 +269,8 @@ describe('win app scanner', () => {
 
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
-      name: 'Weixin',
-      displayName: '微信',
+      name: 'ChatApp',
+      displayName: '聊天应用',
       displayNameSource: 'Get-StartApps',
       displayNameQuality: 'system',
       identityKind: 'windows-path',
@@ -278,7 +278,7 @@ describe('win app scanner', () => {
       launchKind: 'path',
       launchTarget: appPath,
       displayPath: appPath,
-      stableId: 'c:\\program files\\tencent\\weixin\\weixin.exe'
+      stableId: 'c:\\program files\\tencent\\chatapp\\chatapp.exe'
     })
   })
 
@@ -517,11 +517,11 @@ describe('win app scanner', () => {
     const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
     const userStartMenuPath =
       'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
-    const shortcutPath = `${startMenuPath}\\微信.lnk`
-    const targetPath = 'C:\\Program Files\\Tencent\\Weixin\\Weixin.exe'
+    const shortcutPath = `${startMenuPath}\\聊天应用.lnk`
+    const targetPath = 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe'
 
     readdirMock.mockImplementation(async (dir: string) => {
-      if (dir === startMenuPath) return ['微信.lnk']
+      if (dir === startMenuPath) return ['聊天应用.lnk']
       if (dir === userStartMenuPath) return []
       return []
     })
@@ -532,13 +532,13 @@ describe('win app scanner', () => {
     readShortcutLinkMock.mockReturnValue({
       target: targetPath,
       args: '',
-      cwd: 'C:\\Program Files\\Tencent\\Weixin'
+      cwd: 'C:\\Program Files\\Tencent\\ChatApp'
     })
     mockPowerShellOutputs({
       startApps: [
         {
-          Name: '微信',
-          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\Weixin\\Weixin.exe'
+          Name: '聊天应用',
+          AppId: '{6D809377-6AF0-444B-8957-A3773F02200E}\\Tencent\\ChatApp\\ChatApp.exe'
         }
       ]
     })
@@ -548,12 +548,12 @@ describe('win app scanner', () => {
 
     expect(apps).toHaveLength(1)
     expect(apps[0]).toMatchObject({
-      name: '微信',
+      name: '聊天应用',
       path: shortcutPath,
       launchKind: 'shortcut',
       launchTarget: targetPath,
-      workingDirectory: 'C:\\Program Files\\Tencent\\Weixin',
-      stableId: 'shortcut:c:\\program files\\tencent\\weixin\\weixin.exe|'
+      workingDirectory: 'C:\\Program Files\\Tencent\\ChatApp',
+      stableId: 'shortcut:c:\\program files\\tencent\\chatapp\\chatapp.exe|'
     })
   })
 

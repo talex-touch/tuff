@@ -27,8 +27,8 @@
 | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` | 2434 | provider 管理、缓存、健康度、trace、维护任务、搜索编排 |
 | `apps/core-app/src/main/modules/update/UpdateService.ts` | 2436 | 更新源、任务调度、下载/安装、状态管理 |
 | `apps/nexus/server/utils/tuffIntelligenceLabService.ts` | 3656 | Intelligence 管理端聚合读写与转换逻辑 |
-| `apps/pilot/server/utils/pilot-tool-gateway.ts` | 2163 | websearch、媒体工具、审批、审计、fallback、格式适配 |
-| `apps/pilot/app/composables/usePilotChatPage.ts` | 2121 | SSE 消费、seq/replay、状态机、卡片投影、legacy 忽略分支 |
+| `retired-ai-app/server/utils/aiapp-tool-gateway.ts` | 2163 | websearch、媒体工具、审批、审计、fallback、格式适配 |
+| `retired-ai-app/app/composables/useAIChatPage.ts` | 2121 | SSE 消费、seq/replay、状态机、卡片投影、legacy 忽略分支 |
 | `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` | 2137 | 消息构造、附件适配、SSE 解析、错误映射、transport fallback |
 
 这类文件的共同问题不是“太长”本身，而是：
@@ -72,7 +72,7 @@
 
 - `packages/utils/renderer/storage/storage-subscription.ts`
 - `packages/utils/renderer/storage/base-storage.ts`
-- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `retired-ai-app/app/composables/useAIChatPage.ts`
 
 这些兼容层现在的问题不是“存在”，而是缺少统一退场顺序。没有退场顺序时，兼容代码会永久停留在热路径。
 
@@ -106,10 +106,10 @@
 2. `search-core.ts`
    - 把 `provider health/refractory`、`cache/trace`、`maintenance` 拆出独立服务
    - 搜索编排层只保留 query parse + provider dispatch + result merge
-3. `pilot-tool-gateway.ts`
+3. `aiapp-tool-gateway.ts`
    - 拆 `websearch`、`image/audio`、`approval/audit`
    - 当前文件已经像一个“工具平台内核”，继续堆功能会迅速失控
-4. `usePilotChatPage.ts`
+4. `useAIChatPage.ts`
    - 拆 `stream parser`、`seq/replay projector`、`ui state actions`
    - 页面 composable 不应同时承担协议解释器和页面状态机
 
@@ -139,7 +139,7 @@
 当前 guard 已经有了，但“先退谁、后退谁”还不够明确。建议：
 
 1. 先清 renderer storage 旧事件兼容层。
-2. 再清 Pilot UI 中仅用于旧事件忽略/兼容的热路径逻辑。
+2. 再清 AI UI 中仅用于旧事件忽略/兼容的热路径逻辑。
 3. 最后再回到 packages/utils 做对外入口收敛。
 
 这样做的原因很简单：先清消费方，才能避免 SDK/transport 层永远背兼容包袱。
@@ -164,12 +164,12 @@
   - `search-core` provider health / maintenance 抽离
   - `plugin-module` 的 widget / issue / watcher 职责分段
 
-### 工作包 C：Pilot Runtime / UI Projection
+### 工作包 C：AI Runtime / UI Projection
 
-- 目标：把 Pilot 的协议解释、工具网关、页面状态分层。
+- 目标：把 AI 的协议解释、工具网关、页面状态分层。
 - 交付：
-  - `pilot-tool-gateway` 子模块化
-  - `usePilotChatPage` 降为页面编排层
+  - `aiapp-tool-gateway` 子模块化
+  - `useAIChatPage` 降为页面编排层
   - `deepagent-engine` 降为协议/适配核心，不再继续吸收 UI 与工具语义
 
 ## 最小验证建议
@@ -178,12 +178,12 @@
 
 - 构建链：对应 target 的 `build-target` smoke + 运行时依赖校验
 - Core 搜索链：定向 `vitest` + `typecheck:node`
-- Pilot：定向 `vitest` + `typecheck`
+- AI：定向 `vitest` + `typecheck`
 - 文档/治理：`pnpm docs:guard`
 
 ## 不建议现在做的事
 
-- 不建议以“统一重写”方式处理 `core-app`、`pilot`、`nexus`。
+- 不建议以“统一重写”方式处理 `core-app`、`aiapp`、`nexus`。
 - 不建议把 legacy 清理、模块拆分、协议调整放在同一批改动里。
 - 不建议继续在超长文件里叠更多 feature flag、fallback、compat patch。
 

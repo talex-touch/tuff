@@ -131,11 +131,11 @@ function isProviderConfigured(provider: TranslationProvider): boolean {
     case 'deepl':
     case 'bing':
     case 'custom':
-      return !!config.apiKey
+      return typeof config.apiKey === 'string' && config.apiKey.trim().length > 0
     case 'baidu':
-      return !!(config.appId && config.secretKey)
+      return !!(config.appId && typeof config.secretKey === 'string' && config.secretKey.trim())
     case 'tencent':
-      return !!(config.secretId && config.secretKey)
+      return !!(typeof config.secretId === 'string' && config.secretId.trim() && typeof config.secretKey === 'string' && config.secretKey.trim())
     case 'mymemory':
       return true
     default:

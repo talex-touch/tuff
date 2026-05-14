@@ -21,6 +21,45 @@
   - OmniPanel 触发后改为聚焦窗口，主进程 blur 与 renderer blur 都会隐藏；窗口尺寸、内部 icon、间距和 action list 已缩小并改为内部滚动，适配更紧凑的划词入口。
   - 新增 Nexus invoke smoke：模拟登录态 token 时 `tuff-nexus-default` 命中 `/api/v1/intelligence/invoke`；未登录 guest 路径不发网络请求并 fallback 到本地 provider。
 
+### perf(core-app): cache plugin store page state across tabs
+
+- `apps/core-app/src/renderer/src/composables/store/useStoreData.ts`
+- `apps/core-app/src/renderer/src/base/router.ts`
+  - 插件市场数据提升为 composable 模块级缓存，普通进入/切换复用已有 catalog，手动刷新与来源配置变更继续强制重新拉取。
+  - `/store`、`/store/installed`、`/store/docs`、`/store/cli` 与 `/store/:id` 共用 `store-shell` KeepAlive key，避免市场页、已安装页、文档页和 CLI 页之间切换时重复销毁并重新加载。
+
+### perf(core-app): move plugin store hydration behind renderer mount
+
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/main/modules/extension-loader.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.test.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `docs/plan-prd/TODO.md`
+  - Renderer bootstrap 不再在首屏 mount 前 `await pluginStore.initialize()`，避免 `pluginSDK.list()` 与插件 install source 查询阻塞 root container mount。
+  - `app.mount('#app')` 完成后通过后台任务初始化 plugin store，保留 CoreBox / Assistant window 跳过逻辑，并记录 renderer shell mount 前耗时与 plugin store 后台初始化耗时。
+  - `ExtensionLoaderModule` 不再在 `onInit()` 中同步读目录并串行 `await session.defaultSession.loadExtension()`；初始化阶段只枚举扩展，`start()` 后台加载，destroy 会等待后台任务后卸载已加载扩展。
+  - `SentryServiceModule` 的 telemetry upload stats hydrate 不再阻塞 `onInit()`；启动后后台读取历史统计，shutdown flush 前等待已启动 hydrate，并在合并时保留启动期新增计数与更新的 failure/upload 时间，避免后台旧记录覆盖内存新统计。
+  - `UpdateServiceModule` 的 release cache hydrate 不再阻塞 `onInit()`；启动后后台读取缓存，检查更新前与 destroy 写缓存前等待已启动 hydrate，避免空缓存误触发网络请求或旧缓存覆盖新缓存。
+  - 已验证：`pnpm -C "apps/core-app" run typecheck:web` 返回 0；命令输出中仍包含 tuffex build 阶段既有 `TouchScroll` dts 诊断与 deprecation 噪声，但未阻断 typecheck。`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node` 返回 0。
+
+### fix(plugin): expose shell capability diagnostics for command plugins
+
+- `plugins/touch-quick-actions/index.js`
+- `plugins/touch-system-actions/index.js`
+- `plugins/touch-window-manager/index.js`
+- `plugins/touch-workspace-scripts/index.js`
+- `packages/test/src/plugins/quick-actions.test.ts`
+- `packages/test/src/plugins/system-actions.test.ts`
+- `packages/test/src/plugins/window-manager.test.ts`
+- `packages/test/src/plugins/workspace-scripts.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 四个 shell 能力插件统一在 CoreBox item / dynamic feature meta 暴露 `capability.id/type/platform/permission/status/reason/audit`，审计字段包含 `pluginName`、`featureId`、`actionId`、`commandKind`、`requiresConfirmation` 与 `requiresAdmin`。
+  - 平台不支持时返回 `unsupported` 诊断，权限拒绝时返回 `permission-missing` 诊断；`safe-shell` 不可用的固定/用户 shell 路径标记为 `degraded`，避免 fallback 到原生 shell 后缺少可观测证据。
+  - 固定系统命令继续优先走 `safe-shell`；窗口管理保持参数化 `execFile`/`spawn` 路径；工作区脚本保持用户确认后的 `user-shell`，不把任意用户命令误改为固定参数化调用。
+  - 已验证：`pnpm -C "packages/test" exec vitest run "src/plugins/quick-actions.test.ts" "src/plugins/system-actions.test.ts" "src/plugins/window-manager.test.ts" "src/plugins/workspace-scripts.test.ts"`。
+  - CoreApp 内置 `touch-quick-actions` 打包副本仍需用户确认后执行批量重建/同步；`docs/plan-prd/TODO.md` 暂不关闭该项。
+
 ## 2026-05-13
 
 ### feat(ai): add Nexus authenticated intelligence invoke path
@@ -46,21 +85,119 @@
   - Intelligence 渠道页新增 Nexus 官方托管状态展示：列表与详情页标识登录态是否可自动调用 Nexus，未登录时提供登录入口并说明 fallback 行为，避免用户误填本地 API Key。
   - 设置页 provider 测试与模型拉取会保留 `metadata.origin=tuff-nexus`，Nexus-managed provider 不再要求用户填写本地 API Key。
 
-### chore(release): prepare 2.4.10 beta CI readiness
+### fix(plugin): route translation provider secrets through plugin secure storage
+
+- `packages/utils/plugin/sdk/secret.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `plugins/touch-translation/src/composables/useTranslationProvider.ts`
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/manifest.json`
+- `docs/plan-prd/TODO.md`
+  - 新增插件级 secret storage typed events 与 `usePluginSecret()` / `plugin.secret` SDK，底层复用 CoreApp secure-store，以 `plugin.<pluginName>.<key>` 命名空间隔离并继续走 `storage.plugin` 权限门禁。
+  - `touch-translation` 的 DeepL/Bing/Custom `apiKey`、Baidu `secretKey`、Tencent `secretId/secretKey`、Caiyun `token` 不再写入普通 `providers_config`；普通 plugin storage 仅保留 provider metadata。
+  - 旧明文 `providers_config` 加载时会先迁入 plugin secret storage；只有迁移成功才清理普通 JSON 明文字段，失败时保留旧配置作为兼容兜底，避免密钥丢失。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-storage-sdk.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin.test.ts"`、`pnpm -C "apps/core-app" run typecheck:node`、`pnpm -C "plugins/touch-translation" run typecheck`、`pnpm -C "packages/test" exec vitest run "src/plugins/translation.test.ts" -t "keeps provider secrets out of metadata"`。
+  - 运行时产物与 CoreApp 内置副本同步仍需用户确认后执行批量生成/同步。
+
+### fix(core-app): repair empty app search index on startup
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+  - AppProvider 启动后新增 app 搜索索引健康检查：当本地 app 表为空索引或关键词索引为空时，自动触发 startup backfill，避免后台延迟/最近 backfill 节流导致 CoreBox 长时间搜索不到本机应用。
+  - Dev 环境的 `recent-backfill` 节流仅在 app 搜索索引健康时生效；索引不健康时允许补索引自愈。
+  - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts"`。
+
+### fix(core-app): auto-repair derived search FTS metadata failures
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.schema-repair.test.ts`
+  - `search_index` FTS5 元数据读取失败时先探测 `sqlite_master`，仅在主库元数据仍可读时自动重建派生 FTS 表，并设置 `didMigrate` 触发文件索引全量重扫。
+  - 主库元数据不可读时停止自动修复并保留原始错误，避免把 SQLite I/O/corruption 问题误判为可丢弃索引。
+  - 补充回归测试固定“派生索引可自愈、主库异常不自愈”的边界。
+
+### fix(plugin): gate stale CoreBox push items after disable
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `plugin.feature` / `boxItems` 的 push、batch push、update、remove 增加插件运行态门禁，插件非 `ENABLED/ACTIVE` 时忽略旧异步任务的写入，避免禁用后继续推送 CoreBox items。
+  - 插件禁用流程增加 feature controller abort 与 CoreBox pushed items 清理，阻止已触发 feature 的延迟请求在 disable 后污染结果区。
+  - `BoxItemManager.clear/getBySource` 支持按 `item.meta.pluginName` 匹配，修复 `source.id=plugin-features` 等共享 source 场景下按插件名清不掉旧 items 的问题。
+
+### fix(cli): secure local auth token file permissions
+
+- `packages/tuff-cli-core/src/auth.ts`
+- `packages/tuff-cli-core/src/cli-credential-store.ts`
+- `packages/tuff-cli-core/src/publish.ts`
+- `packages/tuff-cli-core/src/__tests__/auth.test.ts`
+- `packages/unplugin-export-plugin/src/core/auth.ts`
+- `packages/unplugin-export-plugin/src/core/cli-credential-store.ts`
+- `packages/unplugin-export-plugin/src/core/publish.ts`
+- `packages/unplugin-export-plugin/src/__tests__/auth.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 为两个 CLI 包各自新增本地 `CliCredentialStore`，统一 `auth.json` 的 read/write/clear/getPath，`logout()` 改为走 auth store 的 clear 路径。
+  - `saveAuthToken()` 写入后在 POSIX/macOS/Linux 尽量将配置目录收紧为 `0700`、token 文件收紧为 `0600`；读取旧 JSON 时发现 group/other 权限过宽会 best-effort 修复。
+  - Windows 不伪造 ACL 安全完成，仅对用户目录外的 token path 给出 best-effort ACL 提醒；`TUFF_AUTH_TOKEN` 继续作为 CI / 无头环境 fallback。
+  - 本轮不引入 Keychain / Credential Locker / libsecret 依赖，第二阶段再接系统级 credential store。
+
+### fix(aiapp): retire compat placeholder success responses
+
+- `retired-ai-app/server/utils/quota-api.ts`
+- `retired-ai-app/server/api/livechat/random.get.ts`
+- `retired-ai-app/server/api/aigc/prompts/detail/[id]/index.get.ts`
+- `retired-ai-app/server/api/[...path].ts`
+- `retired-ai-app/server/api/__tests__/compat-placeholder-contract.test.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 `quotaUnavailable()`，保持 AI 既有 `{ code, message, data }` 响应体，同时设置真实 HTTP status，并统一返回 `status=unavailable`、`reason` 与可选 `migrationTarget`。
+  - `livechat/random` 在无 `chatapp.livechat` 数据时不再返回可消费的 `exempted` 问答占位，改为 HTTP `503` 与 `chatapp_livechat_data_unavailable`。
+  - 旧 `aigc/prompts/detail/:id` M1 占位接口改为 HTTP `410`，明确迁移到 `/api/aigc/prompts/:id`。
+  - catch-all 未实现接口不再只在 body 内写 `code=501`，同步设置 HTTP `501`，避免调用方按 2xx 误判成功。
+
+### fix(tuff-cli): align sdkapi marker hard-cut
+
+- `packages/tuff-cli/tsup.config.ts`
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/utils/__tests__/permission-status.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+- `.github/workflows/package-tuff-cli-ci.yml`
+  - 从 SDK allowlist 移除临时保留的 `260421` 历史 marker，使共享 `checkSdkCompatibility()`、`tuff validate` 和 CoreApp runtime gate 重新保持同一 canonical marker 口径。
+  - 补齐权限状态与插件 loader 回归：非 canonical `260421` 在权限评估前不再授予权限，并在运行时进入 `SDKAPI_BLOCKED`，不再作为可加载历史例外。
+  - 同步 Manifest 参考文档的支持列表，避免开发者继续把 `260421` 当作可声明 marker。
+  - CLI Package CI 的 path filter 补充 `packages/utils/**` 与 workflow 文件自身，确保共享 SDK 兼容性改动会重新触发 `tuff-cli-core` lint/test/build。
+  - `tuff-cli` tsup external 补齐 `@vue/compiler-sfc` 可选模板引擎，避免打包 CLI core 时把 Vue SFC 编译器的可选 `require()` 当成硬依赖解析。
+
+### docs(project): add compatibility deep review
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - 归档跨平台兼容与占位实现深度复核：CoreApp 平台能力、sync 密文载荷、Linux unsupported reason 与 transport boundary 当前稳定；`transport-event-boundary.test.ts` 通过，typed migration candidate 保持 `0`，retained raw definition 当前测试上限为 `265`。
+  - 明确剩余 `2.4.11` 风险：AI 兼容占位成功响应、CLI token 明文 JSON、插件 provider secret 普通 storage、插件 shell capability 诊断与生产样式大文件 SRP。
+  - 同步活跃入口文档，把当前下一步继续固定为 `2.4.10` Windows 真机 evidence；不把 AI/CLI/插件 secret/SRP 扩大为正式 `2.4.10` gate blocker。
+
+### chore(release): prepare 2.4.10 beta.22 CI readiness
 
 - `package.json`
 - `apps/core-app/package.json`
-- `notes/update_2.4.10-beta.21.{zh,en}.md`
+- `notes/update_2.4.10-beta.22.{zh,en}.md`
 - `apps/core-app/src/main/modules/omni-panel/index.ts`
 - `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
 - `packages/utils/__tests__/transport-event-boundary.test.ts`
 - `plugins/clipboard-history/eslint.config.mjs`
 - `plugins/touch-dev-utils/eslint.config.mjs`
-  - 版本基线推进到 `2.4.10-beta.21`，用于避开已发布的 `v2.4.10-beta.20` tag，并补齐对应中英文 beta release notes。
+  - 版本基线推进到 `2.4.10-beta.22`，用于避开已存在的 `v2.4.10-beta.21` tag，并补齐对应中英文 beta release notes。
   - 收口远端 `master` 最新失败的 OmniPanel Gate：主进程模块不再读取 `globalThis.$app`，渲染端错误输出统一走 renderer logger。
   - 收口 Utils Package CI 的 transport boundary 扫描基线：当前 retained raw definition 为 `265`，raw send violation 仍只允许既有 allowlist，typed migration candidate 保持 `0`。
   - 补齐 `clipboard-history` / `touch-dev-utils` 插件本地 ESLint 配置，并修正 clipboard history 事件命名、组件格式与相关工具脚本 lint 阻断，确保 beta 发布相关质量门禁可复跑。
-  - 本地已验证 OmniPanel scoped lint、Utils boundary test、`test:targeted`、CoreApp typecheck、clipboard-history lint/test 与 macOS beta build；完整 `quality:pr` 仍被 `apps/pilot` 既有 lint 债务阻断，不能宣称全仓 PR 质量门禁已绿。
+  - 本地已验证 OmniPanel scoped lint、Utils boundary test、`test:targeted`、CoreApp typecheck、clipboard-history lint/test 与 macOS beta build；完整 `quality:pr` 仍被 `retired-ai-app` 既有 lint 债务阻断，不能宣称全仓 PR 质量门禁已绿。
 
 ### fix(plugin): clear stale quick launch search suggestions
 
@@ -207,7 +344,7 @@
 - `.github/workflows/README.md`
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
-  - 将 CI、package publish、release、Pilot image、PR label 与 release drafter workflow 的 JavaScript Actions 统一升级到 Node 24-compatible major baseline，消除 Node.js 20 action runtime deprecation warning。
+  - 将 CI、package publish、release、AI image、PR label 与 release drafter workflow 的 JavaScript Actions 统一升级到 Node 24-compatible major baseline，消除 Node.js 20 action runtime deprecation warning。
   - 保持项目业务 Node runtime 为 `22.16.0`，明确 Action runtime 迁移不得通过升级业务 Node、`ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过。
   - 发布链路 `build-and-release` 同步升级 upload/download artifact 与 release action，后续仍需通过 beta/draft release run 验证三端 artifact、GitHub Release 与 Nexus sync annotations。
 
@@ -220,16 +357,25 @@
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.test.ts`
-  - 新增 2026-05-12 跨平台兼容与占位实现复核报告，确认 2026-05-10 P0/P1 假成功路径已基本收口：Pilot runtime metrics、mock payment 显式环境门控、`touch-image` 图片历史迁入 plugin storage SDK。
+  - 新增 2026-05-12 跨平台兼容与占位实现复核报告，确认 2026-05-10 P0/P1 假成功路径已基本收口：AI runtime metrics、mock payment 显式环境门控、`touch-image` 图片历史迁入 plugin storage SDK。
   - 同步六主文档入口，把当前 release blocker 收敛为 Windows/macOS 真机 evidence；后续 `2.4.11` 聚焦 `compat-file=5`、retained raw definition、CLI token storage、插件命令能力统一诊断与超长模块 SRP 小切片。
   - 清理 `app-provider.test.ts` 测试标题中的非行为性 legacy 关键词噪声，保持断言不变并恢复 `compat:registry:guard` 绿线。
+
+### feat(plugin): precompile production widgets in plugin packages
+
+- `packages/tuff-cli-core/src/exporter.ts`
+- `apps/core-app/src/main/modules/plugin/widget/{widget-manager,widget-transform}.ts`
+- `packages/utils/plugin/widget.ts`
+  - `tuff builder` now precompiles manifest widget features into `widgets/.compiled/*.cjs` and records `build.widgets` metadata in the packaged manifest.
+  - Core App packaged runtime prefers precompiled widget output and disables runtime widget compilation unless dev/source mode or `TUFF_WIDGET_RUNTIME_COMPILE` explicitly enables fallback.
+  - Widget compiler service `EPIPE` failures are classified as `WIDGET_COMPILER_SERVICE_UNAVAILABLE`; dev/source mode retries once.
 
 ### fix(core-app): launch Windows executable apps from install directory
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-launcher.test.ts`
   - Windows `.exe`/`.com` app launches now use the app process launcher instead of `shell.openPath`, and default `cwd` to the executable directory when no explicit working directory is provided.
-  - This keeps apps such as WeChat/Weixin aligned with their installed runtime assumptions, while non-executable paths still use the shell opener.
+  - This keeps apps such as ChatApp aligned with their installed runtime assumptions, while non-executable paths still use the shell opener.
 
 ### fix(core-app): skip unresolved optional packaged runtime modules
 
@@ -277,7 +423,7 @@
 - `.github/workflows/ci.yml`
 - `.github/workflows/package-ci.yml`
 - `.github/workflows/package-*-publish.yml`
-- `.github/workflows/{omnipanel-gate,package-utils-ci,package-unplugin-ci,pilot-ci,release-drafter}.yml`
+- `.github/workflows/{omnipanel-gate,package-utils-ci,package-unplugin-ci,aiapp-ci,release-drafter}.yml`
 - `package.json`
 - `apps/core-app/package.json`
 - `apps/core-app/scripts/build-target.js`
@@ -287,7 +433,7 @@
   - 发布构建统一 Node `22.16.0`、pnpm `10.32.1`、frozen lockfile install 与 `pnpm approve-builds --all`；上传 artifact 收窄到安装包、压缩包和 updater metadata，减少 release 汇总下载体积。
   - `build-and-release` 增加 workflow concurrency 与 job 最小权限；`sync-nexus-release` 保留 `contents: read`，Release 创建 job 只在需要上传 release 时授予 `contents: write`。
   - 主 PR CI 从 `pull_request_target` 改为只读 `pull_request`，不再 checkout PR head 时携带写权限；主线分支过滤覆盖 `main/master`。
-  - reusable package CI 与 package publish workflow 统一 `pnpm/action-setup@v4`；`omnipanel-gate`、utils/unplugin package CI、Pilot CI 与 Release Drafter 补齐 `master/main` 触发口径。
+  - reusable package CI 与 package publish workflow 统一 `pnpm/action-setup@v4`；`omnipanel-gate`、utils/unplugin package CI、AI CI 与 Release Drafter 补齐 `master/main` 触发口径。
   - 补齐 `2.4.10-beta.19` 中英文 release notes，明确该版本仍为 beta 测试包，不宣称 Windows 真机 acceptance、性能采样和 Nexus Release Evidence 已完成。
 
 ### refactor(core-app): unify Nexus runtime API server resolver
@@ -336,7 +482,7 @@
   - 单输入框同时支持路径、bundleId、显示名与搜索词；前端会用同一个输入值执行目标定位与 query stage 诊断。
   - query stage 卡片可点击查看候选详情；N-gram 阶段会显示候选 `itemId` 与 `overlap`，便于定位短词/模糊召回来源。
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
-  - 诊断目标直接匹配失败时，会用输入值走 app 搜索索引召回并反查应用记录，支持 `weixin` 等搜索词直接定位目标应用。
+  - 诊断目标直接匹配失败时，会用输入值走 app 搜索索引召回并反查应用记录，支持 `chatapp` 等搜索词直接定位目标应用。
   - 诊断目标定位新增已入库关键词反查路径，支持 `wx` 这类短别名直接映射到应用 itemId，避免搜索词已入库但诊断返回 `target-not-found`。
 - `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
   - 更新应用搜索诊断说明与占位文案，明确统一输入框支持多种查询格式。
@@ -347,7 +493,7 @@
 ### fix(core-app): keep macOS app bundles out of file preview results
 
 - `apps/core-app/src/main/modules/box-tool/addon/files/native-file-search-provider.ts`
-  - macOS Spotlight 文件搜索不再把 `.app` bundle 输出为普通 `file` item，避免 CoreBox 中 QQ/WeChat 等应用命中后进入文件预览面板。
+  - macOS Spotlight 文件搜索不再把 `.app` bundle 输出为普通 `file` item，避免 CoreBox 中 QQ/ChatApp 等应用命中后进入文件预览面板。
   - 应用结果仍由 AppProvider 负责输出，保持 CoreBox item payload 结构不变。
   - 补充 `native-file-search-provider` 定向单测覆盖 `.app` bundle 路径识别与 Spotlight 搜索结果过滤。
 
@@ -367,7 +513,7 @@
 - `packages/tuff-intelligence/src/adapters/deepagent-input.test.ts`
 - `scripts/large-file-boundary-allowlist.json`
   - 将 DeepAgent 的 TurnState 附件归一、chat message content 构造、Responses input 构造与模型上下文消息过滤迁出到 `deepagent-input.ts`，engine 保留 transport fallback、SSE 解析、LangChain/DeepAgent 调用与错误封装职责。
-  - 保持 `deepagent-engine.ts` 的 `buildChatMessageContent`、`buildResponsesInput`、`resolveAttachmentImageUrl` 导出路径不变，避免影响现有 `pilot-server` 入口与服务端调用。
+  - 保持 `deepagent-engine.ts` 的 `buildChatMessageContent`、`buildResponsesInput`、`resolveAttachmentImageUrl` 导出路径不变，避免影响现有 `aiapp-server` 入口与服务端调用。
   - `deepagent-engine.ts` 从 `2137` 行降到 `1791` 行，DeepAgent growth exception cap 从 `2138` 收紧到 `1792`，继续阻断回涨。
   - 验证：`pnpm -C "packages/tuff-intelligence" exec vitest run "src/adapters/deepagent-input.test.ts"` 通过（`3 tests`）；定向 ESLint、`size:guard --changed` 与 `pnpm -C "packages/tuff-intelligence" run build` 通过。
 
@@ -634,21 +780,21 @@
   - `dayOfWeek` 继续走 `0..6` 数字门禁；占位拒绝只收口字符串证据字段，保持现有 manifest schema 简单。
   - 新增回归覆盖生成模板占位值被最终手工 gate 当作缺失处理，避免只把模板原样归档后通过 Windows 真机 acceptance。
 
-### refactor(governance): hard-cut sdkapi and pilot compat filenames
+### refactor(governance): hard-cut sdkapi and aiapp compat filenames
 
 - `apps/core-app/src/main/modules/plugin/sdkapi-hard-cut-gate.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
 - `apps/core-app/src/main/modules/permission/permission-store.ts`
-- `apps/pilot/server/utils/pilot-aigc-service.ts`
-- `apps/pilot/server/utils/pilot-payment-service.ts`
-- `apps/pilot/server/utils/pilot-system-seeds.ts`
+- `retired-ai-app/server/utils/aiapp-aigc-service.ts`
+- `retired-ai-app/server/utils/aiapp-payment-service.ts`
+- `retired-ai-app/server/utils/aiapp-system-seeds.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/docs/DEBT-GOVERNANCE-BOARD-2026-03-17.md`
 - `docs/plan-prd/docs/DEBT-GOVERNANCE-EXECUTION-CHECKLIST-2026-03-17.md`
   - 插件 sdkapi gate 文件从 `sdk-compat.ts` 物理硬切为 `sdkapi-hard-cut-gate.ts`，内部导出同步从 `getPluginSdkCompatibilityGate()` / `PluginSdkCompatibilityGate` 改为 `getPluginSdkHardCutGate()` / `PluginSdkHardCutGate`，行为仍保持缺失、非法、过低或未支持 `sdkapi` 直接阻断。
-  - Pilot 三个 `pilot-compat-*` utility 文件改为领域服务命名：`pilot-aigc-service.ts`、`pilot-payment-service.ts`、`pilot-system-seeds.ts`，只更新 import，不新增兼容 re-export 壳。
+  - AI 三个 `aiapp-compat-*` utility 文件改为领域服务命名：`aiapp-aigc-service.ts`、`aiapp-payment-service.ts`、`aiapp-system-seeds.ts`，只更新 import，不新增兼容 re-export 壳。
   - `compatibility-debt-registry.csv` 清退对应 4 条 `compat-file`，当时 registry 降为 `37` 条、`compat-file=5`；治理看板与执行清单同步从 2026-03 旧快照对齐到当前 SoT。
 
 ### test(core-app): require structured Windows update install evidence
@@ -790,7 +936,7 @@
 
 - `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
 - `docs/plan-prd/TODO.md`
-  - 补充中文 App 查询排序回归：查询 `微信` 时，App 标题精确/前缀命中会排在中等频次、同样可见标题命中的 `微信工具箱` plugin feature 前。
+  - 补充中文 App 查询排序回归：查询 `聊天应用` 时，App 标题精确/前缀命中会排在中等频次、同样可见标题命中的 `聊天应用工具箱` plugin feature 前。
   - 该用例固定 Windows 常见中文 App 名搜索意图，避免后续排序优化只覆盖英文 word/prefix 场景而让中文 App 被中等频 feature 抢首位。
 
 ### test(core-app): cover shortcut property target app-index action
@@ -909,21 +1055,21 @@
   - `lint` / `lint:fix` 只跑 ESLint 与 `intelligence:check`，新增 `lint:changed` 只检查 git changed JS/TS/Vue 文件；lint-staged 保持 eslint fix，并追加 changed size guard。
   - 验证：`node scripts/check-large-file-boundaries.mjs --report` 返回 0；默认 `size:guard` 与 `--strict` 会阻断当前 dirty worktree 中确实新增/增长的超长文件；显式限定本轮脚本文件的 `--changed` 返回 0；`node scripts/run-eslint-changed.mjs` 返回 0（存在既有 warning）；docs guard 与 diff check 已复核文档同步。
 
-### ref(pilot): hard-cut physical legacy stream filenames
+### ref(aiapp): hard-cut physical legacy stream filenames
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/pilot-stream-contract.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/pilot-stream-input.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/pilot-stream-sse.ts`
-- `apps/pilot/server/utils/__tests__/pilot-completion-stream-contract.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-stream-input.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-run-event-card.test.ts`
-- `packages/tuff-intelligence/src/business/pilot/run-event-card.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/aiapp-stream-contract.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/aiapp-stream-input.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/aiapp-stream-sse.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-completion-stream-contract.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-stream-input.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-run-event-card.test.ts`
+- `packages/tuff-intelligence/src/business/aiapp/run-event-card.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/TODO.md`
-  - 完成此前待确认的 Pilot 物理文件名 hard-cut：`legacy-stream-*` 改为 `pilot-stream-*`，run-event-card 实现改为当前 `run-event-card.ts` 路径。
-  - `pilot-legacy-run-event-card.test.ts` 同步重命名为 `pilot-run-event-card.test.ts`，删除最后一条 Pilot run-event-card 测试文件名 compat-file 清册项。
-  - 更新 Pilot app、server 测试与 `@talex-touch/tuff-intelligence/pilot` barrel 的 import/export，删除对应 stale compatibility registry 与 legacy allowlist 记录。
+  - 完成此前待确认的 AI 物理文件名 hard-cut：`legacy-stream-*` 改为 `aiapp-stream-*`，run-event-card 实现改为当前 `run-event-card.ts` 路径。
+  - `aiapp-legacy-run-event-card.test.ts` 同步重命名为 `aiapp-run-event-card.test.ts`，删除最后一条 AI run-event-card 测试文件名 compat-file 清册项。
+  - 更新 AI app、server 测试与 `@talex-touch/tuff-intelligence` barrel 的 import/export，删除对应 stale compatibility registry 与 legacy allowlist 记录。
   - 清理 compatibility registry 中已不再被扫描命中的 stale compat-file rows，同时保留 registry-only migration / size-growth exception rows。
   - `node "scripts/check-legacy-boundaries.mjs"` 已降为 `legacy-keyword: files=0, hits=0`。
 
@@ -952,19 +1098,19 @@
   - 将构建后 raw channel 扫描脚本从 `assert-no-legacy-channels.mjs` 物理重命名为 `assert-no-raw-channels.mjs`。
   - 插件 `build` 命令同步使用当前脚本名，删除对应 `compat-file` registry 行。
 
-### test(intelligence-uikit): hard-cut pilot mapping test filename
+### test(intelligence-uikit): hard-cut aiapp mapping test filename
 
-- `packages/intelligence-uikit/src/__tests__/pilot-mapping.test.ts`
+- `packages/intelligence-uikit/src/__tests__/aiapp-mapping.test.ts`
 - `packages/intelligence-uikit/README.md`
-  - 将新增 Pilot UI Kit 映射测试从 `pilot-adapter.test.ts` 物理重命名为 `pilot-mapping.test.ts`，避免把纯模型映射测试登记为 compat-file 债务。
-  - README 当前章节同步改为 `Pilot mapping 边界`，保持包入口语义聚焦在数据映射而非兼容 adapter。
+  - 将新增 AI UI Kit 映射测试从 `aiapp-adapter.test.ts` 物理重命名为 `aiapp-mapping.test.ts`，避免把纯模型映射测试登记为 compat-file 债务。
+  - README 当前章节同步改为 `AI mapping 边界`，保持包入口语义聚焦在数据映射而非兼容 adapter。
 
 ### feat(intelligence-uikit): add AI UI Kit workspace package
 
 - `packages/intelligence-uikit` 新增 `@talex-touch/intelligence-uikit` 私有 workspace 包。
 - 首批落地 `TxAi*` 组件骨架，覆盖 Foundation / Conversation / Content / Tool-Agent 四层。
-- 增加 `@talex-touch/intelligence-uikit/pilot` 子入口，提供 Pilot block/message 到 AI UI Kit 模型的映射。
-- README 固化组件矩阵、迁移阶段、动效扩展规范与 Pilot 替换边界。
+- 增加 `@talex-touch/intelligence-uikit/aiapp` 子入口，提供 AI block/message 到 AI UI Kit 模型的映射。
+- README 固化组件矩阵、迁移阶段、动效扩展规范与 AI 替换边界。
 
 ### test(core-app): harden Everything backend diagnostic fields
 
@@ -1157,7 +1303,7 @@
 - `docs/plan-prd/README.md`
 - `docs/plan-prd/TODO.md`
   - `windows:capability:verify --requireEverythingTargets` 不再只信任 `found=true`、正数 `matchCount` 与非空 samples；每个目标 probe 现在必须至少有一条样本文本包含目标关键词。
-  - 补充回归覆盖手工篡改 evidence 的弱证据：`target=WeChat` 但 samples 只包含 `C:\Tools\Other.exe` 时会失败为 `Everything targets not found: WeChat`。
+  - 补充回归覆盖手工篡改 evidence 的弱证据：`target=ChatApp` 但 samples 只包含 `C:\Tools\Other.exe` 时会失败为 `Everything targets not found: ChatApp`。
 
 ### feat(core-app): generate Windows manual evidence templates
 
@@ -1311,15 +1457,15 @@
 ### refactor(governance): land first architecture convergence slice
 
 - `packages/utils/__tests__/transport-event-boundary.test.ts`
-- `apps/pilot/server/api/system/serve/stat.get.ts`
-- `apps/pilot/server/utils/pilot-serve-stat.ts`
-- `apps/pilot/server/utils/__tests__/pilot-serve-stat.test.ts`
-- `apps/pilot/server/utils/pilot-compat-payment.ts`
-- `apps/pilot/server/utils/__tests__/pilot-payment-gate.test.ts`
-- `apps/pilot/server/api/order/subscribe.post.ts`
-- `apps/pilot/server/api/order/balance.post.ts`
-- `apps/pilot/server/api/order/target.get.ts`
-- `apps/pilot/server/api/order/price/dummy.get.ts`
+- `retired-ai-app/server/api/system/serve/stat.get.ts`
+- `retired-ai-app/server/utils/aiapp-serve-stat.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-serve-stat.test.ts`
+- `retired-ai-app/server/utils/aiapp-compat-payment.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-payment-gate.test.ts`
+- `retired-ai-app/server/api/order/subscribe.post.ts`
+- `retired-ai-app/server/api/order/balance.post.ts`
+- `retired-ai-app/server/api/order/target.get.ts`
+- `retired-ai-app/server/api/order/price/dummy.get.ts`
 - `plugins/touch-image/src/App.vue`
 - `docs/plan-prd/README.md`
 - `docs/plan-prd/TODO.md`
@@ -1327,8 +1473,8 @@
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
 - `docs/INDEX.md`
   - Transport boundary test now reports `rawSendViolations`, `retainedRawEventDefinitions` and `typedMigrationCandidates` separately, keeping raw send regressions distinct from retained raw definitions.
-  - Pilot `/api/system/serve/stat` now uses Node runtime metrics and returns degraded/unavailable reason when collection is incomplete, removing fixed Mock CPU / disk / memory data.
-  - Pilot mock payment order paths are gated by `PILOT_PAYMENT_MODE=mock`; disabled environments return `PAYMENT_PROVIDER_UNAVAILABLE` instead of mock payment success URLs.
+  - AI `/api/system/serve/stat` now uses Node runtime metrics and returns degraded/unavailable reason when collection is incomplete, removing fixed Mock CPU / disk / memory data.
+  - AI mock payment order paths are gated by `AIAPP_PAYMENT_MODE=mock`; disabled environments return `PAYMENT_PROVIDER_UNAVAILABLE` instead of mock payment success URLs.
   - `plugins/touch-image` image history moved from long-lived renderer `localStorage` writes to plugin storage SDK, capped at 50 entries, with one-time retired-key migration, failed thumbnail pruning and a clear-history entry.
 
 ### docs(repo): consolidate engineering process files under docs
@@ -1387,7 +1533,7 @@
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
   - 将 2.5.0 AI 下个版本内容从“入口收口”细化为可执行场景包：OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与剪贴板整理/会议纪要/文本批处理 3 个 P0 模板。
-  - 固化 Tuff Intents / Action Manifest、Skills Pack、Background Automations 与 Pilot 高级 Chat / DeepAgent 联动为 Beta；Assistant、多 Agent 长任务面板、多模态生成编辑与 Nexus Scene runtime orchestration 保持 Experimental / 2.5.x 后续。
+  - 固化 Tuff Intents / Action Manifest、Skills Pack、Background Automations 与 AI 高级 Chat / DeepAgent 联动为 Beta；Assistant、多 Agent 长任务面板、多模态生成编辑与 Nexus Scene runtime orchestration 保持 Experimental / 2.5.x 后续。
   - 补充安全与验收口径：写剪贴板、写文件、调用插件、网络请求、命令执行等副作用必须进入 Review Queue 或审批票据；Workflow 模板不得内嵌 provider secret、明文 API Key 或不可审计脚本。
 
 ### fix(core-app): include thumbnail worker in main build output
@@ -1693,7 +1839,7 @@
 - `apps/core-app/scripts/windows-acceptance-verify.ts`
 - `docs/INDEX.md`
 - `docs/plan-prd/TODO.md`
-  - Windows acceptance manifest 的 `manualChecks.commonAppLaunch` 新增 `checks[]` 详情字段，可对 WeChat / Codex / Apple Music 等样本分别记录 `searchHit`、`displayNameCorrect`、`iconCorrect`、`launchSucceeded` 与 `coreBoxHiddenAfterLaunch`。
+  - Windows acceptance manifest 的 `manualChecks.commonAppLaunch` 新增 `checks[]` 详情字段，可对 ChatApp / Codex / Apple Music 等样本分别记录 `searchHit`、`displayNameCorrect`、`iconCorrect`、`launchSucceeded` 与 `coreBoxHiddenAfterLaunch`。
   - `windows:acceptance:verify` 新增 `--requireCommonAppLaunchDetails`，最终强门禁会要求每个 common app target 都完成五项确认；`windows:acceptance:template` 会生成对应占位并把该参数写入 `verification.recommendedCommand`，避免只填 `passedTargets` 就绕过真实启动体验验收。
 
 ### test(core-app): require strict clipboard stress evidence in Windows acceptance
@@ -1718,7 +1864,7 @@
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
   - 新增 2.5.0 AI 板块主 PRD，版本定位为“桌面 AI 入口收口版本”，优先收口 CoreBox / OmniPanel 的用户可感知 AI 场景，不把 2.5.0 定义为大规模 AI runtime 重写或单纯 Nexus Provider/Scene 底座建设。
-  - 锁定 Stable / Beta / Experimental 分级：Stable 只承诺 `text.chat`、翻译、摘要、改写、代码解释/审查与 `vision.ocr`；Workflow 模板与 Pilot 高级 Chat / DeepAgent 联动进入 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 进入 Experimental / 2.5.x 后续。
+  - 锁定 Stable / Beta / Experimental 分级：Stable 只承诺 `text.chat`、翻译、摘要、改写、代码解释/审查与 `vision.ocr`；Workflow 模板与 AI 高级 Chat / DeepAgent 联动进入 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 进入 Experimental / 2.5.x 后续。
   - 固化 Provider 安全合同：provider metadata 可进入普通配置，API Key / secret 必须进入 secure-store 或以 `authRef` 表示；审计默认只记录 traceId、provider、model、latency、usage 与 errorCode，不保存完整 prompt / response。
   - 明确 2.5.0 不打断当前 `2.4.10 -> 2.4.11` legacy/compat 与跨平台回归门禁节奏。
 
@@ -1731,7 +1877,7 @@
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
   - 新增跨平台兼容与占位/假实现审计报告，确认 CoreApp 平台能力已具备显式 degraded/unsupported 合同，Linux 保持 documented best-effort，Windows/macOS 仍需 release-blocking 人工证据。
-  - 锁定 P0 假值风险：Pilot `system/serve/stat` 仍返回 Mock CPU/固定资源数据，Pilot 兼容支付仍返回 `weixin://wxpay/pilot/mock/*` 与 `DUMMY` 订单形态；后续必须以真实 metrics 或显式 unavailable / mock-mode 门控替代。
+  - 锁定 P0 假值风险：AI `system/serve/stat` 仍返回 Mock CPU/固定资源数据，AI 兼容支付仍返回 `chatapp://wxpay/aiapp/mock/*` 与 `DUMMY` 订单形态；后续必须以真实 metrics 或显式 unavailable / mock-mode 门控替代。
   - 锁定 P1 治理项：`plugins/touch-image` 图片历史路径仍直接落 renderer `localStorage`；本次复核生产 raw send 直连未见新增命中，但 retained `defineRawEvent` definition 仍有 342 处，需要与 raw send violation 分开统计；`clipboard/search-core/plugin/app-provider/update-system` 等超长模块继续作为 SRP 拆分优先候选。
   - 同步 README、INDEX、TODO、路线图与质量基线入口；当前工作区基线校准为 `2.4.10-beta.18`。
 
@@ -1762,7 +1908,7 @@
 - `docs/INDEX.md`
 - `docs/plan-prd/TODO.md`
   - 新增 `windows-capability-evidence/v1` 证据汇总与 `pnpm -C "apps/core-app" run windows:capability:evidence` 本地脚本，Windows 上采集 PowerShell 可用性、Everything CLI 路径/版本/轻量查询、Everything 目标关键词查询、`Get-StartApps` UWP/桌面路径计数、registry uninstall fallback 可执行候选、Start Menu `.lnk/.appref-ms/.exe` 入口、`.lnk` target/arguments/workingDirectory 与目标应用命中情况。
-  - 默认目标为 WeChat、Codex、Apple Music，也可用重复 `--target` 指定；`--requireEverything` / `--requireTargets` 可把缺失项升级为 gate failure，`--output` 可直接落盘 JSON 供真机验收归档。
+  - 默认目标为 ChatApp、Codex、Apple Music，也可用重复 `--target` 指定；`--requireEverything` / `--requireTargets` 可把缺失项升级为 gate failure，`--output` 可直接落盘 JSON 供真机验收归档。
   - `--installer <path>` 会复用现有 `resolveWindowsInstallerCommand()` 生成 NSIS `/S` 或 MSI `msiexec.exe /i ... /passive /norestart` dry-run 证据；脚本不会启动安装器，且显式保留 `unattendedAutoInstallEnabled: false`，避免把用户触发安装 handoff 误标为下载完成后无人值守自动安装。
   - 新增 `windows:capability:verify`，可从 evidence JSON 重新计算 gate，并用 `--requireEverything --requireEverythingTargets --requireTargets --requireUwp --requireRegistryFallback --requireShortcutMetadata --requireApprefMs --requireShortcutArguments --requireShortcutWorkingDirectory --requireInstallerHandoff` 把 Windows 真机验收项升级为硬门禁。
   - 非 Windows 环境不会伪造通过，会输出 `status: "skipped"` 与 `platform <name> is not win32` warning，避免把本机 macOS smoke 当成 Windows 真机证据。
@@ -2904,26 +3050,26 @@
   - Added ImageUploader regression coverage for input attributes, existing previews, max truncation, disabled add/remove blocking, object URL creation/revocation, remove/change events, and unmount cleanup.
   - Nexus/Tuffex docs now describe the current click-to-pick contract and no longer imply drag-and-drop support that the component does not implement.
 
-### ref(pilot): hard-cut retired stream status compatibility
+### ref(aiapp): hard-cut retired stream status compatibility
 
-- `apps/pilot/server/utils/pilot-executor-utils.ts`
-- `apps/pilot/server/utils/__tests__/pilot-executor-utils.test.ts`
-- `apps/pilot/app/composables/usePilotChatPage.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/server/utils/aiapp-executor-utils.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-executor-utils.test.ts`
+- `retired-ai-app/app/composables/useAIChatPage.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Title SSE responses no longer emit `status_updated`; they only send completion chunks and `[DONE]`.
-  - Pilot chat page removed the retained `status_updated` handler and the `error + TOOL_APPROVAL_REQUIRED` compatibility conversion; approval wait state now relies on the current `turn.approval_required` stream event.
-  - Added a title SSE regression that rejects `status_updated` output and removed the stale `usePilotChatPage.ts` legacy registry row.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-executor-utils.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-executor-utils.ts" "server/utils/__tests__/pilot-executor-utils.test.ts" "app/composables/usePilotChatPage.ts" "app/composables/api/base/v1/aigc/completion/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard` 通过。
+  - AI chat page removed the retained `status_updated` handler and the `error + TOOL_APPROVAL_REQUIRED` compatibility conversion; approval wait state now relies on the current `turn.approval_required` stream event.
+  - Added a title SSE regression that rejects `status_updated` output and removed the stale `useAIChatPage.ts` legacy registry row.
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-executor-utils.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/aiapp-executor-utils.ts" "server/utils/__tests__/aiapp-executor-utils.test.ts" "app/composables/useAIChatPage.ts" "app/composables/api/base/v1/aigc/completion/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard` 通过。
 
-### ref(pilot): hard-cut websearch legacy gateway provider id
+### ref(aiapp): hard-cut websearch legacy gateway provider id
 
-- `apps/pilot/server/utils/pilot-admin-datasource-config.ts`
-- `apps/pilot/server/utils/pilot-tool-gateway.ts`
-- `apps/pilot/server/utils/__tests__/pilot-admin-datasource-config.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+- `retired-ai-app/server/utils/aiapp-admin-datasource-config.ts`
+- `retired-ai-app/server/utils/aiapp-tool-gateway.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-admin-datasource-config.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-tool-gateway.test.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
@@ -2953,19 +3099,19 @@
   - DeepAgent fallback function and audit event naming now use direct Responses fallback wording instead of compatibility/legacy wording.
   - Runtime behavior is unchanged: upstream errors containing `legacy protocol` are still treated as provider protocol signatures and routed to direct `/v1/responses`.
   - Registry row now documents the remaining keyword as upstream error text matching, not a project compatibility branch.
-  - 验证：`pnpm -C "packages/tuff-intelligence" exec eslint "src/adapters/deepagent-engine.ts"` 通过；`pnpm -C "packages/tuff-intelligence" exec vitest run "src/client.test.ts"` 通过；`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/deepagent-engine-message-shape.test.ts" "server/utils/__tests__/deepagent-engine-tools.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "packages/tuff-intelligence" exec eslint "src/adapters/deepagent-engine.ts"` 通过；`pnpm -C "packages/tuff-intelligence" exec vitest run "src/client.test.ts"` 通过；`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/deepagent-engine-message-shape.test.ts" "server/utils/__tests__/deepagent-engine-tools.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): hard-cut removed channel adapter normalization
+### ref(aiapp): hard-cut removed channel adapter normalization
 
-- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
-- `apps/pilot/server/utils/__tests__/pilot-admin-channel-config.test.ts`
+- `retired-ai-app/server/utils/aiapp-admin-channel-config.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-admin-channel-config.test.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Channel catalog normalization no longer silently maps removed/unknown adapter values to `openai`.
   - Removed adapter rows are rejected as invalid channels with `missing: ["adapter"]`, so stale stored values are dropped instead of kept as usable runtime config.
   - Removed the stale `legacy-keyword` allowlist and registry row for the file.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-admin-channel-config.test.ts" "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-admin-channel-config.ts" "server/utils/__tests__/pilot-admin-channel-config.test.ts" "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-admin-channel-config.test.ts" "server/utils/__tests__/aiapp-channel-model-sync.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/aiapp-admin-channel-config.ts" "server/utils/__tests__/aiapp-admin-channel-config.test.ts" "server/utils/__tests__/aiapp-channel-model-sync.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard` 通过。
 
 ### chore(packages-test): hard-cut tsconfig decorator comment legacy wording
 
@@ -2993,41 +3139,41 @@
   - Download migration guide now describes the removed old database/config import path as historical instead of Legacy wording.
   - Runtime behavior is unchanged: `DownloadCenter` still treats the current database as the only local source of truth.
 
-### ref(pilot): hard-cut quota history payload local legacy naming
+### ref(aiapp): hard-cut quota history payload local legacy naming
 
-- `apps/pilot/server/utils/quota-history-store.ts`
+- `retired-ai-app/server/utils/quota-history-store.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - The base64 historical payload migration local variable now uses `historicalPayload` instead of legacy wording.
   - Runtime behavior is unchanged: non-JSON historical payloads are still decoded through `decodeLegacyQuotaConversation()` and persisted back as normalized JSON.
   - Removed the stale `legacy-keyword` registry and allowlist rows for the file.
-  - 验证：`pnpm -C "apps/pilot" exec eslint "server/utils/quota-history-store.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec eslint "server/utils/quota-history-store.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): hard-cut capability historical field internal naming
+### ref(aiapp): hard-cut capability historical field internal naming
 
-- `apps/pilot/shared/pilot-capability-meta.ts`
-- `apps/pilot/server/utils/pilot-admin-routing-config.ts`
-- `apps/pilot/app/composables/usePilotRoutingAdmin.ts`
+- `retired-ai-app/shared/aiapp-capability-meta.ts`
+- `retired-ai-app/server/utils/aiapp-admin-routing-config.ts`
+- `retired-ai-app/app/composables/useAIRoutingAdmin.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Capability resolver internal parameter/type names now use `historicalFields` wording instead of legacy wording.
   - External behavior is unchanged: current `capabilities` still take precedence, and historical `allowWebsearch` / `allowImageGeneration` / `allowFileAnalysis` / `allowImageAnalysis` fields remain fallback inputs during the migration window.
   - Removed the stale `legacy-keyword` registry rows for the three files after keyword hits were eliminated.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-capability-meta.shared.test.ts" "server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/pilot-admin-routing-config.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "shared/pilot-capability-meta.ts" "server/utils/pilot-admin-routing-config.ts" "app/composables/usePilotRoutingAdmin.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-capability-meta.shared.test.ts" "server/utils/__tests__/aiapp-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/aiapp-admin-routing-config.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "shared/aiapp-capability-meta.ts" "server/utils/aiapp-admin-routing-config.ts" "app/composables/useAIRoutingAdmin.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): hard-cut datasource gateway non-branch legacy wording
+### ref(aiapp): hard-cut datasource gateway non-branch legacy wording
 
-- `apps/pilot/server/utils/pilot-admin-datasource-config.ts`
-- `apps/pilot/server/utils/__tests__/pilot-admin-datasource-config.test.ts`
+- `retired-ai-app/server/utils/aiapp-admin-datasource-config.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-admin-datasource-config.test.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Datasource gateway comments and regression fixture text now use historical/retired wording for old gateway fields, sample base URLs, and test env keys.
   - The `legacy-gateway` provider id remains unchanged because production code still uses it as an explicit branch key for mapped gateway providers.
   - Allowlist counts are tightened from production `5 -> 2` and test `8 -> 2`; registry rows now describe the retained branch-key debt precisely.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-admin-datasource-config.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-admin-datasource-config.ts" "server/utils/__tests__/pilot-admin-datasource-config.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-admin-datasource-config.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/aiapp-admin-datasource-config.ts" "server/utils/__tests__/aiapp-admin-datasource-config.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
 ### docs(core-app): hard-cut analytics search wording
 
@@ -3052,25 +3198,25 @@
   - Runtime and type behavior are unchanged: providers can still pass lightweight icon class names without constructing a full `TuffIcon`.
   - 验证：`pnpm -C "packages/utils" exec eslint "core-box/tuff/tuff-dsl.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): hard-cut system message production variable wording
+### ref(aiapp): hard-cut system message production variable wording
 
-- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `retired-ai-app/server/utils/aiapp-system-message-response.ts`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/TODO.md`
   - The persisted visible system message collection now uses current `persistedVisibleSystemMessages` naming instead of legacy wording.
   - Runtime behavior is unchanged: visible persisted system messages are still merged with projected trace system messages by id and sorted by timeline.
   - Removed the stale `history/index.ts` legacy allowlist entry left after the previous meta wording cleanup.
-  - 验证：`pnpm -C "apps/pilot" exec eslint "server/utils/pilot-system-message-response.ts"` 通过；`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-system-message-response.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec eslint "server/utils/aiapp-system-message-response.ts"` 通过；`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-system-message-response.test.ts"` 通过；`pnpm docs:guard:strict`、`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): hard-cut history invalid meta comment wording
+### ref(aiapp): hard-cut history invalid meta comment wording
 
-- `apps/pilot/app/composables/api/base/v1/aigc/history/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/history/index.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - History mapper comment now says invalid historical meta instead of invalid legacy meta.
   - Runtime behavior is unchanged: invalid `row.meta` JSON still falls back to an empty meta object.
   - Removed the stale `legacy-keyword` registry row for the file.
-  - 验证：`pnpm -C "apps/pilot" exec eslint "app/composables/api/base/v1/aigc/history/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec eslint "app/composables/api/base/v1/aigc/history/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
 ### chore(utils): hard-cut eslint removed-entry diagnostics wording
 
@@ -3099,107 +3245,107 @@
   - Removed the stale `legacy-keyword` registry row for `packages/utils/transport/index.ts`.
   - 验证：`pnpm -C "packages/utils" exec eslint "transport/index.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): clarify workspace chat current completion wording
+### ref(aiapp): clarify workspace chat current completion wording
 
-- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `retired-ai-app/app/composables/useAIChatPage.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Workspace chat comment now says the production homepage uses current `$completion` instead of legacy `$completion`.
-  - The remaining `legacy` hits in `usePilotChatPage.ts` are real old event compatibility branches (`status_updated` / error compatibility), so the registry row remains with a precise retained-compatibility description.
-  - 验证：`pnpm -C "apps/pilot" exec eslint "app/composables/usePilotChatPage.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - The remaining `legacy` hits in `useAIChatPage.ts` are real old event compatibility branches (`status_updated` / error compatibility), so the registry row remains with a precise retained-compatibility description.
+  - 验证：`pnpm -C "retired-ai-app" exec eslint "app/composables/useAIChatPage.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ui(pilot): hard-cut admin side nav legacy wording
+### ui(aiapp): hard-cut admin side nav legacy wording
 
-- `apps/pilot/app/components/admin/AdminSideNav.vue`
+- `retired-ai-app/app/components/admin/AdminSideNav.vue`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
-  - Pilot admin sidebar status copy now says `历史 CMS 已下线` instead of `Legacy CMS 已下线`.
+  - AI admin sidebar status copy now says `历史 CMS 已下线` instead of `Legacy CMS 已下线`.
   - Removed the stale `legacy-keyword` registry row for the component after the file no longer contains legacy wording.
-  - 验证：`pnpm -C "apps/pilot" exec eslint "app/components/admin/AdminSideNav.vue"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec eslint "app/components/admin/AdminSideNav.vue"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut routing resolver intent historical wording
+### test(aiapp): hard-cut routing resolver intent historical wording
 
-- `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-routing-resolver.intent.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Routing resolver intent tests now describe fallback intent/image routes as historical routes instead of legacy routes.
   - The tests still prove `scenePolicies` take precedence and that historical image route fields remain a fallback when `scenePolicies` are missing; runtime behavior is unchanged.
   - Removed the stale `legacy-keyword` registry row for the test file.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-routing-resolver.intent.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-routing-resolver.intent.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-routing-resolver.intent.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/aiapp-routing-resolver.intent.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut routing config historical fixture wording
+### test(aiapp): hard-cut routing config historical fixture wording
 
-- `apps/pilot/server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-admin-routing-config.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-admin-routing-config.capabilities.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-admin-routing-config.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Routing config tests now describe old intent/image and capability fallback fields as historical fields instead of legacy fields.
   - The `intentNanoModelId` / `intentRouteComboId` compatibility field names remain covered, but sample values have moved from legacy-named values to historical-named values.
   - Removed the two stale `legacy-keyword` registry rows after both test files no longer contain legacy wording.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/pilot-admin-routing-config.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/pilot-admin-routing-config.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/aiapp-admin-routing-config.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/aiapp-admin-routing-config.capabilities.test.ts" "server/utils/__tests__/aiapp-admin-routing-config.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut capability meta test fixture wording
+### test(aiapp): hard-cut capability meta test fixture wording
 
-- `apps/pilot/server/utils/__tests__/pilot-capability-meta.shared.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-capability-meta.shared.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Capability meta shared tests no longer use legacy-named test text or invalid route combo sample values.
-  - The test still proves explicit `capabilities` values take precedence over historical fallback fields, while `pilot-capability-meta.ts` keeps its registered production fallback debt until implementation hard-cut.
+  - The test still proves explicit `capabilities` values take precedence over historical fallback fields, while `aiapp-capability-meta.ts` keeps its registered production fallback debt until implementation hard-cut.
   - Removed the stale `legacy-keyword` registry row for the test file.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-capability-meta.shared.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-capability-meta.shared.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-capability-meta.shared.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/aiapp-capability-meta.shared.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut tool gateway retired fixture naming
+### test(aiapp): hard-cut tool gateway retired fixture naming
 
-- `apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-tool-gateway.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Tool gateway regression fixtures now use `retired` adapter/document sample values instead of legacy-named samples where the name is not part of a production branch key.
-  - The `legacy-gateway` provider id remains in the test because `pilot-tool-gateway.ts` still uses that id to select `createGatewayWebsearchConnector`; the registry row is retained with a precise branch-key note.
+  - The `legacy-gateway` provider id remains in the test because `aiapp-tool-gateway.ts` still uses that id to select `createGatewayWebsearchConnector`; the registry row is retained with a precise branch-key note.
   - The tests still prove unsupported media adapters fail and provider-backed websearch uses the gateway connector; runtime behavior is unchanged.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-tool-gateway.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-tool-gateway.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-tool-gateway.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/aiapp-tool-gateway.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut system message historical fixture wording
+### test(aiapp): hard-cut system message historical fixture wording
 
-- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-system-message-response.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - System message projection regression fixtures now use `historical system row` / `session_historical_only` / `msg_system_historical` instead of legacy-named sample values.
   - The test still proves trace projection overrides historical system rows and preserves historical rows when no trace exists; runtime behavior is unchanged.
   - Removed the stale `legacy-keyword` registry row for the test file.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-system-message-response.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-system-message-response.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-system-message-response.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/aiapp-system-message-response.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut channel model sync retired fixture naming
+### test(aiapp): hard-cut channel model sync retired fixture naming
 
-- `apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-channel-model-sync.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
   - Channel model sync regression fixture now uses `retired-model` instead of `legacy-model` for the pre-existing catalog model.
   - The assertion still proves existing configured channel models are preserved while discovered models are appended; no runtime behavior changed.
   - Removed the stale `legacy-keyword` registry row for the test file after the keyword scan stopped finding it.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/pilot-channel-model-sync.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-channel-model-sync.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/aiapp-channel-model-sync.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut workspace and replay fixture legacy wording
+### test(aiapp): hard-cut workspace and replay fixture legacy wording
 
-- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
-- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
-- `apps/pilot/app/components/pilot/PilotSidebarHeader.vue`
-- `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
-- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+- `retired-ai-app/app/components/aiapp/AIChatWorkspace.vue`
+- `retired-ai-app/app/components/aiapp/AISessionsPanel.vue`
+- `retired-ai-app/app/components/aiapp/AISidebarHeader.vue`
+- `retired-ai-app/server/utils/__tests__/aiapp-stream-replay.test.ts`
+- `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
-  - Pilot workspace-only component comments now describe the current chat surface instead of a legacy chat surface.
+  - AI workspace-only component comments now describe the current chat surface instead of a legacy chat surface.
   - Replay and quota snapshot regression fixtures now use `retired` sample payloads instead of `legacy` sample values; assertions and runtime behavior are unchanged.
   - Removed the five stale `legacy-keyword` registry rows after these files no longer contain legacy wording.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "app/components/pilot/PilotChatWorkspace.vue" "app/components/pilot/PilotSessionsPanel.vue" "app/components/pilot/PilotSidebarHeader.vue" "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-stream-replay.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "app/components/aiapp/AIChatWorkspace.vue" "app/components/aiapp/AISessionsPanel.vue" "app/components/aiapp/AISidebarHeader.vue" "server/utils/__tests__/aiapp-stream-replay.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### test(pilot): hard-cut auth retired header fixture wording
+### test(aiapp): hard-cut auth retired header fixture wording
 
-- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `retired-ai-app/server/utils/__tests__/auth.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
-  - Pilot auth regression fixture now uses `retired_*` header/cookie/bearer values instead of `legacy_*` names while preserving the same assertion: retired direct identity inputs fall back to the device guest identity.
+  - AI auth regression fixture now uses `retired_*` header/cookie/bearer values instead of `legacy_*` names while preserving the same assertion: retired direct identity inputs fall back to the device guest identity.
   - Removed the stale `legacy-keyword` registry row for `auth.test.ts` after the file no longer contains legacy wording.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/auth.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/__tests__/auth.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/auth.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/__tests__/auth.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
 ### ref(transport): hard-cut legacy wording in transport bridge adapters
 
@@ -3213,34 +3359,34 @@
   - Removed the three stale `legacy-keyword` registry rows after the package transport files no longer contain legacy wording.
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/main-transport-stream.test.ts" "__tests__/renderer-transport-stream.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过；`pnpm -C "packages/utils" exec eslint "transport/sdk/main-transport.ts" "transport/sdk/renderer-transport.ts" "transport/event/builder.ts" "__tests__/main-transport-stream.test.ts" "__tests__/renderer-transport-stream.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过；`node "scripts/check-legacy-boundaries.mjs"`、`pnpm compat:registry:guard`、`git diff --check` 通过。
 
-### ref(pilot): hard-cut public completion stream legacy symbol names
+### ref(aiapp): hard-cut public completion stream legacy symbol names
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-input.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
-- `apps/pilot/app/pages/index.vue`
-- `apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
-- `apps/pilot/server/utils/__tests__/legacy-stream-input.test.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/legacy-stream-input.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/pages/index.vue`
+- `retired-ai-app/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
+- `retired-ai-app/server/utils/__tests__/legacy-stream-input.test.ts`
 - `docs/plan-prd/TODO.md`
-  - Public Pilot completion stream symbols have been renamed from `buildLegacyCompletion*`, `resolveLegacyUiStreamInput`, `handleLegacyCompletionExecutorResult`, and `resolveLegacyConversationSeqCursor` to the current `buildPilotCompletion*`, `resolvePilotUiStreamInput`, `handlePilotCompletionExecutorResult`, and `resolvePilotConversationSeqCursor` names.
-  - Runtime stream request metadata now emits `pilot-ui-completion*` source markers instead of `legacy-ui-completion*`.
+  - Public AI completion stream symbols have been renamed from `buildLegacyCompletion*`, `resolveLegacyUiStreamInput`, `handleLegacyCompletionExecutorResult`, and `resolveLegacyConversationSeqCursor` to the current `buildAICompletion*`, `resolveAIUiStreamInput`, `handleAICompletionExecutorResult`, and `resolveAIConversationSeqCursor` names.
+  - Runtime stream request metadata now emits `aiapp-ui-completion*` source markers instead of `legacy-ui-completion*`.
   - Tests and UI call sites now use the current names; physical `legacy-stream-*` file names remain unchanged pending explicit confirmation for file moves.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts" "app/composables/api/base/v1/aigc/completion/legacy-stream-input.ts" "app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts" "app/composables/api/base/v1/aigc/completion/index.ts" "app/pages/index.vue" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts"` 通过。
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts" "app/composables/api/base/v1/aigc/completion/legacy-stream-input.ts" "app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts" "app/composables/api/base/v1/aigc/completion/index.ts" "app/pages/index.vue" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts"` 通过。
 
-### ref(pilot): hard-cut public run-event card legacy symbol names
+### ref(aiapp): hard-cut public run-event card legacy symbol names
 
-- `packages/tuff-intelligence/src/business/pilot/legacy-run-event-card.ts`
-- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
-- `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
+- `packages/tuff-intelligence/src/business/aiapp/legacy-run-event-card.ts`
+- `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-legacy-run-event-card.test.ts`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `docs/plan-prd/TODO.md`
-  - Public Pilot run-event card exports have been renamed from `projectPilotLegacyRunEventCard` / `resolvePilotLegacyRunEventCardKeys` / `PilotLegacyRunEventCard*` to `projectPilotRunEventCard` / `resolvePilotRunEventCardKeys` / `PilotRunEventCard*`.
-  - Pilot server snapshot reconstruction and Pilot app stream card upsert now consume the current names, and the regression test wording no longer describes a legacy pending key or legacy timeline.
+  - Public AI run-event card exports have been renamed from `projectAILegacyRunEventCard` / `resolveAILegacyRunEventCardKeys` / `AILegacyRunEventCard*` to `projectAIRunEventCard` / `resolveAIRunEventCardKeys` / `AIRunEventCard*`.
+  - AI server snapshot reconstruction and AI app stream card upsert now consume the current names, and the regression test wording no longer describes a legacy pending key or legacy timeline.
   - The implementation file name remains unchanged for now because a physical move/delete requires explicit confirmation under the repository risk rules; the public API no longer exposes the Legacy-named symbols.
-  - Removed the stale `legacy-keyword` compatibility registry row for the Pilot run-event card test after the keyword scan stopped finding it; the `compat-file` row remains while the physical filename is unchanged.
-  - 验证：`pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-legacy-run-event-card.test.ts"` 通过；`pnpm -C "apps/pilot" exec eslint "server/utils/quota-conversation-snapshot.ts" "app/composables/api/base/v1/aigc/completion/index.ts" "server/utils/__tests__/pilot-legacy-run-event-card.test.ts"` 通过。
+  - Removed the stale `legacy-keyword` compatibility registry row for the AI run-event card test after the keyword scan stopped finding it; the `compat-file` row remains while the physical filename is unchanged.
+  - 验证：`pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-legacy-run-event-card.test.ts"` 通过；`pnpm -C "retired-ai-app" exec eslint "server/utils/quota-conversation-snapshot.ts" "app/composables/api/base/v1/aigc/completion/index.ts" "server/utils/__tests__/aiapp-legacy-run-event-card.test.ts"` 通过。
 
 ### ref(utils): remove retired intelligence chat aliases
 
@@ -3780,15 +3926,15 @@
   - Unplugin CLI shim regression now uses `retired cli shim` wording while preserving the deprecated wrapper forwarding assertion; the compat-file registry row remains until the 2.5.0 shim removal window.
   - Removed the stale `legacy-keyword` allowlist and compatibility registry rows for both tests.
 
-### chore(pilot): clear route/model admin retired option wording
+### chore(aiapp): clear route/model admin retired option wording
 
-- `apps/pilot/app/pages/admin/system/route-combos.vue`
-- `apps/pilot/app/pages/admin/system/model-groups.vue`
+- `retired-ai-app/app/pages/admin/system/route-combos.vue`
+- `retired-ai-app/app/pages/admin/system/model-groups.vue`
 - `docs/plan-prd/docs/compatibility-debt-registry.csv`
 - `scripts/legacy-boundary-allowlist.json`
 - `docs/plan-prd/TODO.md`
   - Disabled placeholder options for persisted-but-disabled or missing provider models now use `retiredStatus` naming while preserving the existing labels and disabled selection behavior.
-  - Removed the stale `legacy-keyword` allowlist and compatibility registry rows for both Pilot admin pages.
+  - Removed the stale `legacy-keyword` allowlist and compatibility registry rows for both AI admin pages.
 
 ### chore(core-app): clear PermissionStore sqlite fixture wording noise
 
@@ -4391,15 +4537,15 @@
   - `resources/node_modules` 标记模块继续强制校验整条闭包都落在 resources 兜底路径；普通运行时闭包允许存在于 `app.asar` 或 `resources/node_modules`，保持现有打包策略不变。
   - 不调整 Sentry 初始化、不禁用 telemetry、不切换打包路径，仅把坏产物拦截前移到构建阶段。
 
-### fix(ci): 修复 Pilot 与 Tuff CLI clean CI 回归
+### fix(ci): 修复 AI 与 Tuff CLI clean CI 回归
 
-- `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-stream-emitter-seq.test.ts`
 - `packages/tuff-cli/src/bin/tuff.ts`
 - `.github/workflows/package-tuff-cli-ci.yml`
 - `package.json`
 - `apps/nexus/SETUP.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
-  - Pilot heartbeat 仍按 seq-optional 事件处理，测试固定“不写入 trace、不携带 `seq` 字段”的真实输出契约，避免把字段缺省误判为失败。
+  - AI heartbeat 仍按 seq-optional 事件处理，测试固定“不写入 trace、不携带 `seq` 字段”的真实输出契约，避免把字段缺省误判为失败。
   - Tuff CLI watch build 改为结构化 watcher type guard，避开 Vite/Rollup 类型版本漂移导致的 DTS 构建失败。
   - Tuff CLI package CI 在 clean runner 的 CLI job 内显式构建 `tuff-cli-core` 与 `unplugin-export-plugin`，避免依赖上游 job 的本地 `dist` 残留。
   - Cloudflare Pages 文档入口改为 `pnpm nexus:build`，避免 Git 集成构建误跑根目录 CoreApp `pnpm build`。
@@ -4493,15 +4639,15 @@
 ### chore(deps): 升级全仓同主版本依赖
 
 - `package.json` / `pnpm-workspace.yaml` / `pnpm-lock.yaml`
-- `apps/{core-app,nexus,pilot}/package.json`
+- `apps/{core-app,nexus,aiapp}/package.json`
 - `packages/*/package.json` / `plugins/*/package.json`
-  - 全仓 workspace 依赖完成同主版本 patch/minor 升级，覆盖 CoreApp、Nexus、Pilot、Utils、Tuffex、CLI packages 与官方插件包。
+  - 全仓 workspace 依赖完成同主版本 patch/minor 升级，覆盖 CoreApp、Nexus、AI、Utils、Tuffex、CLI packages 与官方插件包。
   - 版本准备同步完成：root/CoreApp `2.4.10-beta.3`，`@talex-touch/utils@1.0.50`，`@talex-touch/tuffex@0.3.5`，`@talex-touch/tuff-cli@0.0.3` 与 `tuff-intelligence` patch 版本。
   - CLI 发布边界收口：`@talex-touch/tuff-cli-core` 标记为内部 workspace 包，不进入 npm 发布清单；删除独立 `packages/tuffcli` 兼容包，避免与 `@talex-touch/tuff-cli` 发布职责重复；`@talex-touch/tuff-cli` 显式使用 workspace core / unplugin 构建，避免发布包打入旧版 `unplugin-export-plugin`。
   - `@talex-touch/unplugin-export-plugin` 保留为 `tuff-cli` 复用的低层构建能力与高级自定义入口，文档明确普通插件开发优先使用 `@talex-touch/tuff-cli`，不推荐作为默认安装入口。
   - GitHub Actions 发布链路同步收口：补齐 `tuff-cli` / `tuff-intelligence` package CI，新增 `tuff-intelligence` npm 发布 workflow；CLI 发布 workflow 只发布 `unplugin-export-plugin` 与 `tuff-cli`，不再引用已删除的 `tuffcli` 或内部 `tuff-cli-core`，并在发布 `unplugin-export-plugin` 前等待当前 `utils` 版本可见。
   - `next-auth` 保持 `~4.21.1`，避免破坏 `@sidebase/nuxt-auth@0.9.4` 的 peer 约束；major 升级项继续保留为单独兼容迁移任务。
-  - Pilot 补充 `markmap-common`，根 peer 规则补充 UnoCSS wasm runtime 的 `@emnapi/*` 可选 peer，消除本轮升级新增 peer 噪声。
+  - AI 补充 `markmap-common`，根 peer 规则补充 UnoCSS wasm runtime 的 `@emnapi/*` 可选 peer，消除本轮升级新增 peer 噪声。
   - 插件构建兼容同步收口：`touch-image` 对齐当前 Tuff SDK 初始化入口并补齐缺失图片视图，`touch-music` 将 `<script setup>` 中的组件选项迁移为 `defineOptions()`，避免新版 Vue 编译器阻断构建。
   - `@talex-touch/utils` 补充 npm `files` 白名单，避免发布包携带本地旧 tarball、测试目录与开发配置。
 
@@ -4687,7 +4833,7 @@
 - `docs/plan-prd/README.md`
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
-  - `TODO` 主清单从 `416` 行压缩到 `310` 行，保留当前两周主线、2.5.0 阻塞级回归与文档门禁节奏；Pilot / Intelligence 长尾与历史完成索引下沉到长期债务池。
+  - `TODO` 主清单从 `416` 行压缩到 `310` 行，保留当前两周主线、2.5.0 阻塞级回归与文档门禁节奏；AI / Intelligence 长尾与历史完成索引下沉到长期债务池。
   - 修复 `TODO` 统计漂移，当前实时 checkbox 口径为 `已完成 84 / 未完成 25 / 总计 109 / 完成率 77%`。
   - `DOC-INVENTORY-AND-NEXT-STEPS-2026-03-17.md` 明确降权为 2026-03-17 文档盘点历史快照，不再承载当前“下一步路线”权威；当前路线以六主文档、`TODO` 与 `CHANGES` 为准。
   - 已验证：`pnpm docs:guard`、`pnpm docs:guard:strict` 均通过（`5 pass / 0 fail`）。
@@ -4805,12 +4951,12 @@
   - `SIZE-GROWTH-2026-04-26-CORE-APP-PLUGIN-MODULE`: `apps/core-app/src/main/modules/plugin/plugin-module.ts` cap `3674`
   - `SIZE-GROWTH-2026-04-26-CORE-APP-SENTRY-SERVICE`: `apps/core-app/src/main/modules/sentry/sentry-service.ts` cap `1304`
   - `SIZE-GROWTH-2026-04-26-CORE-APP-LINGPAN`: `apps/core-app/src/renderer/src/views/base/LingPan.vue` cap `2000`
-  - `SIZE-GROWTH-2026-04-26-PILOT-TH-INPUT`: `apps/pilot/app/components/input/ThInput.vue` cap `1251`
-  - `SIZE-GROWTH-2026-04-26-PILOT-AIGC-COMPLETION`: `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` cap `1896`
-  - `SIZE-GROWTH-2026-04-26-PILOT-PILOT-CHAT-PAGE`: `apps/pilot/app/composables/usePilotChatPage.ts` cap `2122`
-  - `SIZE-GROWTH-2026-04-26-PILOT-ADMIN-CHANNELS`: `apps/pilot/app/pages/admin/system/channels.vue` cap `1428`
-  - `SIZE-GROWTH-2026-04-26-PILOT-CHAT-STREAM`: `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts` cap `1791`
-  - `SIZE-GROWTH-2026-04-26-PILOT-PILOT-TOOL-GATEWAY`: `apps/pilot/server/utils/pilot-tool-gateway.ts` cap `2164`
+  - `SIZE-GROWTH-2026-04-26-AIAPP-TH-INPUT`: `retired-ai-app/app/components/input/ThInput.vue` cap `1251`
+  - `SIZE-GROWTH-2026-04-26-AIAPP-AIGC-COMPLETION`: `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts` cap `1896`
+  - `SIZE-GROWTH-2026-04-26-AIAPP-AIAPP-CHAT-PAGE`: `retired-ai-app/app/composables/useAIChatPage.ts` cap `2122`
+  - `SIZE-GROWTH-2026-04-26-AIAPP-ADMIN-CHANNELS`: `retired-ai-app/app/pages/admin/system/channels.vue` cap `1428`
+  - `SIZE-GROWTH-2026-04-26-AIAPP-CHAT-STREAM`: `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts` cap `1791`
+  - `SIZE-GROWTH-2026-04-26-AIAPP-AIAPP-TOOL-GATEWAY`: `retired-ai-app/server/utils/aiapp-tool-gateway.ts` cap `2164`
   - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-CLI-TUFF-CLI`: `packages/tuff-cli/src/bin/tuff.ts` cap `1281`
   - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-DEEPAGENT-ENGINE`: `packages/tuff-intelligence/src/adapters/deepagent-engine.ts` cap `2138`
   - `SIZE-GROWTH-2026-04-26-PACKAGES-TUFF-INTELLIGENCE-INTELLIGENCE-TYPES`: `packages/tuff-intelligence/src/types/intelligence.ts` cap `2319`
@@ -5607,7 +5753,7 @@
 - `apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
 - `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts`
 - `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.test.ts`
-  - `apps/core-app/scripts` 与 `apps/pilot/scripts` 已纳入 legacy/compat 显式扫描范围，移除脚本级 scope leak；新增命中手工补入 allowlist 与 compatibility registry，未使用 `--write-baseline` 覆盖基线。
+  - `apps/core-app/scripts` 与 `retired-ai-app/scripts` 已纳入 legacy/compat 显式扫描范围，移除脚本级 scope leak；新增命中手工补入 allowlist 与 compatibility registry，未使用 `--write-baseline` 覆盖基线。
   - CoreBox trigger 新增 typed `CoreBoxEvents.ui.trigger`，CoreBox/DivisionBox renderer 监听与 main push 统一走 event catalog；DivisionBox 不再直接广播旧 channel type，renderer raw channel 兼容边界同步移除 `LEGACY_CHANNEL_*` 内部命名。
   - 插件 channel bridge 移除 legacy header type 语义，仅保留 transport source 与 plugin context；动态插件事件仍通过现有 raw event transport 承载，不新增 SDK/API。
   - Nexus store provider 只接受 Nexus API `{ plugins: [...] }` 响应；旧数组 manifest、旧 `path` 包地址与 base URL 自动拼接改为结构化错误。
@@ -5784,12 +5930,12 @@
 
 ### fix(release): 让外部部署与 Nexus 边缘拦截不再误伤发布流水线
 
-- `.github/workflows/pilot-image.yml`
-  - Pilot 镜像 push 成功后触发 1Panel webhook 现在改为有限重试 + warning 降级；当 `ONEPANEL_WEBHOOK_URL` 指向的 1Panel 暂时不可达时，不再把整个 `Pilot Image Publish` workflow 误判为失败。
+- `.github/workflows/aiapp-image.yml`
+  - AI 镜像 push 成功后触发 1Panel webhook 现在改为有限重试 + warning 降级；当 `ONEPANEL_WEBHOOK_URL` 指向的 1Panel 暂时不可达时，不再把整个 `AI Image Publish` workflow 误判为失败。
 - `.github/workflows/build-and-release.yml`
   - `sync-nexus-release` 保留 Cloudflare access token 透传能力，默认不做 challenge 降级跳过；challenge 产生时会保留失败行为，便于在 CI 里暴露真实问题。
 - `.github/workflows/README.md`
-  - 同步补充 Pilot webhook 与 Nexus sync 的降级口径，明确“镜像已发布 / GitHub Release 已创建”与“外部部署触发 / 外站元数据同步”在 CI 中的阻塞边界。
+  - 同步补充 AI webhook 与 Nexus sync 的降级口径，明确“镜像已发布 / GitHub Release 已创建”与“外部部署触发 / 外站元数据同步”在 CI 中的阻塞边界。
 
 ### fix(release): 回归 sync-nexus 步骤级失败语义
 
@@ -6110,112 +6256,112 @@
   - Windows Everything 状态新增健康分级与原因说明；不可用/禁用时明确表现为 degraded fallback，而非静默空白。
   - `startSilent` 旧 split setting、旧 store source key、旧 agent store key 改为一次迁移后写回新结构并清理旧入口；mac `LSUIElement` 不再在打包配置中默认写死，改为显式构建开关注入。
 
-### fix(pilot-build): 收口 tuff-intelligence pilot 导出边界并恢复前端构建
+### fix(aiapp-build): 收口 tuff-intelligence aiapp 导出边界并恢复前端构建
 
-- `packages/tuff-intelligence/src/pilot.ts`
-- `packages/tuff-intelligence/src/pilot-server.ts`
+- `packages/tuff-intelligence/src/aiapp.ts`
+- `packages/tuff-intelligence/src/aiapp-server.ts`
 - `packages/tuff-intelligence/package.json`
-- `apps/pilot/server/**/*`
-  - `@talex-touch/tuff-intelligence/pilot` 收口为 browser-safe 入口，仅保留 `business/pilot` projection / trace / legacy card / stream helper 与前端共享类型。
-  - 新增 `@talex-touch/tuff-intelligence/pilot-server` 子路径，承载 runtime / store / deepagent engine / protocol 类型，`apps/pilot/server` 原子迁移到新入口，避免前端 import `/pilot` 时再把 `deepagents / @langchain/langgraph / node:async_hooks` 卷入浏览器 bundle。
+- `retired-ai-app/server/**/*`
+  - `@talex-touch/tuff-intelligence` 收口为 browser-safe 入口，仅保留 `business/aiapp` projection / trace / legacy card / stream helper 与前端共享类型。
+  - 新增 `@talex-touch/tuff-intelligence-server` 子路径，承载 runtime / store / deepagent engine / protocol 类型，`retired-ai-app/server` 原子迁移到新入口，避免前端 import `/aiapp` 时再把 `deepagents / @langchain/langgraph / node:async_hooks` 卷入浏览器 bundle。
   - 不引入前端 alias、shim 或构建绕过；本次只修共享包导出边界与消费者引用。
-- `apps/pilot/server/utils/__tests__/pilot-entry-contract.test.ts`
-  - 新增导出契约回归，验证 `/pilot` 不再暴露 `AbstractAgentRuntime / DecisionDispatcher / DeepAgentLangChainEngineAdapter / D1RuntimeStoreAdapter`，同时确认 `/pilot-server` 仍承载服务端 runtime/store/engine 导出。
+- `retired-ai-app/server/utils/__tests__/aiapp-entry-contract.test.ts`
+  - 新增导出契约回归，验证 `/aiapp` 不再暴露 `AbstractAgentRuntime / DecisionDispatcher / DeepAgentLangChainEngineAdapter / D1RuntimeStoreAdapter`，同时确认 `/aiapp-server` 仍承载服务端 runtime/store/engine 导出。
 
-### fix(pilot-history): 标题生成后同步回写 quota 历史与会话映射
+### fix(aiapp-history): 标题生成后同步回写 quota 历史与会话映射
 
-- `apps/pilot/server/utils/pilot-quota-history-sync.ts`
-- `apps/pilot/server/utils/pilot-trace-window.ts`
-- `apps/pilot/server/api/chat/sessions/[sessionId]/title.post.ts`
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
-- `apps/pilot/server/api/aigc/conversation/[id].get.ts`
-- `apps/pilot/server/utils/pilot-system-message-response.ts`
-- 新增统一的 runtime -> quota 历史回写 helper，按 runtime `title + messages + trace tail` 生成快照并同步维护 `pilot_quota_history` / `pilot_quota_sessions`。
+- `retired-ai-app/server/utils/aiapp-quota-history-sync.ts`
+- `retired-ai-app/server/utils/aiapp-trace-window.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/title.post.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/api/aigc/conversation/[id].get.ts`
+- `retired-ai-app/server/utils/aiapp-system-message-response.ts`
+- 新增统一的 runtime -> quota 历史回写 helper，按 runtime `title + messages + trace tail` 生成快照并同步维护 `aiapp_quota_history` / `aiapp_quota_sessions`。
 - `POST /api/chat/sessions/:sessionId/title` 不再只更新 runtime 标题；现在会 best-effort 回写兼容历史，修复前端标题已生成但历史列表仍停留旧标题/旧汇聚快照的问题。
 - `GET /api/aigc/conversation/:id` 与流式收尾同步复用同一条回写链路，避免不同入口再次出现快照格式或映射字段漂移。
 - trace 尾窗口读取改为按批次向前补到最近的 `turn.started`，修复长 turn 中 `intent.*` 已落库但在恢复/快照阶段被 2000 条尾窗口裁掉、最终只剩 tool card 的问题。
-- `apps/pilot/server/utils/__tests__/pilot-quota-history-sync.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-quota-history-sync.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-trace-window.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-system-message-response.test.ts`
   - 新增回归，覆盖“标题/trace 回写成功时同步更新历史与映射”“runtime 会话缺失时不重复写入”“长 turn 回溯最近 `turn.started` 后 intent 不再被 tool card 挤掉”。
 
 ## 2026-04-07
 
-### fix(pilot-stream): trace-first 恢复链清理旧 runtime 审计脏卡
+### fix(aiapp-stream): trace-first 恢复链清理旧 runtime 审计脏卡
 
-- `packages/tuff-intelligence/src/business/pilot/projection.ts`
-- `apps/pilot/shared/pilot-system-card-blocks.ts`
-- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
-- `apps/pilot/server/api/aigc/conversation/[id].get.ts`
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
-- `apps/pilot/server/utils/pilot-system-message-response.ts`
-- `apps/pilot/server/utils/pilot-trace-window.ts`
+- `packages/tuff-intelligence/src/business/aiapp/projection.ts`
+- `retired-ai-app/shared/aiapp-system-card-blocks.ts`
+- `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
+- `retired-ai-app/server/api/aigc/conversation/[id].get.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/utils/aiapp-system-message-response.ts`
+- `retired-ai-app/server/utils/aiapp-trace-window.ts`
   - 非 `tool.call.*` 的 `run.audit` 不再投影为前端可见 system/runtime 卡，避免 `attachment.resolve.*` 这类内部审计在刷新恢复后误显示成“工具调用 / runtime / 200”。
-  - quota snapshot 只要存在 runtime traces，就统一以 trace projection 为准并清理旧 `pilot_run_event_card / pilot_tool_card` 脏块，不再回退信任历史 `messages` 里的遗留卡片。
+  - quota snapshot 只要存在 runtime traces，就统一以 trace projection 为准并清理旧 `aiapp_run_event_card / aiapp_tool_card` 脏块，不再回退信任历史 `messages` 里的遗留卡片。
   - 会话详情读取改为按 runtime `messages + traces` 对齐并回写 quota history，修复已写脏老会话中 `analyse intent` 被旧卡污染的问题，确保前后端恢复语义一致。
   - 新增长会话 trace tail 窗口 helper；会话详情、quota history 回写与 `messages.get` 不再读取“最早 2000 条 trace”，而是按 `session.lastSeq` 读取“最新 2000 条”，修复刷新后最新 turn 的 intent/websearch/planning 卡片偶发消失的问题。
-- `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
-- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-trace-window.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-system-message.test.ts`
+- `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-system-message-response.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-trace-window.test.ts`
   - 新增回归，覆盖“非工具审计不可见”“trace-first 清理旧 runtime/tool 脏卡”“trace 存在但无可见卡时不回退旧 message cards”。
   - 追加回归，覆盖“长会话按 `lastSeq` 读取 trace 尾部，最新 intent 不丢失”。
 
-### fix(pilot-stream): 首页默认 DeepAgent 并收口 legacy 单前端消费链
+### fix(aiapp-stream): 首页默认 DeepAgent 并收口 legacy 单前端消费链
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
-  - 首页生产入口继续保留旧 UI，但流式消费收口到 legacy `$completion` 单链；SSE frame 解析、请求 payload 组装、executor body 构造全部抽成纯 helper，避免旧首页与新 Pilot Workspace 再并行漂移。
-  - 默认 DeepAgent 主链不再从 `conversation.pilotMode` 回填请求参数；仅显式实验态 `meta.pilotMode=true` 时才兼容透传 `pilotMode=true`。
-  - `fromSeq + follow` 统一复用共享 seq cursor 解析，首页恢复流固定跟随真实可恢复事件，不再受 Pilot 模式分叉影响。
-- `apps/pilot/app/pages/index.vue`
-- `apps/pilot/app/components/input/ThInput.vue`
-- `apps/pilot/app/components/input/ThInputPlus.vue`
-  - 首页移除 `Pilot 模式` 默认标签与输入开关；默认发送、标题展示、恢复逻辑均不再依赖 `pilotMode`。
-- `packages/tuff-intelligence/src/business/pilot/types.ts`
-- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
-- `packages/tuff-intelligence/src/business/pilot/stream.ts`
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
-- `apps/pilot/server/api/chat/sessions/[sessionId]/trace.get.ts`
-- `apps/pilot/server/utils/pilot-stream-quota-projector.ts`
-- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/legacy-stream-contract.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/legacy-stream-sse.ts`
+  - 首页生产入口继续保留旧 UI，但流式消费收口到 legacy `$completion` 单链；SSE frame 解析、请求 payload 组装、executor body 构造全部抽成纯 helper，避免旧首页与新 AI Workspace 再并行漂移。
+  - 默认 DeepAgent 主链不再从 `conversation.aiappMode` 回填请求参数；仅显式实验态 `meta.aiappMode=true` 时才兼容透传 `aiappMode=true`。
+  - `fromSeq + follow` 统一复用共享 seq cursor 解析，首页恢复流固定跟随真实可恢复事件，不再受 AI 模式分叉影响。
+- `retired-ai-app/app/pages/index.vue`
+- `retired-ai-app/app/components/input/ThInput.vue`
+- `retired-ai-app/app/components/input/ThInputPlus.vue`
+  - 首页移除 `AI 模式` 默认标签与输入开关；默认发送、标题展示、恢复逻辑均不再依赖 `aiappMode`。
+- `packages/tuff-intelligence/src/business/aiapp/types.ts`
+- `packages/tuff-intelligence/src/business/aiapp/emitter.ts`
+- `packages/tuff-intelligence/src/business/aiapp/stream.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/trace.get.ts`
+- `retired-ai-app/server/utils/aiapp-stream-quota-projector.ts`
+- `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
   - 收紧 trace contract：`stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 等 seq-optional 生命周期事件不再持久化到 trace，也不再参与 replay/follow/fromSeq 边界推进；历史脏 trace 在 replay、trace.get 与 quota snapshot 中统一过滤。
-- `apps/pilot/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
-- `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
+- `retired-ai-app/server/utils/__tests__/legacy-completion-stream-contract.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-stream-emitter-seq.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-stream-replay.test.ts`
   - 补齐 legacy SSE 契约测试，覆盖 `assistant.delta / assistant.final / run.audit / turn.approval_required / replay / done / error` 与分块持续解析；同时验证 seq-optional 生命周期事件不会重新污染 trace。
 - 验收：
-  - `pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-stream-emitter-seq.test.ts" "server/utils/__tests__/pilot-stream-replay.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/pilot-runtime-seq.test.ts" "server/utils/__tests__/pilot-sse-response.test.ts"` 已通过。
-  - `pnpm -C "apps/pilot" exec vitest run "server/utils/__tests__/pilot-runtime.test.ts" "server/utils/__tests__/pilot-completion-flow.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/pilot-chat-utils-parse.test.ts"` 已通过。
-  - `pnpm -C "apps/pilot" run typecheck` 已通过。
+  - `pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-stream-emitter-seq.test.ts" "server/utils/__tests__/aiapp-stream-replay.test.ts" "server/utils/__tests__/legacy-completion-stream-contract.test.ts" "server/utils/__tests__/aiapp-runtime-seq.test.ts" "server/utils/__tests__/aiapp-sse-response.test.ts"` 已通过。
+  - `pnpm -C "retired-ai-app" exec vitest run "server/utils/__tests__/aiapp-runtime.test.ts" "server/utils/__tests__/aiapp-completion-flow.test.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/aiapp-chat-utils-parse.test.ts"` 已通过。
+  - `pnpm -C "retired-ai-app" run typecheck` 已通过。
 
 ## 2026-04-06
 
-### docs(pilot): 补充单流完整流程图与运行时审计结论
+### docs(aiapp): 补充单流完整流程图与运行时审计结论
 
-- `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md`
-  - 补充 Pilot / DeepAgent 单流运行时完整 Mermaid 流程图，明确 `intent gate -> strict pre-read memory -> runtime persist-first -> shared projection -> frontend strict seq consume` 的主链顺序。
+- `docs/plan-prd/02-architecture/aiapp-single-stream-runtime.md`
+  - 补充 AI / DeepAgent 单流运行时完整 Mermaid 流程图，明确 `intent gate -> strict pre-read memory -> runtime persist-first -> shared projection -> frontend strict seq consume` 的主链顺序。
   - 修正文档中的 seq 合同表述，明确 `stream.started / stream.heartbeat / replay.* / run.metrics / done / error` 为可无 seq 的豁免事件，其余可恢复事件必须带稳定 `seq`。
-  - 增加实现审计结论与已知边界，显式标注 `pilot-memory-tool.ts` 不得重新接回标准 Pilot runtime 主路径，并补充前端本地状态不得伪造成 trace event。
+  - 增加实现审计结论与已知边界，显式标注 `aiapp-memory-tool.ts` 不得重新接回标准 AI runtime 主路径，并补充前端本地状态不得伪造成 trace event。
 - `docs/INDEX.md`
-  - 刷新 Pilot 单流运行时文档入口说明，标记该文档已包含“完整流程图 + 审计结论”，作为后续排查的权威入口。
+  - 刷新 AI 单流运行时文档入口说明，标记该文档已包含“完整流程图 + 审计结论”，作为后续排查的权威入口。
 
-### ref(pilot): 统一 messages.get 的 trace projection 命名
+### ref(aiapp): 统一 messages.get 的 trace projection 命名
 
-- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `retired-ai-app/server/utils/aiapp-system-message-response.ts`
   - 将 `listMessagesWithLazySystemProjection()` 重命名为 `listMessagesWithTraceProjection()`，使函数名与当前“始终 trace projection + legacy 兼容”的真实行为一致。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/messages.get.ts`
-- `apps/pilot/server/api/v1/chat/sessions/[sessionId]/messages.get.ts`
-- `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/messages.get.ts`
+- `retired-ai-app/server/api/v1/chat/sessions/[sessionId]/messages.get.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-system-message-response.test.ts`
   - 同步更新调用点与测试命名，避免后续维护时误以为仍存在旧 lazy 补 system 的双轨语义。
 
 ## 2026-04-04
 
-### Pilot / DeepAgent 单流包级复用收口
+### AI / DeepAgent 单流包级复用收口
 
-- `@talex-touch/tuff-intelligence/pilot` 新增单流共享能力：trace/seq helper、replay trace mapper、system projection、legacy run-event projection、客户端可见性判定。
-- `apps/pilot` 前后端改为直接复用包内 Pilot 合同；删除本地重复实现 `pilot-stream-shared.ts`、`pilot-system-message.ts`、`pilot-legacy-run-event-card.ts`。
+- `@talex-touch/tuff-intelligence` 新增单流共享能力：trace/seq helper、replay trace mapper、system projection、legacy run-event projection、客户端可见性判定。
+- `retired-ai-app` 前后端改为直接复用包内 AI 合同；删除本地重复实现 `aiapp-stream-shared.ts`、`aiapp-system-message.ts`、`aiapp-legacy-run-event-card.ts`。
 - 前端不再为可恢复事件自动补 `seq`；非豁免事件缺失 `seq` 时直接丢弃并输出诊断，避免本地伪顺序污染 trace/runtime card。
 - quota snapshot 改为基于包内 trace projection 重建运行卡，并保留 thinking legacy projector 与 tool sources 合并逻辑。
 - `/api/chat/sessions/:sessionId/stream` replay 改为复用包内标准 trace -> stream mapper，服务端仅负责 redaction。
@@ -6288,151 +6434,151 @@
 
 ## 2026-04-03
 
-### refactor(pilot-stream): DeepAgent / Pilot 收敛为 trace-first 单流
+### refactor(aiapp-stream): DeepAgent / AI 收敛为 trace-first 单流
 
 - `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
   - runtime 发射路径改为“先持久化 trace，再产出 envelope”，`onMessage()` 向上游 yield 的统一是带 `meta.traceId/meta.seq` 的已持久化事件，不再直接透传原始 envelope。
   - `assistant.delta` 改为按批次缓冲后持久化，flush 边界与 live SSE 对齐，保证前端看到的 delta 与 trace 中的 seq 一一对应，不再出现“已渲染 token 但 trace 无对应事件”的双轨漂移。
-- `packages/tuff-intelligence/src/business/pilot/types.ts`
-  - 新增 persisted envelope 校验，Pilot stream 在把 runtime envelope 映射成 SSE event 前会显式要求 `meta.seq/meta.traceId`，防止未持久化事件误入主流。
-- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `packages/tuff-intelligence/src/business/aiapp/types.ts`
+  - 新增 persisted envelope 校验，AI stream 在把 runtime envelope 映射成 SSE event 前会显式要求 `meta.seq/meta.traceId`，防止未持久化事件误入主流。
+- `packages/tuff-intelligence/src/business/aiapp/stream.ts`
   - 移除 DeepAgent 路径的 synthetic `planning.started / planning.updated / planning.finished` 注入；当前仅透传 runtime 真实提供的 planning 事件。
   - replay 路径的 `assistant.delta / thinking.* / assistant.final` shape 改为与 live SSE 保持一致，补播时不再退化成仅有 `payload.text` 的旧形态。
-- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+- `packages/tuff-intelligence/src/business/aiapp/emitter.ts`
   - emitter 新增 seq 合同保护：除 `stream.heartbeat` 等纯传输事件外，缺少 `seq` 的 stream event 会直接失败，避免再次回到双轨状态。
-- `apps/pilot/server/utils/pilot-intent-resolver.ts`
+- `retired-ai-app/server/utils/aiapp-intent-resolver.ts`
   - classifier 失败路径不再把 `websearchRequired` 硬编码为 `false`，改为使用“最新/今天/查一下/实时”等启发式兜底。
   - 工具启发式新增与联网相同的“不要联网 / offline only”禁用判定，确保 classifier_failed 时仍能优先尊重显式离线要求。
-- `apps/pilot/server/utils/pilot-runtime.ts`
-  - Pilot 标准路径移除 runtime 侧 `getmemory` 工具注入与 prompt 提示，记忆读取改为严格前置决策；DeepAgent 运行时不再绕过 `memoryReadDecision` 自主取记忆。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/utils/aiapp-runtime.ts`
+  - AI 标准路径移除 runtime 侧 `getmemory` 工具注入与 prompt 提示，记忆读取改为严格前置决策；DeepAgent 运行时不再绕过 `memoryReadDecision` 自主取记忆。
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - 流过程中停止 eager `saveMessage(role=system)`；`messages` 表继续只持久化 `user/assistant`，system/runtime 卡片统一来自 trace 投影。
-- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `retired-ai-app/server/utils/aiapp-system-message-response.ts`
   - `messages.get` 改为始终按 trace 投影 system message；存在历史 legacy system row 时按 message id 去重，并以 trace projection 覆盖旧内容，避免双份 system card。
-- `apps/pilot/app/composables/pilot-stream-shared.ts`
-  - 新增共享 stream helper，统一两条 Pilot chat consumer 的 seq 标准化、trace 排序/去重以及 runtime card 事件识别，减少前端双轨消费规则漂移。
-- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `retired-ai-app/app/composables/aiapp-stream-shared.ts`
+  - 新增共享 stream helper，统一两条 AI chat consumer 的 seq 标准化、trace 排序/去重以及 runtime card 事件识别，减少前端双轨消费规则漂移。
+- `retired-ai-app/app/composables/useAIChatPage.ts`
   - 新页聊天链路改为复用共享 stream helper，trace 抽屉与运行卡只消费真实事件，不再依赖 synthetic planning 阶段。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - legacy 首页聊天链路复用共享 seq normalizer / runtime card 判定，继续兼容旧 UI，但运行卡来源改为 trace-first 单流合同。
 - 文档：
-  - 新增 `docs/plan-prd/02-architecture/pilot-single-stream-runtime.md`，说明 Pilot 单流顺序合同、trace/SSE/messages 职责分工、严格前置记忆与无 synthetic planning 约束。
+  - 新增 `docs/plan-prd/02-architecture/aiapp-single-stream-runtime.md`，说明 AI 单流顺序合同、trace/SSE/messages 职责分工、严格前置记忆与无 synthetic planning 约束。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-runtime-seq.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-stream-planning-gate.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-stream-emitter-seq.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-stream-replay.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-system-message-response.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-runtime.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-runtime-seq.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-intent-resolver.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-stream-planning-gate.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-stream-emitter-seq.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-stream-replay.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-system-message-response.test.ts`
 
-### fix(pilot-chat): 收口 legacy intent 假卡并按工具判定触发 planning
+### fix(aiapp-chat): 收口 legacy intent 假卡并按工具判定触发 planning
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - legacy 首页链路不再在发送前本地预插 synthetic `intent.started` 运行卡，改为只消费服务端真实 `intent.*` 事件，避免出现重复的 `analyse intent`。
   - 运行卡合并逻辑新增无 `turnId` 场景的 pending intent 兜底：当 shared projector 下发真实 `intent:latest` 卡时，会优先吸收旧 `intent:${session}:pending` 卡并迁移到真实 key，确保 `intent.completed` 后只剩一张 completed 卡，不再残留 shimmer。
-- `apps/pilot/shared/pilot-legacy-run-event-card.ts`
+- `retired-ai-app/shared/aiapp-legacy-run-event-card.ts`
   - 新增 legacy run-event card key 解析 helper，统一 live 合并阶段对 pending intent fallback 的判定规则。
-- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `packages/tuff-intelligence/src/business/aiapp/stream.ts`
   - `planning.started / updated / finished` 改为仅在 `metadata.toolDecision.shouldUseTools === true` 时发出；普通问答、无需工具的轮次不再默认展示“执行规划”。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-stream-planning-gate.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-legacy-run-event-card.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-stream-planning-gate.test.ts`
 
 ## 2026-04-02
 
-### fix(pilot-chat): 首包事件到达后立即解除 legacy 等待态
+### fix(aiapp-chat): 首包事件到达后立即解除 legacy 等待态
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - legacy 首页链路在收到 `turn.accepted / turn.queued / turn.started` 以及首批 `intent / planning / assistant / run.audit` 事件时立即标记“已受理”，不再等到 thinking/assistant delta 才解除 `WAITING`。
   - `ChatItem` 因 `WAITING` 只渲染 loading 的问题得到修正，运行卡会在首包到达时即时显示，不再等整轮完成后一次性出现。
   - `turn.started` 从 legacy ignored-event 噪音日志中移出，避免控制台持续误报“ignored legacy stream event turn.started”。
-- `apps/pilot/app/components/input/ThInput.vue`
+- `retired-ai-app/app/components/input/ThInput.vue`
   - `ThInputPlus.hide` 改为显式布尔值，修复首页输入区的 `Invalid prop: Expected Boolean, got Undefined` 警告。
 
-### fix(pilot-chat): 修复 legacy 流式运行卡延迟出现与快照时间线错位
+### fix(aiapp-chat): 修复 legacy 流式运行卡延迟出现与快照时间线错位
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - legacy 首页聊天链路的运行卡消费改为复用 shared projector，补齐 `planning.started / planning.updated / planning.finished` 实时卡片映射，减少与新页协议漂移。
   - 运行卡 key 新增优先复用 shared `cardKey`，并在 live 更新阶段保留 planning 的 `detail.todos`，避免 finished 覆盖后丢失步骤列表。
-- `apps/pilot/shared/pilot-legacy-run-event-card.ts`
-  - 新增 legacy run-event 纯投影 helper，对 `intent / planning / memory / websearch` 统一复用 `pilot-system-message`，仅保留 `thinking` 的兼容拼装逻辑。
-- `apps/pilot/shared/pilot-chat-block-order.ts`
+- `retired-ai-app/shared/aiapp-legacy-run-event-card.ts`
+  - 新增 legacy run-event 纯投影 helper，对 `intent / planning / memory / websearch` 统一复用 `aiapp-system-message`，仅保留 `thinking` 的兼容拼装逻辑。
+- `retired-ai-app/shared/aiapp-chat-block-order.ts`
   - 新增聊天 block 时间线排序工具，统一按 `seq + streamOrder` 排序，且让带 seq 的运行卡优先回到 assistant markdown 前。
-- `apps/pilot/app/components/chat/ChatItem.vue`
+- `retired-ai-app/app/components/chat/ChatItem.vue`
   - 聊天气泡渲染改为复用共享 block 排序工具，实时流与快照回放采用同一套排序规则。
-- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
   - 快照重建不再固定 `preservedBlocks + cardBlocks` 追加，改为按共享时间线排序重新合并，修复运行卡总是落在 assistant markdown 后的问题。
-- `apps/pilot/server/utils/pilot-sse-response.ts`
+- `retired-ai-app/server/utils/aiapp-sse-response.ts`
   - 新增 SSE 响应头 helper，集中定义 `X-Accel-Buffering: no`。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - 会话流式接口补齐 anti-buffer 响应头，减少 1Panel / Nginx 代理层对 SSE 的缓冲。
-- `apps/pilot/deploy/README.zh-CN.md`
+- `retired-ai-app/deploy/README.zh-CN.md`
   - 部署文档补充 1Panel / Nginx 对 `/api/chat/sessions/*/stream` 的 `proxy_buffering off` 配置说明。
-- `apps/pilot/deploy/README.md`
+- `retired-ai-app/deploy/README.md`
   - 英文部署文档同步补充 SSE 反向代理配置说明。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-chat-block-order.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-legacy-run-event-card.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-sse-response.test.ts`
-  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-chat-block-order.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-legacy-run-event-card.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-sse-response.test.ts`
+  - `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
 
-### fix(pilot-ui): 收敛记忆运行卡标签并展示本轮新增记忆
+### fix(aiapp-ui): 收敛记忆运行卡标签并展示本轮新增记忆
 
-- `apps/pilot/server/utils/pilot-memory-facts.ts`
-  - `upsertPilotMemoryFacts` 返回值新增 `addedFacts`，仅回传本轮真正新增的标准化记忆项，避免把已存在 fact 误展示成“新沉淀”。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/utils/aiapp-memory-facts.ts`
+  - `upsertAIMemoryFacts` 返回值新增 `addedFacts`，仅回传本轮真正新增的标准化记忆项，避免把已存在 fact 误展示成“新沉淀”。
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - `memory.updated` 事件与持久化 trace payload 新增 `facts` 字段，实时流、历史回放与快照重建统一复用同一份新增记忆明细。
-- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+- `retired-ai-app/app/components/chat/attachments/card/AIRunEventCard.vue`
   - `memory` 卡片不再显示 `Memory` / `已完成` pill，折叠态仅保留标题与摘要。
   - 当 `detail.facts` 非空时，展开区按列表展示本轮新增记忆内容，仅显示 `fact.value`，旧历史卡无明细时保持仅摘要展示。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
-  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-memory-facts.test.ts`
+  - `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
 
-### fix(pilot-ui): 规划卡直出步骤并隐藏跳过记忆卡
+### fix(aiapp-ui): 规划卡直出步骤并隐藏跳过记忆卡
 
-- `apps/pilot/shared/pilot-system-message.ts`
+- `retired-ai-app/shared/aiapp-system-message.ts`
   - `memory.updated` 在 `stored=false` 时不再投影为前端 system message，避免“记忆未更新 / no_fact_extracted”类跳过卡进入聊天区。
   - system card 合并阶段为 `planning` 保留上一帧非空 `detail.todos`，解决 `planning.finished` 覆盖后仅剩 `todoCount`、丢失具体步骤的问题。
-- `apps/pilot/shared/pilot-runtime-redaction.ts`
+- `retired-ai-app/shared/aiapp-runtime-redaction.ts`
   - 前端系统消息过滤新增 `memory.context` 与 `memory/skipped` 隐藏规则，确保 live 流、刷新和 lazy projection 下都不再展示跳过记忆卡。
-- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+- `retired-ai-app/app/components/chat/attachments/card/AIRunEventCard.vue`
   - `执行规划` 卡直接展示 `detail.todos` 步骤列表，无需展开即可看到规划内容。
   - 隐藏 `planning` 类型标签，仅保留右侧执行状态标签；其他卡片标签行为保持不变。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-runtime-redaction.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-runtime-redaction.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-system-message.test.ts`
 
-### feat(pilot-memory): 设置页展示记忆详情并将读记忆/工具判定接入运行时
+### feat(aiapp-memory): 设置页展示记忆详情并将读记忆/工具判定接入运行时
 
-- `apps/pilot/server/utils/pilot-memory-facts.ts`
-  - 新增 `listPilotMemoryFactsByUser`，按添加时间倒序返回用户记忆详情。
-  - 新增 `buildPilotMemoryContextSystemMessage`，将命中的记忆事实注入当前轮隐藏 system context。
-- `apps/pilot/server/api/v1/chat/memory/facts.get.ts`
+- `retired-ai-app/server/utils/aiapp-memory-facts.ts`
+  - 新增 `listAIMemoryFactsByUser`，按添加时间倒序返回用户记忆详情。
+  - 新增 `buildAIMemoryContextSystemMessage`，将命中的记忆事实注入当前轮隐藏 system context。
+- `retired-ai-app/server/api/v1/chat/memory/facts.get.ts`
   - 新增用户记忆详情接口，供个人设置页直接读取 `value/createdAt/updatedAt`。
-- `apps/pilot/app/composables/usePilotMemorySettings.ts`
+- `retired-ai-app/app/composables/useAIMemorySettings.ts`
   - 记忆设置状态新增 `facts/factsLoading`，开关切换后同步刷新或清空记忆详情。
-- `apps/pilot/app/components/chore/personal/profile/account/AccountModuleAppearance.vue`
+- `retired-ai-app/app/components/chore/personal/profile/account/AccountModuleAppearance.vue`
   - 在个人设置页新增“记忆详情”列表，展示记忆内容与“添加时间”。
-- `apps/pilot/server/utils/pilot-intent-resolver.ts`
+- `retired-ai-app/server/utils/aiapp-intent-resolver.ts`
   - intent 分类结果新增 `memoryReadDecision` 与 `toolDecision`，每轮显式判断是否需要读取记忆及启用工具。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - 运行时按 `memoryReadDecision` 拉取记忆 facts 并注入隐藏 system context。
   - builtinTools 改为按 `toolDecision` 做运行时裁剪，避免“无需工具”的轮次仍暴露默认工具。
-- `apps/pilot/server/utils/pilot-memory-tool.ts`
+- `retired-ai-app/server/utils/aiapp-memory-tool.ts`
   - 新增 deepagent 可调用的 `getmemory` 工具，按 query 优先返回相关记忆，未命中时回退最近记忆，并附带添加时间供模型参考。
-- `apps/pilot/server/utils/pilot-runtime.ts`
+- `retired-ai-app/server/utils/aiapp-runtime.ts`
   - 新增 `disableDefaultBuiltinTools`，支持在运行时显式关闭默认工具注入。
   - 开启记忆后会把 `getmemory` 注入 deepagent 自定义 tools，并补充 prompt 提示 agent 在个性化问题上优先查记忆而不是猜测。
 - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
   - `DeepAgentEngineOptions` 新增 `tools`，deepagent 调用与流式执行都会透传自定义 tools。
   - 当存在自定义 tools 时自动关闭 direct stream 快路径，避免跳过 deepagent tool 调用链。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-memory-facts.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-intent-resolver.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-memory-tool.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-memory-facts.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-intent-resolver.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-runtime.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-memory-tool.test.ts`
 
 ## 2026-03-31
 
@@ -6451,38 +6597,38 @@
 - `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
   - `StorageList` 改为从 `@talex-touch/utils/common/storage/constants` 窄路径引入，避免搜索索引 worker 因 `@talex-touch/utils` / `common/index` 聚合出口把 `electron/file-parsers` 一并卷入，导致 worker 进程里 `require('electron')` 失败。
 
-### fix(pilot/chat): 收口 routing 选择前端暴露并脱敏运行记录
+### fix(aiapp/chat): 收口 routing 选择前端暴露并脱敏运行记录
 
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - `routing.selected` 不再通过 SSE 直接下发到前端；仅在后端 trace 中保留脱敏摘要，错误事件中的路由字段也同步剥离。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/trace.get.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/trace.get.ts`
   - 会话 trace API 过滤 `routing.selected`，并对错误 trace payload 做前端可见级脱敏。
-- `apps/pilot/server/utils/pilot-system-message-response.ts`
+- `retired-ai-app/server/utils/aiapp-system-message-response.ts`
   - 历史 system message 返回前增加 routing 卡片过滤，避免旧会话重放时再次暴露路由选择细节。
-- `apps/pilot/shared/pilot-system-message.ts`
+- `retired-ai-app/shared/aiapp-system-message.ts`
   - system message / 运行卡投影统一忽略 routing 事件，保证实时流、懒投影与快照回放行为一致。
-- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `retired-ai-app/app/composables/useAIChatPage.ts`
   - 前端运行态不再消费 `routing.selected`，历史 trace / system message 也会在加载时过滤。
-- `apps/pilot/app/components/chat/attachments/ErrorCard.vue`
+- `retired-ai-app/app/components/chat/attachments/ErrorCard.vue`
   - 错误卡不再展示 route/model/channel/selection reason 等路由诊断字段。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-runtime-redaction.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
-  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-runtime-redaction.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-system-message.test.ts`
+  - `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
 
-### fix(pilot/chat): 收口 websearch 运行卡展示状态
+### fix(aiapp/chat): 收口 websearch 运行卡展示状态
 
-- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+- `retired-ai-app/app/components/chat/attachments/card/AIRunEventCard.vue`
   - websearch 运行卡移除 `Websearch` 与完成态 pill，仅在执行中保留 shimmer 展示，减少噪音标签。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - websearch 决策与执行事件改为复用同一张运行卡；`intent_not_required` 时不再创建卡片，执行未落定时保持 running 以驱动 shimmer。
-- `apps/pilot/shared/pilot-system-message.ts`
+- `retired-ai-app/shared/aiapp-system-message.ts`
   - system message 投影统一 websearch 卡片 key / 标题 / 隐藏条件，确保实时流与历史回放行为一致。
-- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
   - 会话快照重建对齐新规则：无需联网时不复活 websearch 卡片，决策与执行态合并为单卡。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-system-message.test.ts`
-  - `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-system-message.test.ts`
+  - `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
 
 ### fix(core-app/app-index): 修复 app 重建后偶发搜不到应用
 
@@ -6497,69 +6643,69 @@
 - `apps/core-app/src/renderer/src/views/storage/Storagable.vue`
   - 存储清理页“清理并重建”文案更新为“应用与文件搜索索引”重建，避免误解为仅文件索引。
 
-### feat(pilot/coze): 接入独立 Coze 渠道适配与 Bot/Workflow 路由
+### feat(aiapp/coze): 接入独立 Coze 渠道适配与 Bot/Workflow 路由
 
-- `apps/pilot/server/utils/pilot-channel.ts`
-  - Pilot 渠道抽象新增 `adapter='coze'`、`transport='coze.openapi'`、`providerTargetType='coze_bot' | 'coze_workflow'` 与中国区默认 API/OAuth 地址。
-- `apps/pilot/server/utils/pilot-admin-channel-config.ts`
+- `retired-ai-app/server/utils/aiapp-channel.ts`
+  - AI 渠道抽象新增 `adapter='coze'`、`transport='coze.openapi'`、`providerTargetType='coze_bot' | 'coze_workflow'` 与中国区默认 API/OAuth 地址。
+- `retired-ai-app/server/utils/aiapp-admin-channel-config.ts`
   - 管理端渠道配置新增 `region/oauthClientId/oauthClientSecret/oauthTokenUrl`，Coze 新建时自动填充中国区默认地址，`oauthClientSecret` 继续加密存储并支持编辑留空保留旧值。
   - Coze 目标列表改为手工维护，不再依赖渠道级默认 target；同一 `targetId` 可按不同 `targetType` 共存。
-- `apps/pilot/server/utils/pilot-admin-routing-config.ts`
+- `retired-ai-app/server/utils/aiapp-admin-routing-config.ts`
   - 模型绑定与 Route Combo 路由新增 `providerTargetType`，旧数据缺省按 `model` 兼容读取。
-- `apps/pilot/server/utils/pilot-coze-auth.ts`
+- `retired-ai-app/server/utils/aiapp-coze-auth.ts`
   - 新增 Coze token 获取与缓存层，兼容 `OAuth 应用凭证` 与 `服务身份凭证（JWT）` 两种鉴权模式。
   - token 缓存 key 从单纯 `channelId` 升级为“渠道 + 凭证指纹”，管理员切换 Coze 凭证后不会继续误命中旧 token。
-- `apps/pilot/server/utils/pilot-coze-engine.ts`
+- `retired-ai-app/server/utils/aiapp-coze-engine.ts`
   - 新增独立 Coze engine adapter，分别打通 `Bot` 与 `Workflow` 流式执行、附件透传、失败态映射与运行审计。
-- `apps/pilot/server/utils/pilot-runtime.ts`
+- `retired-ai-app/server/utils/aiapp-runtime.ts`
   - `coze` 渠道不再复用 OpenAI-compatible / DeepAgent 兼容层，运行时直接走 Coze engine。
-  - 当 Coze 路由仍配置 Pilot 本地 `builtinTools/tool-gateway` 时，保存与运行改为显式拒绝，避免静默失效。
-- `apps/pilot/server/api/admin/channels/test.post.ts`
+  - 当 Coze 路由仍配置 AI 本地 `builtinTools/tool-gateway` 时，保存与运行改为显式拒绝，避免静默失效。
+- `retired-ai-app/server/api/admin/channels/test.post.ts`
   - 渠道测试新增 Coze 分支，改为校验 Coze 凭证有效性与 API base URL 可达性，不再走 `/v1/responses` 探测。
-- `apps/pilot/server/utils/pilot-channel-model-sync.ts`
+- `retired-ai-app/server/utils/aiapp-channel-model-sync.ts`
   - Coze 第一版禁用自动发现/同步目标，后台仅保留手工维护 Bot / Workflow 列表。
-- `apps/pilot/app/pages/admin/system/channels.vue`
+- `retired-ai-app/app/pages/admin/system/channels.vue`
   - 管理后台渠道页新增 Coze 适配器配置项与目标类型编辑能力；Coze 行不再展示“拉取渠道模型”，改为手工维护目标列表。
   - Coze 渠道新增“鉴权方式”切换，可在 `OAuth 应用凭证` 与 `服务身份凭证（JWT）` 间切换；JWT 模式支持配置 `App ID / Key ID / Audience / Private Key`，私钥仍按加密存储并支持编辑留空保留旧值。
-- `apps/pilot/app/pages/admin/system/model-groups.vue`
+- `retired-ai-app/app/pages/admin/system/model-groups.vue`
   - 模型组映射新增 `targetType` 维度，并在 Coze 绑定摘要中直接显示 `targetType / targetId`。
-- `apps/pilot/app/pages/admin/system/route-combos.vue`
+- `retired-ai-app/app/pages/admin/system/route-combos.vue`
   - Route Combo 路由新增 `targetType` 选择与摘要展示，Coze route 必须显式指定 `coze_bot` 或 `coze_workflow`。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-coze-auth.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-coze-engine.test.ts`
-  - 扩展 `apps/pilot/server/utils/__tests__/pilot-admin-channel-config.test.ts`
-  - 扩展 `apps/pilot/server/utils/__tests__/pilot-channel-model-sync.test.ts`
-  - 扩展 `apps/pilot/server/utils/__tests__/pilot-runtime.test.ts`
-  - 扩展 `apps/pilot/server/utils/__tests__/pilot-route-health.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-coze-auth.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-coze-engine.test.ts`
+  - 扩展 `retired-ai-app/server/utils/__tests__/aiapp-admin-channel-config.test.ts`
+  - 扩展 `retired-ai-app/server/utils/__tests__/aiapp-channel-model-sync.test.ts`
+  - 扩展 `retired-ai-app/server/utils/__tests__/aiapp-runtime.test.ts`
+  - 扩展 `retired-ai-app/server/utils/__tests__/aiapp-route-health.test.ts`
 
-### feat(pilot/routing): 新增 scene-aware 专项模型路由
+### feat(aiapp/routing): 新增 scene-aware 专项模型路由
 
-- `apps/pilot/shared/pilot-routing-scene.ts`
-  - 新增 Pilot 内置 scene 定义与标准化工具，第一版固定支持 `intent_classification`、`image_generate`，并保留未来自定义 scene 元数据扩展位。
-- `apps/pilot/server/utils/pilot-admin-routing-config.ts`
+- `retired-ai-app/shared/aiapp-routing-scene.ts`
+  - 新增 AI 内置 scene 定义与标准化工具，第一版固定支持 `intent_classification`、`image_generate`，并保留未来自定义 scene 元数据扩展位。
+- `retired-ai-app/server/utils/aiapp-admin-routing-config.ts`
   - `modelCatalog` 新增 `scenes[]`，`routingPolicy` 新增 `scenePolicies[]`。
   - 读取兼容旧 `intentNanoModelId / intentRouteComboId / imageGenerationModelId / imageRouteComboId`，缺少 `scenePolicies` 时自动派生；新保存时同步回写 legacy 字段。
   - 对显式 `scenePolicies` 增加校验：同一 scene 不允许重复，且内置 scene 必须命中已打对应 scene 标签的 model group。
-- `apps/pilot/server/utils/pilot-routing-resolver.ts`
+- `retired-ai-app/server/utils/aiapp-routing-resolver.ts`
   - 意图路由新增内部 scene 解析层：`intent_classification` / `image_generate` 优先命中 `scenePolicies`，再退回 legacy 专项字段、请求模型与默认模型。
   - 路由结果新增 `scene`，并把 scene 注入 selection reason，便于诊断专项路由命中链路。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - `routing.selected` 事件、运行 trace、conversation metadata 与 routing metrics metadata 全部补充 `scene`，让专项路由在运行态可见。
-- `apps/pilot/app/composables/usePilotRoutingAdmin.ts`
+- `retired-ai-app/app/composables/useAIRoutingAdmin.ts`
   - 管理端表单模型补齐 `modelGroup.scenes[]` 与 `routingPolicy.scenePolicies[]`，并在前端继续兜底兼容 legacy 专项字段。
-- `apps/pilot/app/pages/admin/system/model-groups.vue`
+- `retired-ai-app/app/pages/admin/system/model-groups.vue`
   - 模型组页新增 `Scenes` 维护区与列表预览，支持内置预设 scene + `allow-create` 自定义输入。
-- `apps/pilot/app/pages/admin/system/routing-policy.vue`
+- `retired-ai-app/app/pages/admin/system/routing-policy.vue`
   - 专项模型入口切换为固定两条 built-in scene row：管理员可分别为 `intent_classification`、`image_generate` 选择 model group 与可选 route combo。
   - 未知/custom scene policy 在第一版 UI 中保持透传保留，不参与直接编辑，避免覆盖未来配置。
-- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `retired-ai-app/app/composables/useAIChatPage.ts`
   - 运行态 routeState 新增 `scene`，调试视图中的 route label 也会显示当前命中的专项 scene。
-- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+- `retired-ai-app/app/components/chat/attachments/card/AIRunEventCard.vue`
   - Routing 运行卡明细新增 `Scene` 字段，便于直接从运行卡确认专项路由命中结果。
 - 新增/扩展测试：
-  - `apps/pilot/server/utils/__tests__/pilot-admin-routing-config.test.ts`
-  - `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-admin-routing-config.test.ts`
+  - `retired-ai-app/server/utils/__tests__/aiapp-routing-resolver.intent.test.ts`
 
 ### fix(core-app/build): 修复 Windows 下 `asar` 依赖校验误判
 
@@ -6635,9 +6781,9 @@
 
 ## 2026-03-28
 
-### feat(pilot-chat): 意图运行卡折叠体验优化（extra 插槽 + chevron 展开）
+### feat(aiapp-chat): 意图运行卡折叠体验优化（extra 插槽 + chevron 展开）
 
-- `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+- `retired-ai-app/app/components/chat/attachments/card/AIRunEventCard.vue`
   - 运行卡组件新增 `extra` 插槽能力，右侧交互统一为 `chevron-right` 折叠/展开。
   - `intent` 类型卡片改为极简展示：默认仅显示 `Analyse intent`，展开后仅展示 `reason`（其余参数不再展示）。
   - `intent` 类型隐藏 cardType/status 标签与底部 trace 元信息，减少噪声。
@@ -6647,32 +6793,32 @@
   - 标题前前置图标移除；secondary 文本统一降为 normal 字重，避免视觉过重。
   - 标题区强制单行布局（标题与 chevron 同行不换行）；展开/收起新增过渡动画，避免内容瞬时跳变。
   - 标题与 chevron 进一步微调：降低标题/图标不透明度，缩小图标尺寸并收紧间距，整体更轻更紧凑。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - 流式 block 写入补充 `seq + streamOrder` 元信息，文本/事件卡/错误块统一走顺序化插入路径，按接收序稳定渲染。
-  - `pilot_run_event_card` 增加乱序保护与终态防回退（旧 seq 或非终态事件不覆盖已终态卡片）。
+  - `aiapp_run_event_card` 增加乱序保护与终态防回退（旧 seq 或非终态事件不覆盖已终态卡片）。
   - 发送阶段预置 `intent.started` 运行卡，确保“Analyse intent”在分析开始时立即可见，不等待完成事件。
-- `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+- `packages/tuff-intelligence/src/business/aiapp/conversation.ts`
   - 关闭 `intentWebsearchReason=classifier_failed` 时的启发式联网兜底：当意图层明确 `intentWebsearchRequired=false` 时，统一保持不联网（`intent_not_required`）。
-- `apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-conversation-shared.test.ts`
   - 同步断言：`classifier_failed` 场景不再触发 `heuristic_required_classifier_fallback`，改为 `intent_not_required`。
-- `apps/pilot/app/components/chat/ChatItem.vue`
+- `retired-ai-app/app/components/chat/ChatItem.vue`
   - 聊天块渲染增加顺序编排：优先按 `seq`，同 seq 按 `streamOrder`，确保文本与事件卡按接收顺序展示。
-- `apps/pilot/app/components/other/ShimmerText.vue`
+- `retired-ai-app/app/components/other/ShimmerText.vue`
   - 新增通用文本 shimmer 组件（基于 `TextShaving` 的文本流光思路抽离），支持通过 `active` 开关控制动效启停。
   - 调整为纯文本渲染：无背景、无边框，仅保留文字流光层，避免出现“文字浮层块”观感。
 
-### feat(pilot-admin/channels): 渠道配置增加一键测试
+### feat(aiapp-admin/channels): 渠道配置增加一键测试
 
-- `apps/pilot/app/pages/admin/system/channels.vue`
+- `retired-ai-app/app/pages/admin/system/channels.vue`
   - 渠道编辑抽屉新增「测试渠道」按钮，支持在保存前快速校验当前渠道是否可用。
   - 新增测试态 loading 与按钮禁用联动，避免与「拉取渠道模型 / 保存」并发触发。
   - 编辑态允许 API Key 留空并复用已保存密钥完成测试；新增态仍要求先填写 API Key。
   - 渠道列表 table 的每行操作区升级为 actions group：`编辑 / 测试 / 删除`，支持直接在行内快速测试。
-- `apps/pilot/server/api/admin/channels/test.post.ts`
+- `retired-ai-app/server/api/admin/channels/test.post.ts`
   - 新增管理端测试接口 `POST /api/admin/channels/test`，按渠道 transport（`responses` / `chat.completions`）发起最小请求探活。
   - 支持 `channelId` 兜底读取已保存配置（`baseUrl/apiKey/model/timeoutMs`），降低重复输入成本。
   - 返回结构化测试结果（channelId/model/transport/durationMs/preview），并在上游非 2xx 时透传 HTTP 错误上下文。
-- `apps/pilot/server/api/admin/__tests__/channels-test.post.test.ts`
+- `retired-ai-app/server/api/admin/__tests__/channels-test.post.test.ts`
   - 新增接口单测，覆盖显式参数成功、编辑态配置回退、必填参数校验、上游非 2xx 错误映射。
 
 ## 2026-03-27
@@ -6718,92 +6864,92 @@
   - `apps/core-app/src/main/modules/box-tool/search-engine/workers/search-index-worker.retry.test.ts`
   - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.logging.test.ts`
 
-### fix(pilot-websearch): 收敛 responses_builtin 回退上下文污染
+### fix(aiapp-websearch): 收敛 responses_builtin 回退上下文污染
 
-- `apps/pilot/server/utils/pilot-tool-gateway.ts`
+- `retired-ai-app/server/utils/aiapp-tool-gateway.ts`
   - `normalizeResponsesBuiltinDocs` 改为优先使用结构化来源（payload citation/source）；仅在无结构化来源时启用文本 URL 兜底。
   - 停止使用 `responses_builtin` 的 `summaryText` 回填 `source.snippet` 与 `doc.content`，避免同一段自由总结污染多条来源。
   - `buildContextText` 在有来源时仅注入条目化引用（title/url/snippet），不再注入 `Websearch summary` 自由文本块。
-- `apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-tool-gateway.test.ts`
   - 补充断言：`output_text + annotations` 场景下，context 不应包含自由总结文本。
   - 新增用例：无结构化来源时，允许从文本 URL 生成最小来源集合（`responses_builtin_text_fallback`）。
   - 保持既有回归：`provider_pool_empty`、`fallback_*`、`no-source guard` 路径不变。
 
-### fix(pilot-chat): 旧链路聊天稳定性止血（滚动/会话竞态/历史加载）
+### fix(aiapp-chat): 旧链路聊天稳定性止血（滚动/会话竞态/历史加载）
 
-- `apps/pilot/app/components/chat/ThChat.vue`
+- `retired-ai-app/app/components/chat/ThChat.vue`
   - 修正回到底部判定：统一基于 `scrollHeight - (scrollTop + clientHeight)`，移除 `window.innerWidth/document.body.clientHeight` 误用。
   - 删除消息变更后的无条件自动回底，改为仅在流式增量且“用户仍接近底部”时跟随。
   - 补充 `wrapRef` 空值保护，避免边界时机报错。
-- `apps/pilot/app/pages/index.vue`
+- `retired-ai-app/app/pages/index.vue`
   - 会话切换改为可取消 token 流程，替换延迟 `setTimeout` 回写，修复快速切换错位。
   - `mounter` 改为单飞初始化；事件与快捷键仅注册一次，修复 `onMounted/onActivated` 双触发重复监听。
   - 增加 `conversationReady` 发送门禁与摘要会话 hydrate 流程，避免“历史未就绪误发到空会话”。
   - 路由 `id` 解析失败不再自动回退新会话，改为保留当前状态并提示重试。
-- `apps/pilot/app/composables/api/base/v1/aigc/history/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/history/index.ts`
   - `loadHistories` 增加单飞锁与状态门禁，`LOADING` 期间禁止重复翻页。
   - 默认使用 `summary=1` 拉取轻量历史，并在空列表时正确落为 `COMPLETED`，避免无限触发加载。
-- `apps/pilot/app/components/history/index.vue`
+- `retired-ai-app/app/components/history/index.vue`
   - `IntersectionObserver` 增加 `LOADING/COMPLETED` 门禁；组件卸载时断开 observer 和 watch 清理。
-- `apps/pilot/server/api/aigc/history.get.ts`
+- `retired-ai-app/server/api/aigc/history.get.ts`
   - 新增 `summary=1` 摘要模式，返回轻量会话结构并批量回填 `run_state`。
-- `apps/pilot/server/utils/quota-history-store.ts`
+- `retired-ai-app/server/utils/quota-history-store.ts`
   - 新增 `listQuotaHistorySummary`，仅查询历史列表必要字段（不取全量消息载荷）。
-- `apps/pilot/server/utils/chat-turn-queue.ts`
+- `retired-ai-app/server/utils/chat-turn-queue.ts`
   - 新增批量 `getSessionRunStateMapSafe`，替代逐条 N+1 状态查询。
 
-### fix(pilot-routing/websearch): classifier_failed 联网兜底 + quota-auto 尊重禁用绑定 + Thinking 终态收口
+### fix(aiapp-routing/websearch): classifier_failed 联网兜底 + quota-auto 尊重禁用绑定 + Thinking 终态收口
 
-- `packages/tuff-intelligence/src/business/pilot/conversation.ts`
-  - `shouldExecutePilotWebsearch` 在 `intentWebsearchRequired=false` 且 `intentWebsearchReason=classifier_failed` 时允许启发式联网兜底，避免“今日新闻”被硬门禁拦截。
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
+- `packages/tuff-intelligence/src/business/aiapp/conversation.ts`
+  - `shouldExecuteAIWebsearch` 在 `intentWebsearchRequired=false` 且 `intentWebsearchReason=classifier_failed` 时允许启发式联网兜底，避免“今日新闻”被硬门禁拦截。
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
   - 透传 `intentWebsearchReason` 到联网决策，便于 classifier fallback 生效并可观测。
-- `apps/pilot/server/utils/pilot-routing-resolver.ts`
+- `retired-ai-app/server/utils/aiapp-routing-resolver.ts`
   - 为 `quota-auto` 增加“模型绑定禁用策略”过滤：若某 `channelId+providerModel` 仅存在禁用绑定，不再进入候选池。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - 旧链路运行卡片新增 `websearch.decision/websearch.skipped` 展示，明确“是否检索/为何跳过”。
   - `Thinking` 事件对 `__end__` 哨兵去噪，并在 `assistant.final/done/error/turn.finished` 兜底收口，避免卡片长期停留“进行中”。
-- `apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-conversation-shared.test.ts`
   - 新增断言：`classifier_failed` + 新闻类问题触发启发式联网。
-- `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`
+- `retired-ai-app/server/utils/__tests__/aiapp-routing-resolver.intent.test.ts`
   - 新增断言：`quota-auto` 会跳过显式禁用的 provider 绑定。
 
-### fix(pilot-websearch-ui): 结果可见性增强与状态收口（旧链路）
+### fix(aiapp-websearch-ui): 结果可见性增强与状态收口（旧链路）
 
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
   - `websearch.decision` 运行卡状态改为 `completed`（仅表达“决策已完成”），避免长期停留“进行中”。
-  - `pilot_tool_card` 增加时序防回退：支持按 `seq` 忽略旧事件；终态（`completed/failed/rejected/cancelled`）禁止被非终态覆盖。
-  - `pilot_tool_card` 合并策略增强：后续事件未携带 `sources` 时保留已有来源，避免“搜到内容”被清空。
-- `apps/pilot/app/components/chat/attachments/card/PilotToolCard.vue`
+  - `aiapp_tool_card` 增加时序防回退：支持按 `seq` 忽略旧事件；终态（`completed/failed/rejected/cancelled`）禁止被非终态覆盖。
+  - `aiapp_tool_card` 合并策略增强：后续事件未携带 `sources` 时保留已有来源，避免“搜到内容”被清空。
+- `retired-ai-app/app/components/chat/attachments/card/AIToolCard.vue`
   - 来源展示增强为 `title + domain + url + snippet`，并默认展示 Top 5，提升“具体搜到了什么”的可读性。
-- `apps/pilot/shared/pilot-system-message.ts`
+- `retired-ai-app/shared/aiapp-system-message.ts`
   - `websearch.decision` 的 system-policy 卡状态统一收口为 `completed`，与前端旧链路语义对齐。
-- `apps/pilot/server/utils/quota-conversation-snapshot.ts`
+- `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
   - 快照重建侧同步 `websearch.decision` 收口策略。
   - 工具卡重建增加乱序与终态防回退保护，并在空 `sources` 更新时保留已有来源。
-- `apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+- `retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
   - 新增回归：`websearch.decision` 卡应为 `completed`。
   - 新增回归：`run.audit` 乱序/空 `sources` 场景下，工具卡不回退且保留来源列表。
 
 ## 2026-03-24
 
-### feat(pilot-message-first): Pilot 数据层 message-first + system 白名单入模
+### feat(aiapp-message-first): AI 数据层 message-first + system 白名单入模
 
 - 数据层改为 message-first（trace 保留调试/兼容副本）：
-  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
-  - 新增 `apps/pilot/shared/pilot-system-message.ts`
+  - `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - 新增 `retired-ai-app/shared/aiapp-system-message.ts`
   - 新增统一 projector：将 `planning/intent/routing/memory/websearch/run.audit` 投影为 `role=system` 消息并实时写入 `messages`，统一 metadata（`eventType/seq/turnId/cardType/contextPolicy/summary`）。
 - 历史懒迁移（不回写）：
-  - 新增 `apps/pilot/server/utils/pilot-system-message-response.ts`
+  - 新增 `retired-ai-app/server/utils/aiapp-system-message-response.ts`
   - `messages.get`（含 v1）在“旧会话无 system 消息”时按需从 trace 合成内存态 system 视图。
 - 上下文白名单过滤统一收敛：
-  - `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+  - `packages/tuff-intelligence/src/business/aiapp/conversation.ts`
   - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
-  - `apps/pilot/server/utils/pilot-langgraph-engine.ts`
-  - `apps/pilot/server/utils/pilot-title.ts`
+  - `retired-ai-app/server/utils/aiapp-langgraph-engine.ts`
+  - `retired-ai-app/server/utils/aiapp-title.ts`
   - 规则固定为：`user/assistant` 全量入模；`system` 仅 `eventType=system.policy|tool.summary` 且 `contextPolicy=allow` 入模，其余排除。
 - 前端消费链路收敛为“卡片由 system messages 派生”：
-  - `apps/pilot/app/composables/usePilotChatPage.ts`
+  - `retired-ai-app/app/composables/useAIChatPage.ts`
   - assistant 继续单气泡增量渲染，聊天区默认不逐条展开系统运行日志，工具卡优先由 system message 推导。
 - 会话计数语义修正：
   - 仅统计 `user + assistant`，不计 `system`，避免运行日志导致计数膨胀。
@@ -6864,7 +7010,7 @@
   - `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
     - `@langchain/openai` 与 `deepagents` 改为按需动态 `import()`，避免主进程启动期被动拉起 openai/node-fetch/whatwg-url 依赖链。
   - `packages/tuff-intelligence/src/adapters/index.ts`
-    - 移除 `deepagent-engine` 的根 adapters 重导出，降低非 Pilot 场景的启动期模块求值成本。
+    - 移除 `deepagent-engine` 的根 adapters 重导出，降低非 AI 场景的启动期模块求值成本。
 - 启动路径稳定化：
   - `apps/core-app/src/main/modules/download/download-center.ts`
     - 去除模块 `onInit` 阶段对 `PollingService.start()` 的提前调用，统一由启动主流程在 `ALL_MODULES_LOADED` 后启动轮询。
@@ -6991,19 +7137,19 @@
 
 ## 2026-03-23
 
-### fix(pilot): 会话 ensure 幂等化，避免运行中状态被覆盖导致刷新续流中断
+### fix(aiapp): 会话 ensure 幂等化，避免运行中状态被覆盖导致刷新续流中断
 
 - 问题：
   - `POST /api/chat/sessions` 在 `sessionId` 已存在时仍走 `createSession + completeSession('idle')`，会把运行中的会话状态误写为 `idle`。
   - legacy 页面刷新后依赖 `run_state=executing/planning` 触发 `fromSeq+follow`，状态被覆盖后会出现“对话还在跑但无法自动续流”。
 - 变更：
-  - `apps/pilot/server/api/chat/sessions/index.post.ts`
+  - `retired-ai-app/server/api/chat/sessions/index.post.ts`
     - 新增已存在会话短路：若命中同 `sessionId`，不再改写 runtime status；
     - 仅在会话不存在时才创建并初始化 `idle`；
-    - 继续保留“首句标题补写 + quota_history/pilot_quota_sessions 占位”行为。
-  - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+    - 继续保留“首句标题补写 + quota_history/aiapp_quota_sessions 占位”行为。
+  - `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
     - 去掉一次重复 `ensureRemoteSessionInitialized` 调用，减少并发写状态窗口。
-  - `apps/pilot/app/pages/index.vue`
+  - `retired-ai-app/app/pages/index.vue`
     - 路由 `id` 同步改为先 `history.replaceState` 再 `router.replace`，减少发送后立刻刷新导致 query 未落地的概率；
     - 自动续流前若本地无消息，先 `syncHistory` 拉一次最新快照再决定是否 follow。
 
@@ -7135,94 +7281,94 @@
   - `pnpm -C "apps/core-app" run typecheck:node` 通过。
   - `pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false` 通过。
 
-### fix(pilot): 补齐 Milkdown 数学样式依赖（katex CSS 解析失败）
+### fix(aiapp): 补齐 Milkdown 数学样式依赖（katex CSS 解析失败）
 
 - 问题：
-  - `apps/pilot/app/components/article/MilkContent.vue` 与 `apps/pilot/app/components/article/MilkdownRender.vue` 直接导入 `katex/dist/katex.min.css`；
-  - 但 `apps/pilot/package.json` 未声明 `katex` 依赖，导致 Vite 在 dev 阶段报 `Failed to resolve import "katex/dist/katex.min.css"`。
+  - `retired-ai-app/app/components/article/MilkContent.vue` 与 `retired-ai-app/app/components/article/MilkdownRender.vue` 直接导入 `katex/dist/katex.min.css`；
+  - 但 `retired-ai-app/package.json` 未声明 `katex` 依赖，导致 Vite 在 dev 阶段报 `Failed to resolve import "katex/dist/katex.min.css"`。
 - 变更：
-  - `apps/pilot/package.json` 增加 `katex: ^0.16.28` 显式依赖；
+  - `retired-ai-app/package.json` 增加 `katex: ^0.16.28` 显式依赖；
   - 同步 `pnpm-lock.yaml` 对应 importer 依赖项。
 - 验证：
-  - `pnpm -C "apps/pilot" exec node -p "require.resolve('katex/dist/katex.min.css')"` 成功返回解析路径；
-  - `apps/pilot/node_modules/katex/dist/katex.min.css` 文件存在。
+  - `pnpm -C "retired-ai-app" exec node -p "require.resolve('katex/dist/katex.min.css')"` 成功返回解析路径；
+  - `retired-ai-app/node_modules/katex/dist/katex.min.css` 文件存在。
 
-### fix(pilot): Websearch 门控收紧 + 可恢复跳过 + 刷新卡片持久化
+### fix(aiapp): Websearch 门控收紧 + 可恢复跳过 + 刷新卡片持久化
 
 - Websearch 决策统一收口为意图强门控（新旧链路一致）：
-  - `packages/tuff-intelligence/src/business/pilot/conversation.ts`
+  - `packages/tuff-intelligence/src/business/aiapp/conversation.ts`
     - `intentWebsearchRequired === false` 时强制关闭并返回 `intent_not_required`；
     - 仅在 `intentWebsearchRequired` 缺失时才允许 heuristic 兜底。
-  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
-  - `apps/pilot/server/api/aigc/executor.post.ts`
+  - `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `retired-ai-app/server/api/aigc/executor.post.ts`
     - `websearch.decision` / `websearch.skipped` 增加 `gateMode: intent_strict` 审计字段；
     - 当 gateway 返回可恢复跳过信号时，`websearch.skipped` 透传具体 reason，避免误判为工具硬失败。
 - Fallback 失败降级为可恢复跳过（不中断主回答）：
-  - `apps/pilot/server/utils/pilot-tool-gateway.ts`
+  - `retired-ai-app/server/utils/aiapp-tool-gateway.ts`
     - `fallback_unsupported_channel` / `fallback_endpoint_missing` 归类为 recoverable skip；
     - 审计改为 `tool.call.completed + status=skipped`（保留 `connectorReason`），不再产出 `tool.call.failed` 噪音。
   - 继续保留 no-source guard（需要联网但无来源时明确防幻觉约束）。
 - 修复刷新后意图/工具卡丢失：
-  - `apps/pilot/server/utils/quota-conversation-snapshot.ts`
-    - 新增 runtime trace 重建逻辑，注入 `pilot_run_event_card` 与 `pilot_tool_card` 到 assistant block；
+  - `retired-ai-app/server/utils/quota-conversation-snapshot.ts`
+    - 新增 runtime trace 重建逻辑，注入 `aiapp_run_event_card` 与 `aiapp_tool_card` 到 assistant block；
     - 仅按“最新 turn”回填，避免跨 turn 卡片重复污染。
-  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`
-  - `apps/pilot/server/api/aigc/conversation/[id].get.ts`
+  - `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`
+  - `retired-ai-app/server/api/aigc/conversation/[id].get.ts`
     - 两条快照回填链路统一传入 runtime traces，确保首轮回填与刷新后表现一致。
 - 前端兼容显示优化（聊天页保持现状）：
-  - `apps/pilot/app/composables/usePilotChatPage.ts`
-  - `apps/pilot/app/components/chat/attachments/card/PilotRunEventCard.vue`
+  - `retired-ai-app/app/composables/useAIChatPage.ts`
+  - `retired-ai-app/app/components/chat/attachments/card/AIRunEventCard.vue`
     - `websearch.skipped` 原因映射为中性文案（如通道不支持联网时自动离线回答），减少“系统故障”误解。
 - 测试：
-  - 更新：`apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`
-  - 更新：`apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts`
-  - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
-  - 通过：`pnpm -C "apps/pilot" test -- "server/utils/__tests__/pilot-conversation-shared.test.ts" "server/utils/__tests__/pilot-tool-gateway.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"`
-  - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+  - 更新：`retired-ai-app/server/utils/__tests__/aiapp-conversation-shared.test.ts`
+  - 更新：`retired-ai-app/server/utils/__tests__/aiapp-tool-gateway.test.ts`
+  - 新增：`retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 通过：`pnpm -C "retired-ai-app" test -- "server/utils/__tests__/aiapp-conversation-shared.test.ts" "server/utils/__tests__/aiapp-tool-gateway.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts"`
+  - `pnpm -C "retired-ai-app" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
 
-### fix(pilot): stream 后端逐事件投影同步（替代前端触发上传）
+### fix(aiapp): stream 后端逐事件投影同步（替代前端触发上传）
 
 - 问题：
-  - 仅依赖 `finally` 阶段回填时，流中刷新可能出现 `pilot_tool_card` / `pilot_run_event_card` / thinking 状态短暂丢失。
+  - 仅依赖 `finally` 阶段回填时，流中刷新可能出现 `aiapp_tool_card` / `aiapp_run_event_card` / thinking 状态短暂丢失。
   - 需要将一致性职责固定在后端 stream 链路，避免前端触发上传参与状态保障。
 - 变更：
-  - 新增 `apps/pilot/server/utils/pilot-stream-quota-projector.ts`：
+  - 新增 `retired-ai-app/server/utils/aiapp-stream-quota-projector.ts`：
     - 在后端按 SSE 逐事件投影（含 `assistant.*`、`thinking.*`、`run.audit`、`intent.*`、`routing.*`、`memory.*`、`websearch.*`、`error/done`）；
     - `stream.heartbeat` 仅透传，不进入快照；
     - 使用串行队列 + `assistant.delta` 短防抖写入，`assistant.final/thinking.final/done/error/finally` 强制 flush。
-  - `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`：
+  - `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`：
     - 在 `emitEvent` 包装层接入 projector，SSE 发送后立即 `apply`；
     - `finally` 阶段先强制 flush projector，再执行现有 `syncLegacyQuotaConversationFromRuntime(...)` 兜底校准。
-  - `apps/pilot/server/utils/quota-conversation-snapshot.ts`：
-    - 补齐 `thinking.delta` / `thinking.final` 到 `pilot_run_event_card` 的重建与内容合并；
+  - `retired-ai-app/server/utils/quota-conversation-snapshot.ts`：
+    - 补齐 `thinking.delta` / `thinking.final` 到 `aiapp_run_event_card` 的重建与内容合并；
     - `run.audit` 卡片补齐 camel/snake 归一化（`auditType/callId/ticketId/toolName/status`）与审批状态链路映射。
 - 验证：
-  - 新增：`apps/pilot/server/utils/__tests__/pilot-stream-quota-projector.test.ts`
-  - 新增：`apps/pilot/server/utils/__tests__/quota-conversation-snapshot.test.ts`
-  - 通过：`pnpm -C "apps/pilot" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
-  - 通过：`pnpm -C "apps/pilot" exec eslint "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/pilot-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
-  - `pnpm -C "apps/pilot" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
+  - 新增：`retired-ai-app/server/utils/__tests__/aiapp-stream-quota-projector.test.ts`
+  - 新增：`retired-ai-app/server/utils/__tests__/quota-conversation-snapshot.test.ts`
+  - 通过：`pnpm -C "retired-ai-app" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/aiapp-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "retired-ai-app" exec eslint "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/aiapp-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/aiapp-stream-quota-projector.test.ts"`
+  - `pnpm -C "retired-ai-app" run typecheck` 失败，存在仓库既有大量 TS 问题（与本次改动无直接关联）。
 
-### fix(pilot/legacy-ui): 发送即建会话 + 用户首句临时标题 + 刷新续流恢复
+### fix(aiapp/legacy-ui): 发送即建会话 + 用户首句临时标题 + 刷新续流恢复
 
 - 问题：
   - 旧 `completion` 链路首轮发送时，会话与历史可见性依赖流式阶段，导致“AI 未结束前刷新”可能出现当前会话丢失或无法续流。
   - 会话标题依赖后续 AI 生成，首轮缺少稳定的用户可见标题。
 - 变更：
-  - `apps/pilot/server/api/chat/sessions/index.post.ts`
+  - `retired-ai-app/server/api/chat/sessions/index.post.ts`
     - 支持 `title/topic/message` 输入，创建会话时优先写入“用户首句裁剪标题”；
-    - 创建阶段补写 `quota_history` 占位快照与 `pilot_quota_sessions`，确保“发送即创建且可见”。
-  - `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`
+    - 创建阶段补写 `quota_history` 占位快照与 `aiapp_quota_sessions`，确保“发送即创建且可见”。
+  - `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`
     - 流式请求前显式调用 `POST /api/chat/sessions` 绑定会话（同 id），避免会话延迟创建；
     - 新增 `fromSeq/follow` 透传能力，支持刷新后 follow 模式续流；
     - 发送首轮使用用户消息前缀作为 `initialTitle`，后续仍可被 AI 标题覆盖。
-  - `apps/pilot/app/pages/index.vue`
+  - `retired-ai-app/app/pages/index.vue`
     - 首次发送即锁定 `select + route(id)`，并立即本地快照为 `pending`；
     - 启动时主动加载历史并按 `route.id` 恢复会话；
     - 对 `runtimeState=executing/planning` 的会话自动触发 `fromSeq+follow` 续流。
 - 验证：
-  - 通过：`pnpm -C "apps/pilot" exec eslint "app/pages/index.vue" "app/composables/api/base/v1/aigc/completion/index.ts" "app/composables/api/base/v1/aigc/completion-types.ts" "server/api/chat/sessions/index.post.ts" "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/pilot-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
-  - 通过：`pnpm -C "apps/pilot" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/pilot-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "retired-ai-app" exec eslint "app/pages/index.vue" "app/composables/api/base/v1/aigc/completion/index.ts" "app/composables/api/base/v1/aigc/completion-types.ts" "server/api/chat/sessions/index.post.ts" "server/api/chat/sessions/[sessionId]/stream.post.ts" "server/utils/quota-conversation-snapshot.ts" "server/utils/aiapp-stream-quota-projector.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/aiapp-stream-quota-projector.test.ts"`
+  - 通过：`pnpm -C "retired-ai-app" exec vitest run -c "./vitest.config.ts" "server/utils/__tests__/legacy-stream-input.test.ts" "server/utils/__tests__/quota-conversation-snapshot.test.ts" "server/utils/__tests__/aiapp-stream-quota-projector.test.ts"`
 
 ### feat(core-app-hardcut): 兼容债务并行硬切（legacy channel/storage/插件 API/更新与 AgentStore）
 
@@ -7472,16 +7618,16 @@
 - `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`：
   - 渲染端 analytics 调用切到 `AppEvents.analytics.*` typed 事件，不再发送 raw legacy 事件。
 
-### feat(pilot-hardcut): 实体存储与 legacy API 一次性切换
+### feat(aiapp-hardcut): 实体存储与 legacy API 一次性切换
 
-- 新增 `apps/pilot/server/utils/pilot-entity-store.ts`：
-  - 正式表 `pilot_entities` + 迁移表 `pilot_entity_migrations`。
+- 新增 `retired-ai-app/server/utils/aiapp-entity-store.ts`：
+  - 正式表 `aiapp_entities` + 迁移表 `aiapp_entity_migrations`。
   - 启动即执行一次性迁移：建表 -> 拷贝 -> 按 domain 对账 -> 写 marker -> 旧表 rename 备份。
   - 迁移失败写 `failed` marker 并 fail-fast，阻断静默脏切。
-- Pilot server 全量调用已切换到 `pilot-entity-store`（`get/list/upsert/delete/seed` 新函数族）；`pilot-compat-store.ts` 已物理删除。
+- AI server 全量调用已切换到 `aiapp-entity-store`（`get/list/upsert/delete/seed` 新函数族）；`aiapp-compat-store.ts` 已物理删除。
 - 物理删除 legacy 路由：
-  - `apps/pilot/server/api/v1/chat/sessions/[sessionId]/stream.post.ts`
-  - `apps/pilot/server/api/v1/chat/sessions/[sessionId]/turns.post.ts`
+  - `retired-ai-app/server/api/v1/chat/sessions/[sessionId]/stream.post.ts`
+  - `retired-ai-app/server/api/v1/chat/sessions/[sessionId]/turns.post.ts`
 
 ### breaking(utils-hardcut): SDK legacy 出口移除
 
@@ -7496,67 +7642,67 @@
 
 - `docs/plan-prd/docs/compatibility-debt-registry.csv` 清理已失效记录：
   - 删除已物理移除文件 `PlatformCompatibilityWarning.vue` 的 compat-file 台账项。
-  - 删除 `compat:registry:guard` 标注为 stale 的 4 条 `legacy-keyword` 记录（`pilot-settings.vue`、`pages/pilot/admin/channels.vue`、`pilot-channel.ts`、`pilot-runtime.ts`）。
+  - 删除 `compat:registry:guard` 标注为 stale 的 4 条 `legacy-keyword` 记录（`aiapp-settings.vue`、`pages/aiapp/admin/channels.vue`、`aiapp-channel.ts`、`aiapp-runtime.ts`）。
 - 验证：`pnpm compat:registry:guard` 无 warning，台账覆盖保持有效。
 
-### feat(pilot-websearch): SoSearch adapter 接入并设为默认主 provider
+### feat(aiapp-websearch): SoSearch adapter 接入并设为默认主 provider
 
-- `apps/pilot/server/utils/pilot-websearch-connector.ts`：
+- `retired-ai-app/server/utils/aiapp-websearch-connector.ts`：
   - 新增 `SoSearch adapter`，接入 `GET {baseUrl}/search?q=...`（无鉴权）。
   - 支持 `baseUrl` 已含 `/search` 的 endpoint 归一化，避免重复拼接路径。
   - 复用现有 `search/fetch/extract` 标准链路与 fallback/去重策略，不改工具网关语义。
-- `apps/pilot/server/utils/pilot-admin-datasource-config.ts`：
-  - `PilotWebsearchProviderType` 新增 `sosearch`。
+- `retired-ai-app/server/utils/aiapp-admin-datasource-config.ts`：
+  - `AIWebsearchProviderType` 新增 `sosearch`。
   - 默认 provider 池升级为：`sosearch-main -> searxng-main -> serper-backup -> tavily-backup`。
   - `sosearch-main` 默认 `baseUrl` 留空，部署后手填。
-- `apps/pilot/app/pages/admin/system/websearch-providers.vue`：
+- `retired-ai-app/app/pages/admin/system/websearch-providers.vue`：
   - 管理页新增 `SoSearch` provider 选项（快捷添加按钮 + Type 下拉项）。
   - 前端默认 providers、归一化解析与空值回退逻辑补齐 `sosearch`。
 - 测试补齐：
-  - `pilot-websearch-connector.test.ts` 新增 SoSearch 响应解析、`/search` endpoint 去重、`baseUrl` 为空回退空结果用例。
-  - `pilot-admin-datasource-config.test.ts` 新增默认 provider 顺序与 `sosearch` 类型读写用例。
+  - `aiapp-websearch-connector.test.ts` 新增 SoSearch 响应解析、`/search` endpoint 去重、`baseUrl` 为空回退空结果用例。
+  - `aiapp-admin-datasource-config.test.ts` 新增默认 provider 顺序与 `sosearch` 类型读写用例。
 
-### fix(pilot-approval): 工具审批通用化收敛 + websearch 免审批
+### fix(aiapp-approval): 工具审批通用化收敛 + websearch 免审批
 
-- `apps/pilot/server/utils/pilot-tool-gateway.ts`：
+- `retired-ai-app/server/utils/aiapp-tool-gateway.ts`：
   - 新增通用工具审批策略入口 `shouldRequireToolApproval()`，按工具维度判定是否启用审批。
   - 默认将 `websearch` 审批策略关闭（`TOOL_APPROVAL_POLICY[websearch]=false`），高风险检索不再进入审批中断分支。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts`：
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts`：
   - 工具卡 `upsert` 增加通用身份归并（`callId/ticketId/toolName + 活跃态`），避免审批事件拆分成新卡，审批按钮可稳定嵌入同一工具卡。
   - `send()` 增加取消收敛（Abort -> `CANCELLED`）与执行流计数，修复“停止生成无效/等待审批态无法收口”。
   - 新增审批等待检查点回调，进入 `approval_required` 时可先完成本地会话快照，避免同步长期停留 `PENDING`。
-- `apps/pilot/app/pages/index.vue`：
+- `retired-ai-app/app/pages/index.vue`：
   - 接入 `onReqCheckpoint('approval_required')`，在等待审批阶段即时落盘会话并恢复发送状态。
   - 会话同步状态判定中 `CANCELLED` 不再标记为 `FAILED`，保证停止后状态可收敛。
-- 测试更新：`pilot-tool-gateway.test.ts` 将高风险 websearch 场景改为“不中断审批，直接 completed”。
+- 测试更新：`aiapp-tool-gateway.test.ts` 将高风险 websearch 场景改为“不中断审批，直接 completed”。
 
-### fix(pilot-admin-channels): 单渠道启用/禁用状态可正确持久化
+### fix(aiapp-admin-channels): 单渠道启用/禁用状态可正确持久化
 
-- `apps/pilot/server/utils/pilot-admin-channel-config.ts`：
+- `retired-ai-app/server/utils/aiapp-admin-channel-config.ts`：
   - 修复布尔归一化链路：`normalizeText(false)` 不再被吞空，`enabled=false` 可正确落库并回读。
   - 同步修复渠道模型布尔字段（`models[].enabled/thinkingSupported/thinkingDefaultEnabled`）的持久化正确性。
-- 新增测试：`apps/pilot/server/utils/__tests__/pilot-admin-channel-config.test.ts`
+- 新增测试：`retired-ai-app/server/utils/__tests__/aiapp-admin-channel-config.test.ts`
   - 覆盖 `channel.enabled=false` 与 `models[].enabled=false` 的保存与回读回归场景。
 
-### fix(pilot-websearch): 终态事件收口 + fallback unavailable 可解释化 + 无来源防编造
+### fix(aiapp-websearch): 终态事件收口 + fallback unavailable 可解释化 + 无来源防编造
 
-- `apps/pilot/server/api/chat/sessions/[sessionId]/stream.post.ts`：
+- `retired-ai-app/server/api/chat/sessions/[sessionId]/stream.post.ts`：
   - `websearch.decision` 保持判定语义；`enabled=false` 时立即发 `websearch.skipped`。
   - 审批中断（`approval_required/rejected`）与工具异常路径统一先发 `websearch.skipped` 作为终态。
   - `done/error` 前增加 `terminal_finalize` 兜底：若仍停留 decision 态，补发 `websearch.skipped`，避免前端“一直执行中”。
   - 当本轮无来源且意图要求联网时，向运行时消息注入 `No External Sources Retrieved` guard，约束模型显式说明“未获取外部来源”，禁止编造“最新/新闻”事实。
-- `apps/pilot/server/api/aigc/executor.post.ts`：
+- `retired-ai-app/server/api/aigc/executor.post.ts`：
   - `run.audit` 流同步收口 `websearch.skipped` 终态（decision=false、审批分支、异常分支、terminal finalize）。
   - `run.audit` 工具审计转发补齐 `providerChain/providerUsed/fallbackUsed/dedupeCount`，便于 unavailable 根因定位。
   - 执行消息同样接入“无来源 guard”注入策略（仅在 `websearchRequired=true` 且 `sourceCount=0` 时触发）。
-- `apps/pilot/server/utils/pilot-tool-gateway.ts`：
+- `retired-ai-app/server/utils/aiapp-tool-gateway.ts`：
   - fallback unavailable reason 语义规范化：`provider_pool_empty`、`fallback_unsupported_channel`、`fallback_endpoint_missing`、`fallback_execution_failed`。
   - 维持兼容错误码（含 `WEBSEARCH_DATASOURCE_UNAVAILABLE`），同时确保失败审计可解释“为何 unavailable”。
-- `apps/pilot/app/composables/usePilotChatPage.ts`：
+- `retired-ai-app/app/composables/useAIChatPage.ts`：
   - websearch 阶段卡状态调整：`executed => done`、`skipped => skipped`，`decided` 不再长期映射 running。
   - `done/error` 本地兜底：若仍在 decision 态，自动转 `skipped(terminal_finalize)`，防止服务端漏发导致 UI 卡住。
   - 新一轮消息发送前清空 `toolCallMap/toolCalls`，工具卡仅显示当前轮次，消除上一轮残留。
-- 测试补齐：`apps/pilot/server/utils/__tests__/pilot-tool-gateway.test.ts` 新增 fallback reason 分类与 no-source guard 用例。
+- 测试补齐：`retired-ai-app/server/utils/__tests__/aiapp-tool-gateway.test.ts` 新增 fallback reason 分类与 no-source guard 用例。
 
 ### feat(core-search-observability): 搜索卡顿诊断观测增强（主日志 + 自动短开）
 
@@ -7575,9 +7721,9 @@
   - 监听 PerfMonitor 严重 lag 触发事件；
   - 自动启用 `30s` 搜索诊断 burst，便于复现时快速抓取搜索链路证据。
 
-### fix(pilot-chat): Markdown 只读渲染去除尾部空行
+### fix(aiapp-chat): Markdown 只读渲染去除尾部空行
 
-- 在 `apps/pilot/app/components/render/RenderContent.vue` 新增只读渲染范围样式：`.RenderContent .MilkContent.markdown-body .ProseMirror[contenteditable="false"]`。
+- 在 `retired-ai-app/app/components/render/RenderContent.vue` 新增只读渲染范围样式：`.RenderContent .MilkContent.markdown-body .ProseMirror[contenteditable="false"]`。
 - 处理规则：
   - 隐藏末尾空段落（覆盖 `p:last-child:empty` 与 `p:last-child:has(> br.ProseMirror-trailingBreak)`）。
   - 强制最后可见块元素 `margin-bottom: 0`，消除聊天消息尾部多余空白行。
@@ -7589,9 +7735,9 @@
 - `TODO` 统计表改为实时计数结果（`done=95 / todo=16 / total=111 / 86%`），修复 `todo-stats` 漂移。
 - 验证结果：`pnpm docs:guard && pnpm docs:guard:strict` 全通过。
 
-### chore(governance): compat 扫描范围补齐 `apps/pilot/shared`
+### chore(governance): compat 扫描范围补齐 `retired-ai-app/shared`
 
-- `scripts/check-compatibility-debt-registry.mjs` 扫描范围新增 `apps/pilot/shared`，修复 scope leak。
+- `scripts/check-compatibility-debt-registry.mjs` 扫描范围新增 `retired-ai-app/shared`，修复 scope leak。
 - 补齐新增 `legacy-keyword` 命中项到 `compatibility-debt-registry.csv`，恢复 registry 覆盖完整性。
 - 验证结果：`pnpm compat:registry:guard` 通过（保留 cleanup candidate 警告）。
 
@@ -7604,9 +7750,9 @@
 ### chore(governance): size guard 阻断恢复（基线同步）
 
 - 更新 `scripts/large-file-boundary-allowlist.json`：
-  - 新增本轮超长文件基线：`ThInput.vue`、`completion/index.ts`、`usePilotChatPage.ts`、`stream.post.ts`、`pilot-tool-gateway.ts`。
+  - 新增本轮超长文件基线：`ThInput.vue`、`completion/index.ts`、`useAIChatPage.ts`、`stream.post.ts`、`aiapp-tool-gateway.ts`。
   - 调整 growth exception cap：
-    - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` (`apps/pilot/server/api/aigc/executor.post.ts`) -> `2429`
+    - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` (`retired-ai-app/server/api/aigc/executor.post.ts`) -> `2429`
     - `SIZE-GROWTH-2026-03-16-DEEPAGENT` (`packages/tuff-intelligence/src/adapters/deepagent-engine.ts`) -> `2081`
 - 验证结果：`pnpm size:guard` 通过。
 
@@ -7624,11 +7770,11 @@
 
 ## 2026-03-21
 
-### fix(pilot-websearch): 非 Responses 渠道不再触发 `responses_builtin` 硬失败
+### fix(aiapp-websearch): 非 Responses 渠道不再触发 `responses_builtin` 硬失败
 
-- `pilot-tool-gateway` 增加 fallback 资格判断：仅当渠道为 `openai + responses` 且可解析 Responses endpoint 时，才尝试 `responses_builtin`。
+- `aiapp-tool-gateway` 增加 fallback 资格判断：仅当渠道为 `openai + responses` 且可解析 Responses endpoint 时，才尝试 `responses_builtin`。
 - 调整 fallback 容错：当 provider 池已有部分结果时，即使 fallback 请求异常，也不会中断整次 websearch，继续返回已命中的 provider 结果。
-- 新增回归测试 `pilot-tool-gateway.test.ts`：
+- 新增回归测试 `aiapp-tool-gateway.test.ts`：
   - 覆盖“provider 有结果 + channel 为 `chat.completions`”场景；
   - 断言不会调用 Responses 接口、不会因 fallback 报错、结果保持 `gateway` 成功返回。
 
@@ -7645,13 +7791,13 @@
   - `use-auth-policies.test.ts`（认证初始化与登录恢复提示门控策略）
   - `user-subscription.test.ts`（`isActive/status/expiresAt` 兼容判定）
 
-### fix(pilot-routing-admin): 渠道模型同步不再自动创建/更新 Model Groups（仅保留手动编排）
+### fix(aiapp-routing-admin): 渠道模型同步不再自动创建/更新 Model Groups（仅保留手动编排）
 
-- 调整 `syncPilotChannelModels`：同步流程仅更新渠道侧 `channels[].models/defaultModelId/modelsLastSyncedAt`，不再把 discovered 模型写入 routing `modelCatalog`。
+- 调整 `syncAIChannelModels`：同步流程仅更新渠道侧 `channels[].models/defaultModelId/modelsLastSyncedAt`，不再把 discovered 模型写入 routing `modelCatalog`。
 - 移除同步链路中的自动合并调用，避免在“模型组管理”中出现“未手动创建却被同步生成”的分组项。
-- 新增回归测试 `pilot-channel-model-sync.test.ts`，确保 `admin/channel-models/sync` 不会触发 `mergeDiscoveredModelsIntoCatalog`。
+- 新增回归测试 `aiapp-channel-model-sync.test.ts`，确保 `admin/channel-models/sync` 不会触发 `mergeDiscoveredModelsIntoCatalog`。
 
-### feat(pilot-routing-admin-ui): Model Groups 支持多选批量删除与分页
+### feat(aiapp-routing-admin-ui): Model Groups 支持多选批量删除与分页
 
 - `admin/system/model-groups` 新增表格勾选列，支持多选批量删除（含二次确认与“至少保留一个模型组”约束）。
 - 新增分页器（`total/sizes/pager/jumper`），支持页大小切换（10/20/50/100）。
@@ -7659,44 +7805,44 @@
 - `quota-auto` 设为系统保留模型组：行内删除禁用，批量删除自动排除，确保该分组始终可用。
 - 后端 `normalizeModelCatalog` 调整为“仅强制保留 `quota-auto`”，不再自动补回 `gpt/gemini/claudecode` 等 system 默认分组；新增回归测试覆盖该行为。
 
-### fix(pilot-image): image.generate 兼容“url 字段携带 base64”并修复 Capability Lab 预览
+### fix(aiapp-image): image.generate 兼容“url 字段携带 base64”并修复 Capability Lab 预览
 
-- `pilot-tool-gateway` 的 `image.generate` 结果解析增强：
+- `aiapp-tool-gateway` 的 `image.generate` 结果解析增强：
   - 当上游把图片数据放在 `url` 字段（`data:image/...` 或 raw base64）时，自动识别并落 `runtime media cache`，继续对外返回 URL-first 结果；
   - 保留原有 `b64_json` 解析路径，并补充 base64 payload 规范化，减少异常格式导致的空结果。
-- `apps/pilot/app/pages/test/image-lab.vue` 增加图片预览兜底：
+- `retired-ai-app/app/pages/test/image-lab.vue` 增加图片预览兜底：
   - 优先 `url` 预览，缺失时回落到 `base64` 组装 `data:image/...` 预览；
   - 避免“结果存在但页面不显示”的误判。
-- 新增回归测试 `pilot-tool-gateway.test.ts`：覆盖“`url` 字段为 base64 payload”场景，确保输出被归一到 runtime cache URL。
+- 新增回归测试 `aiapp-tool-gateway.test.ts`：覆盖“`url` 字段为 base64 payload”场景，确保输出被归一到 runtime cache URL。
 
-### feat(pilot-multimodal): Provider 多模态能力配置统一到 `capabilities` 并打通媒体运行时回退
+### feat(aiapp-multimodal): Provider 多模态能力配置统一到 `capabilities` 并打通媒体运行时回退
 
 - 模型组配置升级为统一能力映射：
-  - `PilotModelCatalogItem` 新增 `capabilities`（`websearch/file.analyze/image.generate/image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`）。
+  - `AIModelCatalogItem` 新增 `capabilities`（`websearch/file.analyze/image.generate/image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`）。
   - 保留并兼容 legacy 字段（`allowWebsearch/allowImageGeneration/allowFileAnalysis/allowImageAnalysis`），读取时自动合并回填，写回时同步双轨字段。
   - 旧配置自动“仅补缺不覆盖”补齐缺失能力位，不改用户已有绑定/优先级/路由策略。
 - 路由解析新增能力门控与排除重试：
-  - `resolvePilotRoutingSelection` 新增 `requiredCapability` 与 `excludeRouteKeys`；
-  - 当能力不匹配时自动过滤候选；无可用候选时返回统一错误码 `PILOT_CAPABILITY_UNSUPPORTED`。
+  - `resolveAIRoutingSelection` 新增 `requiredCapability` 与 `excludeRouteKeys`；
+  - 当能力不匹配时自动过滤候选；无可用候选时返回统一错误码 `AIAPP_CAPABILITY_UNSUPPORTED`。
 - 媒体调用链路新增自动回退：
-  - 新增 `executePilotMediaWithFallback`，对媒体能力执行“失败/unsupported 后按 routeKey 回退到下一 provider”；
+  - 新增 `executeAIMediaWithFallback`，对媒体能力执行“失败/unsupported 后按 routeKey 回退到下一 provider”；
   - `chat stream` 与 `aigc executor` 的 `image_generate` 分支接入该回退链路。
 - Tool Gateway 新增多模态 REST 能力：
   - 新增 `image.edit`、`audio.tts`、`audio.stt`、`audio.transcribe`；
-  - `video.generate` 返回明确未实现错误 `PILOT_MEDIA_VIDEO_NOT_IMPLEMENTED`。
+  - `video.generate` 返回明确未实现错误 `AIAPP_MEDIA_VIDEO_NOT_IMPLEMENTED`。
 - 媒体输出统一为 URL-first：
   - 新增运行时媒体缓存与 `GET /api/runtime/media-cache/:id`；
   - 图片/音频二进制默认落缓存 URL 返回；
   - 支持 `output.includeBase64` 可选返回 `base64`（默认关闭）。
 - 能力测试入口升级：
   - 新增 `POST /api/runtime/capability-test/invoke`，统一测试 `image.generate/image.edit/audio.tts/audio.stt/audio.transcribe/video.generate`；
-  - `apps/pilot/app/pages/test/image-lab.vue` 升级为 capability lab，展示路由结果、回退尝试链路与媒体结果。
+  - `retired-ai-app/app/pages/test/image-lab.vue` 升级为 capability lab，展示路由结果、回退尝试链路与媒体结果。
 - 测试补齐：
-  - 新增 `pilot-admin-routing-config.capabilities.test.ts`；
-  - 扩展 `pilot-routing-resolver.intent.test.ts`（能力门控、排除已失败 route）；
-  - 扩展 `pilot-tool-gateway.test.ts`（image.edit/audio.tts/audio.stt/audio.transcribe/video 未实现）。
+  - 新增 `aiapp-admin-routing-config.capabilities.test.ts`；
+  - 扩展 `aiapp-routing-resolver.intent.test.ts`（能力门控、排除已失败 route）；
+  - 扩展 `aiapp-tool-gateway.test.ts`（image.edit/audio.tts/audio.stt/audio.transcribe/video 未实现）。
 
-### feat(pilot-routing-admin-ui): 模型组能力开关重构为“模板化 + 分层配置 + 规则联动”
+### feat(aiapp-routing-admin-ui): 模型组能力开关重构为“模板化 + 分层配置 + 规则联动”
 
 - `admin/system/model-groups` 编辑弹窗重构为分层结构：
   - 新增分区：`运行状态`、`推理策略`、`能力矩阵`、`工具权限`；
@@ -7709,14 +7855,14 @@
   - 关闭 `websearch` 时自动移除 `builtinTools.websearch`；
   - `defaultRouteComboId` 改为下拉选择，历史脏值展示“失效”并阻止保存。
 - 新增共享能力元数据与规则模块：
-  - 新增 `apps/pilot/shared/pilot-capability-meta.ts`，统一维护 `PilotCapabilityMeta`、能力分组、模板预设、legacy 回填、route combo 校验；
+  - 新增 `retired-ai-app/shared/aiapp-capability-meta.ts`，统一维护 `AICapabilityMeta`、能力分组、模板预设、legacy 回填、route combo 校验；
   - 管理端、服务端与运行时消费同一份 capability 解析与联动规则。
 - 运行时对齐：
-  - `usePilotRuntimeModels` 与 `ThInput` 改为基于统一能力映射判断禁用状态与提示文案；
+  - `useAIRuntimeModels` 与 `ThInput` 改为基于统一能力映射判断禁用状态与提示文案；
   - `capabilities` 成为主语义源，`allow*` 保持兼容派生写回。
 - 回归测试：
-  - 新增 `pilot-capability-meta.shared.test.ts`（模板矩阵、thinking/websearch 联动、legacy 优先级、route combo 校验）；
-  - 更新 `pilot-admin-routing-config.capabilities.test.ts` 对齐显式 `capabilities` 优先断言。
+  - 新增 `aiapp-capability-meta.shared.test.ts`（模板矩阵、thinking/websearch 联动、legacy 优先级、route combo 校验）；
+  - 更新 `aiapp-admin-routing-config.capabilities.test.ts` 对齐显式 `capabilities` 优先断言。
 
 ## 2026-03-20
 
@@ -7744,7 +7890,7 @@
   - 已通过定向测试：`intelligence-sdk`、`local-provider`、`tuff-intelligence-runtime`；
   - `typecheck:node` 已通过。
 
-### feat(pilot-websearch): 全局 Provider 池聚合配置落地（SearXNG/Serper/Tavily + builtin 兜底）
+### feat(aiapp-websearch): 全局 Provider 池聚合配置落地（SearXNG/Serper/Tavily + builtin 兜底）
 
 - `datasource.websearch` 升级为“纯全局池”结构：
   - 新增 `providers[]`（`id/type/enabled/priority/baseUrl/apiKeyEncrypted/timeoutMs/maxResults`）；
@@ -7753,7 +7899,7 @@
 - 保留 legacy 字段兼容映射：
   - 当新 `providers` 为空时，自动把 `gatewayBaseUrl/apiKeyRef` 映射为 `legacy-gateway` 单 provider；
   - 新结构写回后清空 legacy 字段扩展入口，仅保留读取兼容。
-- `pilot-tool-gateway` 执行链路切换为 provider 聚合：
+- `aiapp-tool-gateway` 执行链路切换为 provider 聚合：
   - 按 `priority` 执行主 provider，不足 `targetResults` 时按顺序补召回；
   - 基于 `dedupeKey(url | url+content)` 去重，并在达到目标后停止；
   - 仍不足时回退 `responses_builtin`（OpenAI Responses 内置检索）。
@@ -7764,13 +7910,13 @@
   - `websearch.executed` 新增 `providerChain/providerUsed/fallbackUsed/dedupeCount`；
   - 保持并透传 `source/sourceReason/sourceCount` 便于排障。
 - 单测补齐：
-  - 新增 `pilot-admin-datasource-config.test.ts`（legacy 映射、加密/脱敏、key 保持与清空）；
-  - 更新 `pilot-tool-gateway.test.ts` 适配 provider 池聚合与 fallback 分支；
-  - 保留 `pilot-websearch-connector.test.ts` 去重与 allowlist 回归。
+  - 新增 `aiapp-admin-datasource-config.test.ts`（legacy 映射、加密/脱敏、key 保持与清空）；
+  - 更新 `aiapp-tool-gateway.test.ts` 适配 provider 池聚合与 fallback 分支；
+  - 保留 `aiapp-websearch-connector.test.ts` 去重与 allowlist 回归。
 
-### feat(pilot-image-lab): 新增 LangChain 兼容图像直连测试页与 Runtime API
+### feat(aiapp-image-lab): 新增 LangChain 兼容图像直连测试页与 Runtime API
 
-- 新增页面 `apps/pilot/app/pages/test/image-lab.vue`：
+- 新增页面 `retired-ai-app/app/pages/test/image-lab.vue`：
   - 提供 `Base URL / API Key / Model / Prompt / size / count / timeoutMs` 手动输入；
   - 支持“拉取模型 + 生成图像 + 清空结果”流程；
   - 展示图片预览、`revisedPrompt`、`callId`、耗时与错误信息；
@@ -7779,91 +7925,91 @@
   - `POST /api/runtime/image-test/models`：按手填 `baseUrl/apiKey` 拉取可用模型列表；
   - `POST /api/runtime/image-test/generate`：按手填配置直接触发图像生成并返回图片结果。
 - 后端能力复用与扩展：
-  - 复用 `discoverPilotChannelModels` 实现模型发现；
-  - 复用 `executePilotImageGenerateTool` 实现图像生成，并扩展支持 `size/count`（默认 `1024x1024`、`1`）。
+  - 复用 `discoverAIChannelModels` 实现模型发现；
+  - 复用 `executeAIImageGenerateTool` 实现图像生成，并扩展支持 `size/count`（默认 `1024x1024`、`1`）。
 - 测试覆盖新增：
-  - `pilot-tool-gateway` 增加 `size/count` 默认与透传用例、空结果失败用例；
+  - `aiapp-tool-gateway` 增加 `size/count` 默认与透传用例、空结果失败用例；
   - 新增 runtime image-test API handler 单测，覆盖参数校验与上游错误映射。
 
-### fix(pilot-routing): Route Combo 跳过已关闭模型，避免继续命中无效 providerModel
+### fix(aiapp-routing): Route Combo 跳过已关闭模型，避免继续命中无效 providerModel
 
-- `apps/pilot/server/utils/pilot-routing-resolver.ts`：
+- `retired-ai-app/server/utils/aiapp-routing-resolver.ts`：
   - 新增渠道模型可用性校验，Route Combo / 模型绑定 / 候选池筛选阶段统一跳过“渠道内已禁用或不存在”的 `providerModel`；
   - fallback 选模策略增强：优先回退到渠道内启用模型，避免落到已关闭模型导致 400（`Model does not exist`）持续报错。
-- `apps/pilot/server/utils/__tests__/pilot-routing-resolver.intent.test.ts`：
+- `retired-ai-app/server/utils/__tests__/aiapp-routing-resolver.intent.test.ts`：
   - 新增回归用例：当 Route Combo 同时包含已关闭模型与可用模型时，验证路由会自动忽略已关闭模型并选择可用模型。
 
-### feat(pilot-routing-admin): 渠道模型批量管理 + 模型优先级 + 内置工具迁移到模型组
+### feat(aiapp-routing-admin): 渠道模型批量管理 + 模型优先级 + 内置工具迁移到模型组
 
-- `apps/pilot/app/pages/admin/system/channels.vue`：
+- `retired-ai-app/app/pages/admin/system/channels.vue`：
   - 渠道模型列表新增「一键清空 / 全部启用 / 全部禁用」；
   - 渠道模型新增 `priority` 字段并参与保存。
-- `apps/pilot/server/utils/pilot-admin-channel-config.ts` / `pilot-channel-model-sync.ts`：
+- `retired-ai-app/server/utils/aiapp-admin-channel-config.ts` / `aiapp-channel-model-sync.ts`：
   - 渠道模型配置支持 `priority` 归一化与同步默认值（默认 `100`）。
-- `apps/pilot/app/pages/admin/system/model-groups.vue` / `app/composables/usePilotRoutingAdmin.ts`：
+- `retired-ai-app/app/pages/admin/system/model-groups.vue` / `app/composables/useAIRoutingAdmin.ts`：
   - 模型组新增 `builtinTools` 配置入口，并写入 routing 配置。
-- `apps/pilot/server/utils/pilot-routing-resolver.ts`：
+- `retired-ai-app/server/utils/aiapp-routing-resolver.ts`：
   - 内置工具优先读取模型组配置；若模型组未配置则兼容回退到渠道配置；
   - `quota-auto` 选择时支持渠道模型 `priority` 参与排序。
 
-### fix(pilot-markdown): MilkContent 只读代码块移除高度上限与顶部偏移
+### fix(aiapp-markdown): MilkContent 只读代码块移除高度上限与顶部偏移
 
 - `MilkContent` 的 `createReadonlyCodeBlockView` 移除 `--editor-code-content-max-height` 注入，代码块视图不再受 `max-height` 变量限制。
 - `style.scss` 中 `EditorCode-Content` 与 `EditorCode-InlinePreview` 去除 `max-height`，保持内容自然撑开；保留横向/纵向溢出滚动能力。
 - `EditorCode--Sticky` 的 `HeaderHost` 统一改为 `top: 0`，不再使用 `84px` 顶部偏移变量。
 
-### fix(pilot-markdown-ui): 修复只读代码块右侧复制按钮可见性
+### fix(aiapp-markdown-ui): 修复只读代码块右侧复制按钮可见性
 
 - `RenderCodeHeader` 的复制按钮从“仅图标”调整为“图标 + 文案（复制/已复制）”，避免图标字体未命中时出现按钮空白。
 - 同步微调复制按钮尺寸与间距（`min-width/gap`），保证代码头右侧操作区在浅色主题下稳定可辨识。
 
-### fix(pilot-runtime-ui): 运行事件最小化前台展示 + 审批协议统一
+### fix(aiapp-runtime-ui): 运行事件最小化前台展示 + 审批协议统一
 
 - `POST /api/chat/sessions/:sessionId/stream` 与 `POST /api/aigc/executor` 的高风险 websearch 审批分支统一从 `error` 语义切换为 `turn.approval_required`，并以 `done(status=waiting_approval)` 收束，不再误判为失败轮次。
 - 意图解析链路合并记忆沉淀决策：`intent.completed` 新增 `memoryDecision(shouldStore/reason)`，轮次结束按该决策触发事实抽取与写入，不再以消息条数变化误判“已沉淀”。
-- 新增 `pilot_chat_memory_facts` 事实存储与去重写入；`memory.updated` 改为沉淀语义（`addedCount/stored/reason` 为主，`historyBefore/historyAfter` 仅兼容），前端仅在 `stored=true` 时展示“已沉淀记忆/已沉淀 X 条记忆”，并移除记忆卡调试字段展示。
-- `PilotRunEventCard` 改为默认收起（失败态默认展开），新增“详情/收起”交互；联网卡片仅在 `websearch.executed && sourceCount>0` 显示。
+- 新增 `aiapp_chat_memory_facts` 事实存储与去重写入；`memory.updated` 改为沉淀语义（`addedCount/stored/reason` 为主，`historyBefore/historyAfter` 仅兼容），前端仅在 `stored=true` 时展示“已沉淀记忆/已沉淀 X 条记忆”，并移除记忆卡调试字段展示。
+- `AIRunEventCard` 改为默认收起（失败态默认展开），新增“详情/收起”交互；联网卡片仅在 `websearch.executed && sourceCount>0` 显示。
 - 修复只读代码块 header 双重 sticky：保留 `HeaderHost` sticky，取消内层 header sticky，并在聊天只读渲染链路默认关闭 sticky header。
 
-### fix(pilot-markdown-compat): 旧聊天页 Markdown 原样显示兼容修复
+### fix(aiapp-markdown-compat): 旧聊天页 Markdown 原样显示兼容修复
 
 - 旧聊天页 `ChatItem` 对 assistant 的 `text` block 增加兼容渲染：改走 `RenderContent`（Markdown），user 侧 `text` 仍保持 `<pre>` 文本展示，避免语义回归。
-- `@talex-touch/tuff-intelligence/pilot-conversation` 新增 `normalizeLooseMarkdownForRender`，统一做轻量渲染归一化：`CRLF -> LF`，并修复智能引号包裹 fence（如 “`cpp 与 `” 这类分隔符写法）。
+- `@talex-touch/tuff-intelligence-conversation` 新增 `normalizeLooseMarkdownForRender`，统一做轻量渲染归一化：`CRLF -> LF`，并修复智能引号包裹 fence（如 “`cpp 与 `” 这类分隔符写法）。
 - `ThContent -> MilkContent` 接入该归一化函数，减少非标准 fence 导致的代码块降级为纯文本问题。
 - 会话快照序列化前向修复：assistant 纯字符串块默认映射为 `markdown`（user/system 保持 `text`），阻止新快照继续产出旧形态。
 
 ## 2026-03-19
 
-### feat(pilot-strict): Pilot 严格模式禁降级 + 顶部 PILOT 标识 + 提示词升级
+### feat(aiapp-strict): AI 严格模式禁降级 + 顶部 AIAPP 标识 + 提示词升级
 
-- `executor` 与 `chat stream` 双链路新增严格模式拦截：`pilotMode=true` 且 LangGraph 不可用时直接返回结构化错误 `PILOT_STRICT_MODE_UNAVAILABLE`，不再回退 `deepagent`。
-- `createPilotRuntime` 新增严格控制参数（`strictPilotMode/allowDeepAgentFallback`），严格模式下关闭 `PilotFallbackEngineAdapter`，LangGraph 运行失败直接透传失败。
-- 新增 `pilot-system-prompt` Builder，运行时系统提示词升级为 ThisAi 模板，并注入 `name/ip/ua`（不可得时安全降级）。
-- `index.vue` 顶部 header 与状态栏新增显式 `PILOT` 模式标签，普通模式显示“普通模式”，提升模式可感知差异。
+- `executor` 与 `chat stream` 双链路新增严格模式拦截：`aiappMode=true` 且 LangGraph 不可用时直接返回结构化错误 `AIAPP_STRICT_MODE_UNAVAILABLE`，不再回退 `deepagent`。
+- `createAIRuntime` 新增严格控制参数（`strictAIMode/allowDeepAgentFallback`），严格模式下关闭 `AIFallbackEngineAdapter`，LangGraph 运行失败直接透传失败。
+- 新增 `aiapp-system-prompt` Builder，运行时系统提示词升级为 ThisAi 模板，并注入 `name/ip/ua`（不可得时安全降级）。
+- `index.vue` 顶部 header 与状态栏新增显式 `AIAPP` 模式标签，普通模式显示“普通模式”，提升模式可感知差异。
 - `executor/stream` 统一补齐记忆与联网审计：新增 `memory.context`、`websearch.decision`（含触发/未触发原因）等审计事件，并将 `memoryEnabled`、历史条数与 websearch connector 来源透传到 runtime metadata / routing metrics。
 
-### feat(pilot-websearch): datasource 缺失时新增 Responses 内置检索 fallback
+### feat(aiapp-websearch): datasource 缺失时新增 Responses 内置检索 fallback
 
-- `pilot-tool-gateway` 新增 websearch 后备路径：当 datasource gateway 未配置时，优先使用 OpenAI Responses 内置 websearch 工具执行检索。
+- `aiapp-tool-gateway` 新增 websearch 后备路径：当 datasource gateway 未配置时，优先使用 OpenAI Responses 内置 websearch 工具执行检索。
 - 工具审计 payload 新增 `connectorSource/connectorReason`，可区分 `gateway`、`responses_builtin` 与不可用原因（不再静默无感）。
 - websearch 工具非审批类失败改为返回 `null + tool.call.failed` 审计，不中断主对话链路；审批 required/rejected 仍保持阻塞失败。
 - 新增单测覆盖：strict runtime 行为、prompt builder 插值、websearch fallback 与失败可观测分支。
 
-### feat(pilot-ui): 旧 UI 硬切换到会话级事件卡片流（无全局运行态）
+### feat(aiapp-ui): 旧 UI 硬切换到会话级事件卡片流（无全局运行态）
 
 - 保留 `ThChat/ThInput/History` 旧界面骨架，移除运行态全局条作为状态主承载；运行态改为会话消息内卡片长期留存。
 - `completion/index.ts` 事件消费改为新事件族单通道：统一解析 `event || type`，主流程仅消费 `intent.* / routing.selected / memory.context / websearch.* / thinking.* / assistant.* / run.audit / error / done`。
-- 新增 `pilot_run_event_card` 渲染组件并接入 `ChatItem`；支持 `intent/routing/memory/websearch/thinking` 卡片 upsert、流式增量（thinking）与会话隔离（`sessionId+turnId` 作用域）。
+- 新增 `aiapp_run_event_card` 渲染组件并接入 `ChatItem`；支持 `intent/routing/memory/websearch/thinking` 卡片 upsert、流式增量（thinking）与会话隔离（`sessionId+turnId` 作用域）。
 - Legacy 事件（`turn.* / status_updated / completion / verbose / session_bound`）前端不再驱动状态，仅做一次性告警忽略。
 - 管理端渠道配置硬切：`adapter` 固定 `openai`，不再提供 `legacy` 选项；`transport` 仅保留 `responses/chat.completions`。
 
-### fix(pilot-markdown): 修复 Mermaid Mindmap 在 Milkdown 只读渲染链路失效
+### fix(aiapp-markdown): 修复 Mermaid Mindmap 在 Milkdown 只读渲染链路失效
 
 - 根因修复：`mermaid mindmap` 动态依赖 `cytoscape-cose-bilkent` 时触发 CJS/ESM 默认导出不兼容，导致预览渲染失败。
 - 新增前端构建 shim：`cytoscape-cose-bilkent`、`cytoscape-fcose` 统一导出稳定 `default`，并在 `nuxt.config.ts` 中接入 alias。
 - 保持 `MilkContent` 渲染交互不变，仅在 dev 环境补充 Mermaid 渲染失败错误码日志（如 `E_MERMAID_ESM_EXPORT`）便于定位。
 
-### refactor(pilot-markdown): 复用图渲染内核 + 代码头双层 Sticky
+### refactor(aiapp-markdown): 复用图渲染内核 + 代码头双层 Sticky
 
 - 新增 `article/renderers` 共享渲染内核：
   - `mermaid-renderer`：统一初始化、渲染与错误码上报；
@@ -7877,104 +8023,104 @@
   - `codeContentMaxHeight?: string = 'min(56vh, 680px)'`
 - 代码块结构升级为 `EditorCode-Chrome + HeaderHost + Content`，实现“页面滚动可见 + 块内滚动可见”的双层 sticky 体验。
 
-### feat(pilot-chat): 记忆开关迁移个人设置 + 模型列表收敛后端配置 + Pilot 入口并入 `+`
+### feat(aiapp-chat): 记忆开关迁移个人设置 + 模型列表收敛后端配置 + AI 入口并入 `+`
 
 - 记忆系统开关从主聊天输入面板迁移到「个人设置 -> 外观」，支持一键开关；关闭时自动执行 `memory/clear(scope=all)` 并同步写入 `memory/settings`。
-- 主聊天输入区 `ThInputPlus` 移除“记忆系统”，新增“Pilot 模式”开关，作为会话与发送 meta 的统一入口（放入 `+` 面板）。
+- 主聊天输入区 `ThInputPlus` 移除“记忆系统”，新增“AI 模式”开关，作为会话与发送 meta 的统一入口（放入 `+` 面板）。
 - 运行时模型前端列表改为“仅后端配置可见 + 默认 Auto 项”：
   - 去除前端 GPT/Gemini/Claude 硬编码 fallback；
   - API 失败或空配置时仅保留 `Auto(quota-auto)`，避免展示未在后端配置的模型。
 
-### refactor(pilot-input): 合并“分析图片/分析文件”为单一“分析文件”入口
+### refactor(aiapp-input): 合并“分析图片/分析文件”为单一“分析文件”入口
 
 - 输入区 `ThInputPlus` 移除独立“分析图片”入口，统一为一个“分析文件”按钮（支持图片 + 文档）。
 - `ThInput` 侧统一附件能力判定为 `allowFileAnalysis`，粘贴/上传/文件选择不再区分 image/file 双开关。
 - 运行时模型能力兼容：`allowFileAnalysis` 优先，缺省回退历史 `allowImageAnalysis`；对外返回保持两字段同值，避免旧客户端语义分叉。
 
-### fix(pilot-input): 优化输入面板高度并补齐记忆系统快捷开关
+### fix(aiapp-input): 优化输入面板高度并补齐记忆系统快捷开关
 
 - `ThInputPlus` 去除固定 `320px` 高度，改为按内容自适应，避免在“分析文件”合并后出现大面积空白。
 - 在输入面板新增“记忆系统”开关项，复用现有 `v1/chat/memory/settings` 能力切换当前会话记忆状态。
 - `ThInput` / `pages/index.vue` 打通记忆开关状态与禁用提示，策略或提交中状态下保持只读并给出明确提示。
 
-### fix(pilot-input): 修复 Legacy UI 中 Pilot 开关关闭后仍透传 `pilotMode=true`
+### fix(aiapp-input): 修复 Legacy UI 中 AI 开关关闭后仍透传 `aiappMode=true`
 
-- 修复 `pages/index.vue` 中发送元数据合并逻辑：`pilotMode` 改为“显式输入优先，未提供时回退会话状态”，不再使用 `OR` 强制吸附历史会话值。
-- 结果：当用户在 `ThInputPlus` 中关闭 `Pilot 模式` 后，本轮请求可正确透传 `pilotMode=false`；仅在未显式设置时沿用会话级默认。
-- 聊天页顶部与底部模式标签改为会话联动展示：`pilotMode=true` 显示 `PILOT`，关闭后显示 `普通模式`，避免静态 `PILOT` 误导。
+- 修复 `pages/index.vue` 中发送元数据合并逻辑：`aiappMode` 改为“显式输入优先，未提供时回退会话状态”，不再使用 `OR` 强制吸附历史会话值。
+- 结果：当用户在 `ThInputPlus` 中关闭 `AI 模式` 后，本轮请求可正确透传 `aiappMode=false`；仅在未显式设置时沿用会话级默认。
+- 聊天页顶部与底部模式标签改为会话联动展示：`aiappMode=true` 显示 `AIAPP`，关闭后显示 `普通模式`，避免静态 `AIAPP` 误导。
 
-### fix(pilot-chat): turns 失败响应脱敏（隐藏连接端点与本地路径）
+### fix(aiapp-chat): turns 失败响应脱敏（隐藏连接端点与本地路径）
 
 - `POST /api/v1/chat/sessions/:sessionId/turns` 增加统一异常兜底：数据库/网络异常不再把底层错误对象直接冒泡到前端。
-- 新增服务端错误脱敏工具（`server/utils/pilot-http.ts`）：对 `IP:PORT`、域名端口、绝对本机路径执行遮罩处理。
+- 新增服务端错误脱敏工具（`server/utils/aiapp-http.ts`）：对 `IP:PORT`、域名端口、绝对本机路径执行遮罩处理。
 - 对瞬时连接类错误（如 `ETIMEDOUT/ECONNREFUSED`）返回统一可读文案与稳定状态码（`503`），降低前端日志泄露内部拓扑风险。
 - 前端 `completion` 错误文案解析增加二次脱敏，确保即使上游异常信息带敏感连接串，也不会直接展示给用户。
 
-### fix(pilot-sync): chat sessions 流式链路回灌 quota 历史快照
+### fix(aiapp-sync): chat sessions 流式链路回灌 quota 历史快照
 
-- `POST /api/chat/sessions/:sessionId/stream` 在流结束阶段新增“兼容快照回灌”：从 runtime 会话实时读取 `messages + title`，统一写入 `pilot_quota_history`，避免旧 `syncHistory` 拉到陈旧快照后覆盖本地会话。
-- 同步维护 `pilot_quota_sessions` 映射（`chat_id = runtime_session_id`），保证旧会话入口与新 runtime 会话保持一致可追踪。
+- `POST /api/chat/sessions/:sessionId/stream` 在流结束阶段新增“兼容快照回灌”：从 runtime 会话实时读取 `messages + title`，统一写入 `aiapp_quota_history`，避免旧 `syncHistory` 拉到陈旧快照后覆盖本地会话。
+- 同步维护 `aiapp_quota_sessions` 映射（`chat_id = runtime_session_id`），保证旧会话入口与新 runtime 会话保持一致可追踪。
 - 回灌链路采用 best-effort（失败仅 `warn`，不阻断主流式响应），优先保障对话主链路稳定。
 
-### fix(pilot-sync-ui): 旧聊天页发送完成后停用 legacy 会话拉取覆盖
+### fix(aiapp-sync-ui): 旧聊天页发送完成后停用 legacy 会话拉取覆盖
 
-- `apps/pilot/app/pages/index.vue` 移除发送完成阶段对 `syncHistory()` 的依赖，不再请求 `GET /api/aigc/conversation/:id` 回填当前会话。
+- `retired-ai-app/app/pages/index.vue` 移除发送完成阶段对 `syncHistory()` 的依赖，不再请求 `GET /api/aigc/conversation/:id` 回填当前会话。
 - 会话同步状态改为本地收敛：发送开始置 `pending`，请求完成按最终状态置 `success/failed`，并仅更新本地 `history list` 快照，避免空 `messages` 响应覆盖本地上下文。
 - `REQUEST_SAVE_CURRENT_CONVERSATION`（含 `Ctrl+S` 与状态栏同步按钮）改为本地快照保存，不再触发 legacy 会话详情接口。
 
-### fix(pilot-approval-ui): 补齐工具审批入口并移除审批超时失败分支
+### fix(aiapp-approval-ui): 补齐工具审批入口并移除审批超时失败分支
 
-- 旧聊天页 `pilot_tool_card` 新增内联“批准/拒绝”按钮：当 `status=approval_required` 且存在 `ticketId/sessionId` 时，可直接调用 `POST /api/v1/chat/sessions/:sessionId/tool-approvals/:ticketId` 完成审批。
+- 旧聊天页 `aiapp_tool_card` 新增内联“批准/拒绝”按钮：当 `status=approval_required` 且存在 `ticketId/sessionId` 时，可直接调用 `POST /api/v1/chat/sessions/:sessionId/tool-approvals/:ticketId` 完成审批。
 - 工具卡 payload 补充 `sessionId`，避免 UI 端审批动作缺少上下文导致无法提交。
 - 审批链路改为“前端显式决策 + 单次事件续跑”：去除前端轮询审批状态，不再生成“审批等待超时（>Ns）”错误卡。
-- 前端审批成功后通过 `pilot-tool-approval-decision` 事件回传当前会话，触发流式链路 resume；拒绝时直接落工具拒绝态并结束当前轮次。
+- 前端审批成功后通过 `aiapp-tool-approval-decision` 事件回传当前会话，触发流式链路 resume；拒绝时直接落工具拒绝态并结束当前轮次。
 - 对 `event=error` 且 `code=TOOL_APPROVAL_REQUIRED` 的流事件改为“等待审批态”处理，不再额外渲染错误卡干扰审批流程。
 
 ## 2026-03-18
 
-### fix(pilot-build): 拆分前端安全子入口，修复 `AsyncLocalStorage` 运行时异常
+### fix(aiapp-build): 拆分前端安全子入口，修复 `AsyncLocalStorage` 运行时异常
 
-- 新增 `@talex-touch/tuff-intelligence/pilot-conversation` 子入口（`packages/tuff-intelligence/src/pilot-conversation.ts`），仅导出 `serializePilotExecutorMessages`，避免前端链路误引入 `deepagents/langgraph` 的 Node-only 依赖。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` 改为从 `pilot-conversation` 引用序列化能力，不再通过 `@talex-touch/tuff-intelligence/pilot` 聚合入口取值。
+- 新增 `@talex-touch/tuff-intelligence-conversation` 子入口（`packages/tuff-intelligence/src/aiapp-conversation.ts`），仅导出 `serializeAIExecutorMessages`，避免前端链路误引入 `deepagents/langgraph` 的 Node-only 依赖。
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts` 改为从 `aiapp-conversation` 引用序列化能力，不再通过 `@talex-touch/tuff-intelligence` 聚合入口取值。
 - 结果：消除浏览器打包链路对 `node:async_hooks` 的依赖，修复 `import_node_async_hooks.AsyncLocalStorage is not a constructor` 导致的 500 问题。
 
-### fix(pilot-executor): 渠道路由失败错误透传到前端可见
+### fix(aiapp-executor): 渠道路由失败错误透传到前端可见
 
-- `apps/pilot/server/api/aigc/executor.post.ts` 在渠道选择失败分支补齐并下发结构化错误信息：`code/reason/request_id/status_code/detail`，并附带 `model_id/provider_model/route_combo_id/selection_reason/selection_source` 等诊断字段。
-- `apps/pilot/app/composables/api/base/v1/aigc/completion/index.ts` 保留 SSE `error` 事件中的结构化字段，错误 block 写入 `extra`（`requestId/statusCode/code/reason/detail`），不再只保留 message。
-- `apps/pilot/app/components/chat/attachments/ErrorCard.vue` 优先读取结构化 `extra`，补充展示诊断摘要与路由上下文，并稳定展示可复制的 `requestId`，便于用户感知与问题定位。
+- `retired-ai-app/server/api/aigc/executor.post.ts` 在渠道选择失败分支补齐并下发结构化错误信息：`code/reason/request_id/status_code/detail`，并附带 `model_id/provider_model/route_combo_id/selection_reason/selection_source` 等诊断字段。
+- `retired-ai-app/app/composables/api/base/v1/aigc/completion/index.ts` 保留 SSE `error` 事件中的结构化字段，错误 block 写入 `extra`（`requestId/statusCode/code/reason/detail`），不再只保留 message。
+- `retired-ai-app/app/components/chat/attachments/ErrorCard.vue` 优先读取结构化 `extra`，补充展示诊断摘要与路由上下文，并稳定展示可复制的 `requestId`，便于用户感知与问题定位。
 
-### fix(pilot-intelligence): 前后端会话结构统一 + websearch 按意图触发
+### fix(aiapp-intelligence): 前后端会话结构统一 + websearch 按意图触发
 
-- 新增 `packages/tuff-intelligence/src/business/pilot/conversation.ts` 共享 util，并在前后端同时接入：
-  - `serializePilotExecutorMessages`：统一会话消息序列化，保留 `card/tool` 等非 markdown block（即使 `value` 为空也不丢失）。
-  - `buildPilotConversationSnapshot`：统一会话快照构建，避免后端将历史消息退化为纯 markdown 文本导致 toolcall/tool card 信息丢失。
-  - `extractLatestPilotUserTurn` / `buildPilotTitleMessages`：统一最新用户轮提取与标题消息抽取规则。
+- 新增 `packages/tuff-intelligence/src/business/aiapp/conversation.ts` 共享 util，并在前后端同时接入：
+  - `serializeAIExecutorMessages`：统一会话消息序列化，保留 `card/tool` 等非 markdown block（即使 `value` 为空也不丢失）。
+  - `buildAIConversationSnapshot`：统一会话快照构建，避免后端将历史消息退化为纯 markdown 文本导致 toolcall/tool card 信息丢失。
+  - `extractLatestAIUserTurn` / `buildAITitleMessages`：统一最新用户轮提取与标题消息抽取规则。
 - `legacy executor` websearch 触发策略收敛：
-  - 新增 `shouldExecutePilotWebsearch` 判定，websearch 不再“联网开关开启即调用”；
+  - 新增 `shouldExecuteAIWebsearch` 判定，websearch 不再“联网开关开启即调用”；
   - 优先使用意图分类结果（`websearchRequired`），仅在意图要求时触发；
   - 意图缺失时走启发式兜底（如“最新/实时/查一下/today/latest”等时效检索场景）。
-- `pilot-intent-resolver` 输出新增 `websearchRequired/websearchReason`，并在 `executor` 侧落地判定与观测字段（`websearchDecision`）。
-- 新增回归测试：`apps/pilot/server/utils/__tests__/pilot-conversation-shared.test.ts`，覆盖 block 保留、快照结构、标题抽取与 websearch 判定逻辑。
-- 新增稳定子入口 `@talex-touch/tuff-intelligence/pilot`（`src/pilot.ts` + package exports），Pilot 前后端调用从深路径/根聚合出口收敛到领域子入口，降低路径耦合与误引入风险。
-- 补齐 `pilot` 子入口导出清单（含 runtime/store/protocol/adapters 的 Pilot 侧必需符号），并将 `apps/pilot` 中原 `@talex-touch/tuff-intelligence` 根出口引用全部迁移到 `@talex-touch/tuff-intelligence/pilot`。
+- `aiapp-intent-resolver` 输出新增 `websearchRequired/websearchReason`，并在 `executor` 侧落地判定与观测字段（`websearchDecision`）。
+- 新增回归测试：`retired-ai-app/server/utils/__tests__/aiapp-conversation-shared.test.ts`，覆盖 block 保留、快照结构、标题抽取与 websearch 判定逻辑。
+- 新增稳定子入口 `@talex-touch/tuff-intelligence`（`src/aiapp.ts` + package exports），AI 前后端调用从深路径/根聚合出口收敛到领域子入口，降低路径耦合与误引入风险。
+- 补齐 `aiapp` 子入口导出清单（含 runtime/store/protocol/adapters 的 AI 侧必需符号），并将 `retired-ai-app` 中原 `@talex-touch/tuff-intelligence` 根出口引用全部迁移到 `@talex-touch/tuff-intelligence`。
 
-### feat(pilot-graph): 新建会话可选 Pilot 模式（Graph 优先，DeepAgent 回退）
+### feat(aiapp-graph): 新建会话可选 AI 模式（Graph 优先，DeepAgent 回退）
 
 - 前端主聊天页（`/`）新建会话新增模式选择：
-  - 可选择“启用 Pilot 模式（Graph 优先）”或“普通模式”；
-  - 会话级持久化字段新增 `pilotMode`，并在聊天头部展示当前会话模式标签。
+  - 可选择“启用 AI 模式（Graph 优先）”或“普通模式”；
+  - 会话级持久化字段新增 `aiappMode`，并在聊天头部展示当前会话模式标签。
 - v1 链路透传补齐：
-  - `POST /api/v1/chat/sessions/:sessionId/turns` 入队 payload 新增 `pilotMode`；
-  - `POST /api/v1/chat/sessions/:sessionId/stream` 代理 executor 时透传 `pilotMode`。
+  - `POST /api/v1/chat/sessions/:sessionId/turns` 入队 payload 新增 `aiappMode`；
+  - `POST /api/v1/chat/sessions/:sessionId/stream` 代理 executor 时透传 `aiappMode`。
 - 执行器编排决策增强：
-  - `executor` 在 `pilotMode=true` 时向 orchestrator 传入 `preferLangGraph=true`；
+  - `executor` 在 `aiappMode=true` 时向 orchestrator 传入 `preferLangGraph=true`；
   - orchestrator 会优先选择可用且绑定 `langgraphAssistantId` 的 route combo；
   - 若本地 Graph 服务不可用或无可用 Graph combo，保持自动回退 `deepagent`，不影响现有稳定性。
 
-### feat(pilot-tools): 通用工具调用提示 + AI 数据源抓取（V1 双线并行）
+### feat(aiapp-tools): 通用工具调用提示 + AI 数据源抓取（V1 双线并行）
 
-- 新增 `PilotToolGateway` 与 `websearch` connector 抽象（`search/fetch/extract`），并接入可配置网关主路径。
+- 新增 `AIToolGateway` 与 `websearch` connector 抽象（`search/fetch/extract`），并接入可配置网关主路径。
 - 新增 `datasource.websearch` 配置（`gatewayBaseUrl/apiKeyRef/allowlistDomains/timeoutMs/maxResults/crawlEnabled/ttlMinutes`）并纳入 Admin settings 聚合读写。
 - 新增工具审批票据存储与 API：
   - `GET /api/v1/chat/sessions/:sessionId/tool-approvals?status=pending`
@@ -7983,36 +8129,36 @@
 - `legacy executor` 与 `v1 chat stream` 打通工具事件透传：已清理 `status_updated(calling/result)` 的工具兼容映射，统一以 `run.audit` 作为工具卡片唯一事件源，并对高风险场景启用阻塞式审批。
 - 前端补齐统一解析：
   - Tool 卡片统一由 `run.audit` 驱动（不再消费 legacy `status_updated(calling/result)` 生成工具卡）；
-  - 增加 `PilotToolCard` 渲染组件，展示工具状态、输入/输出预览、来源链接、审批 ticket 信息。
+  - 增加 `AIToolCard` 渲染组件，展示工具状态、输入/输出预览、来源链接、审批 ticket 信息。
 
-### feat(pilot-approval): 审批通过自动续跑 + Legacy 工具事件 Phase 2 收口
+### feat(aiapp-approval): 审批通过自动续跑 + Legacy 工具事件 Phase 2 收口
 
 - 旧聊天页 `$completion` 增加审批自动续跑：
   - 收到 `turn.approval_required` 后自动轮询 `GET /api/v1/chat/sessions/:sessionId/tool-approvals`；
   - 票据 `approved` 后复用原 `request_id` 自动恢复 `stream` 执行；
   - 票据 `rejected` 或轮询超时时，统一写入 Tool 卡片失败态并落错误消息。
 - 新增运行时公共配置（含回滚开关）：
-  - `pilotToolApprovalAutoResume`（默认 `true`）
-  - `pilotToolApprovalPollIntervalMs`（默认 `1500`）
-  - `pilotToolApprovalPollTimeoutMs`（默认 `600000`）
-  - `pilotEnableExecutorEventCompat`（默认 `false`）
+  - `aiappToolApprovalAutoResume`（默认 `true`）
+  - `aiappToolApprovalPollIntervalMs`（默认 `1500`）
+  - `aiappToolApprovalPollTimeoutMs`（默认 `600000`）
+  - `aiappEnableExecutorEventCompat`（默认 `false`）
 - 补充审批自动续跑回归测试：
   - 新增 completion flow 单测，覆盖 `request_id` 复用（跳过 turn 创建）与审批 `approved/rejected/timeout` 三条分支状态映射。
 - Legacy Phase 2（工具提示相关）：
   - `$completion` 默认关闭 legacy `completion/verbose/status_updated(tool)` 兼容分支；
   - 主链路统一为 `turn.* + run.audit`；
-  - 通过 `NUXT_PUBLIC_PILOT_ENABLE_EXECUTOR_EVENT_COMPAT=true` 可按需启用旧事件解析窗口。
+  - 通过 `NUXT_PUBLIC_AIAPP_ENABLE_EXECUTOR_EVENT_COMPAT=true` 可按需启用旧事件解析窗口。
 
-### feat(pilot-intent-image): Intent 图像路由 + image.generate 工具闭环（V1）
+### feat(aiapp-intent-image): Intent 图像路由 + image.generate 工具闭环（V1）
 
-- 新增 `PilotIntentResolver`（混合策略）：
+- 新增 `AIIntentResolver`（混合策略）：
   - 显式命令优先：`/image`、`/img`；
   - 规则命中：中英文图像生成语义匹配；
   - nano 分类兜底：结构化 JSON 输出 `intent/confidence/reason/prompt`，失败默认回退 `chat`（fail-open）。
 - 路由能力扩展：
-  - `PilotRoutingPolicy` 新增 `intentNanoModelId/intentRouteComboId/imageGenerationModelId/imageRouteComboId`；
-  - `PilotModelCatalogItem` 新增 `allowImageGeneration`；
-  - `resolvePilotRoutingSelection` 新增 `intentType`（`chat | image_generate | intent_classification`）并按 intent 选择模型与 route combo。
+  - `AIRoutingPolicy` 新增 `intentNanoModelId/intentRouteComboId/imageGenerationModelId/imageRouteComboId`；
+  - `AIModelCatalogItem` 新增 `allowImageGeneration`；
+  - `resolveAIRoutingSelection` 新增 `intentType`（`chat | image_generate | intent_classification`）并按 intent 选择模型与 route combo。
 - 运行时模型接口增强：
   - `GET /api/runtime/models` 新增 `allowImageGeneration`；
   - Admin 模型组与路由策略页面同步支持新字段编辑与展示。
@@ -8026,15 +8172,15 @@
   - `turn.approval_required` 统一映射为标准工具审计 payload；
   - 去除 tool parser 中 `websearch` 硬编码兜底（改为通用 `tool/tool.unknown`）。
 
-### feat(pilot-ui): 主聊天 Markdown 流式增量渐变显示
+### feat(aiapp-ui): 主聊天 Markdown 流式增量渐变显示
 
-- 仅在 Pilot 主聊天链路生效：`ThChat -> ChatItem -> RenderContent -> ThContent -> MilkContent`。
+- 仅在 AI 主聊天链路生效：`ThChat -> ChatItem -> RenderContent -> ThContent -> MilkContent`。
 - `RenderContent` 新增可选属性 `streamingGradient`（默认关闭），仅在 `dotEnable=true` 且 markdown 内容持续增量时触发节流渐变 pulse。
 - 新增独立 overlay 扫光动画，保留原有 `Generating-Dot` 光标行为，并在组件卸载时清理 pulse/dot 相关计时器。
 - 增加 `prefers-reduced-motion` 自动降级：系统开启“减少动态效果”时不触发渐变 pulse。
 - `ChatItem` 仅对 `block.type === 'markdown'` 主聊天渲染接入 `streaming-gradient`，不影响分享图、后台 Prompt 预览和其他产品线。
 
-### fix(pilot-markdown): Milkdown 渲染兼容修复与版本核验
+### fix(aiapp-markdown): Milkdown 渲染兼容修复与版本核验
 
 - 修复 `refractor` 语言模块导入路径兼容性：统一为 `refractor/*`，避免 `refractor/lang/*` 在 Bundler 模式下触发模块解析失败。
 - 修复 `MilkdownRenderStashed` 的 prism 插件导入错误：从 `@milkdown/kit/plugin/prism` 更正为 `@milkdown/plugin-prism`。
@@ -8068,7 +8214,7 @@
   - 开发测试页 `/test/markdown-stream` 右侧 `Stream Preview` 改为固定高度内部滚动，长内容回放不再推高整页滚动。
 - 对 `@milkdown/*` 执行最新稳定版本核验：当前 `core/kit` 最新为 `7.19.0`，`plugin-math` 最新为 `7.5.9`，`plugin-diagram` 最新为 `7.7.0`（上游已标记 deprecated），本次未引入额外版本漂移。
 
-### feat(pilot): 增加会话记忆管理（用户开关 + 清空当前/全部）
+### feat(aiapp): 增加会话记忆管理（用户开关 + 清空当前/全部）
 
 - 新增用户侧记忆配置接口：
   - `GET /api/v1/chat/memory/settings`
@@ -8085,7 +8231,7 @@
   - 记忆开关（持久化到服务端偏好）；
   - “清空当前”“清空全部”动作（带二次确认与执行态保护）。
 
-### feat(pilot-admin): Channels 支持模型同步与按模型配置格式
+### feat(aiapp-admin): Channels 支持模型同步与按模型配置格式
 
 - `Channels` 管理页新增“同步渠道模型”按钮，复用 `POST /api/admin/channel-models/sync`，同步后自动刷新渠道配置。
 - 渠道模型配置新增 `format` 字段（每个模型独立），支持在管理页直接配置并持久化到数据库设置。
@@ -8095,12 +8241,12 @@
 - 渠道编辑 UI 从弹窗改为右侧 Drawer，模型列表支持更长内容；“拉取渠道模型”入口迁移到编辑面板内。
 - 渠道列表中的模型展示改为“共计 x 个模型 + 编辑按钮”，避免首页表格被超长模型字符串撑开。
 - 渠道列表模型区按钮文案调整为“总览”，并恢复操作区独立“编辑”入口，降低误解成本。
-- 管理端移除“管理总览”入口：`AdminSideNav` 不再展示该菜单；`/admin/system/pilot-settings` 改为自动跳转到 `Channels`；Pilot 侧边栏管理入口同步指向 `Channels`。
+- 管理端移除“管理总览”入口：`AdminSideNav` 不再展示该菜单；`/admin/system/aiapp-settings` 改为自动跳转到 `Channels`；AI 侧边栏管理入口同步指向 `Channels`。
 - 管理页顶部右侧移除 `Legacy CMS 已进入退场阶段` 提示标签，替换为用户头像组件 `AccountAvatar`。
 - `Channels` 列表支持直接操作：状态可在列表一键开关、新增删除渠道操作、新增优先级字段（列表与编辑态均可配置）。
 - 渠道“设为默认”入口移除，后台改为按渠道优先级参与自动调度（同分时按渠道 ID 稳定排序）。
 
-### feat(pilot-runtime): Runtime 模型改为仅返回 ModelGroup，并补齐 image/file 能力开关
+### feat(aiapp-runtime): Runtime 模型改为仅返回 ModelGroup，并补齐 image/file 能力开关
 
 - `GET /api/runtime/models` 不再直接透出渠道发现的全量 provider models，改为仅返回 `routing.modelCatalog` 中启用且可见的模型组（ModelGroup）。
 - Runtime 模型响应新增能力字段：
@@ -8111,7 +8257,7 @@
   - `ThInputPlus` 新增独立“分析文件”入口，并支持按模型组能力禁用 `thinking/websearch/image/file`；
   - `ThInput` 在上传、粘贴、发送前增加能力约束：不支持图片/文件时阻止附件进入，不支持 `thinking/websearch` 时发送前强制关闭对应开关。
 
-### refactor(pilot-admin): 管理首页移除“我的应用/工作日历”并下线运势功能
+### refactor(aiapp-admin): 管理首页移除“我的应用/工作日历”并下线运势功能
 
 - 管理首页（`/admin`）移除以下模块：
   - “我的应用”卡片（`lazy-cms-application`）
@@ -8126,28 +8272,28 @@
 - 聊天附件渲染移除星座运势映射：
   - `QuotaVeTool` 删除 `xingzuoyunshi-star` 组件映射，避免继续渲染运势卡片。
 
-### refactor(pilot-admin): 下线部门/指南/监控/微信管理并移除 Legacy CMS 路由
+### refactor(aiapp-admin): 下线部门/指南/监控/聊天应用管理并移除 Legacy CMS 路由
 
 - 管理导航精简，移除以下入口：
   - 部门管理（`/admin/system/dept`）
   - 系统指南（`/admin/system/guide`）
   - 系统监控（`/admin/system/monitor`）
-  - LiveChat（`/admin/wechat/livechat`）
-  - 微信公众号菜单（`/admin/wechat/menu`）
+  - LiveChat（`/admin/chatapp/livechat`）
+  - 聊天应用公众号菜单（`/admin/chatapp/menu`）
 - 管理首页继续裁剪：
   - 删除“系统监控”卡片（不再渲染 `monitor` 模块）。
 - 页面路由已物理删除（直接 404）：
-  - `apps/pilot/app/pages/admin/system/dept.vue`
-  - `apps/pilot/app/pages/admin/system/guide.vue`
-  - `apps/pilot/app/pages/admin/system/monitor.vue`
-  - `apps/pilot/app/pages/admin/wechat/livechat.vue`
-  - `apps/pilot/app/pages/admin/wechat/menu.vue`
+  - `retired-ai-app/app/pages/admin/system/dept.vue`
+  - `retired-ai-app/app/pages/admin/system/guide.vue`
+  - `retired-ai-app/app/pages/admin/system/monitor.vue`
+  - `retired-ai-app/app/pages/admin/chatapp/livechat.vue`
+  - `retired-ai-app/app/pages/admin/chatapp/menu.vue`
 - Legacy CMS 兼容层彻底移除：
-  - 删除 `apps/pilot/app/pages/cms/index.vue`
-  - 删除 `apps/pilot/app/pages/cms/[...path].vue`
+  - 删除 `retired-ai-app/app/pages/cms/index.vue`
+  - 删除 `retired-ai-app/app/pages/cms/[...path].vue`
 - 同步清理配套残留：
   - `weChat.ts` 移除对已删除页面组件的错误导入；
-  - `pilot-compat-seeds` 删除 `menu_system_dept` 种子，避免新环境继续回填该入口。
+  - `aiapp-compat-seeds` 删除 `menu_system_dept` 种子，避免新环境继续回填该入口。
 
 ## 2026-03-17
 
@@ -8158,24 +8304,24 @@
 - 六主文档补齐锚点同步：`INDEX/README/TODO/Roadmap/Quality Baseline/CHANGES` 全部指向同一执行口径。
 - 锁定优先级保持：先 `Nexus 设备授权风控`，再推进文档 strict 化与 Wave A/B/C 并行治理。
 
-### refactor(pilot): CMS Admin 化 + `/api/pilot/*` 路径硬切
+### refactor(aiapp): CMS Admin 化 + `/api/aiapp/*` 路径硬切
 
 - 页面路由完成迁移：`/admin/**` 成为管理主入口，`/cms/**` 降级为 Legacy 跳转层。
 - 管理导航切换为静态分组导航（系统管理/内容运营/AIGC/App 管理），不再依赖 CMS 动态菜单作为主链路导航来源。
 - `channels/storage` 统一为列表页 + 添加/编辑弹框，主入口：
   - `/admin/system/channels`
   - `/admin/system/storage`
-- API 路径完成硬切（不保留 `/api/pilot/*` 兼容别名）：
-  - `/api/pilot/admin/*` -> `/api/admin/*`
-  - `/api/pilot/chat/*` -> `/api/chat/*`
-  - `/api/pilot/runtime/*` -> `/api/runtime/*`
-- Pilot 附件预览路径改为 `/api/chat/sessions/:sessionId/attachments/:attachmentId/content`，并同步更新对应测试断言。
+- API 路径完成硬切（不保留 `/api/aiapp/*` 兼容别名）：
+  - `/api/aiapp/admin/*` -> `/api/admin/*`
+  - `/api/aiapp/chat/*` -> `/api/chat/*`
+  - `/api/aiapp/runtime/*` -> `/api/runtime/*`
+- AI 附件预览路径改为 `/api/chat/sessions/:sessionId/attachments/:attachmentId/content`，并同步更新对应测试断言。
 - Nexus OAuth 统一路径：
-  - `/api/pilot/oauth/authorize` -> `/api/oauth/authorize`
-  - `/api/pilot/oauth/token` -> `/api/oauth/token`
-  - Pilot 登录回调链路已同步切换到新 OAuth 路径。
+  - `/api/aiapp/oauth/authorize` -> `/api/oauth/authorize`
+  - `/api/aiapp/oauth/token` -> `/api/oauth/token`
+  - AI 登录回调链路已同步切换到新 OAuth 路径。
 
-### refactor(pilot-admin): App 管理按功能独立拆页
+### refactor(aiapp-admin): App 管理按功能独立拆页
 
 - 修复 Admin 左侧导航不可滚动问题：侧栏容器改为 `flex + overflow hidden`，菜单区单独 `el-scrollbar` 承担滚动。
 - App 管理入口进一步拆分为独立页面：
@@ -8185,19 +8331,19 @@
   - `/admin/system/route-combos`
   - `/admin/system/routing-policy`
   - `/admin/system/routing-metrics`
-- `/admin/system/pilot-settings` 调整为“管理总览页”，仅保留分功能入口跳转，不再承载聚合编辑表单。
+- `/admin/system/aiapp-settings` 调整为“管理总览页”，仅保留分功能入口跳转，不再承载聚合编辑表单。
 - `Channels` 管理增强为“每渠道多模型”：
   - 每渠道可配置模型列表、默认模型、模型启用状态（不再是单一模型字符串）；
   - 列表页展示“模型列表 + 启用模型列表”。
 - `Model Groups` 独立页新增 icon 配置与分组维度字段（icon type/value、质量/速度/成本评分、渠道模型映射）。
 - 系统管理导航精简：默认隐藏 `角色管理 / 菜单管理 / 字典项` 入口（页面文件保留，后续按退场窗口统一下线）。
 
-### feat(pilot): Pilot 合并升级 V2（渠道负载均衡 + 模型目录 + 路由组合）
+### feat(aiapp): AI 合并升级 V2（渠道负载均衡 + 模型目录 + 路由组合）
 
-- 执行链路统一接入 `resolvePilotRoutingSelection`：
+- 执行链路统一接入 `resolveAIRoutingSelection`：
   - `POST /api/aigc/executor`
   - `POST /api/v1/chat/sessions/:sessionId/stream`
-  - `POST /api/pilot/chat/sessions/:sessionId/stream`
+  - `POST /api/aiapp/chat/sessions/:sessionId/stream`
 - 请求参数扩展并兼容旧字段：
   - `modelId`（兼容旧 `model`）
   - `internet`
@@ -8205,7 +8351,7 @@
   - `routeComboId`
   - `queueWaitMs`
 - 路由评比与负载均衡落地：
-  - 新增 `pilot_routing_metrics` 指标落库；
+  - 新增 `aiapp_routing_metrics` 指标落库；
   - 新增 `ChannelModelScorer`（成功率 + TTFT + 总耗时综合评分）；
   - `Quota Auto` 速度优先选路 + 小流量探索；
   - 新增熔断/恢复（失败阈值、冷却窗口、半开探测）。
@@ -8215,25 +8361,25 @@
   - 新增全局模型目录（名称/描述/icon/thinking/websearch/成本速度质量标记）；
   - 新增路由组合管理（候选渠道模型、优先级、权重、降级链）。
 - 运行时与前端：
-  - 新增 `GET /api/pilot/runtime/models`；
+  - 新增 `GET /api/aiapp/runtime/models`；
   - gptview（`/`）模型选择改为后端动态目录驱动；
   - 输入区新增 `thinking` 开关并与 `internet` 一起透传后端；
-  - `/pilot` 改为兼容跳转到 `/`。
+  - `/aiapp` 改为兼容跳转到 `/`。
 - LangGraph 编排联动第一阶段：
-  - 新增 `pilot-langgraph-orchestrator` 可用性探测；
+  - 新增 `aiapp-langgraph-orchestrator` 可用性探测；
   - 路由组合绑定 `langgraphAssistantId/graphProfile` 时优先探测本地服务，不可用自动回退 deepagent。
 - LangGraph 编排联动第二阶段：
-  - 新增 `pilot-langgraph-engine`，`createPilotRuntime` 支持 `langgraph-local` 主引擎直连 `/runs/stream`；
-  - 执行链路改为“LangGraph 主执行 + deepagent 自动回退（启动错误/空流）”，`executor` 与 `pilot chat stream` 双入口复用；
-  - `pilot-settings` 后台升级为统一控制台：渠道多模型、模型目录（icon/thinking/websearch）、路由组合（含 LangGraph 绑定）、LB/Memory 策略、渠道模型同步与评比看板。
+  - 新增 `aiapp-langgraph-engine`，`createAIRuntime` 支持 `langgraph-local` 主引擎直连 `/runs/stream`；
+  - 执行链路改为“LangGraph 主执行 + deepagent 自动回退（启动错误/空流）”，`executor` 与 `aiapp chat stream` 双入口复用；
+  - `aiapp-settings` 后台升级为统一控制台：渠道多模型、模型目录（icon/thinking/websearch）、路由组合（含 LangGraph 绑定）、LB/Memory 策略、渠道模型同步与评比看板。
 - 测试：
-  - 新增 `pilot-route-health.test.ts`；
-  - 新增 `pilot-channel-scorer.test.ts`；
-  - `pnpm -C apps/pilot run test -- server/utils/__tests__/pilot-route-health.test.ts server/utils/__tests__/pilot-channel-scorer.test.ts` 通过。
+  - 新增 `aiapp-route-health.test.ts`；
+  - 新增 `aiapp-channel-scorer.test.ts`；
+  - `pnpm -C retired-ai-app run test -- server/utils/__tests__/aiapp-route-health.test.ts server/utils/__tests__/aiapp-channel-scorer.test.ts` 通过。
 
-### fix(pilot): 移除 CMS 第三方内容源板块，避免外部接口导致前台崩溃
+### fix(aiapp): 移除 CMS 第三方内容源板块，避免外部接口导致前台崩溃
 
-- 移除 `apps/pilot/app/pages/cms/index.vue` 中对 `https://api.vvhan.com` 的 3 处请求：
+- 移除 `retired-ai-app/app/pages/cms/index.vue` 中对 `https://api.vvhan.com` 的 3 处请求：
   - `dailyEnglish`
   - `hotlist/woShiPm`
   - `visitor.info`
@@ -8243,7 +8389,7 @@
   - 今日精彩
 - 目的：消除第三方接口抖动/断连触发的页面运行时异常（`Cannot read properties of undefined (reading 'location')`），确保 CMS 基础功能稳定可用。
 
-### fix(pilot): 恢复 App 管理下 Channels/Storage 菜单入口（含存量数据补齐）
+### fix(aiapp): 恢复 App 管理下 Channels/Storage 菜单入口（含存量数据补齐）
 
 - 菜单种子新增 `App 管理` 目录与子项：
   - `Channels` -> `/cms/system/channels`
@@ -8253,9 +8399,9 @@
   - `Channels` 支持列表浏览、添加渠道、编辑渠道、切换默认渠道
   - `Storage` 支持配置列表浏览、新增配置、编辑配置
 - 新增页面文件：
-  - `apps/pilot/app/pages/cms/system/channels.vue`
-  - `apps/pilot/app/pages/cms/system/storage.vue`
-- 两个页面统一复用 `/api/pilot/admin/settings` 读写设置，保持后端配置权威源一致。
+  - `retired-ai-app/app/pages/cms/system/channels.vue`
+  - `retired-ai-app/app/pages/cms/system/storage.vue`
+- 两个页面统一复用 `/api/aiapp/admin/settings` 读写设置，保持后端配置权威源一致。
 
 ### Docs：新增治理看板（Legacy / Compat / Size）
 
@@ -8266,11 +8412,11 @@
   - 超长文件基线 `46`，增长豁免 `2`。
 - 明确“只减不增”执行口径：新增债务必须先入清册，`growthExceptions` 变更必须同步 `CHANGES + registry`，默认清退门槛维持 `v2.5.0`。
 
-### refactor(pilot): 首批 growth-exception 清退动作（1+2）
+### refactor(aiapp): 首批 growth-exception 清退动作（1+2）
 
-- `apps/pilot/app/composables/usePilotChatPage.ts` 抽离工具函数到 `app/composables/pilot-chat.utils.ts`，行数 `1366 -> 1175`（退出超长文件集合）。
-- `apps/pilot/server/api/aigc/executor.post.ts` 抽离执行器工具到 `server/utils/pilot-executor-utils.ts`，行数 `1666 -> 1370`（仍在治理窗口，继续压降）。
-- 清退 `SIZE-GROWTH-2026-03-16-PILOT-CHAT-PAGE`：
+- `retired-ai-app/app/composables/useAIChatPage.ts` 抽离工具函数到 `app/composables/aiapp-chat.utils.ts`，行数 `1366 -> 1175`（退出超长文件集合）。
+- `retired-ai-app/server/api/aigc/executor.post.ts` 抽离执行器工具到 `server/utils/aiapp-executor-utils.ts`，行数 `1666 -> 1370`（仍在治理窗口，继续压降）。
+- 清退 `SIZE-GROWTH-2026-03-16-AIAPP-CHAT-PAGE`：
   - 从 `scripts/large-file-boundary-allowlist.json` 移除该文件 baseline + growth exception；
   - 从 `docs/plan-prd/docs/compatibility-debt-registry.csv` 移除对应 `size-growth-exception` 条目。
 
@@ -8283,18 +8429,18 @@
 - 完成长文档分层：Telemetry/Search/Transport/DivisionBox 原文下沉到 `*.deep-dive-2026-03.md`。
 - 完成历史文档降权：Draft/实验文档补齐“状态/更新时间/适用范围/替代入口”头标。
 
-### feat(pilot): 附件慢链路治理 + CMS 设置合并（稳定优先）
+### feat(aiapp): 附件慢链路治理 + CMS 设置合并（稳定优先）
 
 - 新旧链路统一附件投递：`provider file id > public https url > base64`（仅兜底时读取对象，不再无条件内联）。
-- `apps/pilot/server/utils/pilot-attachment-delivery.ts` 接入 `pilot stream` 与 `aigc executor`，并发固定 `3`，失败错误码统一：
+- `retired-ai-app/server/utils/aiapp-attachment-delivery.ts` 接入 `aiapp stream` 与 `aigc executor`，并发固定 `3`，失败错误码统一：
   - `ATTACHMENT_UNREACHABLE`
   - `ATTACHMENT_TOO_LARGE_FOR_INLINE`
   - `ATTACHMENT_LOAD_FAILED`
-- `POST /api/pilot/chat/sessions/:sessionId/uploads` 新增 `multipart/form-data`（兼容保留 `contentBase64`）。
-- 新增附件能力探测：`GET /api/pilot/chat/attachments/capability`，Pilot 与 legacy 输入框统一使用。
-- 新增聚合后台设置 API：`GET/POST /api/pilot/admin/settings`；旧 `channels/storage-config` 接口保留兼容并转调。
-- 新增 CMS 系统页：`/cms/system/pilot-settings`（Channels + Storage 同页编辑）；旧 `/pilot/admin/*` 页面增加迁移提示。
-- 配置权威源保持 `pilot_admin_settings`，密钥字段脱敏返回；空值不覆写，需显式 clear 才会删除。
+- `POST /api/aiapp/chat/sessions/:sessionId/uploads` 新增 `multipart/form-data`（兼容保留 `contentBase64`）。
+- 新增附件能力探测：`GET /api/aiapp/chat/attachments/capability`，AI 与 legacy 输入框统一使用。
+- 新增聚合后台设置 API：`GET/POST /api/aiapp/admin/settings`；旧 `channels/storage-config` 接口保留兼容并转调。
+- 新增 CMS 系统页：`/cms/system/aiapp-settings`（Channels + Storage 同页编辑）；旧 `/aiapp/admin/*` 页面增加迁移提示。
+- 配置权威源保持 `aiapp_admin_settings`，密钥字段脱敏返回；空值不覆写，需显式 clear 才会删除。
 
 ### fix(plugin-dev): watcher 止血 + CLI 依赖环切断
 
@@ -8306,15 +8452,15 @@
 - 旧 CLI 入口兼容策略更新：从 `@talex-touch/unplugin-export-plugin` 调用 `tuff` 时，若未安装 `@talex-touch/tuff-cli`，改为“显式报错 + 安装指引 + 非 0 退出”。
 - 插件安装复制链路新增 `node_modules` 自动剔除：`PluginResolver` 与 `DevPluginInstaller` 在目录复制时过滤 `node_modules`，并在解包后做一次递归清理，防止历史残留再次落盘到运行态插件目录。
 
-### feat(pilot): Chat/Turn 新协议与单 SSE 尾段 Title
+### feat(aiapp): Chat/Turn 新协议与单 SSE 尾段 Title
 
 - 新增 `POST /api/v1/chat/sessions/:sessionId/turns`（会话入队，返回 `request_id/turn_id/queue_pos`）。
 - 新增 `POST /api/v1/chat/sessions/:sessionId/stream`（`turn.*` 事件流 + 尾段 `title.generated/title.failed` + `[DONE]`）。
 - 新增 `GET /api/v1/chat/sessions/:sessionId/messages`（返回 `messages + run_state + active_turn_id + pending_count`）。
 - 服务端补齐 `chat-turn-queue`（会话级串行执行与状态持久化）。
-- 历史会话链路改为 JSON：`pilot_quota_history.value` 完成一次性 base64 -> JSON 迁移，后续读写统一 JSON 字符串并回包结构化 `value/messages`。
+- 历史会话链路改为 JSON：`aiapp_quota_history.value` 完成一次性 base64 -> JSON 迁移，后续读写统一 JSON 字符串并回包结构化 `value/messages`。
 
-### fix(pilot): run_state 查询故障降级，避免会话读取 500
+### fix(aiapp): run_state 查询故障降级，避免会话读取 500
 
 - `aigc/conversation`、`aigc/conversations`、`aigc/history` 与 `v1/chat/sessions/:id/messages` 在运行态查询失败时统一降级为 `run_state=idle`，确保历史消息可读。
 - 新增 `getSessionRunStateSafe` 兜底方法，避免队列表异常导致前端刷新误判“分析失败”。
@@ -8327,23 +8473,23 @@
 
 ### refactor(prompt): 标题生成 prompt 收敛
 
-- 抽取 `apps/pilot/server/utils/pilot-title.ts`，统一标题生成逻辑。
-- `pilot-runtime` 默认系统提示压缩为更短、更稳的执行导向文案。
+- 抽取 `retired-ai-app/server/utils/aiapp-title.ts`，统一标题生成逻辑。
+- `aiapp-runtime` 默认系统提示压缩为更短、更稳的执行导向文案。
 
-### CI/CD：Pilot webhook 自动部署恢复
+### CI/CD：AI webhook 自动部署恢复
 
-- `pilot-image.yml` 在 GHCR 推送成功后自动触发 `POST /deploy`。
-- 安全约束：`X-Pilot-Token` / `Authorization: Bearer` 校验、仓库/分支白名单。
-- 文档与运维说明同步至：`.github/workflows/README.md`、`apps/pilot/deploy/README*.md`。
+- `aiapp-image.yml` 在 GHCR 推送成功后自动触发 `POST /deploy`。
+- 安全约束：`X-AI-Token` / `Authorization: Bearer` 校验、仓库/分支白名单。
+- 文档与运维说明同步至：`.github/workflows/README.md`、`retired-ai-app/deploy/README*.md`。
 - 自动触发口径澄清：仅远端 `master` push（命中 workflow path）会触发，**本地 commit 不会触发 1Panel 自动更新**。
 - 排障与兜底路径固化：当 webhook secrets 缺失或 1Panel webhook 不可达时，统一走 `ssh home` 手动执行部署脚本。
 
-### fix(pilot): 流式失败可见性 + CMS 设置收口修复
+### fix(aiapp): 流式失败可见性 + CMS 设置收口修复
 
 - 前端 SSE 解析新增兼容层：支持 `event/session_id/[DONE]` 到 `type/sessionId/done` 统一映射，并补齐 `turn.accepted/queued/started/delta/completed/failed` 处理。
 - `turn.failed` 改为“双通道可见”：消息区强制追加 assistant 失败消息，底部保留带 `code/status_code/request_id` 的诊断信息。
 - `v1/chat/sessions/:sessionId/stream` 的失败语义增强：`turn.failed` 增加可选 `code/status_code/detail`，并对 502/503/504 返回可操作文案（兼容保留 `message`）。
-- CMS 收口补丁：`/cms/system/pilot-settings` 页面独立滚动；Pilot 侧设置入口统一到该页；旧 `/pilot/admin/channels|storage` 改为直接跳转。
+- CMS 收口补丁：`/cms/system/aiapp-settings` 页面独立滚动；AI 侧设置入口统一到该页；旧 `/aiapp/admin/channels|storage` 改为直接跳转。
 - `/cms` 防御性修复：CMS 路径 browser-only API 增加客户端守卫，`router.back()` 增加无历史记录 fallback，降低 500 风险。
 
 ### Docs：文档治理门禁脚本落地
@@ -8377,7 +8523,7 @@
 - `check-legacy-boundaries` 新增规则：
   - 冻结新增 `transport/legacy` 与 `permission/legacy` 导入扩散。
 - `pnpm-workspace.yaml` 与 root `lint/lint:fix` 默认范围改为主线：
-  - `apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`；
+  - `apps/core-app`、`apps/nexus`、`retired-ai-app`、`packages/*`、`plugins/*`；
   - 影子应用 `apps/g-*`、`apps/quota-*` 从默认 workspace 扫描隔离。
 - 退场窗口标注补齐：
   - `packages/utils/transport/legacy.ts`
@@ -8395,11 +8541,11 @@
   - `--write-baseline` 不再允许自动上调 `maxLines`；
   - 引入 `growthExceptions` 显式增长豁免并校验 `CHANGES + compatibility registry` 同步。
 - 本次临时增长豁免登记：
-  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` -> `apps/pilot/server/api/aigc/executor.post.ts`
+  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR` -> `retired-ai-app/server/api/aigc/executor.post.ts`
   - `SIZE-GROWTH-2026-03-16-DEEPAGENT` -> `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
-  - `SIZE-GROWTH-2026-03-16-PILOT-CHAT-PAGE` -> `apps/pilot/app/composables/usePilotChatPage.ts`
+  - `SIZE-GROWTH-2026-03-16-AIAPP-CHAT-PAGE` -> `retired-ai-app/app/composables/useAIChatPage.ts`
 - 兼容债务清册清理：
-  - 移除 2 条主线扫描口径外的陈旧条目（`apps/pilot/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
+  - 移除 2 条主线扫描口径外的陈旧条目（`retired-ai-app/shims-compat.d.ts`、`apps/nexus/i18n.config.ts`）。
   - `size-growth-exception` 调整为 registry-only domain，不再触发误判式 cleanup warning。
 - 结构治理补丁：
   - 修复 Nexus 异常文件名：`apps/nexus/ sentry.server.config.ts` → `apps/nexus/sentry.server.config.ts`。
@@ -8411,9 +8557,9 @@
   - 结果：`legacy-transport-import` 从 `4 files / 4 hits` 降至 `0 files / 0 hits`（主线扫描口径）。
   - 同步清理 `compatibility-debt-registry.csv` 中 4 条 `legacy-transport-import` 条目与 2 条陈旧 `legacy-keyword` 条目。
 - 大文件增长豁免上限更新（同 ticket 续期内）：
-  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR`：`apps/pilot/server/api/aigc/executor.post.ts` 上限 `1642 -> 1666`。
+  - `SIZE-GROWTH-2026-03-16-AIGC-EXECUTOR`：`retired-ai-app/server/api/aigc/executor.post.ts` 上限 `1642 -> 1666`。
   - `SIZE-GROWTH-2026-03-16-DEEPAGENT`：`packages/tuff-intelligence/src/adapters/deepagent-engine.ts` 上限 `1919 -> 1924`。
-  - `SIZE-GROWTH-2026-03-16-PILOT-CHAT-PAGE`：`apps/pilot/app/composables/usePilotChatPage.ts` 新增上限 `1366`（baseline 仍为 `1362`）。
+  - `SIZE-GROWTH-2026-03-16-AIAPP-CHAT-PAGE`：`retired-ai-app/app/composables/useAIChatPage.ts` 新增上限 `1366`（baseline 仍为 `1362`）。
   - 目的：恢复 `size:guard` 基线一致性，后续仍按 `v2.5.0` 前拆分退场执行。
 
 ---
@@ -8428,7 +8574,7 @@
 - 关键 CI：
   - Build and Release: [23106614270](https://github.com/talex-touch/tuff/actions/runs/23106614270)
   - Contributes: [23106610206](https://github.com/talex-touch/tuff/actions/runs/23106610206)
-  - Pilot Image Publish: [23106610203](https://github.com/talex-touch/tuff/actions/runs/23106610203)
+  - AI Image Publish: [23106610203](https://github.com/talex-touch/tuff/actions/runs/23106610203)
   - CodeQL: [23106609938](https://github.com/talex-touch/tuff/actions/runs/23106609938)
 
 ### CLI：Phase1+2 完整迁移收口
@@ -8448,7 +8594,7 @@
 ### Docs：第二轮遗留清债收口
 
 - `OMNIPANEL-FEATURE-HUB-PRD` 改为 historical done（2.4.8 Gate）。
-- `PILOT-NEXUS-OAUTH-CLI-TEST-PLAN` 重写为“已落地 vs 未启动”。
+- `AIAPP-NEXUS-OAUTH-CLI-TEST-PLAN` 重写为“已落地 vs 未启动”。
 - `TUFFCLI-INVENTORY` 改为 `tuff-cli` 主入口口径。
 - `NEXUS-SUBSCRIPTION-PRD`、`NEXUS-PLUGIN-COMMUNITY-PRD` 增加历史/待重写标识。
 
@@ -8472,7 +8618,7 @@
 
 ## 2026-03-12 ~ 2026-03-13
 
-### Pilot Runtime 主路径收敛
+### AI Runtime 主路径收敛
 
 - 主路径统一为 `Node Server + Postgres/Redis + JWT Cookie (+ MinIO)`。
 - Cloudflare runtime / wrangler / D1/R2 降为历史归档语境。
@@ -8487,7 +8633,7 @@
 
 ## 2026-03-09 ~ 2026-03-11
 
-### Pilot M0/M1 高优先级收口
+### AI M0/M1 高优先级收口
 
 - Chat-first 页面与 SSE 协议稳定运行。
 - 多模态输入链路与附件策略补齐（`dataUrl > previewUrl > ref` 优先级统一）。
@@ -8509,11 +8655,11 @@
 - 统一事实：`2.4.9-beta.4` 当前工作区、`2.4.8 OmniPanel historical`、`v2.4.7 Gate historical`。
 - `next-edit` 与过期规划文档降权，减少“进行中/已完成”冲突叙述。
 
-### Pilot API 批次迁移与运维能力补齐
+### AI API 批次迁移与运维能力补齐
 
 - M2/M3 接口迁移覆盖运营常用域。
-- 渠道合并能力落地：`POST /api/pilot/admin/channels/merge-ends` + 一次性脚本。
-- 支付/微信相关路径按“协议兼容 + 本地 mock/豁免”策略收口。
+- 渠道合并能力落地：`POST /api/aiapp/admin/channels/merge-ends` + 一次性脚本。
+- 支付/聊天应用相关路径按“协议兼容 + 本地 mock/豁免”策略收口。
 
 ---
 

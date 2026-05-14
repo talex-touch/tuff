@@ -39,6 +39,14 @@ describe('widget esbuild transform helpers', () => {
     expect(classifyWidgetCompileError(new Error('Unexpected token'))).toBe('WIDGET_COMPILE_FAILED')
   })
 
+  it('classifies stopped esbuild service failures explicitly', () => {
+    const error = Object.assign(new Error('The service is no longer running: write EPIPE'), {
+      code: 'EPIPE'
+    })
+
+    expect(classifyWidgetCompileError(error)).toBe('WIDGET_COMPILER_SERVICE_UNAVAILABLE')
+  })
+
   it('resolves packaged esbuild binary from resources node_modules', () => {
     const root = createTempRoot()
     const platformPackage =

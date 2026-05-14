@@ -397,7 +397,9 @@ import type {
   PluginStorageListSyncItemsRequest,
   PluginStorageOpenFolderRequest,
   PluginStorageOpenInEditorRequest,
+  PluginStorageSecretRequest,
   PluginStorageSetFileRequest,
+  PluginStorageSetSecretRequest,
   PluginStorageSyncItem,
   PluginStorageStatsRequest,
   PluginStorageTreeRequest,
@@ -1701,6 +1703,24 @@ export const PluginEvents = {
       .module("storage")
       .event("delete-file")
       .define<PluginStorageFileRequest, { success: boolean; error?: string }>(),
+
+    getSecret: defineEvent("plugin")
+      .module("storage")
+      .event("get-secret")
+      .define<PluginStorageSecretRequest, string | null>(),
+
+    setSecret: defineEvent("plugin")
+      .module("storage")
+      .event("set-secret")
+      .define<
+        PluginStorageSetSecretRequest,
+        { success: boolean; error?: string }
+      >(),
+
+    deleteSecret: defineEvent("plugin")
+      .module("storage")
+      .event("delete-secret")
+      .define<PluginStorageSecretRequest, { success: boolean; error?: string }>(),
 
     listFiles: defineEvent("plugin")
       .module("storage")

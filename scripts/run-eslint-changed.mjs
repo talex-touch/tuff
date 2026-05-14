@@ -28,7 +28,7 @@ function isWorkspaceDirectory(relativePath) {
 }
 
 function collectWorkspaceDirectories() {
-  const directWorkspaces = ['apps/core-app', 'apps/nexus', 'apps/pilot']
+  const directWorkspaces = ['apps/core-app', 'apps/nexus']
   const workspaceParents = ['packages', 'plugins']
   const workspaces = []
 

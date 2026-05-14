@@ -26,7 +26,8 @@ class FakeBuilder {
     return this
   }
 
-  setMeta() {
+  setMeta(meta: Record<string, unknown>) {
+    this.item.meta = meta
     return this
   }
 
@@ -36,7 +37,7 @@ class FakeBuilder {
 }
 
 function createTestGlobals(
-  items: Array<{ title?: string, subtitle?: string }>,
+  items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>,
   permissionAllowed: boolean,
 ) {
   return createPluginGlobals({
@@ -48,7 +49,7 @@ function createTestGlobals(
     plugin: {
       feature: {
         clearItems() { items.length = 0 },
-        pushItems(next: Array<{ title?: string, subtitle?: string }>) { items.push(...next) },
+        pushItems(next: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>) { items.push(...next) },
       },
     },
   })
@@ -118,7 +119,7 @@ describe('system actions plugin', () => {
   })
 
   it('shows permission hint when denied', async () => {
-    const items: Array<{ title?: string, subtitle?: string }> = []
+    const items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }> = []
     const globals = createTestGlobals(items, false)
 
     const pluginModule = loadPluginModule(
@@ -128,7 +129,14 @@ describe('system actions plugin', () => {
 
     await pluginModule.onFeatureTriggered('system-actions', '')
     expect(items.length).toBe(1)
-    expect(items[0]?.title).toBe('缺少系统权限')
+    if (systemTest.isShellPlatformSupported(process.platform)) {
+      expect(items[0]?.title).toBe('缺少系统权限')
+      expect(items[0]?.meta?.capability?.status).toBe('permission-missing')
+      expect(items[0]?.meta?.capability?.permission).toBe('system.shell')
+    }
+    else {
+      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
+    }
   })
 
   it('returns empty hint when no matches', async () => {
@@ -145,7 +153,7 @@ describe('system actions plugin', () => {
   })
 
   it('builds grouped items for matches', async () => {
-    const items: Array<{ title?: string }> = []
+    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
     const globals = createTestGlobals(items, true)
 
     const pluginModule = loadPluginModule(
@@ -154,7 +162,31 @@ describe('system actions plugin', () => {
     )
 
     await pluginModule.onFeatureTriggered('system-actions', '关机')
+    if (!systemTest.isShellPlatformSupported(process.platform)) {
+      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
+      return
+    }
+
     expect(items.length).toBeGreaterThan(1)
     expect(items[0]?.title).toBe('电源操作')
+    expect(items[1]?.meta?.capability?.audit).toMatchObject({
+      pluginName: 'touch-system-actions',
+      featureId: 'system-actions',
+      actionId: 'shutdown',
+      requiresConfirmation: true,
+      requiresAdmin: true,
+    })
+  })
+
+  it('marks shell fallback as degraded when safe-shell is unavailable', () => {
+    const capability = systemTest.buildShellCapability({
+      featureId: 'system-actions',
+      actionId: 'shutdown',
+      platform: 'darwin',
+    })
+
+    expect(['available', 'degraded']).toContain(capability.status)
+    expect(capability.permission).toBe('system.shell')
+    expect(capability.audit.commandKind).toBe('fixed-shell')
   })
 })

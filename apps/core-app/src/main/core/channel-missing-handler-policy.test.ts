@@ -7,7 +7,7 @@ import {
 describe('resolveMissingHandlerPolicy', () => {
   it('downgrades optional stream cancel requests', () => {
     const policy = resolveMissingHandlerPolicy({
-      eventName: `pilot:chat${STREAM_CANCEL_EVENT_SUFFIX}`,
+      eventName: `assistant:chat${STREAM_CANCEL_EVENT_SUFFIX}`,
       channelType: 'main'
     })
 
@@ -15,9 +15,9 @@ describe('resolveMissingHandlerPolicy', () => {
       suppressWarning: true,
       replyAsSuccess: true,
       payload: {
-        message: `Optional stream cancel ignored for "pilot:chat${STREAM_CANCEL_EVENT_SUFFIX}"`,
+        message: `Optional stream cancel ignored for "assistant:chat${STREAM_CANCEL_EVENT_SUFFIX}"`,
         reason: 'optional_stream_cancel',
-        eventName: `pilot:chat${STREAM_CANCEL_EVENT_SUFFIX}`,
+        eventName: `assistant:chat${STREAM_CANCEL_EVENT_SUFFIX}`,
         channelType: 'main'
       }
     })

@@ -5,6 +5,7 @@ const PLUGIN_NAME = 'touch-window-manager'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'window-manager'
+const SHELL_PERMISSION_ID = 'system.shell'
 const RECENT_WINDOWS_FILE = 'recent-windows.json'
 const RECENT_MAX_ITEMS = 30
 const RECENT_SHOW_LIMIT = 8
@@ -38,6 +39,75 @@ async function ensurePermission(permissionId, reason) {
     return true
   const granted = await permission.request(permissionId, reason)
   return Boolean(granted)
+}
+
+function isShellPlatformSupported(platform = process.platform) {
+  return platform === 'win32' || platform === 'darwin'
+}
+
+function resolveShellStatus(platform = process.platform) {
+  if (!isShellPlatformSupported(platform)) {
+    return {
+      status: 'unsupported',
+      reason: `platform:${platform}`,
+    }
+  }
+
+  return {
+    status: 'available',
+  }
+}
+
+function resolveActionCommandKind(actionId, platform = process.platform) {
+  if (platform === 'win32')
+    return 'powershell'
+  if (platform === 'darwin' && actionId === 'launch')
+    return 'execFile'
+  if (platform === 'darwin')
+    return 'execFile'
+  return 'execFile'
+}
+
+function buildShellCapability({
+  featureId,
+  actionId,
+  commandKind,
+  requiresConfirmation = false,
+  requiresAdmin = false,
+  platform = process.platform,
+  status,
+  reason,
+} = {}) {
+  const resolved = status ? { status, reason } : resolveShellStatus(platform)
+  const capability = {
+    id: SHELL_PERMISSION_ID,
+    type: 'shell',
+    platform,
+    permission: SHELL_PERMISSION_ID,
+    status: resolved.status,
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId,
+      commandKind: commandKind || resolveActionCommandKind(actionId, platform),
+      requiresConfirmation: Boolean(requiresConfirmation),
+      requiresAdmin: Boolean(requiresAdmin),
+    },
+  }
+
+  if (resolved.reason)
+    capability.reason = resolved.reason
+
+  return capability
+}
+
+function buildActionCapability(featureId, actionId, payload = {}) {
+  const platform = payload?.platform || process.platform
+  return buildShellCapability({
+    featureId,
+    actionId,
+    platform,
+  })
 }
 
 function execFileAsync(command, args) {
@@ -481,17 +551,21 @@ function resolveGroupOrder({ quickActions, frontWindow, recentWindows, visibleWi
   return order
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function buildInfoItem({ id, featureId, title, subtitle, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(ICON)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      ...(capability ? { capability } : {}),
+    })
     .build()
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -503,6 +577,7 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       defaultAction: ACTION_ID,
       actionId,
       payload,
+      capability: capability || buildActionCapability(featureId, actionId, payload),
     })
     .build()
 }
@@ -660,7 +735,26 @@ function isTrackableAction(actionId) {
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
-      const canRun = await ensurePermission('system.shell', '需要系统命令权限以管理应用窗口')
+      if (!isShellPlatformSupported(process.platform)) {
+        plugin.feature.clearItems()
+        plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-unsupported`,
+            featureId,
+            title: '当前平台暂不支持窗口管理',
+            subtitle: `platform:${process.platform}`,
+            capability: buildShellCapability({
+              featureId,
+              actionId: 'list-windows',
+              status: 'unsupported',
+              reason: `platform:${process.platform}`,
+            }),
+          }),
+        ])
+        return true
+      }
+
+      const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以管理应用窗口')
       if (!canRun) {
         plugin.feature.clearItems()
         plugin.feature.pushItems([
@@ -669,6 +763,12 @@ const pluginLifecycle = {
             featureId,
             title: '缺少系统权限',
             subtitle: '请授予 system.shell 权限后再试',
+            capability: buildShellCapability({
+              featureId,
+              actionId: 'list-windows',
+              status: 'permission-missing',
+              reason: SHELL_PERMISSION_ID,
+            }),
           }),
         ])
         return true
@@ -775,7 +875,7 @@ const pluginLifecycle = {
     if (!actionId)
       return
 
-    const canRun = await ensurePermission('system.shell', '需要系统命令权限以管理应用窗口')
+    const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以管理应用窗口')
     if (!canRun)
       return
 
@@ -805,7 +905,10 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     buildAppleScript,
+    buildActionCapability,
+    buildShellCapability,
     buildWindowsScript,
+    isShellPlatformSupported,
     normalizeWindows,
     mergeRecentWindows,
     parseRecentWindows,

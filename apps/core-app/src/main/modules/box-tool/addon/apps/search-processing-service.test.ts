@@ -41,11 +41,11 @@ describe('search-processing-service', () => {
         {
           name: '\u5FAE\u4FE1',
           displayName: '\u03A2\uFFFD\uFFFD',
-          path: 'D:\\Weixin\\Weixin.exe',
+          path: 'D:\\ChatApp\\ChatApp.exe',
           extensions: {
-            appIdentity: 'path:d:\\weixin\\weixin.exe',
+            appIdentity: 'path:d:\\chatapp\\chatapp.exe',
             launchKind: 'path',
-            launchTarget: 'D:\\Weixin\\Weixin.exe'
+            launchTarget: 'D:\\ChatApp\\ChatApp.exe'
           }
         }
       ] as any,

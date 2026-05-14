@@ -355,7 +355,7 @@ export const ACCEPTANCE_RECOMMENDED_COMMAND_REQUIREMENT: VerifierCommandRequirem
     '--requireDivisionBoxDetachedWidgetManualChecks',
     '--requireTimeAwareRecommendationManualChecks',
     '--requireCommonAppTargets',
-    'WeChat',
+    'ChatApp',
     'Codex',
     'Apple Music'
   ]

@@ -15,6 +15,7 @@ const PLUGIN_NAME = 'touch-workspace-scripts'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'workspace-scripts'
+const SHELL_PERMISSION_ID = 'system.shell'
 const CONFIG_FILE = 'workspace-scripts.json'
 const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 
@@ -50,6 +51,52 @@ async function ensurePermission(permissionId, reason) {
     return true
   const granted = await permission.request(permissionId, reason)
   return Boolean(granted)
+}
+
+function resolveShellStatus() {
+  if (!spawnShellCommand) {
+    return {
+      status: 'degraded',
+      reason: 'safe-shell-unavailable',
+    }
+  }
+
+  return {
+    status: 'available',
+  }
+}
+
+function buildShellCapability({
+  featureId,
+  actionId,
+  commandKind = 'user-shell',
+  requiresConfirmation = false,
+  requiresAdmin = false,
+  platform = process.platform,
+  status,
+  reason,
+} = {}) {
+  const resolved = status ? { status, reason } : resolveShellStatus()
+  const capability = {
+    id: SHELL_PERMISSION_ID,
+    type: 'shell',
+    platform,
+    permission: SHELL_PERMISSION_ID,
+    status: resolved.status,
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId,
+      commandKind,
+      requiresConfirmation: Boolean(requiresConfirmation),
+      requiresAdmin: Boolean(requiresAdmin),
+    },
+  }
+
+  if (resolved.reason)
+    capability.reason = resolved.reason
+
+  return capability
 }
 
 function parseScriptsConfig(raw) {
@@ -158,17 +205,21 @@ function resolveCommandCwd(commandCwd, workspacePath) {
   return path.join(workspacePath || process.cwd(), commandCwd)
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function buildInfoItem({ id, featureId, title, subtitle, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(ICON)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      ...(capability ? { capability } : {}),
+    })
     .build()
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -180,6 +231,7 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       defaultAction: ACTION_ID,
       actionId,
       payload,
+      ...(capability ? { capability } : {}),
     })
     .build()
 }
@@ -281,6 +333,12 @@ const pluginLifecycle = {
             command: script.command,
             cwd: workspacePath || process.cwd(),
           },
+          capability: buildShellCapability({
+            featureId,
+            actionId: 'run-command',
+            commandKind: 'user-shell',
+            requiresConfirmation: true,
+          }),
         }))
       })
 
@@ -302,6 +360,12 @@ const pluginLifecycle = {
             command: commandText,
             cwd: resolveCommandCwd(cmd.cwd, workspacePath),
           },
+          capability: buildShellCapability({
+            featureId,
+            actionId: 'run-command',
+            commandKind: 'user-shell',
+            requiresConfirmation: true,
+          }),
         }))
       })
 
@@ -366,7 +430,7 @@ const pluginLifecycle = {
         if (!command)
           return
 
-        const canRun = await ensurePermission('system.shell', '需要系统命令权限以执行开发命令')
+        const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行开发命令')
         if (!canRun)
           return
 
@@ -387,6 +451,7 @@ const pluginLifecycle = {
 module.exports = {
   ...pluginLifecycle,
   __test: {
+    buildShellCapability,
     parseScriptsConfig,
     parsePackageScriptsMap,
     resolveCommandCwd,

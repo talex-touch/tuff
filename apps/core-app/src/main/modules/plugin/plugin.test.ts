@@ -2,7 +2,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import { NotificationEvents } from '@talex-touch/utils/transport/events'
+import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import fse from 'fs-extra'
 
 vi.mock('@talex-touch/utils/plugin/node', () => {
@@ -95,10 +95,17 @@ vi.mock('../box-tool/core-box/view-cache', () => ({
   }
 }))
 
+const boxItemManagerMock = vi.hoisted(() => ({
+  clear: vi.fn(),
+  upsert: vi.fn(),
+  batchUpsert: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  getBySource: vi.fn(() => [])
+}))
+
 vi.mock('../box-tool/item-sdk', () => ({
-  getBoxItemManager: () => ({
-    clear: vi.fn()
-  })
+  getBoxItemManager: () => boxItemManagerMock
 }))
 
 vi.mock('../box-tool/core-box', () => ({
@@ -111,6 +118,7 @@ vi.mock('./widget/widget-manager', () => ({
   }
 }))
 
+import { PluginStatus } from '@talex-touch/utils/plugin'
 import { TouchPlugin } from './plugin'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { widgetManager } from './widget/widget-manager'
@@ -118,7 +126,55 @@ import { widgetManager } from './widget/widget-manager'
 describe('TouchPlugin.triggerFeature', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
+    boxItemManagerMock.clear.mockClear()
+    boxItemManagerMock.upsert.mockClear()
+    boxItemManagerMock.batchUpsert.mockClear()
+    boxItemManagerMock.update.mockClear()
+    boxItemManagerMock.delete.mockClear()
+    boxItemManagerMock.getBySource.mockClear()
     vi.restoreAllMocks()
+  })
+
+  it('blocks stale box item pushes after plugin is disabled', async () => {
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    plugin.status = PluginStatus.ENABLED
+    const boxItems = plugin.getFeatureUtil().boxItems
+
+    await boxItems.pushItems([
+      { id: 'before-disable', source: { type: 'plugin', id: 'custom', name: 'custom' } } as any
+    ])
+    expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
+
+    plugin.status = PluginStatus.DISABLED
+    await boxItems.pushItems([
+      { id: 'after-disable', source: { type: 'plugin', id: 'custom', name: 'custom' } } as any
+    ])
+
+    expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
   })
 
   it('notifies CoreBox when widget registration fails', async () => {
@@ -180,6 +236,49 @@ describe('TouchPlugin.triggerFeature', () => {
       })
     )
   })
+
+  it('exposes plugin secret API through the injected feature util', async () => {
+    const transport = {
+      invoke: vi.fn().mockResolvedValue({ success: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    await plugin.getFeatureUtil().plugin.secret.set('providers.baidu.secretKey', 'secret-value')
+
+    expect(transport.invoke).toHaveBeenCalledWith(
+      PluginEvents.storage.setSecret,
+      {
+        pluginName: 'test-plugin',
+        key: 'providers.baidu.secretKey',
+        value: 'secret-value'
+      },
+      {
+        plugin: {
+          name: 'test-plugin',
+          uniqueKey: expect.any(String),
+          verified: expect.any(Boolean)
+        }
+      }
+    )
+  })
 })
 
 describe('TouchPlugin.setRuntime', () => {
@@ -234,6 +333,12 @@ describe('TouchPlugin.setRuntime', () => {
 describe('TouchPlugin.enable', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
+    boxItemManagerMock.clear.mockClear()
+    boxItemManagerMock.upsert.mockClear()
+    boxItemManagerMock.batchUpsert.mockClear()
+    boxItemManagerMock.update.mockClear()
+    boxItemManagerMock.delete.mockClear()
+    boxItemManagerMock.getBySource.mockClear()
     vi.restoreAllMocks()
   })
 

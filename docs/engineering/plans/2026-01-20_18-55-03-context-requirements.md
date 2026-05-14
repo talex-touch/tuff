@@ -33,9 +33,9 @@ created_at: 2026-01-20T18:55:06+08:00
 - 表结构：`config(key text primaryKey, value text)`，`value` 为 JSON 字符串（`apps/core-app/src/main/db/schema.ts:278`）
 - 写入点：`StorageModule.upsertSqliteConfig` 使用 `db.insert(configSchema)` upsert（`apps/core-app/src/main/modules/storage/index.ts:230`）
 - 触发来源：
-  - `runSqlitePilotMigration` 启动时遍历 `SQLITE_PILOT_CONFIGS` 写入（`apps/core-app/src/main/modules/storage/index.ts:212` / `apps/core-app/src/main/modules/storage/index.ts:60`）
+  - `runSqliteAIMigration` 启动时遍历 `SQLITE_AIAPP_CONFIGS` 写入（`apps/core-app/src/main/modules/storage/index.ts:212` / `apps/core-app/src/main/modules/storage/index.ts:60`）
   - `saveConfig` 写入内存后触发 SQLite upsert（`apps/core-app/src/main/modules/storage/index.ts:582`）
-- JSON 重叠范围：仅 `SQLITE_PILOT_CONFIGS` 内 key（当前为 `StorageList.SEARCH_ENGINE_LOGS_ENABLED`）同时存在 JSON 文件与 SQLite 记录，其余 key 仅走 JSON（`apps/core-app/src/main/modules/storage/index.ts:60`）
+- JSON 重叠范围：仅 `SQLITE_AIAPP_CONFIGS` 内 key（当前为 `StorageList.SEARCH_ENGINE_LOGS_ENABLED`）同时存在 JSON 文件与 SQLite 记录，其余 key 仅走 JSON（`apps/core-app/src/main/modules/storage/index.ts:60`）
 
 🔗 调用链与一致性要求
 - Main 调用链：
@@ -52,22 +52,22 @@ created_at: 2026-01-20T18:55:06+08:00
   - 一致性要求：插件侧更新基于事件通知与异步 IPC，默认最终一致
 
 🧭 同步口径与策略（初稿）
-- 同步方向：JSON 作为主源；仅 `SQLITE_PILOT_CONFIGS` 内 key 做 JSON → SQLite 镜像写入（`apps/core-app/src/main/modules/storage/index.ts:60` / `apps/core-app/src/main/modules/storage/index.ts:230`）
+- 同步方向：JSON 作为主源；仅 `SQLITE_AIAPP_CONFIGS` 内 key 做 JSON → SQLite 镜像写入（`apps/core-app/src/main/modules/storage/index.ts:60` / `apps/core-app/src/main/modules/storage/index.ts:230`）
 - 时序/冲突策略：主进程 `saveConfig` 先更新内存与 JSON，再异步 upsert SQLite；客户端携带版本号时执行冲突检测（旧版本拒绝），未携带版本默认接受并以最新写入为准（`apps/core-app/src/main/modules/storage/index.ts:582`）
-- 迁移/回滚：启动时执行 JSON → SQLite pilot 迁移；回滚只需移除 pilot key 或忽略 SQLite，JSON 文件仍为可用主源（`apps/core-app/src/main/modules/storage/index.ts:212`）
+- 迁移/回滚：启动时执行 JSON → SQLite aiapp 迁移；回滚只需移除 aiapp key 或忽略 SQLite，JSON 文件仍为可用主源（`apps/core-app/src/main/modules/storage/index.ts:212`）
 - 兼容性：保留 legacy `storage:*` IPC 与 JSON 文件格式，SQLite 表结构保持 key/value 不变，避免破坏已有读写路径（`apps/core-app/src/main/modules/storage/index.ts:283` / `apps/core-app/src/main/db/schema.ts:278`）
 - 可观测性：利用 `storageLog` 记录 SQLite 写入失败与慢写入告警，保持问题可追踪（`apps/core-app/src/main/modules/storage/index.ts:230` / `apps/core-app/src/main/modules/storage/index.ts:662`）
 
 📌 需求清单（草案）
 - 明确主进程配置入口与 JSON 存储路径/生命周期，保证读写/订阅/广播链路可追溯（`apps/core-app/src/main/modules/storage/index.ts:121`）
-- 明确 SQLite config 表结构、写入点与 pilot 范围，标注与 JSON 重叠的 key（`apps/core-app/src/main/db/schema.ts:278` / `apps/core-app/src/main/modules/storage/index.ts:60`）
+- 明确 SQLite config 表结构、写入点与 aiapp 范围，标注与 JSON 重叠的 key（`apps/core-app/src/main/db/schema.ts:278` / `apps/core-app/src/main/modules/storage/index.ts:60`）
 - 明确 main/renderer/plugin 调用链与一致性要求，覆盖跨窗口同步与版本策略（`apps/core-app/src/main/modules/storage/index.ts:283` / `packages/utils/renderer/storage/base-storage.ts:278` / `packages/utils/plugin/sdk/storage.ts:24`）
 - 明确 5 类同步口径与策略，作为后续实现评审的统一边界（`docs/engineering/plans/2026-01-20_18-55-03-context-requirements.md:54`）
 - 保持 legacy IPC 与 JSON 存储的向后兼容，不引入破坏性改动（`apps/core-app/src/main/modules/storage/index.ts:283`）
 
 ⚠️ 风险清单（草案）
 - 双写/版本冲突处理不一致导致配置漂移（`apps/core-app/src/main/modules/storage/index.ts:582`）
-- SQLite 不可用或迁移失败导致 pilot 数据缺失（`apps/core-app/src/main/modules/storage/index.ts:212`）
+- SQLite 不可用或迁移失败导致 aiapp 数据缺失（`apps/core-app/src/main/modules/storage/index.ts:212`）
 - IPC 广播延迟造成跨窗口短暂不一致（`apps/core-app/src/main/modules/storage/index.ts:68`）
 - 插件存储与主配置通道误用导致依赖边界混乱（`packages/utils/plugin/sdk/storage.ts:24`）
 

@@ -827,7 +827,7 @@ export default {
         scopeHint: 'Current scope: {scope}',
         form: {
           name: 'Application Name',
-          namePlaceholder: 'e.g. Pilot Integration',
+          namePlaceholder: 'e.g. OAuth Integration',
           description: 'Description',
           descriptionPlaceholder: 'Optional short description',
           redirectUris: 'Redirect URIs',
@@ -1155,7 +1155,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
         memberStatus: {
           active: 'Active',
-          automation: 'Automation pilot',
+          automation: 'Automation assistant',
           invited: 'Invited',
         },
       },

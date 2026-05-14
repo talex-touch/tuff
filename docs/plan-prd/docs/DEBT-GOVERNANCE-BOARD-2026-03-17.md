@@ -25,7 +25,7 @@
 | owner | 总数 | 主要构成 |
 | --- | ---: | --- |
 | `core-app` | 22 | compat-file(5), core-app-migration-exception(3), size-growth-exception(14) |
-| `pilot` | 6 | size-growth-exception(6) |
+| `aiapp` | 6 | size-growth-exception(6) |
 | `nexus` | 3 | size-growth-exception(3) |
 | `packages-tuff-intelligence` | 2 | size-growth-exception(2) |
 | `plugin-touch-translation` | 2 | size-growth-exception(2) |
@@ -46,7 +46,7 @@
 | owner | count | 重点清理方向 |
 | --- | ---: | --- |
 | `core-app` | 14 | `clipboard.ts`、`search-core.ts`、`plugin-module.ts`、`app-provider.ts` 等继续按 SRP 切片降低 cap。 |
-| `pilot` | 6 | AIGC completion、chat stream、tool gateway 与 admin channel 继续拆分。 |
+| `aiapp` | 6 | AIGC completion、chat stream、tool gateway 与 admin channel 继续拆分。 |
 | `nexus` | 3 | i18n locale 与 `authStore.ts` 拆分。 |
 | `packages-tuff-intelligence` | 2 | `deepagent-engine.ts` 与 intelligence 类型拆分。 |
 | `plugin-touch-translation` | 2 | 插件入口与翻译面板拆分。 |
@@ -83,4 +83,4 @@
 1. `core-app`：继续清理剩余 `compat-file 5`，优先评估 download migration 命名与 `polyfills.ts` 的退场条件。
 2. `core-app`：继续拆 `clipboard.ts` autopaste、`search-core.ts` 与 `app-provider.ts`，按行为等价切片降低 size cap。
 3. `nexus`：拆分 `tuffIntelligenceLabService.ts`、locale 与 auth store 超长报告项。
-4. `packages-utils`：retained raw definition 当前上限保持 `<=265`，继续把符合 typed builder 结构的事件分批迁入 typed registry。
+4. `packages-utils`：retained raw definition 当前测试上限为 `265`，继续把符合 typed builder 结构的事件分批迁入 typed registry。

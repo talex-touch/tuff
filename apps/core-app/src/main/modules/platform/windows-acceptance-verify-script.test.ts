@@ -295,7 +295,7 @@ describe('windows-acceptance-verify script', () => {
 
 ## Evidence
 
-- Morning top recommendations: Calculator, WeChat, Codex
+- Morning top recommendations: Calculator, ChatApp, Codex
 - Notes:
 `)
     ).toBe(true)
@@ -521,7 +521,7 @@ describe('windows-acceptance-verify script', () => {
 
     expect(result.exitCode).toBe(1)
     expect(manualFailures).toEqual([
-      'Windows acceptance manual evidence checklist or fields are incomplete: evidence/windows/manual/common-app-wechat.md (unchecked checklist items: 5; missing evidence fields: Screenshot or recording, Search query used, Observed display name, Icon evidence, Observed launch target, CoreBox hidden evidence)',
+      'Windows acceptance manual evidence checklist or fields are incomplete: evidence/windows/manual/common-app-chatapp.md (unchecked checklist items: 5; missing evidence fields: Screenshot or recording, Search query used, Observed display name, Icon evidence, Observed launch target, CoreBox hidden evidence)',
       'Windows acceptance manual evidence checklist or fields are incomplete: evidence/windows/manual/common-app-codex.md (unchecked checklist items: 5; missing evidence fields: Screenshot or recording, Search query used, Observed display name, Icon evidence, Observed launch target, CoreBox hidden evidence)',
       'Windows acceptance manual evidence checklist or fields are incomplete: evidence/windows/manual/common-app-apple-music.md (unchecked checklist items: 5; missing evidence fields: Screenshot or recording, Search query used, Observed display name, Icon evidence, Observed launch target, CoreBox hidden evidence)',
       'Windows acceptance manual evidence checklist or fields are incomplete: evidence/windows/manual/copied-app-path-index.md (unchecked checklist items: 6; missing evidence fields: Copied source, Normalized app path, Add-to-local-launch-area action, Local launch entry, App Index diagnostic evidence path, Search query used after reindex, Indexed search result, Indexed result launch evidence, Screenshot or recording)',
@@ -544,7 +544,7 @@ describe('windows-acceptance-verify script', () => {
     expect(plan).toContain('# Windows Acceptance Evidence Collection Plan')
     expect(plan).toContain('### windows-everything-file-search')
     expect(plan).toContain(
-      'pnpm -C "apps/core-app" run windows:capability:evidence -- --target WeChat --target Codex --target "Apple Music" --output "evidence/windows/windows-everything-file-search-capability.json"'
+      'pnpm -C "apps/core-app" run windows:capability:evidence -- --target ChatApp --target Codex --target "Apple Music" --output "evidence/windows/windows-everything-file-search-capability.json"'
     )
     expect(plan).toContain('pnpm -C "apps/core-app" run windows:capability:verify')
     expect(plan).toContain(
@@ -565,7 +565,7 @@ describe('windows-acceptance-verify script', () => {
     expect(plan).toContain('pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "')
     expect(plan).toContain('--requireCompletedManualEvidence')
     expect(plan).toContain('--requireEvidenceGatePassed')
-    expect(plan).toContain('--requireCommonAppTargets WeChat,Codex,"Apple Music"')
+    expect(plan).toContain('--requireCommonAppTargets ChatApp,Codex,"Apple Music"')
     expect(plan).not.toContain('<capability-evidence.json>')
     expect(plan).not.toContain('<everything-evidence.json>')
     expect(plan).not.toContain('<app-index-evidence.json>')

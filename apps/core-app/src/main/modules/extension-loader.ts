@@ -1,4 +1,4 @@
-import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleInitContext, ModuleKey, ModuleStartContext } from '@talex-touch/utils'
 import type { TalexEvents } from '../core/eventbus/touch-event'
 import path from 'node:path'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -20,6 +20,9 @@ export class ExtensionLoaderModule extends BaseModule {
 
   private extensions: string[] = []
   private loadedExtensions: LoadedExtensionRecord[] = []
+  private extensionPath: string | null = null
+  private loadPromise: Promise<void> | null = null
+  private destroying = false
 
   constructor() {
     super(ExtensionLoaderModule.key, {
@@ -30,13 +33,54 @@ export class ExtensionLoaderModule extends BaseModule {
 
   async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const extensionPath = file.dirPath!
-    const extensions = fse.readdirSync(extensionPath)
+    this.extensionPath = extensionPath
+    this.destroying = false
+
+    try {
+      this.extensions = await fse.readdir(extensionPath)
+    } catch (error) {
+      this.extensions = []
+      extensionLoaderLog.error('Failed to list extensions directory', {
+        error,
+        meta: { path: extensionPath }
+      })
+    }
+  }
+
+  start(_ctx: ModuleStartContext<TalexEvents>): void {
+    this.scheduleBackgroundLoad()
+  }
+
+  private scheduleBackgroundLoad(): void {
+    if (this.loadPromise || !this.extensionPath || this.extensions.length === 0) {
+      return
+    }
+
+    const extensionPath = this.extensionPath
+    const extensions = [...this.extensions]
+    this.loadPromise = this.loadExtensions(extensionPath, extensions)
+  }
+
+  private async loadExtensions(extensionPath: string, extensions: string[]): Promise<void> {
+    const startedAt = performance.now()
 
     for (const extension of extensions) {
+      if (this.destroying) {
+        break
+      }
+
       const fullPath = path.join(extensionPath, extension)
-      this.extensions.push(extension)
       try {
         const loaded = await session.defaultSession.loadExtension(fullPath)
+        if (this.destroying) {
+          this.removeLoadedExtension({
+            id: loaded.id,
+            name: loaded.name,
+            path: fullPath
+          })
+          continue
+        }
+
         this.loadedExtensions.push({
           id: loaded.id,
           name: loaded.name,
@@ -52,24 +96,47 @@ export class ExtensionLoaderModule extends BaseModule {
         })
       }
     }
+
+    extensionLoaderLog.info('Extension background load finished', {
+      meta: {
+        total: extensions.length,
+        loaded: this.loadedExtensions.length,
+        durationMs: Math.round(performance.now() - startedAt)
+      }
+    })
+  }
+
+  private removeLoadedExtension(extension: LoadedExtensionRecord): void {
+    try {
+      session.defaultSession.removeExtension(extension.id)
+      extensionLoaderLog.info(`Unloaded extension: ${extension.name}`, {
+        meta: { id: extension.id, path: extension.path }
+      })
+    } catch (error) {
+      extensionLoaderLog.error(`Failed to unload extension: ${extension.name}`, {
+        error,
+        meta: { id: extension.id, path: extension.path }
+      })
+    }
   }
 
   async onDestroy(): Promise<void> {
-    for (const extension of [...this.loadedExtensions].reverse()) {
+    this.destroying = true
+    if (this.loadPromise) {
       try {
-        session.defaultSession.removeExtension(extension.id)
-        extensionLoaderLog.info(`Unloaded extension: ${extension.name}`, {
-          meta: { id: extension.id, path: extension.path }
-        })
+        await this.loadPromise
       } catch (error) {
-        extensionLoaderLog.error(`Failed to unload extension: ${extension.name}`, {
-          error,
-          meta: { id: extension.id, path: extension.path }
-        })
+        extensionLoaderLog.error('Extension background load failed during destroy', { error })
       }
+    }
+
+    for (const extension of [...this.loadedExtensions].reverse()) {
+      this.removeLoadedExtension(extension)
     }
     this.loadedExtensions = []
     this.extensions = []
+    this.extensionPath = null
+    this.loadPromise = null
     extensionLoaderLog.info('ExtensionLoaderModule destroyed')
   }
 }

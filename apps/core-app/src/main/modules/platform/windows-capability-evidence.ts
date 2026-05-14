@@ -1,6 +1,6 @@
 export const WINDOWS_CAPABILITY_EVIDENCE_SCHEMA = 'windows-capability-evidence/v1'
 
-export const DEFAULT_WINDOWS_CAPABILITY_TARGETS = ['WeChat', 'Codex', 'Apple Music'] as const
+export const DEFAULT_WINDOWS_CAPABILITY_TARGETS = ['ChatApp', 'Codex', 'Apple Music'] as const
 
 export type WindowsCapabilityStatus = 'passed' | 'degraded' | 'failed' | 'skipped'
 

@@ -7,7 +7,7 @@ export type PaymentMethod =
   | 'apple_pay'
   | 'google_pay'
   | 'alipay'
-  | 'wechat'
+  | 'chatapp'
   | 'paypal'
   | 'crypto'
 

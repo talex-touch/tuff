@@ -274,7 +274,7 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
   const fileName = path.basename(appPath, '.app')
 
-  // Try to get localized display name (e.g., "微信" for WeChat)
+  // Try to get localized display name (e.g., "聊天应用" for ChatApp)
   const localizedName = await getLocalizedDisplayName(appPath)
 
   // mdls display-name corrections are handled by the background mdls scan.

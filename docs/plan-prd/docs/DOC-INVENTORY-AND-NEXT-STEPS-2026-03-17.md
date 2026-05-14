@@ -73,7 +73,7 @@
 ### P1：技术债三波次并行（W2-W4）
 
 - Wave A：Transport（MessagePort 高频通道 + `sendSync` 清理）。
-- Wave B：Pilot（typecheck/lint 清理 + SSE/鉴权矩阵回归）。
+- Wave B：AI（typecheck/lint 清理 + SSE/鉴权矩阵回归）。
 - Wave C：架构质量（`plugin-module/search-core/file-provider` SRP 拆分）。
 - 每波强制产出：`CHANGES` 证据 + `TODO` 状态 + 可复现门禁命令。
 

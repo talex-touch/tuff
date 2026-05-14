@@ -27,13 +27,14 @@
     }
   },
   "permissions": {
-    "required": ["clipboard.read", "network.internet", "intelligence.basic"],
+    "required": ["clipboard.read", "network.internet", "intelligence.basic", "storage.plugin"],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
     "clipboard.read": "读取剪贴板中的待翻译文本",
     "network.internet": "连接翻译服务 API（如 Google、DeepL、百度等）",
     "intelligence.basic": "调用智能翻译服务",
+    "storage.plugin": "保存翻译源配置与本地密钥引用",
     "clipboard.write": "将翻译结果复制到剪贴板"
   },
   "features": [

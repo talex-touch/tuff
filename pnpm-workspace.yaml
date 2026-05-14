@@ -3,7 +3,6 @@ packages:
   - packages/tuffex/packages/components
   - 'apps/core-app'
   - 'apps/nexus'
-  - 'apps/pilot'
   - 'plugins/*'
   - '!apps/g-*'
   - '!apps/quota-*'

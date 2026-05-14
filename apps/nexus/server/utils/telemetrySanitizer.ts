@@ -271,7 +271,7 @@ export function resolveAppCategory(bundleId: string): string {
     {
       category: 'communication',
       keywords: [
-        'wechat',
+        'chatapp',
         'qq',
         'telegram',
         'slack',

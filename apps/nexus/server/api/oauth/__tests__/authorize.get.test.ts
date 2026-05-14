@@ -5,7 +5,7 @@ const authMocks = vi.hoisted(() => ({
 }))
 
 const authStoreMocks = vi.hoisted(() => ({
-  createPilotOauthCode: vi.fn(),
+  createOAuthCode: vi.fn(),
 }))
 
 const oauthClientStoreMocks = vi.hoisted(() => ({
@@ -51,7 +51,7 @@ describe('/api/oauth/authorize', () => {
     h3Mocks.getRequestURL.mockReturnValue(new URL('https://tuff.tagzxia.com/api/oauth/authorize'))
     h3Mocks.sendRedirect.mockImplementation((_event, url, code) => ({ url, code }))
     authMocks.requireSessionAuth.mockResolvedValue({ userId: 'u1' })
-    authStoreMocks.createPilotOauthCode.mockResolvedValue({
+    authStoreMocks.createOAuthCode.mockResolvedValue({
       code: 'oauth_code_1',
       clientId: 'nxo_client_123',
       userId: 'u1',
@@ -69,7 +69,7 @@ describe('/api/oauth/authorize', () => {
   it('已登录时签发 code 并回跳 redirect_uri', async () => {
     const result = await handler({ context: {} })
 
-    expect(authStoreMocks.createPilotOauthCode).toHaveBeenCalledWith(
+    expect(authStoreMocks.createOAuthCode).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         clientId: 'nxo_client_123',
@@ -92,7 +92,7 @@ describe('/api/oauth/authorize', () => {
       url: 'https://tuff.tagzxia.com/api/auth/signin?callbackUrl=https%3A%2F%2Ftuff.tagzxia.com%2Fapi%2Foauth%2Fauthorize',
       code: 302,
     })
-    expect(authStoreMocks.createPilotOauthCode).not.toHaveBeenCalled()
+    expect(authStoreMocks.createOAuthCode).not.toHaveBeenCalled()
   })
 
   it('redirect_uri 未注册时拒绝', async () => {

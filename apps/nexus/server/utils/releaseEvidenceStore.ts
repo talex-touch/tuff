@@ -11,7 +11,7 @@ const EVIDENCE_JSON_LIMIT_BYTES = 128 * 1024
 const initializedSchemas = new WeakSet<D1Database>()
 
 export const RELEASE_EVIDENCE_PLATFORMS = ['windows', 'macos', 'linux', 'all'] as const
-export const RELEASE_EVIDENCE_SCOPES = ['core-app', 'pilot', 'nexus', 'docs', 'release'] as const
+export const RELEASE_EVIDENCE_SCOPES = ['core-app', 'nexus', 'docs', 'release'] as const
 export const RELEASE_EVIDENCE_RUN_STATUSES = ['running', 'passed', 'failed', 'partial'] as const
 export const RELEASE_EVIDENCE_ITEM_STATUSES = ['pending', 'passed', 'failed', 'blocked', 'best_effort', 'skipped'] as const
 

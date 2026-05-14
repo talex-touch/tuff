@@ -52,7 +52,7 @@ describe('/api/dashboard/oauth/clients/:id/rotate-secret POST', () => {
       clientId: 'nxo_abc',
       clientSecretHint: 'nxs_new...',
       clientSecret: 'nxs_new_secret',
-      name: 'Pilot Integration',
+      name: 'OAuth Integration',
       description: null,
       redirectUris: ['http://127.0.0.1:3201/auth/callback'],
       ownerScope: 'team',

@@ -1999,7 +1999,7 @@
       "fullSyncCheckIntervalDesc": "检查是否需要全量同步的频率",
       "appDiagnosticTitle": "应用搜索诊断",
       "appDiagnosticDesc": "输入应用路径、appIdentity、bundleId、显示名或搜索词，检查单个应用的索引内容与查询命中阶段",
-      "appDiagnosticTargetPlaceholder": "应用路径 / appIdentity / bundleId / 显示名 / 搜索词，例如 weixin",
+      "appDiagnosticTargetPlaceholder": "应用路径 / appIdentity / bundleId / 显示名 / 搜索词，例如 chatapp",
       "appDiagnosticQueryPlaceholder": "可选：搜索词，例如 网易云",
       "appDiagnosticRun": "诊断",
       "appDiagnosticReindexKeywords": "仅重建关键词",

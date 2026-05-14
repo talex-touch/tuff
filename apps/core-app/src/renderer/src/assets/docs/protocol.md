@@ -66,7 +66,7 @@ We collect and use information that you voluntarily provide while using our serv
 
 ### 1.5 Application for talex-touch Business Edition
 
-- When you apply to become a user of the talex-touch Business Edition, we will collect your real name, contact information (WeChat or phone number), current company, personal profile information, and blog and technical media information. If you fail to provide the above information, you may not be able to become a user of the talex-touch Business Edition, but it will not affect your use of other functions of talex-touch.
+- When you apply to become a user of the talex-touch Business Edition, we will collect your real name, contact information (ChatApp or phone number), current company, personal profile information, and blog and technical media information. If you fail to provide the above information, you may not be able to become a user of the talex-touch Business Edition, but it will not affect your use of other functions of talex-touch.
 
 ### 1.6 talex-touch Knowledge Column
 

@@ -9,11 +9,11 @@ import type {
   TraceRecord,
 } from './store-adapter'
 
-const SESSIONS_TABLE = 'pilot_chat_sessions'
-const MESSAGES_TABLE = 'pilot_chat_messages'
-const TRACE_TABLE = 'pilot_chat_trace'
-const CHECKPOINTS_TABLE = 'pilot_chat_checkpoints'
-const ATTACHMENTS_TABLE = 'pilot_chat_attachments'
+const SESSIONS_TABLE = 'ai_chat_sessions'
+const MESSAGES_TABLE = 'ai_chat_messages'
+const TRACE_TABLE = 'ai_chat_trace'
+const CHECKPOINTS_TABLE = 'ai_chat_checkpoints'
+const ATTACHMENTS_TABLE = 'ai_chat_attachments'
 
 function nowIso() {
   return new Date().toISOString()
@@ -96,7 +96,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     }
 
     await this.db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_pilot_chat_sessions_user_updated
+      CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_user_updated
       ON ${SESSIONS_TABLE}(user_id, updated_at DESC);
     `).run()
 
@@ -113,7 +113,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     `).run()
 
     await this.db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_pilot_chat_messages_session_created
+      CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session_created
       ON ${MESSAGES_TABLE}(session_id, created_at ASC);
     `).run()
 
@@ -130,7 +130,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     `).run()
 
     await this.db.prepare(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_pilot_chat_trace_session_seq
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_chat_trace_session_seq
       ON ${TRACE_TABLE}(session_id, seq);
     `).run()
 
@@ -146,7 +146,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     `).run()
 
     await this.db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_pilot_chat_checkpoints_session_seq
+      CREATE INDEX IF NOT EXISTS idx_ai_chat_checkpoints_session_seq
       ON ${CHECKPOINTS_TABLE}(session_id, seq DESC);
     `).run()
 
@@ -165,7 +165,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     `).run()
 
     await this.db.prepare(`
-      CREATE INDEX IF NOT EXISTS idx_pilot_chat_attachments_session_created
+      CREATE INDEX IF NOT EXISTS idx_ai_chat_attachments_session_created
       ON ${ATTACHMENTS_TABLE}(session_id, created_at DESC);
     `).run()
   }

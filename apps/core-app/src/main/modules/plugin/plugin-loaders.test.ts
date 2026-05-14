@@ -256,6 +256,44 @@ describe('createPluginLoader', () => {
     expect(issueCodes).not.toContain('DEV_SOURCE_FALLBACK_LOCAL')
   })
 
+  it('sanitizes manifest build metadata before exposing runtime plugin state', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      build: {
+        widgets: [
+          {
+            featureId: 'translate',
+            widgetId: 'touch-translation::translate',
+            sourcePath: 'widgets/panel.vue',
+            compiledPath: 'widgets/.compiled/panel.cjs',
+            hash: 'abc',
+            styles: '',
+            compiledAt: 1
+          }
+        ],
+        internalOnly: { token: 'secret' }
+      }
+    })
+    createdPaths.push(pluginPath)
+
+    const loader = createPluginLoader('touch-translation', pluginPath)
+    const plugin = await loader.load()
+
+    expect(plugin.build).toEqual({
+      widgets: [
+        expect.objectContaining({
+          featureId: 'translate',
+          widgetId: 'touch-translation::translate'
+        })
+      ]
+    })
+    expect(plugin.build).not.toHaveProperty('internalOnly')
+  })
+
   it('marks plugins below the enforced sdkapi floor as blocked load failures', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',
@@ -314,7 +352,7 @@ describe('createPluginLoader', () => {
     expect(plugin.issues.some((issue) => issue.code === 'SDK_VERSION_OUTDATED')).toBe(false)
   })
 
-  it('keeps the historical touch-dev-utils sdk marker loadable', async () => {
+  it('blocks non-canonical historical sdk markers', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-dev-utils',
       version: '1.0.0',
@@ -328,9 +366,9 @@ describe('createPluginLoader', () => {
     const loader = createPluginLoader('touch-dev-utils', pluginPath)
     const plugin = await loader.load()
 
-    expect(plugin.loadState).not.toBe('load_failed')
-    expect(plugin.loadError).toBeUndefined()
-    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(false)
+    expect(plugin.loadState).toBe('load_failed')
+    expect(plugin.loadError).toMatchObject({ code: 'SDKAPI_BLOCKED' })
+    expect(plugin.issues.some((issue) => issue.code === 'SDKAPI_BLOCKED')).toBe(true)
   })
 
   it('creates loader plugin shells without eager data initialization', async () => {

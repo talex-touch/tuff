@@ -1,5 +1,5 @@
 import { createError, readBody } from 'h3'
-import { consumePilotOauthCode, getUserById } from '../../utils/authStore'
+import { consumeOAuthCode, getUserById } from '../../utils/authStore'
 import { verifyOauthClientSecret } from '../../utils/oauthClientStore'
 
 interface OauthTokenBody {
@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const oauthCode = await consumePilotOauthCode(event, {
+  const oauthCode = await consumeOAuthCode(event, {
     code,
     clientId,
     redirectUri,

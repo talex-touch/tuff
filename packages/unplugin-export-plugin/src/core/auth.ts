@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { getTuffBaseUrl, normalizeBaseUrl } from '@talex-touch/utils/env'
 import { getCliConfigDir } from '../cli/runtime-config'
-import fs from 'fs-extra'
+import { createCliCredentialStore } from './cli-credential-store'
 
 export interface AuthState {
   prompt: string
@@ -19,22 +19,27 @@ export function getAuthTokenPath(): string {
   return path.join(getCliConfigDir(), 'auth.json')
 }
 
+function validateAuthState(value: unknown): AuthState | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const auth = value as Partial<AuthState>
+  if (typeof auth.token !== 'string' || !auth.token.trim()) {
+    return null
+  }
+  return auth as AuthState
+}
+
+export function createAuthCredentialStore() {
+  return createCliCredentialStore<AuthState>({
+    filePath: getAuthTokenPath(),
+    validate: validateAuthState,
+    onWarning: message => console.warn(`⚠️  ${message}`),
+  })
+}
+
 export async function readAuthState(): Promise<AuthState | null> {
-  const tokenPath = getAuthTokenPath()
-
-  try {
-    if (await fs.pathExists(tokenPath)) {
-      const auth = await fs.readJson(tokenPath)
-      if (auth && typeof auth === 'object') {
-        return auth as AuthState
-      }
-    }
-  }
-  catch {
-    // Ignore
-  }
-
-  return null
+  return createAuthCredentialStore().read()
 }
 
 export async function getAuthToken(): Promise<string | null> {
@@ -44,7 +49,7 @@ export async function getAuthToken(): Promise<string | null> {
       const currentBase = normalizeBaseUrl(getTuffBaseUrl())
       const storedBase = normalizeBaseUrl(auth.baseUrl)
       if (storedBase !== currentBase)
-        return null
+        return process.env.TUFF_AUTH_TOKEN || null
     }
     return auth.token
   }
@@ -61,8 +66,6 @@ export async function saveAuthToken(
     devicePlatform?: string
   },
 ): Promise<void> {
-  const tokenPath = getAuthTokenPath()
-  await fs.ensureDir(path.dirname(tokenPath))
   const payload: AuthState = {
     prompt: AUTH_PROMPT,
     token,
@@ -72,12 +75,9 @@ export async function saveAuthToken(
     deviceName: meta?.deviceName,
     devicePlatform: meta?.devicePlatform,
   }
-  await fs.writeJson(tokenPath, payload, { spaces: 2 })
+  await createAuthCredentialStore().write(payload)
 }
 
 export async function clearAuthToken(): Promise<void> {
-  const tokenPath = getAuthTokenPath()
-  if (await fs.pathExists(tokenPath)) {
-    await fs.remove(tokenPath)
-  }
+  await createAuthCredentialStore().clear()
 }

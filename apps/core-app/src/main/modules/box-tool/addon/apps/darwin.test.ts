@@ -103,18 +103,18 @@ describe('darwin app info', () => {
   })
 
   it('does not call mdls during fresh app info scan', async () => {
-    const tempRoot = await createTempAppBundle('WeChat', 'WeChat')
+    const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp')
     tempRoots.push(tempRoot)
-    const appPath = path.join(tempRoot, 'WeChat.app')
+    const appPath = path.join(tempRoot, 'ChatApp.app')
 
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
     expect(appInfo).toEqual(
       expect.objectContaining({
-        name: 'WeChat',
-        displayName: 'WeChat',
-        bundleId: 'com.example.wechat',
+        name: 'ChatApp',
+        displayName: 'ChatApp',
+        bundleId: 'com.example.chatapp',
         path: appPath
       })
     )
@@ -122,23 +122,23 @@ describe('darwin app info', () => {
   })
 
   it('prefers localized strings without calling mdls during fresh scan', async () => {
-    const tempRoot = await createTempAppBundle('WeChat', 'WeChat', {
-      localizedDisplayName: '微信'
+    const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp', {
+      localizedDisplayName: '聊天应用'
     })
     tempRoots.push(tempRoot)
-    const appPath = path.join(tempRoot, 'WeChat.app')
+    const appPath = path.join(tempRoot, 'ChatApp.app')
 
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
     expect(appInfo).toEqual(
       expect.objectContaining({
-        name: 'WeChat',
-        displayName: '微信',
+        name: 'ChatApp',
+        displayName: '聊天应用',
         displayNameSource: 'InfoPlist.strings',
         displayNameQuality: 'localized',
         identityKind: 'macos-path',
-        bundleId: 'com.example.wechat',
+        bundleId: 'com.example.chatapp',
         path: appPath
       })
     )
@@ -165,42 +165,42 @@ describe('darwin app info', () => {
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('reads zh_CN InfoPlist.strings for WeChat developer tools', async () => {
-    const tempRoot = await createTempAppBundle('wechatwebdevtools', 'wechatwebdevtools', {
-      localizedDisplayName: '微信开发者工具',
+  it('reads zh_CN InfoPlist.strings for ChatApp developer tools', async () => {
+    const tempRoot = await createTempAppBundle('chatappdevtools', 'chatappdevtools', {
+      localizedDisplayName: '聊天应用开发者工具',
       localizedDir: 'zh_CN.lproj'
     })
     tempRoots.push(tempRoot)
-    const appPath = path.join(tempRoot, 'wechatwebdevtools.app')
+    const appPath = path.join(tempRoot, 'chatappdevtools.app')
 
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
     expect(appInfo).toEqual(
       expect.objectContaining({
-        name: 'wechatwebdevtools',
-        displayName: '微信开发者工具',
+        name: 'chatappdevtools',
+        displayName: '聊天应用开发者工具',
         displayNameSource: 'InfoPlist.strings',
         displayNameQuality: 'localized',
         identityKind: 'macos-path',
-        alternateNames: expect.arrayContaining(['wechatwebdevtools'])
+        alternateNames: expect.arrayContaining(['chatappdevtools'])
       })
     )
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
   it('generates stable hashed png app icon cache from bundle icon resources', async () => {
-    const tempRoot = await createTempAppBundle('WeChat', 'WeChat', {
+    const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp', {
       iconFile: 'AppIcon'
     })
     tempRoots.push(tempRoot)
-    const appPath = path.join(tempRoot, 'WeChat.app')
+    const appPath = path.join(tempRoot, 'ChatApp.app')
 
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
     expect(appInfo?.icon).toMatch(/cache\/app-icons\/darwin\/[a-f0-9]{32}\.png$/)
-    expect(path.basename(appInfo?.icon ?? '')).not.toContain('WeChat')
+    expect(path.basename(appInfo?.icon ?? '')).not.toContain('ChatApp')
     expect(execFileSafeMock).toHaveBeenCalledWith(
       'sips',
       expect.arrayContaining([

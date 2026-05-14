@@ -9,6 +9,7 @@ import type {
 import type {
   IFeatureLifeCycle,
   IPlatform,
+  IPluginBuildInfo,
   IPluginDev,
   IPluginFeature,
   IPluginWebview,
@@ -294,6 +295,7 @@ export class TouchPlugin implements ITouchPlugin {
   platforms: IPlatform
   category?: string
   meta?: PluginMeta
+  build?: IPluginBuildInfo
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
@@ -364,6 +366,7 @@ export class TouchPlugin implements ITouchPlugin {
       desc: this.desc,
       category: this.category,
       meta: this.meta,
+      build: this.build,
       icon: {
         type: this.icon.type,
         value: this.icon.value,
@@ -586,6 +589,15 @@ export class TouchPlugin implements ITouchPlugin {
     } catch (error) {
       this.handleRuntimeError('onInputChanged', error)
     }
+  }
+
+  private isRuntimeActive(): boolean {
+    return this.status === PluginStatus.ENABLED || this.status === PluginStatus.ACTIVE
+  }
+
+  private abortFeatureControllers(): void {
+    this.featureControllers.forEach((controller) => controller.abort())
+    this.featureControllers.clear()
   }
 
   public clearCoreBoxItems(): void {
@@ -981,8 +993,6 @@ export class TouchPlugin implements ITouchPlugin {
   async disable(): Promise<boolean> {
     this.pluginLifecycle = null
 
-    await widgetManager.releasePlugin(this.name)
-
     const stoppableStates = [
       PluginStatus.ENABLED,
       PluginStatus.ACTIVE,
@@ -992,6 +1002,11 @@ export class TouchPlugin implements ITouchPlugin {
     if (!stoppableStates.includes(this.status)) {
       return Promise.resolve(false)
     }
+
+    this.abortFeatureControllers()
+    this.clearCoreBoxItems()
+
+    await widgetManager.releasePlugin(this.name)
 
     this.logger.info('[Lifecycle] disable start')
     this.status = PluginStatus.DISABLING
@@ -1239,6 +1254,39 @@ export class TouchPlugin implements ITouchPlugin {
   private async resolvePluginManager() {
     const { pluginModule } = await import('./plugin-module')
     return pluginModule.pluginManager
+  }
+
+  private createSecretSDK(pluginName: string, transport: ITuffTransportMain) {
+    const createPluginContext = () => ({
+      plugin: {
+        name: pluginName,
+        uniqueKey: this._uniqueChannelKey ?? '',
+        verified: Boolean(this._uniqueChannelKey)
+      }
+    })
+
+    return {
+      get: (key: string): Promise<string | null> =>
+        transport.invoke(
+          PluginEvents.storage.getSecret,
+          { pluginName, key },
+          createPluginContext()
+        ) as Promise<string | null>,
+
+      set: (key: string, value: string | null): Promise<{ success: boolean; error?: string }> =>
+        transport.invoke(
+          PluginEvents.storage.setSecret,
+          { pluginName, key, value },
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>,
+
+      delete: (key: string): Promise<{ success: boolean; error?: string }> =>
+        transport.invoke(
+          PluginEvents.storage.deleteSecret,
+          { pluginName, key },
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>
+    }
   }
 
   private createRecommendSDK(pluginName: string) {
@@ -1505,6 +1553,14 @@ export class TouchPlugin implements ITouchPlugin {
       return processedItem
     }
 
+    const ensureBoxItemsActive = (method: string): boolean => {
+      if (this.isRuntimeActive()) {
+        return true
+      }
+      this.logger.warn(`[Feature SDK] Ignored boxItems.${method} because plugin is not active.`)
+      return false
+    }
+
     // BoxItem SDK 工具对象
     const boxItems = {
       /**
@@ -1512,7 +1568,9 @@ export class TouchPlugin implements ITouchPlugin {
        * @param item - 要推送的 item
        */
       push: async (item: TuffItem) => {
+        if (!ensureBoxItemsActive('push')) return
         const processed = await processItemIcon(item)
+        if (!ensureBoxItemsActive('push')) return
         const enriched = this.enrichItemWithSource(processed)
         boxItemManager.upsert(enriched)
       },
@@ -1522,7 +1580,9 @@ export class TouchPlugin implements ITouchPlugin {
        * @param items - 要推送的 items 数组
        */
       pushItems: async (items: TuffItem[]) => {
+        if (!ensureBoxItemsActive('pushItems')) return
         const processed = await Promise.all(items.map(processItemIcon))
+        if (!ensureBoxItemsActive('pushItems')) return
         const enriched = processed.map((item) => this.enrichItemWithSource(item))
         boxItemManager.batchUpsert(enriched)
       },
@@ -1533,6 +1593,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @param updates - 要更新的字段
        */
       update: (id: string, updates: Partial<TuffItem>) => {
+        if (!ensureBoxItemsActive('update')) return
         boxItemManager.update(id, updates)
       },
 
@@ -1541,6 +1602,7 @@ export class TouchPlugin implements ITouchPlugin {
        * @param id - item id
        */
       remove: (id: string) => {
+        if (!ensureBoxItemsActive('remove')) return
         boxItemManager.delete(id)
       },
 
@@ -1561,6 +1623,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const powerSDK = this.createPowerSDK(pluginName, transport)
+    const secretSDK = this.createSecretSDK(pluginName, transport)
 
     const recommendSDK = this.createRecommendSDK(pluginName)
 
@@ -1737,6 +1800,7 @@ export class TouchPlugin implements ITouchPlugin {
     const pluginAPI = {
       ...pluginInfo,
       storage,
+      secret: secretSDK,
       feature: featureSDK,
       box: boxSDK,
       divisionBox: divisionBoxSDK,
@@ -1753,6 +1817,7 @@ export class TouchPlugin implements ITouchPlugin {
       openUrl: (url: string) => shell.openExternal(url),
       http,
       storage,
+      secret: secretSDK,
       clipboard: clipboardUtil,
       channel: channelBridge,
       touchChannel,

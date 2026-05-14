@@ -4,7 +4,7 @@
  * Handles error reporting, analytics, and user tracking with privacy controls
  */
 
-import type { ModuleDestroyContext, ModuleKey } from '@talex-touch/utils'
+import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -18,6 +18,7 @@ import { getTuffTransportMain, SentryEvents } from '@talex-touch/utils/transport
 import { app, BrowserWindow } from 'electron'
 import { innerRootPath } from '../../core/precore'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import {
   shouldDowngradeRemoteFailure,
@@ -201,6 +202,7 @@ export class SentryServiceModule extends BaseModule {
   private telemetryStatsStore: TelemetryUploadStatsStore | null = null
   private reportQueueStore: ReportQueueStore | null = null
   private telemetryStatsPersistTimer: NodeJS.Timeout | null = null
+  private telemetryStatsHydratePromise: Promise<void> | null = null
 
   private eventLoopDelay?: ReturnType<typeof monitorEventLoopDelay>
   private unresponsiveAt = new Map<number, number>()
@@ -251,7 +253,7 @@ export class SentryServiceModule extends BaseModule {
     this.initializeSentry()
   }
 
-  async onInit(): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     sentryLog.info('Initializing Sentry service')
 
     // Load configuration
@@ -261,7 +263,7 @@ export class SentryServiceModule extends BaseModule {
     this.deviceFingerprint = generateDeviceFingerprint()
     this.clientId = getOrCreateTelemetryClientId()
 
-    await this.hydrateTelemetryStats()
+    this.scheduleTelemetryStatsHydration()
 
     // Initialize Sentry if enabled
     if (this.config.enabled) {
@@ -275,7 +277,7 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.info('Sentry is disabled by configuration')
     }
 
-    this.setupIPCChannels()
+    this.setupIPCChannels(ctx)
 
     try {
       subscribeMainConfig(StorageList.SENTRY_CONFIG, (data) => {
@@ -294,11 +296,10 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Setup IPC channels for user context updates
    */
-  private setupIPCChannels(): void {
-    const channel = $app.channel
-    if (!channel) return
-    const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
-    const transport = getTuffTransportMain(channel, keyManager)
+  private setupIPCChannels(ctx: ModuleInitContext<TalexEvents>): void {
+    const runtime = resolveMainRuntime(ctx, 'SentryServiceModule.onInit')
+    const keyManager = resolveKeyManager(runtime.channel as { keyManager?: unknown })
+    const transport = getTuffTransportMain(runtime.channel, keyManager)
 
     // Listen for user context updates from renderer
     transport.on(SentryEvents.api.updateUser, (payload) => {
@@ -430,7 +431,19 @@ export class SentryServiceModule extends BaseModule {
     }, 1500)
   }
 
+  private async waitForTelemetryStatsHydration(): Promise<void> {
+    if (this.telemetryStatsHydratePromise) {
+      try {
+        await this.telemetryStatsHydratePromise
+      } catch {
+        // Hydration failures are already logged by hydrateTelemetryStats.
+      }
+    }
+  }
+
   private async flushTelemetryStats(): Promise<void> {
+    await this.waitForTelemetryStatsHydration()
+
     if (this.telemetryStatsPersistTimer) {
       clearTimeout(this.telemetryStatsPersistTimer)
       this.telemetryStatsPersistTimer = null
@@ -438,7 +451,20 @@ export class SentryServiceModule extends BaseModule {
     await this.persistTelemetryStats()
   }
 
+  private scheduleTelemetryStatsHydration(): void {
+    if (this.telemetryStatsHydratePromise) return
+    const startedAt = performance.now()
+    const baseline = this.telemetryStatsSnapshot()
+    this.telemetryStatsHydratePromise = this.hydrateTelemetryStats(baseline).finally(() => {
+      sentryLog.debug('Telemetry upload stats hydration finished', {
+        meta: { durationMs: Math.round(performance.now() - startedAt) }
+      })
+    })
+  }
+
   private async persistTelemetryStats(): Promise<void> {
+    await this.waitForTelemetryStatsHydration()
+
     const store = this.getTelemetryStatsStore()
     if (!store) return
     try {
@@ -458,18 +484,43 @@ export class SentryServiceModule extends BaseModule {
     }
   }
 
-  private async hydrateTelemetryStats(): Promise<void> {
+  private applyHydratedTelemetryStats(
+    record: TelemetryUploadStatsRecord,
+    baseline: TelemetryUploadStatsRecord
+  ): void {
+    this.searchCount =
+      Math.max(record.searchCount, baseline.searchCount) +
+      Math.max(0, this.searchCount - baseline.searchCount)
+    this.totalNexusUploads =
+      Math.max(record.totalUploads, baseline.totalUploads) +
+      Math.max(0, this.totalNexusUploads - baseline.totalUploads)
+    this.failedNexusUploads =
+      Math.max(record.failedUploads, baseline.failedUploads) +
+      Math.max(0, this.failedNexusUploads - baseline.failedUploads)
+    this.lastNexusUploadTime =
+      Math.max(this.lastNexusUploadTime ?? 0, record.lastUploadTime ?? 0) || null
+
+    if (
+      record.lastFailureAt !== null &&
+      (this.lastTelemetryFailureAt === null || record.lastFailureAt > this.lastTelemetryFailureAt)
+    ) {
+      this.lastTelemetryFailureAt = record.lastFailureAt
+      this.lastTelemetryFailureMessage = record.lastFailureMessage
+    } else if (
+      record.lastFailureAt === this.lastTelemetryFailureAt &&
+      !this.lastTelemetryFailureMessage
+    ) {
+      this.lastTelemetryFailureMessage = record.lastFailureMessage
+    }
+  }
+
+  private async hydrateTelemetryStats(baseline: TelemetryUploadStatsRecord): Promise<void> {
     const store = this.getTelemetryStatsStore()
     if (!store) return
     try {
       const record = await store.get()
       if (!record) return
-      this.searchCount = record.searchCount
-      this.totalNexusUploads = record.totalUploads
-      this.failedNexusUploads = record.failedUploads
-      this.lastNexusUploadTime = record.lastUploadTime
-      this.lastTelemetryFailureAt = record.lastFailureAt
-      this.lastTelemetryFailureMessage = record.lastFailureMessage
+      this.applyHydratedTelemetryStats(record, baseline)
     } catch (error) {
       sentryLog.warn('Failed to hydrate telemetry upload stats', {
         meta: { error: error instanceof Error ? error.message : String(error) }

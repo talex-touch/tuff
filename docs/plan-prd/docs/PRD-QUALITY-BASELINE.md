@@ -16,10 +16,11 @@
 - 2026-05-12 跨平台兼容与占位实现复核已新增：`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md`；`2026-05-10` 审计保留为历史基线，当前 PRD 必须继续区分真实 unavailable、开发 mock 与生产假值成功，并把 Windows/macOS 真机 evidence、CLI token storage、retained raw definition 与 `compat-file=5` 作为后续收口口径。
 - 2026-05-13 执行顺序补充：`2.4.10` 正式 gate 前不得把 `2.5.0` AI/workflow、Provider Registry 高级策略、retained raw definition 后续迁移或 SRP 大拆分扩大为当前 release blocker；这些事项保留在 `2.4.11` / `2.5.0` 后续，当前只允许围绕 Windows 真机采证、性能采样、Release Evidence 与必要 bugfix 推进。dev/2.5.0 AI 首切只允许落登录态 Nexus AI invoke 薄接口与 CoreApp provider adapter，不得把 Scene runtime 全量编排升级为 2.5.0 Stable。
 - 2026-05-13 CoreApp 启动异步化缺口已归档：专项报告 `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` 确认当前启动仍受 main modules 串行 `await`、Database/Extension/Intelligence 等非首屏任务进入 critical path、Search provider 启动后集中抢资源，以及 renderer mount 前等待 storage/plugin store 影响；该项不升级为当前 `2.4.10` release blocker，后续按 P0/P1/P2/P3 分层治理并补 benchmark 证据。
-- 2026-05-11 架构治理切片已新增并收紧：transport guard 独立输出 raw send / retained raw definition / typed candidate，当前三段 typed candidate 为 `0`，retained raw definition 当前上限为 `265`；Pilot stat 与 mock payment 假成功路径已门控；插件图片历史路径不得继续长期写 renderer `localStorage`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`update-system.ts` 与 `omni-panel/index.ts` 已拆出纯 utility/helper 并退出 grown list，CoreApp 当前不在 grown list；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders，growth exception cap 收紧到 `1792`；`app-provider.test.ts` 已拆出测试 harness 并退出 grown list；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 state composable 并降到阈值以下；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，Pilot `pilot-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 质量入口已统一，`lint/lint:fix` 只负责 ESLint 与 intelligence check，架构债务由 `quality:pr` / `quality:release` 承载。
+- 2026-05-13 跨平台兼容与占位实现深度复核已归档：`docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md` 确认 CoreApp 平台能力、sync 密文载荷、Linux unsupported reason 与 transport boundary 当前稳定；`2.4.11` 必须继续收口 AI 兼容占位成功响应、CLI token 明文 JSON、插件 provider secret 普通 storage、插件 shell capability 诊断与生产样式大文件 SRP。
+- 2026-05-11 架构治理切片已新增并收紧：transport guard 独立输出 raw send / retained raw definition / typed candidate，当前三段 typed candidate 为 `0`，retained raw definition 当前上限为 `265`；AI stat 与 mock payment 假成功路径已门控；插件图片历史路径不得继续长期写 renderer `localStorage`；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行清退 size exception；`recommendation-engine.ts`、`search-core.ts`、`app-provider.ts`、`update-system.ts` 与 `omni-panel/index.ts` 已拆出纯 utility/helper 并退出 grown list，CoreApp 当前不在 grown list；`app-provider.ts` 已拆出 path helper 与 source scanner facade，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 input builders，growth exception cap 收紧到 `1792`；`app-provider.test.ts` 已拆出测试 harness 并退出 grown list；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 state composable 并降到阈值以下；`sdk-compat.ts` 已硬切为 `sdkapi-hard-cut-gate.ts`，AI `aiapp-compat-*` 已硬切为领域服务命名；Tuffex `TxFlipOverlay.vue` 已拆出 stack helper 并清退 size exception；registry 当前 `36` 条、`compat-file=5`；重构期 质量入口已统一，`lint/lint:fix` 只负责 ESLint 与 intelligence check，架构债务由 `quality:pr` / `quality:release` 承载。
 - 2026-05-13 Nexus Intelligence provider 已镜像到 Provider Registry；Provider metadata 不保存明文 API key，密钥只通过 secure store `authRef` 绑定；dashboard list/sync/model list/probe/admin chat/docs assistant/lab runtime 已统一经 bridge 合并读取旧表与 registry mirror，Provider Registry check 已可对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史，OpenAI-compatible AI mirror 已可通过 Scene 默认 adapter 执行 `vision.ocr`；新增 `/api/v1/intelligence/invoke` 登录态薄接口供官方 app 默认 provider 调用，并复用现有 credential、audit、retry/fallback 逻辑；Dashboard Admin Provider Registry 已补系统级本地 `overlay.render` provider 与 `corebox.screenshot.translate` Scene 的幂等 seed 入口，且不会把 user-scope AI mirror OCR 自动绑入 system Scene；旧表退场、user-scope AI mirror OCR 绑定策略与高级策略仍是后续门禁。
 - 2026-05-12 CI/CD warning 迁移已建立：GitHub Actions JavaScript Action `uses:` 依赖统一到 Node 24-compatible major baseline，项目业务 Node runtime 继续保持 `22.16.0`；后续 CI warning 收口不得通过 `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 或长期 `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` 绕过。
-- 2026-05-13 beta CI readiness 复核：`2.4.10-beta.21` 准备用于避开已存在的 `v2.4.10-beta.20` tag；OmniPanel Gate 与 Utils Package CI 当前可见阻断已本地收口，transport boundary retained raw definition 当前扫描上限为 `265`，typed migration candidate 保持 `0`；完整 `quality:pr` 仍被 `apps/pilot` 既有 lint 债务阻断，不得宣称全仓 PR gate 已绿。
+- 2026-05-13 beta CI readiness 复核：`2.4.10-beta.22` 准备用于避开已存在的 `v2.4.10-beta.21` tag；Widget/CLI 最新修复与兼容性复核记录已合入，OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果延续有效，transport boundary retained raw definition 当前扫描上限为 `265`，typed migration candidate 保持 `0`；完整 `quality:pr` 仍被 `retired-ai-app` 既有 lint 债务阻断，不得宣称全仓 PR gate 已绿。
 - 文档治理不再使用脚本强校验；行为/接口/架构变化仍必须按 AGENTS.md 同步活跃入口文档。
 
 ## 2. 每个活跃 PRD 必须包含的章节（MUST）
@@ -52,12 +53,13 @@
 - runtime console / runtime boundary 统一迁移到 ESLint：CoreApp `main/preload/renderer` 新增裸 `console.*`、宽松 WebPreferences、裸 `ipcRenderer/ipcMain`、raw IPC event string、`window.touchChannel`、`window.$t/window.$i18n` 与旧 `/api/sync/*` 均视为质量回退。
 - 网络边界统一由 ESLint 承担：业务层禁止新增 direct `fetch/axios`，统一走 `@talex-touch/utils/network` 或明确注入的网络客户端。
 - 不再维护 compatibility registry / legacy allowlist / size allowlist；文件行数治理回到 code review 与普通 SRP 重构任务，发布质量入口以 `quality:pr` / `quality:release` 为准。
+- Widget production gate: packaged plugins must ship precompiled widget artifacts in `widgets/.compiled/` with `build.widgets` manifest metadata; packaged CoreApp must not rely on startup runtime widget compilation unless an explicit debug fallback is enabled.
 - CoreApp 硬切补充门禁：业务层 `window.$channel` 调用、legacy storage 旧协议（`storage:get/save/reload/save-sync/saveall`）与 legacy `sdkapi` 放行路径必须保持为 `0`；占位能力必须返回真实状态或显式 `unavailable + reason`，禁止固定假值“成功”。
 - CoreApp `2.4.11` 前置门禁：清册中的 `2.4.11` 兼容债务必须关闭或显式降权；Windows/macOS 回归为 release-blocking，Linux 仅作为 documented best-effort 与非阻塞 smoke。
 - Windows Everything 目标验收门禁：`windows:capability:verify --requireEverythingTargets` 必须同时复核基础 Everything 查询成功、目标 probe 命中、`matchCount` 为正，且至少一条 sample 文本包含目标关键词；禁止仅凭手工填写的 `found=true` 或不匹配样本通过。
 - Windows App Index 诊断验收门禁：`app-index:diagnostic:verify --requireQueryHit` 必须用 `stages.*.targetHit`、目标 `itemId`、`matchCount` 与 matches 重新证明 query hit；未运行 stage 不得携带命中或 matches，未命中 target 的 stage 不得携带 matches；input target、diagnosis target、manual suggested fields、app launch/icon/displayName 字段与 reindex path 必须指向同一个目标 App，成功 reindex 在存在 app 实体字段时必须对齐 app path/launchTarget/appIdentity/bundleId，UWP/Store 样本必须记录 `identityKind/bundleId/appIdentity/launchKind/launchTarget/displayNameSource/iconPresent`，Steam 样本必须记录 `bundleId=steam:<appid>` 与 `launchKind=protocol`，禁止只凭手工填写的 `matchedStages`、reusable caseId、输入名称或 reindex status 通过。
 - Windows common app launch 手工证据门禁：每个目标 App 的 Markdown 必须填写 observed display name、icon evidence、observed launch target、CoreBox hidden evidence、search query 与截图/录屏；布尔项全 true 但缺少这些 Evidence label 仍不得通过最终 acceptance。
-- Windows common app launch 结构化门禁：`--requireCommonAppLaunchDetails` 必须同时复核 manifest 中每个目标的 `searchQuery / observedDisplayName / iconEvidence / observedLaunchTarget / coreBoxHiddenEvidence` 非空；禁止仅靠布尔项或泛截图通过微信/Codex/Apple Music 等常见 App 启动验收。
+- Windows common app launch 结构化门禁：`--requireCommonAppLaunchDetails` 必须同时复核 manifest 中每个目标的 `searchQuery / observedDisplayName / iconEvidence / observedLaunchTarget / coreBoxHiddenEvidence` 非空；禁止仅靠布尔项或泛截图通过聊天应用/Codex/Apple Music 等常见 App 启动验收。
 - 复制 app path / 应用索引管理验收门禁：`windows-copied-app-path-index` 不得只依赖 app-index diagnostic caseId；运行时 `addAppByPath()` 必须把用户触发添加写成 `entrySource=manual / entryEnabled=1` 本地启动区条目；设置页应用索引管理必须复用 `settingsSdk.appIndex.*`，不得新增并行 transport event 或独立 DB 表；添加 `.exe/.lnk/.appref-ms`、UWP shell path/裸 AppID 或 Steam protocol 后必须无需重启即可 reindex/diagnose 并再次搜索命中；最终 Windows acceptance 必须启用 `--requireCopiedAppPathManualChecks`、`--requireCompletedManualEvidence` 与 app-index `--requireManagedEntry`，并归档复制源、normalized app path、add-to-local-launch-area action、本地启动区条目、App Index diagnostic evidence、reindex 后 search query、indexed search result 与 indexed result launch evidence；manifest 结构化字段也必须复核这些值非空；manual evidence Markdown 必须 checklist 全勾选且模板要求的 Evidence 关键字段全部为非占位实际证据值。
 - DivisionBox / 分时推荐手工证据门禁：`--requireCompletedManualEvidence` 下不得接受泛化 `Logs` 替代关键事实；DivisionBox detached widget 必须归档 observed/expected pluginId、detached URL 中的真实 plugin `source` 与 provider `providerSource`、`detachedPayload` itemId/query 与 no-fallback 日志摘录；`--requireDivisionBoxDetachedWidgetManualChecks` 还必须在 manifest 结构化字段中复核 observed session pluginId 与 URL `source` 等于真实 feature pluginId，且 `providerSource=plugin-features`；time-aware recommendation 必须归档 `timeSlot/dayOfWeek` cache key、早/午 top item/provider source/recommendation source、frequent comparison item/provider source/recommendation source 与 recommendation trace 摘录，`--requireTimeAwareRecommendationManualChecks` 还必须在 manifest 结构化字段中复核早/午 timeSlot 不同、dayOfWeek 合法、top recommendation 不同、早/午 recommendation source 为 `time-based` 且频率对照 source 为 `frequent`。
 - Windows 更新证据门禁：`update:diagnostic:verify --requireInstalledVersionMatchesTarget` 不得只接受 `installedVersion.matchesExpected=true`；必须同时复核 installed target 与 `downloadReadyVersion` / cached release tag 一致，且 installedVersion current/expected 不能是空白字符串，cached release channel 与 settings 一致，matching asset platform/arch/size 与 runtime target 一致，避免跨版本、空白版本或跨平台资产 evidence 假通过；`windows-auto-installer-handoff` evidence 必须带非空 `downloadTaskId` 证明来源是自动下载任务；manual evidence 必须归档 update diagnostic evidence、installer path/mode、UAC prompt、app exit、installer exit、installed version、app relaunch 与 failure rollback evidence；manifest 结构化字段也必须复核这些值非空；运行时自动 installer handoff 还必须同时满足自动下载任务标记、`autoInstallDownloadedUpdates=true` 与 Windows 平台，禁止绕过用户高级设置。
@@ -65,8 +67,11 @@
 - Windows 性能证据门禁：`search-trace-stats/v1` 必须通过 paired/session/sample/slow counter、slowRatio 与 percentile 单调性内部一致性复算，`clipboard-stress-summary/v1` 必须包含有效 clipboard 采样且 scheduler sample count 不得超过 count，scheduler delay 与 duration 指标不得倒挂；禁止仅靠手工填写 `gate.passed=true` 或阈值字段通过 acceptance。真机采证应优先使用 `windows:acceptance:template -- --writeCollectionPlan` 生成的 collection plan，确保 case evidence、capability evidence 采集命令、实际 evidence path verifier、性能采样、manual evidence 与最终 recommended gate 使用同一份 manifest 口径。
 - 2.4.10 Windows 发版门禁：当前版本不得只凭本地 unit test、macOS 代跑或手工口头确认放行；必须在 Windows 真机提交并通过最终 acceptance manifest 强门禁，至少包括 Windows required cases、common app launch、copied app path、update install、DivisionBox detached widget、time-aware recommendation、search trace `200` 样本、clipboard stress `120000ms` 压测和 Nexus Release Evidence 写入。缺少真实 Windows evidence、性能样本或 Release Evidence 写入时，结论只能是 blocked。
 - Nexus Provider / Scene 类 PRD 必须保持 Provider 与 Scene 解耦：新增供应商只进入 Provider registry，新增使用场景只进入 Scene，不允许新增孤立 provider model 或绕过 typed transport/domain SDK。
-- 2.5.0 AI 类 PRD 必须保持桌面入口收口边界：Stable 能力只承诺文本 + OCR；Workflow / Pilot 联动必须标为 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 必须标为 Experimental 或 2.5.x 后续，禁止作为 2.5.0 稳定承诺。
+- 2.5.0 AI 类 PRD 必须保持桌面入口收口边界：Stable 能力只承诺文本 + OCR；Workflow / AI 联动必须标为 Beta；Assistant、多模态生成编辑与 Nexus Scene runtime orchestration 必须标为 Experimental 或 2.5.x 后续，禁止作为 2.5.0 稳定承诺。
 - 假值治理门禁：生产 API / dashboard / runtime 不得默认返回 Mock CPU、固定磁盘/内存、mock 支付 URL、伪成功空结果；开发 mock 必须由显式环境变量或配置开关启用，关闭时返回明确错误码与 reason。
+- 兼容占位响应门禁：退役、豁免或未实现接口不得以 HTTP 2xx + 可消费业务 payload 冒充真实数据；必须使用明确 status、`unavailable + reason`、`exempted: true` 或 migration target，并保证前端不把占位内容当作真实业务结果。
+- 插件 secret storage 门禁：插件 provider 的 `apiKey`、`secretKey`、token、refresh token 等不得进入普通 plugin storage 文件；普通配置只保留 provider metadata，密钥必须进入 plugin secret capability、secure store 或等价加密引用。
+- 插件命令 capability 门禁：插件侧平台命令、PowerShell、AppleScript、workspace shell 等能力必须声明 platform、permission、command source、unsupported/degraded reason 与审计字段；高风险 shell 字符串优先替换为参数化 `execFile` 或 `safe-shell`。
 - Transport 统计门禁：文档和测试必须区分 raw send violation 与 retained raw event definition；新增符合 `namespace/module/action` 结构的事件必须使用 typed builder；当前三段 migration candidate 必须保持 `0`，下载迁移 push events 以 `DownloadEvents.migration.progress/result` 为 typed registry SoT。
 - CI/CD Action runtime 门禁：`.github/workflows` 中 JavaScript Actions 必须使用 Node 24-compatible major；保留项目业务 `node-version: 22.16.0`，禁止把 Actions runtime warning 迁移处理成业务 Node 版本升级。
 - SRP/size 收敛要求：超长模块后续通过 code review、targeted refactor 与最近路径测试控制回潮；`clipboard.ts` 已拆出 capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline，并降到 `1143` 行；Tuffex `TxFlipOverlay.vue` stack helper 切片已把组件降到 `1194` 行并清退 size exception；Nexus `provider-registry.vue` 已拆出 admin composable 并降到 `999` 行，`provider-registry.api.test.ts` 已拆出测试 helper 并降到 `951` 行；CoreApp Windows acceptance verifier 已拆出 command requirements、case/performance evidence spec 与 manifest test helper，`windows-acceptance-manifest-verifier.ts` 降到 `1136` 行，`windows-acceptance-manifest-verifier.test.ts` 降到 `1156` 行；`recommendation-engine.ts` 已拆出 `recommendation-utils.ts` 并降到 `1869` 行；`search-core.ts` 已拆出 `search-core-utils.ts` 并降到 `2475` 行；`app-provider.test.ts` 已拆出 `app-provider-test-harness.ts` 并降到 `1400` 行；`app-provider.ts` 已拆出 `app-provider-path-utils.ts` 与 `app-provider-source-scanner.ts` 并降到 `3305` 行，growth exception cap 收紧到 `3306`；`deepagent-engine.ts` 已拆出 `deepagent-input.ts` 并降到 `1791` 行，growth exception cap 收紧到 `1792`；`update-system.ts` 已拆出 `update-asset-utils.ts` 并降到 `1610` 行；`omni-panel/index.ts` 已拆出 `omni-panel-builtin-features.ts` 并降到 `1845` 行；`packages/intelligence-uikit/src/playground/App.vue` 已拆出 `usePlaygroundState.ts` 并降到 `919` 行；Nexus `useSignIn.ts` 已拆出 `sign-in-redirect-utils.ts` 并降到 `1538` 行，`assistant.post.ts` 已拆出 `requestAuditMeta.ts` 并降到 `1762` 行，`tuffIntelligenceLabService.ts` 已拆出 `tuffIntelligenceLabTools.ts` 并降到 `3408` 行，`telemetryStore.ts` 已拆出 `telemetrySanitizer.ts` 并降到 `1502` 行，`en.ts/zh.ts` 已拆出 legal shard 并低于 exception cap；当前 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`，后续治理聚焦剩余业务闭环与 Windows 真机 evidence。
@@ -74,7 +79,7 @@
 ### 3.2 可靠性约束
 - 关键路径需有显式错误处理与用户可见反馈。
 - 对异步流程必须定义超时与失败回退。
-- Pilot 路由链路必须具备可观测指标（至少含 `queue wait`、`TTFT`、`total duration`、`success/error`），并支持熔断恢复策略。
+- AI 路由链路必须具备可观测指标（至少含 `queue wait`、`TTFT`、`total duration`、`success/error`），并支持熔断恢复策略。
 - 启动高峰期涉及 SQLite 高频写入的链路，必须满足“单写者或物理分库隔离 + QoS 优先级 + 可降级策略（drop/backoff/latest-wins）”至少两项，禁止无上限重试灌队列。
 - 启动异步化改造验收必须至少采集 Electron ready → first window show、renderer script start → app mount、app mount → plugin list ready、all modules loaded → providers ready 四段耗时；Database aux migration、Search provider ready 与 renderer storage hydration 必须能区分 critical 与 background。
 
@@ -101,18 +106,18 @@
 
 ## 4. 项目质量审查优化计划（2026-05-12 复核）
 
-本节用于承接 `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md` 与 `docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md` 的审查结论，把跨平台兼容、占位/假实现、transport 收口、安全凭据与 SRP 拆分转成后续迭代的质量门禁。
+本节用于承接 `docs/plan-prd/report/cross-platform-compat-placeholder-audit-2026-05-10.md`、`docs/plan-prd/report/cross-platform-compat-placeholder-review-2026-05-12.md` 与 `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md` 的审查结论，把跨平台兼容、占位/假实现、transport 收口、安全凭据与 SRP 拆分转成后续迭代的质量门禁。
 
 ### 4.1 分阶段治理顺序
 
 | 阶段 | 目标 | 验收要求 |
 | --- | --- | --- |
 | Phase 0 | `2.4.10` 收口，只补 Windows 真机证据，不扩大兼容层 | 先生成 Windows acceptance collection plan，再完成 Windows App 索引、更新安装、DivisionBox detached widget、复制 app path、search trace `200` 样本、clipboard stress `120000ms` 与 Nexus Release Evidence 留证；macOS/Linux 不因本阶段降级或新增兼容分支 |
-| Phase 1 | `2.4.11` blocker 清零 | `compat-file=5` 退场评估、retained raw definition 高频路径迁移、CLI token storage 安全收口、插件命令能力统一 degraded/unsupported 诊断与 Linux best-effort 证据归档必须完成或显式降权 |
+| Phase 1 | `2.4.11` blocker 清零 | `compat-file=5` 退场评估、AI 兼容占位响应退场、retained raw definition 高频路径迁移、CLI token storage 安全收口、插件 provider secret storage、插件命令能力统一 degraded/unsupported 诊断与 Linux best-effort 证据归档必须完成或显式降权 |
 | Phase 2 | Transport / SDK 收口 | 区分生产 raw send violation 与 retained `defineRawEvent` definition；优先收口 CoreBox、terminal、auth、sync、opener 等高频/高敏路径 |
 | Phase 3 | SRP 结构拆分 | 优先拆分 `clipboard.ts`、`search-core.ts`、`plugin.ts/plugin-module`、`app-provider.ts`；每次拆分保持外部契约兼容并补最近路径测试 |
 
-切片执行状态（2026-05-13）：Phase 1 中 Pilot stat 假值、mock payment 默认成功与 `plugins/touch-image` localStorage 历史持久化已先行收口；当前 release blocker 收敛为 Windows/macOS 真机 evidence，`compat-file=5`、retained raw definition 高频路径、CLI token storage 与插件命令能力统一诊断保留为 `2.4.11` 治理余量。Phase 2 指标口径已在 transport boundary test 固化，当前三段 retained typed candidates 已迁移清零，retained raw definition 上限为 `265`；Phase 3 已完成 `clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 行为等价切片，并拆出 `recommendation-engine.ts` 纯 utility、`search-core.ts` 纯 helper、`app-provider.ts` path helper 与 source scanner facade、`deepagent-engine.ts` input builders、`update-system.ts` asset helper、`omni-panel/index.ts` builtin definitions、`app-provider.test.ts` harness 与 `intelligence-uikit` playground state；guard 已调整为重构期分层策略，历史 size debt 先报告，changed/release strict 继续防回潮。
+切片执行状态（2026-05-13）：Phase 1 中 AI stat 假值、mock payment 默认成功与 `plugins/touch-image` localStorage 历史持久化已先行收口；当前 release blocker 收敛为 Windows/macOS 真机 evidence，`compat-file=5`、AI 兼容占位成功响应、retained raw definition 高频路径、CLI token storage、插件 provider secret storage 与插件命令能力统一诊断保留为 `2.4.11` 治理余量。Phase 2 指标口径已在 transport boundary test 固化，当前三段 retained typed candidates 已迁移清零，retained raw definition 上限为 `265`；Phase 3 已完成 `clipboard.ts` capture freshness、history persistence、transport handlers、autopaste automation、image persistence、polling policy、native watcher、meta persistence、stage-B enrichment 与 capture pipeline 行为等价切片，并拆出 `recommendation-engine.ts` 纯 utility、`search-core.ts` 纯 helper、`app-provider.ts` path helper 与 source scanner facade、`deepagent-engine.ts` input builders、`update-system.ts` asset helper、`omni-panel/index.ts` builtin definitions、`app-provider.test.ts` harness 与 `intelligence-uikit` playground state；guard 已调整为重构期分层策略，历史 size debt 先报告，changed/release strict 继续防回潮。
 
 ### 4.2 审查门禁
 
@@ -133,6 +138,7 @@
 
 **Release-blocking：**
 - 生产 API、dashboard 或 runtime 默认返回假成功、固定资源数据、mock 支付 URL、空结果伪成功。
+- 兼容豁免、未实现或退役 API 返回 HTTP 2xx 且 payload 可被调用方当作真实业务数据消费。
 - 敏感信息或敏感元数据明文进入 renderer `localStorage`、业务 JSON、日志或同步 payload。
 - 新增 raw event 字符串分发、未登记兼容债、旧 `/api/sync/*` 新依赖、旧 storage protocol 新依赖。
 - Windows/macOS 主线验收缺少 release-blocking 证据，且无明确降权记录。
@@ -244,17 +250,17 @@
 - Gate D 收口证据：GitHub Actions `Build and Release` run `23091014958`（`workflow_dispatch + sync_tag=v2.4.7`）成功。
 - 历史豁免边界：`v2.4.7` 允许 `signature` 缺口豁免；`>=2.4.8` 必须恢复 `manifest + sha256 + signatureUrl` 严格门禁。
 
-### 7.5 Pilot × Intelligence（2026-03-07）
+### 7.5 AI × Intelligence（2026-03-07）
 
 **现状指标**
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
-| 新应用 | `apps/pilot`（Nuxt Node Server + Postgres/Redis） | 已创建并作为主路径运行 |
+| 新应用 | `retired-ai-app`（Nuxt Node Server + Postgres/Redis） | 已创建并作为主路径运行 |
 | Runtime 收口 | `packages/tuff-intelligence`（protocol/runtime/registry/policy/store） | 已落地 |
-| 流式 API | `POST /api/chat/sessions/:sessionId/stream`（2026-03-17 从 `/api/pilot/*` 硬切） | 已上线 |
+| 流式 API | `POST /api/chat/sessions/:sessionId/stream`（2026-03-17 从 `/api/aiapp/*` 硬切） | 已上线 |
 | 事件契约 | `assistant.delta/final`、`run.metrics`、`session.paused`、`error`、`done` | 已实现 |
 | 补播机制 | `fromSeq` trace replay + checkpoint | 已实现（基础版） |
-| 校验 | `apps/pilot` lint/typecheck/build | 已通过 |
+| 校验 | `retired-ai-app` lint/typecheck/build | 已通过 |
 
 **质量约束落地**
 - 长对话必须具备 pause/resume 语义，断线场景不得“吞消息”。
@@ -267,7 +273,7 @@
 | 项目 | 结果 | 结论 |
 | --- | --- | --- |
 | 统一入口 | `@talex-touch/utils/network`（request/file/guard） | 已落地 |
-| 覆盖范围 | `apps/core-app + apps/nexus + apps/pilot + packages + plugins` | 已收口 |
+| 覆盖范围 | `apps/core-app + apps/nexus + retired-ai-app + packages + plugins` | 已收口 |
 | 业务层 direct `fetch/axios` | 0（network 套件内部除外） | 已达标 |
 | root 门禁 | `pnpm run ESLint network-boundary rules`（全仓） | 已硬禁 |
 | ESLint 规则 | `no-restricted-imports(axios)` + `no-restricted-syntax(fetch)` | 已补齐关键 workspace |
@@ -322,7 +328,7 @@
 
 **质量约束落地**
 - 新增能力不得通过 legacy 分支、raw channel、旧 storage protocol 或旧 SDK bypass 承载。
-- `apps/core-app/scripts` 与 `apps/pilot/scripts` 必须纳入 legacy/compat 显式扫描；不得用 scope exemption 掩盖脚本债务。
+- `apps/core-app/scripts` 与 `retired-ai-app/scripts` 必须纳入 legacy/compat 显式扫描；不得用 scope exemption 掩盖脚本债务。
 - 数据迁移例外必须保持 one-shot / marker-gated / read-once，不得重新成为业务写入 SoT。
 - Windows/macOS 阻塞级回归必须在 `CHANGES + TODO` 留证；Linux 失败必须记录限制原因，但不阻塞 `2.4.11`。
 - `Nexus 设备授权风控` 保留实施文档，不得从历史记录中删除。
@@ -356,7 +362,7 @@
 | 首个落地切片 | CoreBox AI Ask `text.chat` + 剪贴板图片 `vision.ocr -> text.chat` | 已接入 |
 | Stable 能力 | 文本 + OCR、OmniPanel Writing Tools、Workflow `Use Model`、Review Queue | 已收窄 |
 | P0 模板 | 剪贴板整理、会议纪要/摘要、文本批处理 | 已列入 |
-| Beta 能力 | Tuff Intents / Action Manifest、Skills Pack、Background Automations、Pilot 高级 Chat / DeepAgent 联动 | 已定义 |
+| Beta 能力 | Tuff Intents / Action Manifest、Skills Pack、Background Automations、AI 高级 Chat / DeepAgent 联动 | 已定义 |
 | Experimental 能力 | Assistant、多 Agent 长任务面板、多模态生成编辑、Nexus Scene runtime orchestration | 已降级 |
 | 安全边界 | API Key / secret 使用 secure-store 或 `authRef`；审计不保存完整 prompt / response | 已固化 |
 
@@ -372,7 +378,7 @@
 - Stable 只承诺 `text.chat`、`text.translate`、`text.summarize`、`text.rewrite`、`code.explain`、`code.review`、`vision.ocr`；未完成 runtime adapter 的多模态能力不得宣传为稳定可用。
 - Nexus Provider / Scene 在 2.5.0 只作为架构约束，不作为稳定执行链路；Scene runtime 编排进入后续 2.5.x。
 
-### 7.11 Pilot 路由 V2（2026-03-17）
+### 7.11 AI 路由 V2（2026-03-17）
 
 **现状指标**
 | 项目 | 结果 | 结论 |

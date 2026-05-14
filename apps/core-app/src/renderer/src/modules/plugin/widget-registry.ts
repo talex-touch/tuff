@@ -3,6 +3,7 @@ import type {
   WidgetRegistrationPayload
 } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
+import { WIDGET_ALLOWED_PACKAGES } from '@talex-touch/utils/plugin/widget'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
@@ -16,6 +17,7 @@ import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import {
   cacheWidgetRuntimeSource,
   clearWidgetFailure,
@@ -25,6 +27,7 @@ import {
 
 export { getWidgetFailure, getWidgetRuntimeSnippet } from './widget-diagnostics'
 
+const widgetRegistryLog = createRendererLogger('WidgetRegistry')
 const injectedStyles = new Map<string, HTMLStyleElement>()
 const widgetSetupStatePatchLogCache = new Set<string>()
 const transport = useTuffTransport()
@@ -218,7 +221,7 @@ async function ensureLocalStorageLoaded(pluginName?: string): Promise<void> {
       deserializeStorageState(state, parsed)
     } catch (error) {
       if (isDev) {
-        console.warn('[WidgetRegistry] Failed to load widget storage', error)
+        widgetRegistryLog.warn('Failed to load widget storage', error)
       }
     } finally {
       state.loaded = true
@@ -299,7 +302,7 @@ function createStorageFacade(
     setItem(itemKey: string, value: string) {
       const nextValue = String(value)
       if (nextValue.length > WIDGET_STORAGE_ENTRY_MAX_BYTES) {
-        console.warn('[WidgetRegistry] Storage entry too large, ignoring setItem')
+        widgetRegistryLog.warn('Storage entry too large, ignoring setItem')
         return
       }
       const previousValue = store.get(itemKey)
@@ -312,7 +315,7 @@ function createStorageFacade(
           } else {
             store.set(itemKey, previousValue)
           }
-          console.warn('[WidgetRegistry] Storage quota exceeded, ignoring setItem')
+          widgetRegistryLog.warn('Storage quota exceeded, ignoring setItem')
           return
         }
       }
@@ -373,7 +376,7 @@ function createSandboxDocument(
         if (parsed) {
           const nextValue = parsed.value
           if (nextValue.length > WIDGET_STORAGE_ENTRY_MAX_BYTES) {
-            console.warn('[WidgetRegistry] Cookie entry too large, ignoring set')
+            widgetRegistryLog.warn('Cookie entry too large, ignoring set')
             return true
           }
           const previousValue = cookieStore.get(parsed.key)
@@ -385,7 +388,7 @@ function createSandboxDocument(
             } else {
               cookieStore.set(parsed.key, previousValue)
             }
-            console.warn('[WidgetRegistry] Storage quota exceeded, ignoring cookie set')
+            widgetRegistryLog.warn('Storage quota exceeded, ignoring cookie set')
             return true
           }
           scheduleLocalStorageFlush(pluginName)
@@ -582,16 +585,7 @@ function resolveWidgetSourceType(filePath?: string): string {
 }
 
 // List of allowed packages that can be used in widgets
-const ALLOWED_PACKAGES = [
-  'vue',
-  '@talex-touch/utils',
-  '@talex-touch/utils/plugin',
-  '@talex-touch/utils/plugin/sdk',
-  '@talex-touch/utils/core-box',
-  '@talex-touch/utils/transport',
-  '@talex-touch/utils/common',
-  '@talex-touch/utils/types'
-]
+const ALLOWED_PACKAGES: readonly string[] = WIDGET_ALLOWED_PACKAGES
 
 // Pre-loaded module cache using ES imports
 const preloadedModuleCache: Record<string, unknown> = {
@@ -935,7 +929,7 @@ function evaluateWidgetComponent(
       sandboxSelf
     )
   } catch (error) {
-    console.error('[WidgetRegistry] Widget execution failed:', error)
+    widgetRegistryLog.error('Widget execution failed:', error)
     throw error
   }
 
@@ -1017,7 +1011,7 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
       )
       devLog(`[WidgetRegistry] source type=${sourceType} file=${payload.filePath || '-'}`)
       if (!payload.styles) {
-        console.warn(`[WidgetRegistry] widget ${payload.widgetId} has empty styles`)
+        widgetRegistryLog.warn(`widget ${payload.widgetId} has empty styles`)
       }
     }
     const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
@@ -1035,7 +1029,7 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
       devLog(`[WidgetRegistry] registered widget ${payload.widgetId} (${componentName})`)
     }
   } catch (error) {
-    console.error('[WidgetRegistry] Widget registration failed', error)
+    widgetRegistryLog.error('Widget registration failed', error)
     throw error
   }
 }
@@ -1054,7 +1048,7 @@ async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<v
       )
       devLog(`[WidgetRegistry] source type=${sourceType} file=${payload.filePath || '-'}`)
       if (!payload.styles) {
-        console.warn(`[WidgetRegistry] widget ${payload.widgetId} has empty styles`)
+        widgetRegistryLog.warn(`widget ${payload.widgetId} has empty styles`)
       }
     }
     const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
@@ -1072,7 +1066,7 @@ async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<v
       devLog(`[WidgetRegistry] updated widget ${payload.widgetId} (${componentName})`)
     }
   } catch (error) {
-    console.error('[WidgetRegistry] Widget update failed', error)
+    widgetRegistryLog.error('Widget update failed', error)
     throw error
   }
 }
@@ -1091,7 +1085,7 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
       injectedStyles.delete(widgetId)
     }
   } catch (error) {
-    console.error('[WidgetRegistry] Widget unregister failed', error)
+    widgetRegistryLog.error('Widget unregister failed', error)
     throw error
   }
 }
@@ -1123,7 +1117,7 @@ function bindTransportHandlers(): boolean {
         // ignore cleanup errors during transport binding retry
       }
     })
-    console.warn('[WidgetRegistry] Transport not ready, will retry binding handlers', error)
+    widgetRegistryLog.warn('Transport not ready, will retry binding handlers', error)
     return false
   }
 }

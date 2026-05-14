@@ -2100,7 +2100,7 @@ export class SearchEngineCore
       {
         category: 'communication',
         keywords: [
-          'wechat',
+          'chatapp',
           'qq',
           'telegram',
           'slack',

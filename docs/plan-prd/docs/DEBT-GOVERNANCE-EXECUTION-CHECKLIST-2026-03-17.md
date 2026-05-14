@@ -2,7 +2,7 @@
 
 > 更新时间: 2026-05-11
 > 目标版本: `v2.4.11`（兼容债务清退门槛）
-> 适用范围: `core-app / nexus / pilot / packages / plugins`（主线）
+> 适用范围: `core-app / nexus / aiapp / packages / plugins`（主线）
 
 ---
 
@@ -13,7 +13,7 @@
 - `core-app-migration-exception`: `3` 条
 - `size-growth-exception`: `28` 条
 - Legacy/raw 边界：`legacy-keyword 0` / `raw-channel-send 0` / `legacy-transport-import 0` / `legacy-permission-import 0`
-- Retained raw definitions：测试扫描上限 `<=265`
+- Retained raw definitions：测试上限为 `265`
 - `size` 报告：`oversizedFiles=58`、`newOversizedFiles=5`、`grownOversizedFiles=15`
 
 ---
@@ -24,7 +24,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | A | `core-app` | remaining `compat-file 5` | 逐个确认迁移窗口后执行物理命名 hard-cut 或退场 | `COMPAT-REGISTRY-NAMING` | 进行中 | `pnpm compat:registry:guard` |
 | B | `core-app` | `clipboard.ts / search-core.ts / app-provider.ts` | 按 SRP 切片迁出 autopaste、路由/召回、provider source 责任 | size-growth tickets | 进行中 | `node "scripts/check-large-file-boundaries.mjs" --report` |
-| C | `packages-utils` | retained raw definitions `<=265` | 将符合 typed builder 结构的事件分批迁入 typed registry | transport boundary tests | 进行中 | `pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` |
+| C | `packages-utils` | retained raw definitions 测试上限 `265` | 将符合 typed builder 结构的事件分批迁入 typed registry | transport boundary tests | 进行中 | `pnpm -C "packages/utils" exec vitest run "__tests__/transport-event-boundary.test.ts"` |
 | D | `nexus` | `tuffIntelligenceLabService.ts / locales / authStore.ts` | 拆分 service、locale chunk 与 auth storage responsibility | size-growth tickets | 待开始 | `node "scripts/check-large-file-boundaries.mjs" --report` |
 | E | `docs` | 治理文档矩阵 | 每次清退同步 `CHANGES + TODO/README/Quality Baseline + registry` | docs governance | 持续 | `node "scripts/check-doc-governance.mjs" --strict true --json` |
 
@@ -44,13 +44,13 @@
 - `MigrationProgress.vue` 移除局部 raw event definition。
 - `retainedRawEventDefinitions` 当前上限为 `265`，typed migration candidate 保持 `0`。
 
-### 3.3 sdkapi 与 Pilot compat 文件命名 hard-cut
+### 3.3 sdkapi 与 AI compat 文件命名 hard-cut
 
 - `apps/core-app/src/main/modules/plugin/sdk-compat.ts` 重命名为 `sdkapi-hard-cut-gate.ts`。
 - `getPluginSdkCompatibilityGate()` / `PluginSdkCompatibilityGate` 重命名为 `getPluginSdkHardCutGate()` / `PluginSdkHardCutGate`。
-- `apps/pilot/server/utils/pilot-compat-aigc.ts` 重命名为 `pilot-aigc-service.ts`。
-- `apps/pilot/server/utils/pilot-compat-payment.ts` 重命名为 `pilot-payment-service.ts`。
-- `apps/pilot/server/utils/pilot-compat-seeds.ts` 重命名为 `pilot-system-seeds.ts`。
+- `retired-ai-app/server/utils/aiapp-compat-aigc.ts` 重命名为 `aiapp-aigc-service.ts`。
+- `retired-ai-app/server/utils/aiapp-compat-payment.ts` 重命名为 `aiapp-payment-service.ts`。
+- `retired-ai-app/server/utils/aiapp-compat-seeds.ts` 重命名为 `aiapp-system-seeds.ts`。
 - 对应 registry 4 条 `compat-file` 清退，当前 `compat-file=5`。
 
 ### 3.4 Tuffex FlipOverlay size exception 清退

@@ -236,7 +236,7 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
     generatedAt: new Date().toISOString(),
     platform: 'win32',
     verification: {
-      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"`
+      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"`
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
       const template = buildCaseTemplate(caseId, evidenceDir, {
@@ -272,9 +272,9 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
     },
     manualChecks: {
       commonAppLaunch: {
-        targets: ['WeChat', 'Codex', 'Apple Music'],
+        targets: ['ChatApp', 'Codex', 'Apple Music'],
         passedTargets: [],
-        checks: ['WeChat', 'Codex', 'Apple Music'].map((target) => ({
+        checks: ['ChatApp', 'Codex', 'Apple Music'].map((target) => ({
           target,
           searchQuery: target,
           searchHit: false,
@@ -796,7 +796,7 @@ function buildCollectionCommand(
 
   const command = [
     'pnpm -C "apps/core-app" run windows:capability:evidence --',
-    '--target WeChat',
+    '--target ChatApp',
     '--target Codex',
     '--target "Apple Music"',
     `--output "${evidencePath}"`

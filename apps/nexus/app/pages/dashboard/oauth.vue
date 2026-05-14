@@ -345,7 +345,7 @@ async function copySecret() {
             </p>
             <TuffInput
               v-model="formName"
-              :placeholder="t('dashboard.sections.oauth.form.namePlaceholder', 'e.g. Pilot Integration')"
+              :placeholder="t('dashboard.sections.oauth.form.namePlaceholder', 'e.g. OAuth Integration')"
               size="small"
             />
           </div>

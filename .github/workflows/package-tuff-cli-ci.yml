@@ -9,6 +9,7 @@ on:
       - 'packages/tuff-cli/**'
       - 'packages/tuff-cli-core/**'
       - 'packages/unplugin-export-plugin/**'
+      - 'packages/utils/**'
       - '.github/workflows/package-tuff-cli-ci.yml'
       - '.github/workflows/package-ci.yml'
   push:
@@ -19,6 +20,9 @@ on:
       - 'packages/tuff-cli/**'
       - 'packages/tuff-cli-core/**'
       - 'packages/unplugin-export-plugin/**'
+      - 'packages/utils/**'
+      - '.github/workflows/package-tuff-cli-ci.yml'
+      - '.github/workflows/package-ci.yml'
 
 jobs:
   core:

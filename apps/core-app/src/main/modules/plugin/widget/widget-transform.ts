@@ -28,6 +28,10 @@ export function classifyWidgetCompileError(error: unknown): string {
     return error.code
   }
 
+  if (isEsbuildServiceStoppedError(error)) {
+    return 'WIDGET_COMPILER_SERVICE_UNAVAILABLE'
+  }
+
   return isEsbuildBinaryError(error)
     ? 'WIDGET_COMPILER_BINARY_UNAVAILABLE'
     : 'WIDGET_COMPILE_FAILED'
@@ -50,6 +54,15 @@ export async function transformWidgetSource(
   try {
     return await esbuild.transform(input, options)
   } catch (error) {
+    if (isEsbuildServiceStoppedError(error)) {
+      esbuildModule = null
+      throw new WidgetCompilerError(
+        'WIDGET_COMPILER_SERVICE_UNAVAILABLE',
+        buildServiceUnavailableMessage(error),
+        error
+      )
+    }
+
     if (isEsbuildBinaryError(error)) {
       throw new WidgetCompilerError(
         'WIDGET_COMPILER_BINARY_UNAVAILABLE',
@@ -155,6 +168,16 @@ function isEsbuildBinaryError(error: unknown): boolean {
   return /\bspawn\s+(ENOTDIR|ENOENT|EACCES)\b/.test(message)
 }
 
+function isEsbuildServiceStoppedError(error: unknown): boolean {
+  const code = resolveErrorCode(error)
+  if (code === 'EPIPE') {
+    return true
+  }
+
+  const message = error instanceof Error ? error.message : String(error)
+  return /The service is no longer running|write EPIPE/i.test(message)
+}
+
 function resolveErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') {
     return undefined
@@ -167,4 +190,9 @@ function resolveErrorCode(error: unknown): string | undefined {
 function buildBinaryUnavailableMessage(error: unknown): string {
   const cause = error instanceof Error ? error.message : String(error)
   return `Widget compiler binary is unavailable. Ensure esbuild and its platform package are packaged outside app.asar. Cause: ${cause}`
+}
+
+function buildServiceUnavailableMessage(error: unknown): string {
+  const cause = error instanceof Error ? error.message : String(error)
+  return `Widget compiler service is unavailable. Runtime widget compilation can be retried in dev mode or avoided by packaged precompiled widgets. Cause: ${cause}`
 }

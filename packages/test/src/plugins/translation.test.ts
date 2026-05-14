@@ -117,6 +117,52 @@ describe('touch-translation shared helpers', () => {
     expect(translationTest.normalizeErrorMessage('无输入：')).toBe('无输入：请输入要翻译的文本')
   })
 
+  it('keeps provider secrets out of metadata and reads runtime secrets from plugin storage', async () => {
+    const secretGetCalls: string[] = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        plugin: {
+          feature: {
+            clearItems() {},
+            pushItems() {},
+          },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          secret: {
+            async get(key: string) {
+              secretGetCalls.push(key)
+              return key === 'providers.baidu.secretKey' ? 'secure-baidu-secret' : null
+            },
+          },
+          box: {
+            hide() {},
+          },
+        },
+      }),
+    )
+
+    expect(pluginModule.__test.stripProviderSecrets('baidu', {
+      appId: 'baidu-app',
+      secretKey: 'plain-secret',
+      apiUrl: 'https://example.test',
+    })).toEqual({
+      appId: 'baidu-app',
+      apiUrl: 'https://example.test',
+    })
+    await expect(pluginModule.__test.mergeProviderSecrets('baidu', {
+      appId: 'baidu-app',
+    })).resolves.toEqual({
+      appId: 'baidu-app',
+      secretKey: 'secure-baidu-secret',
+    })
+    expect(secretGetCalls).toEqual(['providers.baidu.secretKey'])
+  })
+
   it('keeps translate-panel widgets sandbox-compatible in canonical and bundled runtime copies', () => {
     ensureBundledRuntimeSynced()
 

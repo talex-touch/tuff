@@ -18,6 +18,7 @@ const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'quick-actions'
 const DYNAMIC_FEATURE_PREFIX = 'quick-action-'
+const SHELL_PERMISSION_ID = 'system.shell'
 const PERMISSION_REASON = '需要 system.shell 权限执行系统快捷动作'
 const COMMON_ACTION_IDS = ['restart', 'shutdown', 'lock-screen', 'mute-toggle', 'focus-settings']
 let dynamicFeaturesInitialized = false
@@ -58,6 +59,82 @@ function resolvePlatformFlags(platform = process.platform) {
     darwin: platform === 'darwin',
     linux: platform === 'linux',
   }
+}
+
+function isShellPlatformSupported(platform = process.platform) {
+  return platform === 'win32' || platform === 'darwin'
+}
+
+function resolveShellStatus(platform = process.platform) {
+  if (!isShellPlatformSupported(platform)) {
+    return {
+      status: 'unsupported',
+      reason: `platform:${platform}`,
+    }
+  }
+
+  if (!spawnShellCommand) {
+    return {
+      status: 'degraded',
+      reason: 'safe-shell-unavailable',
+    }
+  }
+
+  return {
+    status: 'available',
+  }
+}
+
+function resolveActionCommandKind(action) {
+  const command = normalizeText(action?.command).toLowerCase()
+  if (command.includes('powershell'))
+    return 'powershell'
+  return 'fixed-shell'
+}
+
+function buildShellCapability({
+  featureId,
+  actionId,
+  commandKind = 'fixed-shell',
+  requiresConfirmation = false,
+  requiresAdmin = false,
+  platform = process.platform,
+  status,
+  reason,
+} = {}) {
+  const resolved = status ? { status, reason } : resolveShellStatus(platform)
+  const capability = {
+    id: SHELL_PERMISSION_ID,
+    type: 'shell',
+    platform,
+    permission: SHELL_PERMISSION_ID,
+    status: resolved.status,
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId,
+      commandKind,
+      requiresConfirmation: Boolean(requiresConfirmation),
+      requiresAdmin: Boolean(requiresAdmin),
+    },
+  }
+
+  if (resolved.reason)
+    capability.reason = resolved.reason
+
+  return capability
+}
+
+function buildActionCapability(featureId, action, platform = process.platform) {
+  const confirmLevel = Number(action?.confirmLevel || 0)
+  return buildShellCapability({
+    featureId,
+    actionId: action?.id,
+    commandKind: resolveActionCommandKind(action),
+    requiresConfirmation: confirmLevel > 0,
+    requiresAdmin: confirmLevel >= 2,
+    platform,
+  })
 }
 
 async function ensurePermission(permissionId, reason) {
@@ -318,6 +395,9 @@ function buildDynamicFeatures(actions, platform = process.platform) {
           value: keywords,
         },
       ],
+      meta: {
+        capability: buildActionCapability(`${DYNAMIC_FEATURE_PREFIX}${action.id}`, action, platform),
+      },
     }
   })
 }
@@ -359,17 +439,21 @@ function registerDynamicFeatures(actions, platform = process.platform) {
   return addedCount
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function buildInfoItem({ id, featureId, title, subtitle, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(ICON)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      ...(capability ? { capability } : {}),
+    })
     .build()
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -381,6 +465,7 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       defaultAction: ACTION_ID,
       actionId,
       payload,
+      ...(capability ? { capability } : {}),
     })
     .build()
 }
@@ -407,7 +492,7 @@ async function runActionWithGuards(action) {
     }
   }
 
-  const hasPermission = await ensurePermission('system.shell', PERMISSION_REASON)
+  const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, PERMISSION_REASON)
   if (!hasPermission) {
     return {
       ok: false,
@@ -486,15 +571,40 @@ const pluginLifecycle = {
       return false
 
     try {
-      const hasPermission = await ensurePermission('system.shell', PERMISSION_REASON)
+      if (!isShellPlatformSupported(process.platform)) {
+        plugin.feature.clearItems()
+        plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-unsupported`,
+            featureId,
+            title: '当前平台暂不支持系统快捷动作',
+            subtitle: `platform:${process.platform}`,
+            capability: buildShellCapability({
+              featureId,
+              actionId: 'list-actions',
+              status: 'unsupported',
+              reason: `platform:${process.platform}`,
+            }),
+          }),
+        ])
+        return true
+      }
+
+      const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, PERMISSION_REASON)
       if (!hasPermission) {
         plugin.feature.clearItems()
         plugin.feature.pushItems([
           buildInfoItem({
             id: `${featureId}-no-permission`,
             featureId,
-            title: '缺少 system.shell 权限',
+            title: `缺少 ${SHELL_PERMISSION_ID} 权限`,
             subtitle: '授权后可执行锁屏、静音与系统设置动作',
+            capability: buildShellCapability({
+              featureId,
+              actionId: 'list-actions',
+              status: 'permission-missing',
+              reason: SHELL_PERMISSION_ID,
+            }),
           }),
         ])
         return true
@@ -514,6 +624,7 @@ const pluginLifecycle = {
             payload: {
               action,
             },
+            capability: buildActionCapability(featureId, action),
           }))
         })
       }
@@ -534,6 +645,7 @@ const pluginLifecycle = {
                 payload: {
                   action,
                 },
+                capability: buildActionCapability(featureId, action),
               }))
             })
         })
@@ -596,7 +708,9 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     buildDynamicFeatures,
+    buildShellCapability,
     confirmDangerAction,
+    isShellPlatformSupported,
     matchActions,
     resolveActionFromFeatureId,
     resolveCommonActions,
