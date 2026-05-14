@@ -4,10 +4,12 @@ import type {
   PluginInstallProgressEvent
 } from '@talex-touch/utils/plugin'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createNotificationSdk } from '@talex-touch/utils/transport/sdk/domains/notification'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { computed, reactive } from 'vue'
 import { useI18nText } from '~/modules/lang'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface InstallTaskState extends PluginInstallProgressEvent {
   updatedAt: number
@@ -25,6 +27,7 @@ const tasks = reactive(new Map<string, InstallTaskState>())
 const pluginIndex = reactive(new Map<string, string>())
 const sourceIndex = reactive(new Map<string, string>())
 const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const notifiedTaskStages = new Set<string>()
 
 /**
  * Generate a composite key for uniquely identifying a plugin across different sources.
@@ -33,6 +36,8 @@ const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>()
 export function getPluginCompositeKey(pluginId: string, providerId?: string): string {
   return providerId ? `${providerId}::${pluginId}` : pluginId
 }
+
+const installManagerLog = createRendererLogger('InstallManager')
 
 let initialized = false
 const transportDisposers: Array<() => void> = []
@@ -51,6 +56,47 @@ function scheduleCleanup(taskId: string): void {
     cleanupTimers.delete(taskId)
   }, 5000)
   cleanupTimers.set(taskId, timer)
+}
+
+function shouldUseSystemNotification(): boolean {
+  return document.hidden || !document.hasFocus()
+}
+
+async function notifyTerminalTask(event: PluginInstallProgressEvent): Promise<void> {
+  if (event.stage !== 'completed' && event.stage !== 'failed') return
+
+  const dedupeKey = `${event.taskId}:${event.stage}`
+  if (notifiedTaskStages.has(dedupeKey)) return
+  notifiedTaskStages.add(dedupeKey)
+
+  if (!shouldUseSystemNotification()) return
+
+  const t = getTranslator()
+  const transport = useTuffTransport()
+  const notificationSdk = createNotificationSdk(transport)
+  const name = event.pluginName || event.pluginId || 'Plugin'
+  const isSuccess = event.stage === 'completed'
+  const title = isSuccess
+    ? t('store.installation.successTitle')
+    : t('store.installation.failureTitle')
+  const message = isSuccess
+    ? t('store.installation.successMessage', { name })
+    : t('store.installation.failureMessage', {
+        name,
+        reason: event.error || event.message || 'INSTALL_FAILED'
+      })
+
+  try {
+    await notificationSdk.notify({
+      channel: 'system',
+      level: isSuccess ? 'success' : 'error',
+      title,
+      message,
+      dedupeKey
+    })
+  } catch (error) {
+    installManagerLog.warn('Failed to send install notification', error)
+  }
 }
 
 function updateTask(event: PluginInstallProgressEvent): void {
@@ -73,6 +119,7 @@ function updateTask(event: PluginInstallProgressEvent): void {
   }
 
   if (!ACTIVE_STAGES.has(event.stage)) {
+    void notifyTerminalTask(event)
     scheduleCleanup(event.taskId)
   }
 }
@@ -83,7 +130,7 @@ async function sendDecision(response: PluginInstallConfirmResponse): Promise<voi
     const pluginSdk = createPluginSdk(transport)
     await pluginSdk.sendInstallConfirmResponse(response)
   } catch (error) {
-    console.error('[InstallManager] Failed to send confirm response:', error)
+    installManagerLog.error('Failed to send confirm response', error)
   }
 }
 

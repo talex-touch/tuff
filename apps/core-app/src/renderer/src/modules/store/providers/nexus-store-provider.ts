@@ -217,7 +217,8 @@ export class NexusStoreProvider extends BaseStoreProvider {
       downloadUrl,
       install: {
         type: 'url',
-        url: downloadUrl
+        url: downloadUrl,
+        format: 'tpex'
       },
       providerId: this.definition.id,
       providerName: this.definition.name,
