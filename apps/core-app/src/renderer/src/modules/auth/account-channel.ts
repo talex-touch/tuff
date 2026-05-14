@@ -1,14 +1,16 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { AuthEvents } from '@talex-touch/utils/transport/events'
 import { resolveFingerprintHash } from './device-attest'
 
 const transport = useTuffTransport()
-const authGetFingerprintHashEvent = defineRawEvent<void, string | null>('auth:get-fingerprint-hash')
 
-transport.on(authGetFingerprintHashEvent, async () => {
+const handleFingerprintHashRequest = async () => {
   try {
     return await resolveFingerprintHash()
   } catch {
     return null
   }
-})
+}
+
+transport.on(AuthEvents.device.getFingerprintHash, handleFingerprintHashRequest)
+transport.on(AuthEvents.legacy.getFingerprintHash, handleFingerprintHashRequest)

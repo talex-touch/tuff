@@ -1,17 +1,14 @@
 import type { AuthState } from '@talex-touch/utils/renderer'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-
-const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
-const authLogoutEvent = defineRawEvent<void, { success: boolean }>('auth:logout')
+import { AuthEvents } from '@talex-touch/utils/transport/events'
 
 export async function isAuthenticated(): Promise<boolean> {
   const transport = useTuffTransport()
-  const state = (await transport.send(authGetStateEvent)) as AuthState
+  const state = (await transport.send(AuthEvents.session.getState)) as AuthState
   return Boolean(state?.isSignedIn)
 }
 
 export async function handleUnauthorized(): Promise<void> {
   const transport = useTuffTransport()
-  await transport.send(authLogoutEvent)
+  await transport.send(AuthEvents.session.logout)
 }

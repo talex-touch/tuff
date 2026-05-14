@@ -1,15 +1,10 @@
+import type {
+  NexusRequestPayload,
+  NexusResponsePayload
+} from '@talex-touch/utils/transport/events/auth'
 import type { StoreHttpRequestOptions, StoreHttpResponse } from '@talex-touch/utils/store'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-
-type NexusRequestPayload = {
-  url?: string
-  path?: string
-  method?: string
-  headers?: Record<string, string>
-  body?: string
-  context?: string
-}
+import { AuthEvents } from '@talex-touch/utils/transport/events'
 
 type NexusUploadFilePayload = {
   field: string
@@ -17,31 +12,6 @@ type NexusUploadFilePayload = {
   type?: string
   data: ArrayBuffer
 }
-
-type NexusUploadPayload = {
-  url?: string
-  path?: string
-  method?: string
-  headers?: Record<string, string>
-  fields?: Record<string, string>
-  files?: NexusUploadFilePayload[]
-  context?: string
-}
-
-type NexusResponsePayload = {
-  status: number
-  statusText: string
-  headers: Record<string, string>
-  url: string
-  body: string
-}
-
-const authNexusRequestEvent = defineRawEvent<NexusRequestPayload, NexusResponsePayload | null>(
-  'auth:nexus-request'
-)
-const authNexusUploadEvent = defineRawEvent<NexusUploadPayload, NexusResponsePayload | null>(
-  'auth:nexus-upload'
-)
 
 export interface NexusAuthResponse {
   ok: boolean
@@ -88,7 +58,7 @@ export async function fetchNexusWithAuth(
     body: typeof init.body === 'string' ? init.body : undefined,
     context
   }
-  const response = await transport.send(authNexusRequestEvent, payload)
+  const response = await transport.send(AuthEvents.nexus.request, payload)
   if (!response) {
     return null
   }
@@ -132,7 +102,7 @@ export async function uploadNexusWithAuth(
     }
   }
 
-  const response = await transport.send(authNexusUploadEvent, {
+  const response = await transport.send(AuthEvents.nexus.upload, {
     path,
     method,
     fields,
@@ -163,7 +133,7 @@ export async function requestNexusWithAuth<T>(
     }
   }
 
-  const response = await transport.send(authNexusRequestEvent, {
+  const response = await transport.send(AuthEvents.nexus.request, {
     url,
     method: options.method,
     headers,

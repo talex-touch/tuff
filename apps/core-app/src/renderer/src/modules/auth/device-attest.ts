@@ -1,7 +1,6 @@
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AuthEvents } from '@talex-touch/utils/transport/events'
 
-const authAttestEvent = defineRawEvent<void, { success: boolean }>('auth:attest-device')
 const FINGERPRINT_HASH_VERSION = 'fp_v1'
 
 let fingerprintHashPromise: Promise<string | null> | null = null
@@ -56,5 +55,5 @@ export async function resolveFingerprintHash(): Promise<string | null> {
 
 export async function attestCurrentDevice(): Promise<void> {
   const transport = useTuffTransport()
-  await transport.send(authAttestEvent)
+  await transport.send(AuthEvents.device.attest)
 }

@@ -463,6 +463,7 @@ import type {
   TransportPortUpgradeRequest,
   TransportPortUpgradeResponse,
 } from "./types/transport";
+import { AccountEvents, AuthEvents } from "./auth";
 import { SyncEvents } from "./sync";
 import { TerminalEvents } from "./terminal";
 import { OpenerEvents } from "./opener";
@@ -2688,6 +2689,8 @@ export const TuffEvents = {
   permission: PermissionEvents,
   platform: PlatformEvents,
   agents: AgentsEvents,
+  auth: AuthEvents,
+  account: AccountEvents,
   transport: TransportEvents,
   sentry: SentryEvents,
   sync: SyncEvents,
@@ -2701,4 +2704,4 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AppEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };
+export { AccountEvents, AppEvents, AuthEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };

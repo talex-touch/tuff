@@ -2,8 +2,7 @@ import type { AuthState, AuthUser, LoginOptions, LoginResult } from '@talex-touc
 import type { AppContext } from 'vue'
 import { useAuthState, useCurrentUser } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { SentryEvents } from '@talex-touch/utils/transport/events'
+import { AuthEvents, SentryEvents } from '@talex-touch/utils/transport/events'
 import {
   computed,
   createVNode,
@@ -29,28 +28,6 @@ let isInitialized = false
 let activeConsumers = 0
 
 const transport = useTuffTransport()
-const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
-const authLoginEvent = defineRawEvent<{ mode?: 'sign-in' | 'sign-up' }, { initiated: boolean }>(
-  'auth:login'
-)
-const authLogoutEvent = defineRawEvent<void, { success: boolean }>('auth:logout')
-const authUpdateProfileEvent = defineRawEvent<
-  { displayName?: string; bio?: string },
-  AuthUser | null
->('auth:update-profile')
-const authUpdateAvatarEvent = defineRawEvent<{ dataUrl: string }, AuthUser | null>(
-  'auth:update-avatar'
-)
-const authStateChangedEvent = defineRawEvent<AuthState, void>('auth:state-changed')
-const authManualTokenEvent = defineRawEvent<
-  { token: string; appToken?: string },
-  { success: boolean }
->('auth:manual-token')
-const authRequestStepUpEvent = defineRawEvent<void, { initiated: boolean }>('auth:request-stepup')
-const authGetStepUpTokenEvent = defineRawEvent<void, string | null>('auth:get-stepup-token')
-const authClearStepUpTokenEvent = defineRawEvent<void, { success: boolean }>(
-  'auth:clear-stepup-token'
-)
 const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const BROWSER_LOGIN_CALLBACK_GRACE_MS = 5000
 const FOCUS_PROMPT_RECHECK_DELAY_MS = 400
@@ -74,11 +51,11 @@ const authLoadingState = reactive({
 })
 
 async function clearStepUpToken(): Promise<void> {
-  await transport.send(authClearStepUpTokenEvent)
+  await transport.send(AuthEvents.stepUp.clearToken)
 }
 
 async function getStepUpToken(): Promise<string | null> {
-  return (await transport.send(authGetStepUpTokenEvent)) as string | null
+  return (await transport.send(AuthEvents.stepUp.getToken)) as string | null
 }
 
 function isStepUpRequiredError(error: unknown): boolean {
@@ -311,7 +288,7 @@ async function updateUserProfile(payload: {
     return authState.user
   }
 
-  const nextUser = (await transport.send(authUpdateProfileEvent, {
+  const nextUser = (await transport.send(AuthEvents.profile.update, {
     displayName: payload.displayName,
     bio: payload.bio
   })) as AuthUser | null
@@ -332,7 +309,7 @@ async function fileToDataUrl(file: File): Promise<string> {
 
 async function updateUserAvatar(file: File): Promise<AuthUser | null> {
   const dataUrl = await fileToDataUrl(file)
-  const nextUser = (await transport.send(authUpdateAvatarEvent, {
+  const nextUser = (await transport.send(AuthEvents.profile.updateAvatar, {
     dataUrl
   })) as AuthUser | null
   if (nextUser) {
@@ -346,7 +323,7 @@ async function openLoginSettings(): Promise<boolean> {
 }
 
 async function requestStepUp(): Promise<void> {
-  await transport.send(authRequestStepUpEvent)
+  await transport.send(AuthEvents.stepUp.request)
   toast.info('请在浏览器中完成二次验证')
 }
 
@@ -362,7 +339,7 @@ async function initializeAuth() {
   if (isInitialized) return
 
   try {
-    const state = (await transport.send(authGetStateEvent)) as AuthState
+    const state = (await transport.send(AuthEvents.session.getState)) as AuthState
     if (state) {
       applyAuthState(state)
     } else {
@@ -398,7 +375,7 @@ async function signUp(): Promise<void> {
 async function signOut(): Promise<void> {
   authLoadingState.isSigningOut = true
   try {
-    await transport.send(authLogoutEvent)
+    await transport.send(AuthEvents.session.logout)
   } finally {
     authLoadingState.isSigningOut = false
   }
@@ -483,7 +460,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       return
     }
 
-    const result = (await transport.send(authManualTokenEvent, {
+    const result = (await transport.send(AuthEvents.token.manual, {
       token: resolvedToken,
       appToken
     })) as { success?: boolean } | null
@@ -513,7 +490,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
 
 function setupAuthStateListener(): void {
   if (authStateCleanup) return
-  authStateCleanup = transport.on(authStateChangedEvent, (payload) => {
+  authStateCleanup = transport.on(AuthEvents.session.stateChanged, (payload) => {
     if (!payload) {
       return
     }
@@ -557,7 +534,7 @@ function cleanupAuthStateListener(): void {
 }
 
 async function openBrowserLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
-  await transport.send(authLoginEvent, { mode })
+  await transport.send(AuthEvents.session.login, { mode })
 }
 
 function createBrowserLoginTimeout(resolve: (result: LoginResult) => void): NodeJS.Timeout {

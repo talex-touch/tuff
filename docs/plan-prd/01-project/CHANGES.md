@@ -60,6 +60,26 @@
   - `transport-domain-sdks.test.ts` 固定 opener canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `259` 收紧到 `256`，`typedCandidates` 保持 `0`。
   - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 30 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
 
+### refactor(transport): migrate auth retained event aliases
+
+- `packages/utils/transport/events/auth.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/account/account-sdk.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `packages/utils/__tests__/transport-event-boundary.test.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/modules/auth/device-attest.ts`
+- `apps/core-app/src/renderer/src/modules/auth/account-channel.ts`
+- `apps/core-app/src/renderer/src/modules/store/auth-token-service.ts`
+- `apps/core-app/src/renderer/src/modules/store/nexus-auth-client.ts`
+- `docs/plan-prd/TODO.md`
+  - 新增 shared `AuthEvents` / `AccountEvents` canonical typed events，对应 session/profile/device/nexus/token/step-up 与 account auth/device/sync；保留 `legacy` aliases 承载 `auth:*` 与 `account:*` retained wire names。
+  - `AuthModule` main handler 同时监听 canonical 与 legacy alias；`auth state changed` 在兼容窗口内同时广播 canonical 与 legacy，renderer auth/Nexus 代理调用点改发 canonical event。
+  - `accountSDK` 改向 canonical account wire name，main 侧仍保留 legacy listener 兼容旧端。
+  - `transport-domain-sdks.test.ts` 固定 auth/account canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `256` 收紧到 `241`，`typedCandidates` 保持 `0`。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 31 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
+
 ### feat(core-app): proxy authenticated Nexus uploads
 
 - `apps/core-app/src/main/modules/auth/index.ts`

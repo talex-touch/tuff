@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   AgentsEvents,
   AppEvents,
+  AccountEvents,
+  AuthEvents,
   ClipboardEvents,
   NativeEvents,
   OpenerEvents,
@@ -202,6 +204,52 @@ describe('transport domain sdk mappings', () => {
     )
     expect(OpenerEvents.legacy.dropPlugin.toEventName()).toBe('drop:plugin')
     expect(OpenerEvents.legacy.resolveApp.toEventName()).toBe('openers:resolve')
+  })
+
+  it('auth and account events expose canonical names and retained legacy aliases', () => {
+    expect(AuthEvents.session.getState.toEventName()).toBe(
+      'auth:session:get-state',
+    )
+    expect(AuthEvents.session.getState).toMatchObject({
+      namespace: 'auth',
+      module: 'session',
+      action: 'get-state',
+    })
+    expect(AuthEvents.profile.update.toEventName()).toBe(
+      'auth:profile:update',
+    )
+    expect(AuthEvents.device.getFingerprintHash.toEventName()).toBe(
+      'auth:device:get-fingerprint-hash',
+    )
+    expect(AuthEvents.nexus.upload.toEventName()).toBe('auth:nexus:upload')
+    expect(AuthEvents.stepUp.getToken.toEventName()).toBe(
+      'auth:step-up:get-token',
+    )
+    expect(AuthEvents.legacy.getState.toEventName()).toBe('auth:get-state')
+    expect(AuthEvents.legacy.nexusUpload.toEventName()).toBe(
+      'auth:nexus-upload',
+    )
+    expect(AuthEvents.legacy.getFingerprintHash.toEventName()).toBe(
+      'auth:get-fingerprint-hash',
+    )
+
+    expect(AccountEvents.auth.getToken.toEventName()).toBe(
+      'account:auth:get-token',
+    )
+    expect(AccountEvents.sync.recordActivity.toEventName()).toBe(
+      'account:sync:record-activity',
+    )
+    expect(AccountEvents.sync.recordActivity).toMatchObject({
+      namespace: 'account',
+      module: 'sync',
+      action: 'record-activity',
+    })
+    expect(AccountEvents.legacy.getAuthToken.toEventName()).toBe(
+      'account:get-auth-token',
+    )
+    expect(AccountEvents.legacy.recordSyncActivity.toEventName()).toBe(
+      'account:record-sync-activity',
+    )
   })
 
   it('storage sdk maps app storage operations to typed storage events', async () => {

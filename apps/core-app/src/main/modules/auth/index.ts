@@ -2,12 +2,23 @@ import type { AuthState, AuthUser } from '@talex-touch/utils/auth'
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { NetworkMethod } from '@talex-touch/utils/network'
+import type {
+  AuthAvatarUpdateRequest,
+  AuthLoginRequest,
+  AuthManualTokenRequest,
+  AuthProfileUpdateRequest,
+  NexusRequestPayload,
+  NexusResponsePayload,
+  NexusUploadFilePayload,
+  NexusUploadPayload,
+  AccountRecordSyncActivityRequest
+} from '@talex-touch/utils/transport/events/auth'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { AccountEvents, AuthEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { randomUUID, createHash } from 'node:crypto'
 import os from 'node:os'
@@ -36,40 +47,6 @@ const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 
 type AuthStateListener = (state: AuthState) => void
 
-type NexusRequestPayload = {
-  url?: string
-  path?: string
-  method?: string
-  headers?: Record<string, string>
-  body?: string
-  context?: string
-}
-
-type NexusUploadFilePayload = {
-  field: string
-  name: string
-  type?: string
-  data: ArrayBuffer | Uint8Array | number[]
-}
-
-type NexusUploadPayload = {
-  url?: string
-  path?: string
-  method?: string
-  headers?: Record<string, string>
-  fields?: Record<string, string>
-  files?: NexusUploadFilePayload[]
-  context?: string
-}
-
-type NexusResponsePayload = {
-  status: number
-  statusText: string
-  headers: Record<string, string>
-  url: string
-  body: string
-}
-
 const authState: AuthState = {
   isLoaded: false,
   isSignedIn: false,
@@ -88,41 +65,22 @@ let authUseSecureStorage = false
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
-const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
-const authLoginEvent = defineRawEvent<{ mode?: 'sign-in' | 'sign-up' }, { initiated: boolean }>(
-  'auth:login'
-)
-const authLogoutEvent = defineRawEvent<void, { success: boolean }>('auth:logout')
-const authUpdateProfileEvent = defineRawEvent<
-  { displayName?: string; bio?: string },
-  AuthUser | null
->('auth:update-profile')
-const authUpdateAvatarEvent = defineRawEvent<{ dataUrl: string }, AuthUser | null>(
-  'auth:update-avatar'
-)
-const authAttestDeviceEvent = defineRawEvent<void, { success: boolean }>('auth:attest-device')
-const authNexusRequestEvent = defineRawEvent<NexusRequestPayload, NexusResponsePayload | null>(
-  'auth:nexus-request'
-)
-const authNexusUploadEvent = defineRawEvent<NexusUploadPayload, NexusResponsePayload | null>(
-  'auth:nexus-upload'
-)
-const authStateChangedEvent = defineRawEvent<AuthState, void>('auth:state-changed')
-const authManualTokenEvent = defineRawEvent<
-  { token: string; appToken?: string },
-  { success: boolean }
->('auth:manual-token')
-const authRequestStepUpEvent = defineRawEvent<void, { initiated: boolean }>('auth:request-stepup')
-const authGetStepUpTokenEvent = defineRawEvent<void, string | null>('auth:get-stepup-token')
-const authClearStepUpTokenEvent = defineRawEvent<void, { success: boolean }>(
-  'auth:clear-stepup-token'
-)
-const accountGetAuthTokenEvent = defineRawEvent<void, string | null>('account:get-auth-token')
-const accountGetDeviceIdEvent = defineRawEvent<void, string | null>('account:get-device-id')
-const accountGetSyncEnabledEvent = defineRawEvent<void, boolean>('account:get-sync-enabled')
-const accountRecordSyncActivityEvent = defineRawEvent<{ kind?: string }, boolean>(
-  'account:record-sync-activity'
-)
+
+type AuthEventDefinition<TPayload, TResult> = Parameters<ITuffTransportMain['on']>[0] & {
+  _request: TPayload
+  _response: TResult
+}
+
+function registerAuthHandler<TPayload, TResult>(
+  primaryEvent: AuthEventDefinition<TPayload, TResult>,
+  legacyEvent: AuthEventDefinition<TPayload, TResult>,
+  handler: (payload: TPayload) => TResult | Promise<TResult>
+): Array<() => void> {
+  if (!transport) {
+    return []
+  }
+  return [transport.on(primaryEvent, handler), transport.on(legacyEvent, handler)]
+}
 
 function cloneAuthState(): AuthState {
   return {
@@ -183,7 +141,8 @@ function notifyAuthStateChanged(): void {
     }
   }
   if (transport) {
-    transport.broadcast(authStateChangedEvent, snapshot)
+    transport.broadcast(AuthEvents.session.stateChanged, snapshot)
+    transport.broadcast(AuthEvents.legacy.stateChanged, snapshot)
   }
 }
 
@@ -837,7 +796,9 @@ async function resolveFingerprintHash(): Promise<string> {
   if (!requestRendererValue) {
     return ''
   }
-  const hash = await requestRendererValue<string>('auth:get-fingerprint-hash')
+  const hash = await requestRendererValue<string>(
+    AuthEvents.device.getFingerprintHash.toEventName()
+  )
   return typeof hash === 'string' ? hash : ''
 }
 
@@ -1035,78 +996,132 @@ export class AuthModule extends BaseModule<TalexEvents> {
     }
 
     this.transportDisposers.push(
-      transport.on(authGetStateEvent, async () => cloneAuthState()),
-      transport.on(authLoginEvent, async (payload) => {
-        const mode = payload?.mode === 'sign-up' ? 'sign-up' : 'sign-in'
-        await openLoginPage(mode)
-        return { initiated: true }
-      }),
-      transport.on(authLogoutEvent, async () => {
+      ...registerAuthHandler(AuthEvents.session.getState, AuthEvents.legacy.getState, async () =>
+        cloneAuthState()
+      ),
+      ...registerAuthHandler(
+        AuthEvents.session.login,
+        AuthEvents.legacy.login,
+        async (payload: AuthLoginRequest) => {
+          const mode = payload?.mode === 'sign-up' ? 'sign-up' : 'sign-in'
+          await openLoginPage(mode)
+          return { initiated: true }
+        }
+      ),
+      ...registerAuthHandler(AuthEvents.session.logout, AuthEvents.legacy.logout, async () => {
         await clearAuthToken()
         updateAuthState(null)
         return { success: true }
       }),
-      transport.on(authUpdateProfileEvent, async (payload) => {
-        const token = authToken
-        if (!token) {
-          return null
+      ...registerAuthHandler(
+        AuthEvents.profile.update,
+        AuthEvents.legacy.updateProfile,
+        async (payload: AuthProfileUpdateRequest) => {
+          const token = authToken
+          if (!token) {
+            return null
+          }
+          const nextUser = await patchRemoteUserProfile(token, {
+            name: payload?.displayName ?? null,
+            bio: payload?.bio ?? null
+          })
+          updateAuthState(nextUser, authState.sessionId)
+          return nextUser
         }
-        const nextUser = await patchRemoteUserProfile(token, {
-          name: payload?.displayName ?? null,
-          bio: payload?.bio ?? null
-        })
-        updateAuthState(nextUser, authState.sessionId)
-        return nextUser
-      }),
-      transport.on(authUpdateAvatarEvent, async (payload) => {
-        const token = authToken
-        if (!token) {
-          return null
+      ),
+      ...registerAuthHandler(
+        AuthEvents.profile.updateAvatar,
+        AuthEvents.legacy.updateAvatar,
+        async (payload: AuthAvatarUpdateRequest) => {
+          const token = authToken
+          if (!token) {
+            return null
+          }
+          const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl : ''
+          if (!dataUrl) {
+            return null
+          }
+          const nextUser = await patchRemoteUserProfile(token, { image: dataUrl })
+          updateAuthState(nextUser, authState.sessionId)
+          return nextUser
         }
-        const dataUrl = typeof payload?.dataUrl === 'string' ? payload.dataUrl : ''
-        if (!dataUrl) {
-          return null
-        }
-        const nextUser = await patchRemoteUserProfile(token, { image: dataUrl })
-        updateAuthState(nextUser, authState.sessionId)
-        return nextUser
-      }),
-      transport.on(authAttestDeviceEvent, async () => {
+      ),
+      ...registerAuthHandler(AuthEvents.device.attest, AuthEvents.legacy.attestDevice, async () => {
         const success = await attestCurrentDevice()
         return { success }
       }),
-      transport.on(authNexusRequestEvent, async (payload) => performNexusRequest(payload)),
-      transport.on(authNexusUploadEvent, async (payload) => performNexusUpload(payload)),
-      transport.on(authManualTokenEvent, async (payload) => {
-        const token =
-          typeof payload?.appToken === 'string' && payload.appToken.trim()
-            ? payload.appToken
-            : payload?.token
-        if (!token) {
-          return { success: false }
+      ...registerAuthHandler(
+        AuthEvents.nexus.request,
+        AuthEvents.legacy.nexusRequest,
+        async (payload) => performNexusRequest(payload)
+      ),
+      ...registerAuthHandler(
+        AuthEvents.nexus.upload,
+        AuthEvents.legacy.nexusUpload,
+        async (payload) => performNexusUpload(payload)
+      ),
+      ...registerAuthHandler(
+        AuthEvents.token.manual,
+        AuthEvents.legacy.manualToken,
+        async (payload: AuthManualTokenRequest) => {
+          const token =
+            typeof payload?.appToken === 'string' && payload.appToken.trim()
+              ? payload.appToken
+              : payload?.token
+          if (!token) {
+            return { success: false }
+          }
+          await handleExternalAuthCallback(token, payload?.appToken)
+          return { success: true }
         }
-        await handleExternalAuthCallback(token, payload?.appToken)
-        return { success: true }
-      }),
-      transport.on(authRequestStepUpEvent, async () => {
-        await requestStepUp()
-        return { initiated: true }
-      }),
-      transport.on(authGetStepUpTokenEvent, async () => getStepUpToken()),
-      transport.on(authClearStepUpTokenEvent, async () => {
-        clearStepUpToken()
-        return { success: true }
-      }),
-      transport.on(accountGetAuthTokenEvent, async () => authToken),
-      transport.on(accountGetDeviceIdEvent, async () => getDeviceId()),
-      transport.on(accountGetSyncEnabledEvent, async () => getSyncEnabled()),
-      transport.on(accountRecordSyncActivityEvent, async (payload) => {
-        const kind = payload?.kind === 'pull' ? 'pull' : payload?.kind === 'push' ? 'push' : ''
-        if (!kind) {
-          return false
+      ),
+      ...registerAuthHandler(
+        AuthEvents.stepUp.request,
+        AuthEvents.legacy.requestStepUp,
+        async () => {
+          await requestStepUp()
+          return { initiated: true }
         }
-        return recordSyncActivity(kind)
-      })
+      ),
+      ...registerAuthHandler(
+        AuthEvents.stepUp.getToken,
+        AuthEvents.legacy.getStepUpToken,
+        async () => getStepUpToken()
+      ),
+      ...registerAuthHandler(
+        AuthEvents.stepUp.clearToken,
+        AuthEvents.legacy.clearStepUpToken,
+        async () => {
+          clearStepUpToken()
+          return { success: true }
+        }
+      ),
+      ...registerAuthHandler(
+        AccountEvents.auth.getToken,
+        AccountEvents.legacy.getAuthToken,
+        async () => authToken
+      ),
+      ...registerAuthHandler(
+        AccountEvents.device.getId,
+        AccountEvents.legacy.getDeviceId,
+        async () => getDeviceId()
+      ),
+      ...registerAuthHandler(
+        AccountEvents.sync.getEnabled,
+        AccountEvents.legacy.getSyncEnabled,
+        async () => getSyncEnabled()
+      ),
+      ...registerAuthHandler(
+        AccountEvents.sync.recordActivity,
+        AccountEvents.legacy.recordSyncActivity,
+        async (payload: AccountRecordSyncActivityRequest) => {
+          const kind = payload?.kind === 'pull' ? 'pull' : payload?.kind === 'push' ? 'push' : ''
+          if (!kind) {
+            return false
+          }
+          return recordSyncActivity(kind)
+        }
+      )
     )
 
     if (!this.appSettingUnsubscribe) {

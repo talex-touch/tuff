@@ -20,6 +20,7 @@ import {
   TeamRole,
   VerificationStatus,
 } from './types'
+import { AccountEvents } from '../transport/events'
 
 /**
  * Default plan quotas
@@ -207,7 +208,7 @@ export class AccountSDK {
       return cached
 
     try {
-      const token = await this.send<string | null>('account:get-auth-token')
+      const token = await this.send<string | null>(AccountEvents.auth.getToken.toEventName())
       if (token) {
         this.setCache('authToken', token)
       }
@@ -227,7 +228,7 @@ export class AccountSDK {
       return cached
 
     try {
-      const deviceId = await this.send<string | null>('account:get-device-id')
+      const deviceId = await this.send<string | null>(AccountEvents.device.getId.toEventName())
       if (deviceId) {
         this.setCache('deviceId', deviceId)
       }
@@ -244,7 +245,7 @@ export class AccountSDK {
    */
   async getSyncEnabled(): Promise<boolean> {
     try {
-      const enabled = await this.send<boolean | null>('account:get-sync-enabled')
+      const enabled = await this.send<boolean | null>(AccountEvents.sync.getEnabled.toEventName())
       return typeof enabled === 'boolean' ? enabled : true
     }
     catch {
@@ -257,7 +258,7 @@ export class AccountSDK {
    */
   async recordSyncActivity(kind: 'push' | 'pull'): Promise<void> {
     try {
-      await this.send('account:record-sync-activity', { kind })
+      await this.send(AccountEvents.sync.recordActivity.toEventName(), { kind })
     }
     catch {
       // ignore, best-effort telemetry
