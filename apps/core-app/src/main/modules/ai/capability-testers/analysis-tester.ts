@@ -11,7 +11,7 @@ export class IntentDetectTester extends BaseCapabilityTester {
   readonly capabilityType = 'intent-detect'
 
   async generateTestPayload(input: CapabilityTestPayload): Promise<unknown> {
-    const text = input.userInput || '帮我打开微信'
+    const text = input.userInput || '帮我打开聊天应用'
     return {
       text,
       possibleIntents: ['open_app', 'search', 'calculate', 'translate', 'unknown']

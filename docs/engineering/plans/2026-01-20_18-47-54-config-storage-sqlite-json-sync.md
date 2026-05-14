@@ -20,7 +20,7 @@ Execution Plan
 5. Draft a migration plan with read-fallback, one-time import, and rollback strategy for each candidate item.
 6. Update the permission-center PRD and TODO statuses to reflect current completion and storage reality; list remaining Phase 5 gaps.
 7. Create a consolidated progress document listing related PRDs, scope, implementation steps, and current status.
-8. Validate the plan with a small pilot migration (low-risk config) and define test/verification gates.
+8. Validate the plan with a small aiapp migration (low-risk config) and define test/verification gates.
 
 Risks and Notes
 - Data migration errors or silent data loss if fallback is incomplete.

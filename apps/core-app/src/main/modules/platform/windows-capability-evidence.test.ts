@@ -147,7 +147,7 @@ describe('windows-capability-evidence', () => {
       generatedAt: '2026-05-10T00:00:00.000Z',
       platform: 'win32',
       arch: 'x64',
-      targets: ['WeChat'],
+      targets: ['ChatApp'],
       powershell: commandResult(),
       everything: {
         cliPaths: [],
@@ -174,7 +174,7 @@ describe('windows-capability-evidence', () => {
     expect(evidence.gate.warnings).toEqual([
       'registry uninstall fallback produced no executable candidates',
       'Everything CLI es.exe was not found',
-      'targets not found: WeChat'
+      'targets not found: ChatApp'
     ])
   })
 
@@ -251,7 +251,7 @@ describe('windows-capability-evidence', () => {
         generatedAt: '2026-05-10T00:00:00.000Z',
         platform: 'win32',
         arch: 'x64',
-        targets: ['WeChat'],
+        targets: ['ChatApp'],
         powershell: commandResult(),
         everything: {
           cliPaths: [],
@@ -269,7 +269,7 @@ describe('windows-capability-evidence', () => {
       'Get-StartApps returned no applications',
       'Start Menu scan returned no .lnk/.appref-ms/.exe entries',
       'Everything CLI es.exe was not found',
-      'targets not found: WeChat'
+      'targets not found: ChatApp'
     ])
   })
 
@@ -360,14 +360,14 @@ describe('windows-capability-evidence', () => {
       generatedAt: '2026-05-10T00:00:00.000Z',
       platform: 'win32',
       arch: 'x64',
-      targets: ['WeChat'],
+      targets: ['ChatApp'],
       powershell: commandResult(),
       everything: {
         cliPaths: [],
         where: commandResult({ command: 'where es.exe', available: false, exitCode: 1 }),
         targets: [
           {
-            target: 'WeChat',
+            target: 'ChatApp',
             found: false,
             matchCount: 0,
             samples: []
@@ -415,8 +415,8 @@ describe('windows-capability-evidence', () => {
       'registry uninstall fallback produced no executable candidates',
       'Everything CLI es.exe was not found',
       'Everything query evidence did not return results',
-      'Everything targets not found: WeChat',
-      'targets not found: WeChat',
+      'Everything targets not found: ChatApp',
+      'targets not found: ChatApp',
       'installer dry-run evidence does not support detached handoff'
     ])
   })
@@ -426,7 +426,7 @@ describe('windows-capability-evidence', () => {
       generatedAt: '2026-05-10T00:00:00.000Z',
       platform: 'win32',
       arch: 'x64',
-      targets: ['WeChat'],
+      targets: ['ChatApp'],
       powershell: commandResult(),
       everything: {
         cliPaths: ['C:\\Tools\\es.exe'],
@@ -437,26 +437,26 @@ describe('windows-capability-evidence', () => {
         },
         targets: [
           {
-            target: 'WeChat',
+            target: 'ChatApp',
             found: true,
             matchCount: 1,
             samples: []
           }
         ]
       },
-      startApps: [{ name: 'WeChat', appId: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe' }],
+      startApps: [{ name: 'ChatApp', appId: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe' }],
       registryApps: [
         {
-          displayName: 'WeChat',
-          displayIcon: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe,0'
+          displayName: 'ChatApp',
+          displayIcon: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe,0'
         }
       ],
       startMenuEntries: [
         {
-          path: 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\WeChat.lnk',
-          name: 'WeChat',
+          path: 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\ChatApp.lnk',
+          name: 'ChatApp',
           extension: '.lnk',
-          target: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe'
+          target: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe'
         }
       ]
     })
@@ -469,7 +469,7 @@ describe('windows-capability-evidence', () => {
       }).gate.failures
     ).toEqual([
       'Everything query evidence did not return results',
-      'Everything targets not found: WeChat'
+      'Everything targets not found: ChatApp'
     ])
   })
 
@@ -478,7 +478,7 @@ describe('windows-capability-evidence', () => {
       generatedAt: '2026-05-10T00:00:00.000Z',
       platform: 'win32',
       arch: 'x64',
-      targets: ['WeChat'],
+      targets: ['ChatApp'],
       powershell: commandResult(),
       everything: {
         cliPaths: ['C:\\Tools\\es.exe'],
@@ -489,26 +489,26 @@ describe('windows-capability-evidence', () => {
         },
         targets: [
           {
-            target: 'WeChat',
+            target: 'ChatApp',
             found: true,
             matchCount: 1,
             samples: ['C:\\Tools\\Other.exe']
           }
         ]
       },
-      startApps: [{ name: 'WeChat', appId: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe' }],
+      startApps: [{ name: 'ChatApp', appId: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe' }],
       registryApps: [
         {
-          displayName: 'WeChat',
-          displayIcon: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe,0'
+          displayName: 'ChatApp',
+          displayIcon: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe,0'
         }
       ],
       startMenuEntries: [
         {
-          path: 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\WeChat.lnk',
-          name: 'WeChat',
+          path: 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\ChatApp.lnk',
+          name: 'ChatApp',
           extension: '.lnk',
-          target: 'C:\\Program Files\\Tencent\\WeChat\\WeChat.exe'
+          target: 'C:\\Program Files\\Tencent\\ChatApp\\ChatApp.exe'
         }
       ]
     })
@@ -519,7 +519,7 @@ describe('windows-capability-evidence', () => {
         requireEverythingTargets: true,
         requireTargets: true
       }).gate.failures
-    ).toEqual(['Everything targets not found: WeChat'])
+    ).toEqual(['Everything targets not found: ChatApp'])
   })
 
   it('marks non-Windows evidence as skipped unless strict mode is requested', () => {

@@ -33,24 +33,24 @@ describe('appProvider display name backfill', () => {
     const privateProvider = asPrivateProvider(appProvider)
     const dbRow = {
       id: 81,
-      path: '/Applications/wechatwebdevtools.app',
-      name: 'wechatwebdevtools',
-      displayName: '微信开发者工具',
+      path: '/Applications/chatappdevtools.app',
+      name: 'chatappdevtools',
+      displayName: '聊天应用开发者工具',
       type: 'app',
       mtime: new Date('2026-05-05T08:00:00Z'),
       ctime: new Date('2026-05-05T08:00:00Z')
     }
     const scannedApp = {
-      name: 'wechatwebdevtools',
-      displayName: 'wechatwebdevtools',
+      name: 'chatappdevtools',
+      displayName: 'chatappdevtools',
       displayNameQuality: 'manifest' as const,
-      path: '/Applications/wechatwebdevtools.app',
+      path: '/Applications/chatappdevtools.app',
       icon: '',
       bundleId: 'com.tencent.webplusdevtools',
-      uniqueId: '/Applications/wechatwebdevtools.app',
-      stableId: '/Applications/wechatwebdevtools.app',
+      uniqueId: '/Applications/chatappdevtools.app',
+      stableId: '/Applications/chatappdevtools.app',
       launchKind: 'path' as const,
-      launchTarget: '/Applications/wechatwebdevtools.app',
+      launchTarget: '/Applications/chatappdevtools.app',
       lastModified: new Date('2026-05-05T09:00:00Z')
     }
     let updatedDisplayName: string | null = dbRow.displayName
@@ -74,7 +74,7 @@ describe('appProvider display name backfill', () => {
       files.map((file) => ({
         ...(file as typeof dbRow),
         extensions: {
-          appIdentity: '/Applications/wechatwebdevtools.app',
+          appIdentity: '/Applications/chatappdevtools.app',
           displayNameQuality: 'localized'
         }
       }))
@@ -83,6 +83,6 @@ describe('appProvider display name backfill', () => {
 
     await privateProvider._performStartupBackfill()
 
-    expect(updatedDisplayName).toBe('微信开发者工具')
+    expect(updatedDisplayName).toBe('聊天应用开发者工具')
   })
 })

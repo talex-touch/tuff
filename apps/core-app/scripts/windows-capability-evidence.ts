@@ -47,7 +47,7 @@ function printUsage(): void {
   pnpm -C "apps/core-app" run windows:capability:evidence -- [options]
 
 Options:
-  --target <name>          App target to probe. Can be repeated. Defaults: WeChat, Codex, Apple Music.
+  --target <name>          App target to probe. Can be repeated. Defaults: ChatApp, Codex, Apple Music.
   --installer <path>       Add dry-run evidence for a downloaded Windows installer. Does not execute it.
   --output <path>          Write JSON evidence to a file in addition to stdout.
   --timeoutMs <ms>         Per-command timeout. Default: 15000.

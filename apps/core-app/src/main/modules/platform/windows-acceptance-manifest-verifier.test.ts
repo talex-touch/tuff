@@ -17,7 +17,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       requireUpdateInstallManualChecks: true,
       requireDivisionBoxDetachedWidgetManualChecks: true,
       requireTimeAwareRecommendationManualChecks: true,
-      requireCommonAppTargets: ['WeChat', 'Codex', 'Apple Music']
+      requireCommonAppTargets: ['ChatApp', 'Codex', 'Apple Music']
     })
 
     expect(gate).toEqual({
@@ -45,8 +45,8 @@ describe('windows-acceptance-manifest-verifier', () => {
       performance: {},
       manualChecks: {
         commonAppLaunch: {
-          targets: ['WeChat', 'Codex', 'Apple Music'],
-          passedTargets: ['WeChat']
+          targets: ['ChatApp', 'Codex', 'Apple Music'],
+          passedTargets: ['ChatApp']
         }
       }
     })
@@ -57,7 +57,7 @@ describe('windows-acceptance-manifest-verifier', () => {
         requireVerifierCommand: true,
         requireSearchTrace: true,
         requireClipboardStress: true,
-        requireCommonAppTargets: ['WeChat', 'Codex', 'Apple Music']
+        requireCommonAppTargets: ['ChatApp', 'Codex', 'Apple Music']
       }).failures
     ).toEqual([
       'required Windows case did not pass: windows-everything-file-search (failed)',
@@ -374,7 +374,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         verification: {
           recommendedCommand:
-            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"'
         }
       }),
       {
@@ -392,7 +392,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         verification: {
           recommendedCommand:
-            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"'
         }
       }),
       {
@@ -410,7 +410,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         verification: {
           recommendedCommand:
-            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+            'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input evidence/windows-acceptance.json --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"'
         }
       }),
       {
@@ -521,11 +521,11 @@ describe('windows-acceptance-manifest-verifier', () => {
       manualChecks: {
         ...buildManifest().manualChecks,
         commonAppLaunch: {
-          targets: ['WeChat'],
-          passedTargets: ['WeChat'],
+          targets: ['ChatApp'],
+          passedTargets: ['ChatApp'],
           checks: [
             {
-              target: 'WeChat',
+              target: 'ChatApp',
               searchQuery: '<search-query>',
               searchHit: true,
               displayNameCorrect: true,
@@ -536,7 +536,7 @@ describe('windows-acceptance-manifest-verifier', () => {
               observedLaunchTarget: '<observed-launch-target>',
               coreBoxHiddenAfterLaunch: true,
               coreBoxHiddenEvidence: '<corebox-hidden-evidence>',
-              evidencePath: 'evidence/manual/common-app-wechat.md'
+              evidencePath: 'evidence/manual/common-app-chatapp.md'
             }
           ]
         },
@@ -594,15 +594,15 @@ describe('windows-acceptance-manifest-verifier', () => {
       requireUpdateInstallManualChecks: true,
       requireDivisionBoxDetachedWidgetManualChecks: true,
       requireTimeAwareRecommendationManualChecks: true,
-      requireCommonAppTargets: ['WeChat']
+      requireCommonAppTargets: ['ChatApp']
     })
 
     expect(gate.failures).toEqual([
-      'common app launch search query is missing: WeChat',
-      'common app launch observed display name is missing: WeChat',
-      'common app launch icon evidence is missing: WeChat',
-      'common app launch observed launch target is missing: WeChat',
-      'common app launch CoreBox hidden evidence is missing: WeChat',
+      'common app launch search query is missing: ChatApp',
+      'common app launch observed display name is missing: ChatApp',
+      'common app launch icon evidence is missing: ChatApp',
+      'common app launch observed launch target is missing: ChatApp',
+      'common app launch CoreBox hidden evidence is missing: ChatApp',
       'copied app path copied source is missing',
       'copied app path normalized app path is missing',
       'copied app path add-to-local-launch-area action evidence is missing',
@@ -660,8 +660,8 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         manualChecks: {
           commonAppLaunch: {
-            targets: ['WeChat'],
-            passedTargets: ['WeChat'],
+            targets: ['ChatApp'],
+            passedTargets: ['ChatApp'],
             checks: [
               {
                 ...completeManualChecks!.commonAppLaunch!.checks![0],
@@ -689,7 +689,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       }),
       {
         requireCommonAppLaunchDetails: true,
-        requireCommonAppTargets: ['WeChat'],
+        requireCommonAppTargets: ['ChatApp'],
         requireCopiedAppPathManualChecks: true,
         requireUpdateInstallManualChecks: true,
         requireDivisionBoxDetachedWidgetManualChecks: true,
@@ -698,7 +698,7 @@ describe('windows-acceptance-manifest-verifier', () => {
     )
 
     expect(gate.failures).toEqual([
-      'common app launch evidence path is missing: WeChat',
+      'common app launch evidence path is missing: ChatApp',
       'copied app path manual evidence path is missing',
       'Windows update install manual evidence path is missing',
       'DivisionBox detached widget manual evidence path is missing',
@@ -712,8 +712,8 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         manualChecks: {
           commonAppLaunch: {
-            targets: ['WeChat'],
-            passedTargets: ['WeChat'],
+            targets: ['ChatApp'],
+            passedTargets: ['ChatApp'],
             checks: [
               {
                 ...completeManualChecks!.commonAppLaunch!.checks![0],
@@ -741,7 +741,7 @@ describe('windows-acceptance-manifest-verifier', () => {
       }),
       {
         requireCommonAppLaunchDetails: true,
-        requireCommonAppTargets: ['WeChat'],
+        requireCommonAppTargets: ['ChatApp'],
         requireCopiedAppPathManualChecks: true,
         requireUpdateInstallManualChecks: true,
         requireDivisionBoxDetachedWidgetManualChecks: true,
@@ -750,7 +750,7 @@ describe('windows-acceptance-manifest-verifier', () => {
     )
 
     expect(gate.failures).toEqual([
-      'common app launch evidence path is missing: WeChat',
+      'common app launch evidence path is missing: ChatApp',
       'copied app path manual evidence path is missing',
       'Windows update install manual evidence path is missing',
       'DivisionBox detached widget manual evidence path is missing',
@@ -1078,11 +1078,11 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         manualChecks: {
           commonAppLaunch: {
-            targets: ['WeChat', 'Codex', 'Apple Music'],
-            passedTargets: ['WeChat', 'Codex', 'Apple Music'],
+            targets: ['ChatApp', 'Codex', 'Apple Music'],
+            passedTargets: ['ChatApp', 'Codex', 'Apple Music'],
             checks: [
               {
-                target: 'WeChat',
+                target: 'ChatApp',
                 searchHit: true,
                 displayNameCorrect: false,
                 iconCorrect: true,
@@ -1095,19 +1095,19 @@ describe('windows-acceptance-manifest-verifier', () => {
       }),
       {
         requireCommonAppLaunchDetails: true,
-        requireCommonAppTargets: ['WeChat', 'Codex', 'Apple Music']
+        requireCommonAppTargets: ['ChatApp', 'Codex', 'Apple Music']
       }
     )
 
     expect(gate.failures).toEqual([
-      'common app launch search query is missing: WeChat',
-      'common app launch display name not verified: WeChat',
-      'common app launch observed display name is missing: WeChat',
-      'common app launch icon evidence is missing: WeChat',
-      'common app launch observed launch target is missing: WeChat',
-      'common app launch did not hide CoreBox: WeChat',
-      'common app launch CoreBox hidden evidence is missing: WeChat',
-      'common app launch evidence path is missing: WeChat',
+      'common app launch search query is missing: ChatApp',
+      'common app launch display name not verified: ChatApp',
+      'common app launch observed display name is missing: ChatApp',
+      'common app launch icon evidence is missing: ChatApp',
+      'common app launch observed launch target is missing: ChatApp',
+      'common app launch did not hide CoreBox: ChatApp',
+      'common app launch CoreBox hidden evidence is missing: ChatApp',
+      'common app launch evidence path is missing: ChatApp',
       'common app launch detail is missing: Codex',
       'common app launch detail is missing: Apple Music'
     ])
@@ -1118,11 +1118,11 @@ describe('windows-acceptance-manifest-verifier', () => {
       buildManifest({
         manualChecks: {
           commonAppLaunch: {
-            targets: ['WeChat'],
-            passedTargets: ['WeChat'],
+            targets: ['ChatApp'],
+            passedTargets: ['ChatApp'],
             checks: [
               {
-                target: 'WeChat',
+                target: 'ChatApp',
                 searchQuery: '',
                 searchHit: true,
                 displayNameCorrect: true,
@@ -1133,7 +1133,7 @@ describe('windows-acceptance-manifest-verifier', () => {
                 observedLaunchTarget: '',
                 coreBoxHiddenAfterLaunch: true,
                 coreBoxHiddenEvidence: '',
-                evidencePath: 'evidence/manual/common-app-wechat.md'
+                evidencePath: 'evidence/manual/common-app-chatapp.md'
               }
             ]
           }
@@ -1141,16 +1141,16 @@ describe('windows-acceptance-manifest-verifier', () => {
       }),
       {
         requireCommonAppLaunchDetails: true,
-        requireCommonAppTargets: ['WeChat']
+        requireCommonAppTargets: ['ChatApp']
       }
     )
 
     expect(gate.failures).toEqual([
-      'common app launch search query is missing: WeChat',
-      'common app launch observed display name is missing: WeChat',
-      'common app launch icon evidence is missing: WeChat',
-      'common app launch observed launch target is missing: WeChat',
-      'common app launch CoreBox hidden evidence is missing: WeChat'
+      'common app launch search query is missing: ChatApp',
+      'common app launch observed display name is missing: ChatApp',
+      'common app launch icon evidence is missing: ChatApp',
+      'common app launch observed launch target is missing: ChatApp',
+      'common app launch CoreBox hidden evidence is missing: ChatApp'
     ])
   })
 })

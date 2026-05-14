@@ -131,16 +131,16 @@ describe('tuff-sorter ranking strategy', () => {
 
   it('中文 app 标题命中应优先于中等频次 plugin feature 可见标题命中', () => {
     const appItem = createItem({
-      id: 'app-wechat',
+      id: 'app-chatapp',
       kind: 'app',
-      title: '微信',
+      title: '聊天应用',
       sourceId: 'app-provider'
     })
 
     const featureItem = createItem({
-      id: 'feature-wechat-tools',
+      id: 'feature-chatapp-tools',
       kind: 'feature',
-      title: '微信工具箱',
+      title: '聊天应用工具箱',
       sourceId: 'plugin-features',
       usageStats: {
         executeCount: 12,
@@ -152,8 +152,12 @@ describe('tuff-sorter ranking strategy', () => {
       }
     })
 
-    const sorted = tuffSorter.sort([featureItem, appItem], { text: '微信' } as TuffQuery, signal)
-    expect(sorted[0]?.id).toBe('app-wechat')
+    const sorted = tuffSorter.sort(
+      [featureItem, appItem],
+      { text: '聊天应用' } as TuffQuery,
+      signal
+    )
+    expect(sorted[0]?.id).toBe('app-chatapp')
   })
 
   it('匹配差距明显时仍以匹配分为主', () => {

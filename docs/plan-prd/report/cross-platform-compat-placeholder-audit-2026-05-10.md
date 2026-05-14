@@ -1,7 +1,7 @@
 # 跨平台兼容与占位实现审计报告（2026-05-10）
 
-> 审计范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*` 的生产源码与关键文档入口。  
-> 当前版本基线：根包与 CoreApp 为 `2.4.10-beta.18`。  
+> 审计范围：`apps/core-app`、`apps/nexus`、`retired AI app`、`packages/*`、`plugins/*` 的生产源码与关键文档入口。
+> 当前版本基线：根包与 CoreApp 为 `2.4.10-beta.18`。
 > 结论口径：本文只记录可从代码直接验证的事实，不把 UI placeholder、测试 mock、Tuffex `.fake-background` 视觉类名等常规实现误判为假功能。
 
 ## 1. 总体结论
@@ -11,7 +11,7 @@
 - CoreApp 平台能力已集中到 runtime patch 口径，macOS / Windows / Linux 的限制会通过 `supportLevel / issueCode / reason / limitations` 暴露，不再静默冒充 supported。
 - Windows App 索引、Everything、Start Menu、UWP、registry uninstall 与启动参数链路已有较多回归覆盖，但仍缺真实 Windows 设备体验证据。
 - Linux 目前是 documented best-effort：`xdotool` 与 desktop environment 是明确依赖，不应作为 `2.4.10` blocker。
-- 当前最大工程风险不再是单一 legacy runtime 分支，而是 retained raw event 定义、Pilot 假数据/兼容支付、插件侧 localStorage 持久化、以及若干超长多职责模块。复核口径需要区分“生产 raw send 违规”和“保留的 raw event 定义”：本次扫描未发现生产 `channel.send('x:y')` / `transport.send('x:y')` 直连违规，`ipcRenderer.sendSync` 仅剩负向测试断言；但仍有 342 处 `defineRawEvent` 定义需要后续迁移或解释。
+- 当前最大工程风险不再是单一 legacy runtime 分支，而是 retained raw event 定义、AI 假数据/兼容支付、插件侧 localStorage 持久化、以及若干超长多职责模块。复核口径需要区分“生产 raw send 违规”和“保留的 raw event 定义”：本次扫描未发现生产 `channel.send('x:y')` / `transport.send('x:y')` 直连违规，`ipcRenderer.sendSync` 仅剩负向测试断言；但仍有 342 处 `defineRawEvent` 定义需要后续迁移或解释。
 
 质量判断：主线架构方向正确，但 `2.4.11` 前必须把“假值成功、隐式兼容、不可观测降级”继续收口，否则跨平台体验会在真实设备上表现为不可解释失败。
 
@@ -45,13 +45,13 @@
 
 ## 3. 占位、假值、不优雅实现
 
-### P0：Pilot 系统状态接口返回硬编码假数据
+### P0：AI 系统状态接口返回硬编码假数据
 
-文件：`apps/pilot/server/api/system/serve/stat.get.ts`
+文件：`retired AI app/server/api/system/serve/stat.get.ts`
 
 事实：
 
-- CPU brand 为 `Mock CPU`，model 为 `pilot-mock`。
+- CPU brand 为 `Mock CPU`，model 为 `ai-mock`。
 - 磁盘、内存、CPU load 均为固定构造值。
 
 风险：
@@ -64,13 +64,13 @@
 - 改为真实 runtime metrics provider；不可用时返回 `unavailable` 状态、reason 与 partial data。
 - 不要在生产路径继续返回固定 CPU / disk / memory。
 
-### P0：Pilot 兼容支付仍使用 mock 微信 URL / DUMMY 订单
+### P0：AI 兼容支付仍使用 mock 聊天应用 URL / DUMMY 订单
 
-文件：`apps/pilot/server/utils/pilot-payment-service.ts`、`apps/pilot/server/api/order/price/dummy.get.ts`
+文件：`retired AI app/server/utils/ai-payment-service.ts`、`retired AI app/server/api/order/price/dummy.get.ts`
 
 事实：
 
-- 订单 URL 形态为 `weixin://wxpay/pilot/mock/${order.id}`。
+- 订单 URL 形态为 `chatapp://wxpay/ai/mock/${order.id}`。
 - `createDummyOrder()` 写入 `type: 'DUMMY'`，并把 `dummy` 价格信息放进订单 meta。
 
 风险：
@@ -79,7 +79,7 @@
 
 建议：
 
-- 保留本地开发 mock，但要求 `PILOT_PAYMENT_MODE=mock` 或等价显式开关。
+- 保留本地开发 mock，但要求 `AI_PAYMENT_MODE=mock` 或等价显式开关。
 - 非 mock 环境若真实支付未配置，应返回 `PAYMENT_PROVIDER_UNAVAILABLE`，不要返回 mock URL。
 
 ### P1：插件 touch-image 直接使用 localStorage 保存本地图片路径
@@ -151,13 +151,13 @@
 
 ### 立即做（2.4.10 收口）
 
-1. 完成 Windows 真机 App 索引与启动体验验证：微信、Codex、Apple Music 至少三类应用。
+1. 完成 Windows 真机 App 索引与启动体验验证：聊天应用、Codex、Apple Music 至少三类应用。
 2. 保持 CoreApp 当前 legacy/raw/storage/sdk bypass 零新增；不要再为 2.4.10 引入新的兼容层。
 3. 将本报告中的 P0 假值项纳入 `2.4.11` blocker，不在 2.4.10 中扩大范围。
 
 ### 2.4.11 必做
 
-1. Pilot 系统状态接口替换固定假值；支付 mock 增加显式环境门控。
+1. AI 系统状态接口替换固定假值；支付 mock 增加显式环境门控。
 2. touch-image 插件历史路径从 localStorage 迁到插件 storage SDK。
 3. 拆分 raw 指标口径并迁移 retained raw event definitions。
 4. 关闭或降权 `compatibility-debt-registry.csv` 中 `2.4.11` 退场项。

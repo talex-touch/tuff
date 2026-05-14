@@ -826,7 +826,7 @@ export default {
         scopeHint: '当前范围：{scope}',
         form: {
           name: '应用名称',
-          namePlaceholder: '例如：Pilot Integration',
+          namePlaceholder: '例如：OAuth Integration',
           description: '描述',
           descriptionPlaceholder: '可选的简短描述',
           redirectUris: '回调地址（Redirect URIs）',
@@ -1154,7 +1154,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         notesPlaceholder: 'TEAM 套餐可使用完整邀请与成员管理。',
         memberStatus: {
           active: '已激活',
-          automation: '自动化 Pilot',
+          automation: '自动化助手',
           invited: '已邀请',
         },
       },

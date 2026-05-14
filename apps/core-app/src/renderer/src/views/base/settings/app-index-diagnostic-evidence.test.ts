@@ -248,31 +248,31 @@ describe('app index diagnostic evidence', () => {
     const diagnosis: AppIndexDiagnoseResult = {
       success: true,
       status: 'found',
-      target: 'WeChat',
+      target: 'ChatApp',
       app: {
         id: 8,
-        path: 'D:\\Weixin\\Weixin.exe',
-        name: 'WeChat',
-        displayName: 'WeChat',
+        path: 'D:\\ChatApp\\ChatApp.exe',
+        name: 'ChatApp',
+        displayName: 'ChatApp',
         rawDisplayName: '\u03A2\uFFFD\uFFFD',
         displayNameStatus: 'fallback',
         iconPresent: true,
         launchKind: 'path',
-        launchTarget: 'D:\\Weixin\\Weixin.exe',
-        alternateNames: ['微信'],
+        launchTarget: 'D:\\ChatApp\\ChatApp.exe',
+        alternateNames: ['聊天应用'],
         entryEnabled: true
       }
     }
 
     const payload = buildAppIndexDiagnosticEvidencePayload({
-      target: 'WeChat',
-      query: 'wechat',
+      target: 'ChatApp',
+      query: 'chatapp',
       diagnosis,
       createdAt: '2026-05-10T10:00:00.000Z'
     })
 
     expect(payload.app).toMatchObject({
-      displayName: 'WeChat',
+      displayName: 'ChatApp',
       rawDisplayName: '\u03A2\uFFFD\uFFFD',
       displayNameStatus: 'fallback'
     })

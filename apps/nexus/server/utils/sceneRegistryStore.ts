@@ -11,7 +11,7 @@ const JSON_LIMIT_BYTES = 64 * 1024
 
 const initializedSchemas = new WeakSet<D1Database>()
 
-export const SCENE_REGISTRY_OWNERS = ['nexus', 'core-app', 'pilot', 'plugin'] as const
+export const SCENE_REGISTRY_OWNERS = ['nexus', 'core-app', 'app', 'plugin'] as const
 export const SCENE_STRATEGY_MODES = ['priority', 'least_cost', 'lowest_latency', 'balanced', 'manual'] as const
 export const SCENE_FALLBACK_MODES = ['enabled', 'disabled'] as const
 export const SCENE_BINDING_STATUSES = ['enabled', 'disabled'] as const

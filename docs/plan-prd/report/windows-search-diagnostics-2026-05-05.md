@@ -3,7 +3,7 @@
 ## Scope
 
 - Runtime: Core App on Windows.
-- Issues covered: production crash observability, WeChat launch failure, Windows Store app indexing, Everything backend fallback, startup/search lag, titlebar controls, and left logo spacing.
+- Issues covered: production crash observability, ChatApp launch failure, Windows Store app indexing, Everything backend fallback, startup/search lag, titlebar controls, and left logo spacing.
 - Data safety: production logs were read only; database snapshot inspection was attempted but not performed because approval service returned 503.
 
 ## Findings
@@ -13,9 +13,9 @@
 - The logging gap was caused by two combined behaviors:
   - `createLogger()` formatted to console and depended on the console/log4js bridge to persist.
   - `app-provider` and `file-provider` module loggers were disabled by default, hiding the most useful launch and Everything diagnostics.
-- WeChat was present in Start Menu as a `.lnk`, but the Windows scanner resolved shortcuts to target `.exe` and discarded the original shortcut path, args, cwd, and description. Launching the target directly can fail for shortcut-driven apps even when search finds the item.
+- ChatApp was present in Start Menu as a `.lnk`, but the Windows scanner resolved shortcuts to target `.exe` and discarded the original shortcut path, args, cwd, and description. Launching the target directly can fail for shortcut-driven apps even when search finds the item.
 - Windows Store apps were not indexed because the scanner only walked Start Menu `.lnk/.exe` paths. Store apps such as Codex and Apple Music surface via `Get-StartApps` / AppsFolder AUMID instead of traditional executable paths.
-- The WeChat square/garbled title was not a renderer-wide font failure. In the dev index snapshot, `name` for `D:\Weixin\Weixin.exe` was valid (`U+5FAE U+4FE1`), but `display_name` was stale corrupted data (`U+03A2 U+FFFD U+FFFD`). Search rendering preferred `display_name`, so the bad persisted value hid the clean app name.
+- The ChatApp square/garbled title was not a renderer-wide font failure. In the dev index snapshot, `name` for `D:\ChatApp\ChatApp.exe` was valid (`U+5FAE U+4FE1`), but `display_name` was stale corrupted data (`U+03A2 U+FFFD U+FFFD`). Search rendering preferred `display_name`, so the bad persisted value hid the clean app name.
 - Startup lag risk is concentrated in app scan/backfill/full sync competing with renderer loading and active search. Existing code already tracked recent search activity, but app maintenance did not use it as a deferral signal.
 - Everything already had `sdk-napi -> cli -> unavailable` fallback, but per-candidate backend errors were not retained for status diagnostics.
 - Windows titlebar controls could become low contrast and visually covered by the header pseudo background. Flat layout also did not pass the Windows layout flag, so spacing fixes only applied to Simple layout.
@@ -81,6 +81,6 @@
 - After dev launch succeeds, collect:
   - app scan duration and app count.
   - `files`, `file_extensions`, `keyword_mappings`, and FTS table row counts from a copied database snapshot.
-  - searches for `微信`, `wechat`, `codex`, and `apple music`, including candidate count and slow stages.
+  - searches for `聊天应用`, `chatapp`, `codex`, and `apple music`, including candidate count and slow stages.
   - Everything status payload, especially `backend`, `backendAttemptErrors`, and `lastBackendError`.
   - before/after first result latency and startup lag traces over a 2 minute window.

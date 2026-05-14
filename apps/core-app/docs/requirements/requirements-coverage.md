@@ -12,7 +12,7 @@
 
 | 主题 | 完成度 | 证据（实现/缺失） | 说明 |
 | --- | --- | --- | --- |
-| 配置存储 SQLite/JSON 同步 | 部分完成 | `apps/core-app/src/main/modules/storage/index.ts:61` | 仅 pilot key 写入，策略与迁移仍需完善。 |
+| 配置存储 SQLite/JSON 同步 | 部分完成 | `apps/core-app/src/main/modules/storage/index.ts:61` | 仅 trial key 写入，策略与迁移仍需完善。 |
 | TouchSDK hooks 迁移 | 已完成 | `packages/utils/plugin/sdk/touch-sdk.ts:9` | hooks 已落地并替代示例中 window 直取。 |
 | 插件 CLI 精炼（tuff） | 已完成 | `packages/unplugin-export-plugin/src/bin/tuff.ts:1` | CLI 命令与构建/发布流程已实现。 |
 | Tuffex 组件 3/4/5/7/8 | 已完成 | `packages/tuffex/packages/components/src/tree/src/TxTree.vue:1` | 组件与测试已存在。 |

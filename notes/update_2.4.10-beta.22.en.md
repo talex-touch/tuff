@@ -12,4 +12,3 @@
 
 - This is still a beta test package and does not mean the stable `2.4.10` release gate is complete.
 - Windows real-device acceptance, performance sampling, and Nexus Release Evidence sync remain blockers for the stable release.
-- The full `pnpm quality:pr` command is still blocked by existing `apps/pilot` lint debt; this pass focuses on the beta test package and currently visible release-chain fixes.

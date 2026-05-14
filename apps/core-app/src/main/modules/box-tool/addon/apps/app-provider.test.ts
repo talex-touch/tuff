@@ -40,9 +40,9 @@ describe('appProvider rebuild maintenance', () => {
     getMainConfigMock.mockReturnValue(undefined)
     pinyinMock.mockImplementation((value: string, options?: { pattern?: string }) => {
       if (options?.pattern === 'first') {
-        return value === '微信' ? 'WX' : value
+        return value === '聊天应用' ? 'WX' : value
       }
-      return value === '微信' ? 'WEI XIN' : value
+      return value === '聊天应用' ? 'WEI XIN' : value
     })
   })
 
@@ -629,24 +629,24 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
     const dbRow = {
       id: 80,
-      path: 'D:\\Weixin\\Weixin.exe',
-      name: 'Weixin',
+      path: 'D:\\ChatApp\\ChatApp.exe',
+      name: 'ChatApp',
       displayName: '\u03A2\uFFFD\uFFFD',
       type: 'app',
       mtime: new Date('2026-05-05T08:00:00Z'),
       ctime: new Date('2026-05-05T08:00:00Z')
     }
     const scannedApp = {
-      name: 'WeChat',
-      displayName: 'WeChat',
+      name: 'ChatApp',
+      displayName: 'ChatApp',
       displayNameQuality: 'localized',
-      path: 'D:\\Weixin\\Weixin.exe',
+      path: 'D:\\ChatApp\\ChatApp.exe',
       icon: '',
       bundleId: '',
-      uniqueId: 'path:d:\\weixin\\weixin.exe',
-      stableId: 'path:d:\\weixin\\weixin.exe',
+      uniqueId: 'path:d:\\chatapp\\chatapp.exe',
+      stableId: 'path:d:\\chatapp\\chatapp.exe',
       launchKind: 'path' as const,
-      launchTarget: 'D:\\Weixin\\Weixin.exe',
+      launchTarget: 'D:\\ChatApp\\ChatApp.exe',
       lastModified: new Date('2026-05-05T09:00:00Z')
     }
     let updatedDisplayName: string | null = dbRow.displayName
@@ -680,7 +680,7 @@ describe('appProvider rebuild maintenance', () => {
       files.map((file) => ({
         ...(file as typeof dbRow),
         extensions: {
-          appIdentity: 'path:d:\\weixin\\weixin.exe',
+          appIdentity: 'path:d:\\chatapp\\chatapp.exe',
           displayNameQuality: 'filename'
         }
       }))
@@ -689,7 +689,7 @@ describe('appProvider rebuild maintenance', () => {
 
     await privateProvider._performStartupBackfill()
 
-    expect(updatedDisplayName).toBe('WeChat')
+    expect(updatedDisplayName).toBe('ChatApp')
   })
 
   it('serializes rebuild, full sync, mdls scan and startup backfill tasks', async () => {
@@ -842,19 +842,19 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
 
     const keywords = await privateProvider._generateKeywordsForApp({
-      name: 'WeChat',
-      displayName: '微信',
-      fileName: 'WeChat',
-      path: '/Applications/WeChat.app',
+      name: 'ChatApp',
+      displayName: '聊天应用',
+      fileName: 'ChatApp',
+      path: '/Applications/ChatApp.app',
       launchKind: 'path',
-      launchTarget: '/Applications/WeChat.app',
-      stableId: '/Applications/WeChat.app',
+      launchTarget: '/Applications/ChatApp.app',
+      stableId: '/Applications/ChatApp.app',
       icon: '',
       lastModified: new Date(0)
     })
 
-    expect(keywords).toContain('微信')
-    expect(keywords).toContain('weixin')
+    expect(keywords).toContain('聊天应用')
+    expect(keywords).toContain('chatapp')
     expect(keywords).toContain('wx')
     expect(keywords).not.toContain('WEIXIN')
     expect(keywords).not.toContain('WX')
@@ -1110,16 +1110,16 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
     const appRow = {
       id: 8,
-      path: 'D:\\Weixin\\Weixin.exe',
-      name: 'WeChat',
+      path: 'D:\\ChatApp\\ChatApp.exe',
+      name: 'ChatApp',
       displayName: '\u03A2\uFFFD\uFFFD',
       type: 'app',
       mtime: new Date(0),
       ctime: new Date(0),
       extensions: {
-        appIdentity: 'path:d:\\weixin\\weixin.exe',
+        appIdentity: 'path:d:\\chatapp\\chatapp.exe',
         launchKind: 'path',
-        launchTarget: 'D:\\Weixin\\Weixin.exe'
+        launchTarget: 'D:\\ChatApp\\ChatApp.exe'
       }
     }
 
@@ -1145,20 +1145,20 @@ describe('appProvider rebuild maintenance', () => {
     }
 
     const result = await appProvider.diagnoseAppSearch({
-      target: 'WeChat',
-      query: 'wechat'
+      target: 'ChatApp',
+      query: 'chatapp'
     })
 
     expect(result).toMatchObject({
       success: true,
       status: 'found',
       app: {
-        name: 'WeChat',
-        displayName: 'WeChat',
+        name: 'ChatApp',
+        displayName: 'ChatApp',
         rawDisplayName: '\u03A2\uFFFD\uFFFD',
         displayNameStatus: 'fallback',
         launchKind: 'path',
-        launchTarget: 'D:\\Weixin\\Weixin.exe'
+        launchTarget: 'D:\\ChatApp\\ChatApp.exe'
       }
     })
   })
@@ -1522,7 +1522,7 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
 
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'app-provider-managed-conflict-'))
-    const scriptPath = path.join(tempDir, 'wechat.app')
+    const scriptPath = path.join(tempDir, 'chatapp.app')
     await fs.writeFile(scriptPath, 'not-a-real-app', 'utf8')
 
     privateProvider.dbUtils = {
@@ -1534,20 +1534,20 @@ describe('appProvider rebuild maintenance', () => {
       getFileByPath: vi.fn(async () => ({
         id: 7,
         path: scriptPath,
-        name: 'WeChat',
-        displayName: 'WeChat',
+        name: 'ChatApp',
+        displayName: 'ChatApp',
         type: 'app',
         mtime: new Date(0),
         ctime: new Date(0)
       })),
       getFileExtensions: vi.fn(async () => [
-        { fileId: 7, key: 'bundleId', value: 'com.tencent.xinWeChat' }
+        { fileId: 7, key: 'bundleId', value: 'com.example.chatapp' }
       ])
     }
 
     const result = await appProvider.upsertManagedEntry({
       path: scriptPath,
-      displayName: '微信',
+      displayName: '聊天应用',
       launchKind: 'path'
     })
 

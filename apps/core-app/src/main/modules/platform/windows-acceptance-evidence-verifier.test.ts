@@ -87,7 +87,7 @@ describe('windows-acceptance-evidence-verifier', () => {
       platform: 'win32',
       arch: 'x64',
       status: 'passed',
-      targets: ['WeChat'],
+      targets: ['ChatApp'],
       checks: {
         powershell: {
           command: 'powershell',
@@ -103,19 +103,19 @@ describe('windows-acceptance-evidence-verifier', () => {
             exitCode: 0,
             durationMs: 10
           },
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
+          targets: [{ target: 'ChatApp', found: true, matchCount: 1, samples: ['ChatApp'] }]
         },
         startApps: {
           count: 1,
           uwpCount: 1,
           desktopPathCount: 0,
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
+          targets: [{ target: 'ChatApp', found: true, matchCount: 1, samples: ['ChatApp'] }]
         },
         registry: {
           count: 1,
           executableCandidateCount: 1,
           skippedSystemComponentCount: 0,
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
+          targets: [{ target: 'ChatApp', found: true, matchCount: 1, samples: ['ChatApp'] }]
         },
         startMenu: {
           directoryCount: 1,
@@ -127,7 +127,7 @@ describe('windows-acceptance-evidence-verifier', () => {
           shortcutWithArgumentsCount: 0,
           shortcutWithWorkingDirectoryCount: 0,
           uwpShortcutCount: 0,
-          targets: [{ target: 'WeChat', found: true, matchCount: 1, samples: ['WeChat'] }]
+          targets: [{ target: 'ChatApp', found: true, matchCount: 1, samples: ['ChatApp'] }]
         }
       },
       gate: {

@@ -2,7 +2,7 @@
 
 > 更新时间: 2026-05-11
 > 目标版本: `v2.4.11`（兼容债务清退门槛）
-> 适用范围: `core-app / nexus / pilot / packages / plugins`（主线）
+> 适用范围: `core-app / nexus / aiapp / packages / plugins`（主线）
 
 ---
 
@@ -44,13 +44,13 @@
 - `MigrationProgress.vue` 移除局部 raw event definition。
 - `retainedRawEventDefinitions` 当前上限为 `265`，typed migration candidate 保持 `0`。
 
-### 3.3 sdkapi 与 Pilot compat 文件命名 hard-cut
+### 3.3 sdkapi 与 AI compat 文件命名 hard-cut
 
 - `apps/core-app/src/main/modules/plugin/sdk-compat.ts` 重命名为 `sdkapi-hard-cut-gate.ts`。
 - `getPluginSdkCompatibilityGate()` / `PluginSdkCompatibilityGate` 重命名为 `getPluginSdkHardCutGate()` / `PluginSdkHardCutGate`。
-- `apps/pilot/server/utils/pilot-compat-aigc.ts` 重命名为 `pilot-aigc-service.ts`。
-- `apps/pilot/server/utils/pilot-compat-payment.ts` 重命名为 `pilot-payment-service.ts`。
-- `apps/pilot/server/utils/pilot-compat-seeds.ts` 重命名为 `pilot-system-seeds.ts`。
+- `retired-ai-app/server/utils/aiapp-compat-aigc.ts` 重命名为 `aiapp-aigc-service.ts`。
+- `retired-ai-app/server/utils/aiapp-compat-payment.ts` 重命名为 `aiapp-payment-service.ts`。
+- `retired-ai-app/server/utils/aiapp-compat-seeds.ts` 重命名为 `aiapp-system-seeds.ts`。
 - 对应 registry 4 条 `compat-file` 清退，当前 `compat-file=5`。
 
 ### 3.4 Tuffex FlipOverlay size exception 清退

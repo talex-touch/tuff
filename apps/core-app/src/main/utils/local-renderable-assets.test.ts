@@ -28,7 +28,7 @@ afterEach(() => {
 describe('local renderable assets', () => {
   it('normalizes absolute local paths to tfile URLs', () => {
     const root = createTempRoot()
-    const filePath = path.join(root, '微信图片 01.png')
+    const filePath = path.join(root, '聊天应用图片 01.png')
     fs.writeFileSync(filePath, 'image')
 
     const result = normalizeRenderableSource(filePath)

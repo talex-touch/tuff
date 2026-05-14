@@ -2003,7 +2003,7 @@
       "fullSyncCheckIntervalDesc": "How often to check if a full sync is due",
       "appDiagnosticTitle": "App Search Diagnostic",
       "appDiagnosticDesc": "Enter an app path, appIdentity, bundleId, display name, or search query to inspect indexed fields and query recall stages",
-      "appDiagnosticTargetPlaceholder": "App path / appIdentity / bundleId / display name / query, e.g. weixin",
+      "appDiagnosticTargetPlaceholder": "App path / appIdentity / bundleId / display name / query, e.g. chatapp",
       "appDiagnosticQueryPlaceholder": "Optional query, e.g. NetEase Cloud",
       "appDiagnosticRun": "Diagnose",
       "appDiagnosticReindexKeywords": "Rebuild Keywords Only",

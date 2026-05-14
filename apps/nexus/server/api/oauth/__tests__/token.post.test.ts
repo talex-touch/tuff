@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const authStoreMocks = vi.hoisted(() => ({
-  consumePilotOauthCode: vi.fn(),
+  consumeOAuthCode: vi.fn(),
   getUserById: vi.fn(),
 }))
 
@@ -43,7 +43,7 @@ describe('/api/oauth/token', () => {
       client_secret: 'nxs_secret_1',
       redirect_uri: 'https://app.example.com/oauth/callback',
     })
-    authStoreMocks.consumePilotOauthCode.mockResolvedValue({
+    authStoreMocks.consumeOAuthCode.mockResolvedValue({
       code: 'oauth_code_1',
       clientId: 'nxo_client_1',
       userId: 'u1',
@@ -69,7 +69,7 @@ describe('/api/oauth/token', () => {
         clientSecret: 'nxs_secret_1',
       },
     )
-    expect(authStoreMocks.consumePilotOauthCode).toHaveBeenCalledWith(
+    expect(authStoreMocks.consumeOAuthCode).toHaveBeenCalledWith(
       expect.anything(),
       {
         code: 'oauth_code_1',
@@ -108,7 +108,7 @@ describe('/api/oauth/token', () => {
   })
 
   it('code 失效时拒绝', async () => {
-    authStoreMocks.consumePilotOauthCode.mockResolvedValue(null)
+    authStoreMocks.consumeOAuthCode.mockResolvedValue(null)
 
     await expect(handler(createEvent())).rejects.toMatchObject({
       statusCode: 401,

@@ -900,11 +900,11 @@ describe('CommonChannelModule private helpers', () => {
     const { appProvider } = await import('../modules/box-tool/addon/apps/app-provider')
     ;(appProvider.listManagedEntries as ReturnType<typeof vi.fn>).mockResolvedValue([
       {
-        path: '/Applications/WeChat.app',
-        name: 'WeChat',
+        path: '/Applications/ChatApp.app',
+        name: 'ChatApp',
         enabled: true,
         launchKind: 'path',
-        launchTarget: '/Applications/WeChat.app'
+        launchTarget: '/Applications/ChatApp.app'
       }
     ])
     ;(appProvider.upsertManagedEntry as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -935,18 +935,18 @@ describe('CommonChannelModule private helpers', () => {
 
     await expect(listHandler?.({}, {})).resolves.toEqual([
       {
-        path: '/Applications/WeChat.app',
-        name: 'WeChat',
+        path: '/Applications/ChatApp.app',
+        name: 'ChatApp',
         enabled: true,
         launchKind: 'path',
-        launchTarget: '/Applications/WeChat.app'
+        launchTarget: '/Applications/ChatApp.app'
       }
     ])
     await expect(
       upsertHandler?.(
         {
-          path: '/Applications/WeChat.app',
-          displayName: '微信',
+          path: '/Applications/ChatApp.app',
+          displayName: '聊天应用',
           enabled: true
         },
         {}
@@ -961,20 +961,20 @@ describe('CommonChannelModule private helpers', () => {
       reason: 'path-empty'
     })
     await expect(
-      Promise.resolve(removeHandler?.({ path: '/Applications/WeChat.app' }, {}))
+      Promise.resolve(removeHandler?.({ path: '/Applications/ChatApp.app' }, {}))
     ).resolves.toEqual({
       success: true,
       status: 'removed'
     })
     await expect(
-      Promise.resolve(setEnabledHandler?.({ path: '/Applications/WeChat.app' }, {}))
+      Promise.resolve(setEnabledHandler?.({ path: '/Applications/ChatApp.app' }, {}))
     ).resolves.toEqual({
       success: false,
       status: 'invalid',
       reason: 'enabled-invalid'
     })
     await expect(
-      setEnabledHandler?.({ path: '/Applications/WeChat.app', enabled: false }, {})
+      setEnabledHandler?.({ path: '/Applications/ChatApp.app', enabled: false }, {})
     ).resolves.toEqual({
       success: true,
       status: 'updated'
@@ -982,13 +982,13 @@ describe('CommonChannelModule private helpers', () => {
 
     expect(appProvider.listManagedEntries).toHaveBeenCalledTimes(1)
     expect(appProvider.upsertManagedEntry).toHaveBeenCalledWith({
-      path: '/Applications/WeChat.app',
-      displayName: '微信',
+      path: '/Applications/ChatApp.app',
+      displayName: '聊天应用',
       enabled: true
     })
-    expect(appProvider.removeManagedEntry).toHaveBeenCalledWith('/Applications/WeChat.app')
+    expect(appProvider.removeManagedEntry).toHaveBeenCalledWith('/Applications/ChatApp.app')
     expect(appProvider.setManagedEntryEnabled).toHaveBeenCalledWith(
-      '/Applications/WeChat.app',
+      '/Applications/ChatApp.app',
       false
     )
   })

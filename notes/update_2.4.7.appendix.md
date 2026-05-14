@@ -166,7 +166,7 @@
 - `f58cc2c0` | 2026-01-21 | fix(plugin): route channel traffic through transport
 - `1ee6b680` | 2026-01-20 | chore(core-app): fix permission/audit types
 - `ec345d6f` | 2026-01-20 | chore(core-app): lint/type adjustments
-- `4f1a7e0d` | 2026-01-20 | feat(storage): [CFG-080] pilot sqlite config sync
+- `4f1a7e0d` | 2026-01-20 | feat(storage): [CFG-080] trial sqlite config sync
 - `d3d4c1a6` | 2026-01-19 | feat: Enhance perf monitoring, auth, and tuffex components
 - `fe31b427` | 2026-01-19 | feat(dependencies): update baseline-browser-mapping to version 2.9.15 and adjust related imports
 - `f86d4596` | 2026-01-19 | feat(agents): enhance agent management and integration features

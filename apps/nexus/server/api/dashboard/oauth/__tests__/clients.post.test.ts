@@ -41,8 +41,8 @@ describe('/api/dashboard/oauth/clients POST', () => {
     oauthAccessMocks.resolveOauthOwnerScope.mockReturnValue('team')
     readBodyMock.mockResolvedValue({
       scope: 'team',
-      name: 'Pilot Integration',
-      description: 'oauth for pilot',
+      name: 'OAuth Integration',
+      description: 'oauth integration',
       redirectUris: ['http://127.0.0.1:3201/auth/callback'],
     })
     oauthClientStoreMocks.createOauthClient.mockResolvedValue({
@@ -50,8 +50,8 @@ describe('/api/dashboard/oauth/clients POST', () => {
       clientId: 'nxo_abc',
       clientSecret: 'nxs_secret',
       clientSecretHint: 'nxs_secret...',
-      name: 'Pilot Integration',
-      description: 'oauth for pilot',
+      name: 'OAuth Integration',
+      description: 'oauth integration',
       redirectUris: ['http://127.0.0.1:3201/auth/callback'],
       ownerScope: 'team',
       ownerUserId: 'u_team_admin',
@@ -80,7 +80,7 @@ describe('/api/dashboard/oauth/clients POST', () => {
         ownerUserId: 'u_team_admin',
         ownerTeamId: 'org_1',
         createdByRole: 'team_admin',
-        name: 'Pilot Integration',
+        name: 'OAuth Integration',
       }),
     )
     expect(result).toMatchObject({

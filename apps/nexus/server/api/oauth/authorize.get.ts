@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { createError, getQuery, getRequestURL, sendRedirect } from 'h3'
 import { requireSessionAuth } from '../../utils/auth'
-import { createPilotOauthCode } from '../../utils/authStore'
+import { createOAuthCode } from '../../utils/authStore'
 import { getActiveOauthClientByClientId } from '../../utils/oauthClientStore'
 
 const DEFAULT_CODE_TTL_MS = 60_000
@@ -95,7 +95,7 @@ export default defineEventHandler(async (event) => {
     throw error
   }
 
-  const oauthCode = await createPilotOauthCode(event, {
+  const oauthCode = await createOAuthCode(event, {
     clientId,
     userId,
     redirectUri,

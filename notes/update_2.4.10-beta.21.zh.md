@@ -13,4 +13,3 @@
 
 - 该版本仍是 beta 测试包，不代表 `2.4.10` 正式发布 gate 已完成。
 - Windows 真机 acceptance、性能采样和 Nexus Release Evidence 写入仍是正式发布阻塞项。
-- 全量 `pnpm quality:pr` 当前仍会被 `apps/pilot` 既有 lint 债务阻断；本次只收口 beta 发布相关的 OmniPanel、Utils、插件与工具脚本质量阻断。

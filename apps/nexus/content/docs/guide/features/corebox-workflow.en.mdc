@@ -25,5 +25,5 @@
 
 ## Scope Notes
 
-- Pilot-side workflow is intentionally excluded here.
+- AI-side workflow is intentionally excluded here.
 - If docs and runtime differ, trust manifests and runtime implementation.

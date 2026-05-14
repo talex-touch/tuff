@@ -46,7 +46,7 @@ describe('/api/dashboard/oauth/clients/:id PATCH', () => {
     h3Mocks.getRouterParam.mockReturnValue('oauth_client_1')
     h3Mocks.readBody.mockResolvedValue({
       scope: 'team',
-      name: 'Pilot Integration Updated',
+      name: 'OAuth Integration Updated',
       description: 'updated',
       redirectUris: [
         'http://127.0.0.1:3201/auth/callback',
@@ -56,7 +56,7 @@ describe('/api/dashboard/oauth/clients/:id PATCH', () => {
       id: 'oauth_client_1',
       clientId: 'nxo_abc',
       clientSecretHint: 'nxs_secret...',
-      name: 'Pilot Integration Updated',
+      name: 'OAuth Integration Updated',
       description: 'updated',
       redirectUris: ['http://127.0.0.1:3201/auth/callback'],
       ownerScope: 'team',
@@ -80,13 +80,13 @@ describe('/api/dashboard/oauth/clients/:id PATCH', () => {
         id: 'oauth_client_1',
         ownerScope: 'team',
         ownerTeamId: 'org_1',
-        name: 'Pilot Integration Updated',
+        name: 'OAuth Integration Updated',
       }),
     )
     expect(result).toMatchObject({
       application: {
         id: 'oauth_client_1',
-        name: 'Pilot Integration Updated',
+        name: 'OAuth Integration Updated',
       },
     })
   })

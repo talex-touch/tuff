@@ -20,7 +20,7 @@ const LOGIN_HISTORY_TABLE = 'auth_login_history'
 const MERGE_LOGS_TABLE = 'auth_user_merges'
 const DEVICE_AUTH_TABLE = 'auth_device_auth_requests'
 const DEVICE_AUTH_AUDIT_TABLE = 'auth_device_auth_audits'
-const PILOT_OAUTH_CODE_TABLE = 'auth_pilot_oauth_codes'
+const OAUTH_CODE_TABLE = 'auth_oauth_codes'
 
 const DEVICE_AUTH_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000
 const DEVICE_AUTH_RATE_LIMIT_MAX_BY_DEVICE = 6
@@ -230,7 +230,7 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PILOT_OAUTH_CODE_TABLE} (
+    CREATE TABLE IF NOT EXISTS ${OAUTH_CODE_TABLE} (
       code TEXT PRIMARY KEY,
       client_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
@@ -347,8 +347,8 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_pilot_oauth_codes_client_user
-    ON ${PILOT_OAUTH_CODE_TABLE}(client_id, user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_oauth_codes_client_user
+    ON ${OAUTH_CODE_TABLE}(client_id, user_id, created_at DESC);
   `).run()
 
   const deviceColumns = await db.prepare(`PRAGMA table_info(${DEVICES_TABLE});`).all<{ name: string }>()
@@ -459,7 +459,7 @@ export interface AuthLoginHistoryRecord {
   geo_source: string | null
 }
 
-export interface PilotOauthCode {
+export interface OAuthCode {
   code: string
   clientId: string
   userId: string
@@ -1623,7 +1623,7 @@ export async function createLoginToken(event: H3Event, userId: string, reason: s
   return token
 }
 
-export async function createPilotOauthCode(
+export async function createOAuthCode(
   event: H3Event,
   payload: {
     clientId: string
@@ -1631,7 +1631,7 @@ export async function createPilotOauthCode(
     redirectUri: string
     ttlMs: number
   },
-): Promise<PilotOauthCode> {
+): Promise<OAuthCode> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
@@ -1639,7 +1639,7 @@ export async function createPilotOauthCode(
   const code = generateToken(24)
 
   await db.prepare(`
-    INSERT INTO ${PILOT_OAUTH_CODE_TABLE} (code, client_id, user_id, redirect_uri, expires_at, consumed_at, created_at)
+    INSERT INTO ${OAUTH_CODE_TABLE} (code, client_id, user_id, redirect_uri, expires_at, consumed_at, created_at)
     VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6)
   `).bind(code, payload.clientId, payload.userId, payload.redirectUri, expiresAt, now).run()
 
@@ -1654,20 +1654,20 @@ export async function createPilotOauthCode(
   }
 }
 
-export async function consumePilotOauthCode(
+export async function consumeOAuthCode(
   event: H3Event,
   payload: {
     code: string
     clientId: string
     redirectUri: string
   },
-): Promise<PilotOauthCode | null> {
+): Promise<OAuthCode | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
 
   const row = await db.prepare(`
     SELECT code, client_id, user_id, redirect_uri, expires_at, consumed_at, created_at
-    FROM ${PILOT_OAUTH_CODE_TABLE}
+    FROM ${OAUTH_CODE_TABLE}
     WHERE code = ?1
     LIMIT 1
   `).bind(payload.code).first<{
@@ -1694,7 +1694,7 @@ export async function consumePilotOauthCode(
 
   const consumedAt = new Date().toISOString()
   const result = await db.prepare(`
-    UPDATE ${PILOT_OAUTH_CODE_TABLE}
+    UPDATE ${OAUTH_CODE_TABLE}
     SET consumed_at = ?1
     WHERE code = ?2 AND consumed_at IS NULL
   `).bind(consumedAt, payload.code).run()

@@ -1,6 +1,6 @@
 # 跨平台兼容与占位实现复核报告（2026-05-12）
 
-> 复核范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*` 的生产源码、guard 脚本与 `plan-prd` 主入口。
+> 复核范围：`apps/core-app`、`apps/nexus`、`retired-ai-app`、`packages/*`、`plugins/*` 的生产源码、guard 脚本与 `plan-prd` 主入口。
 > 基线：`2.4.10-beta.19`。
 > 关系：本文是 `cross-platform-compat-placeholder-audit-2026-05-10.md` 的后续复核；旧报告保留为历史基线，当前执行口径以本文和 `TODO.md` 为准。
 
@@ -8,10 +8,10 @@
 
 跨平台与假实现治理已经从“识别问题”进入“证据和退场”阶段：
 
-- 2026-05-10 报告里的三类 P0/P1 假成功路径已基本收口：Pilot 系统状态改为 runtime metrics，Pilot 支付 mock 由 `PILOT_PAYMENT_MODE=mock` 显式门控，`plugins/touch-image` 图片历史迁入 plugin storage SDK 并保留一次性 retired localStorage 迁移。
+- 2026-05-10 报告里的三类 P0/P1 假成功路径已基本收口：AI 系统状态改为 runtime metrics，AI 支付 mock 由 `AIAPP_PAYMENT_MODE=mock` 显式门控，`plugins/touch-image` 图片历史迁入 plugin storage SDK 并保留一次性 retired localStorage 迁移。
 - CoreApp 生产 raw channel 直连没有新增未授权命中；`transport-event-boundary.test.ts` 继续把 raw send、retained raw definition、typed migration candidate 分开统计，typed candidate 保持 `0`，retained raw definition 上限为 `264`。
 - 当前最大 blocker 仍不在本地实现，而是真实设备证据：Windows `2.4.10` release gate 必须补齐 acceptance manifest、常见 App 启动、复制 app path、本地启动区索引、Everything target probe、更新安装、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 与 Nexus Release Evidence 写入。
-- 结构治理继续有效，但主线仍有 52 个 `>=1200` 行文件；`size:guard:report` 当前显示 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`，说明没有回涨，但 `plugin-module`、`file-provider`、`app-provider`、Nexus/Pilot 大文件仍是 2.4.11 前的 SRP 余量。
+- 结构治理继续有效，但主线仍有 52 个 `>=1200` 行文件；`size:guard:report` 当前显示 `newOversizedFiles=0`、`grownOversizedFiles=0`、`cleanupCandidates=0`，说明没有回涨，但 `plugin-module`、`file-provider`、`app-provider`、Nexus/AI 大文件仍是 2.4.11 前的 SRP 余量。
 
 质量判断：当前代码比 2026-05-10 更稳，已消除最危险的“假值成功”默认路径；下一步应停止扩大治理范围，集中补真实设备证据和关闭清册退场项。
 
@@ -19,9 +19,9 @@
 
 ### 已收口项
 
-- `apps/pilot/server/api/system/serve/stat.get.ts` 已改为 `buildPilotServeStat()`，不再返回 `Mock CPU` / `pilot-mock` / 固定磁盘内存。
-- `apps/pilot/server/utils/pilot-payment-service.ts` 的 mock 支付 URL 仍存在，但所有创建/查询 pending mock 订单路径都会先执行 `ensurePilotPaymentMockEnabled()`；非 mock 环境返回 `PAYMENT_PROVIDER_UNAVAILABLE`。
-- `apps/pilot/server/api/order/price/dummy.get.ts`、`balance.post.ts`、`subscribe.post.ts`、`target.get.ts` 均处理 `PAYMENT_PROVIDER_UNAVAILABLE`，不会默认成功返回 mock 订单。
+- `retired-ai-app/server/api/system/serve/stat.get.ts` 已改为 `buildAIServeStat()`，不再返回 `Mock CPU` / `aiapp-mock` / 固定磁盘内存。
+- `retired-ai-app/server/utils/aiapp-payment-service.ts` 的 mock 支付 URL 仍存在，但所有创建/查询 pending mock 订单路径都会先执行 `ensureAIPaymentMockEnabled()`；非 mock 环境返回 `PAYMENT_PROVIDER_UNAVAILABLE`。
+- `retired-ai-app/server/api/order/price/dummy.get.ts`、`balance.post.ts`、`subscribe.post.ts`、`target.get.ts` 均处理 `PAYMENT_PROVIDER_UNAVAILABLE`，不会默认成功返回 mock 订单。
 - `plugins/touch-image/src/App.vue` 使用 `usePluginStorage()` 保存 `history-images.json`，只读取旧 `historyImgs` localStorage 做一次性迁移后删除，并限制历史上限为 50 条。
 - `pnpm compat:registry:guard` 已通过：`compat-file=5`，`legacy-keyword=0`，`raw-channel-send=0`，`legacy-transport-import=0`，`legacy-permission-import=0`。
 - `pnpm -C "apps/core-app" run runtime:guard` 已通过。
@@ -41,7 +41,7 @@
 本地 verifier 和模板已经很细，但不能替代真实设备。`2.4.10` 正式 gate 仍缺：
 
 - Windows acceptance manifest 最终强门禁。
-- 微信 / Codex / Apple Music 等常见 App 搜索、图标、启动与 CoreBox 隐藏证据。
+- 聊天应用 / Codex / Apple Music 等常见 App 搜索、图标、启动与 CoreBox 隐藏证据。
 - 复制 app path 加入本地启动区后的 reindex、搜索命中和 indexed result launch 闭环。
 - Everything target probe、App Index diagnostic、Windows update install、DivisionBox detached widget、分时推荐手工证据。
 - Search trace `200` 样本和 Clipboard stress `120000ms` 压测。
@@ -67,12 +67,12 @@
 
 ### P1：超长模块仍需要小步 SRP
 
-本轮无新增/增长，但 `file-provider.ts`、`plugin-module.ts`、`app-provider.ts`、Nexus provider/lab/store、Pilot stream/tool gateway 等仍超过 1200 行。后续不要做大爆炸重构，优先按“可测试 helper + 保持外部合同”拆：
+本轮无新增/增长，但 `file-provider.ts`、`plugin-module.ts`、`app-provider.ts`、Nexus provider/lab/store、AI stream/tool gateway 等仍超过 1200 行。后续不要做大爆炸重构，优先按“可测试 helper + 保持外部合同”拆：
 
 - `file-provider.ts`：扫描状态/索引调度/thumbnail pipeline/诊断导出边界。
 - `plugin-module.ts`：lifecycle、runtime repair、surface/window wiring、registry 更新。
 - `app-provider.ts`：launch resolver、metadata enrichment、diagnostic evidence。
-- Nexus/Pilot 大文件：先拆 request parsing、sanitizer、provider adapter、view state composable。
+- Nexus/AI 大文件：先拆 request parsing、sanitizer、provider adapter、view state composable。
 
 ## 4. 下一步建议
 

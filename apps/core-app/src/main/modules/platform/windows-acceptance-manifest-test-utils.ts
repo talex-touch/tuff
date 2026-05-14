@@ -10,7 +10,7 @@ export function buildManifest(
     platform: 'win32',
     verification: {
       recommendedCommand:
-        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets WeChat,Codex,"Apple Music"'
+        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"'
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => ({
       caseId,
@@ -37,9 +37,9 @@ export function buildManifest(
     },
     manualChecks: {
       commonAppLaunch: {
-        targets: ['WeChat', 'Codex', 'Apple Music'],
-        passedTargets: ['WeChat', 'Codex', 'Apple Music'],
-        checks: ['WeChat', 'Codex', 'Apple Music'].map((target) => ({
+        targets: ['ChatApp', 'Codex', 'Apple Music'],
+        passedTargets: ['ChatApp', 'Codex', 'Apple Music'],
+        checks: ['ChatApp', 'Codex', 'Apple Music'].map((target) => ({
           target,
           searchQuery: target,
           searchHit: true,
