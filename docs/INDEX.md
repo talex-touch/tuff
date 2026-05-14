@@ -33,7 +33,7 @@
 ## 状态快照（2026-05-13，统一口径）
 
 - **当前工作区基线**：`2.4.10-beta.22`（根包与 CoreApp 对齐）。
-- **2.4.10-beta.22 发布准备（2026-05-13）**：`build-and-release` 支持 tag push 触发 beta pre-release；`v2.4.10-beta.21` 已存在，下一次新 beta 使用 `v2.4.10-beta.22`。本轮已补 `notes/update_2.4.10-beta.22.{zh,en}.md`，合入 Widget/CLI 最新修复、兼容性复核记录，并延续 OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果；完整 `quality:pr` 仍被 `retired-ai-app` 既有 lint 债务阻断。
+- **2.4.10-beta.22 发布准备（2026-05-14）**：`build-and-release` 支持 tag push 触发 beta pre-release；`v2.4.10-beta.21` 已存在，下一次新 beta 使用 `v2.4.10-beta.22`。本轮已补 `notes/update_2.4.10-beta.22.{zh,en}.md`，合入 Widget/CLI 最新修复、兼容性复核记录，并延续 OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果；`quality:pr` lint 阶段已改为只检查 PR 修改的 JS/TS/Vue 文件，`quality:release` 仍保留全仓 lint。
 - **2.4.10 当前主线**：优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口；Windows App Search & Launch Beta 已开始落地应用索引管理页、Steam 最小 provider 与 `protocol` 启动白名单；不把全部跨平台回归压进 `2.4.10`。
 - **2.4.10 Windows 发版 gate**：功能实现与本地 verifier 已进入收口态，但当前版本发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是在 Windows 真机生成 acceptance collection plan，并按同一清单补齐 Windows acceptance manifest 最终强门禁、聊天应用/Codex/Apple Music 常见 App 启动、复制 app path 加入本地启动区、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐，外加 search trace `200` 样本和 clipboard stress `120000ms` 压测；Nexus Release Evidence 写入闭环仍是发版阻塞项。
 - **立即执行顺序（2026-05-13）**：先确认工作区本地噪声不混入提交，再生成 Windows acceptance collection plan，随后采集 case/manual/performance evidence，运行 `windows:acceptance:verify` final gate，最后写入 Nexus Release Evidence；`2.5.0` AI、Provider Registry 高级策略与 SRP 大拆分不得抢占正式 `2.4.10` gate。

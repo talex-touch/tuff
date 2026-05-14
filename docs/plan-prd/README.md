@@ -24,7 +24,7 @@
 ## 单一口径快照（2026-05-13）
 
 - 当前工作区基线：`2.4.10-beta.22`。
-- 发布准备：`2.4.10-beta.22` 已补中英文 release notes；`build-and-release` 仍支持 tag push 触发 beta pre-release，`v2.4.10-beta.21` 已存在，下一次新 beta 使用 `v2.4.10-beta.22`。本轮已合入 Widget/CLI 最新修复、兼容性复核记录，并延续 OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果；完整 `quality:pr` 仍被 `retired-ai-app` 既有 lint 债务阻断，不得宣称全仓 PR gate 已绿。
+- 发布准备：`2.4.10-beta.22` 已补中英文 release notes；`build-and-release` 仍支持 tag push 触发 beta pre-release，`v2.4.10-beta.21` 已存在，下一次新 beta 使用 `v2.4.10-beta.22`。本轮已合入 Widget/CLI 最新修复、兼容性复核记录，并延续 OmniPanel Gate、Utils Package CI 与 macOS beta build 准备结果；`quality:pr` lint 阶段已改为只检查 PR 修改的 JS/TS/Vue 文件，避免既有全仓 lint 债务阻塞无关 PR；`quality:release` 仍保留全仓 lint。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验与基础 legacy/compat 收口。
 - 当前版本 Windows 发版 gate：功能实现与本地 verifier 已进入收口态，但发版必须先补齐 Windows 真机 evidence 与性能 evidence；当前最需要做的是先在 Windows 真机生成 acceptance collection plan，再逐项补齐常见 App 启动、复制 app path、本地启动区索引、Everything target probe、自动安装更新、DivisionBox detached widget、分时推荐、search trace `200` 样本、clipboard stress `120000ms` 压测，并完成 Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 必须关闭剩余未闭环项；清册内 legacy/compat/size 债务退场目标统一前移到 `2.4.11`。

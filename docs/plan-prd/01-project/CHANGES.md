@@ -5,6 +5,16 @@
 
 ## 2026-05-14
 
+### ci(quality): scope PR lint to changed files
+
+- `package.json`
+- `scripts/run-eslint-changed.mjs`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/TODO.md`
+  - `quality:pr` 的 lint 阶段从全仓 `pnpm lint` 调整为 `pnpm lint:changed`，PR CI 中按 `GITHUB_BASE_REF` 与 `origin/<base>` 计算三点 diff，仅 lint PR 修改过的 JS/TS/Vue 文件。
+  - 本地 `lint:changed` 默认仍保持 lint 工作区未提交 JS/TS/Vue 改动，避免影响开发态检查习惯。
+  - 该调整用于避免既有全仓 lint 债务阻塞无关 PR；`quality:release` 仍保留全仓 lint，不降低 release gate。
+
 ### docs(transport): close retained event follow-up scan
 
 - `docs/plan-prd/04-implementation/TransportRetainedEventWireNamePlan-260514.md`
