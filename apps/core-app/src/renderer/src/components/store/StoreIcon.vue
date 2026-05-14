@@ -80,20 +80,20 @@ const tuffIcon = computed<ITuffIcon>(() => {
 <style lang="scss" scoped>
 .store-icon {
   flex-shrink: 0;
-  width: 44px;
-  height: 44px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
-  // background: linear-gradient(
-  //   135deg,
-  //   rgba(var(--tx-color-primary-rgb), 0.18),
-  //   rgba(var(--tx-color-primary-rgb), 0.05)
-  // );
-  border-radius: 14px;
-  border: 1px solid rgba(var(--tx-color-primary-rgb), 0.15);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tx-fill-color-light, #eef1f5) 88%, var(--tx-bg-color, #fff)),
+    color-mix(in srgb, var(--tx-fill-color-lighter, #f5f7fa) 72%, var(--tx-bg-color, #fff))
+  );
+  border-radius: 16px;
+  border: 1px solid rgba(var(--tx-color-primary-rgb), 0.18);
   transition: all 0.25s ease;
-  font-size: 22px;
+  font-size: 30px;
   color: var(--tx-color-primary);
 }
 </style>

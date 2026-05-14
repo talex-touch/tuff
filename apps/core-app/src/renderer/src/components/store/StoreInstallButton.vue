@@ -220,29 +220,25 @@ function handleClick(event: MouseEvent): void {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: conic-gradient(
-    var(--tx-color-primary) var(--progress),
-    rgba(var(--tx-color-primary-rgb), 0.15) 0
-  );
+  background:
+    radial-gradient(circle at center, var(--tx-bg-color-overlay) 0 54%, transparent 56%),
+    conic-gradient(
+      var(--tx-color-primary) 0 var(--progress),
+      rgba(var(--tx-color-primary-rgb), 0.18) var(--progress) 100%
+    );
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--tx-color-primary);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.65rem;
-}
-
-.install-progress::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: var(--tx-bg-color-overlay);
+  box-shadow: inset 0 0 0 1px rgba(var(--tx-color-primary-rgb), 0.16);
 }
 
 .install-progress span {
   position: relative;
   z-index: 1;
+  line-height: 1;
 }
 
 .animate-spin {

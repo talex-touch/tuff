@@ -276,7 +276,7 @@ watch(
     gap: 1rem;
 
     .store-grid-item {
-      height: 100px;
+      height: 146px;
     }
   }
 }
