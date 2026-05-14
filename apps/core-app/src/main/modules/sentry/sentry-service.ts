@@ -454,7 +454,8 @@ export class SentryServiceModule extends BaseModule {
   private scheduleTelemetryStatsHydration(): void {
     if (this.telemetryStatsHydratePromise) return
     const startedAt = performance.now()
-    this.telemetryStatsHydratePromise = this.hydrateTelemetryStats().finally(() => {
+    const baseline = this.telemetryStatsSnapshot()
+    this.telemetryStatsHydratePromise = this.hydrateTelemetryStats(baseline).finally(() => {
       sentryLog.debug('Telemetry upload stats hydration finished', {
         meta: { durationMs: Math.round(performance.now() - startedAt) }
       })
@@ -483,10 +484,19 @@ export class SentryServiceModule extends BaseModule {
     }
   }
 
-  private applyHydratedTelemetryStats(record: TelemetryUploadStatsRecord): void {
-    this.searchCount = Math.max(this.searchCount, record.searchCount)
-    this.totalNexusUploads = Math.max(this.totalNexusUploads, record.totalUploads)
-    this.failedNexusUploads = Math.max(this.failedNexusUploads, record.failedUploads)
+  private applyHydratedTelemetryStats(
+    record: TelemetryUploadStatsRecord,
+    baseline: TelemetryUploadStatsRecord
+  ): void {
+    this.searchCount =
+      Math.max(record.searchCount, baseline.searchCount) +
+      Math.max(0, this.searchCount - baseline.searchCount)
+    this.totalNexusUploads =
+      Math.max(record.totalUploads, baseline.totalUploads) +
+      Math.max(0, this.totalNexusUploads - baseline.totalUploads)
+    this.failedNexusUploads =
+      Math.max(record.failedUploads, baseline.failedUploads) +
+      Math.max(0, this.failedNexusUploads - baseline.failedUploads)
     this.lastNexusUploadTime =
       Math.max(this.lastNexusUploadTime ?? 0, record.lastUploadTime ?? 0) || null
 
@@ -504,13 +514,13 @@ export class SentryServiceModule extends BaseModule {
     }
   }
 
-  private async hydrateTelemetryStats(): Promise<void> {
+  private async hydrateTelemetryStats(baseline: TelemetryUploadStatsRecord): Promise<void> {
     const store = this.getTelemetryStatsStore()
     if (!store) return
     try {
       const record = await store.get()
       if (!record) return
-      this.applyHydratedTelemetryStats(record)
+      this.applyHydratedTelemetryStats(record, baseline)
     } catch (error) {
       sentryLog.warn('Failed to hydrate telemetry upload stats', {
         meta: { error: error instanceof Error ? error.message : String(error) }
