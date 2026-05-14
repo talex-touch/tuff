@@ -7,6 +7,7 @@ import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langc
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { createError, type H3Event } from 'h3'
 import { getUserById } from './authStore'
+import { consumeCredits } from './creditsStore'
 import { resolveProviderBaseUrl } from './intelligenceModels'
 import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import {
@@ -235,6 +236,7 @@ const DEFAULT_PROVIDER_RETRY_COUNT = 1
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000
 const STREAM_CONTRACT_VERSION = 3
 const STREAM_ENGINE = 'intelligence'
+const CREDITS_EXCEEDED_MESSAGES = new Set(['Team credits exceeded.', 'User credits exceeded.'])
 const SUPPORTED_CAPABILITY_IDS = ['text.chat', 'content.extract'] as const
 const AGENT_PROMPT_CAPABILITY = {
   intent: 'agent.intent',
@@ -1315,6 +1317,49 @@ function normalizeTextResult(capabilityId: string, content: string): unknown {
   return content
 }
 
+function isCreditsExceededError(error: unknown): error is Error {
+  return error instanceof Error && CREDITS_EXCEEDED_MESSAGES.has(error.message)
+}
+
+async function consumeIntelligenceInvokeCredits(
+  event: H3Event,
+  userId: string,
+  invocation: NexusIntelligenceInvokeResult,
+): Promise<void> {
+  const usage = normalizeUsage(invocation.usage)
+  const tokens = usage.totalTokens
+  if (!Number.isFinite(tokens) || tokens <= 0) {
+    return
+  }
+
+  try {
+    await consumeCredits(event, userId, tokens, 'intelligence-invoke', {
+      capabilityId: invocation.capabilityId,
+      providerId: invocation.provider,
+      providerName: invocation.metadata.providerName,
+      providerType: invocation.metadata.providerType,
+      model: invocation.model,
+      traceId: invocation.traceId,
+      tokens,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      source: 'core-app',
+    })
+  } catch (error) {
+    if (isCreditsExceededError(error)) {
+      throw createError({
+        statusCode: 402,
+        statusMessage: 'CREDITS_EXCEEDED',
+        data: {
+          code: 'CREDITS_EXCEEDED',
+          reason: error.message,
+        },
+      })
+    }
+    throw error
+  }
+}
+
 function providerHasRegistryCapability(provider: ProviderRegistryRecord, capability: string): boolean {
   return provider.capabilities.some(item => item.capability === capability)
 }
@@ -1396,7 +1441,7 @@ export async function invokeIntelligenceCapability(
     const provider = await resolveVisionOcrProvider(event, userId, providerId)
     const startedAt = now()
     const ocr = await invokeIntelligenceVisionOcr(event, provider, request.payload)
-    return {
+    const result: NexusIntelligenceInvokeResult = {
       capabilityId,
       result: ocr.output,
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
@@ -1413,6 +1458,8 @@ export async function invokeIntelligenceCapability(
         attemptedProviders: [provider.id],
       },
     }
+    await consumeIntelligenceInvokeCredits(event, userId, result)
+    return result
   }
 
   const messages = buildCapabilityMessages(capabilityId, request.payload)
@@ -1426,7 +1473,7 @@ export async function invokeIntelligenceCapability(
     sessionId: readOptionalString(options.metadata?.sessionId),
   })
 
-  return {
+  const result: NexusIntelligenceInvokeResult = {
     capabilityId,
     result: normalizeTextResult(capabilityId, invocation.result.content),
     usage: normalizeUsage(invocation.result.usage),
@@ -1443,6 +1490,8 @@ export async function invokeIntelligenceCapability(
       attemptedProviders: invocation.attemptedProviders,
     },
   }
+  await consumeIntelligenceInvokeCredits(event, userId, result)
+  return result
 }
 
 async function analyzeIntentWithModel(

@@ -96,4 +96,26 @@ describe('/api/v1/intelligence/invoke', () => {
     })
     expect(intelligenceMocks.invokeIntelligenceCapability).not.toHaveBeenCalled()
   })
+
+  it('credits 不足时透传明确错误', async () => {
+    intelligenceMocks.invokeIntelligenceCapability.mockRejectedValueOnce(
+      Object.assign(new Error('CREDITS_EXCEEDED'), {
+        statusCode: 402,
+        statusMessage: 'CREDITS_EXCEEDED',
+        data: {
+          code: 'CREDITS_EXCEEDED',
+          reason: 'User credits exceeded.',
+        },
+      }),
+    )
+
+    await expect(invokeHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 402,
+      statusMessage: 'CREDITS_EXCEEDED',
+      data: {
+        code: 'CREDITS_EXCEEDED',
+        reason: 'User credits exceeded.',
+      },
+    })
+  })
 })
