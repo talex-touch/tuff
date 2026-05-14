@@ -5,8 +5,7 @@ import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 
@@ -51,7 +50,6 @@ declare global {
 const scrollbar = ref()
 const boxInputRef = ref()
 const transport = useTuffTransport()
-const focusInputEvent = defineRawEvent<void, void>('corebox:focus-input')
 const boxOptions = reactive<IBoxOptions>({
   lastHidden: -1,
   mode: BoxMode.INPUT,
@@ -415,7 +413,7 @@ const previewHistory = usePreviewHistory({
 const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, (payload) => {
   logDebug('[CoreBox] UI mode exited from main process, deactivating providers')
   deactivateAllProviders().catch((error) => {
-    console.error('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
+    logDebug('[CoreBox] Failed to deactivate providers on UI mode exit:', error)
   })
 
   // Reset input state if requested
@@ -449,7 +447,10 @@ const actionPanel = useActionPanel({
 })
 
 // Channel: focus input
-const unregFocusInput = transport.on(focusInputEvent, () => focusInput())
+const unregFocusInput = transport.on(CoreBoxRetainedEvents.input.focus, () => focusInput())
+const unregLegacyFocusInput = transport.on(CoreBoxRetainedEvents.legacy.focusInput, () =>
+  focusInput()
+)
 
 onMounted(() => {
   resetAutoPasteState()
@@ -460,6 +461,7 @@ onBeforeUnmount(() => {
   cleanupVisibility()
   unregUIModeExited()
   unregFocusInput()
+  unregLegacyFocusInput()
   if (resWatchTimerId !== null) {
     clearTimeout(resWatchTimerId)
     resWatchTimerId = null

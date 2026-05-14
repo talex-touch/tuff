@@ -42,7 +42,8 @@ const AUTH_TOKEN_PURPOSE = 'auth-token'
 const MACHINE_SEED_PURPOSE = 'machine-seed'
 const MACHINE_CODE_VERSION = 'mc_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
-const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
+const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 12_000
+const AUTH_PROFILE_REQUEST_RETRY_DELAY_MS = 800
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 
 type AuthStateListener = (state: AuthState) => void
@@ -472,17 +473,22 @@ type FetchRemoteUserResult =
   | { kind: 'unauthorized' }
   | { kind: 'unavailable' }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function fetchRemoteUser(
   token: string,
   signal?: AbortSignal
 ): Promise<FetchRemoteUserResult> {
+  const url = new URL('/api/v1/auth/me', resolveAuthBaseUrl()).toString()
   try {
-    const url = new URL('/api/v1/auth/me', resolveAuthBaseUrl()).toString()
-    const response = await getNetworkService().request<AuthUser>({
+    const response = await getNetworkService().request<AuthUser | null>({
       method: 'GET',
       url,
       headers: { Authorization: normalizeBearerToken(token) },
       signal,
+      timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
       responseType: 'json',
       validateStatus: [200, 401, 403]
     })
@@ -492,21 +498,37 @@ async function fetchRemoteUser(
       }
       return { kind: 'unavailable' }
     }
-    const data = response.data as AuthUser
-    return { kind: 'success', user: toAuthUserProfile(data) }
-  } catch {
+    const data = response.data
+    if (!data || typeof data.id !== 'string' || typeof data.email !== 'string') {
+      return { kind: 'unauthorized' }
+    }
+    return { kind: 'success', user: toAuthUserProfile(data as AuthUser) }
+  } catch (error) {
+    authLog.warn('Failed to fetch remote auth profile', {
+      error,
+      meta: {
+        url,
+        timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS
+      }
+    })
     return { kind: 'unavailable' }
   }
 }
 
 async function fetchRemoteUserWithTimeout(token: string): Promise<FetchRemoteUserResult> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), AUTH_PROFILE_REQUEST_TIMEOUT_MS)
-  try {
-    return await fetchRemoteUser(token, controller.signal)
-  } finally {
-    clearTimeout(timer)
+  const first = await fetchRemoteUser(token)
+  if (first.kind !== 'unavailable') {
+    return first
   }
+
+  await delay(AUTH_PROFILE_REQUEST_RETRY_DELAY_MS)
+  authLog.info('Retrying remote auth profile fetch', {
+    meta: {
+      retryDelayMs: AUTH_PROFILE_REQUEST_RETRY_DELAY_MS,
+      timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS
+    }
+  })
+  return await fetchRemoteUser(token)
 }
 
 async function refreshAuthStateFromRemote(): Promise<void> {
@@ -635,9 +657,10 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     return true
   }
 
+  authLog.warn('Auth callback accepted token but user profile is unavailable')
   updateAuthState(null)
   scheduleAuthStartupRefresh(2_000)
-  return true
+  return false
 }
 
 function resolveNexusRequestUrl(payload: { url?: string; path?: string }): string {

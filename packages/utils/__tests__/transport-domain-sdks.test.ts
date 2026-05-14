@@ -5,6 +5,7 @@ import {
   AccountEvents,
   AuthEvents,
   ClipboardEvents,
+  CoreBoxRetainedEvents,
   NativeEvents,
   OpenerEvents,
   PermissionEvents,
@@ -249,6 +250,130 @@ describe('transport domain sdk mappings', () => {
     )
     expect(AccountEvents.legacy.recordSyncActivity.toEventName()).toBe(
       'account:record-sync-activity',
+    )
+  })
+
+  it('corebox retained events expose canonical names and retained legacy aliases', () => {
+    expect(CoreBoxRetainedEvents.beginner.shortcutTriggered.toEventName()).toBe(
+      'beginner:shortcut:triggered',
+    )
+    expect(CoreBoxRetainedEvents.input.focus.toEventName()).toBe(
+      'core-box:input:focus',
+    )
+    expect(CoreBoxRetainedEvents.input.focus).toMatchObject({
+      namespace: 'core-box',
+      module: 'input',
+      action: 'focus',
+    })
+    expect(CoreBoxRetainedEvents.ui.resume.toEventName()).toBe(
+      'core-box:ui:resume',
+    )
+    expect(CoreBoxRetainedEvents.ui.show.toEventName()).toBe(
+      'core-box:ui:show',
+    )
+    expect(CoreBoxRetainedEvents.ui.hide.toEventName()).toBe(
+      'core-box:ui:hide',
+    )
+    expect(CoreBoxRetainedEvents.ui.expand.toEventName()).toBe(
+      'core-box:ui:expand',
+    )
+    expect(CoreBoxRetainedEvents.ui.focusWindow.toEventName()).toBe(
+      'core-box:ui:focus-window',
+    )
+    expect(CoreBoxRetainedEvents.ui.getUIViewState.toEventName()).toBe(
+      'core-box:ui:get-ui-view-state',
+    )
+    expect(CoreBoxRetainedEvents.ui.shortcutTriggered.toEventName()).toBe(
+      'core-box:ui:shortcut-triggered',
+    )
+    expect(CoreBoxRetainedEvents.ui.uiModeExited.toEventName()).toBe(
+      'core-box:ui:mode-exited',
+    )
+    expect(CoreBoxRetainedEvents.ui.hideInput.toEventName()).toBe(
+      'core-box:ui:hide-input',
+    )
+    expect(CoreBoxRetainedEvents.ui.showInput.toEventName()).toBe(
+      'core-box:ui:show-input',
+    )
+    expect(CoreBoxRetainedEvents.ui.focusWindow).toMatchObject({
+      namespace: 'core-box',
+      module: 'ui',
+      action: 'focus-window',
+    })
+    expect(CoreBoxRetainedEvents.recommendation.get.toEventName()).toBe(
+      'core-box:recommendation:get',
+    )
+    expect(CoreBoxRetainedEvents.recommendation.aggregateTimeStats.toEventName()).toBe(
+      'core-box:recommendation:aggregate-time-stats',
+    )
+    expect(CoreBoxRetainedEvents.recommendation.isPinned.toEventName()).toBe(
+      'core-box:recommendation:is-pinned',
+    )
+    expect(CoreBoxRetainedEvents.previewHistory.show.toEventName()).toBe(
+      'core-box:preview-history:show',
+    )
+    expect(CoreBoxRetainedEvents.preview.copy.toEventName()).toBe(
+      'core-box:preview:copy',
+    )
+    expect(CoreBoxRetainedEvents.actionPanel.open.toEventName()).toBe(
+      'core-box:action-panel:open',
+    )
+    expect(CoreBoxRetainedEvents.metaOverlay.itemAction.toEventName()).toBe(
+      'core-box:meta-overlay:item-action',
+    )
+    expect(CoreBoxRetainedEvents.legacy.beginnerShortcutTriggered.toEventName()).toBe(
+      'beginner:shortcut-triggered',
+    )
+    expect(CoreBoxRetainedEvents.legacy.focusInput.toEventName()).toBe(
+      'corebox:focus-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.openActionPanel.toEventName()).toBe(
+      'corebox:open-action-panel',
+    )
+    expect(CoreBoxRetainedEvents.legacy.metaOverlayItemAction.toEventName()).toBe(
+      'meta-overlay:item-action',
+    )
+    expect(CoreBoxRetainedEvents.legacy.show.toEventName()).toBe(
+      'core-box:show',
+    )
+    expect(CoreBoxRetainedEvents.legacy.hide.toEventName()).toBe(
+      'core-box:hide',
+    )
+    expect(CoreBoxRetainedEvents.legacy.expand.toEventName()).toBe(
+      'core-box:expand',
+    )
+    expect(CoreBoxRetainedEvents.legacy.focusWindow.toEventName()).toBe(
+      'core-box:focus-window',
+    )
+    expect(CoreBoxRetainedEvents.legacy.getUIViewState.toEventName()).toBe(
+      'core-box:get-ui-view-state',
+    )
+    expect(CoreBoxRetainedEvents.legacy.shortcutTriggered.toEventName()).toBe(
+      'core-box:shortcut-triggered',
+    )
+    expect(CoreBoxRetainedEvents.legacy.uiModeExited.toEventName()).toBe(
+      'core-box:ui-mode-exited',
+    )
+    expect(CoreBoxRetainedEvents.legacy.hideInput.toEventName()).toBe(
+      'core-box:hide-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.showInput.toEventName()).toBe(
+      'core-box:show-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.allowInput.toEventName()).toBe(
+      'core-box:allow-input',
+    )
+    expect(CoreBoxRetainedEvents.legacy.uiResume.toEventName()).toBe(
+      'core-box:ui-resume',
+    )
+    expect(CoreBoxRetainedEvents.legacy.getRecommendations.toEventName()).toBe(
+      'core-box:get-recommendations',
+    )
+    expect(CoreBoxRetainedEvents.legacy.aggregateTimeStats.toEventName()).toBe(
+      'core-box:aggregate-time-stats',
+    )
+    expect(CoreBoxRetainedEvents.legacy.isPinned.toEventName()).toBe(
+      'core-box:is-pinned',
     )
   })
 

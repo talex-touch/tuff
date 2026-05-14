@@ -1,6 +1,7 @@
 <script lang="ts" name="CoreBoxRender" setup>
 import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
+import { CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { computed } from 'vue'
 import BoxItem from './BoxItem.vue'
 import WidgetFrame from './WidgetFrame.vue'
@@ -46,9 +47,15 @@ function handleShowHistory(): void {
 function handleCopyPrimary(): void {
   const value = customPayload.value?.primaryValue
   if (!value) return
+  const detail = { value, item: props.item }
   window.dispatchEvent(
-    new CustomEvent('corebox:copy-preview', {
-      detail: { value, item: props.item }
+    new CustomEvent(CoreBoxRetainedEvents.preview.copy.toEventName(), {
+      detail
+    })
+  )
+  window.dispatchEvent(
+    new CustomEvent(CoreBoxRetainedEvents.legacy.copyPreview.toEventName(), {
+      detail
     })
   )
 }

@@ -10,6 +10,7 @@ import type { StorePluginListItem } from '~/composables/store/useStoreData'
 import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
 import { TxRating } from '@talex-touch/tuffex'
 import { computed, onMounted, watch } from 'vue'
+import StoreInstallButton from '~/components/store/StoreInstallButton.vue'
 import { useI18n } from 'vue-i18n'
 import StoreDetailSkeleton from '~/components/store/StoreDetailSkeleton.vue'
 import { useStoreData } from '~/composables/store/useStoreData'
@@ -18,6 +19,7 @@ import { resolveStoreRatingErrorMessage } from '~/composables/store/store-rating
 import { useStoreRating } from '~/composables/store/useStoreRating'
 import { useStoreReadme } from '~/composables/store/useStoreReadme'
 import { usePluginVersionStatus } from '~/composables/store/usePluginVersionStatus'
+import { useStoreInstall } from '~/composables/store/useStoreInstall'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 const props = withDefaults(
@@ -40,6 +42,7 @@ const { plugins: storePlugins, loading, loadStorePlugins } = useStoreData()
 
 // Plugin version status (for checking installed plugins and upgrade availability)
 const { usePluginStatus } = usePluginVersionStatus()
+const { getInstallTask, handleInstall } = useStoreInstall()
 
 const activePlugin = computed<StorePluginListItem | null>(() => {
   // Match by both id and providerId to distinguish plugins from different sources
@@ -56,6 +59,9 @@ const notFound = computed(
 
 /** Plugin version status (installed, upgrade available, etc.) */
 const pluginStatus = usePluginStatus(activePlugin)
+const installTask = computed(() =>
+  activePlugin.value ? getInstallTask(activePlugin.value.id, activePlugin.value.providerId) : null
+)
 
 const { detailMeta } = useStoreDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
@@ -83,6 +89,14 @@ const {
 const ratingErrorText = computed(() => {
   return resolveStoreRatingErrorMessage(ratingError.value, t)
 })
+
+async function onInstallActivePlugin(): Promise<void> {
+  if (!activePlugin.value) return
+  await handleInstall(
+    activePlugin.value,
+    pluginStatus.value.hasUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined
+  )
+}
 
 async function onRatingChange(value: number): Promise<void> {
   const previous = userRating.value
@@ -119,6 +133,19 @@ onMounted(() => {
     <StoreDetailSkeleton v-if="loading" />
 
     <div v-else-if="activePlugin" class="h-full flex flex-col p-4">
+      <div class="detail-install-action">
+        <StoreInstallButton
+          :plugin-name="activePlugin.name"
+          :is-installed="pluginStatus.isInstalled"
+          :has-upgrade="pluginStatus.hasUpgrade"
+          :installed-version="pluginStatus.installedVersion"
+          :store-version="pluginStatus.storeVersion"
+          :install-task="installTask"
+          :mini="false"
+          @install="onInstallActivePlugin"
+        />
+      </div>
+
       <div class="detail-content">
         <div class="readme-section">
           <div v-if="readmeLoading" class="readme-state">
@@ -170,6 +197,12 @@ onMounted(() => {
 </template>
 
 <style lang="scss" scoped>
+.detail-install-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
 .detail-content {
   display: flex;
   gap: 12px;
@@ -184,6 +217,7 @@ onMounted(() => {
   background: var(--tx-bg-color-overlay);
   border-radius: 12px;
   padding: 1.5rem;
+  color: var(--tx-text-color-regular);
 }
 
 .rating-row {
@@ -224,6 +258,13 @@ onMounted(() => {
 
 .readme-content {
   line-height: 1.6;
+  color: var(--tx-text-color-regular);
+
+  :deep(.prose),
+  :deep(.prose-sm),
+  :deep(div) {
+    color: inherit;
+  }
 
   :deep(h1),
   :deep(h2),
@@ -231,6 +272,7 @@ onMounted(() => {
   :deep(h4) {
     margin: 1.5rem 0 0.75rem;
     font-weight: 600;
+    color: var(--tx-text-color-primary);
     &:first-child {
       margin-top: 0;
     }
@@ -250,6 +292,20 @@ onMounted(() => {
 
   :deep(p) {
     margin: 0.75rem 0;
+    color: var(--tx-text-color-regular);
+  }
+
+  :deep(li) {
+    color: var(--tx-text-color-regular);
+  }
+
+  :deep(strong) {
+    color: var(--tx-text-color-primary);
+  }
+
+  :deep(ul),
+  :deep(ol) {
+    color: var(--tx-text-color-regular);
   }
 
   :deep(code) {
@@ -366,6 +422,17 @@ onMounted(() => {
     .meta-value {
       color: var(--tx-color-success);
     }
+  }
+}
+
+@media (max-width: 900px) {
+  .detail-content {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    max-height: none;
   }
 }
 

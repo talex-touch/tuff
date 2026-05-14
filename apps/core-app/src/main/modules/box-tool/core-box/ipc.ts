@@ -19,8 +19,7 @@ import type {
 import type { TouchApp } from '../../../core/touch-app'
 import crypto from 'node:crypto'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
@@ -39,7 +38,6 @@ import { getCoreBoxWindow, windowManager } from './window'
 const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-const coreBoxAllowInputEvent = defineRawEvent<void, { enabled: boolean }>('core-box:allow-input')
 
 /**
  * @class IpcManager
@@ -203,9 +201,19 @@ export class IpcManager {
         coreBoxManager.trigger(true)
       })
     )
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.show, () => {
+        coreBoxManager.trigger(true)
+      })
+    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.hide, () => {
+        coreBoxManager.trigger(false)
+      })
+    )
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.hide, () => {
         coreBoxManager.trigger(false)
       })
     )
@@ -215,15 +223,23 @@ export class IpcManager {
         this.handleExpandRequest(payload as ExpandOptions | number)
       })
     )
-
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.ui.focusWindow, () => {
-        const window = getCoreBoxWindow()
-        if (window && !window.window.isDestroyed()) {
-          window.window.focus()
-        }
-        return { focused: true }
+      transport.on(CoreBoxRetainedEvents.legacy.expand, (payload) => {
+        this.handleExpandRequest(payload as ExpandOptions | number)
       })
+    )
+
+    const handleFocusWindow = () => {
+      const window = getCoreBoxWindow()
+      if (window && !window.window.isDestroyed()) {
+        window.window.focus()
+      }
+      return { focused: true }
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.ui.focusWindow, handleFocusWindow))
+    this.transportDisposers.push(
+      transport.on(CoreBoxRetainedEvents.legacy.focusWindow, handleFocusWindow)
     )
 
     this.transportDisposers.push(
@@ -415,7 +431,7 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(coreBoxAllowInputEvent, () => {
+      transport.on(CoreBoxRetainedEvents.legacy.allowInput, () => {
         windowManager.enableInputMonitoring()
         return { enabled: true }
       })

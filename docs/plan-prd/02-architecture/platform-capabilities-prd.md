@@ -1,231 +1,28 @@
-# PRD: 通用平台型能力建设 (v1.0)
+# PRD: 通用平台型能力建设
 
-## 1. 背景与目标
+> 状态：当前参考 / 压缩版
+> 更新时间：2026-05-14
+> 完整快照：`./archive/platform-capabilities-prd.full-2026-05-14.md`
 
-- **能力碎片化**: 目前通用能力分散在 SDK、CoreBox、工具模块中，缺乏统一抽象，开发者难以理解和复用。
-- **平台定位升级**: Tuff 需要从“插件集合”进化为“应用平台”，提供一致的安全、配置、存储、洞察能力。
-- **生态扩展需求**: 随着流转、多视图、AI 能力上线，需要一个平台级能力层支撑跨插件协作。
+## TL;DR
 
-### 1.1 最终目标
+平台能力需要统一 capability、权限、unsupported/degraded reason、审计与 SDK 调用面。当前重点是避免平台能力伪成功，并为 Windows/macOS release-blocking 与 Linux best-effort 提供可复核证据。
 
-- 形成统一的能力目录、调用协议与授权闭环，减少能力碎片化。
-- 关键能力可观测（调用日志、失败率、耗时），可驱动治理。
-- 对插件开发者提供稳定、可演进的能力扩展接口。
+## 当前原则
 
-### 1.2 质量约束
+- 能力不可用必须返回明确 `unsupported/degraded reason`，不得伪成功。
+- 插件调用平台能力必须声明 permission、platform、command source 与审计字段。
+- 高风险 shell/PowerShell/AppleScript 优先参数化执行或 safe-shell。
+- Native transport V1 已覆盖 screenshot、capabilities、file-index、file、media 五域。
 
-- 能力调用必须经过鉴权与权限检查，禁止绕过授权。
-- 能力接口必须 typed，禁止 raw event 字符串分发。
-- 性能预算：能力调用平均延迟 ≤ 20ms（同机）。
-- 数据与配置落地必须遵守 Storage Rule。
+## 未闭环
 
-### 1.3 回滚与兼容策略
+- 插件 shell capability 统一诊断。
+- Native transport V1 macOS/Windows/Linux 真机 smoke。
+- Windows/macOS 阻塞级回归与 Linux best-effort 记录。
 
-- 提供兼容层：旧插件仍可通过旧接口工作，新接口优先。
-- 能力治理异常时可降级为只读目录与受限调用。
-- 关键能力发布需支持灰度与回滚（按能力 ID 级别关闭）。
+## 关联入口
 
-## 2. 平台能力全景
-
-- **身份与授权**: 统一的用户身份、组织、权限模型。
-- **数据与配置**: 同步的配置中心、密钥管理、持久化存储。
-- **交互与 UI**: 通用通知、对话框、引导、快捷入口组件。
-- **任务与调度**: 后台任务管理、Cron、事件总线。
-- **观测与日志**: 统一日志、指标、追踪、告警体系。
-- **安全与合规**: 权限申请、沙箱策略、数据脱敏。
-
-## 3. 功能需求
-
-### 3.1 能力目录与发现
-
-- 提供 `Platform Capability Catalog`，以文档与 API 形式列出所有可用能力。
-- SDK 暴露 `platform.capabilities.list()`，返回能力清单与状态。
-- 支持按插件、系统、AI 模块归类，并标记稳定度（alpha/beta/stable）。
-
-### 3.2 能力申请与授权
-
-- 插件 manifest 声明所需能力，安装/首次运行时触发授权流程。
-- 管理中心提供能力授权管理界面：启用、禁用、审计。
-- 对敏感能力（如文件访问、账号信息）需提供细粒度权限描述。
-
-### 3.3 能力接口统一
-
-- 设计 `Capability Provider` 协议，能力由主进程模块实现并通过 IPC 暴露。
-- SDK 提供统一调用方式：`platform.invoke<CapabilityId>(method, payload)`。
-- 支持能力版本化，插件可声明兼容 range。
-
-### 3.4 能力监控与告警
-
-- 每次能力调用记录日志（调用方、耗时、结果）。
-- 提供仪表盘展示使用频次、失败率、权限拒绝情况。
-- 支持阈值告警，通知平台管理员处理异常。
-
-### 3.5 开放能力扩展
-
-- 平台开发者可注册自定义能力，通过 manifest 标记为 `provider`。
-- 提供沙箱隔离策略、防止恶意能力影响平台稳定性。
-
-## 4. 非功能需求
-
-- **性能**: 能力调用平均延迟 ≤ 20ms；高并发场景需保持稳定。
-- **安全**: 所有能力调用必须经过鉴权；敏感数据传输需加密。
-- **兼容**: 保证旧版插件仍可使用原有能力接口，通过适配层兼容。
-
-## 5. 技术方案概述
-
-### 5.1 平台核心服务（Platform Core Service）
-
-- 在主进程实现 `PlatformCoreService`，维护能力注册表(`CapabilityRegistry`)与授权策略。
-- 能力定义遵循接口：
-  ```ts
-  interface CapabilityDefinition {
-    id: string
-    version: string
-    handler: (context: CapabilityContext, payload: any) => Promise<any>
-    metadata: {
-      description: string
-      scope: 'system' | 'plugin' | 'ai'
-      sensitive?: boolean
-    }
-  }
-  ```
-
-### 5.2 SDK 层封装
-
-- `plugin.utils.platform.invoke(capabilityId, method, params)` 统一入口。
-- 支持 Typescript 提示，根据 `CapabilityDescriptor` 生成类型。
-- 能力授权信息缓存于本地，减少重复请求。
-
-### 5.3 管理与可视化
-
-- 在设置中心新增 “平台能力” 页面，展示能力列表、授权状态、调用统计。
-- 支持导出审计日志，满足企业审计需求。
-
-## 6. 伪代码示例
-
-```ts
-// 注册能力
-platformCoreService.register({
-  id: 'system.clipboard.read',
-  version: '1.0.0',
-  handler: async ({ pluginId }, payload) => {
-    assertPermission(pluginId, 'clipboard.read')
-    return clipboardManager.read(payload.format)
-  }
-})
-```
-
-## 7. 实施计划
-
-1. **[x] 能力模型设计（基础）**: 定义基础 `CapabilityRegistry` 数据结构。
-2. **[x] 核心服务实现（基础）**: 能力注册表 + `platform.capabilities.list` 查询通道。
-3. **[x] SDK 封装（基础）**: `usePlatformSdk().listCapabilities()` 查询能力目录。
-4. **[x] 管理 UI（基础）**: 能力列表展示已落地，授权审批流程待补。
-5. **[ ] 数据与监控**: 接入日志、指标、告警配置。
-6. **[ ] 文档与生态推广**: 发布能力目录、示例插件与最佳实践。
-
-## 8. 风险与待决问题
-
-- **能力膨胀**: 如何防止能力定义过多导致维护困难，需要治理流程。
-  - 建议设立能力评审委员会（产品+技术+安全）。
-- **第三方能力安全**: 自定义能力可能引入风险，需沙箱/审核机制。
-- **版本兼容**: 能力升级变更需考虑旧插件兼容性与迁移策略。
-
-## 9. 验收标准
-
-- 至少 20 个现有能力通过新框架注册并稳定运行。
-- 插件可通过新接口完成 3 条典型能力调用（如剪贴板、通知、配置）。
-- 管理中心可查看授权状态、修改权限并实时生效。
-- 能力调用日志可在 5 分钟内查询到结果。
-
-## 10. 成功指标
-
-- 新能力框架启用后，能力调用失败率下降 ≥ 30%。
-- 开发者满意度调查中，对能力发现/调用流程的满意度 ≥ 4.5/5。
-- 首季度内新增 ≥ 5 个第三方能力提供方接入。
-
-## 11. 后续迭代方向
-
-- 引入多租户支持，适配企业级场景。
-- 支持策略化授权（按组织、时间段、数据范围）。
-- 与 Flow Transfer、DivisionBox 等新能力打通，实现一站式平台体验。
-
----
-
-# PRD: 存储占用与清理 (v1.0)
-
-## 1. 背景与目标
-
-- **存储不可见**：用户无法直观了解模块、插件、数据库与缓存的占用情况。
-- **清理缺口**：缺少统一清理入口，历史数据与缓存难以按策略释放。
-- **性能风险**：索引/剪贴板/下载等数据增长后会影响性能与可用空间。
-
-目标：
-- 统一展示 **模块/插件/数据库/缓存** 占用（即使为 0 也必须展示）。
-- 提供可控的清理入口，支持 **按时间阈值** 与 **全量清理**。
-- 明确文件索引与搜索索引的占用与清理策略。
-
-## 2. 数据范围与口径
-
-### 2.1 目录与模块
-- `userData/config`（含 `config/plugins`）
-- `userData/database`
-- `userData/temp`
-- `app.getPath('logs')`
-- 其余目录归为“其他”
-
-### 2.2 数据库占用
-- 文件级：`database.db` / `database.db-wal` / `database.db-shm`
-- 表级：通过 `dbstat` 获取（不可用时标记为“未知”）
-- 必含表分类：
-  - 文件索引：`files` / `file_extensions` / `file_index_progress` / `scan_progress` / `file_fts`
-  - 搜索索引：`search_index` / `keyword_mappings` / `query_completions`
-  - 剪贴板：`clipboard_history` / `clipboard_history_meta`
-  - OCR：`ocr_jobs` / `ocr_results`
-  - 智能/分析/使用统计/下载/插件数据/更新等
-
-### 2.3 缓存与内存
-- 剪贴板内存缓存
-- 配置 LRU 缓存
-- 插件配置缓存
-- 更新检查缓存
-- 智能配额缓存
-
-> 所有缓存项必须展示，即使为 0。
-
-## 3. 功能需求
-
-### 3.1 存储占用可视化
-
-- 顶部卡片展示：总占用 / 插件配置 / 模块合计
-- 模块/目录占用条形图
-- 插件占用榜单（Top 12 + 折叠提示）
-- 数据库占用：文件级 + 表级分类列表（含 row 数量）
-- 缓存占用：条目数 + TTL + 范围（内存/磁盘/混合）
-
-### 3.2 清理操作
-
-- 剪贴板：清理 N 天前 / 全部清空
-- 文件索引：清理索引 / 清理并重建
-- 日志：清理 N 天前 / 全部清空
-- 临时文件：全部清空
-- OCR / 下载 / 分析 / 使用统计 / 智能：清理 N 天前 / 全部清空（按需）
-- 更新记录：清空
-
-### 3.3 交互与反馈
-
-- 所有清理操作必须确认弹窗
-- 清理后返回删除数量与释放空间（可用则展示）
-- 支持刷新重新统计
-
-## 4. 非功能需求
-
-- 统计时延 ≤ 500ms（5s 内缓存复用）
-- 清理任务不阻塞 UI（后台执行）
-- DB 表级占用在 dbstat 不可用时仍能展示 rows 与 “未知占用”
-
-## 5. 风险与待决问题
-
-- dbstat 在部分环境不可用，需要降级与提示。
-- 清理索引触发重建可能较慢，需要 UI 提示。
-- 临时文件清理需保证仅在 `userData/temp` 内执行。
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md`

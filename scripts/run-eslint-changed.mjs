@@ -75,7 +75,7 @@ function getDiffArgs() {
   }
 
   const remoteBaseRef = `refs/remotes/origin/${baseRef}`
-  const fetchStatus = run('git', ['fetch', '--no-tags', '--depth=1', 'origin', `${baseRef}:${remoteBaseRef}`])
+  const fetchStatus = run('git', ['fetch', '--no-tags', 'origin', `${baseRef}:${remoteBaseRef}`])
   if (fetchStatus !== 0) {
     process.exit(fetchStatus)
   }

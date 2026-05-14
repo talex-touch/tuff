@@ -19,7 +19,11 @@ import process from 'node:process'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import {
+  ClipboardEvents,
+  CoreBoxEvents,
+  CoreBoxRetainedEvents
+} from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
@@ -33,34 +37,8 @@ const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime('core-box')
-const metaOverlayActionExecutedEvent = defineRawEvent<
-  {
-    actionId: string
-    item: TuffItem
-    pluginId: string
-  },
-  void
->('meta-overlay:action-executed')
-const metaOverlayItemActionEvent = defineRawEvent<
-  {
-    actionId: string
-    item: TuffItem
-  },
-  void
->('meta-overlay:item-action')
-const coreBoxTogglePinEvent = defineRawEvent<
-  {
-    sourceId: string
-    itemId: string
-    sourceType: string
-  },
-  void
->('core-box:toggle-pin')
 const shellShowItemInFolderEvent = defineRawEvent<{ path: string }, void>(
   'shell:show-item-in-folder'
-)
-const metaOverlayFlowTransferEvent = defineRawEvent<{ item: TuffItem }, void>(
-  'meta-overlay:flow-transfer'
 )
 
 const BUILTIN_ACTION_IDS = new Set([
@@ -504,7 +482,16 @@ export class MetaOverlayManager {
       const channel = touchApp.channel
       const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
       void transport
-        .sendToPlugin(pluginId, metaOverlayActionExecutedEvent, {
+        .sendToPlugin(pluginId, CoreBoxRetainedEvents.metaOverlay.actionExecuted, {
+          actionId,
+          item: targetItem,
+          pluginId
+        })
+        .catch((error) => {
+          metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
+        })
+      void transport
+        .sendToPlugin(pluginId, CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted, {
           actionId,
           item: targetItem,
           pluginId
@@ -523,7 +510,13 @@ export class MetaOverlayManager {
         const channel = touchApp.channel
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport
-          .sendTo(coreBoxWebContents, metaOverlayItemActionEvent, {
+          .sendTo(coreBoxWebContents, CoreBoxRetainedEvents.metaOverlay.itemAction, {
+            actionId,
+            item: targetItem
+          })
+          .catch(() => {})
+        void transport
+          .sendTo(coreBoxWebContents, CoreBoxRetainedEvents.legacy.metaOverlayItemAction, {
             actionId,
             item: targetItem
           })
@@ -558,7 +551,7 @@ export class MetaOverlayManager {
 
     switch (actionId) {
       case 'toggle-pin': {
-        void transport.sendTo(coreBoxWebContents, coreBoxTogglePinEvent, {
+        void transport.sendTo(coreBoxWebContents, CoreBoxEvents.item.togglePin, {
           sourceId: item.source.id,
           itemId: item.id,
           sourceType: item.source.type
@@ -584,9 +577,16 @@ export class MetaOverlayManager {
         break
       }
       case 'flow-transfer': {
-        void transport.sendTo(coreBoxWebContents, metaOverlayFlowTransferEvent, {
+        void transport.sendTo(coreBoxWebContents, CoreBoxRetainedEvents.metaOverlay.flowTransfer, {
           item
         })
+        void transport.sendTo(
+          coreBoxWebContents,
+          CoreBoxRetainedEvents.legacy.metaOverlayFlowTransfer,
+          {
+            item
+          }
+        )
         break
       }
       default:
