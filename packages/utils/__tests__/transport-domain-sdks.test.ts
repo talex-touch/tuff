@@ -4,6 +4,7 @@ import {
   AppEvents,
   ClipboardEvents,
   NativeEvents,
+  OpenerEvents,
   PermissionEvents,
   PluginEvents,
   StorageEvents,
@@ -178,6 +179,29 @@ describe('transport domain sdk mappings', () => {
     expect(TerminalEvents.legacy.kill.toEventName()).toBe('terminal:kill')
     expect(TerminalEvents.legacy.data.toEventName()).toBe('terminal:data')
     expect(TerminalEvents.legacy.exit.toEventName()).toBe('terminal:exit')
+  })
+
+  it('opener events expose canonical names and retained legacy aliases', () => {
+    expect(OpenerEvents.plugin.open.toEventName()).toBe('plugin:opener:open')
+    expect(OpenerEvents.install.request.toEventName()).toBe(
+      'plugin:install:request',
+    )
+    expect(OpenerEvents.drop.install.toEventName()).toBe('plugin:drop:install')
+    expect(OpenerEvents.app.resolve.toEventName()).toBe('opener:app:resolve')
+    expect(OpenerEvents.app.resolve).toMatchObject({
+      namespace: 'opener',
+      module: 'app',
+      action: 'resolve',
+    })
+    expect(OpenerEvents.legacy.openPlugin.toEventName()).toBe('@open-plugin')
+    expect(OpenerEvents.legacy.installPlugin.toEventName()).toBe(
+      '@install-plugin',
+    )
+    expect(OpenerEvents.legacy.installDevPlugin.toEventName()).toBe(
+      'plugin:install-dev',
+    )
+    expect(OpenerEvents.legacy.dropPlugin.toEventName()).toBe('drop:plugin')
+    expect(OpenerEvents.legacy.resolveApp.toEventName()).toBe('openers:resolve')
   })
 
   it('storage sdk maps app storage operations to typed storage events', async () => {

@@ -1,8 +1,9 @@
 import type { ComputedRef } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { watch } from 'vue'
 import { openers } from '~/modules/storage/app-storage'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface RemoteOpener {
   bundleId: string
@@ -14,9 +15,7 @@ interface RemoteOpener {
 
 const pendingResolutions = new Map<string, Promise<void>>()
 const transport = useTuffTransport()
-const openerResolveEvent = defineRawEvent<{ extension: string }, RemoteOpener | null>(
-  'openers:resolve'
-)
+const openersLog = createRendererLogger('Openers')
 
 async function requestOpener(extension: string): Promise<void> {
   const normalized = extension.replace(/^\./, '').toLowerCase()
@@ -29,7 +28,7 @@ async function requestOpener(extension: string): Promise<void> {
   }
 
   const promise = transport
-    .send(openerResolveEvent, { extension: normalized })
+    .send(OpenerEvents.app.resolve, { extension: normalized })
     .then((result: RemoteOpener | null) => {
       if (result && typeof result === 'object') {
         openers[normalized] = {
@@ -42,7 +41,7 @@ async function requestOpener(extension: string): Promise<void> {
       }
     })
     .catch((error) => {
-      console.error(`[Openers] Failed to resolve opener for .${normalized}`, error)
+      openersLog.error(`Failed to resolve opener for .${normalized}`, error)
     })
     .finally(() => {
       pendingResolutions.delete(normalized)

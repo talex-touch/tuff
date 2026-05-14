@@ -465,6 +465,7 @@ import type {
 } from "./types/transport";
 import { SyncEvents } from "./sync";
 import { TerminalEvents } from "./terminal";
+import { OpenerEvents } from "./opener";
 
 // ============================================================================
 // Clipboard Events
@@ -2691,6 +2692,7 @@ export const TuffEvents = {
   sentry: SentryEvents,
   sync: SyncEvents,
   terminal: TerminalEvents,
+  opener: OpenerEvents,
   boxItem: BoxItemEvents,
   clipboard: ClipboardEvents,
   metaOverlay: MetaOverlayEvents,
@@ -2699,4 +2701,4 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AppEvents, MetaOverlayEvents, SyncEvents, TerminalEvents };
+export { AppEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };

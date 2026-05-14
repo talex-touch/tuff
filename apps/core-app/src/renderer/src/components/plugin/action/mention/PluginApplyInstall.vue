@@ -2,12 +2,13 @@
 import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 import Loading from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { clearBufferedFile, getBufferedFile } from '~/modules/hooks/dropper-resolver'
 import { blowMention, forTouchTip } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 import {
   isPluginAlreadyInstalledMessage,
   resolvePluginApplyInstallErrorMessage
@@ -27,18 +28,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-type PluginInstallRequest = {
-  name: string
-  buffer: Buffer
-  forceUpdate: boolean
-}
-
-type PluginInstallResponse = {
-  status?: string
-  msg?: unknown
-}
-
-const installEvent = defineRawEvent<PluginInstallRequest, PluginInstallResponse>('@install-plugin')
+const pluginApplyInstallLog = createRendererLogger('PluginApplyInstall')
 const installing = ref(false)
 const close = inject('destroy') as () => void
 
@@ -56,7 +46,7 @@ async function install(forceUpdate = false): Promise<void> {
   try {
     await sleep(400)
 
-    const data = await transport.send(installEvent, {
+    const data = await transport.send(OpenerEvents.install.request, {
       name: props.fileName,
       buffer,
       forceUpdate
@@ -117,7 +107,7 @@ async function install(forceUpdate = false): Promise<void> {
   } catch (error: unknown) {
     installing.value = false
     close()
-    console.error('[PluginApplyInstall] Installation error:', error)
+    pluginApplyInstallLog.error('Installation error:', error)
     await blowMention(t('plugin.dropInstall.errorTitle'), t('plugin.dropInstall.unexpected'))
   } finally {
     clearBufferedFile(props.fileName)

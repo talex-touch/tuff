@@ -1,18 +1,20 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { TxLoadingOverlay } from '@talex-touch/tuffex'
 import { hasDocument } from '@talex-touch/utils/env'
 import { h, render } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { resolvePluginApplyInstallErrorMessage } from '~/components/plugin/action/mention/plugin-apply-install-utils'
 import { useI18nText } from '~/modules/lang'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { blowMention, popperMention } from '../mention/dialog-mention'
 
 const bufferCache = new Map<string, Buffer>()
 const transport = useTuffTransport()
 const { t } = useI18nText()
+const dropperResolverLog = createRendererLogger('DropperResolver')
 type DropPluginManifest = { name: string; [key: string]: unknown }
-type DropPluginRequest = { name: string; buffer: Buffer; size: number }
 type DropPluginResponse =
   | { status: 'error'; msg: string }
   | { status: 'success'; manifest: DropPluginManifest; path: string }
@@ -35,7 +37,6 @@ type DropEventPayload = {
   }
 }
 
-const dropPluginEvent = defineRawEvent<DropPluginRequest, DropPluginResponse>('drop:plugin')
 const dropEvent = defineRawEvent<DropEventPayload, void>('drop')
 
 function createLoadingOverlay(text: string) {
@@ -86,16 +87,16 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       // Cache the buffer before sending it to the main process
       bufferCache.set(file.name, buffer)
 
-      const data = await transport.send(dropPluginEvent, {
+      const data = (await transport.send(OpenerEvents.drop.install, {
         name: file.name,
         buffer,
         size: file.size
-      })
+      })) as DropPluginResponse
 
       loadingInstance.close()
 
       if (data.status === 'error') {
-        console.error(`[DropperResolver] Error resolving plugin: ${data.msg}`)
+        dropperResolverLog.error('Error resolving plugin:', data.msg)
         // Clear cache on error
         clearBufferedFile(file.name)
         await blowMention(
@@ -110,7 +111,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
       }
     } catch (error) {
       loadingInstance.close()
-      console.error('[DropperResolver] Failed to process TPEX file:', error)
+      dropperResolverLog.error('Failed to process TPEX file:', error)
       clearBufferedFile(file.name)
       await blowMention(t('plugin.dropInstall.errorTitle'), t('plugin.dropInstall.readFailed'))
     }

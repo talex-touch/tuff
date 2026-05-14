@@ -40,6 +40,7 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
@@ -196,9 +197,6 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   extraPaths: []
 }
 
-const openerResolveEvent = defineRawEvent<{ extension: string }, ResolvedOpener | null>(
-  'openers:resolve'
-)
 const fileIndexFailedEvent = defineRawEvent<
   {
     error: string
@@ -992,7 +990,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     const transport = getTuffTransportMain(channel, keyManager)
 
-    transport.on(openerResolveEvent, async (payload) => {
+    const resolveOpenerHandler = async (payload: { extension?: string }) => {
       const extension = typeof payload?.extension === 'string' ? payload.extension : null
       if (!extension) {
         return null
@@ -1006,7 +1004,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
         return null
       }
-    })
+    }
+
+    transport.on(OpenerEvents.app.resolve, resolveOpenerHandler)
+    transport.on(OpenerEvents.legacy.resolveApp, resolveOpenerHandler)
 
     this.openersChannelRegistered = true
   }
