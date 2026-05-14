@@ -13,6 +13,13 @@
 
 ## 2026-05-14
 
+### fix(nexus): harden docs props table prerender
+
+- `apps/nexus/app/components/content/TuffPropsTable.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `TuffPropsTable` 不再假设 `type/default` 一定是字符串，复制与可复制判定前会统一归一化 boolean/number/string，避免 docs prerender 在 `/docs/dev/components/floating` 遇到 boolean default 时因 `.trim()` 崩溃。
+  - 目标是恢复 Cloudflare Pages / Nexus build；不改变文档表格数据结构与展示入口。
+
 ### perf(nexus): prerender docs routes and smooth docs switching
 
 - `apps/nexus/nuxt.config.ts`
