@@ -92,6 +92,16 @@ describe('quick actions plugin', () => {
     expect(dynamicFeatures.every(feature => feature.id.startsWith('quick-action-'))).toBe(true)
     expect(dynamicFeatures.every(feature => !feature.id.includes('.'))).toBe(true)
     expect(dynamicFeatures.every(feature => feature.push === false)).toBe(true)
+    expect(dynamicFeatures[0]?.meta?.capability).toMatchObject({
+      id: 'system.shell',
+      type: 'shell',
+      platform: 'darwin',
+      permission: 'system.shell',
+      audit: {
+        pluginName: 'touch-quick-actions',
+        actionId: actions[0].id,
+      },
+    })
   })
 
   it('registers dynamic features during onInit and keeps idempotency', () => {
@@ -122,7 +132,7 @@ describe('quick actions plugin', () => {
   })
 
   it('pushes common actions directly when keyword is empty', async () => {
-    const items: Array<{ title?: string }> = []
+    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
     const globals = createPluginGlobals({
       TuffItemBuilder: FakeBuilder,
       permission: {
@@ -140,10 +150,52 @@ describe('quick actions plugin', () => {
 
     await pluginModule.onFeatureTriggered('quick-actions', '')
 
+    if (!quickActionsTest.isShellPlatformSupported(process.platform)) {
+      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
+      return
+    }
+
     const titles = items.map(item => item.title)
     expect(titles).toContain('重启')
     expect(titles).toContain('关机')
     expect(titles).not.toContain('即时动作')
+    expect(items[0]?.meta?.capability?.audit).toMatchObject({
+      pluginName: 'touch-quick-actions',
+      featureId: 'quick-actions',
+      actionId: expect.any(String),
+    })
+  })
+
+  it('pushes diagnostic meta when shell permission is denied', async () => {
+    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: {
+        check: async () => false,
+        request: async () => false,
+      },
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, meta?: Record<string, any> }>) { items.push(...next) },
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(quickActionsUrl, globals)
+
+    await pluginModule.onFeatureTriggered('quick-actions', '')
+
+    if (!quickActionsTest.isShellPlatformSupported(process.platform)) {
+      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
+      return
+    }
+
+    expect(items[0]?.title).toBe('缺少 system.shell 权限')
+    expect(items[0]?.meta?.capability).toMatchObject({
+      permission: 'system.shell',
+      status: 'permission-missing',
+      reason: 'system.shell',
+    })
   })
 
   it('executes dynamic feature directly without entering list mode', async () => {
@@ -213,5 +265,17 @@ describe('quick actions plugin', () => {
   it('returns empty list on unsupported platform', () => {
     const actions = quickActionsTest.resolveActions('linux')
     expect(actions.length).toBe(0)
+  })
+
+  it('builds unsupported capability diagnostics for linux', () => {
+    const capability = quickActionsTest.buildShellCapability({
+      featureId: 'quick-actions',
+      actionId: 'list-actions',
+      platform: 'linux',
+    })
+
+    expect(capability.status).toBe('unsupported')
+    expect(capability.reason).toBe('platform:linux')
+    expect(capability.audit.commandKind).toBe('fixed-shell')
   })
 })
