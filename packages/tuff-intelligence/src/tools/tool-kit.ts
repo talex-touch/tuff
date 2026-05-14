@@ -1,5 +1,6 @@
 import type { CapabilityManifest } from '../registry/capability-registry'
 import type {
+  AnyTuffTool,
   TuffTool,
   TuffToolApprovalDecision,
   TuffToolApprovalGate,
@@ -9,6 +10,7 @@ import type {
   TuffToolInvocationResult,
   TuffToolKitOptions,
   TuffToolListFilter,
+  TuffToolManifest,
   TuffToolRiskLevel,
   TuffToolSource,
 } from './types'
@@ -42,6 +44,14 @@ function normalizeTool<TInput, TOutput>(tool: TuffTool<TInput, TOutput>): TuffTo
   }
 }
 
+function hasRequiredTags(tool: TuffTool, tags: string[] | undefined): boolean {
+  if (!Array.isArray(tags) || tags.length <= 0) {
+    return true
+  }
+  const toolTags = new Set((tool.tags ?? []).map(tag => tag.trim()).filter(Boolean))
+  return tags.every(tag => toolTags.has(tag))
+}
+
 export function defineTuffTool<TInput, TOutput>(
   definition: TuffTool<TInput, TOutput>,
 ): TuffTool<TInput, TOutput> {
@@ -62,7 +72,7 @@ export const defaultToolApprovalGate: TuffToolApprovalGate = (
 }
 
 export class ToolKit {
-  private readonly tools = new Map<string, TuffTool>()
+  private readonly tools = new Map<string, AnyTuffTool>()
   private readonly approvalGate: TuffToolApprovalGate
 
   constructor(options: TuffToolKitOptions = {}) {
@@ -71,7 +81,7 @@ export class ToolKit {
 
   register<TInput, TOutput>(tool: TuffTool<TInput, TOutput>): TuffTool<TInput, TOutput> {
     const normalized = normalizeTool(tool)
-    this.tools.set(normalized.id, normalized as TuffTool)
+    this.tools.set(normalized.id, normalized as AnyTuffTool)
     return normalized
   }
 
@@ -79,7 +89,7 @@ export class ToolKit {
     return (this.tools.get(id) as TuffTool<TInput, TOutput> | undefined) ?? null
   }
 
-  list(filter: TuffToolListFilter = {}): TuffTool[] {
+  list(filter: TuffToolListFilter = {}): AnyTuffTool[] {
     return Array.from(this.tools.values()).filter((tool) => {
       if (filter.source && tool.source !== filter.source) {
         return false
@@ -87,8 +97,18 @@ export class ToolKit {
       if (filter.riskLevel && tool.riskLevel !== filter.riskLevel) {
         return false
       }
+      if (typeof filter.requiresApproval === 'boolean' && isApprovalRequired(tool) !== filter.requiresApproval) {
+        return false
+      }
+      if (!hasRequiredTags(tool, filter.tags)) {
+        return false
+      }
       return true
     })
+  }
+
+  listManifests(filter: TuffToolListFilter = {}): TuffToolManifest[] {
+    return toToolManifests(this.list(filter))
   }
 
   async invoke<TOutput = unknown>(
@@ -207,6 +227,28 @@ export class ToolKit {
 
 export function createToolKit(options?: TuffToolKitOptions): ToolKit {
   return new ToolKit(options)
+}
+
+export function toToolManifest<TInput, TOutput>(
+  tool: TuffTool<TInput, TOutput>,
+): TuffToolManifest {
+  const normalized = normalizeTool(tool)
+  return {
+    id: normalized.id,
+    name: normalized.name,
+    description: normalized.description,
+    source: normalized.source ?? DEFAULT_TOOL_SOURCE,
+    riskLevel: normalized.riskLevel ?? DEFAULT_RISK_LEVEL,
+    requiresApproval: isApprovalRequired(normalized),
+    inputSchema: normalized.inputSchema,
+    metadata: normalized.metadata,
+    tags: normalized.tags,
+    examples: normalized.examples,
+  }
+}
+
+export function toToolManifests(tools: AnyTuffTool[]): TuffToolManifest[] {
+  return tools.map(toToolManifest)
 }
 
 export function toCapabilityManifest<TInput, TOutput>(

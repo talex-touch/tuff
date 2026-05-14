@@ -48,7 +48,9 @@ async function run() {
 import { z } from 'zod'
 import {
   createToolKit,
+  LangChainToolAdapter,
   defineTuffTool,
+  toToolManifest,
 } from '@talex-touch/tuff-intelligence'
 
 const kit = createToolKit({
@@ -77,6 +79,9 @@ const result = await kit.invoke('text.uppercase', { text: 'tuff' })
 if (result.ok) {
   console.log(result.output.text)
 }
+
+const manifest = toToolManifest(kit.get('text.uppercase')!)
+const langChainTool = LangChainToolAdapter.fromTuffTool(kit.get('text.uppercase')!)
 ```
 
 工具也可以桥接到既有 `CapabilityRegistry`：

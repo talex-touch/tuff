@@ -4,6 +4,7 @@ import {
   createToolKit,
   defineTuffTool,
   toCapabilityManifest,
+  toToolManifest,
 } from './tool-kit'
 
 describe('tuff intelligence tool kit', () => {
@@ -93,7 +94,7 @@ describe('tuff intelligence tool kit', () => {
       }),
       execute: () => ({
         ok: 'yes',
-      }),
+      }) as never,
     }))
 
     const result = await kit.invoke('output.strict', {})
@@ -229,5 +230,54 @@ describe('tuff intelligence tool kit', () => {
         text: 'hello',
       },
     })
+  })
+
+  it('builds safe tool manifests and filters by discovery metadata', () => {
+    const kit = createToolKit()
+    const searchTool = kit.register(defineTuffTool({
+      id: 'search.files',
+      name: 'Search files',
+      description: 'Search local files.',
+      source: 'mcp',
+      riskLevel: 'medium',
+      tags: ['search', 'files'],
+      examples: [
+        {
+          input: { query: 'readme' },
+          description: 'Find README files.',
+        },
+      ],
+      inputSchema: z.object({
+        query: z.string(),
+      }),
+      execute: () => [],
+    }))
+    kit.register(defineTuffTool({
+      id: 'file.delete',
+      name: 'Delete file',
+      description: 'Delete a file.',
+      riskLevel: 'critical',
+      inputSchema: z.object({
+        path: z.string(),
+      }),
+      execute: () => ({ deleted: true }),
+    }))
+
+    const manifest = toToolManifest(searchTool)
+
+    expect('execute' in manifest).toBe(false)
+    expect(manifest).toMatchObject({
+      id: 'search.files',
+      source: 'mcp',
+      riskLevel: 'medium',
+      requiresApproval: false,
+      tags: ['search', 'files'],
+    })
+    expect(kit.listManifests({ tags: ['search'], source: 'mcp' })).toHaveLength(1)
+    expect(kit.listManifests({ requiresApproval: true })).toEqual([
+      expect.objectContaining({
+        id: 'file.delete',
+      }),
+    ])
   })
 })

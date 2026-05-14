@@ -27,11 +27,33 @@ export interface TuffToolDefinition<TInput = unknown, TOutput = unknown> {
   requiresApproval?: boolean
   inputSchema: z.ZodType<TInput>
   outputSchema?: z.ZodType<TOutput>
+  tags?: string[]
+  examples?: TuffToolExample[]
   metadata?: Record<string, unknown>
   execute: (input: TInput, context: TuffToolContext) => Promise<TOutput> | TOutput
 }
 
 export type TuffTool<TInput = unknown, TOutput = unknown> = TuffToolDefinition<TInput, TOutput>
+export type AnyTuffTool = TuffTool<any, any>
+
+export interface TuffToolExample {
+  input: unknown
+  output?: unknown
+  description?: string
+}
+
+export interface TuffToolManifest {
+  id: string
+  name: string
+  description: string
+  source: TuffToolSource
+  riskLevel: TuffToolRiskLevel
+  requiresApproval: boolean
+  inputSchema: z.ZodType
+  metadata?: Record<string, unknown>
+  tags?: string[]
+  examples?: TuffToolExample[]
+}
 
 export interface TuffToolError {
   code: TuffToolErrorCode
@@ -76,4 +98,6 @@ export interface TuffToolKitOptions {
 export interface TuffToolListFilter {
   source?: TuffToolSource
   riskLevel?: TuffToolRiskLevel
+  tags?: string[]
+  requiresApproval?: boolean
 }

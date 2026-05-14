@@ -5,6 +5,19 @@
 
 ## 2026-05-14
 
+### perf(nexus): prerender docs routes and smooth docs switching
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/build/docs-prerender-routes.ts`
+- `apps/nexus/build/docs-prerender-routes.test.ts`
+- `apps/nexus/server/api/docs/sidebar-components.get.ts`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/vitest.config.ts`
+  - Nexus 构建期扫描 `content/docs/**/*.{md,mdc}`，生成 canonical `/docs/**` 预渲染路由，并将稳定 docs API 纳入 prerender 列表。
+  - 组件文档侧边栏元信息改为 Nitro cached handler；Docs Sidebar 与 pager 局部启用 NuxtLink prefetch，保留全局默认禁用预取策略。
+  - 文档页将 feedback/comments 延后到内容稳定后客户端挂载，并按文档 render key 收敛 code enhance、TOC fallback 与 tracker refresh 调度，减少切换时重复 DOM 扫描。
+
 ### feat(plugin): bridge touch-intelligence to handoff sessions
 
 - `plugins/touch-intelligence/index.js`
@@ -19,8 +32,13 @@
 
 ### feat(intelligence): add native tool kit foundation
 
+- `apps/core-app/src/main/modules/ai/agents/tool-registry.ts`
+- `apps/core-app/src/main/modules/ai/agents/tool-registry.test.ts`
+- `packages/tuff-intelligence/src/adapters/*`
+- `packages/tuff-intelligence/src/runtime/decision-dispatcher.ts`
 - `packages/tuff-intelligence/src/tools/*`
 - `packages/tuff-intelligence/src/registry/capability-registry.ts`
+- `packages/tuff-intelligence/src/registry/skill-registry.ts`
 - `packages/tuff-intelligence/src/index.ts`
 - `packages/tuff-intelligence/README.md`
 - `packages/tuff-intelligence/package.json`
@@ -29,7 +47,8 @@
   - 工具输入/输出使用 Zod runtime schema 校验；工具调用统一返回结构化结果，并覆盖 `TOOL_NOT_FOUND`、`TOOL_INPUT_INVALID`、`TOOL_OUTPUT_INVALID`、`TOOL_APPROVAL_DENIED`、`TOOL_EXECUTION_FAILED` 错误码。
   - 审批策略采用风险标记 + 可插拔 approval gate；默认 gate 阻断 `requiresApproval` 或 `high/critical` 工具，自定义 gate 可接入后续 HITL。
   - `CapabilityRegistry.registerTool()` 支持直接注册 Tuff Tool，并修复 DeepAgent Responses 输入中未授权 system message 进入模型上下文的问题；包内全量测试恢复绿色。
-  - 已验证：`corepack pnpm -C "packages/tuff-intelligence" exec vitest run` 通过（5 files / 16 tests）；`corepack pnpm -C "packages/tuff-intelligence" run lint` 通过；`corepack pnpm -C "packages/tuff-intelligence" run build` 通过。
+  - 新增 Tool Manifest/Discovery、LangChain/DeepAgents Tuff Tool adapter、approval.request envelope 分发、SkillRegistry deterministic resolution 与 Core App 旧 AgentTool/TuffTool 双向桥接。
+  - 已验证：`corepack pnpm -C "packages/tuff-intelligence" exec vitest run` 通过；`corepack pnpm -C "packages/tuff-intelligence" run lint` 通过；`corepack pnpm -C "packages/tuff-intelligence" run build` 通过；`corepack pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/agents/tool-registry.test.ts"` 通过。
 
 ### feat(ai): charge Nexus invoke credits and surface usage
 
