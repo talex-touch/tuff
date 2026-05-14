@@ -1,0 +1,235 @@
+import type { CapabilityManifest } from '../registry/capability-registry'
+import type {
+  TuffTool,
+  TuffToolApprovalDecision,
+  TuffToolApprovalGate,
+  TuffToolApprovalRequest,
+  TuffToolContext,
+  TuffToolError,
+  TuffToolInvocationResult,
+  TuffToolKitOptions,
+  TuffToolListFilter,
+  TuffToolRiskLevel,
+  TuffToolSource,
+} from './types'
+
+const DEFAULT_TOOL_SOURCE: TuffToolSource = 'builtin'
+const DEFAULT_RISK_LEVEL: TuffToolRiskLevel = 'low'
+
+function isApprovalRequired<TInput, TOutput>(tool: TuffTool<TInput, TOutput>): boolean {
+  return tool.requiresApproval === true
+    || tool.riskLevel === 'high'
+    || tool.riskLevel === 'critical'
+}
+
+function createToolError(
+  code: TuffToolError['code'],
+  message: string,
+  detail?: unknown,
+): TuffToolError {
+  return {
+    code,
+    message,
+    detail,
+  }
+}
+
+function normalizeTool<TInput, TOutput>(tool: TuffTool<TInput, TOutput>): TuffTool<TInput, TOutput> {
+  return {
+    ...tool,
+    source: tool.source ?? DEFAULT_TOOL_SOURCE,
+    riskLevel: tool.riskLevel ?? DEFAULT_RISK_LEVEL,
+  }
+}
+
+export function defineTuffTool<TInput, TOutput>(
+  definition: TuffTool<TInput, TOutput>,
+): TuffTool<TInput, TOutput> {
+  return normalizeTool(definition)
+}
+
+export const defaultToolApprovalGate: TuffToolApprovalGate = (
+  request: TuffToolApprovalRequest,
+): TuffToolApprovalDecision => {
+  if (!request.requiresApproval) {
+    return { approved: true }
+  }
+
+  return {
+    approved: false,
+    reason: `Tool "${request.toolId}" requires approval.`,
+  }
+}
+
+export class ToolKit {
+  private readonly tools = new Map<string, TuffTool>()
+  private readonly approvalGate: TuffToolApprovalGate
+
+  constructor(options: TuffToolKitOptions = {}) {
+    this.approvalGate = options.approvalGate ?? defaultToolApprovalGate
+  }
+
+  register<TInput, TOutput>(tool: TuffTool<TInput, TOutput>): TuffTool<TInput, TOutput> {
+    const normalized = normalizeTool(tool)
+    this.tools.set(normalized.id, normalized as TuffTool)
+    return normalized
+  }
+
+  get<TInput = unknown, TOutput = unknown>(id: string): TuffTool<TInput, TOutput> | null {
+    return (this.tools.get(id) as TuffTool<TInput, TOutput> | undefined) ?? null
+  }
+
+  list(filter: TuffToolListFilter = {}): TuffTool[] {
+    return Array.from(this.tools.values()).filter((tool) => {
+      if (filter.source && tool.source !== filter.source) {
+        return false
+      }
+      if (filter.riskLevel && tool.riskLevel !== filter.riskLevel) {
+        return false
+      }
+      return true
+    })
+  }
+
+  async invoke<TOutput = unknown>(
+    id: string,
+    input: unknown,
+    context: TuffToolContext = {},
+  ): Promise<TuffToolInvocationResult<TOutput>> {
+    const tool = this.get<unknown, TOutput>(id)
+    if (!tool) {
+      return {
+        ok: false,
+        toolId: id,
+        error: createToolError(
+          'TOOL_NOT_FOUND',
+          `Tool "${id}" is not registered.`,
+        ),
+      }
+    }
+
+    return await this.invokeTool(tool, input, context)
+  }
+
+  async invokeTool<TInput, TOutput>(
+    tool: TuffTool<TInput, TOutput>,
+    input: unknown,
+    context: TuffToolContext = {},
+  ): Promise<TuffToolInvocationResult<TOutput>> {
+    const normalized = normalizeTool(tool)
+    const parsedInput = normalized.inputSchema.safeParse(input)
+    if (!parsedInput.success) {
+      return {
+        ok: false,
+        toolId: normalized.id,
+        error: createToolError(
+          'TOOL_INPUT_INVALID',
+          `Input for tool "${normalized.id}" is invalid.`,
+          parsedInput.error.flatten(),
+        ),
+      }
+    }
+
+    const approvalRequest = this.createApprovalRequest(normalized, parsedInput.data, context)
+    const approval = await this.approvalGate(approvalRequest)
+    if (!approval.approved) {
+      return {
+        ok: false,
+        toolId: normalized.id,
+        error: createToolError(
+          'TOOL_APPROVAL_DENIED',
+          approval.reason || `Tool "${normalized.id}" was not approved.`,
+        ),
+        metadata: approval.metadata,
+      }
+    }
+
+    try {
+      const output = await normalized.execute(parsedInput.data, context)
+      if (normalized.outputSchema) {
+        const parsedOutput = normalized.outputSchema.safeParse(output)
+        if (!parsedOutput.success) {
+          return {
+            ok: false,
+            toolId: normalized.id,
+            error: createToolError(
+              'TOOL_OUTPUT_INVALID',
+              `Output from tool "${normalized.id}" is invalid.`,
+              parsedOutput.error.flatten(),
+            ),
+          }
+        }
+
+        return {
+          ok: true,
+          toolId: normalized.id,
+          output: parsedOutput.data,
+        }
+      }
+
+      return {
+        ok: true,
+        toolId: normalized.id,
+        output,
+      }
+    }
+    catch (error) {
+      return {
+        ok: false,
+        toolId: normalized.id,
+        error: createToolError(
+          'TOOL_EXECUTION_FAILED',
+          error instanceof Error ? error.message : 'Tool execution failed.',
+          error,
+        ),
+      }
+    }
+  }
+
+  private createApprovalRequest<TInput, TOutput>(
+    tool: TuffTool<TInput, TOutput>,
+    input: TInput,
+    context: TuffToolContext,
+  ): TuffToolApprovalRequest<TInput> {
+    return {
+      toolId: tool.id,
+      name: tool.name,
+      description: tool.description,
+      source: tool.source ?? DEFAULT_TOOL_SOURCE,
+      riskLevel: tool.riskLevel ?? DEFAULT_RISK_LEVEL,
+      input,
+      context,
+      requiresApproval: isApprovalRequired(tool),
+      metadata: tool.metadata,
+    }
+  }
+}
+
+export function createToolKit(options?: TuffToolKitOptions): ToolKit {
+  return new ToolKit(options)
+}
+
+export function toCapabilityManifest<TInput, TOutput>(
+  tool: TuffTool<TInput, TOutput>,
+): CapabilityManifest<TInput, TuffToolInvocationResult<TOutput>> {
+  const normalized = normalizeTool(tool)
+  const kit = createToolKit({
+    approvalGate: () => ({ approved: true }),
+  })
+
+  return {
+    id: normalized.id,
+    description: normalized.description,
+    enabled: true,
+    annotations: {
+      readOnly: normalized.riskLevel === 'low',
+      destructive: normalized.riskLevel === 'critical',
+      requiresApproval: isApprovalRequired(normalized),
+    },
+    invoke: async (input, context) => {
+      return await kit.invokeTool(normalized, input, {
+        metadata: context,
+      })
+    },
+  }
+}
