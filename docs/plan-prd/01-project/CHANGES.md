@@ -57,7 +57,8 @@
 - `docs/plan-prd/TODO.md`
   - 新增 shared `OpenerEvents` canonical typed events，对应 plugin open、plugin install、dev install、drop install 与 app opener resolve；保留 `OpenerEvents.legacy.*` 承载 `@open-plugin`、`@install-plugin`、`plugin:install-dev`、`drop:plugin`、`openers:resolve` 兼容窗口。
   - 主进程 opener/install/drop/resolve 保持 legacy 双发或双监听，renderer 安装、拖拽安装与 opener resolve 改发 canonical event。
-  - `transport-domain-sdks.test.ts` 固定 opener canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限更新为 `260`。
+  - `transport-domain-sdks.test.ts` 固定 opener canonical metadata 与 legacy alias 原 wire name；`transport-event-boundary.test.ts` retained raw definition 上限从 `259` 收紧到 `256`，`typedCandidates` 保持 `0`。
+  - 已验证：`pnpm -C "packages/utils" exec vitest run "__tests__/transport-domain-sdks.test.ts" "__tests__/transport-event-boundary.test.ts"` 通过（2 files / 30 tests）；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 通过（仍输出既有 tuffex `TouchScroll` dts/deprecation 噪声但退出码 0）。
 
 ### feat(core-app): proxy authenticated Nexus uploads
 
