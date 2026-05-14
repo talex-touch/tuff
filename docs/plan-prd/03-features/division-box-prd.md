@@ -1,4 +1,22 @@
-# PRD: DivisionBox 交互容器能力深化 (v1.0)
+# PRD: DivisionBox 交互容器能力深化 (v1.0)（历史方案 / 分层入口）
+
+> 状态: 历史参考 / 待按当前 detached widget evidence 与 typed SDK 口径重写
+> 更新时间: 2026-05-14
+> 适用范围: DivisionBox 会话、插件 UI 挂载、Flow 联动与 detached widget 验收
+> 当前执行入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 相关现行文档: `docs/plan-prd/docs/DIVISION_BOX_GUIDE.md`、`docs/plan-prd/docs/DIVISION_BOX_API.md`
+
+## TL;DR
+
+- 本文保留 DivisionBox 早期“浮动工作区”完整设想，当前执行主线已经收敛到 detached widget 真实设备证据、权限 actor 归因和 typed SDK/transport 稳定性。
+- `DIVISION_BOX_GUIDE.md` 与 `DIVISION_BOX_API.md` 是当前精简入口；本文只作为历史目标、风险和验收思路追溯。
+- 后续若继续推进 DivisionBox，应优先补 Windows/macOS 真机证据、session `pluginId`/`detachedPayload` 水合、错误搜索回退防护和可复现回归命令。
+
+## 当前边界
+
+- 不再以本文的全量 keepAlive、多视图、协作、云同步设想作为当前版本 blocker。
+- 新能力必须走 typed transport/SDK 和权限中心 actor/scope/sdkapi 约束，不新增 raw event 或隐式来源推断。
+- 真机验收必须归档到 Windows acceptance / Release Evidence；单测只能证明局部契约，不能替代平台证据。
 
 ## 1. 背景与目标
 

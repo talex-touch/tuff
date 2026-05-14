@@ -1,4 +1,22 @@
-# TuffTransport 迁移清单 260111
+# TuffTransport 迁移清单 260111（历史迁移视图 / 分层入口）
+
+> 状态: 历史参考 / 待按当前 typed event boundary 重写
+> 更新时间: 2026-05-14
+> 适用范围: CoreApp main/renderer/plugin transport 迁移审计
+> 当前执行入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 相关现行专题: `docs/plan-prd/docs/TRANSPORT-LEGACY-RETIREMENT-CHECKLIST-2026-03.md`、`docs/plan-prd/04-implementation/TuffTransportPortPlan260111.md`
+
+## TL;DR
+
+- 本文是 260111 时点的迁移快照，下面“已迁移 / 部分迁移 / Legacy”列表不能直接作为当前真实清册。
+- 当前事实以 typed event boundary 测试、`rawSendViolations / retainedRawEventDefinitions / typedMigrationCandidates` 指标和 `TODO` 中 Transport Wave A 记录为准。
+- 后续 Transport 工作应优先围绕 MessagePort 高频通道、`sendSync` 清理、retained raw event 分批迁移和可复现门禁命令推进。
+
+## 当前边界
+
+- 二段或特殊 wire-name 在没有明确替代协议前可以保留 raw definition，但不得新增三段 typed-builder 形态的 raw event。
+- 业务代码不得直接绕过 typed SDK 复活旧 Channel 调用；必要保留必须有测试或 registry 说明。
+- 本文保留历史清单用于追溯，不作为 release gate 的唯一依据。
 
 ## 已迁移（明确使用 TuffTransport）
 ### 主进程

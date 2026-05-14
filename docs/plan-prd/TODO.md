@@ -41,7 +41,7 @@
 
 > 目标：把“最需要做的事”固定为可执行顺序，避免在正式 `2.4.10` gate 前继续扩大功能范围。当前结论是：先完成 Windows 真机 evidence 与 Release Evidence 闭环，再进入 `2.4.11` 债务退场与 `2.5.0` AI/Provider 后续。
 
-- [ ] 先确认工作区本地噪声：`mise.toml`、`apps/core-app/.playwright-mcp/`、`paseo.json` 是否为预期改动，避免混入证据或提交批次。
+- [x] 先确认工作区本地噪声：`mise.toml`、`apps/core-app/.playwright-mcp/`、`paseo.json` 是否为预期改动，避免混入证据或提交批次。2026-05-14 已确认 `mise.toml` 是 tracked 且无 diff，`apps/core-app/.playwright-mcp/` 与 `paseo.json` 被 `.gitignore` 明确忽略，当前不会混入提交批次。
 - [ ] 在 Windows 真机生成采证入口：使用 `pnpm -C "apps/core-app" run windows:acceptance:template -- --writeManualEvidenceTemplates --writeCollectionPlan` 生成 acceptance manifest、manual evidence templates 与 collection plan。
 - [ ] 按 collection plan 逐项采集 Windows 证据：capability evidence、Everything target probe、App Index diagnostic、common app launch、copied app path、应用索引管理页手动条目、UWP/Store、Steam、update install、DivisionBox detached widget、time-aware recommendation。
 - [ ] 采集性能证据：`search-trace` 真实查询 `200` 样本生成 `search-trace-stats/v1`；执行 `clipboard:stress` `120000ms` 并用 `clipboard:stress:verify --strict` 复核。
@@ -61,6 +61,7 @@
 > 目标：当前治理版本可按“quality 绿线 + 已知未闭环项入 TODO”口径准备发版；以下未闭环项不得在发版说明中宣称完成，后续继续按 `2.4.11` / `2.5.0` 主线推进。
 
 - [ ] 发版前最小复核：重新执行 `pnpm quality:release` 与 `git diff --check`，并记录命令结果；如完整 build 环境缺失，则至少执行 `pnpm lint`、`pnpm typecheck:all`、`pnpm test:targeted` 并记录阻塞原因。
+  - 2026-05-14 复核：`git diff --check` 返回 0；`pnpm quality:release` 在 `pnpm lint` 阶段失败。已修复 Nexus `app/utils/request.ts` 的 `ts/consistent-type-definitions` error，复跑后 Nexus `analytics.vue` 仅剩 26 个换行 warning（eslint exit 0）；当前真实阻塞为 CoreApp 既有 lint gate：`$app` global restricted syntax、renderer `console`、raw IPC guard 等合计 `178` 个 errors / `130` 个 warnings，未进入 typecheck/test/build 阶段。本项保持未完成，后续需按 lint debt 专项收敛或调整 release gate 后再复跑。
 - [x] `2.4.10-beta.22` beta 发布准备：补齐 `notes/update_2.4.10-beta.22.{zh,en}.md`，确认 `build-and-release` tag push 会进入 beta pre-release 语义；真实 commit/push/tag 仍需用户确认后执行.
 - [ ] Compat physical hard-cut：剩余 `compat-file=5` 需要独立确认后再做物理命名/删除旧路径；当前文件为 `startup-migrations.ts`、download `migration-manager.test.ts` / `migrations.ts`、`polyfills.ts`、`MigrationProgress.vue`。
 - [ ] Windows 真机 release evidence：补齐 acceptance manifest、Everything target probe、App Index diagnostic、常见 App 启动、复制 app path、本地启动区索引、应用索引管理页手动条目、UWP/Store、Steam 最小支持、更新安装、DivisionBox detached widget、分时推荐、search trace 与 clipboard stress 证据。
@@ -71,12 +72,16 @@
 - [ ] Provider Registry 后续：补旧 `intelligence_providers` 表退场方案、user-scope AI mirror OCR 自动绑定策略、success rate / quota / dynamic pricingRef 策略。
 - [ ] 2.5.0 AI/workflow 后续：继续拆 OmniPanel Writing Tools、Workflow `Use Model` 节点、Review Queue、Desktop Context Capsule 与 3 个 P0 模板。
 - [x] CoreApp 启动异步化 P0：renderer 已将 `pluginStore.initialize()` 从 mount 前 await gate 移到 `app.mount()` 后后台执行，避免 plugin list RPC 与 install source 查询阻塞首屏；新增 renderer shell mount 前耗时与 plugin store 后台初始化耗时日志。已验证 `pnpm -C "apps/core-app" run typecheck:web` 返回 0（tuffex build 阶段仍输出既有 dts/deprecation 噪声）；真机冷/热启动前后耗时对比留到后续平台补证。
-- [ ] CoreApp 启动异步化 P1：将 `ExtensionLoader`、Sentry telemetry hydrate、Intelligence agent/workflow runtime、Update cache、Clipboard OCR/native watcher 等非首屏任务改为 handler-first + background runtime。
+- [x] CoreApp 启动异步化 P1：将 `ExtensionLoader`、Sentry telemetry hydrate、Intelligence agent/workflow runtime、Update cache、Clipboard OCR/native watcher 等非首屏任务改为 handler-first + background runtime；命名范围已完成，Database critical/background 拆分与 Search provider 后台 ready 继续由 P2/P3 承接。
   - 2026-05-14 首个 P1 切片：`ExtensionLoaderModule` 已从 `onInit()` 串行同步读目录 + 逐个 `await loadExtension()` 改为 `onInit()` 只枚举扩展、`start()` 后台加载；destroy 会等待后台任务并卸载已加载扩展。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
   - 2026-05-14 Sentry 切片：`SentryServiceModule` 的 telemetry upload stats hydrate 已从 `onInit()` await gate 改为后台 hydrate，shutdown flush 前等待已启动 hydrate；hydrate 合并会保留启动期新增计数与更新的 failure/upload 时间，避免后台读取旧记录覆盖内存新统计。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
   - 2026-05-14 UpdateService 切片：release cache hydrate 已从 `onInit()` await gate 改为后台读取；检查更新前和 destroy flush 前会等待已启动 hydrate，避免空缓存误触发网络请求或旧缓存覆盖新缓存。已验证 `pnpm -C "apps/core-app" run typecheck:node`。
-- [ ] CoreApp 启动异步化 P2：拆分 `DatabaseModule` critical path 与 aux migration/health/WAL 后台任务，确保 `getAuxDb()` fallback primary DB 期间行为稳定。
-- [ ] CoreApp 启动异步化 P3：Everything backend detection、FileProvider search-index worker 与 filesystem watcher 改为后台 ready；搜索侧未 ready 返回 degraded/partial result。
+  - 2026-05-14 Intelligence 切片：`IntelligenceModule` 不再在 `onInit()` await agent/workflow runtime；provider、capability 与 IPC handler 先完成注册，agent/workflow runtime 后台初始化。`agent.run` / `workflow.execute` capability、workflow run 与 agent IPC 执行类 handler 会在真正执行前等待 runtime ready，Agent Store 查询不被 runtime readiness 阻塞。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/agents/agent-channels.test.ts" "src/main/modules/ai/intelligence-sdk.test.ts" "src/main/modules/ai/intelligence-workflow-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
+  - 2026-05-14 Clipboard 切片：Clipboard polling 仍在 monitoring 启动时立即注册，native clipboard watcher 的可选动态 import/start 改为等待 `appTaskGate.waitForIdle()` 后执行；OCR service 继续保持既有 idle 后启动路径。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/clipboard/clipboard-native-watcher.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
+- [x] CoreApp 启动异步化 P2：拆分 `DatabaseModule` critical path 与 aux migration/health/WAL 后台任务，确保 `getAuxDb()` fallback primary DB 期间行为稳定；命名范围已完成，更细的真机启动耗时与 WAL/health 长尾证据留到后续平台补证。
+  - 2026-05-14 P2 切片：`DatabaseModule.onInit()` 保留 primary DB 创建、SQLite primary pragma、主迁移与兼容表修复同步完成；aux DB 初始化/热表迁移、WAL maintenance 注册与启动 health snapshot 改为 `setImmediate` 后台任务。`getAuxDb()` 在 aux 未 ready 期间继续 fallback primary DB，destroy 会等待已启动的后台任务并清理 WAL task。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/database/index.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
+- [x] CoreApp 启动异步化 P3：Everything backend detection、FileProvider search-index worker 与 filesystem watcher 改为后台 ready；搜索侧未 ready 返回 degraded/partial result；命名范围已完成，真实设备启动耗时、trace 与 UI 观感补证并入上方 Windows 真机 release evidence / 搜索性能验收。
+  - 2026-05-14 P3 切片：`EverythingProvider.onLoad()` 只加载设置并注册 status/toggle/test handlers，SDK/CLI backend detection 改为 `setImmediate + appTaskGate.waitForIdle(3000)` 后台刷新；`FileProvider.onLoad()` 只完成 db/searchIndex/touchApp 引用与 opener handler 注册，search-index worker init、后台索引任务服务与 filesystem watcher 注册改为后台 ready。File index status 新增可选 `startupReady/startupPending/startupError` 用于 degraded 诊断；worker init 失败时 watcher 仍 best-effort 注册但不会把 startup 标成 ready。SearchCore 在 Windows 文件搜索命中 FileProvider 且 startup 未 ready/degraded 时追加低分 notification，明确结果为 partial，同时保留已有索引/Windows shell 候选。已验证 `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node`。
 
 ### 剩余工作区提交拆分清单（2026-05-11）
 
@@ -101,18 +106,21 @@
   - 范围：`apps/core-app/src/main/modules/clipboard.ts`、`apps/core-app/src/main/modules/clipboard/clipboard-autopaste-automation*`、`clipboard-capture-freshness*`、`clipboard-history-persistence*`、`clipboard-image-persistence*`、`clipboard-transport-handlers*`、`clipboard-polling-policy*`、`clipboard-native-watcher*`、`clipboard-meta-persistence*`、`clipboard-stage-b-enrichment*`、`clipboard-capture-pipeline*`、`clipboard-request-normalizer.ts`。
   - 结果：`clipboard.ts` 已降到 `1143` 行并清退 size exception；外部事件名、payload、action result 与 DB schema 保持兼容。
   - 已验证：Clipboard 定向测试 `11 files / 37 tests`、CoreApp node typecheck、定向 ESLint、`targeted ESLint` 与 code review / targeted refactor。
-- [ ] Nexus Intelligence provider dot-route hard-cut：
+- [x] Nexus Intelligence provider dot-route hard-cut：
   - 范围：`apps/nexus/server/api/dashboard/intelligence/providers/**`、`intelligence-route-compat` middleware 删除、`migrate.post.ts` 与相关测试。
-  - 下一步：先跑 intelligence provider/migration targeted tests，再与 Provider Registry 已提交批次保持边界清晰。
-- [ ] SDK hard-cut / plugin legacy channel：
+  - 结果：旧 `:id.probe` / `:id.test` dot-route shell 与 `intelligence-route-compat` middleware 已删除，仅保留当前 slash-route `providers/[id]/probe.post.ts` / `providers/[id]/test.post.ts` 与 migration 主路径；本轮复核确认顶部清单与后段完成项口径一致。
+  - 已验证：`pnpm -C "apps/nexus" exec vitest run "server/api/dashboard/intelligence/providers/migrate.api.test.ts"`；`pnpm -C "apps/nexus" exec eslint --cache --no-warn-ignored "server/api/dashboard/intelligence/providers/migrate.post.ts" "server/api/dashboard/intelligence/providers/migrate.api.test.ts" "server/api/dashboard/intelligence/providers/[id]/probe.post.ts" "server/api/dashboard/intelligence/providers/[id]/test.post.ts"`。
+- [x] SDK hard-cut / plugin legacy channel：
   - 范围：`apps/core-app/src/main/modules/plugin/*`、`sdkapi-hard-cut-gate.ts`、`packages/utils/plugin/index.ts`、`plugins/clipboard-history` raw channel 脚本。
-  - 下一步：跑 plugin-loader / sdkapi / ESLint / 最近路径测试后再提交；这是架构性批次，不要混入 UI 或 docs 迁移。
+  - 结果：`sdkapi-hard-cut-gate.ts`、plugin loader / installer / preflight 已统一以 `SDKAPI_BLOCKED` 阻断缺失、低于 floor、非法或未支持的 SDK marker；插件 channel `sendSync` 保持 removed error，renderer SDK 类型面不再暴露 `sendSync`；`clipboard-history` 构建产物与 CoreApp 内置副本 raw clipboard/system channel 字符串检查通过。
+  - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/plugin-preflight-helper.test.ts" "src/main/modules/plugin/plugin-installer.test.ts" "src/main/modules/plugin/install-queue.test.ts"`；`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-channel-send-sync-hard-cut.test.ts"`；`node "plugins/clipboard-history/scripts/assert-no-raw-channels.mjs"`；`pnpm -C "apps/core-app" exec eslint "src/main/modules/plugin/sdkapi-hard-cut-gate.ts" "src/main/modules/plugin/plugin-loaders.ts" "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/plugin-preflight-helper.ts" "src/main/modules/plugin/plugin-preflight-helper.test.ts" "src/main/modules/plugin/plugin-installer.ts" "src/main/modules/plugin/plugin-installer.test.ts" "src/main/modules/plugin/install-queue.ts" "src/main/modules/plugin/install-queue.test.ts"`；`pnpm -C "packages/utils" exec eslint "plugin/channel.ts" "plugin/sdk/channel-client.ts" "plugin/sdk/types.ts" "__tests__/plugin-channel-send-sync-hard-cut.test.ts"`。
 - [x] Guard 退场与 ESLint 统一：
   - 范围：root `package.json`、CI、CoreApp ESLint runtime/network/console 边界、legacy/compat/size/docs guard 脚本与基线清理。
   - 结果：质量入口收敛为 `lint`、`lint:fix`、`lint:changed`、`typecheck`、`typecheck:all`、`test:targeted`、`quality:pr`、`quality:release`。
-- [ ] Tuffex FlipOverlay SRP：
-  - 范围：`TxFlipOverlay.vue`、`flip-overlay-stack.ts`。
-  - 下一步：跑 tuffex 相关测试或最小组件测试后提交。
+- [x] Tuffex FlipOverlay SRP：
+  - 范围：`TxFlipOverlay.vue`、`flip-overlay-stack.ts`、`flip-overlay-body-scroll-lock.ts`。
+  - 结果：stack registry 已由 `flip-overlay-stack.ts` 承担；本轮继续将 body scroll lock 计数、overflow/padding 恢复逻辑迁出到 `flip-overlay-body-scroll-lock.ts`，组件 SFC 只保留渲染状态、动画编排与生命周期调用。
+  - 已验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"`；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/flip-overlay/src/TxFlipOverlay.vue" "packages/components/src/flip-overlay/src/flip-overlay-stack.ts" "packages/components/src/flip-overlay/src/flip-overlay-body-scroll-lock.ts" "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"`。
 
 #### 需先修复或拆分
 
@@ -857,6 +865,7 @@
   - 当前完成边界：上报、聚合、展示、类型与定向测试已完成；`search:trace:stats -- --input <core-app-log-file> --output <stats.json> --minSamples 200 --strict` 可从目标设备日志生成可归档 stats，Windows acceptance template 已输出 `performance.searchTraceStatsCommand`；验收关闭条件是目标设备产出 `search-trace-stats/v1`，并用 `search:trace:verify -- --minSamples 200 --strict` 通过样本数、P95、slowRatio 与内部 metric 自洽门禁。
 - [ ] 启动搜索压测：执行“全量索引 + 高频推荐 + 剪贴板图像轮询”，产出 2 分钟窗口内 lag/P95 证据；`clipboard:stress:verify` 已可复核 `clipboard:stress` summary 的 2 分钟窗口、500/250ms interval、scheduler delay P95/max、realtime queue peak、drop/timeout/error 门禁，但真实设备压测尚未执行。
 - [ ] 文档治理：第二批历史文档统一加“历史/待重写”头标，Telemetry/Search/Transport/DivisionBox 长文档改造为 TL;DR 分层模板。
+  - 2026-05-14 分层入口切片：`telemetry-error-reporting-system-prd.md` 已具备压缩版 TL;DR；本轮补齐 `SEARCH-REFACTOR-PRD.md`、`TuffTransportMigration260111.md`、`division-box-prd.md` 的状态头标、TL;DR、当前边界与追溯入口。`04-implementation/README.md` 已完成目录级 Draft 清点与有效状态索引；第二批历史文档头标与链接抽样仍未完成，本项暂不整体关闭。
 - [ ] Transport Wave A：MessagePort 高频通道迁移 + `sendSync` 清理。
 - [x] Transport Wave A 指标拆分：把 raw send violation 与 retained `defineRawEvent` definition 分开统计；2026-05-10 已在 `transport-event-boundary.test.ts` 输出 `rawSendViolations`、`retainedRawEventDefinitions` 与 `typedMigrationCandidates`，并继续禁止三段 typed-builder 形态新增 raw definition。
 - [x] Transport Wave A retained event 迁移第一批：2026-05-11 已迁移当前扫描到的三段 retained raw event：`system:permission:*` 与 `omni-panel:feature:*`，外部事件名保持不变；`typedMigrationCandidates` 当前为 `0`，retained raw definition 当前上限为 `265`。
@@ -1082,9 +1091,12 @@
 
 ### 剩余
 
-- [ ] Telemetry/Search/Transport/DivisionBox 四个长文档改造为 TL;DR 分层模板。
-- [ ] `04-implementation` 目录继续清点 Draft 文档并标注有效状态。
-- [ ] 抽样复核主入口链接可达性（归档后不得断链）。
+- [x] Telemetry/Search/Transport/DivisionBox 四个长文档改造为 TL;DR 分层模板。
+  - 2026-05-14 已确认 Telemetry 主文档是压缩版入口，并补齐 Search、Transport、DivisionBox 主文档的分层摘要；当前执行事实统一指向 `TODO` / `CHANGES` / 对应现行专题文档，历史正文继续保留作追溯。
+- [x] `04-implementation` 目录继续清点 Draft 文档并标注有效状态。
+  - 2026-05-14 已新增 `docs/plan-prd/04-implementation/README.md`，逐项清点 17 个 Markdown 文件并标注 `当前参考 / 历史参考 / 待重写 / Runbook / 参考资料` 边界，避免旧草案被误用为当前 release gate。
+- [x] 抽样复核主入口链接可达性（归档后不得断链）。
+  - 2026-05-14 已用本地 Node 链接检查抽样复核 `docs/INDEX.md` 与 `docs/plan-prd/README.md`，所有本地 Markdown 链接目标存在；外部 URL 与锚点不在本次抽样范围。
 
 ---
 

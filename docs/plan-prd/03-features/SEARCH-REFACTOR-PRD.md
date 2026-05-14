@@ -1,4 +1,22 @@
-# 搜索系统重构 PRD
+# 搜索系统重构 PRD（历史方案 / 分层入口）
+
+> 状态: 历史参考 / 待按当前 SearchCore 与 Windows evidence 口径重写
+> 更新时间: 2026-05-14
+> 适用范围: CoreBox 搜索聚合、Provider 编排、搜索性能治理
+> 当前执行入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/01-project/CHANGES.md`
+> 相关现行专题: `docs/plan-prd/03-features/search/WINDOWS-FILE-SEARCH-PRD.md`、`docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md`
+
+## TL;DR
+
+- 本文保留“单队列搜索 + 全局重排”的历史方案，不能直接代表当前 `SearchCore`、Windows Everything/FileProvider 后台 ready 与 partial result 的实现状态。
+- 当前主线验收以 Windows 真机 release evidence、`search-trace` 200 样本、`clipboard:stress` 2 分钟压测和 `TODO` 中记录的 P0/P1/P2/P3 启动异步化状态为准。
+- 后续若重启搜索系统重构，应按小切片推进：Provider 编排、结果缓存/去重、性能采样、UI 布局稳定性、Windows/macOS/Linux 证据分别闭环。
+
+## 当前边界
+
+- 不再把本文的“单队列一次性返回”视为当前默认目标；现有实现允许后台增强和 partial result，以避免首屏阻塞。
+- 新增搜索能力必须优先复用 typed transport / SDK 与现有 provider 抽象，不新增 raw channel 或绕过 SearchCore 的并行实现。
+- 性能结论必须有 `search-trace-stats/v1` 或等价可复核证据，不接受只凭体感描述关闭验收。
 
 ## 1. 背景与问题
 
@@ -263,7 +281,6 @@ async function executeSearch(query: TuffQuery): Promise<SearchResult> {
 - 搜索结果卡顿
 - 窗口动画不流畅
 - 排序不符合预期
-
 
 
 

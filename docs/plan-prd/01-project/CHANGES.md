@@ -9,9 +9,11 @@
 
 - `docs/plan-prd/04-implementation/README.md`
 - `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
   - 新增 `04-implementation` 目录级状态索引，逐项清点 17 个实施文档，并标注 `当前参考 / 历史参考 / 待重写 / Runbook / 参考资料` 有效边界。
-  - 将 `04-implementation` Draft 清点子项关闭；第二批历史文档头标与主入口链接抽样仍保留未完成，文档治理总项不整体关闭。
-  - 验证：文档改动，无运行时代码变更；`git diff --check` 待本轮复核。
+  - 将 `04-implementation` Draft 清点子项关闭；抽样复核 `docs/INDEX.md` 与 `docs/plan-prd/README.md` 的本地 Markdown 链接目标均存在；第二批历史文档头标仍保留未完成，文档治理总项不整体关闭。
+  - 验证：文档改动，无运行时代码变更；`git diff --check` 通过。
 
 ### feat(store): polish plugin marketplace cards and install feedback
 
