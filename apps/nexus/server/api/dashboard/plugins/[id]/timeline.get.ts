@@ -1,10 +1,10 @@
 import { createError } from 'h3'
-import { requireAuth } from '../../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
 import { getPluginById, listPluginTimeline } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:read'])
   const id = event.context.params?.id
 
   if (!id)

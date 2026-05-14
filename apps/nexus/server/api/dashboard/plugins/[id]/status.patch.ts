@@ -1,12 +1,12 @@
 import { createError, readBody } from 'h3'
-import { requireAuth } from '../../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
 import { getPluginById, setPluginStatus } from '../../../../utils/pluginsStore'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:publish'])
   const id = event.context.params?.id
 
   if (!id)

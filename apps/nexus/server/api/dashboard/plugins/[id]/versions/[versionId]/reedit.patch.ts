@@ -1,12 +1,12 @@
 import { createError, readFormData } from 'h3'
-import { requireAuth } from '../../../../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../../../../utils/auth'
 import { getUserById } from '../../../../../../utils/authStore'
 import { getPluginById, reeditPluginVersion } from '../../../../../../utils/pluginsStore'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:publish'])
   const id = event.context.params?.id
   const versionId = event.context.params?.versionId
 

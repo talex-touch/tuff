@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPopperDialog } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxPopperDialog } from '@talex-touch/tuffex'
 import type { TxSelectValue } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -87,12 +87,8 @@ async function fetchKeys() {
   }
 }
 
-watch(isAdmin, (admin) => {
-  if (user.value && !admin) {
-    navigateTo('/dashboard/overview')
-    return
-  }
-  if (admin)
+watch(user, (currentUser) => {
+  if (currentUser)
     fetchKeys()
 }, { immediate: true })
 
@@ -255,12 +251,6 @@ const scopeTree = computed<ApiKeyScopeGroup[]>(() => [
     description: t('dashboard.sections.apiKeys.scopes.groups.releases.description'),
     adminOnly: true,
     children: [
-      {
-        id: 'release:sync',
-        label: t('dashboard.sections.apiKeys.scopes.items.releaseSync.label'),
-        description: t('dashboard.sections.apiKeys.scopes.items.releaseSync.description'),
-        sensitive: true,
-      },
       {
         id: 'release:write',
         label: t('dashboard.sections.apiKeys.scopes.items.releaseWrite.label'),
@@ -480,18 +470,25 @@ const expiryOptions = computed(() => [
                       </p>
                     </div>
                     <div class="ApiKeyScopeTree-Children">
-                      <label
+                      <button
                         v-for="scope in group.children"
                         :key="scope.id"
+                        type="button"
                         class="ApiKeyScopeTree-Node"
-                        :class="{ 'is-sensitive': scope.sensitive }"
+                        :class="{
+                          'is-sensitive': scope.sensitive,
+                          'is-selected': newKeyScopes.includes(scope.id),
+                        }"
+                        @click="toggleScope(scope.id, !newKeyScopes.includes(scope.id))"
                       >
                         <TxCheckbox
-                          class="mt-0.5"
+                          class="mt-0.5 shrink-0"
                           :model-value="newKeyScopes.includes(scope.id)"
+                          :aria-label="scope.label"
+                          @click.stop
                           @change="(value: boolean) => toggleScope(scope.id, value)"
                         />
-                        <div class="min-w-0">
+                        <div class="min-w-0 text-left">
                           <div class="ApiKeyScopeTree-NodeTitleRow">
                             <p
                               class="ApiKeyScopeTree-NodeTitle"
@@ -510,7 +507,7 @@ const expiryOptions = computed(() => [
                             {{ scope.description }}
                           </p>
                         </div>
-                      </label>
+                      </button>
                     </div>
                   </section>
                 </div>
@@ -619,21 +616,32 @@ const expiryOptions = computed(() => [
 }
 
 .ApiKeyScopeTree-Node {
+  width: 100%;
   display: flex;
   align-items: flex-start;
   gap: 10px;
   cursor: pointer;
+  border: 1px solid transparent;
   border-radius: 10px;
   padding: 8px 10px;
-  transition: background-color 160ms ease;
+  color: inherit;
+  background: transparent;
+  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.ApiKeyScopeTree-Node:hover {
+.ApiKeyScopeTree-Node:hover,
+.ApiKeyScopeTree-Node.is-selected {
+  border-color: color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent);
   background: color-mix(in srgb, var(--tx-color-primary, #409eff) 7%, transparent);
 }
 
+.ApiKeyScopeTree-Node:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
+}
+
 .ApiKeyScopeTree-Node.is-sensitive {
-  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  border-color: color-mix(in srgb, #ef4444 35%, transparent);
   background: color-mix(in srgb, #ef4444 8%, transparent);
 }
 

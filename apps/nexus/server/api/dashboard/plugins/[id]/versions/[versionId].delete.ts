@@ -1,10 +1,10 @@
 import { createError } from 'h3'
-import { requireAuth } from '../../../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../../../utils/auth'
 import { getUserById } from '../../../../../utils/authStore'
 import { deletePluginVersion, getPluginById } from '../../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:publish'])
   const id = event.context.params?.id
   const versionId = event.context.params?.versionId
 

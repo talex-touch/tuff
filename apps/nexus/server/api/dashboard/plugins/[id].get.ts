@@ -1,11 +1,10 @@
 import { createError } from 'h3'
 import { requireAuthOrApiKey } from '../../../utils/auth'
 import { getUserById } from '../../../utils/authStore'
-import { deletePlugin, getPluginById } from '../../../utils/pluginsStore'
+import { getPluginById } from '../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuthOrApiKey(event, ['plugin:publish'])
-
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:read'])
   const id = event.context.params?.id
 
   if (!id)
@@ -14,7 +13,11 @@ export default defineEventHandler(async (event) => {
   const user = await getUserById(event, userId)
   const isAdmin = user?.role === 'admin'
 
-  const plugin = await getPluginById(event, id)
+  const plugin = await getPluginById(event, id, {
+    includeVersions: true,
+    viewerId: userId,
+    viewerIsAdmin: isAdmin,
+  })
 
   if (!plugin)
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
@@ -22,9 +25,13 @@ export default defineEventHandler(async (event) => {
   if (!isAdmin && plugin.userId !== userId)
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
 
-  await deletePlugin(event, id)
+  const versions = plugin.versions ?? []
+  const latest = versions.find(version => version.id === plugin.latestVersionId) ?? versions[0] ?? null
 
   return {
-    ok: true,
+    plugin: {
+      ...plugin,
+      latestVersion: latest,
+    },
   }
 })

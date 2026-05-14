@@ -145,6 +145,19 @@ export async function requireApiKey(event: H3Event, requiredScopes: string[] = [
   return { userId, scopes, user }
 }
 
+export async function requireAuthOrApiKey(event: H3Event, requiredScopes: string[] = []) {
+  try {
+    const auth = await requireAuth(event)
+    return { ...auth, authType: auth.authSource as 'session' | 'app' }
+  }
+  catch (error: any) {
+    if (error?.statusCode !== 401)
+      throw error
+    const apiKey = await requireApiKey(event, requiredScopes)
+    return { ...apiKey, authType: 'apiKey' as const }
+  }
+}
+
 export async function requireAdminOrApiKey(event: H3Event, requiredScopes: string[] = []) {
   try {
     const admin = await requireAdmin(event)

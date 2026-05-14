@@ -1,5 +1,5 @@
 import { createError, readFormData } from 'h3'
-import { requireAuth } from '../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../utils/auth'
 import { getUserById } from '../../../utils/authStore'
 import { uploadImage } from '../../../utils/imageStorage'
 import { getPluginById, updatePlugin } from '../../../utils/pluginsStore'
@@ -8,7 +8,7 @@ const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:publish'])
   const id = event.context.params?.id
 
   if (!id)

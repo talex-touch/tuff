@@ -1,12 +1,12 @@
 import { Buffer } from 'node:buffer'
 import { createError, readFormData } from 'h3'
-import { requireAuth } from '../../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../../utils/auth'
 import { extractTpexMetadata } from '../../../../utils/tpex'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
+  await requireAuthOrApiKey(event, ['plugin:publish'])
 
   const formData = await readFormData(event)
   const packageFile = formData.get('package')

@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer'
 import { createError, readFormData } from 'h3'
-import { requireAuth } from '../../utils/auth'
+import { requireAuthOrApiKey } from '../../utils/auth'
 import { getUserById } from '../../utils/authStore'
 import { uploadImage, uploadImageFromBuffer } from '../../utils/imageStorage'
-import { createPlugin } from '../../utils/pluginsStore'
+import { createPlugin, deletePlugin, publishPluginVersion } from '../../utils/pluginsStore'
 import { extractTpexMetadata } from '../../utils/tpex'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
@@ -11,7 +11,7 @@ const ALLOWED_ARTIFACT_TYPES = ['plugin', 'layout', 'theme'] as const
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:publish'])
   const formData = await readFormData(event)
 
   const user = await getUserById(event, userId)
@@ -51,6 +51,9 @@ export default defineEventHandler(async (event) => {
 
   const iconFile = formData.get('icon')
   const packageFile = formData.get('package')
+  const initialVersion = getString('initialVersion')
+  const initialChannel = (getString('initialChannel') ?? 'SNAPSHOT').toUpperCase()
+  const initialChangelog = getString('initialChangelog')
   let iconKey: string | null = null
   let iconUrl: string | null = null
 
@@ -151,7 +154,35 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: `Failed to create plugin: ${errorMessage}` })
   }
 
+  let initialVersionRecord = null
+  if (isFile(packageFile) && packageFile.size > 0 && initialVersion) {
+    try {
+      initialVersionRecord = await publishPluginVersion(event, {
+        pluginId: plugin.id,
+        channel: initialChannel === 'RELEASE' || initialChannel === 'BETA' || initialChannel === 'SNAPSHOT'
+          ? initialChannel
+          : 'SNAPSHOT',
+        version: initialVersion,
+        changelog: initialChangelog || `Initial release v${initialVersion}`,
+        homepage: homepage || null,
+        packageFile,
+        createdBy: userId,
+        canModerate: isAdmin,
+      })
+    }
+    catch (err: unknown) {
+      await deletePlugin(event, plugin.id).catch((deleteError) => {
+        console.error('[plugins.post] Failed to rollback plugin after initial version failure:', deleteError)
+      })
+      if (err && typeof err === 'object' && 'statusCode' in err)
+        throw err
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      throw createError({ statusCode: 400, statusMessage: `Failed to initialize plugin version: ${errorMessage}` })
+    }
+  }
+
   return {
     plugin,
+    initialVersion: initialVersionRecord,
   }
 })

@@ -1,10 +1,10 @@
 import { getQuery } from 'h3'
-import { requireAuth } from '../../utils/auth'
+import { requireAuthOrApiKey } from '../../utils/auth'
 import { getUserById } from '../../utils/authStore'
 import { listPlugins } from '../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:read'])
 
   const user = await getUserById(event, userId)
   const isAdmin = user?.role === 'admin'
