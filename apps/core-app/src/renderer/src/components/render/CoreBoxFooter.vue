@@ -347,7 +347,7 @@ const keyHints = computed(() => {
   &.display {
     transform: translateY(0%);
 
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.12s ease-out;
   }
 
   transition: none;

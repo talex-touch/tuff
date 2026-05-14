@@ -172,8 +172,9 @@ export function useSearch(
   const pendingSearchEndById = new Map<string, SearchEndData>()
   const pendingSearchUpdatesById = new Map<string, TuffItem[]>()
 
-  const BASE_DEBOUNCE = 80
-  const inputTransport = createCoreBoxInputTransport(transport, BASE_DEBOUNCE)
+  const SEARCH_DEBOUNCE_MS = 30
+  const INPUT_CHANGE_DEBOUNCE_MS = 25
+  const inputTransport = createCoreBoxInputTransport(transport, INPUT_CHANGE_DEBOUNCE_MS)
 
   let searchSequence = 0
   let recommendationTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -579,7 +580,7 @@ export function useSearch(
     }
   }
 
-  const debouncedSearch = useDebounceFn(executeSearch, BASE_DEBOUNCE)
+  const debouncedSearch = useDebounceFn(executeSearch, SEARCH_DEBOUNCE_MS)
 
   async function handleSearch(): Promise<void> {
     debouncedSearch()

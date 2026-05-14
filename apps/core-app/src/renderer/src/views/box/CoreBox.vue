@@ -919,7 +919,7 @@ div.CoreBoxRes {
     display: flex;
     flex-direction: column;
     width: 100%;
-    transition: width 0.3s ease;
+    transition: width 0.12s ease;
   }
 
   .CoreBoxRes-Main.compressed {
@@ -988,12 +988,12 @@ div.CoreBoxRes.CoreBoxRes--widget {
 
 // Result switch animation (list <-> grid, or new results)
 .result-switch-enter-active {
-  animation: result-enter 0.28s ease-out;
+  animation: result-enter 0.12s ease-out;
   animation-fill-mode: both;
 }
 
 .result-switch-leave-active {
-  animation: result-leave 0.15s ease-in;
+  animation: result-leave 0.08s ease-in;
   animation-fill-mode: both;
 }
 
@@ -1026,7 +1026,7 @@ div.CoreBoxRes.CoreBoxRes--widget {
 
 // Animation for new items (both initial load and incremental updates)
 .item-list > .CoreBoxRender.is-new-item {
-  animation: item-stagger-in 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: item-stagger-in 0.14s ease-out;
   animation-fill-mode: both;
   animation-delay: var(--stagger-delay, 0s);
 }
@@ -1035,10 +1035,6 @@ div.CoreBoxRes.CoreBoxRes--widget {
   0% {
     opacity: 0;
     transform: translateY(10px);
-  }
-  70% {
-    opacity: 1;
-    transform: translateY(-2px);
   }
   100% {
     opacity: 1;

@@ -19,7 +19,7 @@ const HEIGHT_SAFETY_PADDING = 10
 const HEADER_HEIGHT = 64
 const MIN_HEIGHT = 64
 const MAX_HEIGHT = 600
-const RESULT_LAYOUT_SETTLE_MS = 220
+const RESULT_LAYOUT_SETTLE_MS = 100
 
 const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
 
