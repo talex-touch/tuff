@@ -1,7 +1,6 @@
 export const WORKSPACE_SCAN_ROOTS = [
   'apps/core-app',
   'apps/nexus',
-  'apps/pilot',
   'packages',
   'plugins',
 ]
@@ -11,10 +10,6 @@ export const LEGACY_SCAN_ROOTS = [
   'apps/core-app/scripts',
   'apps/nexus/server',
   'apps/nexus/app',
-  'apps/pilot/server',
-  'apps/pilot/app',
-  'apps/pilot/shared',
-  'apps/pilot/scripts',
   'packages',
   'plugins',
 ]
@@ -45,12 +40,6 @@ export const SCOPE_GUARD_EXEMPT_FILES = new Set([
   'apps/nexus/types/sync-api.d.ts',
   'apps/nexus/uno.config.ts',
   'apps/nexus/vitest.config.ts',
-  'apps/pilot/eslint.config.js',
-  'apps/pilot/nuxt.config.ts',
-  'apps/pilot/shared/pilot-env-loader.ts',
-  'apps/pilot/shims-compat.d.ts',
-  'apps/pilot/uno.config.ts',
-  'apps/pilot/vitest.config.ts',
 ])
 
 export const DEFAULT_IGNORE_DIRS = new Set([

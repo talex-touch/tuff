@@ -1,5 +1,4 @@
 import type { TurnState, UserMessageAttachment } from '../protocol/session'
-import { shouldIncludePilotMessageInModelContext } from '../business/pilot/conversation'
 
 export interface DeepAgentInvokeMessage {
   type: 'system' | 'user' | 'assistant'
@@ -24,6 +23,17 @@ function normalizeMessageRole(value: unknown): 'system' | 'user' | 'assistant' {
     return normalized
   }
   return 'user'
+}
+
+function shouldIncludeMessageInModelContext(message: Record<string, unknown>): boolean {
+  const metadata = toRecord(message.metadata)
+  const contextPolicy = String(metadata.contextPolicy || '').trim().toLowerCase()
+  if (contextPolicy === 'deny') {
+    return false
+  }
+
+  const sourceEventType = String(metadata.sourceEventType || '').trim().toLowerCase()
+  return sourceEventType !== 'memory.context'
 }
 
 function normalizeTurnAttachments(state: TurnState): UserMessageAttachment[] {
@@ -269,7 +279,7 @@ export function buildDeepAgentMessages(
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
-    if (!shouldIncludePilotMessageInModelContext(row)) {
+    if (!shouldIncludeMessageInModelContext(row)) {
       continue
     }
     const text = String(row.content || '').trim()
@@ -299,7 +309,7 @@ export function buildResponsesInput(state: TurnState): Array<Record<string, unkn
   for (const item of state.messages) {
     currentIndex += 1
     const row = toRecord(item)
-    if (!shouldIncludePilotMessageInModelContext(row)) {
+    if (!shouldIncludeMessageInModelContext(row)) {
       continue
     }
     const role = normalizeMessageRole(row.role)

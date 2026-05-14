@@ -263,7 +263,7 @@ const {
       <section>
         <h2>Run state</h2>
         <TxAiToolCall
-          :name="isLiveMode ? 'DeepAgent request' : 'Pilot timeline'"
+          :name="isLiveMode ? 'DeepAgent request' : 'Conversation timeline'"
           :status="toolStatus"
           :description="isLiveMode ? liveStatusText : activeStep.description"
         />

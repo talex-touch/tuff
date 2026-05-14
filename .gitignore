@@ -129,8 +129,6 @@ apps/nexus/dist/
 apps/nexus/.output/
 apps/nexus/.nuxt/
 apps/nexus/.data/
-apps/pilot/.env
-apps/pilot/.output/
 
 # ========================
 # Project-specific (core-app)

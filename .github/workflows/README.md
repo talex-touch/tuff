@@ -33,19 +33,6 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - Contributors README automation was retired on `2026-04-22`
   - The previous `readme-contributors.yml` workflow kept generating duplicate README PRs on `master` pushes, so it was disabled and removed to keep the official PR queue stable
 
-- **`pilot-ci.yml`** - Pilot 前端 CI + 静态产物
-  - 触发条件：`apps/pilot/**` 相关变更
-  - `quality`：lint / typecheck（非阻塞）+ test / build（阻塞）
-  - `static-dist`：`nuxt generate` + `prepare:cf-static` 并上传 `pilot-dist` artifact
-
-- **`pilot-image.yml`** - Pilot Docker 镜像发布到 GHCR
-  - 触发条件：`master` push 且命中 `apps/pilot/**`、`packages/**` 或锁文件/工作流改动
-  - 使用 `apps/pilot/Dockerfile` 构建 `ghcr.io/<owner>/tuff-pilot`
-  - 推送标签：`pilot-<short_sha>` + `pilot-latest`
-  - 输出镜像 digest，供后续 1Panel 回滚与审计
-  - 若配置 `ONEPANEL_WEBHOOK_URL` + `ONEPANEL_WEBHOOK_TOKEN`，镜像发布后自动 `POST /deploy`
-  - 1Panel webhook 会做有限重试；连通性异常只记 warning，不阻塞已经成功的 GHCR 镜像发布
-  - webhook 鉴权使用 `X-Pilot-Token: $ONEPANEL_WEBHOOK_TOKEN`（服务端变量为 `PILOT_WEBHOOK_TOKEN`）
 
 ### Package CI Workflows
 
