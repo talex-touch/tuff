@@ -9,24 +9,17 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 
 import { createPinia } from 'pinia'
 import type { Router } from 'vue-router'
-import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-element'
-import VWave from 'v-wave'
 import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
 import { resolveInitialLanguagePreference, setupI18n } from '~/modules/lang'
-import { registerBuildVerificationListener } from '~/modules/build-verification/register-build-verification'
-import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
-import { registerPluginInstallListener } from '~/modules/plugin/plugin-install-listener'
 
-import { usePluginStore } from '~/stores/plugin'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 import App from './App.vue'
 
-import '~/modules/auth/account-channel'
 import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/style.css'
@@ -43,14 +36,14 @@ setRuntimeEnv(import.meta.env as Record<string, string | undefined>)
 const transport = useTuffTransport()
 const mainLog = createRendererLogger('RendererMain')
 const rendererBootstrapStartedAt = performance.now()
+const isLightweightWindow = isCoreBox() || isAssistantWindow()
 
 let router: Router | null = null
 let routerEventsRegistered = false
 let lifecycleEventsRegistered = false
 
 registerNotificationHub(transport)
-registerBuildVerificationListener(transport)
-registerBatteryStatusListener()
+registerMainWindowSideEffects()
 registerLifecycleEvents()
 
 function registerRouterEvents(instance: Router): void {
@@ -94,8 +87,12 @@ async function ensureRouter(): Promise<Router> {
     return router
   }
 
-  const module = await import('./base/router')
-  router = module.default
+  const [routerModule, sharedElementModule] = await Promise.all([
+    import('./base/router'),
+    import('v-shared-element')
+  ])
+  router = routerModule.default
+  const { SharedElementRouteGuard } = sharedElementModule
   router.beforeEach(SharedElementRouteGuard)
   registerRouterEvents(router)
   return router
@@ -112,7 +109,7 @@ registerDefaultCustomRenderers()
 async function bootstrap() {
   initializeRendererStorage(transport)
   await appSettings.whenHydrated()
-  const router = await ensureRouter()
+  const router = isLightweightWindow ? null : await ensureRouter()
   const initialLanguage = resolveInitialLanguage()
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
     setupI18n({ locale: initialLanguage })
@@ -121,11 +118,17 @@ async function bootstrap() {
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
 
   await runBootStep('Registering plugins and global modules', 0.05, () => {
-    registerCorePlugins(app, i18n, router)
-    registerPluginInstallListener(transport, router)
-    // Expose router to window for MetaOverlay access
-    window.__VUE_ROUTER__ = router
+    return registerCorePlugins(app, i18n, router)
   })
+
+  if (router) {
+    await runBootStep('Registering main window modules', 0.05, async () => {
+      const { registerPluginInstallListener } =
+        await import('~/modules/plugin/plugin-install-listener')
+      registerPluginInstallListener(transport, router)
+      window.__VUE_ROUTER__ = router
+    })
+  }
 
   await runBootStep('Mounting renderer root container', 0.05, () => {
     app.mount('#app')
@@ -156,18 +159,52 @@ function resolveInitialLanguage() {
 function registerCorePlugins(
   app: ReturnType<typeof createApp>,
   i18n: I18nInstance,
-  router: Router
+  router: Router | null
 ) {
-  app.use(router).use(createPinia()).use(VWave, {}).use(i18n).use(createSharedElementDirective())
+  app.use(createPinia()).use(i18n)
+  if (!router) {
+    return
+  }
+
+  return Promise.all([import('v-wave'), import('v-shared-element')]).then(
+    ([vWaveModule, sharedElementModule]) => {
+      app
+        .use(router)
+        .use(vWaveModule.default, {})
+        .use(sharedElementModule.createSharedElementDirective())
+    }
+  )
+}
+
+/**
+ * Register main-window-only side-effect modules.
+ */
+function registerMainWindowSideEffects(): void {
+  if (isLightweightWindow) {
+    return
+  }
+
+  void import('~/modules/auth/account-channel').catch((error) => {
+    mainLog.error('Failed to register account channel', error)
+  })
+
+  void import('~/modules/build-verification/register-build-verification')
+    .then(({ registerBuildVerificationListener }) => {
+      registerBuildVerificationListener(transport)
+    })
+    .catch((error) => {
+      mainLog.error('Failed to register build verification listener', error)
+    })
 }
 
 /**
  * Initialize the plugin store unless CoreBox mode is active.
  */
 async function maybeInitializePluginStore() {
-  if (isCoreBox() || isAssistantWindow()) {
+  if (isLightweightWindow) {
     return
   }
+  const { usePluginStore } = await import('~/stores/plugin')
   const pluginStore = usePluginStore()
   await pluginStore.initialize()
 }

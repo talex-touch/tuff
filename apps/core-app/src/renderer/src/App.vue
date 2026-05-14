@@ -1,55 +1,46 @@
 <script name="App" lang="ts" setup>
 import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer'
-import { appSettings } from '@talex-touch/utils/renderer/storage'
+import { until } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import TouchMenu from '~/components/menu/TouchMenu.vue'
 import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
-import { usePermissionStartup } from '~/composables/usePermissionStartup'
 import { appSetting } from '~/modules/storage/app-storage'
-import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
-import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
-import { useLanguage } from '~/modules/lang'
-import { captureAppContext } from '~/modules/mention/dialog-mention'
-import { createRendererLogger } from '~/utils/renderer-log'
 import Beginner from '~/views/base/begin/Beginner.vue'
 import AppLayout from '~/views/layout/AppLayout.vue'
 import AppEntrance from './AppEntrance.vue'
 
+const MainWindowRuntimeServices = defineAsyncComponent(
+  () => import('~/components/app/MainWindowRuntimeServices.vue')
+)
 const { t } = useI18n()
-const { initializeLanguage } = useLanguage()
 useStartupInfo()
-const appLog = createRendererLogger('App')
+const isLightweightWindow = isCoreBox() || isAssistantWindow()
 
 const beginner = ref(false)
-
-captureAppContext()
-usePermissionStartup()
-useGlobalBatteryOptimizer()
+const mainRuntimeReady = ref(isLightweightWindow)
 
 /**
  * Initialize renderer-only services once the lifecycle is ready.
  */
 async function init(): Promise<void> {
-  if (isCoreBox() || isAssistantWindow()) {
+  if (isLightweightWindow) {
     return
   }
 
-  try {
-    await initializeLanguage()
-  } catch (error) {
-    appLog.error('Failed to initialize language', error)
+  if (!mainRuntimeReady.value) {
+    await until(mainRuntimeReady).toBe(true)
   }
-
-  useDropperResolver()
-
-  await appSettings.whenHydrated()
-  if (!appSetting?.beginner?.init) beginner.value = true
 }
 </script>
 
 <template>
-  <AppEntrance :on-ready="init">
+  <MainWindowRuntimeServices
+    v-if="!isLightweightWindow"
+    @beginner-required="beginner = true"
+    @ready="mainRuntimeReady = true"
+  />
+  <AppEntrance v-if="mainRuntimeReady" :on-ready="init">
     <AppLayout>
       <template #title>
         <span text-sm>{{ t('app.title') }}</span>

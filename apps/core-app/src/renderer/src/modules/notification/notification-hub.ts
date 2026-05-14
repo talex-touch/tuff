@@ -1,4 +1,5 @@
 import type { ITuffTransport } from '@talex-touch/utils/transport'
+import { isCoreBox } from '@talex-touch/utils/renderer'
 import type {
   NotificationAppPresentation,
   NotificationDismissPayload,
@@ -17,8 +18,19 @@ import {
 
 const notificationCache = new Map<string, NotificationRequest>()
 
+function shouldHandleAppNotification(request: NotificationRequest): boolean {
+  if (!isCoreBox()) {
+    return true
+  }
+  return request.channel === 'app'
+}
+
 function resolvePresentation(request: NotificationRequest): NotificationAppPresentation {
-  return request.app?.presentation ?? 'toast'
+  const presentation = request.app?.presentation ?? 'toast'
+  if (isCoreBox() && presentation !== 'toast' && presentation !== 'banner') {
+    return 'toast'
+  }
+  return presentation
 }
 
 function resolveToastMessage(request: NotificationRequest): { text: string; description?: string } {
@@ -166,12 +178,18 @@ export function registerNotificationHub(transport: ITuffTransport): () => void {
   disposers.push(
     transport.on(NotificationEvents.push.notify, async (payload: NotificationPushPayload) => {
       const { id, request } = payload
+      if (!shouldHandleAppNotification(request)) {
+        return
+      }
       notificationCache.set(id, request)
       await dispatchAppNotification(request, transport, id)
     }),
     transport.on(NotificationEvents.push.update, async (payload: NotificationUpdatePayload) => {
       const previous = notificationCache.get(payload.id)
       const merged = mergeRequest(previous, payload.patch, payload.id)
+      if (!shouldHandleAppNotification(merged)) {
+        return
+      }
       notificationCache.set(payload.id, merged)
       await dispatchAppNotification(merged, transport, payload.id)
     }),

@@ -60,6 +60,17 @@
   - Update dialogs continue to use i18n keys, and their published date formatting now follows the active i18n locale instead of the host default locale; the older download update dialog title no longer mixes decorative emoji into localized text.
   - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useUpdateRuntime.test.ts"`、`pnpm -C "apps/core-app" run typecheck:web`。
 
+### refactor(core-app): trim CoreBox renderer startup side effects
+
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/App.vue`
+- `apps/core-app/src/renderer/src/components/app/MainWindowRuntimeServices.vue`
+- `apps/core-app/src/renderer/src/modules/notification/notification-hub.ts`
+  - CoreBox / assistant lightweight renderer entries no longer create the main Vue Router, register plugin install route-jump handling, build verification notification listeners, or auth fingerprint channel handlers.
+  - Main-window-only runtime services for permission startup prompts, global low-battery motion toggling, language hydration, dropper handling, and beginner gating moved behind a main-window-only async component so CoreBox does not load those modules during its startup path.
+  - CoreBox keeps app-channel toast notifications for widget/runtime feedback, but system-channel broadcasts are ignored and dialog/mention/blow/popper presentations are downgraded to toast to avoid invoking DialogManager in the search window.
+  - 已验证：`pnpm -C "apps/core-app" exec eslint "src/renderer/src/main.ts" "src/renderer/src/App.vue" "src/renderer/src/components/app/MainWindowRuntimeServices.vue" "src/renderer/src/modules/notification/notification-hub.ts"`、`git diff --check`。
+
 ### fix(cli): precompile all packaged plugin widgets
 
 - `packages/tuff-cli-core/src/exporter.ts`
