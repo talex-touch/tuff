@@ -1,7 +1,25 @@
 # 变更日志
 
-> 更新时间: 2026-05-13
-> 说明: 主文件仅保留近 30 天（2026-04-13 ~ 2026-05-13）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-14
+> 说明: 主文件仅保留近 30 天（2026-04-14 ~ 2026-05-14）详细记录；更早历史已按月归档。
+
+## 2026-05-14
+
+### feat(core-app): add OmniPanel AI writing tools preview
+
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/shared/intelligence/{desktop-context-capsule.ts,desktop-context-capsule.test.ts}`
+- `apps/core-app/src/main/modules/omni-panel/{index.ts,omni-panel-builtin-features.ts,index.test.ts}`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/{OmniPanel.vue,ai-actions.ts,ai-actions.test.ts}`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/{OmniPanelActionItem.vue,OmniPanelActionList.vue}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN.json,en-US.json}`
+- `apps/core-app/src/main/modules/ai/nexus-invoke-smoke.test.ts`
+  - OmniPanel 新增划词 AI MVP 动作：`builtin.ai.translate` -> `text.translate`、`builtin.ai.summarize` -> `text.summarize`、`builtin.ai.rewrite` -> `text.rewrite`、`builtin.ai.explain` -> `text.chat` / `code.explain`、`builtin.ai.review` -> `code.review`。
+  - AI 动作由 renderer 侧拦截并通过 `@talex-touch/tuff-intelligence` client 调用 typed `intelligence.invoke()`；结果进入 OmniPanel 预览面板，展示 provider、model、traceId，并提供 copy、retry、replace clipboard 二次确认，不再直接修改剪贴板或原文。
+  - OmniPanel context payload 新增 transient Desktop Context Capsule，统一携带 selection text、clipboard text、OCR text 预留、appName/windowTitle、source/capturedAt；原文仅作为 invoke 输入或内存态 context，不写入普通 storage 或审计 metadata。
+  - OmniPanel 触发后改为聚焦窗口，主进程 blur 与 renderer blur 都会隐藏；窗口尺寸、内部 icon、间距和 action list 已缩小并改为内部滚动，适配更紧凑的划词入口。
+  - 新增 Nexus invoke smoke：模拟登录态 token 时 `tuff-nexus-default` 命中 `/api/v1/intelligence/invoke`；未登录 guest 路径不发网络请求并 fallback 到本地 provider。
 
 ## 2026-05-13
 
