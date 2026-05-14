@@ -144,6 +144,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
   private releaseCacheStore: ReleaseCacheStore = { version: 1, entries: {} }
+  private releaseCacheLoadPromise: Promise<void> | null = null
   private autoDownloadTasks: Map<string, string> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
@@ -246,7 +247,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     // Load settings
     this.loadSettings()
-    await this.loadReleaseCache()
+    this.scheduleReleaseCacheLoad()
     this.setupMacAutoUpdater()
 
     if (!this.tryInitUpdateSystem(ctx)) {
@@ -294,6 +295,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (this.releaseCacheSaveTimer) {
       clearTimeout(this.releaseCacheSaveTimer)
       this.releaseCacheSaveTimer = null
+      await this.waitForReleaseCacheLoad()
       await this.flushReleaseCacheToDisk()
     }
 
@@ -1434,6 +1436,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     channel: AppPreviewChannel,
     options?: { force?: boolean }
   ): Promise<UpdateFetchResult> {
+    await this.waitForReleaseCacheLoad()
+
     if (this.settings.source?.type === UpdateProviderType.OFFICIAL) {
       return this.fetchLatestReleaseFromOfficial(channel, options)
     }
@@ -2153,6 +2157,25 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
     } catch (error) {
       updateLog.warn('Failed to load update cache', { error })
+    }
+  }
+
+  private scheduleReleaseCacheLoad(): void {
+    if (this.releaseCacheLoadPromise) return
+    const startedAt = performance.now()
+    this.releaseCacheLoadPromise = this.loadReleaseCache().finally(() => {
+      updateLog.debug('Update release cache load finished', {
+        meta: { durationMs: Math.round(performance.now() - startedAt) }
+      })
+    })
+  }
+
+  private async waitForReleaseCacheLoad(): Promise<void> {
+    if (!this.releaseCacheLoadPromise) return
+    try {
+      await this.releaseCacheLoadPromise
+    } catch {
+      // loadReleaseCache logs failures internally.
     }
   }
 

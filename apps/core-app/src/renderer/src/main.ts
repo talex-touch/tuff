@@ -42,6 +42,7 @@ setRuntimeEnv(import.meta.env as Record<string, string | undefined>)
 
 const transport = useTuffTransport()
 const mainLog = createRendererLogger('RendererMain')
+const rendererBootstrapStartedAt = performance.now()
 
 let router: Router | null = null
 let routerEventsRegistered = false
@@ -126,11 +127,13 @@ async function bootstrap() {
     window.__VUE_ROUTER__ = router
   })
 
-  await runBootStep('Initializing plugin store', 0.05, () => maybeInitializePluginStore())
-
   await runBootStep('Mounting renderer root container', 0.05, () => {
     app.mount('#app')
   })
+
+  const mountBeforeMs = Math.round(performance.now() - rendererBootstrapStartedAt)
+  mainLog.info('Renderer shell mounted', { mountBeforeMs })
+  schedulePluginStoreInitialization()
 
   preloadDebugStep('Renderer shell mounted', 0.02)
 }
@@ -167,6 +170,21 @@ async function maybeInitializePluginStore() {
   }
   const pluginStore = usePluginStore()
   await pluginStore.initialize()
+}
+
+function schedulePluginStoreInitialization() {
+  window.setTimeout(() => {
+    const startedAt = performance.now()
+    void maybeInitializePluginStore()
+      .then(() => {
+        mainLog.info('Plugin store initialized in background', {
+          durationMs: Math.round(performance.now() - startedAt)
+        })
+      })
+      .catch((error) => {
+        mainLog.error('Background plugin store initialization failed', error)
+      })
+  }, 0)
 }
 
 /**
