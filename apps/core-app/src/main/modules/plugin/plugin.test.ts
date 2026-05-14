@@ -2,7 +2,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
-import { NotificationEvents } from '@talex-touch/utils/transport/events'
+import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import fse from 'fs-extra'
 
 vi.mock('@talex-touch/utils/plugin/node', () => {
@@ -234,6 +234,49 @@ describe('TouchPlugin.triggerFeature', () => {
           message: '插件 widget 初始化失败，请检查插件版本、路径和运行日志。'
         })
       })
+    )
+  })
+
+  it('exposes plugin secret API through the injected feature util', async () => {
+    const transport = {
+      invoke: vi.fn().mockResolvedValue({ success: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    await plugin.getFeatureUtil().plugin.secret.set('providers.baidu.secretKey', 'secret-value')
+
+    expect(transport.invoke).toHaveBeenCalledWith(
+      PluginEvents.storage.setSecret,
+      {
+        pluginName: 'test-plugin',
+        key: 'providers.baidu.secretKey',
+        value: 'secret-value'
+      },
+      {
+        plugin: {
+          name: 'test-plugin',
+          uniqueKey: expect.any(String),
+          verified: expect.any(Boolean)
+        }
+      }
     )
   })
 })

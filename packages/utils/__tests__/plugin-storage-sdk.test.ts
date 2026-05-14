@@ -28,6 +28,7 @@ vi.mock('../transport', () => ({
 }))
 
 import { usePluginStorage } from '../plugin/sdk/storage'
+import { usePluginSecret } from '../plugin/sdk/secret'
 
 describe('Plugin Storage SDK', () => {
   beforeEach(() => {
@@ -136,5 +137,29 @@ describe('Plugin Storage SDK', () => {
 
     unsubscribe()
     expect(dispose).toHaveBeenCalled()
+  })
+
+  it('maps plugin secret operations to namespaced typed storage events', async () => {
+    const sdk = usePluginSecret()
+
+    await sdk.get('providers.baidu.secretKey')
+    await sdk.set('providers.baidu.secretKey', 'secret-value')
+    await sdk.delete('providers.baidu.secretKey')
+
+    expect(mocks.send).toHaveBeenNthCalledWith(
+      1,
+      PluginEvents.storage.getSecret,
+      { pluginName: 'demo-plugin', key: 'providers.baidu.secretKey' },
+    )
+    expect(mocks.send).toHaveBeenNthCalledWith(
+      2,
+      PluginEvents.storage.setSecret,
+      { pluginName: 'demo-plugin', key: 'providers.baidu.secretKey', value: 'secret-value' },
+    )
+    expect(mocks.send).toHaveBeenNthCalledWith(
+      3,
+      PluginEvents.storage.deleteSecret,
+      { pluginName: 'demo-plugin', key: 'providers.baidu.secretKey' },
+    )
   })
 })

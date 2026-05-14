@@ -60,6 +60,11 @@ import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
+import {
+  getSecureStoreValue,
+  isSecureStoreAvailable,
+  setSecureStoreValue
+} from '../../utils/secure-store'
 import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
@@ -1738,6 +1743,7 @@ export class PluginModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private pluginSqliteClients = new Map<string, Client>()
+  private secureStoreRootPath = ''
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -1754,6 +1760,7 @@ export class PluginModule extends BaseModule {
     registerMainRuntime('plugin-module', resolveMainRuntime(ctx, 'PluginModule.onInit'))
     const ioRuntime = resolvePluginModuleIoRuntime(ctx)
     this.transport = ioRuntime.transport
+    this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
 
     const pluginRuntime = buildPluginManagerRuntime({
@@ -2280,6 +2287,37 @@ export class PluginModule extends BaseModule {
       return result.reason ?? `Permission '${result.permissionId}' not granted`
     }
 
+    const normalizePluginSecretKey = (pluginName: string, rawKey: unknown): string => {
+      const key = typeof rawKey === 'string' ? rawKey.trim() : ''
+      if (!/^[a-z0-9._-]{1,48}$/i.test(key)) {
+        throw new Error('INVALID_PLUGIN_SECRET_KEY')
+      }
+      return `plugin.${pluginName}.${key}`
+    }
+
+    const ensurePluginSecretPermission = (
+      plugin: TouchPlugin
+    ): { success: true } | { success: false; error: string } => {
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) {
+        return { success: true }
+      }
+
+      const result = permissionModule.checkPermission(
+        plugin.name,
+        'storage:plugin:secret',
+        plugin.sdkapi
+      )
+      if (result.allowed) {
+        return { success: true }
+      }
+
+      return {
+        success: false,
+        error: result.reason ?? `Permission '${result.permissionId}' not granted`
+      }
+    }
+
     // Plugin Storage Channel Handlers
     this.transportDisposers.push(
       transport.on(PluginEvents.storage.getFile, async (payload, context) => {
@@ -2333,6 +2371,107 @@ export class PluginModule extends BaseModule {
           return resolved.plugin.deletePluginFile(fileName)
         } catch (error) {
           logIpcHandlerError('plugin:storage:delete-file', error)
+          return { success: false, error: toErrorMessage(error) }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.getSecret, async (payload, context) => {
+        try {
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return null
+          }
+
+          const permission = ensurePluginSecretPermission(resolved.plugin)
+          if (!permission.success) {
+            return null
+          }
+
+          const secureKey = normalizePluginSecretKey(resolved.pluginName, payload?.key)
+          const rootPath = this.secureStoreRootPath
+          if (!isSecureStoreAvailable(rootPath)) {
+            return null
+          }
+
+          return await getSecureStoreValue(rootPath, secureKey, 'plugin-secret', (message, error) =>
+            pluginIpcLog.warn(message, { error: toErrorMessage(error) })
+          )
+        } catch (error) {
+          logIpcHandlerError('plugin:storage:get-secret', error)
+          return null
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.setSecret, async (payload, context) => {
+        try {
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return { success: false, error: resolved.error }
+          }
+
+          const permission = ensurePluginSecretPermission(resolved.plugin)
+          if (!permission.success) {
+            return permission
+          }
+
+          const secureKey = normalizePluginSecretKey(resolved.pluginName, payload?.key)
+          const rootPath = this.secureStoreRootPath
+          if (!isSecureStoreAvailable(rootPath)) {
+            return { success: false, error: 'Secure storage is unavailable' }
+          }
+
+          const persisted = await setSecureStoreValue(
+            rootPath,
+            secureKey,
+            typeof payload?.value === 'string' && payload.value.trim() ? payload.value : null,
+            'plugin-secret',
+            (message, error) => pluginIpcLog.warn(message, { error: toErrorMessage(error) })
+          )
+          return persisted
+            ? { success: true }
+            : { success: false, error: 'Secure storage is unavailable' }
+        } catch (error) {
+          logIpcHandlerError('plugin:storage:set-secret', error)
+          return { success: false, error: toErrorMessage(error) }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.deleteSecret, async (payload, context) => {
+        try {
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return { success: false, error: resolved.error }
+          }
+
+          const permission = ensurePluginSecretPermission(resolved.plugin)
+          if (!permission.success) {
+            return permission
+          }
+
+          const secureKey = normalizePluginSecretKey(resolved.pluginName, payload?.key)
+          const rootPath = this.secureStoreRootPath
+          if (!isSecureStoreAvailable(rootPath)) {
+            return { success: false, error: 'Secure storage is unavailable' }
+          }
+
+          const removed = await setSecureStoreValue(
+            rootPath,
+            secureKey,
+            null,
+            'plugin-secret',
+            (message, error) => pluginIpcLog.warn(message, { error: toErrorMessage(error) })
+          )
+          return removed
+            ? { success: true }
+            : { success: false, error: 'Secure storage is unavailable' }
+        } catch (error) {
+          logIpcHandlerError('plugin:storage:delete-secret', error)
           return { success: false, error: toErrorMessage(error) }
         }
       })

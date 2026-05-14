@@ -559,6 +559,15 @@ export interface PluginStorageSetFileRequest extends PluginStorageFileRequest {
   content: unknown
 }
 
+export interface PluginStorageSecretRequest {
+  pluginName?: string
+  key: string
+}
+
+export interface PluginStorageSetSecretRequest extends PluginStorageSecretRequest {
+  value: string | null
+}
+
 export interface PluginStorageListFilesRequest {
   pluginName: string
 }

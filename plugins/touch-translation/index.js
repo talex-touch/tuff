@@ -28,6 +28,14 @@ const {
 const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
+const PROVIDER_SECRET_FIELDS = {
+  deepl: ['apiKey'],
+  bing: ['apiKey'],
+  custom: ['apiKey'],
+  baidu: ['secretKey'],
+  tencent: ['secretId', 'secretKey'],
+  caiyun: ['token'],
+}
 
 let createIntelligenceClientLoader = null
 let makeWidgetIdLoader = null
@@ -79,6 +87,32 @@ const widgetStateByFeature = new Map()
 
 let networkPermissionState = null
 let aiPermissionState = null
+
+function getProviderSecretKey(providerId, field) {
+  return `providers.${providerId}.${field}`
+}
+
+function stripProviderSecrets(providerId, config) {
+  const next = { ...(config || {}) }
+  for (const field of PROVIDER_SECRET_FIELDS[providerId] || []) {
+    delete next[field]
+  }
+  return next
+}
+
+async function mergeProviderSecrets(providerId, config) {
+  const next = { ...(config || {}) }
+  if (!plugin.secret) {
+    return next
+  }
+  for (const field of PROVIDER_SECRET_FIELDS[providerId] || []) {
+    const stored = await plugin.secret.get(getProviderSecretKey(providerId, field))
+    if (stored) {
+      next[field] = stored
+    }
+  }
+  return next
+}
 
 async function ensureNetworkPermission() {
   if (!permission) {
@@ -199,13 +233,18 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
 
   const providersConfig = await plugin.storage.getFile('providers_config')
   const enabledProviderIds = getEnabledProviderIds(providersConfig)
-  const providersToShow = enabledProviderIds.map((providerId) => {
+  const providersToShow = await Promise.all(enabledProviderIds.map(async (providerId) => {
     const providerConfig = providersConfig && typeof providersConfig === 'object' ? providersConfig[providerId] : null
+    const rawConfig = providerConfig && typeof providerConfig === 'object'
+      ? providerConfig.config
+      : null
     return {
       id: providerId,
-      ...(providerConfig && typeof providerConfig === 'object' ? providerConfig : {}),
+      enabled: providerConfig?.enabled,
+      config: await mergeProviderSecrets(providerId, rawConfig),
+      metadata: stripProviderSecrets(providerId, rawConfig),
     }
-  })
+  }))
   const state = createWidgetState(
     featureId,
     textToTranslate,
@@ -1252,9 +1291,12 @@ module.exports = {
     md5,
     detectLanguage,
     getEnabledProviderIds,
+    getProviderSecretKey,
     getTranslationProviderLabel,
+    mergeProviderSecrets,
     normalizeCallFailureMessage,
     normalizeErrorMessage: normalizeTranslationErrorMessage,
     resolveTargetLanguage,
+    stripProviderSecrets,
   },
 }

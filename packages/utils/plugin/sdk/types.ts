@@ -173,6 +173,11 @@ export interface IPluginUtils {
   storage: IStorageManager
 
   /**
+   * Secure per-plugin secret storage.
+   */
+  secret: IPluginSecretManager
+
+  /**
    * Clipboard manager for system clipboard operations
    * @see {@link IClipboardManager}
    */
@@ -643,6 +648,12 @@ export interface IPluginLifecycle {
    * @optional
    */
   onDestroy?: () => Promise<void> | void
+}
+
+export interface IPluginSecretManager {
+  get: (key: string) => Promise<string | null>
+  set: (key: string, value: string | null) => Promise<{ success: boolean, error?: string }>
+  delete: (key: string) => Promise<{ success: boolean, error?: string }>
 }
 
 /**

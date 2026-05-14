@@ -1256,6 +1256,39 @@ export class TouchPlugin implements ITouchPlugin {
     return pluginModule.pluginManager
   }
 
+  private createSecretSDK(pluginName: string, transport: ITuffTransportMain) {
+    const createPluginContext = () => ({
+      plugin: {
+        name: pluginName,
+        uniqueKey: this._uniqueChannelKey ?? '',
+        verified: Boolean(this._uniqueChannelKey)
+      }
+    })
+
+    return {
+      get: (key: string): Promise<string | null> =>
+        transport.invoke(
+          PluginEvents.storage.getSecret,
+          { pluginName, key },
+          createPluginContext()
+        ) as Promise<string | null>,
+
+      set: (key: string, value: string | null): Promise<{ success: boolean; error?: string }> =>
+        transport.invoke(
+          PluginEvents.storage.setSecret,
+          { pluginName, key, value },
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>,
+
+      delete: (key: string): Promise<{ success: boolean; error?: string }> =>
+        transport.invoke(
+          PluginEvents.storage.deleteSecret,
+          { pluginName, key },
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>
+    }
+  }
+
   private createRecommendSDK(pluginName: string) {
     const getEngine = () => {
       const { SearchEngineCore } =
@@ -1590,6 +1623,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const powerSDK = this.createPowerSDK(pluginName, transport)
+    const secretSDK = this.createSecretSDK(pluginName, transport)
 
     const recommendSDK = this.createRecommendSDK(pluginName)
 
@@ -1766,6 +1800,7 @@ export class TouchPlugin implements ITouchPlugin {
     const pluginAPI = {
       ...pluginInfo,
       storage,
+      secret: secretSDK,
       feature: featureSDK,
       box: boxSDK,
       divisionBox: divisionBoxSDK,
@@ -1782,6 +1817,7 @@ export class TouchPlugin implements ITouchPlugin {
       openUrl: (url: string) => shell.openExternal(url),
       http,
       storage,
+      secret: secretSDK,
       clipboard: clipboardUtil,
       channel: channelBridge,
       touchChannel,

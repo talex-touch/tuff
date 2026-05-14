@@ -5,7 +5,7 @@ import {
   isDefaultEnabledProvider,
   TRANSLATION_PROVIDER_ORDER,
 } from '@talex-touch/utils/plugin'
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+import { usePluginSecret, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
 import { computed, reactive, ref } from 'vue'
 import { BaiduTranslateProvider } from '../providers/baidu-translate'
 import { BingTranslateProvider } from '../providers/bing-translate'
@@ -19,8 +19,87 @@ import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)
 
+const PROVIDER_SECRET_FIELDS: Record<string, string[]> = {
+  deepl: ['apiKey'],
+  bing: ['apiKey'],
+  custom: ['apiKey'],
+  baidu: ['secretKey'],
+  tencent: ['secretId', 'secretKey'],
+  caiyun: ['token'],
+}
+
+function getProviderSecretKey(providerId: string, field: string): string {
+  return `providers.${providerId}.${field}`
+}
+
+function stripProviderSecrets(providerId: string, config: Record<string, any>): Record<string, any> {
+  const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
+  const next = { ...config }
+  for (const field of secretFields) {
+    delete next[field]
+  }
+  return next
+}
+
+function hasProviderSecrets(providerId: string, config: Record<string, any>): boolean {
+  return (PROVIDER_SECRET_FIELDS[providerId] || []).some(field => typeof config[field] === 'string' && config[field].trim())
+}
+
+function hasProviderSecretFields(providerId: string, config: Record<string, any>): boolean {
+  return (PROVIDER_SECRET_FIELDS[providerId] || []).some(field => field in config)
+}
+
 export function useTranslationProvider() {
   const storage = usePluginStorage()
+  const secret = usePluginSecret()
+
+  const mergeProviderSecrets = async (providerId: string, config: Record<string, any>): Promise<Record<string, any>> => {
+    const next = { ...config }
+    const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
+    for (const field of secretFields) {
+      const stored = await secret.get(getProviderSecretKey(providerId, field))
+      if (stored) {
+        next[field] = stored
+      }
+    }
+    return next
+  }
+
+  const saveProviderSecrets = async (providerId: string, config: Record<string, any>): Promise<boolean> => {
+    const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
+    const results = await Promise.all(secretFields.map(async (field) => {
+      if (!(field in config)) {
+        return true
+      }
+      const value = typeof config[field] === 'string' ? config[field].trim() : ''
+      if (value) {
+        const result = await secret.set(getProviderSecretKey(providerId, field), value)
+        return result.success
+      }
+      const result = await secret.delete(getProviderSecretKey(providerId, field))
+      return result.success
+    }))
+    return results.every(Boolean)
+  }
+
+  const deleteAllProviderSecrets = async (): Promise<boolean> => {
+    const results = await Promise.all(
+      Object.entries(PROVIDER_SECRET_FIELDS).flatMap(([providerId, fields]) =>
+        fields.map(async (field) => {
+          const result = await secret.delete(getProviderSecretKey(providerId, field))
+          return result.success
+        }),
+      ),
+    )
+    return results.every(Boolean)
+  }
+
+  const persistProviderConfig = async (providerId: string, config: Record<string, any>) => {
+    if (hasProviderSecretFields(providerId, config) && !(await saveProviderSecrets(providerId, config))) {
+      return
+    }
+    await saveProvidersConfig()
+  }
 
   // 初始化所有提供者
   const initializeProviders = async () => {
@@ -59,7 +138,7 @@ export function useTranslationProvider() {
     providers.forEach((provider, id) => {
       config[id] = {
         enabled: provider.enabled,
-        config: provider.config || {},
+        config: stripProviderSecrets(id, provider.config || {}),
       }
     })
     // 兼容新版本：使用 setFile 代替 setItem
@@ -74,12 +153,30 @@ export function useTranslationProvider() {
       if (saved && typeof saved === 'object' && saved !== null) {
         const config = saved as Record<string, { enabled?: boolean, config?: Record<string, any> }>
         const enabledIds = getEnabledProviderIds(config) as string[]
-        providers.forEach((provider, id) => {
+        let legacySecretsFound = false
+        let legacySecretsMigrated = true
+        await Promise.all(Array.from(providers.entries()).map(async ([id, provider]) => {
           provider.enabled = enabledIds.includes(id)
           if (config[id]?.config && provider.config) {
-            provider.config = { ...provider.config, ...config[id].config }
+            const rawConfig = config[id].config
+            const hasLegacySecrets = hasProviderSecrets(id, rawConfig)
+            legacySecretsFound = legacySecretsFound || hasLegacySecrets
+            let providerSecretsMigrated = true
+            if (hasLegacySecrets) {
+              providerSecretsMigrated = await saveProviderSecrets(id, rawConfig)
+              legacySecretsMigrated = providerSecretsMigrated && legacySecretsMigrated
+            }
+            const metadataConfig = stripProviderSecrets(id, rawConfig)
+            provider.config = {
+              ...provider.config,
+              ...(providerSecretsMigrated ? metadataConfig : rawConfig),
+              ...(providerSecretsMigrated ? await mergeProviderSecrets(id, metadataConfig) : {}),
+            }
           }
-        })
+        }))
+        if (legacySecretsFound && legacySecretsMigrated) {
+          await saveProvidersConfig()
+        }
       }
     }
     catch (error) {
@@ -119,8 +216,7 @@ export function useTranslationProvider() {
     const provider = providers.get(id)
     if (provider && provider.config) {
       provider.config = { ...provider.config, ...config }
-      // 异步保存，不阻塞 UI
-      saveProvidersConfig().catch((err) => {
+      persistProviderConfig(id, config).catch((err) => {
         void err
       })
     }
@@ -193,10 +289,15 @@ export function useTranslationProvider() {
         }
       }
     })
-    // 异步保存，不阻塞 UI
-    saveProvidersConfig().catch((err) => {
-      void err
-    })
+    deleteAllProviderSecrets()
+      .then((success) => {
+        if (success) {
+          return saveProvidersConfig()
+        }
+      })
+      .catch((err) => {
+        void err
+      })
   }
 
   // 自动初始化

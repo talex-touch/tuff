@@ -296,13 +296,13 @@ describe('transport domain sdk mappings', () => {
 
     await sdk.appIndex.listEntries()
     await sdk.appIndex.upsertEntry({
-      path: '/Applications/WeChat.app',
-      displayName: '微信',
+      path: '/Applications/ChatApp.app',
+      displayName: '聊天应用',
       enabled: true,
     })
-    await sdk.appIndex.removeEntry({ path: '/Applications/WeChat.app' })
+    await sdk.appIndex.removeEntry({ path: '/Applications/ChatApp.app' })
     await sdk.appIndex.setEntryEnabled({
-      path: '/Applications/WeChat.app',
+      path: '/Applications/ChatApp.app',
       enabled: false,
     })
 
@@ -314,8 +314,8 @@ describe('transport domain sdk mappings', () => {
       2,
       AppEvents.appIndex.upsertEntry,
       {
-        path: '/Applications/WeChat.app',
-        displayName: '微信',
+        path: '/Applications/ChatApp.app',
+        displayName: '聊天应用',
         enabled: true,
       },
     )
@@ -323,14 +323,14 @@ describe('transport domain sdk mappings', () => {
       3,
       AppEvents.appIndex.removeEntry,
       {
-        path: '/Applications/WeChat.app',
+        path: '/Applications/ChatApp.app',
       },
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       4,
       AppEvents.appIndex.setEntryEnabled,
       {
-        path: '/Applications/WeChat.app',
+        path: '/Applications/ChatApp.app',
         enabled: false,
       },
     )
