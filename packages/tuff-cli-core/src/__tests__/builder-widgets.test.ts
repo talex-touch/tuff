@@ -156,7 +156,7 @@ describe('builder widget precompile', () => {
     })
   })
 
-  it('fails when a widget imports a disallowed dependency', async () => {
+  it('fails when a widget relative import escapes widgets directory', async () => {
     await withPluginFixture(async (root) => {
       await fs.writeFile(
         path.join(root, 'widgets', 'panel.vue'),
@@ -175,7 +175,7 @@ describe('builder widget precompile', () => {
           outDir: 'dist',
           versionSync: { enabled: false },
         }),
-      ).rejects.toThrow(/WIDGET_INVALID_DEPENDENCY.*translate/)
+      ).rejects.toThrow(/WIDGET_PATH_INVALID.*widgets directory/)
     })
   })
 
@@ -209,10 +209,71 @@ describe('builder widget precompile', () => {
       })
 
       const packagedManifest = await fs.readJson(path.join(root, 'dist', 'build', 'manifest.json'))
-      expect(packagedManifest.build?.widgets).toBeUndefined()
+      expect(packagedManifest.build.widgets[0]).toMatchObject({
+        featureId: 'translate',
+        sourcePath: 'widgets/panel.vue',
+      })
       await expect(
         fs.pathExists(path.join(root, 'dist', 'build', 'widgets', '.compiled')),
-      ).resolves.toBe(false)
+      ).resolves.toBe(true)
+    })
+  })
+
+  it('precompiles all supported files under widgets even when not declared as features', async () => {
+    await withPluginFixture(async (root) => {
+      await fs.writeFile(
+        path.join(root, 'widgets', 'floating-card.vue'),
+        [
+          '<script setup>',
+          'const title = "Floating"',
+          '</script>',
+          '<template><section>{{ title }}</section></template>',
+        ].join('\n'),
+      )
+      await fs.writeFile(
+        path.join(root, 'widgets', 'script-card.ts'),
+        'export default { name: "ScriptCard" }',
+      )
+
+      await build({
+        root,
+        outDir: 'dist',
+        versionSync: { enabled: false },
+      })
+
+      const packagedManifest = await fs.readJson(path.join(root, 'dist', 'build', 'manifest.json'))
+      expect(packagedManifest.build.widgets).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            featureId: 'translate',
+            widgetId: 'demo-plugin::translate',
+            sourcePath: 'widgets/panel.vue',
+          }),
+          expect.objectContaining({
+            featureId: 'widget.floating-card',
+            widgetId: 'demo-plugin::widget.floating-card',
+            sourcePath: 'widgets/floating-card.vue',
+            compiledPath: 'widgets/.compiled/demo-plugin__widget.floating-card.cjs',
+          }),
+          expect.objectContaining({
+            featureId: 'widget.script-card',
+            widgetId: 'demo-plugin::widget.script-card',
+            sourcePath: 'widgets/script-card.ts',
+            compiledPath: 'widgets/.compiled/demo-plugin__widget.script-card.cjs',
+          }),
+        ]),
+      )
+      expect(packagedManifest.build.widgets).toHaveLength(3)
+      await expect(
+        fs.pathExists(
+          path.join(root, 'dist', 'build', 'widgets', '.compiled', 'demo-plugin__widget.floating-card.cjs'),
+        ),
+      ).resolves.toBe(true)
+      await expect(
+        fs.pathExists(
+          path.join(root, 'dist', 'build', 'widgets', '.compiled', 'demo-plugin__widget.script-card.cjs'),
+        ),
+      ).resolves.toBe(true)
     })
   })
 })

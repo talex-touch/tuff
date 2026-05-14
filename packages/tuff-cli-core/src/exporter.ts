@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import type { WidgetPrecompiledManifestEntry, WidgetPrecompiledMeta } from '@talex-touch/utils/plugin/widget'
+import type { Plugin as EsbuildPlugin } from 'esbuild'
 import type { Options } from './types'
 import crypto from 'node:crypto'
 import { posix as posixPath } from 'node:path'
@@ -64,9 +65,15 @@ interface WidgetCompileContext {
   widgetsDir: string
   pluginName: string
   feature: WidgetFeatureManifest
+  sourceRelativePath?: string
 }
 
-const WIDGET_SUPPORTED_EXTENSIONS = new Set(['.vue'])
+interface WidgetCompileTarget {
+  feature: WidgetFeatureManifest
+  sourceRelativePath: string
+}
+
+const WIDGET_SUPPORTED_EXTENSIONS = new Set(['.vue', '.ts', '.js', '.cjs', '.tsx', '.jsx'])
 
 function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
   if (!source || typeof source !== 'object')
@@ -354,13 +361,14 @@ function collectWidgetImports(source: string): string[] {
 
 function validateWidgetDependencies(featureId: string, source: string): string[] {
   const imports = collectWidgetImports(source)
-  const disallowed = imports.filter(moduleName => !isAllowedWidgetModule(moduleName))
+  const externalImports = imports.filter(moduleName => !moduleName.startsWith('.'))
+  const disallowed = externalImports.filter(moduleName => !isAllowedWidgetModule(moduleName))
   if (disallowed.length) {
     throw new Error(
       `WIDGET_INVALID_DEPENDENCY: feature "${featureId}" imports unavailable module(s): ${disallowed.join(', ')}. Allowed packages: ${WIDGET_ALLOWED_PACKAGES.join(', ')}`,
     )
   }
-  return imports
+  return externalImports
 }
 
 function ensureVueDependency(dependencies: string[]): string[] {
@@ -371,34 +379,42 @@ function resolveWidgetSourceFile(context: WidgetCompileContext): {
   sourcePath: string
   sourceRelativePath: string
 } {
-  const interactionPath = context.feature.interaction?.path
+  const sourceRelativePath = context.sourceRelativePath ?? resolveWidgetSourceRelativePath(context.feature)
+  const sourcePath = path.resolve(context.buildDir, sourceRelativePath)
+  assertWidgetSourceFile(context.feature.id, sourcePath, sourceRelativePath)
+
+  return { sourcePath, sourceRelativePath }
+}
+
+function resolveWidgetSourceRelativePath(feature: WidgetFeatureManifest): string {
+  const interactionPath = feature.interaction?.path
   if (typeof interactionPath !== 'string' || !interactionPath.trim()) {
-    throw new Error(`WIDGET_PATH_MISSING: feature "${context.feature.id}" has no widget interaction.path`)
+    throw new Error(`WIDGET_PATH_MISSING: feature "${feature.id}" has no widget interaction.path`)
   }
 
   const normalized = normalizeWidgetPath(interactionPath)
   if (!normalized || normalized.startsWith('../') || posixPath.isAbsolute(normalized)) {
     throw new Error(
-      `WIDGET_PATH_INVALID: feature "${context.feature.id}" widget path "${interactionPath}" is invalid`,
+      `WIDGET_PATH_INVALID: feature "${feature.id}" widget path "${interactionPath}" is invalid`,
     )
   }
 
-  const sourceRelativePath = posixPath.join('widgets', withWidgetExtension(normalized))
-  const sourcePath = path.resolve(context.buildDir, sourceRelativePath)
+  return posixPath.join('widgets', withWidgetExtension(normalized))
+}
+
+function assertWidgetSourceFile(featureId: string, sourcePath: string, sourceRelativePath: string): void {
   if (!fs.existsSync(sourcePath)) {
     throw new Error(
-      `WIDGET_NOT_FOUND: feature "${context.feature.id}" widget source "${sourceRelativePath}" does not exist`,
+      `WIDGET_NOT_FOUND: feature "${featureId}" widget source "${sourceRelativePath}" does not exist`,
     )
   }
 
   const ext = path.extname(sourcePath).toLowerCase()
   if (!WIDGET_SUPPORTED_EXTENSIONS.has(ext)) {
     throw new Error(
-      `WIDGET_UNSUPPORTED_TYPE: feature "${context.feature.id}" uses unsupported widget extension "${ext}"`,
+      `WIDGET_UNSUPPORTED_TYPE: feature "${featureId}" uses unsupported widget extension "${ext}"`,
     )
   }
-
-  return { sourcePath, sourceRelativePath }
 }
 
 function resolveWidgetLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'jsx' {
@@ -412,83 +428,213 @@ function resolveWidgetLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'j
   return 'js'
 }
 
+function resolveScriptWidgetLoader(filePath: string): 'js' | 'ts' | 'tsx' | 'jsx' {
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.ts')
+    return 'ts'
+  if (ext === '.tsx')
+    return 'tsx'
+  if (ext === '.jsx')
+    return 'jsx'
+  return 'js'
+}
+
+function resolveRelativeWidgetImport(importerPath: string, importPath: string, buildDir: string): string | null {
+  if (!importPath.startsWith('.')) {
+    return null
+  }
+
+  const widgetsRoot = path.resolve(buildDir, 'widgets')
+  const importerDir = path.dirname(importerPath)
+  const rawCandidate = path.resolve(importerDir, importPath)
+  const candidates = path.extname(rawCandidate)
+    ? [rawCandidate]
+    : Array.from(WIDGET_SUPPORTED_EXTENSIONS).map(ext => `${rawCandidate}${ext}`)
+
+  for (const candidate of candidates) {
+    const relative = path.relative(widgetsRoot, candidate)
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error(`WIDGET_PATH_INVALID: relative widget import "${importPath}" escapes widgets directory`)
+    }
+    if (fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return null
+}
+
+function createWidgetBundlePlugin(
+  buildDir: string,
+  featureId: string,
+  dependencies: Set<string>,
+  styles: string[],
+): EsbuildPlugin {
+  return {
+    name: 'tuff-widget-bundle',
+    setup(build) {
+      build.onResolve({ filter: /.*/ }, (args) => {
+        if (args.kind === 'entry-point' && path.isAbsolute(args.path)) {
+          return { path: args.path }
+        }
+
+        if (isAllowedWidgetModule(args.path)) {
+          dependencies.add(args.path)
+          return {
+            path: args.path,
+            external: true,
+          }
+        }
+
+        if (!args.path.startsWith('.')) {
+          throw new Error(
+            `WIDGET_INVALID_DEPENDENCY: feature "${featureId}" imports unavailable module "${args.path}". Allowed packages: ${WIDGET_ALLOWED_PACKAGES.join(', ')}`,
+          )
+        }
+
+        const resolved = resolveRelativeWidgetImport(args.importer, args.path, buildDir)
+        if (!resolved) {
+          throw new Error(
+            `WIDGET_NOT_FOUND: feature "${featureId}" relative widget import "${args.path}" from "${args.importer}" does not exist`,
+          )
+        }
+
+        return { path: resolved }
+      })
+
+      build.onLoad({ filter: /\.vue$/ }, async (args) => {
+        const source = await fs.readFile(args.path, 'utf-8')
+        const parseResult = parse(source, { filename: args.path })
+        if (parseResult.errors.length) {
+          const details = parseResult.errors.map(error => String(error)).join('; ')
+          throw new Error(
+            `WIDGET_PARSE_ERROR: feature "${featureId}" Vue SFC parse failed for ${args.path}: ${details}`,
+          )
+        }
+
+        const descriptor = parseResult.descriptor
+        const styleContent = descriptor.styles
+          .map(style => style.content || '')
+          .join('\n')
+          .trim()
+        if (styleContent) {
+          styles.push(styleContent)
+        }
+
+        let scriptCode = 'export default {}'
+        if (descriptor.script || descriptor.scriptSetup) {
+          scriptCode = compileScript(descriptor, {
+            id: hashWidgetSource(args.path),
+            inlineTemplate: false,
+          }).content
+        }
+
+        const templateResult = descriptor.template
+          ? compileTemplate({
+              id: hashWidgetSource(args.path),
+              filename: args.path,
+              source: descriptor.template.content,
+              compilerOptions: {
+                mode: 'module',
+              },
+            })
+          : null
+        if (templateResult?.errors.length) {
+          const details = templateResult.errors.map(error => String(error)).join('; ')
+          throw new Error(
+            `WIDGET_TEMPLATE_ERROR: feature "${featureId}" template compilation failed for ${args.path}: ${details}`,
+          )
+        }
+
+        return {
+          contents: `${scriptCode}\n${templateResult?.code ?? ''}`,
+          loader: resolveWidgetLoader(descriptor.script?.lang ?? descriptor.scriptSetup?.lang),
+        }
+      })
+
+      build.onLoad({ filter: /\.(ts|js|cjs|tsx|jsx)$/ }, async args => ({
+        contents: await fs.readFile(args.path, 'utf-8'),
+        loader: resolveScriptWidgetLoader(args.path),
+      }))
+    },
+  }
+}
+
 async function compileWidgetForPackage(
   context: WidgetCompileContext,
 ): Promise<WidgetPrecompiledManifestEntry> {
   const esbuild = await import('esbuild')
   const { sourcePath, sourceRelativePath } = resolveWidgetSourceFile(context)
   const source = fs.readFileSync(sourcePath, 'utf-8')
-  const dependencies = ensureVueDependency(validateWidgetDependencies(context.feature.id, source))
+  const ext = path.extname(sourcePath).toLowerCase()
+  const baseDependencies = validateWidgetDependencies(context.feature.id, source)
+  const dependencies = ext === '.vue' ? ensureVueDependency(baseDependencies) : baseDependencies
   const widgetId = makeWidgetId(context.pluginName, context.feature.id)
   const safeId = makeSafeWidgetFileId(widgetId)
   const compiledRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.cjs`)
   const metaRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.meta.json`)
   const compiledPath = path.resolve(context.buildDir, compiledRelativePath)
   const metaPath = path.resolve(context.buildDir, metaRelativePath)
+  const compiledAt = Date.now()
+  const hash = hashWidgetSource(source)
+  const bundledDependencies = new Set(dependencies)
+  const bundledStyles: string[] = []
 
-  const parseResult = parse(source, { filename: sourcePath })
-  if (parseResult.errors.length) {
-    const details = parseResult.errors.map(error => String(error)).join('; ')
-    throw new Error(
-      `WIDGET_PARSE_ERROR: feature "${context.feature.id}" Vue SFC parse failed for ${sourcePath}: ${details}`,
-    )
-  }
-
-  const descriptor = parseResult.descriptor
-  let scriptCode = 'export default {}'
-  if (descriptor.script || descriptor.scriptSetup) {
-    try {
-      scriptCode = compileScript(descriptor, {
-        id: widgetId,
-        inlineTemplate: false,
-      }).content
+  if (ext === '.cjs') {
+    const meta: WidgetPrecompiledMeta = {
+      featureId: context.feature.id,
+      widgetId,
+      sourcePath: sourceRelativePath,
+      compiledPath: compiledRelativePath,
+      hash,
+      styles: '',
+      dependencies: Array.from(bundledDependencies),
+      compiledAt,
     }
-    catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      throw new Error(
-        `WIDGET_SCRIPT_ERROR: feature "${context.feature.id}" script compilation failed for ${sourcePath}: ${message}`,
-      )
+    const code = `
+${source}
+const __component = exports.default || module.exports || {}
+module.exports = __component
+`
+
+    fs.ensureDirSync(path.dirname(compiledPath))
+    fs.writeFileSync(compiledPath, code, 'utf-8')
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8')
+
+    return {
+      ...meta,
+      metaPath: metaRelativePath,
     }
   }
 
-  const templateResult = descriptor.template
-    ? compileTemplate({
-        id: widgetId,
-        filename: sourcePath,
-        source: descriptor.template.content,
-        compilerOptions: {
-          mode: 'module',
-        },
-      })
-    : null
-  if (templateResult?.errors.length) {
-    const details = templateResult.errors.map(error => String(error)).join('; ')
-    throw new Error(
-      `WIDGET_TEMPLATE_ERROR: feature "${context.feature.id}" template compilation failed for ${sourcePath}: ${details}`,
-    )
-  }
-  const templateCode = templateResult?.code ?? ''
-  const loader = resolveWidgetLoader(descriptor.script?.lang ?? descriptor.scriptSetup?.lang)
+  const result = await esbuild.build({
+    entryPoints: [sourcePath],
+    bundle: true,
+    write: false,
+    format: 'cjs',
+    platform: 'browser',
+    target: 'node18',
+    external: Array.from(WIDGET_ALLOWED_PACKAGES),
+    plugins: [
+      createWidgetBundlePlugin(
+        context.buildDir,
+        context.feature.id,
+        bundledDependencies,
+        bundledStyles,
+      ),
+    ],
+    logLevel: 'silent',
+  })
+  const bundledCode = result.outputFiles?.[0]?.text ?? ''
+  const styles = bundledStyles.join('\n').trim()
   const finalBundle = `
-${scriptCode}
-${templateCode}
+${bundledCode}
 const __component = exports.default || module.exports || {}
 if (__component && exports.render) {
   __component.render = exports.render
 }
 module.exports = __component
 `
-  const transformed = await esbuild.transform(finalBundle, {
-    loader,
-    format: 'cjs',
-    target: 'node18',
-  })
-  const styles = descriptor.styles
-    .map(style => style.content || '')
-    .join('\n')
-    .trim()
-  const compiledAt = Date.now()
-  const hash = hashWidgetSource(source)
   const meta: WidgetPrecompiledMeta = {
     featureId: context.feature.id,
     widgetId,
@@ -496,18 +642,62 @@ module.exports = __component
     compiledPath: compiledRelativePath,
     hash,
     styles,
-    dependencies,
+    dependencies: Array.from(bundledDependencies),
     compiledAt,
   }
 
   fs.ensureDirSync(path.dirname(compiledPath))
-  fs.writeFileSync(compiledPath, transformed.code, 'utf-8')
+  fs.writeFileSync(compiledPath, finalBundle, 'utf-8')
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), 'utf-8')
 
   return {
     ...meta,
     metaPath: metaRelativePath,
   }
+}
+
+function makeDirectoryWidgetFeatureId(widgetRelativePath: string): string {
+  const withoutExtension = widgetRelativePath.replace(/\.[^.]+$/, '')
+  return `widget.${withoutExtension.replace(/[^\w.-]+/g, '.')}`
+}
+
+function collectWidgetDirectoryCompileTargets(
+  buildDir: string,
+  knownSourcePaths: Set<string>,
+): WidgetCompileTarget[] {
+  const widgetsRoot = path.resolve(buildDir, 'widgets')
+  if (!fs.existsSync(widgetsRoot)) {
+    return []
+  }
+
+  const targets: WidgetCompileTarget[] = []
+  const files = globSync('**/*', { cwd: widgetsRoot, nodir: true })
+    .map(file => file.replace(/\\/g, '/'))
+    .filter((file) => {
+      if (file.startsWith(`${WIDGET_COMPILED_DIR}/`))
+        return false
+      return WIDGET_SUPPORTED_EXTENSIONS.has(path.extname(file).toLowerCase())
+    })
+    .sort()
+
+  for (const file of files) {
+    const sourceRelativePath = posixPath.join('widgets', file)
+    if (knownSourcePaths.has(sourceRelativePath))
+      continue
+
+    targets.push({
+      feature: {
+        id: makeDirectoryWidgetFeatureId(file),
+        interaction: {
+          type: 'widget',
+          path: file,
+        },
+      },
+      sourceRelativePath,
+    })
+  }
+
+  return targets
 }
 
 async function compilePackageWidgets(
@@ -521,24 +711,32 @@ async function compilePackageWidgets(
     (feature): feature is WidgetFeatureManifest =>
       Boolean(feature?.id)
       && feature.interaction?.type === 'widget'
-      && typeof feature.interaction?.path === 'string'
-      && (!feature.experimental || opts.includeExperimentalWidgets),
+      && typeof feature.interaction?.path === 'string',
   )
 
-  if (!widgetFeatures.length) {
+  const knownSourcePaths = new Set<string>()
+  const compileTargets = widgetFeatures.map((feature) => {
+    const sourceRelativePath = resolveWidgetSourceRelativePath(feature)
+    knownSourcePaths.add(sourceRelativePath)
+    return { feature, sourceRelativePath }
+  })
+  compileTargets.push(...collectWidgetDirectoryCompileTargets(buildDir, knownSourcePaths))
+
+  if (!compileTargets.length) {
     return []
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Precompiling ${widgetFeatures.length} widget(s)...`))
+  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Precompiling ${compileTargets.length} widget(s)...`))
 
   const entries: WidgetPrecompiledManifestEntry[] = []
-  for (const feature of widgetFeatures) {
+  for (const { feature, sourceRelativePath } of compileTargets) {
     const entry = await compileWidgetForPackage({
       root: opts.root,
       buildDir,
       widgetsDir: opts.widgetsDir,
       pluginName: manifest.name,
       feature,
+      sourceRelativePath,
     })
     entries.push(entry)
     console.info(

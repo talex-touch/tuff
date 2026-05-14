@@ -64,6 +64,7 @@ export default defineConfig({
     'pathe',
     'rollup',
     'unplugin',
+    '@vue/compiler-sfc',
     'vite',
     ...vueCompilerOptionalTemplateEngines,
   ],
