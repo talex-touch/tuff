@@ -261,6 +261,17 @@ onMounted(() => {
 </template>
 
 <style lang="scss" scoped>
+:deep(.TGroupBlock-Container) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+:deep(.TGroupBlock-Main) {
+  flex: 1 1 auto;
+}
+
 .PlatformCapabilities-Toolbar {
   display: flex;
   align-items: flex-start;

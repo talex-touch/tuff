@@ -29,7 +29,7 @@ function openPlatformDocs(): void {
       </TxButton>
     </section>
 
-    <SettingPlatformCapabilities />
+    <SettingPlatformCapabilities class="StoreDocs-Capabilities" />
   </div>
 </template>
 
@@ -41,7 +41,7 @@ function openPlatformDocs(): void {
   padding: 16px;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .StoreDocs-Intro {
@@ -92,6 +92,17 @@ function openPlatformDocs(): void {
 
 .StoreDocs-IntroAction {
   flex: 0 0 auto;
+}
+
+.StoreDocs-Capabilities {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-bottom: 0;
+}
+
+.StoreDocs-Capabilities :deep(.TGroupBlock-Main) {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 640px) {
