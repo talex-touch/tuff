@@ -4,6 +4,7 @@ import { getProviderOrderIndex } from '@talex-touch/utils/plugin'
 import {
   CoreBoxEvents,
   createPluginTuffTransport,
+  intelligence,
   tryUsePluginInfo,
   useChannel,
   useClipboard,
@@ -23,6 +24,7 @@ interface ProviderState {
   to?: string
   provider?: string
   model?: string
+  traceId?: string
   phonetic?: string
   transliteration?: string
   pronunciations?: ProviderPronunciation[]
@@ -61,6 +63,7 @@ interface HistoryResult {
   to?: string
   provider?: string
   model?: string
+  traceId?: string
   phonetic?: string
 }
 
@@ -118,6 +121,8 @@ const selectedProviderId = ref<string | null>(null)
 const selectedHistoryId = ref<number | null>(null)
 const expandedProviderErrorIds = ref<Set<string>>(new Set())
 const playingProviderId = ref<string | null>(null)
+const synthesizingProviderId = ref<string | null>(null)
+const synthesizedAudioUrls = ref<Record<string, string>>({})
 
 let activeAudio: HTMLAudioElement | null = null
 
@@ -253,6 +258,7 @@ function normalizeProviders(input: unknown): ProviderState[] {
       to: safeReadRecordString(provider, 'to'),
       provider: safeReadRecordString(provider, 'provider'),
       model: safeReadRecordString(provider, 'model'),
+      traceId: safeReadRecordString(provider, 'traceId'),
       phonetic: safeReadRecordString(provider, 'phonetic'),
       transliteration: safeReadRecordString(provider, 'transliteration'),
       pronunciations: normalizePronunciations(safeReadRecordValue(provider, 'pronunciations')),
@@ -280,6 +286,7 @@ function buildHistoryResults(inputProviders: unknown): HistoryResult[] {
       to: provider.to,
       provider: provider.provider,
       model: provider.model,
+      traceId: provider.traceId,
       phonetic: provider.phonetic,
     })
   }
@@ -547,6 +554,11 @@ function getProviderAudioUrl(provider: ProviderState | null): string {
     return ''
   }
 
+  const synthesized = synthesizedAudioUrls.value[provider.id]
+  if (synthesized) {
+    return synthesized
+  }
+
   for (const pronunciation of provider.pronunciations ?? []) {
     if (pronunciation.audioUrl) {
       return pronunciation.audioUrl
@@ -554,6 +566,10 @@ function getProviderAudioUrl(provider: ProviderState | null): string {
   }
 
   return ''
+}
+
+function canSpeakProvider(provider: ProviderState): boolean {
+  return provider.status === 'success' && Boolean(getProviderCopyText(provider))
 }
 
 function hasProviderDetails(provider: ProviderState): boolean {
@@ -579,7 +595,11 @@ function isProviderAudioPlaying(provider: ProviderState): boolean {
 }
 
 async function toggleProviderAudio(provider: ProviderState): Promise<void> {
-  const audioUrl = getProviderAudioUrl(provider)
+  let audioUrl = getProviderAudioUrl(provider)
+  if (!audioUrl && canSpeakProvider(provider)) {
+    audioUrl = await synthesizeProviderAudio(provider)
+  }
+
   if (!audioUrl || typeof Audio !== 'function') {
     return
   }
@@ -609,6 +629,45 @@ async function toggleProviderAudio(provider: ProviderState): Promise<void> {
   }
   catch {
     cleanup()
+  }
+}
+
+async function synthesizeProviderAudio(provider: ProviderState): Promise<string> {
+  const text = getProviderCopyText(provider)
+  if (!text || synthesizingProviderId.value === provider.id) {
+    return ''
+  }
+
+  synthesizingProviderId.value = provider.id
+  try {
+    const result = await intelligence.ttsSpeak({
+      text,
+      language: provider.to || resolvedPayload.value?.targetLang || 'auto',
+      format: 'mp3',
+      sourceTraceId: provider.traceId,
+      metadata: {
+        caller: pluginName.value || 'touch-translation',
+        entry: 'translation-widget',
+        providerId: provider.id,
+      },
+    })
+
+    const audioUrl = result.audio
+    if (audioUrl) {
+      synthesizedAudioUrls.value = {
+        ...synthesizedAudioUrls.value,
+        [provider.id]: audioUrl,
+      }
+    }
+    return audioUrl
+  }
+  catch {
+    return ''
+  }
+  finally {
+    if (synthesizingProviderId.value === provider.id) {
+      synthesizingProviderId.value = null
+    }
   }
 }
 
@@ -676,7 +735,7 @@ function handleWidgetKeydown(event: {
 
   if ((key === ' ' || key === 'Spacebar') && focusedArea.value === 'providers') {
     const provider = selectedProvider.value
-    if (provider && getProviderAudioUrl(provider)) {
+    if (provider && canSpeakProvider(provider)) {
       toggleProviderAudio(provider).catch((err) => {
         void err
       })
@@ -794,6 +853,7 @@ watch(
       return
     }
     selectedProviderId.value = null
+    synthesizedAudioUrls.value = {}
     ensureProviderSelection()
     stopAudioPlayback()
   },
@@ -1019,12 +1079,13 @@ onBeforeUnmount(() => {
                 {{ providerStatusLabel(provider) }}
               </span>
               <button
-                v-if="provider.status === 'success' && getProviderAudioUrl(provider)"
+                v-if="canSpeakProvider(provider)"
                 class="TranslationWidget__audio"
                 type="button"
+                :disabled="synthesizingProviderId === provider.id"
                 @click.stop="toggleProviderAudio(provider)"
               >
-                {{ isProviderAudioPlaying(provider) ? '停止' : '播放' }}
+                {{ synthesizingProviderId === provider.id ? '生成中' : isProviderAudioPlaying(provider) ? '停止' : '朗读' }}
               </button>
               <button
                 v-if="getProviderCopyText(provider)"
@@ -1400,6 +1461,11 @@ onBeforeUnmount(() => {
   padding: 3px 8px;
   cursor: pointer;
   flex-shrink: 0;
+}
+
+.TranslationWidget__audio:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .TranslationWidget__provider-body {
