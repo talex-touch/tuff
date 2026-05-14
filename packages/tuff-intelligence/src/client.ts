@@ -1,5 +1,11 @@
 import { createIntelligenceSdk } from './transport/sdk/domains/intelligence'
 import type { IntelligenceSdk, IntelligenceSdkTransport } from './transport/sdk/domains/intelligence'
+export type {
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
+} from './types/intelligence'
 
 export interface IntelligenceClientChannel {
   send: (eventName: string, payload?: unknown) => Promise<any>

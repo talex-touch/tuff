@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type {
+  IntelligenceTTSPayload,
+  IntelligenceTTSResult,
   IntelligenceChatPayload,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
@@ -13,7 +15,9 @@ import type {
   IntelligenceEmbeddingPayload,
   IntelligenceTranslatePayload
 } from '@talex-touch/tuff-intelligence'
+import { Buffer } from 'node:buffer'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
+import { getNetworkService } from '../../network'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
@@ -194,11 +198,39 @@ function createKeywords(text: string): string[] {
     .slice(0, 10)
 }
 
+function clampSpeechSpeed(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return Math.min(4, Math.max(0.25, value))
+}
+
+function normalizeSpeechFormat(format: IntelligenceTTSPayload['format']): {
+  responseFormat: string
+  mimeType: string
+} {
+  switch (format) {
+    case 'wav':
+      return { responseFormat: 'wav', mimeType: 'audio/wav' }
+    case 'ogg':
+      return { responseFormat: 'opus', mimeType: 'audio/ogg' }
+    case 'flac':
+      return { responseFormat: 'flac', mimeType: 'audio/flac' }
+    default:
+      return { responseFormat: 'mp3', mimeType: 'audio/mpeg' }
+  }
+}
+
+function arrayBufferToDataUrl(buffer: ArrayBuffer, mimeType: string): string {
+  return `data:${mimeType};base64,${Buffer.from(buffer).toString('base64')}`
+}
+
 export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProvider {
   protected abstract readonly defaultBaseUrl: string
   protected abstract readonly defaultChatModel: string
   protected readonly defaultEmbeddingModel: string = 'text-embedding-3-small'
   protected readonly defaultVisionModel: string | undefined
+  protected readonly defaultTtsModel: string = 'tts-1'
   protected readonly requireApiKey: boolean = true
   protected readonly embeddingSupported: boolean = true
   protected readonly visionSupported: boolean = true
@@ -220,6 +252,21 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
     this.validateModel(model, {
       capabilityId: options.metadata?.capabilityId as string | undefined,
       endpoint: '/langchain/chat'
+    })
+    return model
+  }
+
+  protected resolveTtsModel(
+    payload: IntelligenceTTSPayload,
+    options: IntelligenceInvokeOptions
+  ): string {
+    const model =
+      options.modelPreference?.[0] ||
+      (payload.quality === 'hd' ? 'tts-1-hd' : '') ||
+      this.defaultTtsModel
+    this.validateModel(model, {
+      capabilityId: options.metadata?.capabilityId as string | undefined,
+      endpoint: '/audio/speech'
     })
     return model
   }
@@ -450,6 +497,69 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       result,
       usage: extractUsageInfo(rawMessage),
       model: resolveModelName(rawMessage, modelName),
+      latency: Date.now() - startTime,
+      traceId,
+      provider: this.type
+    }
+  }
+
+  async tts(
+    payload: IntelligenceTTSPayload,
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceTTSResult>> {
+    const text = typeof payload.text === 'string' ? payload.text.trim() : ''
+    if (!text) {
+      throw new Error(`[${this.type}] TTS text is required`)
+    }
+
+    const startTime = Date.now()
+    const traceId = this.generateTraceId()
+    const modelName = this.resolveTtsModel(payload, options)
+    const { responseFormat, mimeType } = normalizeSpeechFormat(payload.format)
+    const voice = payload.voice?.trim() || 'alloy'
+    const speed = clampSpeechSpeed(payload.speed)
+
+    const response = await getNetworkService().request<ArrayBuffer>({
+      method: 'POST',
+      url: `${this.resolveBaseUrl()}/audio/speech`,
+      headers: {
+        Authorization: `Bearer ${this.resolveApiKey()}`,
+        'Content-Type': 'application/json'
+      },
+      body: {
+        model: modelName,
+        input: text,
+        voice,
+        response_format: responseFormat,
+        ...(speed ? { speed } : {})
+      },
+      responseType: 'arrayBuffer',
+      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
+      retryPolicy: {
+        maxRetries: 0,
+        retryOnNetworkError: false,
+        retryOnTimeout: false,
+        retryableStatusCodes: []
+      },
+      cooldownPolicy: {
+        key: `${this.config.id}:audio.tts`,
+        failureThreshold: 2,
+        cooldownMs: 15_000,
+        autoResetOnSuccess: true
+      }
+    })
+
+    return {
+      result: {
+        audio: arrayBufferToDataUrl(response.data, mimeType),
+        format: responseFormat
+      },
+      usage: {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0
+      },
+      model: modelName,
       latency: Date.now() - startTime,
       traceId,
       provider: this.type

@@ -48,6 +48,7 @@ import type {
   IntelligenceSentimentAnalyzePayload,
   IntelligenceSentimentAnalyzeResult,
   IntelligenceStreamChunk,
+  IntelligenceTTSPayload,
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
@@ -1086,6 +1087,11 @@ export class TuffIntelligenceSDK {
       case 'image-generate':
         return (await provider.imageGenerate!(
           payload as IntelligenceImageGeneratePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'tts':
+        return (await provider.tts!(
+          payload as IntelligenceTTSPayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
 

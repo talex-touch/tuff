@@ -10,6 +10,8 @@ import type {
   IntelligenceRewritePayload,
   IntelligenceStreamChunk,
   IntelligenceSummarizePayload,
+  IntelligenceTTSPayload,
+  IntelligenceTTSResult,
   IntelligenceTranslatePayload,
   IntelligenceUsageInfo,
   IntelligenceVisionOcrPayload,
@@ -234,5 +236,12 @@ export class NexusProvider extends IntelligenceProvider {
     options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
     return this.invokeNexus('vision.ocr', payload, options)
+  }
+
+  tts(
+    payload: IntelligenceTTSPayload,
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceTTSResult>> {
+    return this.invokeNexus('audio.tts', payload, options)
   }
 }

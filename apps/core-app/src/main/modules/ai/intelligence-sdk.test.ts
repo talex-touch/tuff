@@ -7,6 +7,7 @@ import {
   type IntelligenceProviderAdapter,
   type IntelligenceProviderConfig,
   type IntelligenceProviderManagerAdapter,
+  type IntelligenceTTSResult,
   type IntelligenceVisionOcrPayload,
   type IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
@@ -398,6 +399,65 @@ describe('TuffIntelligenceSDK invoke', () => {
       content: 'You are OCR assistant'
     })
     expect(payload.messages[1]).toEqual({ role: 'user', content: 'hello' })
+  })
+
+  it('dispatches audio.tts to provider TTS capability', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'audio.tts',
+      type: IntelligenceCapabilityType.TTS,
+      name: 'Text-to-Speech',
+      description: 'test tts capability',
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
+    })
+
+    const ttsInvoke = vi.fn().mockResolvedValue({
+      result: {
+        audio: 'data:audio/mpeg;base64,AAAA',
+        format: 'mp3'
+      } satisfies IntelligenceTTSResult,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: 'tts-1',
+      latency: 15,
+      traceId: 'trace-tts',
+      provider: IntelligenceProviderType.CUSTOM
+    })
+
+    const provider = createProvider(
+      {
+        id: 'custom-tts',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Custom TTS',
+        enabled: true,
+        priority: 1,
+        apiKey: 'tts-key',
+        models: ['tts-1'],
+        capabilities: ['audio.tts']
+      },
+      vi.fn()
+    )
+    provider.tts = ttsInvoke
+
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const result = await sdk.invoke<IntelligenceTTSResult>('audio.tts', {
+      text: 'Hello',
+      voice: 'alloy',
+      format: 'mp3'
+    })
+
+    expect(result.result.audio).toBe('data:audio/mpeg;base64,AAAA')
+    expect(ttsInvoke).toHaveBeenCalledOnce()
+    expect(ttsInvoke.mock.calls[0]?.[0]).toMatchObject({
+      text: 'Hello',
+      voice: 'alloy',
+      format: 'mp3'
+    })
   })
 
   it('resolves DeepAgent runtime config from non-Anthropic provider selection', async () => {
