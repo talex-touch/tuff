@@ -24,6 +24,7 @@ import type {
   PluginStandardChannelData
 } from '@talex-touch/utils/plugin/sdk/channel-client'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import type { TouchWindow } from '../../core/touch-window'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -1285,7 +1286,14 @@ export class TouchPlugin implements ITouchPlugin {
           PluginEvents.storage.deleteSecret,
           { pluginName, key },
           createPluginContext()
-        ) as Promise<{ success: boolean; error?: string }>
+        ) as Promise<{ success: boolean; error?: string }>,
+
+      health: (): Promise<SecureStoreHealthResponse> =>
+        transport.invoke(
+          PluginEvents.storage.getSecretHealth,
+          undefined,
+          createPluginContext()
+        ) as Promise<SecureStoreHealthResponse>
     }
   }
 

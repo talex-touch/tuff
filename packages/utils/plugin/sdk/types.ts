@@ -6,6 +6,7 @@
 
 import type { PluginStandardChannelData } from './channel-client'
 import type { IPluginFeature } from '../index'
+import type { SecureStoreHealthResponse } from '../../transport/events/types'
 import path from 'node:path'
 
 /**
@@ -654,6 +655,7 @@ export interface IPluginSecretManager {
   get: (key: string) => Promise<string | null>
   set: (key: string, value: string | null) => Promise<{ success: boolean, error?: string }>
   delete: (key: string) => Promise<{ success: boolean, error?: string }>
+  health: () => Promise<SecureStoreHealthResponse>
 }
 
 /**

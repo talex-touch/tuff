@@ -262,6 +262,7 @@ describe('TouchPlugin.triggerFeature', () => {
     )
 
     await plugin.getFeatureUtil().plugin.secret.set('providers.baidu.secretKey', 'secret-value')
+    await plugin.getFeatureUtil().plugin.secret.health()
 
     expect(transport.invoke).toHaveBeenCalledWith(
       PluginEvents.storage.setSecret,
@@ -278,6 +279,13 @@ describe('TouchPlugin.triggerFeature', () => {
         }
       }
     )
+    expect(transport.invoke).toHaveBeenCalledWith(PluginEvents.storage.getSecretHealth, undefined, {
+      plugin: {
+        name: 'test-plugin',
+        uniqueKey: expect.any(String),
+        verified: expect.any(Boolean)
+      }
+    })
   })
 })
 

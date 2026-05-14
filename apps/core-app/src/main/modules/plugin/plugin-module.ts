@@ -61,6 +61,7 @@ import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
 import {
+  getSecureStoreHealth,
   getSecureStoreValue,
   isSecureStoreAvailable,
   setSecureStoreValue
@@ -2401,6 +2402,22 @@ export class PluginModule extends BaseModule {
         } catch (error) {
           logIpcHandlerError('plugin:storage:get-secret', error)
           return null
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.getSecretHealth, async () => {
+        try {
+          return await getSecureStoreHealth(this.secureStoreRootPath)
+        } catch (error) {
+          logIpcHandlerError('plugin:storage:get-secret-health', error)
+          return {
+            backend: 'unavailable',
+            available: false,
+            degraded: true,
+            reason: toErrorMessage(error)
+          }
         }
       })
     )

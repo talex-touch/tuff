@@ -373,6 +373,7 @@ import type {
   PluginStorageListSyncItemsRequest,
   PluginStorageOpenFolderRequest,
   PluginStorageOpenInEditorRequest,
+  PluginStorageSecretHealthResponse,
   PluginStorageSecretRequest,
   PluginStorageSetFileRequest,
   PluginStorageSetSecretRequest,
@@ -1741,6 +1742,11 @@ export const PluginEvents = {
       .module("storage")
       .event("get-secret")
       .define<PluginStorageSecretRequest, string | null>(),
+
+    getSecretHealth: defineEvent("plugin")
+      .module("storage")
+      .event("get-secret-health")
+      .define<void, PluginStorageSecretHealthResponse>(),
 
     setSecret: defineEvent("plugin")
       .module("storage")

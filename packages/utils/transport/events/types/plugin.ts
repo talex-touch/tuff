@@ -28,6 +28,7 @@ import type {
   RegisterWidgetRequest,
   TriggerFeatureRequest,
 } from '../../../plugin/sdk/types'
+import type { SecureStoreHealthResponse } from './app'
 
 export enum PluginStatus {
   /**
@@ -567,6 +568,8 @@ export interface PluginStorageSecretRequest {
 export interface PluginStorageSetSecretRequest extends PluginStorageSecretRequest {
   value: string | null
 }
+
+export type PluginStorageSecretHealthResponse = SecureStoreHealthResponse
 
 export interface PluginStorageListFilesRequest {
   pluginName: string
