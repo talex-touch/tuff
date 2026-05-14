@@ -21,7 +21,7 @@
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 为 documented best-effort。
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
-- 质量入口：PR 使用 `pnpm quality:pr`，release/milestone 使用 `pnpm quality:release`；若既有失败阻断，必须记录失败项与最近路径替代验证。
+- 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；若既有失败阻断，必须记录失败项与最近路径替代验证。
 - 当前额外阻断：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 为 0 行导致 `pnpm -C "apps/core-app" run typecheck:node` 失败，恢复前不得宣称 CoreApp 主进程质量门禁通过。
 
 ## 3. 活跃 PRD 必须包含

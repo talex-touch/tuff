@@ -29,6 +29,7 @@ export class TuffIntelligenceTranslateProvider implements TranslationProvider {
         sourceLanguage: sourceLang,
         targetLanguage: targetLang,
         provider: `${this.name} (${provider}/${model})`,
+        traceId: response?.traceId,
         timestamp: Date.now(),
       }
     }

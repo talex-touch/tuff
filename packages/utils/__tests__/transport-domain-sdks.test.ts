@@ -808,6 +808,7 @@ describe('transport domain sdk mappings', () => {
     const sdk = createIntelligenceSdk(transport as any)
 
     await sdk.invoke('text.chat', { messages: [] })
+    await sdk.ttsSpeak({ text: 'hello', language: 'en' })
     await sdk.testProvider({
       id: 'provider-1',
       type: 'openai',
@@ -826,9 +827,17 @@ describe('transport domain sdk mappings', () => {
       action: 'invoke',
     })
     expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:tts-speak',
+    )
+    expect(transport.send.mock.calls[1]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'api',
+      action: 'tts-speak',
+    })
+    expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe(
       'intelligence:api:test-provider',
     )
-    expect(transport.send.mock.calls[2]?.[0]?.toEventName?.()).toBe(
+    expect(transport.send.mock.calls[3]?.[0]?.toEventName?.()).toBe(
       'intelligence:api:get-quota',
     )
   })

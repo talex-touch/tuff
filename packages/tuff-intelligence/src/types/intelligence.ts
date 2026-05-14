@@ -901,6 +901,38 @@ export interface IntelligenceTTSResult {
 }
 
 /**
+ * Payload for the typed text-to-speech speak API.
+ */
+export interface IntelligenceTtsSpeakPayload extends IntelligenceTTSPayload {
+  /** Trace ID of the source intelligence result, for example a translation trace. */
+  sourceTraceId?: string
+  /** Preferred provider ID for this synthesis. */
+  providerId?: string
+  /** Preferred model for this synthesis. */
+  model?: string
+  /** Additional invocation metadata. */
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * Result from the typed text-to-speech speak API.
+ */
+export interface IntelligenceTtsSpeakResult extends Omit<IntelligenceTTSResult, 'audio'> {
+  /** Playable audio data URL. */
+  audio: string
+  /** Provider that produced the audio. */
+  provider: string
+  /** Model that produced the audio. */
+  model: string
+  /** Trace ID of the speech synthesis call. */
+  traceId: string
+  /** Trace ID of the source intelligence result, when provided. */
+  sourceTraceId?: string
+  /** Whether this response came from the process-local TTS cache. */
+  cacheHit: boolean
+}
+
+/**
  * Payload for speech-to-text capability.
  */
 export interface IntelligenceSTTPayload {
@@ -2239,12 +2271,17 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
   'audio.tts': {
     id: 'audio.tts',
     label: '语音合成 / Text-to-Speech',
-    description: '将文字转换为自然语音',
+    description: '将文字转换为自然语音（Beta）',
     providers: [
+      {
+        providerId: 'tuff-nexus-default',
+        priority: 1,
+        enabled: true,
+      },
       {
         providerId: 'openai-default',
         models: ['tts-1', 'tts-1-hd'],
-        priority: 1,
+        priority: 2,
         enabled: false,
       },
     ],

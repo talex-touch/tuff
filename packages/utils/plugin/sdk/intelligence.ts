@@ -1,6 +1,8 @@
 import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
 } from '../../types/intelligence'
 import { createIntelligenceClient } from '../../intelligence/client'
 import { ensureRendererChannel } from './channel'
@@ -12,6 +14,7 @@ export interface IntelligenceSDK {
     payload: any,
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
+  ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
 }
 
 function resolveSdkApi(): number | undefined {
@@ -50,6 +53,11 @@ async function invokeCapability<T = any>(
   return getClient().invoke<T>(capabilityId, payload, options)
 }
 
+async function ttsSpeak(payload: IntelligenceTtsSpeakPayload): Promise<IntelligenceTtsSpeakResult> {
+  return getClient().ttsSpeak(payload)
+}
+
 export const intelligence: IntelligenceSDK = {
   invoke: invokeCapability,
+  ttsSpeak,
 }

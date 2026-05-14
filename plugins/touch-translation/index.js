@@ -255,8 +255,8 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
     nextSeq
   )
 
-  const ok = await ensureNetworkPermission()
-  if (!ok) {
+  const usesNetworkProviders = providersToShow.some(provider => provider.id !== 'tuffintelligence')
+  if (usesNetworkProviders && !(await ensureNetworkPermission())) {
     state.error = PERMISSION_DENIED_MESSAGE
     upsertWidgetItem(featureId)
     return
@@ -576,6 +576,7 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
         to: result.to || targetLang,
         provider: result.provider,
         model: result.model,
+        traceId: result.traceId,
       })
     }
 
@@ -619,6 +620,7 @@ async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
       service: 'tuffintelligence',
       provider: response?.provider,
       model: response?.model,
+      traceId: response?.traceId,
     }
   }
   catch (error) {
