@@ -23,6 +23,29 @@ const notificationModuleMock = vi.hoisted(() => ({
   showInternalSystemNotification: vi.fn()
 }))
 
+const clipboardRuntimeMocks = vi.hoisted(() => ({
+  transportOn: vi.fn(),
+  transportOnStream: vi.fn(),
+  pollingService: {
+    isRegistered: vi.fn(() => false),
+    register: vi.fn(),
+    unregister: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn()
+  },
+  appTaskGate: {
+    waitForIdle: vi.fn(async () => undefined),
+    isActive: vi.fn(() => false)
+  }
+}))
+
+vi.mock('@talex-touch/utils/transport/main', () => ({
+  getTuffTransportMain: vi.fn(() => ({
+    on: clipboardRuntimeMocks.transportOn,
+    onStream: clipboardRuntimeMocks.transportOnStream
+  }))
+}))
+
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp'),
@@ -240,13 +263,12 @@ vi.mock('../utils/perf-monitor', () => ({
 
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
-    getInstance: vi.fn(() => ({
-      register: vi.fn(),
-      unregister: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn()
-    }))
+    getInstance: vi.fn(() => clipboardRuntimeMocks.pollingService)
   }
+}))
+
+vi.mock('../service/app-task-gate', () => ({
+  appTaskGate: clipboardRuntimeMocks.appTaskGate
 }))
 
 vi.mock('@sentry/electron/main', () => ({
@@ -356,35 +378,36 @@ vi.mock('../core/eventbus/touch-event', () => ({
 
 import { ClipboardModule } from './clipboard'
 import { tempFileService } from '../service/temp-file.service'
+import { ClipboardAutopasteAutomation } from './clipboard/clipboard-autopaste-automation'
 
 type ClipboardModuleTestHandle = {
   transport: {
     on: ReturnType<typeof vi.fn>
     onStream: ReturnType<typeof vi.fn>
   } | null
-  registerTypedClipboardQueryHandlers: () => void
-  registerTypedClipboardMutationHandlers: (
-    writePayload: (payload: unknown) => Promise<void>
-  ) => void
-  registerTypedClipboardReadHandlers: () => void
-  registerTypedClipboardStreamHandlers: () => void
+  transportChannel: unknown
+  registerTransportHandlers: () => void
 }
 
 afterEach(() => {
   vi.clearAllMocks()
+  clipboardRuntimeMocks.transportOn.mockImplementation(() => () => {})
+  clipboardRuntimeMocks.transportOnStream.mockImplementation(() => () => {})
+  clipboardRuntimeMocks.pollingService.isRegistered.mockReturnValue(false)
+  clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(undefined)
+  clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
 })
 
 describe('ClipboardModule transport registration', () => {
   it('只注册 typed clipboard transport handlers，不再注册 retired raw bridge', () => {
-    const on = vi.fn(() => () => {})
-    const onStream = vi.fn(() => () => {})
+    const on = clipboardRuntimeMocks.transportOn
+    const onStream = clipboardRuntimeMocks.transportOnStream
     const module = new ClipboardModule() as unknown as ClipboardModuleTestHandle
 
-    module.transport = { on, onStream }
-    module.registerTypedClipboardQueryHandlers()
-    module.registerTypedClipboardMutationHandlers(async () => {})
-    module.registerTypedClipboardReadHandlers()
-    module.registerTypedClipboardStreamHandlers()
+    module.transportChannel = {
+      keyManager: {}
+    }
+    module.registerTransportHandlers()
 
     const registeredEvents = [...on.mock.calls, ...onStream.mock.calls].map((call) =>
       String((call as unknown[])[0])
@@ -415,23 +438,51 @@ describe('ClipboardModule transport registration', () => {
   })
 })
 
+describe('ClipboardModule startup tasks', () => {
+  it('starts native clipboard watcher after idle while polling is registered immediately', async () => {
+    const nativeStart = vi.fn(async () => undefined)
+    const module = new ClipboardModule() as unknown as {
+      clipboardHelper: { bootstrap: ReturnType<typeof vi.fn> } | null
+      nativeWatcher: { start: typeof nativeStart }
+      startClipboardMonitoring: () => void
+    }
+
+    module.clipboardHelper = { bootstrap: vi.fn() }
+    module.nativeWatcher.start = nativeStart
+
+    module.startClipboardMonitoring()
+
+    expect(clipboardRuntimeMocks.pollingService.register).toHaveBeenCalledWith(
+      'clipboard.monitor',
+      expect.any(Function),
+      expect.any(Object)
+    )
+    expect(nativeStart).not.toHaveBeenCalled()
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(clipboardRuntimeMocks.appTaskGate.waitForIdle).toHaveBeenCalled()
+    expect(nativeStart).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('ClipboardModule auto-paste failure notification', () => {
   it('sends a deduped system notification when auto-paste fails', async () => {
     const error = new Error('Command failed: osascript')
     Object.assign(error, {
       stderr: 'execution error: 未获得授权将Apple事件发送给System Events。 (-1743)'
     })
-    const module = new ClipboardModule() as unknown as {
-      toActionFailureResult: (
-        error: unknown,
-        logMessage: string,
-        meta: Record<string, unknown>,
-        fallbackMessage?: string,
-        options?: { notify?: boolean }
-      ) => { success: boolean; message?: string; code?: string }
-    }
+    const automation = new ClipboardAutopasteAutomation({
+      hasDatabase: () => true,
+      getItemById: vi.fn(async () => null),
+      rememberFreshness: vi.fn(),
+      logWarn: vi.fn(),
+      logError: vi.fn(),
+      logDebug: vi.fn()
+    })
 
-    const result = module.toActionFailureResult(
+    const result = automation.toActionFailureResult(
       error,
       'Clipboard apply failed',
       { platform: 'darwin' },

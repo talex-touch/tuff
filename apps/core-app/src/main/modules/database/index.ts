@@ -1,5 +1,5 @@
 import type { Client } from '@libsql/client'
-import type { MaybePromise, ModuleInitContext, ModuleKey, TimingLogLevel } from '@talex-touch/utils'
+import type { ModuleInitContext, ModuleKey, TimingLogLevel } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import fs from 'node:fs/promises'
@@ -53,6 +53,8 @@ export class DatabaseModule extends BaseModule {
   private mainDbPath = ''
   private auxDbPath = ''
   private walMaintenanceRegistered = false
+  private backgroundStartupPromise: Promise<void> | null = null
+  private destroying = false
   private walPeakBytes = 0
   private schedulerQueuePeak = 0
 
@@ -553,9 +555,11 @@ export class DatabaseModule extends BaseModule {
       this.auxDbPath = path.join(databaseDirPath, 'database-aux.db')
       this.auxClient = createClient({ url: `file:${this.auxDbPath}` })
       await this.configureSqliteClient(this.auxClient, 'aux')
-      this.auxDb = drizzle(this.auxClient, { schema })
+      const auxDb = drizzle(this.auxClient, { schema })
       await this.ensureAuxTables()
       await this.migrateHotTablesToAux()
+      if (this.destroying) return
+      this.auxDb = auxDb
       this.auxInitialized = true
       dbLog.info('Aux database initialized', {
         meta: { path: this.auxDbPath }
@@ -574,8 +578,33 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
+  private scheduleBackgroundStartupTasks(databaseDirPath: string): void {
+    if (this.backgroundStartupPromise) return
+    const startedAt = performance.now()
+    this.backgroundStartupPromise = new Promise<void>((resolve) => setImmediate(resolve))
+      .then(async () => {
+        if (this.destroying) return
+        this.registerWalMaintenanceTasks()
+
+        if (this.destroying) return
+        await this.initAuxDatabase(databaseDirPath)
+
+        if (this.destroying) return
+        await this.reportDatabaseHealth('threshold')
+      })
+      .catch((error) => {
+        dbLog.warn('Database background startup tasks failed', { error })
+      })
+      .finally(() => {
+        dbLog.debug('Database background startup tasks finished', {
+          meta: { durationMs: Math.round(performance.now() - startedAt) }
+        })
+      })
+  }
+
   async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const { dirPath } = file
+    this.destroying = false
     const dbPath = path.join(dirPath!, 'database.db')
     this.mainDbPath = dbPath
     this.client = createClient({ url: `file:${dbPath}` })
@@ -707,9 +736,7 @@ export class DatabaseModule extends BaseModule {
       }
     }
 
-    await this.initAuxDatabase(dirPath!)
-    this.registerWalMaintenanceTasks()
-    await this.reportDatabaseHealth('threshold')
+    this.scheduleBackgroundStartupTasks(dirPath!)
   }
 
   private async ensureKeywordMappingsProviderColumn(): Promise<void> {
@@ -828,7 +855,13 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
-  onDestroy(): MaybePromise<void> {
+  async onDestroy(): Promise<void> {
+    this.destroying = true
+    if (this.backgroundStartupPromise) {
+      await this.backgroundStartupPromise
+      this.backgroundStartupPromise = null
+    }
+
     if (this.walMaintenanceRegistered) {
       pollingService.unregister(DB_WAL_PASSIVE_TASK_ID)
       pollingService.unregister(DB_WAL_TRUNCATE_TASK_ID)

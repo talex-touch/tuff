@@ -1,14 +1,16 @@
 import type { Ref } from 'vue'
 
 export type JsonRequestOptions = Record<string, unknown>
-export type RequestErrorLike = {
+interface RequestErrorPayload {
   statusCode?: number
   message?: string
   data?: {
     statusCode?: number
     statusMessage?: string
   }
-} | null
+}
+
+export type RequestErrorLike = RequestErrorPayload | null
 
 type JsonRequestLike = <T = unknown>(request: string, options?: JsonRequestOptions) => Promise<T>
 
@@ -17,7 +19,7 @@ export function requestJson<T = unknown>(request: string, options?: JsonRequestO
   return requestFn<T>(request, options)
 }
 
-export type TypedFetchOptions<T> = {
+export interface TypedFetchOptions<T> {
   key?: string | Ref<string>
   default?: () => T
   [key: string]: unknown

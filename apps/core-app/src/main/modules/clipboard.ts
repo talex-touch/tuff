@@ -777,7 +777,10 @@ export class ClipboardModule extends BaseModule {
     this.updateClipboardPolling(true)
     this.ensureActiveAppRefreshTask()
     this.scheduleActiveAppRefresh()
-    void this.startNativeClipboardWatcher()
+    void appTaskGate
+      .waitForIdle()
+      .then(() => this.startNativeClipboardWatcher())
+      .catch((error) => clipboardLog.warn('Failed to start native clipboard watcher', { error }))
   }
 
   private ensureActiveAppRefreshTask(): void {

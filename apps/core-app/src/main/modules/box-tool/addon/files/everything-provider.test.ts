@@ -128,6 +128,8 @@ interface MutableEverythingProvider {
   }>
   refreshBackendState: (reason: 'startup' | 'manual-check' | 'toggle-enable') => Promise<boolean>
   registerChannels: (context: { touchApp: { channel: unknown } }) => void
+  onLoad: (context: { touchApp: { channel: unknown } }) => Promise<void>
+  startupRefreshPromise: Promise<void> | null
 }
 
 function buildResult(path: string) {
@@ -169,6 +171,7 @@ afterEach(() => {
   provider.diagnostics = { stages: {}, lastUpdated: null }
   provider.sdkAddon = null
   provider.esPath = null
+  provider.startupRefreshPromise = null
   provider.iconCache.clear()
   provider.iconExtractions.clear()
 
@@ -184,6 +187,20 @@ afterEach(() => {
 })
 
 describe('everything-provider fallback chain', () => {
+  it('loads settings and channels without blocking on startup backend detection', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(false)
+      appTaskWaitForIdle.mockImplementation(() => new Promise(() => {}))
+
+      await provider.onLoad({ touchApp: { channel: {} } })
+
+      expect(transportOn).toHaveBeenCalledTimes(3)
+      expect(refreshSpy).not.toHaveBeenCalled()
+      expect(provider.startupRefreshPromise).toBeInstanceOf(Promise)
+    })
+  })
+
   it('falls back to CLI when SDK runtime search fails', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'sdk-napi'

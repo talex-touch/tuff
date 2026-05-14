@@ -35,6 +35,7 @@ import {
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import { searchLogger } from '../../search-engine/search-logger'
 import { EverythingDiagnosticsTracker, toEverythingResultSample } from './everything-diagnostics'
 import {
@@ -55,6 +56,7 @@ const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
 const EVERYTHING_ICON_WARMUP_LIMIT = 12
+const EVERYTHING_STARTUP_READY_WAIT_MS = 3_000
 
 function usesWindowsSeparators(filePath: string): boolean {
   return filePath.includes('\\')
@@ -128,6 +130,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private startupRefreshPromise: Promise<void> | null = null
   private readonly diagnosticsTracker = new EverythingDiagnosticsTracker()
   private readonly iconCache = new EverythingIconCache()
   readonly iconExtractions = { clear: () => this.iconCache.clear() }
@@ -248,9 +251,29 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.logInfo('Initializing Everything provider')
 
     await this.loadSettings(context)
-    await this.refreshBackendState('startup')
-
     this.registerChannels(context)
+    this.scheduleStartupBackendRefresh()
+  }
+
+  private scheduleStartupBackendRefresh(): void {
+    if (this.startupRefreshPromise) return
+    const startedAt = performance.now()
+
+    this.startupRefreshPromise = new Promise<void>((resolve) => setImmediate(resolve))
+      .then(async () => {
+        const becameIdle = await appTaskGate.waitForIdle(EVERYTHING_STARTUP_READY_WAIT_MS)
+        this.logDebug('Everything startup backend refresh running', { becameIdle })
+        await this.refreshBackendState('startup')
+      })
+      .catch((error) => {
+        this.logWarn('Everything startup backend refresh failed', error)
+      })
+      .finally(() => {
+        this.logDebug('Everything startup backend refresh finished', {
+          duration: formatDuration(performance.now() - startedAt)
+        })
+        this.startupRefreshPromise = null
+      })
   }
 
   private async loadSettings(_context: ProviderContext): Promise<void> {

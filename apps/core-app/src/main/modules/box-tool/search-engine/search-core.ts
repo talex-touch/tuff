@@ -841,6 +841,18 @@ export class SearchEngineCore
     query: TuffQuery,
     providerFilter?: string
   ): TuffItem[] {
+    const shouldCheckWindowsFileReadiness =
+      process.platform === 'win32' &&
+      (providerFilter === undefined ||
+        isExplicitFileProviderFilter(providerFilter) ||
+        isExplicitFileCategoryFilter(providerFilter))
+    if (shouldCheckWindowsFileReadiness) {
+      const notice = fileProvider.buildStartupDegradedNotice(query)
+      if (notice && !items.some((item) => item.id === notice.id)) {
+        return [...items, notice]
+      }
+    }
+
     if (
       items.length > 0 ||
       process.platform !== 'win32' ||

@@ -454,6 +454,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private manager: IntelligenceProviderManager | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private agentChannelsCleanup: (() => void) | null = null
+  private agentRuntimePromise: Promise<void> | null = null
 
   constructor() {
     super(IntelligenceModule.key)
@@ -483,6 +484,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 注册 IPC 通道
     this.registerChannels()
+    this.registerAgentRuntimeChannels()
 
     // 设置配置更新监听器
     setupConfigUpdateListener()
@@ -493,13 +495,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // 强制加载初始配置（force=true 确保即使 signature 相同也会重新加载）
     ensureIntelligenceConfigLoaded(true)
 
-    await this.setupAgentRuntime()
+    this.startAgentRuntime()
 
     intelligenceLog.success('Intelligence module initialized')
   }
 
   async onDestroy(): Promise<void> {
     intelligenceLog.info('Destroying Intelligence module')
+    try {
+      await this.waitForAgentRuntime()
+    } catch (error) {
+      intelligenceLog.warn('Intelligence agent runtime was not ready during destroy', { error })
+    }
     if (this.agentChannelsCleanup) {
       this.agentChannelsCleanup()
       this.agentChannelsCleanup = null
@@ -510,13 +517,24 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.manager = null
   }
 
+  private startAgentRuntime(): void {
+    if (this.agentRuntimePromise) return
+    const task = this.setupAgentRuntime()
+    task.catch((error) => {
+      intelligenceLog.error('Intelligence agent runtime initialization failed', { error })
+    })
+    this.agentRuntimePromise = task
+  }
+
+  private async waitForAgentRuntime(): Promise<void> {
+    if (!this.agentRuntimePromise) {
+      this.startAgentRuntime()
+    }
+    await this.agentRuntimePromise
+  }
+
   private async setupAgentRuntime(): Promise<void> {
     intelligenceLog.info('Initializing intelligence agent runtime')
-    const transport = this.transport
-    if (!transport) {
-      throw new Error('[Intelligence] Transport is not ready')
-    }
-
     registerBuiltinTools()
     registerBuiltinAgents()
     intelligenceWorkflowService.setExecutor((ctx) =>
@@ -545,9 +563,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     })
 
     await intelligenceWorkflowService.initialize()
-    this.agentChannelsCleanup = registerAgentChannels(transport)
     this.verifyAgentRuntimeReady()
     intelligenceLog.success('Intelligence agent runtime initialized')
+  }
+
+  private registerAgentRuntimeChannels(): void {
+    if (!this.transport || this.agentChannelsCleanup) return
+    this.agentChannelsCleanup = registerAgentChannels(this.transport, {
+      waitForRuntime: () => this.waitForAgentRuntime()
+    })
   }
 
   private verifyAgentRuntimeReady(): void {
@@ -1005,6 +1029,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
         const { capabilityId, payload, options } = data
         ensureIntelligenceConfigLoaded()
+        if (capabilityId === 'agent.run' || capabilityId === 'workflow.execute') {
+          await this.waitForAgentRuntime()
+        }
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
         let result: IntelligenceInvokeResult<unknown>
         try {
@@ -1509,6 +1536,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow run payload')
         }
+        await this.waitForAgentRuntime()
         return intelligenceWorkflowService.runWorkflow(data)
       }
     )

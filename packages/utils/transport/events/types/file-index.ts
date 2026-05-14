@@ -26,6 +26,9 @@ export interface FileIndexStatus {
   isInitializing: boolean
   initializationFailed: boolean
   error: string | null
+  startupReady?: boolean
+  startupPending?: boolean
+  startupError?: string | null
   progress: {
     stage: FileIndexStage | null
     current: number

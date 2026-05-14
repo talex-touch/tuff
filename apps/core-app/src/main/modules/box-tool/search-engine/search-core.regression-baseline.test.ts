@@ -2,9 +2,10 @@ import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import { TuffInputType } from '@talex-touch/utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { everythingReadyMock, fileHasSearchFiltersMock } = vi.hoisted(() => ({
+const { everythingReadyMock, fileHasSearchFiltersMock, fileStartupNoticeMock } = vi.hoisted(() => ({
   everythingReadyMock: vi.fn(() => false),
-  fileHasSearchFiltersMock: vi.fn(() => false)
+  fileHasSearchFiltersMock: vi.fn(() => false),
+  fileStartupNoticeMock: vi.fn<() => TuffItem | null>(() => null)
 }))
 
 vi.mock('../../../utils/perf-context', () => ({
@@ -92,7 +93,8 @@ vi.mock('../addon/files/file-provider', () => ({
     type: 'file',
     supportedInputTypes: [TuffInputType.Text, TuffInputType.Files],
     onSearch: vi.fn(),
-    hasSearchFilters: fileHasSearchFiltersMock
+    hasSearchFilters: fileHasSearchFiltersMock,
+    buildStartupDegradedNotice: fileStartupNoticeMock
   }
 }))
 
@@ -290,6 +292,7 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T> 
 afterEach(() => {
   everythingReadyMock.mockReset().mockReturnValue(false)
   fileHasSearchFiltersMock.mockReset().mockReturnValue(false)
+  fileStartupNoticeMock.mockReset().mockReturnValue(null)
 })
 
 async function measureScenario(scenario: StageSample['scenario']): Promise<StageSample> {
@@ -439,6 +442,35 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
         'windows-shell-file-provider',
         'plugin-features'
       ])
+    })
+  })
+
+  it('appends a partial file-search notice while the file provider startup is degraded', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      appendCompatibilityNotice: (
+        items: TuffItem[],
+        query: TuffQuery,
+        providerFilter?: string
+      ) => TuffItem[]
+    }
+    const notice = {
+      id: 'file-provider:startup-degraded:report',
+      kind: 'notification',
+      source: { id: 'file-provider', type: 'file' },
+      render: { basic: { title: 'File search is warming up' } },
+      scoring: { final: 0.05 }
+    } as unknown as TuffItem
+    const item = createItems(1)[0]
+    fileStartupNoticeMock.mockReturnValue(notice)
+
+    await withPlatform('win32', async () => {
+      const result = core.appendCompatibilityNotice(
+        [item],
+        { text: 'report', inputs: [] } as TuffQuery,
+        'file'
+      )
+
+      expect(result.map((entry) => entry.id)).toEqual([item.id, notice.id])
     })
   })
 

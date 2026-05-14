@@ -33,6 +33,7 @@ import process from 'node:process'
 import {
   StorageList,
   timingLogger,
+  TuffItemBuilder,
   TuffInputType,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
@@ -133,6 +134,7 @@ const BACKGROUND_CONTENT_INDEX_MIN_BYTES = 5 * 1024 * 1024
 const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
+const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -315,6 +317,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly iconWorker = new IconWorkerClient()
   private readonly searchIndexWorker = new SearchIndexWorkerClient()
   private searchIndexWorkerReady: Promise<boolean> | null = null
+  private backgroundStartupPromise: Promise<void> | null = null
+  private backgroundStartupReady = false
+  private backgroundStartupError: Error | null = null
   private readonly workerStatusService = new FileProviderWorkerStatusService()
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
@@ -651,6 +656,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.syncWatchServiceState()
   }
 
+  private scheduleBackgroundStartupTasks(loadStart: number): void {
+    if (this.backgroundStartupPromise) return
+
+    this.backgroundStartupReady = false
+    this.backgroundStartupError = null
+    this.backgroundStartupPromise = new Promise<void>((resolve) => setImmediate(resolve))
+      .then(async () => {
+        const becameIdle = await appTaskGate.waitForIdle(FILE_PROVIDER_STARTUP_READY_WAIT_MS)
+        this.logDebug('FileProvider background startup running', { becameIdle })
+
+        const workerReady = await this.ensureSearchIndexWorkerReady('startup.background')
+        this.initializeBackgroundTaskService()
+        await this.ensureFileSystemWatchers()
+
+        if (workerReady) {
+          this.backgroundStartupReady = true
+        } else {
+          this.backgroundStartupError = new Error('Search index worker initialization failed')
+        }
+      })
+      .catch((error) => {
+        this.backgroundStartupError = error instanceof Error ? error : new Error(String(error))
+        this.logWarn('FileProvider background startup failed', error)
+      })
+      .finally(() => {
+        this.logDebug('FileProvider background startup finished', {
+          duration: formatDuration(performance.now() - loadStart),
+          ready: this.backgroundStartupReady,
+          error: this.backgroundStartupError?.message ?? null
+        })
+        this.backgroundStartupPromise = null
+      })
+  }
+
   /**
    * Record user activity for background task scheduling
    */
@@ -690,6 +729,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async startIndexing(source: 'auto' | 'manual'): Promise<void> {
+    if (!(await this.ensureSearchIndexWorkerReady(`indexing.${source}`))) {
+      throw new Error('Search index worker is not ready')
+    }
+
     if (this.isInitializing) {
       throw new Error('Indexing is already in progress')
     }
@@ -717,6 +760,38 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.isInitializing = run
     return run
+  }
+
+  public isStartupReady(): boolean {
+    return this.backgroundStartupReady
+  }
+
+  public isStartupPending(): boolean {
+    return this.backgroundStartupPromise !== null
+  }
+
+  public buildStartupDegradedNotice(query: TuffQuery): TuffItem | null {
+    const searchText = query.text?.trim() ?? ''
+    if (!searchText || this.backgroundStartupReady) {
+      return null
+    }
+
+    const detail = this.backgroundStartupError?.message
+      ? `File index startup is degraded: ${this.backgroundStartupError.message}`
+      : 'File index startup is still warming up; results may be partial until the index worker and filesystem watcher are ready.'
+
+    return new TuffItemBuilder(
+      `file-provider:startup-degraded:${encodeURIComponent(searchText).slice(0, 64)}`,
+      this.type,
+      this.id
+    )
+      .setKind('notification')
+      .setTitle('File search is warming up')
+      .setSubtitle('Partial file results')
+      .setDescription(detail)
+      .setAccessory('File Index')
+      .setFinalScore(0.05)
+      .build()
   }
 
   public getWatchedPaths(): string[] {
@@ -884,28 +959,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       ? path.join(databaseDir, 'database.db')
       : path.join(app.getPath('userData'), 'database.db')
 
-    // Initialize the search index worker with the database path so that
-    // all FTS5 + keyword_mappings write operations run off the main thread.
-    this.searchIndexWorkerReady = this.createSearchIndexWorkerReady(this.databaseFilePath)
-    await this.searchIndexWorkerReady
-
     this.logDebug('FileProvider.onLoad called', {
       watchPathsCount: this.watchPaths.length,
       watchPaths: JSON.stringify(this.watchPaths.slice(0, 3))
     })
 
-    this.initializeBackgroundTaskService()
-
     // 尽早注册 transport 事件，避免前端启动期请求出现 no-handler 警告
     this.registerOpenersChannel(context)
 
-    // 索引任务由后台调度执行（空闲+电量策略）
-    this.logDebug('onLoad: background index task registered, waiting for idle conditions')
-
-    // 只等待文件系统监听器设置完成，不等待索引完成
-    await this.ensureFileSystemWatchers()
+    // 索引 worker、后台索引任务与文件系统监听器延后到首屏空闲后准备。
+    this.scheduleBackgroundStartupTasks(loadStart)
     const loadDuration = performance.now() - loadStart
-    this.logDebug('Provider onLoad completed (indexing continues in background)', {
+    this.logDebug('Provider onLoad completed (background startup continues)', {
       duration: formatDuration(loadDuration)
     })
   }
@@ -999,6 +1064,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       isInitializing: isIndexing,
       initializationFailed: this.initializationFailed,
       error: this.initializationError?.message || null,
+      startupReady: this.backgroundStartupReady,
+      startupPending: this.backgroundStartupPromise !== null,
+      startupError: this.backgroundStartupError?.message || null,
       progress: { ...this.indexingProgress },
       startTime: this.indexingStartTime,
       estimatedCompletion,

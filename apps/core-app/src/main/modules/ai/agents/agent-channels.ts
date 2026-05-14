@@ -22,11 +22,21 @@ const agentChannelsLog = createLogger('Intelligence').child('AgentChannels')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
 const logInfo = (...args: unknown[]) => agentChannelsLog.info(formatLogArgs(args))
 
+interface AgentChannelOptions {
+  waitForRuntime?: () => Promise<void>
+}
+
 /**
  * Register all agent IPC channels
  */
-export function registerAgentChannels(transport: ITuffTransportMain): () => void {
+export function registerAgentChannels(
+  transport: ITuffTransportMain,
+  options: AgentChannelOptions = {}
+): () => void {
   const cleanups: Array<() => void> = []
+  const waitForRuntime = async () => {
+    await options.waitForRuntime?.()
+  }
 
   // ============================================================================
   // Agent Management
@@ -35,6 +45,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // List all available agents
   cleanups.push(
     transport.on(AgentsEvents.api.list, async (): Promise<AgentDescriptor[]> => {
+      await waitForRuntime()
       return agentManager.getAvailableAgents()
     })
   )
@@ -42,6 +53,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // List all agents (including disabled)
   cleanups.push(
     transport.on(AgentsEvents.api.listAll, async (): Promise<AgentDescriptor[]> => {
+      await waitForRuntime()
       return agentManager.getAllAgents()
     })
   )
@@ -49,6 +61,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Get specific agent
   cleanups.push(
     transport.on(AgentsEvents.api.get, async (payload): Promise<AgentDescriptor | null> => {
+      await waitForRuntime()
       const agentId = payload?.id
       if (!agentId) {
         return null
@@ -64,6 +77,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Execute a task (queued)
   cleanups.push(
     transport.on(AgentsEvents.api.execute, async (payload): Promise<{ taskId: string }> => {
+      await waitForRuntime()
       const taskId = await agentManager.executeTask(payload)
       return { taskId }
     })
@@ -72,6 +86,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Execute a task immediately
   cleanups.push(
     transport.on(AgentsEvents.api.executeImmediate, async (payload): Promise<AgentResult> => {
+      await waitForRuntime()
       return agentManager.executeTaskImmediate(payload)
     })
   )
@@ -79,6 +94,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Cancel a task
   cleanups.push(
     transport.on(AgentsEvents.api.cancel, async (payload): Promise<{ success: boolean }> => {
+      await waitForRuntime()
       if (!payload?.taskId) {
         return { success: false }
       }
@@ -90,6 +106,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Get task status
   cleanups.push(
     transport.on(AgentsEvents.api.taskStatus, async (payload): Promise<{ status: string }> => {
+      await waitForRuntime()
       if (!payload?.taskId) {
         return { status: 'idle' }
       }
@@ -103,6 +120,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
     transport.on(
       AgentsEvents.api.updatePriority,
       async (payload): Promise<{ success: boolean }> => {
+        await waitForRuntime()
         if (!payload?.taskId || typeof payload.priority !== 'number') {
           return { success: false }
         }
@@ -119,6 +137,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // List all tools
   cleanups.push(
     transport.on(AgentsEvents.api.tools.list, async (): Promise<AgentTool[]> => {
+      await waitForRuntime()
       return agentManager.getTools()
     })
   )
@@ -126,6 +145,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Get specific tool
   cleanups.push(
     transport.on(AgentsEvents.api.tools.get, async (payload): Promise<AgentTool | null> => {
+      await waitForRuntime()
       return agentManager.getTool(payload?.toolId)
     })
   )
@@ -137,6 +157,7 @@ export function registerAgentChannels(transport: ITuffTransportMain): () => void
   // Get agent system stats
   cleanups.push(
     transport.on(AgentsEvents.api.stats, async () => {
+      await waitForRuntime()
       return agentManager.getStats()
     })
   )
