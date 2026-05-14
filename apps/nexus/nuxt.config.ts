@@ -5,6 +5,7 @@ import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 import { remarkMermaid } from './app/utils/remark-mermaid'
+import { createDocsPrerenderRoutes } from './build/docs-prerender-routes'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -53,6 +54,13 @@ const riskControlFeatureEnabled = isEnvFlagEnabled(
 const nitroTypegenRouteExcludes = [
   '/api/dashboard/provider-registry/providers/:id/capabilities',
   '/api/dashboard/provider-registry/providers/:id/capabilities/:capabilityId',
+]
+const docsPrerenderRoutes = createDocsPrerenderRoutes(currentDir)
+const stablePrerenderRoutes = [
+  '/',
+  '/api/docs/component-sync',
+  '/api/docs/navigation',
+  '/api/docs/sidebar-components',
 ]
 
 export default defineNuxtConfig({
@@ -273,7 +281,7 @@ export default defineNuxtConfig({
         }
       : {
           crawlLinks: false,
-          routes: ['/', '/docs/dev/components', '/api/docs/component-sync'],
+          routes: [...new Set([...stablePrerenderRoutes, ...docsPrerenderRoutes])],
           ignore: ['/hi'],
         },
   },

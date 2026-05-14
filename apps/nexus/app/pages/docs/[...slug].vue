@@ -198,6 +198,7 @@ const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => locale.value)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+const shouldMountDocClientPanels = ref(false)
 
 watch(
   () => requestKey.value,
@@ -206,6 +207,7 @@ watch(
     docTitleState.value = ''
     docLocaleState.value = locale.value
     docMetaState.value = {}
+    shouldMountDocClientPanels.value = false
   },
 )
 
@@ -661,29 +663,39 @@ const pagerNextTitle = computed(() => {
   return entry ? itemTitle(entry.title, entry.path) : null
 })
 
+const currentDocRenderKey = computed(() => {
+  const path = typeof doc.value?.path === 'string' ? doc.value.path : docPath.value
+  return `${path}:${locale.value}`
+})
+const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
+let lastEnhancedDocKey = ''
 let docsTrackerRefreshRaf: number | null = null
 
-watchEffect(() => {
-  if (doc.value) {
-    outlineState.value = doc.value.body?.toc?.links ?? []
-    const rawTitle = doc.value.seo?.title ?? doc.value.title ?? ''
-    docTitleState.value = normalizeTitleForLocale(String(rawTitle), doc.value.path ?? docPath.value)
-    docLocaleState.value = resolveDocLocale(doc.value)
-    docMetaState.value = {
-      ...docMeta.value,
-      assistantTitle: docTitleState.value,
-      assistantContext: buildAssistantContext(doc.value.body),
+watch(
+  () => [doc.value, locale.value] as const,
+  ([currentDoc]) => {
+    if (currentDoc) {
+      outlineState.value = currentDoc.body?.toc?.links ?? []
+      const rawTitle = currentDoc.seo?.title ?? currentDoc.title ?? ''
+      docTitleState.value = normalizeTitleForLocale(String(rawTitle), currentDoc.path ?? docPath.value)
+      docLocaleState.value = resolveDocLocale(currentDoc)
+      docMetaState.value = {
+        ...docMeta.value,
+        assistantTitle: docTitleState.value,
+        assistantContext: buildAssistantContext(currentDoc.body),
+      }
+      if (!outlineState.value.length)
+        void scheduleOutlineSync(120)
+      return
     }
-    if (!outlineState.value.length)
-      void scheduleOutlineSync(120)
-  }
-  else {
+
     outlineState.value = []
     docTitleState.value = ''
     docLocaleState.value = locale.value
     docMetaState.value = {}
-  }
-})
+  },
+  { immediate: true },
+)
 
 onBeforeUnmount(() => {
   outlineState.value = []
@@ -1623,9 +1635,6 @@ onMounted(() => {
   loadDocsAnalyticsOptions()
   docsAnalyticsOptionsReady.value = true
   clampDocsAnalyticsOptions()
-  scheduleCodeEnhance()
-  bindDocsAnalyticsResizeObserver()
-  scheduleDocsTrackerRefresh()
   window.addEventListener('resize', scheduleDocsAnalyticsOverlay, { passive: true })
 })
 
@@ -1641,17 +1650,28 @@ watch(
 )
 
 watch(
-  () => viewState.value,
-  (value) => {
+  () => [currentDocRenderKey.value, isDocsContentReady.value] as const,
+  async ([docKey, ready]) => {
     if (!import.meta.client)
       return
-    if (value !== 'content')
+    shouldMountDocClientPanels.value = false
+    if (!ready)
       return
-    scheduleCodeEnhance(260)
-    void scheduleOutlineSync(280)
+
+    await nextTick()
+    if (docKey !== currentDocRenderKey.value || !isDocsContentReady.value)
+      return
+
+    shouldMountDocClientPanels.value = true
+    if (lastEnhancedDocKey !== docKey) {
+      lastEnhancedDocKey = docKey
+      scheduleCodeEnhance(260)
+      void scheduleOutlineSync(280)
+    }
     bindDocsAnalyticsResizeObserver()
     scheduleDocsTrackerRefresh()
   },
+  { immediate: true },
 )
 
 watch(
@@ -1783,7 +1803,7 @@ watch(
               { 'docs-prose--hero': showDocHero },
             ]"
           />
-          <ClientOnly>
+          <ClientOnly v-if="shouldMountDocClientPanels">
             <Teleport to="#docs-outline-tools">
               <div v-if="isAdmin && viewState === 'content'" class="docs-analytics-toolbar docs-analytics-toolbar--outline">
                 <div class="docs-analytics-toolbar__main docs-analytics-toolbar__main--icons">
@@ -1951,7 +1971,7 @@ watch(
               </FlipDialog>
           </ClientOnly>
           <div
-            v-if="isAdmin && docsAnalyticsVisible && docsAnalyticsFrame.ready"
+            v-if="shouldMountDocClientPanels && isAdmin && docsAnalyticsVisible && docsAnalyticsFrame.ready"
             class="docs-analytics-overlay"
             :style="{
               top: `${docsAnalyticsFrame.top}px`,
@@ -2040,7 +2060,9 @@ watch(
             </div>
           </div>
 
-          <DocsFeedback :doc-path="docPath" />
+          <ClientOnly>
+            <DocsFeedback v-if="shouldMountDocClientPanels" :doc-path="docPath" />
+          </ClientOnly>
 
           <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
             <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.12em] uppercase dark:text-light/40">
@@ -2050,6 +2072,7 @@ watch(
               <NuxtLink
                 v-if="pagerPrevPath"
                 :to="localePath({ path: pagerPrevPath })"
+                prefetch
                 class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
@@ -2063,6 +2086,7 @@ watch(
               <NuxtLink
                 v-if="pagerNextPath"
                 :to="localePath({ path: pagerNextPath })"
+                prefetch
                 class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
               >
                 <span class="dark:group-hover:text-primary-200 flex items-center justify-end gap-2 text-xs text-black/40 font-medium tracking-[0.12em] uppercase dark:text-light/40 group-hover:text-primary">
@@ -2077,7 +2101,7 @@ watch(
           </div>
 
           <ClientOnly>
-            <DocsComments :doc-path="docPath" />
+            <DocsComments v-if="shouldMountDocClientPanels" :doc-path="docPath" />
           </ClientOnly>
         </div>
 
