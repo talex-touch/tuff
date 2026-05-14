@@ -40,7 +40,8 @@ vi.mock('../modules/sentry/sentry-service', () => ({
 }))
 
 vi.mock('./perf-context', () => ({
-  getPerfContextSnapshot: () => []
+  getPerfContextSnapshot: () => [],
+  markPerfEventLoopLag: vi.fn()
 }))
 
 vi.mock('./workflow-debug', () => ({

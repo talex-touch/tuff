@@ -42,6 +42,15 @@ vi.mock('~/modules/mention/dialog-mention', () => ({
   forTouchTip: vi.fn().mockResolvedValue(undefined)
 }))
 
+vi.mock('~/utils/renderer-log', () => ({
+  createRendererLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
+  })
+}))
+
 describe('install-manager task indexing', () => {
   beforeEach(() => {
     vi.resetModules()

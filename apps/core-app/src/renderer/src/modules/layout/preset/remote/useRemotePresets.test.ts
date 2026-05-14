@@ -28,6 +28,10 @@ async function loadTarget() {
     getAuthBaseUrl: () => 'https://nexus.example'
   }))
 
+  vi.doMock('~/modules/nexus/runtime-base', () => ({
+    getRuntimeNexusBaseUrl: () => 'https://nexus.example'
+  }))
+
   vi.doMock('~/modules/store/store-http-client', () => ({
     storeHttpRequest: vi.fn()
   }))

@@ -36,7 +36,7 @@ describe('local renderable assets', () => {
     expect('missing' in result).toBe(false)
     if ('missing' in result) return
     expect(result.value).toMatch(/^tfile:\/\//)
-    expect(result.value).toContain('%E5%BE%AE%E4%BF%A1%E5%9B%BE%E7%89%87%2001.png')
+    expect(result.value).toContain(encodeURIComponent(path.basename(filePath)))
     expect(result.localPath).toBe(filePath)
   })
 

@@ -18,6 +18,11 @@ vi.mock('electron', () => ({
 
 import { ExtensionLoaderModule } from './extension-loader'
 
+async function waitForBackgroundLoad(module: ExtensionLoaderModule): Promise<void> {
+  const state = module as unknown as { loadPromise: Promise<void> | null }
+  await state.loadPromise
+}
+
 describe('ExtensionLoaderModule', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
@@ -30,8 +35,8 @@ describe('ExtensionLoaderModule', () => {
   })
 
   it('unloads loaded extensions in reverse order on destroy', async () => {
-    const entries = ['ext-a', 'ext-b'] as unknown as ReturnType<typeof fse.readdirSync>
-    vi.spyOn(fse, 'readdirSync').mockReturnValue(entries)
+    const entries = ['ext-a', 'ext-b'] as unknown as Awaited<ReturnType<typeof fse.readdir>>
+    vi.spyOn(fse, 'readdir').mockResolvedValue(entries)
     loadExtensionMock.mockImplementation(async (fullPath: string) => {
       const name = path.basename(fullPath)
       return { id: name, name }
@@ -42,6 +47,8 @@ describe('ExtensionLoaderModule', () => {
       file: { dirPath: '/tmp/extensions' }
     } as unknown as Parameters<ExtensionLoaderModule['onInit']>[0]
     await module.onInit(initContext)
+    module.start({} as Parameters<ExtensionLoaderModule['start']>[0])
+    await waitForBackgroundLoad(module)
 
     await module.onDestroy()
 
@@ -52,8 +59,8 @@ describe('ExtensionLoaderModule', () => {
   })
 
   it('only unloads successfully loaded extensions', async () => {
-    const entries = ['ext-a', 'ext-b'] as unknown as ReturnType<typeof fse.readdirSync>
-    vi.spyOn(fse, 'readdirSync').mockReturnValue(entries)
+    const entries = ['ext-a', 'ext-b'] as unknown as Awaited<ReturnType<typeof fse.readdir>>
+    vi.spyOn(fse, 'readdir').mockResolvedValue(entries)
     loadExtensionMock
       .mockRejectedValueOnce(new Error('broken package'))
       .mockResolvedValueOnce({ id: 'ext-b', name: 'ext-b' })
@@ -63,6 +70,8 @@ describe('ExtensionLoaderModule', () => {
       file: { dirPath: '/tmp/extensions' }
     } as unknown as Parameters<ExtensionLoaderModule['onInit']>[0]
     await module.onInit(initContext)
+    module.start({} as Parameters<ExtensionLoaderModule['start']>[0])
+    await waitForBackgroundLoad(module)
 
     await module.onDestroy()
 

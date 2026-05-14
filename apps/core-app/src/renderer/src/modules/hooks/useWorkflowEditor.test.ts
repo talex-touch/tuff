@@ -37,6 +37,12 @@ async function loadTarget() {
     useIntelligenceSdk: () => intelligenceSdk
   }))
 
+  vi.doMock('~/modules/lang/useI18nText', () => ({
+    useI18nText: () => ({
+      t: (key: string) => key
+    })
+  }))
+
   const target = await import('./useWorkflowEditor')
   return {
     ...target,

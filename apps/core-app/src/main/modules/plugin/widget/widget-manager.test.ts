@@ -9,9 +9,24 @@ const mocks = vi.hoisted(() => ({
   broadcastToWindow: vi.fn(),
   compileWidgetSource: vi.fn(),
   loadWidget: vi.fn(),
+  watch: vi.fn(() => {
+    const watcher = {
+      add: vi.fn(),
+      close: vi.fn(async () => undefined),
+      on: vi.fn()
+    }
+    watcher.on.mockReturnValue(watcher)
+    return watcher
+  }),
   mainWindow: {
     id: 11,
     isDestroyed: vi.fn(() => false)
+  }
+}))
+
+vi.mock('chokidar', () => ({
+  default: {
+    watch: mocks.watch
   }
 }))
 
