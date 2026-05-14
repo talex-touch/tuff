@@ -78,6 +78,46 @@ interface FeatureEventUtil {
   offFeatureLifeCycle: (id: string, callback: ITargetFeatureLifeCycle) => void
 }
 
+type PluginClipboardApi = Pick<
+  Electron.Clipboard,
+  'readText' | 'writeText' | 'readImage' | 'writeImage' | 'clear' | 'has'
+>
+
+function createSafePluginDialogApi() {
+  return {
+    showMessageBox: (...args: Parameters<typeof dialog.showMessageBox>) =>
+      dialog.showMessageBox(...args),
+    showOpenDialog: (...args: Parameters<typeof dialog.showOpenDialog>) =>
+      dialog.showOpenDialog(...args),
+    showSaveDialog: (...args: Parameters<typeof dialog.showSaveDialog>) =>
+      dialog.showSaveDialog(...args)
+  }
+}
+
+function createSafePluginClipboardApi(): PluginClipboardApi {
+  return {
+    readText: (...args) => clipboard.readText(...args),
+    writeText: (...args) => clipboard.writeText(...args),
+    readImage: (...args) => clipboard.readImage(...args),
+    writeImage: (...args) => clipboard.writeImage(...args),
+    clear: (...args) => clipboard.clear(...args),
+    has: (...args) => clipboard.has(...args)
+  }
+}
+
+function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
+  return async (url: string): Promise<void> => {
+    try {
+      await shell.openExternal(url)
+    } catch (error) {
+      logger.warn(`[Plugin ${pluginName}] openUrl failed`, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      throw error
+    }
+  }
+}
+
 function createRemovedChannelError(capability: 'channel.raw' | 'channel.sendSync'): Error {
   return new Error(
     `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
@@ -126,6 +166,20 @@ const TRANSIENT_ISSUE_CODES = new Set([
 ])
 const CHANNEL_SOURCE_TRANSPORT = 'transport' as PluginStandardChannelData['header']['type']
 const CHANNEL_SUCCESS_CODE = 200 as PluginStandardChannelData['code']
+
+function getRuntimeErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : undefined
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  )
+}
 
 export interface TouchPluginRuntimeContext {
   rootPath: string
@@ -486,9 +540,24 @@ export class TouchPlugin implements ITouchPlugin {
     feature: IPluginFeature,
     query: TuffQuery | undefined
   ): Promise<boolean | void> {
+    const executeStart = Date.now()
+    const logFeatureBreadcrumb = (
+      stage: string,
+      extra?: { errorCode?: string; durationMs?: number }
+    ) => {
+      this.logger.debug('[Breadcrumb] feature execute', {
+        pluginName: this.name,
+        featureId: feature.id,
+        stage,
+        durationMs: extra?.durationMs,
+        errorCode: extra?.errorCode
+      })
+    }
+
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
+    logFeatureBreadcrumb('start')
 
     if (this.featureControllers.has(feature.id)) {
       this.featureControllers.get(feature.id)?.abort()
@@ -513,15 +582,39 @@ export class TouchPlugin implements ITouchPlugin {
           `Plugin lifecycle not initialized before triggering feature. This may indicate an issue.`
         )
       }
-      await PluginViewLoader.loadPluginView(this, feature, query)
+      try {
+        await PluginViewLoader.loadPluginView(this, feature, query)
+        logFeatureBreadcrumb('webcontent-ready', { durationMs: Date.now() - executeStart })
+      } catch (error) {
+        logFeatureBreadcrumb('webcontent-failed', {
+          durationMs: Date.now() - executeStart,
+          errorCode: getRuntimeErrorCode(error)
+        })
+        this.handleRuntimeError('loadPluginView', error)
+        return false
+      }
       return true
     }
 
     if (feature.interaction?.type === 'widget') {
       const needsRegistration = Boolean(feature.interaction.path)
       if (needsRegistration) {
-        const registration = await widgetManager.registerWidget(this, feature)
+        logFeatureBreadcrumb('widget-register-start')
+        let registration: Awaited<ReturnType<typeof widgetManager.registerWidget>>
+        try {
+          registration = await widgetManager.registerWidget(this, feature)
+        } catch (error) {
+          logFeatureBreadcrumb('widget-register-error', {
+            durationMs: Date.now() - executeStart,
+            errorCode: getRuntimeErrorCode(error)
+          })
+          this.handleRuntimeError('registerWidget', error)
+          return false
+        }
         if (!registration) {
+          logFeatureBreadcrumb('widget-register-failed', {
+            durationMs: Date.now() - executeStart
+          })
           this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
           const coreBoxWindow = getCoreBoxWindow()
           if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
@@ -545,6 +638,9 @@ export class TouchPlugin implements ITouchPlugin {
           }
           return false
         }
+        logFeatureBreadcrumb('widget-register-ready', {
+          durationMs: Date.now() - executeStart
+        })
         this.logger.info(
           `Widget interaction ready for feature: ${feature.id} (id=${registration.widgetId}, file=${registration.filePath})`
         )
@@ -559,24 +655,39 @@ export class TouchPlugin implements ITouchPlugin {
         feature,
         controller.signal
       )
+      if (isPromiseLike(result)) {
+        result = (await result) as boolean | void
+      }
     } catch (error) {
+      logFeatureBreadcrumb('lifecycle-error', {
+        durationMs: Date.now() - executeStart,
+        errorCode: getRuntimeErrorCode(error)
+      })
       this.handleRuntimeError('onFeatureTriggered', error)
     }
     try {
       this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
     } catch (error) {
+      logFeatureBreadcrumb('on-launch-error', {
+        durationMs: Date.now() - executeStart,
+        errorCode: getRuntimeErrorCode(error)
+      })
       this.handleRuntimeError('onLaunch', error)
     }
+    logFeatureBreadcrumb('complete', { durationMs: Date.now() - executeStart })
     return result
   }
 
-  triggerInputChanged(feature: IPluginFeature, query: TuffQuery | undefined): void {
+  async triggerInputChanged(feature: IPluginFeature, query: TuffQuery | undefined): Promise<void> {
     this._runtimeStats.requestCount += 1
     this._runtimeStats.lastActiveAt = Date.now()
     this.markActive()
 
     try {
-      this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
+      const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
+      if (isPromiseLike(result)) {
+        await result
+      }
     } catch (error) {
       this.handleRuntimeError('onFeatureTriggered', error)
     }
@@ -738,6 +849,7 @@ export class TouchPlugin implements ITouchPlugin {
    */
   private handleRuntimeError(source: string, error: unknown): void {
     const err = error instanceof Error ? error : new Error(String(error))
+    const errorCode = getRuntimeErrorCode(error) ?? 'RUNTIME_ERROR'
 
     this.logger.error(`[Runtime] ${source} failed: ${err.message}`, err)
 
@@ -745,8 +857,8 @@ export class TouchPlugin implements ITouchPlugin {
       type: 'error',
       message: `Runtime error in ${source}: ${err.message}`,
       source: `runtime:${source}`,
-      code: 'RUNTIME_ERROR',
-      meta: { error: err.stack },
+      code: errorCode,
+      meta: { error: err.stack, code: errorCode },
       timestamp: Date.now()
     })
 
@@ -961,7 +1073,10 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.lastActiveAt = now
 
     try {
-      this.pluginLifecycle?.onInit?.()
+      const initResult = this.pluginLifecycle?.onInit?.()
+      if (isPromiseLike(initResult)) {
+        Promise.resolve(initResult).catch((error) => this.handleRuntimeError('onInit', error))
+      }
     } catch (error) {
       this.handleRuntimeError('onInit', error)
     }
@@ -1362,7 +1477,9 @@ export class TouchPlugin implements ITouchPlugin {
 
     const http = createPluginHttpClient()
     const storage = this.createPluginStorageAPI(pluginName)
-    const clipboardUtil = createClipboardManager(clipboard)
+    const clipboardUtil = createClipboardManager(createSafePluginClipboardApi())
+    const dialogUtil = createSafePluginDialogApi()
+    const openUrl = createSafePluginOpenUrl(pluginName, this.logger)
 
     const onTransport = (
       eventName: string,
@@ -1747,10 +1864,10 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     return {
-      dialog,
+      dialog: dialogUtil,
       logger: this.logger,
       $event: this.getFeatureEventUtil(),
-      openUrl: (url: string) => shell.openExternal(url),
+      openUrl,
       http,
       storage,
       clipboard: clipboardUtil,

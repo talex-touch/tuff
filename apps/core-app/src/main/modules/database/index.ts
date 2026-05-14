@@ -20,6 +20,7 @@ import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DB_AUX_ENABLED } from '../../db/runtime-flags'
 import { getSqliteBusyRetryCount } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
+import { fileProvider } from '../box-tool/addon/files/file-provider'
 
 const dbLog = getLogger('database')
 const AUX_MIGRATION_MARKER_KEY = 'db.aux.migration.v1.complete'
@@ -30,6 +31,8 @@ const DB_WAL_PASSIVE_INTERVAL_MS = 5 * 60 * 1000
 const DB_WAL_TRUNCATE_INTERVAL_MS = 30 * 60 * 1000
 const DB_HEALTH_REPORT_INTERVAL_MS = 10 * 60 * 1000
 const DB_WAL_TRUNCATE_MAX_QUEUED_WRITES = 2
+const DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS = 5_000
+const DB_WAL_CHECKPOINT_SKIPPED_BUSY = 'DB_WAL_CHECKPOINT_SKIPPED_BUSY'
 const WAL_WARN_THRESHOLD_BYTES = 512 * 1024 * 1024
 const AUX_COPY_TABLES = [
   'analytics_snapshots',
@@ -239,29 +242,117 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
+  private getDbSchedulerBusyReason():
+    | {
+        reason: 'db-write-scheduler'
+        queued: number
+        processing: boolean
+        currentTaskLabel?: string
+      }
+    | null {
+    const stats = dbWriteScheduler.getStats()
+    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, stats.queued)
+    if (stats.queued > 0 || stats.processing) {
+      return {
+        reason: 'db-write-scheduler',
+        queued: stats.queued,
+        processing: stats.processing,
+        currentTaskLabel: stats.currentTaskLabel ?? undefined
+      }
+    }
+    return null
+  }
+
+  private getSearchIndexWorkerBusyReason():
+    | { reason: 'search-index-worker'; queued: number; processing: boolean }
+    | null {
+    try {
+      if (fileProvider.isSearchIndexWorkerBusy()) {
+        return {
+          reason: 'search-index-worker',
+          queued: 0,
+          processing: true
+        }
+      }
+    } catch {
+      return null
+    }
+    return null
+  }
+
+  private getWalCheckpointBusyReason():
+    | {
+        reason: 'db-write-scheduler' | 'search-index-worker'
+        queued: number
+        processing: boolean
+        currentTaskLabel?: string
+      }
+    | null {
+    return this.getDbSchedulerBusyReason() ?? this.getSearchIndexWorkerBusyReason()
+  }
+
+  private logWalCheckpointSkippedBusy(
+    mode: 'PASSIVE' | 'TRUNCATE',
+    busy: NonNullable<ReturnType<DatabaseModule['getWalCheckpointBusyReason']>>
+  ): void {
+    dbLog.info(DB_WAL_CHECKPOINT_SKIPPED_BUSY, {
+      meta: {
+        mode,
+        reason: busy.reason,
+        busyQueueDepth: busy.queued,
+        busyProcessing: busy.processing,
+        currentTaskLabel: busy.currentTaskLabel
+      }
+    })
+  }
+
   private async runWalCheckpoint(mode: 'PASSIVE' | 'TRUNCATE'): Promise<void> {
     if (!this.client) return
 
-    const queueDepth = dbWriteScheduler.getStats().queued
-    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
+    const busyBeforeSchedule = this.getWalCheckpointBusyReason()
+    if (busyBeforeSchedule) {
+      this.logWalCheckpointSkippedBusy(mode, busyBeforeSchedule)
+      return
+    }
 
     try {
-      const result = await this.client.execute(`PRAGMA wal_checkpoint(${mode})`)
-      const parsed = this.parseCheckpointRow(result.rows?.[0])
-      const walSize = await this.getWalSizeBytes()
-      this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
+      await dbWriteScheduler.schedule(
+        `database.wal-checkpoint.${mode.toLowerCase()}`,
+        async () => {
+          const busyBeforeExecute = this.getSearchIndexWorkerBusyReason()
+          if (busyBeforeExecute) {
+            this.logWalCheckpointSkippedBusy(mode, busyBeforeExecute)
+            return
+          }
 
-      dbLog.info(`WAL checkpoint ${mode} complete`, {
-        meta: {
-          busy: parsed.busy,
-          logFrames: parsed.log,
-          checkpointedFrames: parsed.checkpointed,
-          walSizeBytes: walSize,
-          walPeakBytes: this.walPeakBytes,
-          schedulerQueueDepth: queueDepth,
-          schedulerQueuePeak: this.schedulerQueuePeak
+          const checkpointStart = Date.now()
+          dbLog.debug('DB_WAL_CHECKPOINT_START', {
+            meta: { mode }
+          })
+          const result = await this.client!.execute(`PRAGMA wal_checkpoint(${mode})`)
+          const parsed = this.parseCheckpointRow(result.rows?.[0])
+          const walSize = await this.getWalSizeBytes()
+          this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
+
+          dbLog.info(`WAL checkpoint ${mode} complete`, {
+            meta: {
+              mode,
+              busy: parsed.busy,
+              logFrames: parsed.log,
+              checkpointedFrames: parsed.checkpointed,
+              walSizeBytes: walSize,
+              walPeakBytes: this.walPeakBytes,
+              durationMs: Date.now() - checkpointStart,
+              schedulerQueuePeak: this.schedulerQueuePeak
+            }
+          })
+        },
+        {
+          priority: 'best_effort',
+          dropPolicy: 'drop',
+          maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
         }
-      })
+      )
     } catch (error) {
       dbLog.warn(`WAL checkpoint ${mode} failed`, { error })
     }

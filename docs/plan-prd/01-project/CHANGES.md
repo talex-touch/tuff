@@ -3,6 +3,23 @@
 > 更新时间: 2026-05-12
 > 说明: 主文件仅保留近 30 天（2026-04-12 ~ 2026-05-12）详细记录；更早历史已按月归档。
 
+## 2026-05-14
+
+### fix(core-app): contain prod feature native crash paths
+
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-require.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/system/active-app.ts`
+- `apps/core-app/src/main/modules/database/index.ts`
+- `packages/utils/plugin/sdk/system.ts`
+- `packages/utils/transport/events/types/app.ts`
+  - Plugin runtime now denies direct `electron`, `.node`, `@libsql/*`, `@crosscopy/clipboard`, and `extract-file-icon` imports with `PLUGIN_RUNTIME_DENIED_MODULE`, keeping failures scoped to the plugin/feature.
+  - Plugin `dialog`, `openUrl`, and `clipboard` globals remain compatible but now go through narrow main-process wrappers instead of exposing raw Electron objects.
+  - `system.getActiveApp` adds `includeIcon`; plugin transport and main channel default it to `false`, so `app.getFileIcon` only runs for explicit icon requests.
+  - WAL checkpoint now runs through DB maintenance scheduling and skips when the DB write queue or search-index worker is busy, logging `DB_WAL_CHECKPOINT_SKIPPED_BUSY`.
+  - Feature execution, widget registration, plugin lifecycle, and WAL checkpoint paths emit lightweight breadcrumbs without query text, clipboard text, or full file paths.
+
 ## 2026-05-12
 
 ### fix(core-app): skip unresolved optional packaged runtime modules

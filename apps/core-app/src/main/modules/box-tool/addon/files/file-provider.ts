@@ -3362,6 +3362,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
+  public isSearchIndexWorkerBusy(): boolean {
+    return (
+      this.pendingIndexWorkerResults.size > 0 ||
+      this.inflightIndexWorkerResults.size > 0 ||
+      this.searchIndexWorker.hasPendingWork()
+    )
+  }
+
   private scheduleSemanticEnrichment(normalizedQuery: string, candidateCount: number): void {
     const shouldRunSemantic =
       Boolean(this.embeddingService) &&

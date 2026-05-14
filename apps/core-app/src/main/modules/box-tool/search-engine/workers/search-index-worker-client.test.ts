@@ -194,4 +194,23 @@ describe('SearchIndexWorkerClient init gate', () => {
     await vi.advanceTimersByTimeAsync(300)
     expect(worker.terminateCalls).toBe(1)
   })
+
+  it('reports pending work while a worker task is in flight', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const removePromise = client.removeItems(['file:/tmp/demo.txt'])
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    expect(client.hasPendingWork()).toBe(true)
+
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[1]) })
+    await removePromise
+
+    expect(client.hasPendingWork()).toBe(false)
+  })
 })
