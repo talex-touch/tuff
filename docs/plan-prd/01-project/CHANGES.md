@@ -5,6 +5,90 @@
 
 ## 2026-05-14
 
+### docs(plan): index 04-implementation draft status
+
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/TODO.md`
+  - 新增 `04-implementation` 目录级状态索引，逐项清点 17 个实施文档，并标注 `当前参考 / 历史参考 / 待重写 / Runbook / 参考资料` 有效边界。
+  - 将 `04-implementation` Draft 清点子项关闭；第二批历史文档头标与主入口链接抽样仍保留未完成，文档治理总项不整体关闭。
+  - 验证：文档改动，无运行时代码变更；`git diff --check` 待本轮复核。
+
+### feat(store): polish plugin marketplace cards and install feedback
+
+- `apps/core-app/src/renderer/src/components/store/StoreItemCard.vue`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/core-app/src/renderer/src/components/store/StoreInstallButton.vue`
+- `apps/core-app/src/renderer/src/modules/install/install-manager.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts`
+  - 插件市场卡片增加边框、灰底层次、放大图标、两行简介与 hover Popover 全量介绍；底部统一展示下载量、收藏、作者、版本与安装按钮。
+  - 市场顶部补充搜索 icon、类别下拉筛选与安装状态筛选；安装进度按钮补齐圆环进度表现。
+  - 插件安装完成/失败在窗口不可见或未聚焦时通过 Notification SDK 发送系统通知；Nexus provider 继续走 `/api/store/plugins/:slug/download.tpex` 统计入口。
+  - 已验证：插件市场相关 ESLint 与 `pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false --pretty false` 通过。
+
+### docs(plan): add TLDR layered entrances for governance docs
+
+- `docs/plan-prd/03-features/SEARCH-REFACTOR-PRD.md`
+- `docs/plan-prd/04-implementation/TuffTransportMigration260111.md`
+- `docs/plan-prd/03-features/division-box-prd.md`
+- `docs/plan-prd/TODO.md`
+  - 为 Search、Transport、DivisionBox 三份历史主文档补齐状态头标、TL;DR、当前边界与追溯入口，避免旧方案被误读为当前执行 gate。
+  - 复核 Telemetry 主文档已是压缩版 TL;DR 入口；四个专题的分层模板子项已关闭，第二批历史文档头标、`04-implementation` Draft 清点与链接抽样仍保留未完成。
+  - 验证：文档改动，无运行时代码变更；`git diff --check` 通过。
+
+### perf(core-app): tighten CoreBox search and layout motion
+
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/components/render/BoxGrid.vue`
+- `apps/core-app/src/renderer/src/components/render/CoreBoxFooter.vue`
+  - CoreBox 搜索输入 debounce 从 80ms 降到 30ms，插件/DivisionBox input change 广播独立降到 25ms，减少输入到结果更新的等待感。
+  - 结果高度 settled 二次布局从 220ms 缩短到 100ms，降低窗口高度补动的滞后感。
+  - 移除 Grid item 默认 600ms stagger/blur/scale 入场动画，缩短结果切换、新列表项、Footer 与预览压缩宽度过渡，保持搜索交互更干脆。
+
+### fix(core-app): keep app update prompts out of CoreBox
+
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdateRuntime.test.ts`
+- `apps/core-app/src/renderer/src/components/base/AppUpgradationView.vue`
+- `apps/core-app/src/renderer/src/components/download/UpdatePromptDialog.vue`
+  - App update availability remains a main-window concern: CoreBox / DivisionBox no longer inherit the root `has-update` class, so the small search entry will not show the titlebar update indicator.
+  - `useUpdateRuntime` now guards update listener registration, manual checks, and update dialog presentation behind the main-window role, preventing broadcast update events from opening prompts in lightweight renderer entries.
+  - Update dialogs continue to use i18n keys, and their published date formatting now follows the active i18n locale instead of the host default locale; the older download update dialog title no longer mixes decorative emoji into localized text.
+  - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/hooks/useUpdateRuntime.test.ts"`、`pnpm -C "apps/core-app" run typecheck:web`。
+
+### fix(cli): precompile all packaged plugin widgets
+
+- `packages/tuff-cli-core/src/exporter.ts`
+- `packages/tuff-cli-core/src/__tests__/builder-widgets.test.ts`
+  - `tuff builder` 打包阶段不再只预编译 manifest 中声明且非 experimental 的 widget feature，而是以 `widgets/` 目录下全部支持的 widget 源文件（`.vue/.ts/.js/.cjs/.tsx/.jsx`）为输入源生成 `widgets/.compiled/*.cjs` 与 meta。
+  - Manifest 已声明的 widget 继续保留原 featureId/widgetId，未声明的 widget 使用 `widget.<relative-path>` 派生 featureId，避免影响运行时按 feature 加载的稳定路径。
+  - 补充回归测试覆盖 experimental widget 仍会随目录全量预编译，以及未声明 Vue/TS widget 文件也会写入 `manifest.build.widgets`。
+
+### refactor(tuffex): split FlipOverlay body scroll lock
+
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-body-scroll-lock.ts`
+- `docs/plan-prd/TODO.md`
+  - 将 `TxFlipOverlay.vue` 内的 body scroll lock 计数、overflow/padding 备份与恢复逻辑迁出到独立 helper，组件主体只保留可见状态 watcher 与生命周期调用。
+  - Public props、emits、slot props、DOM class 与 stack 行为不变；现有 body lock、多实例计数和 stack 回归继续由 `flip-overlay.test.ts` 覆盖。
+  - 已验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/flip-overlay/src/TxFlipOverlay.vue" "packages/components/src/flip-overlay/src/flip-overlay-stack.ts" "packages/components/src/flip-overlay/src/flip-overlay-body-scroll-lock.ts" "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"` 通过。
+
+### docs(nexus): close intelligence provider dot-route hard-cut drift
+
+- `docs/plan-prd/TODO.md`
+  - 复核 `apps/nexus/server/api/dashboard/intelligence/providers/**` 后，确认旧 `:id.probe` / `:id.test` dot-route shell 与 `intelligence-route-compat` middleware 已删除，只保留当前 slash-route provider probe/test 与 migration 主路径。
+  - 将顶部“可优先提交”清单里的 Nexus Intelligence provider dot-route hard-cut 项同步标记为完成，避免与后段已完成记录互相矛盾。
+  - 已验证：`pnpm -C "apps/nexus" exec vitest run "server/api/dashboard/intelligence/providers/migrate.api.test.ts"` 通过；`pnpm -C "apps/nexus" exec eslint --cache --no-warn-ignored "server/api/dashboard/intelligence/providers/migrate.post.ts" "server/api/dashboard/intelligence/providers/migrate.api.test.ts" "server/api/dashboard/intelligence/providers/[id]/probe.post.ts" "server/api/dashboard/intelligence/providers/[id]/test.post.ts"` 通过。
+
+### docs(core-app): close plugin sdk hard-cut checklist
+
+- `docs/plan-prd/TODO.md`
+  - 复核 `apps/core-app/src/main/modules/plugin/sdkapi-hard-cut-gate.ts`、plugin loader / installer / preflight 与 `packages/utils` plugin channel 表面，确认缺失、非法、低于 floor 或未支持的 `sdkapi` 统一以 `SDKAPI_BLOCKED` 阻断。
+  - 复核 `packages/utils/__tests__/plugin-channel-send-sync-hard-cut.test.ts` 与 `plugins/clipboard-history/scripts/assert-no-raw-channels.mjs`，确认 plugin channel `sendSync` 仍是 removed error，renderer SDK 类型面不再暴露 `sendSync`，clipboard-history 构建产物与 CoreApp 内置副本不含已禁止 raw clipboard/system channel 字符串。
+  - 已验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/plugin-preflight-helper.test.ts" "src/main/modules/plugin/plugin-installer.test.ts" "src/main/modules/plugin/install-queue.test.ts"` 通过；`pnpm -C "packages/utils" exec vitest run "__tests__/plugin-channel-send-sync-hard-cut.test.ts"` 通过；`node "plugins/clipboard-history/scripts/assert-no-raw-channels.mjs"` 通过；CoreApp plugin 相关 ESLint 与 packages/utils plugin channel ESLint 均通过。
+
 ### perf(core-app): cache plugin store page state across tabs
 
 - `apps/core-app/src/renderer/src/composables/store/useStoreData.ts`
@@ -15,6 +99,21 @@
 ### perf(core-app): move plugin store hydration behind renderer mount
 
 - `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/ai/agents/agent-channels.ts`
+- `apps/core-app/src/main/modules/ai/agents/agent-channels.test.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard.transport.test.ts`
+- `apps/core-app/src/main/modules/database/index.ts`
+- `apps/core-app/src/main/modules/database/index.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider-startup.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
+- `apps/nexus/app/utils/request.ts`
+- `packages/utils/transport/events/types/file-index.ts`
 - `apps/core-app/src/main/modules/extension-loader.ts`
 - `apps/core-app/src/main/modules/sentry/sentry-service.ts`
 - `apps/core-app/src/main/modules/sentry/sentry-service.test.ts`
@@ -22,10 +121,21 @@
 - `docs/plan-prd/TODO.md`
   - Renderer bootstrap 不再在首屏 mount 前 `await pluginStore.initialize()`，避免 `pluginSDK.list()` 与插件 install source 查询阻塞 root container mount。
   - `app.mount('#app')` 完成后通过后台任务初始化 plugin store，保留 CoreBox / Assistant window 跳过逻辑，并记录 renderer shell mount 前耗时与 plugin store 后台初始化耗时。
+  - Clipboard monitoring 启动仍立即注册 polling fallback，但 native clipboard watcher 的可选动态 import/start 改为等待 `appTaskGate.waitForIdle()` 后执行，避免可选 native watcher 初始化挤入启动忙时窗口。
+  - `DatabaseModule.onInit()` 保留 primary DB 与主迁移同步完成，aux DB 初始化/热表迁移、WAL maintenance 注册与启动 health snapshot 移到后台任务；`getAuxDb()` 在 aux 未 ready 时继续 fallback primary DB。
+  - `docs/plan-prd/TODO.md` 已关闭 CoreApp 启动异步化 P2 命名范围；更细的真机启动耗时与 WAL/health 长尾证据留到后续平台补证。
+  - `EverythingProvider.onLoad()` 改为 handler-first：只加载设置并注册 status/toggle/test handlers，SDK/CLI backend detection 延后到后台 idle refresh，搜索侧继续沿用 existing ready/fallback notice。
+  - `FileProvider.onLoad()` 改为 handler-first：search-index worker init、后台索引任务服务与 filesystem watcher 注册延后到后台 startup task；File index status 新增可选 `startupReady/startupPending/startupError`，worker init 失败时保持 degraded 而不是标记假 ready。
+  - SearchCore 在 Windows 文件搜索命中 FileProvider 且 startup 未 ready/degraded 时追加低分 notification，明确当前文件结果为 partial，同时保留已有索引与 Windows shell 候选，避免启动期静默空白或误导为完整结果。
+  - `docs/plan-prd/TODO.md` 已关闭 CoreApp 启动异步化 P3 命名范围；真实设备启动耗时、trace 与 UI 观感补证并入 Windows 真机 release evidence / 搜索性能验收。
+  - 复核工作区本地噪声清单：`mise.toml` tracked 且无 diff，`apps/core-app/.playwright-mcp/` 与 `paseo.json` 均由 `.gitignore` 忽略，当前不会混入证据或提交批次。
+  - 发版前最小复核首轮运行 `pnpm quality:release`，先修复 Nexus `app/utils/request.ts` 的 `ts/consistent-type-definitions` lint error，保留 `RequestErrorLike | null` 类型语义不变；复跑后仍在 CoreApp lint gate 阻塞，主要为既有 `$app` global restricted syntax、renderer `console` 与 raw IPC guard errors，尚未进入 typecheck/test/build 阶段。`git diff --check` 返回 0。
   - `ExtensionLoaderModule` 不再在 `onInit()` 中同步读目录并串行 `await session.defaultSession.loadExtension()`；初始化阶段只枚举扩展，`start()` 后台加载，destroy 会等待后台任务后卸载已加载扩展。
+  - `IntelligenceModule` 不再在 `onInit()` 中等待 agent/workflow runtime；provider、capability 与 IPC handler 先完成注册，agent/workflow runtime 后台初始化，执行 `agent.run` / `workflow.execute`、workflow run 与 agent IPC 执行类 handler 时再等待 runtime ready。
   - `SentryServiceModule` 的 telemetry upload stats hydrate 不再阻塞 `onInit()`；启动后后台读取历史统计，shutdown flush 前等待已启动 hydrate，并在合并时保留启动期新增计数与更新的 failure/upload 时间，避免后台旧记录覆盖内存新统计。
   - `UpdateServiceModule` 的 release cache hydrate 不再阻塞 `onInit()`；启动后后台读取缓存，检查更新前与 destroy 写缓存前等待已启动 hydrate，避免空缓存误触发网络请求或旧缓存覆盖新缓存。
-  - 已验证：`pnpm -C "apps/core-app" run typecheck:web` 返回 0；命令输出中仍包含 tuffex build 阶段既有 `TouchScroll` dts 诊断与 deprecation 噪声，但未阻断 typecheck。`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node` 返回 0。
+  - `docs/plan-prd/TODO.md` 已关闭 CoreApp 启动异步化 P1 命名范围；Database critical/background 拆分与 Search provider 后台 ready 继续由 P2/P3 承接。
+  - 已验证：`pnpm -C "apps/core-app" run typecheck:web` 返回 0；命令输出中仍包含 tuffex build 阶段既有 `TouchScroll` dts 诊断与 deprecation 噪声，但未阻断 typecheck。`pnpm -C "apps/core-app" exec vitest run "src/main/modules/sentry/sentry-service.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/ai/agents/agent-channels.test.ts" "src/main/modules/ai/intelligence-sdk.test.ts" "src/main/modules/ai/intelligence-workflow-service.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/clipboard.transport.test.ts" "src/main/modules/clipboard/clipboard-native-watcher.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/database/index.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts" "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"` 与 `pnpm -C "apps/core-app" run typecheck:node` 返回 0。
 
 ### fix(plugin): expose shell capability diagnostics for command plugins
 
