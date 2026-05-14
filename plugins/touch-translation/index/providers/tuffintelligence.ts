@@ -20,6 +20,7 @@ export class TuffIntelligenceProvider implements TranslationProvider {
         service: this.id,
         provider: response.provider,
         model: response.model,
+        traceId: response.traceId,
       }
     }
     catch (error) {

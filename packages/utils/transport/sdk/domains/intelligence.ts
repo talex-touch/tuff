@@ -4,6 +4,8 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceApprovalTicket,
@@ -246,6 +248,7 @@ export interface IntelligenceSdk {
     payload: unknown,
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
+  ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
   chatLangChain: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
   testCapability: (params: Record<string, unknown>) => Promise<unknown>
@@ -325,6 +328,10 @@ export const intelligenceApiEvents = {
     payload: unknown
     options?: IntelligenceInvokeOptions
   }, IntelligenceApiResponse<IntelligenceInvokeResult<unknown>>>(),
+  ttsSpeak: defineEvent('intelligence')
+    .module('api')
+    .event('tts-speak')
+    .define<IntelligenceTtsSpeakPayload, IntelligenceApiResponse<IntelligenceTtsSpeakResult>>(),
   chatLangChain: defineEvent('intelligence')
     .module('api')
     .event('chat-langchain')
@@ -578,6 +585,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     ) {
       const response = await transport.send(intelligenceApiEvents.invoke, { capabilityId, payload, options })
       return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
+    },
+
+    async ttsSpeak(payload) {
+      const response = await transport.send(intelligenceApiEvents.ttsSpeak, payload)
+      return assertApiResponse(response, 'Intelligence TTS speak failed')
     },
 
     async chatLangChain(payload) {

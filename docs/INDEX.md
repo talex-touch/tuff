@@ -19,7 +19,7 @@
 - 当前主线：`2.4.10` Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 当前阻塞：Windows 真机 evidence、search trace `200` 样本、clipboard stress `120000ms`、Windows final acceptance gate、Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。
-- 质量现状：`file-provider.ts` 0 字节导致 CoreApp `typecheck:node` 失败，`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
+- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 0 字节导致 CoreApp `typecheck:node` 失败，`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 
 ## 高价值专题入口
 

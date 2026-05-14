@@ -29,6 +29,7 @@ interface ProviderState {
   to?: string
   provider?: string
   model?: string
+  traceId?: string
   phonetic?: string
   transliteration?: string
   pronunciations?: Array<{
@@ -393,8 +394,8 @@ async function startTranslationRequest(
     nextSeq,
   )
 
-  const ok = await ensureNetworkPermission()
-  if (!ok) {
+  const usesNetworkProviders = providersToShow.some(providerId => providerId !== 'tuffintelligence')
+  if (usesNetworkProviders && !(await ensureNetworkPermission())) {
     state.error = PERMISSION_DENIED_MESSAGE
     upsertWidgetItem(featureId)
     return
@@ -451,6 +452,7 @@ async function startTranslationRequest(
           to: result.to || targetLang,
           provider: result.provider,
           model: result.model,
+          traceId: result.traceId,
           phonetic: result.phonetic,
           transliteration: result.transliteration,
           pronunciations: result.pronunciations,

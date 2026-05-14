@@ -35,7 +35,8 @@
 
 - Assistant 悬浮球与语音唤醒。
 - 多 Agent 长任务面板。
-- `image.generate`、`image.edit`、`audio.tts`、`audio.stt`、`audio.transcribe`、`video.generate`。
+- `image.generate`、`image.edit`、`audio.stt`、`audio.transcribe`、`video.generate`。
+- `audio.tts` 已作为翻译结果朗读 Beta 能力接入 typed `ttsSpeak`，不作为 Stable 承诺。
 - Nexus Scene runtime 全量 orchestration。
 
 ## 4. 非目标
@@ -59,7 +60,8 @@
 - CoreBox AI Ask 最小 Stable 切片已接入 `text.chat` 与 `vision.ocr -> text.chat`。
 - 登录态 Nexus AI invoke 薄接口已进入实现切片。
 - OmniPanel Writing Tools MVP 已接入翻译/摘要/改写/解释/Review、结果预览、Desktop Context Capsule、copy/retry/replace clipboard 二次确认。
-- 后续重点：Workflow `Use Model` 节点、完整 Review Queue、3 个 P0 Workflow 模板。
+- 翻译插件已接入 Intelligence-first 翻译与 typed `ttsSpeak` / `audio.tts` Beta 朗读入口，使用进程内短期缓存，不接触 provider secret。
+- 后续重点：Workflow `Use Model` 节点、完整 Review Queue、3 个 P0 Workflow 模板与 TTS 队列/播放服务评估。
 
 ## 7. 验收清单
 

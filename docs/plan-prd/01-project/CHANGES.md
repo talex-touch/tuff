@@ -13,6 +13,27 @@
 
 ## 2026-05-14
 
+### ci(quality): scope PR lint to changed files
+
+- `package.json`
+- `scripts/run-eslint-changed.mjs`
+- `.github/workflows/ci.yml`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `quality:pr` 的 lint 阶段从全仓 `pnpm lint` 调整为 `pnpm lint:changed`，PR CI 中按 base 分支三点 diff 仅 lint PR 修改过的 JS/TS/Vue 文件。
+  - PR Quality checkout 改为 `fetch-depth: 0`，避免 shallow checkout 下 changed-file lint 找不到 merge base。
+  - `quality:release` 仍保留全仓 lint，不降低正式 release gate。
+
+### feat(ai): add translation TTS beta path
+
+- `apps/core-app/src/main/modules/ai/intelligence-tts-service.ts`
+- `packages/utils/plugin/sdk/intelligence.ts`
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
+  - `audio.tts` 进入 2.5.0 Beta 调用链，新增 typed `ttsSpeak` API，统一封装 TTS invoke、data URL 归一与进程内短期缓存。
+  - `touch-translation` 翻译结果新增朗读入口，通过 Intelligence SDK 调用 TTS，保留 trace metadata，插件侧不接触 provider secret。
+  - Stable 范围仍只承诺文本 + OCR，TTS 不升级为 2.5.0 Stable blocker。
+
 ### docs: refresh compatibility and placeholder follow-up
 
 - `docs/plan-prd/report/cross-platform-compat-placeholder-followup-2026-05-14.md`

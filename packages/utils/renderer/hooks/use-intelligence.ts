@@ -45,6 +45,8 @@ import type {
   IntelligenceSentimentAnalyzeResult,
   IntelligenceSummarizePayload,
   IntelligenceTranslatePayload,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult,
 } from '../../types/intelligence'
@@ -136,6 +138,11 @@ interface IntelligenceComposable {
     caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>
     analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
     generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
+  }
+
+  // Audio methods
+  audio: {
+    ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
   }
 
   // RAG methods
@@ -310,6 +317,11 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
 
       generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
         invokeCapability<IntelligenceImageGenerateResult>('image.generate', payload, options),
+    },
+
+    audio: {
+      ttsSpeak: (payload: IntelligenceTtsSpeakPayload) =>
+        withLoadingState(() => intelligenceSdk.ttsSpeak(payload)),
     },
 
     rag: {

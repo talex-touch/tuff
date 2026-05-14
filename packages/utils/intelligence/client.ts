@@ -2,6 +2,8 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceProviderConfig,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
 } from '../types/intelligence'
 import type { ITuffTransport } from '../transport/types'
 import {
@@ -101,4 +103,6 @@ export type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceProviderConfig,
+  IntelligenceTtsSpeakPayload,
+  IntelligenceTtsSpeakResult,
 }

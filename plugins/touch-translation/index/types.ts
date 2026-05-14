@@ -17,6 +17,7 @@ export interface TranslationResult {
   service: string
   provider?: string
   model?: string
+  traceId?: string
   phonetic?: string
   transliteration?: string
   pronunciations?: TranslationPronunciation[]

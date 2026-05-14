@@ -56,6 +56,7 @@ import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
+import { intelligenceTtsService } from './intelligence-tts-service'
 import type { CapabilityTestPayload } from './capability-testers/base-tester'
 
 const intelligenceLog = createLogger('Intelligence')
@@ -483,6 +484,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     }
     await intelligenceMcpRegistry.closeAll()
     await agentManager.shutdown()
+    intelligenceTtsService.clear()
     this.manager?.clear()
     this.manager = null
   }
@@ -1012,6 +1014,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
         return result
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceApiEvents.ttsSpeak,
+      'TTS speak',
+      'intelligence.basic',
+      async (data) => {
+        ensureIntelligenceConfigLoaded()
+        return await intelligenceTtsService.speak(data)
       }
     )
 
