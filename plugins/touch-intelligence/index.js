@@ -11,6 +11,8 @@ const MAX_DRAFTS = 20
 const MAX_OCR_CONTEXT_CHARS = 4000
 const CALLER_ID = `plugin:${PLUGIN_NAME}`
 const ENTRY_ID = 'corebox.ai-ask'
+const HANDOFF_SOURCE = 'corebox.touch-intelligence'
+const HANDOFF_SESSION_PREFIX = 'corebox_ai_ask'
 const INPUT_TYPE_TEXT = 'text'
 const INPUT_TYPE_IMAGE = 'image'
 
@@ -70,6 +72,21 @@ function resolveFeatureId(featureId) {
   return normalizeText(featureId) || DEFAULT_FEATURE_ID
 }
 
+function toSessionIdPart(value) {
+  return normalizeText(value).replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '')
+}
+
+function buildHandoffSessionId(featureId) {
+  const resolvedFeatureId = resolveFeatureId(featureId)
+  const slug = toSessionIdPart(resolvedFeatureId) || DEFAULT_FEATURE_ID
+  const digest = crypto
+    .createHash('sha256')
+    .update(resolvedFeatureId)
+    .digest('hex')
+    .slice(0, 8)
+  return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`
+}
+
 function normalizeHistory(messages) {
   if (!Array.isArray(messages))
     return []
@@ -114,11 +131,98 @@ function getSession(featureId) {
       history: [],
       activeRequestId: '',
       uiRequestId: '',
+      handoffSessionId: buildHandoffSessionId(resolvedFeatureId),
       drafts: new Map(),
     })
   }
 
   return conversationSessions.get(resolvedFeatureId)
+}
+
+function buildHandoffContext({ featureId, prompt, history, answer, requestId, inputKinds = [] }) {
+  const messages = keepNewestBusinessMessages([
+    ...cloneHistory(history),
+    ...(answer
+      ? [
+          { role: 'user', content: normalizeText(prompt) },
+          { role: 'assistant', content: normalizeText(answer) },
+        ]
+      : []),
+  ])
+  const conversation = messages.length > 0
+    ? {
+        conversation: {
+          messages,
+          updatedAt: Date.now(),
+        },
+      }
+    : {}
+
+  return {
+    source: HANDOFF_SOURCE,
+    featureId: resolveFeatureId(featureId),
+    entry: ENTRY_ID,
+    requestId,
+    inputKinds: Array.from(new Set(inputKinds.filter(Boolean))),
+    lastPrompt: normalizeText(prompt),
+    ...(answer ? { lastAnswer: normalizeText(answer) } : {}),
+    ...conversation,
+  }
+}
+
+async function ensureHandoffSession(client, session, params) {
+  const handoffSessionId = normalizeText(session.handoffSessionId)
+    || buildHandoffSessionId(params.featureId)
+  session.handoffSessionId = handoffSessionId
+
+  if (!client?.agentSessionStart)
+    return handoffSessionId
+
+  try {
+    const handoff = await client.agentSessionStart({
+      sessionId: handoffSessionId,
+      objective: params.prompt,
+      context: buildHandoffContext(params),
+      metadata: {
+        caller: CALLER_ID,
+        entry: ENTRY_ID,
+        featureId: resolveFeatureId(params.featureId),
+        source: HANDOFF_SOURCE,
+      },
+    })
+    const restoredMessages = normalizeHistory(handoff?.context?.conversation?.messages)
+    if (restoredMessages.length > session.history.length) {
+      session.history = keepNewestBusinessMessages(restoredMessages)
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] handoff session unavailable', error)
+  }
+
+  return handoffSessionId
+}
+
+async function updateHandoffSession(client, session, params) {
+  if (!client?.agentSessionStart || !session.handoffSessionId)
+    return
+
+  try {
+    await client.agentSessionStart({
+      sessionId: session.handoffSessionId,
+      objective: params.prompt,
+      context: buildHandoffContext(params),
+      metadata: {
+        caller: CALLER_ID,
+        entry: ENTRY_ID,
+        featureId: resolveFeatureId(params.featureId),
+        source: HANDOFF_SOURCE,
+        lastRequestId: params.requestId,
+      },
+    })
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to update handoff session', error)
+  }
 }
 
 function truncateForContext(value, max = MAX_OCR_CONTEXT_CHARS) {
@@ -162,7 +266,7 @@ function buildOcrPayload(imageDataUrl) {
   }
 }
 
-function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [] }) {
+function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [], sessionId }) {
   return {
     metadata: {
       caller: CALLER_ID,
@@ -171,17 +275,25 @@ function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [
       requestId,
       inputKinds: Array.from(new Set(inputKinds.filter(Boolean))),
       capabilityId,
+      ...(sessionId
+        ? {
+            sessionId,
+            handoffSessionId: sessionId,
+            handoffSource: HANDOFF_SOURCE,
+          }
+        : {}),
     },
   }
 }
 
-function mapInvokeResult(result, prompt, requestId) {
+function mapInvokeResult(result, prompt, requestId, handoffSessionId = '') {
   return {
     requestId,
     prompt,
     answer: normalizeText(result?.result),
     provider: normalizeText(result?.provider),
     model: normalizeText(result?.model),
+    handoffSessionId: normalizeText(handoffSessionId),
   }
 }
 
@@ -259,7 +371,16 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
-function buildInfoItem({ id, featureId, title, subtitle, payload, actionId, status }) {
+function buildInfoItem({
+  id,
+  featureId,
+  title,
+  subtitle,
+  payload,
+  actionId,
+  status,
+  handoffSessionId,
+}) {
   const builder = new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -270,6 +391,14 @@ function buildInfoItem({ id, featureId, title, subtitle, payload, actionId, stat
     pluginName: PLUGIN_NAME,
     featureId,
     status,
+  }
+
+  if (handoffSessionId) {
+    meta.intelligence = {
+      handoffSessionId,
+      sessionId: handoffSessionId,
+      source: HANDOFF_SOURCE,
+    }
   }
 
   if (actionId) {
@@ -320,7 +449,7 @@ function buildSendItem(featureId, draft) {
   })
 }
 
-function buildPendingItem(featureId, prompt, requestId, stage = 'chat') {
+function buildPendingItem(featureId, prompt, requestId, stage = 'chat', handoffSessionId = '') {
   const isOcr = stage === 'ocr'
   return buildInfoItem({
     id: `${featureId}-${isOcr ? 'ocr-pending' : 'chat-pending'}-${requestId}`,
@@ -328,12 +457,16 @@ function buildPendingItem(featureId, prompt, requestId, stage = 'chat') {
     title: prompt,
     subtitle: isOcr ? '正在识别剪贴板图片…' : 'AI 正在思考…',
     status: isOcr ? 'ocr-pending' : 'chat-pending',
+    handoffSessionId,
   })
 }
 
 function buildReadyItem(featureId, state) {
   const modelInfo = [state.provider, state.model].filter(Boolean).join(' / ')
-  const subtitle = [truncateText(state.answer, 72), modelInfo].filter(Boolean).join(' · ')
+  const handoffText = state.handoffSessionId ? '已接入交接会话' : ''
+  const subtitle = [truncateText(state.answer, 72), modelInfo, handoffText]
+    .filter(Boolean)
+    .join(' · ')
 
   return buildInfoItem({
     id: `${featureId}-ready-${state.requestId}`,
@@ -344,8 +477,10 @@ function buildReadyItem(featureId, state) {
     payload: {
       prompt: state.prompt,
       answer: state.answer,
+      handoffSessionId: state.handoffSessionId,
     },
     status: 'ready',
+    handoffSessionId: state.handoffSessionId,
   })
 }
 
@@ -365,8 +500,10 @@ function buildErrorItem(featureId, prompt, error, history = [], retryContext = {
       history: cloneHistory(history),
       draftId: retryContext.draftId,
       inputKinds: retryContext.inputKinds,
+      handoffSessionId: retryContext.handoffSessionId,
     },
     status: 'error',
+    handoffSessionId: retryContext.handoffSessionId,
   })
 }
 
@@ -458,7 +595,7 @@ async function dispatchPrompt({
   const resolvedFeatureId = resolveFeatureId(featureId)
   const normalizedPrompt = normalizePrompt(prompt)
   const session = getSession(resolvedFeatureId)
-  const resolvedHistory = cloneHistory(historySnapshot)
+  let resolvedHistory = cloneHistory(historySnapshot)
   let resolvedOcrText = normalizeText(ocrText)
   const displayPrompt = resolveDisplayPrompt(
     normalizedPrompt,
@@ -470,6 +607,16 @@ async function dispatchPrompt({
 
   try {
     const client = resolveIntelligenceClient()
+    const handoffSessionId = await ensureHandoffSession(client, session, {
+      featureId: resolvedFeatureId,
+      prompt: displayPrompt,
+      history: resolvedHistory,
+      requestId,
+      inputKinds,
+    })
+    if (session.history.length > resolvedHistory.length) {
+      resolvedHistory = cloneHistory(session.history)
+    }
 
     if (imageDataUrl && !resolvedOcrText) {
       const ocrPayload = buildOcrPayload(imageDataUrl)
@@ -481,6 +628,7 @@ async function dispatchPrompt({
           requestId,
           capabilityId: 'vision.ocr',
           inputKinds,
+          sessionId: handoffSessionId,
         }),
       )
       resolvedOcrText = normalizeText(ocrResult?.result?.text)
@@ -503,7 +651,7 @@ async function dispatchPrompt({
 
       plugin.feature.clearItems()
       plugin.feature.pushItems([
-        buildPendingItem(resolvedFeatureId, displayPrompt, requestId, 'chat'),
+        buildPendingItem(resolvedFeatureId, displayPrompt, requestId, 'chat', handoffSessionId),
       ])
     }
 
@@ -517,9 +665,10 @@ async function dispatchPrompt({
         requestId,
         capabilityId: 'text.chat',
         inputKinds,
+        sessionId: handoffSessionId,
       }),
     )
-    const mapped = mapInvokeResult(result, displayPrompt, requestId)
+    const mapped = mapInvokeResult(result, displayPrompt, requestId, handoffSessionId)
 
     if (!mapped.answer) {
       throw createPluginError('EMPTY_RESPONSE')
@@ -533,6 +682,14 @@ async function dispatchPrompt({
       { role: 'user', content: displayPrompt },
       { role: 'assistant', content: mapped.answer },
     ])
+    await updateHandoffSession(client, session, {
+      featureId: resolvedFeatureId,
+      prompt: displayPrompt,
+      history: resolvedHistory,
+      answer: mapped.answer,
+      requestId,
+      inputKinds,
+    })
     session.activeRequestId = ''
     session.uiRequestId = requestId
 
@@ -552,6 +709,7 @@ async function dispatchPrompt({
       buildErrorItem(resolvedFeatureId, displayPrompt, normalizedError, resolvedHistory, {
         draftId,
         inputKinds,
+        handoffSessionId: session.handoffSessionId,
       }),
     ])
   }
@@ -645,6 +803,7 @@ const pluginLifecycle = {
             buildErrorItem(featureId, displayPrompt, normalizedError, [], {
               draftId: draft.draftId,
               inputKinds: draft.inputKinds,
+              handoffSessionId: session.handoffSessionId,
             }),
           ])
           return {
@@ -667,6 +826,7 @@ const pluginLifecycle = {
             displayPrompt,
             requestId,
             draft.imageDataUrl ? 'ocr' : 'chat',
+            session.handoffSessionId,
           ),
         ])
         void dispatchPrompt({
@@ -693,6 +853,8 @@ module.exports = {
   __test: {
     buildInvokePayload,
     buildInvokeOptions,
+    buildHandoffContext,
+    buildHandoffSessionId,
     buildOcrPayload,
     extractImageDataUrl,
     extractInputKinds,

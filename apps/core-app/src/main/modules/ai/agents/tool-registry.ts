@@ -5,6 +5,13 @@
  */
 
 import type { AgentPermission, AgentTool, JsonSchema, ToolResult } from '@talex-touch/utils'
+import type {
+  AnyTuffTool,
+  TuffTool,
+  TuffToolInvocationResult
+} from '@talex-touch/tuff-intelligence'
+import { createToolKit } from '@talex-touch/tuff-intelligence'
+import { z } from 'zod'
 import { createLogger } from '../../../utils/logger'
 
 const toolRegistryLog = createLogger('Intelligence').child('ToolRegistry')
@@ -37,6 +44,11 @@ interface RegisteredTool {
   registeredAt: number
 }
 
+type JsonSchemaLike = JsonSchema & {
+  properties?: Record<string, JsonSchemaLike>
+  items?: JsonSchemaLike
+}
+
 /**
  * Tool Registry - manages tool registration and execution
  */
@@ -58,6 +70,11 @@ export class ToolRegistry {
     })
 
     logInfo(`Registered tool: ${definition.id} (${definition.name})`)
+  }
+
+  registerTuffTool(tool: AnyTuffTool): void {
+    const converted = tuffToolToAgentTool(tool)
+    this.registerTool(converted.definition, converted.executor)
   }
 
   /**
@@ -264,4 +281,119 @@ export function createTool(
     },
     executor
   }
+}
+
+export function agentToolToTuffTool(
+  definition: AgentTool,
+  executor: ToolExecutorFn
+): TuffTool<unknown, unknown> {
+  return {
+    id: definition.id,
+    name: definition.name,
+    description: definition.description,
+    source: 'builtin',
+    riskLevel: 'low',
+    inputSchema: jsonSchemaToZod(definition.inputSchema as JsonSchemaLike),
+    metadata: {
+      category: definition.category,
+      permissions: definition.permissions
+    },
+    execute: async (input, context) => {
+      return await executor(input, {
+        taskId: String(context.metadata?.taskId || context.traceId || ''),
+        agentId: String(context.metadata?.agentId || context.caller || ''),
+        workingDirectory:
+          typeof context.metadata?.workingDirectory === 'string'
+            ? context.metadata.workingDirectory
+            : undefined,
+        signal:
+          context.metadata?.signal instanceof AbortSignal ? context.metadata.signal : undefined
+      })
+    }
+  }
+}
+
+export function tuffToolResultToAgentToolResult(result: TuffToolInvocationResult): ToolResult {
+  if (result.ok) {
+    return {
+      success: true,
+      output: result.output
+    }
+  }
+
+  return {
+    success: false,
+    error: result.error?.message || `Tool ${result.toolId} failed`
+  }
+}
+
+function tuffToolToAgentTool(tool: AnyTuffTool): {
+  definition: AgentTool
+  executor: ToolExecutorFn
+} {
+  const kit = createToolKit()
+  kit.register(tool)
+
+  return {
+    definition: {
+      id: tool.id,
+      name: tool.name,
+      description: tool.description,
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      },
+      category: typeof tool.metadata?.category === 'string' ? tool.metadata.category : undefined,
+      permissions: Array.isArray(tool.metadata?.permissions)
+        ? (tool.metadata.permissions as AgentPermission[])
+        : undefined
+    },
+    executor: async (input, ctx) => {
+      const result = await kit.invoke(tool.id, input, {
+        caller: ctx.agentId,
+        traceId: ctx.taskId,
+        metadata: {
+          taskId: ctx.taskId,
+          agentId: ctx.agentId,
+          workingDirectory: ctx.workingDirectory,
+          signal: ctx.signal
+        }
+      })
+      if (!result.ok) {
+        throw new Error(result.error?.message || `Tool ${tool.id} failed`)
+      }
+      return result.output
+    }
+  }
+}
+
+function jsonSchemaToZod(schema: JsonSchemaLike | undefined): z.ZodType {
+  if (!schema) {
+    return z.unknown()
+  }
+
+  if (schema.type === 'object') {
+    const shape: Record<string, z.ZodType> = {}
+    for (const [key, value] of Object.entries(schema.properties ?? {})) {
+      const fieldSchema = jsonSchemaToZod(value)
+      shape[key] =
+        Array.isArray(schema.required) && schema.required.includes(key)
+          ? fieldSchema
+          : fieldSchema.optional()
+    }
+    return z.object(shape)
+  }
+  if (schema.type === 'array') {
+    return z.array(jsonSchemaToZod(schema.items))
+  }
+  if (schema.type === 'string') {
+    return z.string()
+  }
+  if (schema.type === 'number') {
+    return z.number()
+  }
+  if (schema.type === 'boolean') {
+    return z.boolean()
+  }
+  return z.unknown()
 }

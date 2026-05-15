@@ -3,7 +3,15 @@ import type {
   IntelligenceToolRiskLevel,
   ToolSource
 } from '../types/intelligence'
+import type {
+  AnyTuffTool,
+  TuffTool,
+  TuffToolApprovalGate,
+  TuffToolContext,
+  TuffToolSource,
+} from '../tools/types'
 import { DynamicStructuredTool } from '@langchain/core/tools'
+import { createToolKit } from '../tools/tool-kit'
 
 export interface AdaptedStructuredToolMetadata {
   toolId: string
@@ -29,7 +37,12 @@ export interface LangChainToolAdapterDefinition<TInput = Record<string, unknown>
   execute: (input: TInput) => Promise<unknown>
 }
 
-function normalizeSource(source: ToolSource | undefined): ToolSource {
+export interface TuffToolAdapterOptions {
+  approvalGate?: TuffToolApprovalGate
+  context?: TuffToolContext
+}
+
+function normalizeSource(source: ToolSource | TuffToolSource | undefined): ToolSource {
   return source === 'mcp' ? 'mcp' : 'builtin'
 }
 
@@ -67,5 +80,41 @@ export class LangChainToolAdapter {
     }
 
     return tool
+  }
+
+  static fromTuffTool<TInput, TOutput>(
+    definition: TuffTool<TInput, TOutput>,
+    options: TuffToolAdapterOptions = {}
+  ): AdaptedStructuredTool {
+    const kit = createToolKit({
+      approvalGate: options.approvalGate,
+    })
+    const tool = new DynamicStructuredTool({
+      name: definition.id,
+      description: definition.description,
+      schema: definition.inputSchema,
+      func: async (input) => {
+        return await kit.invokeTool(definition, input, options.context)
+      }
+    }) as unknown as AdaptedStructuredTool
+
+    tool.tuffMetadata = {
+      toolId: definition.id,
+      source: normalizeSource(definition.source),
+      riskLevel: normalizeRiskLevel(definition.riskLevel),
+      approvalRequired: definition.requiresApproval === true
+        || definition.riskLevel === 'high'
+        || definition.riskLevel === 'critical',
+      metadata: definition.metadata
+    }
+
+    return tool
+  }
+
+  static fromTuffTools(
+    definitions: AnyTuffTool[],
+    options: TuffToolAdapterOptions = {}
+  ): AdaptedStructuredTool[] {
+    return definitions.map(tool => LangChainToolAdapter.fromTuffTool(tool, options))
   }
 }

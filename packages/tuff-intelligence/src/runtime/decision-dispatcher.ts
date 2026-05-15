@@ -96,6 +96,20 @@ export class DecisionDispatcher {
       }
     }
 
+    for (const approval of decision.approvalRequests ?? []) {
+      yield {
+        version: 'aep/1',
+        id: makeEventId('evt'),
+        sessionId: state.sessionId,
+        turnId: state.turnId,
+        correlationId: approval.id,
+        source: 'runtime',
+        type: 'approval.request',
+        ts: new Date().toISOString(),
+        payload: approval,
+      }
+    }
+
     for (const intent of decision.viewIntents ?? []) {
       if (!this.deps.viewRenderer) {
         continue

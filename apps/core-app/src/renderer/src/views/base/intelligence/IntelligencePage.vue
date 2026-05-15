@@ -1,6 +1,7 @@
 <script lang="ts" name="IntelligencePage" setup>
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import CreditsSummaryBlock from '~/components/account/CreditsSummaryBlock.vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import IntelligenceCapabilities from '~/components/intelligence/IntelligenceCapabilities.vue'
 import IntelligenceChannels from '~/components/intelligence/IntelligenceChannels.vue'
@@ -56,6 +57,8 @@ const boundCapabilities = computed(
         <span class="intelligence-stats__label">{{ t('settings.intelligence.statsBound') }}</span>
       </div>
     </div>
+
+    <CreditsSummaryBlock context="intelligence" />
 
     <!-- Two-column grid for Channels + Capabilities -->
     <div class="intelligence-grid">

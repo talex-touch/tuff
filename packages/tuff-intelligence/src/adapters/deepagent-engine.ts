@@ -4,8 +4,10 @@ import { networkClient } from '@talex-touch/utils/network'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
 import type { TurnState } from '../protocol/session'
+import type { AnyTuffTool, TuffToolApprovalGate, TuffToolContext } from '../tools/types'
 import { toAgentErrorDetail } from '../protocol/error-detail'
 import { LangChainEngineAdapter } from './langchain-engine'
+import { LangChainToolAdapter } from './langchain-tool-adapter'
 import {
   buildDeepAgentMessages,
   buildResponsesInput,
@@ -53,6 +55,9 @@ export interface DeepAgentEngineOptions {
   subagents?: DeepAgentSubAgentConfig[]
   builtinTools?: Array<'write_todos' | 'read_file' | 'write_file' | 'edit_file' | 'ls'>
   tools?: StructuredTool[]
+  tuffTools?: AnyTuffTool[]
+  toolApprovalGate?: TuffToolApprovalGate
+  toolContext?: TuffToolContext
   onAudit?: (record: DeepAgentAuditRecord) => Promise<void> | void
 }
 
@@ -69,6 +74,30 @@ type DeepAgentsModule = typeof import('deepagents')
 
 let langChainOpenAiModulePromise: Promise<LangChainOpenAiModule> | null = null
 let deepAgentsModulePromise: Promise<DeepAgentsModule> | null = null
+
+export function createDeepAgentToolsFromTuff(
+  tools: AnyTuffTool[],
+  options: {
+    approvalGate?: TuffToolApprovalGate
+    context?: TuffToolContext
+  } = {},
+): StructuredTool[] {
+  return LangChainToolAdapter.fromTuffTools(tools, {
+    approvalGate: options.approvalGate,
+    context: options.context,
+  })
+}
+
+function resolveCustomTools(options: DeepAgentEngineOptions): StructuredTool[] {
+  const directTools = Array.isArray(options.tools) ? options.tools : []
+  const tuffTools = Array.isArray(options.tuffTools)
+    ? createDeepAgentToolsFromTuff(options.tuffTools, {
+        approvalGate: options.toolApprovalGate,
+        context: options.toolContext,
+      })
+    : []
+  return [...directTools, ...tuffTools]
+}
 
 async function getChatOpenAIConstructor(): Promise<LangChainOpenAiModule['ChatOpenAI']> {
   if (!langChainOpenAiModulePromise) {
@@ -1190,7 +1219,7 @@ async function invokeDeepAgentWithTransport(
   const builtinTools = Array.isArray(options.builtinTools) && options.builtinTools.length > 0
     ? options.builtinTools
     : DEFAULT_BUILTIN_TOOLS
-  const customTools = Array.isArray(options.tools) ? options.tools : []
+  const customTools = resolveCustomTools(options)
   const useResponsesApi = transport === 'responses'
 
   const invokeMessages = buildDeepAgentMessages(state, {
@@ -1453,7 +1482,7 @@ export class DeepAgentLangChainEngineAdapter implements AgentEngineAdapter {
     const builtinTools = Array.isArray(this.options.builtinTools) && this.options.builtinTools.length > 0
       ? this.options.builtinTools
       : DEFAULT_BUILTIN_TOOLS
-    const customTools = Array.isArray(this.options.tools) ? this.options.tools : []
+    const customTools = resolveCustomTools(this.options)
     const invokeMessages = buildDeepAgentMessages(state, {
       includeInputFiles: useResponsesApi,
     })

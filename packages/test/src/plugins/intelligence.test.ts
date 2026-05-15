@@ -100,6 +100,78 @@ describe('intelligence plugin', () => {
     })
   })
 
+  it('builds handoff-aware invoke metadata', () => {
+    const sessionId = intelligenceTest.buildHandoffSessionId('intelligence-ask')
+
+    expect(
+      intelligenceTest.buildInvokeOptions({
+        featureId: 'intelligence-ask',
+        requestId: 'req-1',
+        capabilityId: 'text.chat',
+        inputKinds: ['text', 'text'],
+        sessionId,
+      }),
+    ).toEqual({
+      metadata: {
+        caller: 'plugin:touch-intelligence',
+        entry: 'corebox.ai-ask',
+        featureId: 'intelligence-ask',
+        requestId: 'req-1',
+        inputKinds: ['text'],
+        capabilityId: 'text.chat',
+        sessionId,
+        handoffSessionId: sessionId,
+        handoffSource: 'corebox.touch-intelligence',
+      },
+    })
+  })
+
+  it('builds stable collision-resistant handoff session ids', () => {
+    expect(intelligenceTest.buildHandoffSessionId('intelligence-ask')).toMatch(
+      /^corebox_ai_ask_intelligence-ask_[0-9a-f]{8}$/,
+    )
+    expect(intelligenceTest.buildHandoffSessionId('custom feature')).toMatch(
+      /^corebox_ai_ask_custom_feature_[0-9a-f]{8}$/,
+    )
+    expect(intelligenceTest.buildHandoffSessionId('custom feature')).not.toBe(
+      intelligenceTest.buildHandoffSessionId('custom_feature'),
+    )
+  })
+
+  it('builds bounded handoff conversation context', () => {
+    const history = Array.from({ length: 6 }, (_, index) => [
+      { role: 'user', content: `q${index}` },
+      { role: 'assistant', content: `a${index}` },
+    ]).flat()
+    const context = intelligenceTest.buildHandoffContext({
+      featureId: 'intelligence-ask',
+      prompt: 'final question',
+      answer: 'final answer',
+      history,
+      requestId: 'req-1',
+      inputKinds: ['text', 'image', 'text'],
+    })
+
+    expect(context).toMatchObject({
+      source: 'corebox.touch-intelligence',
+      featureId: 'intelligence-ask',
+      entry: 'corebox.ai-ask',
+      requestId: 'req-1',
+      inputKinds: ['text', 'image'],
+      lastPrompt: 'final question',
+      lastAnswer: 'final answer',
+    })
+    expect(context.conversation.messages).toHaveLength(10)
+    expect(context.conversation.messages.at(-2)).toEqual({
+      role: 'user',
+      content: 'final question',
+    })
+    expect(context.conversation.messages.at(-1)).toEqual({
+      role: 'assistant',
+      content: 'final answer',
+    })
+  })
+
   it('normalizes visible invoke errors', () => {
     expect(
       intelligenceTest.normalizeInvokeError(new Error('No enabled providers for text.chat')),

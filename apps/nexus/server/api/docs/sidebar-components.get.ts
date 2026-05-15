@@ -58,7 +58,7 @@ function resolveLocale(path: string): 'en' | 'zh' {
   return path.endsWith('.zh') ? 'zh' : 'en'
 }
 
-export default defineEventHandler(async (event) => {
+export default defineCachedEventHandler(async (event) => {
   const docs = await queryCollection(event, 'docs')
     .where('path', 'LIKE', `${COMPONENT_DOC_PREFIX}%`)
     .all()
@@ -87,7 +87,9 @@ export default defineEventHandler(async (event) => {
     })
     .sort((a, b) => a.title.localeCompare(b.title, a.locale === 'zh' ? 'zh-CN' : 'en'))
 
-  setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-
   return rows
+}, {
+  maxAge: 300,
+  staleMaxAge: 3600,
+  name: 'docs-sidebar-components',
 })

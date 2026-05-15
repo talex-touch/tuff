@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import CreditsSummaryBlock from '~/components/account/CreditsSummaryBlock.vue'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
 import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -383,6 +384,8 @@ onMounted(() => {
       active-icon="i-carbon-development"
     />
   </TuffGroupBlock>
+
+  <CreditsSummaryBlock context="settings" />
 
   <TModal v-model="profileEditorVisible" :title="t('userProfile.editTitle', 'Edit profile')">
     <UserProfileEditor :visible="profileEditorVisible" />
