@@ -13,6 +13,19 @@
 
 ## 2026-05-15
 
+### fix(core-app): refine Intelligence capability detail layout
+
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityHeader.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityOverview.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceCapabilitiesPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - 智能能力详情头部标题压缩为 16px，说明文字限制为两行，能力列表说明支持两行展示并同步放大卡片高度。
+  - 统计卡片调整为单行三列紧凑布局，避免“启用渠道/总绑定数/配置模型”换行。
+  - 测试能力入口移动到详情头部右侧，点击后通过 Drawer 承载原测试表单与结果。
+  - 补齐能力测试与渠道选择 i18n 文案，避免按钮展示 `settings.intelligence.*` key；未启用渠道时点击“管理模型”会先启用当前渠道并打开模型配置。
+
 ### fix(core-app): improve main window search recall
 
 - `apps/core-app/src/main/modules/box-tool/addon/system/main-window-provider.ts`

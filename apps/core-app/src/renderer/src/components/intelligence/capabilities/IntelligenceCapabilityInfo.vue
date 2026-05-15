@@ -48,6 +48,7 @@ const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
 const showModelDrawer = ref(false)
 const showPromptDrawer = ref(false)
+const showTestDrawer = ref(false)
 let promptTimer: number | null = null
 let syncingFromProps = false
 
@@ -237,12 +238,19 @@ function handleModelTransferUpdates(models: string[]): void {
 }
 
 function openModelDrawer(): void {
-  if (!canEditModels.value) return
+  if (!focusedProvider.value) return
+  if (!canEditModels.value) {
+    handleProviderToggle(focusedProvider.value.id, true)
+  }
   showModelDrawer.value = true
 }
 
 function openPromptDrawer(): void {
   showPromptDrawer.value = true
+}
+
+function openTestDrawer(): void {
+  showTestDrawer.value = true
 }
 
 function handleTest(options?: {
@@ -288,7 +296,20 @@ onBeforeUnmount(() => {
 <template>
   <TouchScroll>
     <template #header>
-      <CapabilityHeader :capability="capability" />
+      <CapabilityHeader :capability="capability">
+        <template #actions>
+          <TxButton
+            class="capability-info__test-button"
+            variant="flat"
+            type="primary"
+            :disabled="activeBindingCount === 0"
+            @click="openTestDrawer"
+          >
+            <i class="i-carbon-play-filled" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.capabilityTest') }}</span>
+          </TxButton>
+        </template>
+      </CapabilityHeader>
     </template>
 
     <template #default>
@@ -329,7 +350,7 @@ onBeforeUnmount(() => {
             default-icon="i-carbon-model"
             @click="openModelDrawer"
           >
-            <TxButton variant="flat" type="primary" :disabled="!canEditModels">
+            <TxButton variant="flat" type="primary" @click.stop="openModelDrawer">
               <i class="i-carbon-settings" aria-hidden="true" />
               <span>{{ t('settings.intelligence.manageModels') }}</span>
             </TxButton>
@@ -355,25 +376,6 @@ onBeforeUnmount(() => {
               <span>{{ t('settings.intelligence.editPrompt') }}</span>
             </TxButton>
           </TuffBlockSlot>
-        </template>
-      </TuffGroupBlock>
-
-      <TuffGroupBlock
-        :name="t('settings.intelligence.capabilityTestTitle')"
-        :description="t('settings.intelligence.capabilityTestDesc')"
-        default-icon="i-carbon-flash"
-        active-icon="i-carbon-flash"
-        :memory-name="`capability-test-${capability.id}`"
-      >
-        <template #default>
-          <TestSection
-            :capability-id="capability.id"
-            :is-testing="isTesting"
-            :disabled="activeBindingCount === 0"
-            :test-result="testResult"
-            :enabled-bindings="enabledBindings"
-            @test="handleTest"
-          />
         </template>
       </TuffGroupBlock>
 
@@ -408,6 +410,25 @@ onBeforeUnmount(() => {
       <FlatMarkdown v-model="promptValue" :readonly="false" />
     </div>
   </TuffDrawer>
+
+  <TuffDrawer
+    v-model:visible="showTestDrawer"
+    :title="t('settings.intelligence.capabilityTestTitle')"
+  >
+    <div class="capability-info__drawer">
+      <p class="capability-info__drawer-description">
+        {{ t('settings.intelligence.capabilityTestDesc') }}
+      </p>
+      <TestSection
+        :capability-id="capability.id"
+        :is-testing="isTesting"
+        :disabled="activeBindingCount === 0"
+        :test-result="testResult"
+        :enabled-bindings="enabledBindings"
+        @test="handleTest"
+      />
+    </div>
+  </TuffDrawer>
 </template>
 
 <style lang="scss" scoped>
@@ -428,6 +449,15 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
   color: var(--tx-text-color-secondary);
   margin: 0;
+}
+
+:deep(.TGroupBlock-Header .TGroupBlock-Label > h3),
+:deep(.TBlockSlot-TitleRow > h5) {
+  font-size: 1rem;
+}
+
+.capability-info__test-button {
+  min-width: 7.5rem;
 }
 
 .capability-info__drawer {

@@ -338,7 +338,7 @@ async function handleCapabilityTest(
 .capability-cards {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.625rem;
   align-items: stretch;
   padding: 0.5rem;
 }
@@ -346,8 +346,25 @@ async function handleCapabilityTest(
 .capability-card {
   flex: 0 0 auto;
   align-self: stretch;
-  height: 3.75rem;
+  height: 5.25rem;
   min-height: 0;
+}
+
+.capability-card :deep(.TuffItemTemplate-Content) {
+  gap: 0.25rem;
+}
+
+.capability-card :deep(.TuffItemTemplate-Subtitle) {
+  align-items: flex-start;
+}
+
+.capability-card :deep(.TuffItemTemplate-SubtitleText) {
+  display: -webkit-box;
+  white-space: normal;
+  line-height: 1.35;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .capability-list-empty {

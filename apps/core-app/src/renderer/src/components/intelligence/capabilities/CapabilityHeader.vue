@@ -26,6 +26,9 @@ const capabilityType = computed(() => {
         {{ capability.description }}
       </p>
     </div>
+    <div v-if="$slots.actions" class="capability-header__actions">
+      <slot name="actions" />
+    </div>
   </header>
 </template>
 
@@ -34,25 +37,26 @@ const capabilityType = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1.5rem;
-  padding: 1.5rem 1.5rem 1rem 1.5rem;
+  gap: 1rem;
+  padding: 1rem 1.25rem 0.75rem;
   background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
 }
 
 .capability-header__content {
   flex: 1;
+  min-width: 0;
 }
 
 .capability-header__meta {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.625rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .capability-header__id {
   font-size: 0.6875rem;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--tx-text-color-placeholder);
   font-weight: 600;
@@ -71,26 +75,30 @@ const capabilityType = computed(() => {
 }
 
 .capability-header__title {
-  font-size: 1.875rem;
+  font-size: 1rem;
   font-weight: 700;
-  margin: 0 0 0.875rem 0;
+  margin: 0 0 0.375rem;
   color: var(--tx-text-color-primary);
-  line-height: 1.2;
-  background: linear-gradient(
-    135deg,
-    var(--tx-text-color-primary) 0%,
-    var(--tx-text-color-regular) 100%
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  line-height: 1.35;
 }
 
 .capability-header__description {
+  display: -webkit-box;
   margin: 0;
   color: var(--tx-text-color-regular);
   max-width: 48rem;
-  line-height: 1.7;
-  font-size: 0.9375rem;
+  line-height: 1.45;
+  font-size: 0.8125rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.capability-header__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding-top: 0.25rem;
 }
 </style>
