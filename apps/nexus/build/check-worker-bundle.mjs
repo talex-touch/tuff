@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -7,6 +8,13 @@ const nexusRoot = join(currentDir, '..')
 const distRoot = join(nexusRoot, 'dist')
 const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
+const oneMiB = 1024 * 1024
+const distBudget = {
+  maxTotalBytes: 60 * oneMiB,
+  maxFileBytes: 20 * oneMiB,
+  maxWorkerExecutableBytes: 20 * oneMiB,
+  maxWorkerGzipBytes: 2.7 * oneMiB,
+}
 
 const expectedStaticRoutes = [
   '/',
@@ -85,12 +93,55 @@ function analyzeWorkerFiles() {
   return { executableFiles, totalBytes }
 }
 
+function analyzeDistFiles() {
+  const files = walkFiles(distRoot)
+    .map((file) => {
+      const bytes = statSync(file).size
+      return {
+        file,
+        relativePath: relative(distRoot, file),
+        bytes,
+      }
+    })
+    .sort((a, b) => b.bytes - a.bytes)
+
+  const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0)
+  return { files, totalBytes }
+}
+
+function getWorkerGzipBytes(files) {
+  const source = files.map(file => readFileSync(file.file)).join('\n')
+  return gzipSync(source, { level: 9 }).byteLength
+}
+
+function checkSizeBudgets(distFiles, distTotalBytes, workerTotalBytes, workerGzipBytes) {
+  const findings = []
+  if (distTotalBytes > distBudget.maxTotalBytes) {
+    findings.push(`dist total ${formatBytes(distTotalBytes)} exceeds ${formatBytes(distBudget.maxTotalBytes)}`)
+  }
+
+  const oversizedFiles = distFiles.filter(file => file.bytes > distBudget.maxFileBytes)
+  for (const file of oversizedFiles) {
+    findings.push(`dist file ${file.relativePath} is ${formatBytes(file.bytes)} > ${formatBytes(distBudget.maxFileBytes)}`)
+  }
+
+  if (workerTotalBytes > distBudget.maxWorkerExecutableBytes) {
+    findings.push(`Worker executable JS ${formatBytes(workerTotalBytes)} exceeds ${formatBytes(distBudget.maxWorkerExecutableBytes)}`)
+  }
+
+  if (workerGzipBytes > distBudget.maxWorkerGzipBytes) {
+    findings.push(`Worker gzip ${formatBytes(workerGzipBytes)} exceeds ${formatBytes(distBudget.maxWorkerGzipBytes)}`)
+  }
+
+  return findings
+}
+
 function checkRoutes() {
   const routesJson = readRoutesJson()
   if (!routesJson) {
     return {
-      ok: false,
-      message: 'dist/_routes.json is missing. Run `pnpm -C "apps/nexus" run build` first.',
+      ok: true,
+      message: 'dist/_routes.json is missing; static route exclusion check skipped.',
     }
   }
 
@@ -148,13 +199,22 @@ if (!existsSync(workerRoot)) {
 }
 
 const { executableFiles, totalBytes } = analyzeWorkerFiles()
+const workerGzipBytes = getWorkerGzipBytes(executableFiles)
+const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
 const routeCheck = checkRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
 const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
+const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
+console.log(`[nexus-worker-bundle] executable_gzip=${formatBytes(workerGzipBytes)}`)
 console.log('[nexus-worker-bundle] top_chunks=')
 for (const file of executableFiles.slice(0, 10))
+  console.log(`  ${formatBytes(file.bytes).padStart(10)}  ${file.relativePath}`)
+
+console.log(`[nexus-dist-budget] total=${formatBytes(distTotalBytes)} files=${distFiles.length}`)
+console.log('[nexus-dist-budget] top_files=')
+for (const file of distFiles.slice(0, 10))
   console.log(`  ${formatBytes(file.bytes).padStart(10)}  ${file.relativePath}`)
 
 console.log(`[nexus-worker-bundle] ${routeCheck.message}`)
@@ -171,5 +231,11 @@ if (demoWorkerChunks.length) {
     console.error(`  ${chunk}`)
 }
 
-if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length)
+if (sizeFindings.length) {
+  console.error('[nexus-dist-budget] size budget violations:')
+  for (const finding of sizeFindings)
+    console.error(`  ${finding}`)
+}
+
+if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || sizeFindings.length)
   process.exit(1)

@@ -39,7 +39,7 @@ const ssrEnabled = isProd ? true : !disableSsr
 const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
-const legacyPublicAssets = [
+const publicAssetsExcludedFromDeploy = [
   'shots/SearchApp.gif',
   'shots/PluginTranslate.gif',
 ]
@@ -268,7 +268,7 @@ export default defineNuxtConfig({
     sourceMap: !disableNitroSourceMap,
     hooks: {
       async compiled(nitro) {
-        await Promise.all(legacyPublicAssets.map(asset =>
+        await Promise.all(publicAssetsExcludedFromDeploy.map(asset =>
           rm(resolve(nitro.options.output.publicDir, asset), { force: true }),
         ))
       },
