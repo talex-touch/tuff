@@ -418,7 +418,6 @@ async function handleCopyContent(): Promise<void> {
     toast.success(t('settings.intelligence.promptCopySuccess'))
   } catch {
     toast.error(t('settings.intelligence.promptCopyFailed'))
-    console.error('Failed to copy prompt content to clipboard')
   }
 }
 
@@ -487,6 +486,7 @@ onBeforeUnmount(() => {
       search-id="prompt-search"
       :search-placeholder="t('settings.intelligence.promptSearchPlaceholder')"
       :clear-label="t('common.close')"
+      :main-edge-blur="false"
     >
       <template #default>
         <div>

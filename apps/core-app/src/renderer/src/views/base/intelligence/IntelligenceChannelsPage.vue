@@ -288,6 +288,7 @@ useKeyboardNavigation({
       :search-placeholder="t('intelligence.search.placeholder')"
       :clear-label="t('intelligence.search.clear')"
       :main-aria-live="selectedProvider ? 'polite' : 'off'"
+      :main-edge-blur="false"
     >
       <template #default>
         <IntelligenceList
