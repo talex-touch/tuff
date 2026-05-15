@@ -5,7 +5,7 @@ import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 import { remarkMermaid } from './app/utils/remark-mermaid'
-import { createDocsPrerenderRoutes } from './build/docs-prerender-routes'
+import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -55,13 +55,7 @@ const nitroTypegenRouteExcludes = [
   '/api/dashboard/provider-registry/providers/:id/capabilities',
   '/api/dashboard/provider-registry/providers/:id/capabilities/:capabilityId',
 ]
-const docsPrerenderRoutes = createDocsPrerenderRoutes(currentDir)
-const stablePrerenderRoutes = [
-  '/',
-  '/api/docs/component-sync',
-  '/api/docs/navigation',
-  '/api/docs/sidebar-components',
-]
+const nexusPrerenderRoutes = createNexusPrerenderRoutes(currentDir)
 
 export default defineNuxtConfig({
   modules: [
@@ -281,7 +275,7 @@ export default defineNuxtConfig({
         }
       : {
           crawlLinks: false,
-          routes: [...new Set([...stablePrerenderRoutes, ...docsPrerenderRoutes])],
+          routes: nexusPrerenderRoutes,
           ignore: ['/hi'],
         },
   },

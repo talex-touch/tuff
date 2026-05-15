@@ -14,20 +14,25 @@ const capabilityType = computed(() => {
 
 <template>
   <header class="capability-header">
-    <div class="capability-header__content">
-      <div class="capability-header__meta">
-        <span class="capability-header__id">{{ capability.id }}</span>
-        <span class="capability-header__type-badge">{{ capabilityType }}</span>
-      </div>
-      <h1 class="capability-header__title">
-        {{ capability.label || capability.id }}
-      </h1>
-      <p class="capability-header__description">
-        {{ capability.description }}
-      </p>
+    <div v-if="$slots.notice" class="capability-header__notice">
+      <slot name="notice" />
     </div>
-    <div v-if="$slots.actions" class="capability-header__actions">
-      <slot name="actions" />
+    <div class="capability-header__main">
+      <div class="capability-header__content">
+        <div class="capability-header__meta">
+          <span class="capability-header__id">{{ capability.id }}</span>
+          <span class="capability-header__type-badge">{{ capabilityType }}</span>
+        </div>
+        <h1 class="capability-header__title">
+          {{ capability.label || capability.id }}
+        </h1>
+        <p class="capability-header__description">
+          {{ capability.description }}
+        </p>
+      </div>
+      <div v-if="$slots.actions" class="capability-header__actions">
+        <slot name="actions" />
+      </div>
     </div>
   </header>
 </template>
@@ -35,11 +40,27 @@ const capabilityType = computed(() => {
 <style lang="scss" scoped>
 .capability-header {
   display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem 0.75rem;
+  background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
+}
+
+.capability-header__notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.capability-header__main {
+  display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  padding: 1rem 1.25rem 0.75rem;
-  background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
 }
 
 .capability-header__content {

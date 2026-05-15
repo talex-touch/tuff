@@ -13,6 +13,19 @@
 
 ## 2026-05-15
 
+### ref(nexus): slim static docs and Worker bundle surface
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/build/nexus-prerender-routes.ts`
+- `apps/nexus/build/check-worker-bundle.mjs`
+- `apps/nexus/app/plugins/tuffex.ts`
+- `packages/tuff-intelligence/src/light.ts`
+- `packages/tuff-intelligence/package.json`
+  - Nexus prerender 清单抽成可测试 helper，覆盖稳定公开页、文档页与 docs API；动态市场/发布/登录/控制台页面继续保留运行时渲染，避免固化用户态或 D1 数据。
+  - Tuffex 全局组件注册从顶层整包静态 import 改为组件子入口 async component 注册，避免文档与组件文档首屏初始化时全量拉入组件实现。
+  - `@talex-touch/tuff-intelligence/light` 作为 Nexus contract 轻入口，仅导出 enum/types/sync payload；Nexus 侧 import 迁移到轻入口，避免误带 runtime / LangChain barrel。
+  - 新增 `pnpm -C "apps/nexus" run build:analyze-worker`，用于构建后统计 `_worker.js` 可执行 JS、Top chunks，并校验关键静态路由已排除出 Pages Worker。
+
 ### fix(core-app): refine Intelligence capability detail layout
 
 - `apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityHeader.vue`
@@ -23,7 +36,8 @@
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
   - 智能能力详情头部标题压缩为 16px，说明文字限制为两行，能力列表说明支持两行展示并同步放大卡片高度。
   - 统计卡片调整为单行三列紧凑布局，避免“启用渠道/总绑定数/配置模型”换行。
-  - 测试能力入口移动到详情头部右侧，点击后通过 Drawer 承载原测试表单与结果。
+  - 测试能力入口移动到详情头部右侧，点击后通过 Drawer 承载原测试表单与结果；底部生效提示移动到详情头部提示区。
+  - 模型优先级与默认提示词合并为“能力配置”区块，两个配置项均通过点击打开 Drawer。
   - 补齐能力测试与渠道选择 i18n 文案，避免按钮展示 `settings.intelligence.*` key；未启用渠道时点击“管理模型”会先启用当前渠道并打开模型配置。
 
 ### fix(core-app): improve main window search recall

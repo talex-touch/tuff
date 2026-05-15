@@ -1,7 +1,7 @@
-import type { IntelligenceProviderSyncPayload, IntelligenceProviderSyncRecord } from '@talex-touch/tuff-intelligence'
+import type { IntelligenceProviderSyncPayload, IntelligenceProviderSyncRecord } from '@talex-touch/tuff-intelligence/light'
 import {
   TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/light'
 import { requireAuth } from '../../../../utils/auth'
 import { listIntelligenceProvidersWithRegistryMirrors } from '../../../../utils/intelligenceProviderRegistryBridge'
 import type { IntelligenceProviderRecord } from '../../../../utils/intelligenceStore'

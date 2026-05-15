@@ -1,4 +1,4 @@
-import type { TuffIntelligenceApprovalTicket } from '@talex-touch/tuff-intelligence'
+import type { TuffIntelligenceApprovalTicket } from '@talex-touch/tuff-intelligence/light'
 import { requireAdmin } from '../../../../utils/auth'
 import { approveIntelligenceLabTool } from '../../../../utils/tuffIntelligenceLabService'
 

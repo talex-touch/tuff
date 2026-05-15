@@ -159,19 +159,6 @@ const promptSummary = computed(() => {
   return singleLine.length > 100 ? `${singleLine.slice(0, 97)}...` : singleLine
 })
 
-const modelTransferDescription = computed(() => {
-  if (!focusedProvider.value) {
-    return t('settings.intelligence.capabilityBindingModelsDesc')
-  }
-  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
-    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
-      ? '开启渠道后再配置模型'
-      : hint
-  }
-  return t('settings.intelligence.capabilityBindingModelsDesc')
-})
-
 watch(
   () => props.capability.promptTemplate,
   (value) => {
@@ -297,6 +284,9 @@ onBeforeUnmount(() => {
   <TouchScroll>
     <template #header>
       <CapabilityHeader :capability="capability">
+        <template #notice>
+          {{ t('settings.intelligence.capabilityFooterHint') }}
+        </template>
         <template #actions>
           <TxButton
             class="capability-info__test-button"
@@ -338,16 +328,20 @@ onBeforeUnmount(() => {
       </TuffGroupBlock>
 
       <TuffGroupBlock
-        :name="focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')"
-        :description="modelTransferDescription"
-        default-icon="i-carbon-model"
-        active-icon="i-carbon-model"
-        :memory-name="`capability-models-${capability.id}`"
+        :name="t('settings.intelligence.capabilityConfigTitle')"
+        :description="t('settings.intelligence.capabilityConfigDesc')"
+        default-icon="i-carbon-settings"
+        active-icon="i-carbon-settings"
+        :memory-name="`capability-config-${capability.id}`"
       >
         <template #default>
           <TuffBlockSlot
-            :title="modelSummary"
+            :title="
+              focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')
+            "
+            :description="modelSummary"
             default-icon="i-carbon-model"
+            :active="!!focusedBinding"
             @click="openModelDrawer"
           >
             <TxButton variant="flat" type="primary" @click.stop="openModelDrawer">
@@ -355,35 +349,20 @@ onBeforeUnmount(() => {
               <span>{{ t('settings.intelligence.manageModels') }}</span>
             </TxButton>
           </TuffBlockSlot>
-        </template>
-      </TuffGroupBlock>
 
-      <TuffGroupBlock
-        :name="t('settings.intelligence.capabilityPromptSectionTitle')"
-        :description="t('settings.intelligence.capabilityPromptSectionDesc')"
-        default-icon="i-carbon-notebook"
-        active-icon="i-carbon-notebook"
-        :memory-name="`capability-prompt-${capability.id}`"
-      >
-        <template #default>
           <TuffBlockSlot
-            :title="promptSummary"
+            :title="t('settings.intelligence.capabilityPromptSectionTitle')"
+            :description="promptSummary"
             default-icon="i-carbon-notebook"
             @click="openPromptDrawer"
           >
-            <TxButton variant="flat" type="text">
+            <TxButton variant="flat" type="text" @click.stop="openPromptDrawer">
               <i class="i-carbon-edit" aria-hidden="true" />
               <span>{{ t('settings.intelligence.editPrompt') }}</span>
             </TxButton>
           </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
-
-      <div class="capability-info__footer">
-        <span class="capability-info__footer-text">
-          {{ t('settings.intelligence.capabilityFooterHint') }}
-        </span>
-      </div>
     </template>
   </TouchScroll>
 
@@ -474,17 +453,5 @@ onBeforeUnmount(() => {
 
 .capability-info__drawer :deep(.FlatMarkdown-Container) {
   min-height: 280px;
-}
-
-.capability-info__footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-fill-color-blank);
-  text-align: center;
-}
-
-.capability-info__footer-text {
-  font-size: 0.75rem;
-  color: var(--tx-text-color-secondary);
 }
 </style>

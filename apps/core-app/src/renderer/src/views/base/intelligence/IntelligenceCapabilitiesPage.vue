@@ -346,7 +346,7 @@ async function handleCapabilityTest(
 .capability-card {
   flex: 0 0 auto;
   align-self: stretch;
-  height: 5.25rem;
+  height: 5.75rem;
   min-height: 0;
 }
 
