@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SettingUser">
 import { TxButton } from '@talex-touch/tuffex'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
+import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
@@ -178,6 +179,7 @@ const secureStorageEnabled = computed({
 })
 
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const showRuntimeApiServer = computed(() => isDevEnv() && !isLoggedIn.value)
 
 const secureStorageDescription = computed(() => {
   if (!secureStorageEnabled.value) {
@@ -212,6 +214,16 @@ const useLocalServer = computed({
 })
 
 const runtimeServerDescription = computed(() => getRuntimeNexusBaseUrl())
+const loginButtonText = computed(() => {
+  if (!authLoadingState.isLoggingIn) {
+    return t('settingUser.login')
+  }
+  const remaining = authLoadingState.loginTimeRemaining
+  if (remaining > 0) {
+    return `${t('settingUser.loggingIn')} ${remaining}s`
+  }
+  return t('settingUser.loggingIn')
+})
 
 async function handleLogin() {
   try {
@@ -374,12 +386,12 @@ onMounted(() => {
         @click="handleLogin"
       >
         <span v-if="authLoadingState.isLoggingIn" class="i-carbon-circle-dash animate-spin mr-1" />
-        {{ authLoadingState.isLoggingIn ? t('settingUser.loggingIn') : t('settingUser.login') }}
+        {{ loginButtonText }}
       </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSwitch
-      v-if="!isLoggedIn"
+      v-if="showRuntimeApiServer"
       v-model="useLocalServer"
       :title="t('settingUser.runtimeApiServer', '运行时 API 服务器')"
       :description="runtimeServerDescription"

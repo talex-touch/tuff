@@ -13,6 +13,15 @@
 
 ## 2026-05-15
 
+### fix(core-app): reset browser login pending state and gate dev runtime server switch
+
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+  - 修复设置页账户区在浏览器已完成登录但 App 未收到完整成功回调/收到未登录状态广播后，`isLoggingIn` 未及时复位导致按钮长期显示“登录中...”的问题。
+  - 登录状态广播现在会兜底结束 pending browser login；已登录时恢复账户展示，未登录时恢复按钮可重试。
+  - 浏览器登录增加 2 分钟可见超时与按钮倒计时，超时后自动恢复登录按钮，避免 dev protocol callback 丢失时长期卡住。
+  - “运行时 API 服务器”切换项明确限制为 dev 环境未登录时显示，避免 production 暴露开发调试入口。
+
 ### docs(governance): refresh compatibility audit and live SoT wording
 
 - `docs/plan-prd/report/cross-platform-compat-placeholder-summary-2026-05-15.md`

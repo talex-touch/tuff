@@ -28,14 +28,18 @@ let isInitialized = false
 let activeConsumers = 0
 
 const transport = useTuffTransport()
-const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
+const BROWSER_LOGIN_TIMEOUT_MS = 2 * 60 * 1000
 const BROWSER_LOGIN_CALLBACK_GRACE_MS = 5000
+const BROWSER_LOGIN_COUNTDOWN_TICK_MS = 1000
 const FOCUS_PROMPT_RECHECK_DELAY_MS = 400
+
+type BrowserIntervalId = number
 
 const pendingBrowserLogin = ref<{
   resolve: (result: LoginResult) => void
   reject: (error: Error) => void
-  timeoutId: NodeJS.Timeout
+  timeoutId: ReturnType<typeof setTimeout>
+  countdownId: BrowserIntervalId
   openedAt: number
 } | null>(null)
 const isHandlingExternalAuthCallback = ref(false)
@@ -259,6 +263,21 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
   })
 }
 
+function clearBrowserLoginLoading(): void {
+  if (pendingBrowserLogin.value) {
+    clearTimeout(pendingBrowserLogin.value.timeoutId)
+    window.clearInterval(pendingBrowserLogin.value.countdownId)
+    pendingBrowserLogin.value = null
+  }
+  authLoadingState.isLoggingIn = false
+  authLoadingState.loginTimeRemaining = 0
+}
+
+function finishPendingBrowserLogin(result: LoginResult): void {
+  pendingBrowserLogin.value?.resolve(result)
+  clearBrowserLoginLoading()
+}
+
 function getDisplayName(): string {
   const name = authState.user?.name?.trim()
   if (name) {
@@ -399,15 +418,16 @@ function cleanup(): boolean {
 async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<LoginResult> {
   authLoadingState.isLoggingIn = true
   authLoadingState.loginProgress = 0
+  authLoadingState.loginTimeRemaining = Math.ceil(BROWSER_LOGIN_TIMEOUT_MS / 1000)
 
   return new Promise((resolve) => {
     const openedAt = Date.now()
     const timeoutId = createBrowserLoginTimeout(resolve)
-    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId, openedAt }
+    const countdownId = createBrowserLoginCountdown(openedAt)
+    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId, countdownId, openedAt }
     openBrowserLoginPage(mode).catch((err) => {
-      clearTimeout(timeoutId)
-      pendingBrowserLogin.value = null
-      authLoadingState.isLoggingIn = false
+      clearBrowserLoginLoading()
+      authLoadingState.loginProgress = 0
       toast.error('无法打开浏览器')
       resolve({ success: false, error: err })
     })
@@ -508,13 +528,26 @@ function setupAuthStateListener(): void {
       return
     }
     applyAuthState(payload)
-    if (payload.isSignedIn && pendingBrowserLogin.value) {
-      clearTimeout(pendingBrowserLogin.value.timeoutId)
-      pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
-      pendingBrowserLogin.value = null
-      authLoadingState.isLoggingIn = false
-      authLoadingState.loginProgress = 100
-      toast.success('登录成功')
+    if (payload.isSignedIn) {
+      if (pendingBrowserLogin.value) {
+        finishPendingBrowserLogin({ success: true, user: currentUser.value })
+        authLoadingState.loginProgress = 100
+        toast.success('登录成功')
+        return
+      }
+      if (authLoadingState.isLoggingIn) {
+        clearBrowserLoginLoading()
+        authLoadingState.loginProgress = 100
+      }
+      return
+    }
+
+    if (authLoadingState.isLoggingIn) {
+      finishPendingBrowserLogin({
+        success: false,
+        error: new Error('Login state changed without session')
+      })
+      authLoadingState.loginProgress = 0
     }
   })
 
@@ -550,13 +583,27 @@ async function openBrowserLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Pr
   await transport.send(AuthEvents.session.login, { mode })
 }
 
-function createBrowserLoginTimeout(resolve: (result: LoginResult) => void): NodeJS.Timeout {
+function updateBrowserLoginCountdown(openedAt: number): void {
+  const elapsedMs = Date.now() - openedAt
+  const remainingMs = Math.max(0, BROWSER_LOGIN_TIMEOUT_MS - elapsedMs)
+  authLoadingState.loginTimeRemaining = Math.ceil(remainingMs / 1000)
+}
+
+function createBrowserLoginCountdown(openedAt: number): BrowserIntervalId {
+  updateBrowserLoginCountdown(openedAt)
+  return window.setInterval(() => {
+    updateBrowserLoginCountdown(openedAt)
+  }, BROWSER_LOGIN_COUNTDOWN_TICK_MS) as BrowserIntervalId
+}
+
+function createBrowserLoginTimeout(
+  resolve: (result: LoginResult) => void
+): ReturnType<typeof setTimeout> {
   return setTimeout(() => {
     if (pendingBrowserLogin.value) {
-      pendingBrowserLogin.value = null
-      authLoadingState.isLoggingIn = false
-      authLoadingState.loginProgress = 0
       const error = new Error('Browser login timeout')
+      clearBrowserLoginLoading()
+      authLoadingState.loginProgress = 0
       toast.error(getErrorMessage(error, 'LOGIN_TIMEOUT'))
       resolve({ success: false, error })
     }
@@ -581,8 +628,12 @@ function cancelPendingBrowserLogin(reason = 'Login cancelled'): void {
 async function retryPendingBrowserLogin(): Promise<void> {
   if (!pendingBrowserLogin.value) return
   clearTimeout(pendingBrowserLogin.value.timeoutId)
+  window.clearInterval(pendingBrowserLogin.value.countdownId)
   pendingBrowserLogin.value.openedAt = Date.now()
   pendingBrowserLogin.value.timeoutId = createBrowserLoginTimeout(pendingBrowserLogin.value.resolve)
+  pendingBrowserLogin.value.countdownId = createBrowserLoginCountdown(
+    pendingBrowserLogin.value.openedAt
+  )
   try {
     await openBrowserLoginPage()
     toast.info('已重新打开登录页面')
