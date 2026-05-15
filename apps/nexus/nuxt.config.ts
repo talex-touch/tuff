@@ -370,6 +370,11 @@ export default defineNuxtConfig({
 
   auth: {
     isEnabled: true,
+    baseURL: '/api/auth',
+    provider: {
+      type: 'authjs',
+      trustHost: true,
+    },
   },
 
   eslint: {

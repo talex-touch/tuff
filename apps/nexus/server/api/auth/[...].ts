@@ -11,6 +11,7 @@ import GitHub from 'next-auth/providers/github'
 import { createD1Adapter } from '../../utils/authAdapter'
 import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, verifyUserPassword } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
+import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
 
 const CredentialsProvider = (Credentials as any).default ?? Credentials
 const GitHubProvider = (GitHub as any).default ?? GitHub
@@ -163,9 +164,9 @@ function normalizeAuthResponseUrl(url: string, baseUrl: string) {
 }
 
 function resolveAuthBaseUrl(event: H3Event) {
-  const configuredOrigin = useRuntimeConfig().auth?.origin
-  if (typeof configuredOrigin === 'string' && configuredOrigin.trim().length > 0)
-    return configuredOrigin.trim()
+  const configuredOrigin = normalizeAuthOrigin(useRuntimeConfig().auth?.origin)
+  if (configuredOrigin && !shouldTrustForwardedAuthHost(configuredOrigin))
+    return configuredOrigin
   return getRequestURL(event).origin
 }
 
@@ -391,8 +392,21 @@ async function requestOauthProfileByFetch(input: {
   return payload
 }
 
+function applyNextAuthOriginFallback(configuredOrigin: string, trustForwardedHost: boolean) {
+  if (configuredOrigin && !trustForwardedHost) {
+    process.env.NEXTAUTH_URL = configuredOrigin
+    return
+  }
+
+  if (!process.env.NEXTAUTH_URL)
+    process.env.AUTH_TRUST_HOST = 'true'
+}
+
 function getAuthOptions(): AuthOptions {
   const config = useRuntimeConfig()
+  const configuredOrigin = normalizeAuthOrigin(config.auth?.origin)
+  const trustForwardedHost = shouldTrustForwardedAuthHost(configuredOrigin)
+  applyNextAuthOriginFallback(configuredOrigin, trustForwardedHost)
   const linuxdoIssuer = config.auth?.linuxdo?.issuer || 'https://connect.linux.do'
   const linuxdoClientId = config.auth?.linuxdo?.clientId
   const linuxdoClientSecret = config.auth?.linuxdo?.clientSecret

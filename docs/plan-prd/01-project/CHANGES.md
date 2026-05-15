@@ -13,6 +13,15 @@
 
 ## 2026-05-15
 
+### fix(nexus): harden production auth origin resolution
+
+- `apps/nexus/server/api/auth/[...].ts`
+- `apps/nexus/server/utils/authOrigin.ts`
+- `apps/nexus/nuxt.config.ts`
+  - Nexus AuthJS 现在会把有效 `AUTH_ORIGIN` 桥接为 `NEXTAUTH_URL`，避免生产环境回退到 `localhost:3000` 并写入错误 `next-auth.callback-url` cookie。
+  - 当生产环境缺失 canonical origin 或误配为 localhost/127.0.0.1 时，AuthJS 改为通过 `AUTH_TRUST_HOST` 信任 Cloudflare forwarded host 兜底，避免退出/刷新后 session 与 profile 状态分裂。
+  - Sidebase auth 配置显式声明 `/api/auth`、`authjs` 与 `trustHost`，并补充 origin 归一化单测。
+
 ### fix(core-app): use notification test button for macOS unverifiable permission
 
 - `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
