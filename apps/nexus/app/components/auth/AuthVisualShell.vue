@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import TouchAurora from '~/components/tuff/background/TouchAurora.vue'
+import { computed, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   loading?: boolean
@@ -11,6 +10,15 @@ const props = withDefaults(defineProps<{
 })
 
 const blockMessage = computed(() => props.blockText?.trim() || '')
+const shouldMountAurora = ref(false)
+
+onMounted(() => {
+  window.requestIdleCallback?.(() => {
+    shouldMountAurora.value = true
+  }, { timeout: 1200 }) ?? window.setTimeout(() => {
+    shouldMountAurora.value = true
+  }, 600)
+})
 </script>
 
 <template>
@@ -19,14 +27,17 @@ const blockMessage = computed(() => props.blockText?.trim() || '')
       <div class="auth-glow auth-glow--top absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(120,90,255,0.18),_transparent_55%)]" />
       <div class="auth-glow auth-glow--left absolute -left-40 top-[18%] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(255,120,155,0.18),_transparent_70%)] blur-3xl" />
       <div class="auth-glow auth-glow--right absolute -right-48 bottom-[8%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(88,190,255,0.2),_transparent_70%)] blur-3xl" />
-      <TouchAurora
-        :color-stops="['#574BDD', '#8727CE', '#057CCF']"
-        :amplitude="1.0"
-        :blend="0.5"
-        :speed="1.0"
-        :intensity="1.0"
-        class="op-10 -scale-100"
-      />
+      <ClientOnly>
+        <LazyTuffBackgroundTouchAurora
+          v-if="shouldMountAurora"
+          :color-stops="['#574BDD', '#8727CE', '#057CCF']"
+          :amplitude="1.0"
+          :blend="0.5"
+          :speed="1.0"
+          :intensity="1.0"
+          class="op-10 -scale-100"
+        />
+      </ClientOnly>
     </div>
 
     <div

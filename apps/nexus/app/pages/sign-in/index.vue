@@ -63,12 +63,7 @@ const {
   handleHeaderBack,
 } = useSignIn()
 
-const hasClientTakenOver = ref(false)
-const isPageBlocking = computed(() => !hasClientTakenOver.value)
-
-onMounted(() => {
-  hasClientTakenOver.value = true
-})
+const isCallbackBlocking = computed(() => step.value === 'oauth' && authLoading.value)
 
 function goTo(path: string) {
   return navigateTo(path)
@@ -81,8 +76,8 @@ function goTo(path: string) {
   </ClientOnly>
 
   <AuthVisualShell
-    :loading="authLoading || isPageBlocking"
-    :block-text="isPageBlocking ? t('auth.sessionBlocking', '正在处理登录，请稍候...') : ''"
+    :loading="authLoading"
+    :block-text="isCallbackBlocking ? t('auth.sessionBlocking', '正在处理登录，请稍候...') : ''"
   >
     <template #header>
       <AuthTopbar
@@ -91,7 +86,7 @@ function goTo(path: string) {
       />
     </template>
 
-    <div class="auth-shell" :class="{ 'is-loading': authLoading || isPageBlocking }">
+    <div class="auth-shell" :class="{ 'is-loading': authLoading }">
       <div class="auth-header">
         <div class="auth-logo">
           <Logo class="text-28" />

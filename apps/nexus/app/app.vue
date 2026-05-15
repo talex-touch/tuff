@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, watchEffect } from 'vue'
-import GlobalSearch from '~/components/search/GlobalSearch.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
-import InvisibleWatermark from '~/components/watermark/InvisibleWatermark.vue'
-import WatermarkRiskModal from '~/components/watermark/WatermarkRiskModal.vue'
 import { appName } from '~/constants'
 
 useHead({
@@ -13,6 +10,16 @@ useHead({
 const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
+const isAuthShellRoute = computed(() => {
+  const path = route.path || '/'
+  return path.startsWith('/sign-in')
+    || path.startsWith('/sign-up')
+    || path.startsWith('/auth/')
+    || path.startsWith('/verify')
+    || path.startsWith('/forgot-password')
+    || path.startsWith('/reset-password')
+    || path.startsWith('/device-auth')
+})
 const { showInvisibleWatermark } = useWatermarkDisplayPolicy()
 const { initLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
@@ -297,9 +304,9 @@ watchEffect(() => {
   <VitePwaManifest />
   <ToastContainer />
   <ClientOnly>
-    <GlobalSearch />
-    <InvisibleWatermark v-if="showInvisibleWatermark" />
-    <WatermarkRiskModal v-if="showInvisibleWatermark" />
+    <LazySearchGlobalSearch v-if="!isAuthShellRoute" />
+    <LazyWatermarkInvisibleWatermark v-if="showInvisibleWatermark && !isAuthShellRoute" />
+    <LazyWatermarkRiskModal v-if="showInvisibleWatermark && !isAuthShellRoute" />
   </ClientOnly>
   <template v-if="isProtectedRoute">
     <div

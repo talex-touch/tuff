@@ -13,6 +13,26 @@
 
 ## 2026-05-15
 
+### perf(nexus): tighten Pages media and bundle budgets
+
+- `apps/nexus/public/shots/SearchFileImmediately.mp4`
+- `apps/nexus/build/check-worker-bundle.mjs`
+- `apps/nexus/build/check-worker-bundle.test.ts`
+- `apps/nexus/nuxt.config.ts`
+  - Re-encoded the landing showcase file-search video as a silent 1280px H.264 asset, reducing it from about 19 MiB to about 659 KiB while keeping the existing `/shots/SearchFileImmediately.mp4` contract.
+  - Extended the existing Worker bundle analyzer into a Pages dist budget guard covering total dist size, largest static file, Worker executable JS, and gzip Worker size.
+  - Added focused tests to keep landing showcase MP4 assets below 2 MiB and to assert legacy GIF assets stay excluded from Cloudflare Pages output.
+  - Current local build output drops from about 54 MiB to about 38 MiB on disk, with `dist/shots` reduced to about 1.7 MiB.
+
+### perf(nexus): reduce auth shell critical client work
+
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/components/auth/AuthVisualShell.vue`
+- `apps/nexus/app/pages/sign-in/index.vue`
+  - Nexus auth shell routes no longer eagerly mount global search or watermark risk clients, reducing sign-in / auth callback critical hydration work.
+  - Sign-in visual aurora now mounts after client idle/short delay via lazy component, keeping the static gradient fallback on the first interactive path.
+  - Normal `/sign-in` no longer shows a hydration-only full-page blocking overlay; the blocking copy is limited to active OAuth verification.
+
 ### fix(nexus): harden production auth origin resolution
 
 - `apps/nexus/server/api/auth/[...].ts`
