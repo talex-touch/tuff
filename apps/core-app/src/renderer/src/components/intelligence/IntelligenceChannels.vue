@@ -36,7 +36,6 @@ function handleViewStats(event: MouseEvent) {
 <template>
   <TuffGroupBlock
     :name="t('settings.intelligence.landing.channels.title')"
-    :description="t('settings.intelligence.landing.channels.desc')"
     default-icon="i-carbon-api-1"
     active-icon="i-carbon-api-1"
     memory-name="intelligence-channels"
@@ -44,7 +43,6 @@ function handleViewStats(event: MouseEvent) {
     <!-- 配置渠道 -->
     <TuffBlockSlot
       :title="t('settings.intelligence.landing.channels.manageTitle')"
-      :description="t('settings.intelligence.landing.channels.manageDesc')"
       default-icon="i-carbon-settings"
       active-icon="i-carbon-settings"
     >
@@ -57,7 +55,6 @@ function handleViewStats(event: MouseEvent) {
     <!-- 渠道审计 -->
     <TuffBlockSlot
       :title="t('settings.intelligence.landing.channels.auditTitle')"
-      :description="t('settings.intelligence.landing.channels.auditDesc')"
       default-icon="i-carbon-event-schedule"
       active-icon="i-carbon-event-schedule"
       @click="handleAudit"
