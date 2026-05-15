@@ -3,6 +3,14 @@ import { join, relative } from 'node:path'
 
 const DOC_FILE_PATTERN = /\.(md|mdc)$/i
 const LOCALE_SUFFIX_PATTERN = /\.(en|zh)$/i
+const STATIC_DOC_ROUTE_ALLOWLIST = new Set([
+  'dev/index',
+  'guide/features/preview',
+  'guide/index',
+  'guide/start',
+  'hello',
+  'index',
+])
 
 function toPosixPath(path: string) {
   return path.replace(/\\/g, '/')
@@ -32,7 +40,7 @@ export function normalizeDocsContentRoute(relativePath: string) {
     .replace(LOCALE_SUFFIX_PATTERN, '')
     .replace(/^\/+/, '')
 
-  if (!normalized)
+  if (!normalized || !STATIC_DOC_ROUTE_ALLOWLIST.has(normalized))
     return []
 
   const routes = new Set<string>([`/docs/${normalized}`])

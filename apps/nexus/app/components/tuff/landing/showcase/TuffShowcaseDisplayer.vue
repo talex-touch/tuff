@@ -57,7 +57,7 @@ const slides = computed<ShowcaseSlide[]>(() => [
       insight: '',
       references: [],
       media: {
-        src: '/shots/SearchApp.gif',
+        src: '/shots/SearchApp.mp4',
         alt: t('landing.os.aiSpotlight.corebox.slides.search.alt'),
       },
       results: [],
@@ -96,7 +96,7 @@ const slides = computed<ShowcaseSlide[]>(() => [
       insight: '',
       references: [],
       media: {
-        src: '/shots/PluginTranslate.gif',
+        src: '/shots/PluginTranslate.mp4',
         alt: t('landing.os.aiSpotlight.corebox.slides.tool.alt'),
       },
       results: [],

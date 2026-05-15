@@ -72,6 +72,26 @@
   - 新增模板均使用 `model` step 与 Stable capability：会议纪要走 `text.summarize`，文本批处理走 `text.chat`，输出继续进入现有运行结果与页面 Review Queue。
   - 内置模板统一写入 `builtin/template/category/templateVersion` metadata；启动 seed 只自动覆盖同 ID 且 `metadata.builtin === true` 的模板，保留用户另存副本。
 
+### perf(nexus): slim prerender docs and silent showcase media
+
+- `apps/nexus/build/docs-prerender-routes.ts`
+- `apps/nexus/build/docs-prerender-routes.test.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/components/tuff/landing/showcase/TuffShowcaseDisplayer.vue`
+- `apps/nexus/public/shots/SearchApp.mp4`
+- `apps/nexus/public/shots/PluginTranslate.mp4`
+  - Nexus docs prerender 从全量扫描 `content/docs` 收敛为稳定入口 allowlist，保留 `/docs`、guide/start、preview、dev index 与 docs API 静态输出；组件/API 等长尾文档继续走运行时 SSR，降低 Cloudflare Pages 上传包与重复 HTML。
+  - 首页 showcase 的两个 GIF 演示迁移为无音轨 MP4，并保持前端 `muted` / `loop` / `playsinline` 播放；Nitro public copy 排除 legacy GIF，避免大 GIF 继续进入发布产物。
+
+### fix(nexus): stabilize component docs route switches
+
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/components/content/demos/GlassSurfaceGlassSurface2Demo.vue`
+- `packages/tuffex/packages/components/src/glass-surface/src/TxGlassSurface.vue`
+  - Docs 内容页取消整页 `out-in` page/state transition，并在文档切换与卸载时清理手动渲染的 code header VNode，避免 Vue route unmount 过程中出现 `parentNode` 为空导致页面卡死。
+  - `TxGlassSurface` 的 `ResizeObserver` / `setTimeout` 更新增加卸载保护，组件离开页面后不再继续写 SVG filter DOM。
+  - 修正 GlassSurface 参数调节 demo 的初始值，避免生成 demo 把数字、channel 列表和 blend mode 错误初始化为空字符串或布尔值。
+
 ### fix(ci): prevent beta release dependency install hang
 
 - `.github/workflows/build-and-release.yml`
