@@ -7,7 +7,10 @@ import type {
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
-import { isNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
+import {
+  isNexusManagedProvider,
+  TUFF_NEXUS_PROVIDER_ICON
+} from '~/modules/intelligence/nexus-provider'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -108,7 +111,11 @@ const statusDot = computed<TuffItemStatusDot>(() => ({
   label: localEnabled.value ? t('intelligence.status.enabled') : t('intelligence.status.disabled')
 }))
 
-function getProviderIcon(type: string): ITuffIcon {
+function getProviderIcon(provider: IntelligenceProviderConfig): ITuffIcon {
+  if (isNexusManagedProvider(provider)) {
+    return TUFF_NEXUS_PROVIDER_ICON
+  }
+
   const iconMap: Record<string, string> = {
     [IntelligenceProviderType.OPENAI]: 'i-simple-icons-openai',
     [IntelligenceProviderType.ANTHROPIC]: 'i-simple-icons-anthropic',
@@ -118,7 +125,7 @@ function getProviderIcon(type: string): ITuffIcon {
     [IntelligenceProviderType.CUSTOM]: 'i-carbon-settings'
   }
 
-  const iconClass = iconMap[type] || 'i-carbon-ibm-watson-machine-learning'
+  const iconClass = iconMap[provider.type] || 'i-carbon-ibm-watson-machine-learning'
 
   return {
     type: 'class',
@@ -136,7 +143,7 @@ function handleClick() {
   <TuffItemTemplate
     :title="provider.name"
     :subtitle="providerSubtitle"
-    :icon="getProviderIcon(provider.type)"
+    :icon="getProviderIcon(provider)"
     :selected="isSelected"
     :top-badge="
       hasConfigError ? errorBadge : isNexusManagedProvider(provider) ? nexusBadge : undefined

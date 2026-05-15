@@ -9,11 +9,13 @@ import { TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
 import IntelligenceList from '~/components/intelligence/layout/IntelligenceList.vue'
+import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
 import {
@@ -43,6 +45,12 @@ const searchQuery = ref('')
 const isSyncingFromNexus = ref(false)
 const syncError = ref('')
 const syncMessage = ref('')
+const basicEditorVisible = ref(false)
+const basicDraft = ref({ id: '', name: '', type: IntelligenceProviderType.CUSTOM })
+
+const canEditSelectedProvider = computed(
+  () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value)
+)
 
 function normalizeProviderType(type: string): IntelligenceProviderType {
   switch (type) {
@@ -188,6 +196,48 @@ async function syncProvidersFromNexus(): Promise<void> {
   } finally {
     isSyncingFromNexus.value = false
   }
+}
+
+function createProviderCopy(provider: IntelligenceProviderConfig): IntelligenceProviderConfig {
+  const id = `custom-${Date.now()}`
+  return {
+    ...provider,
+    id,
+    name: `${provider.name} Copy`,
+    enabled: false,
+    metadata: {
+      ...(provider.metadata || {}),
+      copiedFrom: provider.id,
+      copiedAt: Date.now()
+    }
+  }
+}
+
+function handleDuplicateProvider(): void {
+  if (!selectedProvider.value || isNexusManagedProvider(selectedProvider.value)) return
+  const copied = createProviderCopy(selectedProvider.value)
+  addProvider(copied)
+  selectedProviderId.value = copied.id
+  testResult.value = null
+}
+
+function handleOpenBasicEditor(): void {
+  if (!selectedProvider.value || !canEditSelectedProvider.value) return
+  basicDraft.value = {
+    id: selectedProvider.value.id,
+    name: selectedProvider.value.name,
+    type: normalizeProviderType(selectedProvider.value.type)
+  }
+  basicEditorVisible.value = true
+}
+
+function handleSaveBasicEditor(): void {
+  if (!selectedProvider.value || basicDraft.value.id !== selectedProvider.value.id) return
+  updateProvider(selectedProvider.value.id, {
+    name: basicDraft.value.name.trim() || selectedProvider.value.name,
+    type: basicDraft.value.type
+  })
+  basicEditorVisible.value = false
 }
 
 function handleAddProvider(): void {
@@ -350,6 +400,8 @@ useKeyboardNavigation({
             @update="handleUpdateProvider"
             @test="handleTestProvider"
             @delete="handleDeleteProvider"
+            @duplicate="handleDuplicateProvider"
+            @edit-basic="handleOpenBasicEditor"
           />
           <IntelligenceEmptyState v-else />
         </div>
@@ -359,5 +411,37 @@ useKeyboardNavigation({
     <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
       {{ t('settings.intelligence.emptyProviders') }}
     </p>
+
+    <TuffDrawer
+      v-model:visible="basicEditorVisible"
+      :title="t('settings.intelligence.editProviderBasic')"
+    >
+      <div class="p-4 space-y-3">
+        <TuffBlockInput
+          v-model="basicDraft.name"
+          :title="t('settings.intelligence.providerName')"
+          :description="t('settings.intelligence.providerNameHint')"
+          :placeholder="t('settings.intelligence.providerNamePlaceholder')"
+          default-icon="i-carbon-text-font"
+          active-icon="i-carbon-text-font"
+        />
+        <TuffBlockInput
+          v-model="basicDraft.type"
+          :title="t('settings.intelligence.providerType')"
+          :description="t('settings.intelligence.providerTypeHint')"
+          placeholder="custom"
+          default-icon="i-carbon-api-1"
+          active-icon="i-carbon-api-1"
+        />
+        <div class="flex justify-end gap-2 pt-2">
+          <TxButton variant="flat" @click="basicEditorVisible = false">
+            {{ t('common.cancel') }}
+          </TxButton>
+          <TxButton type="primary" variant="flat" @click="handleSaveBasicEditor">
+            {{ t('common.confirm') }}
+          </TxButton>
+        </div>
+      </div>
+    </TuffDrawer>
   </div>
 </template>

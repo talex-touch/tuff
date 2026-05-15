@@ -26,6 +26,7 @@ interface IntelligenceProviderConfig {
 const props = defineProps<{
   modelValue: IntelligenceProviderConfig
   disabled?: boolean
+  priorityOnly?: boolean
 }>()
 
 const emits = defineEmits<{
@@ -136,6 +137,7 @@ function handleTimeoutControlBlur(onBlur: () => void) {
 
     <!-- Timeout Input -->
     <TuffBlockInput
+      v-if="!priorityOnly"
       v-model="localTimeout"
       :title="t('intelligence.config.advanced.timeout')"
       :description="timeoutError || t('intelligence.config.advanced.timeoutHint')"

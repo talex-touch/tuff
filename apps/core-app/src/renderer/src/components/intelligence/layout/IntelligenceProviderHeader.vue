@@ -2,11 +2,15 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import { TxBottomDialog, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
+import {
+  isNexusManagedProvider as checkNexusManagedProvider,
+  TUFF_NEXUS_PROVIDER_ICON
+} from '~/modules/intelligence/nexus-provider'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -42,6 +46,8 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   delete: []
+  duplicate: []
+  editBasic: []
 }>()
 
 const { t } = useI18n()
@@ -60,6 +66,8 @@ const providerIconMap: Record<IntelligenceProviderType, ITuffIcon> = {
 
 const overflowIcon: ITuffIcon = { type: 'class', value: 'i-carbon-overflow-menu-horizontal' }
 const trashIcon: ITuffIcon = { type: 'class', value: 'i-carbon-trash-can' }
+const copyIcon: ITuffIcon = { type: 'class', value: 'i-carbon-copy' }
+const editIcon: ITuffIcon = { type: 'class', value: 'i-carbon-edit' }
 const defaultIcon: ITuffIcon = { type: 'class', value: 'i-carbon-ibm-watson-machine-learning' }
 
 const localEnabled = computed({
@@ -74,11 +82,31 @@ const isNexusManagedProvider = computed(() => {
 })
 
 const providerIcon = computed<ITuffIcon>(() => {
+  if (isNexusManagedProvider.value) {
+    return TUFF_NEXUS_PROVIDER_ICON
+  }
   return providerIconMap[props.provider.type as IntelligenceProviderType] ?? defaultIcon
 })
 
 const deleteConfirmVisible = ref(false)
 const actionMenuOpen = ref(false)
+
+async function handleDuplicate() {
+  emits('duplicate')
+}
+
+function handleEditBasic() {
+  emits('editBasic')
+}
+
+async function handleCopyId() {
+  try {
+    await navigator.clipboard.writeText(props.provider.id)
+    toast.success(t('settings.intelligence.copyProviderSuccess'))
+  } catch {
+    toast.error(t('settings.intelligence.copyProviderFailed'))
+  }
+}
 
 function handleDelete() {
   deleteConfirmVisible.value = true
@@ -118,11 +146,7 @@ function closeDeleteConfirm() {
       </div>
     </div>
     <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
-      <TxDropdownMenu
-        v-if="provider.type === 'custom'"
-        v-model="actionMenuOpen"
-        placement="bottom-end"
-      >
+      <TxDropdownMenu v-model="actionMenuOpen" placement="bottom-end">
         <template #trigger>
           <TxButton
             variant="flat"
@@ -137,7 +161,27 @@ function closeDeleteConfirm() {
             />
           </TxButton>
         </template>
-        <TxDropdownItem danger @select="handleDelete">
+        <TxDropdownItem @select="handleCopyId">
+          <TuffIcon :icon="copyIcon" :alt="t('settings.intelligence.copyProvider')" :size="18" />
+          <span class="ml-2">{{ t('settings.intelligence.copyProvider') }}</span>
+        </TxDropdownItem>
+        <TxDropdownItem v-if="!isNexusManagedProvider" @select="handleEditBasic">
+          <TuffIcon
+            :icon="editIcon"
+            :alt="t('settings.intelligence.editProviderBasic')"
+            :size="18"
+          />
+          <span class="ml-2">{{ t('settings.intelligence.editProviderBasic') }}</span>
+        </TxDropdownItem>
+        <TxDropdownItem v-if="!isNexusManagedProvider" @select="handleDuplicate">
+          <TuffIcon
+            :icon="copyIcon"
+            :alt="t('settings.intelligence.duplicateProvider')"
+            :size="18"
+          />
+          <span class="ml-2">{{ t('settings.intelligence.duplicateProvider') }}</span>
+        </TxDropdownItem>
+        <TxDropdownItem v-if="!isNexusManagedProvider" danger @select="handleDelete">
           <TuffIcon
             :icon="trashIcon"
             :alt="t('settings.intelligence.deleteProvider', { name: provider.name })"
