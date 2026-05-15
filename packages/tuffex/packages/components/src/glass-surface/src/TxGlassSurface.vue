@@ -44,6 +44,9 @@ const redGradId = `tx-glass-red-grad-${uniqueId}`
 const blueGradId = `tx-glass-blue-grad-${uniqueId}`
 
 let resizeObserver: ResizeObserver | null = null
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
+let isUnmounted = false
+
 function supportsSVGFilters() {
   if (!hasWindow() || !hasNavigator() || !hasDocument())
     return false
@@ -97,12 +100,18 @@ function generateDisplacementMap() {
 }
 
 function updateDisplacementMap() {
+  if (isUnmounted)
+    return
+
   if (feImageRef.value) {
     feImageRef.value.setAttribute('href', generateDisplacementMap())
   }
 }
 
 function updateFilterElements() {
+  if (isUnmounted)
+    return
+
   const elements = [
     { el: redChannelRef.value, offset: props.redOffset },
     { el: greenChannelRef.value, offset: props.greenOffset },
@@ -160,13 +169,23 @@ const containerStyles = computed(() => {
 })
 
 onMounted(() => {
+  isUnmounted = false
+
   nextTick(() => {
+    if (isUnmounted)
+      return
+
     updateDisplacementMap()
     updateFilterElements()
 
     if (containerRef.value && typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
-        setTimeout(updateDisplacementMap, 0)
+        if (resizeTimer)
+          clearTimeout(resizeTimer)
+        resizeTimer = setTimeout(() => {
+          resizeTimer = null
+          updateDisplacementMap()
+        }, 0)
       })
       resizeObserver.observe(containerRef.value)
     }
@@ -174,8 +193,13 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  isUnmounted = true
   resizeObserver?.disconnect()
   resizeObserver = null
+  if (resizeTimer) {
+    clearTimeout(resizeTimer)
+    resizeTimer = null
+  }
 })
 
 watch(

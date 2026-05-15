@@ -431,7 +431,13 @@ function hydrateSelectedScene() {
     resetSceneForm()
     return
   }
-  const current = scenes.value.find(scene => scene.id === selectedSceneId.value) ?? scenes.value[0]
+  const firstScene = scenes.value[0]
+  if (!firstScene) {
+    selectedSceneId.value = ''
+    resetSceneForm()
+    return
+  }
+  const current = scenes.value.find(scene => scene.id === selectedSceneId.value) ?? firstScene
   selectedSceneId.value = current.id
   hydrateSceneForm(current)
 }
@@ -1174,14 +1180,18 @@ function openProbeOverlay(provider: Provider, event?: MouseEvent) {
   probeResult.value = null
   probeStreamOutput.value = ''
   probeStreamStatus.value = ''
-  probeAbortController?.abort()
+  abortProviderProbe()
   probeAbortController = null
   probeOverlaySource.value = (event?.currentTarget as HTMLElement) ?? null
   showProbeOverlay.value = true
 }
 
-function closeProbeOverlay(close: () => void) {
+function abortProviderProbe() {
   probeAbortController?.abort()
+}
+
+function closeProbeOverlay(close: () => void) {
+  abortProviderProbe()
   close()
 }
 
@@ -2832,7 +2842,7 @@ function formatEndpointCandidates(list?: string[]) {
                 v-if="probeLoading"
                 variant="secondary"
                 size="small"
-                @click="probeAbortController?.abort()"
+                @click="abortProviderProbe"
               >
                 {{ t('dashboard.sections.intelligence.providers.probe.stop', '停止') }}
               </TxButton>

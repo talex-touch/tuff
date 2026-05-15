@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
 const { color, toggleDark } = useTheme()
+const isMounted = ref(false)
 
 useHead({
   meta: [{
@@ -17,8 +18,19 @@ const isDark = computed(() => color.value === 'dark')
 function handleToggle(value: boolean) {
   toggleDark(value ? 'dark' : 'light')
 }
+
+onMounted(() => {
+  isMounted.value = true
+})
 </script>
 
 <template>
-  <TuffSwitch :model-value="isDark" @change="handleToggle" />
+  <TuffSwitch v-if="isMounted" :model-value="isDark" @change="handleToggle" />
+  <div
+    v-else
+    class="tuff-switch DarkToggle-Placeholder"
+    aria-hidden="true"
+  >
+    <span class="tuff-switch__thumb" />
+  </div>
 </template>

@@ -13,6 +13,31 @@
 
 ## 2026-05-15
 
+### docs(governance): refresh compatibility audit and live SoT wording
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-summary-2026-05-15.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
+  - 新增 2026-05-15 兼容性、占位实现与治理口径总结：当前未发现新的 P0 级固定假值成功或平台能力伪装全支持，主要风险仍是 Windows/Nexus evidence、AI 占位退场、secret backend、插件 shell capability、动态执行边界与 SRP 大文件拆分。
+  - 活跃入口基线同步到 `2.4.10-beta.25`，并明确旧 `compatibility-debt-registry.csv`、`legacy-boundary-allowlist.json`、`large-file-boundary-allowlist.json` 与 `docs:guard/legacy:guard/compat:registry:guard` 已不在当前 live tree，不能继续作为当前事实来源。
+  - 下一步收口口径改为 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单，避免继续引用已经退场的 guard/清册。
+
+### fix(nexus): stabilize component docs demo loading
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/components/content/TuffDemoWrapper.vue`
+- `apps/nexus/app/components/content/TuffDemoClientRenderer.client.vue`
+- `apps/nexus/app/components/content/demo-lazy.ts`
+- `apps/nexus/app/components/content/demo-loader.ts`
+- `apps/nexus/app/components/content/demo-client-boundary.test.ts`
+  - 将组件文档 demo 与 demo registry 从 Nuxt 自动组件注册中硬过滤，避免 UI 文档切换时把数百个 demo 组件注入客户端初始化边界。
+  - Demo renderer 仅在 wrapper 进入视口并处于浏览器 idle/短延迟后挂载，registry 只在客户端 active 后加载，减轻 docs 路由 hydration 与切换时的主线程压力。
+  - 补充 focused 回归，锁定 SSR wrapper 不静态引入 demo registry、renderer 仍在 active state 后加载，以及自动注册过滤规则继续存在。
+
 ### feat(core-app): expose local AI tools and skills providers
 
 - `apps/core-app/src/main/modules/ai/intelligence-local-environment.ts`

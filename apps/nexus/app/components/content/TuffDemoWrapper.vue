@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { type ComponentPublicInstance, computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { DEMO_LAZY_ROOT_MARGIN, shouldActivateDemo } from './demo-lazy'
+import { DEMO_LAZY_ROOT_MARGIN, scheduleDemoActivation, shouldActivateDemo, type DemoActivationTask } from './demo-lazy'
 
 interface DemoWrapperProps {
   demo: string
@@ -54,6 +54,7 @@ const isDemoActive = ref(false)
 const demoInstanceRef = ref<DemoResetController | null>(null)
 const isResetting = ref(false)
 let observer: IntersectionObserver | null = null
+let activationTask: DemoActivationTask | null = null
 
 const toggleLabel = computed(() => {
   if (showCode.value)
@@ -108,10 +109,25 @@ function handleDemoInstanceChange(instance: DemoResetController | null) {
   demoInstanceRef.value = instance
 }
 
+function clearPendingActivation() {
+  if (!activationTask)
+    return
+
+  activationTask.cancel()
+  activationTask = null
+}
+
 function activateDemo() {
-  isDemoActive.value = true
-  observer?.disconnect()
-  observer = null
+  if (isDemoActive.value || activationTask)
+    return
+
+  clearPendingActivation()
+  activationTask = scheduleDemoActivation(() => {
+    activationTask = null
+    isDemoActive.value = true
+    observer?.disconnect()
+    observer = null
+  })
 }
 
 onMounted(() => {
@@ -139,6 +155,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   observer?.disconnect()
   observer = null
+  clearPendingActivation()
 })
 
 </script>
@@ -179,12 +196,16 @@ onBeforeUnmount(() => {
         <div class="tuff-demo__preview">
           <ClientOnly>
             <TuffDemoClientRenderer
+              v-if="isDemoActive"
               :demo="props.demo"
               :is-active="isDemoActive"
               :render-key="demoRenderKey"
               :inactive-label="inactiveLabel"
               @instance-change="handleDemoInstanceChange"
             />
+            <div v-else class="tuff-demo__placeholder">
+              {{ inactiveLabel }}
+            </div>
             <template #fallback>
               <div class="tuff-demo__placeholder">
                 {{ inactiveLabel }}

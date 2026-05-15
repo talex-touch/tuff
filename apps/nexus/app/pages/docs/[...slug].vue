@@ -14,10 +14,7 @@ import { useTypedFetch } from '~/utils/request'
 
 definePageMeta({
   layout: 'docs',
-  pageTransition: {
-    name: 'docs-page',
-    mode: 'out-in',
-  },
+  pageTransition: false,
 })
 
 const route = useRoute()
@@ -158,6 +155,8 @@ const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
 
 watch(requestKey, () => {
+  clearCodeEnhanceSchedule()
+  clearRenderedCodeHeaders()
   isLoading.value = true
 })
 
@@ -704,6 +703,7 @@ onBeforeUnmount(() => {
   docsAnalyticsOptionsReady.value = false
   docsAnalyticsConfigOpen.value = false
   clearCodeEnhanceSchedule()
+  clearRenderedCodeHeaders()
   docsOverlayResizeObserver?.disconnect()
   docsOverlayResizeObserver = null
   if (import.meta.client)
@@ -1536,11 +1536,13 @@ function renderCodeHeader(target: HTMLElement, language: string, codeText: strin
   const vnode = h(CodeHeader, { language, codeText })
   vnode.appContext = nuxtApp.vueApp._context
   render(vnode, target)
+  codeHeaderTargets.add(target)
 }
 
 let codeEnhanceTimer: ReturnType<typeof setTimeout> | null = null
 let codeEnhanceRaf: number | null = null
 let codeEnhanceRunId = 0
+const codeHeaderTargets = new Set<HTMLElement>()
 
 function clearCodeEnhanceSchedule() {
   if (import.meta.server)
@@ -1553,6 +1555,19 @@ function clearCodeEnhanceSchedule() {
     cancelAnimationFrame(codeEnhanceRaf)
     codeEnhanceRaf = null
   }
+}
+
+function clearRenderedCodeHeaders() {
+  if (import.meta.server || !codeHeaderTargets.size)
+    return
+
+  for (const target of codeHeaderTargets) {
+    try {
+      render(null, target)
+    }
+    catch {}
+  }
+  codeHeaderTargets.clear()
 }
 
 function enhanceCodeBlocks() {
@@ -1734,8 +1749,7 @@ watch(
 
 <template>
   <div class="docs-root relative">
-    <Transition name="docs-state" mode="out-in">
-      <div :key="viewState" class="docs-state">
+    <div :key="viewState" class="docs-state">
         <div v-if="viewState === 'loading'" class="docs-state__body px-6 py-20">
           <TxLoadingState title="" :description="t('docs.loading')" />
         </div>
@@ -1792,6 +1806,7 @@ watch(
             </div>
           </div>
           <ContentRenderer
+            :key="currentDocRenderKey"
             :value="doc ?? {}"
             :class="[
               'docs-prose',
@@ -2126,8 +2141,7 @@ watch(
             {{ t('docs.backHome') }}
           </NuxtLink>
         </div>
-      </div>
-    </Transition>
+    </div>
     <ClientOnly>
       <Toaster position="bottom-left" />
     </ClientOnly>

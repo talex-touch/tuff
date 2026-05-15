@@ -1,27 +1,45 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const backgroundOpacity = ref('')
-const blendModes = ref('')
-const blueOffset = ref('')
-const blur = ref('')
-const borderRadius = ref('')
-const borderWidth = ref('')
-const brightness = ref('')
-const channel = ref('')
-const channels = ref('')
-const displace = ref(false)
-const distortionScale = ref(false)
-const greenOffset = ref('')
-const height = ref('')
-const mixBlendMode = ref('')
-const mode = ref('')
-const opacity = ref('')
-const redOffset = ref('')
-const saturation = ref('')
-const width = ref('')
-const xChannel = ref('')
-const yChannel = ref('')
+const width = ref(360)
+const height = ref(160)
+const borderRadius = ref(20)
+const borderWidth = ref(0.08)
+const brightness = ref(85)
+const opacity = ref(0.9)
+const blur = ref(10)
+const displace = ref(0.6)
+const backgroundOpacity = ref(0.08)
+const saturation = ref(1.2)
+const distortionScale = ref(-180)
+const redOffset = ref(0)
+const greenOffset = ref(10)
+const blueOffset = ref(20)
+const xChannel = ref<'R' | 'G' | 'B'>('R')
+const yChannel = ref<'R' | 'G' | 'B'>('G')
+const mixBlendMode = ref('difference')
+
+const channels = ['R', 'G', 'B']
+const blendModes = [
+  'normal',
+  'multiply',
+  'screen',
+  'overlay',
+  'darken',
+  'lighten',
+  'color-dodge',
+  'color-burn',
+  'hard-light',
+  'soft-light',
+  'difference',
+  'exclusion',
+  'hue',
+  'saturation',
+  'color',
+  'luminosity',
+  'plus-darker',
+  'plus-lighter',
+]
 </script>
 
 <template>

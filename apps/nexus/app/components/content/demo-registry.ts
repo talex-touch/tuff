@@ -1,17 +1,6 @@
-import { type Component, defineAsyncComponent } from 'vue'
+import type { DemoLoader } from './demo-loader'
 
-interface DemoModule { default: Component }
-type DemoLoader = () => Promise<DemoModule>
-
-export function createAsyncDemo(loader: DemoLoader, loadingComponent: Component, errorComponent: Component) {
-  return defineAsyncComponent({
-    loader,
-    loadingComponent,
-    errorComponent,
-    delay: 200,
-    timeout: 15000,
-  })
-}
+export type { DemoLoader } from './demo-loader'
 
 export const demoLoaders: Record<string, DemoLoader> = {
   AgentsAgentsListDemo: () => import('./demos/AgentsAgentsListDemo.vue'),

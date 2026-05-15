@@ -79,6 +79,24 @@ export default defineNuxtConfig({
   ],
   ssr: ssrEnabled,
 
+  components: {
+    dirs: [
+      {
+        path: '~/components/global',
+        global: true,
+      },
+      {
+        path: '~/components',
+        ignore: [
+          'content/demos/**',
+          'content/demo-registry.ts',
+          'content/demo-loader.ts',
+          'content/demo-lazy.ts',
+        ],
+      },
+    ],
+  },
+
   imports: {
     dirsScanOptions: {
       fileFilter: (file) => !file.replace(/\\/g, '/').endsWith('/server/utils/billing/index.ts'),
@@ -332,6 +350,23 @@ export default defineNuxtConfig({
   },
 
   debug: false,
+
+  hooks: {
+    'components:extend'(components) {
+      const ignoredContentComponentPatterns = [
+        '/app/components/content/demos/',
+        '/app/components/content/demo-registry.ts',
+        '/app/components/content/demo-loader.ts',
+        '/app/components/content/demo-lazy.ts',
+      ]
+
+      for (let index = components.length - 1; index >= 0; index -= 1) {
+        const filePath = components[index]?.filePath?.replace(/\\/g, '/') ?? ''
+        if (ignoredContentComponentPatterns.some(pattern => filePath.includes(pattern)))
+          components.splice(index, 1)
+      }
+    },
+  },
 
   auth: {
     isEnabled: true,
