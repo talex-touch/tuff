@@ -23,6 +23,8 @@ const {
   agentOptions,
   builtinToolOptions,
   pendingApprovals,
+  reviewQueueItems,
+  reviewQueueReplaceConfirmId,
   canDeleteCurrent,
   loadAgents,
   loadWorkflows,
@@ -39,7 +41,10 @@ const {
   runWorkflow,
   resumeCurrentRun,
   inspectRun,
-  approveTicket
+  approveTicket,
+  copyReviewItemToClipboard,
+  replaceClipboardWithReviewItem,
+  dismissReviewItem
 } = useWorkflowEditor()
 
 const runStatusText = computed(() => {
@@ -94,11 +99,12 @@ function formatDate(value?: number): string {
 function kindLabel(kind: WorkflowStepKind): string {
   if (kind === 'tool') return 'Tool'
   if (kind === 'prompt') return 'Prompt'
+  if (kind === 'model') return 'Model'
   return 'Agent'
 }
 
 function displayStepKind(kind?: string): string {
-  return kindLabel(kind === 'tool' || kind === 'prompt' ? kind : 'agent')
+  return kindLabel(kind === 'tool' || kind === 'prompt' || kind === 'model' ? kind : 'agent')
 }
 
 function workflowStatusText(enabled: boolean): string {
@@ -174,6 +180,37 @@ async function handleApproval(ticketId: string, approved: boolean): Promise<void
         ? t('intelligence.workflow.toastToolApproved')
         : t('intelligence.workflow.toastToolRejected')
     )
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
+}
+
+async function handleCopyReviewItem(itemId: string): Promise<void> {
+  try {
+    await copyReviewItemToClipboard(itemId)
+    toast.success(t('intelligence.workflow.toastReviewCopied'))
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
+}
+
+async function handleReplaceClipboardReviewItem(itemId: string): Promise<void> {
+  try {
+    const result = await replaceClipboardWithReviewItem(itemId)
+    if (!result.confirmed) {
+      toast.info(t('intelligence.workflow.toastReviewReplaceConfirm'))
+      return
+    }
+    toast.success(t('intelligence.workflow.toastReviewClipboardReplaced'))
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
+}
+
+async function handleDismissReviewItem(itemId: string): Promise<void> {
+  try {
+    await dismissReviewItem(itemId)
+    toast.success(t('intelligence.workflow.toastReviewDismissed'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
   }
@@ -471,6 +508,9 @@ onMounted(async () => {
                 <TxButton variant="flat" @click="addStep('prompt')">
                   <span>{{ t('intelligence.workflow.addPromptStep') }}</span>
                 </TxButton>
+                <TxButton variant="flat" @click="addStep('model')">
+                  <span>{{ t('intelligence.workflow.addModelStep') }}</span>
+                </TxButton>
                 <TxButton variant="flat" @click="addStep('tool')">
                   <span>{{ t('intelligence.workflow.addToolStep') }}</span>
                 </TxButton>
@@ -515,6 +555,7 @@ onMounted(async () => {
                     <span class="field-label">{{ t('intelligence.workflow.fieldType') }}</span>
                     <select v-model="step.kind">
                       <option value="prompt">prompt</option>
+                      <option value="model">model</option>
                       <option value="tool">tool</option>
                       <option value="agent">agent</option>
                     </select>
@@ -536,6 +577,8 @@ onMounted(async () => {
                     :placeholder="
                       step.kind === 'prompt'
                         ? t('intelligence.workflow.promptPlaceholder')
+                        : step.kind === 'model'
+                          ? t('intelligence.workflow.modelPlaceholder')
                         : t('intelligence.workflow.instructionPlaceholder')
                     "
                   />
@@ -565,6 +608,22 @@ onMounted(async () => {
                     placeholder="builtin.workflow-agent"
                   />
                 </label>
+
+                <div v-if="step.kind === 'model'" class="form-grid">
+                  <label class="field">
+                    <span class="field-label">{{
+                      t('intelligence.workflow.modelInputSources')
+                    }}</span>
+                    <textarea v-model="step.inputSources" rows="5" />
+                  </label>
+
+                  <label class="field">
+                    <span class="field-label">{{
+                      t('intelligence.workflow.modelOutputContract')
+                    }}</span>
+                    <textarea v-model="step.outputContract" rows="5" />
+                  </label>
+                </div>
 
                 <label class="field">
                   <span class="field-label">{{ t('intelligence.workflow.inputJsonShort') }}</span>
@@ -672,6 +731,57 @@ onMounted(async () => {
           </div>
         </div>
 
+        <div v-if="currentRun" class="subsection">
+          <div class="subsection-head">
+            <h3>{{ t('intelligence.workflow.reviewQueueTitle') }}</h3>
+            <p>{{ t('intelligence.workflow.reviewQueueDescription') }}</p>
+          </div>
+
+          <div v-if="reviewQueueItems.length === 0" class="empty-state">
+            {{ t('intelligence.workflow.emptyReviewQueue') }}
+          </div>
+
+          <article v-for="item in reviewQueueItems" :key="item.id" class="small-card">
+            <div class="review-title">
+              <span>{{ item.stepName || item.stepId }}</span>
+              <span class="mini-badge">{{ item.status }}</span>
+            </div>
+            <div class="small-card__meta">
+              <span>{{ item.capabilityId || 'workflow.output' }}</span>
+              <span v-if="item.provider || item.model">
+                {{ [item.provider, item.model].filter(Boolean).join(' / ') }}
+              </span>
+            </div>
+            <div v-if="item.traceId" class="small-card__meta">
+              trace: {{ item.traceId }}
+            </div>
+            <pre class="result-pre">{{ item.preview }}</pre>
+            <div v-if="item.error" class="runtime-error">
+              {{ item.error }}
+            </div>
+            <div class="approval-actions">
+              <TxButton variant="flat" @click="handleDismissReviewItem(item.id)">
+                <span>{{ t('intelligence.workflow.dismissReviewItem') }}</span>
+              </TxButton>
+              <TxButton variant="flat" @click="handleCopyReviewItem(item.id)">
+                <span>{{ t('intelligence.workflow.copyReviewItem') }}</span>
+              </TxButton>
+              <TxButton
+                :variant="reviewQueueReplaceConfirmId === item.id ? 'flat' : 'ghost'"
+                @click="handleReplaceClipboardReviewItem(item.id)"
+              >
+                <span>
+                  {{
+                    reviewQueueReplaceConfirmId === item.id
+                      ? t('intelligence.workflow.confirmReplaceClipboard')
+                      : t('intelligence.workflow.replaceClipboard')
+                  }}
+                </span>
+              </TxButton>
+            </div>
+          </article>
+        </div>
+
         <div class="subsection">
           <div class="subsection-head">
             <h3>{{ t('intelligence.workflow.historyTitle') }}</h3>
@@ -764,6 +874,7 @@ onMounted(async () => {
 .workflow-list-item__meta,
 .approval-actions,
 .approval-title,
+.review-title,
 .toolbar-actions,
 .subsection-actions,
 .toggle-row {

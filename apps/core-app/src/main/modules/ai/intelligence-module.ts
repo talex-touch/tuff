@@ -9,6 +9,7 @@ import type {
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn,
   WorkflowDefinition,
+  WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowTriggerType
 } from '@talex-touch/tuff-intelligence'
@@ -43,6 +44,7 @@ import {
   setupConfigUpdateListener
 } from './intelligence-config'
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
+import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
@@ -203,6 +205,13 @@ interface IntelligenceWorkflowRunPayload {
   triggerType?: WorkflowTriggerType
   continueOnError?: boolean
   metadata?: Record<string, unknown>
+}
+
+interface IntelligenceWorkflowReviewUpdatePayload {
+  runId: string
+  itemId: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
 }
 
 function normalizeFromSeq(value: unknown): number | undefined {
@@ -383,7 +392,11 @@ const intelligenceWorkflowEvents = {
   history: defineEvent('intelligence')
     .module('workflow')
     .event('history')
-    .define<IntelligenceWorkflowHistoryPayload | undefined, ApiResponse<WorkflowRunRecord[]>>()
+    .define<IntelligenceWorkflowHistoryPayload | undefined, ApiResponse<WorkflowRunRecord[]>>(),
+  reviewUpdate: defineEvent('intelligence')
+    .module('workflow')
+    .event('review:update')
+    .define<IntelligenceWorkflowReviewUpdatePayload, ApiResponse<WorkflowRunRecord>>()
 } as const
 
 const intelligenceSessionStartEvent = intelligenceAgentEvents.sessionStart
@@ -410,6 +423,7 @@ const intelligenceWorkflowSaveEvent = intelligenceWorkflowEvents.save
 const intelligenceWorkflowDeleteEvent = intelligenceWorkflowEvents.delete
 const intelligenceWorkflowRunEvent = intelligenceWorkflowEvents.run
 const intelligenceWorkflowHistoryEvent = intelligenceWorkflowEvents.history
+const intelligenceWorkflowReviewUpdateEvent = intelligenceWorkflowEvents.reviewUpdate
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -933,6 +947,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerInvokeChannels(registerProtectedSafe)
     this.registerCapabilityChannels(registerSafe)
     this.registerStatsChannels(registerSafe)
+    this.registerEnvironmentChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
     this.registerWorkflowChannels(registerProtectedSafe)
@@ -1214,6 +1229,22 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const { callerId, periodType, startPeriod, endPeriod } = data
       return await tuffIntelligence.getUsageStats(callerId, periodType, startPeriod, endPeriod)
     })
+  }
+
+  private registerEnvironmentChannels(
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerSafe(
+      intelligenceApiEvents.getLocalEnvironment,
+      'Get local intelligence environment',
+      async () => {
+        return await getIntelligenceLocalEnvironment()
+      }
+    )
   }
 
   private registerOrchestrationChannels(
@@ -1531,6 +1562,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Invalid workflow history payload')
         }
         return intelligenceWorkflowService.listHistory(data ?? {})
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowReviewUpdateEvent,
+      'Update intelligence workflow review queue',
+      'intelligence.basic',
+      async (data) => {
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid workflow review update payload')
+        }
+        return intelligenceWorkflowService.updateReviewQueueItem(data)
       }
     )
   }

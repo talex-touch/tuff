@@ -129,6 +129,38 @@ describe('intelligenceProviderRegistryBridge', () => {
     }))
   })
 
+  it('preserves existing registry metadata when syncing provider fields', async () => {
+    registryMocks.listProviderRegistryEntries.mockResolvedValue([
+      {
+        id: 'prv_existing',
+        metadata: {
+          source: 'intelligence',
+          intelligenceProviderId: 'ip_ai_provider_1',
+          routingShape: 'providers-scenes',
+          sceneModelOverrides: {
+            'nexus.intelligence.chat': 'gpt-4.1-mini',
+          },
+        },
+      },
+    ])
+
+    await syncIntelligenceProviderToRegistry({} as any, provider({
+      defaultModel: 'gpt-4.1',
+    }), 'admin-user-1')
+
+    const input = registryMocks.updateProviderRegistryEntry.mock.calls[0][2]
+    expect(input.metadata).toMatchObject({
+      source: 'intelligence',
+      intelligenceProviderId: 'ip_ai_provider_1',
+      providerRegistryId: 'prv_existing',
+      defaultModel: 'gpt-4.1',
+      routingShape: 'providers-scenes',
+      sceneModelOverrides: {
+        'nexus.intelligence.chat': 'gpt-4.1-mini',
+      },
+    })
+  })
+
   it('maps local intelligence providers to vision.ocr without credential requirement', async () => {
     await syncIntelligenceProviderToRegistry({} as any, provider({
       type: 'local',

@@ -5,6 +5,7 @@ import type {
   IntelligenceAgentResult,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  WorkflowModelInputSource,
   PromptWorkflowExecution,
   ToolSource,
   WorkflowDefinition,
@@ -34,6 +35,15 @@ const DEFAULT_CONTEXT_SOURCES: WorkflowDefinition['contextSources'] = [
 ]
 
 const BUILTIN_WORKFLOW_TOOL_PREFIXES = ['clipboard.', 'desktop.context.', 'browser.']
+const STABLE_MODEL_CAPABILITIES = new Set([
+  'text.chat',
+  'text.translate',
+  'text.summarize',
+  'text.rewrite',
+  'code.explain',
+  'code.review',
+  'vision.ocr'
+])
 
 class WorkflowApprovalRequiredError extends Error {
   constructor(
@@ -99,6 +109,22 @@ function stringifyForPrompt(value: unknown): string {
   }
 }
 
+function readPath(source: unknown, path?: string): unknown {
+  if (!path) {
+    return source
+  }
+
+  return path.split('.').reduce((current, part) => {
+    if (!part) {
+      return current
+    }
+    if (current && typeof current === 'object') {
+      return (current as Record<string, unknown>)[part]
+    }
+    return undefined
+  }, source)
+}
+
 function normalizeTextResult(value: unknown): string {
   if (typeof value === 'string') {
     return value.trim()
@@ -119,6 +145,88 @@ function normalizeTextResult(value: unknown): string {
 
 function toToolTextResult(value: unknown): string {
   return normalizeTextResult(value)
+}
+
+function resolveStringInput(
+  input: Record<string, unknown>,
+  keys: string[],
+  fallback: string
+): string {
+  for (const key of keys) {
+    const value = input[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+  return fallback
+}
+
+function omitWorkflowModelRoutingFields(input: Record<string, unknown>): Record<string, unknown> {
+  const {
+    allowedProviderIds,
+    capabilityId,
+    inputSources,
+    metadata,
+    modelPreference,
+    output,
+    outputFormat,
+    preferredProviderId,
+    timeout,
+    ...payload
+  } = input
+  void allowedProviderIds
+  void capabilityId
+  void inputSources
+  void metadata
+  void modelPreference
+  void output
+  void outputFormat
+  void preferredProviderId
+  void timeout
+  return payload
+}
+
+function resolveModelInputSourceText(
+  source: WorkflowModelInputSource,
+  executionContext: DeepAgentExecutionContext,
+  state: {
+    inputs: Record<string, unknown>
+    previousOutputs: Record<string, unknown>
+  }
+): string {
+  let value: unknown
+
+  switch (source.type) {
+    case 'literal':
+      value = source.text
+      break
+    case 'workflow.input':
+    case 'selectionRef':
+    case 'ocrRef':
+    case 'fileTextRef':
+      value = readPath(state.inputs, source.key || 'text')
+      break
+    case 'clipboardRef':
+      value = executionContext.contextSnapshot?.clipboard
+        ?.map((item) => item.content)
+        .filter(Boolean)
+        .join('\n\n')
+      break
+    case 'previousStep':
+      value = source.stepId
+        ? readPath(state.previousOutputs[source.stepId], source.field)
+        : state.previousOutputs
+      break
+    default:
+      value = readPath(state.inputs, source.key)
+      break
+  }
+
+  const text = normalizeTextResult(value)
+  if (text) {
+    return source.label ? `${source.label}:\n${text}` : text
+  }
+  return source.fallback ? `${source.label || source.type}:\n${source.fallback}` : ''
 }
 
 function computeRiskLevel(tool: AgentTool): 'low' | 'medium' | 'high' | 'critical' {
@@ -536,6 +644,10 @@ export class IntelligenceDeepAgentOrchestrationService {
       return await this.executeDirectToolStep(definitionStep, executionContext)
     }
 
+    if (definitionStep.kind === 'model') {
+      return await this.executeModelStep(definitionStep, executionContext, state)
+    }
+
     if (definitionStep.kind === 'prompt') {
       const result = await this.runDeepAgent({
         capabilityId: 'workflow.execute',
@@ -561,6 +673,138 @@ export class IntelligenceDeepAgentOrchestrationService {
       text: result.text,
       provider: result.provider,
       model: result.model
+    }
+  }
+
+  private async executeModelStep(
+    definitionStep: WorkflowDefinitionStep,
+    executionContext: DeepAgentExecutionContext,
+    state: {
+      inputs: Record<string, unknown>
+      previousOutputs: Record<string, unknown>
+    }
+  ): Promise<unknown> {
+    const input = toRecord(definitionStep.input)
+    const capabilityId = String(input.capabilityId || 'text.chat').trim()
+    if (!STABLE_MODEL_CAPABILITIES.has(capabilityId)) {
+      throw new Error(
+        `[Intelligence] workflow model step ${definitionStep.id} only supports stable capabilities`
+      )
+    }
+
+    const payload = this.buildModelStepPayload(capabilityId, definitionStep, executionContext, state)
+    const intelligence = await getIntelligenceSdk()
+    const result = await intelligence.invoke(capabilityId, payload, {
+      metadata: {
+        ...(executionContext.metadata ?? {}),
+        ...(toRecord(input.metadata) ?? {}),
+        caller: 'workflow.use-model',
+        source: 'intelligence.workflow.model',
+        workflowId: executionContext.workflowId,
+        workflowName: executionContext.workflowName,
+        workflowRunId: executionContext.runId,
+        workflowStepId: executionContext.step.workflowStepId || definitionStep.id,
+        sessionId: executionContext.sessionId
+      },
+      modelPreference: Array.isArray(input.modelPreference)
+        ? input.modelPreference.filter((item): item is string => typeof item === 'string')
+        : undefined,
+      allowedProviderIds: Array.isArray(input.allowedProviderIds)
+        ? input.allowedProviderIds.filter((item): item is string => typeof item === 'string')
+        : undefined,
+      preferredProviderId:
+        typeof input.preferredProviderId === 'string' ? input.preferredProviderId : undefined,
+      timeout: typeof input.timeout === 'number' ? input.timeout : undefined
+    })
+
+    return {
+      result: result.result,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
+      latency: result.latency,
+      traceId: result.traceId,
+      capabilityId
+    }
+  }
+
+  private buildModelStepPayload(
+    capabilityId: string,
+    step: WorkflowDefinitionStep,
+    executionContext: DeepAgentExecutionContext,
+    state: {
+      inputs: Record<string, unknown>
+      previousOutputs: Record<string, unknown>
+    }
+  ): Record<string, unknown> {
+    const input = toRecord(step.input)
+    const text = resolveStringInput(input, ['text', 'inputText', 'content'], '')
+    const sourceText = (step.inputSources ?? [])
+      .map((source) => resolveModelInputSourceText(source, executionContext, state))
+      .filter(Boolean)
+      .join('\n\n')
+    const outputContract = step.output
+    const prompt = [
+      step.prompt || step.description || '',
+      text ? `输入:\n${text}` : '',
+      sourceText ? `输入引用:\n${sourceText}` : '',
+      outputContract?.format ? `输出格式:\n${outputContract.format}` : '',
+      outputContract?.schema ? `输出 JSON schema:\n${stringifyForPrompt(outputContract.schema)}` : '',
+      `工作流输入:\n${stringifyForPrompt(state.inputs)}`,
+      `桌面上下文:\n${stringifyForPrompt(executionContext.contextSnapshot)}`,
+      `前置步骤输出:\n${stringifyForPrompt(state.previousOutputs)}`
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+    const code = resolveStringInput(input, ['code', 'text', 'inputText'], text || prompt)
+    const payloadInput = omitWorkflowModelRoutingFields(input)
+
+    switch (capabilityId) {
+      case 'text.translate':
+        return {
+          ...payloadInput,
+          text: text || prompt,
+          targetLang: resolveStringInput(input, ['targetLang', 'targetLanguage'], 'zh-CN'),
+          sourceLang: typeof input.sourceLang === 'string' ? input.sourceLang : undefined
+        }
+      case 'text.summarize':
+        return {
+          ...payloadInput,
+          text: text || prompt
+        }
+      case 'text.rewrite':
+        return {
+          ...payloadInput,
+          text: text || prompt
+        }
+      case 'code.explain':
+        return {
+          ...payloadInput,
+          code,
+          language: typeof input.language === 'string' ? input.language : undefined
+        }
+      case 'code.review':
+        return {
+          ...payloadInput,
+          code,
+          language: typeof input.language === 'string' ? input.language : undefined,
+          context: resolveStringInput(input, ['context'], prompt)
+        }
+      case 'vision.ocr':
+        return payloadInput
+      case 'text.chat':
+      default:
+        return {
+          ...payloadInput,
+          messages: Array.isArray(input.messages)
+            ? input.messages
+            : [
+                {
+                  role: 'user',
+                  content: prompt || text || '请处理当前工作流输入。'
+                }
+              ]
+        }
     }
   }
 
@@ -925,7 +1169,7 @@ export class IntelligenceDeepAgentOrchestrationService {
           `[Intelligence] workflow.execute step ${String(step.id || index + 1)} rejects capabilityId`
         )
       }
-      if (kind !== 'prompt' && kind !== 'tool' && kind !== 'agent') {
+      if (kind !== 'prompt' && kind !== 'tool' && kind !== 'agent' && kind !== 'model') {
         throw new Error(
           `[Intelligence] workflow.execute step ${String(step.id || index + 1)} requires explicit kind`
         )

@@ -14,6 +14,8 @@ import {
   getIntelligenceProviderApiKeyWithRegistryFallback,
   listIntelligenceProvidersWithRegistryMirrors,
 } from './intelligenceProviderRegistryBridge'
+import { recordProviderUsageLedger } from './providerUsageLedgerStore'
+import type { SceneRunFallbackTrailItem, SceneRunResult, SceneRunTraceStep } from './sceneOrchestrator'
 import {
   createAudit,
   getSettings,
@@ -101,6 +103,16 @@ interface NexusInvokeOptions extends InvokeModelOptions {
   allowedProviderIds?: string[]
   modelPreference?: string[]
   metadata?: Record<string, unknown>
+}
+
+interface NexusInvokeAuditContext {
+  source: string
+  caller?: string
+  sessionId?: string
+  workflowId?: string
+  workflowName?: string
+  workflowRunId?: string
+  workflowStepId?: string
 }
 
 interface InvokeModelAttemptError {
@@ -1317,6 +1329,144 @@ function normalizeTextResult(capabilityId: string, content: string): unknown {
   return content
 }
 
+function resolveInvokeAuditContext(options: NexusInvokeOptions): NexusInvokeAuditContext {
+  const metadata = options.metadata ?? {}
+  const source = readOptionalString(metadata.source) || options.source || 'core-app'
+  return {
+    source,
+    caller: readOptionalString(metadata.caller),
+    sessionId: readOptionalString(metadata.sessionId) || options.sessionId,
+    workflowId: readOptionalString(metadata.workflowId),
+    workflowName: readOptionalString(metadata.workflowName),
+    workflowRunId: readOptionalString(metadata.workflowRunId),
+    workflowStepId: readOptionalString(metadata.workflowStepId),
+  }
+}
+
+function buildInvokeCreditMetadata(
+  invocation: NexusIntelligenceInvokeResult,
+  usage: IntelligenceUsageInfo,
+  audit: NexusInvokeAuditContext,
+) {
+  return {
+    capabilityId: invocation.capabilityId,
+    providerId: invocation.provider,
+    providerName: invocation.metadata.providerName,
+    providerType: invocation.metadata.providerType,
+    model: invocation.model,
+    traceId: invocation.traceId,
+    tokens: usage.totalTokens,
+    promptTokens: usage.promptTokens,
+    completionTokens: usage.completionTokens,
+    source: audit.source,
+    caller: audit.caller,
+    sessionId: audit.sessionId,
+    workflowId: audit.workflowId,
+    workflowName: audit.workflowName,
+    workflowRunId: audit.workflowRunId,
+    workflowStepId: audit.workflowStepId,
+  }
+}
+
+function buildInvokeTrace(
+  invocation: NexusIntelligenceInvokeResult,
+  audit: NexusInvokeAuditContext,
+  createdAt: string,
+): SceneRunTraceStep[] {
+  return [
+    {
+      phase: 'scene.load',
+      status: 'success',
+      at: createdAt,
+      message: 'Nexus intelligence invoke audit context resolved.',
+      metadata: {
+        traceId: invocation.traceId,
+        source: audit.source,
+        caller: audit.caller ?? null,
+        sessionId: audit.sessionId ?? null,
+        workflowId: audit.workflowId ?? null,
+        workflowName: audit.workflowName ?? null,
+        workflowRunId: audit.workflowRunId ?? null,
+        workflowStepId: audit.workflowStepId ?? null,
+      },
+    },
+    {
+      phase: 'adapter.dispatch',
+      status: 'success',
+      at: createdAt,
+      message: 'Nexus intelligence capability invocation completed.',
+      metadata: {
+        capabilityId: invocation.capabilityId,
+        providerId: invocation.provider,
+        model: invocation.model,
+        traceId: invocation.traceId,
+        totalTokens: invocation.usage.totalTokens,
+        latency: invocation.latency,
+      },
+    },
+  ]
+}
+
+async function recordIntelligenceInvokeUsageLedger(
+  event: H3Event,
+  invocation: NexusIntelligenceInvokeResult,
+  audit: NexusInvokeAuditContext,
+): Promise<string[]> {
+  const usage = normalizeUsage(invocation.usage)
+  const createdAt = new Date().toISOString()
+  const fallbackTrail: SceneRunFallbackTrailItem[] = invocation.metadata.attemptedProviders.map(providerId => ({
+    providerId,
+    capability: invocation.capabilityId,
+    status: providerId === invocation.provider ? 'selected' : 'candidate',
+  }))
+  const run: SceneRunResult = {
+    runId: `intelligence_invoke_${invocation.traceId}`,
+    sceneId: 'nexus.intelligence.invoke',
+    status: 'completed',
+    mode: 'execute',
+    strategyMode: 'priority',
+    requestedCapabilities: [invocation.capabilityId],
+    selected: [
+      {
+        providerId: invocation.provider,
+        providerName: invocation.metadata.providerName || invocation.provider,
+        vendor: invocation.metadata.providerType || 'unknown',
+        capability: invocation.capabilityId,
+        priority: 0,
+        weight: null,
+        bindingId: `intelligence:${invocation.provider}`,
+        authRef: null,
+        endpoint: null,
+        region: null,
+      },
+    ],
+    candidates: [],
+    fallbackTrail,
+    trace: buildInvokeTrace(invocation, audit, createdAt),
+    usage: [
+      {
+        unit: 'token',
+        quantity: usage.totalTokens,
+        billable: usage.totalTokens > 0,
+        providerId: invocation.provider,
+        capability: invocation.capabilityId,
+        estimated: false,
+        providerUsageRef: invocation.traceId,
+      },
+    ],
+    output: null,
+  }
+
+  try {
+    const entries = await recordProviderUsageLedger(event, run)
+    return entries.map(entry => entry.id)
+  }
+  catch (error) {
+    console.warn('[tuffIntelligenceLabService] Failed to record intelligence invoke usage ledger', error)
+    return []
+  }
+}
+
 function isCreditsExceededError(error: unknown): error is Error {
   return error instanceof Error && CREDITS_EXCEEDED_MESSAGES.has(error.message)
 }
@@ -1325,26 +1475,34 @@ async function consumeIntelligenceInvokeCredits(
   event: H3Event,
   userId: string,
   invocation: NexusIntelligenceInvokeResult,
-): Promise<void> {
+  audit: NexusInvokeAuditContext,
+): Promise<NexusIntelligenceInvokeResult['metadata']['billing']> {
   const usage = normalizeUsage(invocation.usage)
   const tokens = usage.totalTokens
   if (!Number.isFinite(tokens) || tokens <= 0) {
-    return
+    return {
+      chargedCredits: 0,
+      unit: 'token',
+      billable: false,
+      reason: 'intelligence-invoke',
+    }
   }
 
   try {
-    await consumeCredits(event, userId, tokens, 'intelligence-invoke', {
-      capabilityId: invocation.capabilityId,
-      providerId: invocation.provider,
-      providerName: invocation.metadata.providerName,
-      providerType: invocation.metadata.providerType,
-      model: invocation.model,
-      traceId: invocation.traceId,
+    const consumption = await consumeCredits(
+      event,
+      userId,
       tokens,
-      promptTokens: usage.promptTokens,
-      completionTokens: usage.completionTokens,
-      source: 'core-app',
-    })
+      'intelligence-invoke',
+      buildInvokeCreditMetadata(invocation, usage, audit),
+    )
+    return {
+      ledgerId: consumption.ledgerId,
+      chargedCredits: consumption.amount,
+      unit: 'token',
+      billable: true,
+      reason: 'intelligence-invoke',
+    }
   } catch (error) {
     if (isCreditsExceededError(error)) {
       throw createError({
@@ -1419,6 +1577,21 @@ export interface NexusIntelligenceInvokeResult {
     fallbackCount: number
     retryCount: number
     attemptedProviders: string[]
+    source: string
+    caller?: string
+    sessionId?: string
+    workflowId?: string
+    workflowName?: string
+    workflowRunId?: string
+    workflowStepId?: string
+    billing?: {
+      ledgerId?: string
+      chargedCredits: number
+      unit: 'token'
+      billable: boolean
+      reason: 'intelligence-invoke'
+    }
+    providerUsageLedgerIds?: string[]
   }
 }
 
@@ -1429,6 +1602,7 @@ export async function invokeIntelligenceCapability(
 ): Promise<NexusIntelligenceInvokeResult> {
   const capabilityId = normalizeCapabilityId(request.capabilityId)
   const options = request.options ?? {}
+  const audit = resolveInvokeAuditContext(options)
   const model = options.model
     || (Array.isArray(options.modelPreference) ? readOptionalString(options.modelPreference[0]) : undefined)
   const providerId = options.providerId
@@ -1456,9 +1630,21 @@ export async function invokeIntelligenceCapability(
         fallbackCount: 0,
         retryCount: 0,
         attemptedProviders: [provider.id],
+        source: audit.source,
+        caller: audit.caller,
+        sessionId: audit.sessionId,
+        workflowId: audit.workflowId,
+        workflowName: audit.workflowName,
+        workflowRunId: audit.workflowRunId,
+        workflowStepId: audit.workflowStepId,
       },
     }
-    await consumeIntelligenceInvokeCredits(event, userId, result)
+    result.metadata.billing = await consumeIntelligenceInvokeCredits(event, userId, result, audit)
+    result.metadata.providerUsageLedgerIds = await recordIntelligenceInvokeUsageLedger(
+      event,
+      result,
+      audit,
+    )
     return result
   }
 
@@ -1468,9 +1654,9 @@ export async function invokeIntelligenceCapability(
     model,
     timeoutMs,
     messages,
-    source: 'core-app',
+    source: audit.source,
     stage: `capability:${capabilityId}`,
-    sessionId: readOptionalString(options.metadata?.sessionId),
+    sessionId: audit.sessionId,
   })
 
   const result: NexusIntelligenceInvokeResult = {
@@ -1488,9 +1674,21 @@ export async function invokeIntelligenceCapability(
       fallbackCount: invocation.fallbackCount,
       retryCount: invocation.retryCount,
       attemptedProviders: invocation.attemptedProviders,
+      source: audit.source,
+      caller: audit.caller,
+      sessionId: audit.sessionId,
+      workflowId: audit.workflowId,
+      workflowName: audit.workflowName,
+      workflowRunId: audit.workflowRunId,
+      workflowStepId: audit.workflowStepId,
     },
   }
-  await consumeIntelligenceInvokeCredits(event, userId, result)
+  result.metadata.billing = await consumeIntelligenceInvokeCredits(event, userId, result, audit)
+  result.metadata.providerUsageLedgerIds = await recordIntelligenceInvokeUsageLedger(
+    event,
+    result,
+    audit,
+  )
   return result
 }
 

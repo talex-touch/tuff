@@ -12,6 +12,7 @@ import type {
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn,
   WorkflowDefinition,
+  WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowTriggerType,
 } from '../../../types/intelligence'
@@ -238,6 +239,54 @@ export interface IntelligenceWorkflowRunPayload {
   metadata?: Record<string, unknown>
 }
 
+export interface IntelligenceWorkflowReviewUpdatePayload {
+  runId: string
+  itemId: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+}
+
+export interface IntelligenceLocalToolSummary {
+  id: 'codex' | 'claude'
+  name: string
+  installed: boolean
+  executablePath?: string
+  configRoots: string[]
+}
+
+export interface IntelligenceLocalConfigFileSummary {
+  tool: 'codex' | 'claude'
+  path: string
+  exists: boolean
+  kind: 'config' | 'instructions' | 'codex-project' | 'claude-project'
+  keyPaths: string[]
+  sensitiveKeyPaths: string[]
+  updatedAt?: number
+}
+
+export interface IntelligenceLocalSkillProviderSummary {
+  id: string
+  name: string
+  description: string
+  source: 'codex-local' | 'tuff-internal'
+  installed: boolean
+  enabled: boolean
+  mode: 'core' | 'gated' | 'external'
+  riskLevel: 'low' | 'medium' | 'high' | 'critical'
+  capabilities: string[]
+  path?: string
+  manifestPath?: string
+  updatedAt?: number
+}
+
+export interface IntelligenceLocalEnvironmentSummary {
+  scannedAt: number
+  cwd: string
+  tools: IntelligenceLocalToolSummary[]
+  configFiles: IntelligenceLocalConfigFileSummary[]
+  skillProviders: IntelligenceLocalSkillProviderSummary[]
+}
+
 export type IntelligenceApiResponse<T = undefined>
   = { ok: true, result?: T }
     | { ok: false, error: string }
@@ -315,6 +364,8 @@ export interface IntelligenceSdk {
   workflowDelete: (payload: IntelligenceWorkflowDeletePayload) => Promise<{ deleted: boolean }>
   workflowRun: (payload: IntelligenceWorkflowRunPayload) => Promise<WorkflowRunRecord>
   workflowHistory: (payload?: IntelligenceWorkflowHistoryPayload) => Promise<WorkflowRunRecord[]>
+  workflowReviewUpdate: (payload: IntelligenceWorkflowReviewUpdatePayload) => Promise<WorkflowRunRecord>
+  getLocalEnvironment: () => Promise<IntelligenceLocalEnvironmentSummary>
 }
 
 export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'> & Partial<Pick<ITuffTransport, 'stream'>>
@@ -420,6 +471,10 @@ export const intelligenceApiEvents = {
     .module('api')
     .event('reload-config')
     .define<void, { ok: boolean, error?: string }>(),
+  getLocalEnvironment: defineEvent('intelligence')
+    .module('api')
+    .event('local-environment')
+    .define<void, IntelligenceApiResponse<IntelligenceLocalEnvironmentSummary>>(),
 } as const
 
 export const intelligenceAgentEvents = {
@@ -567,6 +622,10 @@ const intelligenceWorkflowEvents = {
       IntelligenceWorkflowHistoryPayload | undefined,
       IntelligenceApiResponse<WorkflowRunRecord[]>
     >(),
+  reviewUpdate: defineEvent('intelligence')
+    .module('workflow')
+    .event('review:update')
+    .define<IntelligenceWorkflowReviewUpdatePayload, IntelligenceApiResponse<WorkflowRunRecord>>(),
 } as const
 
 function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMessage: string): T {
@@ -665,6 +724,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async getCurrentUsage(payload) {
       const response = await transport.send(intelligenceApiEvents.getCurrentUsage, payload)
       return assertApiResponse(response, 'Failed to get current usage')
+    },
+
+    async getLocalEnvironment() {
+      const response = await transport.send(intelligenceApiEvents.getLocalEnvironment)
+      return assertApiResponse(response, 'Failed to get local intelligence environment')
     },
 
     async agentSessionStart(payload = {}) {
@@ -787,6 +851,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async workflowHistory(payload = {}) {
       const response = await transport.send(intelligenceWorkflowEvents.history, payload)
       return assertApiResponse(response, 'Failed to query workflow history')
+    },
+
+    async workflowReviewUpdate(payload) {
+      const response = await transport.send(intelligenceWorkflowEvents.reviewUpdate, payload)
+      return assertApiResponse(response, 'Failed to update workflow review queue')
     },
   }
 }

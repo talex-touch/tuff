@@ -3,6 +3,10 @@ import type {
   ToolSource,
   WorkflowDefinition,
   WorkflowDefinitionStep,
+  WorkflowModelInputSource,
+  WorkflowModelOutputContract,
+  WorkflowReviewQueueItemState,
+  WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowRunStatus,
   WorkflowStepKind,
@@ -43,6 +47,13 @@ export interface WorkflowRunRequest {
   metadata?: Record<string, unknown>
 }
 
+export interface WorkflowReviewQueueUpdateRequest {
+  runId: string
+  itemId: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+}
+
 export interface WorkflowExecutionContext {
   workflow: WorkflowDefinition
   run: WorkflowRunRecord
@@ -55,6 +66,8 @@ export interface WorkflowExecutionContext {
 }
 
 type WorkflowExecutor = (ctx: WorkflowExecutionContext) => Promise<WorkflowRunRecord>
+
+const BUILTIN_WORKFLOW_TEMPLATE_VERSION = 1
 
 function now(): number {
   return Date.now()
@@ -79,6 +92,16 @@ function toJson(value: unknown, fallback: unknown = null): string {
   return JSON.stringify(value ?? fallback)
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
 function normalizeTriggerType(value: unknown): WorkflowTriggerType {
   return value === 'clipboard.batch' ? 'clipboard.batch' : 'manual'
 }
@@ -97,7 +120,7 @@ function normalizeRunStatus(value: unknown): WorkflowRunStatus {
 }
 
 function normalizeWorkflowStepKind(value: unknown): WorkflowStepKind {
-  if (value === 'prompt' || value === 'tool' || value === 'agent') {
+  if (value === 'prompt' || value === 'tool' || value === 'agent' || value === 'model') {
     return value
   }
   throw new Error(`Unsupported workflow step kind: ${String(value || '')}`)
@@ -113,6 +136,114 @@ function normalizeToolSource(value: unknown): ToolSource {
   throw new Error(`Unsupported workflow tool source: ${String(value)}`)
 }
 
+function normalizeReviewQueueStatus(value: unknown): WorkflowReviewQueueItemStatus {
+  if (
+    value === 'pending' ||
+    value === 'copied' ||
+    value === 'clipboard_replaced' ||
+    value === 'dismissed' ||
+    value === 'failed'
+  ) {
+    return value
+  }
+  throw new Error(`Unsupported workflow review queue status: ${String(value)}`)
+}
+
+function normalizeModelInputSources(value: unknown): WorkflowModelInputSource[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item): WorkflowModelInputSource | null => {
+      const source = toRecord(item)
+      const type = optionalString(source.type)
+      if (!type) {
+        return null
+      }
+      return {
+        type,
+        key: optionalString(source.key),
+        label: optionalString(source.label),
+        text: optionalString(source.text),
+        stepId: optionalString(source.stepId),
+        field: optionalString(source.field),
+        fallback: optionalString(source.fallback)
+      }
+    })
+    .filter((item): item is WorkflowModelInputSource => Boolean(item))
+}
+
+function normalizeModelOutputContract(
+  value: unknown,
+  input: Record<string, unknown>
+): WorkflowModelOutputContract {
+  const output = toRecord(value)
+  const inputFormat = optionalString(input.outputFormat)
+  const format = optionalString(output.format) ?? inputFormat ?? 'markdown'
+  const schema = toRecord(output.schema)
+  const reviewPolicy = output.reviewPolicy === 'approval' ? 'approval' : 'preview'
+  const riskLevel =
+    output.riskLevel === 'high' || output.riskLevel === 'medium' ? output.riskLevel : 'low'
+
+  return {
+    format,
+    schema: Object.keys(schema).length > 0 ? schema : undefined,
+    reviewPolicy,
+    riskLevel
+  }
+}
+
+function omitModelContractMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const { modelContract, ...rest } = metadata
+  void modelContract
+  return rest
+}
+
+function createDefaultManualTrigger(): WorkflowDefinition['triggers'] {
+  return [
+    {
+      id: 'manual',
+      type: 'manual',
+      enabled: true,
+      label: '手动运行'
+    }
+  ]
+}
+
+function createDefaultTemplateContextSources(limit: number): WorkflowDefinition['contextSources'] {
+  return [
+    {
+      id: 'clipboard.recent',
+      type: 'clipboard.recent',
+      enabled: true,
+      label: '最近剪贴板',
+      config: {
+        limit
+      }
+    },
+    {
+      id: 'desktop.active-app',
+      type: 'desktop.active-app',
+      enabled: true,
+      label: '前台应用'
+    },
+    {
+      id: 'session.memory',
+      type: 'session.memory',
+      enabled: true,
+      label: '当前会话记忆'
+    }
+  ]
+}
+
+function createDefaultTemplateApprovalPolicy(): ToolApprovalPolicy {
+  return {
+    requireApprovalAtOrAbove: 'high',
+    autoApproveReadOnly: true
+  }
+}
+
 function createClipboardOrganizerTemplate(): WorkflowDefinition {
   const timestamp = now()
   return {
@@ -121,54 +252,40 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
     description: '读取最近剪贴板历史，按主题分组并生成可复制的整理结果。',
     version: '1',
     enabled: true,
-    triggers: [
-      {
-        id: 'manual',
-        type: 'manual',
-        enabled: true,
-        label: '手动运行'
-      }
-    ],
-    contextSources: [
-      {
-        id: 'clipboard.recent',
-        type: 'clipboard.recent',
-        enabled: true,
-        label: '最近剪贴板',
-        config: {
-          limit: 8
-        }
-      },
-      {
-        id: 'desktop.active-app',
-        type: 'desktop.active-app',
-        enabled: true,
-        label: '前台应用'
-      },
-      {
-        id: 'session.memory',
-        type: 'session.memory',
-        enabled: true,
-        label: '当前会话记忆'
-      }
-    ],
+    triggers: createDefaultManualTrigger(),
+    contextSources: createDefaultTemplateContextSources(8),
     toolSources: ['builtin'],
-    approvalPolicy: {
-      requireApprovalAtOrAbove: 'high',
-      autoApproveReadOnly: true
-    },
+    approvalPolicy: createDefaultTemplateApprovalPolicy(),
     steps: [
       {
         id: 'organize-clipboard',
         name: '整理近期剪贴板',
-        kind: 'prompt',
+        kind: 'model',
         description:
           '读取最近的剪贴板内容，按主题或任务分组，输出简明摘要和一个适合再次复制的整理结果。',
         prompt:
           '你会收到近期剪贴板、前台应用和会话记忆。请把近期剪贴板按主题或任务分组，输出 Markdown，总结每组要点，并在结尾给出一个适合再次复制的整理结果代码块。',
         input: {
+          capabilityId: 'text.chat',
           outputFormat: 'markdown',
           includeCopyReadyBlock: true
+        },
+        inputSources: [
+          {
+            type: 'clipboardRef',
+            key: 'clipboard.recent',
+            label: '最近剪贴板'
+          },
+          {
+            type: 'workflow.input',
+            key: 'text',
+            label: '手动输入'
+          }
+        ],
+        output: {
+          format: 'markdown',
+          reviewPolicy: 'preview',
+          riskLevel: 'low'
         },
         metadata: {
           builtin: true
@@ -178,11 +295,135 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
     metadata: {
       builtin: true,
       template: true,
-      category: 'clipboard'
+      category: 'clipboard',
+      templateVersion: BUILTIN_WORKFLOW_TEMPLATE_VERSION
     },
     createdAt: timestamp,
     updatedAt: timestamp
   }
+}
+
+function createMeetingSummaryTemplate(): WorkflowDefinition {
+  const timestamp = now()
+  return {
+    id: 'builtin.meeting-summary',
+    name: '会议纪要 / 摘要',
+    description: '整理会议转写稿或会议相关文本，生成摘要、决议和行动项。',
+    version: '1',
+    enabled: true,
+    triggers: createDefaultManualTrigger(),
+    contextSources: createDefaultTemplateContextSources(6),
+    toolSources: ['builtin'],
+    approvalPolicy: createDefaultTemplateApprovalPolicy(),
+    steps: [
+      {
+        id: 'summarize-meeting',
+        name: '生成会议纪要',
+        kind: 'model',
+        description: '根据近期剪贴板、前台应用和会话记忆中的会议文本生成结构化会议纪要。',
+        prompt:
+          '你会收到会议转写稿、会议相关剪贴板、前台应用和会话记忆。请输出 Markdown：1. 三句话摘要；2. 决议；3. 行动项，包含负责人、截止时间和状态，未知请写“待确认”；4. 风险 / 待确认项。不要编造不存在的负责人或时间。',
+        input: {
+          capabilityId: 'text.summarize',
+          outputFormat: 'markdown'
+        },
+        inputSources: [
+          {
+            type: 'workflow.input',
+            key: 'text',
+            label: '会议文本'
+          },
+          {
+            type: 'clipboardRef',
+            key: 'clipboard.recent',
+            label: '最近剪贴板'
+          }
+        ],
+        output: {
+          format: 'markdown',
+          reviewPolicy: 'preview',
+          riskLevel: 'low'
+        },
+        metadata: {
+          builtin: true
+        }
+      }
+    ],
+    metadata: {
+      builtin: true,
+      template: true,
+      category: 'meeting',
+      templateVersion: BUILTIN_WORKFLOW_TEMPLATE_VERSION
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+}
+
+function createBatchTextProcessingTemplate(): WorkflowDefinition {
+  const timestamp = now()
+  return {
+    id: 'builtin.batch-text-processing',
+    name: '文本批处理',
+    description: '按多段文本逐条执行整理、改写、摘要或翻译建议，保留逐条结果。',
+    version: '1',
+    enabled: true,
+    triggers: createDefaultManualTrigger(),
+    contextSources: createDefaultTemplateContextSources(12),
+    toolSources: ['builtin'],
+    approvalPolicy: createDefaultTemplateApprovalPolicy(),
+    steps: [
+      {
+        id: 'process-text-batch',
+        name: '批量处理文本',
+        kind: 'model',
+        description: '从近期剪贴板和会话上下文中识别多段文本，逐条输出处理结果与失败原因。',
+        prompt:
+          '你会收到多段文本、近期剪贴板、前台应用和会话记忆。请把输入拆成编号条目，逐条处理并输出 Markdown 表格：序号、原文摘要、处理结果、状态、需人工确认项。默认执行清洗、格式化和摘要；如果文本明确要求翻译或改写，则按该要求处理。无法可靠处理的条目标记为“需人工确认”，不要静默跳过。',
+        input: {
+          capabilityId: 'text.chat',
+          outputFormat: 'markdown',
+          preserveItemOrder: true
+        },
+        inputSources: [
+          {
+            type: 'workflow.input',
+            key: 'items',
+            label: '批处理条目'
+          },
+          {
+            type: 'clipboardRef',
+            key: 'clipboard.recent',
+            label: '最近剪贴板'
+          }
+        ],
+        output: {
+          format: 'markdown',
+          reviewPolicy: 'preview',
+          riskLevel: 'medium'
+        },
+        metadata: {
+          builtin: true
+        }
+      }
+    ],
+    metadata: {
+      builtin: true,
+      template: true,
+      category: 'batch-text',
+      templateVersion: BUILTIN_WORKFLOW_TEMPLATE_VERSION
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+}
+
+function createBuiltinWorkflowTemplates(): WorkflowDefinition[] {
+  return [
+    createClipboardOrganizerTemplate(),
+    createMeetingSummaryTemplate(),
+    createBatchTextProcessingTemplate()
+  ]
 }
 
 export class IntelligenceWorkflowService {
@@ -330,7 +571,18 @@ export class IntelligenceWorkflowService {
             agentId: step.agentId ?? null,
             input: toJson(step.input, {}),
             continueOnError: step.continueOnError === true,
-            metadata: toJson(step.metadata, {}),
+            metadata: toJson(
+              step.kind === 'model'
+                ? {
+                    ...omitModelContractMetadata(toRecord(step.metadata)),
+                    modelContract: {
+                      inputSources: step.inputSources ?? [],
+                      output: step.output ?? {}
+                    }
+                  }
+                : step.metadata,
+              {}
+            ),
             createdAt: new Date(normalized.createdAt ?? now()),
             updatedAt: new Date(normalized.updatedAt ?? now())
           }))
@@ -425,6 +677,50 @@ export class IntelligenceWorkflowService {
         : []
 
     return this.hydrateRuns(rows, stepRows)
+  }
+
+  async updateReviewQueueItem(
+    request: WorkflowReviewQueueUpdateRequest
+  ): Promise<WorkflowRunRecord> {
+    await this.initialize()
+    const runId = String(request.runId || '').trim()
+    const itemId = String(request.itemId || '').trim()
+    if (!runId) {
+      throw new Error('runId is required')
+    }
+    if (!itemId) {
+      throw new Error('review itemId is required')
+    }
+
+    const run = await this.getRun(runId)
+    if (!run) {
+      throw new Error('Workflow run not found')
+    }
+
+    const status = normalizeReviewQueueStatus(request.status)
+    const metadata = toRecord(run.metadata)
+    const reviewQueue = toRecord(metadata.reviewQueue)
+    const items = toRecord(reviewQueue.items) as Record<string, WorkflowReviewQueueItemState>
+    const nextRun = this.normalizeRunRecord({
+      ...run,
+      metadata: {
+        ...metadata,
+        reviewQueue: {
+          ...reviewQueue,
+          items: {
+            ...items,
+            [itemId]: {
+              status,
+              error: status === 'failed' ? optionalString(request.error) : undefined,
+              updatedAt: now()
+            }
+          }
+        }
+      }
+    })
+
+    await this.persistRun(nextRun)
+    return nextRun
   }
 
   async runWorkflow(request: WorkflowRunRequest): Promise<WorkflowRunRecord> {
@@ -672,12 +968,23 @@ export class IntelligenceWorkflowService {
   }
 
   private async seedBuiltinTemplates(): Promise<void> {
-    const builtinTemplate = createClipboardOrganizerTemplate()
-    const existing = await this.getWorkflow(builtinTemplate.id)
+    for (const template of createBuiltinWorkflowTemplates()) {
+      await this.seedBuiltinTemplate(template)
+    }
+  }
+
+  private async seedBuiltinTemplate(template: WorkflowDefinition): Promise<void> {
+    const existing = await this.getWorkflow(template.id)
     if (existing) {
+      if (existing.metadata?.builtin === true) {
+        await this.saveWorkflow({
+          ...template,
+          createdAt: existing.createdAt
+        })
+      }
       return
     }
-    await this.saveWorkflow(builtinTemplate)
+    await this.saveWorkflow(template)
   }
 
   private createInitialRun(
@@ -837,6 +1144,16 @@ export class IntelligenceWorkflowService {
       throw new Error(`Workflow agent step ${stepId} requires agentId`)
     }
 
+    const input = toRecord(step.input)
+    const inputSources =
+      normalizedKind === 'model'
+        ? normalizeModelInputSources(step.inputSources ?? input.inputSources)
+        : undefined
+    const output =
+      normalizedKind === 'model'
+        ? normalizeModelOutputContract(step.output ?? input.output, input)
+        : undefined
+
     return {
       ...step,
       id: stepId,
@@ -845,10 +1162,21 @@ export class IntelligenceWorkflowService {
       toolSource: normalizedKind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
       toolId: normalizedKind === 'tool' ? toolId : undefined,
       agentId: normalizedKind === 'agent' ? agentId : undefined,
-      prompt: normalizedKind === 'prompt' ? step.prompt : undefined,
-      input: step.input ?? {},
+      prompt: normalizedKind === 'prompt' || normalizedKind === 'model' ? step.prompt : undefined,
+      input,
+      inputSources,
+      output,
       continueOnError: step.continueOnError === true,
-      metadata: step.metadata ?? {}
+      metadata:
+        normalizedKind === 'model'
+          ? {
+              ...omitModelContractMetadata(toRecord(step.metadata)),
+              modelContract: {
+                inputSources,
+                output
+              }
+            }
+          : step.metadata ?? {}
     }
   }
 
@@ -900,6 +1228,7 @@ export class IntelligenceWorkflowService {
       toolId: kind === 'tool' ? toolId : undefined,
       toolSource: kind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
       input: step.input ?? {},
+      output: step.output,
       metadata: step.metadata ?? {}
     }
   }
@@ -928,8 +1257,11 @@ export class IntelligenceWorkflowService {
       metadata: parseJson(row.metadata, {}),
       createdAt: row.createdAt ? new Date(row.createdAt).getTime() : undefined,
       updatedAt: row.updatedAt ? new Date(row.updatedAt).getTime() : undefined,
-      steps: (stepMap.get(row.id) ?? []).map((step, index) =>
-        this.normalizeWorkflowStep(
+      steps: (stepMap.get(row.id) ?? []).map((step, index) => {
+        const input = parseJson<Record<string, unknown>>(step.input, {})
+        const metadata = parseJson<Record<string, unknown>>(step.metadata, {})
+        const modelContract = toRecord(metadata.modelContract)
+        return this.normalizeWorkflowStep(
           {
             id: step.id,
             name: step.name,
@@ -939,14 +1271,16 @@ export class IntelligenceWorkflowService {
             toolId: step.toolId ?? undefined,
             toolSource: step.toolSource ?? undefined,
             agentId: step.agentId ?? undefined,
-            input: parseJson(step.input, {}),
+            input,
+            inputSources: normalizeModelInputSources(modelContract.inputSources),
+            output: normalizeModelOutputContract(modelContract.output, input),
             continueOnError: step.continueOnError,
-            metadata: parseJson(step.metadata, {})
+            metadata
           },
           row.id,
           index
         )
-      )
+      })
     }))
   }
 

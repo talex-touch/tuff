@@ -875,7 +875,23 @@ export async function claimDailyCheckin(event: H3Event, userId: string) {
   }
 }
 
-export async function consumeCredits(event: H3Event, userId: string, amount: number, reason: string, metadata?: Record<string, any>) {
+export interface CreditConsumptionResult {
+  ledgerId: string
+  teamId: string
+  userId: string
+  amount: number
+  reason: string
+  createdAt: string
+  metadata: Record<string, any>
+}
+
+export async function consumeCredits(
+  event: H3Event,
+  userId: string,
+  amount: number,
+  reason: string,
+  metadata?: Record<string, any>,
+): Promise<CreditConsumptionResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
   const teamId = await ensurePersonalTeam(event, userId)
@@ -923,6 +939,16 @@ export async function consumeCredits(event: H3Event, userId: string, amount: num
     INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
     VALUES (?, 'team', ?, ?, ?, ?, ?)
   `).bind(id, teamId, -normalizedAmount, reason, now, JSON.stringify(ledgerMetadata)).run()
+
+  return {
+    ledgerId: id,
+    teamId,
+    userId,
+    amount: normalizedAmount,
+    reason,
+    createdAt: now,
+    metadata: ledgerMetadata,
+  }
 }
 
 export async function listCreditLedger(event: H3Event, userId: string) {
@@ -1125,6 +1151,85 @@ export async function listCreditLedgerByUsers(
     page,
     pageSize: limit,
   }
+}
+
+export interface CreditLedgerAuditEntry {
+  id: string
+  teamId: string
+  teamType: string | null
+  userId: string | null
+  userEmail: string | null
+  userName: string | null
+  delta: number
+  reason: string
+  createdAt: string
+  metadata: Record<string, any> | null
+}
+
+export async function listCreditLedgerByTraceIds(
+  event: H3Event,
+  traceIds: string[],
+): Promise<CreditLedgerAuditEntry[]> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const uniqueTraceIds = Array.from(new Set(
+    traceIds
+      .map(traceId => traceId.trim())
+      .filter(Boolean),
+  )).slice(0, 200)
+
+  if (!uniqueTraceIds.length)
+    return []
+
+  const placeholders = uniqueTraceIds.map(() => '?').join(', ')
+
+  const { results } = await db.prepare(`
+    SELECT
+      l.id,
+      l.scope_id,
+      l.delta,
+      l.reason,
+      l.created_at,
+      l.metadata,
+      t.id as team_id,
+      t.owner_user_id,
+      t.type as team_type,
+      u.email,
+      u.name
+    FROM ${CREDIT_LEDGER_TABLE} l
+    LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id
+    LEFT JOIN ${USERS_TABLE} u ON u.id = t.owner_user_id
+    WHERE l.scope = 'team'
+      AND l.reason = 'intelligence-invoke'
+      AND json_extract(l.metadata, '$.traceId') IN (${placeholders})
+    ORDER BY l.created_at DESC
+    LIMIT 200
+  `).bind(...uniqueTraceIds).all<Record<string, any>>()
+
+  return (results ?? [])
+    .map((row) => {
+      const metadata = parseLedgerMetadata(row.metadata ?? null)
+      const traceId = typeof metadata?.traceId === 'string' ? metadata.traceId : ''
+      if (!uniqueTraceIds.includes(traceId))
+        return null
+      const resolvedUserId = typeof metadata?.userId === 'string'
+        ? metadata.userId
+        : (row.owner_user_id ?? null)
+      return {
+        id: row.id,
+        teamId: row.team_id ?? row.scope_id,
+        teamType: row.team_type ?? null,
+        userId: resolvedUserId,
+        userEmail: row.email ?? null,
+        userName: row.name ?? null,
+        delta: resolveCreditAmount(row.delta ?? 0),
+        reason: row.reason ?? '',
+        createdAt: row.created_at,
+        metadata,
+      }
+    })
+    .filter((entry): entry is CreditLedgerAuditEntry => Boolean(entry))
 }
 
 export async function listCreditTrendByUsers(

@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { WorkflowDefinition, WorkflowRunRecord } from '@talex-touch/tuff-intelligence'
 import { IntelligenceWorkflowService } from './intelligence-workflow-service'
+
+vi.mock('../database', () => ({
+  databaseModule: {
+    getClient: vi.fn(),
+    getDb: vi.fn()
+  }
+}))
 
 type WorkflowNormalizer = (
   workflow: WorkflowDefinition,
@@ -23,6 +30,30 @@ function createRunNormalizer(): (run: WorkflowRunRecord) => WorkflowRunRecord {
       normalizeRunRecord: (run: WorkflowRunRecord) => WorkflowRunRecord
     }
   ).normalizeRunRecord.bind(service)
+}
+
+function createTemplateSeeder(existingWorkflows: WorkflowDefinition[] = []) {
+  const service = new IntelligenceWorkflowService()
+  const savedWorkflows: WorkflowDefinition[] = []
+  const existingById = new Map(existingWorkflows.map((workflow) => [workflow.id, workflow]))
+  const target = service as unknown as {
+    getWorkflow: (workflowId: string) => Promise<WorkflowDefinition | null>
+    saveWorkflow: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition>
+    seedBuiltinTemplates: () => Promise<void>
+  }
+
+  target.getWorkflow = vi.fn(async (workflowId: string) => existingById.get(workflowId) ?? null)
+  target.saveWorkflow = vi.fn(async (workflow: WorkflowDefinition) => {
+    savedWorkflows.push(workflow)
+    return workflow
+  })
+
+  return {
+    seedBuiltinTemplates: target.seedBuiltinTemplates.bind(service),
+    savedWorkflows,
+    getWorkflow: target.getWorkflow,
+    saveWorkflow: target.saveWorkflow
+  }
 }
 
 function createHydrators() {
@@ -60,6 +91,103 @@ function createWorkflow(overrides: Partial<WorkflowDefinition> = {}): WorkflowDe
 }
 
 describe('IntelligenceWorkflowService workflow normalization', () => {
+  it('seeds all P0 builtin workflow templates with stable model steps', async () => {
+    const { seedBuiltinTemplates, savedWorkflows } = createTemplateSeeder()
+
+    await seedBuiltinTemplates()
+
+    expect(savedWorkflows.map((workflow) => workflow.id)).toEqual([
+      'builtin.organize-recent-clipboard',
+      'builtin.meeting-summary',
+      'builtin.batch-text-processing'
+    ])
+    expect(savedWorkflows.map((workflow) => workflow.metadata)).toMatchObject([
+      {
+        builtin: true,
+        template: true,
+        category: 'clipboard',
+        templateVersion: 1
+      },
+      {
+        builtin: true,
+        template: true,
+        category: 'meeting',
+        templateVersion: 1
+      },
+      {
+        builtin: true,
+        template: true,
+        category: 'batch-text',
+        templateVersion: 1
+      }
+    ])
+    expect(savedWorkflows.flatMap((workflow) => workflow.steps)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'model',
+          input: expect.objectContaining({ capabilityId: 'text.chat' })
+        }),
+        expect.objectContaining({
+          kind: 'model',
+          input: expect.objectContaining({ capabilityId: 'text.summarize' })
+        })
+      ])
+    )
+    expect(
+      savedWorkflows.flatMap((workflow) => workflow.steps).every((step) => step.kind === 'model')
+    ).toBe(true)
+  })
+
+  it('updates existing builtin templates while preserving user-owned workflows', async () => {
+    const existingBuiltin = createWorkflow({
+      id: 'builtin.meeting-summary',
+      name: 'Old Meeting Template',
+      createdAt: 123,
+      metadata: {
+        builtin: true,
+        template: true,
+        category: 'meeting',
+        templateVersion: 0
+      }
+    })
+    const userOwnedSameId = createWorkflow({
+      id: 'builtin.batch-text-processing',
+      name: 'User Copy With Reserved ID',
+      createdAt: 456,
+      metadata: {
+        builtin: false,
+        template: true,
+        category: 'batch-text'
+      }
+    })
+    const { seedBuiltinTemplates, savedWorkflows } = createTemplateSeeder([
+      existingBuiltin,
+      userOwnedSameId
+    ])
+
+    await seedBuiltinTemplates()
+
+    expect(savedWorkflows.map((workflow) => workflow.id)).toEqual([
+      'builtin.organize-recent-clipboard',
+      'builtin.meeting-summary'
+    ])
+    expect(
+      savedWorkflows.find((workflow) => workflow.id === 'builtin.meeting-summary')
+    ).toMatchObject({
+      name: '会议纪要 / 摘要',
+      createdAt: 123,
+      metadata: {
+        builtin: true,
+        template: true,
+        category: 'meeting',
+        templateVersion: 1
+      }
+    })
+    expect(savedWorkflows.some((workflow) => workflow.id === 'builtin.batch-text-processing')).toBe(
+      false
+    )
+  })
+
   it('rejects unsupported workflow step kinds instead of coercing to prompt', () => {
     const normalizeWorkflowDefinition = createServiceNormalizer()
 
@@ -162,6 +290,19 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
             toolId: 'clipboard.read',
             toolSource: 'mcp',
             prompt: 'Should not be kept'
+          },
+          {
+            id: 'model-step',
+            name: 'Use Model',
+            kind: 'model',
+            prompt: 'Summarize',
+            toolId: 'clipboard.read',
+            toolSource: 'mcp',
+            agentId: 'builtin.workflow-agent',
+            input: {
+              capabilityId: 'text.summarize',
+              text: 'hello'
+            }
           }
         ]
       })
@@ -183,8 +324,138 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
         toolId: undefined,
         toolSource: undefined,
         prompt: undefined
+      },
+      {
+        id: 'model-step',
+        kind: 'model',
+        prompt: 'Summarize',
+        toolId: undefined,
+        toolSource: undefined,
+        agentId: undefined,
+        input: {
+          capabilityId: 'text.summarize',
+          text: 'hello'
+        }
       }
     ])
+  })
+
+  it('normalizes model input refs and output contract into metadata', () => {
+    const normalizeWorkflowDefinition = createServiceNormalizer()
+
+    const workflow = normalizeWorkflowDefinition(
+      createWorkflow({
+        steps: [
+          {
+            id: 'model-step',
+            name: 'Use Model',
+            kind: 'model',
+            prompt: 'Summarize',
+            input: {
+              capabilityId: 'text.summarize',
+              outputFormat: 'markdown'
+            },
+            inputSources: [
+              {
+                type: 'workflow.input',
+                key: 'text',
+                label: 'Input Text'
+              },
+              {
+                type: '',
+                key: 'ignored'
+              }
+            ],
+            output: {
+              format: 'json',
+              schema: { type: 'object' },
+              reviewPolicy: 'approval',
+              riskLevel: 'medium'
+            }
+          }
+        ]
+      })
+    )
+
+    expect(workflow.steps[0]).toMatchObject({
+      kind: 'model',
+      inputSources: [
+        {
+          type: 'workflow.input',
+          key: 'text',
+          label: 'Input Text'
+        }
+      ],
+      output: {
+        format: 'json',
+        schema: { type: 'object' },
+        reviewPolicy: 'approval',
+        riskLevel: 'medium'
+      },
+      metadata: {
+        modelContract: {
+          inputSources: [
+            {
+              type: 'workflow.input',
+              key: 'text',
+              label: 'Input Text'
+            }
+          ],
+          output: {
+            format: 'json',
+            schema: { type: 'object' },
+            reviewPolicy: 'approval',
+            riskLevel: 'medium'
+          }
+        }
+      }
+    })
+  })
+
+  it('persists review queue item state in run metadata', async () => {
+    const service = new IntelligenceWorkflowService()
+    const persistedRuns: WorkflowRunRecord[] = []
+    const target = service as unknown as {
+      getRun: (runId: string) => Promise<WorkflowRunRecord | null>
+      persistRun: (run: WorkflowRunRecord) => Promise<WorkflowRunRecord>
+      updateReviewQueueItem: typeof service.updateReviewQueueItem
+      initialize: () => Promise<void>
+    }
+    target.initialize = vi.fn(async () => undefined)
+    target.getRun = vi.fn(async () => ({
+      id: 'run-1',
+      workflowId: 'workflow-1',
+      workflowName: 'Workflow',
+      status: 'completed',
+      triggerType: 'manual',
+      inputs: {},
+      outputs: {},
+      steps: [],
+      startedAt: 1,
+      completedAt: 2,
+      metadata: {}
+    }))
+    target.persistRun = vi.fn(async (run: WorkflowRunRecord) => {
+      persistedRuns.push(run)
+      return run
+    })
+
+    const result = await target.updateReviewQueueItem.call(service, {
+      runId: 'run-1',
+      itemId: 'run-1:model-step',
+      status: 'copied'
+    })
+
+    expect(result.metadata).toMatchObject({
+      reviewQueue: {
+        items: {
+          'run-1:model-step': {
+            status: 'copied'
+          }
+        }
+      }
+    })
+    expect(persistedRuns[0]?.metadata).toMatchObject(result.metadata ?? {})
   })
 
   it('rejects unsupported run step kinds and invalid tool run steps', () => {

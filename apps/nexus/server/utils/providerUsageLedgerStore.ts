@@ -64,6 +64,7 @@ export interface ListProviderUsageLedgerOptions {
   sceneId?: string
   providerId?: string
   capability?: string
+  providerUsageRef?: string
   status?: ProviderUsageLedgerStatus
   mode?: ProviderUsageLedgerMode
   page?: number
@@ -129,6 +130,7 @@ async function ensureProviderUsageLedgerSchema(db: D1Database) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_scene ON ${LEDGER_TABLE}(scene_id, created_at);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_provider ON ${LEDGER_TABLE}(provider_id, created_at);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_capability ON ${LEDGER_TABLE}(capability, created_at);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_usage_ref ON ${LEDGER_TABLE}(provider_usage_ref);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_provider_usage_ledger_status ON ${LEDGER_TABLE}(status, created_at);`).run()
 
   initializedSchemas.add(db)
@@ -331,6 +333,10 @@ function buildLedgerWhere(options: ListProviderUsageLedgerOptions) {
     conditions.push('capability = ?')
     values.push(options.capability)
   }
+  if (options.providerUsageRef) {
+    conditions.push('provider_usage_ref = ?')
+    values.push(options.providerUsageRef)
+  }
   if (options.status) {
     conditions.push('status = ?')
     values.push(options.status)
@@ -430,6 +436,7 @@ export async function listProviderUsageLedgerEntries(
     sceneId: readOptionalString(options.sceneId, 'sceneId', 180),
     providerId: readOptionalString(options.providerId, 'providerId', 180),
     capability: readOptionalString(options.capability, 'capability', 160),
+    providerUsageRef: readOptionalString(options.providerUsageRef, 'providerUsageRef', 255),
     status: assertEnum(options.status, 'status', ['planned', 'completed', 'failed'] as const),
     mode: assertEnum(options.mode, 'mode', ['dry_run', 'execute'] as const),
     page: options.page,

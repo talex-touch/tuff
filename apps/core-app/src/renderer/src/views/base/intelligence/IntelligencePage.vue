@@ -6,6 +6,7 @@ import IntelligenceCapabilities from '~/components/intelligence/IntelligenceCapa
 import IntelligenceChannels from '~/components/intelligence/IntelligenceChannels.vue'
 import IntelligenceFuture from '~/components/intelligence/IntelligenceFuture.vue'
 import IntelligenceHeader from '~/components/intelligence/IntelligenceHeader.vue'
+import IntelligenceLocalSkills from '~/components/intelligence/IntelligenceLocalSkills.vue'
 import IntelligencePrompts from '~/components/intelligence/IntelligencePrompts.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 
@@ -64,6 +65,8 @@ const boundCapabilities = computed(
     </div>
 
     <IntelligencePrompts />
+
+    <IntelligenceLocalSkills />
 
     <IntelligenceFuture />
   </ViewTemplate>

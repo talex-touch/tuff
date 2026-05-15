@@ -16,6 +16,10 @@ const creditStoreMocks = vi.hoisted(() => ({
   consumeCredits: vi.fn(),
 }))
 
+const usageLedgerMocks = vi.hoisted(() => ({
+  recordProviderUsageLedger: vi.fn(),
+}))
+
 const langchainMocks = vi.hoisted(() => ({
   constructorArgs: vi.fn(),
   invoke: vi.fn(),
@@ -33,6 +37,7 @@ vi.mock('./intelligenceStore', async () => {
 vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
 
 vi.mock('./creditsStore', () => creditStoreMocks)
+vi.mock('./providerUsageLedgerStore', () => usageLedgerMocks)
 
 vi.mock('@langchain/openai', () => ({
   ChatOpenAI: class {
@@ -84,7 +89,16 @@ describe('invokeIntelligenceCapability', () => {
       provider(),
     ])
     providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
-    creditStoreMocks.consumeCredits.mockResolvedValue(undefined)
+    creditStoreMocks.consumeCredits.mockResolvedValue({
+      ledgerId: 'credit_ledger_1',
+      teamId: 'team_user_1',
+      userId: 'user_1',
+      amount: 7,
+      reason: 'intelligence-invoke',
+      createdAt: '2026-05-12T00:00:00.000Z',
+      metadata: {},
+    })
+    usageLedgerMocks.recordProviderUsageLedger.mockResolvedValue([{ id: 'provider_usage_1' }])
     langchainMocks.invoke.mockResolvedValue({
       content: 'translated text',
       usage_metadata: {
@@ -105,7 +119,14 @@ describe('invokeIntelligenceCapability', () => {
       },
       options: {
         modelPreference: ['gpt-4o-mini'],
-        metadata: { sessionId: 'session_1' },
+        metadata: {
+          sessionId: 'session_1',
+          caller: 'workflow.use-model',
+          workflowId: 'workflow_1',
+          workflowName: 'Meeting Summary',
+          workflowRunId: 'run_1',
+          workflowStepId: 'step_1',
+        },
       },
     })
 
@@ -160,11 +181,42 @@ describe('invokeIntelligenceCapability', () => {
         promptTokens: 3,
         completionTokens: 4,
         source: 'core-app',
+        caller: 'workflow.use-model',
+        sessionId: 'session_1',
+        workflowId: 'workflow_1',
+        workflowName: 'Meeting Summary',
+        workflowRunId: 'run_1',
+        workflowStepId: 'step_1',
       }),
     )
     const creditMetadata = JSON.stringify(creditStoreMocks.consumeCredits.mock.calls[0]?.[4])
     expect(creditMetadata).not.toContain('hello')
     expect(creditMetadata).not.toContain('translated text')
+    expect(usageLedgerMocks.recordProviderUsageLedger).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        runId: 'intelligence_invoke_' + result.traceId,
+        sceneId: 'nexus.intelligence.invoke',
+        status: 'completed',
+        requestedCapabilities: ['text.translate'],
+        usage: [
+          expect.objectContaining({
+            unit: 'token',
+            quantity: 7,
+            billable: true,
+            providerId: 'ip_nexus_text',
+            capability: 'text.translate',
+            providerUsageRef: result.traceId,
+          }),
+        ],
+        output: null,
+      }),
+    )
+    const providerLedgerPayload = JSON.stringify(
+      usageLedgerMocks.recordProviderUsageLedger.mock.calls[0]?.[1],
+    )
+    expect(providerLedgerPayload).not.toContain('hello')
+    expect(providerLedgerPayload).not.toContain('translated text')
     expect(result).toMatchObject({
       capabilityId: 'text.translate',
       result: 'translated text',
@@ -178,6 +230,21 @@ describe('invokeIntelligenceCapability', () => {
         fallbackCount: 0,
         retryCount: 0,
         attemptedProviders: ['ip_nexus_text'],
+        source: 'core-app',
+        caller: 'workflow.use-model',
+        sessionId: 'session_1',
+        workflowId: 'workflow_1',
+        workflowName: 'Meeting Summary',
+        workflowRunId: 'run_1',
+        workflowStepId: 'step_1',
+        billing: {
+          ledgerId: 'credit_ledger_1',
+          chargedCredits: 7,
+          unit: 'token',
+          billable: true,
+          reason: 'intelligence-invoke',
+        },
+        providerUsageLedgerIds: ['provider_usage_1'],
       },
     })
   })
@@ -200,6 +267,17 @@ describe('invokeIntelligenceCapability', () => {
     })
 
     expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(usageLedgerMocks.recordProviderUsageLedger).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        usage: [
+          expect.objectContaining({
+            quantity: 0,
+            billable: false,
+          }),
+        ],
+      }),
+    )
   })
 
   it('provider 调用失败时不扣 credits', async () => {

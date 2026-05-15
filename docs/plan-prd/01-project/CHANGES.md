@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-14
+> 更新时间：2026-05-15
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -12,6 +12,65 @@
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
 ## 2026-05-15
+
+### feat(core-app): expose local AI tools and skills providers
+
+- `apps/core-app/src/main/modules/ai/intelligence-local-environment.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
+  - Intelligence 新增只读本地环境扫描：识别 Codex / Claude CLI、Codex 配置键路径、项目 `AGENTS.md` / `CLAUDE.md` / `.codex` / `.claude` 指令入口，以及本地 `SKILL.md` provider 元数据。
+  - 新增 typed `intelligence:api:local-environment` 与 SDK `getLocalEnvironment()`，首版只返回工具、配置、skills provider 摘要；敏感配置仅暴露 key path，不返回密钥值，不执行任何 skill。
+  - Intelligence 首页新增“本地 Skills Provider”只读区块，用于继续定调 providers / scenes / skills 管理；高风险 skills 仅展示为 gated，后续再接权限与场景门控。
+
+### feat(intelligence): persist workflow review state and model contracts
+
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+  - Workflow Review Queue 的 copy / replace clipboard / dismiss / failed 状态现在通过 typed `intelligence:workflow:review:update` 写回 run metadata，历史 run 重新 inspect 时可恢复审阅状态，不再只依赖页面临时 ref。
+  - `Use Model` 步骤新增 `inputSources` 与 `output` 合同，支持 `workflow.input`、`clipboardRef`、`ocrRef`、`fileTextRef`、`previousStep` 等输入引用描述，并把输出格式 / schema / reviewPolicy / riskLevel 固化到 step metadata 的 `modelContract`。
+  - Model step prompt 构建会消费输入引用与输出合同，同时继续只允许 Stable capability；不新增 DB 列、不保存完整 prompt / response 到普通 metadata。
+
+### feat(nexus): reshape Intelligence admin around Providers and Scenes
+
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id]/probe-stream.post.ts`
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.ts`
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.test.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+  - Nexus Intelligence 管理页从单纯 provider 列表调整为 `Providers + Models` 与 `Scenes` 配置：provider 负责暴露模型，scene 负责绑定 provider/model、策略、fallback 与启停状态。
+  - Scene 配置复用 Provider Registry / Scene Registry，不新增独立存储；仅展示/编辑 `routingShape=providers-scenes` 的 Intelligence scenes，并限制 binding provider 必须已迁移且声明当前 scene capability。
+  - Binding metadata 保留 `source=intelligence`、`intelligenceProviderId`、`model` 与排序信息；provider mirror 同步会保留已有 registry metadata，并补测试覆盖。
+  - Provider 测试新增 SSE 流式 probe 入口，前端实时展示模型增量输出并支持停止；流式不可用时仍回退到原 JSON probe。
+  - Provider 启停、scene/fallback、全局 audit/cache 等二态控件切到 Tuffex switch/status 组件，收敛管理页交互一致性。
+
+### feat(nexus): link AI invoke billing and audit ledgers
+
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/creditsStore.ts`
+- `apps/nexus/server/utils/providerUsageLedgerStore.ts`
+- `apps/nexus/server/api/dashboard/intelligence/invoke-audits.get.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts`
+  - `/api/v1/intelligence/invoke` 成功调用后会把安全审计字段写入返回 metadata：source/caller/session/workflow/run/step、credit ledger id、charged credits 与 provider usage ledger id。
+  - Nexus AI invoke 现在同步写入 `provider_usage_ledger`，使用固定 `sceneId=nexus.intelligence.invoke` 与 trace 派生 runId，便于和 `credit_ledger.metadata.traceId` 对账。
+  - 新增 Dashboard 只读 `invoke-audits` 查询入口，支持按 trace/provider/capability/status/mode 过滤 AI invoke provider usage，并按 trace 精确关联 credit ledger。
+  - 计费与 provider usage ledger 只记录 capability/provider/model/token/trace/workflow 等安全元数据，不落 prompt、输入文本或模型输出明文；`totalTokens=0` 不扣 credits 但仍保留非 billable usage ledger。
+
+### feat(intelligence): seed P0 workflow templates
+
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Workflow 内置模板从单个“整理近期剪贴板”扩展为 3 个 P0 模板：剪贴板整理、会议纪要 / 摘要、文本批处理。
+  - 新增模板均使用 `model` step 与 Stable capability：会议纪要走 `text.summarize`，文本批处理走 `text.chat`，输出继续进入现有运行结果与页面 Review Queue。
+  - 内置模板统一写入 `builtin/template/category/templateVersion` metadata；启动 seed 只自动覆盖同 ID 且 `metadata.builtin === true` 的模板，保留用户另存副本。
 
 ### fix(ci): prevent beta release dependency install hang
 

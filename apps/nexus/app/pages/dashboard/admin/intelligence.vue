@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxPagination, TxPopperDialog, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { networkClient } from '@talex-touch/utils/network'
+import { TuffInput, TuffSelect, TuffSelectItem, TuffSwitch, TxButton, TxPagination, TxPopperDialog, TxSkeleton, TxSpinner, TxStatusBadge, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
 import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
+import type { ProviderRegistryRecord, SceneRegistryRecord, SceneStrategyMode } from '~/utils/provider-registry-admin'
 
 definePageMeta({
   pageTransition: {
@@ -164,6 +166,8 @@ interface CreditLedgerItem {
 // ── State ──
 const activeTab = ref('overview')
 const providers = ref<Provider[]>([])
+const registryProviders = ref<ProviderRegistryRecord[]>([])
+const scenes = ref<SceneRegistryRecord[]>([])
 const settings = ref<Settings>({
   defaultStrategy: 'priority',
   enableAudit: false,
@@ -172,6 +176,9 @@ const settings = ref<Settings>({
 })
 const loading = ref(true)
 const error = ref<string | null>(null)
+const scenesLoading = ref(false)
+const scenesError = ref<string | null>(null)
+const sceneSaving = ref(false)
 const migrationLoading = ref(false)
 const migrationError = ref<string | null>(null)
 const migrationResult = ref<MigrationResult | null>(null)
@@ -223,6 +230,38 @@ const ledgerPagination = ref<Pagination>({
 })
 const ledgerQuery = ref('')
 
+type SceneBindingStatus = 'enabled' | 'disabled'
+type SceneFallbackMode = 'enabled' | 'disabled'
+
+interface SceneBindingForm {
+  providerId: string
+  model: string
+  priority: number
+  status: SceneBindingStatus
+}
+
+interface SceneFormState {
+  id: string
+  displayName: string
+  requiredCapability: string
+  strategyMode: SceneStrategyMode
+  fallback: SceneFallbackMode
+  status: SceneBindingStatus
+  bindings: SceneBindingForm[]
+}
+
+const AI_SCENE_CAPABILITIES = ['chat.completion', 'text.summarize', 'content.extract', 'vision.ocr'] as const
+const selectedSceneId = ref('')
+const sceneForm = reactive<SceneFormState>({
+  id: 'nexus.intelligence.chat',
+  displayName: 'Nexus Intelligence Chat',
+  requiredCapability: 'chat.completion',
+  strategyMode: 'priority',
+  fallback: 'enabled',
+  status: 'enabled',
+  bindings: [],
+})
+
 function ipBanAuthHeaders() {
   const token = ipBanStepUpToken.value.trim()
   if (!token)
@@ -255,6 +294,327 @@ async function fetchProviders() {
   }
 }
 
+function readRegistryIntelligenceProviderId(provider: ProviderRegistryRecord): string | null {
+  const id = provider.metadata?.intelligenceProviderId
+  return typeof id === 'string' && id.trim() ? id.trim() : null
+}
+
+function isIntelligenceRegistryProvider(provider: ProviderRegistryRecord): boolean {
+  return provider.metadata?.source === 'intelligence' && Boolean(readRegistryIntelligenceProviderId(provider))
+}
+
+function registryProviderForIntelligenceProvider(providerId: string): ProviderRegistryRecord | null {
+  return registryProviders.value.find(provider => readRegistryIntelligenceProviderId(provider) === providerId) ?? null
+}
+
+function resolveRegistryProviderId(providerId: string): string | null {
+  const directRegistryProvider = registryProviders.value.find(provider => provider.id === providerId)
+  if (directRegistryProvider)
+    return directRegistryProvider.id
+  return registryProviderForIntelligenceProvider(providerId)?.id ?? null
+}
+
+function resolveIntelligenceProviderId(sceneProviderId: string): string {
+  const registryProvider = registryProviders.value.find(provider => provider.id === sceneProviderId)
+  return registryProvider ? readRegistryIntelligenceProviderId(registryProvider) ?? sceneProviderId : sceneProviderId
+}
+
+function getProviderById(providerId: string): Provider | null {
+  return providers.value.find(provider => provider.id === providerId) ?? null
+}
+
+function getProviderDisplayName(providerId: string): string {
+  return getProviderById(providerId)?.name
+    ?? registryProviders.value.find(provider => provider.id === providerId)?.displayName
+    ?? providerId
+}
+
+function readSceneBindingModel(binding: { metadata: Record<string, unknown> | null }): string {
+  const metadata = binding.metadata ?? {}
+  const model = metadata.model ?? metadata.aiModel ?? metadata.defaultModel
+  return typeof model === 'string' ? model : ''
+}
+
+function isIntelligenceScene(scene: SceneRegistryRecord): boolean {
+  return scene.metadata?.source === 'intelligence'
+    && scene.metadata?.routingShape === 'providers-scenes'
+}
+
+function registryProviderSupportsCapability(provider: ProviderRegistryRecord, capability: string): boolean {
+  return provider.capabilities.some(item => item.capability === capability)
+}
+
+const aiRegistryProviders = computed(() => registryProviders.value.filter(isIntelligenceRegistryProvider))
+
+const providerSceneOptions = computed(() => providers.value.map(provider => {
+  const registryProvider = registryProviderForIntelligenceProvider(provider.id)
+  const registryMissing = !registryProvider
+  const capabilityMissing = Boolean(
+    registryProvider
+    && !registryProviderSupportsCapability(registryProvider, sceneForm.requiredCapability),
+  )
+  return {
+    value: provider.id,
+    label: registryMissing
+      ? `${provider.name} · ${t('dashboard.sections.intelligence.scenes.registryMissing', '需先迁移')}`
+      : capabilityMissing
+        ? `${provider.name} · ${t('dashboard.sections.intelligence.scenes.capabilityMissing', '缺少能力')}`
+        : `${provider.name} · ${providerTypeLabel(provider.type)}`,
+    disabled: registryMissing || capabilityMissing,
+  }
+}))
+
+const availableSceneProviderIds = computed(() =>
+  providerSceneOptions.value
+    .filter(option => !option.disabled)
+    .map(option => option.value),
+)
+
+const selectedScene = computed(() =>
+  scenes.value.find(scene => scene.id === selectedSceneId.value) ?? null,
+)
+
+const sceneBindingCount = computed(() =>
+  scenes.value.reduce((total, scene) => total + scene.bindings.length, 0),
+)
+
+function createSceneBindingForm(providerId = availableSceneProviderIds.value[0] ?? ''): SceneBindingForm {
+  const provider = getProviderById(providerId)
+  return {
+    providerId,
+    model: provider?.defaultModel || provider?.models[0] || '',
+    priority: 50,
+    status: 'enabled',
+  }
+}
+
+function resetSceneForm() {
+  sceneForm.id = 'nexus.intelligence.chat'
+  sceneForm.displayName = 'Nexus Intelligence Chat'
+  sceneForm.requiredCapability = 'chat.completion'
+  sceneForm.strategyMode = 'priority'
+  sceneForm.fallback = 'enabled'
+  sceneForm.status = 'enabled'
+  sceneForm.bindings = availableSceneProviderIds.value.length ? [createSceneBindingForm()] : []
+}
+
+function hydrateSceneForm(scene: SceneRegistryRecord) {
+  sceneForm.id = scene.id
+  sceneForm.displayName = scene.displayName
+  sceneForm.requiredCapability = scene.requiredCapabilities[0] || 'chat.completion'
+  sceneForm.strategyMode = scene.strategyMode
+  sceneForm.fallback = scene.fallback
+  sceneForm.status = scene.status
+  sceneForm.bindings = scene.bindings.length
+    ? scene.bindings.map(binding => ({
+        providerId: resolveIntelligenceProviderId(binding.providerId),
+        model: readSceneBindingModel(binding),
+        priority: binding.priority,
+        status: binding.status,
+      }))
+    : [createSceneBindingForm()]
+}
+
+function createSceneDraft() {
+  selectedSceneId.value = ''
+  resetSceneForm()
+}
+
+function selectScene(scene: SceneRegistryRecord) {
+  selectedSceneId.value = scene.id
+  hydrateSceneForm(scene)
+}
+
+function hydrateSelectedScene() {
+  if (!scenes.value.length) {
+    selectedSceneId.value = ''
+    resetSceneForm()
+    return
+  }
+  const current = scenes.value.find(scene => scene.id === selectedSceneId.value) ?? scenes.value[0]
+  selectedSceneId.value = current.id
+  hydrateSceneForm(current)
+}
+
+async function fetchSceneRegistry() {
+  scenesLoading.value = true
+  scenesError.value = null
+  try {
+    const [registryProviderResult, sceneResult] = await Promise.all([
+      rawFetch<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers', {
+        query: { ownerScope: 'user' },
+      }),
+      rawFetch<{ scenes: SceneRegistryRecord[] }>('/api/dashboard/provider-registry/scenes'),
+    ])
+    registryProviders.value = registryProviderResult.providers ?? []
+    scenes.value = (sceneResult.scenes ?? [])
+      .filter(isIntelligenceScene)
+      .sort((a, b) => a.id.localeCompare(b.id))
+    hydrateSelectedScene()
+  }
+  catch (e: any) {
+    scenesError.value = e.data?.message || e.data?.statusMessage || 'Failed to load scene registry'
+  }
+  finally {
+    scenesLoading.value = false
+  }
+}
+
+function addSceneBinding() {
+  sceneForm.bindings.push(createSceneBindingForm())
+}
+
+function removeSceneBinding(index: number) {
+  sceneForm.bindings.splice(index, 1)
+}
+
+function providerModelOptions(providerId: string): string[] {
+  const provider = getProviderById(providerId)
+  if (!provider)
+    return []
+  const models = new Set<string>()
+  if (provider.defaultModel?.trim())
+    models.add(provider.defaultModel.trim())
+  for (const model of provider.models || []) {
+    if (model.trim())
+      models.add(model.trim())
+  }
+  return [...models]
+}
+
+function onSceneBindingProviderChange(binding: SceneBindingForm) {
+  const models = providerModelOptions(binding.providerId)
+  binding.model = getProviderById(binding.providerId)?.defaultModel || models[0] || ''
+}
+
+function ensureSceneBindingsSupportCapability() {
+  const fallbackProviderId = availableSceneProviderIds.value[0] ?? ''
+  for (const binding of sceneForm.bindings) {
+    if (!binding.providerId)
+      continue
+    if (availableSceneProviderIds.value.includes(binding.providerId))
+      continue
+    binding.providerId = fallbackProviderId
+    onSceneBindingProviderChange(binding)
+  }
+}
+
+function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
+  if (['enabled', 'success', 'completed', 'planned', 'healthy'].includes(status))
+    return 'success'
+  if (['disabled', 'muted'].includes(status))
+    return 'muted'
+  if (['degraded', 'warning'].includes(status))
+    return 'warning'
+  if (['failed', 'unhealthy', 'danger'].includes(status))
+    return 'danger'
+  return 'info'
+}
+
+function buildSceneBindings() {
+  const capability = sceneForm.requiredCapability.trim() || 'chat.completion'
+  const seen = new Set<string>()
+  return sceneForm.bindings
+    .filter(binding => binding.providerId)
+    .map((binding, index) => {
+      const registryProviderId = resolveRegistryProviderId(binding.providerId)
+      if (!registryProviderId) {
+        throw new Error(t('dashboard.sections.intelligence.scenes.errors.registryMissing', {
+          name: getProviderDisplayName(binding.providerId),
+        }, `Provider ${getProviderDisplayName(binding.providerId)} has no Provider Registry mirror.`))
+      }
+      const registryProvider = registryProviders.value.find(provider => provider.id === registryProviderId)
+      if (!registryProvider || !registryProviderSupportsCapability(registryProvider, capability)) {
+        throw new Error(t('dashboard.sections.intelligence.scenes.errors.capabilityMissing', {
+          name: getProviderDisplayName(binding.providerId),
+          capability,
+        }, `Provider ${getProviderDisplayName(binding.providerId)} does not support ${capability}.`))
+      }
+      if (seen.has(registryProviderId)) {
+        throw new Error(t('dashboard.sections.intelligence.scenes.errors.duplicateProvider', {
+          name: getProviderDisplayName(binding.providerId),
+        }, `Provider ${getProviderDisplayName(binding.providerId)} is already bound to this scene.`))
+      }
+      seen.add(registryProviderId)
+
+      const existingBinding = selectedScene.value?.bindings.find(item =>
+        resolveIntelligenceProviderId(item.providerId) === binding.providerId
+        && item.capability === capability,
+      )
+      return {
+        providerId: registryProviderId,
+        capability,
+        priority: Number(binding.priority) || 100,
+        status: binding.status,
+        constraints: existingBinding?.constraints ?? undefined,
+        metadata: {
+          ...(existingBinding?.metadata ?? {}),
+          source: 'intelligence',
+          intelligenceProviderId: binding.providerId,
+          model: binding.model.trim() || null,
+          order: index,
+        },
+      }
+    })
+}
+
+async function saveSceneConfig() {
+  const id = sceneForm.id.trim()
+  const displayName = sceneForm.displayName.trim()
+  if (!id || !displayName)
+    return
+
+  sceneSaving.value = true
+  scenesError.value = null
+  try {
+    const existing = scenes.value.find(scene => scene.id === id)
+    const body = {
+      displayName,
+      owner: 'nexus',
+      ownerScope: 'user',
+      status: sceneForm.status,
+      requiredCapabilities: [sceneForm.requiredCapability.trim() || 'chat.completion'],
+      strategyMode: sceneForm.strategyMode,
+      fallback: sceneForm.fallback,
+      auditPolicy: existing?.auditPolicy ?? {
+        persistInput: false,
+        persistOutput: false,
+      },
+      metadata: {
+        ...(existing?.metadata ?? {}),
+        source: 'intelligence',
+        routingShape: 'providers-scenes',
+      },
+      bindings: buildSceneBindings(),
+    }
+
+    if (existing) {
+      await rawFetch(`/api/dashboard/provider-registry/scenes/${encodeURIComponent(existing.id)}`, {
+        method: 'PATCH',
+        body,
+      })
+    }
+    else {
+      await rawFetch('/api/dashboard/provider-registry/scenes', {
+        method: 'POST',
+        body: {
+          id,
+          ...body,
+        },
+      })
+    }
+
+    selectedSceneId.value = id
+    await fetchSceneRegistry()
+  }
+  catch (e: any) {
+    scenesError.value = e.data?.message || e.data?.statusMessage || e.message || 'Failed to save scene'
+  }
+  finally {
+    sceneSaving.value = false
+  }
+}
+
 async function runProviderRegistryMigration(dryRun: boolean) {
   migrationLoading.value = true
   migrationError.value = null
@@ -264,8 +624,10 @@ async function runProviderRegistryMigration(dryRun: boolean) {
       body: { dryRun },
     })
     migrationResult.value = result.migration
-    if (!dryRun)
+    if (!dryRun) {
       await fetchProviders()
+      await fetchSceneRegistry()
+    }
   }
   catch (e: any) {
     migrationError.value = e.data?.message || e.data?.statusMessage || 'Failed to migrate providers'
@@ -541,6 +903,7 @@ function ensureCreditsLoaded() {
 
 onMounted(() => {
   fetchProviders()
+  fetchSceneRegistry()
   fetchSettings()
   fetchAudits()
   fetchOverview()
@@ -675,6 +1038,7 @@ async function submitForm() {
 
     showFormOverlay.value = false
     await fetchProviders()
+    await fetchSceneRegistry()
   }
   catch (e: any) {
     error.value = e.data?.message || 'Failed to save provider'
@@ -692,6 +1056,7 @@ async function toggleProvider(provider: Provider) {
       body: { enabled: !provider.enabled },
     })
     provider.enabled = !provider.enabled
+    await fetchSceneRegistry()
   }
   catch (e: any) {
     error.value = e.data?.message || 'Failed to toggle provider'
@@ -729,6 +1094,21 @@ const probeLoading = ref(false)
 const probePrompt = ref('')
 const probeModel = ref('')
 const probeResult = ref<ProviderProbeResult | null>(null)
+const probeStreamOutput = ref('')
+const probeStreamStatus = ref('')
+let probeAbortController: AbortController | null = null
+
+interface ProviderProbeStreamEvent {
+  type: 'status' | 'probe.started' | 'assistant.delta' | 'probe.completed' | 'error' | 'done'
+  timestamp?: number
+  delta?: string
+  message?: string
+  providerId?: string
+  providerName?: string
+  providerType?: string
+  model?: string
+  result?: ProviderProbeResult
+}
 
 function isHtmlLikeResponse(status: number, contentType: string, data: unknown): boolean {
   if (status >= 400)
@@ -792,8 +1172,103 @@ function openProbeOverlay(provider: Provider, event?: MouseEvent) {
   probeModel.value = provider.defaultModel || provider.models[0] || ''
   probePrompt.value = t('dashboard.sections.intelligence.providers.probe.defaultPrompt')
   probeResult.value = null
+  probeStreamOutput.value = ''
+  probeStreamStatus.value = ''
+  probeAbortController?.abort()
+  probeAbortController = null
   probeOverlaySource.value = (event?.currentTarget as HTMLElement) ?? null
   showProbeOverlay.value = true
+}
+
+function closeProbeOverlay(close: () => void) {
+  probeAbortController?.abort()
+  close()
+}
+
+function handleProbeStreamEvent(event: ProviderProbeStreamEvent) {
+  if (event.type === 'status' || event.type === 'probe.started') {
+    probeStreamStatus.value = event.message || ''
+    return
+  }
+  if (event.type === 'assistant.delta') {
+    probeStreamOutput.value += event.delta || ''
+    return
+  }
+  if (event.type === 'probe.completed' && event.result) {
+    probeResult.value = event.result
+    probeStreamOutput.value = event.result.output || probeStreamOutput.value
+    probeStreamStatus.value = event.result.message || ''
+    return
+  }
+  if (event.type === 'error') {
+    probeStreamStatus.value = event.message || ''
+    return
+  }
+  if (event.type === 'done') {
+    probeLoading.value = false
+  }
+}
+
+async function consumeProbeSseResponse(streamBody: ReadableStream<Uint8Array> | null) {
+  if (!streamBody)
+    throw new Error('Empty stream response body.')
+
+  const reader = streamBody.getReader()
+  const decoder = new TextDecoder('utf-8')
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done)
+      break
+
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() || ''
+
+    for (const chunk of chunks) {
+      const lines = chunk
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+      for (const line of lines) {
+        if (!line.startsWith('data:'))
+          continue
+        const jsonText = line.slice(5).trim()
+        if (!jsonText)
+          continue
+        try {
+          handleProbeStreamEvent(JSON.parse(jsonText) as ProviderProbeStreamEvent)
+        }
+        catch {
+          // Ignore malformed stream chunks
+        }
+      }
+    }
+  }
+}
+
+async function runProviderProbeStream(providerId: string, requestBody: Record<string, unknown>): Promise<boolean> {
+  try {
+    const response = await networkClient.request<ReadableStream<Uint8Array> | null>({
+      method: 'POST',
+      url: `/api/dashboard/intelligence/providers/${providerId}/probe-stream`,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
+      },
+      body: requestBody,
+      signal: probeAbortController?.signal,
+      responseType: 'stream',
+    })
+    await consumeProbeSseResponse(response.data)
+    return Boolean(probeResult.value?.success)
+  }
+  catch (error: any) {
+    if (error?.name === 'AbortError')
+      throw error
+    return false
+  }
 }
 
 async function runProviderProbe() {
@@ -801,38 +1276,50 @@ async function runProviderProbe() {
     return
   probeLoading.value = true
   probeResult.value = null
+  probeStreamOutput.value = ''
+  probeStreamStatus.value = t('dashboard.sections.intelligence.providers.probe.connecting', '正在连接模型流…')
+  probeAbortController?.abort()
+  probeAbortController = new AbortController()
   try {
     const requestBody: Record<string, unknown> = {
       model: probeModel.value.trim() || undefined,
       prompt: probePrompt.value.trim() || undefined,
     }
     const providerId = probeProvider.value.id
+    const streamSucceeded = await runProviderProbeStream(providerId, requestBody)
+    if (streamSucceeded)
+      return
+    probeStreamStatus.value = t('dashboard.sections.intelligence.providers.probe.fallback', '流式测试不可用，切换到普通测试…')
     const result = await postJsonStrict<ProviderProbeResult>(
       `/api/dashboard/intelligence/providers/${providerId}/probe`,
       requestBody,
     )
     probeResult.value = result
+    probeStreamOutput.value = result.output || probeStreamOutput.value
   }
   catch (e: any) {
-    probeResult.value = {
-      success: false,
-      providerId: probeProvider.value.id,
-      providerName: probeProvider.value.name,
-      providerType: probeProvider.value.type,
-      model: probeModel.value.trim() || probeProvider.value.defaultModel || probeProvider.value.models[0] || '',
-      output: '',
-      latency: 0,
-      endpoint: '',
-      traceId: '',
-      fallbackCount: 0,
-      retryCount: 0,
-      attemptedProviders: [probeProvider.value.id],
-      message: e.data?.message || 'Probe failed',
-      error: e.data?.error,
+    if (e?.name !== 'AbortError') {
+      probeResult.value = {
+        success: false,
+        providerId: probeProvider.value.id,
+        providerName: probeProvider.value.name,
+        providerType: probeProvider.value.type,
+        model: probeModel.value.trim() || probeProvider.value.defaultModel || probeProvider.value.models[0] || '',
+        output: probeStreamOutput.value,
+        latency: 0,
+        endpoint: '',
+        traceId: '',
+        fallbackCount: 0,
+        retryCount: 0,
+        attemptedProviders: [probeProvider.value.id],
+        message: e.data?.message || e.message || 'Probe failed',
+        error: e.data?.error,
+      }
     }
   }
   finally {
     probeLoading.value = false
+    probeAbortController = null
   }
 }
 
@@ -895,6 +1382,7 @@ async function confirmDelete(): Promise<boolean> {
   try {
     await rawFetch(`/api/dashboard/intelligence/providers/${pendingDeleteId.value}`, { method: 'DELETE' })
     await fetchProviders()
+    await fetchSceneRegistry()
   }
   catch (e: any) {
     error.value = e.data?.message || 'Failed to delete provider'
@@ -1338,11 +1826,52 @@ function formatEndpointCandidates(list?: string[]) {
         </template>
 
         <div class="space-y-6">
-          <section class="space-y-4">
-            <div class="flex items-center justify-between">
-              <h2 class="apple-heading-sm">
+          <section class="grid gap-4 md:grid-cols-3">
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <p class="text-xs text-black/40 dark:text-white/40">
                 {{ t('dashboard.sections.intelligence.providers.title') }}
-              </h2>
+              </p>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ providers.length }}
+              </p>
+              <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.intelligence.providers.enabledCount', { count: providers.filter(item => item.enabled).length }, `${providers.filter(item => item.enabled).length} enabled`) }}
+              </p>
+            </div>
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <p class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.intelligence.scenes.registryMirrors', 'Registry mirrors') }}
+              </p>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ aiRegistryProviders.length }}
+              </p>
+              <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.intelligence.scenes.registryHint', 'Scenes bind registry providers, not raw API keys.') }}
+              </p>
+            </div>
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <p class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.intelligence.scenes.title', 'Scenes') }}
+              </p>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ scenes.length }}
+              </p>
+              <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.intelligence.scenes.bindingCount', { count: sceneBindingCount }, `${sceneBindingCount} bindings`) }}
+              </p>
+            </div>
+          </section>
+
+          <section class="apple-card-lg space-y-4 p-6">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 class="apple-heading-sm">
+                  {{ t('dashboard.sections.intelligence.providers.modelsTitle', 'Providers + Models') }}
+                </h2>
+                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.sections.intelligence.providers.modelsSubtitle', 'Providers expose available models; scenes decide which provider/model path is used.') }}
+                </p>
+              </div>
               <TxButton v-if="providers.length" ref="addTriggerRef" variant="primary" size="small" @click="openCreateForm(addTriggerRef?.$el || null)">
                 <span class="i-carbon-add mr-1 text-base" />
                 {{ t('dashboard.sections.intelligence.providers.addButton') }}
@@ -1393,173 +1922,313 @@ function formatEndpointCandidates(list?: string[]) {
               </div>
             </div>
 
-      <!-- Loading -->
-      <div v-if="loading" class="space-y-3 py-4">
-        <div class="flex items-center justify-center">
-          <TxSpinner :size="20" />
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-      </div>
-
-      <!-- Providers List -->
-      <div v-else-if="providers.length" class="space-y-3">
-        <div
-          v-for="provider in providers"
-          :key="provider.id"
-          class="group relative rounded-2xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
-        >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4" @click="openEditForm(provider, $event)">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-black/[0.04] dark:bg-white/[0.06]">
-                <span class="i-carbon-machine-learning-model text-lg text-black/60 dark:text-white/60" />
+            <div v-if="loading" class="space-y-3 py-4">
+              <div class="flex items-center justify-center">
+                <TxSpinner :size="20" />
               </div>
+              <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                <TxSkeleton :loading="true" :lines="2" />
+              </div>
+              <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                <TxSkeleton :loading="true" :lines="2" />
+              </div>
+            </div>
+
+            <div v-else-if="providers.length" class="space-y-3">
+              <div
+                v-for="provider in providers"
+                :key="provider.id"
+                class="group relative rounded-2xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                  <div class="flex min-w-0 items-center gap-4" @click="openEditForm(provider, $event)">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] dark:bg-white/[0.06]">
+                      <span class="i-carbon-machine-learning-model text-lg text-black/60 dark:text-white/60" />
+                    </div>
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="cursor-pointer truncate font-medium text-black dark:text-white">
+                          {{ provider.name }}
+                        </p>
+                        <TxStatusBadge
+                          :text="provider.enabled ? t('dashboard.sections.intelligence.providers.enabled') : t('dashboard.sections.intelligence.providers.disabled')"
+                          :status="provider.enabled ? 'success' : 'muted'"
+                          size="sm"
+                        />
+                        <TxStatusBadge
+                          :text="registryProviderForIntelligenceProvider(provider.id) ? 'registry' : t('dashboard.sections.intelligence.scenes.registryMissing', '需先迁移')"
+                          :status="registryProviderForIntelligenceProvider(provider.id) ? 'info' : 'warning'"
+                          size="sm"
+                        />
+                      </div>
+                      <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/40 dark:text-white/40">
+                        <span>{{ providerTypeLabel(provider.type) }}</span>
+                        <span>·</span>
+                        <span>{{ provider.models.length ? t('dashboard.sections.intelligence.providers.models', { count: provider.models.length }) : t('dashboard.sections.intelligence.providers.noModels') }}</span>
+                        <template v-if="provider.defaultModel">
+                          <span>·</span>
+                          <span class="truncate">{{ provider.defaultModel }}</span>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <TxButton
+                      variant="secondary"
+                      size="mini"
+                      class="rounded-lg"
+                      @click="openProbeOverlay(provider, $event)"
+                    >
+                      <span class="i-carbon-connection-signal text-base" />
+                      <span class="ml-1 text-[11px]">
+                        {{ t('dashboard.sections.intelligence.providers.testConnection') }}
+                      </span>
+                    </TxButton>
+                    <TuffSwitch :model-value="provider.enabled" size="small" @change="() => toggleProvider(provider)" />
+                    <TxButton
+                      variant="bare"
+                      circle
+                      size="mini"
+                      class="rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
+                      @click="requestDelete(provider)"
+                    >
+                      <span class="i-carbon-trash-can text-base" />
+                    </TxButton>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="rounded-2xl bg-black/[0.02] p-8 text-center dark:bg-white/[0.03]">
+              <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
+                <span class="i-carbon-machine-learning-model text-2xl text-black/30 dark:text-white/30" />
+              </div>
+              <h3 class="font-medium text-black dark:text-white">
+                {{ t('dashboard.sections.intelligence.providers.title') }}
+              </h3>
+              <p class="mt-1 text-sm text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.intelligence.providers.empty') }}
+              </p>
+              <TxButton ref="emptyAddTriggerRef" variant="primary" class="mt-4" @click="openCreateForm(emptyAddTriggerRef?.$el || null)">
+                {{ t('dashboard.sections.intelligence.providers.addButton') }}
+              </TxButton>
+            </div>
+          </section>
+
+          <section class="apple-card-lg space-y-5 p-6">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div class="flex items-center gap-2">
-                  <p class="cursor-pointer font-medium text-black dark:text-white">
-                    {{ provider.name }}
-                  </p>
-                  <span
-                    class="rounded px-1.5 py-0.5 text-[10px] font-medium"
-                    :class="provider.enabled
-                      ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-                      : 'bg-black/5 text-black/40 dark:bg-white/5 dark:text-white/40'"
-                  >
-                    {{ provider.enabled ? t('dashboard.sections.intelligence.providers.enabled') : t('dashboard.sections.intelligence.providers.disabled') }}
-                  </span>
-                </div>
-                <div class="flex items-center gap-2 text-xs text-black/40 dark:text-white/40">
-                  <span>{{ providerTypeLabel(provider.type) }}</span>
-                  <span>·</span>
-                  <span>{{ provider.models.length ? t('dashboard.sections.intelligence.providers.models', { count: provider.models.length }) : t('dashboard.sections.intelligence.providers.noModels') }}</span>
-                  <template v-if="provider.defaultModel">
-                    <span>·</span>
-                    <span>{{ provider.defaultModel }}</span>
-                  </template>
-                </div>
+                <h2 class="apple-heading-sm">
+                  {{ t('dashboard.sections.intelligence.scenes.title', 'Scenes') }}
+                </h2>
+                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.sections.intelligence.scenes.subtitle', 'Bind each AI scene to one or more providers, then pick the model used by that scene.') }}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <TxButton variant="secondary" size="mini" :disabled="scenesLoading" @click="fetchSceneRegistry">
+                  {{ t('common.refresh', '刷新') }}
+                </TxButton>
+                <TxButton variant="secondary" size="mini" @click="createSceneDraft">
+                  {{ t('dashboard.sections.intelligence.scenes.newScene', '新建场景') }}
+                </TxButton>
+                <TxButton variant="primary" size="mini" :disabled="sceneSaving || !sceneForm.id.trim() || !sceneForm.displayName.trim()" @click="saveSceneConfig">
+                  {{ sceneSaving ? t('dashboard.sections.intelligence.form.saving') : t('dashboard.sections.intelligence.form.save') }}
+                </TxButton>
               </div>
             </div>
 
-            <div class="flex items-center gap-2">
-              <!-- Test Connection -->
-              <TxButton
-                variant="secondary"
-                size="mini"
-                class="rounded-lg"
-                @click="openProbeOverlay(provider, $event)"
-              >
-                <span class="i-carbon-connection-signal text-base" />
-                <span class="ml-1 text-[11px]">
-                  {{ t('dashboard.sections.intelligence.providers.testConnection') }}
-                </span>
-              </TxButton>
+            <div v-if="scenesError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+              {{ scenesError }}
+            </div>
 
-              <!-- Toggle Enabled -->
-              <TxButton
-                variant="bare"
-                size="mini"
-                class="rounded-lg text-black/40 transition hover:text-primary dark:text-white/40"
-                @click="toggleProvider(provider)"
-              >
-                <span :class="provider.enabled ? 'i-carbon-toggle-filled text-primary' : 'i-carbon-toggle'" class="text-lg" />
-              </TxButton>
+            <div v-if="scenesLoading" class="flex items-center justify-center py-4">
+              <TxSpinner :size="18" />
+            </div>
 
-              <!-- Delete -->
-              <TxButton
-                variant="bare"
-                circle
-                size="mini"
-                class="rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
-                @click="requestDelete(provider)"
-              >
-                <span class="i-carbon-trash-can text-base" />
+            <div class="grid gap-5 lg:grid-cols-[260px_1fr]">
+              <div class="space-y-2">
+                <TxButton
+                  v-for="scene in scenes"
+                  :key="scene.id"
+                  variant="bare"
+                  class="SceneListButton"
+                  :class="{ 'SceneListButton--active': selectedSceneId === scene.id }"
+                  @click="selectScene(scene)"
+                >
+                  <span class="min-w-0 flex-1 text-left">
+                    <span class="block truncate text-sm font-medium">{{ scene.displayName }}</span>
+                    <span class="block truncate text-[11px] text-black/40 dark:text-white/40">{{ scene.id }}</span>
+                  </span>
+                  <TxStatusBadge :text="scene.status" :status="statusTone(scene.status)" size="sm" />
+                </TxButton>
+                <div v-if="!scenes.length" class="rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/40 dark:bg-white/[0.03] dark:text-white/40">
+                  {{ t('dashboard.sections.intelligence.scenes.empty', '暂无场景，保存右侧表单后会创建。') }}
+                </div>
+              </div>
+
+              <div class="space-y-4">
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div class="space-y-2">
+                    <label class="text-xs text-black/60 dark:text-white/60">
+                      {{ t('dashboard.sections.intelligence.scenes.sceneId', 'Scene ID') }}
+                    </label>
+                    <TuffInput v-model="sceneForm.id" class="w-full" :disabled="Boolean(selectedSceneId)" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-xs text-black/60 dark:text-white/60">
+                      {{ t('dashboard.sections.intelligence.scenes.displayName', 'Display name') }}
+                    </label>
+                    <TuffInput v-model="sceneForm.displayName" class="w-full" />
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-xs text-black/60 dark:text-white/60">
+                      {{ t('dashboard.sections.intelligence.scenes.capability', 'Capability') }}
+                    </label>
+                    <TuffSelect v-model="sceneForm.requiredCapability" class="w-full" @change="ensureSceneBindingsSupportCapability">
+                      <TuffSelectItem v-for="capability in AI_SCENE_CAPABILITIES" :key="capability" :value="capability" :label="capability" />
+                    </TuffSelect>
+                  </div>
+                  <div class="space-y-2">
+                    <label class="text-xs text-black/60 dark:text-white/60">
+                      {{ t('dashboard.sections.intelligence.scenes.strategy', 'Strategy') }}
+                    </label>
+                    <TuffSelect v-model="sceneForm.strategyMode" class="w-full">
+                      <TuffSelectItem value="priority" :label="t('dashboard.sections.intelligence.settings.strategies.priority')" />
+                      <TuffSelectItem value="lowest_latency" :label="t('dashboard.sections.intelligence.settings.strategies.leastLatency')" />
+                      <TuffSelectItem value="balanced" label="Balanced" />
+                      <TuffSelectItem value="manual" label="Manual" />
+                    </TuffSelect>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label class="flex cursor-pointer items-center justify-between rounded-xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                    <span>
+                      <span class="block text-sm font-medium text-black dark:text-white">{{ t('dashboard.sections.intelligence.scenes.enabled', '启用场景') }}</span>
+                      <span class="block text-xs text-black/40 dark:text-white/40">{{ sceneForm.id }}</span>
+                    </span>
+                    <TuffSwitch :model-value="sceneForm.status === 'enabled'" size="small" @change="value => sceneForm.status = value ? 'enabled' : 'disabled'" />
+                  </label>
+                  <label class="flex cursor-pointer items-center justify-between rounded-xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                    <span>
+                      <span class="block text-sm font-medium text-black dark:text-white">{{ t('dashboard.sections.intelligence.scenes.fallback', '启用 fallback') }}</span>
+                      <span class="block text-xs text-black/40 dark:text-white/40">{{ t('dashboard.sections.intelligence.scenes.fallbackHint', '当前绑定失败后继续尝试后续 provider。') }}</span>
+                    </span>
+                    <TuffSwitch :model-value="sceneForm.fallback === 'enabled'" size="small" @change="value => sceneForm.fallback = value ? 'enabled' : 'disabled'" />
+                  </label>
+                </div>
+
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <h3 class="text-sm font-medium text-black dark:text-white">
+                      {{ t('dashboard.sections.intelligence.scenes.bindings', 'Scene bindings') }}
+                    </h3>
+                    <TxButton variant="secondary" size="mini" :disabled="!availableSceneProviderIds.length" @click="addSceneBinding">
+                      <span class="i-carbon-add mr-1 text-sm" />
+                      {{ t('dashboard.sections.intelligence.scenes.addBinding', '添加绑定') }}
+                    </TxButton>
+                  </div>
+
+                  <div
+                    v-for="(binding, index) in sceneForm.bindings"
+                    :key="index"
+                    class="grid gap-3 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03] lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.2fr)_120px_110px_auto]"
+                  >
+                    <div class="space-y-1">
+                      <label class="text-[11px] text-black/45 dark:text-white/45">{{ t('dashboard.sections.intelligence.providers.title') }}</label>
+                      <TuffSelect v-model="binding.providerId" class="w-full" searchable @change="() => onSceneBindingProviderChange(binding)">
+                        <TuffSelectItem
+                          v-for="option in providerSceneOptions"
+                          :key="option.value"
+                          :value="option.value"
+                          :label="option.label"
+                          :disabled="option.disabled"
+                        />
+                      </TuffSelect>
+                    </div>
+                    <div class="space-y-1">
+                      <label class="text-[11px] text-black/45 dark:text-white/45">{{ t('dashboard.sections.intelligence.providers.defaultModel') }}</label>
+                      <TuffSelect v-if="providerModelOptions(binding.providerId).length" v-model="binding.model" class="w-full" searchable>
+                        <TuffSelectItem value="" :label="t('dashboard.sections.intelligence.providers.probe.modelAuto')" />
+                        <TuffSelectItem v-for="model in providerModelOptions(binding.providerId)" :key="model" :value="model" :label="model" />
+                      </TuffSelect>
+                      <TuffInput v-else v-model="binding.model" class="w-full" :placeholder="t('dashboard.sections.intelligence.providers.probe.modelPlaceholder')" />
+                    </div>
+                    <div class="space-y-1">
+                      <label class="text-[11px] text-black/45 dark:text-white/45">{{ t('dashboard.sections.intelligence.form.priority') }}</label>
+                      <TuffInput v-model.number="binding.priority" type="number" class="w-full" />
+                    </div>
+                    <div class="flex items-end">
+                      <TuffSwitch :model-value="binding.status === 'enabled'" size="small" @change="value => binding.status = value ? 'enabled' : 'disabled'" />
+                    </div>
+                    <div class="flex items-end justify-end">
+                      <TxButton variant="bare" circle size="mini" class="text-red-500" :disabled="sceneForm.bindings.length <= 1" @click="removeSceneBinding(index)">
+                        <span class="i-carbon-trash-can text-base" />
+                      </TxButton>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="apple-card-lg space-y-5 p-6">
+            <h2 class="apple-heading-sm">
+              {{ t('dashboard.sections.intelligence.settings.title') }}
+            </h2>
+
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  {{ t('dashboard.sections.intelligence.settings.defaultStrategy') }}
+                </label>
+                <TuffSelect v-model="settings.defaultStrategy" class="w-full max-w-xs">
+                  <TuffSelectItem value="priority" :label="t('dashboard.sections.intelligence.settings.strategies.priority')" />
+                  <TuffSelectItem value="round-robin" :label="t('dashboard.sections.intelligence.settings.strategies.roundRobin')" />
+                  <TuffSelectItem value="random" :label="t('dashboard.sections.intelligence.settings.strategies.random')" />
+                  <TuffSelectItem value="least-latency" :label="t('dashboard.sections.intelligence.settings.strategies.leastLatency')" />
+                </TuffSelect>
+              </div>
+
+              <label class="flex cursor-pointer items-center justify-between rounded-xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]">
+                <div>
+                  <p class="text-sm font-medium text-black dark:text-white">
+                    {{ t('dashboard.sections.intelligence.settings.enableAudit') }}
+                  </p>
+                  <p class="text-xs text-black/40 dark:text-white/40">
+                    {{ t('dashboard.sections.intelligence.settings.enableAuditHint') }}
+                  </p>
+                </div>
+                <TuffSwitch :model-value="settings.enableAudit" size="small" @change="value => settings.enableAudit = value" />
+              </label>
+
+              <label class="flex cursor-pointer items-center justify-between rounded-xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]">
+                <div>
+                  <p class="text-sm font-medium text-black dark:text-white">
+                    {{ t('dashboard.sections.intelligence.settings.enableCache') }}
+                  </p>
+                  <p class="text-xs text-black/40 dark:text-white/40">
+                    {{ t('dashboard.sections.intelligence.settings.enableCacheHint') }}
+                  </p>
+                </div>
+                <TuffSwitch :model-value="settings.enableCache" size="small" @change="value => settings.enableCache = value" />
+              </label>
+
+              <div v-if="settings.enableCache" class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  {{ t('dashboard.sections.intelligence.settings.cacheExpiration') }}
+                </label>
+                <TuffInput v-model.number="settings.cacheExpiration" type="number" class="w-full max-w-xs" />
+              </div>
+            </div>
+
+            <div class="flex justify-end">
+              <TxButton variant="primary" size="small" :disabled="settingsSaving" @click="saveSettings">
+                {{ settingsSaving ? t('dashboard.sections.intelligence.form.saving') : t('dashboard.sections.intelligence.form.save') }}
               </TxButton>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Empty State -->
-      <div v-else class="rounded-2xl bg-black/[0.02] p-8 text-center dark:bg-white/[0.03]">
-        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
-          <span class="i-carbon-machine-learning-model text-2xl text-black/30 dark:text-white/30" />
-        </div>
-        <h3 class="font-medium text-black dark:text-white">
-          {{ t('dashboard.sections.intelligence.providers.title') }}
-        </h3>
-        <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.sections.intelligence.providers.empty') }}
-        </p>
-        <TxButton ref="emptyAddTriggerRef" variant="primary" class="mt-4" @click="openCreateForm(emptyAddTriggerRef?.$el || null)">
-          {{ t('dashboard.sections.intelligence.providers.addButton') }}
-        </TxButton>
-      </div>
-    </section>
-
-    <!-- Settings Section -->
-    <section class="apple-card-lg space-y-5 p-6">
-      <h2 class="apple-heading-sm">
-        {{ t('dashboard.sections.intelligence.settings.title') }}
-      </h2>
-
-      <div class="space-y-4">
-        <!-- Default Strategy -->
-        <div class="space-y-2">
-          <label class="text-xs text-black/60 dark:text-white/60">
-            {{ t('dashboard.sections.intelligence.settings.defaultStrategy') }}
-          </label>
-          <TuffSelect v-model="settings.defaultStrategy" class="w-full max-w-xs">
-            <TuffSelectItem value="priority" :label="t('dashboard.sections.intelligence.settings.strategies.priority')" />
-            <TuffSelectItem value="round-robin" :label="t('dashboard.sections.intelligence.settings.strategies.roundRobin')" />
-            <TuffSelectItem value="random" :label="t('dashboard.sections.intelligence.settings.strategies.random')" />
-            <TuffSelectItem value="least-latency" :label="t('dashboard.sections.intelligence.settings.strategies.leastLatency')" />
-          </TuffSelect>
-        </div>
-
-        <!-- Audit toggle -->
-        <label class="flex cursor-pointer items-center justify-between rounded-xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]">
-          <div>
-            <p class="text-sm font-medium text-black dark:text-white">
-              {{ t('dashboard.sections.intelligence.settings.enableAudit') }}
-            </p>
-            <p class="text-xs text-black/40 dark:text-white/40">
-              {{ t('dashboard.sections.intelligence.settings.enableAuditHint') }}
-            </p>
-          </div>
-          <TxCheckbox v-model="settings.enableAudit" />
-        </label>
-
-        <!-- Cache toggle -->
-        <label class="flex cursor-pointer items-center justify-between rounded-xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]">
-          <div>
-            <p class="text-sm font-medium text-black dark:text-white">
-              {{ t('dashboard.sections.intelligence.settings.enableCache') }}
-            </p>
-            <p class="text-xs text-black/40 dark:text-white/40">
-              {{ t('dashboard.sections.intelligence.settings.enableCacheHint') }}
-            </p>
-          </div>
-          <TxCheckbox v-model="settings.enableCache" />
-        </label>
-
-        <!-- Cache expiration -->
-        <div v-if="settings.enableCache" class="space-y-2">
-          <label class="text-xs text-black/60 dark:text-white/60">
-            {{ t('dashboard.sections.intelligence.settings.cacheExpiration') }}
-          </label>
-          <TuffInput v-model.number="settings.cacheExpiration" type="number" class="w-full max-w-xs" />
-        </div>
-      </div>
-
-      <div class="flex justify-end">
-        <TxButton variant="primary" size="small" :disabled="settingsSaving" @click="saveSettings">
-          {{ settingsSaving ? t('dashboard.sections.intelligence.form.saving') : t('dashboard.sections.intelligence.form.save') }}
-        </TxButton>
-      </div>
           </section>
         </div>
       </TxTabItem>
@@ -2104,22 +2773,23 @@ function formatEndpointCandidates(list?: string[]) {
               </div>
 
               <div
-                v-if="probeResult"
+                v-if="probeLoading || probeStreamOutput || probeResult"
                 class="space-y-3 rounded-2xl border px-4 py-3"
-                :class="probeResult.success
+                :class="(probeResult?.success ?? true)
                   ? 'border-green-500/20 bg-green-500/10'
                   : 'border-red-500/20 bg-red-500/10'"
               >
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="text-sm font-medium" :class="probeResult.success ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-300'">
-                    {{ probeResult.message || (probeResult.success ? 'Probe completed.' : 'Probe failed.') }}
+                  <p class="flex items-center gap-2 text-sm font-medium" :class="(probeResult?.success ?? true) ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-300'">
+                    <TxSpinner v-if="probeLoading" :size="14" />
+                    <span>{{ probeResult?.message || probeStreamStatus || t('dashboard.sections.intelligence.providers.probe.streaming', '模型正在流式返回…') }}</span>
                   </p>
-                  <p v-if="probeResult.latency" class="text-xs text-black/45 dark:text-white/45">
+                  <p v-if="probeResult?.latency" class="text-xs text-black/45 dark:text-white/45">
                     {{ t('dashboard.sections.intelligence.providers.probe.latency') }} {{ probeResult.latency }}ms
                   </p>
                 </div>
 
-                <div class="grid gap-2 text-xs text-black/60 dark:text-white/60 sm:grid-cols-2">
+                <div v-if="probeResult" class="grid gap-2 text-xs text-black/60 dark:text-white/60 sm:grid-cols-2">
                   <p>
                     <span class="text-black/40 dark:text-white/40">{{ t('dashboard.sections.intelligence.providers.probe.model') }}:</span>
                     {{ probeResult.model || '-' }}
@@ -2138,14 +2808,14 @@ function formatEndpointCandidates(list?: string[]) {
                   </p>
                 </div>
 
-                <div v-if="probeResult.output" class="space-y-1">
+                <div v-if="probeStreamOutput || probeResult?.output" class="space-y-1">
                   <p class="text-xs text-black/45 dark:text-white/45">
                     {{ t('dashboard.sections.intelligence.providers.probe.response') }}
                   </p>
-                  <pre class="ProviderProbe-ResultText">{{ probeResult.output }}</pre>
+                  <pre class="ProviderProbe-ResultText">{{ probeStreamOutput || probeResult?.output }}</pre>
                 </div>
 
-                <div v-if="probeResult.error?.responseSnippet" class="space-y-1">
+                <div v-if="probeResult?.error?.responseSnippet" class="space-y-1">
                   <p class="text-xs text-red-500">
                     {{ t('dashboard.sections.intelligence.providers.probe.errorSnippet') }}
                   </p>
@@ -2155,8 +2825,16 @@ function formatEndpointCandidates(list?: string[]) {
             </div>
 
             <div class="ProviderOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
+              <TxButton variant="secondary" size="small" @click="closeProbeOverlay(close)">
                 {{ t('dashboard.sections.intelligence.form.cancel') }}
+              </TxButton>
+              <TxButton
+                v-if="probeLoading"
+                variant="secondary"
+                size="small"
+                @click="probeAbortController?.abort()"
+              >
+                {{ t('dashboard.sections.intelligence.providers.probe.stop', '停止') }}
               </TxButton>
               <TxButton
                 variant="primary"
@@ -2211,6 +2889,29 @@ function formatEndpointCandidates(list?: string[]) {
 
 :root.dark .ProviderOverlay-Actions {
   border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.SceneListButton {
+  width: 100%;
+  min-height: 58px;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.SceneListButton--active {
+  background: rgba(64, 158, 255, 0.12);
+  color: var(--tx-color-primary);
+}
+
+:root.dark .SceneListButton {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:root.dark .SceneListButton--active {
+  background: rgba(64, 158, 255, 0.18);
 }
 
 .ProviderProbe-ResultText {

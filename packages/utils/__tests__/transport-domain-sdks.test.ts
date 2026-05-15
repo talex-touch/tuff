@@ -916,6 +916,11 @@ describe('transport domain sdk mappings', () => {
     await sdk.workflowDelete({ workflowId: 'wf_1' })
     await sdk.workflowRun({ workflowId: 'wf_1', sessionId: 'tis_1' })
     await sdk.workflowHistory({ workflowId: 'wf_1', limit: 10 })
+    await sdk.workflowReviewUpdate({
+      runId: 'run_1',
+      itemId: 'run_1:step_1',
+      status: 'copied',
+    })
 
     expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
       'intelligence:workflow:list',
@@ -961,6 +966,48 @@ describe('transport domain sdk mappings', () => {
       workflowId: 'wf_1',
       limit: 10,
     })
+    expect(transport.send.mock.calls[6]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:review:update',
+    )
+    expect(transport.send.mock.calls[6]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'workflow',
+      action: 'review:update',
+    })
+    expect(transport.send.mock.calls[6]?.[1]).toEqual({
+      runId: 'run_1',
+      itemId: 'run_1:step_1',
+      status: 'copied',
+    })
+  })
+
+  it('intelligence sdk maps local environment scan through typed transport events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({
+      ok: true,
+      result: {
+        scannedAt: 1,
+        cwd: '/repo',
+        tools: [],
+        configFiles: [],
+        skillProviders: [],
+      },
+    })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    const result = await sdk.getLocalEnvironment()
+
+    expect(result.cwd).toBe('/repo')
+    expect(transport.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        namespace: 'intelligence',
+        module: 'api',
+        action: 'local-environment',
+      }),
+    )
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:local-environment',
+    )
   })
 
   it('permission sdk maps grant + push subscription', async () => {

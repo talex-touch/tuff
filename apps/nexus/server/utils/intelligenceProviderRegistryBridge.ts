@@ -84,11 +84,18 @@ function buildCapabilityInput(capability: string) {
   }
 }
 
-function buildProviderMetadata(provider: IntelligenceProviderRecord, registryProviderId?: string) {
+function readExistingProviderMetadata(existing: ProviderRegistryRecord | null): Record<string, unknown> {
+  const metadata = existing?.metadata
+  return metadata && typeof metadata === 'object' ? metadata : {}
+}
+
+function buildProviderMetadata(provider: IntelligenceProviderRecord, registryProviderId?: string, existing?: ProviderRegistryRecord | null) {
+  const existingMetadata = readExistingProviderMetadata(existing ?? null)
   return {
+    ...existingMetadata,
     source: INTELLIGENCE_PROVIDER_SOURCE,
     intelligenceProviderId: provider.id,
-    providerRegistryId: registryProviderId,
+    providerRegistryId: registryProviderId ?? (typeof existingMetadata.providerRegistryId === 'string' ? existingMetadata.providerRegistryId : undefined),
     intelligenceType: provider.type,
     models: provider.models,
     defaultModel: provider.defaultModel,
@@ -269,7 +276,7 @@ export async function syncIntelligenceProviderToRegistry(
   const hasApiKeyInput = typeof options.apiKey === 'string' && options.apiKey.trim().length > 0
   const shouldClearApiKey = options.apiKey === null
   const authType = provider.hasApiKey || hasApiKeyInput ? 'api_key' : 'none'
-  const metadata = buildProviderMetadata(provider, existing?.id)
+  const metadata = buildProviderMetadata(provider, existing?.id, existing)
   const capabilities = normalizeCapabilities(provider.capabilities, provider.type).map(buildCapabilityInput)
 
   if (hasApiKeyInput) {
