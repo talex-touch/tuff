@@ -136,6 +136,7 @@ class MockD1Database {
       ['scene_id = ?', 'scene_id'],
       ['provider_id = ?', 'provider_id'],
       ['capability = ?', 'capability'],
+      ['provider_usage_ref = ?', 'provider_usage_ref'],
       ['status = ?', 'status'],
       ['mode = ?', 'mode'],
     ]
@@ -281,6 +282,21 @@ describe('providerUsageLedgerStore', () => {
       billable: false,
       errorCode: 'CAPABILITY_UNSUPPORTED',
     })
+  })
+
+  it('支持按 provider usage ref 精确过滤', async () => {
+    await recordProviderUsageLedger(event, completedRun())
+
+    const matched = await listProviderUsageLedgerEntries(event, {
+      providerUsageRef: 'req_tencent_1',
+    })
+    const missed = await listProviderUsageLedgerEntries(event, {
+      providerUsageRef: 'missing_ref',
+    })
+
+    expect(matched.total).toBe(1)
+    expect(matched.entries[0]?.providerUsageRef).toBe('req_tencent_1')
+    expect(missed.total).toBe(0)
   })
 
   it('schema guard 按 D1 binding 实例隔离', async () => {
