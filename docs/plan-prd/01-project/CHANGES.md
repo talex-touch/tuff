@@ -1,7 +1,22 @@
 # 变更日志
 
-> 更新时间: 2026-05-14
-> 说明: 主文件仅保留近 30 天（2026-04-14 ~ 2026-05-14）详细记录；更早历史已按月归档。
+> 更新时间: 2026-05-15
+> 说明: 主文件仅保留近 30 天（2026-04-15 ~ 2026-05-15）详细记录；更早历史已按月归档。
+
+## 2026-05-15
+
+### feat(nexus): reshape Intelligence admin around Providers and Scenes
+
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id]/probe-stream.post.ts`
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.ts`
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.test.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+  - Nexus Intelligence 管理页从单纯 provider 列表调整为 `Providers + Models` 与 `Scenes` 配置：provider 负责暴露模型，scene 负责绑定 provider/model、策略、fallback 与启停状态。
+  - Scene 配置复用 Provider Registry / Scene Registry，不新增独立存储；仅展示/编辑 `routingShape=providers-scenes` 的 Intelligence scenes，并限制 binding provider 必须已迁移且声明当前 scene capability。
+  - Binding metadata 保留 `source=intelligence`、`intelligenceProviderId`、`model` 与排序信息；provider mirror 同步会保留已有 registry metadata，并补测试覆盖。
+  - Provider 测试新增 SSE 流式 probe 入口，前端实时展示模型增量输出并支持停止；流式不可用时仍回退到原 JSON probe。
+  - Provider 启停、scene/fallback、全局 audit/cache 等二态控件切到 Tuffex switch/status 组件，收敛管理页交互一致性。
 
 ## 2026-05-14
 
