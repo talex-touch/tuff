@@ -19,6 +19,7 @@ const useWorkspaceSource = isDev
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
+const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
@@ -286,6 +287,7 @@ export default defineNuxtConfig({
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
         { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
+        { find: /^@tuffex-components\/(.+)$/, replacement: `${tuffexComponentsSourceRoot}/$1` },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
         ...(useWorkspaceSource
           ? [
@@ -310,6 +312,7 @@ export default defineNuxtConfig({
       compilerOptions: {
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
+          '@tuffex-components/*': [`${tuffexComponentsSourceRoot}/*`],
           '@talex-touch/tuffex': [tuffexSourceEntry],
           '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
           '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
