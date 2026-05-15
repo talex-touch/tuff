@@ -8,7 +8,7 @@
 - 当前基线：`2.4.10-beta.22`。
 - 当前主线：`2.4.10` 聚焦 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。
-- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 高级策略不得抢占当前 release gate。
+- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 高级策略只能以 dev 小切片推进，不得抢占当前 release gate。
 
 ## P0 - 2.4.10 Release Blockers
 
@@ -38,7 +38,7 @@
 
 | ID | 事项 | 状态 | 验收/证据 |
 | --- | --- | --- | --- |
-| P2-AI-250 | Tuff 2.5.0 AI 桌面入口 | 进行中 | CoreBox AI Ask 与 OmniPanel Writing Tools MVP 已落地；继续 Workflow `Use Model` 节点、完整 Review Queue 与 3 个 P0 模板。Stable 只承诺文本 + OCR。 |
+| P2-AI-250 | Tuff 2.5.0 AI 桌面入口 | 进行中 | CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation 与 OmniPanel Writing Tools MVP 已进入 dev 切片；继续 Workflow `Use Model` 节点、完整 Review Queue 与 3 个 P0 模板。Stable 只承诺文本 + OCR。 |
 | P2-PROVIDER | Nexus Provider Registry / Scene 编排 | 进行中 | 已有 D1 secure store、Scene run、Dashboard dry-run/execute、AI mirror、health/usage ledger 与最小策略路由；后续补旧 `intelligence_providers` 表退场、user-scope OCR 自动绑定、success rate/配额/dynamic pricingRef。 |
 | P2-NATIVE | Native transport V1 真机 smoke | 待执行 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort；打包预览确认 `sharp` 与 ffmpeg/ffprobe 可执行。 |
 | P2-QUICK-LAUNCH | Quick Launch 真机验收 | 待执行 | macOS/Windows/Linux 验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。 |
@@ -51,6 +51,7 @@
 - CoreApp 启动异步化 P0/P1/P2/P3 主要代码切片已完成，剩余为真机补证。
 - Quick Launch 搜索引擎模式、补全隔离、图标与旧结果清理已完成。
 - 插件禁用后 CoreBox push items 门禁已完成。
+- Nexus docs prerender routes 与 docs 切换性能优化已完成。
 - 2.4.8 OmniPanel Gate、v2.4.7 Gate A/B/C/D/E、2.4.9 插件完善主线为 historical done。
 
 ## 长期债务入口

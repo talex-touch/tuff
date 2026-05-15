@@ -329,6 +329,26 @@
     "logoutFailed": "Failed to sign out",
     "runtimeApiServer": "Runtime API server"
   },
+  "creditsSummary": {
+    "title": "AI Credits",
+    "description": "View remaining, used, and total Nexus AI credits.",
+    "notice": "Nexus official provider calls consume this quota by the totalTokens returned by the model.",
+    "loginRequired": "Sign in to view remaining credits and usage.",
+    "loading": "Loading credits information.",
+    "empty": "No credits information yet.",
+    "month": "Billing month: {month}",
+    "refresh": "Refresh",
+    "openDashboard": "Open Nexus",
+    "personalRemaining": "Personal remaining",
+    "personalUsed": "Personal used",
+    "personalQuota": "Personal total",
+    "teamRemaining": "Team pool remaining",
+    "loginTitle": "Sign-in required",
+    "loginDescription": "Sign in to your Tuff account to read the Nexus credits summary.",
+    "errorTitle": "Credits unavailable",
+    "retry": "Retry",
+    "billingNoticeTitle": "Billing notice"
+  },
   "userProfile": {
     "title": "Account",
     "unknownName": "User",

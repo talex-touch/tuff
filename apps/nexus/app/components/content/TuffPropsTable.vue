@@ -4,8 +4,8 @@ import { computed, ref } from 'vue'
 
 interface PropRow {
   name: string
-  type?: string
-  default?: string
+  type?: unknown
+  default?: unknown
   description?: string
   values?: string[]
 }
@@ -22,13 +22,22 @@ const labels = {
 
 const copiedKey = ref('')
 
-function extractValues(type?: string) {
-  if (!type)
+function toCopyText(value: unknown): string {
+  if (typeof value === 'string')
+    return value
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value)
+  return ''
+}
+
+function extractValues(type?: unknown) {
+  const text = toCopyText(type)
+  if (!text)
     return []
-  const matches = Array.from(type.matchAll(/'([^']+)'/g)).map(match => match[1])
+  const matches = Array.from(text.matchAll(/'([^']+)'/g)).map(match => match[1])
   if (matches.length)
     return matches
-  const doubleMatches = Array.from(type.matchAll(/"([^"]+)"/g)).map(match => match[1])
+  const doubleMatches = Array.from(text.matchAll(/"([^"]+)"/g)).map(match => match[1])
   return doubleMatches
 }
 
@@ -42,10 +51,8 @@ const normalizedRows = computed(() => {
   })
 })
 
-function isCopyable(value?: string) {
-  if (!value)
-    return false
-  const trimmed = value.trim()
+function isCopyable(value?: unknown) {
+  const trimmed = toCopyText(value).trim()
   if (!trimmed || trimmed === '-' || trimmed === '—')
     return false
   return true
@@ -65,19 +72,20 @@ function fallbackCopy(text: string) {
   document.body.removeChild(textarea)
 }
 
-async function copyText(text?: string, key?: string) {
-  if (!text || !hasWindow())
+async function copyText(text?: unknown, key?: string) {
+  const copyValue = toCopyText(text).trim()
+  if (!copyValue || !hasWindow())
     return
   try {
     if (hasNavigator() && navigator.clipboard) {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(copyValue)
     }
     else {
-      fallbackCopy(text)
+      fallbackCopy(copyValue)
     }
   }
   catch {
-    fallbackCopy(text)
+    fallbackCopy(copyValue)
   }
   if (key) {
     copiedKey.value = key

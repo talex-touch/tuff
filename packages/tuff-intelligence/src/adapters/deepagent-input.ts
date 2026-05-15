@@ -32,6 +32,11 @@ function shouldIncludeMessageInModelContext(message: Record<string, unknown>): b
     return false
   }
 
+  const role = normalizeMessageRole(message.role)
+  if (role === 'system' && contextPolicy !== 'allow') {
+    return false
+  }
+
   const sourceEventType = String(metadata.sourceEventType || '').trim().toLowerCase()
   return sourceEventType !== 'memory.context'
 }

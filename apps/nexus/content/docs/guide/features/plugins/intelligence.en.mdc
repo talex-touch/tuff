@@ -9,10 +9,11 @@
 
 ## Core Capabilities
 - AI Q&A: ask directly in CoreBox and copy the response.
+- Conversation handoff: CoreBox turns are linked to an Intelligence Session with a recoverable `handoffSessionId`.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data
-- Config/data files: None (no manual config file needed for MVP)
+- Config/data files: None (handoff context is maintained by the Intelligence Session runtime)
 - Plugin directory: `plugins/touch-intelligence`
 
 ## Permissions

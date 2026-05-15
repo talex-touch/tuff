@@ -66,6 +66,77 @@
   - App / External 授权不受该开关影响，仍保持 IP 不一致拒绝策略。
   - 验证：`pnpm -C "apps/nexus" run typecheck` 通过（仅保留既有 Nuxt 自动导入重复 warning）。
 
+### fix(nexus): harden docs props table prerender
+
+- `apps/nexus/app/components/content/TuffPropsTable.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `TuffPropsTable` 不再假设 `type/default` 一定是字符串，复制与可复制判定前会统一归一化 boolean/number/string，避免 docs prerender 在 `/docs/dev/components/floating` 遇到 boolean default 时因 `.trim()` 崩溃。
+  - 目标是恢复 Cloudflare Pages / Nexus build；不改变文档表格数据结构与展示入口。
+
+### fix(intelligence): address tool and handoff review feedback
+
+- `apps/core-app/src/main/modules/ai/agents/tool-registry.ts`
+- `packages/tuff-intelligence/src/tools/*`
+- `packages/tuff-intelligence/src/registry/skill-registry.ts`
+- `plugins/touch-intelligence/index.js`
+- `apps/nexus/server/api/docs/sidebar-components.get.ts`
+  - CoreApp Tuff tool bridge 改为通过 `ToolKit` 执行，保留 Zod 输入校验与 approval gate；ToolKit 注册重复 id 会拒绝覆盖，approval gate 异常会返回结构化 tool error，capability bridge 不再默认绕过高风险工具审批。
+  - SkillRegistry 移除长 query 包含短 candidate 的过宽匹配；`touch-intelligence` handoff session id 加入 sha256 短摘要避免 slug 碰撞，并优先采用更长远端 handoff 历史。
+  - Nexus docs sidebar cached handler 移除冗余 `cache-control` 手写 header，继续由 Nitro cache options 生成。
+
+### perf(nexus): prerender docs routes and smooth docs switching
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/build/docs-prerender-routes.ts`
+- `apps/nexus/build/docs-prerender-routes.test.ts`
+- `apps/nexus/server/api/docs/sidebar-components.get.ts`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/vitest.config.ts`
+  - Nexus 构建期扫描 `content/docs/**/*.{md,mdc}` 生成 canonical `/docs/**` 预渲染路由，并将稳定 docs API 纳入 prerender 列表。
+  - Docs Sidebar 与 pager 局部启用 NuxtLink prefetch；feedback/comments 延后到内容稳定后客户端挂载，减少切换时重复 DOM 扫描。
+
+### feat(plugin): bridge touch-intelligence to handoff sessions
+
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/intelligence.test.ts`
+- `apps/nexus/content/docs/guide/features/plugins/intelligence.{zh,en}.mdc`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - `touch-intelligence` 发送 CoreBox AI Ask 前会确保稳定 `corebox_ai_ask_<featureId>` Intelligence Session，并在成功回答后把最近业务消息写入 `context.conversation` 供后续恢复/接续。
+  - `text.chat` / `vision.ocr` 调用 metadata 增加 `sessionId`、`handoffSessionId` 与 `handoffSource=corebox.touch-intelligence`，保留原有审计字段。
+  - 已验证：`corepack pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"` 通过。
+
+### feat(intelligence): add native tool kit foundation
+
+- `apps/core-app/src/main/modules/ai/agents/tool-registry.ts`
+- `apps/core-app/src/main/modules/ai/agents/tool-registry.test.ts`
+- `packages/tuff-intelligence/src/adapters/*`
+- `packages/tuff-intelligence/src/runtime/decision-dispatcher.ts`
+- `packages/tuff-intelligence/src/tools/*`
+- `packages/tuff-intelligence/src/registry/*`
+- `packages/tuff-intelligence/README.md`
+- `packages/tuff-intelligence/package.json`
+  - 新增 Tuff-native Tool Kit 基础层，提供 `defineTuffTool()`、`createToolKit()`、工具 manifest/discovery、LangChain/DeepAgents adapter、approval gate 与 SkillRegistry deterministic resolution。
+  - 工具输入/输出使用 Zod runtime schema 校验，并统一返回结构化错误码；`CapabilityRegistry.registerTool()` 支持直接注册 Tuff Tool。
+  - 修复 DeepAgent Responses 输入中未授权 system message 进入模型上下文的问题，并补 Core App 旧 AgentTool/TuffTool 双向桥接。
+  - 已验证：`packages/tuff-intelligence` vitest/lint/build 与 CoreApp tool-registry targeted test 通过。
+
+### feat(ai): charge Nexus invoke credits and surface usage
+
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts`
+- `apps/nexus/server/api/v1/intelligence/invoke.api.test.ts`
+- `apps/core-app/src/renderer/src/modules/nexus/credits-summary*.ts`
+- `apps/core-app/src/renderer/src/components/account/CreditsSummaryBlock.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Nexus `/api/v1/intelligence/invoke` 成功返回模型结果后按 `usage.totalTokens` 扣减 AI credits；provider 调用失败与 `totalTokens <= 0` 不扣 credits。
+  - `Team credits exceeded.` / `User credits exceeded.` 映射为 `402 CREDITS_EXCEEDED`，避免落成 500。
+  - CoreApp 通过既有登录态代理复用 `/api/credits/summary` 展示个人剩余、已用、总额度与团队池剩余；模型倍率与 dynamic `pricingRef` 留给 Provider Registry Phase 4。
+
 ### fix(core-app): restore Windows PowerShell app source scans
 
 - `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`

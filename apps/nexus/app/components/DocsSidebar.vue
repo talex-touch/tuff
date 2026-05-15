@@ -36,6 +36,7 @@ const { data: componentDocs, pending: componentDocsPending } = await useTypedFet
   '/api/docs/sidebar-components',
   {
     key: 'docs-components-meta',
+    server: true,
     default: () => [],
   },
 )
@@ -385,6 +386,7 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 
 const items = computed(() => navigationTree.value ?? [])
 const componentItems = computed(() => filterByLocale((componentDocs.value ?? []) as any[]))
+const lastComponentSections = shallowRef<any[]>([])
 const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
 
@@ -414,7 +416,7 @@ function findSectionByPath(list: any[], targetPath: string): any | null {
   return null
 }
 
-const componentSections = computed(() => {
+const resolvedComponentSections = computed(() => {
   const sourceItems = componentItems.value ?? []
   if (!sourceItems.length)
     return []
@@ -483,6 +485,22 @@ const componentSections = computed(() => {
 
   return sections
 })
+
+const componentSections = computed(() => {
+  if (componentDocsPending.value)
+    return lastComponentSections.value
+
+  return resolvedComponentSections.value
+})
+
+watch(
+  () => [componentDocsPending.value, resolvedComponentSections.value] as const,
+  ([isPending, latestSections]) => {
+    if (!isPending)
+      lastComponentSections.value = latestSections
+  },
+  { immediate: true },
+)
 
 function resolveComponentItemStatus(item: any): SyncStatusKey | null {
   if (!item)
@@ -660,6 +678,7 @@ watch(
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
           :to="localePath({ path: sec.entryPath || sec.basePath })"
+          prefetch
           class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
           :class="activeTopSection === sec.key
             ? 'bg-white text-black shadow-sm dark:bg-white/15 dark:text-white'
@@ -685,6 +704,7 @@ watch(
             <NuxtLink
               v-if="linkTarget(currentSectionData)"
               :to="localePath({ path: linkTarget(currentSectionData)! })"
+              prefetch
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
@@ -732,6 +752,7 @@ watch(
             <NuxtLink
               v-if="linkTarget(child)"
               :to="localePath({ path: linkTarget(child)! })"
+              prefetch
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"

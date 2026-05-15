@@ -1,3 +1,6 @@
+import type { TuffTool, TuffToolInvocationResult } from '../tools/types'
+import { toCapabilityManifest } from '../tools/tool-kit'
+
 export interface CapabilityManifest<I = unknown, O = unknown> {
   id: string
   description: string
@@ -12,11 +15,22 @@ export interface CapabilityManifest<I = unknown, O = unknown> {
   }
 }
 
-export class CapabilityRegistry {
-  private readonly capabilities = new Map<string, CapabilityManifest>()
+type StoredCapabilityManifest = CapabilityManifest<any, any>
 
-  register(manifest: CapabilityManifest) {
-    this.capabilities.set(manifest.id, manifest)
+export class CapabilityRegistry {
+  private readonly capabilities = new Map<string, StoredCapabilityManifest>()
+
+  register<I = unknown, O = unknown>(manifest: CapabilityManifest<I, O>): CapabilityManifest<I, O> {
+    this.capabilities.set(manifest.id, manifest as StoredCapabilityManifest)
+    return manifest
+  }
+
+  registerTool<I, O>(
+    tool: TuffTool<I, O>,
+  ): CapabilityManifest<I, TuffToolInvocationResult<O>> {
+    const manifest = toCapabilityManifest(tool)
+    this.register(manifest)
+    return manifest
   }
 
   get(id: string): CapabilityManifest | null {

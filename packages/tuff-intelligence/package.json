@@ -52,6 +52,9 @@
     "@talex-touch/utils": "workspace:*",
     "deepagents": "0.0.2"
   },
+  "peerDependencies": {
+    "zod": "^3.25.32"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260426.1",
     "eslint": "^9.39.4",

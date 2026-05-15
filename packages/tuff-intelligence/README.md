@@ -41,6 +41,58 @@ async function run() {
 }
 ```
 
+## Tool Kit
+`ToolKit` 提供 Tuff-native 工具定义、Zod 运行时校验和可插拔审批门禁。它不绑定 LangChain / DeepAgents，后续 adapter 可以消费同一套工具定义。
+
+```ts
+import { z } from 'zod'
+import {
+  createToolKit,
+  LangChainToolAdapter,
+  defineTuffTool,
+  toToolManifest,
+} from '@talex-touch/tuff-intelligence'
+
+const kit = createToolKit({
+  approvalGate: async request => ({
+    approved: request.riskLevel !== 'critical',
+    reason: request.riskLevel === 'critical' ? 'Critical tool requires HITL.' : undefined,
+  }),
+})
+
+kit.register(defineTuffTool({
+  id: 'text.uppercase',
+  name: 'Uppercase',
+  description: 'Uppercase input text.',
+  inputSchema: z.object({
+    text: z.string(),
+  }),
+  outputSchema: z.object({
+    text: z.string(),
+  }),
+  execute: input => ({
+    text: input.text.toUpperCase(),
+  }),
+}))
+
+const result = await kit.invoke('text.uppercase', { text: 'tuff' })
+if (result.ok) {
+  console.log(result.output.text)
+}
+
+const manifest = toToolManifest(kit.get('text.uppercase')!)
+const langChainTool = LangChainToolAdapter.fromTuffTool(kit.get('text.uppercase')!)
+```
+
+工具也可以桥接到既有 `CapabilityRegistry`：
+
+```ts
+import { CapabilityRegistry } from '@talex-touch/tuff-intelligence'
+
+const registry = new CapabilityRegistry()
+registry.registerTool(kit.get('text.uppercase')!)
+```
+
 ## 存储适配器（接口）
 `TuffIntelligenceStorageAdapter` 需实现：
 - 审计：`saveAuditLog` / `queryAuditLogs`
