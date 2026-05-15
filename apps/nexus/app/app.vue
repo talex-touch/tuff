@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { appName } from '~/constants'
 
@@ -21,6 +21,7 @@ const isAuthShellRoute = computed(() => {
     || path.startsWith('/device-auth')
 })
 const { showInvisibleWatermark } = useWatermarkDisplayPolicy()
+const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearch()
 const { initLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
 const { user, pending: authUserPending } = useAuthUser()
@@ -29,6 +30,7 @@ const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
 const protectedSessionRecheckDone = ref(false)
 const protectedSessionRecheckRunning = ref(false)
+const searchTriggerSelector = '[data-role="global-search-trigger"]'
 await initLocale({
   isAuthenticated: status.value === 'authenticated',
   profileLocale: user.value?.locale ?? null,
@@ -47,6 +49,61 @@ watch(
 )
 
 const redirectTarget = computed(() => sanitizeRedirect(route.fullPath, '/dashboard'))
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement))
+    return false
+  if (target.isContentEditable)
+    return true
+  const tagName = target.tagName.toLowerCase()
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select'
+}
+
+function resolveGlobalSearchTrigger() {
+  if (!import.meta.client)
+    return null
+  return document.querySelector<HTMLElement>(searchTriggerSelector)
+}
+
+function handleGlobalSearchShortcut(event: KeyboardEvent) {
+  if (event.defaultPrevented || isAuthShellRoute.value)
+    return
+
+  if (globalSearchOpen.value && event.key === 'Escape') {
+    event.preventDefault()
+    closeSearch()
+    return
+  }
+
+  if (isEditableTarget(event.target))
+    return
+
+  const key = event.key.toLowerCase()
+  if ((event.metaKey || event.ctrlKey) && key === 'k') {
+    event.preventDefault()
+    void summonSearch(resolveGlobalSearchTrigger())
+    return
+  }
+
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === '/') {
+    event.preventDefault()
+    void summonSearch(resolveGlobalSearchTrigger())
+  }
+}
+
+onMounted(() => {
+  closeSearch()
+  window.addEventListener('keydown', handleGlobalSearchShortcut)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalSearchShortcut)
+})
+
+watch(
+  () => route.fullPath,
+  () => closeSearch(),
+)
 
 function pickFirstQueryValue(value: unknown) {
   if (!value)
@@ -304,7 +361,7 @@ watchEffect(() => {
   <VitePwaManifest />
   <ToastContainer />
   <ClientOnly>
-    <LazySearchGlobalSearch v-if="!isAuthShellRoute" />
+    <LazySearchGlobalSearch v-if="!isAuthShellRoute && globalSearchOpen" />
     <LazyWatermarkInvisibleWatermark v-if="showInvisibleWatermark && !isAuthShellRoute" />
     <LazyWatermarkRiskModal v-if="showInvisibleWatermark && !isAuthShellRoute" />
   </ClientOnly>

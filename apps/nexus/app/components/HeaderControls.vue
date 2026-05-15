@@ -18,14 +18,14 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
-const { summonSearch } = useGlobalSearch()
+const { openSearch } = useGlobalSearch()
 
 const searchButtonLabel = computed(() => t('search.open'))
 const searchButtonAriaLabel = computed(() => t('search.openAria'))
 
 async function onSearchClick(event: MouseEvent) {
   const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  await summonSearch(target)
+  openSearch(target)
 }
 </script>
 

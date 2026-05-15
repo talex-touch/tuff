@@ -24,6 +24,16 @@
   - Added focused tests to keep landing showcase MP4 assets below 2 MiB and to assert legacy GIF assets stay excluded from Cloudflare Pages output.
   - Current local build output drops from about 54 MiB to about 38 MiB on disk, with `dist/shots` reduced to about 1.7 MiB.
 
+### fix(nexus): prevent dashboard search overlay from mounting by default
+
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/components/search/GlobalSearch.vue`
+- `apps/nexus/app/components/HeaderControls.vue`
+- `apps/nexus/app/layouts/dashboard.vue`
+  - Global search command palette now mounts only while open and closes on route changes, avoiding a stale command palette overlay washing out dashboard pages such as Assets.
+  - Search keyboard shortcuts are handled at the app shell level so lazy mounting still supports Cmd/Ctrl+K and `/` without keeping the palette component alive on every dashboard page.
+  - Dashboard visible watermark opacity/z-index is reduced to avoid sitting above page content.
+
 ### perf(nexus): reduce auth shell critical client work
 
 - `apps/nexus/app/app.vue`

@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { useDebounceFn, useEventListener } from '@vueuse/core'
+import { useDebounceFn } from '@vueuse/core'
 import { gsap } from 'gsap'
-import { computed, nextTick, onMounted, watch } from 'vue'
-import { hasDocument } from '@talex-touch/utils/env'
+import { computed, nextTick, watch } from 'vue'
 import { TxCommandPalette } from '@talex-touch/tuffex'
 import type { CommandPaletteItem } from '@talex-touch/tuffex'
 import { useGlobalSearch } from '~/composables/useGlobalSearch'
@@ -18,7 +17,6 @@ const {
   results,
   loading,
   anchorRect,
-  summonSearch,
   prefersReducedMotion,
   closeSearch,
   resetSearch,
@@ -27,7 +25,6 @@ const {
 } = useGlobalSearch()
 
 const emptyText = computed(() => (loading.value ? t('search.loading') : t('search.empty')))
-const searchTriggerSelector = '[data-role="global-search-trigger"]'
 let panelTween: gsap.core.Tween | gsap.core.Timeline | null = null
 
 const commands = computed<SearchCommandItem[]>(() => {
@@ -70,12 +67,6 @@ function onSelect(item: CommandPaletteItem) {
   const target = (item as SearchCommandItem).to
   if (target)
     navigateTo(target)
-}
-
-function resolveSearchTrigger() {
-  if (!hasDocument())
-    return null
-  return document.querySelector<HTMLElement>(searchTriggerSelector)
 }
 
 function clearPanelTween() {
@@ -207,39 +198,6 @@ function runFlipCloseAnimation() {
     },
   })
 }
-
-function isEditableTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement))
-    return false
-  if (target.isContentEditable)
-    return true
-  const tagName = target.tagName.toLowerCase()
-  return tagName === 'input' || tagName === 'textarea' || tagName === 'select'
-}
-
-onMounted(() => {
-  useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-    if (event.defaultPrevented)
-      return
-    if (isEditableTarget(event.target))
-      return
-    const key = event.key.toLowerCase()
-    if ((event.metaKey || event.ctrlKey) && key === 'k') {
-      event.preventDefault()
-      void summonSearch(resolveSearchTrigger())
-      return
-    }
-    if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === '/') {
-      event.preventDefault()
-      void summonSearch(resolveSearchTrigger())
-      return
-    }
-    if (open.value && event.key === 'Escape') {
-      event.preventDefault()
-      closeSearch()
-    }
-  })
-})
 
 watch(open, (value) => {
   if (!value)
