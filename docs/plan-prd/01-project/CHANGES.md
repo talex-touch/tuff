@@ -13,6 +13,27 @@
 
 ## 2026-05-15
 
+### fix(core-app): improve main window search recall
+
+- `apps/core-app/src/main/modules/box-tool/addon/system/main-window-provider.ts`
+  - 扩展主窗口系统动作召回词，补齐 `show/open/display/focus` 与 `显示/打开/唤起/主窗口` 等中英文别名，确保搜索 `show` 或 `主窗口` 均可命中主窗口动作。
+  - 中文或别名命中时映射到标题中的 `Show` / `Main Window` 范围，恢复 CoreBox 结果标题高亮反馈。
+
+### fix(core-app): refine Intelligence prompt manager page
+
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligencePromptsPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - 梳理智能提示词页面右侧详情区：统一头部操作按钮、内容区留白、折叠区块间距和表单输入态，降低页面拥挤感。
+  - 补齐提示词元信息、正文说明、操作区、复制失败与测试能力等 i18n 文案，避免 UI 直接显示 key。
+  - 默认收起低频模板操作区，保留基础信息与正文的优先阅读层级。
+
+### fix(core-app): align Intelligence provider action menu
+
+- `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceProviderHeader.vue`
+  - 官方渠道继续隐藏删除操作；非官方渠道删除项前增加 divider，并保持删除项 danger 红色样式。
+  - 统一更多菜单项图标与文字的垂直居中，避免菜单内容视觉偏移。
+
 ### fix(core-app): refine Intelligence channel management
 
 - `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceProviderHeader.vue`
@@ -21,7 +42,7 @@
 - `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
   - Nexus 官方通道使用 Tuff Logo，隐藏官方通道 API/模型/速率限制编辑，仅保留优先级设置。
-  - 右上操作菜单补充复制 ID、复制渠道、修改基本信息，并禁止删除官方通道。
+  - 右上操作菜单补充复制 ID、复制配置、分享配置、导出配置、复制渠道、修改基本信息，并禁止删除官方通道；配置复制/分享/导出会排除密钥字段。
   - 修复浏览器登录回调后渲染端账户状态未及时刷新；登录凭证保护默认开启且仅在高级设置中提供关闭入口。
   - 智能首页移除 AI 积分区块，能力配置商统计摘要调整为“已绑定：x/y”格式。
 
