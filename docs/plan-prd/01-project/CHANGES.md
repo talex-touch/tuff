@@ -24,6 +24,20 @@
   - 新增 typed `intelligence:api:local-environment` 与 SDK `getLocalEnvironment()`，首版只返回工具、配置、skills provider 摘要；敏感配置仅暴露 key path，不返回密钥值，不执行任何 skill。
   - Intelligence 首页新增“本地 Skills Provider”只读区块，用于继续定调 providers / scenes / skills 管理；高风险 skills 仅展示为 gated，后续再接权限与场景门控。
 
+### feat(intelligence): persist workflow review state and model contracts
+
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-deepagent-orchestration.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+  - Workflow Review Queue 的 copy / replace clipboard / dismiss / failed 状态现在通过 typed `intelligence:workflow:review:update` 写回 run metadata，历史 run 重新 inspect 时可恢复审阅状态，不再只依赖页面临时 ref。
+  - `Use Model` 步骤新增 `inputSources` 与 `output` 合同，支持 `workflow.input`、`clipboardRef`、`ocrRef`、`fileTextRef`、`previousStep` 等输入引用描述，并把输出格式 / schema / reviewPolicy / riskLevel 固化到 step metadata 的 `modelContract`。
+  - Model step prompt 构建会消费输入引用与输出合同，同时继续只允许 Stable capability；不新增 DB 列、不保存完整 prompt / response 到普通 metadata。
+
 ### feat(nexus): reshape Intelligence admin around Providers and Scenes
 
 - `apps/nexus/app/pages/dashboard/admin/intelligence.vue`

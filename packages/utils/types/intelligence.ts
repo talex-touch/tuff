@@ -65,6 +65,38 @@ export type WorkflowRunStatus
   = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
 export type WorkflowStepStatus
   = 'pending' | 'running' | 'waiting_approval' | 'completed' | 'failed' | 'skipped'
+export type WorkflowModelInputSourceType
+  = 'literal' | 'workflow.input' | 'selectionRef' | 'clipboardRef' | 'ocrRef' | 'fileTextRef' | 'previousStep'
+export type WorkflowModelOutputFormat = 'text' | 'markdown' | 'json'
+export type WorkflowReviewQueueItemStatus
+  = 'pending' | 'copied' | 'clipboard_replaced' | 'dismissed' | 'failed'
+
+export interface WorkflowModelInputSource {
+  type: WorkflowModelInputSourceType | string
+  key?: string
+  label?: string
+  text?: string
+  stepId?: string
+  field?: string
+  fallback?: string
+}
+
+export interface WorkflowModelOutputContract {
+  format?: WorkflowModelOutputFormat | string
+  schema?: Record<string, unknown>
+  reviewPolicy?: 'preview' | 'approval'
+  riskLevel?: 'low' | 'medium' | 'high'
+}
+
+export interface WorkflowReviewQueueItemState {
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+  updatedAt?: number
+}
+
+export interface WorkflowReviewQueueMetadata {
+  items?: Record<string, WorkflowReviewQueueItemState>
+}
 
 export interface WorkflowTrigger {
   id?: string
@@ -97,6 +129,8 @@ export interface WorkflowDefinitionStep {
   toolSource?: ToolSource | string
   agentId?: string
   input?: Record<string, unknown>
+  inputSources?: WorkflowModelInputSource[]
+  output?: WorkflowModelOutputContract
   continueOnError?: boolean
   metadata?: Record<string, unknown>
 }

@@ -25,6 +25,49 @@ async function loadTarget() {
     workflowDelete: vi.fn(),
     workflowRun: vi.fn(),
     workflowHistory: vi.fn(async () => []),
+    workflowReviewUpdate: vi.fn(async ({ runId, itemId, status, error }) => ({
+      id: runId,
+      workflowId: 'workflow-1',
+      workflowName: 'Review Workflow',
+      status: 'completed',
+      triggerType: 'manual',
+      inputs: {},
+      outputs: {},
+      startedAt: 1,
+      completedAt: 2,
+      steps: [
+        {
+          id: 'run-step-1',
+          workflowStepId: 'model-step',
+          kind: 'model',
+          name: 'Summarize',
+          status: 'completed',
+          input: { capabilityId: 'text.summarize' },
+          output: {
+            result: 'summary text',
+            provider: 'openai',
+            model: 'gpt-4.1-mini',
+            traceId: 'trace-1',
+            capabilityId: 'text.summarize'
+          },
+          metadata: {
+            modelContract: {
+              output: {
+                riskLevel: 'low'
+              }
+            }
+          },
+          completedAt: 2
+        }
+      ],
+      metadata: {
+        reviewQueue: {
+          items: {
+            [itemId]: { status, error, updatedAt: 3 }
+          }
+        }
+      }
+    })),
     agentSessionGetState: vi.fn(async () => ({ pendingApprovals: [] })),
     agentToolApprove: vi.fn()
   }
@@ -164,6 +207,10 @@ describe('useWorkflowEditor', () => {
     editor.workflowDraft.value.steps[0]!.instruction = 'Summarize the input'
     editor.workflowDraft.value.steps[0]!.input =
       '{"capabilityId":"text.summarize","text":"hello","outputFormat":"markdown"}'
+    editor.workflowDraft.value.steps[0]!.inputSources =
+      '[{"type":"workflow.input","key":"text","label":"Input"}]'
+    editor.workflowDraft.value.steps[0]!.outputContract =
+      '{"format":"json","schema":{"type":"object"},"reviewPolicy":"preview","riskLevel":"medium"}'
 
     await editor.saveWorkflow()
 
@@ -178,6 +225,13 @@ describe('useWorkflowEditor', () => {
           capabilityId: 'text.summarize',
           text: 'hello',
           outputFormat: 'markdown'
+        },
+        inputSources: [{ type: 'workflow.input', key: 'text', label: 'Input' }],
+        output: {
+          format: 'json',
+          schema: { type: 'object' },
+          reviewPolicy: 'preview',
+          riskLevel: 'medium'
         },
         agentId: undefined,
         toolId: undefined
@@ -215,6 +269,13 @@ describe('useWorkflowEditor', () => {
             traceId: 'trace-1',
             capabilityId: 'text.summarize'
           },
+          metadata: {
+            modelContract: {
+              output: {
+                riskLevel: 'low'
+              }
+            }
+          },
           completedAt: 2
         }
       ],
@@ -251,6 +312,12 @@ describe('useWorkflowEditor', () => {
     await editor.copyReviewItemToClipboard(item!.id)
 
     expect(writeText).toHaveBeenCalledWith('summary text')
+    expect(intelligenceSdk.workflowReviewUpdate).toHaveBeenCalledWith({
+      runId: 'run-1',
+      itemId: item!.id,
+      status: 'copied',
+      error: undefined
+    })
     expect(editor.reviewQueueItems.value[0]?.status).toBe('copied')
 
     writeText.mockClear()
@@ -268,7 +335,7 @@ describe('useWorkflowEditor', () => {
     expect(editor.reviewQueueReplaceConfirmId.value).toBeNull()
     expect(editor.reviewQueueItems.value[0]?.status).toBe('clipboard_replaced')
 
-    editor.dismissReviewItem(item!.id)
+    await editor.dismissReviewItem(item!.id)
 
     expect(editor.reviewQueueItems.value).toHaveLength(0)
   })

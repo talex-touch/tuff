@@ -9,6 +9,7 @@ import type {
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn,
   WorkflowDefinition,
+  WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowTriggerType
 } from '@talex-touch/tuff-intelligence'
@@ -206,6 +207,13 @@ interface IntelligenceWorkflowRunPayload {
   metadata?: Record<string, unknown>
 }
 
+interface IntelligenceWorkflowReviewUpdatePayload {
+  runId: string
+  itemId: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+}
+
 function normalizeFromSeq(value: unknown): number | undefined {
   const seq = Number(value)
   if (!Number.isFinite(seq)) {
@@ -384,7 +392,11 @@ const intelligenceWorkflowEvents = {
   history: defineEvent('intelligence')
     .module('workflow')
     .event('history')
-    .define<IntelligenceWorkflowHistoryPayload | undefined, ApiResponse<WorkflowRunRecord[]>>()
+    .define<IntelligenceWorkflowHistoryPayload | undefined, ApiResponse<WorkflowRunRecord[]>>(),
+  reviewUpdate: defineEvent('intelligence')
+    .module('workflow')
+    .event('review:update')
+    .define<IntelligenceWorkflowReviewUpdatePayload, ApiResponse<WorkflowRunRecord>>()
 } as const
 
 const intelligenceSessionStartEvent = intelligenceAgentEvents.sessionStart
@@ -411,6 +423,7 @@ const intelligenceWorkflowSaveEvent = intelligenceWorkflowEvents.save
 const intelligenceWorkflowDeleteEvent = intelligenceWorkflowEvents.delete
 const intelligenceWorkflowRunEvent = intelligenceWorkflowEvents.run
 const intelligenceWorkflowHistoryEvent = intelligenceWorkflowEvents.history
+const intelligenceWorkflowReviewUpdateEvent = intelligenceWorkflowEvents.reviewUpdate
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -1549,6 +1562,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Invalid workflow history payload')
         }
         return intelligenceWorkflowService.listHistory(data ?? {})
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceWorkflowReviewUpdateEvent,
+      'Update intelligence workflow review queue',
+      'intelligence.basic',
+      async (data) => {
+        if (!data || typeof data !== 'object') {
+          throw new Error('Invalid workflow review update payload')
+        }
+        return intelligenceWorkflowService.updateReviewQueueItem(data)
       }
     )
   }

@@ -3,6 +3,10 @@ import type {
   ToolSource,
   WorkflowDefinition,
   WorkflowDefinitionStep,
+  WorkflowModelInputSource,
+  WorkflowModelOutputContract,
+  WorkflowReviewQueueItemState,
+  WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowRunStatus,
   WorkflowStepKind,
@@ -43,6 +47,13 @@ export interface WorkflowRunRequest {
   metadata?: Record<string, unknown>
 }
 
+export interface WorkflowReviewQueueUpdateRequest {
+  runId: string
+  itemId: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+}
+
 export interface WorkflowExecutionContext {
   workflow: WorkflowDefinition
   run: WorkflowRunRecord
@@ -81,6 +92,16 @@ function toJson(value: unknown, fallback: unknown = null): string {
   return JSON.stringify(value ?? fallback)
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
 function normalizeTriggerType(value: unknown): WorkflowTriggerType {
   return value === 'clipboard.batch' ? 'clipboard.batch' : 'manual'
 }
@@ -113,6 +134,70 @@ function normalizeToolSource(value: unknown): ToolSource {
     return 'builtin'
   }
   throw new Error(`Unsupported workflow tool source: ${String(value)}`)
+}
+
+function normalizeReviewQueueStatus(value: unknown): WorkflowReviewQueueItemStatus {
+  if (
+    value === 'pending' ||
+    value === 'copied' ||
+    value === 'clipboard_replaced' ||
+    value === 'dismissed' ||
+    value === 'failed'
+  ) {
+    return value
+  }
+  throw new Error(`Unsupported workflow review queue status: ${String(value)}`)
+}
+
+function normalizeModelInputSources(value: unknown): WorkflowModelInputSource[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item): WorkflowModelInputSource | null => {
+      const source = toRecord(item)
+      const type = optionalString(source.type)
+      if (!type) {
+        return null
+      }
+      return {
+        type,
+        key: optionalString(source.key),
+        label: optionalString(source.label),
+        text: optionalString(source.text),
+        stepId: optionalString(source.stepId),
+        field: optionalString(source.field),
+        fallback: optionalString(source.fallback)
+      }
+    })
+    .filter((item): item is WorkflowModelInputSource => Boolean(item))
+}
+
+function normalizeModelOutputContract(
+  value: unknown,
+  input: Record<string, unknown>
+): WorkflowModelOutputContract {
+  const output = toRecord(value)
+  const inputFormat = optionalString(input.outputFormat)
+  const format = optionalString(output.format) ?? inputFormat ?? 'markdown'
+  const schema = toRecord(output.schema)
+  const reviewPolicy = output.reviewPolicy === 'approval' ? 'approval' : 'preview'
+  const riskLevel =
+    output.riskLevel === 'high' || output.riskLevel === 'medium' ? output.riskLevel : 'low'
+
+  return {
+    format,
+    schema: Object.keys(schema).length > 0 ? schema : undefined,
+    reviewPolicy,
+    riskLevel
+  }
+}
+
+function omitModelContractMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const { modelContract, ...rest } = metadata
+  void modelContract
+  return rest
 }
 
 function createDefaultManualTrigger(): WorkflowDefinition['triggers'] {
@@ -185,6 +270,23 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
           outputFormat: 'markdown',
           includeCopyReadyBlock: true
         },
+        inputSources: [
+          {
+            type: 'clipboardRef',
+            key: 'clipboard.recent',
+            label: '最近剪贴板'
+          },
+          {
+            type: 'workflow.input',
+            key: 'text',
+            label: '手动输入'
+          }
+        ],
+        output: {
+          format: 'markdown',
+          reviewPolicy: 'preview',
+          riskLevel: 'low'
+        },
         metadata: {
           builtin: true
         }
@@ -224,6 +326,23 @@ function createMeetingSummaryTemplate(): WorkflowDefinition {
         input: {
           capabilityId: 'text.summarize',
           outputFormat: 'markdown'
+        },
+        inputSources: [
+          {
+            type: 'workflow.input',
+            key: 'text',
+            label: '会议文本'
+          },
+          {
+            type: 'clipboardRef',
+            key: 'clipboard.recent',
+            label: '最近剪贴板'
+          }
+        ],
+        output: {
+          format: 'markdown',
+          reviewPolicy: 'preview',
+          riskLevel: 'low'
         },
         metadata: {
           builtin: true
@@ -265,6 +384,23 @@ function createBatchTextProcessingTemplate(): WorkflowDefinition {
           capabilityId: 'text.chat',
           outputFormat: 'markdown',
           preserveItemOrder: true
+        },
+        inputSources: [
+          {
+            type: 'workflow.input',
+            key: 'items',
+            label: '批处理条目'
+          },
+          {
+            type: 'clipboardRef',
+            key: 'clipboard.recent',
+            label: '最近剪贴板'
+          }
+        ],
+        output: {
+          format: 'markdown',
+          reviewPolicy: 'preview',
+          riskLevel: 'medium'
         },
         metadata: {
           builtin: true
@@ -435,7 +571,18 @@ export class IntelligenceWorkflowService {
             agentId: step.agentId ?? null,
             input: toJson(step.input, {}),
             continueOnError: step.continueOnError === true,
-            metadata: toJson(step.metadata, {}),
+            metadata: toJson(
+              step.kind === 'model'
+                ? {
+                    ...omitModelContractMetadata(toRecord(step.metadata)),
+                    modelContract: {
+                      inputSources: step.inputSources ?? [],
+                      output: step.output ?? {}
+                    }
+                  }
+                : step.metadata,
+              {}
+            ),
             createdAt: new Date(normalized.createdAt ?? now()),
             updatedAt: new Date(normalized.updatedAt ?? now())
           }))
@@ -530,6 +677,50 @@ export class IntelligenceWorkflowService {
         : []
 
     return this.hydrateRuns(rows, stepRows)
+  }
+
+  async updateReviewQueueItem(
+    request: WorkflowReviewQueueUpdateRequest
+  ): Promise<WorkflowRunRecord> {
+    await this.initialize()
+    const runId = String(request.runId || '').trim()
+    const itemId = String(request.itemId || '').trim()
+    if (!runId) {
+      throw new Error('runId is required')
+    }
+    if (!itemId) {
+      throw new Error('review itemId is required')
+    }
+
+    const run = await this.getRun(runId)
+    if (!run) {
+      throw new Error('Workflow run not found')
+    }
+
+    const status = normalizeReviewQueueStatus(request.status)
+    const metadata = toRecord(run.metadata)
+    const reviewQueue = toRecord(metadata.reviewQueue)
+    const items = toRecord(reviewQueue.items) as Record<string, WorkflowReviewQueueItemState>
+    const nextRun = this.normalizeRunRecord({
+      ...run,
+      metadata: {
+        ...metadata,
+        reviewQueue: {
+          ...reviewQueue,
+          items: {
+            ...items,
+            [itemId]: {
+              status,
+              error: status === 'failed' ? optionalString(request.error) : undefined,
+              updatedAt: now()
+            }
+          }
+        }
+      }
+    })
+
+    await this.persistRun(nextRun)
+    return nextRun
   }
 
   async runWorkflow(request: WorkflowRunRequest): Promise<WorkflowRunRecord> {
@@ -953,6 +1144,16 @@ export class IntelligenceWorkflowService {
       throw new Error(`Workflow agent step ${stepId} requires agentId`)
     }
 
+    const input = toRecord(step.input)
+    const inputSources =
+      normalizedKind === 'model'
+        ? normalizeModelInputSources(step.inputSources ?? input.inputSources)
+        : undefined
+    const output =
+      normalizedKind === 'model'
+        ? normalizeModelOutputContract(step.output ?? input.output, input)
+        : undefined
+
     return {
       ...step,
       id: stepId,
@@ -962,9 +1163,20 @@ export class IntelligenceWorkflowService {
       toolId: normalizedKind === 'tool' ? toolId : undefined,
       agentId: normalizedKind === 'agent' ? agentId : undefined,
       prompt: normalizedKind === 'prompt' || normalizedKind === 'model' ? step.prompt : undefined,
-      input: step.input ?? {},
+      input,
+      inputSources,
+      output,
       continueOnError: step.continueOnError === true,
-      metadata: step.metadata ?? {}
+      metadata:
+        normalizedKind === 'model'
+          ? {
+              ...omitModelContractMetadata(toRecord(step.metadata)),
+              modelContract: {
+                inputSources,
+                output
+              }
+            }
+          : step.metadata ?? {}
     }
   }
 
@@ -1016,6 +1228,7 @@ export class IntelligenceWorkflowService {
       toolId: kind === 'tool' ? toolId : undefined,
       toolSource: kind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
       input: step.input ?? {},
+      output: step.output,
       metadata: step.metadata ?? {}
     }
   }
@@ -1044,8 +1257,11 @@ export class IntelligenceWorkflowService {
       metadata: parseJson(row.metadata, {}),
       createdAt: row.createdAt ? new Date(row.createdAt).getTime() : undefined,
       updatedAt: row.updatedAt ? new Date(row.updatedAt).getTime() : undefined,
-      steps: (stepMap.get(row.id) ?? []).map((step, index) =>
-        this.normalizeWorkflowStep(
+      steps: (stepMap.get(row.id) ?? []).map((step, index) => {
+        const input = parseJson<Record<string, unknown>>(step.input, {})
+        const metadata = parseJson<Record<string, unknown>>(step.metadata, {})
+        const modelContract = toRecord(metadata.modelContract)
+        return this.normalizeWorkflowStep(
           {
             id: step.id,
             name: step.name,
@@ -1055,14 +1271,16 @@ export class IntelligenceWorkflowService {
             toolId: step.toolId ?? undefined,
             toolSource: step.toolSource ?? undefined,
             agentId: step.agentId ?? undefined,
-            input: parseJson(step.input, {}),
+            input,
+            inputSources: normalizeModelInputSources(modelContract.inputSources),
+            output: normalizeModelOutputContract(modelContract.output, input),
             continueOnError: step.continueOnError,
-            metadata: parseJson(step.metadata, {})
+            metadata
           },
           row.id,
           index
         )
-      )
+      })
     }))
   }
 

@@ -916,6 +916,11 @@ describe('transport domain sdk mappings', () => {
     await sdk.workflowDelete({ workflowId: 'wf_1' })
     await sdk.workflowRun({ workflowId: 'wf_1', sessionId: 'tis_1' })
     await sdk.workflowHistory({ workflowId: 'wf_1', limit: 10 })
+    await sdk.workflowReviewUpdate({
+      runId: 'run_1',
+      itemId: 'run_1:step_1',
+      status: 'copied',
+    })
 
     expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
       'intelligence:workflow:list',
@@ -960,6 +965,19 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send.mock.calls[5]?.[1]).toEqual({
       workflowId: 'wf_1',
       limit: 10,
+    })
+    expect(transport.send.mock.calls[6]?.[0]?.toEventName?.()).toBe(
+      'intelligence:workflow:review:update',
+    )
+    expect(transport.send.mock.calls[6]?.[0]).toMatchObject({
+      namespace: 'intelligence',
+      module: 'workflow',
+      action: 'review:update',
+    })
+    expect(transport.send.mock.calls[6]?.[1]).toEqual({
+      runId: 'run_1',
+      itemId: 'run_1:step_1',
+      status: 'copied',
     })
   })
 

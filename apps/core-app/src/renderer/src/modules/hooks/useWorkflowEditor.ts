@@ -4,6 +4,9 @@ import type {
   WorkflowContextSource,
   WorkflowDefinition,
   WorkflowDefinitionStep,
+  WorkflowModelInputSource,
+  WorkflowModelOutputContract,
+  WorkflowReviewQueueItemStatus as SharedWorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowStepKind,
   WorkflowTrigger,
@@ -28,11 +31,7 @@ export type WorkflowValidationErrorCode =
   | 'context_config_json'
 
 export type WorkflowReviewQueueItemStatus =
-  | 'pending'
-  | 'copied'
-  | 'clipboard_replaced'
-  | 'dismissed'
-  | 'failed'
+  SharedWorkflowReviewQueueItemStatus
 
 export class WorkflowValidationError extends Error {
   constructor(
@@ -55,6 +54,8 @@ export interface WorkflowStepDraft {
   toolSource: 'builtin' | 'mcp'
   agentId: string
   input: string
+  inputSources: string
+  outputContract: string
   continueOnError: boolean
 }
 
@@ -250,11 +251,40 @@ function parseJson(
   }
 }
 
+function parseJsonArray<T>(
+  text: string,
+  errorCode: WorkflowValidationErrorCode,
+  stepUid?: string
+): T[] {
+  const source = text.trim()
+  if (!source) {
+    return []
+  }
+  try {
+    const parsed = JSON.parse(source)
+    if (!Array.isArray(parsed)) {
+      throw new Error('expected JSON array')
+    }
+    return parsed as T[]
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'invalid JSON'
+    throw new WorkflowValidationError(errorCode, reason, stepUid)
+  }
+}
+
 function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): WorkflowStepDraft {
   const defaultInput =
     kind === 'model'
       ? '{\n  "capabilityId": "text.chat",\n  "outputFormat": "markdown"\n}'
       : '{\n  "outputFormat": "markdown"\n}'
+  const defaultInputSources =
+    kind === 'model'
+      ? '[\n  {\n    "type": "workflow.input",\n    "key": "text",\n    "label": "Input text"\n  },\n  {\n    "type": "clipboardRef",\n    "key": "clipboard.recent",\n    "label": "Recent clipboard"\n  }\n]'
+      : '[]'
+  const defaultOutputContract =
+    kind === 'model'
+      ? '{\n  "format": "markdown",\n  "reviewPolicy": "preview",\n  "riskLevel": "low"\n}'
+      : '{}'
 
   return {
     uid: createUid(),
@@ -271,6 +301,8 @@ function createDefaultStep(index: number, kind: WorkflowStepKind = 'agent'): Wor
     toolSource: 'builtin',
     agentId: kind === 'agent' ? DEFAULT_WORKFLOW_AGENT_ID : '',
     input: defaultInput,
+    inputSources: defaultInputSources,
+    outputContract: defaultOutputContract,
     continueOnError: false
   }
 }
@@ -341,6 +373,8 @@ function mapStepToDraft(step: WorkflowDefinitionStep, index: number): WorkflowSt
     toolSource: step.toolSource === 'mcp' ? 'mcp' : 'builtin',
     agentId: kind === 'agent' ? step.agentId || DEFAULT_WORKFLOW_AGENT_ID : '',
     input: safeJsonStringify(step.input ?? {}),
+    inputSources: safeJsonStringify(step.inputSources ?? []),
+    outputContract: safeJsonStringify(step.output ?? {}),
     continueOnError: step.continueOnError === true
   }
 }
@@ -398,12 +432,18 @@ function extractSessionId(run: WorkflowRunRecord | null | undefined): string | u
 }
 
 function buildReviewQueueItems(
-  run: WorkflowRunRecord | null | undefined,
-  itemState: Record<string, { status: WorkflowReviewQueueItemStatus; error?: string }>
+  run: WorkflowRunRecord | null | undefined
 ): WorkflowReviewQueueItem[] {
   if (!run) {
     return []
   }
+
+  const metadata = toRecord(run.metadata)
+  const reviewQueue = toRecord(metadata.reviewQueue)
+  const itemState = toRecord(reviewQueue.items) as Record<
+    string,
+    { status?: WorkflowReviewQueueItemStatus; error?: string }
+  >
 
   return (run.steps ?? [])
     .filter((step) => step.status === 'completed' && step.output !== undefined)
@@ -416,6 +456,8 @@ function buildReviewQueueItems(
       const output = toRecord(step.output)
       const input = toRecord(step.input)
       const metadata = toRecord(step.metadata)
+      const modelContract = toRecord(metadata.modelContract)
+      const outputContract = toRecord(modelContract.output)
       const stepId = String(step.workflowStepId || step.id || `step-${index + 1}`)
       const id = `${run.id}:${stepId}`
       const state = itemState[id]
@@ -435,7 +477,7 @@ function buildReviewQueueItems(
         traceId: firstString(output.traceId, metadata.traceId),
         provider: firstString(output.provider, metadata.provider),
         model: firstString(output.model, metadata.model),
-        riskLevel: 'low',
+        riskLevel: outputContract.riskLevel === 'medium' ? 'medium' : 'low',
         text,
         preview: text.length > 500 ? `${text.slice(0, 500)}...` : text,
         status,
@@ -471,7 +513,6 @@ export function useWorkflowEditor() {
   const executionError = ref<string | null>(null)
   const agents = ref<AgentDescriptor[]>([])
   const sessionState = ref<TuffIntelligenceStateSnapshot | null>(null)
-  const reviewQueueState = ref<Record<string, { status: WorkflowReviewQueueItemStatus; error?: string }>>({})
   const reviewQueueReplaceConfirmId = ref<string | null>(null)
 
   const agentOptions = computed(() =>
@@ -481,7 +522,7 @@ export function useWorkflowEditor() {
   const builtinToolOptions = computed(() => BUILTIN_TOOL_OPTIONS)
   const pendingApprovals = computed(() => sessionState.value?.pendingApprovals ?? [])
   const currentSessionId = computed(() => extractSessionId(currentRun.value))
-  const reviewQueueItems = computed(() => buildReviewQueueItems(currentRun.value, reviewQueueState.value))
+  const reviewQueueItems = computed(() => buildReviewQueueItems(currentRun.value))
 
   async function loadAgents(): Promise<void> {
     agents.value = await agentsSdk.listAll()
@@ -571,15 +612,26 @@ export function useWorkflowEditor() {
     reviewQueueReplaceConfirmId.value = null
   }
 
-  function setReviewQueueItemStatus(
+  async function setReviewQueueItemStatus(
     itemId: string,
     status: WorkflowReviewQueueItemStatus,
     error?: string
-  ): void {
-    reviewQueueState.value = {
-      ...reviewQueueState.value,
-      [itemId]: { status, error }
+  ): Promise<WorkflowRunRecord> {
+    if (!currentRun.value) {
+      throw new Error('No workflow run is selected')
     }
+    const updated = await intelligenceSdk.workflowReviewUpdate({
+      runId: currentRun.value.id,
+      itemId,
+      status,
+      error
+    })
+    currentRun.value = {
+      ...updated,
+      sessionId: extractSessionId(updated),
+      pendingApprovals: currentRun.value.pendingApprovals ?? []
+    }
+    return updated
   }
 
   function getReviewQueueItem(itemId: string): WorkflowReviewQueueItem {
@@ -594,12 +646,12 @@ export function useWorkflowEditor() {
     const item = getReviewQueueItem(itemId)
     try {
       await writeClipboardText(item.text)
-      setReviewQueueItemStatus(itemId, 'copied')
+      await setReviewQueueItemStatus(itemId, 'copied')
       reviewQueueReplaceConfirmId.value = null
       return { ...item, status: 'copied' }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setReviewQueueItemStatus(itemId, 'failed', message)
+      await setReviewQueueItemStatus(itemId, 'failed', message)
       throw error
     }
   }
@@ -615,18 +667,18 @@ export function useWorkflowEditor() {
 
     try {
       await writeClipboardText(item.text)
-      setReviewQueueItemStatus(itemId, 'clipboard_replaced')
+      await setReviewQueueItemStatus(itemId, 'clipboard_replaced')
       reviewQueueReplaceConfirmId.value = null
       return { item: { ...item, status: 'clipboard_replaced' }, confirmed: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      setReviewQueueItemStatus(itemId, 'failed', message)
+      await setReviewQueueItemStatus(itemId, 'failed', message)
       throw error
     }
   }
 
-  function dismissReviewItem(itemId: string): void {
-    setReviewQueueItemStatus(itemId, 'dismissed')
+  async function dismissReviewItem(itemId: string): Promise<void> {
+    await setReviewQueueItemStatus(itemId, 'dismissed')
     if (reviewQueueReplaceConfirmId.value === itemId) {
       reviewQueueReplaceConfirmId.value = null
     }
@@ -673,6 +725,14 @@ export function useWorkflowEditor() {
       }
 
       const input = parseJson(step.input, 'input_json', step.uid)
+      const inputSources =
+        step.kind === 'model'
+          ? parseJsonArray<WorkflowModelInputSource>(step.inputSources, 'input_json', step.uid)
+          : undefined
+      const output =
+        step.kind === 'model'
+          ? (parseJson(step.outputContract, 'input_json', step.uid) as WorkflowModelOutputContract)
+          : undefined
       if (step.kind === 'tool' && !step.toolId.trim()) {
         throw new WorkflowValidationError(
           'tool_required',
@@ -701,6 +761,8 @@ export function useWorkflowEditor() {
         toolSource: step.kind === 'tool' ? step.toolSource : undefined,
         agentId: step.kind === 'agent' ? step.agentId.trim() : undefined,
         input,
+        inputSources,
+        output,
         continueOnError: step.continueOnError,
         metadata: {}
       }

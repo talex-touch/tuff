@@ -207,9 +207,13 @@ async function handleReplaceClipboardReviewItem(itemId: string): Promise<void> {
   }
 }
 
-function handleDismissReviewItem(itemId: string): void {
-  dismissReviewItem(itemId)
-  toast.success(t('intelligence.workflow.toastReviewDismissed'))
+async function handleDismissReviewItem(itemId: string): Promise<void> {
+  try {
+    await dismissReviewItem(itemId)
+    toast.success(t('intelligence.workflow.toastReviewDismissed'))
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
 }
 
 function handleToolSourceToggle(source: 'builtin' | 'mcp', event: Event): void {
@@ -604,6 +608,22 @@ onMounted(async () => {
                     placeholder="builtin.workflow-agent"
                   />
                 </label>
+
+                <div v-if="step.kind === 'model'" class="form-grid">
+                  <label class="field">
+                    <span class="field-label">{{
+                      t('intelligence.workflow.modelInputSources')
+                    }}</span>
+                    <textarea v-model="step.inputSources" rows="5" />
+                  </label>
+
+                  <label class="field">
+                    <span class="field-label">{{
+                      t('intelligence.workflow.modelOutputContract')
+                    }}</span>
+                    <textarea v-model="step.outputContract" rows="5" />
+                  </label>
+                </div>
 
                 <label class="field">
                   <span class="field-label">{{ t('intelligence.workflow.inputJsonShort') }}</span>

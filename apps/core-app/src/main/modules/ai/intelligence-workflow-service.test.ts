@@ -340,6 +340,124 @@ describe('IntelligenceWorkflowService workflow normalization', () => {
     ])
   })
 
+  it('normalizes model input refs and output contract into metadata', () => {
+    const normalizeWorkflowDefinition = createServiceNormalizer()
+
+    const workflow = normalizeWorkflowDefinition(
+      createWorkflow({
+        steps: [
+          {
+            id: 'model-step',
+            name: 'Use Model',
+            kind: 'model',
+            prompt: 'Summarize',
+            input: {
+              capabilityId: 'text.summarize',
+              outputFormat: 'markdown'
+            },
+            inputSources: [
+              {
+                type: 'workflow.input',
+                key: 'text',
+                label: 'Input Text'
+              },
+              {
+                type: '',
+                key: 'ignored'
+              }
+            ],
+            output: {
+              format: 'json',
+              schema: { type: 'object' },
+              reviewPolicy: 'approval',
+              riskLevel: 'medium'
+            }
+          }
+        ]
+      })
+    )
+
+    expect(workflow.steps[0]).toMatchObject({
+      kind: 'model',
+      inputSources: [
+        {
+          type: 'workflow.input',
+          key: 'text',
+          label: 'Input Text'
+        }
+      ],
+      output: {
+        format: 'json',
+        schema: { type: 'object' },
+        reviewPolicy: 'approval',
+        riskLevel: 'medium'
+      },
+      metadata: {
+        modelContract: {
+          inputSources: [
+            {
+              type: 'workflow.input',
+              key: 'text',
+              label: 'Input Text'
+            }
+          ],
+          output: {
+            format: 'json',
+            schema: { type: 'object' },
+            reviewPolicy: 'approval',
+            riskLevel: 'medium'
+          }
+        }
+      }
+    })
+  })
+
+  it('persists review queue item state in run metadata', async () => {
+    const service = new IntelligenceWorkflowService()
+    const persistedRuns: WorkflowRunRecord[] = []
+    const target = service as unknown as {
+      getRun: (runId: string) => Promise<WorkflowRunRecord | null>
+      persistRun: (run: WorkflowRunRecord) => Promise<WorkflowRunRecord>
+      updateReviewQueueItem: typeof service.updateReviewQueueItem
+      initialize: () => Promise<void>
+    }
+    target.initialize = vi.fn(async () => undefined)
+    target.getRun = vi.fn(async () => ({
+      id: 'run-1',
+      workflowId: 'workflow-1',
+      workflowName: 'Workflow',
+      status: 'completed',
+      triggerType: 'manual',
+      inputs: {},
+      outputs: {},
+      steps: [],
+      startedAt: 1,
+      completedAt: 2,
+      metadata: {}
+    }))
+    target.persistRun = vi.fn(async (run: WorkflowRunRecord) => {
+      persistedRuns.push(run)
+      return run
+    })
+
+    const result = await target.updateReviewQueueItem.call(service, {
+      runId: 'run-1',
+      itemId: 'run-1:model-step',
+      status: 'copied'
+    })
+
+    expect(result.metadata).toMatchObject({
+      reviewQueue: {
+        items: {
+          'run-1:model-step': {
+            status: 'copied'
+          }
+        }
+      }
+    })
+    expect(persistedRuns[0]?.metadata).toMatchObject(result.metadata ?? {})
+  })
+
   it('rejects unsupported run step kinds and invalid tool run steps', () => {
     const normalizeRunRecord = createRunNormalizer()
     const baseRun: WorkflowRunRecord = {

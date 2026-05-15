@@ -12,6 +12,7 @@ import type {
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn,
   WorkflowDefinition,
+  WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowTriggerType,
 } from '../../../types/intelligence'
@@ -238,6 +239,13 @@ export interface IntelligenceWorkflowRunPayload {
   metadata?: Record<string, unknown>
 }
 
+export interface IntelligenceWorkflowReviewUpdatePayload {
+  runId: string
+  itemId: string
+  status: WorkflowReviewQueueItemStatus
+  error?: string
+}
+
 export interface IntelligenceLocalToolSummary {
   id: 'codex' | 'claude'
   name: string
@@ -356,6 +364,7 @@ export interface IntelligenceSdk {
   workflowDelete: (payload: IntelligenceWorkflowDeletePayload) => Promise<{ deleted: boolean }>
   workflowRun: (payload: IntelligenceWorkflowRunPayload) => Promise<WorkflowRunRecord>
   workflowHistory: (payload?: IntelligenceWorkflowHistoryPayload) => Promise<WorkflowRunRecord[]>
+  workflowReviewUpdate: (payload: IntelligenceWorkflowReviewUpdatePayload) => Promise<WorkflowRunRecord>
   getLocalEnvironment: () => Promise<IntelligenceLocalEnvironmentSummary>
 }
 
@@ -613,6 +622,10 @@ const intelligenceWorkflowEvents = {
       IntelligenceWorkflowHistoryPayload | undefined,
       IntelligenceApiResponse<WorkflowRunRecord[]>
     >(),
+  reviewUpdate: defineEvent('intelligence')
+    .module('workflow')
+    .event('review:update')
+    .define<IntelligenceWorkflowReviewUpdatePayload, IntelligenceApiResponse<WorkflowRunRecord>>(),
 } as const
 
 function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMessage: string): T {
@@ -838,6 +851,11 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async workflowHistory(payload = {}) {
       const response = await transport.send(intelligenceWorkflowEvents.history, payload)
       return assertApiResponse(response, 'Failed to query workflow history')
+    },
+
+    async workflowReviewUpdate(payload) {
+      const response = await transport.send(intelligenceWorkflowEvents.reviewUpdate, payload)
+      return assertApiResponse(response, 'Failed to update workflow review queue')
     },
   }
 }
