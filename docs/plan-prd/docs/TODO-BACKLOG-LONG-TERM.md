@@ -1,6 +1,6 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-05-14
+> 更新时间：2026-05-15
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务
@@ -43,7 +43,7 @@
 
 ## E. 文档治理持续项
 
-- [ ] `docs:guard` 升级 strict 阻塞前置条件达成（连续 N 次零告警）。
+- [ ] 文档治理自动门禁重建评估：若需要恢复 `docs:guard` / compat registry / legacy allowlist / size allowlist，先重新立项并落地脚本、清册与入口文档同步。
 - [ ] 历史 PRD 分批加 `Status: Archived/Historical` 头标与替代入口。
 - [ ] 长专题文档持续执行 `TL;DR + deep-dive` 分层模板。
 - [ ] `CHANGES.md` 只保留近 30 天；历史按月归档。

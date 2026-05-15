@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-05-14
+> 更新时间：2026-05-15
 > 定位：PRD / 规划主入口。历史长文已下沉到 `CHANGES` 与专题文档；当前执行项以 `TODO.md` 为准。
 
 ## 快速入口
@@ -14,11 +14,11 @@
 
 ## 当前单一口径
 
-- 当前基线：`2.4.10-beta.22`。
+- 当前基线：`2.4.10-beta.25`。
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 当前 release blocker：Windows 真机 acceptance evidence、search trace `200` 样本、clipboard stress `120000ms`、`windows:acceptance:verify` final gate、Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 前关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 保持 documented best-effort。
-- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；不得宣称全仓 release gate 已绿。
+- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准。
 - 范围约束：`2.5.0` AI、Provider Registry 高级策略、SRP 大拆分可继续规划/小切片，但不得抢占正式 `2.4.10` Windows evidence gate。
 
 ## 当前主线（2 周）
@@ -27,7 +27,7 @@
 2. 采集 Windows case/manual/performance evidence。
 3. 运行 `windows:acceptance:verify` final gate。
 4. 写入 Nexus Release Evidence。
-5. 继续收敛 `2.4.11` legacy/compat/size 清册，不新增 legacy/raw channel/旧 storage/旧 SDK bypass。
+5. 继续收敛 `2.4.11` legacy/compat/size 债务，不新增 legacy/raw channel/旧 storage/旧 SDK bypass；旧自动清册不再作为 live SoT。
 
 详见：[TODO](./TODO.md)。
 
@@ -65,6 +65,7 @@
 - [Intelligence 能力路由与 Provider 抽象](./02-architecture/intelligence-power-generic-api-prd.md)
 - [跨平台兼容与占位实现深度复核报告](./report/cross-platform-compat-placeholder-deep-review-2026-05-13.md)
 - [跨平台兼容与占位实现跟进报告](./report/cross-platform-compat-placeholder-followup-2026-05-14.md)
+- [跨平台兼容、占位实现与治理口径总结](./report/cross-platform-compat-placeholder-summary-2026-05-15.md)
 - [CoreApp 启动异步化与首屏卡顿分析](./report/coreapp-startup-async-blocking-analysis-2026-05-13.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)

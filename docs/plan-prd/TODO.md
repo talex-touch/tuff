@@ -5,10 +5,10 @@
 
 ## 当前执行窗口
 
-- 当前基线：`2.4.10-beta.22`。
+- 当前基线：`2.4.10-beta.25`。
 - 当前主线：`2.4.10` 聚焦 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。
-- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 高级策略只能以 dev 小切片推进，不得抢占当前 release gate。
+- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；旧 compat registry / legacy allowlist / size allowlist 已退场，不再作为 live SoT；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 高级策略只能以 dev 小切片推进，不得抢占当前 release gate。
 
 ## P0 - 2.4.10 Release Blockers
 
@@ -26,7 +26,7 @@
 
 | ID | 事项 | 状态 | 验收/证据 |
 | --- | --- | --- | --- |
-| P1-COMPAT | legacy/compat/size 债务关闭或降权 | 进行中 | 清册内 `2.4.11` 项关闭或记录降权理由；禁止新增 legacy/raw channel/旧 storage protocol/旧 SDK bypass。 |
+| P1-COMPAT | legacy/compat/size 债务关闭或降权 | 进行中 | 以 2026-05-15 兼容总结、Quality Baseline、长期债务池与最近路径代码证据为准关闭或记录降权理由；禁止新增 legacy/raw channel/旧 storage protocol/旧 SDK bypass。 |
 | P1-PLATFORM | Windows/macOS 阻塞级人工回归 | 待执行 | Windows/macOS 完成 release-blocking 手工回归；Linux 仅记录 best-effort smoke 与桌面环境限制。 |
 | P1-AI-COMPAT | AI 兼容占位成功响应退场 | 待执行 | `livechat/random`、prompt detail、catch-all 未实现接口改为明确 HTTP status、`unavailable + reason` 或迁移目标。 |
 | P1-SECRET | CLI 与插件 secret storage 收口 | 进行中 | CLI token 已通过 `CliCredentialStore` 做 POSIX `0700/0600` 权限缓解与 Windows ACL warning；`touch-translation` provider secret 已迁入 `usePluginSecret()` 并清理普通配置，配置弹窗已展示 secure-store available/degraded/unavailable health；插件侧已新增只读 `plugin.secret.health()` / `usePluginSecret().health()` 以暴露 secure-store degraded/unavailable 状态。仍需 OS Keychain/Credential Locker/libsecret backend 与遗留 secret 清理 evidence。 |
@@ -46,7 +46,7 @@
 
 ## 已完成/历史不再重复开发
 
-- `2.4.10-beta.22` beta notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 仍需用户确认。
+- `2.4.10-beta.25` beta notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 仍需用户确认。
 - Widget production precompile gate 已完成。
 - CoreApp 启动异步化 P0/P1/P2/P3 主要代码切片已完成，剩余为真机补证。
 - Quick Launch 搜索引擎模式、补全隔离、图标与旧结果清理已完成。

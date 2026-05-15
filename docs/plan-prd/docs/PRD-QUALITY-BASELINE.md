@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-05-14
+> 更新时间：2026-05-15
 > 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
 
 ## 1. 适用范围
@@ -16,13 +16,13 @@
 
 ## 2. 当前强口径
 
-- 当前基线：`2.4.10-beta.22`。
+- 当前基线：`2.4.10-beta.25`。
 - `2.4.10` release blocker 只聚焦 Windows 真机 evidence、性能 evidence、final acceptance gate 与 Nexus Release Evidence。
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 为 documented best-effort。
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
 - 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；若既有失败阻断，必须记录失败项与最近路径替代验证。
-- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证。
+- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用。
 
 ## 3. 活跃 PRD 必须包含
 
@@ -93,6 +93,7 @@
 ### 4.7 SRP / Size
 
 - 不再维护 size allowlist 作为唯一门禁；超长文件治理回到 code review、targeted refactor 与最近路径测试。
+- 不再维护旧 `compatibility-debt-registry.csv`、`legacy-boundary-allowlist.json` 或 `large-file-boundary-allowlist.json` 作为 live SoT；若要恢复自动债务门禁，必须重新立项并同步脚本、清册和入口文档。
 - 新增大文件或显著增长必须说明职责边界、拆分计划与验证命令。
 - 已完成拆分的模块不得回潮：Clipboard、AppProvider、SearchCore、UpdateSystem、OmniPanel、Provider Registry、Tuffex FlipOverlay 等继续按最近路径测试防回归。
 

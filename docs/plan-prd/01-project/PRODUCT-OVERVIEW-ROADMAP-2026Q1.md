@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-05-14
+> 更新时间：2026-05-15
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -21,7 +21,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 目标 | 说明 | 当前口径 |
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
-| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证 |
+| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
 | 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；release evidence 继续补齐 |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前不抢 `2.4.10` Windows evidence gate |
 | AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR |
@@ -107,8 +107,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ## 5. 当前状态快照
 
-- 当前基线：`2.4.10-beta.22`。
-- `2.4.10-beta.22` notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 需用户确认。
+- 当前基线：`2.4.10-beta.25`。
+- `2.4.10-beta.25` notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 需用户确认。
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - Windows App Search & Launch Beta 已进入实现态：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单等仍需真机 evidence。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
