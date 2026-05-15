@@ -13,6 +13,18 @@
 
 ## 2026-05-15
 
+### fix(core-app): refine Intelligence channel management
+
+- `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceProviderHeader.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceInfo.vue`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+  - Nexus 官方通道使用 Tuff Logo，隐藏官方通道 API/模型/速率限制编辑，仅保留优先级设置。
+  - 右上操作菜单补充复制 ID、复制渠道、修改基本信息，并禁止删除官方通道。
+  - 修复浏览器登录回调后渲染端账户状态未及时刷新；登录凭证保护默认开启且仅在高级设置中提供关闭入口。
+  - 智能首页移除 AI 积分区块，能力配置商统计摘要调整为“已绑定：x/y”格式。
+
 ### docs: align FileProvider quality status
 
 - `docs/plan-prd/README.md`
