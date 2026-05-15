@@ -18,6 +18,27 @@
   - Provider 测试新增 SSE 流式 probe 入口，前端实时展示模型增量输出并支持停止；流式不可用时仍回退到原 JSON probe。
   - Provider 启停、scene/fallback、全局 audit/cache 等二态控件切到 Tuffex switch/status 组件，收敛管理页交互一致性。
 
+### feat(nexus): link AI invoke billing and audit ledgers
+
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/creditsStore.ts`
+- `apps/nexus/server/utils/providerUsageLedgerStore.ts`
+- `apps/nexus/server/api/dashboard/intelligence/invoke-audits.get.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts`
+  - `/api/v1/intelligence/invoke` 成功调用后会把安全审计字段写入返回 metadata：source/caller/session/workflow/run/step、credit ledger id、charged credits 与 provider usage ledger id。
+  - Nexus AI invoke 现在同步写入 `provider_usage_ledger`，使用固定 `sceneId=nexus.intelligence.invoke` 与 trace 派生 runId，便于和 `credit_ledger.metadata.traceId` 对账。
+  - 新增 Dashboard 只读 `invoke-audits` 查询入口，支持按 trace/provider/capability/status/mode 过滤 AI invoke provider usage，并按 trace 精确关联 credit ledger。
+  - 计费与 provider usage ledger 只记录 capability/provider/model/token/trace/workflow 等安全元数据，不落 prompt、输入文本或模型输出明文；`totalTokens=0` 不扣 credits 但仍保留非 billable usage ledger。
+
+### feat(intelligence): seed P0 workflow templates
+
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-workflow-service.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Workflow 内置模板从单个“整理近期剪贴板”扩展为 3 个 P0 模板：剪贴板整理、会议纪要 / 摘要、文本批处理。
+  - 新增模板均使用 `model` step 与 Stable capability：会议纪要走 `text.summarize`，文本批处理走 `text.chat`，输出继续进入现有运行结果与页面 Review Queue。
+  - 内置模板统一写入 `builtin/template/category/templateVersion` metadata；启动 seed 只自动覆盖同 ID 且 `metadata.builtin === true` 的模板，保留用户另存副本。
+
 ## 2026-05-14
 
 ### feat(intelligence): add workflow Review Queue MVP
