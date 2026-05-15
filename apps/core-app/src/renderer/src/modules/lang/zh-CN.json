@@ -2439,6 +2439,20 @@
       "docsButton": "查看 GitHub 文档",
       "providerStat": "渠道 {count} 个",
       "capabilityStat": "能力 {count} 个",
+      "localSkills": {
+        "title": "本地 Skills Provider",
+        "desc": "识别 Codex / Claude 与受信任 skills，作为内部能力来源管理。",
+        "toolsTitle": "本地 AI 工具",
+        "providersTitle": "内部 Skills Provider",
+        "configTitle": "配置与项目说明",
+        "refresh": "刷新",
+        "loading": "正在扫描本地环境...",
+        "noTools": "未发现 Codex 或 Claude CLI",
+        "noSkills": "未发现可用 skills",
+        "configSummary": "已识别 {count} 个配置或说明入口，敏感字段仅记录键名。",
+        "gatedHint": "{count} 个高风险 provider 默认仅展示，执行需审批。",
+        "refreshFailed": "刷新本地 AI 环境失败"
+      },
       "landing": {
         "channels": {
           "title": "渠道配置商",

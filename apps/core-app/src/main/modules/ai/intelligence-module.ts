@@ -43,6 +43,7 @@ import {
   setupConfigUpdateListener
 } from './intelligence-config'
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
+import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
@@ -933,6 +934,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerInvokeChannels(registerProtectedSafe)
     this.registerCapabilityChannels(registerSafe)
     this.registerStatsChannels(registerSafe)
+    this.registerEnvironmentChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
     this.registerWorkflowChannels(registerProtectedSafe)
@@ -1214,6 +1216,22 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const { callerId, periodType, startPeriod, endPeriod } = data
       return await tuffIntelligence.getUsageStats(callerId, periodType, startPeriod, endPeriod)
     })
+  }
+
+  private registerEnvironmentChannels(
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerSafe(
+      intelligenceApiEvents.getLocalEnvironment,
+      'Get local intelligence environment',
+      async () => {
+        return await getIntelligenceLocalEnvironment()
+      }
+    )
   }
 
   private registerOrchestrationChannels(

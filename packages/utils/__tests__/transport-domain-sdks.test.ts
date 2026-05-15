@@ -963,6 +963,35 @@ describe('transport domain sdk mappings', () => {
     })
   })
 
+  it('intelligence sdk maps local environment scan through typed transport events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({
+      ok: true,
+      result: {
+        scannedAt: 1,
+        cwd: '/repo',
+        tools: [],
+        configFiles: [],
+        skillProviders: [],
+      },
+    })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    const result = await sdk.getLocalEnvironment()
+
+    expect(result.cwd).toBe('/repo')
+    expect(transport.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        namespace: 'intelligence',
+        module: 'api',
+        action: 'local-environment',
+      }),
+    )
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:local-environment',
+    )
+  })
+
   it('permission sdk maps grant + push subscription', async () => {
     const transport = createTransportMock()
     const dispose = vi.fn()

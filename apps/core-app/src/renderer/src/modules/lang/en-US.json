@@ -2447,6 +2447,20 @@
       "docsButton": "View GitHub Docs",
       "providerStat": "{count} channels",
       "capabilityStat": "{count} capabilities",
+      "localSkills": {
+        "title": "Local Skills Providers",
+        "desc": "Detect Codex / Claude and trusted skills as internal capability providers.",
+        "toolsTitle": "Local AI Tools",
+        "providersTitle": "Internal Skills Providers",
+        "configTitle": "Config and Project Instructions",
+        "refresh": "Refresh",
+        "loading": "Scanning local environment...",
+        "noTools": "No Codex or Claude CLI detected",
+        "noSkills": "No usable skills detected",
+        "configSummary": "{count} config or instruction entries detected. Sensitive fields keep key names only.",
+        "gatedHint": "{count} high-risk providers are visible only and require approval before execution.",
+        "refreshFailed": "Failed to refresh local AI environment"
+      },
       "landing": {
         "channels": {
           "title": "Channel Manager",

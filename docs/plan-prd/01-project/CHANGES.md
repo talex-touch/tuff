@@ -13,6 +13,17 @@
 
 ## 2026-05-15
 
+### feat(core-app): expose local AI tools and skills providers
+
+- `apps/core-app/src/main/modules/ai/intelligence-local-environment.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
+  - Intelligence 新增只读本地环境扫描：识别 Codex / Claude CLI、Codex 配置键路径、项目 `AGENTS.md` / `CLAUDE.md` / `.codex` / `.claude` 指令入口，以及本地 `SKILL.md` provider 元数据。
+  - 新增 typed `intelligence:api:local-environment` 与 SDK `getLocalEnvironment()`，首版只返回工具、配置、skills provider 摘要；敏感配置仅暴露 key path，不返回密钥值，不执行任何 skill。
+  - Intelligence 首页新增“本地 Skills Provider”只读区块，用于继续定调 providers / scenes / skills 管理；高风险 skills 仅展示为 gated，后续再接权限与场景门控。
+
 ### feat(nexus): reshape Intelligence admin around Providers and Scenes
 
 - `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
