@@ -13,6 +13,13 @@
 
 ## 2026-05-15
 
+### fix(core-app): reuse device auth for browser login
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+  - Desktop App browser login now starts the existing Nexus device authorization flow with `clientType: 'app'` and polls `/api/app-auth/device/poll` in the main process for the resulting `appToken`.
+  - The browser is only responsible for sign-in and approval on `/device-auth`; the App no longer depends on `tuff://auth/callback` for new login attempts, while the old callback path remains available for compatibility.
+  - Superseded, failed, expired, cancelled, or closed browser authorization attempts are logged and the pending device auth request is aborted when possible.
+
 ### perf(nexus): tighten Pages media and bundle budgets
 
 - `apps/nexus/public/shots/SearchFileImmediately.mp4`

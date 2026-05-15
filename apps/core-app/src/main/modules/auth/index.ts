@@ -45,6 +45,8 @@ const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 12_000
 const AUTH_PROFILE_REQUEST_RETRY_DELAY_MS = 800
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
+const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
+const DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS = 3
 
 type AuthStateListener = (state: AuthState) => void
 
@@ -66,6 +68,8 @@ let authUseSecureStorage = false
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
+let deviceAuthLoginAttempt = 0
+let activeDeviceAuthCode: string | null = null
 
 type AuthEventDefinition<TPayload, TResult> = Parameters<ITuffTransportMain['on']>[0] & {
   _request: TPayload
@@ -473,6 +477,38 @@ type FetchRemoteUserResult =
   | { kind: 'unauthorized' }
   | { kind: 'unavailable' }
 
+type DeviceAuthPollStatus =
+  | 'approved'
+  | 'expired'
+  | 'cancelled'
+  | 'timeout'
+  | 'rejected'
+  | 'browser_closed'
+
+interface DeviceAuthStartResponse {
+  deviceCode?: string
+  userCode?: string
+  authorizeUrl?: string
+  expiresAt?: string
+  intervalSeconds?: number
+}
+
+interface DeviceAuthPollResponse {
+  status?: string
+  appToken?: string
+  grantType?: 'short' | 'long'
+  ttlSeconds?: number
+  refreshable?: boolean
+  reason?: string
+  message?: string | null
+}
+
+interface DeviceAuthPollResult {
+  status: DeviceAuthPollStatus
+  token?: string
+  message?: string | null
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -613,24 +649,196 @@ async function initializeAuthState(): Promise<void> {
   scheduleAuthStartupRefresh()
 }
 
-async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
+async function startDeviceAuthRequest(): Promise<DeviceAuthStartResponse> {
   const { deviceId, deviceName, devicePlatform } = ensureDeviceProfile()
-  const nexusUrl = resolveAuthBaseUrl()
-  const redirectUrl = new URL('/auth/app-callback', nexusUrl)
-  if (deviceId) {
-    redirectUrl.searchParams.set('device_id', deviceId)
-  }
-  if (deviceName) {
-    redirectUrl.searchParams.set('device_name', deviceName)
-  }
-  if (devicePlatform) {
-    redirectUrl.searchParams.set('device_platform', devicePlatform)
+  const url = new URL('/api/app-auth/device/start', resolveAuthBaseUrl()).toString()
+  const response = await getNetworkService().request<DeviceAuthStartResponse>({
+    method: 'POST',
+    url,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: {
+      deviceId,
+      deviceName,
+      devicePlatform,
+      clientType: 'app'
+    },
+    responseType: 'json',
+    timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+    validateStatus: [200, 400, 403, 429]
+  })
+
+  if (
+    response.status < 200 ||
+    response.status >= 300 ||
+    !response.data?.deviceCode ||
+    !response.data?.authorizeUrl
+  ) {
+    const message =
+      typeof (response.data as { message?: unknown } | undefined)?.message === 'string'
+        ? String((response.data as { message: string }).message)
+        : `Device auth start failed: ${response.status}`
+    throw new Error(message)
   }
 
-  const entry = mode === 'sign-up' ? '/sign-up' : '/sign-in'
-  const url = new URL(entry, nexusUrl)
-  url.searchParams.set('redirect_url', redirectUrl.pathname + redirectUrl.search)
-  await shell.openExternal(url.toString())
+  return response.data
+}
+
+async function pollDeviceAuth(
+  deviceCode: string,
+  intervalSeconds = DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS,
+  isCurrentAttempt: () => boolean = () => true
+): Promise<DeviceAuthPollResult> {
+  const url = new URL('/api/app-auth/device/poll', resolveAuthBaseUrl()).toString()
+  const intervalMs = Math.max(1000, intervalSeconds * 1000)
+  const startAt = Date.now()
+
+  while (Date.now() - startAt <= DEVICE_AUTH_TIMEOUT_MS) {
+    if (!isCurrentAttempt()) {
+      return { status: 'cancelled' }
+    }
+
+    await delay(intervalMs)
+
+    if (!isCurrentAttempt()) {
+      return { status: 'cancelled' }
+    }
+
+    try {
+      const response = await getNetworkService().request<DeviceAuthPollResponse>({
+        method: 'GET',
+        url,
+        query: {
+          device_code: deviceCode
+        },
+        headers: {
+          'Cache-Control': 'no-cache'
+        },
+        responseType: 'json',
+        timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+        validateStatus: [200, 400, 410, 429]
+      })
+
+      if (response.status < 200 || response.status >= 300) {
+        continue
+      }
+
+      const data = response.data
+      if (data?.status === 'approved' && data.appToken) {
+        return { status: 'approved', token: data.appToken }
+      }
+      if (data?.status === 'expired') return { status: 'expired' }
+      if (data?.status === 'cancelled') return { status: 'cancelled' }
+      if (data?.status === 'browser_closed') return { status: 'browser_closed' }
+      if (data?.status === 'rejected')
+        return { status: 'rejected', message: data.message ?? data.reason ?? null }
+    } catch (error) {
+      authLog.warn('Device auth poll failed', { error })
+    }
+  }
+
+  return { status: 'timeout' }
+}
+
+async function abortDeviceAuth(deviceCode: string): Promise<void> {
+  const url = new URL('/api/app-auth/device/abort', resolveAuthBaseUrl()).toString()
+  try {
+    await getNetworkService().request({
+      method: 'POST',
+      url,
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: { deviceCode },
+      timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+      validateStatus: [200, 400, 404, 410]
+    })
+  } catch (error) {
+    authLog.warn('Failed to abort device auth request', { error })
+  }
+}
+
+async function cancelActiveDeviceAuth(): Promise<void> {
+  const deviceCode = activeDeviceAuthCode
+  deviceAuthLoginAttempt += 1
+  activeDeviceAuthCode = null
+  if (deviceCode) {
+    await abortDeviceAuth(deviceCode)
+  }
+}
+
+async function completeDeviceAuthLogin(
+  deviceCode: string,
+  intervalSeconds: number,
+  attemptId: number
+): Promise<void> {
+  const isCurrentAttempt = () =>
+    deviceAuthLoginAttempt === attemptId && activeDeviceAuthCode === deviceCode
+  const result = await pollDeviceAuth(deviceCode, intervalSeconds, isCurrentAttempt)
+  if (!isCurrentAttempt()) {
+    return
+  }
+
+  activeDeviceAuthCode = null
+  if (result.status !== 'approved' || !result.token) {
+    await abortDeviceAuth(deviceCode)
+    authLog.warn('Device auth login did not complete', {
+      meta: {
+        status: result.status,
+        message: result.message ?? null
+      }
+    })
+    if (!authToken) {
+      updateAuthState(null)
+    }
+    return
+  }
+
+  const applied = await handleExternalAuthCallback(result.token, result.token)
+  if (!applied) {
+    authLog.warn('Device auth token was rejected')
+    if (!authToken) {
+      updateAuthState(null)
+    }
+  }
+}
+
+async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
+  const previousDeviceCode = activeDeviceAuthCode
+  const attemptId = ++deviceAuthLoginAttempt
+  activeDeviceAuthCode = null
+  if (previousDeviceCode) {
+    await abortDeviceAuth(previousDeviceCode)
+  }
+
+  const auth = await startDeviceAuthRequest()
+  const authorizeUrlRaw = auth.authorizeUrl
+  const deviceCode = auth.deviceCode
+  if (!authorizeUrlRaw || !deviceCode) {
+    throw new Error('Device auth response is incomplete')
+  }
+
+  activeDeviceAuthCode = deviceCode
+  const authorizeUrl = new URL(authorizeUrlRaw, resolveAuthBaseUrl())
+  if (mode === 'sign-up') {
+    authorizeUrl.pathname = '/sign-up'
+  }
+
+  await shell.openExternal(authorizeUrl.toString())
+  void completeDeviceAuthLogin(
+    deviceCode,
+    auth.intervalSeconds ?? DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS,
+    attemptId
+  ).catch((error) => {
+    if (deviceAuthLoginAttempt === attemptId && activeDeviceAuthCode === deviceCode) {
+      activeDeviceAuthCode = null
+      if (!authToken) {
+        updateAuthState(null)
+      }
+    }
+    authLog.warn('Device auth login failed', { error })
+  })
 }
 
 async function handleExternalAuthCallback(token: string, appToken?: string): Promise<boolean> {
@@ -1032,6 +1240,7 @@ export class AuthModule extends BaseModule<TalexEvents> {
         }
       ),
       ...registerAuthHandler(AuthEvents.session.logout, AuthEvents.legacy.logout, async () => {
+        await cancelActiveDeviceAuth()
         await clearAuthToken()
         updateAuthState(null)
         return { success: true }
