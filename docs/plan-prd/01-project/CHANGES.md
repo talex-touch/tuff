@@ -13,18 +13,27 @@
 
 ## 2026-05-15
 
+### fix(ci): prevent beta release dependency install hang
+
+- `.github/workflows/build-and-release.yml`
+  - 移除 tag 发布矩阵构建中 `pnpm approve-builds --all` 的非交互调用，避免依赖安装已完成后 workflow 长时间停留在 `Install Dependencies`。
+  - `v2.4.10-beta.24` 发布流水线因此取消，后续使用 `v2.4.10-beta.25` 重新触发 beta 发布验证。
+
 ### ref(nexus): slim static docs and Worker bundle surface
 
 - `apps/nexus/nuxt.config.ts`
 - `apps/nexus/build/nexus-prerender-routes.ts`
 - `apps/nexus/build/check-worker-bundle.mjs`
 - `apps/nexus/app/plugins/tuffex.ts`
+- `apps/nexus/app/components/content/TuffDemoWrapper.vue`
+- `apps/nexus/app/components/content/TuffDemoClientRenderer.client.vue`
 - `packages/tuff-intelligence/src/light.ts`
 - `packages/tuff-intelligence/package.json`
   - Nexus prerender 清单抽成可测试 helper，覆盖稳定公开页、文档页与 docs API；动态市场/发布/登录/控制台页面继续保留运行时渲染，避免固化用户态或 D1 数据。
   - Tuffex 全局组件注册从顶层整包静态 import 改为组件子入口 async component 注册，避免文档与组件文档首屏初始化时全量拉入组件实现。
+  - 组件文档 demo registry 移入 `.client.vue` 渲染器，`TuffDemoWrapper` 在 SSR 侧仅保留文档外壳与 `ClientOnly` fallback；避免 300+ demo dynamic imports 被编进 Cloudflare Pages Worker。
   - `@talex-touch/tuff-intelligence/light` 作为 Nexus contract 轻入口，仅导出 enum/types/sync payload；Nexus 侧 import 迁移到轻入口，避免误带 runtime / LangChain barrel。
-  - 新增 `pnpm -C "apps/nexus" run build:analyze-worker`，用于构建后统计 `_worker.js` 可执行 JS、Top chunks，并校验关键静态路由已排除出 Pages Worker。
+  - 新增 `pnpm -C "apps/nexus" run build:analyze-worker`，用于构建后统计 `_worker.js` 可执行 JS、Top chunks，校验关键静态路由已排除出 Pages Worker，并阻断具体 demo implementation chunk 回流 Worker。
 
 ### fix(core-app): refine Intelligence capability detail layout
 

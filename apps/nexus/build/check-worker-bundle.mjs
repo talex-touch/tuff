@@ -31,6 +31,7 @@ const suspiciousServerPatterns = [
     pattern: /packages\/tuff-intelligence\/src\/index\.ts/,
   },
 ]
+const allowedDemoWorkerChunks = new Set(['TuffDemoWrapper'])
 
 function formatBytes(bytes) {
   if (bytes < 1024)
@@ -122,6 +123,25 @@ function checkSuspiciousPatterns(files) {
   return findings
 }
 
+function getChunkBaseName(file) {
+  return file.relativePath
+    .split('/')
+    .pop()
+    ?.replace(/-[A-Za-z0-9_-]+\.mjs$/, '')
+    .replace(/\.mjs$/, '')
+}
+
+function checkDemoWorkerChunks(files) {
+  return files
+    .filter(file => file.relativePath.startsWith('chunks/build/'))
+    .filter(file => file.relativePath.endsWith('.mjs'))
+    .filter((file) => {
+      const baseName = getChunkBaseName(file)
+      return baseName?.includes('Demo') && !allowedDemoWorkerChunks.has(baseName)
+    })
+    .map(file => file.relativePath)
+}
+
 if (!existsSync(workerRoot)) {
   console.error('[nexus-worker-bundle] dist/_worker.js is missing. Run `pnpm -C "apps/nexus" run build` first.')
   process.exit(1)
@@ -130,6 +150,7 @@ if (!existsSync(workerRoot)) {
 const { executableFiles, totalBytes } = analyzeWorkerFiles()
 const routeCheck = checkRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
+const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
 console.log('[nexus-worker-bundle] top_chunks=')
@@ -144,5 +165,11 @@ if (suspiciousFindings.length) {
     console.error(`  ${finding.label}: ${finding.file}`)
 }
 
-if (!routeCheck.ok || suspiciousFindings.length)
+if (demoWorkerChunks.length) {
+  console.error('[nexus-worker-bundle] demo implementation chunks found in Worker:')
+  for (const chunk of demoWorkerChunks)
+    console.error(`  ${chunk}`)
+}
+
+if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length)
   process.exit(1)

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { type Component, type ComponentPublicInstance, computed, h, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { createAsyncDemo, demoLoaders } from './demo-registry'
+import { type ComponentPublicInstance, computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { DEMO_LAZY_ROOT_MARGIN, shouldActivateDemo } from './demo-lazy'
 
 interface DemoWrapperProps {
@@ -63,6 +62,7 @@ const toggleLabel = computed(() => {
 })
 
 const resetLabel = computed(() => (locale.value === 'zh' ? '重置' : 'Reset'))
+const inactiveLabel = computed(() => (locale.value === 'zh' ? '示例即将加载...' : 'Demo will load when visible.'))
 
 function toggleCode() {
   showCode.value = !showCode.value
@@ -104,6 +104,10 @@ async function resetDemo() {
   }
 }
 
+function handleDemoInstanceChange(instance: DemoResetController | null) {
+  demoInstanceRef.value = instance
+}
+
 function activateDemo() {
   isDemoActive.value = true
   observer?.disconnect()
@@ -137,101 +141,77 @@ onBeforeUnmount(() => {
   observer = null
 })
 
-const DemoLoadingFallback: Component = () => h('div', { class: 'tuff-demo__placeholder' }, 'Loading demo...')
-
-const DemoErrorFallback: Component = () =>
-  h('div', { class: 'tuff-demo__placeholder', style: 'color: var(--tx-color-danger)' }, 'Failed to load demo.')
-
-const demoComponentMap = new Map<string, Component>()
-
-const demoComponent = computed(() => {
-  if (!isDemoActive.value)
-    return null
-  if (!props.demo)
-    return null
-  const existing = demoComponentMap.get(props.demo)
-  if (existing)
-    return existing
-
-  const loader = demoLoaders[props.demo]
-  if (!loader)
-    return null
-
-  const component = createAsyncDemo(loader, DemoLoadingFallback, DemoErrorFallback)
-  demoComponentMap.set(props.demo, component)
-  return component
-})
 </script>
 
 <template>
-  <ClientOnly>
-    <section ref="wrapperRef" class="tuff-demo">
-      <header v-if="props.title || props.description" class="tuff-demo__header">
-        <h3 v-if="props.title" class="tuff-demo__title">
-          {{ props.title }}
-        </h3>
-        <p v-if="props.description" class="tuff-demo__desc">
-          {{ props.description }}
-        </p>
-      </header>
-      <div class="tuff-demo__window">
-        <div class="tuff-demo__window-bar">
-          <div class="tuff-demo__dots" aria-hidden="true">
-            <span class="tuff-demo__dot is-red" />
-            <span class="tuff-demo__dot is-yellow" />
-            <span class="tuff-demo__dot is-green" />
-          </div>
-          <div class="tuff-demo__window-actions">
-            <TxButton
-              variant="ghost"
-              size="small"
-              native-type="button"
-              class="tuff-demo__reset-btn"
-              :aria-label="resetLabel"
-              :disabled="isResetting || !isDemoActive"
-              @click="resetDemo"
-            >
-              <span class="tuff-demo__reset-icon i-carbon-renew" aria-hidden="true" />
-              {{ resetLabel }}
-            </TxButton>
-          </div>
+  <section ref="wrapperRef" class="tuff-demo">
+    <header v-if="props.title || props.description" class="tuff-demo__header">
+      <h3 v-if="props.title" class="tuff-demo__title">
+        {{ props.title }}
+      </h3>
+      <p v-if="props.description" class="tuff-demo__desc">
+        {{ props.description }}
+      </p>
+    </header>
+    <div class="tuff-demo__window">
+      <div class="tuff-demo__window-bar">
+        <div class="tuff-demo__dots" aria-hidden="true">
+          <span class="tuff-demo__dot is-red" />
+          <span class="tuff-demo__dot is-yellow" />
+          <span class="tuff-demo__dot is-green" />
         </div>
-        <div class="tuff-demo__window-body">
-          <div class="tuff-demo__preview">
-            <component :is="demoComponent" v-if="demoComponent" :key="demoRenderKey" ref="demoInstanceRef" />
-            <div v-else-if="!isDemoActive" class="tuff-demo__placeholder">
-              {{ locale === 'zh' ? '示例即将加载...' : 'Demo will load when visible.' }}
-            </div>
-            <div v-else class="tuff-demo__placeholder">
-              Demo component "{{ props.demo }}" not found.
-            </div>
-          </div>
-          <div v-if="hasCode" class="tuff-demo__code" :class="{ 'is-open': showCode }">
-            <div class="tuff-demo__code-body">
-              <div class="tuff-demo__code-body-inner">
-                <TuffCodeBlock
-                  embedded
-                  :lang="props.codeLang"
-                  :code="resolvedCode"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        <div v-if="hasCode" class="tuff-demo__toggle-row">
-          <TxButton variant="ghost" size="small" native-type="button" :aria-expanded="showCode" @click="toggleCode">
-            <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
-            {{ toggleLabel }}
+        <div class="tuff-demo__window-actions">
+          <TxButton
+            variant="ghost"
+            size="small"
+            native-type="button"
+            class="tuff-demo__reset-btn"
+            :aria-label="resetLabel"
+            :disabled="isResetting || !isDemoActive"
+            @click="resetDemo"
+          >
+            <span class="tuff-demo__reset-icon i-carbon-renew" aria-hidden="true" />
+            {{ resetLabel }}
           </TxButton>
         </div>
       </div>
-    </section>
-    <template #fallback>
-      <div class="tuff-demo__placeholder">
-        Demo loads on client.
+      <div class="tuff-demo__window-body">
+        <div class="tuff-demo__preview">
+          <ClientOnly>
+            <TuffDemoClientRenderer
+              :demo="props.demo"
+              :is-active="isDemoActive"
+              :render-key="demoRenderKey"
+              :inactive-label="inactiveLabel"
+              @instance-change="handleDemoInstanceChange"
+            />
+            <template #fallback>
+              <div class="tuff-demo__placeholder">
+                {{ inactiveLabel }}
+              </div>
+            </template>
+          </ClientOnly>
+        </div>
+        <div v-if="hasCode" class="tuff-demo__code" :class="{ 'is-open': showCode }">
+          <div class="tuff-demo__code-body">
+            <div class="tuff-demo__code-body-inner">
+              <TuffCodeBlock
+                embedded
+                :lang="props.codeLang"
+                :code="resolvedCode"
+              />
+            </div>
+          </div>
+        </div>
       </div>
-    </template>
-  </ClientOnly>
+      <div v-if="hasCode" class="tuff-demo__toggle-row">
+        <TxButton variant="ghost" size="small" native-type="button" :aria-expanded="showCode" @click="toggleCode">
+          <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
+          {{ toggleLabel }}
+        </TxButton>
+      </div>
+    </div>
+  </section>
 </template>
 
 <style scoped>
