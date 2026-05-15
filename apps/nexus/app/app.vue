@@ -20,7 +20,6 @@ const isAuthShellRoute = computed(() => {
     || path.startsWith('/reset-password')
     || path.startsWith('/device-auth')
 })
-const { showInvisibleWatermark } = useWatermarkDisplayPolicy()
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearch()
 const { initLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
@@ -362,8 +361,6 @@ watchEffect(() => {
   <ToastContainer />
   <ClientOnly>
     <LazySearchGlobalSearch v-if="!isAuthShellRoute && globalSearchOpen" />
-    <LazyWatermarkInvisibleWatermark v-if="showInvisibleWatermark && !isAuthShellRoute" />
-    <LazyWatermarkRiskModal v-if="showInvisibleWatermark && !isAuthShellRoute" />
   </ClientOnly>
   <template v-if="isProtectedRoute">
     <div

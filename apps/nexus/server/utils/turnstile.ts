@@ -4,7 +4,7 @@ import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { resolveRequestIp } from './ipSecurityStore'
 
-type TurnstileAction = 'login' | 'signup' | 'watermark'
+type TurnstileAction = 'login' | 'signup'
 
 interface TurnstileSiteverifyResponse {
   success: boolean

@@ -61,7 +61,6 @@ const isTeamAdmin = computed(() => {
 })
 const canManageOauthApps = computed(() => isAdmin.value || isTeamAdmin.value)
 const riskControlEnabled = computed(() => runtimeConfig.public?.riskControl?.enabled === true)
-const watermarkEnabled = computed(() => runtimeConfig.public?.watermark?.enabled === true)
 
 const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
@@ -88,7 +87,6 @@ const sectionPaths: Record<string, string> = {
   account: '/dashboard/account',
   devices: '/dashboard/devices',
   storage: '/dashboard/storage',
-  watermark: '/dashboard/watermark',
 }
 
 function mapItems(items: Array<{ id: string, label: string, icon: string }>) {
@@ -217,14 +215,6 @@ const adminMenuItems = computed(() => {
     })
   }
 
-  if (watermarkEnabled.value) {
-    items.push({
-      id: 'watermark',
-      label: t('dashboard.sections.menu.watermark', 'Watermark'),
-      icon: 'i-carbon-identification',
-    })
-  }
-
   return mapItems(items)
 })
 
@@ -243,8 +233,6 @@ const activeSection = computed(() => {
     return 'reviews'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
-  if (route.path.startsWith('/dashboard/watermark'))
-    return 'watermark'
   if (route.path.startsWith('/dashboard/admin/credits'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/intelligence-agent'))

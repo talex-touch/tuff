@@ -16,11 +16,6 @@ function asBoolean(value: unknown, fallback = false): boolean {
   return fallback
 }
 
-export function isWatermarkFeatureEnabled(event: H3Event): boolean {
-  const config = useRuntimeConfig(event)
-  return asBoolean(config.watermark?.enabled ?? config.public?.watermark?.enabled, false)
-}
-
 export function isRiskControlFeatureEnabled(event: H3Event): boolean {
   const config = useRuntimeConfig(event)
   return asBoolean(config.riskControl?.enabled ?? config.public?.riskControl?.enabled, false)

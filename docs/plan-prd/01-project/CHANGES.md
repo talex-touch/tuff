@@ -20,6 +20,18 @@
   - The browser is only responsible for sign-in and approval on `/device-auth`; the App no longer depends on `tuff://auth/callback` for new login attempts, while the old callback path remains available for compatibility.
   - Superseded, failed, expired, cancelled, or closed browser authorization attempts are logged and the pending device auth request is aborted when possible.
 
+### perf(nexus): remove retired watermark runtime
+
+- `apps/nexus/app/components/watermark/**`
+- `apps/nexus/app/composables/useWatermark*.ts`
+- `apps/nexus/server/api/watermark/**`
+- `apps/nexus/server/utils/watermark*.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/package.json`
+  - Removed the retired Nexus watermark experiment from the app shell, dashboard layout, admin navigation, route gates, server API routes, and Worker utilities.
+  - Dropped the watermark-only `qrcode` and `jsqr` dependencies and removed the stale `NUXT_PUBLIC_WATERMARK_ENABLED` runtime switch.
+  - Kept the separate risk-control feature gate intact while reducing default client and Worker surface area.
+
 ### perf(nexus): tighten Pages media and bundle budgets
 
 - `apps/nexus/public/shots/SearchFileImmediately.mp4`

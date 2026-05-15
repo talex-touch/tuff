@@ -51,9 +51,6 @@ function isEnvFlagEnabled(value?: string) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
-const watermarkFeatureEnabled = isEnvFlagEnabled(
-  process.env.NUXT_PUBLIC_WATERMARK_ENABLED || process.env.NEXUS_EXPERIMENTAL_WATERMARK_ENABLED,
-)
 const riskControlFeatureEnabled = isEnvFlagEnabled(
   process.env.NUXT_PUBLIC_RISK_CONTROL_ENABLED || process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED,
 )
@@ -178,10 +175,6 @@ export default defineNuxtConfig({
     turnstile: {
       secretKey: process.env.TURNSTILE_SECRETKEY || process.env.TURNSTILE_SECRET_KEY,
     },
-    watermark: {
-      secretKey: process.env.WATERMARK_SECRET_KEY || process.env.NUXT_WATERMARK_SECRET_KEY,
-      enabled: watermarkFeatureEnabled,
-    },
     riskControl: {
       enabled: riskControlFeatureEnabled,
     },
@@ -225,9 +218,6 @@ export default defineNuxtConfig({
       },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
-      },
-      watermark: {
-        enabled: watermarkFeatureEnabled,
       },
       riskControl: {
         enabled: riskControlFeatureEnabled,

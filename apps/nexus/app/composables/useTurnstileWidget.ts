@@ -66,7 +66,7 @@ export function useTurnstileWidget() {
       : ''
   })
 
-  async function render(container: string | HTMLElement, nextAction = 'watermark') {
+  async function render(container: string | HTMLElement, nextAction = 'login') {
     if (!siteKey.value)
       return
     state.value = 'loading'

@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { isRiskControlFeatureEnabled, isWatermarkFeatureEnabled } from '../utils/runtime-features'
+import { isRiskControlFeatureEnabled } from '../utils/runtime-features'
 
 const RISK_API_PREFIXES = [
   '/api/admin/emergency',
@@ -24,16 +24,6 @@ function isRiskApiPath(path: string): boolean {
   return false
 }
 
-function isWatermarkApiPath(path: string): boolean {
-  if (path.startsWith('/api/watermark/'))
-    return true
-  if (/^\/api\/admin\/.*watermark(\/|$)/i.test(path))
-    return true
-  if (/^\/api\/dashboard\/.*watermark(\/|$)/i.test(path))
-    return true
-  return false
-}
-
 function featureDisabled() {
   return createError({
     statusCode: 404,
@@ -47,8 +37,5 @@ export default defineEventHandler((event) => {
     return
 
   if (!isRiskControlFeatureEnabled(event) && isRiskApiPath(path))
-    throw featureDisabled()
-
-  if (!isWatermarkFeatureEnabled(event) && isWatermarkApiPath(path))
     throw featureDisabled()
 })
