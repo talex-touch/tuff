@@ -589,218 +589,220 @@ onBeforeUnmount(() => {
             </div>
           </template>
 
-          <div v-if="selectedPrompt.builtin" class="prompt-readonly-hint mx-4 mb-4" role="status">
-            <i class="i-carbon-information" aria-hidden="true" />
-            <span>{{ t('settings.intelligence.promptReadonlyHint') }}</span>
-          </div>
-
-          <TuffGroupBlock
-            :name="t('settings.intelligence.promptMetaTitle')"
-            :description="t('settings.intelligence.promptMetaDesc')"
-            default-icon="i-carbon-information"
-            active-icon="i-carbon-information"
-            memory-name="prompt-meta-info"
-            :default-expand="true"
-          >
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptNameLabel')"
-              :description="promptDraft.name || t('settings.intelligence.promptNamePlaceholder')"
-              default-icon="i-carbon-text-font"
-              active-icon="i-carbon-text-font"
-            >
-              <input
-                v-model="promptDraft.name"
-                class="prompt-inline-input"
-                type="text"
-                :placeholder="t('settings.intelligence.promptNamePlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
-            </TuffBlockSlot>
-
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptMetaCategory')"
-              :description="
-                promptDraft.category || t('settings.intelligence.promptCategoryPlaceholder')
-              "
-              default-icon="i-carbon-tag"
-              active-icon="i-carbon-tag"
-            >
-              <input
-                v-model="promptDraft.category"
-                class="prompt-inline-input"
-                type="text"
-                :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
-            </TuffBlockSlot>
-
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptDescriptionLabel')"
-              :description="
-                promptDraft.description || t('settings.intelligence.promptDescriptionPlaceholder')
-              "
-              default-icon="i-carbon-document"
-              active-icon="i-carbon-document"
-            >
-              <textarea
-                v-model="promptDraft.description"
-                class="prompt-inline-textarea"
-                rows="2"
-                :placeholder="t('settings.intelligence.promptDescriptionPlaceholder')"
-                :disabled="isBuiltinSelected"
-              />
-            </TuffBlockSlot>
-          </TuffGroupBlock>
-
-          <TuffGroupBlock
-            :name="t('settings.intelligence.promptContentLabel')"
-            :description="t('settings.intelligence.promptContentDesc')"
-            default-icon="i-carbon-code"
-            active-icon="i-carbon-code"
-            memory-name="prompt-content"
-            :default-expand="true"
-          >
-            <div class="prompt-markdown-wrapper">
-              <FlatMarkdown v-model="promptDraft.content" :readonly="isBuiltinSelected" />
+          <div class="prompt-detail-body">
+            <div v-if="selectedPrompt.builtin" class="prompt-readonly-hint" role="status">
+              <i class="i-carbon-information" aria-hidden="true" />
+              <span>{{ t('settings.intelligence.promptReadonlyHint') }}</span>
             </div>
-          </TuffGroupBlock>
 
-          <TuffGroupBlock
-            :name="t('settings.intelligence.capabilityTestTitle')"
-            :description="t('settings.intelligence.capabilityTestDesc')"
-            default-icon="i-carbon-flash"
-            active-icon="i-carbon-flash"
-            memory-name="prompt-test"
-            :default-expand="false"
-          >
-            <div class="prompt-test__body">
+            <TuffGroupBlock
+              :name="t('settings.intelligence.promptMetaTitle')"
+              :description="t('settings.intelligence.promptMetaDesc')"
+              default-icon="i-carbon-information"
+              active-icon="i-carbon-information"
+              memory-name="prompt-meta-info"
+              :default-expand="true"
+            >
               <TuffBlockSlot
-                :title="t('settings.intelligence.capabilitySelectTitle')"
-                :description="testCapabilityId"
-                default-icon="i-carbon-function-math"
-                active-icon="i-carbon-function-math"
+                :title="t('settings.intelligence.promptNameLabel')"
+                :description="promptDraft.name || t('settings.intelligence.promptNamePlaceholder')"
+                default-icon="i-carbon-text-font"
+                active-icon="i-carbon-text-font"
               >
-                <select v-model="testCapabilityId" class="prompt-inline-input">
-                  <option v-for="cap in capabilityList" :key="cap.id" :value="cap.id">
-                    {{ cap.id }}
-                  </option>
-                </select>
+                <input
+                  v-model="promptDraft.name"
+                  class="prompt-inline-input"
+                  type="text"
+                  :placeholder="t('settings.intelligence.promptNamePlaceholder')"
+                  :disabled="isBuiltinSelected"
+                />
               </TuffBlockSlot>
 
-              <CapabilityTestInput
-                :capability-id="testCapabilityId"
-                :is-testing="promptTesting"
-                :disabled="testEnabledBindings.length === 0"
-                :enabled-bindings="testEnabledBindings"
-                :prompt-template="promptDraft.content"
-                :show-prompt-selector="false"
-                @test="handlePromptTest"
-              />
+              <TuffBlockSlot
+                :title="t('settings.intelligence.promptMetaCategory')"
+                :description="
+                  promptDraft.category || t('settings.intelligence.promptCategoryPlaceholder')
+                "
+                default-icon="i-carbon-tag"
+                active-icon="i-carbon-tag"
+              >
+                <input
+                  v-model="promptDraft.category"
+                  class="prompt-inline-input"
+                  type="text"
+                  :placeholder="t('settings.intelligence.promptCategoryPlaceholder')"
+                  :disabled="isBuiltinSelected"
+                />
+              </TuffBlockSlot>
 
-              <CapabilityTestResult v-if="promptTestResult" :result="promptTestResult" />
-            </div>
-          </TuffGroupBlock>
+              <TuffBlockSlot
+                :title="t('settings.intelligence.promptDescriptionLabel')"
+                :description="
+                  promptDraft.description || t('settings.intelligence.promptDescriptionPlaceholder')
+                "
+                default-icon="i-carbon-document"
+                active-icon="i-carbon-document"
+              >
+                <textarea
+                  v-model="promptDraft.description"
+                  class="prompt-inline-textarea"
+                  rows="2"
+                  :placeholder="t('settings.intelligence.promptDescriptionPlaceholder')"
+                  :disabled="isBuiltinSelected"
+                />
+              </TuffBlockSlot>
+            </TuffGroupBlock>
 
-          <TuffGroupBlock
-            :name="t('settings.intelligence.promptActionsTitle')"
-            :description="t('settings.intelligence.promptActionsDesc')"
-            default-icon="i-carbon-settings"
-            active-icon="i-carbon-settings"
-            memory-name="prompt-actions"
-            :default-expand="true"
-          >
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptDuplicateButton')"
-              :description="t('settings.intelligence.promptDuplicateDesc')"
-              default-icon="i-carbon-copy"
-              active-icon="i-carbon-copy"
-              @click="handleDuplicatePrompt"
+            <TuffGroupBlock
+              :name="t('settings.intelligence.promptContentLabel')"
+              :description="t('settings.intelligence.promptContentDesc')"
+              default-icon="i-carbon-code"
+              active-icon="i-carbon-code"
+              memory-name="prompt-content"
+              :default-expand="true"
             >
-              <TxButton
-                variant="bare"
-                class="aisdk-btn ghost"
-                native-type="button"
+              <div class="prompt-markdown-wrapper">
+                <FlatMarkdown v-model="promptDraft.content" :readonly="isBuiltinSelected" />
+              </div>
+            </TuffGroupBlock>
+
+            <TuffGroupBlock
+              :name="t('settings.intelligence.capabilityTestTitle')"
+              :description="t('settings.intelligence.capabilityTestDesc')"
+              default-icon="i-carbon-flash"
+              active-icon="i-carbon-flash"
+              memory-name="prompt-test"
+              :default-expand="false"
+            >
+              <div class="prompt-test__body">
+                <TuffBlockSlot
+                  :title="t('settings.intelligence.capabilitySelectTitle')"
+                  :description="testCapabilityId"
+                  default-icon="i-carbon-function-math"
+                  active-icon="i-carbon-function-math"
+                >
+                  <select v-model="testCapabilityId" class="prompt-inline-input">
+                    <option v-for="cap in capabilityList" :key="cap.id" :value="cap.id">
+                      {{ cap.id }}
+                    </option>
+                  </select>
+                </TuffBlockSlot>
+
+                <CapabilityTestInput
+                  :capability-id="testCapabilityId"
+                  :is-testing="promptTesting"
+                  :disabled="testEnabledBindings.length === 0"
+                  :enabled-bindings="testEnabledBindings"
+                  :prompt-template="promptDraft.content"
+                  :show-prompt-selector="false"
+                  @test="handlePromptTest"
+                />
+
+                <CapabilityTestResult v-if="promptTestResult" :result="promptTestResult" />
+              </div>
+            </TuffGroupBlock>
+
+            <TuffGroupBlock
+              :name="t('settings.intelligence.promptActionsTitle')"
+              :description="t('settings.intelligence.promptActionsDesc')"
+              default-icon="i-carbon-settings"
+              active-icon="i-carbon-settings"
+              memory-name="prompt-actions"
+              :default-expand="false"
+            >
+              <TuffBlockSlot
+                :title="t('settings.intelligence.promptDuplicateButton')"
+                :description="t('settings.intelligence.promptDuplicateDesc')"
+                default-icon="i-carbon-copy"
+                active-icon="i-carbon-copy"
                 @click="handleDuplicatePrompt"
               >
-                <i class="i-carbon-copy" aria-hidden="true" />
-                <span>{{ t('settings.intelligence.promptDuplicateButton') }}</span>
-              </TxButton>
-            </TuffBlockSlot>
+                <TxButton
+                  variant="bare"
+                  class="aisdk-btn ghost"
+                  native-type="button"
+                  @click="handleDuplicatePrompt"
+                >
+                  <i class="i-carbon-copy" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.promptDuplicateButton') }}</span>
+                </TxButton>
+              </TuffBlockSlot>
 
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptCopyButton')"
-              :description="t('settings.intelligence.promptCopyDesc')"
-              default-icon="i-carbon-document"
-              active-icon="i-carbon-document"
-              @click="handleCopyContent"
-            >
-              <TxButton
-                variant="bare"
-                class="aisdk-btn ghost"
-                native-type="button"
+              <TuffBlockSlot
+                :title="t('settings.intelligence.promptCopyButton')"
+                :description="t('settings.intelligence.promptCopyDesc')"
+                default-icon="i-carbon-document"
+                active-icon="i-carbon-document"
                 @click="handleCopyContent"
               >
-                <i class="i-carbon-document" aria-hidden="true" />
-                <span>{{ t('settings.intelligence.promptCopyButton') }}</span>
-              </TxButton>
-            </TuffBlockSlot>
+                <TxButton
+                  variant="bare"
+                  class="aisdk-btn ghost"
+                  native-type="button"
+                  @click="handleCopyContent"
+                >
+                  <i class="i-carbon-document" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.promptCopyButton') }}</span>
+                </TxButton>
+              </TuffBlockSlot>
 
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptDeleteButton')"
-              :description="t('settings.intelligence.promptDeleteDesc')"
-              default-icon="i-carbon-trash-can"
-              active-icon="i-carbon-trash-can"
-              :disabled="!isCustomEditable"
-              @click="handleDeletePrompt"
-            >
-              <TxButton
-                variant="bare"
-                class="aisdk-btn danger"
-                native-type="button"
+              <TuffBlockSlot
+                :title="t('settings.intelligence.promptDeleteButton')"
+                :description="t('settings.intelligence.promptDeleteDesc')"
+                default-icon="i-carbon-trash-can"
+                active-icon="i-carbon-trash-can"
                 :disabled="!isCustomEditable"
                 @click="handleDeletePrompt"
               >
-                <i class="i-carbon-trash-can" aria-hidden="true" />
-                <span>{{ t('settings.intelligence.promptDeleteButton') }}</span>
-              </TxButton>
-            </TuffBlockSlot>
-
-            <TuffBlockSlot
-              :title="t('settings.intelligence.promptSaveButton')"
-              :description="autoSaveStatusText"
-              default-icon="i-carbon-checkmark"
-              active-icon="i-carbon-checkmark"
-              :disabled="!isCustomEditable || !isDirty"
-              @click="handleSavePrompt"
-            >
-              <div class="flex items-center gap-2">
-                <div
-                  v-if="isCustomEditable"
-                  class="prompt-actions__status"
-                  :data-status="autoSaveStatus"
-                >
-                  <i
-                    v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
-                    class="i-carbon-renew animate-spin text-[var(--tx-text-color-secondary)]"
-                  />
-                  <i
-                    v-else-if="autoSaveStatus === 'saved'"
-                    class="i-carbon-checkmark text-[var(--tx-color-success)]"
-                  />
-                </div>
                 <TxButton
                   variant="bare"
-                  class="aisdk-btn primary"
+                  class="aisdk-btn danger"
                   native-type="button"
-                  :disabled="!isCustomEditable || !isDirty"
-                  @click="handleSavePrompt"
+                  :disabled="!isCustomEditable"
+                  @click="handleDeletePrompt"
                 >
-                  <i class="i-carbon-checkmark" aria-hidden="true" />
-                  <span>{{ t('settings.intelligence.promptSaveButton') }}</span>
+                  <i class="i-carbon-trash-can" aria-hidden="true" />
+                  <span>{{ t('settings.intelligence.promptDeleteButton') }}</span>
                 </TxButton>
-              </div>
-            </TuffBlockSlot>
-          </TuffGroupBlock>
+              </TuffBlockSlot>
+
+              <TuffBlockSlot
+                :title="t('settings.intelligence.promptSaveButton')"
+                :description="autoSaveStatusText"
+                default-icon="i-carbon-checkmark"
+                active-icon="i-carbon-checkmark"
+                :disabled="!isCustomEditable || !isDirty"
+                @click="handleSavePrompt"
+              >
+                <div class="flex items-center gap-2">
+                  <div
+                    v-if="isCustomEditable"
+                    class="prompt-actions__status"
+                    :data-status="autoSaveStatus"
+                  >
+                    <i
+                      v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
+                      class="i-carbon-renew animate-spin text-[var(--tx-text-color-secondary)]"
+                    />
+                    <i
+                      v-else-if="autoSaveStatus === 'saved'"
+                      class="i-carbon-checkmark text-[var(--tx-color-success)]"
+                    />
+                  </div>
+                  <TxButton
+                    variant="bare"
+                    class="aisdk-btn primary"
+                    native-type="button"
+                    :disabled="!isCustomEditable || !isDirty"
+                    @click="handleSavePrompt"
+                  >
+                    <i class="i-carbon-checkmark" aria-hidden="true" />
+                    <span>{{ t('settings.intelligence.promptSaveButton') }}</span>
+                  </TxButton>
+                </div>
+              </TuffBlockSlot>
+            </TuffGroupBlock>
+          </div>
         </TouchScroll>
 
         <div v-else class="prompt-empty-state" role="status">
@@ -894,53 +896,97 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 1.25rem;
   border-bottom: 1px solid var(--tx-border-color-lighter);
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.prompt-main-header h1 {
+  margin: 0.2rem 0 0;
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--tx-text-color-primary);
 }
 
 .prompt-main-eyebrow {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--tx-text-color-secondary);
 }
 
 .prompt-main-desc {
-  margin-top: 0.35rem;
+  max-width: 440px;
+  margin-top: 0.4rem;
   font-size: 0.9rem;
+  line-height: 1.6;
   color: var(--tx-text-color-secondary);
+}
+
+.prompt-main-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 460px;
+}
+
+.prompt-detail-body {
+  padding: 1rem 1.5rem 1.5rem;
+}
+
+.prompt-detail-body :deep(.TGroupBlock-Container) {
+  margin-bottom: 1rem;
+  border-radius: 1rem;
+}
+
+.prompt-detail-body :deep(.TGroupBlock-Header) {
+  min-height: 58px;
+  padding-inline: 1rem;
+}
+
+.prompt-detail-body :deep(.TBlockSlot-Container) {
+  min-height: 64px;
+  height: auto;
+  padding-block: 0.55rem;
 }
 
 .prompt-test__body {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  padding: 1rem;
 }
 
 .prompt-readonly-hint {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  margin-bottom: 1rem;
   padding: 0.75rem 1rem;
   border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 0.75rem;
+  border-radius: 0.9rem;
   background: var(--tx-fill-color-lighter);
   color: var(--tx-text-color-regular);
 }
 
 .prompt-inline-input,
 .prompt-inline-textarea {
-  width: 200px;
+  width: min(360px, 34vw);
   max-width: 100%;
-  border: 1px solid var(--tx-border-color);
-  border-radius: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  background: var(--tx-bg-color);
-  font-size: 0.85rem;
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(var(--tx-bg-color-rgb, 255, 255, 255), 0.72);
+  font-size: 0.86rem;
   color: var(--tx-text-color-primary);
   resize: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 
   &:disabled {
     background: var(--tx-fill-color-light);
@@ -950,22 +996,24 @@ onBeforeUnmount(() => {
 
   &:focus {
     outline: none;
-    border-color: var(--tx-color-primary);
+    border-color: rgba(var(--tx-color-primary-rgb), 0.6);
+    box-shadow: 0 0 0 3px rgba(var(--tx-color-primary-rgb), 0.1);
   }
 }
 
 .prompt-inline-textarea {
-  min-height: 60px;
+  min-height: 72px;
 }
 
 .prompt-markdown-wrapper {
   padding: 0;
   margin: 0;
+  background: var(--tx-bg-color);
 
   :deep(.FlatMarkdown-Container) {
     border: none;
     border-radius: 0;
-    min-height: 300px;
+    min-height: 340px;
   }
 }
 
@@ -975,6 +1023,44 @@ onBeforeUnmount(() => {
   gap: 0.35rem;
   font-size: 0.85rem;
   color: var(--tx-text-color-secondary);
+}
+
+.aisdk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 0.85rem;
+  padding: 0.45rem 0.75rem;
+  background: rgba(var(--tx-bg-color-rgb, 255, 255, 255), 0.78);
+  color: var(--tx-text-color-regular);
+  font-weight: 600;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease;
+
+  &:hover {
+    border-color: rgba(var(--tx-color-primary-rgb), 0.35);
+    background: rgba(var(--tx-color-primary-rgb), 0.08);
+    color: var(--tx-color-primary);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  &.primary {
+    border-color: rgba(var(--tx-color-primary-rgb), 0.35);
+    color: var(--tx-color-primary);
+  }
+
+  &.danger {
+    color: var(--tx-color-danger);
+  }
 }
 
 .prompt-empty-state {
