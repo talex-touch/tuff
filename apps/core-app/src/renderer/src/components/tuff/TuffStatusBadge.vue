@@ -73,6 +73,8 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
   align-items: center;
   justify-content: center;
   gap: 6px;
+  max-width: 100%;
+  min-width: 0;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
@@ -92,7 +94,15 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
   }
 
   i {
+    flex: 0 0 auto;
     font-size: 14px;
+  }
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &.tuff-status-size-sm {
