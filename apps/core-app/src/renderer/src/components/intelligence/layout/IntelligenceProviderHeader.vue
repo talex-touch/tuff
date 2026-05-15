@@ -2,11 +2,15 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import { TxBottomDialog, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
+import {
+  isNexusManagedProvider as checkNexusManagedProvider,
+  TUFF_NEXUS_PROVIDER_ICON
+} from '~/modules/intelligence/nexus-provider'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -42,6 +46,8 @@ const props = defineProps<{
 
 const emits = defineEmits<{
   delete: []
+  duplicate: []
+  editBasic: []
 }>()
 
 const { t } = useI18n()
@@ -60,6 +66,11 @@ const providerIconMap: Record<IntelligenceProviderType, ITuffIcon> = {
 
 const overflowIcon: ITuffIcon = { type: 'class', value: 'i-carbon-overflow-menu-horizontal' }
 const trashIcon: ITuffIcon = { type: 'class', value: 'i-carbon-trash-can' }
+const copyIcon: ITuffIcon = { type: 'class', value: 'i-carbon-copy' }
+const editIcon: ITuffIcon = { type: 'class', value: 'i-carbon-edit' }
+const shareIcon: ITuffIcon = { type: 'class', value: 'i-carbon-share' }
+const exportIcon: ITuffIcon = { type: 'class', value: 'i-carbon-document-export' }
+const configIcon: ITuffIcon = { type: 'class', value: 'i-carbon-settings-adjust' }
 const defaultIcon: ITuffIcon = { type: 'class', value: 'i-carbon-ibm-watson-machine-learning' }
 
 const localEnabled = computed({
@@ -74,11 +85,102 @@ const isNexusManagedProvider = computed(() => {
 })
 
 const providerIcon = computed<ITuffIcon>(() => {
+  if (isNexusManagedProvider.value) {
+    return TUFF_NEXUS_PROVIDER_ICON
+  }
   return providerIconMap[props.provider.type as IntelligenceProviderType] ?? defaultIcon
 })
 
 const deleteConfirmVisible = ref(false)
 const actionMenuOpen = ref(false)
+
+async function handleDuplicate() {
+  emits('duplicate')
+}
+
+function handleEditBasic() {
+  emits('editBasic')
+}
+
+function createProviderConfigText(): string {
+  const { apiKey: _apiKey, ...safeProvider } = props.provider
+  return JSON.stringify(
+    {
+      schema: 'tuff.intelligence.provider.config.v1',
+      exportedAt: new Date().toISOString(),
+      provider: safeProvider
+    },
+    null,
+    2
+  )
+}
+
+function getProviderConfigFileName(): string {
+  const safeName = props.provider.name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+  return `${safeName || props.provider.id}-provider-config.json`
+}
+
+async function copyText(text: string): Promise<void> {
+  await navigator.clipboard.writeText(text)
+}
+
+async function handleCopyId() {
+  try {
+    await copyText(props.provider.id)
+    toast.success(t('settings.intelligence.copyProviderSuccess'))
+  } catch {
+    toast.error(t('settings.intelligence.copyProviderFailed'))
+  }
+}
+
+async function handleCopyConfig() {
+  try {
+    await copyText(createProviderConfigText())
+    toast.success(t('settings.intelligence.copyProviderConfigSuccess'))
+  } catch {
+    toast.error(t('settings.intelligence.copyProviderConfigFailed'))
+  }
+}
+
+async function handleShareConfig() {
+  const text = createProviderConfigText()
+  const title = t('settings.intelligence.shareProviderConfigTitle', { name: props.provider.name })
+
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, text })
+      toast.success(t('settings.intelligence.shareProviderConfigSuccess'))
+      return
+    }
+
+    await copyText(text)
+    toast.success(t('settings.intelligence.shareProviderConfigFallback'))
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    toast.error(t('settings.intelligence.shareProviderConfigFailed'))
+  }
+}
+
+function handleExportConfig() {
+  try {
+    const blob = new Blob([createProviderConfigText()], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = getProviderConfigFileName()
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    toast.success(t('settings.intelligence.exportProviderConfigSuccess'))
+  } catch {
+    toast.error(t('settings.intelligence.exportProviderConfigFailed'))
+  }
+}
 
 function handleDelete() {
   deleteConfirmVisible.value = true
@@ -102,27 +204,25 @@ function closeDeleteConfirm() {
     <div class="flex items-center gap-3">
       <TuffIcon :icon="providerIcon" :alt="provider.name" :size="40" />
       <div class="min-w-0 flex-1">
-        <h1 id="provider-name" class="text-lg font-semibold text-gray-900 dark:text-white">
-          {{ provider.name }}
-        </h1>
+        <div class="flex min-w-0 items-center gap-2">
+          <h1
+            id="provider-name"
+            class="min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-white"
+          >
+            {{ provider.name }}
+          </h1>
+          <p v-if="isNexusManagedProvider" class="provider-official-badge">
+            <i class="i-carbon-cloud-service-management" />
+            <span>{{ t('settings.intelligence.nexusOfficialProvider') }}</span>
+          </p>
+        </div>
         <p id="provider-type" class="text-sm text-gray-600 dark:text-gray-400">
           {{ provider.type }}
-        </p>
-        <p
-          v-if="isNexusManagedProvider"
-          class="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-[var(--tx-color-primary)] bg-[var(--tx-color-primary-soft)]"
-        >
-          <i class="i-carbon-cloud-service-management" />
-          <span>{{ t('settings.intelligence.nexusOfficialProvider') }}</span>
         </p>
       </div>
     </div>
     <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
-      <TxDropdownMenu
-        v-if="provider.type === 'custom'"
-        v-model="actionMenuOpen"
-        placement="bottom-end"
-      >
+      <TxDropdownMenu v-model="actionMenuOpen" placement="bottom-end">
         <template #trigger>
           <TxButton
             variant="flat"
@@ -137,14 +237,85 @@ function closeDeleteConfirm() {
             />
           </TxButton>
         </template>
-        <TxDropdownItem danger @select="handleDelete">
-          <TuffIcon
-            :icon="trashIcon"
-            :alt="t('settings.intelligence.deleteProvider', { name: provider.name })"
-            :size="18"
-          />
-          <span class="ml-2">
-            {{ t('settings.intelligence.deleteProvider', { name: provider.name }) }}
+        <TxDropdownItem class="provider-action-item" @select="handleCopyId">
+          <span class="provider-action-item__content">
+            <TuffIcon :icon="copyIcon" :alt="t('settings.intelligence.copyProvider')" :size="18" />
+            <span>{{ t('settings.intelligence.copyProvider') }}</span>
+          </span>
+        </TxDropdownItem>
+        <TxDropdownItem class="provider-action-item" @select="handleCopyConfig">
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="configIcon"
+              :alt="t('settings.intelligence.copyProviderConfig')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.copyProviderConfig') }}</span>
+          </span>
+        </TxDropdownItem>
+        <TxDropdownItem class="provider-action-item" @select="handleShareConfig">
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="shareIcon"
+              :alt="t('settings.intelligence.shareProviderConfig')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.shareProviderConfig') }}</span>
+          </span>
+        </TxDropdownItem>
+        <TxDropdownItem class="provider-action-item" @select="handleExportConfig">
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="exportIcon"
+              :alt="t('settings.intelligence.exportProviderConfig')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.exportProviderConfig') }}</span>
+          </span>
+        </TxDropdownItem>
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleEditBasic"
+        >
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="editIcon"
+              :alt="t('settings.intelligence.editProviderBasic')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.editProviderBasic') }}</span>
+          </span>
+        </TxDropdownItem>
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleDuplicate"
+        >
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="copyIcon"
+              :alt="t('settings.intelligence.duplicateProvider')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.duplicateProvider') }}</span>
+          </span>
+        </TxDropdownItem>
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item provider-action-item--divided provider-action-item--danger"
+          danger
+          @select="handleDelete"
+        >
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="trashIcon"
+              :alt="t('settings.intelligence.deleteProviderConfig', { name: provider.name })"
+              :size="18"
+            />
+            <span>
+              {{ t('settings.intelligence.deleteProviderConfig', { name: provider.name }) }}
+            </span>
           </span>
         </TxDropdownItem>
       </TxDropdownMenu>
@@ -172,5 +343,78 @@ function closeDeleteConfirm() {
 .IntelligenceHeader {
   backdrop-filter: blur(18px) saturate(180%);
   border-bottom: 1px solid var(--tx-border-color-light);
+}
+
+.provider-official-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 12rem;
+  margin: 0;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--tx-color-primary);
+  background: var(--tx-color-primary-soft);
+
+  span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.provider-action-item {
+  --tx-card-item-padding: 0.625rem 0.75rem;
+}
+
+.provider-action-item :deep(.tx-card-item) {
+  align-items: center;
+}
+
+.provider-action-item :deep(.tx-card-item__top) {
+  align-items: center;
+}
+
+.provider-action-item :deep(.tx-card-item__title) {
+  display: flex;
+  align-items: center;
+  min-height: 1.375rem;
+  line-height: 1.375rem;
+}
+
+.provider-action-item__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.provider-action-item__content :deep(.TuffIcon),
+.provider-action-item__content :deep(.tx-icon) {
+  flex: 0 0 auto;
+}
+
+.provider-action-item--divided {
+  position: relative;
+  margin-top: 0.375rem;
+  padding-top: 0.375rem;
+}
+
+.provider-action-item--divided::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  right: 0.75rem;
+  height: 1px;
+  background: var(--tx-border-color-lighter);
+}
+
+.provider-action-item--danger :deep(.tx-card-item__title),
+.provider-action-item--danger .provider-action-item__content {
+  color: var(--tx-color-danger);
 }
 </style>

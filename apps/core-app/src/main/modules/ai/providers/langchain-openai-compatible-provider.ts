@@ -549,6 +549,10 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       }
     })
 
+    if (response.data.byteLength === 0) {
+      throw new Error(`[${this.type}] TTS provider returned empty audio payload`)
+    }
+
     return {
       result: {
         audio: arrayBufferToDataUrl(response.data, mimeType),

@@ -68,10 +68,25 @@ function collectWorkspaceDirectories() {
     .sort((a, b) => b.length - a.length || a.localeCompare(b))
 }
 
+function getDiffArgs() {
+  const baseRef = process.env.GITHUB_BASE_REF
+  if (!baseRef) {
+    return ['diff', '--name-only', '--diff-filter=ACMRTUXB', 'HEAD']
+  }
+
+  const remoteBaseRef = `refs/remotes/origin/${baseRef}`
+  const fetchStatus = run('git', ['fetch', '--no-tags', 'origin', `${baseRef}:${remoteBaseRef}`])
+  if (fetchStatus !== 0) {
+    process.exit(fetchStatus)
+  }
+
+  return ['diff', '--name-only', '--diff-filter=ACMRTUXB', `${remoteBaseRef}...HEAD`]
+}
+
 function getChangedFiles() {
   const result = spawnSync(
     'git',
-    ['diff', '--name-only', '--diff-filter=ACMRTUXB', 'HEAD'],
+    getDiffArgs(),
     {
       cwd: workspaceRoot,
       encoding: 'utf8',

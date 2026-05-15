@@ -468,11 +468,24 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       throw new Error('Auth callback failed')
     }
 
+    const state = (await transport.send(AuthEvents.session.getState)) as AuthState | null
+    if (state) {
+      applyAuthState(state)
+    } else {
+      await initializeAuth()
+    }
+    if (!authState.isSignedIn) {
+      throw new Error('Auth callback completed but profile is unavailable')
+    }
+
     if (pendingBrowserLogin.value) {
       clearTimeout(pendingBrowserLogin.value.timeoutId)
       pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
       pendingBrowserLogin.value = null
     }
+    authLoadingState.isLoggingIn = false
+    authLoadingState.loginProgress = 100
+    toast.success('登录成功')
   } catch (error) {
     const errorMessage = getErrorMessage(error, 'AUTH_ERROR')
     toast.error(errorMessage)

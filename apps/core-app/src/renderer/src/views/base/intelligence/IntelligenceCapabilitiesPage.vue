@@ -8,11 +8,16 @@ import type {
   CapabilityBinding,
   CapabilityTestResult
 } from '~/components/intelligence/capabilities/types'
+import type {
+  TuffItemBadge,
+  TuffItemStatusDot
+} from '~/components/tuff/template/TuffItemTemplate.vue'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
+import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 
 const { t } = useI18n()
@@ -96,26 +101,42 @@ function getCapabilityIcon(capability: IntelligenceCapabilityConfig): ITuffIcon 
   }
 }
 
-function getCapabilityIconColor(capability: IntelligenceCapabilityConfig): string {
-  const iconMap: Record<string, string> = {
-    'text.chat': '#1e88e5',
-    'embedding.generate': '#7b1fa2',
-    'vision.ocr': '#fb8c00',
-    'text.translate': '#43a047',
-    'text.summarize': '#e53935',
-    'audio.transcribe': '#00acc1',
-    'code.generate': '#5e35b1',
-    'intent.detect': '#f4511e'
-  }
-  return iconMap[capability.id] || '#757575'
+function getConfiguredProviderCount(capability: IntelligenceCapabilityConfig): number {
+  return capability.providers?.filter((provider) => provider.enabled !== false).length ?? 0
 }
 
 function getCapabilityStatus(
   capability: IntelligenceCapabilityConfig
 ): 'configured' | 'unconfigured' {
-  // const hasProviders = capability.providers && capability.providers.length > 0
-  const hasActiveProvider = capability.providers?.some((p) => p.enabled !== false)
-  return hasActiveProvider ? 'configured' : 'unconfigured'
+  return getConfiguredProviderCount(capability) > 0 ? 'configured' : 'unconfigured'
+}
+
+function getCapabilityBadge(capability: IntelligenceCapabilityConfig): TuffItemBadge {
+  const configuredCount = getConfiguredProviderCount(capability)
+  if (configuredCount > 0) {
+    return {
+      text: String(configuredCount),
+      icon: 'i-carbon-checkmark',
+      status: 'success'
+    }
+  }
+  return {
+    text: t('settings.intelligence.capabilityNotConfigured'),
+    icon: 'i-carbon-warning-alt',
+    status: 'muted'
+  }
+}
+
+function getCapabilityStatusDot(
+  capability: IntelligenceCapabilityConfig
+): TuffItemStatusDot | undefined {
+  if (getCapabilityStatus(capability) !== 'configured') return undefined
+  return {
+    class: 'is-active',
+    label: t('settings.intelligence.capabilitySummary', {
+      count: getConfiguredProviderCount(capability)
+    })
+  }
 }
 
 const capabilityTests = reactive<Record<string, CapabilityTestResult | null>>({})
@@ -249,6 +270,7 @@ async function handleCapabilityTest(
     search-id="capability-search"
     :search-placeholder="t('settings.intelligence.capabilitySearchPlaceholder')"
     :clear-label="t('common.close')"
+    :main-edge-blur="false"
   >
     <template #default>
       <!-- Loading skeleton -->
@@ -258,39 +280,20 @@ async function handleCapabilityTest(
 
       <!-- Capability list -->
       <div v-else class="capability-cards">
-        <div
+        <TuffItemTemplate
           v-for="capability in filteredCapabilities"
           :key="capability.id"
           class="capability-card"
-          :class="{
-            'capability-card--selected': selectedCapabilityId === capability.id,
-            'capability-card--configured': getCapabilityStatus(capability) === 'configured'
-          }"
+          :title="capability.label || capability.id"
+          :subtitle="capability.description"
+          :icon="getCapabilityIcon(capability)"
+          :selected="selectedCapabilityId === capability.id"
+          :top-badge="getCapabilityBadge(capability)"
+          :status-dot="getCapabilityStatusDot(capability)"
+          size="sm"
+          :aria-label="capability.label || capability.id"
           @click="handleSelectCapability(capability.id)"
-        >
-          <div class="capability-card__icon" :style="{ color: getCapabilityIconColor(capability) }">
-            <i :class="getCapabilityIcon(capability).value" />
-          </div>
-          <div class="capability-card__content">
-            <div class="capability-card__header">
-              <span class="capability-card__title">{{ capability.label || capability.id }}</span>
-              <span
-                v-if="getCapabilityStatus(capability) === 'configured'"
-                class="capability-card__badge capability-card__badge--success"
-              >
-                <i class="i-carbon-checkmark" />
-                {{ (capability.providers?.filter((p) => p.enabled !== false) || []).length }}
-              </span>
-              <span v-else class="capability-card__badge capability-card__badge--inactive">
-                <i class="i-carbon-warning-alt" />
-                {{ t('settings.intelligence.capabilityNotConfigured') }}
-              </span>
-            </div>
-            <p class="capability-card__description">
-              {{ capability.description }}
-            </p>
-          </div>
-        </div>
+        />
         <div v-if="filteredCapabilities.length === 0" class="capability-list-empty">
           <p>{{ t('settings.intelligence.capabilityListEmpty') }}</p>
         </div>
@@ -335,116 +338,16 @@ async function handleCapabilityTest(
 .capability-cards {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.5rem;
+  align-items: stretch;
   padding: 0.5rem;
 }
 
 .capability-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  padding: 1rem;
-  margin-bottom: 0.5rem;
-  border-radius: 0.75rem;
-  background: var(--tx-fill-color-blank);
-  border: 1.5px solid var(--tx-border-color-light);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: var(--tx-color-primary-light-5);
-  }
-
-  &--selected {
-    background: linear-gradient(
-      135deg,
-      var(--tx-color-primary-light-9) 0%,
-      var(--tx-fill-color-blank) 100%
-    );
-    border-color: var(--tx-color-primary);
-    box-shadow: 0 2px 8px rgba(30, 136, 229, 0.15);
-  }
-
-  &--configured {
-    border-left: 3px solid var(--tx-color-success);
-  }
-}
-
-.capability-card__icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.625rem;
-  background: currentColor;
-  opacity: 0.12;
-  position: relative;
-
-  i {
-    position: absolute;
-    opacity: 1;
-    color: inherit;
-  }
-}
-
-.capability-card__content {
-  flex: 1;
-  min-width: 0;
-}
-
-.capability-card__header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.375rem;
-}
-
-.capability-card__title {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-  flex: 1;
-}
-
-.capability-card__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 0.375rem;
-  font-size: 0.6875rem;
-  font-weight: 600;
-  white-space: nowrap;
-
-  i {
-    font-size: 0.75rem;
-  }
-
-  &--success {
-    background: var(--tx-color-success-light-9);
-    color: var(--tx-color-success);
-  }
-
-  &--inactive {
-    background: var(--tx-fill-color);
-    color: var(--tx-text-color-secondary);
-  }
-}
-
-.capability-card__description {
-  margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: var(--tx-text-color-regular);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  flex: 0 0 auto;
+  align-self: stretch;
+  height: 3.75rem;
+  min-height: 0;
 }
 
 .capability-list-empty {

@@ -1,6 +1,6 @@
 import { createError, getQuery } from 'h3'
 import { requireSessionAuth } from '../../../utils/auth'
-import { evaluateDeviceAuthLongTermPolicy, getDeviceAuthByUserCode, isDeviceAuthExpired, readRequestIp } from '../../../utils/authStore'
+import { evaluateDeviceAuthLongTermPolicy, getDeviceAuthByUserCode, getUserById, isDeviceAuthExpired, readRequestIp } from '../../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -25,12 +25,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const { userId, sessionIssuedAt } = await requireSessionAuth(event)
-  const policy = await evaluateDeviceAuthLongTermPolicy(event, userId, request.deviceId, { sessionIssuedAt })
+  const [policy, user] = await Promise.all([
+    evaluateDeviceAuthLongTermPolicy(event, userId, request.deviceId, { sessionIssuedAt }),
+    getUserById(event, userId),
+  ])
   const requestIp = request.requestIp
   const currentIp = readRequestIp(event)
-  const ipMismatch = request.status === 'rejected'
+  const rawIpMismatch = request.status === 'rejected'
     ? request.rejectReason === 'ip_mismatch'
     : Boolean(requestIp && currentIp && requestIp !== currentIp)
+  const allowCliIpMismatch = request.clientType === 'cli' && Boolean(user?.allowCliIpMismatch)
+  const ipMismatch = rawIpMismatch && !allowCliIpMismatch
+  const ipMismatchWarning = rawIpMismatch && allowCliIpMismatch
 
   return {
     status: request.status,
@@ -43,6 +49,8 @@ export default defineEventHandler(async (event) => {
     longTermSessionFresh: policy.sessionFresh,
     longTermSessionWindowSeconds: policy.sessionWindowSeconds,
     ipMismatch,
+    ipMismatchWarning,
+    allowCliIpMismatch,
     rejectReason: request.rejectReason ?? null,
     rejectMessage: request.rejectMessage ?? null,
     requestIp: request.rejectRequestIp ?? requestIp ?? null,

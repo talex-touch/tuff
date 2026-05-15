@@ -91,43 +91,19 @@ import type {
 } from "./types/clipboard";
 
 import type {
-  ActivationState,
-  AllowClipboardRequest,
-  AllowClipboardResponse,
-  AllowInputMonitoringResponse,
   CancelSearchRequest,
   CancelSearchResponse,
-  ClearInputResponse,
   CoreBoxClearItemsPayload,
   CoreBoxExecuteRequest,
-  CoreBoxForwardKeyEvent,
-  CoreBoxGetBoundsResponse,
   CoreBoxInputChangeRequest,
-  CoreBoxInputVisibilityResponse,
   CoreBoxLayoutUpdateRequest,
   CoreBoxNoResultsPayload,
   CoreBoxSearchEndPayload,
   CoreBoxSearchUpdatePayload,
-  CoreBoxSetHeightRequest,
-  CoreBoxSetHeightResponse,
-  CoreBoxSetPositionOffsetRequest,
-  CoreBoxSetPositionOffsetResponse,
   CoreBoxTogglePinRequest,
   CoreBoxTogglePinResponse,
   CoreBoxTriggerPayload,
-  CoreBoxUIModeExitedPayload,
-  CoreBoxUIViewStateResponse,
-  DeactivateProviderRequest,
-  EnterUIModeRequest,
-  ExpandOptions,
-  FocusWindowResponse,
-  GetInputResponse,
-  GetProviderDetailsRequest,
   IProviderActivate,
-  ProviderDetail,
-  SetInputRequest,
-  SetInputResponse,
-  SetInputVisibilityRequest,
   TuffQuery,
   TuffSearchResult,
 } from "./types/core-box";
@@ -397,6 +373,7 @@ import type {
   PluginStorageListSyncItemsRequest,
   PluginStorageOpenFolderRequest,
   PluginStorageOpenInEditorRequest,
+  PluginStorageSecretHealthResponse,
   PluginStorageSecretRequest,
   PluginStorageSetFileRequest,
   PluginStorageSetSecretRequest,
@@ -464,6 +441,7 @@ import type {
   TransportPortUpgradeResponse,
 } from "./types/transport";
 import { AccountEvents, AuthEvents } from "./auth";
+import { CoreBoxRetainedEvents } from "./core-box-retained";
 import { SyncEvents } from "./sync";
 import { TerminalEvents } from "./terminal";
 import { OpenerEvents } from "./opener";
@@ -987,44 +965,48 @@ export const DivisionBoxEvents = {
  */
 export const CoreBoxEvents = {
   /**
+   * Beginner onboarding events.
+   */
+  beginner: {
+    /**
+     * Notify the onboarding renderer that the CoreBox shortcut was triggered.
+     */
+    shortcutTriggered: CoreBoxRetainedEvents.beginner.shortcutTriggered,
+  },
+
+  /**
    * UI control events.
    */
   ui: {
     /**
      * Show the CoreBox window.
      */
-    show: defineRawEvent<void, void>("core-box:show"),
+    show: CoreBoxRetainedEvents.ui.show,
 
     /**
      * Hide the CoreBox window.
      */
-    hide: defineRawEvent<void, void>("core-box:hide"),
+    hide: CoreBoxRetainedEvents.ui.hide,
 
     /**
      * Expand or collapse the CoreBox.
      */
-    expand: defineRawEvent<ExpandOptions | number, void>("core-box:expand"),
+    expand: CoreBoxRetainedEvents.ui.expand,
 
     /**
      * Focus the CoreBox window.
      */
-    focusWindow: defineRawEvent<void, FocusWindowResponse>(
-      "core-box:focus-window",
-    ),
+    focusWindow: CoreBoxRetainedEvents.ui.focusWindow,
 
     /**
      * Forward a key event to the attached UI view.
      */
-    forwardKeyEvent: defineRawEvent<CoreBoxForwardKeyEvent, void>(
-      "core-box:forward-key-event",
-    ),
+    forwardKeyEvent: CoreBoxRetainedEvents.ui.forwardKeyEvent,
 
     /**
      * Query current UI view state.
      */
-    getUIViewState: defineRawEvent<void, CoreBoxUIViewStateResponse>(
-      "core-box:get-ui-view-state",
-    ),
+    getUIViewState: CoreBoxRetainedEvents.ui.getUIViewState,
 
     /**
      * Notify renderer about CoreBox visibility or entrance mode changes.
@@ -1037,30 +1019,27 @@ export const CoreBoxEvents = {
     /**
      * Notify renderer that CoreBox was triggered by shortcut.
      */
-    shortcutTriggered: defineRawEvent<void, void>(
-      "core-box:shortcut-triggered",
-    ),
+    shortcutTriggered: CoreBoxRetainedEvents.ui.shortcutTriggered,
 
     /**
      * Notify renderer that UI mode exited.
      */
-    uiModeExited: defineRawEvent<CoreBoxUIModeExitedPayload, void>(
-      "core-box:ui-mode-exited",
-    ),
+    uiModeExited: CoreBoxRetainedEvents.ui.uiModeExited,
 
     /**
      * Hide the CoreBox input field.
      */
-    hideInput: defineRawEvent<void, CoreBoxInputVisibilityResponse>(
-      "core-box:hide-input",
-    ),
+    hideInput: CoreBoxRetainedEvents.ui.hideInput,
 
     /**
      * Show the CoreBox input field.
      */
-    showInput: defineRawEvent<void, CoreBoxInputVisibilityResponse>(
-      "core-box:show-input",
-    ),
+    showInput: CoreBoxRetainedEvents.ui.showInput,
+
+    /**
+     * Notify a plugin UI that its CoreBox surface should resume.
+     */
+    resume: CoreBoxRetainedEvents.ui.resume,
   },
 
   /**
@@ -1084,24 +1063,17 @@ export const CoreBoxEvents = {
     /**
      * Set the CoreBox window height.
      */
-    setHeight: defineRawEvent<CoreBoxSetHeightRequest, CoreBoxSetHeightResponse>(
-      "core-box:set-height",
-    ),
+    setHeight: CoreBoxRetainedEvents.layout.setHeight,
 
     /**
      * Set the CoreBox vertical position offset.
      */
-    setPositionOffset: defineRawEvent<
-      CoreBoxSetPositionOffsetRequest,
-      CoreBoxSetPositionOffsetResponse
-    >("core-box:set-position-offset"),
+    setPositionOffset: CoreBoxRetainedEvents.layout.setPositionOffset,
 
     /**
      * Get the current CoreBox window bounds.
      */
-    getBounds: defineRawEvent<void, CoreBoxGetBoundsResponse>(
-      "core-box:get-bounds",
-    ),
+    getBounds: CoreBoxRetainedEvents.layout.getBounds,
   },
 
   /**
@@ -1153,28 +1125,29 @@ export const CoreBoxEvents = {
    */
   input: {
     /**
+     * Focus the CoreBox input field.
+     */
+    focus: CoreBoxRetainedEvents.input.focus,
+
+    /**
      * Get current input value.
      */
-    get: defineRawEvent<void, GetInputResponse>("core-box:get-input"),
+    get: CoreBoxRetainedEvents.input.get,
 
     /**
      * Set input value.
      */
-    set: defineRawEvent<SetInputRequest, SetInputResponse>(
-      "core-box:set-input",
-    ),
+    set: CoreBoxRetainedEvents.input.set,
 
     /**
      * Clear input value.
      */
-    clear: defineRawEvent<void, ClearInputResponse>("core-box:clear-input"),
+    clear: CoreBoxRetainedEvents.input.clear,
 
     /**
      * Set input visibility.
      */
-    setVisibility: defineRawEvent<SetInputVisibilityRequest, void>(
-      "core-box:set-input-visibility",
-    ),
+    setVisibility: CoreBoxRetainedEvents.input.setVisibility,
 
     /**
      * Broadcast input changes from renderer.
@@ -1186,14 +1159,12 @@ export const CoreBoxEvents = {
     /**
      * Request input value from renderer.
      */
-    requestValue: defineRawEvent<void, GetInputResponse>(
-      "core-box:request-input-value",
-    ),
+    requestValue: CoreBoxRetainedEvents.input.requestValue,
 
     /**
      * Set query from main process.
      */
-    setQuery: defineRawEvent<SetInputRequest, void>("core-box:set-query"),
+    setQuery: CoreBoxRetainedEvents.input.setQuery,
   },
 
   /**
@@ -1221,23 +1192,17 @@ export const CoreBoxEvents = {
     /**
      * Deactivate a specific provider.
      */
-    deactivate: defineRawEvent<DeactivateProviderRequest, ActivationState>(
-      "core-box:deactivate-provider",
-    ),
+    deactivate: CoreBoxRetainedEvents.provider.deactivate,
 
     /**
      * Deactivate all providers.
      */
-    deactivateAll: defineRawEvent<void, ActivationState>(
-      "core-box:deactivate-providers",
-    ),
+    deactivateAll: CoreBoxRetainedEvents.provider.deactivateAll,
 
     /**
      * Get current activated providers.
      */
-    getActivated: defineRawEvent<void, ActivationState>(
-      "core-box:get-activated-providers",
-    ),
+    getActivated: CoreBoxRetainedEvents.provider.getActivated,
 
     /**
      * Get details for multiple providers.
@@ -1245,12 +1210,7 @@ export const CoreBoxEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    getDetails: defineRawEvent<GetProviderDetailsRequest, ProviderDetail[]>(
-      "core-box:get-provider-details",
-      {
-        batch: { enabled: true, windowMs: 50, mergeStrategy: "dedupe" },
-      },
-    ),
+    getDetails: CoreBoxRetainedEvents.provider.getDetails,
   },
 
   /**
@@ -1260,12 +1220,12 @@ export const CoreBoxEvents = {
     /**
      * Enter plugin UI mode.
      */
-    enter: defineRawEvent<EnterUIModeRequest, void>("core-box:enter-ui-mode"),
+    enter: CoreBoxRetainedEvents.uiMode.enter,
 
     /**
      * Exit plugin UI mode.
      */
-    exit: defineRawEvent<void, void>("core-box:exit-ui-mode"),
+    exit: CoreBoxRetainedEvents.uiMode.exit,
   },
 
   /**
@@ -1275,9 +1235,7 @@ export const CoreBoxEvents = {
     /**
      * Allow clipboard monitoring for specific types.
      */
-    allow: defineRawEvent<AllowClipboardRequest, AllowClipboardResponse>(
-      "core-box:allow-clipboard",
-    ),
+    allow: CoreBoxRetainedEvents.clipboard.allow,
 
     /**
      * Notify plugin UI that clipboard content changed while monitoring is enabled.
@@ -1294,10 +1252,82 @@ export const CoreBoxEvents = {
     /**
      * Allow input monitoring.
      */
-    allow: defineEvent("core-box")
-      .module("input-monitoring")
-      .event("allow")
-      .define<void, AllowInputMonitoringResponse>(),
+    allow: CoreBoxRetainedEvents.inputMonitoring.allow,
+  },
+
+  /**
+   * Recommendation events.
+   */
+  recommendation: {
+    /**
+     * Get CoreBox recommendations.
+     */
+    get: CoreBoxRetainedEvents.recommendation.get,
+
+    /**
+     * Aggregate time-aware recommendation stats.
+     */
+    aggregateTimeStats: CoreBoxRetainedEvents.recommendation.aggregateTimeStats,
+
+    /**
+     * Check whether an item is pinned.
+     */
+    isPinned: CoreBoxRetainedEvents.recommendation.isPinned,
+  },
+
+  /**
+   * Preview history events.
+   */
+  previewHistory: {
+    /**
+     * Show preview history.
+     */
+    show: CoreBoxRetainedEvents.previewHistory.show,
+
+    /**
+     * Hide preview history.
+     */
+    hide: CoreBoxRetainedEvents.previewHistory.hide,
+  },
+
+  /**
+   * Preview card events.
+   */
+  preview: {
+    /**
+     * Copy the current preview value.
+     */
+    copy: CoreBoxRetainedEvents.preview.copy,
+  },
+
+  /**
+   * CoreBox action panel events.
+   */
+  actionPanel: {
+    /**
+     * Open the action panel for an item.
+     */
+    open: CoreBoxRetainedEvents.actionPanel.open,
+  },
+
+  /**
+   * CoreBox MetaOverlay bridge events.
+   */
+  metaOverlay: {
+    /**
+     * Notify a plugin that one of its MetaOverlay actions was executed.
+     */
+    actionExecuted: CoreBoxRetainedEvents.metaOverlay.actionExecuted,
+
+    /**
+     * Ask the renderer to execute an item action.
+     */
+    itemAction: CoreBoxRetainedEvents.metaOverlay.itemAction,
+
+    /**
+     * Ask the renderer to open Flow Transfer for an item.
+     */
+    flowTransfer: CoreBoxRetainedEvents.metaOverlay.flowTransfer,
   },
 } as const;
 
@@ -1712,6 +1742,11 @@ export const PluginEvents = {
       .module("storage")
       .event("get-secret")
       .define<PluginStorageSecretRequest, string | null>(),
+
+    getSecretHealth: defineEvent("plugin")
+      .module("storage")
+      .event("get-secret-health")
+      .define<void, PluginStorageSecretHealthResponse>(),
 
     setSecret: defineEvent("plugin")
       .module("storage")
@@ -2680,6 +2715,7 @@ export const TransportEvents = {
 export const TuffEvents = {
   app: AppEvents,
   coreBox: CoreBoxEvents,
+  coreBoxRetained: CoreBoxRetainedEvents,
   storage: StorageEvents,
   plugin: PluginEvents,
   store: StoreEvents,
@@ -2704,4 +2740,4 @@ export const TuffEvents = {
 } as const;
 
 // Export MetaOverlayEvents separately for convenience
-export { AccountEvents, AppEvents, AuthEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };
+export { AccountEvents, AppEvents, AuthEvents, CoreBoxRetainedEvents, MetaOverlayEvents, OpenerEvents, SyncEvents, TerminalEvents };

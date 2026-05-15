@@ -12,7 +12,11 @@ import type { DetachedDivisionConfig } from './detached-division'
 import type { IClipboardOptions } from './types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
+import {
+  CoreBoxEvents,
+  CoreBoxRetainedEvents,
+  DivisionBoxEvents
+} from '@talex-touch/utils/transport/events'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
@@ -445,7 +449,7 @@ export function useSearch(
         if (inFlightQueryKey === queryKey) {
           inFlightQueryKey = null
         }
-        console.error('Recommendation search failed:', error)
+        devLog('Recommendation search failed:', error)
         resetSearchState()
       }
       return
@@ -568,7 +572,7 @@ export function useSearch(
 
       boxOptions.layout = undefined
     } catch (error) {
-      console.error('Search initiation failed:', error)
+      devLog('Search initiation failed:', error)
       if (inFlightQueryKey === queryKey) {
         inFlightQueryKey = null
       }
@@ -635,7 +639,7 @@ export function useSearch(
               }
         )
         .catch((error) => {
-          console.error('Execute failed:', error)
+          devLog('Execute failed:', error)
         })
       return
     }
@@ -745,7 +749,7 @@ export function useSearch(
         clipboardOptions.detectedAt = null
       }
     } catch (error) {
-      console.error('Execute failed:', error)
+      devLog('Execute failed:', error)
     } finally {
       loading.value = false
 
@@ -905,7 +909,8 @@ export function useSearch(
   const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
     const nextValue = typeof value === 'string' ? value : ''
     searchVal.value = nextValue
-    window.dispatchEvent(new CustomEvent('corebox:focus-input'))
+    window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
+    window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.legacy.focusInput.toEventName()))
   })
 
   let coreBoxShownHandler: (() => void) | null = null

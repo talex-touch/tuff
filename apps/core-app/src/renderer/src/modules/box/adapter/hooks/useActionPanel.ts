@@ -1,8 +1,11 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import {
+  ClipboardEvents,
+  CoreBoxEvents,
+  CoreBoxRetainedEvents
+} from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -23,12 +26,6 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   const { t } = useI18n()
   const transport = useTuffTransport()
   const appSdk = useAppSdk()
-  const openActionPanelEvent = defineRawEvent<{ item?: TuffItem }, void>(
-    'corebox:open-action-panel'
-  )
-  const metaOverlayItemActionEvent = defineRawEvent<{ actionId: string; item: TuffItem }, void>(
-    'meta-overlay:item-action'
-  )
 
   const visible = ref(false)
   const item = ref<TuffItem | null>(null)
@@ -64,7 +61,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         throw new Error(response?.error || 'Failed')
       }
     } catch (error) {
-      console.error('[useActionPanel] Failed to toggle pin:', error)
+      devLog('[useActionPanel] Failed to toggle pin:', error)
       toast.error(t('corebox.pinFailed', '固定失败'))
     }
   }
@@ -123,7 +120,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
             item: JSON.parse(JSON.stringify(targetItem))
           })
         } catch (error) {
-          console.error('[useActionPanel] Fallback execute failed:', error)
+          devLog('[useActionPanel] Fallback execute failed:', error)
           toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
         }
         break
@@ -138,13 +135,33 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   }
 
   // Channel listener for action panel
-  const unregOpen = transport.on(openActionPanelEvent, (data) => {
+  const openActionPanelHandler = (data: { item?: TuffItem }) => {
     if (data?.item) open(data.item)
-  })
-  const unregMetaOverlayAction = transport.on(metaOverlayItemActionEvent, (data) => {
+  }
+  let lastMetaOverlayActionKey = ''
+  const metaOverlayActionHandler = (data: { actionId?: string; item?: TuffItem }) => {
     if (!data?.item || !data.actionId) return
+    const actionKey = `${data.actionId}:${data.item.id ?? ''}:${data.item.source?.id ?? ''}`
+    if (actionKey === lastMetaOverlayActionKey) return
+    lastMetaOverlayActionKey = actionKey
+    queueMicrotask(() => {
+      if (lastMetaOverlayActionKey === actionKey) lastMetaOverlayActionKey = ''
+    })
     void executeAction(data.actionId, data.item)
-  })
+  }
+  const unregOpen = transport.on(CoreBoxEvents.actionPanel.open, openActionPanelHandler)
+  const unregLegacyOpen = transport.on(
+    CoreBoxRetainedEvents.legacy.openActionPanel,
+    openActionPanelHandler
+  )
+  const unregMetaOverlayAction = transport.on(
+    CoreBoxEvents.metaOverlay.itemAction,
+    metaOverlayActionHandler
+  )
+  const unregLegacyMetaOverlayAction = transport.on(
+    CoreBoxRetainedEvents.legacy.metaOverlayItemAction,
+    metaOverlayActionHandler
+  )
 
   // Window event listener for ⌘K - opens ActionPanel
   function handleTogglePinEvent(event: Event): void {
@@ -162,7 +179,9 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
 
   onBeforeUnmount(() => {
     unregOpen()
+    unregLegacyOpen()
     unregMetaOverlayAction()
+    unregLegacyMetaOverlayAction()
     window.removeEventListener('corebox:toggle-pin', handleTogglePinEvent)
   })
 

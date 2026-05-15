@@ -1,7 +1,10 @@
 import type { Ref } from 'vue'
-import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import {
+  ClipboardEvents,
+  CoreBoxEvents,
+  CoreBoxRetainedEvents
+} from '@talex-touch/utils/transport/events'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
@@ -27,9 +30,6 @@ interface UsePreviewHistoryOptions {
 export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   const { searchVal, focusInput, panelRef } = options
   const transport = useTuffTransport()
-  const coreboxShowHistoryEvent = defineRawEvent<void, void>('corebox:show-history')
-  const coreboxHideHistoryEvent = defineRawEvent<void, void>('corebox:hide-history')
-  const coreboxCopyPreviewEvent = defineRawEvent<{ value?: string }, void>('corebox:copy-preview')
 
   const activeIndex = ref(-1)
   const visible = ref(false)
@@ -78,7 +78,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
       devLog('[usePreviewHistory] Loaded items:', items.value.length)
       ensureSelection()
     } catch (error) {
-      console.error('[usePreviewHistory] Failed to load:', error)
+      devLog('[usePreviewHistory] Failed to load:', error)
       toast.error('加载最近处理失败')
     } finally {
       loading.value = false
@@ -171,17 +171,27 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   }
 
   // Channel listeners
-  const unregShow = transport.on(coreboxShowHistoryEvent, () => open())
-  const unregHide = transport.on(coreboxHideHistoryEvent, () => close())
-  const unregCopy = transport.on(coreboxCopyPreviewEvent, async (payload) => {
+  const unregShow = transport.on(CoreBoxEvents.previewHistory.show, () => open())
+  const unregLegacyShow = transport.on(CoreBoxRetainedEvents.legacy.showHistory, () => open())
+  const unregHide = transport.on(CoreBoxEvents.previewHistory.hide, () => close())
+  const unregLegacyHide = transport.on(CoreBoxRetainedEvents.legacy.hideHistory, () => close())
+  let lastCopyPreviewValue = ''
+  const copyPreviewHandler = async (payload: { value?: string }) => {
     if (!payload?.value) return
+    if (payload.value === lastCopyPreviewValue) return
+    lastCopyPreviewValue = payload.value
+    queueMicrotask(() => {
+      if (lastCopyPreviewValue === payload.value) lastCopyPreviewValue = ''
+    })
     try {
       await transport.send(ClipboardEvents.write, { text: payload.value })
       toast.success('结果已复制')
     } catch {
       toast.error('复制失败')
     }
-  })
+  }
+  const unregCopy = transport.on(CoreBoxEvents.preview.copy, copyPreviewHandler)
+  const unregLegacyCopy = transport.on(CoreBoxRetainedEvents.legacy.copyPreview, copyPreviewHandler)
 
   void transport
     .stream(ClipboardEvents.change, undefined, {
@@ -215,8 +225,11 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
 
   onBeforeUnmount(() => {
     unregShow()
+    unregLegacyShow()
     unregHide()
+    unregLegacyHide()
     unregCopy()
+    unregLegacyCopy()
     clipboardChangeStream?.cancel()
     clipboardChangeStream = null
     window.removeEventListener('mousedown', handleMouseDown)

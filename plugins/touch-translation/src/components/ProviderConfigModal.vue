@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import type { TranslationProvider } from '../types/translation'
-import { reactive, ref, watch } from 'vue'
+import { usePluginSecret } from '@talex-touch/utils/plugin/sdk'
+import { computed, reactive, ref, watch } from 'vue'
 import { BaiduTranslateProvider } from '../providers/baidu-translate'
 import { BingTranslateProvider } from '../providers/bing-translate'
 import { CustomTranslateProvider } from '../providers/custom-translate'
 import { DeepLTranslateProvider } from '../providers/deepl-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
+import { hasProviderSecretDefinition } from '../composables/useTranslationProvider'
 
 interface Props {
   show: boolean
@@ -18,6 +21,8 @@ const emit = defineEmits<{
   close: []
   save: [providerId: string, config: Record<string, any>]
 }>()
+
+const secret = usePluginSecret()
 
 const configForm = reactive({
   apiKey: '',
@@ -33,6 +38,67 @@ const configForm = reactive({
 
 const isTestingConnection = ref(false)
 const testResult = ref<{ success: boolean, message: string } | null>(null)
+const secretHealth = ref<SecureStoreHealthResponse | null>(null)
+const secretHealthLoading = ref(false)
+
+const providerUsesSecret = computed(() => {
+  return props.provider ? hasProviderSecretDefinition(props.provider.id) : false
+})
+
+const secretHealthStatus = computed(() => {
+  const health = secretHealth.value
+  if (secretHealthLoading.value && !health) {
+    return {
+      className: 'bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300',
+      dotClassName: 'bg-gray-400',
+      label: '正在检测密钥存储',
+      message: '保存前会确认本地密钥保护状态。',
+    }
+  }
+  if (!health || !health.available) {
+    return {
+      className: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
+      dotClassName: 'bg-red-500',
+      label: '密钥存储不可用',
+      message: health?.reason || '当前无法持久保护密钥，请稍后重试。',
+    }
+  }
+  if (health.degraded) {
+    return {
+      className: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
+      dotClassName: 'bg-amber-500',
+      label: '本地加密存储',
+      message: health.reason || '密钥将由本机 root 密钥加密保存。',
+    }
+  }
+  return {
+    className: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300',
+    dotClassName: 'bg-green-500',
+    label: '安全存储可用',
+    message: '密钥将保存到本地安全存储。',
+  }
+})
+
+async function refreshSecretHealth() {
+  if (!providerUsesSecret.value) {
+    return
+  }
+  secretHealthLoading.value = true
+  try {
+    secretHealth.value = await secret.health()
+  }
+  catch (error) {
+    secretHealth.value = {
+      backend: 'unavailable',
+      available: false,
+      degraded: true,
+      reason: error instanceof Error ? error.message : 'Failed to query secret storage health',
+    }
+  }
+  finally {
+    secretHealthLoading.value = false
+  }
+}
 
 // 监听 provider 变化，初始化表单
 watch(() => props.provider, (provider) => {
@@ -40,6 +106,13 @@ watch(() => props.provider, (provider) => {
     Object.assign(configForm, provider.config)
   }
   testResult.value = null
+}, { immediate: true })
+
+watch(() => [props.show, props.provider?.id] as const, ([show]) => {
+  if (!show || !providerUsesSecret.value) {
+    return
+  }
+  void refreshSecretHealth()
 }, { immediate: true })
 
 function closeModal() {
@@ -181,6 +254,20 @@ function getRequiredFields(): string[] {
 
             <!-- 配置表单 -->
             <div class="space-y-4">
+              <div
+                v-if="providerUsesSecret"
+                class="border rounded-lg p-3"
+                :class="secretHealthStatus.className"
+              >
+                <div class="flex items-center gap-2 text-sm font-medium">
+                  <div class="w-2 h-2 rounded-full" :class="secretHealthStatus.dotClassName" />
+                  <span>{{ secretHealthStatus.label }}</span>
+                </div>
+                <p class="mt-1 text-xs opacity-85">
+                  {{ secretHealthStatus.message }}
+                </p>
+              </div>
+
               <!-- Google 翻译 -->
               <div v-if="provider?.id === 'google'" class="text-sm text-gray-600 dark:text-gray-400">
                 <p class="mb-2">

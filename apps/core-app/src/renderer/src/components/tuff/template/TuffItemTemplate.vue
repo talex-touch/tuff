@@ -88,20 +88,6 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     @keydown.enter="handleClick"
     @keydown.space.prevent="handleClick"
   >
-    <!-- Top-Right Badge Slot -->
-    <div v-if="$slots['badge-top'] || topBadge" class="TuffItemTemplate-BadgeTop">
-      <slot name="badge-top">
-        <TuffStatusBadge
-          v-if="topBadge"
-          :text="topBadge.text"
-          :icon="topBadge.icon"
-          :status="topBadge.status"
-          :status-key="topBadge.statusKey"
-          size="sm"
-        />
-      </slot>
-    </div>
-
     <!-- Bottom-Right Badge Slot -->
     <div v-if="$slots['badge-bottom'] || bottomBadge" class="TuffItemTemplate-BadgeBottom">
       <slot name="badge-bottom">
@@ -150,8 +136,21 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     </div>
 
     <!-- Right Side Content -->
-    <div v-if="$slots.trailing" class="TuffItemTemplate-Trailing">
+    <div
+      v-if="$slots.trailing || $slots['badge-top'] || topBadge"
+      class="TuffItemTemplate-Trailing"
+    >
       <slot name="trailing" />
+      <slot name="badge-top">
+        <TuffStatusBadge
+          v-if="topBadge"
+          :text="topBadge.text"
+          :icon="topBadge.icon"
+          :status="topBadge.status"
+          :status-key="topBadge.statusKey"
+          size="sm"
+        />
+      </slot>
     </div>
   </div>
 </template>
@@ -161,10 +160,10 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   max-width: 100%;
-  border-radius: 18px;
-  border: 2px solid transparent;
+  border-radius: 16px;
+  border: 1px solid var(--tx-border-color-lighter);
   overflow: hidden;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
@@ -172,14 +171,11 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     cursor: pointer;
 
     &:hover:not(.is-disabled) {
-      border-color: var(--tx-border-color);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-      transform: translateY(-1px);
+      background-color: color-mix(in srgb, var(--tx-fill-color) 60%, transparent);
     }
 
     &:active:not(.is-disabled) {
-      transform: translateY(0) scale(0.985);
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      background-color: color-mix(in srgb, var(--tx-fill-color-light) 70%, transparent);
     }
   }
 
@@ -190,11 +186,9 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   }
 
   &.is-selected {
-    border-color: var(--tx-color-primary-light-3);
+    border-color: var(--tx-color-primary);
     background-color: color-mix(in srgb, var(--tx-color-primary) 5%, var(--tx-fill-color-blank));
-    box-shadow:
-      0 2px 12px rgba(var(--tx-color-primary-rgb), 0.12),
-      0 0 0 1px color-mix(in srgb, var(--tx-color-primary) 12%, transparent);
+    box-shadow: none;
   }
 
   &.is-disabled {
@@ -216,18 +210,21 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   }
 
   &.size-sm {
-    height: 3.5rem;
+    height: 3rem;
+    min-height: 3rem;
     padding: 0.375rem;
   }
 
   &.size-md {
-    height: 5rem;
+    height: 4rem;
+    min-height: 4rem;
     padding: 0.5rem;
   }
 
   &.size-lg {
-    height: 6rem;
-    padding: 0.75rem;
+    height: 4.75rem;
+    min-height: 4.75rem;
+    padding: 0.625rem;
   }
 }
 
@@ -253,6 +250,15 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
   .size-sm & {
+    width: 2rem;
+    height: 2rem;
+
+    :deep(.TuffIcon) {
+      font-size: 1rem;
+    }
+  }
+
+  .size-md & {
     width: 2.5rem;
     height: 2.5rem;
 
@@ -261,7 +267,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     }
   }
 
-  .size-md & {
+  .size-lg & {
     width: 3rem;
     height: 3rem;
 
@@ -270,30 +276,17 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     }
   }
 
-  .size-lg & {
-    width: 3.5rem;
-    height: 3.5rem;
-
-    :deep(.TuffIcon) {
-      font-size: 1.75rem;
-    }
-  }
-
   .TuffItemTemplate.is-selected & {
     background: linear-gradient(135deg, var(--tx-fill-color-light) 0%, var(--tx-fill-color) 100%);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-  }
-
-  .TuffItemTemplate:hover & {
-    transform: scale(1.04);
   }
 
   .TuffItemTemplate-StatusDot {
     position: absolute;
     right: -2px;
     bottom: -2px;
-    width: 0.625rem;
-    height: 0.625rem;
+    width: 0.5rem;
+    height: 0.5rem;
     border-radius: 50%;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 0 2px var(--tx-fill-color-blank);
@@ -319,22 +312,26 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 }
 
 .TuffItemTemplate-Content {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.2rem;
 }
 
 .TuffItemTemplate-Title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
+  min-width: 0;
 }
 
 .TuffItemTemplate-TitleText {
-  font-size: 1rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--tx-text-color-primary);
   overflow: hidden;
@@ -343,11 +340,11 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   transition: color 0.3s ease;
 
   .size-sm & {
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
   }
 
   .size-lg & {
-    font-size: 1.125rem;
+    font-size: 0.9375rem;
   }
 
   .TuffItemTemplate:hover & {
@@ -358,18 +355,18 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 .TuffItemTemplate-Subtitle {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
 }
 
 .TuffItemTemplate-SubtitleText {
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   color: var(--tx-text-color-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
   .size-sm & {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
   }
 
   .size-lg & {
@@ -378,11 +375,12 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 }
 
 .TuffItemTemplate-Trailing {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-left: auto;
+  max-width: 40%;
 }
 
 @keyframes pulse-success {
@@ -400,23 +398,15 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 }
 
 // Badges
-.TuffItemTemplate-BadgeTop,
 .TuffItemTemplate-BadgeBottom {
   position: absolute;
   right: 0.5rem;
+  bottom: 0.5rem;
   z-index: 10;
   transition: all 0.3s ease;
 
   &:hover {
     transform: scale(1.05);
   }
-}
-
-.TuffItemTemplate-BadgeTop {
-  top: 0.5rem;
-}
-
-.TuffItemTemplate-BadgeBottom {
-  bottom: 0.5rem;
 }
 </style>

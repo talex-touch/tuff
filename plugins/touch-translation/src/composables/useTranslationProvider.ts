@@ -19,13 +19,17 @@ import { TuffIntelligenceTranslateProvider } from '../providers/tuffintelligence
 const providers = reactive<Map<string, TranslationProvider>>(new Map())
 const isInitialized = ref(false)
 
-const PROVIDER_SECRET_FIELDS: Record<string, string[]> = {
+export const PROVIDER_SECRET_FIELDS: Record<string, string[]> = {
   deepl: ['apiKey'],
   bing: ['apiKey'],
   custom: ['apiKey'],
   baidu: ['secretKey'],
   tencent: ['secretId', 'secretKey'],
   caiyun: ['token'],
+}
+
+export function hasProviderSecretDefinition(providerId: string): boolean {
+  return (PROVIDER_SECRET_FIELDS[providerId] || []).length > 0
 }
 
 function getProviderSecretKey(providerId: string, field: string): string {

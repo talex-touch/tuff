@@ -173,11 +173,6 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-notification',
     },
     {
-      id: 'intelligence-agent',
-      label: t('dashboard.sections.menu.intelligenceLab', 'Intelligence Lab'),
-      icon: 'i-carbon-beaker',
-    },
-    {
       id: 'intelligence',
       label: t('dashboard.sections.menu.intelligence', 'Intelligence 模块'),
       icon: 'i-carbon-machine-learning-model',
@@ -188,24 +183,14 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-cloud-service-management',
     },
     {
-      id: 'adminCredits',
-      label: t('dashboard.sections.menu.adminCredits', 'AI 积分'),
-      icon: 'i-carbon-currency',
-    },
-    {
       id: 'images',
       label: t('dashboard.sections.menu.images', 'Resources'),
       icon: 'i-carbon-image',
     },
     {
       id: 'users',
-      label: t('dashboard.sections.menu.users', 'User Management'),
+      label: t('dashboard.sections.menu.accounts', 'Account Management'),
       icon: 'i-carbon-user-avatar',
-    },
-    {
-      id: 'subscriptions',
-      label: t('dashboard.sections.menu.subscriptions', 'Subscription Management'),
-      icon: 'i-carbon-certificate',
     },
     {
       id: 'audits',
@@ -214,13 +199,8 @@ const adminMenuItems = computed(() => {
     },
     {
       id: 'reviews',
-      label: t('dashboard.sections.menu.reviews', 'Review Moderation'),
+      label: t('dashboard.sections.menu.comments', 'Comment Management'),
       icon: 'i-carbon-chat',
-    },
-    {
-      id: 'doc-comments',
-      label: t('dashboard.sections.menu.docComments', 'Doc Comments'),
-      icon: 'i-carbon-chat-launch',
     },
     {
       id: 'analytics',
@@ -252,23 +232,23 @@ const activeSection = computed(() => {
   if (route.path.startsWith('/dashboard/admin/users'))
     return 'users'
   if (route.path.startsWith('/dashboard/admin/subscriptions'))
-    return 'subscriptions'
+    return 'users'
   if (route.path.startsWith('/dashboard/admin/audits'))
     return 'audits'
   if (route.path.startsWith('/dashboard/admin/codes'))
-    return 'subscriptions'
+    return 'users'
   if (route.path.startsWith('/dashboard/admin/reviews'))
     return 'reviews'
   if (route.path.startsWith('/dashboard/admin/doc-comments'))
-    return 'doc-comments'
+    return 'reviews'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
   if (route.path.startsWith('/dashboard/watermark'))
     return 'watermark'
   if (route.path.startsWith('/dashboard/admin/credits'))
-    return 'adminCredits'
+    return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/intelligence-agent'))
-    return 'intelligence-agent'
+    return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/provider-registry'))
     return 'provider-registry'
   if (route.path.startsWith('/dashboard/admin/intelligence'))

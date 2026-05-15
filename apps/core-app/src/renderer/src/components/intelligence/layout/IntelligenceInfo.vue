@@ -29,6 +29,7 @@ import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
@@ -48,6 +49,8 @@ const emits = defineEmits<{
   update: [provider: IntelligenceProviderConfig]
   test: []
   delete: []
+  duplicate: []
+  editBasic: []
 }>()
 
 const { t } = useI18n()
@@ -58,9 +61,6 @@ const testResult = ref<TestResult | null>(props.testResult || null)
 const isTesting = ref(props.isTesting || false)
 
 const isModelConfigDisabled = computed(() => {
-  if (isNexusManagedProvider.value) {
-    return false
-  }
   if (localProvider.value.type === 'local') {
     return false
   }
@@ -81,6 +81,12 @@ const nexusStatusDescription = computed(() =>
   isLoggedIn.value
     ? t('settings.intelligence.nexusInvokeReadyDesc')
     : t('settings.intelligence.nexusInvokeLoginDesc')
+)
+
+const nexusCallStateText = computed(() =>
+  isLoggedIn.value
+    ? t('settings.intelligence.nexusInvokeAutoCall')
+    : t('settings.intelligence.nexusInvokeFallback')
 )
 
 watch(
@@ -112,6 +118,14 @@ function handleDelete() {
   emits('delete')
 }
 
+function handleDuplicate() {
+  emits('duplicate')
+}
+
+function handleEditBasic() {
+  emits('editBasic')
+}
+
 /**
  * Handle configuration changes
  * Emits update event with the modified provider
@@ -132,7 +146,12 @@ async function handleLogin() {
 <template>
   <TouchScroll class="IntelligenceInfo-root h-full flex flex-col">
     <template #header>
-      <IntelligenceHeader :provider="localProvider" @delete="handleDelete" />
+      <IntelligenceHeader
+        :provider="localProvider"
+        @delete="handleDelete"
+        @duplicate="handleDuplicate"
+        @edit-basic="handleEditBasic"
+      />
     </template>
 
     <div role="region" :aria-label="t('intelligence.info.configurationPanel')" tabindex="0">
@@ -144,31 +163,24 @@ async function handleLogin() {
         active-icon="i-carbon-cloud-service-management"
         memory-name="aisdk-nexus-status"
       >
-        <div class="nexus-status">
-          <div class="nexus-status__line">
-            <i
-              :class="
-                isLoggedIn
-                  ? 'i-carbon-checkmark-filled text-[var(--tx-color-success)]'
-                  : 'i-carbon-warning-filled text-[var(--tx-color-warning)]'
-              "
-            />
-            <span>
-              {{
-                isLoggedIn
-                  ? t('settings.intelligence.nexusInvokeAutoCall')
-                  : t('settings.intelligence.nexusInvokeFallback')
-              }}
-            </span>
-          </div>
+        <TuffBlockSlot
+          :title="nexusCallStateText"
+          :description="isLoggedIn ? nexusStatusDescription : ''"
+          :default-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
+          :active-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
+          :active="isLoggedIn"
+          icon-size="18"
+          class="nexus-status-slot"
+        >
           <TxButton
             v-if="!isLoggedIn"
             class="nexus-status__login"
             variant="flat"
+            size="sm"
             native-type="button"
             :disabled="authLoadingState.isLoggingIn"
             :loading="authLoadingState.isLoggingIn"
-            @click="handleLogin"
+            @click.stop="handleLogin"
           >
             <i
               :class="
@@ -177,32 +189,34 @@ async function handleLogin() {
             />
             <span>{{ t('settings.intelligence.nexusInvokeLoginAction') }}</span>
           </TxButton>
-        </div>
+        </TuffBlockSlot>
       </TuffGroupBlock>
 
-      <TuffGroupBlock
-        :name="t('intelligence.config.api.title')"
-        :description="t('intelligence.config.api.description')"
-        default-icon="i-carbon-key"
-        active-icon="i-carbon-key"
-        memory-name="aisdk-api-config"
-      >
-        <IntelligenceApiConfig v-model="localProvider" @change="handleChange" />
-      </TuffGroupBlock>
+      <template v-if="!isNexusManagedProvider">
+        <TuffGroupBlock
+          :name="t('intelligence.config.api.title')"
+          :description="t('intelligence.config.api.description')"
+          default-icon="i-carbon-key"
+          active-icon="i-carbon-key"
+          memory-name="aisdk-api-config"
+        >
+          <IntelligenceApiConfig v-model="localProvider" @change="handleChange" />
+        </TuffGroupBlock>
 
-      <TuffGroupBlock
-        :name="t('intelligence.config.model.title')"
-        :description="t('intelligence.config.model.description')"
-        default-icon="i-carbon-model"
-        active-icon="i-carbon-model"
-        memory-name="aisdk-model-config"
-      >
-        <IntelligenceModelConfig
-          v-model="localProvider"
-          :disabled="isModelConfigDisabled"
-          @change="handleChange"
-        />
-      </TuffGroupBlock>
+        <TuffGroupBlock
+          :name="t('intelligence.config.model.title')"
+          :description="t('intelligence.config.model.description')"
+          default-icon="i-carbon-model"
+          active-icon="i-carbon-model"
+          memory-name="aisdk-model-config"
+        >
+          <IntelligenceModelConfig
+            v-model="localProvider"
+            :disabled="isModelConfigDisabled"
+            @change="handleChange"
+          />
+        </TuffGroupBlock>
+      </template>
 
       <TuffGroupBlock
         :name="t('intelligence.config.advanced.title')"
@@ -211,10 +225,15 @@ async function handleLogin() {
         active-icon="i-carbon-settings"
         memory-name="aisdk-advanced-config"
       >
-        <IntelligenceAdvancedConfig v-model="localProvider" @change="handleChange" />
+        <IntelligenceAdvancedConfig
+          v-model="localProvider"
+          :priority-only="isNexusManagedProvider"
+          @change="handleChange"
+        />
       </TuffGroupBlock>
 
       <TuffGroupBlock
+        v-if="!isNexusManagedProvider"
         :name="t('intelligence.config.rateLimit.title')"
         :description="t('intelligence.config.rateLimit.description')"
         default-icon="i-carbon-time"
@@ -228,25 +247,19 @@ async function handleLogin() {
 </template>
 
 <style lang="scss" scoped>
-.nexus-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
+.nexus-status-slot {
+  :deep(.TBlockSlot-Container) {
+    height: 48px;
+  }
 
-.nexus-status__line {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--tx-text-color-secondary);
-  font-size: 13px;
+  :deep(.TBlockSlot-Content > .TuffIcon) {
+    color: v-bind("isLoggedIn ? 'var(--tx-color-success)' : 'var(--tx-color-warning)'");
+  }
 }
 
 .nexus-status__login {
   flex-shrink: 0;
+  min-width: 112px;
 }
 
 .animate-spin {

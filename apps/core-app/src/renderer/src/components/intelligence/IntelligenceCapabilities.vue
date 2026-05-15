@@ -40,7 +40,6 @@ function handleViewMetrics(event: MouseEvent) {
 <template>
   <TuffGroupBlock
     :name="t('settings.intelligence.landing.capabilities.title')"
-    :description="t('settings.intelligence.landing.capabilities.desc')"
     default-icon="i-carbon-flow"
     active-icon="i-carbon-flow"
     memory-name="intelligence-capabilities"
@@ -48,7 +47,6 @@ function handleViewMetrics(event: MouseEvent) {
     <!-- 配置能力 -->
     <TuffBlockSlot
       :title="t('settings.intelligence.landing.capabilities.manageTitle')"
-      :description="t('settings.intelligence.landing.capabilities.manageDesc')"
       default-icon="i-carbon-settings"
       active-icon="i-carbon-settings"
       @click="handleCapabilitiesClick"
@@ -62,7 +60,6 @@ function handleViewMetrics(event: MouseEvent) {
     <!-- 能力审计 -->
     <TuffBlockSlot
       :title="t('settings.intelligence.landing.capabilities.auditTitle')"
-      :description="t('settings.intelligence.landing.capabilities.auditDesc')"
       default-icon="i-carbon-event-schedule"
       active-icon="i-carbon-event-schedule"
       @click="handleAudit"

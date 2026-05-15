@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { requestJson } from '~/utils/request'
 
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const toast = useToast()
 
 const loading = ref(false)
+const securityLoading = ref(false)
 const PRIVACY_STORAGE_KEY = 'tuff_privacy_settings'
 
 const privacySettings = ref({
@@ -13,6 +16,10 @@ const privacySettings = ref({
   crashReports: true,
   usageData: false,
   personalization: true,
+})
+
+const securitySettings = ref({
+  allowCliIpMismatch: false,
 })
 
 async function saveSettings() {
@@ -47,8 +54,57 @@ async function loadSettings() {
   }
 }
 
+async function loadSecuritySettings() {
+  securityLoading.value = true
+  try {
+    const data = await requestJson<{ settings?: { allowCliIpMismatch?: boolean } }>('/api/dashboard/security-settings')
+    securitySettings.value.allowCliIpMismatch = data.settings?.allowCliIpMismatch ?? false
+  }
+  catch (error) {
+    console.error('Failed to load security settings:', error)
+  }
+  finally {
+    securityLoading.value = false
+  }
+}
+
+async function saveSecuritySettings() {
+  const nextValue = securitySettings.value.allowCliIpMismatch
+  if (nextValue && import.meta.client) {
+    const confirmed = window.confirm(t('dashboard.privacy.cliIpMismatchConfirm', '允许 CLI 跨 IP 授权会降低授权来源校验强度。仅在代理、隧道或远程开发导致 IP 不一致时临时开启，确认继续？'))
+    if (!confirmed) {
+      securitySettings.value.allowCliIpMismatch = false
+      return
+    }
+  }
+
+  securityLoading.value = true
+  try {
+    const data = await requestJson<{ settings?: { allowCliIpMismatch?: boolean } }>('/api/dashboard/security-settings', {
+      method: 'PATCH',
+      body: { allowCliIpMismatch: nextValue },
+    })
+    securitySettings.value.allowCliIpMismatch = data.settings?.allowCliIpMismatch ?? false
+    toast.success(
+      t('dashboard.privacy.securitySaved', '安全设置已保存'),
+      securitySettings.value.allowCliIpMismatch
+        ? t('dashboard.privacy.cliIpMismatchEnabled', 'CLI 跨 IP 授权已开启，请仅在必要时使用。')
+        : t('dashboard.privacy.cliIpMismatchDisabled', 'CLI 跨 IP 授权已关闭。'),
+    )
+  }
+  catch (error) {
+    securitySettings.value.allowCliIpMismatch = !nextValue
+    console.error('Failed to save security settings:', error)
+    toast.error(t('dashboard.privacy.securitySaveFailed', '安全设置保存失败'))
+  }
+  finally {
+    securityLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadSettings()
+  void loadSecuritySettings()
 })
 </script>
 
@@ -135,6 +191,36 @@ onMounted(() => {
             </div>
           </div>
           <TuffSwitch v-model="privacySettings.personalization" @change="saveSettings" />
+        </label>
+      </div>
+    </section>
+
+    <!-- Security Settings -->
+    <section class="apple-card-lg p-6">
+      <h2 class="apple-heading-sm">
+        {{ t('dashboard.privacy.security', '安全设置') }}
+      </h2>
+      <p class="mt-1 text-sm text-black/50 dark:text-white/50">
+        {{ t('dashboard.privacy.securityDesc', '管理登录与设备授权相关的安全策略') }}
+      </p>
+
+      <div class="mt-6 space-y-4">
+        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+          <div class="flex items-start gap-3 pr-4">
+            <span class="i-carbon-terminal text-xl text-yellow-600 dark:text-yellow-300" />
+            <div>
+              <p class="text-sm text-black font-medium dark:text-white">
+                {{ t('dashboard.privacy.allowCliIpMismatch', '允许 CLI 跨 IP 授权') }}
+              </p>
+              <p class="mt-1 text-xs text-black/60 dark:text-white/60">
+                {{ t('dashboard.privacy.allowCliIpMismatchDesc', '开启后，当 CLI 发起授权的 IP 与浏览器确认授权的 IP 不一致时仍可继续，但授权页会提示风险警告。') }}
+              </p>
+              <p class="mt-2 text-xs text-yellow-700 font-medium dark:text-yellow-200">
+                {{ t('dashboard.privacy.allowCliIpMismatchWarning', '请勿随意开启：仅在代理、隧道、远程开发等明确可信场景下临时使用，用完建议关闭。') }}
+              </p>
+            </div>
+          </div>
+          <TuffSwitch v-model="securitySettings.allowCliIpMismatch" :disabled="securityLoading" @change="saveSecuritySettings" />
         </label>
       </div>
     </section>

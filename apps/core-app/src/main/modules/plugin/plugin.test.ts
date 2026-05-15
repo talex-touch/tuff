@@ -123,15 +123,19 @@ import { TouchPlugin } from './plugin'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { widgetManager } from './widget/widget-manager'
 
+function clearBoxItemMocks(): void {
+  boxItemManagerMock.clear.mockClear()
+  boxItemManagerMock.upsert.mockClear()
+  boxItemManagerMock.batchUpsert.mockClear()
+  boxItemManagerMock.update.mockClear()
+  boxItemManagerMock.delete.mockClear()
+  boxItemManagerMock.getBySource.mockClear()
+}
+
 describe('TouchPlugin.triggerFeature', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
-    boxItemManagerMock.clear.mockClear()
-    boxItemManagerMock.upsert.mockClear()
-    boxItemManagerMock.batchUpsert.mockClear()
-    boxItemManagerMock.update.mockClear()
-    boxItemManagerMock.delete.mockClear()
-    boxItemManagerMock.getBySource.mockClear()
+    clearBoxItemMocks()
     vi.restoreAllMocks()
   })
 
@@ -237,6 +241,47 @@ describe('TouchPlugin.triggerFeature', () => {
     )
   })
 
+  it('converts widget registration throws into a feature failure', async () => {
+    vi.mocked(getCoreBoxWindow).mockReturnValue(undefined)
+    vi.mocked(widgetManager.registerWidget).mockRejectedValue(new Error('missing widget bundle'))
+
+    const transport = {
+      sendToWindow: vi.fn().mockResolvedValue(undefined),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+
+    const feature = {
+      id: 'test-feature',
+      name: 'Test Feature',
+      desc: '',
+      interaction: { type: 'widget', path: '/widget.vue' }
+    } as IPluginFeature
+
+    await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toBe(false)
+    expect(plugin.issues.at(-1)).toMatchObject({
+      code: 'RUNTIME_ERROR',
+      source: 'runtime:registerWidget'
+    })
+  })
+
   it('exposes plugin secret API through the injected feature util', async () => {
     const transport = {
       invoke: vi.fn().mockResolvedValue({ success: true }),
@@ -262,6 +307,7 @@ describe('TouchPlugin.triggerFeature', () => {
     )
 
     await plugin.getFeatureUtil().plugin.secret.set('providers.baidu.secretKey', 'secret-value')
+    await plugin.getFeatureUtil().plugin.secret.health()
 
     expect(transport.invoke).toHaveBeenCalledWith(
       PluginEvents.storage.setSecret,
@@ -278,6 +324,13 @@ describe('TouchPlugin.triggerFeature', () => {
         }
       }
     )
+    expect(transport.invoke).toHaveBeenCalledWith(PluginEvents.storage.getSecretHealth, undefined, {
+      plugin: {
+        name: 'test-plugin',
+        uniqueKey: expect.any(String),
+        verified: expect.any(Boolean)
+      }
+    })
   })
 })
 
@@ -333,12 +386,7 @@ describe('TouchPlugin.setRuntime', () => {
 describe('TouchPlugin.enable', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
-    boxItemManagerMock.clear.mockClear()
-    boxItemManagerMock.upsert.mockClear()
-    boxItemManagerMock.batchUpsert.mockClear()
-    boxItemManagerMock.update.mockClear()
-    boxItemManagerMock.delete.mockClear()
-    boxItemManagerMock.getBySource.mockClear()
+    clearBoxItemMocks()
     vi.restoreAllMocks()
   })
 

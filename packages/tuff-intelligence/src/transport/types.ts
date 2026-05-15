@@ -1,7 +1,12 @@
 export interface TuffEvent<TRequest = void, TResponse = void> {
+  readonly __brand: 'TuffEvent'
+  readonly namespace: string
+  readonly module: string
+  readonly action: string
+  readonly _request: TRequest
+  readonly _response: TResponse
+  toString: () => string
   toEventName: () => string
-  _request?: TRequest
-  _response?: TResponse
 }
 
 export interface StreamOptions<TChunk> {

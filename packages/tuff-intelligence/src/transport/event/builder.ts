@@ -33,7 +33,7 @@ class TuffEventActionBuilder<
   ) {}
 
   define<TRequest = void, TResponse = void>(): TuffEvent<TRequest, TResponse> {
-    return createEvent(`${this.namespace}:${this.moduleName}:${this.action}`)
+    return createEvent<TRequest, TResponse>(this.namespace, this.moduleName, this.action)
   }
 }
 
@@ -43,10 +43,22 @@ function assertNonEmptyString(value: string, field: string): void {
   }
 }
 
-function createEvent<TRequest = void, TResponse = void>(eventName: string): TuffEvent<TRequest, TResponse> {
+function createEvent<TRequest = void, TResponse = void>(
+  namespace: string,
+  moduleName: string,
+  action: string,
+): TuffEvent<TRequest, TResponse> {
+  const eventName = `${namespace}:${moduleName}:${action}`
   return Object.freeze({
+    __brand: 'TuffEvent' as const,
+    namespace,
+    module: moduleName,
+    action,
+    _request: undefined as unknown as TRequest,
+    _response: undefined as unknown as TResponse,
+    toString: () => eventName,
     toEventName: () => eventName,
-  }) as TuffEvent<TRequest, TResponse>
+  })
 }
 
 export function defineEvent<TNamespace extends string>(

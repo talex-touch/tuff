@@ -4,6 +4,7 @@ import { TuffInput, TuffSelect, TuffSelectItem, TuffSwitch, TxButton, TxPaginati
 import { defineComponent, h, inject } from 'vue'
 import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
 import type { ProviderRegistryRecord, SceneRegistryRecord, SceneStrategyMode } from '~/utils/provider-registry-admin'
 
 definePageMeta({
@@ -1512,6 +1513,31 @@ function formatEndpointCandidates(list?: string[]) {
     </div>
 
     <TxTabs v-model="activeTab" placement="top" :content-scrollable="false" class="IntelligenceTabs">
+      <TxTabItem name="lab" icon-class="i-carbon-beaker">
+        <template #name>
+          {{ t('dashboard.sections.menu.intelligenceLab', 'Intelligence Lab') }}
+        </template>
+
+        <IntelligenceAgentWorkspace />
+      </TxTabItem>
+
+      <TxTabItem name="adminCredits" icon-class="i-carbon-currency">
+        <template #name>
+          {{ t('dashboard.sections.menu.adminCredits', 'AI 积分') }}
+        </template>
+
+        <div class="rounded-2xl border border-black/[0.06] p-5 dark:border-white/[0.08]">
+          <p class="text-sm text-black/60 dark:text-white/60">
+            {{ t('dashboard.sections.intelligence.adminCreditsHint', 'AI 积分已并入 Intelligence 管理分组，可从这里进入完整积分管理。') }}
+          </p>
+          <NuxtLink to="/dashboard/admin/credits" class="mt-4 inline-flex no-underline">
+            <TxButton variant="secondary" size="small">
+              {{ t('dashboard.sections.menu.adminCredits', 'AI 积分') }}
+            </TxButton>
+          </NuxtLink>
+        </div>
+      </TxTabItem>
+
       <TxTabItem name="overview" icon-class="i-carbon-dashboard">
         <template #name>
           {{ t('dashboard.sections.intelligence.tabs.overview') }}

@@ -121,7 +121,7 @@ const selectedProviderId = ref<string | null>(null)
 const selectedHistoryId = ref<number | null>(null)
 const expandedProviderErrorIds = ref<Set<string>>(new Set())
 const playingProviderId = ref<string | null>(null)
-const synthesizingProviderId = ref<string | null>(null)
+const synthesizingProviderIds = ref<Set<string>>(new Set())
 const synthesizedAudioUrls = ref<Record<string, string>>({})
 
 let activeAudio: HTMLAudioElement | null = null
@@ -634,11 +634,11 @@ async function toggleProviderAudio(provider: ProviderState): Promise<void> {
 
 async function synthesizeProviderAudio(provider: ProviderState): Promise<string> {
   const text = getProviderCopyText(provider)
-  if (!text || synthesizingProviderId.value === provider.id) {
+  if (!text || synthesizingProviderIds.value.has(provider.id)) {
     return ''
   }
 
-  synthesizingProviderId.value = provider.id
+  synthesizingProviderIds.value = new Set(synthesizingProviderIds.value).add(provider.id)
   try {
     const result = await intelligence.ttsSpeak({
       text,
@@ -665,9 +665,9 @@ async function synthesizeProviderAudio(provider: ProviderState): Promise<string>
     return ''
   }
   finally {
-    if (synthesizingProviderId.value === provider.id) {
-      synthesizingProviderId.value = null
-    }
+    const next = new Set(synthesizingProviderIds.value)
+    next.delete(provider.id)
+    synthesizingProviderIds.value = next
   }
 }
 
@@ -1082,10 +1082,10 @@ onBeforeUnmount(() => {
                 v-if="canSpeakProvider(provider)"
                 class="TranslationWidget__audio"
                 type="button"
-                :disabled="synthesizingProviderId === provider.id"
+                :disabled="synthesizingProviderIds.has(provider.id)"
                 @click.stop="toggleProviderAudio(provider)"
               >
-                {{ synthesizingProviderId === provider.id ? '生成中' : isProviderAudioPlaying(provider) ? '停止' : '朗读' }}
+                {{ synthesizingProviderIds.has(provider.id) ? '生成中' : isProviderAudioPlaying(provider) ? '停止' : '朗读' }}
               </button>
               <button
                 v-if="getProviderCopyText(provider)"

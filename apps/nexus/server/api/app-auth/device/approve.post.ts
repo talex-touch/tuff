@@ -1,6 +1,6 @@
 import { createError, readBody } from 'h3'
 import { requireSessionAuth } from '../../../utils/auth'
-import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, getDeviceAuthByUserCode, isDeviceAuthExpired, readRequestIp, recordDeviceAuthAudit, rejectDeviceAuthRequest } from '../../../utils/authStore'
+import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, evaluateDeviceAuthRateLimit, getDeviceAuthByUserCode, getUserById, isDeviceAuthExpired, readRequestIp, recordDeviceAuthAudit, rejectDeviceAuthRequest } from '../../../utils/authStore'
 
 interface ApproveBody {
   code?: string
@@ -75,7 +75,10 @@ export default defineEventHandler(async (event) => {
 
   const requestIp = request.requestIp
   const currentIp = readRequestIp(event)
-  if (requestIp && currentIp && requestIp !== currentIp) {
+  const ipMismatch = Boolean(requestIp && currentIp && requestIp !== currentIp)
+  const user = ipMismatch ? await getUserById(event, userId) : null
+  const allowCliIpMismatch = request.clientType === 'cli' && Boolean(user?.allowCliIpMismatch)
+  if (ipMismatch && !allowCliIpMismatch) {
     await rejectDeviceAuthRequest(event, code, {
       reason: 'ip_mismatch',
       message: 'Device authorization IP mismatch',
@@ -151,6 +154,9 @@ export default defineEventHandler(async (event) => {
     reason: grantType,
     metadata: {
       grantType,
+      ipMismatchAllowed: ipMismatch && allowCliIpMismatch,
+      requestIp: ipMismatch && allowCliIpMismatch ? requestIp : undefined,
+      currentIp: ipMismatch && allowCliIpMismatch ? currentIp : undefined,
     },
   })
 

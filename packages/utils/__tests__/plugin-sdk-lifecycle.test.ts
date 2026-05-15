@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DivisionBoxEvents } from '../transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents, DivisionBoxEvents } from '../transport/events'
 import { createDivisionBoxSDK } from '../plugin/sdk/division-box'
 import { createFeatureSDK } from '../plugin/sdk/feature-sdk'
 import { createMetaSDK } from '../plugin/sdk/meta-sdk'
@@ -142,9 +142,22 @@ describe('plugin sdk lifecycle', () => {
       priority: 1,
     })
 
-    expect(listenerCount('meta-overlay:action-executed')).toBe(1)
+    const canonicalEventName = CoreBoxEvents.metaOverlay.actionExecuted.toEventName()
+    const legacyEventName = CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted.toEventName()
 
-    await emit('meta-overlay:action-executed', {
+    expect(listenerCount(canonicalEventName)).toBe(1)
+    expect(listenerCount(legacyEventName)).toBe(1)
+
+    await emit(canonicalEventName, {
+      pluginId: 'demo-plugin',
+      actionId: 'action-1',
+      item: {
+        id: 'item-1',
+        title: { text: 'Item 1' },
+        source: { id: 'demo', name: 'Demo' },
+      },
+    })
+    await emit(legacyEventName, {
       pluginId: 'demo-plugin',
       actionId: 'action-1',
       item: {
@@ -156,9 +169,10 @@ describe('plugin sdk lifecycle', () => {
     expect(onExecute).toHaveBeenCalledTimes(1)
 
     sdk.dispose()
-    expect(listenerCount('meta-overlay:action-executed')).toBe(0)
+    expect(listenerCount(canonicalEventName)).toBe(0)
+    expect(listenerCount(legacyEventName)).toBe(0)
 
-    await emit('meta-overlay:action-executed', {
+    await emit(canonicalEventName, {
       pluginId: 'demo-plugin',
       actionId: 'action-1',
       item: {
@@ -188,9 +202,22 @@ describe('plugin sdk lifecycle', () => {
       priority: 1,
     })
 
-    expect(listenerCount('meta-overlay:action-executed')).toBe(1)
+    const canonicalEventName = CoreBoxEvents.metaOverlay.actionExecuted.toEventName()
+    const legacyEventName = CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted.toEventName()
 
-    await emit('meta-overlay:action-executed', {
+    expect(listenerCount(canonicalEventName)).toBe(1)
+    expect(listenerCount(legacyEventName)).toBe(1)
+
+    await emit(canonicalEventName, {
+      pluginId: 'quick-plugin',
+      actionId: 'quick-action-1',
+      item: {
+        id: 'item-qa-1',
+        title: { text: 'Item QA 1' },
+        source: { id: 'demo', name: 'Demo' },
+      },
+    })
+    await emit(legacyEventName, {
       pluginId: 'quick-plugin',
       actionId: 'quick-action-1',
       item: {
@@ -202,9 +229,10 @@ describe('plugin sdk lifecycle', () => {
     expect(onExecute).toHaveBeenCalledTimes(1)
 
     sdk.dispose()
-    expect(listenerCount('meta-overlay:action-executed')).toBe(0)
+    expect(listenerCount(canonicalEventName)).toBe(0)
+    expect(listenerCount(legacyEventName)).toBe(0)
 
-    await emit('meta-overlay:action-executed', {
+    await emit(canonicalEventName, {
       pluginId: 'quick-plugin',
       actionId: 'quick-action-1',
       item: {

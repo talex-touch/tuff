@@ -29,6 +29,12 @@ import { buildFeatureSearchTokens } from './feature-search-tokens'
 
 const pluginFeaturesLog = getLogger('plugin-system')
 
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' ? code : undefined
+}
+
 function isCommandMatch(command: IFeatureCommand, queryText: string): boolean {
   if (!command.type) {
     return true
@@ -249,7 +255,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
       searchEngineCore.activateProviders([activation])
 
-      await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
+      try {
+        await PluginViewLoader.loadPluginView(plugin as TouchPlugin, feature, query)
+      } catch (error) {
+        pluginFeaturesLog.error('[PluginFeaturesAdapter] webcontent feature execute failed:', error)
+        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        return null
+      }
 
       if (
         plugin.issues.some(
@@ -266,6 +278,21 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     const query: TuffQuery = searchQuery ? { ...searchQuery } : { text: '' }
+    const executeStart = Date.now()
+    const logExecuteBreadcrumb = (
+      stage: string,
+      extra?: { durationMs?: number; errorCode?: string }
+    ) => {
+      pluginFeaturesLog.debug('[Breadcrumb] feature execute adapter', {
+        meta: {
+          pluginName,
+          featureId,
+          stage,
+          durationMs: extra?.durationMs,
+          errorCode: extra?.errorCode
+        }
+      })
+    }
 
     // For push-mode features, pre-activate BEFORE triggering to ensure
     // items pushed during onFeatureTriggered have correct activation state
@@ -289,7 +316,19 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
       searchEngineCore.activateProviders([activation])
 
-      const shouldActivate = await plugin.triggerFeature(feature, query)
+      logExecuteBreadcrumb('push-trigger-start')
+      let shouldActivate: boolean | void
+      try {
+        shouldActivate = await plugin.triggerFeature(feature, query)
+      } catch (error) {
+        pluginFeaturesLog.error('[PluginFeaturesAdapter] push feature execute failed:', error)
+        logExecuteBreadcrumb('push-trigger-error', {
+          durationMs: Date.now() - executeStart,
+          errorCode: getErrorCode(error)
+        })
+        searchEngineCore.deactivateProvider(`${this.id}:${pluginName}`)
+        return null
+      }
 
       if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
         // Deactivate if feature explicitly returns false
@@ -297,17 +336,30 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         return null
       }
 
+      logExecuteBreadcrumb('push-trigger-complete', { durationMs: Date.now() - executeStart })
       return activation
     }
 
     // For non-push features, use original flow
-    const shouldActivate = await plugin.triggerFeature(feature, query)
+    logExecuteBreadcrumb('trigger-start')
+    let shouldActivate: boolean | void
+    try {
+      shouldActivate = await plugin.triggerFeature(feature, query)
+    } catch (error) {
+      pluginFeaturesLog.error('[PluginFeaturesAdapter] feature execute failed:', error)
+      logExecuteBreadcrumb('trigger-error', {
+        durationMs: Date.now() - executeStart,
+        errorCode: getErrorCode(error)
+      })
+      return null
+    }
 
     if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
       return null
     }
 
     if (typeof shouldActivate === 'boolean' && shouldActivate === true) {
+      logExecuteBreadcrumb('trigger-activate', { durationMs: Date.now() - executeStart })
       return {
         id: this.id,
         meta: {
@@ -319,6 +371,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
+    logExecuteBreadcrumb('trigger-complete', { durationMs: Date.now() - executeStart })
     return null
   }
 

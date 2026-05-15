@@ -96,27 +96,45 @@ function refreshCredits() {
 
     <div v-if="credits.isLoggedIn.value && credits.summary.value" class="credits-summary">
       <div class="credits-metric credits-metric--primary">
-        <span class="credits-metric__label">{{ t('creditsSummary.personalRemaining', '个人剩余') }}</span>
-        <strong class="credits-metric__value">{{ formatCredits(credits.personalRemaining.value) }}</strong>
+        <span class="credits-metric__label">{{
+          t('creditsSummary.personalRemaining', '个人剩余')
+        }}</span>
+        <strong class="credits-metric__value">{{
+          formatCredits(credits.personalRemaining.value)
+        }}</strong>
       </div>
       <div class="credits-metric">
-        <span class="credits-metric__label">{{ t('creditsSummary.personalUsed', '个人已用') }}</span>
-        <strong class="credits-metric__value">{{ formatCredits(credits.personalUsed.value) }}</strong>
+        <span class="credits-metric__label">{{
+          t('creditsSummary.personalUsed', '个人已用')
+        }}</span>
+        <strong class="credits-metric__value">{{
+          formatCredits(credits.personalUsed.value)
+        }}</strong>
       </div>
       <div class="credits-metric">
-        <span class="credits-metric__label">{{ t('creditsSummary.personalQuota', '个人总额') }}</span>
-        <strong class="credits-metric__value">{{ formatCredits(credits.personalQuota.value) }}</strong>
+        <span class="credits-metric__label">{{
+          t('creditsSummary.personalQuota', '个人总额')
+        }}</span>
+        <strong class="credits-metric__value">{{
+          formatCredits(credits.personalQuota.value)
+        }}</strong>
       </div>
       <div class="credits-metric">
-        <span class="credits-metric__label">{{ t('creditsSummary.teamRemaining', '团队池剩余') }}</span>
-        <strong class="credits-metric__value">{{ formatCredits(credits.teamRemaining.value) }}</strong>
+        <span class="credits-metric__label">{{
+          t('creditsSummary.teamRemaining', '团队池剩余')
+        }}</span>
+        <strong class="credits-metric__value">{{
+          formatCredits(credits.teamRemaining.value)
+        }}</strong>
       </div>
     </div>
 
     <TuffBlockSlot
       v-if="!credits.isLoggedIn.value"
       :title="t('creditsSummary.loginTitle', '需要登录')"
-      :description="t('creditsSummary.loginDescription', '请先登录 Tuff 账户以读取 Nexus credits summary。')"
+      :description="
+        t('creditsSummary.loginDescription', '请先登录 Tuff 账户以读取 Nexus credits summary。')
+      "
       default-icon="i-carbon-login"
       active-icon="i-carbon-login"
     />

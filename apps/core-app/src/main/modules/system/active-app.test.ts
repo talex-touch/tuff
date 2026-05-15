@@ -124,6 +124,54 @@ describe('active-app resolution', () => {
     })
   })
 
+  it('does not resolve app icons by default', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    mockExecFileSuccess(
+      JSON.stringify({
+        processId: 404,
+        displayName: 'Code',
+        executablePath: 'C:\\Program Files\\Code.exe',
+        windowTitle: 'workspace'
+      })
+    )
+
+    const result = await activeAppService.getActiveApp(true)
+
+    expect(result).toMatchObject({
+      displayName: 'Code',
+      icon: null
+    })
+    expect(getFileIconMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves app icons only when includeIcon is true', async () => {
+    withOSAdapterMock.mockImplementation(
+      async (options: Record<string, () => Promise<unknown>>) => {
+        return await options.win32()
+      }
+    )
+    mockExecFileSuccess(
+      JSON.stringify({
+        processId: 404,
+        displayName: 'Code',
+        executablePath: 'C:\\Program Files\\Code.exe',
+        windowTitle: 'workspace'
+      })
+    )
+
+    const result = await activeAppService.getActiveApp({ forceRefresh: true, includeIcon: true })
+
+    expect(result).toMatchObject({
+      displayName: 'Code',
+      icon: 'data:image/png;base64,icon'
+    })
+    expect(getFileIconMock).toHaveBeenCalledWith('C:\\Program Files\\Code.exe', { size: 'small' })
+  })
+
   it('parses Windows foreground JSON when PowerShell emits warning lines first', async () => {
     withOSAdapterMock.mockImplementation(
       async (options: Record<string, () => Promise<unknown>>) => {

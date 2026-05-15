@@ -64,6 +64,7 @@ async function ensureAuthSchema(db: D1Database) {
       merged_at TEXT,
       merged_by_user_id TEXT,
       disabled_at TEXT,
+      allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
   `).run()
@@ -282,6 +283,7 @@ async function ensureAuthSchema(db: D1Database) {
   await addUserColumnIfMissing('merged_at', 'merged_at TEXT')
   await addUserColumnIfMissing('merged_by_user_id', 'merged_by_user_id TEXT')
   await addUserColumnIfMissing('disabled_at', 'disabled_at TEXT')
+  await addUserColumnIfMissing('allow_cli_ip_mismatch', 'allow_cli_ip_mismatch INTEGER NOT NULL DEFAULT 0')
 
   const deviceAuthColumns = await db.prepare(`PRAGMA table_info(${DEVICE_AUTH_TABLE});`).all<{ name: string }>()
   const addDeviceAuthColumnIfMissing = async (column: string, ddl: string) => {
@@ -399,6 +401,7 @@ export interface AuthUser {
   mergedAt: string | null
   mergedByUserId: string | null
   disabledAt: string | null
+  allowCliIpMismatch: boolean
   createdAt: string
 }
 
@@ -580,6 +583,7 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
   if (!row)
     return null
   const emailState = (row.email_state as EmailState | null) ?? (row.email_verified ? 'verified' : 'unverified')
+  const allowCliIpMismatch = row.allow_cli_ip_mismatch === 1 || row.allow_cli_ip_mismatch === true || row.allow_cli_ip_mismatch === '1'
   return {
     id: row.id,
     email: row.email,
@@ -594,6 +598,7 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
     mergedAt: row.merged_at ?? null,
     mergedByUserId: row.merged_by_user_id ?? null,
     disabledAt: row.disabled_at ?? null,
+    allowCliIpMismatch,
     createdAt: row.created_at
   }
 }
@@ -690,6 +695,7 @@ export async function createUser(
     mergedAt: null,
     mergedByUserId: null,
     disabledAt: null,
+    allowCliIpMismatch: false,
     createdAt: now
   }
 }
@@ -719,6 +725,13 @@ export async function setEmailState(event: H3Event, userId: string, emailState: 
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   await db.prepare(`UPDATE ${USERS_TABLE} SET email_state = ? WHERE id = ?`).bind(emailState, userId).run()
+  return getUserById(event, userId)
+}
+
+export async function setAllowCliIpMismatch(event: H3Event, userId: string, allowed: boolean): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`UPDATE ${USERS_TABLE} SET allow_cli_ip_mismatch = ? WHERE id = ?`).bind(allowed ? 1 : 0, userId).run()
   return getUserById(event, userId)
 }
 

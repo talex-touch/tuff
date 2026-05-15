@@ -44,6 +44,7 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
 
     expect(transport.send).toHaveBeenCalledWith(AppEvents.system.getActiveApp, {
       forceRefresh: true,
+      includeIcon: false,
     })
     expect(channel.send).not.toHaveBeenCalled()
     expect(result).toMatchObject({
@@ -70,6 +71,7 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
 
     expect(transport.send).toHaveBeenCalledWith(AppEvents.system.getActiveApp, {
       forceRefresh: false,
+      includeIcon: false,
     })
     expect(channel.send).not.toHaveBeenCalled()
   })
@@ -90,7 +92,32 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
     await expect(getTypedActiveAppSnapshot()).rejects.toThrow('typed unavailable')
     expect(transport.send).toHaveBeenCalledWith(AppEvents.system.getActiveApp, {
       forceRefresh: false,
+      includeIcon: false,
     })
     expect(channel.send).not.toHaveBeenCalled()
+  })
+
+  it('only requests app icon when includeIcon is explicit', async () => {
+    const channel = {
+      send: vi.fn(),
+    }
+    const transport = {
+      send: vi.fn(async () => ({
+        identifier: 'com.demo.app',
+        displayName: 'Demo',
+        platform: 'macos',
+        lastUpdated: 1,
+      })),
+    }
+
+    useChannelMock.mockReturnValue(channel)
+    createPluginTuffTransportMock.mockReturnValue(transport)
+
+    await getActiveAppSnapshot({ includeIcon: true })
+
+    expect(transport.send).toHaveBeenCalledWith(AppEvents.system.getActiveApp, {
+      forceRefresh: false,
+      includeIcon: true,
+    })
   })
 })

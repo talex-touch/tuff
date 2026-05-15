@@ -101,13 +101,15 @@ describe('intelligence plugin', () => {
   })
 
   it('builds handoff-aware invoke metadata', () => {
+    const sessionId = intelligenceTest.buildHandoffSessionId('intelligence-ask')
+
     expect(
       intelligenceTest.buildInvokeOptions({
         featureId: 'intelligence-ask',
         requestId: 'req-1',
         capabilityId: 'text.chat',
         inputKinds: ['text', 'text'],
-        sessionId: 'corebox_ai_ask_intelligence-ask',
+        sessionId,
       }),
     ).toEqual({
       metadata: {
@@ -117,19 +119,22 @@ describe('intelligence plugin', () => {
         requestId: 'req-1',
         inputKinds: ['text'],
         capabilityId: 'text.chat',
-        sessionId: 'corebox_ai_ask_intelligence-ask',
-        handoffSessionId: 'corebox_ai_ask_intelligence-ask',
+        sessionId,
+        handoffSessionId: sessionId,
         handoffSource: 'corebox.touch-intelligence',
       },
     })
   })
 
-  it('builds stable handoff session ids', () => {
-    expect(intelligenceTest.buildHandoffSessionId('intelligence-ask')).toBe(
-      'corebox_ai_ask_intelligence-ask',
+  it('builds stable collision-resistant handoff session ids', () => {
+    expect(intelligenceTest.buildHandoffSessionId('intelligence-ask')).toMatch(
+      /^corebox_ai_ask_intelligence-ask_[0-9a-f]{8}$/,
     )
-    expect(intelligenceTest.buildHandoffSessionId('custom feature')).toBe(
-      'corebox_ai_ask_custom_feature',
+    expect(intelligenceTest.buildHandoffSessionId('custom feature')).toMatch(
+      /^corebox_ai_ask_custom_feature_[0-9a-f]{8}$/,
+    )
+    expect(intelligenceTest.buildHandoffSessionId('custom feature')).not.toBe(
+      intelligenceTest.buildHandoffSessionId('custom_feature'),
     )
   })
 

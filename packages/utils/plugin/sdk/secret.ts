@@ -1,5 +1,6 @@
 import { createPluginTuffTransport } from '../../transport'
 import { PluginEvents } from '../../transport/events'
+import type { SecureStoreHealthResponse } from '../../transport/events/types'
 import { ensureRendererChannel } from './channel'
 import { usePluginName } from './plugin-info'
 
@@ -22,6 +23,10 @@ export function usePluginSecret() {
 
     delete: async (key: string): Promise<{ success: boolean, error?: string }> => {
       return transport.send(PluginEvents.storage.deleteSecret, { pluginName, key })
+    },
+
+    health: async (): Promise<SecureStoreHealthResponse> => {
+      return transport.send(PluginEvents.storage.getSecretHealth)
     },
   }
 }

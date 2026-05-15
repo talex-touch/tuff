@@ -81,6 +81,9 @@ export class ToolKit {
 
   register<TInput, TOutput>(tool: TuffTool<TInput, TOutput>): TuffTool<TInput, TOutput> {
     const normalized = normalizeTool(tool)
+    if (this.tools.has(normalized.id)) {
+      throw new Error(`Tool "${normalized.id}" is already registered.`)
+    }
     this.tools.set(normalized.id, normalized as AnyTuffTool)
     return normalized
   }
@@ -151,7 +154,21 @@ export class ToolKit {
     }
 
     const approvalRequest = this.createApprovalRequest(normalized, parsedInput.data, context)
-    const approval = await this.approvalGate(approvalRequest)
+    let approval: TuffToolApprovalDecision
+    try {
+      approval = await this.approvalGate(approvalRequest)
+    }
+    catch (error) {
+      return {
+        ok: false,
+        toolId: normalized.id,
+        error: createToolError(
+          'TOOL_EXECUTION_FAILED',
+          error instanceof Error ? error.message : 'Tool approval failed.',
+          error,
+        ),
+      }
+    }
     if (!approval.approved) {
       return {
         ok: false,
@@ -253,11 +270,10 @@ export function toToolManifests(tools: AnyTuffTool[]): TuffToolManifest[] {
 
 export function toCapabilityManifest<TInput, TOutput>(
   tool: TuffTool<TInput, TOutput>,
+  options?: TuffToolKitOptions,
 ): CapabilityManifest<TInput, TuffToolInvocationResult<TOutput>> {
   const normalized = normalizeTool(tool)
-  const kit = createToolKit({
-    approvalGate: () => ({ approved: true }),
-  })
+  const kit = createToolKit(options)
 
   return {
     id: normalized.id,
