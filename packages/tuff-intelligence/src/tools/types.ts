@@ -3,8 +3,7 @@ import type { z } from 'zod'
 export type TuffToolRiskLevel = 'low' | 'medium' | 'high' | 'critical'
 export type TuffToolSource = 'builtin' | 'plugin' | 'mcp' | 'skill' | 'workflow'
 
-export type TuffToolErrorCode =
-  | 'TOOL_NOT_FOUND'
+export type TuffToolErrorCode = 'TOOL_NOT_FOUND'
   | 'TOOL_INPUT_INVALID'
   | 'TOOL_OUTPUT_INVALID'
   | 'TOOL_APPROVAL_DENIED'

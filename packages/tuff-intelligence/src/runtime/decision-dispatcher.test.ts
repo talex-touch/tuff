@@ -1,8 +1,8 @@
+import type { AgentEnvelope } from '../protocol/envelope'
+import type { TurnState } from '../protocol/session'
 import { describe, expect, it } from 'vitest'
 import { CapabilityRegistry } from '../registry/capability-registry'
 import { DecisionDispatcher } from './decision-dispatcher'
-import type { AgentEnvelope } from '../protocol/envelope'
-import type { TurnState } from '../protocol/session'
 
 function createState(): TurnState {
   return {

@@ -116,5 +116,5 @@ function normalize(value: string): string {
 
 function matches(candidate: string, query: string): boolean {
   const normalized = normalize(candidate)
-  return normalized === query || normalized.includes(query) || query.includes(normalized)
+  return normalized === query || normalized.includes(query)
 }

@@ -87,8 +87,6 @@ export default defineCachedEventHandler(async (event) => {
     })
     .sort((a, b) => a.title.localeCompare(b.title, a.locale === 'zh' ? 'zh-CN' : 'en'))
 
-  setHeader(event, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
-
   return rows
 }, {
   maxAge: 300,

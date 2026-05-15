@@ -20,6 +20,17 @@
   - `TuffPropsTable` 不再假设 `type/default` 一定是字符串，复制与可复制判定前会统一归一化 boolean/number/string，避免 docs prerender 在 `/docs/dev/components/floating` 遇到 boolean default 时因 `.trim()` 崩溃。
   - 目标是恢复 Cloudflare Pages / Nexus build；不改变文档表格数据结构与展示入口。
 
+### fix(intelligence): address tool and handoff review feedback
+
+- `apps/core-app/src/main/modules/ai/agents/tool-registry.ts`
+- `packages/tuff-intelligence/src/tools/*`
+- `packages/tuff-intelligence/src/registry/skill-registry.ts`
+- `plugins/touch-intelligence/index.js`
+- `apps/nexus/server/api/docs/sidebar-components.get.ts`
+  - CoreApp Tuff tool bridge 改为通过 `ToolKit` 执行，保留 Zod 输入校验与 approval gate；ToolKit 注册重复 id 会拒绝覆盖，approval gate 异常会返回结构化 tool error，capability bridge 不再默认绕过高风险工具审批。
+  - SkillRegistry 移除长 query 包含短 candidate 的过宽匹配；`touch-intelligence` handoff session id 加入 sha256 短摘要避免 slug 碰撞，并优先采用更长远端 handoff 历史。
+  - Nexus docs sidebar cached handler 移除冗余 `cache-control` 手写 header，继续由 Nitro cache options 生成。
+
 ### perf(nexus): prerender docs routes and smooth docs switching
 
 - `apps/nexus/nuxt.config.ts`

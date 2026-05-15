@@ -52,7 +52,7 @@
 
 ### P2+
 
-- Tuff 2.5.0 AI 桌面入口：CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation 与 OmniPanel Writing Tools MVP 已进入 dev 切片，后续 Workflow `Use Model`、完整 Review Queue 与 P0 模板。
+- Tuff 2.5.0 AI 桌面入口：CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation、Nexus docs prerender routes 与 OmniPanel Writing Tools MVP 已进入 dev 切片，后续 Workflow `Use Model`、完整 Review Queue 与 P0 模板。
 - Nexus Provider Registry / Scene 编排：已具备 secure store、Scene run、Dashboard run、AI mirror、health/usage ledger 与最小策略路由，后续补旧 AI provider 表退场与高级策略。
 - Native transport V1：补 macOS/Windows/Linux 真机 smoke 与打包依赖验证。
 - AttachUIView、Multi Attach View、Widget Sandbox、Flow Transfer、DivisionBox 等进入长期债务池。

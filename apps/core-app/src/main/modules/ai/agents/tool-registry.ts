@@ -5,7 +5,12 @@
  */
 
 import type { AgentPermission, AgentTool, JsonSchema, ToolResult } from '@talex-touch/utils'
-import type { AnyTuffTool, TuffTool, TuffToolInvocationResult } from '@talex-touch/tuff-intelligence'
+import type {
+  AnyTuffTool,
+  TuffTool,
+  TuffToolInvocationResult
+} from '@talex-touch/tuff-intelligence'
+import { createToolKit } from '@talex-touch/tuff-intelligence'
 import { z } from 'zod'
 import { createLogger } from '../../../utils/logger'
 
@@ -291,20 +296,20 @@ export function agentToolToTuffTool(
     inputSchema: jsonSchemaToZod(definition.inputSchema as JsonSchemaLike),
     metadata: {
       category: definition.category,
-      permissions: definition.permissions,
+      permissions: definition.permissions
     },
     execute: async (input, context) => {
       return await executor(input, {
         taskId: String(context.metadata?.taskId || context.traceId || ''),
         agentId: String(context.metadata?.agentId || context.caller || ''),
-        workingDirectory: typeof context.metadata?.workingDirectory === 'string'
-          ? context.metadata.workingDirectory
-          : undefined,
-        signal: context.metadata?.signal instanceof AbortSignal
-          ? context.metadata.signal
-          : undefined,
+        workingDirectory:
+          typeof context.metadata?.workingDirectory === 'string'
+            ? context.metadata.workingDirectory
+            : undefined,
+        signal:
+          context.metadata?.signal instanceof AbortSignal ? context.metadata.signal : undefined
       })
-    },
+    }
   }
 }
 
@@ -312,17 +317,23 @@ export function tuffToolResultToAgentToolResult(result: TuffToolInvocationResult
   if (result.ok) {
     return {
       success: true,
-      output: result.output,
+      output: result.output
     }
   }
 
   return {
     success: false,
-    error: result.error?.message || `Tool ${result.toolId} failed`,
+    error: result.error?.message || `Tool ${result.toolId} failed`
   }
 }
 
-function tuffToolToAgentTool(tool: AnyTuffTool): { definition: AgentTool; executor: ToolExecutorFn } {
+function tuffToolToAgentTool(tool: AnyTuffTool): {
+  definition: AgentTool
+  executor: ToolExecutorFn
+} {
+  const kit = createToolKit()
+  kit.register(tool)
+
   return {
     definition: {
       id: tool.id,
@@ -330,25 +341,29 @@ function tuffToolToAgentTool(tool: AnyTuffTool): { definition: AgentTool; execut
       description: tool.description,
       inputSchema: {
         type: 'object',
-        properties: {},
+        properties: {}
       },
       category: typeof tool.metadata?.category === 'string' ? tool.metadata.category : undefined,
       permissions: Array.isArray(tool.metadata?.permissions)
-        ? tool.metadata.permissions as AgentPermission[]
-        : undefined,
+        ? (tool.metadata.permissions as AgentPermission[])
+        : undefined
     },
     executor: async (input, ctx) => {
-      return await tool.execute(input, {
+      const result = await kit.invoke(tool.id, input, {
         caller: ctx.agentId,
         traceId: ctx.taskId,
         metadata: {
           taskId: ctx.taskId,
           agentId: ctx.agentId,
           workingDirectory: ctx.workingDirectory,
-          signal: ctx.signal,
-        },
+          signal: ctx.signal
+        }
       })
-    },
+      if (!result.ok) {
+        throw new Error(result.error?.message || `Tool ${tool.id} failed`)
+      }
+      return result.output
+    }
   }
 }
 
@@ -361,9 +376,10 @@ function jsonSchemaToZod(schema: JsonSchemaLike | undefined): z.ZodType {
     const shape: Record<string, z.ZodType> = {}
     for (const [key, value] of Object.entries(schema.properties ?? {})) {
       const fieldSchema = jsonSchemaToZod(value)
-      shape[key] = Array.isArray(schema.required) && schema.required.includes(key)
-        ? fieldSchema
-        : fieldSchema.optional()
+      shape[key] =
+        Array.isArray(schema.required) && schema.required.includes(key)
+          ? fieldSchema
+          : fieldSchema.optional()
     }
     return z.object(shape)
   }

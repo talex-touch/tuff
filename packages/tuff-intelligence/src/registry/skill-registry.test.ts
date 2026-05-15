@@ -44,7 +44,7 @@ describe('skillRegistry', () => {
       load: async () => 'review instructions',
     })
 
-    expect(registry.resolve('please write a changelog')).toEqual([
+    expect(registry.resolve('changelog')).toEqual([
       expect.objectContaining({
         skill: expect.objectContaining({
           id: 'release.notes',
@@ -52,5 +52,6 @@ describe('skillRegistry', () => {
         matchedBy: ['trigger'],
       }),
     ])
+    expect(registry.resolve('release notes generator')).toEqual([])
   })
 })

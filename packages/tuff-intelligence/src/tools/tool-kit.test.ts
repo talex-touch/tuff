@@ -34,6 +34,21 @@ describe('tuff intelligence tool kit', () => {
     expect(kit.list()).toEqual([registered])
   })
 
+  it('rejects duplicate tool ids', () => {
+    const kit = createToolKit()
+    const tool = defineTuffTool({
+      id: 'math.add',
+      name: 'Add',
+      description: 'Add two numbers.',
+      inputSchema: z.object({}),
+      execute: () => ({}),
+    })
+
+    kit.register(tool)
+
+    expect(() => kit.register(tool)).toThrow('Tool "math.add" is already registered.')
+  })
+
   it('invokes a low-risk tool successfully', async () => {
     const kit = createToolKit()
     kit.register(defineTuffTool({
@@ -159,6 +174,29 @@ describe('tuff intelligence tool kit', () => {
     expect(result.error?.code).toBe('TOOL_APPROVAL_DENIED')
   })
 
+  it('returns structured errors when approval gates fail', async () => {
+    const kit = createToolKit({
+      approvalGate: async () => {
+        throw new Error('approval backend unavailable')
+      },
+    })
+    kit.register(defineTuffTool({
+      id: 'file.write',
+      name: 'Write file',
+      description: 'Write a file.',
+      inputSchema: z.object({}),
+      execute: () => ({ ok: true }),
+    }))
+
+    const result = await kit.invoke('file.write', {})
+
+    expect(result.ok).toBe(false)
+    expect(result.error).toMatchObject({
+      code: 'TOOL_EXECUTION_FAILED',
+      message: 'approval backend unavailable',
+    })
+  })
+
   it('allows high-risk tools through a custom approval gate', async () => {
     const approvalGate = vi.fn(async request => ({
       approved: request.toolId === 'file.delete',
@@ -229,6 +267,46 @@ describe('tuff intelligence tool kit', () => {
       output: {
         text: 'hello',
       },
+    })
+  })
+
+  it('keeps capability manifests on the default approval gate', async () => {
+    const tool = defineTuffTool({
+      id: 'file.delete',
+      name: 'Delete file',
+      description: 'Delete a file.',
+      riskLevel: 'critical',
+      inputSchema: z.object({ path: z.string() }),
+      execute: () => ({ deleted: true }),
+    })
+
+    const capability = toCapabilityManifest(tool)
+    const result = await capability.invoke({ path: '/tmp/example.txt' }, { sessionId: 's1' })
+
+    expect(capability.annotations?.requiresApproval).toBe(true)
+    expect(result.ok).toBe(false)
+    expect(result.error?.code).toBe('TOOL_APPROVAL_DENIED')
+  })
+
+  it('allows capability manifests to use a caller-provided approval gate', async () => {
+    const tool = defineTuffTool({
+      id: 'file.delete',
+      name: 'Delete file',
+      description: 'Delete a file.',
+      riskLevel: 'critical',
+      inputSchema: z.object({ path: z.string() }),
+      execute: () => ({ deleted: true }),
+    })
+
+    const capability = toCapabilityManifest(tool, {
+      approvalGate: () => ({ approved: true }),
+    })
+    const result = await capability.invoke({ path: '/tmp/example.txt' }, { sessionId: 's1' })
+
+    expect(result).toEqual({
+      ok: true,
+      toolId: 'file.delete',
+      output: { deleted: true },
     })
   })
 

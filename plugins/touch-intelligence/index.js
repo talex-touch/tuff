@@ -77,7 +77,14 @@ function toSessionIdPart(value) {
 }
 
 function buildHandoffSessionId(featureId) {
-  return `${HANDOFF_SESSION_PREFIX}_${toSessionIdPart(resolveFeatureId(featureId)) || DEFAULT_FEATURE_ID}`
+  const resolvedFeatureId = resolveFeatureId(featureId)
+  const slug = toSessionIdPart(resolvedFeatureId) || DEFAULT_FEATURE_ID
+  const digest = crypto
+    .createHash('sha256')
+    .update(resolvedFeatureId)
+    .digest('hex')
+    .slice(0, 8)
+  return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`
 }
 
 function normalizeHistory(messages) {
@@ -184,7 +191,7 @@ async function ensureHandoffSession(client, session, params) {
       },
     })
     const restoredMessages = normalizeHistory(handoff?.context?.conversation?.messages)
-    if (session.history.length === 0 && restoredMessages.length > 0) {
+    if (restoredMessages.length > session.history.length) {
       session.history = keepNewestBusinessMessages(restoredMessages)
     }
   }
@@ -607,7 +614,7 @@ async function dispatchPrompt({
       requestId,
       inputKinds,
     })
-    if (resolvedHistory.length === 0 && session.history.length > 0) {
+    if (session.history.length > resolvedHistory.length) {
       resolvedHistory = cloneHistory(session.history)
     }
 
