@@ -2266,7 +2266,7 @@
       "userMessageLabel": "用户消息",
       "userMessagePlaceholder": "你好，帮我总结一下...",
       "promptVariablesLabel": "提示词变量（JSON）",
-      "promptVariablesPlaceholder": "{\"name\":\"Talex\"}",
+      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}",
       "capabilityFooterHint": "配置完成后，能力将自动生效",
       "capabilityConfigTitle": "能力配置",
       "capabilityConfigDesc": "配置该能力的渠道、模型和提示词等参数",

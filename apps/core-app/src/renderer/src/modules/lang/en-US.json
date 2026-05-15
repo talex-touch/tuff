@@ -1954,7 +1954,7 @@
       "userMessageLabel": "User message",
       "userMessagePlaceholder": "Hello, can you summarize this...",
       "promptVariablesLabel": "Prompt variables (JSON)",
-      "promptVariablesPlaceholder": "{\"name\":\"Talex\"}"
+      "promptVariablesPlaceholder": "{'{\"name\":\"Talex\"}'}"
     },
     "settingFileIndex": {
       "groupTitle": "File Index",
