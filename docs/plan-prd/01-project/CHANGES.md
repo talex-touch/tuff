@@ -24,6 +24,12 @@
   - Added focused tests to keep landing showcase MP4 assets below 2 MiB and to assert legacy GIF assets stay excluded from Cloudflare Pages output.
   - Current local build output drops from about 54 MiB to about 38 MiB on disk, with `dist/shots` reduced to about 1.7 MiB.
 
+### fix(nexus): keep app auth callback page alive for protocol handoff
+
+- `apps/nexus/app/pages/auth/app-callback.vue`
+  - Desktop app auth callback no longer closes the browser tab immediately on `blur` after firing the `tuff://auth/callback` protocol URL, avoiding premature close before the OS/app consumes the callback.
+  - The callback page now keeps a success/fallback state visible, delays auto-close, and exposes manual token copy/close actions for recovery.
+
 ### fix(nexus): prevent dashboard search overlay from mounting by default
 
 - `apps/nexus/app/app.vue`

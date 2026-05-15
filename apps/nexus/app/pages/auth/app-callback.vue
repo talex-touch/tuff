@@ -19,14 +19,16 @@ const sessionToken = ref('')
 const showDevMode = ref(false)
 const copied = ref(false)
 const protocolAttempted = ref(false)
-const autoCloseRequested = ref(false)
+const autoCloseScheduled = ref(false)
 let callbackGuardTimer: ReturnType<typeof setTimeout> | null = null
-let devModeTimer: ReturnType<typeof setTimeout> | null = null
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const APP_SCHEMA = 'tuff'
-const isDev = import.meta.dev
 const SESSION_FETCH_TIMEOUT_MS = 4500
 const CALLBACK_BOOTSTRAP_GUARD_MS = 2500
+const CALLBACK_FALLBACK_DELAY_MS = 4000
+const CALLBACK_AUTO_CLOSE_DELAY_MS = 12000
 
 function hasActiveSession(session: unknown) {
   const user = (session as { user?: unknown } | null | undefined)?.user
@@ -130,13 +132,10 @@ async function handleCallback() {
     protocolAttempted.value = true
     window.location.href = callbackUrl
 
-    // In dev mode, show fallback after a delay (protocol might not work)
-    if (isDev) {
-      devModeTimer = setTimeout(() => {
-        if (!autoCloseRequested.value)
-          showDevMode.value = true
-      }, 2000)
-    }
+    fallbackTimer = setTimeout(() => {
+      showDevMode.value = true
+    }, CALLBACK_FALLBACK_DELAY_MS)
+    scheduleAutoClose()
   }
   catch (error: any) {
     await ensureCallbackProcessingFeedback(callbackStartedAt)
@@ -163,30 +162,35 @@ async function handleCallback() {
   }
 }
 
-function cancelDevModePrompt() {
+function cancelFallbackPrompt() {
   showDevMode.value = false
-  if (devModeTimer) {
-    clearTimeout(devModeTimer)
-    devModeTimer = null
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer)
+    fallbackTimer = null
+  }
+}
+
+function scheduleAutoClose() {
+  if (autoCloseScheduled.value)
+    return
+  autoCloseScheduled.value = true
+  autoCloseTimer = setTimeout(() => {
+    window.close()
+  }, CALLBACK_AUTO_CLOSE_DELAY_MS)
+}
+
+function cancelAutoClose() {
+  autoCloseScheduled.value = false
+  if (autoCloseTimer) {
+    clearTimeout(autoCloseTimer)
+    autoCloseTimer = null
   }
 }
 
 function requestCloseTab() {
-  if (autoCloseRequested.value)
-    return
-  autoCloseRequested.value = true
-  cancelDevModePrompt()
+  cancelFallbackPrompt()
+  cancelAutoClose()
   window.close()
-}
-
-function handleWindowBlur() {
-  if (import.meta.server)
-    return
-  if (status.value !== 'success')
-    return
-  if (!protocolAttempted.value)
-    return
-  requestCloseTab()
 }
 
 async function copyToken() {
@@ -201,7 +205,6 @@ async function copyToken() {
 
 onMounted(() => {
   void handleCallback()
-  window.addEventListener('blur', handleWindowBlur)
   callbackGuardTimer = setTimeout(() => {
     if (status.value !== 'loading')
       return
@@ -220,14 +223,17 @@ watch(
 )
 
 onUnmounted(() => {
-  window.removeEventListener('blur', handleWindowBlur)
-  if (!callbackGuardTimer)
-    return
-  clearTimeout(callbackGuardTimer)
-  callbackGuardTimer = null
-  if (devModeTimer) {
-    clearTimeout(devModeTimer)
-    devModeTimer = null
+  if (callbackGuardTimer) {
+    clearTimeout(callbackGuardTimer)
+    callbackGuardTimer = null
+  }
+  if (fallbackTimer) {
+    clearTimeout(fallbackTimer)
+    fallbackTimer = null
+  }
+  if (autoCloseTimer) {
+    clearTimeout(autoCloseTimer)
+    autoCloseTimer = null
   }
 })
 </script>
@@ -260,15 +266,17 @@ onUnmounted(() => {
 
         <div v-if="showDevMode" class="w-full space-y-2 text-center">
           <p class="text-sm text-amber-200/95">
-            🔧 Dev Mode: Protocol handler may not work
+            {{ t('auth.appCallbackFallbackTitle', '如果 Tuff 没有自动完成登录，请保持本页打开并重试，或复制 token 手动完成。') }}
           </p>
-          <p class="text-xs text-white/65">
-            Copy the token and paste it in the app's dev console:
-          </p>
-          <code class="block max-h-24 overflow-auto text-xs text-white/85">{{ sessionToken }}</code>
-          <TxButton variant="primary" size="small" @click="copyToken">
-            {{ copied ? '✓ Copied!' : 'Copy Token' }}
-          </TxButton>
+          <code class="block max-h-24 overflow-auto break-all text-xs text-white/85">{{ sessionToken }}</code>
+          <div class="flex justify-center gap-2">
+            <TxButton variant="primary" size="small" @click="copyToken">
+              {{ copied ? '✓ Copied!' : 'Copy Token' }}
+            </TxButton>
+            <TxButton variant="ghost" size="small" @click="requestCloseTab">
+              {{ t('common.close', '关闭') }}
+            </TxButton>
+          </div>
         </div>
       </div>
 
