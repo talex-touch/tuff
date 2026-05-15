@@ -237,58 +237,85 @@ function closeDeleteConfirm() {
             />
           </TxButton>
         </template>
-        <TxDropdownItem @select="handleCopyId">
-          <TuffIcon :icon="copyIcon" :alt="t('settings.intelligence.copyProvider')" :size="18" />
-          <span class="ml-2">{{ t('settings.intelligence.copyProvider') }}</span>
+        <TxDropdownItem class="provider-action-item" @select="handleCopyId">
+          <span class="provider-action-item__content">
+            <TuffIcon :icon="copyIcon" :alt="t('settings.intelligence.copyProvider')" :size="18" />
+            <span>{{ t('settings.intelligence.copyProvider') }}</span>
+          </span>
         </TxDropdownItem>
-        <TxDropdownItem @select="handleCopyConfig">
-          <TuffIcon
-            :icon="configIcon"
-            :alt="t('settings.intelligence.copyProviderConfig')"
-            :size="18"
-          />
-          <span class="ml-2">{{ t('settings.intelligence.copyProviderConfig') }}</span>
+        <TxDropdownItem class="provider-action-item" @select="handleCopyConfig">
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="configIcon"
+              :alt="t('settings.intelligence.copyProviderConfig')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.copyProviderConfig') }}</span>
+          </span>
         </TxDropdownItem>
-        <TxDropdownItem @select="handleShareConfig">
-          <TuffIcon
-            :icon="shareIcon"
-            :alt="t('settings.intelligence.shareProviderConfig')"
-            :size="18"
-          />
-          <span class="ml-2">{{ t('settings.intelligence.shareProviderConfig') }}</span>
+        <TxDropdownItem class="provider-action-item" @select="handleShareConfig">
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="shareIcon"
+              :alt="t('settings.intelligence.shareProviderConfig')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.shareProviderConfig') }}</span>
+          </span>
         </TxDropdownItem>
-        <TxDropdownItem @select="handleExportConfig">
-          <TuffIcon
-            :icon="exportIcon"
-            :alt="t('settings.intelligence.exportProviderConfig')"
-            :size="18"
-          />
-          <span class="ml-2">{{ t('settings.intelligence.exportProviderConfig') }}</span>
+        <TxDropdownItem class="provider-action-item" @select="handleExportConfig">
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="exportIcon"
+              :alt="t('settings.intelligence.exportProviderConfig')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.exportProviderConfig') }}</span>
+          </span>
         </TxDropdownItem>
-        <TxDropdownItem v-if="!isNexusManagedProvider" @select="handleEditBasic">
-          <TuffIcon
-            :icon="editIcon"
-            :alt="t('settings.intelligence.editProviderBasic')"
-            :size="18"
-          />
-          <span class="ml-2">{{ t('settings.intelligence.editProviderBasic') }}</span>
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleEditBasic"
+        >
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="editIcon"
+              :alt="t('settings.intelligence.editProviderBasic')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.editProviderBasic') }}</span>
+          </span>
         </TxDropdownItem>
-        <TxDropdownItem v-if="!isNexusManagedProvider" @select="handleDuplicate">
-          <TuffIcon
-            :icon="copyIcon"
-            :alt="t('settings.intelligence.duplicateProvider')"
-            :size="18"
-          />
-          <span class="ml-2">{{ t('settings.intelligence.duplicateProvider') }}</span>
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item"
+          @select="handleDuplicate"
+        >
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="copyIcon"
+              :alt="t('settings.intelligence.duplicateProvider')"
+              :size="18"
+            />
+            <span>{{ t('settings.intelligence.duplicateProvider') }}</span>
+          </span>
         </TxDropdownItem>
-        <TxDropdownItem v-if="!isNexusManagedProvider" danger @select="handleDelete">
-          <TuffIcon
-            :icon="trashIcon"
-            :alt="t('settings.intelligence.deleteProviderConfig', { name: provider.name })"
-            :size="18"
-          />
-          <span class="ml-2">
-            {{ t('settings.intelligence.deleteProviderConfig', { name: provider.name }) }}
+        <TxDropdownItem
+          v-if="!isNexusManagedProvider"
+          class="provider-action-item provider-action-item--divided provider-action-item--danger"
+          danger
+          @select="handleDelete"
+        >
+          <span class="provider-action-item__content">
+            <TuffIcon
+              :icon="trashIcon"
+              :alt="t('settings.intelligence.deleteProviderConfig', { name: provider.name })"
+              :size="18"
+            />
+            <span>
+              {{ t('settings.intelligence.deleteProviderConfig', { name: provider.name }) }}
+            </span>
           </span>
         </TxDropdownItem>
       </TxDropdownMenu>
@@ -337,5 +364,57 @@ function closeDeleteConfirm() {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+}
+
+.provider-action-item {
+  --tx-card-item-padding: 0.625rem 0.75rem;
+}
+
+.provider-action-item :deep(.tx-card-item) {
+  align-items: center;
+}
+
+.provider-action-item :deep(.tx-card-item__top) {
+  align-items: center;
+}
+
+.provider-action-item :deep(.tx-card-item__title) {
+  display: flex;
+  align-items: center;
+  min-height: 1.375rem;
+  line-height: 1.375rem;
+}
+
+.provider-action-item__content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.provider-action-item__content :deep(.TuffIcon),
+.provider-action-item__content :deep(.tx-icon) {
+  flex: 0 0 auto;
+}
+
+.provider-action-item--divided {
+  position: relative;
+  margin-top: 0.375rem;
+  padding-top: 0.375rem;
+}
+
+.provider-action-item--divided::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0.75rem;
+  right: 0.75rem;
+  height: 1px;
+  background: var(--tx-border-color-lighter);
+}
+
+.provider-action-item--danger :deep(.tx-card-item__title),
+.provider-action-item--danger .provider-action-item__content {
+  color: var(--tx-color-danger);
 }
 </style>
