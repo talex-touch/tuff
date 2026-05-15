@@ -2,7 +2,7 @@ import type {
   IntelligenceVisionImageSource,
   IntelligenceVisionOcrBlock,
   IntelligenceVisionOcrResult,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/light'
 import type { H3Event } from 'h3'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import { createError } from 'h3'

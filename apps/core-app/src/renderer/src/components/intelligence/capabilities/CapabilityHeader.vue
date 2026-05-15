@@ -14,17 +14,25 @@ const capabilityType = computed(() => {
 
 <template>
   <header class="capability-header">
-    <div class="capability-header__content">
-      <div class="capability-header__meta">
-        <span class="capability-header__id">{{ capability.id }}</span>
-        <span class="capability-header__type-badge">{{ capabilityType }}</span>
+    <div v-if="$slots.notice" class="capability-header__notice">
+      <slot name="notice" />
+    </div>
+    <div class="capability-header__main">
+      <div class="capability-header__content">
+        <div class="capability-header__meta">
+          <span class="capability-header__id">{{ capability.id }}</span>
+          <span class="capability-header__type-badge">{{ capabilityType }}</span>
+        </div>
+        <h1 class="capability-header__title">
+          {{ capability.label || capability.id }}
+        </h1>
+        <p class="capability-header__description">
+          {{ capability.description }}
+        </p>
       </div>
-      <h1 class="capability-header__title">
-        {{ capability.label || capability.id }}
-      </h1>
-      <p class="capability-header__description">
-        {{ capability.description }}
-      </p>
+      <div v-if="$slots.actions" class="capability-header__actions">
+        <slot name="actions" />
+      </div>
     </div>
   </header>
 </template>
@@ -32,27 +40,44 @@ const capabilityType = computed(() => {
 <style lang="scss" scoped>
 .capability-header {
   display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem 0.75rem;
+  background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
+}
+
+.capability-header__notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.capability-header__main {
+  display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1.5rem;
-  padding: 1.5rem 1.5rem 1rem 1.5rem;
-  background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
+  gap: 1rem;
 }
 
 .capability-header__content {
   flex: 1;
+  min-width: 0;
 }
 
 .capability-header__meta {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.625rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .capability-header__id {
   font-size: 0.6875rem;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--tx-text-color-placeholder);
   font-weight: 600;
@@ -71,26 +96,30 @@ const capabilityType = computed(() => {
 }
 
 .capability-header__title {
-  font-size: 1.875rem;
+  font-size: 1rem;
   font-weight: 700;
-  margin: 0 0 0.875rem 0;
+  margin: 0 0 0.375rem;
   color: var(--tx-text-color-primary);
-  line-height: 1.2;
-  background: linear-gradient(
-    135deg,
-    var(--tx-text-color-primary) 0%,
-    var(--tx-text-color-regular) 100%
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  line-height: 1.35;
 }
 
 .capability-header__description {
+  display: -webkit-box;
   margin: 0;
   color: var(--tx-text-color-regular);
   max-width: 48rem;
-  line-height: 1.7;
-  font-size: 0.9375rem;
+  line-height: 1.45;
+  font-size: 0.8125rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.capability-header__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding-top: 0.25rem;
 }
 </style>

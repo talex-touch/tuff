@@ -2285,6 +2285,8 @@
       "capabilityBindingModelsDesc": "为每个渠道自定义模型顺序，优先尝试靠前的模型。",
       "capabilityPromptSectionTitle": "默认提示词",
       "capabilityPromptSectionDesc": "当调用该能力时默认追加的系统提示词，可为空。",
+      "testCapability": "运行测试",
+      "selectProvider": "选择渠道",
       "userMessageLabel": "用户消息",
       "userMessagePlaceholder": "你好，帮我总结一下...",
       "promptVariablesLabel": "提示词变量（JSON）",

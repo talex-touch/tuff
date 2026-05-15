@@ -2313,6 +2313,8 @@
       "capabilityBindingModelsDesc": "Customize the preferred models for each channel.",
       "capabilityPromptSectionTitle": "Default prompt",
       "capabilityPromptSectionDesc": "System prompt appended when the capability is invoked.",
+      "testCapability": "Run test",
+      "selectProvider": "Select channel",
       "manageModels": "Manage models",
       "editPrompt": "Edit prompt",
       "latestTestResult": "Latest test result",

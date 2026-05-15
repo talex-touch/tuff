@@ -2,9 +2,9 @@ import type {
   IntelligenceMessage,
   IntelligenceUsageInfo,
   TuffIntelligenceApprovalTicket,
-} from '@talex-touch/tuff-intelligence'
+} from '@talex-touch/tuff-intelligence/light'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
-import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence/light'
 import { createError, type H3Event } from 'h3'
 import { getUserById } from './authStore'
 import { consumeCredits } from './creditsStore'

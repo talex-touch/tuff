@@ -169,7 +169,7 @@ async function handleLogin() {
           :default-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
           :active-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
           :active="isLoggedIn"
-          icon-size="18"
+          :icon-size="18"
           class="nexus-status-slot"
         >
           <TxButton

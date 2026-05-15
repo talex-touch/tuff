@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createDocsPrerenderRoutes, normalizeDocsContentRoute } from './docs-prerender-routes'
+import { createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRoutes } from './nexus-prerender-routes'
 
 describe('docs prerender routes', () => {
   it('normalizes locale and markdown suffixes to canonical docs routes', () => {
@@ -31,5 +32,27 @@ describe('docs prerender routes', () => {
       '/docs/dev/components/button',
       '/docs/dev/components/index',
     ])
+  })
+
+  it('combines public pages, docs APIs, and scanned docs into Nexus prerender routes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nexus-prerender-routes-'))
+    const docsDir = join(root, 'content/docs/dev/components')
+    mkdirSync(docsDir, { recursive: true })
+    writeFileSync(join(docsDir, 'button.zh.mdc'), '# Button')
+
+    const routes = createNexusPrerenderRoutes(root)
+
+    expect(routes).toEqual(expect.arrayContaining([
+      ...publicPrerenderRoutes,
+      ...docsApiPrerenderRoutes,
+      '/docs/dev/components/button',
+    ]))
+    expect(routes.filter(route => route === '/docs')).toHaveLength(1)
+    expect(routes).not.toEqual(expect.arrayContaining([
+      '/store',
+      '/updates',
+      '/sign-in',
+      '/dashboard',
+    ]))
   })
 })

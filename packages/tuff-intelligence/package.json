@@ -25,6 +25,11 @@
       "import": "./src/client.ts",
       "default": "./src/client.ts"
     },
+    "./light": {
+      "types": "./src/light.ts",
+      "import": "./src/light.ts",
+      "default": "./src/light.ts"
+    },
     "./types/intelligence": {
       "types": "./src/types/intelligence.ts",
       "import": "./src/types/intelligence.ts",
