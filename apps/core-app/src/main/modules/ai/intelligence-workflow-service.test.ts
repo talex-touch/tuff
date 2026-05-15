@@ -32,6 +32,30 @@ function createRunNormalizer(): (run: WorkflowRunRecord) => WorkflowRunRecord {
   ).normalizeRunRecord.bind(service)
 }
 
+function createTemplateSeeder(existingWorkflows: WorkflowDefinition[] = []) {
+  const service = new IntelligenceWorkflowService()
+  const savedWorkflows: WorkflowDefinition[] = []
+  const existingById = new Map(existingWorkflows.map((workflow) => [workflow.id, workflow]))
+  const target = service as unknown as {
+    getWorkflow: (workflowId: string) => Promise<WorkflowDefinition | null>
+    saveWorkflow: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition>
+    seedBuiltinTemplates: () => Promise<void>
+  }
+
+  target.getWorkflow = vi.fn(async (workflowId: string) => existingById.get(workflowId) ?? null)
+  target.saveWorkflow = vi.fn(async (workflow: WorkflowDefinition) => {
+    savedWorkflows.push(workflow)
+    return workflow
+  })
+
+  return {
+    seedBuiltinTemplates: target.seedBuiltinTemplates.bind(service),
+    savedWorkflows,
+    getWorkflow: target.getWorkflow,
+    saveWorkflow: target.saveWorkflow
+  }
+}
+
 function createHydrators() {
   const service = new IntelligenceWorkflowService()
   const target = service as unknown as {
@@ -67,6 +91,103 @@ function createWorkflow(overrides: Partial<WorkflowDefinition> = {}): WorkflowDe
 }
 
 describe('IntelligenceWorkflowService workflow normalization', () => {
+  it('seeds all P0 builtin workflow templates with stable model steps', async () => {
+    const { seedBuiltinTemplates, savedWorkflows } = createTemplateSeeder()
+
+    await seedBuiltinTemplates()
+
+    expect(savedWorkflows.map((workflow) => workflow.id)).toEqual([
+      'builtin.organize-recent-clipboard',
+      'builtin.meeting-summary',
+      'builtin.batch-text-processing'
+    ])
+    expect(savedWorkflows.map((workflow) => workflow.metadata)).toMatchObject([
+      {
+        builtin: true,
+        template: true,
+        category: 'clipboard',
+        templateVersion: 1
+      },
+      {
+        builtin: true,
+        template: true,
+        category: 'meeting',
+        templateVersion: 1
+      },
+      {
+        builtin: true,
+        template: true,
+        category: 'batch-text',
+        templateVersion: 1
+      }
+    ])
+    expect(savedWorkflows.flatMap((workflow) => workflow.steps)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'model',
+          input: expect.objectContaining({ capabilityId: 'text.chat' })
+        }),
+        expect.objectContaining({
+          kind: 'model',
+          input: expect.objectContaining({ capabilityId: 'text.summarize' })
+        })
+      ])
+    )
+    expect(
+      savedWorkflows.flatMap((workflow) => workflow.steps).every((step) => step.kind === 'model')
+    ).toBe(true)
+  })
+
+  it('updates existing builtin templates while preserving user-owned workflows', async () => {
+    const existingBuiltin = createWorkflow({
+      id: 'builtin.meeting-summary',
+      name: 'Old Meeting Template',
+      createdAt: 123,
+      metadata: {
+        builtin: true,
+        template: true,
+        category: 'meeting',
+        templateVersion: 0
+      }
+    })
+    const userOwnedSameId = createWorkflow({
+      id: 'builtin.batch-text-processing',
+      name: 'User Copy With Reserved ID',
+      createdAt: 456,
+      metadata: {
+        builtin: false,
+        template: true,
+        category: 'batch-text'
+      }
+    })
+    const { seedBuiltinTemplates, savedWorkflows } = createTemplateSeeder([
+      existingBuiltin,
+      userOwnedSameId
+    ])
+
+    await seedBuiltinTemplates()
+
+    expect(savedWorkflows.map((workflow) => workflow.id)).toEqual([
+      'builtin.organize-recent-clipboard',
+      'builtin.meeting-summary'
+    ])
+    expect(
+      savedWorkflows.find((workflow) => workflow.id === 'builtin.meeting-summary')
+    ).toMatchObject({
+      name: '会议纪要 / 摘要',
+      createdAt: 123,
+      metadata: {
+        builtin: true,
+        template: true,
+        category: 'meeting',
+        templateVersion: 1
+      }
+    })
+    expect(savedWorkflows.some((workflow) => workflow.id === 'builtin.batch-text-processing')).toBe(
+      false
+    )
+  })
+
   it('rejects unsupported workflow step kinds instead of coercing to prompt', () => {
     const normalizeWorkflowDefinition = createServiceNormalizer()
 

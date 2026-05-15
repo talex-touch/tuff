@@ -56,6 +56,8 @@ export interface WorkflowExecutionContext {
 
 type WorkflowExecutor = (ctx: WorkflowExecutionContext) => Promise<WorkflowRunRecord>
 
+const BUILTIN_WORKFLOW_TEMPLATE_VERSION = 1
+
 function now(): number {
   return Date.now()
 }
@@ -113,6 +115,50 @@ function normalizeToolSource(value: unknown): ToolSource {
   throw new Error(`Unsupported workflow tool source: ${String(value)}`)
 }
 
+function createDefaultManualTrigger(): WorkflowDefinition['triggers'] {
+  return [
+    {
+      id: 'manual',
+      type: 'manual',
+      enabled: true,
+      label: '手动运行'
+    }
+  ]
+}
+
+function createDefaultTemplateContextSources(limit: number): WorkflowDefinition['contextSources'] {
+  return [
+    {
+      id: 'clipboard.recent',
+      type: 'clipboard.recent',
+      enabled: true,
+      label: '最近剪贴板',
+      config: {
+        limit
+      }
+    },
+    {
+      id: 'desktop.active-app',
+      type: 'desktop.active-app',
+      enabled: true,
+      label: '前台应用'
+    },
+    {
+      id: 'session.memory',
+      type: 'session.memory',
+      enabled: true,
+      label: '当前会话记忆'
+    }
+  ]
+}
+
+function createDefaultTemplateApprovalPolicy(): ToolApprovalPolicy {
+  return {
+    requireApprovalAtOrAbove: 'high',
+    autoApproveReadOnly: true
+  }
+}
+
 function createClipboardOrganizerTemplate(): WorkflowDefinition {
   const timestamp = now()
   return {
@@ -121,42 +167,10 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
     description: '读取最近剪贴板历史，按主题分组并生成可复制的整理结果。',
     version: '1',
     enabled: true,
-    triggers: [
-      {
-        id: 'manual',
-        type: 'manual',
-        enabled: true,
-        label: '手动运行'
-      }
-    ],
-    contextSources: [
-      {
-        id: 'clipboard.recent',
-        type: 'clipboard.recent',
-        enabled: true,
-        label: '最近剪贴板',
-        config: {
-          limit: 8
-        }
-      },
-      {
-        id: 'desktop.active-app',
-        type: 'desktop.active-app',
-        enabled: true,
-        label: '前台应用'
-      },
-      {
-        id: 'session.memory',
-        type: 'session.memory',
-        enabled: true,
-        label: '当前会话记忆'
-      }
-    ],
+    triggers: createDefaultManualTrigger(),
+    contextSources: createDefaultTemplateContextSources(8),
     toolSources: ['builtin'],
-    approvalPolicy: {
-      requireApprovalAtOrAbove: 'high',
-      autoApproveReadOnly: true
-    },
+    approvalPolicy: createDefaultTemplateApprovalPolicy(),
     steps: [
       {
         id: 'organize-clipboard',
@@ -179,11 +193,101 @@ function createClipboardOrganizerTemplate(): WorkflowDefinition {
     metadata: {
       builtin: true,
       template: true,
-      category: 'clipboard'
+      category: 'clipboard',
+      templateVersion: BUILTIN_WORKFLOW_TEMPLATE_VERSION
     },
     createdAt: timestamp,
     updatedAt: timestamp
   }
+}
+
+function createMeetingSummaryTemplate(): WorkflowDefinition {
+  const timestamp = now()
+  return {
+    id: 'builtin.meeting-summary',
+    name: '会议纪要 / 摘要',
+    description: '整理会议转写稿或会议相关文本，生成摘要、决议和行动项。',
+    version: '1',
+    enabled: true,
+    triggers: createDefaultManualTrigger(),
+    contextSources: createDefaultTemplateContextSources(6),
+    toolSources: ['builtin'],
+    approvalPolicy: createDefaultTemplateApprovalPolicy(),
+    steps: [
+      {
+        id: 'summarize-meeting',
+        name: '生成会议纪要',
+        kind: 'model',
+        description: '根据近期剪贴板、前台应用和会话记忆中的会议文本生成结构化会议纪要。',
+        prompt:
+          '你会收到会议转写稿、会议相关剪贴板、前台应用和会话记忆。请输出 Markdown：1. 三句话摘要；2. 决议；3. 行动项，包含负责人、截止时间和状态，未知请写“待确认”；4. 风险 / 待确认项。不要编造不存在的负责人或时间。',
+        input: {
+          capabilityId: 'text.summarize',
+          outputFormat: 'markdown'
+        },
+        metadata: {
+          builtin: true
+        }
+      }
+    ],
+    metadata: {
+      builtin: true,
+      template: true,
+      category: 'meeting',
+      templateVersion: BUILTIN_WORKFLOW_TEMPLATE_VERSION
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+}
+
+function createBatchTextProcessingTemplate(): WorkflowDefinition {
+  const timestamp = now()
+  return {
+    id: 'builtin.batch-text-processing',
+    name: '文本批处理',
+    description: '按多段文本逐条执行整理、改写、摘要或翻译建议，保留逐条结果。',
+    version: '1',
+    enabled: true,
+    triggers: createDefaultManualTrigger(),
+    contextSources: createDefaultTemplateContextSources(12),
+    toolSources: ['builtin'],
+    approvalPolicy: createDefaultTemplateApprovalPolicy(),
+    steps: [
+      {
+        id: 'process-text-batch',
+        name: '批量处理文本',
+        kind: 'model',
+        description: '从近期剪贴板和会话上下文中识别多段文本，逐条输出处理结果与失败原因。',
+        prompt:
+          '你会收到多段文本、近期剪贴板、前台应用和会话记忆。请把输入拆成编号条目，逐条处理并输出 Markdown 表格：序号、原文摘要、处理结果、状态、需人工确认项。默认执行清洗、格式化和摘要；如果文本明确要求翻译或改写，则按该要求处理。无法可靠处理的条目标记为“需人工确认”，不要静默跳过。',
+        input: {
+          capabilityId: 'text.chat',
+          outputFormat: 'markdown',
+          preserveItemOrder: true
+        },
+        metadata: {
+          builtin: true
+        }
+      }
+    ],
+    metadata: {
+      builtin: true,
+      template: true,
+      category: 'batch-text',
+      templateVersion: BUILTIN_WORKFLOW_TEMPLATE_VERSION
+    },
+    createdAt: timestamp,
+    updatedAt: timestamp
+  }
+}
+
+function createBuiltinWorkflowTemplates(): WorkflowDefinition[] {
+  return [
+    createClipboardOrganizerTemplate(),
+    createMeetingSummaryTemplate(),
+    createBatchTextProcessingTemplate()
+  ]
 }
 
 export class IntelligenceWorkflowService {
@@ -673,22 +777,23 @@ export class IntelligenceWorkflowService {
   }
 
   private async seedBuiltinTemplates(): Promise<void> {
-    const builtinTemplate = createClipboardOrganizerTemplate()
-    const existing = await this.getWorkflow(builtinTemplate.id)
+    for (const template of createBuiltinWorkflowTemplates()) {
+      await this.seedBuiltinTemplate(template)
+    }
+  }
+
+  private async seedBuiltinTemplate(template: WorkflowDefinition): Promise<void> {
+    const existing = await this.getWorkflow(template.id)
     if (existing) {
-      const firstStep = existing.steps[0]
-      if (
-        existing.metadata?.builtin === true &&
-        (firstStep?.kind !== 'model' || firstStep.input?.capabilityId !== 'text.chat')
-      ) {
+      if (existing.metadata?.builtin === true) {
         await this.saveWorkflow({
-          ...builtinTemplate,
+          ...template,
           createdAt: existing.createdAt
         })
       }
       return
     }
-    await this.saveWorkflow(builtinTemplate)
+    await this.saveWorkflow(template)
   }
 
   private createInitialRun(
@@ -856,8 +961,7 @@ export class IntelligenceWorkflowService {
       toolSource: normalizedKind === 'tool' ? normalizeToolSource(step.toolSource) : undefined,
       toolId: normalizedKind === 'tool' ? toolId : undefined,
       agentId: normalizedKind === 'agent' ? agentId : undefined,
-      prompt:
-        normalizedKind === 'prompt' || normalizedKind === 'model' ? step.prompt : undefined,
+      prompt: normalizedKind === 'prompt' || normalizedKind === 'model' ? step.prompt : undefined,
       input: step.input ?? {},
       continueOnError: step.continueOnError === true,
       metadata: step.metadata ?? {}
