@@ -13,6 +13,14 @@
 
 ## 2026-05-15
 
+### fix(core-app): use notification test button for macOS unverifiable permission
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - macOS 通知权限仍保留 `unverifiable` 状态口径，但操作按钮从“前往系统设置”调整为“测试通知”，直接发送一条系统通知帮助用户验证授权效果。
+  - Windows/Linux 仍沿用打开系统设置入口；补充测试通知相关中英文文案。
+
 ### fix(core-app): reset browser login pending state and gate dev runtime server switch
 
 - `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`

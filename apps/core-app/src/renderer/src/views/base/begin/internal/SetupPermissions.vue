@@ -1,5 +1,6 @@
 <script setup lang="ts" name="SetupPermissions">
 import { TxButton } from '@talex-touch/tuffex'
+import { useNotificationSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
@@ -18,6 +19,7 @@ import {
   type SystemPermissionStatus,
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
+import { createRendererLogger } from '~/utils/renderer-log'
 import Done from './Done.vue'
 
 type StepFunction = (
@@ -28,7 +30,9 @@ type StepFunction = (
 const { t } = useI18n()
 const step: StepFunction = inject('step')!
 const transport = useTuffTransport()
+const notificationSdk = useNotificationSdk()
 const { isMac: isMacOS, isWindows } = useRendererPlatform()
+const setupPermissionsLog = createRendererLogger('SetupPermissions')
 
 const systemPermissionCheck = defineEvent('system')
   .module('permission')
@@ -169,7 +173,7 @@ async function checkAllPermissions(): Promise<void> {
       try {
         await checkPermission('accessibility')
       } catch (error) {
-        console.warn('[SetupPermissions] Failed to check accessibility permission:', error)
+        setupPermissionsLog.warn('Failed to check accessibility permission', error)
       }
     }
 
@@ -177,7 +181,7 @@ async function checkAllPermissions(): Promise<void> {
     try {
       await checkPermission('notifications')
     } catch (error) {
-      console.warn('[SetupPermissions] Failed to check notification permission:', error)
+      setupPermissionsLog.warn('Failed to check notification permission', error)
     }
 
     // Check admin privileges (Windows, optional)
@@ -185,11 +189,11 @@ async function checkAllPermissions(): Promise<void> {
       try {
         await checkPermission('adminPrivileges')
       } catch (error) {
-        console.warn('[SetupPermissions] Failed to check admin privileges:', error)
+        setupPermissionsLog.warn('Failed to check admin privileges', error)
       }
     }
   } catch (error) {
-    console.error('[SetupPermissions] Failed to check permissions:', error)
+    setupPermissionsLog.error('Failed to check permissions', error)
     toast.error(t('setupPermissions.checkFailed'))
   } finally {
     isLoading.value = false
@@ -208,7 +212,7 @@ async function loadSettings(): Promise<void> {
     const autoStartResult = await transport.send(AppEvents.system.autoStartGet)
     settings.value.autoStart = Boolean(autoStartResult)
   } catch (error) {
-    console.error('[SetupPermissions] Failed to load autoStart:', error)
+    setupPermissionsLog.error('Failed to load autoStart', error)
   }
 
   try {
@@ -219,7 +223,7 @@ async function loadSettings(): Promise<void> {
       settings.value.hideDock = traySettings.hideDock === true
     }
   } catch (error) {
-    console.error('[SetupPermissions] Failed to load tray settings:', error)
+    setupPermissionsLog.error('Failed to load tray settings', error)
     traySettingsAvailable.value = false
   }
 }
@@ -249,7 +253,22 @@ async function requestPermission(type: string): Promise<void> {
       void checkPermission(type)
     }, 2000)
   } catch (error) {
-    console.error(`[SetupPermissions] Failed to request permission ${type}:`, error)
+    setupPermissionsLog.error(`Failed to request permission ${type}`, error)
+    toast.error(t('setupPermissions.requestFailed'))
+  }
+}
+
+async function testNotificationPermission(): Promise<void> {
+  try {
+    await notificationSdk.notify({
+      channel: 'system',
+      level: 'info',
+      title: t('setupPermissions.testNotificationTitle'),
+      message: t('setupPermissions.testNotificationBody')
+    })
+    toast.info(t('setupPermissions.testNotificationSent'))
+  } catch (error) {
+    setupPermissionsLog.error('Failed to send notification test', error)
     toast.error(t('setupPermissions.requestFailed'))
   }
 }
@@ -265,7 +284,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
     })
     await transport.send(AppEvents.system.autoStartUpdate, value)
   } catch (error) {
-    console.error('[SetupPermissions] Failed to update autoStart:', error)
+    setupPermissionsLog.error('Failed to update autoStart', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -281,7 +300,7 @@ async function updateShowTray(value: boolean): Promise<void> {
     })
     await transport.send(AppEvents.system.traySettingsUpdate, { showTray: value })
   } catch (error) {
-    console.error('[SetupPermissions] Failed to update showTray:', error)
+    setupPermissionsLog.error('Failed to update showTray', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -479,9 +498,13 @@ function getStatusIconClass(status: string): string {
               v-if="permissions.notifications.status !== 'granted'"
               size="sm"
               type="primary"
-              @click.stop="requestPermission('notifications')"
+              @click.stop="
+                isMacOS ? testNotificationPermission() : requestPermission('notifications')
+              "
             >
-              {{ t('setupPermissions.openSettings') }}
+              {{
+                t(isMacOS ? 'setupPermissions.testNotification' : 'setupPermissions.openSettings')
+              }}
             </TxButton>
           </div>
         </TuffBlockSlot>

@@ -7,7 +7,7 @@
 <script setup lang="ts" name="SettingSetup">
 import type { AppIndexSettings } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex'
-import { useSettingsSdk } from '@talex-touch/utils/renderer'
+import { useNotificationSdk, useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { useI18n } from 'vue-i18n'
@@ -36,6 +36,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 const { t } = useI18n()
 const transport = useTuffTransport()
 const settingsSdk = useSettingsSdk()
+const notificationSdk = useNotificationSdk()
 const { isMac: isMacOS, isWindows, isLinux } = useRendererPlatform()
 const settingSetupLog = createRendererLogger('SettingSetup')
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
@@ -332,6 +333,21 @@ async function requestPermission(type: string): Promise<void> {
   }
 }
 
+async function testNotificationPermission(): Promise<void> {
+  try {
+    await notificationSdk.notify({
+      channel: 'system',
+      level: 'info',
+      title: t('setupPermissions.testNotificationTitle'),
+      message: t('setupPermissions.testNotificationBody')
+    })
+    toast.info(t('setupPermissions.testNotificationSent'))
+  } catch (error) {
+    settingSetupLog.error('Failed to send notification test', error)
+    toast.error(t('setupPermissions.requestFailed'))
+  }
+}
+
 async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
   appSetting.setup.autoStart = value
@@ -570,9 +586,9 @@ function getStatusIconClass(status: string): string {
           variant="flat"
           type="primary"
           size="sm"
-          @click.stop="requestPermission('notifications')"
+          @click.stop="isMacOS ? testNotificationPermission() : requestPermission('notifications')"
         >
-          {{ t('setupPermissions.openSettings') }}
+          {{ t(isMacOS ? 'setupPermissions.testNotification' : 'setupPermissions.openSettings') }}
         </TxButton>
       </div>
     </TuffBlockSlot>
