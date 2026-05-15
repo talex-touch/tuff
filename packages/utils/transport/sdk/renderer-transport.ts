@@ -20,7 +20,7 @@ import type {
 } from '../types'
 import { useChannel } from '../../renderer/hooks/use-channel'
 import { findCloneIssue, isCloneError, summarizeClonePayload } from '../../common/utils/clone-diagnostics'
-import { assertTuffEvent } from '../event/builder'
+import { assertTuffEvent, isTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
 import { isPortChannelEnabled } from './port-policy'
 import { startClientStream } from './stream/client-runtime'
@@ -76,6 +76,48 @@ function buildCacheKey(eventName: string, payload: unknown, overrideKey?: string
   catch {
     return `${eventName}:${Object.prototype.toString.call(payload)}`
   }
+}
+
+function safeInvoke<T>(reader: () => T): T | undefined {
+  try {
+    return reader()
+  }
+  catch {
+    return undefined
+  }
+}
+
+function summarizeInvalidEvent(event: unknown): Record<string, unknown> {
+  const summary: Record<string, unknown> = {
+    valueType: typeof event,
+    objectType: Object.prototype.toString.call(event),
+  }
+
+  if (!event || typeof event !== 'object') {
+    summary.value = event
+    return summary
+  }
+
+  const record = event as Record<string, unknown>
+  const keys = Object.keys(record)
+  summary.keys = keys.slice(0, 20)
+  summary.keysCount = keys.length
+  summary.brand = record.__brand
+  summary.namespace = record.namespace
+  summary.module = record.module
+  summary.action = record.action
+  summary.hasToEventName = typeof record.toEventName === 'function'
+  summary.hasToString = typeof record.toString === 'function'
+
+  const candidateEventName = safeInvoke(() => {
+    const toEventName = record.toEventName
+    return typeof toEventName === 'function' ? String(toEventName.call(event)) : undefined
+  })
+  if (candidateEventName) {
+    summary.candidateEventName = candidateEventName
+  }
+
+  return summary
 }
 
 
@@ -236,7 +278,15 @@ export class TuffRendererTransport implements ITuffTransport {
     payload?: TReq | void,
     options?: SendOptions,
   ): Promise<TRes> {
-    assertTuffEvent(event, 'TuffRendererTransport.send')
+    if (!isTuffEvent(event)) {
+      console.error('[TuffRendererTransport.send] Invalid event details', {
+        event: summarizeInvalidEvent(event),
+        payload: summarizeClonePayload(payload),
+        options: summarizeClonePayload(options),
+        stack: new Error().stack,
+      })
+      assertTuffEvent(event, 'TuffRendererTransport.send')
+    }
 
     const eventName = event.toEventName()
     const cacheConfig = normalizeCacheOptions(options)
@@ -829,7 +879,15 @@ export class TuffRendererTransport implements ITuffTransport {
     payload: TReq,
     options: StreamOptions<TChunk>,
   ): Promise<StreamController> {
-    assertTuffEvent(event, 'TuffRendererTransport.stream')
+    if (!isTuffEvent(event)) {
+      console.error('[TuffRendererTransport.stream] Invalid event details', {
+        event: summarizeInvalidEvent(event),
+        payload: summarizeClonePayload(payload),
+        options: summarizeClonePayload(options),
+        stack: new Error().stack,
+      })
+      assertTuffEvent(event, 'TuffRendererTransport.stream')
+    }
     if (!this.channel.regChannel) {
       throw new Error('[TuffTransport] Channel does not support event registration')
     }
@@ -856,7 +914,14 @@ export class TuffRendererTransport implements ITuffTransport {
     event: TuffEvent<TReq, TRes>,
     handler: (payload: TReq) => TRes | Promise<TRes>,
   ): () => void {
-    assertTuffEvent(event, 'TuffRendererTransport.on')
+    if (!isTuffEvent(event)) {
+      console.error('[TuffRendererTransport.on] Invalid event details', {
+        event: summarizeInvalidEvent(event),
+        handlerType: typeof handler,
+        stack: new Error().stack,
+      })
+      assertTuffEvent(event, 'TuffRendererTransport.on')
+    }
 
     if (!this.channel.regChannel) {
       throw new Error(

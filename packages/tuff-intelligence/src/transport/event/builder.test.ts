@@ -11,6 +11,11 @@ describe('tuff-intelligence transport event builder', () => {
       .define<{ ticketId: string }, { accepted: boolean }>()
 
     expect(event.toEventName()).toBe('intelligence:agent:tool:approve')
+    expect(event.toString()).toBe('intelligence:agent:tool:approve')
+    expect(event.__brand).toBe('TuffEvent')
+    expect(event.namespace).toBe('intelligence')
+    expect(event.module).toBe('agent')
+    expect(event.action).toBe('tool:approve')
   })
 
   it('maps api, agent, and workflow sdk methods through typed event names', async () => {

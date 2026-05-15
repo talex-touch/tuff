@@ -18,7 +18,7 @@
 - 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 当前 release blocker：Windows 真机 acceptance evidence、search trace `200` 样本、clipboard stress `120000ms`、`windows:acceptance:verify` final gate、Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 前关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 保持 documented best-effort。
-- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 0 字节导致 CoreApp `typecheck:node` 失败，`quality:release` 仍受 CoreApp 既有 lint debt 阻断；不得宣称全仓 release gate 已绿。
+- 质量现状：PR lint 已收敛为 changed-file lint；FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；不得宣称全仓 release gate 已绿。
 - 范围约束：`2.5.0` AI、Provider Registry 高级策略、SRP 大拆分可继续规划/小切片，但不得抢占正式 `2.4.10` Windows evidence gate。
 
 ## 当前主线（2 周）
@@ -37,7 +37,7 @@
 
 - Windows 真机 evidence 闭环：acceptance manifest、common app launch、copied app path、Everything target probe、update install、DivisionBox detached widget、time-aware recommendation、search trace 与 clipboard stress。
 - Windows App 索引与启动体验：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单已进入实现态，仍需真机验收。
-- FileProvider 编译边界：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 当前为空，需恢复 `fileProvider` 等价导出后再继续文件搜索与 Windows fallback 验收。
+- FileProvider 最近路径：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复 `fileProvider` 等价导出，仍需继续文件搜索与 Windows fallback 验收。
 - Release Evidence：需要凭证/API key 写入 documentation review、platform matrix、CoreApp targeted tests 与 Windows 真机 evidence。
 
 ### P1 - 2.4.11

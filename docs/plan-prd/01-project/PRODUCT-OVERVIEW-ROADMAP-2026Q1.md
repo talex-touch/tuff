@@ -36,7 +36,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 **Release blockers**：
 
 - Windows acceptance collection plan。
-- 恢复 FileProvider 编译边界：`file-provider.ts` 当前为 0 行，`typecheck:node` 失败，需先恢复等价导出。
+- FileProvider 编译边界已恢复：`file-provider.ts` 已恢复等价导出，`typecheck:node` 已通过；继续补文件搜索最近路径与 Windows fallback 验收。
 - Windows case/manual/performance evidence。
 - Everything target probe、App Index diagnostic、common app launch、copied app path、UWP/Store、Steam、update install、DivisionBox detached widget、time-aware recommendation。
 - search trace `200` 样本。
@@ -109,7 +109,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 - 当前基线：`2.4.10-beta.22`。
 - `2.4.10-beta.22` notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 需用户确认。
-- `file-provider.ts` 0 字节导致 CoreApp `typecheck:node` 失败；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
+- FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - Windows App Search & Launch Beta 已进入实现态：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单等仍需真机 evidence。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。
