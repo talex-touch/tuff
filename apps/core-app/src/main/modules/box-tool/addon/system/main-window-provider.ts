@@ -13,11 +13,31 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { t } from '../../../../utils/i18n-helper'
 
 const mainWindowLog = getLogger('main-window-provider')
-const MAIN_WINDOW_SEARCH_TOKENS = [
+const MAIN_WINDOW_ACTION_TOKENS = [
+  'show',
+  'open',
+  'display',
+  'reveal',
+  'focus',
+  'activate',
+  'bring up',
+  'bring to front',
+  '显示',
+  '打开',
+  '展示',
+  '唤起',
+  '呼出',
+  '呼起',
+  '激活',
+  '前台'
+]
+
+const MAIN_WINDOW_OBJECT_TOKENS = [
   'main',
   'main window',
   'mainwindow',
   'main窗口',
+  'window',
   'home',
   'home window',
   'homewindow',
@@ -25,14 +45,54 @@ const MAIN_WINDOW_SEARCH_TOKENS = [
   'home page',
   'dashboard',
   'primary window',
+  'app window',
+  'application window',
+  'tuff window',
   '主窗口',
   '主界面',
   '主页面',
   '主页',
   '首页',
-  '主面板'
+  '主面板',
+  '应用窗口',
+  '程序窗口',
+  '窗口'
 ]
 
+const MAIN_WINDOW_PHRASE_TOKENS = [
+  'show main',
+  'show main window',
+  'open main',
+  'open main window',
+  'display main window',
+  'reveal main window',
+  'focus main window',
+  'activate main window',
+  '显示主窗口',
+  '打开主窗口',
+  '展示主窗口',
+  '唤起主窗口',
+  '呼出主窗口',
+  '回到主窗口',
+  '打开 tuff',
+  '显示 tuff',
+  'tuff 主窗口'
+]
+
+const MAIN_WINDOW_SEARCH_TOKENS = Array.from(
+  new Set([
+    ...MAIN_WINDOW_ACTION_TOKENS,
+    ...MAIN_WINDOW_OBJECT_TOKENS,
+    ...MAIN_WINDOW_PHRASE_TOKENS
+  ])
+)
+
+const MAIN_WINDOW_ACTION_ALIASES = new Set(
+  MAIN_WINDOW_ACTION_TOKENS.map((token) => normalizeSearchToken(token))
+)
+const MAIN_WINDOW_OBJECT_ALIASES = new Set(
+  MAIN_WINDOW_OBJECT_TOKENS.map((token) => normalizeSearchToken(token))
+)
 const MAIN_WINDOW_QUERY_ALIASES = new Set(
   MAIN_WINDOW_SEARCH_TOKENS.map((token) => normalizeSearchToken(token))
 )
@@ -94,24 +154,14 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
 
   private isMainWindowQuery(rawText: string): boolean {
     if (!rawText) return false
-    return MAIN_WINDOW_QUERY_ALIASES.has(normalizeSearchToken(rawText))
+    const normalizedQuery = normalizeSearchToken(rawText)
+    return MAIN_WINDOW_QUERY_ALIASES.has(normalizedQuery)
   }
 
   private buildMainWindowItem(query: TuffQuery): TuffItem {
     const title = t('tray.showWindow')
     const subtitle = t('tray.tooltip')
-    const normalizedQuery = (query.text ?? '').trim().toLowerCase()
-    const titleLower = title.toLowerCase()
-    const matchIndex = normalizedQuery ? titleLower.indexOf(normalizedQuery) : -1
-    const matchResult =
-      matchIndex >= 0
-        ? [
-            {
-              start: matchIndex,
-              end: matchIndex + normalizedQuery.length
-            }
-          ]
-        : []
+    const matchResult = this.resolveTitleMatchRanges(title, query.text ?? '')
 
     return new TuffItemBuilder('main-window', this.type, this.id)
       .setKind('app')
@@ -136,6 +186,43 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
         }
       })
       .build()
+  }
+
+  private resolveTitleMatchRanges(
+    title: string,
+    rawText: string
+  ): Array<{ start: number; end: number }> {
+    const trimmedQuery = rawText.trim()
+    if (!trimmedQuery) return []
+
+    const directMatch = this.findTitleRange(title, trimmedQuery)
+    if (directMatch) return [directMatch]
+
+    const normalizedQuery = normalizeSearchToken(trimmedQuery)
+    const fallbackNeedles = MAIN_WINDOW_ACTION_ALIASES.has(normalizedQuery)
+      ? ['show', '显示', '打开']
+      : MAIN_WINDOW_OBJECT_ALIASES.has(normalizedQuery)
+        ? ['main window', '主窗口', 'main']
+        : ['show main window', '显示主窗口', 'main window']
+
+    for (const needle of fallbackNeedles) {
+      const range = this.findTitleRange(title, needle)
+      if (range) return [range]
+    }
+
+    return []
+  }
+
+  private findTitleRange(title: string, needle: string): { start: number; end: number } | null {
+    const normalizedNeedle = needle.trim().toLowerCase()
+    if (!normalizedNeedle) return null
+
+    const start = title.toLowerCase().indexOf(normalizedNeedle)
+    if (start < 0) return null
+    return {
+      start,
+      end: start + normalizedNeedle.length
+    }
   }
 
   private showMainWindow(): void {
