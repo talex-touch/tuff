@@ -468,7 +468,12 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       throw new Error('Auth callback failed')
     }
 
-    await initializeAuth()
+    const state = (await transport.send(AuthEvents.session.getState)) as AuthState | null
+    if (state) {
+      applyAuthState(state)
+    } else {
+      await initializeAuth()
+    }
     if (!authState.isSignedIn) {
       throw new Error('Auth callback completed but profile is unavailable')
     }

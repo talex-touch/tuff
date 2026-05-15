@@ -177,6 +177,8 @@ const secureStorageEnabled = computed({
   }
 })
 
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+
 const secureStorageDescription = computed(() => {
   if (!secureStorageEnabled.value) {
     if (isLoggedIn.value) {
@@ -331,6 +333,7 @@ onMounted(() => {
     />
 
     <TuffBlockSwitch
+      v-if="showAdvancedSettings"
       v-model="secureStorageEnabled"
       :title="t('settingUser.secureStorageTitle', '登录凭证保护')"
       :description="secureStorageDescription"
