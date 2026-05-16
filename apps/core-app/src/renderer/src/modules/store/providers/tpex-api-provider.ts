@@ -1,7 +1,10 @@
 import type { StorePlugin, StoreProviderListOptions } from '@talex-touch/utils/store'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { requestNexusWithAuth } from '../nexus-auth-client'
 import { BaseStoreProvider } from './base-provider'
 import { normalizeStoreIcon } from './store-icon-normalizer'
+
+const tpexApiProviderLog = createRendererLogger('TpexApiProvider')
 
 interface TpexApiPlugin {
   id: string
@@ -168,7 +171,7 @@ export class TpexApiProvider extends BaseStoreProvider {
     )
 
     if (!response) {
-      console.warn('[TpexApiProvider] Not authenticated, cannot fetch user plugins')
+      tpexApiProviderLog.warn('Not authenticated, cannot fetch user plugins')
       return []
     }
     if (response.status < 200 || response.status >= 300) {

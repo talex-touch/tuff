@@ -2,7 +2,10 @@ import { StorageList } from '@talex-touch/utils'
 import { storages, useStorageSdk } from '@talex-touch/utils/renderer'
 import { appSettingsData, openersData } from '@talex-touch/utils/renderer/storage'
 import { reactive, toRaw, unref } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { AccountStorage } from './account-storage'
+
+const storageLog = createRendererLogger('StorageManager')
 
 /**
  * Renderer app storage facade.
@@ -30,11 +33,11 @@ export class StorageManager {
         this.account.analyzeFromObj(data, { persist: false })
       }
     } catch (error) {
-      console.warn('[StorageManager] Failed to load account storage:', error)
+      storageLog.warn('Failed to load account storage:', error)
     } finally {
       const duration = performance.now() - startAt
       if (duration > 200) {
-        console.warn(`[StorageManager] account.ini load took ${duration.toFixed(1)}ms`)
+        storageLog.warn(`account.ini load took ${duration.toFixed(1)}ms`)
       }
     }
   }

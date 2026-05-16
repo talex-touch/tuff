@@ -1,6 +1,9 @@
 import type { Ref } from 'vue'
 import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { ref, watch } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const storeReadmeLog = createRendererLogger('StoreReadme')
 
 export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: string) => string) {
   const networkSdk = useNetworkSdk()
@@ -23,7 +26,7 @@ export function useStoreReadme(readmeUrl: Ref<string | undefined>, t: (key: stri
       })
       readmeMarkdown.value = response.data
     } catch (error) {
-      console.error('[StoreDetail] Failed to load README:', error)
+      storeReadmeLog.error('Failed to load README:', error)
       readmeError.value = t('store.detailDialog.readmeError')
     } finally {
       readmeLoading.value = false

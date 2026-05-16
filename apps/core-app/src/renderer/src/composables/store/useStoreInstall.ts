@@ -9,7 +9,10 @@ import { useI18n } from 'vue-i18n'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { resolveStoreInstallFailureReason } from './store-install-error-utils'
+
+const storeInstallLog = createRendererLogger('StoreInstall')
 
 export interface InstallOptions {
   /** Whether this is an upgrade (force update existing plugin) */
@@ -198,7 +201,7 @@ export function useStoreInstall() {
         throw new Error(reason)
       }
     } catch (error: unknown) {
-      console.error('[Store] Plugin install failed:', error)
+      storeInstallLog.error('Plugin install failed:', error)
 
       // Handle active UI error specially
       const errorMessage = getErrorMessage(error)

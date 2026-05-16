@@ -4,6 +4,9 @@ import { NexusStoreProvider } from './providers/nexus-store-provider'
 import { NpmPackageProvider } from './providers/npm-package-provider'
 import { RepositoryProvider } from './providers/repository-provider'
 import { TpexApiProvider } from './providers/tpex-api-provider'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const storeProviderLog = createRendererLogger('StoreProviderFactory')
 
 export function createStoreProvider(
   definition: StoreProviderDefinition,
@@ -19,8 +22,8 @@ export function createStoreProvider(
     case 'tpexApi':
       return new TpexApiProvider(definition, ctx)
     default:
-      console.warn(
-        `[Store] Unsupported provider type "${definition.type}" for "${definition.name}".`
+      storeProviderLog.warn(
+        `Unsupported provider type "${definition.type}" for "${definition.name}".`
       )
       return null
   }

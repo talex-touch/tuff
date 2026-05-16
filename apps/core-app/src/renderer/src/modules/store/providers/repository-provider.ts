@@ -3,8 +3,11 @@ import type {
   StorePlugin,
   StoreProviderListOptions
 } from '@talex-touch/utils/store'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { BaseStoreProvider } from './base-provider'
 import { normalizeStoreIcon } from './store-icon-normalizer'
+
+const repositoryProviderLog = createRendererLogger('RepositoryProvider')
 
 /**
  * Repository type detection
@@ -86,14 +89,14 @@ export class RepositoryProvider extends BaseStoreProvider {
   async list(_options: StoreProviderListOptions = {}): Promise<StorePlugin[]> {
     const url = this.definition.url
     if (!url) {
-      console.warn(`[RepositoryProvider] No URL configured for "${this.definition.name}"`)
+      repositoryProviderLog.warn(`No URL configured for "${this.definition.name}"`)
       return []
     }
 
     this.parseRepoUrl(url)
 
     if (this.repoType === 'unknown') {
-      console.warn(`[RepositoryProvider] Unknown repository type for URL: ${url}`)
+      repositoryProviderLog.warn(`Unknown repository type for URL: ${url}`)
       return []
     }
 
@@ -105,14 +108,14 @@ export class RepositoryProvider extends BaseStoreProvider {
       const releases = await this.fetchReleases()
 
       if (releases.length === 0) {
-        console.warn(`[RepositoryProvider] No releases found for ${this.owner}/${this.repo}`)
+        repositoryProviderLog.warn(`No releases found for ${this.owner}/${this.repo}`)
         return []
       }
 
       // Convert releases to StorePlugin
       return this.convertReleasesToPlugins(releases, manifest)
     } catch (error) {
-      console.error(`[RepositoryProvider] Failed to fetch from ${this.owner}/${this.repo}:`, error)
+      repositoryProviderLog.error(`Failed to fetch from ${this.owner}/${this.repo}:`, error)
       return []
     }
   }

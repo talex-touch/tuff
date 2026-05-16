@@ -3,8 +3,11 @@ import type {
   StorePlugin,
   StoreProviderListOptions
 } from '@talex-touch/utils/store'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { BaseStoreProvider } from './base-provider'
 import { normalizeStoreIcon } from './store-icon-normalizer'
+
+const npmPackageProviderLog = createRendererLogger('NpmPackageProvider')
 
 /**
  * NPM package metadata from registry
@@ -113,13 +116,13 @@ export class NpmPackageProvider extends BaseStoreProvider {
             plugins.push(plugin)
           }
         } catch (error) {
-          console.warn(`[NpmPackageProvider] Failed to fetch ${pkg.name}:`, error)
+          npmPackageProviderLog.warn(`Failed to fetch ${pkg.name}:`, error)
         }
       }
 
       return plugins
     } catch (error) {
-      console.error(`[NpmPackageProvider] Failed to list packages:`, error)
+      npmPackageProviderLog.error('Failed to list packages:', error)
       return []
     }
   }

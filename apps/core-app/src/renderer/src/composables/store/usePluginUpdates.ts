@@ -4,6 +4,9 @@ import { createStoreSdk } from '@talex-touch/utils/transport/sdk/domains/store'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const pluginUpdatesLog = createRendererLogger('PluginUpdates')
 
 export interface PluginUpdateInfo {
   slug: string
@@ -57,7 +60,7 @@ export function usePluginUpdates() {
       lastCheckedAt.value = Date.now()
       return updates
     } catch (error) {
-      console.error('[PluginUpdates] Failed to check for updates:', error)
+      pluginUpdatesLog.error('Failed to check for updates:', error)
       return []
     } finally {
       isChecking.value = false
