@@ -6,6 +6,7 @@ import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
 import { resolveMigrationReadiness } from '~/utils/intelligence-provider-migration'
+import type { IntelligenceProviderMigrationReadinessStatus } from '~/utils/intelligence-provider-migration'
 import type { ProviderRegistryRecord, SceneRegistryRecord, SceneStrategyMode } from '~/utils/provider-registry-admin'
 
 const { t } = useI18n()
@@ -506,15 +507,46 @@ function ensureSceneBindingsSupportCapability() {
 }
 
 function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'muted' {
-  if (['enabled', 'success', 'completed', 'planned', 'healthy'].includes(status))
+  if (['enabled', 'success', 'completed', 'planned', 'ready', 'healthy'].includes(status))
     return 'success'
   if (['disabled', 'muted'].includes(status))
     return 'muted'
-  if (['degraded', 'warning'].includes(status))
+  if (['degraded', 'planning', 'warning'].includes(status))
     return 'warning'
-  if (['failed', 'unhealthy', 'danger'].includes(status))
+  if (['failed', 'blocked', 'unhealthy', 'danger'].includes(status))
     return 'danger'
   return 'info'
+}
+
+function migrationReadinessLabel(status: IntelligenceProviderMigrationReadinessStatus) {
+  if (status === 'ready')
+    return t('dashboard.sections.intelligence.providers.migration.ready', 'Ready')
+  if (status === 'blocked')
+    return t('dashboard.sections.intelligence.providers.migration.blocked', 'Blocked')
+  return t('dashboard.sections.intelligence.providers.migration.planning', 'Planning')
+}
+
+function migrationReadinessDescription(status: IntelligenceProviderMigrationReadinessStatus) {
+  if (status === 'ready') {
+    return t(
+      'dashboard.sections.intelligence.providers.migration.readyDescription',
+      'The executed migration has a complete registry mirror and can be promoted to registry-primary reads.',
+    )
+  }
+  if (status === 'blocked') {
+    return t(
+      'dashboard.sections.intelligence.providers.migration.blockedDescription',
+      'Registry-primary reads must stay disabled until every blocker is resolved.',
+    )
+  }
+  return t(
+    'dashboard.sections.intelligence.providers.migration.planningDescription',
+    'Dry-run only previews the migration plan; it is not evidence that registry-primary reads are safe.',
+  )
+}
+
+function migrationBlockerLabel(blocker: string) {
+  return t(`dashboard.sections.intelligence.providers.migration.blocker.${blocker}`, blocker)
 }
 
 function buildSceneBindings() {
@@ -1920,6 +1952,44 @@ function formatEndpointCandidates(list?: string[]) {
                   <span>{{ t('dashboard.sections.intelligence.providers.migration.total', '总数') }}: {{ migrationResult.total }}</span>
                   <span>{{ t('dashboard.sections.intelligence.providers.migration.migrated', '已迁移') }}: {{ migrationResult.migrated }}</span>
                   <span>{{ t('dashboard.sections.intelligence.providers.migration.failed', '失败') }}: {{ migrationResult.failed }}</span>
+                </div>
+                <div v-if="migrationReadiness" class="rounded-xl bg-white/55 p-3 dark:bg-white/[0.04]">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <TxStatusBadge
+                        :text="migrationReadinessLabel(migrationReadiness.status)"
+                        :status="migrationReadiness.tone"
+                        size="sm"
+                      />
+                      <span class="font-medium text-black/70 dark:text-white/70">
+                        {{ t('dashboard.sections.intelligence.providers.migration.readiness', 'Registry read readiness') }}
+                      </span>
+                    </div>
+                    <span class="text-black/45 dark:text-white/45">
+                      {{ t('dashboard.sections.intelligence.providers.migration.registryPrimaryReady', 'Registry-primary ready') }}:
+                      {{ migrationReadiness.registryPrimaryReady ? t('common.yes', 'Yes') : t('common.no', 'No') }}
+                    </span>
+                  </div>
+                  <p class="mt-2 text-black/45 dark:text-white/45">
+                    {{ migrationReadinessDescription(migrationReadiness.status) }}
+                  </p>
+                  <div class="mt-2">
+                    <p class="font-medium text-black/55 dark:text-white/55">
+                      {{ t('dashboard.sections.intelligence.providers.migration.blockers', 'Blockers') }}
+                    </p>
+                    <div v-if="migrationReadiness.blockers.length" class="mt-1 flex flex-wrap gap-1.5">
+                      <span
+                        v-for="blocker in migrationReadiness.blockers"
+                        :key="blocker"
+                        class="rounded-full bg-black/[0.05] px-2 py-1 font-mono text-[11px] text-black/55 dark:bg-white/[0.08] dark:text-white/60"
+                      >
+                        {{ migrationBlockerLabel(blocker) }}
+                      </span>
+                    </div>
+                    <p v-else class="mt-1 text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.intelligence.providers.migration.noBlockers', 'No blockers') }}
+                    </p>
+                  </div>
                 </div>
                 <div v-if="migrationResult.items.length" class="max-h-40 overflow-auto rounded-xl bg-black/[0.03] p-3 font-mono text-[11px] text-black/55 dark:bg-white/[0.04] dark:text-white/55">
                   <div v-for="item in migrationResult.items" :key="item.providerId" class="flex flex-wrap gap-x-2 gap-y-1">
