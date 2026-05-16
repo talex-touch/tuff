@@ -13,6 +13,20 @@
 
 ## 2026-05-16
 
+### chore(nexus): move API tests out of route tree
+
+- `apps/nexus/test/api/dashboard/provider-registry/**`
+- `apps/nexus/test/api/{app-auth,auth,oauth,subscription}/**`
+- `apps/nexus/test/api/{admin,dashboard,sync,v1}/**`
+- `apps/nexus/server/api/**/__tests__/**`
+- `apps/nexus/server/api/**/*.api.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/*.api.test.ts`
+- `apps/nexus/build/check-server-api-route-tree.mjs`
+- `apps/nexus/vitest.config.ts`
+  - Moved provider-registry, app-auth, auth, OAuth, subscription, admin release-evidence, dashboard intelligence/OAuth, sync, and v1 API tests from Nitro's `server/api` route tree into the dedicated `test/api` tree.
+  - Extended Vitest discovery to include `test/**/*.test.ts` so migrated API tests keep running outside production route directories.
+  - Added a route-tree guard that fails when any test/dev file is introduced under `server/api`, keeping the production API route tree clean.
+
 ### perf(nexus): keep Content runtime assets out of PWA precache
 
 - `apps/nexus/app/config/pwa.ts`
