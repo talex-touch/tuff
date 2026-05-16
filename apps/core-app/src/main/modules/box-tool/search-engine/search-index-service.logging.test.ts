@@ -1,8 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SearchIndexService } from './search-index-service'
 
-function createServiceHarness(): Record<string, any> {
-  return new SearchIndexService({} as any) as Record<string, any>
+type SearchIndexHarness = SearchIndexService & {
+  recordOperationLog: (
+    action: 'index' | 'remove' | 'removeByProvider',
+    items: number,
+    durationMs: number
+  ) => void
+}
+
+function createServiceHarness(): SearchIndexHarness {
+  return new SearchIndexService(
+    {} as ConstructorParameters<typeof SearchIndexService>[0]
+  ) as unknown as SearchIndexHarness
 }
 
 describe('SearchIndexService logging throttle', () => {

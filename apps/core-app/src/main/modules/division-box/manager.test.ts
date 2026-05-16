@@ -1,4 +1,9 @@
-import type { DivisionBoxState, StateChangeEvent } from '@talex-touch/utils'
+import type {
+  DivisionBoxConfig,
+  DivisionBoxState,
+  SessionMeta,
+  StateChangeEvent
+} from '@talex-touch/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const pollingMocks = vi.hoisted(() => ({
@@ -15,12 +20,12 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
 
 class FakeDivisionBoxSession {
   readonly sessionId: string
-  readonly config: any
-  readonly meta: any
+  readonly config: DivisionBoxConfig
+  readonly meta: SessionMeta
   private state = 'prepare' as DivisionBoxState
   private stateChangeListeners: Array<(event: StateChangeEvent) => void> = []
 
-  constructor(sessionId: string, config: any) {
+  constructor(sessionId: string, config: DivisionBoxConfig) {
     this.sessionId = sessionId
     this.config = config
     this.meta = {

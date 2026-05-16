@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import type { SearchIndexItem } from './search-index-service'
+import type { SearchIndexItem, SearchIndexKeyword } from './search-index-service'
 import { SearchIndexService } from './search-index-service'
 
-function createServiceHarness(): Record<string, any> {
-  return new SearchIndexService({} as any) as Record<string, any>
+type SearchIndexHarness = SearchIndexService & {
+  buildKeywordHash: (entries: SearchIndexKeyword[]) => string
+  prepareDocument: (item: SearchIndexItem) => Promise<{
+    keywordEntries: SearchIndexKeyword[]
+    keywordHash: string
+  }>
+}
+
+function createServiceHarness(): SearchIndexHarness {
+  return new SearchIndexService(
+    {} as ConstructorParameters<typeof SearchIndexService>[0]
+  ) as unknown as SearchIndexHarness
 }
 
 describe('SearchIndexService delta/hash', () => {
