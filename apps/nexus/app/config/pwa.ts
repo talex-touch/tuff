@@ -37,7 +37,13 @@ export const pwa: ModuleOptions = {
     ],
   },
   workbox: {
-    globPatterns: ['**/*.{js,css,html,txt,png,ico,svg}'],
+    globPatterns: ['**/*.{js,css,html,png,ico,svg}'],
+    globIgnores: [
+      '**/__nuxt_content/**',
+      '**/dump.*.sql',
+      '**/*.wasm',
+      '**/sqlite3*',
+    ],
     maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
     navigateFallbackDenylist: [/.*/],
     cleanupOutdatedCaches: true,

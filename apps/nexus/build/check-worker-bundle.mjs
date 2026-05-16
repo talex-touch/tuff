@@ -8,6 +8,7 @@ const nexusRoot = join(currentDir, '..')
 const distRoot = join(nexusRoot, 'dist')
 const workerRoot = join(distRoot, '_worker.js')
 const routesJsonPath = join(distRoot, '_routes.json')
+const serviceWorkerPath = join(distRoot, 'sw.js')
 const oneMiB = 1024 * 1024
 const distBudget = {
   maxTotalBytes: 60 * oneMiB,
@@ -54,6 +55,12 @@ const forbiddenRouteChunkPatterns = [
   /(?:^|\/)hero-v\d+-/,
   /(?:^|\/)flip-overlay-stack-/,
   /(?:^|\/)apitable-/,
+]
+const forbiddenServiceWorkerPrecachePatterns = [
+  /__nuxt_content\//,
+  /dump\.[^"']+\.sql/,
+  /sqlite3[^"']*/,
+  /\.wasm/,
 ]
 
 function formatBytes(bytes) {
@@ -215,6 +222,20 @@ function checkForbiddenRouteChunks(files) {
     .map(file => file.relativePath)
 }
 
+function checkServiceWorkerPrecache() {
+  if (!existsSync(serviceWorkerPath))
+    return []
+
+  const source = readFileSync(serviceWorkerPath, 'utf8')
+  const matches = new Set()
+  for (const pattern of forbiddenServiceWorkerPrecachePatterns) {
+    for (const match of source.matchAll(new RegExp(`url:[\"'][^\"']*${pattern.source}[^\"']*[\"']`, 'g')))
+      matches.add(match[0])
+  }
+
+  return Array.from(matches).sort()
+}
+
 if (!existsSync(workerRoot)) {
   console.error('[nexus-worker-bundle] dist/_worker.js is missing. Run `pnpm -C "apps/nexus" run build` first.')
   process.exit(1)
@@ -227,6 +248,7 @@ const routeCheck = checkRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
 const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
+const forbiddenServiceWorkerPrecache = checkServiceWorkerPrecache()
 const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
@@ -260,11 +282,17 @@ if (forbiddenRouteChunks.length) {
     console.error(`  ${chunk}`)
 }
 
+if (forbiddenServiceWorkerPrecache.length) {
+  console.error('[nexus-worker-bundle] oversized content runtime assets found in service worker precache:')
+  for (const asset of forbiddenServiceWorkerPrecache)
+    console.error(`  ${asset}`)
+}
+
 if (sizeFindings.length) {
   console.error('[nexus-dist-budget] size budget violations:')
   for (const finding of sizeFindings)
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || sizeFindings.length)
+if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || sizeFindings.length)
   process.exit(1)

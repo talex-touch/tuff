@@ -101,6 +101,8 @@ tmp/
 # ========================
 # Workflow / Testing / Dev
 # ========================
+.playwright-mcp/
+.playwright/
 /apps/core-app/.playwright-mcp/
 /index.js
 /paseo.json
