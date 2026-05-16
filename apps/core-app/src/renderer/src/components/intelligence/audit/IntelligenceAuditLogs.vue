@@ -4,6 +4,7 @@ import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface IntelligenceAuditLogEntry {
   traceId: string
@@ -31,6 +32,7 @@ const props = defineProps<{
 const { t } = useI18n()
 const transport = useTuffTransport()
 const aiClient = createIntelligenceClient(transport)
+const intelligenceAuditLog = createRendererLogger('IntelligenceAuditLogs')
 const loading = ref(false)
 
 const logs = ref<IntelligenceAuditLogEntry[]>([])
@@ -55,7 +57,7 @@ async function loadLogs(append = false) {
 
     hasMore.value = newLogs.length === limit.value
   } catch (error) {
-    console.error('Failed to load logs:', error)
+    intelligenceAuditLog.error('Failed to load logs:', error)
   } finally {
     loading.value = false
   }

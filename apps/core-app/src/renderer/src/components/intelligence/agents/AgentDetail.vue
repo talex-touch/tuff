@@ -5,6 +5,7 @@ import { TuffProgress } from '@talex-touch/tuffex'
 import { toast } from 'vue-sonner'
 import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
   agent: AgentDescriptor
@@ -12,6 +13,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const agentsSdk = useAgentsSdk()
+const agentDetailLog = createRendererLogger('AgentDetail')
 
 const taskInput = ref('')
 const executing = ref(false)
@@ -210,7 +212,7 @@ async function executeTask() {
 
     startTaskStatusPolling()
   } catch (err) {
-    console.error('Task execution failed:', err)
+    agentDetailLog.error('Task execution failed:', err)
     taskError.value = err instanceof Error ? err.message : t('intelligence.agents.task_failed')
     taskStep.value = t('intelligence.agents.task_failed')
     executing.value = false

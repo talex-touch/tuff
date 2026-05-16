@@ -16,6 +16,7 @@ import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import CapabilityModelTransfer from './CapabilityModelTransfer.vue'
 import CapabilityTestDialog from './CapabilityTestDialog.vue'
 
@@ -38,6 +39,7 @@ const emits = defineEmits<{
 const { t } = useI18n()
 const transport = useTuffTransport()
 const intelligence = createIntelligenceClient(transport)
+const capabilityDetailsLog = createRendererLogger('IntelligenceCapabilityDetails')
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
 const showModelDrawer = ref(false)
@@ -269,7 +271,7 @@ async function handleTest(): Promise<void> {
     testMeta.value = meta
     showTestDialog.value = true
   } catch (error) {
-    console.error('Failed to get test meta:', error)
+    capabilityDetailsLog.error('Failed to get test meta:', error)
     // 如果获取失败，使用默认值并继续
     testMeta.value = { requiresUserInput: false, inputHint: '' }
     showTestDialog.value = true
