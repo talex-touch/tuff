@@ -11,8 +11,10 @@ const props = withDefaults(defineProps<{
 })
 
 const imageState = ref<'unknown' | 'normal' | 'dark-monochrome'>('unknown')
+const colorMode = useColorMode()
 
 const fallbackText = computed(() => props.title.trim().charAt(0).toUpperCase() || '?')
+const isDarkMode = computed(() => colorMode.value === 'dark')
 const hasIcon = computed(() => Boolean(props.iconUrl?.trim()))
 
 watch(() => props.iconUrl, () => {
@@ -85,7 +87,10 @@ function isDarkMonochromeImage(image: HTMLImageElement) {
 <template>
   <span
     class="DashboardAssetIcon"
-    :class="{ 'is-dark-monochrome': imageState === 'dark-monochrome' }"
+    :class="{
+      'is-dark-monochrome': imageState === 'dark-monochrome',
+      'is-dark-mode': isDarkMode,
+    }"
   >
     <img
       v-if="hasIcon"
@@ -128,7 +133,8 @@ function isDarkMonochromeImage(image: HTMLImageElement) {
   line-height: 1;
 }
 
-:global(.dark) .DashboardAssetIcon.is-dark-monochrome .DashboardAssetIcon-Image {
+.DashboardAssetIcon.is-dark-mode.is-dark-monochrome .DashboardAssetIcon-Image {
   filter: brightness(0) invert(1);
 }
+
 </style>

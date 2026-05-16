@@ -45,7 +45,7 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('\\.wasm')
   })
 
-  it('deduplicates Nuxt Content sqlite wasm after build', () => {
+  it('deduplicates Nuxt Content sqlite wasm and SQL dumps after build', () => {
     const packageSource = readFileSync(join(nexusRoot, 'package.json'), 'utf8')
     const trimSource = readFileSync(trimContentAssetsPath, 'utf8')
     const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
@@ -53,7 +53,11 @@ describe('Nexus deploy asset budget', () => {
     expect(packageSource).toContain('node build/trim-content-assets.mjs')
     expect(trimSource).toContain('removed duplicate sqlite wasm')
     expect(trimSource).toContain('workerSource.replaceAll')
+    expect(trimSource).toContain('removed duplicate root SQL dumps')
+    expect(trimSource).toContain('replaceJsonObjectEntry')
     expect(guardSource).toContain('checkDuplicateSqliteWasm')
+    expect(guardSource).toContain('checkDuplicateRootSqlDumps')
     expect(guardSource).toContain('duplicate sqlite wasm files found')
+    expect(guardSource).toContain('duplicate root SQL dump files found')
   })
 })

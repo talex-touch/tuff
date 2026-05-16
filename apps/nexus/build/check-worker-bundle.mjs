@@ -144,6 +144,12 @@ function checkDuplicateSqliteWasm(distFiles) {
   return duplicateWasmFiles
 }
 
+function checkDuplicateRootSqlDumps(distFiles) {
+  return distFiles
+    .filter(file => /^dump\.[A-Za-z0-9_-]+\.sql$/.test(file.relativePath))
+    .map(file => file.relativePath)
+}
+
 function checkSizeBudgets(distFiles, distTotalBytes, workerTotalBytes, workerGzipBytes) {
   const findings = []
   if (distTotalBytes > distBudget.maxTotalBytes) {
@@ -258,6 +264,7 @@ const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
 const forbiddenServiceWorkerPrecache = checkServiceWorkerPrecache()
 const duplicateSqliteWasm = checkDuplicateSqliteWasm(distFiles)
+const duplicateRootSqlDumps = checkDuplicateRootSqlDumps(distFiles)
 const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
@@ -303,11 +310,17 @@ if (duplicateSqliteWasm.length) {
     console.error(`  ${file}`)
 }
 
+if (duplicateRootSqlDumps.length) {
+  console.error('[nexus-dist-budget] duplicate root SQL dump files found:')
+  for (const file of duplicateRootSqlDumps)
+    console.error(`  ${file}`)
+}
+
 if (sizeFindings.length) {
   console.error('[nexus-dist-budget] size budget violations:')
   for (const finding of sizeFindings)
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || duplicateSqliteWasm.length || sizeFindings.length)
+if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || duplicateSqliteWasm.length || duplicateRootSqlDumps.length || sizeFindings.length)
   process.exit(1)
