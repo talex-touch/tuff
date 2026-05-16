@@ -10,7 +10,10 @@
 
 import type { SizePreset } from '../types'
 import { onUnmounted, ref } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { useDivisionBoxStore } from '../store/division-box'
+
+const divisionBoxResizeLog = createRendererLogger('DivisionBoxResize')
 
 export interface Dimensions {
   width: number
@@ -140,7 +143,7 @@ export function useResize(sessionId: string, initialSize: SizePreset) {
     try {
       await store.updateSessionState(sessionId, 'dimensions', dimensions.value)
     } catch (error) {
-      console.error('Failed to save dimensions:', error)
+      divisionBoxResizeLog.error('Failed to save dimensions:', error)
     }
   }
 

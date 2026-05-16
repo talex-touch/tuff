@@ -18,9 +18,11 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { defineStore } from 'pinia'
 import { divisionBoxStorage } from '~/modules/storage/division-box-storage'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 let disposeStateChanged: (() => void) | null = null
 let disposeSessionDestroyed: (() => void) | null = null
+const divisionBoxStoreLog = createRendererLogger('DivisionBoxStore')
 
 export const useDivisionBoxStore = defineStore('divisionBox', {
   state: (): DivisionBoxStoreState => ({
@@ -79,7 +81,7 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
           throw new Error(result.error?.message || 'Failed to open DivisionBox')
         }
       } catch (error) {
-        console.error('Failed to open DivisionBox:', error)
+        divisionBoxStoreLog.error('Failed to open DivisionBox:', error)
         throw error
       }
     },
@@ -98,7 +100,7 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
           throw new Error(result.error?.message || 'Failed to close DivisionBox')
         }
       } catch (error) {
-        console.error('Failed to close DivisionBox:', error)
+        divisionBoxStoreLog.error('Failed to close DivisionBox:', error)
         throw error
       }
     },
@@ -122,7 +124,7 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
           throw new Error(result?.error?.message || 'Failed to update session state')
         }
       } catch (error) {
-        console.error('Failed to update session state:', error)
+        divisionBoxStoreLog.error('Failed to update session state:', error)
         throw error
       }
     },
@@ -171,7 +173,7 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
         await divisionBoxStorage.reloadFromRemote()
         this.pinnedList = [...divisionBoxStorage.getPinnedSessionIds()]
       } catch (error) {
-        console.error('Failed to load pinned list:', error)
+        divisionBoxStoreLog.error('Failed to load pinned list:', error)
       }
     },
 
@@ -183,7 +185,7 @@ export const useDivisionBoxStore = defineStore('divisionBox', {
         divisionBoxStorage.setPinnedSessionIds(this.pinnedList)
         await divisionBoxStorage.saveToRemote({ force: true })
       } catch (error) {
-        console.error('Failed to save pinned list:', error)
+        divisionBoxStoreLog.error('Failed to save pinned list:', error)
       }
     },
 

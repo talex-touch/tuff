@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { useDrag } from '../composables/useDrag'
 import { useResize } from '../composables/useResize'
 import { useDivisionBoxStore } from '../store/division-box'
@@ -42,6 +43,8 @@ const props = withDefaults(defineProps<Props>(), {
   initialX: 100,
   initialY: 100
 })
+
+const divisionBoxShellLog = createRendererLogger('DivisionBoxShell')
 
 // Refs
 const shellRef = ref<HTMLElement>()
@@ -194,7 +197,7 @@ onMounted(() => {
       }
     })
     .catch((error: Error) => {
-      console.error(`[DivisionBox ${props.sessionId}] Failed to get initial state:`, error)
+      divisionBoxShellLog.error(`Failed to get initial state for ${props.sessionId}:`, error)
     })
 })
 

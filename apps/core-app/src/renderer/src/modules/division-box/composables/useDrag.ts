@@ -8,8 +8,11 @@
  */
 
 import { onUnmounted, ref } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { useDivisionBoxStore } from '../store/division-box'
 import { EDGE_SNAP_THRESHOLD } from '../types'
+
+const divisionBoxDragLog = createRendererLogger('DivisionBoxDrag')
 
 export interface DragPosition {
   x: number
@@ -181,7 +184,7 @@ export function useDrag(sessionId: string, initialX: number = 100, initialY: num
     try {
       await store.updateSessionState(sessionId, 'position', position.value)
     } catch (error) {
-      console.error('Failed to save position:', error)
+      divisionBoxDragLog.error('Failed to save position:', error)
     }
   }
 
