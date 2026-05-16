@@ -6,6 +6,7 @@ import { isElectronRenderer } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
@@ -15,6 +16,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const transport = isElectronRenderer() ? useTuffTransport() : null
+const textPreviewLog = createRendererLogger('TextPreview')
 const textContent = ref('')
 const loading = ref(false)
 const error = ref('')
@@ -140,7 +142,7 @@ async function loadContent() {
     }
 
     if (!isTimeoutError) {
-      console.error('TextPreview error:', err)
+      textPreviewLog.error('Preview error:', err)
     }
   } finally {
     loading.value = false

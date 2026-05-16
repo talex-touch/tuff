@@ -3,6 +3,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import gsap from 'gsap'
 import { computed, onMounted, ref, watch } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { type IconValue, toIcon } from './tuff-icon-utils'
 const props = withDefaults(
   defineProps<{
@@ -30,6 +31,7 @@ const emits = defineEmits<{
 }>()
 
 const STORAGE_PREFIX = 'tuff-block-storage-'
+const tuffGroupBlockLog = createRendererLogger('TuffGroupBlock')
 
 function resolveDefaultExpand(): boolean {
   if (typeof props.defaultExpand === 'boolean') return props.defaultExpand
@@ -47,7 +49,7 @@ function readStoredExpand(): boolean | null {
     const parsed = JSON.parse(raw)
     if (typeof parsed?.expand === 'boolean') return parsed.expand
   } catch (error) {
-    console.warn('[TuffGroupBlock] Failed to read stored expand state', error)
+    tuffGroupBlockLog.warn('Failed to read stored expand state', error)
   }
   return null
 }
@@ -71,7 +73,7 @@ function persistState(state: boolean) {
     localStorage.setItem(`${STORAGE_PREFIX}${props.memoryName}`, JSON.stringify({ expand: state }))
     storedExpand.value = state
   } catch (error) {
-    console.warn('[TuffGroupBlock] Failed to persist expand state', error)
+    tuffGroupBlockLog.warn('Failed to persist expand state', error)
   }
 }
 

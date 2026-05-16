@@ -6,6 +6,7 @@ import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface IntelligencePayload {
   requestId: string
@@ -29,6 +30,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const coreIntelligenceLog = createRendererLogger('CoreIntelligenceAnswer')
 
 const aiData = computed<IntelligencePayload>(() => {
   if (props.payload) {
@@ -119,7 +121,7 @@ function copyAnswer(): void {
       toast.success(t('coreBox.intelligence.copySuccess'))
     })
     .catch((error) => {
-      console.error('[CoreBox] Failed to copy AI answer:', error)
+      coreIntelligenceLog.error('Failed to copy AI answer:', error)
       toast.error(t('coreBox.intelligence.copyFailed'))
     })
 }
