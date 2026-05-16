@@ -1,4 +1,4 @@
-import type { TuffItem } from '@talex-touch/utils/core-box'
+import type { TuffItem, TuffQuery } from '@talex-touch/utils/core-box'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -9,6 +9,24 @@ type AppSearchTestRow = Parameters<typeof mapAppsToRecommendationItems>[0][numbe
 
 function getBasicIcon(item: TuffItem): unknown {
   return item.render.basic?.icon
+}
+
+function getAppMeta(item: TuffItem):
+  | {
+      launchKind?: string
+      launchTarget?: string
+      bundleId?: string
+      bundle_id?: string
+    }
+  | undefined {
+  return item.meta?.app as
+    | {
+        launchKind?: string
+        launchTarget?: string
+        bundleId?: string
+        bundle_id?: string
+      }
+    | undefined
 }
 
 function createAppSearchRow(
@@ -38,7 +56,7 @@ describe('search-processing-service', () => {
   it('falls back to clean app name when displayName contains replacement chars', async () => {
     const items = await processSearchResults(
       [
-        {
+        createAppSearchRow({
           name: '\u5FAE\u4FE1',
           displayName: '\u03A2\uFFFD\uFFFD',
           path: 'D:\\ChatApp\\ChatApp.exe',
@@ -47,9 +65,9 @@ describe('search-processing-service', () => {
             launchKind: 'path',
             launchTarget: 'D:\\ChatApp\\ChatApp.exe'
           }
-        }
-      ] as any,
-      { text: '\u5FAE', inputs: [] } as any,
+        })
+      ],
+      { text: '\u5FAE', inputs: [] } satisfies TuffQuery,
       false,
       {}
     )
@@ -63,34 +81,34 @@ describe('search-processing-service', () => {
   })
 
   it('prefers displayPath as subtitle for Windows Store apps', () => {
-    const [item] = mapAppsToRecommendationItems([
-      {
-        name: 'Calculator',
-        displayName: 'Calculator',
-        path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
-        extensions: {
-          appIdentity: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
-          displayPath: 'Windows Store',
-          description: 'Fast calculations',
-          icon: 'data:image/png;base64,AA==',
-          launchKind: 'uwp',
-          launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+    const [item] = mapAppsToRecommendationItems(
+      [
+        {
+          name: 'Calculator',
+          displayName: 'Calculator',
+          path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+          extensions: {
+            appIdentity: 'uwp:microsoft.windowscalculator_8wekyb3d8bbwe!app',
+            displayPath: 'Windows Store',
+            description: 'Fast calculations',
+            icon: 'data:image/png;base64,AA==',
+            launchKind: 'uwp',
+            launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
+          }
         }
-      }
-    ] as any)
+      ].map((row) => createAppSearchRow(row))
+    )
 
-    expect((item.render as any)?.basic?.subtitle).toBe('Windows Store')
-    expect((item.render as any)?.basic?.description).toBe('Fast calculations')
-    expect((item.render as any)?.basic?.icon).toMatchObject({
+    expect(item.render.basic?.subtitle).toBe('Windows Store')
+    expect(item.render.basic?.description).toBe('Fast calculations')
+    expect(item.render.basic?.icon).toMatchObject({
       type: 'url',
       value: 'data:image/png;base64,AA=='
     })
-    expect((item.meta as any)?.app?.launchKind).toBe('uwp')
-    expect((item.meta as any)?.app?.launchTarget).toBe(
-      'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
-    )
-    expect((item.meta as any)?.app?.bundleId).toBe('')
-    expect((item.meta as any)?.app?.bundle_id).toBeUndefined()
+    expect(getAppMeta(item)?.launchKind).toBe('uwp')
+    expect(getAppMeta(item)?.launchTarget).toBe('Microsoft.WindowsCalculator_8wekyb3d8bbwe!App')
+    expect(getAppMeta(item)?.bundleId).toBe('')
+    expect(getAppMeta(item)?.bundle_id).toBeUndefined()
   })
 
   it('normalizes existing local app icon paths to tfile URLs', () => {
@@ -143,39 +161,43 @@ describe('search-processing-service', () => {
   })
 
   it('keeps empty app icons on the existing file fallback path', () => {
-    const [item] = mapAppsToRecommendationItems([
-      {
-        name: 'No Icon',
-        displayName: 'No Icon',
-        path: '/Applications/No Icon.app',
-        extensions: {
-          appIdentity: '/Applications/No Icon.app',
-          launchKind: 'path',
-          launchTarget: '/Applications/No Icon.app'
+    const [item] = mapAppsToRecommendationItems(
+      [
+        {
+          name: 'No Icon',
+          displayName: 'No Icon',
+          path: '/Applications/No Icon.app',
+          extensions: {
+            appIdentity: '/Applications/No Icon.app',
+            launchKind: 'path',
+            launchTarget: '/Applications/No Icon.app'
+          }
         }
-      }
-    ] as any)
+      ].map((row) => createAppSearchRow(row))
+    )
 
-    expect((item.render as any)?.basic?.icon).toMatchObject({
+    expect(item.render.basic?.icon).toMatchObject({
       type: 'file',
       value: ''
     })
   })
 
   it('skips disabled managed launcher entries in recommendation mapping', () => {
-    const items = mapAppsToRecommendationItems([
-      {
-        name: 'Managed Script',
-        displayName: 'Managed Script',
-        path: '/Users/demo/bin/script.sh',
-        extensions: {
-          entrySource: 'manual',
-          entryEnabled: '0',
-          launchKind: 'shortcut',
-          launchTarget: '/Users/demo/bin/script.sh'
+    const items = mapAppsToRecommendationItems(
+      [
+        {
+          name: 'Managed Script',
+          displayName: 'Managed Script',
+          path: '/Users/demo/bin/script.sh',
+          extensions: {
+            entrySource: 'manual',
+            entryEnabled: '0',
+            launchKind: 'shortcut',
+            launchTarget: '/Users/demo/bin/script.sh'
+          }
         }
-      }
-    ] as any)
+      ].map((row) => createAppSearchRow(row))
+    )
 
     expect(items).toEqual([])
   })

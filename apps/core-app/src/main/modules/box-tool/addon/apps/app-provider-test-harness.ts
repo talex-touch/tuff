@@ -401,6 +401,8 @@ export type AppProviderPrivate = {
   loadScannedApps: (options?: { forceRefresh?: boolean }) => Promise<unknown[]>
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<void>
+  _waitForItemStable: (path: string) => Promise<boolean>
+  handleItemAddedOrChanged: (event: { filePath: string }) => Promise<void> | Promise<Promise<void>>
   _processAppsForDeletion: (apps: unknown[]) => Promise<number[]>
   _performFullSync: (forced: boolean) => Promise<void>
   _generateKeywordsForApp: (app: {

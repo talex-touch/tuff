@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import type { IExecuteArgs } from '@talex-touch/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addWatchPathMock,
@@ -23,6 +24,21 @@ import {
   withPlatform
 } from './app-provider-test-harness'
 import { buildAppExtensions } from './app-index-metadata'
+
+type TestFileRow = {
+  id: number
+  path: string
+  name?: string
+  displayName?: string | null
+  type?: string
+  mtime?: Date
+  ctime?: Date
+}
+
+type TestFilePayload = Record<string, unknown> & {
+  path: string
+  displayName?: string | null
+}
 
 describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
@@ -59,7 +75,7 @@ describe('appProvider rebuild maintenance', () => {
       await appProvider.onLoad({
         databaseManager: { getDb: vi.fn() },
         searchIndex: { indexItems: vi.fn() }
-      } as any)
+      } as Parameters<typeof appProvider.onLoad>[0])
 
       expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
       expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
@@ -101,7 +117,7 @@ describe('appProvider rebuild maintenance', () => {
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      ;(privateProvider as any)._waitForItemStable = vi.fn(async () => true)
+      privateProvider._waitForItemStable = vi.fn(async () => true)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
         getDb: () => ({
@@ -113,7 +129,7 @@ describe('appProvider rebuild maintenance', () => {
       }
       privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
 
-      const processResult = await (privateProvider as any).handleItemAddedOrChanged({
+      const processResult = await privateProvider.handleItemAddedOrChanged({
         filePath: shortcutPath
       })
       await processResult
@@ -122,7 +138,7 @@ describe('appProvider rebuild maintenance', () => {
       expect(valuesMock).toHaveBeenCalled()
 
       getAppInfoByPathMock.mockClear()
-      await (privateProvider as any).handleItemAddedOrChanged({
+      await privateProvider.handleItemAddedOrChanged({
         filePath:
           'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\note.txt'
       })
@@ -163,7 +179,7 @@ describe('appProvider rebuild maintenance', () => {
       }))
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      ;(privateProvider as any)._waitForItemStable = vi.fn(async () => true)
+      privateProvider._waitForItemStable = vi.fn(async () => true)
       const addFileExtensionsMock = vi.fn(async () => undefined)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
@@ -176,7 +192,7 @@ describe('appProvider rebuild maintenance', () => {
       }
       privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
 
-      await (privateProvider as any).handleItemAddedOrChanged({
+      await privateProvider.handleItemAddedOrChanged({
         filePath: apprefPath
       })
 
@@ -232,7 +248,7 @@ describe('appProvider rebuild maintenance', () => {
       const waitForItemStable = vi.fn(async () => true)
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      ;(privateProvider as any)._waitForItemStable = waitForItemStable
+      privateProvider._waitForItemStable = waitForItemStable
       const addFileExtensionsMock = vi.fn(async () => undefined)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
@@ -366,7 +382,7 @@ describe('appProvider rebuild maintenance', () => {
       const waitForItemStable = vi.fn(async () => true)
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
-      ;(privateProvider as any)._waitForItemStable = waitForItemStable
+      privateProvider._waitForItemStable = waitForItemStable
       const addFileExtensionsMock = vi.fn(async () => undefined)
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
@@ -412,7 +428,7 @@ describe('appProvider rebuild maintenance', () => {
           }
         }
       }
-    } as any)
+    } satisfies IExecuteArgs)
 
     expect(shellOpenPathMock).not.toHaveBeenCalled()
 
@@ -443,7 +459,7 @@ describe('appProvider rebuild maintenance', () => {
           }
         }
       }
-    } as any)
+    } satisfies IExecuteArgs)
 
     await flushPromises()
 
@@ -474,7 +490,7 @@ describe('appProvider rebuild maintenance', () => {
           }
         }
       }
-    } as any)
+    } satisfies IExecuteArgs)
 
     await flushPromises()
 
@@ -505,7 +521,7 @@ describe('appProvider rebuild maintenance', () => {
           }
         }
       }
-    } as any)
+    } satisfies IExecuteArgs)
 
     await flushPromises()
     child.emit('exit', 1, null)
@@ -753,7 +769,7 @@ describe('appProvider rebuild maintenance', () => {
           }
         }
       }
-    } as any)
+    } satisfies IExecuteArgs)
 
     await flushPromises()
 
@@ -784,7 +800,7 @@ describe('appProvider rebuild maintenance', () => {
           }
         }
       }
-    } as any)
+    } satisfies IExecuteArgs)
 
     await flushPromises()
 
@@ -1381,7 +1397,7 @@ describe('appProvider rebuild maintenance', () => {
     await fs.writeFile(scriptPath, '#!/bin/sh\nexit 0\n', 'utf8')
 
     let nextId = 1
-    let fileRows: Array<Record<string, any>> = []
+    let fileRows: TestFileRow[] = []
     const extensionRows: Array<{ fileId: number; key: string; value: string }> = []
     const indexItemsMock = vi.fn(async () => undefined)
     const removeItemsMock = vi.fn(async () => undefined)
@@ -1390,7 +1406,7 @@ describe('appProvider rebuild maintenance', () => {
       insert: vi.fn((table: unknown) => {
         expect(table).toBe(files)
         return {
-          values: vi.fn((payload: Record<string, any>) => ({
+          values: vi.fn((payload: TestFilePayload) => ({
             returning: vi.fn(async () => {
               const row = {
                 id: nextId++,
@@ -1406,7 +1422,7 @@ describe('appProvider rebuild maintenance', () => {
       update: vi.fn((table: unknown) => {
         expect(table).toBe(files)
         return {
-          set: vi.fn((payload: Record<string, any>) => ({
+          set: vi.fn((payload: Partial<TestFilePayload>) => ({
             where: vi.fn(async () => {
               fileRows = fileRows.map((row) =>
                 row.path === scriptPath
