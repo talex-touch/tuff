@@ -1,8 +1,4 @@
-import type {
-  LoadingEvent,
-  LoadingMode,
-  StartupContext
-} from '@talex-touch/utils/preload'
+import type { LoadingEvent, LoadingMode, StartupContext } from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
 import { electronAPI } from '@electron-toolkit/preload'
 import { hasWindow } from '@talex-touch/utils/env'

@@ -1,4 +1,7 @@
-import type { IntelligenceInvokeResult, IntelligenceTTSResult } from '@talex-touch/tuff-intelligence'
+import type {
+  IntelligenceInvokeResult,
+  IntelligenceTTSResult
+} from '@talex-touch/tuff-intelligence'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { intelligenceTtsService } from './intelligence-tts-service'
 import { tuffIntelligence } from './intelligence-sdk'

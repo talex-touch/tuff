@@ -214,10 +214,7 @@ describe('search-trace-stats', () => {
 
   it('rejects internally inconsistent archived performance summaries', () => {
     const summary = summarizeSearchTracePerformance(
-      [
-        traceLine('first.result', 's1', 30),
-        traceLine('session.end', 's1', 70)
-      ],
+      [traceLine('first.result', 's1', 30), traceLine('session.end', 's1', 70)],
       {
         minSamples: 200,
         slowThresholdMs: 800

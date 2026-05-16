@@ -52,9 +52,7 @@ function resolveProfileBase(
   return APP_SECURITY_BASE
 }
 
-function stripManagedPreferences(
-  overrides: Electron.WebPreferences
-): WindowWebPreferenceOverrides {
+function stripManagedPreferences(overrides: Electron.WebPreferences): WindowWebPreferenceOverrides {
   const safeOverrides = { ...overrides } as Electron.WebPreferences & Record<string, unknown>
   for (const key of MANAGED_KEYS) {
     delete safeOverrides[key]

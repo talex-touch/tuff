@@ -30,8 +30,7 @@ export type WorkflowValidationErrorCode =
   | 'trigger_config_json'
   | 'context_config_json'
 
-export type WorkflowReviewQueueItemStatus =
-  SharedWorkflowReviewQueueItemStatus
+export type WorkflowReviewQueueItemStatus = SharedWorkflowReviewQueueItemStatus
 
 export class WorkflowValidationError extends Error {
   constructor(
@@ -120,6 +119,16 @@ export interface WorkflowReviewQueueItem {
   status: WorkflowReviewQueueItemStatus
   error?: string
   createdAt: number
+}
+
+export interface WorkflowRunStepSummary {
+  capabilityId?: string
+  provider?: string
+  model?: string
+  traceId?: string
+  latency?: number
+  totalTokens?: number
+  errorCode?: string
 }
 
 const BUILTIN_TOOL_OPTIONS: BuiltinToolOption[] = [
@@ -232,6 +241,34 @@ function firstString(...values: unknown[]): string | undefined {
     }
   }
   return undefined
+}
+
+function firstFiniteNumber(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    const number = Number(value)
+    if (Number.isFinite(number) && number >= 0) {
+      return Math.round(number)
+    }
+  }
+  return undefined
+}
+
+function summarizeRunStep(step: WorkflowRunRecord['steps'][number]): WorkflowRunStepSummary {
+  const output = toRecord(step.output)
+  const input = toRecord(step.input)
+  const metadata = toRecord(step.metadata)
+  const outputUsage = toRecord(output.usage)
+  const metadataUsage = toRecord(metadata.usage)
+
+  return {
+    capabilityId: firstString(output.capabilityId, input.capabilityId, metadata.capabilityId),
+    provider: firstString(output.provider, metadata.provider),
+    model: firstString(output.model, metadata.model),
+    traceId: firstString(output.traceId, metadata.traceId),
+    latency: firstFiniteNumber(output.latency, metadata.latency),
+    totalTokens: firstFiniteNumber(outputUsage.totalTokens, metadataUsage.totalTokens),
+    errorCode: firstString(output.errorCode, metadata.errorCode)
+  }
 }
 
 function parseJson(
@@ -360,9 +397,7 @@ function createDefaultWorkflowDraft(t: Translate): WorkflowDraft {
 
 function mapStepToDraft(step: WorkflowDefinitionStep, index: number): WorkflowStepDraft {
   const kind =
-    step.kind === 'tool' || step.kind === 'prompt' || step.kind === 'model'
-      ? step.kind
-      : 'agent'
+    step.kind === 'tool' || step.kind === 'prompt' || step.kind === 'model' ? step.kind : 'agent'
   return {
     uid: createUid(),
     id: step.id || `step-${index + 1}`,
@@ -523,6 +558,13 @@ export function useWorkflowEditor() {
   const pendingApprovals = computed(() => sessionState.value?.pendingApprovals ?? [])
   const currentSessionId = computed(() => extractSessionId(currentRun.value))
   const reviewQueueItems = computed(() => buildReviewQueueItems(currentRun.value))
+  const currentRunStepSummaries = computed<Record<string, WorkflowRunStepSummary>>(() => {
+    const entries = (currentRun.value?.steps ?? []).map((step, index) => {
+      const stepId = String(step.id || step.workflowStepId || `step-${index + 1}`)
+      return [stepId, summarizeRunStep(step)] as const
+    })
+    return Object.fromEntries(entries)
+  })
 
   async function loadAgents(): Promise<void> {
     agents.value = await agentsSdk.listAll()
@@ -940,6 +982,7 @@ export function useWorkflowEditor() {
     pendingApprovals,
     sessionState,
     reviewQueueItems,
+    currentRunStepSummaries,
     reviewQueueReplaceConfirmId,
     canDeleteCurrent,
     loadAgents,
@@ -964,4 +1007,8 @@ export function useWorkflowEditor() {
     approveTicket,
     refreshSessionState
   }
+}
+
+export const __test = {
+  summarizeRunStep
 }

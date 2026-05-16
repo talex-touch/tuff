@@ -145,10 +145,9 @@ describe('UpdateSystem automatic installer handoff', () => {
     await vi.runOnlyPendingTimersAsync()
     await flushAsync()
 
-    expect(downloadCenter.notificationService.showUpdateDownloadCompleteNotification).toHaveBeenCalledWith(
-      'v2.4.10',
-      'task-1'
-    )
+    expect(
+      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
+    ).toHaveBeenCalledWith('v2.4.10', 'task-1')
     expect(shellOpenPathMock).not.toHaveBeenCalled()
   })
 
@@ -180,10 +179,9 @@ describe('UpdateSystem automatic installer handoff', () => {
     await vi.runOnlyPendingTimersAsync()
     await flushAsync()
 
-    expect(downloadCenter.notificationService.showUpdateDownloadCompleteNotification).toHaveBeenCalledWith(
-      'v2.4.10',
-      'task-1'
-    )
+    expect(
+      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
+    ).toHaveBeenCalledWith('v2.4.10', 'task-1')
     expect(spawnMock).not.toHaveBeenCalled()
     expect(appQuitMock).not.toHaveBeenCalled()
   })
@@ -219,10 +217,9 @@ describe('UpdateSystem automatic installer handoff', () => {
     await vi.runOnlyPendingTimersAsync()
     await flushAsync()
 
-    expect(downloadCenter.notificationService.showUpdateDownloadCompleteNotification).toHaveBeenCalledWith(
-      'v2.4.10',
-      'task-1'
-    )
+    expect(
+      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
+    ).toHaveBeenCalledWith('v2.4.10', 'task-1')
     expect(spawnMock).not.toHaveBeenCalled()
     expect(appQuitMock).not.toHaveBeenCalled()
   })
@@ -266,6 +263,8 @@ describe('UpdateSystem automatic installer handoff', () => {
     expect(unrefMock).toHaveBeenCalledTimes(1)
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(shellOpenPathMock).not.toHaveBeenCalled()
-    expect(downloadCenter.notificationService.showUpdateDownloadCompleteNotification).not.toHaveBeenCalled()
+    expect(
+      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
+    ).not.toHaveBeenCalled()
   })
 })

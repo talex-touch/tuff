@@ -1176,7 +1176,7 @@ export class IntelligenceWorkflowService {
                 output
               }
             }
-          : step.metadata ?? {}
+          : (step.metadata ?? {})
     }
   }
 

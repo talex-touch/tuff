@@ -237,6 +237,4 @@ function isPinnedSection(section: TuffSection): boolean {
     --item-icon-size: 48px;
   }
 }
-
-
 </style>

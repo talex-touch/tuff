@@ -4,10 +4,8 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export type NativeAddonCaptureOptions =
-  NativeScreenshotAddonModule.NativeScreenshotCaptureOptions
-export type NativeAddonCaptureResult =
-  NativeScreenshotAddonModule.NativeScreenshotCaptureResult
+export type NativeAddonCaptureOptions = NativeScreenshotAddonModule.NativeScreenshotCaptureOptions
+export type NativeAddonCaptureResult = NativeScreenshotAddonModule.NativeScreenshotCaptureResult
 export type NativeAddonDisplay = NativeScreenshotAddonModule.NativeScreenshotDisplay
 
 type NativeScreenshotAddon = typeof NativeScreenshotAddonModule
@@ -28,10 +26,7 @@ function collectAncestorDirs(start: string): string[] {
 }
 
 function resolveWorkspaceFallback(): string | null {
-  const startDirs = [
-    process.cwd(),
-    path.dirname(fileURLToPath(import.meta.url))
-  ]
+  const startDirs = [process.cwd(), path.dirname(fileURLToPath(import.meta.url))]
   const seen = new Set<string>()
 
   for (const startDir of startDirs) {

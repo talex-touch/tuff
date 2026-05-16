@@ -749,11 +749,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
     return this.createResult(query, startedAt, [])
   }
 
-  private createResult(
-    query: TuffQuery,
-    startedAt: number,
-    items: TuffItem[]
-  ): TuffSearchResult {
+  private createResult(query: TuffQuery, startedAt: number, items: TuffItem[]): TuffSearchResult {
     const duration = performance.now() - startedAt
     return new TuffSearchResultBuilder(query)
       .setItems(items)

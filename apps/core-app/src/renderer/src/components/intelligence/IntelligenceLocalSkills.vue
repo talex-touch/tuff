@@ -16,7 +16,9 @@ const environment = ref<IntelligenceLocalEnvironmentSummary | null>(null)
 const loading = ref(false)
 const error = ref('')
 
-const installedTools = computed(() => environment.value?.tools.filter((tool) => tool.installed) ?? [])
+const installedTools = computed(
+  () => environment.value?.tools.filter((tool) => tool.installed) ?? []
+)
 const installedSkills = computed(
   () => environment.value?.skillProviders.filter((skill) => skill.installed) ?? []
 )

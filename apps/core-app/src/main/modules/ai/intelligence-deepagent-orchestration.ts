@@ -692,7 +692,12 @@ export class IntelligenceDeepAgentOrchestrationService {
       )
     }
 
-    const payload = this.buildModelStepPayload(capabilityId, definitionStep, executionContext, state)
+    const payload = this.buildModelStepPayload(
+      capabilityId,
+      definitionStep,
+      executionContext,
+      state
+    )
     const intelligence = await getIntelligenceSdk()
     const result = await intelligence.invoke(capabilityId, payload, {
       metadata: {
@@ -749,7 +754,9 @@ export class IntelligenceDeepAgentOrchestrationService {
       text ? `输入:\n${text}` : '',
       sourceText ? `输入引用:\n${sourceText}` : '',
       outputContract?.format ? `输出格式:\n${outputContract.format}` : '',
-      outputContract?.schema ? `输出 JSON schema:\n${stringifyForPrompt(outputContract.schema)}` : '',
+      outputContract?.schema
+        ? `输出 JSON schema:\n${stringifyForPrompt(outputContract.schema)}`
+        : '',
       `工作流输入:\n${stringifyForPrompt(state.inputs)}`,
       `桌面上下文:\n${stringifyForPrompt(executionContext.contextSnapshot)}`,
       `前置步骤输出:\n${stringifyForPrompt(state.previousOutputs)}`

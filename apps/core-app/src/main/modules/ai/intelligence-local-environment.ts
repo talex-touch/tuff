@@ -82,9 +82,8 @@ async function getMtime(path: string): Promise<number | undefined> {
 }
 
 function resolveExecutableCandidates(command: string, envPath: string): string[] {
-  const extensions = process.platform === 'win32'
-    ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
-    : ['']
+  const extensions =
+    process.platform === 'win32' ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';') : ['']
   return envPath
     .split(delimiter)
     .filter(Boolean)
@@ -216,7 +215,7 @@ async function readSkillManifest(
     installed: true,
     enabled: mode === 'core',
     mode,
-    riskLevel: mode === 'gated' ? 'high' as const : 'low' as const,
+    riskLevel: mode === 'gated' ? ('high' as const) : ('low' as const),
     capabilities: CAPABILITY_BY_SKILL[skillId] ?? [],
     path: skillPath,
     manifestPath,
@@ -227,7 +226,10 @@ async function readSkillManifest(
 async function listCodexSkillDirectories(skillsRoot: string): Promise<string[]> {
   try {
     const entries = await readdir(skillsRoot, { withFileTypes: true })
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
   } catch {
     return []
   }
@@ -262,7 +264,7 @@ async function resolveSkillProviders(
         installed: false,
         enabled: false,
         mode,
-        riskLevel: mode === 'gated' ? 'high' as const : 'low' as const,
+        riskLevel: mode === 'gated' ? ('high' as const) : ('low' as const),
         capabilities: CAPABILITY_BY_SKILL[skillId] ?? [],
         path: skillPath,
         manifestPath: join(skillPath, 'SKILL.md')
@@ -284,24 +286,23 @@ function buildDocCandidatePaths(paths: RuntimePaths) {
   ]
 }
 
-async function resolveConfigFiles(paths: RuntimePaths): Promise<IntelligenceLocalConfigFileSummary[]> {
+async function resolveConfigFiles(
+  paths: RuntimePaths
+): Promise<IntelligenceLocalConfigFileSummary[]> {
   const codexHome = paths.codexHome || join(paths.homeDir, '.codex')
   const codexConfigPath = join(codexHome, 'config.toml')
   const codexConfig = await readTomlMetadata(codexConfigPath)
-  const docs: Array<Pick<
-    IntelligenceLocalConfigFileSummary,
-    'path' | 'kind' | 'updatedAt'
-  >> = []
+  const docs: Array<Pick<IntelligenceLocalConfigFileSummary, 'path' | 'kind' | 'updatedAt'>> = []
 
   for (const candidate of buildDocCandidatePaths(paths)) {
     if (await pathExists(candidate)) {
       docs.push({
         path: candidate,
         kind: candidate.endsWith('.md')
-          ? 'instructions' as const
+          ? ('instructions' as const)
           : candidate.includes('.codex')
-            ? 'codex-project' as const
-            : 'claude-project' as const,
+            ? ('codex-project' as const)
+            : ('claude-project' as const),
         updatedAt: await getMtime(candidate)
       })
     }
@@ -318,9 +319,10 @@ async function resolveConfigFiles(paths: RuntimePaths): Promise<IntelligenceLoca
       updatedAt: await getMtime(codexConfigPath)
     },
     ...docs.map((doc) => ({
-      tool: doc.path.endsWith('CLAUDE.md') || doc.path.includes('.claude')
-        ? 'claude' as const
-        : 'codex' as const,
+      tool:
+        doc.path.endsWith('CLAUDE.md') || doc.path.includes('.claude')
+          ? ('claude' as const)
+          : ('codex' as const),
       path: doc.path,
       exists: true,
       kind: doc.kind,
@@ -364,10 +366,7 @@ export async function getIntelligenceLocalEnvironment(
         name: 'Claude',
         installed: Boolean(claudePath),
         executablePath: claudePath,
-        configRoots: [
-          join(paths.homeDir, '.claude'),
-          paths.cwd
-        ]
+        configRoots: [join(paths.homeDir, '.claude'), paths.cwd]
       }
     ],
     configFiles,

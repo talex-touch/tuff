@@ -8,10 +8,7 @@ import type {
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import {
-  FILE_WORKER_IDLE_SHUTDOWN_MS,
-  IdleWorkerShutdownController
-} from './idle-worker-shutdown'
+import { FILE_WORKER_IDLE_SHUTDOWN_MS, IdleWorkerShutdownController } from './idle-worker-shutdown'
 
 interface PendingIcon {
   resolve: (value: Buffer | null) => void

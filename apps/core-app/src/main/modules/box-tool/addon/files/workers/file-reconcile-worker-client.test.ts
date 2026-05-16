@@ -121,9 +121,11 @@ describe('FileReconcileWorkerClient idle shutdown', () => {
       filesToUpdate: [],
       deletedIds: [1]
     }
-    const secondReconcile = client.reconcile([], [{ id: 1, path: '/tmp/a.txt', mtime: 1 }], [
-      '/tmp'
-    ])
+    const secondReconcile = client.reconcile(
+      [],
+      [{ id: 1, path: '/tmp/a.txt', mtime: 1 }],
+      ['/tmp']
+    )
     const secondWorker = workerMock.workers.at(-1)!
 
     expect(workerMock.workers).toHaveLength(2)

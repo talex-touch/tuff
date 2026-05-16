@@ -390,10 +390,7 @@ function addCounterConsistencyFailures(
   addEventMetricConsistencyFailures(summary.sessionEnd, failures)
 }
 
-function addEventMetricConsistencyFailures(
-  stats: SearchTraceEventStats,
-  failures: string[]
-): void {
+function addEventMetricConsistencyFailures(stats: SearchTraceEventStats, failures: string[]): void {
   const label = stats.event
 
   if (

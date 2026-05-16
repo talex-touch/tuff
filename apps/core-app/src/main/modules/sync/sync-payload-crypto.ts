@@ -32,12 +32,13 @@ export interface SyncPayloadCryptoStore {
   isAvailable: () => boolean
   getValue: (key: string) => Promise<string | null>
   setValue: (key: string, value: string | null) => Promise<boolean>
-  wrapValue?: (
-    value: string
-  ) =>
+  wrapValue?: (value: string) =>
     | { backend: Exclude<SecureStoreBackend, 'unavailable'> | string; value: string }
     | null
-    | Promise<{ backend: Exclude<SecureStoreBackend, 'unavailable'> | string; value: string } | null>
+    | Promise<{
+        backend: Exclude<SecureStoreBackend, 'unavailable'> | string
+        value: string
+      } | null>
 }
 
 export interface EncryptedSyncPayload {

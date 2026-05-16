@@ -105,7 +105,8 @@ function scoreDisplayPair(
 
   const physical = getPhysicalBounds(electronDisplay)
   const primaryPenalty =
-    primaryDisplayId !== null && nativeDisplay.isPrimary === (electronDisplay.id === primaryDisplayId)
+    primaryDisplayId !== null &&
+    nativeDisplay.isPrimary === (electronDisplay.id === primaryDisplayId)
       ? 0
       : 5_000
 
@@ -189,7 +190,10 @@ function toNativeLocalRegion(
   }
 }
 
-function toNativePoint(point: { x: number; y: number }, pair: DisplayPair | null): {
+function toNativePoint(
+  point: { x: number; y: number },
+  pair: DisplayPair | null
+): {
   x: number
   y: number
 } {
@@ -252,7 +256,9 @@ export class NativeScreenshotService {
     }
   }
 
-  async capture(request: NativeScreenshotCaptureRequest = {}): Promise<NativeScreenshotCaptureResult> {
+  async capture(
+    request: NativeScreenshotCaptureRequest = {}
+  ): Promise<NativeScreenshotCaptureResult> {
     const support = this.getSupport()
     if (!support.supported) {
       const error = new Error(support.reason || 'Native screenshot is unsupported') as CodedError
@@ -273,7 +279,12 @@ export class NativeScreenshotService {
         ? nativeResult.image
         : Buffer.from(nativeResult.image)
       const wroteClipboard = writeClipboard ? this.writeClipboardImage(imageBuffer) : false
-      const result = await this.buildCaptureResult(nativeResult, imageBuffer, output, wroteClipboard)
+      const result = await this.buildCaptureResult(
+        nativeResult,
+        imageBuffer,
+        output,
+        wroteClipboard
+      )
 
       screenshotLog.info('Native screenshot captured', {
         meta: {

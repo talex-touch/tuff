@@ -92,7 +92,9 @@ describe('FileIndexWorkerClient idle shutdown', () => {
   it('terminates the idle worker after indexing and restarts on next batch', async () => {
     vi.useFakeTimers()
     const client = new FileIndexWorkerClient()
-    const firstBatch = client.indexFiles('/tmp/search.db', 'local', 'file', [createFile(1, 'a.txt')])
+    const firstBatch = client.indexFiles('/tmp/search.db', 'local', 'file', [
+      createFile(1, 'a.txt')
+    ])
     const firstWorker = workerMock.workers.at(-1)!
 
     expect(firstWorker.messages[0]).toMatchObject({
