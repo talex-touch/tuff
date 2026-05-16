@@ -1,5 +1,8 @@
 import type { ITuffTransport, TuffEvent } from '@talex-touch/utils/transport'
 import { useDebounceFn } from '@vueuse/core'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const coreBoxTransportLog = createRendererLogger('CoreBoxTransport')
 
 interface TransportOptions<TPayload, TResponse> {
   event: TuffEvent<TPayload, TResponse>
@@ -31,7 +34,7 @@ export function createCoreBoxTransport<TPayload, TResponse = void>(
       if (onError) {
         onError(error)
       } else {
-        console.error(`[coreBoxTransport] Failed to send ${eventName}:`, error)
+        coreBoxTransportLog.error(`Failed to send ${eventName}:`, error)
       }
     })
   })

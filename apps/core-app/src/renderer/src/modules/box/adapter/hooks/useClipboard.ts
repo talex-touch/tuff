@@ -3,6 +3,7 @@ import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
 import { ref } from 'vue'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/storage/app-storage'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { BoxMode } from '..'
 import { isUrlLikeClipboardText } from './clipboard-text-utils'
 import { getLatestClipboard, useClipboardChannel } from './useClipboardChannel'
@@ -11,6 +12,7 @@ const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
 const autoPastedClipboardIdentities = new Map<string, number>()
+const coreBoxClipboardLog = createRendererLogger('CoreBoxClipboard')
 
 type HandlePasteOptions = {
   overrideDismissed?: boolean
@@ -406,7 +408,7 @@ export function useClipboard(
       })
     } catch (error) {
       // TouchChannel not available yet, retry on next tick
-      console.warn('[useClipboard] TouchChannel not available, retrying...', error)
+      coreBoxClipboardLog.warn('TouchChannel not available, retrying...', error)
       initAttempted = false
       setTimeout(initClipboardChannel, 100)
     }

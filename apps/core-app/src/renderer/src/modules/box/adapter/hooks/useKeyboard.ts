@@ -15,6 +15,7 @@ import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface SectionRange {
   start: number
@@ -42,6 +43,7 @@ const revealInFolderTitle = rendererPlatformState.isMac ? '在 Finder 中显示'
 const revealInFolderSubtitle = rendererPlatformState.isMac
   ? '在 Finder 中打开'
   : '在文件管理器中打开'
+const coreBoxKeyboardLog = createRendererLogger('CoreBoxKeyboard')
 
 /** Build section ranges from sections config */
 function buildSectionRanges(sections: TuffSection[]): SectionRange[] {
@@ -574,7 +576,7 @@ export function useKeyboard(
           itemActions: currentItem.actions?.map(convertTuffActionToMetaAction) || []
         })
         .catch((error) => {
-          console.error('[useKeyboard] Failed to open MetaOverlay:', error)
+          coreBoxKeyboardLog.error('Failed to open MetaOverlay:', error)
         })
 
       event.preventDefault()

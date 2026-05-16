@@ -10,6 +10,9 @@ import {
   getLatest as getLatestClipboardItem,
   onClipboardChange
 } from '../transport/clipboard-transport'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const clipboardChannelLog = createRendererLogger('CoreBoxClipboardChannel')
 
 /**
  * Convert ClipboardItem (from TuffTransport) to IClipboardItem (renderer format)
@@ -93,7 +96,7 @@ export async function getLatestClipboard(): Promise<IClipboardItem | null> {
  */
 export async function applyClipboardToActiveApp(item: IClipboardItem): Promise<boolean> {
   if (!item.id) {
-    console.error('[useClipboardChannel] Cannot apply clipboard item without ID')
+    clipboardChannelLog.error('Cannot apply clipboard item without ID')
     return false
   }
 
@@ -101,7 +104,7 @@ export async function applyClipboardToActiveApp(item: IClipboardItem): Promise<b
     const result = (await applyClipboardItem(item.id)) as ClipboardActionResult | undefined
     return result?.success !== false
   } catch (error) {
-    console.error('[useClipboardChannel] Failed to apply clipboard item:', error)
+    clipboardChannelLog.error('Failed to apply clipboard item:', error)
     return false
   }
 }
