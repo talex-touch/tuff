@@ -13,6 +13,12 @@
 
 ## 2026-05-16
 
+### fix(plugin): require DeepL API key before save/test
+
+- `plugins/touch-translation/src/components/ProviderConfigModal.vue`
+  - DeepL provider configuration now treats `apiKey` as a required field instead of referring to a nonexistent mock mode.
+  - Save and connection-test paths share the same required-field validation, preventing an empty DeepL key from being persisted when the user skips the test action.
+
 ### perf(nexus): dedupe Content sqlite assets and lazy admin route
 
 - `apps/nexus/build/trim-content-assets.mjs`

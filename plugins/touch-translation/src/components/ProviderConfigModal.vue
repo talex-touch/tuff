@@ -123,6 +123,12 @@ function saveConfig() {
   if (!props.provider)
     return
 
+  const missingFields = getMissingRequiredFields()
+  if (missingFields.length > 0) {
+    testResult.value = { success: false, message: `请填写必填项: ${missingFields.join(', ')}` }
+    return
+  }
+
   const config: Record<string, any> = {}
 
   if (props.provider.id === 'deepl') {
@@ -163,8 +169,7 @@ async function testConnection() {
   if (!props.provider)
     return
 
-  const requiredFields = getRequiredFields()
-  const missingFields = requiredFields.filter(field => !configForm[field as keyof typeof configForm])
+  const missingFields = getMissingRequiredFields()
 
   if (missingFields.length > 0) {
     testResult.value = { success: false, message: `请填写必填项: ${missingFields.join(', ')}` }
@@ -211,7 +216,7 @@ function getRequiredFields(): string[] {
 
   switch (props.provider.id) {
     case 'deepl':
-      return [] // apiKey is optional for mock mode
+      return ['apiKey']
     case 'bing':
     case 'custom':
       return ['apiKey']
@@ -224,6 +229,13 @@ function getRequiredFields(): string[] {
     default:
       return []
   }
+}
+
+function getMissingRequiredFields(): string[] {
+  return getRequiredFields().filter((field) => {
+    const value = configForm[field as keyof typeof configForm]
+    return typeof value === 'string' ? value.trim().length === 0 : !value
+  })
 }
 </script>
 
