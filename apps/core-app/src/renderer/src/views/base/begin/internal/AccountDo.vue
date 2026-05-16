@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { createRendererLogger } from '~/utils/renderer-log'
 import SetupPermissions from './SetupPermissions.vue'
 
 type StepFunction = (call: { comp: unknown; rect?: { width: number; height: number } }) => void
@@ -15,6 +16,7 @@ const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
 const appSdk = useAppSdk()
 const { t } = useI18n()
+const accountDoLog = createRendererLogger('AccountDo')
 
 const { signIn, isAuthenticated, authLoadingState, initializeAuth } = useAuth()
 const learnMoreUrl = computed(() => `${getAuthBaseUrl().replace(/\/$/, '')}/sign-in`)
@@ -39,7 +41,7 @@ async function handleBrowserSignIn(): Promise<void> {
   try {
     await signIn()
   } catch (error) {
-    console.error('Browser sign in failed:', error)
+    accountDoLog.error('Browser sign in failed:', error)
     toast.error(t('beginner.account.toastSignInFailed'))
   }
 }

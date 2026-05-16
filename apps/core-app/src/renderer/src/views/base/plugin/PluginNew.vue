@@ -23,6 +23,7 @@ import FormTemplate from '~/components/base/template/FormTemplate.vue'
 import LineTemplate from '~/components/base/template/LineTemplate.vue'
 import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip, popperMention } from '~/modules/mention/dialog-mention'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const emits = defineEmits(['close'])
 
@@ -30,6 +31,7 @@ const activeTab = ref<'install' | 'create'>('install')
 const { t } = useI18n()
 const installManager = useInstallManager()
 const transport = useTuffTransport()
+const pluginNewLog = createRendererLogger('PluginNew')
 const pluginCreateEvent = defineRawEvent<Record<string, unknown>, void>('plugin:new')
 
 const installState = reactive({
@@ -298,7 +300,7 @@ async function installPluginFromSource(): Promise<void> {
       installState.message = result?.message || t('plugin.new.install.errorMessage')
     }
   } catch (error: unknown) {
-    console.error('[PluginNew] Failed to install plugin:', error)
+    pluginNewLog.error('Failed to install plugin:', error)
     installState.status = 'error'
     installState.message =
       error instanceof Error ? error.message : t('plugin.new.install.unexpectedError')

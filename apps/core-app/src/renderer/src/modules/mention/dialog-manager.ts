@@ -1,11 +1,13 @@
 import type { Component } from 'vue'
 import { isCoreBox } from '@talex-touch/utils/renderer'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 /**
  * 对话框优先级级别
  */
 export type DialogPriority = 'low' | 'normal' | 'high'
+const dialogManagerLog = createRendererLogger('DialogManager')
 
 /**
  * 生命周期回调类型
@@ -91,7 +93,7 @@ export class DialogManager {
     // 检查相同 ID 的对话框是否已存在
     const existingIndex = this.stack.findIndex((d) => d.id === config.id)
     if (existingIndex !== -1) {
-      console.warn(`[DialogManager] 对话框 "${config.id}" 已存在，将替换它`)
+      dialogManagerLog.warn(`对话框 "${config.id}" 已存在，将替换它`)
       this.unregister(config.id)
     }
 
@@ -118,7 +120,7 @@ export class DialogManager {
   unregister(id: string): void {
     const index = this.stack.findIndex((d) => d.id === id)
     if (index === -1) {
-      console.warn(`[DialogManager] 对话框 "${id}" 未在堆栈中找到`)
+      dialogManagerLog.warn(`对话框 "${id}" 未在堆栈中找到`)
       return
     }
 

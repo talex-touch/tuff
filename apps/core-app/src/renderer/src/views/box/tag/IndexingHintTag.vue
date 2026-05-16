@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, unref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = withDefaults(
   defineProps<{
@@ -14,6 +15,7 @@ const props = withDefaults(
 
 const { t } = useI18n()
 const { onProgressUpdate, indexProgress, getIndexStatus } = useFileIndexMonitor()
+const indexingHintLog = createRendererLogger('IndexingHintTag')
 
 const isIndexing = computed(() => {
   const stage = indexProgress.value?.stage
@@ -54,7 +56,7 @@ async function syncIndexStatus(): Promise<void> {
       averageItemsPerSecond: status.averageItemsPerSecond ?? 0
     }
   } catch (error) {
-    console.error('[IndexingHintTag] Failed to sync index status:', error)
+    indexingHintLog.error('Failed to sync index status:', error)
   }
 }
 

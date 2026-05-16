@@ -15,6 +15,9 @@
 
 import type { App } from 'vue'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const tuffexLog = createRendererLogger('Tuffex')
 
 /**
  * Components currently enabled for use in the application.
@@ -44,7 +47,7 @@ export async function loadTuffexComponent(name: EnabledComponent) {
     const tuffex = await import('@talex-touch/tuffex')
     return tuffex[name] || null
   } catch (error) {
-    console.warn(`[Tuffex] Failed to load component: ${name}`, error)
+    tuffexLog.warn(`Failed to load component: ${name}`, error)
     return null
   }
 }
@@ -73,7 +76,7 @@ export async function registerTuffexComponents(
 
     devLog(`[Tuffex] Registered ${components.length} components`)
   } catch (error) {
-    console.warn('[Tuffex] Failed to register components:', error)
+    tuffexLog.warn('Failed to register components:', error)
   }
 }
 

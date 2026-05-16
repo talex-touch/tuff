@@ -5,9 +5,11 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const buildSecurityLog = createRendererLogger('BuildSecurityBanner')
 const showBanner = ref(false)
 const verificationFailed = ref(false)
 const dismissed = ref(false)
@@ -33,7 +35,7 @@ onMounted(async () => {
       handleVerificationStatus(status as BuildVerificationStatus)
     }
   } catch (error) {
-    console.warn('[BuildSecurityBanner] Failed to get verification status:', error)
+    buildSecurityLog.warn('Failed to get verification status:', error)
   }
 })
 

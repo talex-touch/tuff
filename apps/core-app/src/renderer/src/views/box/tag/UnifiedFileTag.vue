@@ -2,9 +2,11 @@
 import path from 'path-browserify'
 import { computed } from 'vue'
 import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp', 'ico'])
+const unifiedFileTagLog = createRendererLogger('UnifiedFileTag')
 
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
@@ -51,7 +53,7 @@ const filePaths = computed(() => {
         return parsed.filter(isValidFilePath)
       }
     } catch (error) {
-      console.error('[UnifiedFileTag] Failed to parse clipboard file data:', error)
+      unifiedFileTagLog.error('Failed to parse clipboard file data:', error)
     }
   }
 

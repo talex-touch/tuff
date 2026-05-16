@@ -12,11 +12,13 @@ import TuffAsideTemplate from '~/components/tuff/template/TuffAsideTemplate.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { usePluginSelection } from '~/modules/hooks/usePluginSelection'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { createRendererLogger } from '~/utils/renderer-log'
 import PluginNew from './plugin/PluginNew.vue'
 
 const { t } = useI18n()
 const appSdk = useAppSdk()
 const { ensureStartupInfo } = useStartupInfo()
+const pluginViewLog = createRendererLogger('PluginView')
 
 const { plugins, curSelect, selectPlugin } = usePluginSelection()
 const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
@@ -89,7 +91,7 @@ async function handleOpenPluginFolder(): Promise<void> {
     }
     await appSdk.showInFolder(pluginPath)
   } catch (error) {
-    console.error('Failed to open plugin folder:', error)
+    pluginViewLog.error('Failed to open plugin folder:', error)
   } finally {
     loadingStates.value.openFolder = false
   }

@@ -13,6 +13,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface Props {
   visible: boolean
@@ -30,6 +31,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const transport = useTuffTransport()
+const flowSelectorLog = createRendererLogger('FlowSelector')
 
 const targets = ref<FlowTargetInfo[]>([])
 const loading = ref(false)
@@ -66,11 +68,11 @@ async function loadTargets(): Promise<void> {
     if (response?.success) {
       targets.value = response.data || []
     } else {
-      console.error('[FlowSelector] Failed to load targets:', response?.error)
+      flowSelectorLog.error('Failed to load targets:', response?.error)
       targets.value = []
     }
   } catch (error) {
-    console.error('[FlowSelector] Error loading targets:', error)
+    flowSelectorLog.error('Error loading targets:', error)
     targets.value = []
   } finally {
     loading.value = false

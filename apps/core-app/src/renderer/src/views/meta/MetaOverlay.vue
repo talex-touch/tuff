@@ -11,9 +11,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const metaOverlayLog = createRendererLogger('MetaOverlay')
 
 const visible = ref(false)
 const searchQuery = ref('')
@@ -201,7 +203,7 @@ async function handleActionExecute(action: MetaAction) {
     }
     await transport.send(MetaOverlayEvents.action.execute, payload)
   } catch (error) {
-    console.error('[MetaOverlay] Failed to execute action', error)
+    metaOverlayLog.error('Failed to execute action', error)
   }
 }
 
@@ -209,7 +211,7 @@ async function handleClose() {
   try {
     await transport.send(MetaOverlayEvents.ui.hide)
   } catch (error) {
-    console.error('[MetaOverlay] Failed to hide', error)
+    metaOverlayLog.error('Failed to hide', error)
   }
 }
 
