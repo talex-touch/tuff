@@ -31,7 +31,7 @@ describe('file-provider-search-service', () => {
         displayName: 'README',
         extension: '.md',
         content: 'hello world'
-      } as any,
+      } as Parameters<typeof buildSearchIndexItem>[0],
       'file',
       'files'
     )

@@ -181,7 +181,14 @@ describe('StartupAnalytics averages', () => {
       ([key]) => key === StorageList.STARTUP_ANALYTICS_REPORT_QUEUE
     )
     expect(queueCall).toBeDefined()
-    const queued = queueCall?.[1] as Array<{ payload: Record<string, any> }>
+    const queued = queueCall?.[1] as Array<{
+      payload: {
+        metadata: {
+          startupSummary?: { samples?: number }
+          moduleSummary?: Record<string, { avgLoadTime?: number }>
+        }
+      }
+    }>
     expect(Array.isArray(queued)).toBe(true)
     expect(queued.length).toBeGreaterThan(0)
     const body = queued[queued.length - 1].payload

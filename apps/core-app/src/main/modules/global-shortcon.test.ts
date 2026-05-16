@@ -133,7 +133,7 @@ class InMemoryShortcutStorage {
 }
 
 function createModule() {
-  const module: any = new ShortcutModule()
+  const module = new ShortcutModule() as ShortcutModule & { storage: InMemoryShortcutStorage }
   const storage = new InMemoryShortcutStorage()
   module.storage = storage
   return { module, storage }

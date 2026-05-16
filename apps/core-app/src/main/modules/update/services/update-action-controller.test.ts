@@ -1,4 +1,4 @@
-import { AppPreviewChannel } from '@talex-touch/utils'
+import { AppPreviewChannel, type GitHubRelease, type UpdateCheckResult } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { UpdateActionController } from './update-action-controller'
 
@@ -8,9 +8,9 @@ function createController(
   const deps = {
     isPackaged: vi.fn(() => false),
     getEffectiveChannel: () => AppPreviewChannel.RELEASE,
-    getQuickUpdateCheckResult: vi.fn(async () => ({ hasUpdate: false }) as any),
+    getQuickUpdateCheckResult: vi.fn(async () => ({ hasUpdate: false }) as UpdateCheckResult),
     queueBackgroundUpdateCheck: vi.fn(),
-    checkForUpdates: vi.fn(async () => ({ hasUpdate: true }) as any),
+    checkForUpdates: vi.fn(async () => ({ hasUpdate: true }) as UpdateCheckResult),
     isMacAutoUpdaterEnabled: vi.fn(() => false),
     withDownloadCenterDownload: vi.fn(async () => ({ taskId: 'task-1' })),
     withMacDownload: vi.fn(async () => {}),
@@ -38,7 +38,7 @@ describe('update-action-controller', () => {
 
   it('downloads with task id via download center when non-mac updater', async () => {
     const { controller } = createController()
-    const result = await controller.handleDownload({ tag_name: 'v1.0.0' } as any)
+    const result = await controller.handleDownload({ tag_name: 'v1.0.0' } as GitHubRelease)
 
     expect(result.success).toBe(true)
     expect(result.data?.taskId).toBe('task-1')

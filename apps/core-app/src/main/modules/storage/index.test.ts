@@ -8,7 +8,7 @@ import { StorageModule } from './index'
 const readFileSyncSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('fs-extra', async () => {
-  const actual = await vi.importActual<any>('fs-extra')
+  const actual = await vi.importActual<typeof import('fs-extra')>('fs-extra')
   const actualDefault = actual.default ?? actual
   return {
     ...actual,
@@ -50,7 +50,7 @@ describe('StorageModule', () => {
     await storage.init({
       app: { channel: {} },
       file: { create: true, dirName: 'config', dirPath: configDir }
-    } as any)
+    } as Parameters<StorageModule['init']>[0])
 
     expect(readFileSyncSpy).toHaveBeenCalledTimes(1)
     expect(readFileSyncSpy).toHaveBeenCalledWith(accountPath, 'utf-8')

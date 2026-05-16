@@ -134,7 +134,10 @@ describe('CoreBoxModule', () => {
   it('registers core.box.toggle as enabled by default and AI quick call as disabled', async () => {
     const module = new CoreBoxModule()
 
-    await module.onInit({ app: {}, manager: { loadModule: vi.fn(async () => undefined) } } as any)
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as Parameters<CoreBoxModule['onInit']>[0])
 
     expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
       'core.box.toggle',
