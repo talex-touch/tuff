@@ -4,6 +4,9 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import { toast } from 'vue-sonner'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const pluginStoreLog = createRendererLogger('PluginStore')
 
 /**
  * Plugin store for managing plugin state
@@ -68,7 +71,7 @@ export const usePluginStore = defineStore('plugin', () => {
    */
   function initPlugins(pluginList: ITouchPlugin[]): void {
     if (!Array.isArray(pluginList)) {
-      console.error('[PluginStore] Invalid plugin list received:', pluginList)
+      pluginStoreLog.error('Invalid plugin list received:', pluginList)
       return
     }
     plugins.clear()
@@ -123,7 +126,7 @@ export const usePluginStore = defineStore('plugin', () => {
 
       default: {
         const unknownEvent = event as { type?: string }
-        console.warn('[PluginStore] Unknown state event type:', unknownEvent.type ?? 'unknown')
+        pluginStoreLog.warn('Unknown state event type:', unknownEvent.type ?? 'unknown')
       }
     }
   }
@@ -138,7 +141,7 @@ export const usePluginStore = defineStore('plugin', () => {
     if (plugin) {
       plugin.status = status
     } else {
-      console.warn(`[PluginStore] Plugin "${name}" not found when updating status`)
+      pluginStoreLog.warn(`Plugin "${name}" not found when updating status`)
     }
   }
 
@@ -212,12 +215,12 @@ export const usePluginStore = defineStore('plugin', () => {
     try {
       const pluginList = await pluginSDK.list()
       if (!Array.isArray(pluginList)) {
-        console.error('[PluginStore] Invalid plugin list received:', pluginList)
+        pluginStoreLog.error('Invalid plugin list received:', pluginList)
         return unsubscribe
       }
       initPlugins(pluginList)
     } catch (error) {
-      console.error('[PluginStore] Failed to load initial plugin list:', error)
+      pluginStoreLog.error('Failed to load initial plugin list:', error)
     }
 
     return unsubscribe

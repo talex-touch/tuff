@@ -16,6 +16,7 @@ import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface Props {
   plugin: ITouchPlugin
@@ -24,6 +25,7 @@ interface Props {
 const props = defineProps<Props>()
 const permissionSdk = usePermissionSdk()
 const { t } = useI18n()
+const pluginPermissionsLog = createRendererLogger('PluginPermissions')
 
 interface PluginPermissionStatus {
   pluginId: string
@@ -328,7 +330,7 @@ async function loadStatus() {
         }
       : null
   } catch (e) {
-    console.error('Failed to load permission status:', e)
+    pluginPermissionsLog.error('Failed to load permission status:', e)
   } finally {
     loading.value = false
   }
@@ -356,7 +358,7 @@ async function handleToggle(permissionId: string, granted: boolean) {
     }
     await loadStatus()
   } catch (e) {
-    console.error('Failed to toggle permission:', e)
+    pluginPermissionsLog.error('Failed to toggle permission:', e)
   }
 }
 
@@ -374,7 +376,7 @@ async function handleGrantAll() {
     }
     await loadStatus()
   } catch (e) {
-    console.error('Failed to grant all permissions:', e)
+    pluginPermissionsLog.error('Failed to grant all permissions:', e)
   }
 }
 
@@ -390,7 +392,7 @@ async function handleRevokeAll() {
     }
     await loadStatus()
   } catch (e) {
-    console.error('Failed to revoke all permissions:', e)
+    pluginPermissionsLog.error('Failed to revoke all permissions:', e)
   }
 }
 

@@ -17,6 +17,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -25,6 +26,7 @@ const props = defineProps<{
 const plugin = toRef(props, 'plugin')
 const { t } = useI18n()
 const { startupInfo } = useStartupInfo()
+const pluginDetailsLog = createRendererLogger('PluginDetails')
 
 interface DevSettingsForm {
   enable: boolean
@@ -184,7 +186,7 @@ async function loadDetails(): Promise<void> {
     originalDevSettings.value = { ...resolved }
   } catch (error) {
     manifestData.value = null
-    console.error('[PluginDetails] Failed to load details:', error)
+    pluginDetailsLog.error('Failed to load details:', error)
   } finally {
     devSettingsLoading.value = false
   }
@@ -195,7 +197,7 @@ async function loadShortcuts() {
   try {
     shortcuts.value = await shortconApi.getAll()
   } catch (e) {
-    console.error('Failed to load shortcuts:', e)
+    pluginDetailsLog.error('Failed to load shortcuts:', e)
   } finally {
     shortcutsLoading.value = false
   }
@@ -266,7 +268,7 @@ async function saveDevSettings(): Promise<void> {
     devSettings.address = devSettings.address.trim()
     toast.success(t('plugin.details.saveSuccess'))
   } catch (error) {
-    console.error('[PluginDetails] Failed to save dev settings:', error)
+    pluginDetailsLog.error('Failed to save dev settings:', error)
     toast.error(t('plugin.details.saveError'))
   } finally {
     isSaving.value = false

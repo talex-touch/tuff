@@ -2,8 +2,11 @@
 import Loading from '~/components/icon/LoadingIcon.vue'
 import { forDialogMention } from '~/modules/mention/dialog-mention'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 defineOptions({ name: 'PluginView' })
+
+const pluginViewLog = createRendererLogger('PluginView')
 
 const props = defineProps({
   plugin: {
@@ -36,11 +39,11 @@ function handleListeners(viewData, webview) {
   const { styles, js } = viewData
 
   webview.addEventListener('crashed', () => {
-    console.error('[PluginView] Webview crashed', pluginLogMeta())
+    pluginViewLog.error('Webview crashed', pluginLogMeta())
   })
 
   webview.addEventListener('did-fail-load', async (e) => {
-    console.warn('[PluginView] Webview did-fail-load', {
+    pluginViewLog.warn('Webview did-fail-load', {
       errorCode: e.errorCode,
       errorDescription: e.errorDescription,
       ...pluginLogMeta()

@@ -15,6 +15,7 @@ import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { createRendererLogger } from '~/utils/renderer-log'
 import PluginDetails from './tabs/PluginDetails.vue'
 import PluginFeatures from './tabs/PluginFeatures.vue'
 import PluginIssues from './tabs/PluginIssues.vue'
@@ -32,6 +33,7 @@ const props = defineProps<{
 const transport = useTuffTransport()
 const { startupInfo } = useStartupInfo()
 const { t } = useI18n()
+const pluginInfoLog = createRendererLogger('PluginInfo')
 
 // Tabs state
 const tabsModel = ref<Record<number, string>>({ 1: 'Overview' })
@@ -119,7 +121,7 @@ async function handleOpenPluginFolder(): Promise<void> {
   try {
     await pluginSDK.openFolder(props.plugin.name)
   } catch (error) {
-    console.error('Failed to open plugin folder:', error)
+    pluginInfoLog.error('Failed to open plugin folder:', error)
   } finally {
     loadingStates.value.openFolder = false
   }
@@ -136,7 +138,7 @@ async function handleOpenDevTools(): Promise<void> {
       throw new Error(`Failed to open DevTools for plugin: ${props.plugin.name}`)
     }
   } catch (error) {
-    console.error('Failed to open plugin DevTools:', error)
+    pluginInfoLog.error('Failed to open plugin DevTools:', error)
     toast.error(t('plugin.actions.openDevToolsFailed'))
   } finally {
     loadingStates.value.openDevTools = false
@@ -166,7 +168,7 @@ async function confirmUninstall(): Promise<boolean> {
       toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
     }
   } catch (error) {
-    console.error('Failed to uninstall plugin:', error)
+    pluginInfoLog.error('Failed to uninstall plugin:', error)
     toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
   } finally {
     loadingStates.value.uninstall = false
@@ -260,10 +262,7 @@ async function handlePrimaryAction(): Promise<void> {
       await pluginSDK.reconnectDevServer(pluginName)
     }
   } catch (error) {
-    console.error(
-      `[PluginInfo] Failed primary action "${action}" for plugin "${pluginName}":`,
-      error
-    )
+    pluginInfoLog.error(`Failed primary action "${action}" for plugin "${pluginName}":`, error)
     toast.error(t('system.unknownError'))
   } finally {
     loadingStates.value.toggle = false

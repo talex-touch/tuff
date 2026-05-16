@@ -12,6 +12,7 @@ import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 const transport = useTuffTransport()
+const pluginStorageLog = createRendererLogger('PluginStorage')
 
 const loading = ref(false)
 const clearing = ref(false)
@@ -129,7 +131,7 @@ async function loadPluginPaths(): Promise<void> {
   try {
     pluginPaths.value = await pluginSDK.getPaths(props.plugin.name)
   } catch (error) {
-    console.warn('[PluginStorage] Failed to load plugin paths:', error)
+    pluginStorageLog.warn('Failed to load plugin paths:', error)
     pluginPaths.value = null
   }
 }
@@ -157,7 +159,7 @@ async function loadStorageData(): Promise<void> {
       entries.value = flattenTree(treeResponse)
     }
   } catch (error) {
-    console.error('Failed to load storage data:', error)
+    pluginStorageLog.error('Failed to load storage data:', error)
     toast.error(t('plugin.storage.message.loadFailed'))
   } finally {
     loading.value = false
@@ -251,7 +253,7 @@ async function handleOpenInEditor(): Promise<void> {
       pluginName: props.plugin.name
     })
   } catch (error) {
-    console.error('Failed to open in editor:', error)
+    pluginStorageLog.error('Failed to open in editor:', error)
     toast.error(t('plugin.storage.message.openEditorFailed'))
   }
 }

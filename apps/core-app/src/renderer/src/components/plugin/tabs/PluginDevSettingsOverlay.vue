@@ -9,6 +9,7 @@ import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 interface DevSettingsForm {
   enable: boolean
@@ -34,6 +35,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const plugin = toRef(props, 'plugin')
+const pluginDevSettingsLog = createRendererLogger('PluginDevSettingsOverlay')
 
 const visible = computed({
   get: () => props.modelValue,
@@ -113,7 +115,7 @@ async function loadSettings(): Promise<void> {
     applySettings(next)
     originalSettings.value = { ...next }
   } catch (error) {
-    console.error('[PluginDevSettingsOverlay] Failed to load manifest:', error)
+    pluginDevSettingsLog.error('Failed to load manifest:', error)
     toast.error(t('plugin.details.saveError'))
   } finally {
     manifestLoading.value = false
@@ -179,7 +181,7 @@ async function saveDevSettings(): Promise<void> {
 
     toast.success(t('plugin.details.saveSuccess'))
   } catch (error) {
-    console.error('[PluginDevSettingsOverlay] Failed to save dev settings:', error)
+    pluginDevSettingsLog.error('Failed to save dev settings:', error)
     toast.error(t('plugin.details.saveError'))
   } finally {
     isSaving.value = false
