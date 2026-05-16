@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildOmniPanelAiInvokeRequest,
+  createOmniPanelAiInputPreview,
   isOmniPanelAiAction,
   looksLikeCode,
   normalizeOmniPanelAiResult,
@@ -101,6 +102,12 @@ describe('omni-panel ai actions', () => {
         source: 'manual'
       })
     ).toBe('clipboard')
+  })
+
+  it('creates compact input previews for the AI result panel', () => {
+    expect(createOmniPanelAiInputPreview('  hello\nworld  ')).toBe('hello world')
+    expect(createOmniPanelAiInputPreview('a'.repeat(90), 20)).toBe(`${'a'.repeat(17)}...`)
+    expect(createOmniPanelAiInputPreview('a'.repeat(20), 8)).toBe(`${'a'.repeat(13)}...`)
   })
 
   it('normalizes structured code results for preview', () => {

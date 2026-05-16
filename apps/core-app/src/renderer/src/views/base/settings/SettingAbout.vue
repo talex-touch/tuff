@@ -17,6 +17,7 @@ import { toast } from 'vue-sonner'
 import OSIcon from '~/components/icon/OSIcon.vue'
 // Import UI components
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
+import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -100,6 +101,11 @@ const startCosts = computed(() =>
   startupInfo.value ? (startupInfo.value.t.e - startupInfo.value.t.s) / 1000 : 0
 )
 
+function formatSeconds(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--'
+  return `${value.toFixed(2)}s`
+}
+
 const performanceSummary = computed<StartupPerformanceSummary | null>(() => {
   const startup = analyticsSnapshot.value?.metrics?.startup
   if (startup) {
@@ -125,6 +131,32 @@ const performanceSummary = computed<StartupPerformanceSummary | null>(() => {
     rendererTime: totalTime / 1000,
     rating
   }
+})
+
+const startupHealthTitle = computed(() => {
+  const rating = performanceSummary.value?.rating
+  if (!rating) return t('settingAbout.startupHealthUnknown')
+  return t(`settingAbout.startupHealth.${rating}`)
+})
+
+const startupHealthDescription = computed(() => {
+  const summary = performanceSummary.value
+  if (!summary) return t('settingAbout.startupHealthUnknownDesc')
+
+  return t('settingAbout.startupHealthDesc', {
+    total: formatSeconds(startCosts.value),
+    main: formatSeconds(summary.mainProcessTime),
+    renderer: formatSeconds(summary.rendererTime),
+    modules: summary.moduleCount ?? '--'
+  })
+})
+
+const startupHealthIcon = computed(() => {
+  const rating = performanceSummary.value?.rating
+  if (rating === 'excellent' || rating === 'good') return 'i-carbon-performance'
+  if (rating === 'fair') return 'i-carbon-warning-alt'
+  if (rating === 'poor') return 'i-carbon-warning-filled'
+  return 'i-carbon-help'
 })
 
 // Export performance data
@@ -338,6 +370,24 @@ function openSoftwareLicense() {
         </span>
       </template>
     </TuffBlockLine>
+    <TuffBlockSlot
+      :title="startupHealthTitle"
+      :description="startupHealthDescription"
+      :default-icon="startupHealthIcon"
+      :active-icon="startupHealthIcon"
+      :active="performanceSummary?.rating === 'excellent' || performanceSummary?.rating === 'good'"
+    >
+      <span
+        class="startup-health-pill"
+        :class="`startup-health-pill--${performanceSummary?.rating || 'unknown'}`"
+      >
+        {{
+          performanceSummary?.rating
+            ? t(`settingAbout.rating.${performanceSummary.rating}`)
+            : t('settingAbout.startupHealthUnknownShort')
+        }}
+      </span>
+    </TuffBlockSlot>
     <TuffBlockLine
       v-if="performanceSummary"
       :title="t('settingAbout.performanceDetails')"
@@ -488,5 +538,35 @@ function openSoftwareLicense() {
 
   border-radius: 4px;
   border: 1px solid var(--tx-border-color);
+}
+
+.startup-health-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color);
+}
+
+.startup-health-pill--excellent,
+.startup-health-pill--good {
+  color: var(--tx-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
+}
+
+.startup-health-pill--fair {
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+}
+
+.startup-health-pill--poor {
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
 }
 </style>

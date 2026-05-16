@@ -149,6 +149,25 @@ function escapeHtml(str: string): string {
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
 const recommendation = computed(() => props.item.meta?.recommendation)
+const isNoticeItem = computed(() => props.item.kind === 'notification')
+const noticeDescription = computed(() => resolveI18nText(props.render.basic?.description || '', t))
+const noticeAccessory = computed(
+  () => props.render.basic?.accessory || sourceMeta.value?.label || ''
+)
+const noticeIcon = computed<ITuffIcon | null>(() => {
+  if (!isNoticeItem.value) return null
+  if (props.item.id.startsWith('everything-provider:')) {
+    return { type: 'class', value: 'i-ri-search-eye-line', status: 'normal' }
+  }
+  if (props.item.id.startsWith('file-provider:')) {
+    return { type: 'class', value: 'i-ri-folder-warning-line', status: 'normal' }
+  }
+  return { type: 'class', value: 'i-ri-information-line', status: 'normal' }
+})
+const effectiveIcon = computed(() => noticeIcon.value || displayIcon.value)
+const shouldShowNoticeReason = computed(
+  () => isNoticeItem.value && noticeDescription.value.length > 0
+)
 </script>
 
 <template>
@@ -157,16 +176,17 @@ const recommendation = computed(() => props.item.meta?.recommendation)
     :class="{
       'is-active': active,
       '!bg-[var(--tx-bg-color)]': active,
-      recommendation
+      recommendation,
+      'BoxItem--notice': isNoticeItem
     }"
   >
     <div class="relative w-32px h-32px">
       <TuffIcon
         :empty="DefaultIcon"
-        :icon="displayIcon"
+        :icon="effectiveIcon"
         :alt="resolvedTitle || 'Tuff Item'"
         :size="32"
-        :colorful="render?.basic?.icon?.colorful ?? true"
+        :colorful="noticeIcon ? false : (render?.basic?.icon?.colorful ?? true)"
         style="--icon-color: var(--tx-text-color-primary)"
       />
       <span
@@ -195,12 +215,19 @@ const recommendation = computed(() => props.item.meta?.recommendation)
         v-html="getHighlightedHTML(resolvedTitle, props.item.meta?.extension?.matchResult)"
       />
       <!-- eslint-enable vue/no-v-html -->
-      <ItemSubtitle :item="item" :render="render" />
+      <div v-if="isNoticeItem" class="BoxItemNoticeMeta">
+        <span v-if="noticeAccessory" class="BoxItemNoticeMeta__source">{{ noticeAccessory }}</span>
+        <span v-if="noticeAccessory && shouldShowNoticeReason" class="BoxItemNoticeMeta__dot" />
+        <span v-if="shouldShowNoticeReason" class="BoxItemNoticeMeta__reason">
+          {{ noticeDescription }}
+        </span>
+      </div>
+      <ItemSubtitle v-else :item="item" :render="render" />
     </div>
 
     <div class="ml-auto flex items-center gap-2">
       <span
-        v-if="sourceMeta"
+        v-if="sourceMeta && !isNoticeItem"
         class="SourceBadge text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold"
       >
         <i :class="sourceMeta.icon" class="text-[var(--tx-text-color-secondary)]" />
@@ -241,6 +268,54 @@ const recommendation = computed(() => props.item.meta?.recommendation)
   align-items: center;
   gap: 4px;
   letter-spacing: 0.4px;
+}
+
+.BoxItem--notice {
+  --notice-color: var(--tx-color-warning);
+
+  border: 1px solid color-mix(in srgb, var(--notice-color) 24%, transparent);
+  background: color-mix(in srgb, var(--notice-color) 8%, var(--tx-bg-color));
+}
+
+.BoxItem--notice.is-active {
+  border-color: color-mix(in srgb, var(--tx-color-primary) 40%, var(--notice-color));
+}
+
+.BoxItem--notice :deep(.TuffIcon) {
+  color: var(--notice-color);
+}
+
+.BoxItemNoticeMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.BoxItemNoticeMeta__source {
+  flex: 0 0 auto;
+  color: var(--notice-color);
+  font-weight: 600;
+}
+
+.BoxItemNoticeMeta__dot {
+  width: 3px;
+  height: 3px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.45;
+}
+
+.BoxItemNoticeMeta__reason {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 // .BoxItem.recommendation {

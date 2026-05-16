@@ -24,6 +24,7 @@ const {
   builtinToolOptions,
   pendingApprovals,
   reviewQueueItems,
+  currentRunStepSummaries,
   reviewQueueReplaceConfirmId,
   canDeleteCurrent,
   loadAgents,
@@ -80,6 +81,28 @@ const runStatusClass = computed(() => {
 })
 
 const activeStepCount = computed(() => workflowDraft.value.steps.length)
+const reviewQueueSummary = computed(() => {
+  const summary = {
+    pending: 0,
+    copied: 0,
+    clipboardReplaced: 0,
+    failed: 0
+  }
+
+  for (const item of reviewQueueItems.value) {
+    if (item.status === 'copied') {
+      summary.copied += 1
+    } else if (item.status === 'clipboard_replaced') {
+      summary.clipboardReplaced += 1
+    } else if (item.status === 'failed') {
+      summary.failed += 1
+    } else {
+      summary.pending += 1
+    }
+  }
+
+  return summary
+})
 
 function formatJson(value: unknown): string {
   try {
@@ -96,6 +119,17 @@ function formatDate(value?: number): string {
   return new Date(value).toLocaleString()
 }
 
+function formatLatency(value?: number): string {
+  if (!Number.isFinite(value)) {
+    return '-'
+  }
+  const latency = Math.max(0, Math.round(Number(value)))
+  if (latency < 1000) {
+    return `${latency}ms`
+  }
+  return `${(latency / 1000).toFixed(latency >= 10000 ? 0 : 1)}s`
+}
+
 function kindLabel(kind: WorkflowStepKind): string {
   if (kind === 'tool') return 'Tool'
   if (kind === 'prompt') return 'Prompt'
@@ -107,6 +141,19 @@ function displayStepKind(kind?: string): string {
   return kindLabel(kind === 'tool' || kind === 'prompt' || kind === 'model' ? kind : 'agent')
 }
 
+function reviewStatusText(status: string): string {
+  switch (status) {
+    case 'copied':
+      return t('intelligence.workflow.reviewStatusCopied')
+    case 'clipboard_replaced':
+      return t('intelligence.workflow.reviewStatusClipboardReplaced')
+    case 'failed':
+      return t('intelligence.workflow.reviewStatusFailed')
+    default:
+      return t('intelligence.workflow.reviewStatusPending')
+  }
+}
+
 function workflowStatusText(enabled: boolean): string {
   return enabled === false
     ? t('intelligence.workflow.workflowDisabled')
@@ -115,6 +162,10 @@ function workflowStatusText(enabled: boolean): string {
 
 function stepsCountText(count: number): string {
   return t('intelligence.workflow.stepsCount', { count })
+}
+
+function stepSummaryKey(step: { id?: string; workflowStepId?: string }, index: number): string {
+  return String(step.id || step.workflowStepId || `step-${index + 1}`)
 }
 
 function resolveValidationMessage(error: unknown): string {
@@ -579,7 +630,7 @@ onMounted(async () => {
                         ? t('intelligence.workflow.promptPlaceholder')
                         : step.kind === 'model'
                           ? t('intelligence.workflow.modelPlaceholder')
-                        : t('intelligence.workflow.instructionPlaceholder')
+                          : t('intelligence.workflow.instructionPlaceholder')
                     "
                   />
                 </label>
@@ -713,7 +764,7 @@ onMounted(async () => {
             <p>{{ t('intelligence.workflow.currentRunStepsDescription') }}</p>
           </div>
           <div class="stack-list">
-            <article v-for="step in currentRun.steps" :key="step.id" class="small-card">
+            <article v-for="(step, index) in currentRun.steps" :key="step.id" class="small-card">
               <div class="runtime-kv">
                 <span>{{ step.name }}</span>
                 <span class="mini-badge">{{ step.status }}</span>
@@ -721,11 +772,69 @@ onMounted(async () => {
               <div class="small-card__meta">
                 {{ displayStepKind(step.kind) }}
               </div>
+              <div
+                v-if="currentRunStepSummaries[stepSummaryKey(step, index)]?.capabilityId"
+                class="model-summary"
+              >
+                <span class="mini-badge mini-badge--ghost">
+                  {{ currentRunStepSummaries[stepSummaryKey(step, index)]?.capabilityId }}
+                </span>
+                <span
+                  v-if="
+                    currentRunStepSummaries[stepSummaryKey(step, index)]?.provider ||
+                    currentRunStepSummaries[stepSummaryKey(step, index)]?.model
+                  "
+                >
+                  {{
+                    [
+                      currentRunStepSummaries[stepSummaryKey(step, index)]?.provider,
+                      currentRunStepSummaries[stepSummaryKey(step, index)]?.model
+                    ]
+                      .filter(Boolean)
+                      .join(' / ')
+                  }}
+                </span>
+                <span
+                  v-if="currentRunStepSummaries[stepSummaryKey(step, index)]?.latency !== undefined"
+                >
+                  {{
+                    t('intelligence.workflow.modelLatency', {
+                      latency: formatLatency(
+                        currentRunStepSummaries[stepSummaryKey(step, index)]?.latency
+                      )
+                    })
+                  }}
+                </span>
+                <span
+                  v-if="
+                    currentRunStepSummaries[stepSummaryKey(step, index)]?.totalTokens !== undefined
+                  "
+                >
+                  {{
+                    t('intelligence.workflow.modelTokens', {
+                      count: currentRunStepSummaries[stepSummaryKey(step, index)]?.totalTokens
+                    })
+                  }}
+                </span>
+              </div>
+              <div
+                v-if="currentRunStepSummaries[stepSummaryKey(step, index)]?.traceId"
+                class="small-card__meta"
+              >
+                {{ t('intelligence.workflow.modelTrace') }}:
+                {{ currentRunStepSummaries[stepSummaryKey(step, index)]?.traceId }}
+              </div>
               <pre v-if="step.output !== undefined" class="result-pre">{{
                 formatJson(step.output)
               }}</pre>
               <div v-if="step.error" class="runtime-error">
                 {{ step.error }}
+              </div>
+              <div
+                v-else-if="currentRunStepSummaries[stepSummaryKey(step, index)]?.errorCode"
+                class="runtime-error"
+              >
+                {{ currentRunStepSummaries[stepSummaryKey(step, index)]?.errorCode }}
               </div>
             </article>
           </div>
@@ -737,6 +846,25 @@ onMounted(async () => {
             <p>{{ t('intelligence.workflow.reviewQueueDescription') }}</p>
           </div>
 
+          <div class="review-summary-grid">
+            <div class="review-summary-card review-summary-card--pending">
+              <span>{{ t('intelligence.workflow.reviewSummaryPending') }}</span>
+              <strong>{{ reviewQueueSummary.pending }}</strong>
+            </div>
+            <div class="review-summary-card review-summary-card--copied">
+              <span>{{ t('intelligence.workflow.reviewSummaryCopied') }}</span>
+              <strong>{{ reviewQueueSummary.copied }}</strong>
+            </div>
+            <div class="review-summary-card review-summary-card--replaced">
+              <span>{{ t('intelligence.workflow.reviewSummaryClipboardReplaced') }}</span>
+              <strong>{{ reviewQueueSummary.clipboardReplaced }}</strong>
+            </div>
+            <div class="review-summary-card review-summary-card--failed">
+              <span>{{ t('intelligence.workflow.reviewSummaryFailed') }}</span>
+              <strong>{{ reviewQueueSummary.failed }}</strong>
+            </div>
+          </div>
+
           <div v-if="reviewQueueItems.length === 0" class="empty-state">
             {{ t('intelligence.workflow.emptyReviewQueue') }}
           </div>
@@ -744,7 +872,7 @@ onMounted(async () => {
           <article v-for="item in reviewQueueItems" :key="item.id" class="small-card">
             <div class="review-title">
               <span>{{ item.stepName || item.stepId }}</span>
-              <span class="mini-badge">{{ item.status }}</span>
+              <span class="mini-badge">{{ reviewStatusText(item.status) }}</span>
             </div>
             <div class="small-card__meta">
               <span>{{ item.capabilityId || 'workflow.output' }}</span>
@@ -752,9 +880,7 @@ onMounted(async () => {
                 {{ [item.provider, item.model].filter(Boolean).join(' / ') }}
               </span>
             </div>
-            <div v-if="item.traceId" class="small-card__meta">
-              trace: {{ item.traceId }}
-            </div>
+            <div v-if="item.traceId" class="small-card__meta">trace: {{ item.traceId }}</div>
             <pre class="result-pre">{{ item.preview }}</pre>
             <div v-if="item.error" class="runtime-error">
               {{ item.error }}
@@ -875,6 +1001,7 @@ onMounted(async () => {
 .approval-actions,
 .approval-title,
 .review-title,
+.model-summary,
 .toolbar-actions,
 .subsection-actions,
 .toggle-row {
@@ -972,10 +1099,49 @@ onMounted(async () => {
 }
 
 .form-grid,
-.mini-grid {
+.mini-grid,
+.review-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.review-summary-grid {
+  margin-bottom: 12px;
+}
+
+.review-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+}
+
+.review-summary-card strong {
+  color: #fff;
+  font-size: 16px;
+}
+
+.review-summary-card--pending {
+  border-color: rgba(255, 183, 77, 0.22);
+}
+
+.review-summary-card--copied {
+  border-color: rgba(106, 201, 255, 0.22);
+}
+
+.review-summary-card--replaced {
+  border-color: rgba(42, 184, 92, 0.22);
+}
+
+.review-summary-card--failed {
+  border-color: rgba(255, 87, 87, 0.22);
 }
 
 .field {
@@ -1051,6 +1217,13 @@ textarea {
   background: rgba(0, 0, 0, 0.24);
   white-space: pre-wrap;
   word-break: break-word;
+  font-size: 12px;
+}
+
+.model-summary {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  color: rgba(255, 255, 255, 0.72);
   font-size: 12px;
 }
 

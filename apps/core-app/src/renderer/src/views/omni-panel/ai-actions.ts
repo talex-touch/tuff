@@ -54,6 +54,18 @@ export function resolveOmniPanelAiInput(
   return resolveDesktopContextInput(selectedText, capsule)
 }
 
+export function createOmniPanelAiInputPreview(inputText: string, maxLength = 72): string {
+  const normalized = inputText.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+
+  const safeMaxLength = Math.max(16, maxLength)
+  if (normalized.length <= safeMaxLength) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, safeMaxLength - 3)}...`
+}
+
 export function looksLikeCode(text: string): boolean {
   const normalized = text.trim()
   if (!normalized) return false

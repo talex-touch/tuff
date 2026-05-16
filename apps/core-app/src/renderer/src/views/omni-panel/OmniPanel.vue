@@ -24,6 +24,7 @@ import OmniPanelActionList from './components/OmniPanelActionList.vue'
 import OmniPanelSearchBar from './components/OmniPanelSearchBar.vue'
 import {
   buildOmniPanelAiInvokeRequest,
+  createOmniPanelAiInputPreview,
   isOmniPanelAiAction,
   normalizeOmniPanelAiResult,
   resolveOmniPanelAiInput,
@@ -107,6 +108,19 @@ const footerHint = computed(() => {
 
 const filteredFeatures = computed(() => {
   return filterOmniPanelFeatures(features.value, searchKeyword.value)
+})
+
+const aiPreviewInputPreview = computed(() => {
+  const inputText = aiPreview.value?.inputText || ''
+  return createOmniPanelAiInputPreview(inputText)
+})
+
+const aiPreviewStatusLabel = computed(() => {
+  const status = aiPreview.value?.status
+  if (status === 'running') return t('corebox.omniPanel.aiStatusRunning')
+  if (status === 'error') return t('corebox.omniPanel.aiStatusFailed')
+  if (replaceClipboardConfirming.value) return t('corebox.omniPanel.aiStatusConfirming')
+  return t('corebox.omniPanel.aiStatusReady')
 })
 
 watch(
@@ -268,6 +282,7 @@ async function copyAiResult(): Promise<void> {
   if (!text) return
   try {
     await navigator.clipboard.writeText(text)
+    replaceClipboardConfirming.value = false
     toast.success(t('corebox.omniPanel.aiCopied'))
   } catch (error) {
     omniPanelLog.error('Failed to copy OmniPanel AI result', error)
@@ -426,15 +441,23 @@ onBeforeUnmount(() => {
 
     <section v-if="aiPreview" class="OmniPanelAiPreview" :class="`is-${aiPreview.status}`">
       <header class="OmniPanelAiPreview__header">
-        <div>
+        <div class="OmniPanelAiPreview__heading">
           <h2 class="OmniPanelAiPreview__title">{{ aiPreview.title }}</h2>
-          <p class="OmniPanelAiPreview__meta">
-            {{ aiPreview.capabilityId }}
-            <span v-if="aiPreview.provider"> / {{ aiPreview.provider }}</span>
-            <span v-if="aiPreview.model"> / {{ aiPreview.model }}</span>
+          <p class="OmniPanelAiPreview__context">
+            {{ aiPreviewInputPreview || t('corebox.omniPanel.aiNoInputPreview') }}
           </p>
         </div>
-        <button class="OmniPanelAiPreview__close" type="button" @click="clearAiPreview">x</button>
+        <div class="OmniPanelAiPreview__headerActions">
+          <span class="OmniPanelAiPreview__status">{{ aiPreviewStatusLabel }}</span>
+          <button
+            class="OmniPanelAiPreview__close"
+            type="button"
+            :aria-label="t('corebox.omniPanel.aiClosePreview')"
+            @click="clearAiPreview"
+          >
+            <span class="i-carbon-close" />
+          </button>
+        </div>
       </header>
       <div v-if="aiPreview.status === 'running'" class="OmniPanelAiPreview__state">
         {{ t('corebox.omniPanel.aiRunning') }}
@@ -443,6 +466,12 @@ onBeforeUnmount(() => {
         {{ aiPreview.error || t('corebox.omniPanel.executeFailed') }}
       </div>
       <pre v-else class="OmniPanelAiPreview__result">{{ aiPreview.resultText }}</pre>
+      <div class="OmniPanelAiPreview__metaGrid">
+        <span>{{ aiPreview.capabilityId }}</span>
+        <span v-if="aiPreview.provider">{{ aiPreview.provider }}</span>
+        <span v-if="aiPreview.model">{{ aiPreview.model }}</span>
+        <span v-if="aiPreview.latency > 0">{{ aiPreview.latency }}ms</span>
+      </div>
       <footer class="OmniPanelAiPreview__footer">
         <span class="OmniPanelAiPreview__trace">
           {{ aiPreview.traceId || t('corebox.omniPanel.aiNoTrace') }}
@@ -526,7 +555,7 @@ onBeforeUnmount(() => {
 
 .OmniPanelAiPreview {
   min-height: 0;
-  max-height: 116px;
+  max-height: 156px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -544,6 +573,10 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.OmniPanelAiPreview__heading {
+  min-width: 0;
+}
+
 .OmniPanelAiPreview__title {
   margin: 0;
   font-size: 11px;
@@ -552,13 +585,43 @@ onBeforeUnmount(() => {
 }
 
 .OmniPanelAiPreview__meta,
-.OmniPanelAiPreview__trace {
+.OmniPanelAiPreview__trace,
+.OmniPanelAiPreview__context {
   margin: 0;
   font-size: 9px;
   color: var(--tx-text-color-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.OmniPanelAiPreview__headerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.OmniPanelAiPreview__status {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 650;
+  color: var(--tx-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
+}
+
+.OmniPanelAiPreview.is-running .OmniPanelAiPreview__status {
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+}
+
+.OmniPanelAiPreview.is-error .OmniPanelAiPreview__status {
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
 }
 
 .OmniPanelAiPreview__close {
@@ -569,6 +632,11 @@ onBeforeUnmount(() => {
   color: var(--tx-text-color-secondary);
   background: transparent;
   cursor: pointer;
+}
+
+.OmniPanelAiPreview__close:hover {
+  color: var(--tx-text-color-primary);
+  background: var(--tx-fill-color);
 }
 
 .OmniPanelAiPreview__result,
@@ -587,6 +655,26 @@ onBeforeUnmount(() => {
 
 .OmniPanelAiPreview__error {
   color: var(--tx-color-danger);
+}
+
+.OmniPanelAiPreview__metaGrid {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-secondary);
+  font-size: 9px;
+
+  span {
+    max-width: 96px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--tx-fill-color);
+  }
 }
 
 .OmniPanelAiPreview__actions {

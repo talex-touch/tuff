@@ -339,4 +339,42 @@ describe('useWorkflowEditor', () => {
 
     expect(editor.reviewQueueItems.value).toHaveLength(0)
   })
+
+  it('summarizes Use Model run metadata for runtime display', async () => {
+    const { __test } = await loadTarget()
+
+    expect(
+      __test.summarizeRunStep({
+        id: 'run-step-1',
+        workflowStepId: 'model-step',
+        kind: 'model',
+        name: 'Summarize',
+        status: 'completed',
+        input: { capabilityId: 'text.summarize' },
+        output: {
+          result: 'summary text',
+          provider: 'openai',
+          model: 'gpt-4.1-mini',
+          traceId: 'trace-1',
+          latency: 1234.4,
+          usage: {
+            promptTokens: 10,
+            completionTokens: 5,
+            totalTokens: 15
+          }
+        },
+        metadata: {
+          errorCode: 'IGNORED_METADATA_ERROR'
+        }
+      })
+    ).toEqual({
+      capabilityId: 'text.summarize',
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      traceId: 'trace-1',
+      latency: 1234,
+      totalTokens: 15,
+      errorCode: 'IGNORED_METADATA_ERROR'
+    })
+  })
 })
