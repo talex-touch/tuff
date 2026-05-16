@@ -6,6 +6,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { useRemotePresets } from '~/modules/layout'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
   source?: HTMLElement | null
@@ -13,6 +14,7 @@ const props = defineProps<{
 
 const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
+const remotePresetOverlayLog = createRendererLogger('RemotePresetOverlay')
 
 const {
   items,
@@ -38,7 +40,7 @@ watch(
         selectedPresetId.value = result[0]!.id
       }
     } catch (error) {
-      console.error('[RemotePresetOverlay] Failed to load preset list:', error)
+      remotePresetOverlayLog.error('Failed to load preset list:', error)
       toast.error(t('preset.remoteListFailed', 'Failed to load Nexus preset list'))
     }
   }
@@ -90,7 +92,7 @@ async function handleApply(close: () => void): Promise<void> {
     toast.success(t('preset.remoteApplySuccess', 'Nexus preset applied'))
     close()
   } catch (error) {
-    console.error('[RemotePresetOverlay] Failed to apply preset:', error)
+    remotePresetOverlayLog.error('Failed to apply preset:', error)
     toast.error(t('preset.remoteApplyFailed', 'Failed to apply Nexus preset'))
   }
 }
@@ -103,7 +105,7 @@ async function handleRefresh(): Promise<void> {
   try {
     await listRemotePresets('beta')
   } catch (error) {
-    console.error('[RemotePresetOverlay] Failed to refresh presets:', error)
+    remotePresetOverlayLog.error('Failed to refresh presets:', error)
     toast.error(t('preset.remoteListFailed', 'Failed to load Nexus preset list'))
   }
 }

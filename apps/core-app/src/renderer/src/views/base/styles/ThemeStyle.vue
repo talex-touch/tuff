@@ -20,6 +20,7 @@ import {
   type ThemeMode,
   type ThemeWindowPreference
 } from '~/modules/storage/theme-style'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
@@ -29,6 +30,7 @@ import WindowSectionVue from './WindowSection.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const themeStyleLog = createRendererLogger('ThemeStyle')
 type OpenFileRequest = Record<string, unknown>
 
 const openFileEvent = defineRawEvent<OpenFileRequest, { filePaths?: string[] }>('dialog:open-file')
@@ -295,7 +297,7 @@ async function copyWallpaperToLibrary(
     if (!result?.storedPath) {
       const message =
         result?.error || t('themeStyle.wallpaperCopyFailed', 'Failed to copy wallpaper to library')
-      console.error('[ThemeStyle] Failed to copy wallpaper to library:', {
+      themeStyleLog.error('Failed to copy wallpaper to library:', {
         type,
         sourcePath,
         message
@@ -311,7 +313,7 @@ async function copyWallpaperToLibrary(
     }
     return true
   } catch (error) {
-    console.error('[ThemeStyle] Failed to copy wallpaper to library:', error)
+    themeStyleLog.error('Failed to copy wallpaper to library:', error)
     toast.error(t('themeStyle.wallpaperCopyFailed', 'Failed to copy wallpaper to library'))
     return false
   }
@@ -347,7 +349,7 @@ async function selectBackgroundImageInternal(options?: { setSource?: boolean }):
     }
     return false
   } catch (error) {
-    console.error('[ThemeStyle] Failed to select background image:', error)
+    themeStyleLog.error('Failed to select background image:', error)
     toast.error(t('themeStyle.selectImageFailed', 'Failed to select background image'))
     return false
   }
@@ -370,7 +372,7 @@ async function selectBackgroundFolderInternal(options?: { setSource?: boolean })
     }
     return false
   } catch (error) {
-    console.error('[ThemeStyle] Failed to select background folder:', error)
+    themeStyleLog.error('Failed to select background folder:', error)
     toast.error(t('themeStyle.selectFolderFailed', 'Failed to select background folder'))
     return false
   }
@@ -387,7 +389,7 @@ async function refreshDesktopWallpaperInternal(options?: {
       const message =
         result?.error ||
         t('themeStyle.desktopWallpaperUnavailable', 'Desktop wallpaper is unavailable.')
-      console.error('[ThemeStyle] Failed to refresh desktop wallpaper:', message)
+      themeStyleLog.error('Failed to refresh desktop wallpaper:', message)
       if (!options?.silentError) {
         toast.error(message)
       }
@@ -400,7 +402,7 @@ async function refreshDesktopWallpaperInternal(options?: {
     }
     return true
   } catch (error) {
-    console.error('[ThemeStyle] Failed to refresh desktop wallpaper:', error)
+    themeStyleLog.error('Failed to refresh desktop wallpaper:', error)
     if (!options?.silentError) {
       const message = toErrorMessage(error)
       toast.error(
