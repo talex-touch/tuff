@@ -124,6 +124,7 @@ export default {
     oauthVerifyingSubtitle: 'Verifying account information...',
     oauthCancelled: 'Authorization was cancelled. You can go back and choose another method.',
     oauthError: 'Sign-in failed. Please try again.',
+    oauthSessionMissing: 'OAuth returned, but no active sign-in session was detected. Please try signing in again.',
     oauthAccountNotLinked: 'This OAuth account is already linked to another user.',
     oauthProviderError: 'OAuth provider callback failed. Please check provider configuration and try again.',
     oauthRedirect: 'Redirecting to your provider...',

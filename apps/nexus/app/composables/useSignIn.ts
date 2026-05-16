@@ -960,6 +960,43 @@ export function useSignIn() {
     oauthLoading.value = false
   }
 
+  async function handleOauthSessionMissing() {
+    if (oauthHandled.value || oauthLoading.value)
+      return
+
+    const callbackStartedAt = Date.now()
+    const flow = oauthContext.value.flow
+    const provider = oauthContext.value.provider
+
+    oauthLoading.value = true
+    oauthError.value = ''
+    oauthPhase.value = 'verifying'
+    step.value = 'oauth'
+
+    try {
+      const session = await getSession().catch(() => null)
+      if (status.value === 'authenticated' || session?.user) {
+        oauthLoading.value = false
+        await handleOauthCallback()
+        return
+      }
+
+      await clearOauthRuntime()
+      await ensureCallbackProcessingFeedback(callbackStartedAt)
+      oauthHandled.value = true
+      oauthPhase.value = 'error'
+      oauthError.value = t('auth.oauthSessionMissing', 'OAuth returned without an active session. Please try signing in again.')
+      if (provider)
+        oauthProvider.value = provider
+      oauthFlow.value = flow
+      step.value = 'oauth'
+      notify('error', oauthError.value)
+    }
+    finally {
+      oauthLoading.value = false
+    }
+  }
+
   async function handleOauthCallback() {
     if (oauthHandled.value || oauthLoading.value)
       return
@@ -1115,6 +1152,22 @@ export function useSignIn() {
     if (oauthLoading.value || oauthHandled.value)
       return
     void handleOauthCallback()
+  })
+
+  watchEffect(() => {
+    if (import.meta.server)
+      return
+    if (!oauthCallbackReady.value)
+      return
+    if (resolveOauthRouteErrorMessage())
+      return
+    if (status.value === 'authenticated')
+      return
+    if (!oauthSessionCheckDone.value || oauthSessionChecking.value)
+      return
+    if (oauthLoading.value || oauthHandled.value)
+      return
+    void handleOauthSessionMissing()
   })
 
   watchEffect(() => {

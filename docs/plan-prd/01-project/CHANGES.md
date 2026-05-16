@@ -11,6 +11,16 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-16
+
+### fix(nexus): stop OAuth callback from spinning forever
+
+- `apps/nexus/app/composables/useSignIn.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+  - Nexus sign-in OAuth callback now performs a final session refresh after the callback query is detected.
+  - If the callback returns without an authenticated session, the page clears OAuth intermediate state and shows a retryable error instead of staying on the blocking “processing sign-in” spinner.
+  - Added localized fallback copy for the missing-session case to make provider/cookie/session failures visible to users.
+
 ## 2026-05-15
 
 ### fix(core-app): reuse device auth for browser login

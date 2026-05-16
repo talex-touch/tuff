@@ -46,6 +46,7 @@
 
 ## 已完成/历史不再重复开发
 
+- 2026-05-16 Nexus OAuth 回调缺失 session 时已增加错误兜底与重试入口，避免官网登录回调一直停留在处理中状态。
 - `2.4.10-beta.25` beta notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 仍需用户确认。
 - Widget production precompile gate 已完成。
 - CoreApp 启动异步化 P0/P1/P2/P3 主要代码切片已完成，剩余为真机补证。

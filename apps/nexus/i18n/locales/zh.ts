@@ -124,6 +124,7 @@ export default {
     oauthVerifyingSubtitle: '正在验证账号信息...',
     oauthCancelled: '你已取消授权，可返回并选择其他方式。',
     oauthError: '登录失败，请重试。',
+    oauthSessionMissing: '第三方授权已返回，但未检测到有效登录态。请重新尝试登录。',
     oauthAccountNotLinked: '该第三方账号已绑定到其他用户。',
     oauthProviderError: '第三方回调失败，请检查 Provider 配置后重试。',
     oauthRedirect: '正在跳转到第三方授权页面...',
