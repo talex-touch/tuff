@@ -165,6 +165,10 @@ function createAppSetting(): MockAppSetting {
 }
 
 let appSettingState: MockAppSetting
+type AuthModuleTestApi = Awaited<typeof import('./index')>['__test__']
+type AuthStoragePreferenceInput = Parameters<
+  AuthModuleTestApi['handleAuthStoragePreferenceChanged']
+>[0]
 
 describe('auth secure storage preference', () => {
   beforeEach(() => {
@@ -278,7 +282,7 @@ describe('auth secure storage preference', () => {
         useSecureStorage: false,
         secureStorageUserOverridden: true
       }
-    } as any)
+    } as AuthStoragePreferenceInput)
 
     expect(setSecureStoreValueMock).toHaveBeenCalledWith(
       '/tmp/tuff',
@@ -320,7 +324,7 @@ describe('auth secure storage preference', () => {
         ...appSettingState.auth!,
         useSecureStorage: true
       }
-    } as any)
+    } as AuthStoragePreferenceInput)
 
     expect(getSecureStoreHealthMock).toHaveBeenCalledTimes(1)
     expect(setSecureStoreValueMock).toHaveBeenCalledWith(
@@ -347,7 +351,7 @@ describe('auth secure storage preference', () => {
         ...appSettingState.auth!,
         useSecureStorage: true
       }
-    } as any)
+    } as AuthStoragePreferenceInput)
 
     expect(getSecureStoreHealthMock).toHaveBeenCalledTimes(1)
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()

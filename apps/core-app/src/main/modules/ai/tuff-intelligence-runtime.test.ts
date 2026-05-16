@@ -52,11 +52,28 @@ interface StoredRuntimeSessionLike {
   toolCallCache: Record<string, unknown>
 }
 
-let TuffIntelligenceRuntimeCtor: any
+type TuffIntelligenceRuntimeHarness = {
+  pushTrace: (
+    stored: StoredRuntimeSessionLike,
+    event: Omit<TuffIntelligenceTraceEvent, 'id' | 'sessionId' | 'timestamp'>
+  ) => void
+  loadSession: ReturnType<typeof vi.fn>
+  queryTrace: (options: {
+    sessionId: string
+    fromSeq?: number
+    limit?: number
+  }) => Promise<TuffIntelligenceTraceEvent[]>
+  subscribeSessionTrace: (
+    sessionId: string,
+    listener: (event: TuffIntelligenceTraceEvent) => void
+  ) => () => void
+}
+let TuffIntelligenceRuntimeCtor: new () => TuffIntelligenceRuntimeHarness
 
 beforeAll(async () => {
   const runtimeModule = await import('./tuff-intelligence-runtime')
-  TuffIntelligenceRuntimeCtor = runtimeModule.TuffIntelligenceRuntime
+  TuffIntelligenceRuntimeCtor =
+    runtimeModule.TuffIntelligenceRuntime as unknown as new () => TuffIntelligenceRuntimeHarness
 })
 
 function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
@@ -84,7 +101,7 @@ function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
 
 describe('TuffIntelligenceRuntime trace sequence', () => {
   it('keeps seq monotonic and supports fromSeq replay after trim', async () => {
-    const runtime = new TuffIntelligenceRuntimeCtor() as any
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
     const stored = createStoredSession('session_seq')
 
     for (let index = 0; index < 1005; index += 1) {
@@ -114,7 +131,7 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
   })
 
   it('excludes pre-v3 trace events without seq from replay', async () => {
-    const runtime = new TuffIntelligenceRuntimeCtor() as any
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
     const stored = createStoredSession('session_pre_v3')
 
     stored.trace = [
@@ -158,7 +175,7 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
   })
 
   it('releases session trace subscribers after unsubscribe', () => {
-    const runtime = new TuffIntelligenceRuntimeCtor() as any
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
     const stored = createStoredSession('session_subscribe')
     const onTrace = vi.fn()
 

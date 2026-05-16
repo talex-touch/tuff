@@ -1,4 +1,6 @@
+import type { IProviderActivate } from '@talex-touch/utils'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginFeaturesAdapter } from './plugin-features-adapter'
@@ -91,7 +93,7 @@ describe('plugin-features-adapter', () => {
           featureId: pushFeature.id
         }
       }
-    ] as any)
+    ] as IProviderActivate[])
 
     const result = await adapter.onSearch({ text: '', inputs: [] }, new AbortController().signal)
 
@@ -123,14 +125,14 @@ describe('plugin-features-adapter', () => {
           featureId: pushFeature.id
         }
       }
-    ] as any)
+    ] as IProviderActivate[])
 
     const query = { text: '', inputs: [] }
     const result = await adapter.handleActiveFeatureInput({
       input: '',
       query,
       source: 'keyboard'
-    } as any)
+    } satisfies CoreBoxInputChangeRequest)
 
     expect(result).toBe(true)
     expect(triggerFeature).toHaveBeenCalledWith(pushFeature, query)

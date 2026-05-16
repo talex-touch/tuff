@@ -169,13 +169,21 @@ describe('TouchPlugin.triggerFeature', () => {
     const boxItems = plugin.getFeatureUtil().boxItems
 
     await boxItems.pushItems([
-      { id: 'before-disable', source: { type: 'plugin', id: 'custom', name: 'custom' } } as any
+      {
+        id: 'before-disable',
+        source: { type: 'plugin', id: 'custom', name: 'custom' },
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
 
     plugin.status = PluginStatus.DISABLED
     await boxItems.pushItems([
-      { id: 'after-disable', source: { type: 'plugin', id: 'custom', name: 'custom' } } as any
+      {
+        id: 'after-disable',
+        source: { type: 'plugin', id: 'custom', name: 'custom' },
+        render: { mode: 'default' }
+      } satisfies TuffItem
     ])
 
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
@@ -429,3 +437,4 @@ describe('TouchPlugin.enable', () => {
     })
   })
 })
+import type { TuffItem } from '@talex-touch/utils'
