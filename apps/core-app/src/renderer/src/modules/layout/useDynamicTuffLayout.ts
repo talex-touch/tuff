@@ -2,9 +2,11 @@ import type { Component, ComputedRef, Ref } from 'vue'
 import type { LayoutConfig } from './layouts-definition'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
 import { computed, nextTick, ref, watch } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import layoutsDefinition from './layouts-definition'
 
 const componentCache = new Map<string, Component>()
+const dynamicLayoutLog = createRendererLogger('DynamicTuffLayout')
 
 function getCurrentLayoutName(): string {
   const layout = appSettingsData?.layout
@@ -46,7 +48,7 @@ async function loadLayoutComponent(
     componentCache.set(layoutName, component)
     return component
   } catch (error) {
-    console.error(`Failed to load layout "${layoutName}":`, error)
+    dynamicLayoutLog.error(`Failed to load layout "${layoutName}":`, error)
     return null
   }
 }
@@ -95,7 +97,7 @@ export function useDynamicTuffLayout(): {
         currentLayoutName.value = layoutToLoad
       }
     } catch (error) {
-      console.error(`Failed to load layout "${layoutToLoad}":`, error)
+      dynamicLayoutLog.error(`Failed to load layout "${layoutToLoad}":`, error)
       layoutComponent.value = null
     } finally {
       isLoading.value = false

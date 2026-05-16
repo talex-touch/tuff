@@ -16,7 +16,10 @@ import { useI18n } from 'vue-i18n'
 import { getLayoutAtomPreset, isLayoutPresetKey } from '~/modules/layout/atoms'
 import { showSonnerDialog, showSonnerPrompt } from '~/modules/notification/sonner-dialog'
 import { themeStyle } from '~/modules/storage/theme-style'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { getCoreBoxThemePreset } from '~/views/box/theme'
+
+const presetExportLog = createRendererLogger('PresetExport')
 
 const openFileEvent = defineRawEvent<
   { title?: string; filters?: { name: string; extensions: string[] }[]; properties?: string[] },
@@ -223,7 +226,7 @@ export function usePresetExport() {
 
       toast.success(t('preset.exportSuccess', 'Preset exported successfully'))
     } catch (error) {
-      console.error('[PresetExport] Export failed:', error)
+      presetExportLog.error('Export failed:', error)
       toast.error(t('preset.exportError', 'Failed to export preset'))
     } finally {
       isExporting.value = false
@@ -271,13 +274,13 @@ export function usePresetExport() {
       }
 
       if (validation.warnings.length > 0) {
-        console.warn('[PresetExport] Import warnings:', validation.warnings)
+        presetExportLog.warn('Import warnings:', validation.warnings)
       }
 
       const presetData = preset as PresetExportData
       await confirmAndApplyPreset(presetData)
     } catch (error) {
-      console.error('[PresetExport] Import failed:', error)
+      presetExportLog.error('Import failed:', error)
       toast.error(t('preset.importError', 'Failed to import preset'))
     } finally {
       isImporting.value = false
@@ -399,7 +402,7 @@ export function usePresetExport() {
         }
       }
     } catch (error) {
-      console.error('[PresetExport] Apply failed, rollback in progress:', error)
+      presetExportLog.error('Apply failed, rollback in progress:', error)
       restoreRollbackSnapshot(rollbackSnapshot)
       throw error
     }

@@ -7,7 +7,10 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/storage/app-storage'
 import { normalizeWindowPreference, themeStyle } from '~/modules/storage/theme-style'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
+
+const wallpaperLog = createRendererLogger('Wallpaper')
 
 type WallpaperSource = 'none' | 'bing' | 'custom' | 'folder' | 'desktop'
 
@@ -127,7 +130,7 @@ export function useWallpaper() {
         lastBingFetch.value = now
       }
     } catch {
-      console.warn('[useWallpaper] Failed to fetch Bing wallpaper.')
+      wallpaperLog.warn('Failed to fetch Bing wallpaper.')
     }
   }
 
@@ -135,7 +138,7 @@ export function useWallpaper() {
     try {
       const result = await transport.send(getDesktopEvent)
       if (result?.error) {
-        console.warn('[useWallpaper] Failed to refresh desktop wallpaper:', result.error)
+        wallpaperLog.warn('Failed to refresh desktop wallpaper:', result.error)
         if (lastDesktopErrorToast.value !== result.error) {
           toast.error(result.error)
           lastDesktopErrorToast.value = result.error
@@ -151,7 +154,7 @@ export function useWallpaper() {
       }
     } catch (error) {
       const message = toErrorMessage(error)
-      console.warn('[useWallpaper] Failed to refresh desktop wallpaper:', message)
+      wallpaperLog.warn('Failed to refresh desktop wallpaper:', message)
       if (lastDesktopErrorToast.value !== message) {
         toast.error(message)
         lastDesktopErrorToast.value = message
@@ -171,7 +174,7 @@ export function useWallpaper() {
     } catch (error) {
       folderImages.value = []
       folderIndex.value = -1
-      console.warn('[useWallpaper] Failed to load folder wallpapers:', toErrorMessage(error))
+      wallpaperLog.warn('Failed to load folder wallpapers:', toErrorMessage(error))
     }
   }
 
@@ -259,7 +262,7 @@ export function useWallpaper() {
           : background.value.folderPath
         await loadFolderImages(folderPath)
         if (folderImages.value.length === 0) {
-          console.warn('[useWallpaper] No images found for folder wallpaper source.', {
+          wallpaperLog.warn('No images found for folder wallpaper source.', {
             folderPath
           })
           const toastKey = folderPath.trim()

@@ -7,7 +7,10 @@ import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
 import { storeHttpRequest } from '~/modules/store/store-http-client'
 import { requestNexusWithAuth } from '~/modules/store/nexus-auth-client'
 import { getBuildInfo } from '~/utils/build-info'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { usePresetExport } from '../usePresetExport'
+
+const remotePresetLog = createRendererLogger('RemotePreset')
 
 export interface RemotePresetSummary {
   id: string
@@ -176,7 +179,7 @@ export function useRemotePresets() {
 
       toast.success('Nexus preset applied')
     } catch (error) {
-      console.error('[RemotePreset] apply failed:', error)
+      remotePresetLog.error('Apply failed:', error)
       rollbackLastRemotePreset()
       throw error
     } finally {
