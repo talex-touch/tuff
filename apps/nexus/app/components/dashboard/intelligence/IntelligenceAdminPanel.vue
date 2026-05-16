@@ -5,6 +5,7 @@ import { defineComponent, h, inject } from 'vue'
 import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
+import { resolveMigrationReadiness } from '~/utils/intelligence-provider-migration'
 import type { ProviderRegistryRecord, SceneRegistryRecord, SceneStrategyMode } from '~/utils/provider-registry-admin'
 
 const { t } = useI18n()
@@ -57,6 +58,8 @@ interface MigrationResult {
   migrated: number
   skipped: number
   failed: number
+  readyForRegistryPrimaryReads: boolean
+  blockers: string[]
   items: MigrationItem[]
 }
 
@@ -173,6 +176,12 @@ const sceneSaving = ref(false)
 const migrationLoading = ref(false)
 const migrationError = ref<string | null>(null)
 const migrationResult = ref<MigrationResult | null>(null)
+const migrationReadiness = computed(() => {
+  if (!migrationResult.value)
+    return null
+
+  return resolveMigrationReadiness(migrationResult.value)
+})
 const settingsSaving = ref(false)
 const auditLogs = ref<AuditLog[]>([])
 const auditLoading = ref(false)
