@@ -13,6 +13,14 @@
 
 ## 2026-05-16
 
+### perf(nexus): keep Content runtime assets out of PWA precache
+
+- `apps/nexus/app/config/pwa.ts`
+- `apps/nexus/build/check-worker-bundle.mjs`
+  - Removed `.txt` from Nexus Workbox precache glob and explicitly ignored Nuxt Content SQL dumps, sqlite wasm files, and sqlite worker assets so public docs runtime data is not cached during PWA install/update.
+  - Extended the Worker bundle analyzer to fail when oversized Content runtime assets re-enter the generated `sw.js` precache manifest.
+  - Verified that disabling Nuxt Content `nativeSqlite` is not currently viable because Nuxt Content falls back to requiring `better-sqlite3` during build.
+
 ### perf(nexus): trim public site assets and production routes
 
 - `apps/nexus/app/pages/test/**`
