@@ -30,12 +30,16 @@ const {
   getDisplayName,
   getPrimaryEmail,
   loginWithBrowser,
+  reopenBrowserLogin,
+  cancelPendingBrowserLogin,
   logout,
   runSyncBootstrap,
   authLoadingState
 } = useAuth()
 
 const profileEditorVisible = ref(false)
+const loginDialogVisible = ref(false)
+const loginErrorMessage = ref('')
 const syncSubmitting = ref(false)
 const secureStoreHealth = ref<SecureStoreHealthResponse | null>(null)
 
@@ -214,23 +218,63 @@ const useLocalServer = computed({
 })
 
 const runtimeServerDescription = computed(() => getRuntimeNexusBaseUrl())
-const loginButtonText = computed(() => {
-  if (!authLoadingState.isLoggingIn) {
-    return t('settingUser.login')
+const loginDialogTitle = computed(() => {
+  if (authLoadingState.loginStage === 'failed') {
+    return t('settingUser.loginDialogFailedTitle')
   }
-  const remaining = authLoadingState.loginTimeRemaining
-  if (remaining > 0) {
-    return `${t('settingUser.loggingIn')} ${remaining}s`
+  if (authLoadingState.loginStage === 'success') {
+    return t('settingUser.loginDialogSuccessTitle')
   }
-  return t('settingUser.loggingIn')
+  if (authLoadingState.loginStage === 'waiting') {
+    return t('settingUser.loginDialogWaitingTitle')
+  }
+  return t('settingUser.loginDialogPreparingTitle')
+})
+const loginDialogDescription = computed(() => {
+  if (authLoadingState.loginStage === 'failed') {
+    return loginErrorMessage.value || t('settingUser.loginDialogFailedDesc')
+  }
+  if (authLoadingState.loginStage === 'success') {
+    return t('settingUser.loginDialogSuccessDesc')
+  }
+  if (authLoadingState.loginStage === 'waiting') {
+    return t('settingUser.loginDialogWaitingDesc', {
+      seconds: authLoadingState.loginTimeRemaining || ''
+    })
+  }
+  return t('settingUser.loginDialogPreparingDesc')
 })
 
 async function handleLogin() {
+  loginDialogVisible.value = true
+  loginErrorMessage.value = ''
   try {
-    await loginWithBrowser()
+    const result = await loginWithBrowser()
+    if (result.success) {
+      window.setTimeout(() => {
+        loginDialogVisible.value = false
+      }, 700)
+      return
+    }
+    loginErrorMessage.value = result.error instanceof Error ? result.error.message : ''
+  } catch (error) {
+    loginErrorMessage.value = error instanceof Error ? error.message : ''
+    toast.error(t('settingUser.loginError'))
+  }
+}
+
+async function handleReopenLogin() {
+  try {
+    await reopenBrowserLogin()
   } catch {
     toast.error(t('settingUser.loginError'))
   }
+}
+
+function handleCancelLogin() {
+  cancelPendingBrowserLogin()
+  loginDialogVisible.value = false
+  toast.info(t('settingUser.loginCancelled'))
 }
 
 async function handleLogout() {
@@ -336,7 +380,7 @@ onMounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSwitch
-      v-if="isLoggedIn"
+      v-if="isLoggedIn && showAdvancedSettings"
       v-model="syncEnabled"
       :title="t('settingUser.syncEnabledTitle', '默认同步')"
       :description="syncToggleDescription"
@@ -382,11 +426,11 @@ onMounted(() => {
       <TxButton
         variant="flat"
         type="primary"
+        :loading="authLoadingState.isLoggingIn"
         :disabled="authLoadingState.isLoggingIn"
         @click="handleLogin"
       >
-        <span v-if="authLoadingState.isLoggingIn" class="i-carbon-circle-dash animate-spin mr-1" />
-        {{ loginButtonText }}
+        {{ t('settingUser.login') }}
       </TxButton>
     </TuffBlockSlot>
 
@@ -401,6 +445,51 @@ onMounted(() => {
   </TuffGroupBlock>
 
   <CreditsSummaryBlock context="settings" />
+
+  <TModal v-model="loginDialogVisible" :title="loginDialogTitle">
+    <div class="login-dialog">
+      <div class="login-dialog__icon" :class="`is-${authLoadingState.loginStage}`">
+        <span
+          :class="
+            authLoadingState.loginStage === 'failed'
+              ? 'i-carbon-warning-filled'
+              : authLoadingState.loginStage === 'success'
+                ? 'i-carbon-checkmark-filled'
+                : 'i-carbon-circle-dash animate-spin'
+          "
+        />
+      </div>
+      <p>{{ loginDialogDescription }}</p>
+    </div>
+    <template #footer>
+      <TxButton
+        v-if="authLoadingState.loginStage === 'waiting'"
+        variant="ghost"
+        @click="handleReopenLogin"
+      >
+        {{ t('settingUser.reopenLogin') }}
+      </TxButton>
+      <TxButton
+        v-if="authLoadingState.loginStage === 'failed'"
+        variant="flat"
+        type="primary"
+        @click="handleLogin"
+      >
+        {{ t('settingUser.retryLogin') }}
+      </TxButton>
+      <TxButton
+        v-if="authLoadingState.isLoggingIn"
+        variant="ghost"
+        type="danger"
+        @click="handleCancelLogin"
+      >
+        {{ t('settingUser.cancelLogin') }}
+      </TxButton>
+      <TxButton v-else variant="ghost" @click="loginDialogVisible = false">
+        {{ t('common.close') }}
+      </TxButton>
+    </template>
+  </TModal>
 
   <TModal v-model="profileEditorVisible" :title="t('userProfile.editTitle', 'Edit profile')">
     <UserProfileEditor :visible="profileEditorVisible" />
@@ -457,5 +546,37 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.login-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 4px 12px;
+  text-align: center;
+  color: var(--tx-text-color-secondary);
+}
+
+.login-dialog__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
+  font-size: 26px;
+}
+
+.login-dialog__icon.is-success {
+  color: var(--tx-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 14%, transparent);
+}
+
+.login-dialog__icon.is-failed {
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 14%, transparent);
 }
 </style>

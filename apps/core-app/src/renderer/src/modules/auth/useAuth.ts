@@ -51,7 +51,8 @@ const authLoadingState = reactive({
   isSigningOut: false,
   isLoggingIn: false,
   loginProgress: 0,
-  loginTimeRemaining: 0
+  loginTimeRemaining: 0,
+  loginStage: 'idle' as 'idle' | 'preparing' | 'waiting' | 'success' | 'failed'
 })
 
 async function clearStepUpToken(): Promise<void> {
@@ -271,6 +272,7 @@ function clearBrowserLoginLoading(): void {
   }
   authLoadingState.isLoggingIn = false
   authLoadingState.loginTimeRemaining = 0
+  authLoadingState.loginStage = 'idle'
 }
 
 function finishPendingBrowserLogin(result: LoginResult): void {
@@ -418,6 +420,7 @@ function cleanup(): boolean {
 async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<LoginResult> {
   authLoadingState.isLoggingIn = true
   authLoadingState.loginProgress = 0
+  authLoadingState.loginStage = 'preparing'
   authLoadingState.loginTimeRemaining = Math.ceil(BROWSER_LOGIN_TIMEOUT_MS / 1000)
 
   return new Promise((resolve) => {
@@ -425,13 +428,20 @@ async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promis
     const timeoutId = createBrowserLoginTimeout(resolve)
     const countdownId = createBrowserLoginCountdown(openedAt)
     pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId, countdownId, openedAt }
-    openBrowserLoginPage(mode).catch((err) => {
-      clearBrowserLoginLoading()
-      authLoadingState.loginProgress = 0
-      toast.error('无法打开浏览器')
-      resolve({ success: false, error: err })
-    })
-    toast.info('请在浏览器中完成登录')
+    openBrowserLoginPage(mode)
+      .then(() => {
+        if (pendingBrowserLogin.value) {
+          authLoadingState.loginStage = 'waiting'
+        }
+        toast.info('请在浏览器中完成登录')
+      })
+      .catch((err) => {
+        clearBrowserLoginLoading()
+        authLoadingState.loginStage = 'failed'
+        authLoadingState.loginProgress = 0
+        toast.error('无法打开浏览器')
+        resolve({ success: false, error: err })
+      })
   })
 }
 
@@ -503,6 +513,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
       pendingBrowserLogin.value = null
     }
+    authLoadingState.loginStage = 'success'
     authLoadingState.isLoggingIn = false
     authLoadingState.loginProgress = 100
     toast.success('登录成功')
@@ -515,6 +526,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       pendingBrowserLogin.value.resolve({ success: false, error })
       pendingBrowserLogin.value = null
     }
+    authLoadingState.loginStage = 'failed'
   } finally {
     isHandlingExternalAuthCallback.value = false
     authLoadingState.isLoggingIn = false
@@ -531,11 +543,13 @@ function setupAuthStateListener(): void {
     if (payload.isSignedIn) {
       if (pendingBrowserLogin.value) {
         finishPendingBrowserLogin({ success: true, user: currentUser.value })
+        authLoadingState.loginStage = 'success'
         authLoadingState.loginProgress = 100
         toast.success('登录成功')
         return
       }
       if (authLoadingState.isLoggingIn) {
+        authLoadingState.loginStage = 'success'
         clearBrowserLoginLoading()
         authLoadingState.loginProgress = 100
       }
@@ -547,6 +561,7 @@ function setupAuthStateListener(): void {
         success: false,
         error: new Error('Login state changed without session')
       })
+      authLoadingState.loginStage = 'failed'
       authLoadingState.loginProgress = 0
     }
   })
@@ -603,6 +618,7 @@ function createBrowserLoginTimeout(
     if (pendingBrowserLogin.value) {
       const error = new Error('Browser login timeout')
       clearBrowserLoginLoading()
+      authLoadingState.loginStage = 'failed'
       authLoadingState.loginProgress = 0
       toast.error(getErrorMessage(error, 'LOGIN_TIMEOUT'))
       resolve({ success: false, error })
@@ -618,11 +634,13 @@ function isJwtToken(token: string): boolean {
 function cancelPendingBrowserLogin(reason = 'Login cancelled'): void {
   if (!pendingBrowserLogin.value) return
   clearTimeout(pendingBrowserLogin.value.timeoutId)
+  window.clearInterval(pendingBrowserLogin.value.countdownId)
   pendingBrowserLogin.value.resolve({ success: false, error: new Error(reason) })
   pendingBrowserLogin.value = null
   authLoadingState.isLoggingIn = false
   authLoadingState.loginProgress = 0
   authLoadingState.loginTimeRemaining = 0
+  authLoadingState.loginStage = 'idle'
 }
 
 async function retryPendingBrowserLogin(): Promise<void> {
@@ -635,11 +653,21 @@ async function retryPendingBrowserLogin(): Promise<void> {
     pendingBrowserLogin.value.openedAt
   )
   try {
+    authLoadingState.loginStage = 'preparing'
     await openBrowserLoginPage()
+    authLoadingState.loginStage = 'waiting'
     toast.info('已重新打开登录页面')
   } catch {
     toast.error('无法重新打开浏览器')
   }
+}
+
+async function reopenBrowserLogin(): Promise<void> {
+  if (pendingBrowserLogin.value) {
+    await retryPendingBrowserLogin()
+    return
+  }
+  await loginWithBrowser()
 }
 
 async function handleManualTokenLogin(rawToken: string): Promise<void> {
@@ -833,6 +861,8 @@ export function useAuth() {
     updateUserProfile,
     updateUserAvatar,
     openLoginSettings,
+    reopenBrowserLogin,
+    cancelPendingBrowserLogin,
     requestStepUp,
     runSyncBootstrap,
     runWithStepUpToken,

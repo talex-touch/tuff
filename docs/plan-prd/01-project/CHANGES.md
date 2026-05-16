@@ -24,6 +24,8 @@
   - If auth state changes while `/store/publisher` is active, the store view now falls back to the public marketplace tab instead of showing `NOT_AUTHENTICATED` inside publisher management.
   - Nexus verified-email API guards now accept app tokens through the shared auth fallback, so desktop app tokens can access credits endpoints after `/api/v1/auth/me` succeeds.
   - Desktop Nexus proxy now preserves the signed-in account on ordinary business-endpoint 401 responses; only explicit auth-profile contexts can clear the global auth state.
+  - Settings account sign-in now opens a dedicated progress dialog for preparing, waiting-for-browser, success, and failure states, while keeping the account card itself compact.
+  - Default sync is now gated behind Advanced Settings, matching other account/runtime switches that should not be visible in the simplified settings view.
 
 ### fix(plugin): require DeepL API key before save/test
 
