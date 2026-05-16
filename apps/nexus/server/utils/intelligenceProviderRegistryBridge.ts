@@ -37,6 +37,8 @@ export interface IntelligenceProviderRegistryMigrationResult {
   migrated: number
   skipped: number
   failed: number
+  readyForRegistryPrimaryReads: boolean
+  blockers: string[]
   items: IntelligenceProviderRegistryMigrationItem[]
 }
 
@@ -398,6 +400,17 @@ export async function migrateLegacyIntelligenceProvidersToRegistry(
   const migrated = items.filter(item => item.action === 'created' || item.action === 'updated').length
   const failed = items.filter(item => item.action === 'failed').length
   const skipped = items.filter(item => item.action === 'skipped').length
+  const pending = items.filter(item => item.action === 'would_create' || item.action === 'would_update').length
+  const missingRegistryMirror = items.filter(item => !item.registryProviderId).length
+  const blockers: string[] = []
+  if (dryRun)
+    blockers.push('migration_dry_run_only')
+  if (failed > 0)
+    blockers.push('migration_failed')
+  if (pending > 0)
+    blockers.push('migration_not_executed')
+  if (!dryRun && missingRegistryMirror > 0)
+    blockers.push('registry_mirror_missing')
 
   return {
     dryRun,
@@ -405,6 +418,10 @@ export async function migrateLegacyIntelligenceProvidersToRegistry(
     migrated,
     skipped,
     failed,
+    readyForRegistryPrimaryReads: legacyProviders.length > 0
+      ? blockers.length === 0
+      : !dryRun,
+    blockers,
     items,
   }
 }

@@ -333,6 +333,8 @@ describe('intelligenceProviderRegistryBridge', () => {
       total: 1,
       migrated: 0,
       failed: 0,
+      readyForRegistryPrimaryReads: false,
+      blockers: ['migration_dry_run_only', 'migration_not_executed'],
       items: [
         expect.objectContaining({
           providerId: 'ip_ai_provider_1',
@@ -373,6 +375,8 @@ describe('intelligenceProviderRegistryBridge', () => {
       total: 1,
       migrated: 1,
       failed: 0,
+      readyForRegistryPrimaryReads: true,
+      blockers: [],
       items: [
         expect.objectContaining({
           providerId: 'ip_ai_provider_1',
@@ -397,6 +401,8 @@ describe('intelligenceProviderRegistryBridge', () => {
       total: 1,
       migrated: 0,
       failed: 1,
+      readyForRegistryPrimaryReads: false,
+      blockers: ['migration_failed', 'registry_mirror_missing'],
       items: [
         expect.objectContaining({
           providerId: 'ip_ai_provider_1',
@@ -419,6 +425,8 @@ describe('intelligenceProviderRegistryBridge', () => {
     })
 
     expect(result.total).toBe(1)
+    expect(result.readyForRegistryPrimaryReads).toBe(false)
+    expect(result.blockers).toContain('migration_not_executed')
     expect(result.items[0]).toMatchObject({
       providerId: 'ip_b',
       action: 'would_create',
