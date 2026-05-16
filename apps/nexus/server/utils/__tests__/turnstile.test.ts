@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { verifyTurnstileToken } from '../turnstile'
 
+const networkRequest = vi.fn()
+
 vi.mock('#imports', () => ({
   useRuntimeConfig: () => ({
     turnstile: {
       secretKey: 'test-secret',
     },
   }),
+}))
+
+vi.mock('@talex-touch/utils/network', () => ({
+  networkClient: {
+    request: (...args: unknown[]) => networkRequest(...args),
+  },
 }))
 
 function createEvent(headers: Record<string, string> = {}) {
@@ -48,62 +56,38 @@ describe('verifyTurnstileToken', () => {
   })
 
   it('校验成功时通过', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, action: 'login' }),
+    networkRequest.mockResolvedValue({
+      status: 200,
+      data: { success: true, action: 'login' },
     })
 
-    const originalFetch = globalThis.fetch
-    ;(globalThis as any).fetch = fetchMock
+    await expect(verifyTurnstileToken(createEvent({ 'cf-connecting-ip': '1.1.1.1' }), { token: 'abc', action: 'login' })).resolves.toBeUndefined()
 
-    try {
-      await expect(verifyTurnstileToken(createEvent({ 'cf-connecting-ip': '1.1.1.1' }), { token: 'abc', action: 'login' })).resolves.toBeUndefined()
-
-      const payload = fetchMock.mock.calls[0]?.[1]?.body as string
-      expect(payload).toContain('secret=test-secret')
-      expect(payload).toContain('response=abc')
-      expect(payload).toContain('remoteip=1.1.1.1')
-    }
-    finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    const payload = networkRequest.mock.calls[0]?.[0]?.body as string
+    expect(payload).toContain('secret=test-secret')
+    expect(payload).toContain('response=abc')
+    expect(payload).toContain('remoteip=1.1.1.1')
   })
 
   it('action 不匹配会抛错', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: true, action: 'signup' }),
+    networkRequest.mockResolvedValue({
+      status: 200,
+      data: { success: true, action: 'signup' },
     })
 
-    const originalFetch = globalThis.fetch
-    ;(globalThis as any).fetch = fetchMock
-
-    try {
-      await expect(verifyTurnstileToken(createEvent(), { token: 'abc', action: 'login' })).rejects.toMatchObject({
-        statusCode: 400,
-      })
-    }
-    finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    await expect(verifyTurnstileToken(createEvent(), { token: 'abc', action: 'login' })).rejects.toMatchObject({
+      statusCode: 400,
+    })
   })
 
   it('siteverify 返回失败会抛错', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ success: false, 'error-codes': ['invalid-input-response'] }),
+    networkRequest.mockResolvedValue({
+      status: 200,
+      data: { success: false, 'error-codes': ['invalid-input-response'] },
     })
 
-    const originalFetch = globalThis.fetch
-    ;(globalThis as any).fetch = fetchMock
-
-    try {
-      await expect(verifyTurnstileToken(createEvent(), { token: 'abc', action: 'login' })).rejects.toMatchObject({
-        statusCode: 400,
-      })
-    }
-    finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    await expect(verifyTurnstileToken(createEvent(), { token: 'abc', action: 'login' })).rejects.toMatchObject({
+      statusCode: 400,
+    })
   })
 })

@@ -27,9 +27,16 @@ vi.mock('../exchangeRateStore', () => ({
 }))
 
 const recordTelemetryMessages = vi.fn()
+const networkRequest = vi.fn()
 
 vi.mock('../messageStore', () => ({
   recordTelemetryMessages: (...args: unknown[]) => recordTelemetryMessages(...args),
+}))
+
+vi.mock('@talex-touch/utils/network', () => ({
+  networkClient: {
+    request: (...args: unknown[]) => networkRequest(...args),
+  },
 }))
 
 function buildSnapshot(overrides: Partial<import('../exchangeRateStore').ExchangeRateSnapshot> = {}) {
@@ -50,72 +57,51 @@ describe('exchangeRateService', () => {
     const snapshot = buildSnapshot({ fetchedAt: Date.now() - 1000 })
     getLatestSnapshot.mockResolvedValueOnce(snapshot)
 
-    const fetchMock = vi.fn()
-    const originalFetch = globalThis.fetch
-    ;(globalThis as any).fetch = fetchMock
+    networkRequest.mockClear()
 
-    try {
-      const result = await getUsdRates({} as any)
-      expect(result.source).toBe('cache')
-      expect(result.snapshot).toEqual(snapshot)
-      expect(fetchMock).not.toHaveBeenCalled()
-    }
-    finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    const result = await getUsdRates({} as any)
+    expect(result.source).toBe('cache')
+    expect(result.snapshot).toEqual(snapshot)
+    expect(networkRequest).not.toHaveBeenCalled()
   })
 
   it('缓存过期会触发回源并写入', async () => {
     const snapshot = buildSnapshot({ fetchedAt: Date.now() - 120_000 })
     getLatestSnapshot.mockResolvedValueOnce(snapshot)
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    networkRequest.mockResolvedValue({
+      status: 200,
+      data: {
         result: 'success',
         time_last_update_unix: 1700000000,
         time_next_update_unix: 1700003600,
         base_code: 'USD',
         conversion_rates: { USD: 1, CNY: 7.2 },
-      }),
+      },
     })
 
-    const originalFetch = globalThis.fetch
-    ;(globalThis as any).fetch = fetchMock
-
-    try {
-      const result = await getUsdRates({} as any)
-      expect(result.source).toBe('live')
-      expect(saveSnapshotWithRates).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        baseCurrency: 'USD',
-      }))
-    }
-    finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    const result = await getUsdRates({} as any)
+    expect(result.source).toBe('live')
+    expect(saveSnapshotWithRates).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      baseCurrency: 'USD',
+    }), expect.objectContaining({
+      storeRateRows: true,
+    }))
   })
 
   it('上游失败时无缓存会抛错', async () => {
     getLatestSnapshot.mockResolvedValueOnce(null)
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    networkRequest.mockResolvedValue({
+      status: 200,
+      data: {
         result: 'error',
         'error-type': 'quota-reached',
-      }),
+      },
     })
 
-    const originalFetch = globalThis.fetch
-    ;(globalThis as any).fetch = fetchMock
-
-    try {
-      await expect(getUsdRates({} as any)).rejects.toMatchObject({ statusCode: 429 })
-      expect(recordTelemetryMessages).toHaveBeenCalled()
-    }
-    finally {
-      ;(globalThis as any).fetch = originalFetch
-    }
+    await expect(getUsdRates({} as any)).rejects.toMatchObject({ statusCode: 429 })
+    expect(recordTelemetryMessages).toHaveBeenCalled()
   })
 
   it('convertUsd 会返回换算结果', async () => {
