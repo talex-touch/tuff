@@ -1196,9 +1196,15 @@ importers:
       '@vueuse/core':
         specifier: ^14.2.1
         version: 14.2.1(vue@3.5.33(typescript@5.9.3))
+      dayjs:
+        specifier: ^1.11.20
+        version: 1.11.20
       marked:
         specifier: ^17.0.4
         version: 17.0.4
+      mathjs:
+        specifier: ^15.2.0
+        version: 15.2.0
       path-browserify:
         specifier: ^1.0.1
         version: 1.0.1

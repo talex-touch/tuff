@@ -3,10 +3,10 @@ import type {
   ISearchProvider,
   PreviewAbilityResult,
   PreviewCardPayload,
+  PreviewSdk,
   TuffItem
 } from '@talex-touch/utils'
 import type { ProviderContext, TuffQuery, TuffSearchResult } from '../../search-engine/types'
-import type { PreviewAbilityRegistry } from './preview-registry'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
@@ -27,7 +27,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
   readonly priority = 'fast' as const
   readonly expectedDuration = 200
 
-  constructor(private readonly registry: PreviewAbilityRegistry) {}
+  constructor(private readonly sdk: PreviewSdk) {}
 
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const startedAt = performance.now()
@@ -36,7 +36,7 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       return this.createEmptyResult(query, startedAt)
     }
 
-    const result = await this.registry.resolve({ query, signal })
+    const result = await this.sdk.resolve({ query, signal })
     if (!result) {
       return this.createEmptyResult(query, startedAt)
     }

@@ -1,4 +1,4 @@
-import type { PreviewAbilityRegistry } from '../preview-registry'
+import type { PreviewAbility } from '@talex-touch/utils/core-box/preview'
 import { AdvancedExpressionAbility } from './advanced-expression-ability'
 import { BasicExpressionAbility } from './basic-expression-ability'
 import { ColorPreviewAbility } from './color-ability'
@@ -9,7 +9,9 @@ import { TextStatsAbility } from './text-stats-ability'
 import { TimeDeltaAbility } from './time-delta-ability'
 import { UnitConversionAbility } from './unit-conversion-ability'
 
-export function registerDefaultPreviewAbilities(registry: PreviewAbilityRegistry): void {
+export function registerDefaultPreviewAbilities(registry: {
+  register: (ability: PreviewAbility) => void
+}): void {
   registry.register(new AdvancedExpressionAbility()) // Higher priority for advanced math
   registry.register(new BasicExpressionAbility())
   registry.register(new UnitConversionAbility())

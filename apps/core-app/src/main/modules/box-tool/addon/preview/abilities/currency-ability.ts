@@ -1,4 +1,8 @@
-import type { PreviewAbilityResult, PreviewCardPayload } from '@talex-touch/utils'
+import type {
+  PreviewAbilityResult,
+  PreviewAbilitySafetyPolicy,
+  PreviewCardPayload
+} from '@talex-touch/utils'
 import type { PreviewAbilityContext } from '../preview-ability'
 import { performance } from 'node:perf_hooks'
 import { BasePreviewAbility } from '../preview-ability'
@@ -67,16 +71,32 @@ function normalizeCurrencyInput(input: string): string | null {
 
 export class CurrencyPreviewAbility extends BasePreviewAbility {
   readonly id = 'preview.currency'
+  readonly label = 'Currency'
   readonly priority = 40
+  override readonly safety: PreviewAbilitySafetyPolicy = {
+    input: {
+      maxLength: 120,
+      syntax: 'currency amount conversion, e.g. 10 USD to CNY',
+      notes:
+        'CoreApp adapter remains responsible for Nexus Scene fallback and local FxRateProvider cache.'
+    },
+    dependencies: ['parser', 'network', 'cache'],
+    usesDynamicExecution: false,
+    usesNetwork: true,
+    usesCache: true,
+    replacementPlan:
+      'Keep in CoreApp adapter until Nexus Scene fallback, local fx cache and timeout policy are split behind SDK-safe interfaces.'
+  }
 
   override canHandle(query: { text?: string }): boolean {
-    if (!query.text) return false
+    if (!query.text || query.text.length > this.safety.input.maxLength) return false
     return CURRENCY_PATTERN.test(query.text)
   }
 
   async execute(context: PreviewAbilityContext): Promise<PreviewAbilityResult | null> {
     const startedAt = performance.now()
     const text = this.getNormalizedQuery(context.query)
+    if (!this.isInputWithinLimit(context)) return null
     const match = text.match(CURRENCY_PATTERN)
     if (!match) return null
 
