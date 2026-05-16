@@ -3,6 +3,7 @@ import type { StorePluginListItem } from '~/composables/store/useStoreData'
 import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuth } from '~/modules/auth/useAuth'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import StoreGridView from '~/components/store/StoreGridView.vue'
 import StoreHeader from '~/components/store/StoreHeader.vue'
@@ -48,6 +49,17 @@ function resolvePathByTab(tab: StoreTab): string {
   return '/store'
 }
 
+function isTabAvailable(tab: StoreTab): boolean {
+  if (tab === 'publisher') return showPublisherTab.value
+  if (tab === 'cli') return showCliTab.value
+  return true
+}
+
+function fallbackStoreTab(tab: StoreTab): StoreTab {
+  if (isTabAvailable(tab)) return tab
+  return 'store'
+}
+
 function isStoreDetailPath(path: string): boolean {
   return path.startsWith('/store/') && !STORE_BASE_PATHS.has(path)
 }
@@ -65,6 +77,7 @@ const {
   getPluginVersionStatus
 } = usePluginVersionStatus()
 
+const { isLoggedIn } = useAuth()
 const sourceEditorShow = ref(false)
 const sourceEditorSource = ref<HTMLElement | null>(null)
 const selectedPluginId = ref<string | null>(null)
@@ -77,6 +90,7 @@ const categoryFilter = ref('')
 const initialTab: StoreTab = resolveTabByPath(route.path)
 const tabs = ref<StoreTab>(initialTab)
 const showCliTab = ref(false)
+const showPublisherTab = computed(() => isLoggedIn.value)
 const searchKey = ref('')
 const sourcesState = storeSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
@@ -218,7 +232,7 @@ watch(
   () => route.fullPath,
   () => {
     const path = route.path
-    const nextTab = resolveTabByPath(path)
+    const nextTab = fallbackStoreTab(resolveTabByPath(path))
     if (tabs.value !== nextTab) {
       tabs.value = nextTab
     }
@@ -241,13 +255,25 @@ watch(
 )
 
 watch(tabs, (nextTab) => {
-  if (nextTab === 'store' && isStoreDetailPath(route.path)) {
+  const availableTab = fallbackStoreTab(nextTab)
+  if (availableTab !== nextTab) {
+    tabs.value = availableTab
     return
   }
 
-  const targetPath = resolvePathByTab(nextTab)
+  if (availableTab === 'store' && isStoreDetailPath(route.path)) {
+    return
+  }
+
+  const targetPath = resolvePathByTab(availableTab)
   if (route.path !== targetPath) {
     void router.replace({ path: targetPath })
+  }
+})
+
+watch(showPublisherTab, (visible) => {
+  if (!visible && tabs.value === 'publisher') {
+    tabs.value = 'store'
   }
 })
 
@@ -267,6 +293,7 @@ onMounted(() => {
       :loading="loading"
       :sources-count="sourcesCount"
       :show-cli-tab="showCliTab"
+      :show-publisher-tab="showPublisherTab"
       :categories="categoryTags"
       :provider-stats="providerStatsComputed"
       :provider-details="providerStats"
@@ -287,7 +314,11 @@ onMounted(() => {
         @install="onInstall"
         @open-detail="openPluginDetail"
       />
-      <StorePublisher v-else-if="tabs === 'publisher'" key="publisher" class="flex-1 min-h-0" />
+      <StorePublisher
+        v-else-if="tabs === 'publisher' && showPublisherTab"
+        key="publisher"
+        class="flex-1 min-h-0"
+      />
       <StoreDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
       <StoreCliBeta v-else-if="tabs === 'cli'" key="cli" class="flex-1 min-h-0" />
       <PluginInstalled v-else key="installed" class="flex-1 min-h-0" />

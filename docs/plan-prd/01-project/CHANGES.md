@@ -13,6 +13,15 @@
 
 ## 2026-05-16
 
+### fix(core-app): trace account login state and gate publisher tab
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+  - Added safe main-process auth diagnostics for token load/persist state, browser device-login start/poll, remote `/api/v1/auth/me` profile fetch, auth state transitions, and Nexus proxy request status without logging token values.
+  - Kept account/Nexus requests behind the main-process `AuthEvents.nexus.*` proxy; renderer continues to trigger only transport events and no longer exposes the publisher tab when no signed-in account is available.
+  - If auth state changes while `/store/publisher` is active, the store view now falls back to the public marketplace tab instead of showing `NOT_AUTHENTICATED` inside publisher management.
+
 ### fix(plugin): require DeepL API key before save/test
 
 - `plugins/touch-translation/src/components/ProviderConfigModal.vue`
@@ -30,6 +39,70 @@
   - Extended the bundle analyzer to fail if the duplicate `sqlite3-*.wasm` asset returns to the Pages dist output.
   - Converted the Provider Registry admin page into a lightweight ClientOnly shell and lazy-loaded the heavy admin panel component to reduce dashboard/admin route coupling.
   - Current local build output drops to about 24.48 MiB total dist, with Worker executable JS at about 8.05 MiB and Worker gzip at about 1.88 MiB.
+
+### test(nexus): restore full Nexus test pass
+
+- `apps/nexus/vitest.config.ts`
+- `apps/nexus/server/utils/__tests__/*`
+  - Added the `~` Vitest alias for app imports used by OAuth context tests.
+  - Updated exchange-rate, exchange-history, and Turnstile tests to mock the current SDK/network and credit-store boundaries.
+  - `pnpm -C "apps/nexus" run test` now passes locally.
+
+### fix(core-app): surface CoreBox search degraded reasons
+
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+  - CoreBox default result rows now render `notification` items as compact warning notices with a dedicated icon, source/accessory label, and the backend-provided `description` reason.
+  - Windows Everything unavailable and FileProvider startup-degraded notices now show the user-facing cause directly in the result list instead of hiding it behind a generic subtitle.
+  - Normal search/app/plugin/file rows keep the existing layout and source badge behavior.
+
+### fix(core-app): make browser login recovery visible in settings
+
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Settings account section now shows a browser-login pending state with remaining timeout instead of only a generic disabled login button.
+  - Added explicit "reopen" and "cancel sign-in" actions so users can recover when the browser tab was blocked, closed, or the protocol handoff did not return.
+  - Browser-login cancellation now also clears the countdown interval before resolving the pending login attempt.
+
+### feat(core-app): clarify Workflow Review Queue state
+
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Workflow Review Queue now shows a compact status summary for pending, copied, clipboard-replaced, and failed AI outputs.
+  - Review item badges use localized state labels instead of raw persisted status values.
+  - This keeps the existing copy / replace clipboard / dismiss behavior while making the AI output review loop easier to scan.
+
+### feat(core-app): tighten OmniPanel AI preview workflow
+
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionItem.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/ai-actions.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - OmniPanel AI result preview now surfaces a compact input summary, state pill, capability/provider/model/latency metadata, and trace id in the result panel.
+  - OmniPanel action tiles now show source and unavailable reason directly, so disabled plugin/capability actions explain why they cannot run.
+  - Copying a result clears a pending clipboard-replace confirmation so the preview does not leave stale destructive state behind.
+  - Added focused coverage for compact input preview generation used by the AI result panel.
+
+### feat(core-app): surface startup health in settings
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - About settings now show a compact startup health summary using the existing analytics startup snapshot and startup bridge timing.
+  - The summary exposes total, main-process, renderer, module-count, and rating in user-facing language before users open the detailed analytics rows.
+  - This is diagnostic visibility only; it does not replace the required real-device cold/hot startup benchmark evidence for the release gate.
+
+### docs(governance): refresh compatibility deep audit
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-deep-audit-2026-05-16.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`
+  - 新增 2026-05-16 live-tree 深度审计：当前未发现新的 P0 fixed fake-success、mock 成功或平台能力伪装全支持。
+  - 将 `2.4.11` 下一步聚焦到插件 shell capability、动态执行边界、secret backend、runtime console 与 SRP 小切片。
+  - 明确算式 evaluator、单位公式 evaluator 与 widget runtime sandbox 属于受控动态执行边界，需要审计/替换/回归计划，而不是泛化 placeholder 问题。
 
 ### ref(core-app): remove main runtime `$app` global access
 

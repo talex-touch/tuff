@@ -12,6 +12,7 @@ const props = defineProps<{
   loading: boolean
   sourcesCount: number
   showCliTab?: boolean
+  showPublisherTab?: boolean
   categories?: Array<{ tag: string; filter: string; label?: string }>
   providerStats?: {
     total: number
@@ -80,7 +81,7 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
       <TxRadioGroup v-model="tabs" glass>
         <TxRadio value="store" :label="t('flatNavBar.store')" />
         <TxRadio value="installed" :label="t('store.installed')" />
-        <TxRadio value="publisher" :label="t('store.publisher.tab')" />
+        <TxRadio v-if="showPublisherTab" value="publisher" :label="t('store.publisher.tab')" />
         <TxRadio value="docs" :label="t('store.docs')" />
         <TxRadio v-if="showCliTab" value="cli" :label="t('store.cli')" />
       </TxRadioGroup>

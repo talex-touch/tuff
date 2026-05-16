@@ -222,16 +222,30 @@ async function setSecureValue(key: string, value: string | null): Promise<boolea
 }
 
 function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
+  const wasSignedIn = authState.isSignedIn
+  const previousUserId = authState.user?.id ?? null
   authState.isLoaded = true
   authState.isSignedIn = Boolean(nextUser)
   authState.user = nextUser
   authState.sessionId = sessionId ?? null
   setCachedAuthUser(nextUser)
+  authLog.info('Auth state updated', {
+    meta: {
+      wasSignedIn,
+      isSignedIn: authState.isSignedIn,
+      previousUserId,
+      nextUserId: nextUser?.id ?? null,
+      hasSessionId: Boolean(authState.sessionId)
+    }
+  })
   notifyAuthStateChanged()
 }
 
 async function loadAuthToken(): Promise<void> {
   authUseSecureStorage = isAuthTokenSecureStorageEnabled()
+  authLog.info('Loading auth token', {
+    meta: { secureStorageEnabled: authUseSecureStorage }
+  })
 
   if (!authUseSecureStorage) {
     setSecureStorageDegradedState(false)
@@ -242,6 +256,14 @@ async function loadAuthToken(): Promise<void> {
   const secureStoreHealth = await getSecureStoreHealth(appRootPath)
   setSecureStorageDegradedState(!secureStoreHealth.available)
   authToken = await getSecureValue(AUTH_TOKEN_KEY)
+  authLog.info('Auth token load completed', {
+    meta: {
+      hasToken: Boolean(authToken),
+      secureStoreAvailable: secureStoreHealth.available,
+      secureStoreBackend: secureStoreHealth.backend,
+      secureStoreDegraded: secureStoreHealth.degraded
+    }
+  })
   if (!secureStoreHealth.available) {
     authLog.warn('Secure storage unavailable; auth entered session-only mode', {
       reason: secureStoreHealth.reason
@@ -256,14 +278,27 @@ async function loadAuthToken(): Promise<void> {
 
 async function setAuthToken(nextToken: string): Promise<void> {
   authToken = nextToken
+  authLog.info('Auth token accepted', {
+    meta: {
+      tokenLength: nextToken.length,
+      secureStorageEnabled: authUseSecureStorage
+    }
+  })
   if (!authUseSecureStorage) {
     return
   }
-  await setSecureValue(AUTH_TOKEN_KEY, nextToken)
+  const persisted = await setSecureValue(AUTH_TOKEN_KEY, nextToken)
+  authLog.info('Auth token persistence completed', {
+    meta: { persisted }
+  })
 }
 
 async function clearAuthToken(): Promise<void> {
+  const hadToken = Boolean(authToken)
   authToken = null
+  authLog.info('Clearing auth token', {
+    meta: { hadToken, secureStorageEnabled: authUseSecureStorage }
+  })
   if (!authUseSecureStorage) {
     return
   }
@@ -518,6 +553,15 @@ async function fetchRemoteUser(
   signal?: AbortSignal
 ): Promise<FetchRemoteUserResult> {
   const url = new URL('/api/v1/auth/me', resolveAuthBaseUrl()).toString()
+  const startedAt = Date.now()
+  authLog.info('Fetching remote auth profile', {
+    meta: {
+      url,
+      hasToken: Boolean(token),
+      tokenLength: token.length,
+      timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS
+    }
+  })
   try {
     const response = await getNetworkService().request<AuthUser | null>({
       method: 'GET',
@@ -528,23 +572,43 @@ async function fetchRemoteUser(
       responseType: 'json',
       validateStatus: [200, 401, 403]
     })
+    authLog.info('Remote auth profile response received', {
+      meta: {
+        status: response.status,
+        ok: response.ok,
+        durationMs: Date.now() - startedAt
+      }
+    })
     if (response.status !== 200) {
       if (response.status === 401 || response.status === 403) {
+        authLog.warn('Remote auth profile unauthorized', {
+          meta: { status: response.status, durationMs: Date.now() - startedAt }
+        })
         return { kind: 'unauthorized' }
       }
+      authLog.warn('Remote auth profile unavailable status', {
+        meta: { status: response.status, durationMs: Date.now() - startedAt }
+      })
       return { kind: 'unavailable' }
     }
     const data = response.data
     if (!data || typeof data.id !== 'string' || typeof data.email !== 'string') {
+      authLog.warn('Remote auth profile payload is invalid', {
+        meta: { durationMs: Date.now() - startedAt, hasData: Boolean(data) }
+      })
       return { kind: 'unauthorized' }
     }
+    authLog.info('Remote auth profile resolved', {
+      meta: { userId: data.id, durationMs: Date.now() - startedAt }
+    })
     return { kind: 'success', user: toAuthUserProfile(data as AuthUser) }
   } catch (error) {
     authLog.warn('Failed to fetch remote auth profile', {
       error,
       meta: {
         url,
-        timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS
+        timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+        durationMs: Date.now() - startedAt
       }
     })
     return { kind: 'unavailable' }
@@ -568,6 +632,9 @@ async function fetchRemoteUserWithTimeout(token: string): Promise<FetchRemoteUse
 }
 
 async function refreshAuthStateFromRemote(): Promise<void> {
+  authLog.info('Refreshing auth state from remote', {
+    meta: { hasToken: Boolean(authToken), currentUserId: authState.user?.id ?? null }
+  })
   if (!authToken) {
     updateAuthState(null)
     return
@@ -589,6 +656,7 @@ async function refreshAuthStateFromRemote(): Promise<void> {
 }
 
 function scheduleAuthStartupRefresh(delayMs = AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS): void {
+  authLog.info('Scheduling auth startup refresh', { meta: { delayMs } })
   if (authStartupRefreshTimer) {
     clearTimeout(authStartupRefreshTimer)
   }
@@ -652,6 +720,15 @@ async function initializeAuthState(): Promise<void> {
 async function startDeviceAuthRequest(): Promise<DeviceAuthStartResponse> {
   const { deviceId, deviceName, devicePlatform } = ensureDeviceProfile()
   const url = new URL('/api/app-auth/device/start', resolveAuthBaseUrl()).toString()
+  const startedAt = Date.now()
+  authLog.info('Starting device auth request', {
+    meta: {
+      url,
+      deviceId,
+      deviceName,
+      devicePlatform
+    }
+  })
   const response = await getNetworkService().request<DeviceAuthStartResponse>({
     method: 'POST',
     url,
@@ -667,6 +744,16 @@ async function startDeviceAuthRequest(): Promise<DeviceAuthStartResponse> {
     responseType: 'json',
     timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
     validateStatus: [200, 400, 403, 429]
+  })
+
+  authLog.info('Device auth start response received', {
+    meta: {
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+      hasDeviceCode: Boolean(response.data?.deviceCode),
+      hasAuthorizeUrl: Boolean(response.data?.authorizeUrl),
+      intervalSeconds: response.data?.intervalSeconds ?? null
+    }
   })
 
   if (
@@ -693,6 +780,10 @@ async function pollDeviceAuth(
   const url = new URL('/api/app-auth/device/poll', resolveAuthBaseUrl()).toString()
   const intervalMs = Math.max(1000, intervalSeconds * 1000)
   const startAt = Date.now()
+  let pollCount = 0
+  authLog.info('Polling device auth started', {
+    meta: { url, intervalMs, timeoutMs: DEVICE_AUTH_TIMEOUT_MS }
+  })
 
   while (Date.now() - startAt <= DEVICE_AUTH_TIMEOUT_MS) {
     if (!isCurrentAttempt()) {
@@ -706,6 +797,7 @@ async function pollDeviceAuth(
     }
 
     try {
+      pollCount += 1
       const response = await getNetworkService().request<DeviceAuthPollResponse>({
         method: 'GET',
         url,
@@ -718,6 +810,15 @@ async function pollDeviceAuth(
         responseType: 'json',
         timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
         validateStatus: [200, 400, 410, 429]
+      })
+
+      authLog.debug('Device auth poll response received', {
+        meta: {
+          pollCount,
+          statusCode: response.status,
+          authStatus: response.data?.status ?? null,
+          hasAppToken: Boolean(response.data?.appToken)
+        }
       })
 
       if (response.status < 200 || response.status >= 300) {
@@ -738,6 +839,7 @@ async function pollDeviceAuth(
     }
   }
 
+  authLog.warn('Device auth polling timed out', { meta: { pollCount } })
   return { status: 'timeout' }
 }
 
@@ -805,6 +907,7 @@ async function completeDeviceAuthLogin(
 }
 
 async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
+  authLog.info('Opening browser login page', { meta: { mode } })
   const previousDeviceCode = activeDeviceAuthCode
   const attemptId = ++deviceAuthLoginAttempt
   activeDeviceAuthCode = null
@@ -825,6 +928,15 @@ async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<v
     authorizeUrl.pathname = '/sign-up'
   }
 
+  authLog.info('Browser login page resolved', {
+    meta: {
+      mode,
+      attemptId,
+      hasPreviousDeviceCode: Boolean(previousDeviceCode),
+      authorizeHost: authorizeUrl.host,
+      authorizePath: authorizeUrl.pathname
+    }
+  })
   await shell.openExternal(authorizeUrl.toString())
   void completeDeviceAuthLogin(
     deviceCode,
@@ -843,11 +955,21 @@ async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<v
 
 async function handleExternalAuthCallback(token: string, appToken?: string): Promise<boolean> {
   const resolvedToken = appToken || token
+  authLog.info('Handling auth callback token', {
+    meta: {
+      hasToken: Boolean(token),
+      hasAppToken: Boolean(appToken),
+      resolvedTokenLength: resolvedToken.length
+    }
+  })
   if (!resolvedToken) {
     return false
   }
   await setAuthToken(resolvedToken)
   const remoteResult = await fetchRemoteUserWithTimeout(resolvedToken)
+  authLog.info('Auth callback profile resolution completed', {
+    meta: { result: remoteResult.kind }
+  })
   if (remoteResult.kind === 'success') {
     updateAuthState(remoteResult.user, authState.sessionId)
     return true
@@ -918,8 +1040,19 @@ async function executeNexusRequest(
   url: string,
   method: NetworkMethod,
   headers: Headers,
-  body: unknown
+  body: unknown,
+  context?: string
 ): Promise<NexusResponsePayload> {
+  const startedAt = Date.now()
+  authLog.info('Executing Nexus request', {
+    meta: {
+      context: context ?? '',
+      method,
+      url,
+      hasAuthorization: headers.has('Authorization'),
+      hasBody: Boolean(body)
+    }
+  })
   const response = await getNetworkService().request<string>({
     method,
     url,
@@ -929,7 +1062,21 @@ async function executeNexusRequest(
     validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
   })
 
+  authLog.info('Nexus request completed', {
+    meta: {
+      context: context ?? '',
+      method,
+      url: response.url || url,
+      status: response.status,
+      ok: response.ok,
+      durationMs: Date.now() - startedAt
+    }
+  })
+
   if (response.status === 401) {
+    authLog.warn('Nexus request returned unauthorized; clearing auth state', {
+      meta: { context: context ?? '', method, url: response.url || url }
+    })
     await clearAuthToken()
     updateAuthState(null)
   }
@@ -948,6 +1095,9 @@ async function performNexusRequest(
 ): Promise<NexusResponsePayload | null> {
   const token = authToken
   if (!token) {
+    authLog.warn('Nexus request skipped without auth token', {
+      meta: { context: payload.context ?? '', path: payload.path ?? '', url: payload.url ?? '' }
+    })
     return null
   }
   const url = resolveNexusRequestUrl(payload)
@@ -955,7 +1105,7 @@ async function performNexusRequest(
   const headers = new Headers(payload.headers ?? {})
   headers.set('Authorization', normalizeBearerToken(token))
 
-  return executeNexusRequest(url, method, headers, payload.body)
+  return executeNexusRequest(url, method, headers, payload.body, payload.context)
 }
 
 async function performNexusUpload(
@@ -963,6 +1113,9 @@ async function performNexusUpload(
 ): Promise<NexusResponsePayload | null> {
   const token = authToken
   if (!token) {
+    authLog.warn('Nexus upload skipped without auth token', {
+      meta: { context: payload.context ?? '', path: payload.path ?? '', url: payload.url ?? '' }
+    })
     return null
   }
   const url = resolveNexusRequestUrl(payload)
@@ -971,7 +1124,13 @@ async function performNexusUpload(
   headers.delete('content-type')
   headers.set('Authorization', normalizeBearerToken(token))
 
-  return executeNexusRequest(url, method, headers, buildNexusUploadFormData(payload))
+  return executeNexusRequest(
+    url,
+    method,
+    headers,
+    buildNexusUploadFormData(payload),
+    payload.context
+  )
 }
 
 async function getOrInitMachineSeed(appSettings: AppSetting): Promise<string> {
