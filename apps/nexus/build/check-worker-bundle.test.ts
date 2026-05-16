@@ -6,6 +6,7 @@ const nexusRoot = join(import.meta.dirname, '..')
 const shotsRoot = join(nexusRoot, 'public/shots')
 const pwaConfigPath = join(nexusRoot, 'app/config/pwa.ts')
 const workerBundleGuardPath = join(nexusRoot, 'build/check-worker-bundle.mjs')
+const trimContentAssetsPath = join(nexusRoot, 'build/trim-content-assets.mjs')
 
 describe('Nexus deploy asset budget', () => {
   it('keeps landing showcase videos small and silent', () => {
@@ -42,5 +43,17 @@ describe('Nexus deploy asset budget', () => {
     expect(guardSource).toContain('dump\\.[^"\']+\\.sql')
     expect(guardSource).toContain('sqlite3[^"\']*')
     expect(guardSource).toContain('\\.wasm')
+  })
+
+  it('deduplicates Nuxt Content sqlite wasm after build', () => {
+    const packageSource = readFileSync(join(nexusRoot, 'package.json'), 'utf8')
+    const trimSource = readFileSync(trimContentAssetsPath, 'utf8')
+    const guardSource = readFileSync(workerBundleGuardPath, 'utf8')
+
+    expect(packageSource).toContain('node build/trim-content-assets.mjs')
+    expect(trimSource).toContain('removed duplicate sqlite wasm')
+    expect(trimSource).toContain('workerSource.replaceAll')
+    expect(guardSource).toContain('checkDuplicateSqliteWasm')
+    expect(guardSource).toContain('duplicate sqlite wasm files found')
   })
 })

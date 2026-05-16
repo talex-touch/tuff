@@ -13,6 +13,18 @@
 
 ## 2026-05-16
 
+### perf(nexus): dedupe Content sqlite assets and lazy admin route
+
+- `apps/nexus/build/trim-content-assets.mjs`
+- `apps/nexus/build/check-worker-bundle.mjs`
+- `apps/nexus/package.json`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+  - Added a Nexus post-build content asset trim step that rewrites the sqlite worker to use the canonical sqlite wasm and removes the duplicate hashed wasm copy emitted by Nuxt Content.
+  - Extended the bundle analyzer to fail if the duplicate `sqlite3-*.wasm` asset returns to the Pages dist output.
+  - Converted the Provider Registry admin page into a lightweight ClientOnly shell and lazy-loaded the heavy admin panel component to reduce dashboard/admin route coupling.
+  - Current local build output drops to about 24.48 MiB total dist, with Worker executable JS at about 8.05 MiB and Worker gzip at about 1.88 MiB.
+
 ### ref(core-app): remove main runtime `$app` global access
 
 - `apps/core-app/src/main/core/main-runtime-state.ts`

@@ -46,6 +46,7 @@
 
 ## 已完成/历史不再重复开发
 
+- 2026-05-16 Nexus Content sqlite wasm 重复产物已通过 post-build trim 去重，Provider Registry admin 页面已改为 ClientOnly lazy shell；本地 dist 约 24.48 MiB，Worker executable JS 约 8.05 MiB。
 - 2026-05-16 Nexus API tests 已全部迁出 `server/api` 到 `test/api`，并新增零容忍 route-tree guard，防止测试/开发文件重新进入 Nitro 生产路由树。
 - 2026-05-16 Nexus PWA precache 已排除 Nuxt Content SQL dump、sqlite wasm 与 sqlite worker 资产，并在 Worker bundle analyzer 中增加回潮检查；`nativeSqlite` 仍需保留，直接关闭会触发 `better-sqlite3` build 依赖。
 - 2026-05-16 Nexus 公开站低风险清理与性能小切片已完成：生产测试页、`.DS_Store`、旧 GIF 退场；Landing 大图切到压缩 JPG；highlight.js 改为 docs 按需加载；公开页预渲染范围扩大。

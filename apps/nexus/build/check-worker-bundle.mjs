@@ -136,6 +136,14 @@ function getWorkerGzipBytes(files) {
   return gzipSync(source, { level: 9 }).byteLength
 }
 
+function checkDuplicateSqliteWasm(distFiles) {
+  const duplicateWasmFiles = distFiles
+    .filter(file => /^_nuxt\/sqlite3-[A-Za-z0-9_-]+\.wasm$/.test(file.relativePath))
+    .map(file => file.relativePath)
+
+  return duplicateWasmFiles
+}
+
 function checkSizeBudgets(distFiles, distTotalBytes, workerTotalBytes, workerGzipBytes) {
   const findings = []
   if (distTotalBytes > distBudget.maxTotalBytes) {
@@ -249,6 +257,7 @@ const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
 const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
 const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
 const forbiddenServiceWorkerPrecache = checkServiceWorkerPrecache()
+const duplicateSqliteWasm = checkDuplicateSqliteWasm(distFiles)
 const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
@@ -288,11 +297,17 @@ if (forbiddenServiceWorkerPrecache.length) {
     console.error(`  ${asset}`)
 }
 
+if (duplicateSqliteWasm.length) {
+  console.error('[nexus-dist-budget] duplicate sqlite wasm files found:')
+  for (const file of duplicateSqliteWasm)
+    console.error(`  ${file}`)
+}
+
 if (sizeFindings.length) {
   console.error('[nexus-dist-budget] size budget violations:')
   for (const finding of sizeFindings)
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || sizeFindings.length)
+if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || forbiddenServiceWorkerPrecache.length || duplicateSqliteWasm.length || sizeFindings.length)
   process.exit(1)
