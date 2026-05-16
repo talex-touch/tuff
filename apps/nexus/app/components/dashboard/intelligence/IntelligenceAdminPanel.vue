@@ -5,8 +5,7 @@ import { defineComponent, h, inject } from 'vue'
 import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
-import { resolveMigrationReadiness } from '~/utils/intelligence-provider-migration'
-import type { IntelligenceProviderMigrationReadinessStatus } from '~/utils/intelligence-provider-migration'
+import { resolveMigrationReadiness, type IntelligenceProviderMigrationReadinessStatus } from '~/utils/intelligence-provider-migration'
 import type { ProviderRegistryRecord, SceneRegistryRecord, SceneStrategyMode } from '~/utils/provider-registry-admin'
 
 const { t } = useI18n()

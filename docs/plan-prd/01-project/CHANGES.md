@@ -13,6 +13,14 @@
 
 ## 2026-05-17
 
+### feat(nexus): surface provider migration readiness in admin UI
+
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
+- `apps/nexus/app/utils/intelligence-provider-migration.ts`
+  - Added a Provider Registry migration readiness panel that distinguishes dry-run planning, blocked execution, and registry-primary ready states.
+  - Exposed `readyForRegistryPrimaryReads` and machine-readable `blockers` in the dashboard so legacy `intelligence_providers` retirement is auditable before promoting registry-primary reads.
+  - Added focused utility and migrate API coverage for readiness pass-through and blocker normalization.
+
 ### fix(nexus): prevent dashboard asset icon dark-mode filter leak
 
 - `apps/nexus/app/components/dashboard/DashboardAssetIcon.vue`

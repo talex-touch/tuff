@@ -51,6 +51,8 @@ describe('/api/dashboard/intelligence/providers/migrate', () => {
       migrated: 0,
       skipped: 0,
       failed: 0,
+      readyForRegistryPrimaryReads: false,
+      blockers: ['migration_dry_run_only', 'migration_not_executed'],
       items: [
         {
           providerId: 'ip_1',
@@ -80,6 +82,8 @@ describe('/api/dashboard/intelligence/providers/migrate', () => {
     expect(result.migration).toMatchObject({
       dryRun: true,
       total: 1,
+      readyForRegistryPrimaryReads: false,
+      blockers: ['migration_dry_run_only', 'migration_not_executed'],
       items: [
         expect.objectContaining({ action: 'would_create' }),
       ],
