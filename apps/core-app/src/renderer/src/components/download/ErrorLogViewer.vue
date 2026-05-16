@@ -5,6 +5,7 @@ import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<Props>()
 
@@ -12,6 +13,7 @@ const emit = defineEmits<Emits>()
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const downloadErrorLog = createRendererLogger('DownloadErrorLogs')
 
 interface Props {
   modelValue: boolean
@@ -95,7 +97,7 @@ async function loadErrorStats() {
       errorStats.value = stats
     }
   } catch (error: unknown) {
-    console.error('Failed to load error stats:', error)
+    downloadErrorLog.error('Failed to load error stats:', error)
   }
 }
 

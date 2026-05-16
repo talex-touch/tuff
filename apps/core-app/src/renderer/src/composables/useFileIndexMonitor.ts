@@ -7,6 +7,9 @@ import type {
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { ref } from 'vue'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const fileIndexMonitorLog = createRendererLogger('FileIndexMonitor')
 
 /**
  * 文件索引监控 Composable
@@ -25,7 +28,7 @@ export function useFileIndexMonitor() {
       const status = await settingsSdk.fileIndex.getStatus()
       return status
     } catch (error) {
-      console.error('[FileIndexMonitor] Failed to get index status:', error)
+      fileIndexMonitorLog.error('Failed to get index status:', error)
       return null
     }
   }
@@ -38,7 +41,7 @@ export function useFileIndexMonitor() {
       const battery = await settingsSdk.fileIndex.getBatteryLevel()
       return battery
     } catch (error) {
-      console.error('[FileIndexMonitor] Failed to get battery level:', error)
+      fileIndexMonitorLog.error('Failed to get battery level:', error)
       return null
     }
   }
@@ -50,7 +53,7 @@ export function useFileIndexMonitor() {
     try {
       return await settingsSdk.fileIndex.getFailedFiles()
     } catch (error) {
-      console.error('[FileIndexMonitor] Failed to get failed files:', error)
+      fileIndexMonitorLog.error('Failed to get failed files:', error)
       return []
     }
   }
@@ -69,7 +72,7 @@ export function useFileIndexMonitor() {
         devLog('[FileIndexMonitor] Stats fetch timed out, module may be initializing')
         return null
       }
-      console.error('[FileIndexMonitor] Failed to get index stats:', error)
+      fileIndexMonitorLog.error('Failed to get index stats:', error)
       return null
     }
   }
@@ -92,10 +95,10 @@ export function useFileIndexMonitor() {
         devLog('[FileIndexMonitor] Rebuild triggered successfully')
         return result
       }
-      console.error('[FileIndexMonitor] Rebuild failed:', result?.error)
+      fileIndexMonitorLog.error('Rebuild failed:', result?.error)
       return result ?? { success: false, error: 'Rebuild failed' }
     } catch (error) {
-      console.error('[FileIndexMonitor] Failed to trigger rebuild:', error)
+      fileIndexMonitorLog.error('Failed to trigger rebuild:', error)
       throw error
     }
   }
@@ -115,7 +118,7 @@ export function useFileIndexMonitor() {
           callback(data as FileIndexProgress)
         },
         onError: (err) => {
-          console.error('[FileIndexMonitor] Progress stream error:', err)
+          fileIndexMonitorLog.error('Progress stream error:', err)
         }
       })
       .then((stream) => {
@@ -126,7 +129,7 @@ export function useFileIndexMonitor() {
         controller = stream
       })
       .catch((error) => {
-        console.error('[FileIndexMonitor] Failed to start progress stream:', error)
+        fileIndexMonitorLog.error('Failed to start progress stream:', error)
       })
 
     return () => {

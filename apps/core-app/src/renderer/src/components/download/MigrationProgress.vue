@@ -8,10 +8,12 @@ import type {
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const visible = ref(false)
 const transport = useTuffTransport()
 const { t } = useI18n()
+const migrationLog = createRendererLogger('DownloadMigration')
 
 let disposeProgressListener: (() => void) | null = null
 let disposeResultListener: (() => void) | null = null
@@ -86,7 +88,7 @@ async function handleRetry() {
   try {
     await transport.send(DownloadEvents.migration.retry)
   } catch (error) {
-    console.error('Failed to retry migration:', error)
+    migrationLog.error('Failed to retry migration:', error)
   }
 }
 
@@ -106,7 +108,7 @@ async function checkMigrationNeeded() {
       await transport.send(DownloadEvents.migration.start)
     }
   } catch (error) {
-    console.error('Failed to check migration status:', error)
+    migrationLog.error('Failed to check migration status:', error)
   }
 }
 
@@ -119,7 +121,7 @@ onMounted(() => {
       handleResult(undefined, payload)
     })
   } catch (error) {
-    console.warn('[MigrationProgress] Failed to bind migration listeners:', error)
+    migrationLog.warn('Failed to bind migration listeners:', error)
   }
 
   // Check if migration is needed on mount
