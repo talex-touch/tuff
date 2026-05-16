@@ -202,6 +202,7 @@ export default tseslint.config(
   },
   {
     files: ['src/**/*.{ts,mts,tsx,vue,js,mjs,cjs}'],
+    ignores: ['src/shared/ipc/raw-channel.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -268,6 +269,7 @@ export default tseslint.config(
     files: ['src/renderer/**/*.{ts,mts,tsx,vue,js,mjs,cjs}'],
     ignores: [
       'src/renderer/src/modules/channel/channel-core.ts',
+      'src/renderer/src/modules/platform/renderer-platform.ts',
       'src/renderer/src/views/test/**',
       '**/*.{test,spec}.{ts,mts,tsx,js,mjs,cjs}'
     ],
@@ -279,9 +281,11 @@ export default tseslint.config(
     files: ['src/**/*.{ts,mts,tsx,vue,js,mjs,cjs}'],
     ignores: [
       'src/preload/index.ts',
+      'src/main/utils/logger.ts',
       'src/main/plugins/internal/internal-plugin-logger.ts',
       'src/main/modules/box-tool/search-engine/search-logger.ts',
       'src/main/modules/box-tool/search-engine/search-logger-test.ts',
+      'src/shared/ipc/raw-channel.ts',
       'src/renderer/src/base/axios.ts',
       'src/renderer/src/modules/channel/channel-core.ts',
       'src/renderer/src/utils/dev-log.ts',
