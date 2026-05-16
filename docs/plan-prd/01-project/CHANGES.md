@@ -18,9 +18,12 @@
 - `apps/core-app/src/main/modules/auth/index.ts`
 - `apps/core-app/src/renderer/src/views/base/Store.vue`
 - `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/nexus/server/utils/auth.ts`
   - Added safe main-process auth diagnostics for token load/persist state, browser device-login start/poll, remote `/api/v1/auth/me` profile fetch, auth state transitions, and Nexus proxy request status without logging token values.
   - Kept account/Nexus requests behind the main-process `AuthEvents.nexus.*` proxy; renderer continues to trigger only transport events and no longer exposes the publisher tab when no signed-in account is available.
   - If auth state changes while `/store/publisher` is active, the store view now falls back to the public marketplace tab instead of showing `NOT_AUTHENTICATED` inside publisher management.
+  - Nexus verified-email API guards now accept app tokens through the shared auth fallback, so desktop app tokens can access credits endpoints after `/api/v1/auth/me` succeeds.
+  - Desktop Nexus proxy now preserves the signed-in account on ordinary business-endpoint 401 responses; only explicit auth-profile contexts can clear the global auth state.
 
 ### fix(plugin): require DeepL API key before save/test
 

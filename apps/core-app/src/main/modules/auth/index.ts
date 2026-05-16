@@ -1036,6 +1036,11 @@ function buildNexusUploadFormData(payload: NexusUploadPayload): FormData {
   return form
 }
 
+function shouldClearAuthStateForNexusUnauthorized(context?: string): boolean {
+  const normalizedContext = (context ?? '').trim()
+  return normalizedContext === 'auth-profile' || normalizedContext.startsWith('auth:')
+}
+
 async function executeNexusRequest(
   url: string,
   method: NetworkMethod,
@@ -1074,11 +1079,17 @@ async function executeNexusRequest(
   })
 
   if (response.status === 401) {
-    authLog.warn('Nexus request returned unauthorized; clearing auth state', {
-      meta: { context: context ?? '', method, url: response.url || url }
-    })
-    await clearAuthToken()
-    updateAuthState(null)
+    if (shouldClearAuthStateForNexusUnauthorized(context)) {
+      authLog.warn('Nexus auth request returned unauthorized; clearing auth state', {
+        meta: { context: context ?? '', method, url: response.url || url }
+      })
+      await clearAuthToken()
+      updateAuthState(null)
+    } else {
+      authLog.warn('Nexus business request returned unauthorized; preserving auth state', {
+        meta: { context: context ?? '', method, url: response.url || url }
+      })
+    }
   }
 
   return {
