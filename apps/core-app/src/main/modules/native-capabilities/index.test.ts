@@ -1,9 +1,15 @@
+import type { ModuleInitContext } from '@talex-touch/utils'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { describe, expect, it, vi } from 'vitest'
 import { NativeEvents } from '@talex-touch/utils/transport/events'
 
+type NativeHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
+type NativeStreamHandler = (payload: unknown, context: unknown) => unknown | Promise<unknown>
+
 const mocks = vi.hoisted(() => ({
-  handlers: new Map<string, (...args: any[]) => any>(),
-  streamHandlers: new Map<string, (...args: any[]) => any>(),
+  handlers: new Map<string, NativeHandler>(),
+  streamHandlers: new Map<string, NativeStreamHandler>(),
   capture: vi.fn(async () => ({
     tfileUrl: 'tfile:///tmp/shot.png',
     mimeType: 'image/png',
@@ -186,7 +192,7 @@ vi.mock('./screenshot-service', () => ({
 
 function createContext(pluginName?: string) {
   return {
-    sender: {} as any,
+    sender: {} as HandlerContext['sender'],
     eventName: NativeEvents.screenshot.capture.toEventName(),
     plugin: pluginName
       ? {
@@ -198,12 +204,16 @@ function createContext(pluginName?: string) {
   }
 }
 
+function initNativeModule(module: { onInit: (ctx: ModuleInitContext<TalexEvents>) => void }): void {
+  module.onInit({} as ModuleInitContext<TalexEvents>)
+}
+
 describe('NativeCapabilitiesModule', () => {
   it('registers native screenshot handlers and allows internal renderer calls', async () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
-    module.onInit({} as any)
+    initNativeModule(module)
     const handler = mocks.handlers.get(NativeEvents.screenshot.capture.toEventName())
     expect(handler).toBeTypeOf('function')
 
@@ -218,7 +228,7 @@ describe('NativeCapabilitiesModule', () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
-    module.onInit({} as any)
+    initNativeModule(module)
     const handler = mocks.handlers.get(NativeEvents.screenshot.capture.toEventName())
     await handler?.({ target: 'cursor-display' }, createContext('demo.plugin'))
 
@@ -229,7 +239,7 @@ describe('NativeCapabilitiesModule', () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
-    module.onInit({} as any)
+    initNativeModule(module)
 
     expect(mocks.handlers.has(NativeEvents.capabilities.list.toEventName())).toBe(true)
     expect(mocks.handlers.has(NativeEvents.fileIndex.query.toEventName())).toBe(true)
@@ -242,7 +252,7 @@ describe('NativeCapabilitiesModule', () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
-    module.onInit({} as any)
+    initNativeModule(module)
     const handler = mocks.handlers.get(NativeEvents.fileIndex.query.toEventName())
     const result = await handler?.({ text: 'demo', limit: 2 }, createContext('demo.plugin'))
 
@@ -258,7 +268,7 @@ describe('NativeCapabilitiesModule', () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
-    module.onInit({} as any)
+    initNativeModule(module)
     await mocks.handlers.get(NativeEvents.file.stat.toEventName())?.(
       { path: '/tmp/a.png' },
       createContext('demo.plugin')
@@ -282,7 +292,7 @@ describe('NativeCapabilitiesModule', () => {
     const { NativeCapabilitiesModule } = await import('./index')
     const module = new NativeCapabilitiesModule()
 
-    module.onInit({} as any)
+    initNativeModule(module)
     const handler = mocks.handlers.get(NativeEvents.capabilities.get.toEventName())
     const result = handler?.({ id: 'media.thumbnail' }, createContext('demo.plugin'))
 
