@@ -2,6 +2,9 @@ import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import type { ITuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, ref } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const pluginLogsLog = createRendererLogger('PluginLogs')
 
 export interface LogSessionMeta {
   id: string
@@ -103,7 +106,7 @@ export function usePluginLogSessions(transport: ITuffTransport) {
           })
           chunks.push(...sessionLogs)
         } catch (error) {
-          console.warn('[PluginLogs] Failed to load session log:', error)
+          pluginLogsLog.warn('Failed to load session log:', error)
         }
       }
 
@@ -114,7 +117,7 @@ export function usePluginLogSessions(transport: ITuffTransport) {
           })
           chunks.push(...buffer)
         } catch (error) {
-          console.warn('[PluginLogs] Failed to load buffer:', error)
+          pluginLogsLog.warn('Failed to load buffer:', error)
         }
       }
 
@@ -152,7 +155,7 @@ export function usePluginLogSessions(transport: ITuffTransport) {
         selectedSessionId.value = first ? first.id : selectedSessionId.value
       }
     } catch (error) {
-      console.error('[PluginLogs] Failed to fetch sessions:', error)
+      pluginLogsLog.error('Failed to fetch sessions:', error)
       sessions.value = []
       totalSessions.value = 0
       if (!options?.preserveSelection) {

@@ -73,9 +73,12 @@ export function logAppEntranceMode(
     'font-weight:700;'
   ].join('')
 
+  // eslint-disable-next-line no-console
   console.groupCollapsed(`%cAppEntrance%c ${mode} Mode`, tagStyle, modeStyle)
   if (details && Object.keys(details).length > 0) {
+    // eslint-disable-next-line no-console
     console.table(details)
   }
+  // eslint-disable-next-line no-console
   console.groupEnd()
 }

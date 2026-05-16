@@ -3,6 +3,9 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { appSetting } from '~/modules/storage/app-storage'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const batteryOptimizerLog = createRendererLogger('BatteryOptimizer')
 
 const batteryStatus = reactive<{ onBattery: boolean; percent: number | null }>({
   onBattery: false,
@@ -37,7 +40,7 @@ async function loadLowBatteryThreshold(): Promise<void> {
       lowBatteryThreshold.value = normalizeThreshold(settings?.blockBatteryBelowPercent)
     })
     .catch((error) => {
-      console.warn('[BatteryOptimizer] Failed to load device idle battery threshold:', error)
+      batteryOptimizerLog.warn('Failed to load device idle battery threshold:', error)
       lowBatteryThreshold.value = DEFAULT_LOW_BATTERY_THRESHOLD
     })
     .finally(() => {

@@ -16,6 +16,7 @@ import {
 import { useDownloadSdk, useNetworkSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const svgFileCache = new Map<string, string>()
 const svgContentCache = new Map<string, string>()
@@ -29,6 +30,7 @@ const LOCAL_HTTP_COOLDOWN_POLICY: NetworkCooldownPolicy = {
   cooldownMs: LOCAL_HTTP_RETRY_COOLDOWN_MS,
   autoResetOnSuccess: true
 }
+const svgContentLog = createRendererLogger('SvgContent')
 const pendingTasks = new Map<
   string,
   { resolve: () => void; reject: (error: Error) => void; timeoutId: number; promise: Promise<void> }
@@ -512,7 +514,7 @@ export function useSvgContent(
       error.value = err instanceof Error ? err : new Error(String(err))
       content.value = null // Ensure content is cleared on error
       if (!isLocalHttpSource(targetUrl) && !isApiSource(targetUrl)) {
-        console.error('fetchSvgContent failed after retries', url.value, err)
+        svgContentLog.error('fetchSvgContent failed after retries', url.value, err)
       }
     } finally {
       loading.value = false

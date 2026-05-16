@@ -1,6 +1,9 @@
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { ref } from 'vue'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { getPreloadProcessInfo } from '../preload/process-info'
+
+const envLog = createRendererLogger('EnvHooks')
 
 interface PackageJson {
   name: string
@@ -63,7 +66,7 @@ export function useEnv() {
       packageJson.value = pkg as PackageJson
     })
     .catch((error) => {
-      console.warn('[useEnv] Failed to load package info:', error)
+      envLog.warn('Failed to load package info:', error)
     })
 
   void appSdk
@@ -72,7 +75,7 @@ export function useEnv() {
       os.value = info as OSInfo
     })
     .catch((error) => {
-      console.warn('[useEnv] Failed to load OS info:', error)
+      envLog.warn('Failed to load OS info:', error)
     })
 
   return { packageJson, os, processInfo }

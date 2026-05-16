@@ -2,6 +2,9 @@ import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { reactive } from 'vue'
 import { getBuiltinPromptTemplates } from '~/modules/intelligence/builtin-prompts'
 import { promptLibraryStorage } from '~/modules/storage/prompt-library'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const promptManagerLog = createRendererLogger('PromptManager')
 
 export function usePromptManager() {
   const prompts = reactive({
@@ -11,7 +14,7 @@ export function usePromptManager() {
 
   const persistCustomPrompts = (): void => {
     saveCustomPrompts().catch((error) => {
-      console.error('Failed to persist custom prompts:', error)
+      promptManagerLog.error('Failed to persist custom prompts:', error)
     })
   }
 
@@ -103,7 +106,7 @@ export function usePromptManager() {
       promptLibraryStorage.replaceCustomPrompts(prompts.custom)
       await promptLibraryStorage.saveToRemote({ force: true })
     } catch (error) {
-      console.error('Failed to save custom prompts:', error)
+      promptManagerLog.error('Failed to save custom prompts:', error)
     }
   }
 
@@ -113,7 +116,7 @@ export function usePromptManager() {
       await promptLibraryStorage.reloadFromRemote()
       refreshCustomPrompts()
     } catch (error) {
-      console.error('Failed to load custom prompts:', error)
+      promptManagerLog.error('Failed to load custom prompts:', error)
     }
   }
 
