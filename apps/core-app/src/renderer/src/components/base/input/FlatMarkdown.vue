@@ -1,5 +1,6 @@
 <script lang="ts" name="FlatMarkdown" setup>
 import { defaultValueCtx, Editor, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
+import type { Ctx } from '@milkdown/ctx'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { commonmark } from '@milkdown/preset-commonmark'
 import { nord } from '@milkdown/theme-nord'
@@ -30,7 +31,7 @@ const editorReady = ref(false)
 let internalUpdate = false
 
 type MilkdownBuilder = {
-  config: (configure: (ctx: any) => void) => MilkdownBuilder
+  config: (configure: (ctx: Ctx) => void) => MilkdownBuilder
   use: (plugin: unknown) => MilkdownBuilder
   create: () => Promise<Editor>
 }

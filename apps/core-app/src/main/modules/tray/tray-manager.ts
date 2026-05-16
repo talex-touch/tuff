@@ -47,8 +47,8 @@ export class TrayManager extends BaseModule {
   private touchApp: TrayTouchAppRuntime | null = null
 
   private readonly appEmitter = app as unknown as {
-    on: (eventName: string, handler: (...args: any[]) => void) => void
-    removeListener: (eventName: string, handler: (...args: any[]) => void) => void
+    on: (eventName: string, handler: (...args: unknown[]) => void) => void
+    removeListener: (eventName: string, handler: (...args: unknown[]) => void) => void
   }
 
   constructor() {
@@ -59,7 +59,7 @@ export class TrayManager extends BaseModule {
     this.stateManager = new TrayStateManager()
   }
 
-  async onInit(ctx: ModuleInitContext<any>): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.touchApp = (ctx.runtime?.app ?? ctx.app) as TrayTouchAppRuntime
     this.menuBuilder.setTouchApp(this.touchApp as TrayTouchAppRuntime & { channel: unknown })
     this.syncWindowVisibilityState()
@@ -282,21 +282,21 @@ export class TrayManager extends BaseModule {
     return visible
   }
 
-  private registerAppListener(eventName: string, handler: (...args: any[]) => void): void {
+  private registerAppListener(eventName: string, handler: (...args: unknown[]) => void): void {
     this.appEmitter.on(eventName, handler)
     this.appDisposers.push(() => {
       this.appEmitter.removeListener(eventName, handler)
     })
   }
 
-  private registerWindowListener(eventName: string, handler: (...args: any[]) => void): void {
+  private registerWindowListener(eventName: string, handler: (...args: unknown[]) => void): void {
     const mainWindow = this.touchApp?.window.window
     if (!mainWindow) {
       return
     }
     const windowEmitter = mainWindow as unknown as {
-      on: (eventName: string, listener: (...args: any[]) => void) => void
-      removeListener: (eventName: string, listener: (...args: any[]) => void) => void
+      on: (eventName: string, listener: (...args: unknown[]) => void) => void
+      removeListener: (eventName: string, listener: (...args: unknown[]) => void) => void
     }
 
     windowEmitter.on(eventName, handler)
