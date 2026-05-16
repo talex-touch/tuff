@@ -32,6 +32,7 @@ import { app } from 'electron'
 import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
@@ -143,9 +144,7 @@ export class AnalyticsModule extends BaseModule {
     }
     setPerfSummaryReporter((summary) => this.handlePerfSummary(summary))
 
-    const channel =
-      (ctx.app as { channel?: unknown } | undefined)?.channel ??
-      ($app as { channel?: unknown } | undefined)?.channel
+    const channel = resolveMainRuntime(ctx, 'AnalyticsModule.onInit').channel
     if (channel) {
       this.transport = getTuffTransportMain(channel, getKeyManager(channel) ?? channel)
     }

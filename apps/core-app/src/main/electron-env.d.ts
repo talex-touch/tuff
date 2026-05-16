@@ -1,7 +1,6 @@
 /// <reference types="vite-plugin-electron/electron-env" />
 
 import type { Logger } from 'log4js'
-import type { TouchApp } from './core/touch-app'
 
 declare namespace NodeJS {
   interface ProcessEnv {
@@ -29,7 +28,6 @@ declare namespace NodeJS {
   interface Global {
     logger: Logger
     errLogger: Logger
-    $app: TouchApp
     $pkg: typeof import('../../../package.json')
   }
 }
@@ -38,7 +36,6 @@ declare namespace NodeJS {
 declare global {
   var logger: Logger
   var errLogger: Logger
-  var $app: TouchApp
   var $pkg: typeof import('../../../package.json')
 
   interface Console {

@@ -36,6 +36,7 @@ import {
   parseComparableUpdateVersion,
   selectLatestUpdateRelease
 } from '../../../shared/update/version'
+import { getCurrentTouchApp } from '../../core/main-runtime-state'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -1595,8 +1596,8 @@ export class UpdateSystem {
   }
 
   private requestAppQuit(reason: string): void {
-    const touchApp = (globalThis as { $app?: { quit?: () => void } }).$app
-    if (touchApp?.quit) {
+    const touchApp = getCurrentTouchApp()
+    if (touchApp) {
       touchApp.quit()
     } else {
       app.quit()

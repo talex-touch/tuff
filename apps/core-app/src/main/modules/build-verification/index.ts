@@ -9,6 +9,7 @@ import {
   compareUpdateAssetTargets,
   resolveUpdateAssetTarget
 } from '../../../shared/update/platform-target'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { BaseModule } from '../abstract-base-module'
@@ -41,12 +42,15 @@ export class BuildVerificationModule extends BaseModule {
   private verificationFailed = false
   private readonly signatureVerifier = new SignatureVerifier()
   private readonly log = createLogger('BuildVerification')
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(BuildVerificationModule.key)
   }
 
-  onInit(_ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    this.transport = resolveMainRuntime(ctx, 'BuildVerificationModule.onInit').transport
+
     if (!app.isPackaged) {
       this.setVerificationStatus(true, false)
       return
@@ -70,6 +74,7 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    this.transport = null
     this.log.debug('Destroyed')
   }
 
@@ -310,13 +315,9 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   private pushVerificationStatus(window: BrowserWindow): void {
-    const channel = ($app as { channel?: unknown } | null | undefined)?.channel
-    if (!channel) {
+    if (!this.transport) {
       return
     }
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
     const payload = {
       isOfficialBuild: this.isOfficialBuild,
       verificationFailed: this.verificationFailed,
@@ -324,7 +325,7 @@ export class BuildVerificationModule extends BaseModule {
     }
 
     try {
-      transport.broadcastToWindow(window.id, buildVerificationStatusEvent, payload)
+      this.transport.broadcastToWindow(window.id, buildVerificationStatusEvent, payload)
     } catch (error) {
       this.log.warn('[BuildVerification] Failed to push verification status.', {
         error: error instanceof Error ? error.message : String(error)

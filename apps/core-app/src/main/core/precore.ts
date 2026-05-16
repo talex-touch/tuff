@@ -20,6 +20,7 @@ import {
   touchEventBus,
   WindowAllClosedEvent
 } from './eventbus/touch-event'
+import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
 import { setupSingleInstanceGuard } from './single-instance-guard'
 
@@ -48,14 +49,14 @@ function applyDeprecationTraceSwitch(): void {
 }
 
 function broadcastBeforeQuit(): void {
-  const channel = ($app as { channel?: unknown } | null | undefined)?.channel
+  const channel = getCurrentTouchApp()?.channel
   if (!channel) return
   const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
   transport.broadcast(AppEvents.lifecycle.beforeQuit, undefined)
 }
 
 function markAppQuitting(reason: string): void {
-  const appInstance = globalThis.$app as { isQuitting?: boolean } | undefined
+  const appInstance = getCurrentTouchApp()
   if (!appInstance || appInstance.isQuitting === true) return
   appInstance.isQuitting = true
   mainLog.debug('Marked app quitting state', { meta: { reason } })
@@ -189,8 +190,7 @@ function isStartupBenchmarkMode(): boolean {
 }
 
 function getBeforeQuitTimeoutHint(): unknown {
-  const manager = (globalThis.$app as { moduleManager?: ShutdownObservationProvider } | undefined)
-    ?.moduleManager
+  const manager = getCurrentTouchApp()?.moduleManager as ShutdownObservationProvider | undefined
   return manager?.getShutdownObservation?.()
 }
 

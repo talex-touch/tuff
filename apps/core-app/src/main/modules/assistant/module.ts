@@ -17,6 +17,7 @@ import {
   AssistantFloatingBallWindowOption,
   AssistantVoicePanelWindowOption
 } from '../../config/default'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
@@ -92,9 +93,9 @@ export class AssistantModule extends BaseModule {
     )
   }
 
-  async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.ensureSettingsIntegrity()
-    this.setupTransport()
+    this.setupTransport(ctx)
     this.registerTransportHandlers()
     this.watchAppSetting()
     await this.applySettingSnapshot(this.readAppSetting())
@@ -125,8 +126,8 @@ export class AssistantModule extends BaseModule {
     this.destroyFloatingBallWindow()
   }
 
-  private setupTransport(): void {
-    const channel = $app.channel
+  private setupTransport(ctx: ModuleInitContext<TalexEvents>): void {
+    const channel = resolveMainRuntime(ctx, 'AssistantModule.onInit').channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)

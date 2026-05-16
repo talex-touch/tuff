@@ -115,6 +115,7 @@ export class ShortcutModule extends BaseModule {
   private shortcutStatusMap = new Map<string, ShortcutStatus>()
   private isEnabled: boolean = true
   private disposeBeforeQuitListener: (() => void) | null = null
+  private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
     super(ShortcutModule.key, {
@@ -130,9 +131,8 @@ export class ShortcutModule extends BaseModule {
     })
     this.registerBeforeQuitTeardownListener()
     const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
-    this.setupIpcListeners(
-      getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
-    )
+    this.transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
+    this.setupIpcListeners(this.transport)
     this.reregisterAllShortcuts()
   }
 
@@ -141,6 +141,7 @@ export class ShortcutModule extends BaseModule {
       this.disposeBeforeQuitListener()
       this.disposeBeforeQuitListener = null
     }
+    this.transport = null
     this.teardownRuntimeRegistrations()
   }
 
@@ -691,8 +692,13 @@ export class ShortcutModule extends BaseModule {
       }
       case ShortcutType.RENDERER: {
         const allWindows = BrowserWindow.getAllWindows()
-        const channel = $app.channel
-        const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
+        const transport = this.transport
+        if (!transport) {
+          shortconLog.warn('Shortcut transport is not initialized', {
+            meta: { shortcutId: shortcut.id }
+          })
+          break
+        }
         const triggerId = this.getShortcutTriggerId(shortcut)
         const pluginName = shortcut.meta?.author
         if (pluginName && pluginName !== SYSTEM_SHORTCUT_AUTHOR) {

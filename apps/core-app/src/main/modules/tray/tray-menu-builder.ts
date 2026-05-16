@@ -205,7 +205,7 @@ export class TrayMenuBuilder {
         {
           label: state.hasUpdate ? t('tray.checkUpdateAvailable') : t('tray.checkUpdate'),
           click: () => {
-            $app.window.window.webContents.send('trigger-update-check')
+            this.requireTouchApp().window.window.webContents.send('trigger-update-check')
           }
         },
         {

@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-15
+> 更新时间：2026-05-16
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -12,6 +12,16 @@
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
 ## 2026-05-16
+
+### ref(core-app): remove main runtime `$app` global access
+
+- `apps/core-app/src/main/core/main-runtime-state.ts`
+- `apps/core-app/src/main/core/index.ts`
+- `apps/core-app/src/main/core/precore.ts`
+- `apps/core-app/src/main/modules/**`
+  - 新增显式 TouchApp runtime holder，替代主进程 `$app` / `globalThis.$app` 访问。
+  - 模块初始化阶段优先复用 `resolveMainRuntime(ctx, ...)`，跨生命周期场景缓存 transport 或 touchApp context。
+  - 删除 `electron-env.d.ts` 中 `$app` 全局声明，保持 lint hard-cut 与类型边界一致。
 
 ### chore(nexus): move API tests out of route tree
 

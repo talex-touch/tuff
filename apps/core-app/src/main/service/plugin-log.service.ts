@@ -1,4 +1,4 @@
-import type { ModuleKey } from '@talex-touch/utils'
+import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import type { WebContents } from 'electron'
 import type { PluginLogAppendEvent } from '../core/eventbus/touch-event'
@@ -10,6 +10,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { shell } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { resolveMainRuntime } from '../core/runtime-accessor'
 import { BaseModule } from '../modules/abstract-base-module'
 import { pluginModule } from '../modules/plugin/plugin-module'
 import { createLogger } from '../utils/logger'
@@ -413,10 +414,12 @@ export class PluginLogModule extends BaseModule {
     })
   }
 
-  async onInit(): Promise<void> {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = resolveMainRuntime(ctx, 'PluginLogModule.onInit')
+    const channel = runtime.channel
     const keyManager =
-      ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
-    this.setupIpcHandlers(getTuffTransportMain($app.channel, keyManager))
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    this.setupIpcHandlers(getTuffTransportMain(channel, keyManager))
     this.listenToLogEvents()
   }
 

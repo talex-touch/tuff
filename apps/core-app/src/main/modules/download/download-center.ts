@@ -21,6 +21,7 @@ import { desc, eq } from 'drizzle-orm'
 import { shell } from 'electron'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
@@ -146,7 +147,7 @@ export class DownloadCenterModule extends BaseModule {
     this.downloadWorkers = []
     this.initializeWorkers()
 
-    const channel = $app.channel
+    const channel = resolveMainRuntime(ctx, 'DownloadCenterModule.onInit').channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)

@@ -14,6 +14,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import fse from 'fs-extra'
 import { runStartupMigration } from '../../core/startup-migrations'
+import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
@@ -143,9 +144,7 @@ export class StorageModule extends BaseModule {
     this.pollingService.start()
     this.lruManager.startCleanup()
 
-    const channel =
-      (app as { channel?: unknown } | null | undefined)?.channel ??
-      ($app as { channel?: unknown } | null | undefined)?.channel
+    const channel = resolveMainRuntime({ app }, 'StorageModule.onInit').channel
     this.transport = getTuffTransportMain(channel, resolveKeyManager(channel))
     this.registerTransportHandlers()
 
