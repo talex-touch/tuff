@@ -1148,15 +1148,33 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <table class="w-full min-w-[760px] text-left text-sm">
             <thead class="text-xs uppercase text-black/40 dark:text-white/40">
               <tr>
-                <th class="py-2 pr-4 font-medium">Provider</th>
-                <th class="py-2 pr-4 text-right font-medium">Calls</th>
-                <th class="py-2 pr-4 text-right font-medium">Avg</th>
-                <th class="py-2 pr-4 text-right font-medium">P95</th>
-                <th class="py-2 pr-4 text-right font-medium">Max</th>
-                <th class="py-2 pr-4 text-right font-medium">Results</th>
-                <th class="py-2 pr-4 text-right font-medium">Errors</th>
-                <th class="py-2 pr-4 text-right font-medium">Timeouts</th>
-                <th class="py-2 text-right font-medium">Slow</th>
+                <th class="py-2 pr-4 font-medium">
+Provider
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Calls
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Avg
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+P95
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Max
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Results
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Errors
+</th>
+                <th class="py-2 pr-4 text-right font-medium">
+Timeouts
+</th>
+                <th class="py-2 text-right font-medium">
+Slow
+</th>
               </tr>
             </thead>
             <tbody>
@@ -1168,13 +1186,21 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                 <td class="max-w-[220px] truncate py-3 pr-4 font-medium text-black dark:text-white">
                   {{ provider.provider }}
                 </td>
-                <td class="py-3 pr-4 text-right">{{ formatNumber(provider.calls) }}</td>
-                <td class="py-3 pr-4 text-right">{{ provider.avgDuration }}ms</td>
+                <td class="py-3 pr-4 text-right">
+{{ formatNumber(provider.calls) }}
+</td>
+                <td class="py-3 pr-4 text-right">
+{{ provider.avgDuration }}ms
+</td>
                 <td class="py-3 pr-4 text-right" :class="provider.p95Duration > 300 ? 'text-amber-600 dark:text-amber-300' : ''">
                   {{ provider.p95Duration }}ms
                 </td>
-                <td class="py-3 pr-4 text-right">{{ provider.maxDuration }}ms</td>
-                <td class="py-3 pr-4 text-right">{{ formatNumber(provider.resultCount) }}</td>
+                <td class="py-3 pr-4 text-right">
+{{ provider.maxDuration }}ms
+</td>
+                <td class="py-3 pr-4 text-right">
+{{ formatNumber(provider.resultCount) }}
+</td>
                 <td class="py-3 pr-4 text-right" :class="provider.errorCount > 0 ? 'text-red-600 dark:text-red-300' : ''">
                   {{ formatNumber(provider.errorCount) }}
                 </td>
