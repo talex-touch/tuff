@@ -1,6 +1,6 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-05-15
+> 更新时间：2026-05-16
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务
@@ -10,6 +10,7 @@
 - [ ] AI Wave B：`retired-ai-app` 存量 typecheck/lint 债务逐批清理。
 - [ ] AI Wave B：SSE 断线、鉴权与渠道矩阵集成回归补齐。
 - [ ] SRP Wave C：`plugin-module`、`search-core`、`file-provider` 大文件职责拆分。
+- [ ] Runtime Safety：动态执行边界治理，优先评估算式 evaluator、单位公式 evaluator 与 widget runtime sandbox 的替换、审计和回归策略。
 - [ ] Storage：配置域 SQLite SoT 迁移与 fallback 回归补齐。
 - [ ] Quality：`quality:release` 被既有 lint debt 阻断的项分批清退或显式降权。
 
@@ -21,6 +22,7 @@
 - [ ] Multi Attach View：并行视图容器与布局切换能力。
 - [ ] Widget Sandbox：clipboard/history/location/postMessage/worker 扩展拦截。
 - [ ] Widget Sandbox：调用限额与审计记录。
+- [ ] Plugin Capability：`touch-workspace-scripts` 用户 shell 命令纳入统一 capability/permission/audit/unsupported reason 模型。
 
 ## C. 产品能力闭环
 

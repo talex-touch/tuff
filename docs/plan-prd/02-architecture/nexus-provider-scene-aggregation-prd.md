@@ -36,7 +36,7 @@ Nexus 升级为统一 Provider 聚合中心：Provider 独立声明 `Capability`
 
 ## 4. 未闭环
 
-- 旧 `intelligence_providers` 表退场方案、迁移脚本与回滚策略。
+- 旧 `intelligence_providers` 表退场已补实施计划：`../04-implementation/NexusIntelligenceProviderRetirement-2026-05-16.md`。仍需按 Phase 0/1 采集 dry-run/execute evidence，再推进 registry-primary reads 与最终删除窗口。
 - user-scope AI mirror OCR 自动绑定策略。
 - success rate、quota、dynamic pricingRef 成本估算等高级策略。
 - 真实 provider 端到端验证与生产配置检查。

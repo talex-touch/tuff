@@ -11,7 +11,38 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-17
+
+### fix(nexus): prevent dashboard asset icon dark-mode filter leak
+
+- `apps/nexus/app/components/dashboard/DashboardAssetIcon.vue`
+  - Replaced the global `.dark` scoped selector used for monochrome asset icon inversion with a component-local dark-mode class derived from Nuxt Color Mode.
+  - Prevented the assets dashboard CSS chunk from emitting a global `.dark { filter: brightness(0) invert(1) }` rule that inverted the whole dark dashboard page into a washed-out light surface.
+  - Kept the original behavior of brightening dark monochrome plugin icons in dark mode without affecting the document-level theme class.
+
 ## 2026-05-16
+
+### ref(core-app): extract PreviewSDK kernel and dynamic execution inventory
+
+- `packages/utils/core-box/preview/**`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/**`
+- `apps/core-app/src/main/modules/calculation/unit-converter.ts`
+  - Added the minimal PreviewSDK kernel under `packages/utils/core-box/preview` with ability registration, priority matching, abort-aware resolve, pure `PreviewAbilityResult` / `PreviewCardPayload` output, and per-ability safety metadata.
+  - Migrated BasicExpression, AdvancedExpression, Percentage, TextStats, Color, ScientificConstants, UnitConversion, and TimeDelta into the SDK while keeping CoreApp responsible for CoreBox item rendering, clipboard write, and preview history persistence.
+  - Replaced BasicExpression `new Function` evaluation with a small arithmetic parser and unified preview unit conversion with the calculation module through a static conversion core.
+  - Added preview ability inventory and dynamic execution inventory, explicitly keeping Currency as a CoreApp adapter and Widget runtime sandbox outside the PreviewSDK first batch.
+  - Added focused PreviewSDK and CoreApp preview adapter tests.
+
+### perf(nexus): lazy Intelligence admin and trim duplicate Content SQL dumps
+
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
+- `apps/nexus/build/trim-content-assets.mjs`
+- `apps/nexus/build/check-worker-bundle.mjs`
+  - Converted the 3000-line Intelligence admin page into a lightweight ClientOnly lazy shell while keeping the existing heavy panel implementation intact in a dashboard component.
+  - Extended Content asset trimming to remove root `dump.*.sql` duplicates after verifying they match the canonical `__nuxt_content/*/sql_dump.txt` files byte-for-byte.
+  - Analyzer now fails if duplicate root SQL dumps or duplicate sqlite wasm assets return to `dist`.
+  - Clean pre-SQL-trim build after the Intelligence lazy split measured about 24.06 MiB total dist, 7.76 MiB Worker executable JS, and 1.84 MiB Worker gzip; SQL dump trim removes another projected 749.3 KiB from dist when the tree is otherwise build-clean.
 
 ### fix(core-app): trace account login state and gate publisher tab
 
@@ -95,6 +126,42 @@
   - About settings now show a compact startup health summary using the existing analytics startup snapshot and startup bridge timing.
   - The summary exposes total, main-process, renderer, module-count, and rating in user-facing language before users open the detailed analytics rows.
   - This is diagnostic visibility only; it does not replace the required real-device cold/hot startup benchmark evidence for the release gate.
+
+### docs(nexus): define Intelligence provider table retirement phases
+
+- `docs/plan-prd/04-implementation/NexusIntelligenceProviderRetirement-2026-05-16.md`
+- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+  - Added the concrete retirement plan for legacy `intelligence_providers`, covering baseline inventory, mirror migration, registry-primary reads, legacy write freeze, final table retirement, and rollback paths.
+  - Provider migration results now expose `readyForRegistryPrimaryReads` and machine-readable `blockers`, so the dashboard/release evidence can distinguish dry-run planning from an executed migration that is safe to promote.
+  - Anchored the plan to existing migration API, Provider Registry bridge, secure-store `authRef`, `provider_usage_ledger`, and `provider_health_checks` evidence instead of adding new providers first.
+  - TODO and Provider Scene PRD now point to Phase 0/1 evidence collection before registry-primary reads and advanced routing work.
+
+### feat(plugin): surface CoreBox AI Ask runtime metadata
+
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/intelligence.test.ts`
+  - CoreBox AI Ask result rows now expose provider, model, trace id, latency, capability, input kind, and handoff session metadata under `meta.intelligence`.
+  - Ready/error/pending rows now use CoreBox `description` and `accessory` fields for scan-friendly state, instead of relying only on a long subtitle string.
+  - Error rows keep retry behavior while carrying `errorCode` and `errorMessage` in both payload and metadata for follow-up diagnostics.
+
+### feat(core-app): surface Workflow Use Model runtime summary
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Workflow runtime step cards now summarize Use Model capability, provider, model, latency, token count, trace id, and error code from the actual run step output/metadata.
+  - The right-side workflow workbench can now show whether a model step used `text.chat`, `text.summarize`, or another stable capability without forcing users to inspect raw JSON first.
+  - Added focused hook coverage for extracting model runtime metadata used by the UI summary.
+
+### test(core-app): capture startup smoke benchmark evidence
+
+- `docs/engineering/reports/startup-dev-runs-2026-05-16/*`
+- `docs/plan-prd/TODO.md`
+  - Captured 10 local dev startup benchmark runs with `TUFF_STARTUP_REPORT_DATE="2026-05-16" pnpm -C "apps/core-app" exec node "scripts/startup-benchmark-dev.mjs" --mode run --runs 10 --timeoutMs 180000 --continueOnFail`.
+  - The dev startup sample passed 10/10 runs with Startup health P50 509ms, P95 890ms, 0 WARN, 0 ERROR, no blocking issues, and the benchmark script's final gate passing.
+  - Kept the P1 startup item open because this evidence still does not cover packaged cold/hot startup, renderer ready, StartupAnalytics total time, UI screenshot evidence, or WAL/health long-tail checks.
 
 ### docs(governance): refresh compatibility deep audit
 

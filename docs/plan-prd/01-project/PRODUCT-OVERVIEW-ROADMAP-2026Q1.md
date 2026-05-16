@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-05-15
+> 更新时间：2026-05-16
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -21,7 +21,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 目标 | 说明 | 当前口径 |
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
-| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
+| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
 | 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；release evidence 继续补齐 |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前不抢 `2.4.10` Windows evidence gate |
 | AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR |
@@ -61,6 +61,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - CLI token OS 级 credential backend 收口；当前仅完成 POSIX `0700/0600` 权限缓解与 Windows ACL warning。
 - 插件 provider secret storage 收口；`touch-translation` 已迁入 `usePluginSecret()`，仍需 secure-store 系统 backend 与 degraded health evidence。
 - 插件 shell capability 诊断统一。
+- 动态执行边界治理：算式 evaluator、单位公式 evaluator 与 widget runtime sandbox 进入审计/替换/回归清单。
 - Transport Wave A retained alias/hard-cut 后续批次。
 - CoreApp 启动异步化真实设备 benchmark。
 
@@ -110,6 +111,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 当前基线：`2.4.10-beta.25`。
 - `2.4.10-beta.25` notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 需用户确认。
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
+- 2026-05-16 兼容性/占位实现 live-tree 审计未发现新的 P0 假成功；`2.4.11` 首切建议聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片。
 - Windows App Search & Launch Beta 已进入实现态：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单等仍需真机 evidence。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。

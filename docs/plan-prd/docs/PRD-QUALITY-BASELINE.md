@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-05-15
+> 更新时间：2026-05-16
 > 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
 
 ## 1. 适用范围
@@ -22,7 +22,7 @@
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
 - 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；若既有失败阻断，必须记录失败项与最近路径替代验证。
-- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用。
+- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用。
 
 ## 3. 活跃 PRD 必须包含
 
@@ -62,6 +62,7 @@
 - 生产路径不得返回固定假值成功、mock 支付 URL、伪成功空结果或可消费业务 payload。
 - 不可用能力必须返回明确 status、`unavailable + reason`、`unsupported/degraded reason` 或 migration target。
 - Windows/macOS release-blocking 能力必须有真实设备证据；Linux 差异可 best-effort，但必须有用户可见 reason 与 smoke 记录。
+- 动态执行能力必须有明确输入约束、sandbox/facade、审计或替换计划；PreviewSDK ability 必须声明 parser/sandbox/network/cache 依赖、输入长度、语法约束、是否网络/缓存/动态执行与替换计划。BasicExpression 已替换为小型 parser，单位公式已统一为静态转换核心；`new Function` 仅允许出现在 widget runtime sandbox 等已声明运行时边界中。
 
 ### 4.5 Windows 2.4.10 release evidence
 

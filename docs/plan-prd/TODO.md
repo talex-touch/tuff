@@ -1,6 +1,6 @@
 # Tuff TODO
 
-> 更新时间：2026-05-15
+> 更新时间：2026-05-16
 > 定位：当前 2 周执行清单。历史完整清单已归档到 `docs/plan-prd/docs/archive/TODO-pre-compression-2026-05-14.md`；长期债务见 `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`。
 
 ## 当前执行窗口
@@ -8,7 +8,7 @@
 - 当前基线：`2.4.10-beta.25`。
 - 当前主线：`2.4.10` 聚焦 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。
-- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；旧 compat registry / legacy allowlist / size allowlist 已退场，不再作为 live SoT；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 高级策略只能以 dev 小切片推进，不得抢占当前 release gate。
+- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；旧 compat registry / legacy allowlist / size allowlist 已退场，不再作为 live SoT；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 高级策略只能以 dev 小切片推进，不得抢占当前 release gate。
 
 ## P0 - 2.4.10 Release Blockers
 
@@ -26,26 +26,29 @@
 
 | ID | 事项 | 状态 | 验收/证据 |
 | --- | --- | --- | --- |
-| P1-COMPAT | legacy/compat/size 债务关闭或降权 | 进行中 | 以 2026-05-15 兼容总结、Quality Baseline、长期债务池与最近路径代码证据为准关闭或记录降权理由；禁止新增 legacy/raw channel/旧 storage protocol/旧 SDK bypass。 |
+| P1-COMPAT | legacy/compat/size 债务关闭或降权 | 进行中 | 以 2026-05-15 兼容总结、2026-05-16 深度审计、Quality Baseline、长期债务池与最近路径代码证据为准关闭或记录降权理由；禁止新增 legacy/raw channel/旧 storage protocol/旧 SDK bypass。 |
 | P1-PLATFORM | Windows/macOS 阻塞级人工回归 | 待执行 | Windows/macOS 完成 release-blocking 手工回归；Linux 仅记录 best-effort smoke 与桌面环境限制。 |
 | P1-AI-COMPAT | AI 兼容占位成功响应退场 | 待执行 | `livechat/random`、prompt detail、catch-all 未实现接口改为明确 HTTP status、`unavailable + reason` 或迁移目标。 |
 | P1-SECRET | CLI 与插件 secret storage 收口 | 进行中 | CLI token 已通过 `CliCredentialStore` 做 POSIX `0700/0600` 权限缓解与 Windows ACL warning；`touch-translation` provider secret 已迁入 `usePluginSecret()` 并清理普通配置，配置弹窗已展示 secure-store available/degraded/unavailable health；插件侧已新增只读 `plugin.secret.health()` / `usePluginSecret().health()` 以暴露 secure-store degraded/unavailable 状态。仍需 OS Keychain/Credential Locker/libsecret backend 与遗留 secret 清理 evidence。 |
-| P1-SHELL-CAP | 插件 shell capability 统一诊断 | 待执行 | 系统动作、快捷动作、窗口管理、workspace scripts 等能力暴露 platform/permission/unsupported reason 与审计字段。 |
+| P1-SHELL-CAP | 插件 shell capability 统一诊断 | 待执行 | 优先以 `plugins/touch-workspace-scripts` 为首切样本；系统动作、快捷动作、窗口管理、workspace scripts 等能力暴露 platform/permission/unsupported reason 与审计字段。 |
+| P1-PREVIEW-SDK | PreviewSDK 内核与动态执行治理 | 进行中 | `packages/utils/core-box/preview` 已落地最小 SDK、纯 payload 协议、安全声明、ability inventory；BasicExpression/AdvancedExpression/Percentage/TextStats/Color/ScientificConstants/UnitConversion/TimeDelta 已迁入 SDK，BasicExpression 不再使用 `new Function`，单位换算与 `calculation/unit-converter.ts` 已共用静态转换核心。Currency 仍保留 CoreApp adapter；Widget runtime sandbox 只进入 Runtime Safety 清单，不纳入 PreviewSDK 首批。 |
 | P1-TRANSPORT | Transport Wave A retained aliases 继续收口 | 进行中 | 已完成 sync/terminal/opener/auth/CoreBox UI、beginner shortcut、input focus、ui resume、forward key event、input command、input visibility/value request、input monitoring、clipboard allow、provider management、recommendation、preview history/copy、action panel、MetaOverlay bridge、layout control、uiMode enter/exit 等 alias 迁移切片；继续按 canonical event + legacy alias registry + dual listen 策略推进，禁止改变 wire name 语义。 |
-| P1-STARTUP | CoreApp 启动异步化补证 | 进行中 | P0/P1/P2/P3 代码切片已推进；仍需真实设备冷/热启动 benchmark、WAL/health 长尾与 UI 观感证据。 |
+| P1-STARTUP | CoreApp 启动异步化补证 | 进行中 | 2026-05-16 已补 10 轮本机 dev startup benchmark：`docs/engineering/reports/startup-dev-runs-2026-05-16/汇总报告.md`，Startup health P50 509ms / P95 890ms、0 WARN、0 ERROR、脚本 final gate 通过；该证据仍未覆盖 packaged cold/hot、renderer ready / StartupAnalytics total time、UI 观感截图与 WAL/health 长尾。 |
 
 ## P2 - 近期推进但不阻塞 2.4.10
 
 | ID | 事项 | 状态 | 验收/证据 |
 | --- | --- | --- | --- |
 | P2-AI-250 | Tuff 2.5.0 AI 桌面入口 | 进行中 | CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation、OmniPanel Writing Tools MVP、Workflow `Use Model` 最小节点、Workflow 页面本地 Review Queue MVP 与 3 个 P0 模板已进入 dev 切片；2026-05-15 Review Queue 状态已写回 workflow run metadata 并可从持久化历史恢复，Use Model 步骤补 `inputSources` / `output` 合同与页面 JSON 编辑入口；本地 AI 环境扫描已接 typed `intelligence:api:local-environment`，只读展示 Codex / Claude、项目指令与 Codex skills provider 摘要，后续补 provider / scene / skill 权限门控与执行策略；继续推进跨入口 Review Queue、单步骤重跑/跳过、TTS 队列/播放服务与持久缓存评估。Stable 只承诺文本 + OCR。 |
-| P2-PROVIDER | Nexus Provider Registry / Scene 编排 | 进行中 | 已有 D1 secure store、Scene run、Dashboard dry-run/execute、AI mirror、health/usage ledger 与最小策略路由；后续补旧 `intelligence_providers` 表退场、user-scope OCR 自动绑定、success rate/配额/dynamic pricingRef。 |
+| P2-PROVIDER | Nexus Provider Registry / Scene 编排 | 进行中 | 已有 D1 secure store、Scene run、Dashboard dry-run/execute、AI mirror、health/usage ledger 与最小策略路由；旧 `intelligence_providers` 表退场已补实施计划 `docs/plan-prd/04-implementation/NexusIntelligenceProviderRetirement-2026-05-16.md`，后续按 Phase 0/1 采集 dry-run/execute evidence，再推进 registry-primary reads、user-scope OCR 自动绑定、success rate/配额/dynamic pricingRef。 |
 | P2-NATIVE | Native transport V1 真机 smoke | 待执行 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort；打包预览确认 `sharp` 与 ffmpeg/ffprobe 可执行。 |
 | P2-QUICK-LAUNCH | Quick Launch 真机验收 | 待执行 | macOS/Windows/Linux 验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。 |
 | P2-PUBLISHER | 插件发布管理端到端证据 | 进行中 | CoreApp `/store/publisher` 与 Nexus assets/API key 流程已接入；补 package policy/security scan 与真实 `.tpex` 上传端到端证据。 |
 
 ## 已完成/历史不再重复开发
 
+- 2026-05-16 Nexus Intelligence admin 页面已改为 ClientOnly lazy shell，Content trim 已扩展到重复 root SQL dumps；Intelligence lazy 后本地 dist 约 24.06 MiB，Worker executable JS 约 7.76 MiB，root SQL dump trim 预计额外移除 749.3 KiB。
+- 2026-05-16 Nexus 全量 Vitest 已恢复通过；同步修正 exchange-rate、Turnstile 与 OAuth context 测试 mock/alias。
 - 2026-05-16 Nexus Content sqlite wasm 重复产物已通过 post-build trim 去重，Provider Registry admin 页面已改为 ClientOnly lazy shell；本地 dist 约 24.48 MiB，Worker executable JS 约 8.05 MiB。
 - 2026-05-16 Nexus API tests 已全部迁出 `server/api` 到 `test/api`，并新增零容忍 route-tree guard，防止测试/开发文件重新进入 Nitro 生产路由树。
 - 2026-05-16 Nexus PWA precache 已排除 Nuxt Content SQL dump、sqlite wasm 与 sqlite worker 资产，并在 Worker bundle analyzer 中增加回潮检查；`nativeSqlite` 仍需保留，直接关闭会触发 `better-sqlite3` build 依赖。
