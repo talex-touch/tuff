@@ -3,6 +3,59 @@ import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
 const intelligencePlugin = loadPluginModule(new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url))
 const { __test: intelligenceTest } = intelligencePlugin
+const intelligencePluginUrl = new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url)
+
+class FakeBuilder {
+  item: Record<string, unknown>
+  basic: Record<string, unknown>
+
+  constructor(id: string) {
+    this.item = { id }
+    this.basic = {}
+  }
+
+  setSource() {
+    return this
+  }
+
+  setTitle(title: string) {
+    this.basic.title = title
+    return this
+  }
+
+  setSubtitle(subtitle: string) {
+    this.basic.subtitle = subtitle
+    return this
+  }
+
+  setDescription(description: string) {
+    this.basic.description = description
+    return this
+  }
+
+  setAccessory(accessory: string) {
+    this.basic.accessory = accessory
+    return this
+  }
+
+  setIcon(icon: Record<string, unknown>) {
+    this.basic.icon = icon
+    return this
+  }
+
+  setMeta(meta: Record<string, unknown>) {
+    this.item.meta = meta
+    return this
+  }
+
+  build() {
+    this.item.render = {
+      mode: 'default',
+      basic: this.basic,
+    }
+    return this.item
+  }
+}
 
 describe('intelligence plugin', () => {
   it('normalizes prompt with ai prefix', () => {
@@ -203,9 +256,13 @@ describe('intelligence plugin', () => {
         result: '  你好，这是回答  ',
         provider: ' openai ',
         model: ' gpt-4.1 ',
+        traceId: ' trace-1 ',
+        latency: 1234.4,
       },
       '测试问题',
       'req-1',
+      'session-1',
+      ['text', 'image', 'text'],
     )
 
     expect(mapped.requestId).toBe('req-1')
@@ -213,6 +270,106 @@ describe('intelligence plugin', () => {
     expect(mapped.answer).toBe('你好，这是回答')
     expect(mapped.provider).toBe('openai')
     expect(mapped.model).toBe('gpt-4.1')
+    expect(mapped.traceId).toBe('trace-1')
+    expect(mapped.latency).toBe(1234)
+    expect(mapped.handoffSessionId).toBe('session-1')
+    expect(mapped.inputKinds).toEqual(['text', 'image'])
+  })
+
+  it('builds visible ready item metadata for CoreBox AI Ask', () => {
+    const pluginWithBuilder = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({ TuffItemBuilder: FakeBuilder }),
+    )
+
+    const item = pluginWithBuilder.__test.buildReadyItem('intelligence-ask', {
+      requestId: 'req-1',
+      prompt: '写一段发布说明',
+      answer: '发布说明正文',
+      provider: 'openai',
+      model: 'gpt-4.1',
+      traceId: 'trace-1',
+      latency: 2345,
+      handoffSessionId: 'session-1',
+      inputKinds: ['text', 'text'],
+    })
+
+    expect(item.render.basic).toMatchObject({
+      title: '写一段发布说明',
+      accessory: 'openai / gpt-4.1',
+    })
+    expect(item.render.basic.subtitle).toContain('发布说明正文')
+    expect(item.render.basic.subtitle).toContain('2.3s')
+    expect(item.render.basic.description).toContain('Trace trace-1')
+    expect(item.meta).toMatchObject({
+      status: 'ready',
+      actionId: 'copy-answer',
+      intelligence: {
+        entry: 'corebox.ai-ask',
+        source: 'corebox.touch-intelligence',
+        status: 'ready',
+        requestId: 'req-1',
+        capabilityId: 'text.chat',
+        provider: 'openai',
+        model: 'gpt-4.1',
+        traceId: 'trace-1',
+        latency: 2345,
+        handoffSessionId: 'session-1',
+        inputKinds: ['text'],
+      },
+    })
+    expect(item.meta.payload).toMatchObject({
+      answer: '发布说明正文',
+      provider: 'openai',
+      model: 'gpt-4.1',
+      traceId: 'trace-1',
+      latency: 2345,
+    })
+  })
+
+  it('builds visible error item metadata for retryable AI failures', () => {
+    const pluginWithBuilder = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({ TuffItemBuilder: FakeBuilder }),
+    )
+
+    const item = pluginWithBuilder.__test.buildErrorItem(
+      'intelligence-ask',
+      '解释这段代码',
+      { code: 'MODEL_UNSUPPORTED', message: '当前模型不支持该能力' },
+      [{ role: 'user', content: '旧问题' }],
+      {
+        draftId: 'draft-1',
+        inputKinds: ['text'],
+        capabilityId: 'vision.ocr',
+        handoffSessionId: 'session-1',
+      },
+    )
+
+    expect(item.render.basic).toMatchObject({
+      title: 'AI 请求失败：解释这段代码',
+      subtitle: '当前模型不支持该能力',
+      description: 'vision.ocr + MODEL_UNSUPPORTED',
+      accessory: 'MODEL_UNSUPPORTED',
+    })
+    expect(item.meta).toMatchObject({
+      status: 'error',
+      actionId: 'retry',
+      intelligence: {
+        status: 'error',
+        stage: 'error',
+        capabilityId: 'vision.ocr',
+        errorCode: 'MODEL_UNSUPPORTED',
+        errorMessage: '当前模型不支持该能力',
+        handoffSessionId: 'session-1',
+        inputKinds: ['text'],
+      },
+    })
+    expect(item.meta.payload).toMatchObject({
+      prompt: '解释这段代码',
+      draftId: 'draft-1',
+      errorCode: 'MODEL_UNSUPPORTED',
+    })
   })
 
   it('requires clipboard.write before copying answers', async () => {

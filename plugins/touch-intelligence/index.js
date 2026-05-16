@@ -286,14 +286,43 @@ function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [
   }
 }
 
-function mapInvokeResult(result, prompt, requestId, handoffSessionId = '') {
+function normalizeStringList(values) {
+  if (!Array.isArray(values))
+    return []
+  return Array.from(new Set(values.map(value => normalizeText(value)).filter(Boolean)))
+}
+
+function normalizeLatency(value) {
+  const latency = Number(value)
+  if (!Number.isFinite(latency) || latency < 0)
+    return undefined
+  return Math.round(latency)
+}
+
+function formatLatency(latency) {
+  const normalized = normalizeLatency(latency)
+  if (normalized === undefined)
+    return ''
+  if (normalized < 1000)
+    return `${normalized}ms`
+  return `${(normalized / 1000).toFixed(normalized >= 10000 ? 0 : 1)}s`
+}
+
+function buildCapabilitySummary(values) {
+  return normalizeStringList(values).join(' + ')
+}
+
+function mapInvokeResult(result, prompt, requestId, handoffSessionId = '', inputKinds = []) {
   return {
     requestId,
     prompt,
     answer: normalizeText(result?.result),
     provider: normalizeText(result?.provider),
     model: normalizeText(result?.model),
+    traceId: normalizeText(result?.traceId),
+    latency: normalizeLatency(result?.latency ?? result?.latencyMs),
     handoffSessionId: normalizeText(handoffSessionId),
+    inputKinds: normalizeStringList(inputKinds),
   }
 }
 
@@ -371,15 +400,69 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
+function buildIntelligenceMeta(details = {}) {
+  const meta = {
+    entry: ENTRY_ID,
+    source: HANDOFF_SOURCE,
+  }
+  const status = normalizeText(details.status)
+  const stage = normalizeText(details.stage)
+  const requestId = normalizeText(details.requestId)
+  const capabilityId = normalizeText(details.capabilityId)
+  const provider = normalizeText(details.provider)
+  const model = normalizeText(details.model)
+  const traceId = normalizeText(details.traceId)
+  const handoffSessionId = normalizeText(details.handoffSessionId)
+  const errorCode = normalizeText(details.errorCode)
+  const errorMessage = normalizeText(details.errorMessage)
+  const inputKinds = normalizeStringList(details.inputKinds)
+  const capabilities = normalizeStringList(details.capabilities)
+  const latency = normalizeLatency(details.latency)
+
+  if (status)
+    meta.status = status
+  if (stage)
+    meta.stage = stage
+  if (requestId)
+    meta.requestId = requestId
+  if (capabilityId)
+    meta.capabilityId = capabilityId
+  if (capabilities.length > 0)
+    meta.capabilities = capabilities
+  if (provider)
+    meta.provider = provider
+  if (model)
+    meta.model = model
+  if (traceId)
+    meta.traceId = traceId
+  if (latency !== undefined)
+    meta.latency = latency
+  if (inputKinds.length > 0)
+    meta.inputKinds = inputKinds
+  if (errorCode)
+    meta.errorCode = errorCode
+  if (errorMessage)
+    meta.errorMessage = errorMessage
+  if (handoffSessionId) {
+    meta.handoffSessionId = handoffSessionId
+    meta.sessionId = handoffSessionId
+  }
+
+  return meta
+}
+
 function buildInfoItem({
   id,
   featureId,
   title,
   subtitle,
+  description,
+  accessory,
   payload,
   actionId,
   status,
   handoffSessionId,
+  intelligence,
 }) {
   const builder = new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
@@ -387,18 +470,20 @@ function buildInfoItem({
     .setSubtitle(subtitle)
     .setIcon(ICON)
 
+  if (description)
+    builder.setDescription(description)
+  if (accessory)
+    builder.setAccessory(accessory)
+
   const meta = {
     pluginName: PLUGIN_NAME,
     featureId,
     status,
-  }
-
-  if (handoffSessionId) {
-    meta.intelligence = {
+    intelligence: buildIntelligenceMeta({
+      ...intelligence,
+      status,
       handoffSessionId,
-      sessionId: handoffSessionId,
-      source: HANDOFF_SOURCE,
-    }
+    }),
   }
 
   if (actionId) {
@@ -416,6 +501,8 @@ function buildPlaceholderItem(featureId) {
     featureId,
     title: '输入问题或复制图片后提问',
     subtitle: '示例：ai 帮我总结今天待办；复制图片后可先 OCR 再回答',
+    description: 'CoreBox AI Ask 等待文本或剪贴板图片输入。',
+    accessory: 'AI Ask',
     status: 'empty',
   })
 }
@@ -439,6 +526,8 @@ function buildSendItem(featureId, draft) {
     featureId,
     title: prompt,
     subtitle,
+    description: buildCapabilitySummary(hasImage ? ['vision.ocr', 'text.chat'] : ['text.chat']),
+    accessory: hasImage ? 'OCR + AI' : 'AI Ask',
     actionId: 'send',
     payload: {
       prompt: draft.prompt,
@@ -446,41 +535,80 @@ function buildSendItem(featureId, draft) {
       inputKinds: draft.inputKinds,
     },
     status: 'ready-to-send',
+    intelligence: {
+      stage: hasImage ? 'ocr' : 'chat',
+      capabilities: hasImage ? ['vision.ocr', 'text.chat'] : ['text.chat'],
+      inputKinds: draft.inputKinds,
+    },
   })
 }
 
-function buildPendingItem(featureId, prompt, requestId, stage = 'chat', handoffSessionId = '') {
+function buildPendingItem(
+  featureId,
+  prompt,
+  requestId,
+  stage = 'chat',
+  handoffSessionId = '',
+  context = {},
+) {
   const isOcr = stage === 'ocr'
+  const capabilityId = isOcr ? 'vision.ocr' : 'text.chat'
   return buildInfoItem({
     id: `${featureId}-${isOcr ? 'ocr-pending' : 'chat-pending'}-${requestId}`,
     featureId,
     title: prompt,
     subtitle: isOcr ? '正在识别剪贴板图片…' : 'AI 正在思考…',
+    description: isOcr ? '正在调用 vision.ocr，完成后继续 text.chat。' : '正在调用 text.chat。',
+    accessory: capabilityId,
     status: isOcr ? 'ocr-pending' : 'chat-pending',
     handoffSessionId,
+    intelligence: {
+      requestId,
+      stage,
+      capabilityId,
+      inputKinds: context.inputKinds,
+    },
   })
 }
 
 function buildReadyItem(featureId, state) {
   const modelInfo = [state.provider, state.model].filter(Boolean).join(' / ')
+  const latencyText = formatLatency(state.latency)
   const handoffText = state.handoffSessionId ? '已接入交接会话' : ''
-  const subtitle = [truncateText(state.answer, 72), modelInfo, handoffText]
+  const traceText = state.traceId ? `Trace ${state.traceId}` : ''
+  const subtitle = [truncateText(state.answer, 72), modelInfo, latencyText]
     .filter(Boolean)
     .join(' · ')
+  const description = [traceText, handoffText].filter(Boolean).join(' · ')
 
   return buildInfoItem({
     id: `${featureId}-ready-${state.requestId}`,
     featureId,
     title: state.prompt || 'AI 回答',
     subtitle: subtitle || '回答已生成',
+    description,
+    accessory: modelInfo || 'text.chat',
     actionId: 'copy-answer',
     payload: {
       prompt: state.prompt,
       answer: state.answer,
+      provider: state.provider,
+      model: state.model,
+      traceId: state.traceId,
+      latency: state.latency,
       handoffSessionId: state.handoffSessionId,
     },
     status: 'ready',
     handoffSessionId: state.handoffSessionId,
+    intelligence: {
+      requestId: state.requestId,
+      capabilityId: 'text.chat',
+      provider: state.provider,
+      model: state.model,
+      traceId: state.traceId,
+      latency: state.latency,
+      inputKinds: state.inputKinds,
+    },
   })
 }
 
@@ -492,18 +620,32 @@ function buildErrorItem(featureId, prompt, error, history = [], retryContext = {
   return buildInfoItem({
     id: `${featureId}-error-${Date.now()}`,
     featureId,
-    title: prompt || 'AI 请求失败',
-    subtitle: truncateText(`${normalizedError.code} · ${normalizedError.message}`, 120),
+    title: prompt ? `AI 请求失败：${truncateText(prompt, 48)}` : 'AI 请求失败',
+    subtitle: truncateText(normalizedError.message, 120),
+    description: buildCapabilitySummary([
+      retryContext.capabilityId || 'text.chat',
+      normalizedError.code,
+    ]),
+    accessory: normalizedError.code,
     actionId: 'retry',
     payload: {
       prompt,
       history: cloneHistory(history),
       draftId: retryContext.draftId,
       inputKinds: retryContext.inputKinds,
+      errorCode: normalizedError.code,
+      errorMessage: normalizedError.message,
       handoffSessionId: retryContext.handoffSessionId,
     },
     status: 'error',
     handoffSessionId: retryContext.handoffSessionId,
+    intelligence: {
+      stage: 'error',
+      capabilityId: retryContext.capabilityId || 'text.chat',
+      inputKinds: retryContext.inputKinds,
+      errorCode: normalizedError.code,
+      errorMessage: normalizedError.message,
+    },
   })
 }
 
@@ -651,7 +793,9 @@ async function dispatchPrompt({
 
       plugin.feature.clearItems()
       plugin.feature.pushItems([
-        buildPendingItem(resolvedFeatureId, displayPrompt, requestId, 'chat', handoffSessionId),
+        buildPendingItem(resolvedFeatureId, displayPrompt, requestId, 'chat', handoffSessionId, {
+          inputKinds,
+        }),
       ])
     }
 
@@ -668,7 +812,7 @@ async function dispatchPrompt({
         sessionId: handoffSessionId,
       }),
     )
-    const mapped = mapInvokeResult(result, displayPrompt, requestId, handoffSessionId)
+    const mapped = mapInvokeResult(result, displayPrompt, requestId, handoffSessionId, inputKinds)
 
     if (!mapped.answer) {
       throw createPluginError('EMPTY_RESPONSE')
@@ -709,6 +853,7 @@ async function dispatchPrompt({
       buildErrorItem(resolvedFeatureId, displayPrompt, normalizedError, resolvedHistory, {
         draftId,
         inputKinds,
+        capabilityId: imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
         handoffSessionId: session.handoffSessionId,
       }),
     ])
@@ -827,6 +972,7 @@ const pluginLifecycle = {
             requestId,
             draft.imageDataUrl ? 'ocr' : 'chat',
             session.handoffSessionId,
+            { inputKinds: draft.inputKinds },
           ),
         ])
         void dispatchPrompt({
@@ -853,14 +999,21 @@ module.exports = {
   __test: {
     buildInvokePayload,
     buildInvokeOptions,
+    buildErrorItem,
     buildHandoffContext,
     buildHandoffSessionId,
+    buildIntelligenceMeta,
     buildOcrPayload,
+    buildPendingItem,
+    buildReadyItem,
+    buildSendItem,
     extractImageDataUrl,
     extractInputKinds,
     extractQueryContext,
+    formatLatency,
     mapInvokeResult,
     normalizeInvokeError,
+    normalizeLatency,
     normalizePrompt,
   },
 }
