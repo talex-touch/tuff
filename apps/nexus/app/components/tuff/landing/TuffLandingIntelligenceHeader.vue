@@ -84,7 +84,7 @@ withDefaults(defineProps<{
 
     inset: 0;
 
-    background-image: url('~/images/assets/intelligence.png');
+    background-image: url('~/images/assets/intelligence.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import CalendarBackground from '~/images/assets/plugin-cards/calendar.png'
+import CalendarBackground from '~/images/assets/plugin-cards/calendar.jpg'
 </script>
 
 <template>

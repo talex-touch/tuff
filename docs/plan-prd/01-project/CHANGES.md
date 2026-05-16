@@ -13,6 +13,20 @@
 
 ## 2026-05-16
 
+### perf(nexus): trim public site assets and production routes
+
+- `apps/nexus/app/pages/test/**`
+- `apps/nexus/public/shots/{SearchApp.gif,PluginTranslate.gif}`
+- `apps/nexus/app/images/assets/**`
+- `apps/nexus/app/components/tuff/landing/**`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/build/nexus-prerender-routes.ts`
+- `apps/nexus/build/*test.ts`
+  - Removed Nexus production-only test pages, Finder metadata files, and retired landing GIF assets that already have MP4 replacements.
+  - Replaced the largest public landing PNG imports for plugin cards and the Intelligence header with compressed JPG derivatives while keeping the original PNG sources available for rollback.
+  - Removed global highlight.js CDN injection from the app head; docs code rendering continues to load highlight.js only when code blocks need it.
+  - Expanded public prerender coverage for low-risk static shells and public pages such as `/updates`, `/store`, `/sign-in`, `/forgot-password`, `/verify-waiting`, and `/device-auth`.
+
 ### fix(nexus): stop OAuth callback from spinning forever
 
 - `apps/nexus/app/composables/useSignIn.ts`

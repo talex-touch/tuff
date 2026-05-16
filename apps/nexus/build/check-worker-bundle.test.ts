@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync, statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const nexusRoot = join(import.meta.dirname, '..')
@@ -20,11 +20,8 @@ describe('Nexus deploy asset budget', () => {
     }
   })
 
-  it('keeps legacy GIFs excluded from Cloudflare Pages output', () => {
-    const configSource = readFileSync(join(nexusRoot, 'nuxt.config.ts'), 'utf8')
-
-    expect(configSource).toContain('publicAssetsExcludedFromDeploy')
-    expect(configSource).toContain('shots/SearchApp.gif')
-    expect(configSource).toContain('shots/PluginTranslate.gif')
+  it('keeps retired legacy GIFs out of the public source tree', () => {
+    expect(existsSync(join(shotsRoot, 'SearchApp.gif'))).toBe(false)
+    expect(existsSync(join(shotsRoot, 'PluginTranslate.gif'))).toBe(false)
   })
 })

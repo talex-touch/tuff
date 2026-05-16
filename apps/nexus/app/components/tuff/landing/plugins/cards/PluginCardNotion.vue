@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import NotionBackground from '~/images/assets/plugin-cards/notion.png'
+import NotionBackground from '~/images/assets/plugin-cards/notion.jpg'
 </script>
 
 <template>

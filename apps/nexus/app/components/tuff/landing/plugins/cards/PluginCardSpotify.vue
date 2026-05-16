@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import SpotifyBackground from '~/images/assets/plugin-cards/spotify.png'
+import SpotifyBackground from '~/images/assets/plugin-cards/spotify.jpg'
 </script>
 
 <template>

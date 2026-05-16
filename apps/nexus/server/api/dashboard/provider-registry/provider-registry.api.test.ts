@@ -3,7 +3,7 @@ import {
   MockD1Database,
   makeProviderRegistryEvent,
   tencentTranslateProviderBody,
-} from './provider-registry-test-utils'
+} from '../../../../test/helpers/provider-registry-test-utils'
 
 const authMocks = vi.hoisted(() => ({
   requireAdmin: vi.fn(),

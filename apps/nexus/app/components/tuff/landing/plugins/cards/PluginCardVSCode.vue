@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import VSCodeBackground from '~/images/assets/plugin-cards/vscode.png'
+import VSCodeBackground from '~/images/assets/plugin-cards/vscode.jpg'
 </script>
 
 <template>

@@ -1,7 +1,6 @@
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import { rm } from 'node:fs/promises'
 import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
@@ -39,11 +38,6 @@ const ssrEnabled = isProd ? true : !disableSsr
 const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
-const publicAssetsExcludedFromDeploy = [
-  'shots/SearchApp.gif',
-  'shots/PluginTranslate.gif',
-]
-
 function isEnvFlagEnabled(value?: string) {
   if (!value)
     return false
@@ -111,10 +105,6 @@ export default defineNuxtConfig({
         { rel: 'icon', href: '/favicon.ico', sizes: 'any' },
         { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
-        { rel: 'stylesheet', href: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css' },
-      ],
-      script: [
-        { src: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js', defer: true },
       ],
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -257,11 +247,6 @@ export default defineNuxtConfig({
     minify: !disableNitroMinify,
     sourceMap: !disableNitroSourceMap,
     hooks: {
-      async compiled(nitro) {
-        await Promise.all(publicAssetsExcludedFromDeploy.map(asset =>
-          rm(resolve(nitro.options.output.publicDir, asset), { force: true }),
-        ))
-      },
       'types:extend'(types) {
         for (const route of nitroTypegenRouteExcludes)
           delete types.routes[route]

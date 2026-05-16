@@ -8,6 +8,12 @@ export const publicPrerenderRoutes = [
   '/license',
   '/privacy',
   '/protocol',
+  '/updates',
+  '/store',
+  '/sign-in',
+  '/forgot-password',
+  '/verify-waiting',
+  '/device-auth',
 ] as const
 
 export const docsApiPrerenderRoutes = [

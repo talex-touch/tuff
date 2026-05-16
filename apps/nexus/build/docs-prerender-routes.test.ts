@@ -56,9 +56,6 @@ describe('docs prerender routes', () => {
     expect(routes.filter(route => route === '/docs')).toHaveLength(1)
     expect(routes).not.toEqual(expect.arrayContaining([
       '/docs/dev/components/button',
-      '/store',
-      '/updates',
-      '/sign-in',
       '/dashboard',
     ]))
   })

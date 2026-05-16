@@ -24,6 +24,12 @@ const expectedStaticRoutes = [
   '/license',
   '/privacy',
   '/protocol',
+  '/updates',
+  '/store',
+  '/sign-in',
+  '/forgot-password',
+  '/verify-waiting',
+  '/device-auth',
   '/api/docs/component-sync',
   '/api/docs/navigation',
   '/api/docs/sidebar-components',
@@ -40,6 +46,15 @@ const suspiciousServerPatterns = [
   },
 ]
 const allowedDemoWorkerChunks = new Set(['TuffDemoWrapper'])
+const forbiddenRouteChunkPatterns = [
+  /(?:^|\/)__tests__(?:\/|$)/,
+  /\.api\.test\.mjs$/,
+  /(?:^|\/)test-utils\.mjs$/,
+  /(?:^|\/)provider-registry-test-utils\.mjs$/,
+  /(?:^|\/)hero-v\d+-/,
+  /(?:^|\/)flip-overlay-stack-/,
+  /(?:^|\/)apitable-/,
+]
 
 function formatBytes(bytes) {
   if (bytes < 1024)
@@ -193,6 +208,13 @@ function checkDemoWorkerChunks(files) {
     .map(file => file.relativePath)
 }
 
+function checkForbiddenRouteChunks(files) {
+  return files
+    .filter(file => file.relativePath.startsWith('chunks/routes/'))
+    .filter(file => forbiddenRouteChunkPatterns.some(pattern => pattern.test(file.relativePath)))
+    .map(file => file.relativePath)
+}
+
 if (!existsSync(workerRoot)) {
   console.error('[nexus-worker-bundle] dist/_worker.js is missing. Run `pnpm -C "apps/nexus" run build` first.')
   process.exit(1)
@@ -204,6 +226,7 @@ const { files: distFiles, totalBytes: distTotalBytes } = analyzeDistFiles()
 const routeCheck = checkRoutes()
 const suspiciousFindings = checkSuspiciousPatterns(executableFiles)
 const demoWorkerChunks = checkDemoWorkerChunks(executableFiles)
+const forbiddenRouteChunks = checkForbiddenRouteChunks(executableFiles)
 const sizeFindings = checkSizeBudgets(distFiles, distTotalBytes, totalBytes, workerGzipBytes)
 
 console.log(`[nexus-worker-bundle] executable_js=${formatBytes(totalBytes)} files=${executableFiles.length}`)
@@ -231,11 +254,17 @@ if (demoWorkerChunks.length) {
     console.error(`  ${chunk}`)
 }
 
+if (forbiddenRouteChunks.length) {
+  console.error('[nexus-worker-bundle] test/dev route chunks found in Worker:')
+  for (const chunk of forbiddenRouteChunks)
+    console.error(`  ${chunk}`)
+}
+
 if (sizeFindings.length) {
   console.error('[nexus-dist-budget] size budget violations:')
   for (const finding of sizeFindings)
     console.error(`  ${finding}`)
 }
 
-if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || sizeFindings.length)
+if (!routeCheck.ok || suspiciousFindings.length || demoWorkerChunks.length || forbiddenRouteChunks.length || sizeFindings.length)
   process.exit(1)
