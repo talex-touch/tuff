@@ -350,7 +350,7 @@ export interface TuffCustomRender {
    * @description 指定使用哪种技术进行渲染
    * @required
    */
-  type: 'html' | 'vue' | 'react' | 'markdown'
+  type: 'html' | 'vue' | 'react' | 'markdown' | 'webcomponent' | 'arrow'
 
   /**
    * 渲染内容
