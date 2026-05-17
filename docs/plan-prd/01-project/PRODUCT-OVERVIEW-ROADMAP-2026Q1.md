@@ -24,7 +24,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
 | 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；release evidence 继续补齐 |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前不抢 `2.4.10` Windows evidence gate |
-| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR |
+| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR；2.5.3 / 2.5.5 / 2.5.8 拆分本地知识检索、本地模型运行时与 ASR |
 | Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场与高级策略 |
 
 ## 3. 当前版本路线
@@ -95,6 +95,41 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 多 Agent 长任务面板。
 - image/audio/video 生成编辑。
 - Nexus Scene runtime 全量 orchestration。
+
+### 2.5.3 - 本地知识检索与上下文构建
+
+**目标**：把本地文档、网页摘录、插件知识与桌面上下文转换为可检索知识，由 Context Builder 只把最相关片段送入模型上下文。
+
+**方向**：
+
+- SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项。
+- MVP 覆盖 `documents` / `chunks` schema、FTS5 召回、metadata 过滤、citation 与上下文拼接。
+- 不把上传即 embedding 即 vector db 作为 MVP，不在第一版引入 Tantivy/HNSW 独立索引。
+- 检索能力独立于 2.5.5 本地模型 runtime，可服务 Nexus / 云端 / 本地模型。
+
+### 2.5.5 - 本地开源模型运行时
+
+**目标**：把本地开源大模型升级为 Tuff Intelligence 的一等运行方向，用户可在本机下载、管理并运行轻量模型，文本能力优先本地执行并可回退云端 provider。
+
+**方向**：
+
+- 不强依赖 Ollama；Ollama 只作为已安装用户的可选兼容后端。
+- 优先内置 GGUF / `llama.cpp` runtime；模型权重按需下载到用户数据目录，不进入安装包。
+- Runtime 管理覆盖模型目录、下载/删除、加载/停止、健康状态、失败原因与流式输出。
+- 首批只承诺文本能力：`text.chat`、翻译、摘要、改写、代码解释/Review；多模态生成编辑不进入 2.5.5 Stable。
+- 新增接口继续走 typed transport / domain SDK，并复用现有 Provider / Capability / Audit / Workflow 路由。
+- 不实现本地知识库索引、Context Builder、ASR 或 TTS；这些分别归属 2.5.3 与 2.5.8。
+
+### 2.5.8 - ASR Provider Runtime
+
+**目标**：把语音转文字抽成独立 ASR Provider Runtime，支持本地 `whisper.cpp` 与云端 ASR provider，并让用户按隐私、准确率、成本和设备性能选择策略。
+
+**方向**：
+
+- Stable 覆盖音频文件转写、provider 抽象、本地 `whisper.cpp`、云端 provider、统一 transcript result。
+- 用户策略为 `local-only`、`cloud-only`、`auto`；隐私内容必须允许强制本地，不能默认上传云端。
+- streaming transcription、VAD 断句、会议长音频与 faster-whisper 作为 Beta / Experimental。
+- TTS、语音唤醒、Assistant 悬浮球默认入口不进入 2.5.8 Stable。
 
 ## 4. 质量与安全路线
 
