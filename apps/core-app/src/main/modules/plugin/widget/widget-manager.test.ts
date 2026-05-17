@@ -59,6 +59,11 @@ vi.mock('./widget-loader', () => ({
   pluginWidgetLoader: {
     loadWidget: mocks.loadWidget
   },
+  resolveWidgetRuntimeFromFeature: vi.fn((feature: IPluginFeature) => {
+    const runtime = feature.interaction?.runtime
+    if (runtime === 'arrow' || runtime === 'webcomponent') return runtime
+    return feature.interaction?.path?.includes('.arrow.') ? 'arrow' : 'vue'
+  }),
   resolveWidgetFilePath: vi.fn((pluginPath: string, rawPath: string) => {
     const normalized = rawPath.replace(/\\/g, '/')
     const resolvedPath = `${pluginPath}/widgets/${normalized}`
@@ -104,6 +109,7 @@ function createSource(): WidgetSource {
     hash: 'same-source-hash',
     loadedAt: Date.now(),
     pluginName: 'test-plugin',
+    runtime: 'vue',
     source: 'export default {}',
     widgetId: 'test-plugin::test.widget'
   }
@@ -133,6 +139,8 @@ describe('WidgetManager failure cache', () => {
       featureId: 'test.widget',
       hash: 'same-source-hash',
       pluginName: 'test-plugin',
+      runtime: 'vue',
+      runtimeStage: 'stable',
       widgetId: 'test-plugin::test.widget'
     })
     expect(plugin.issues).toHaveLength(1)
@@ -202,7 +210,79 @@ describe('WidgetManager precompiled widgets', () => {
           dependencies: ['vue'],
           featureId: 'test.widget',
           hash: 'same-source-hash',
+          runtime: 'vue',
+          runtimeStage: 'stable',
           styles: '.panel{}',
+          widgetId: 'test-plugin::test.widget'
+        })
+      )
+    } finally {
+      await fs.remove(root)
+    }
+  })
+
+  it('preserves beta arrow runtime from precompiled metadata', async () => {
+    const root = await createPackagedPluginRoot()
+    try {
+      const manager = new WidgetManager()
+      const plugin = {
+        ...createPlugin(),
+        dev: { enable: false, address: '', source: false },
+        pluginPath: root,
+        build: {
+          widgets: [
+            {
+              compiledAt: Date.now(),
+              compiledPath: 'widgets/.compiled/test-plugin__test.widget.cjs',
+              dependencies: ['@arrow-js/core'],
+              featureId: 'test.widget',
+              hash: 'same-source-hash',
+              metaPath: 'widgets/.compiled/test-plugin__test.widget.meta.json',
+              runtime: 'arrow',
+              runtimeStage: 'beta',
+              sourcePath: 'widgets/panel.arrow.ts',
+              styles: '.panel{}',
+              widgetId: 'test-plugin::test.widget'
+            }
+          ]
+        }
+      } as ITouchPlugin
+      const feature = {
+        ...createFeature(),
+        interaction: {
+          path: 'panel.arrow.ts',
+          runtime: 'arrow',
+          type: 'widget'
+        }
+      } as IPluginFeature
+      const compiledPath = path.join(root, 'widgets', '.compiled', 'test-plugin__test.widget.cjs')
+      const metaPath = path.join(root, 'widgets', '.compiled', 'test-plugin__test.widget.meta.json')
+
+      await fs.ensureDir(path.dirname(compiledPath))
+      await fs.writeFile(compiledPath, 'module.exports = {}', 'utf-8')
+      await fs.writeJson(metaPath, {
+        compiledAt: Date.now(),
+        compiledPath: 'widgets/.compiled/test-plugin__test.widget.cjs',
+        dependencies: ['@arrow-js/core'],
+        featureId: 'test.widget',
+        hash: 'same-source-hash',
+        runtime: 'arrow',
+        runtimeStage: 'beta',
+        sourcePath: 'widgets/panel.arrow.ts',
+        styles: '.panel{}',
+        widgetId: 'test-plugin::test.widget'
+      })
+
+      await manager.registerWidget(plugin, feature)
+
+      expect(mocks.compileWidgetSource).not.toHaveBeenCalled()
+      expect(mocks.broadcastToWindow).toHaveBeenCalledWith(
+        11,
+        expect.anything(),
+        expect.objectContaining({
+          dependencies: ['@arrow-js/core'],
+          runtime: 'arrow',
+          runtimeStage: 'beta',
           widgetId: 'test-plugin::test.widget'
         })
       )
@@ -227,6 +307,32 @@ describe('WidgetManager precompiled widgets', () => {
       code: 'WIDGET_PRECOMPILED_MISSING',
       featureId: 'test.widget',
       pluginName: 'test-plugin',
+      widgetId: 'test-plugin::test.widget'
+    })
+  })
+
+  it('marks .arrow source-path fallback failures as beta arrow runtime', async () => {
+    const manager = new WidgetManager()
+    const plugin = {
+      ...createPlugin(),
+      dev: { enable: false, address: '', source: false }
+    } as ITouchPlugin
+    const feature = {
+      ...createFeature(),
+      interaction: {
+        path: 'panel.arrow.ts',
+        type: 'widget'
+      }
+    } as IPluginFeature
+
+    await manager.registerWidget(plugin, feature)
+
+    expect(mocks.loadWidget).not.toHaveBeenCalled()
+    expect(mocks.compileWidgetSource).not.toHaveBeenCalled()
+    expect(mocks.broadcastToWindow.mock.calls[0]?.[2]).toMatchObject({
+      code: 'WIDGET_PRECOMPILED_MISSING',
+      runtime: 'arrow',
+      runtimeStage: 'beta',
       widgetId: 'test-plugin::test.widget'
     })
   })
@@ -329,6 +435,8 @@ describe('WidgetManager precompiled widgets', () => {
           dependencies: ['vue'],
           featureId: 'test.widget',
           hash: 'cache-hash',
+          runtime: 'vue',
+          runtimeStage: 'stable',
           styles: '.cached{}',
           widgetId: 'test-plugin::test.widget'
         })

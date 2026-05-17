@@ -1,4 +1,5 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { WidgetRuntime } from '@talex-touch/utils/plugin/widget'
 import type { WidgetSource } from './widget-loader'
 
 /**
@@ -8,6 +9,8 @@ import type { WidgetSource } from './widget-loader'
 export interface CompiledWidget {
   /** Compiled JavaScript code | 编译后的 JavaScript 代码 */
   code: string
+  /** Widget runtime | Widget 运行时 */
+  runtime?: WidgetRuntime
   /** Extracted CSS styles | 提取的 CSS 样式 */
   styles: string
   /** List of allowed dependencies | 允许的依赖列表 */

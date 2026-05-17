@@ -145,6 +145,7 @@ module.exports = __component
 
       return {
         code: wrappedCode,
+        runtime: source.runtime,
         styles: '',
         dependencies: validation.allowedImports
       }

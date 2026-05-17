@@ -32,7 +32,7 @@ const quickKey = computed(() => {
 const customRendererId = computed(() => {
   if (render.value?.mode !== 'custom') return null
   const custom = render.value?.custom
-  if (!custom || custom.type !== 'vue') return null
+  if (!custom || !['vue', 'webcomponent', 'arrow'].includes(custom.type)) return null
   return custom.content
 })
 
