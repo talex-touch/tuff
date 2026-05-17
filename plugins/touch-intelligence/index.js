@@ -1,4 +1,4 @@
-const { plugin, clipboard, logger, TuffItemBuilder, permission } = globalThis
+const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel } = globalThis
 const crypto = require('node:crypto')
 
 const PLUGIN_NAME = 'touch-intelligence'
@@ -30,8 +30,8 @@ const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，�
 const conversationSessions = new Map()
 
 function resolveIntelligenceClient() {
-  const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence')
-  return createIntelligenceClient()
+  const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence/client')
+  return createIntelligenceClient(touchChannel)
 }
 
 function normalizeText(value) {
@@ -1015,5 +1015,6 @@ module.exports = {
     normalizeInvokeError,
     normalizeLatency,
     normalizePrompt,
+    resolveIntelligenceClient,
   },
 }

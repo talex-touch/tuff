@@ -22,6 +22,7 @@
     },
     "./client": {
       "types": "./src/client.ts",
+      "require": "./dist/client.cjs",
       "import": "./src/client.ts",
       "default": "./src/client.ts"
     },
@@ -44,7 +45,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --splitting --clean --target node18 --platform node",
+    "build": "tsup src/index.ts --format esm --dts --splitting --clean --target node18 --platform node && tsup src/client.ts --format cjs --target node18 --platform node",
     "dev": "tsup src/index.ts --format esm --dts --splitting --clean --target node18 --platform node --watch",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
