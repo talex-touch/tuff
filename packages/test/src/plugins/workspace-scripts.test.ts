@@ -114,13 +114,13 @@ describe('workspace scripts plugin', () => {
     })
   })
 
-  it('marks safe-shell fallback as degraded when unavailable', () => {
+  it('marks safe-shell fallback as unsupported when unavailable', () => {
     const capability = scriptsTest.buildShellCapability({
       featureId: 'workspace-scripts',
       actionId: 'run-command',
     })
 
-    expect(['available', 'degraded']).toContain(capability.status)
+    expect(['available', 'unsupported']).toContain(capability.status)
     expect(capability.permission).toBe('system.shell')
     expect(capability.audit.commandKind).toBe('user-shell')
   })
