@@ -23,6 +23,18 @@
   - Main-window language initialization now starts the renderer-to-main locale sync, and the main process emits a language-changed event after locale updates so tray menus rebuild with the selected language.
   - Removed the misleading tray `Clipboard History` entry until a dedicated clipboard history route/window exists; clipboard history remains available to SDK/transport consumers but is no longer presented as a direct tray page.
 
+### fix(nexus): stabilize locale preference orchestration
+
+- `apps/nexus/app/composables/useLocaleOrchestrator.ts`
+- `apps/nexus/app/composables/useLocalePreference.ts`
+- `apps/nexus/app/components/LanguageToggle.vue`
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+  - Client-side locale initialization now reconciles cookie/localStorage preference after prerender hydration instead of trusting serialized SSR init state.
+  - Local language preference now takes priority over profile locale during auth sync, preventing manual Chinese/English selection from being overwritten by stale remote profile data.
+  - Manual language switching now uses the unified locale orchestrator and updates the authenticated user profile when available; AI language tool results reuse the same local persistence path.
+  - Locale preference cookie is now written at `/` scope to avoid path-scoped language drift across Nexus pages.
+
 ### fix(core-app): align CoreBox clipboard session settings
 
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`

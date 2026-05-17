@@ -9,7 +9,7 @@ import { useTypedFetch } from '~/utils/request'
 const { data: session, signOut } = useAuth()
 const { t, te, locale } = useI18n()
 const route = useRoute()
-const { setLocaleSerial, persistLocale } = useLocaleOrchestrator()
+const { setManualLocale } = useLocaleOrchestrator()
 const { color, toggleDark } = useTheme()
 
 const { plan } = useSubscriptionData()
@@ -81,8 +81,7 @@ function tSafe(key: string, fallback: string) {
 }
 
 async function handleLocaleSelect(nextLocale: 'en' | 'zh') {
-  await setLocaleSerial(nextLocale, 'manual')
-  persistLocale(nextLocale, 'manual')
+  await setManualLocale(nextLocale)
   userMenuOpen.value = false
   languageMenuOpen.value = false
 }
