@@ -16,6 +16,8 @@ Widgets 是插件在 CoreBox 或 DivisionBox 中渲染的轻量 UI 组件。
 | `.ts` | 纯 TypeScript | WidgetScriptProcessor |
 | `.js` | 纯 JavaScript | WidgetScriptProcessor |
 | `.cjs` | 预编译 CommonJS | WidgetScriptProcessor |
+| `.arrow.ts` | TouchWidget ArrowJS beta | WidgetScriptProcessor |
+| `.arrow.js` | TouchWidget ArrowJS beta | WidgetScriptProcessor |
 
 ## Widget 类型
 | 类型 | 使用场景 |
@@ -37,6 +39,62 @@ code: |
     "interaction": {
       "type": "widget",
       "path": "todo-panel.vue"
+    }
+  }
+---
+:::
+
+## TouchWidget beta：ArrowJS
+
+`arrow` runtime 是新的推荐 TouchWidget beta 入口。`interaction.path` 未带扩展名时仍默认 `.vue`；ArrowJS Widget 需要显式写 `.arrow.ts` 或 `.arrow.js`，并标记 `runtime: "arrow"`。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "type": "widget",
+    "id": "todo.arrow",
+    "title": "Arrow 任务面板",
+    "interaction": {
+      "type": "widget",
+      "runtime": "arrow",
+      "path": "todo-panel.arrow.ts"
+    }
+  }
+---
+:::
+
+`widgets/todo-panel.arrow.ts`
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { component, html, reactive } from '@arrow-js/core'
+
+  export default component((props) => {
+    const state = reactive({ count: 0 })
+
+    return html`<button @click="${() => state.count++}">
+      ${() => props.payload?.title || 'TouchWidget'} ${() => state.count}
+    </button>`
+  })
+---
+:::
+
+## TouchWidget beta：WebComponent
+
+`webcomponent` runtime 也是 beta。默认导出可以是已定义的 tag name、`HTMLElement` 子类，或 `{ tagName, define }`。宿主通过 DOM property 传入 `item`、`payload`、`preview`、`widgetId` 与 `hostKeyEvent`。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "type": "widget",
+    "id": "todo.webcomponent",
+    "title": "WebComponent 面板",
+    "interaction": {
+      "type": "widget",
+      "runtime": "webcomponent",
+      "path": "todo-card.ts"
     }
   }
 ---
@@ -115,6 +173,7 @@ code: |
 Widgets 运行在受控环境，仅允许以下包：
 
 - `vue`
+- `@arrow-js/core`（TouchWidget ArrowJS beta）
 - `@talex-touch/utils`
 - `@talex-touch/utils/plugin`
 - `@talex-touch/utils/plugin/sdk`
