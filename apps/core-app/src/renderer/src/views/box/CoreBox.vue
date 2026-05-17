@@ -104,7 +104,9 @@ const widgetRenderItem = computed(() => {
   const render = item?.render
   if (render?.mode !== 'custom') return null
   const custom = render.custom
-  if (!custom || custom.type !== 'vue' || !custom.content) return null
+  if (!custom || !['vue', 'webcomponent', 'arrow'].includes(custom.type) || !custom.content) {
+    return null
+  }
   if (isDefaultWidgetRenderer(custom.content)) return null
   if (!getCustomRenderer(custom.content)) return null
   return item

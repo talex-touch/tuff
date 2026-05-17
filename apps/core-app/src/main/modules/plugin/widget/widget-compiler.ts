@@ -12,6 +12,11 @@ widgetProcessorRegistry.register(new WidgetVueProcessor())
 widgetProcessorRegistry.register(new WidgetTsxProcessor())
 widgetProcessorRegistry.register(new WidgetScriptProcessor())
 
+function resolveWidgetSourceExtension(filePath: string): string {
+  const normalized = filePath.split('?')[0]?.split('#')[0] ?? filePath
+  return path.extname(normalized)
+}
+
 /**
  * Compile widget source using the processor registry
  * 使用处理器注册表编译 widget 源码
@@ -23,7 +28,7 @@ export async function compileWidgetSource(
   source: WidgetSource,
   context: WidgetCompilationContext
 ): Promise<CompiledWidget | null> {
-  const ext = path.extname(source.filePath)
+  const ext = resolveWidgetSourceExtension(source.filePath)
 
   const processor = widgetProcessorRegistry.getProcessor(ext)
 

@@ -199,6 +199,7 @@ module.exports = __component
 
       return {
         code: transformed.code,
+        runtime: source.runtime,
         styles,
         dependencies: ensureVueDependency(validation.allowedImports)
       }
