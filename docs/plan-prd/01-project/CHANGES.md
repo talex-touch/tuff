@@ -11,7 +11,45 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-18
+
+### fix(plugins): expose browser-open shell capability diagnostics
+
+- `plugins/touch-browser-open/index.js`
+- `packages/test/src/plugins/browser-open.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Browser Open result items now expose `system.shell` capability metadata with platform status, permission state, unsupported reason, command source, and audit fields before execution.
+  - Web Search result items now expose shell-open platform status and audit metadata without blocking fast suggestion refresh.
+  - Browser Open feature rendering uses non-mutating permission checks only, so URL input does not trigger a shell permission prompt; execution still requests `system.shell` for actual browser open actions.
+  - Linux keeps default browser / search open as available through `xdg-open`, while specific-browser open reports `linux-specific-browser-open-unsupported` instead of failing as an opaque runtime error.
+  - Copy URL no longer requires `system.shell`; it only checks `clipboard.write`, keeping permissions aligned with the actual action.
+  - Validation: `pnpm -C "packages/test" exec vitest run "src/plugins/browser-open.test.ts"` passed; `pnpm exec eslint --no-ignore "plugins/touch-browser-open/index.js" "packages/test/src/plugins/browser-open.test.ts"` passed with the existing `.eslintignore` migration warning only; `git diff --check -- "plugins/touch-browser-open/index.js" "packages/test/src/plugins/browser-open.test.ts"` passed.
+
+### fix(plugins): fail closed for system and window shell actions
+
+- `plugins/touch-system-actions/index.js`
+- `plugins/touch-window-manager/index.js`
+- `packages/test/src/plugins/system-actions.test.ts`
+- `packages/test/src/plugins/window-manager.test.ts`
+- `docs/plan-prd/TODO.md`
+  - System Actions no longer falls back to raw `exec` when safe-shell is unavailable; shell-backed actions now fail closed with `safe-shell-unavailable`.
+  - System Actions and Window Manager feature rendering now use non-mutating permission diagnostics, keeping capability reason visible without prompting before the user picks an action.
+  - `open-main-window` is now modeled as a native window capability instead of a shell action, so it stays available even when shell execution is unavailable or denied.
+  - Window Manager now blocks before permission request when the platform or shell support is unavailable, and action results consistently return `started` or `blocked`.
+  - Validation: `pnpm -C "packages/test" exec vitest run "src/plugins/system-actions.test.ts" "src/plugins/window-manager.test.ts"` passed; file-level ESLint passed with the existing `.eslintignore` migration warning only; scoped `git diff --check` passed.
+
 ## 2026-05-17
+
+### fix(plugins): harden workspace shell capability diagnostics
+
+- `plugins/touch-workspace-scripts/index.js`
+- `plugins/touch-workspace-scripts/index.test.cjs`
+- `plugins/touch-workspace-scripts/package.json`
+- `docs/plan-prd/TODO.md`
+  - Workspace Scripts no longer falls back to raw `spawn(..., shell: true)` when the shared safe-shell helper is unavailable; shell execution now fails closed with `safe-shell-unavailable`.
+  - CoreBox shell command items now expose capability status, permission, unsupported reason, command source, and audit metadata so permission/platform failures are visible before execution.
+  - Command execution now validates empty commands, newline/null payloads, and cwd availability before spawning, then returns explicit `started`, `blocked`, or `cancelled` action status.
+  - Added a local plugin test entrypoint covering shell capability diagnostics, permission-missing state, unsafe payload/cwd blocking, safe-shell fail-closed behavior, package script parsing, and relative cwd resolution.
 
 ### fix(core-app): restore CoreBox search results on reopen
 
