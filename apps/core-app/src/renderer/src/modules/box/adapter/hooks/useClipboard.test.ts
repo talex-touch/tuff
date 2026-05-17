@@ -27,6 +27,15 @@ vi.mock('~/modules/storage/app-storage', () => ({
   appSetting: state.appSetting
 }))
 
+vi.mock('~/utils/renderer-log', () => ({
+  createRendererLogger: () => ({
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn()
+  })
+}))
+
 vi.mock('./useClipboardChannel', () => ({
   getLatestClipboard: vi.fn(async () => state.latest),
   useClipboardChannel: vi.fn((handlers?: { onNewItem?: (item: IClipboardItem) => void }) => {

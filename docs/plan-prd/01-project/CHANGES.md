@@ -13,6 +13,17 @@
 
 ## 2026-05-17
 
+### fix(core-app): align CoreBox clipboard session settings
+
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - CoreBox AutoClear now treats legacy `0` as no automatic reset instead of clearing on every reopen, preserving short-session reuse semantics.
+  - AutoClear options no longer expose a duplicate `No limit` choice; `Disabled` is the visible no-auto-reset option while runtime remains backward compatible with saved `0` values.
+  - AutoPaste and AutoClear descriptions now clarify the intended uTools-like behavior: fresh clipboard content is checked when CoreBox is opened, and stale CoreBox sessions reset only after the hidden-time window expires.
+  - Added focused hook coverage for disabled/no-limit AutoClear, short reopen preservation, and stale session reset.
+
 ### test(core-app): record visible experience capture blockers
 
 - `apps/core-app/scripts/dev-electron-wrapper.mjs`
