@@ -216,6 +216,24 @@ export class DbWriteScheduler {
   }
 
   private resolveDefaultLabelPolicy(label: string): DbWriteLabelPolicy {
+    if (label === 'file-index.extensions.upsert') {
+      return {
+        priority: 'background',
+        dropPolicy: 'drop',
+        maxQueueWaitMs: 30_000,
+        maxBusyFailures: 2,
+        circuitOpenMs: 60_000
+      }
+    }
+    if (label === 'file-icon.persist' || label === 'file-opener.icon.persist') {
+      return {
+        priority: 'best_effort',
+        dropPolicy: 'drop',
+        maxQueueWaitMs: 15_000,
+        maxBusyFailures: 2,
+        circuitOpenMs: 60_000
+      }
+    }
     if (label.startsWith('file-index.') || label.startsWith('search-index.')) {
       return { priority: 'critical', dropPolicy: 'none' }
     }
