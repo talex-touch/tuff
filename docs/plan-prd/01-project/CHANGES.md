@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-16
+> 更新时间：2026-05-17
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,19 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-17
+
+### feat(widget): add TouchWidget Arrow and WebComponent beta runtimes
+
+- `packages/utils/plugin/widget.ts`
+- `apps/core-app/src/main/modules/plugin/widget/**`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `packages/tuff-cli-core/src/exporter.ts`
+- `apps/nexus/content/docs/dev/api/widget.{zh,en}.mdc`
+  - 新增 `arrow` 与 `webcomponent` Widget runtime，统一标记为 beta；现有 Vue Widget 仍保持默认 stable 路径。
+  - `@arrow-js/core@1.0.6` 进入受控依赖白名单，支持 `.arrow.ts` / `.arrow.js` TouchWidget 推荐入口。
+  - 预编译 manifest 与 runtime payload 记录 `runtime` / `runtimeStage`，renderer 通过轻量 host wrapper 挂载 ArrowJS 与 WebComponent。
 
 ## 2026-05-16
 
