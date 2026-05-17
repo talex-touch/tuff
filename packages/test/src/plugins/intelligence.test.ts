@@ -71,6 +71,31 @@ describe('intelligence plugin', () => {
     expect(payload.messages[1]?.content).toBe('hello')
   })
 
+  it('loads the intelligence client through the plugin runtime require path', async () => {
+    const send = vi.fn(async () => ({
+      ok: true,
+      result: {
+        result: 'ok',
+      },
+    }))
+    const pluginWithChannel = loadPluginModule(
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      createPluginGlobals({
+        touchChannel: { send },
+      }),
+    )
+
+    const client = pluginWithChannel.__test.resolveIntelligenceClient()
+    const result = await client.invoke('text.chat', { messages: [] })
+
+    expect(result).toEqual({ result: 'ok' })
+    expect(send).toHaveBeenCalledWith('intelligence:api:invoke', {
+      capabilityId: 'text.chat',
+      payload: { messages: [] },
+      options: undefined,
+    })
+  })
+
   it('builds chat payload with OCR context', () => {
     const payload = intelligenceTest.buildInvokePayload('总结重点', [], {
       ocrText: '第一行\n第二行',
