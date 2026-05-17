@@ -120,7 +120,23 @@ describe('system actions plugin', () => {
 
   it('shows permission hint when denied', async () => {
     const items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }> = []
-    const globals = createTestGlobals(items, false)
+    const requested: string[] = []
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: {
+        check: async () => false,
+        request: async (permissionId: string) => {
+          requested.push(permissionId)
+          return false
+        },
+      },
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>) { items.push(...next) },
+        },
+      },
+    })
 
     const pluginModule = loadPluginModule(
       new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
@@ -128,11 +144,12 @@ describe('system actions plugin', () => {
     )
 
     await pluginModule.onFeatureTriggered('system-actions', '')
-    expect(items.length).toBe(1)
     if (systemTest.isShellPlatformSupported(process.platform)) {
-      expect(items[0]?.title).toBe('缺少系统权限')
-      expect(items[0]?.meta?.capability?.status).toBe('permission-missing')
+      expect(items[0]?.title).toBe('系统命令能力')
+      expect(['permission-missing', 'unsupported']).toContain(items[0]?.meta?.capability?.status)
       expect(items[0]?.meta?.capability?.permission).toBe('system.shell')
+      expect(items.some(item => item.title === '打开主窗口')).toBe(true)
+      expect(requested).toEqual([])
     }
     else {
       expect(items[0]?.meta?.capability?.status).toBe('unsupported')
@@ -168,8 +185,9 @@ describe('system actions plugin', () => {
     }
 
     expect(items.length).toBeGreaterThan(1)
-    expect(items[0]?.title).toBe('电源操作')
-    expect(items[1]?.meta?.capability?.audit).toMatchObject({
+    expect(items[0]?.title).toBe('系统命令能力')
+    const shutdown = items.find(item => item.meta?.actionId === 'shutdown')
+    expect(shutdown?.meta?.capability?.audit).toMatchObject({
       pluginName: 'touch-system-actions',
       featureId: 'system-actions',
       actionId: 'shutdown',
@@ -178,15 +196,66 @@ describe('system actions plugin', () => {
     })
   })
 
-  it('marks shell fallback as degraded when safe-shell is unavailable', () => {
+  it('marks shell fallback as unsupported when safe-shell is unavailable', () => {
     const capability = systemTest.buildShellCapability({
       featureId: 'system-actions',
       actionId: 'shutdown',
       platform: 'darwin',
     })
 
-    expect(['available', 'degraded']).toContain(capability.status)
+    expect(['available', 'unsupported']).toContain(capability.status)
     expect(capability.permission).toBe('system.shell')
     expect(capability.audit.commandKind).toBe('fixed-shell')
+  })
+
+  it('keeps main window action native and independent from shell permission', () => {
+    const [mainWindowAction] = systemTest.resolveActions(process.platform)
+      .filter(action => action.id === 'open-main-window')
+    const capability = systemTest.buildActionCapability('system-actions', mainWindowAction)
+
+    expect(capability).toMatchObject({
+      id: 'app.window',
+      type: 'native-window',
+      status: 'available',
+      audit: {
+        pluginName: 'touch-system-actions',
+        featureId: 'system-actions',
+        actionId: 'open-main-window',
+        commandKind: 'native-window',
+      },
+    })
+  })
+
+  it('blocks shell action execution when safe-shell is unavailable before permission request', async () => {
+    const requested: string[] = []
+    const globals = createPluginGlobals({
+      permission: {
+        check: async () => true,
+        request: async (permissionId: string) => {
+          requested.push(permissionId)
+          return true
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      globals,
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'system-actions',
+        actionId: 'lock-screen',
+      },
+    })
+
+    if (systemTest.isShellPlatformSupported(process.platform) && systemTest.resolveShellStatus().status !== 'available') {
+      expect(result).toMatchObject({
+        externalAction: true,
+        status: 'blocked',
+        reason: 'safe-shell-unavailable',
+      })
+      expect(requested).toEqual([])
+    }
   })
 })

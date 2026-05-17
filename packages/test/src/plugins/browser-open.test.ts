@@ -205,6 +205,38 @@ describe('browser open plugin', () => {
     expect((items[1] as any).render.basic.icon.value).toBe('assets/search-engines/google.svg')
   })
 
+  it('adds shell capability metadata to search action items', () => {
+    const pluginModule = loadPluginModule(browserPluginUrl, createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+    }))
+    const testApi = pluginModule.__test
+    const parsed = testApi.parseSearchQuery('g tuff app')
+    const items = testApi.buildSearchItems('web-search', parsed.engine, parsed.query, [
+      'tuff plugin',
+    ], {
+      capabilityState: {
+        status: 'permission-missing',
+        reason: 'system-shell-permission-required',
+      },
+    })
+
+    expect((items[0].meta as any).capability).toMatchObject({
+      id: 'system.shell',
+      type: 'shell',
+      permission: 'system.shell',
+      status: 'permission-missing',
+      reason: 'system-shell-permission-required',
+      audit: {
+        pluginName: 'touch-browser-open',
+        featureId: 'web-search',
+        actionId: 'search-web',
+        commandKind: 'browser-open',
+        commandSource: 'search-direct',
+      },
+    })
+    expect((items[1].meta as any).capability.audit.commandSource).toBe('search-suggestion')
+  })
+
   it('extracts remaining query after choosing an engine feature', () => {
     const google = browserTest.parseSearchQuery('g test').engine
 
@@ -237,6 +269,88 @@ describe('browser open plugin', () => {
       'search-engine-bing',
       'search-engine-duckduckgo',
     ])
+  })
+
+  it('pushes browser-open capability diagnostics without requesting shell permission', async () => {
+    const items: Array<{ title?: string, meta?: any }> = []
+    const request = vi.fn(async () => true)
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: {
+        check: async (permissionId: string) => {
+          expect(permissionId).toBe('system.shell')
+          return false
+        },
+        request,
+      },
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, meta?: any }>) { items.push(...next) },
+        },
+        storage: {
+          async getFile() { return null },
+          async setFile() {},
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+
+    const defaultOpen = items.find(item => item.title === '默认浏览器打开')
+    const diagnostic = items.find(item => item.title === '打开能力')
+    expect(defaultOpen?.meta?.capability).toMatchObject({
+      status: 'permission-missing',
+      reason: 'system-shell-permission-required',
+      audit: {
+        commandSource: 'default-browser',
+      },
+    })
+    expect(diagnostic?.meta?.capability.audit.commandSource).toBe('diagnostic')
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('marks specific browser open as unsupported on linux', () => {
+    expect(browserTest.resolveBrowserOpenSupport('default-open', '', 'linux')).toMatchObject({
+      status: 'available',
+    })
+    expect(browserTest.resolveBrowserOpenSupport('open-browser', 'chrome', 'linux')).toMatchObject({
+      status: 'unsupported',
+      reason: 'linux-specific-browser-open-unsupported',
+    })
+  })
+
+  it('does not require system shell permission to copy url', async () => {
+    const requested: string[] = []
+    const writeText = vi.fn()
+    const globals = createPluginGlobals({
+      clipboard: {
+        writeText,
+      },
+      permission: {
+        check: async (permissionId: string) => permissionId === 'clipboard.write',
+        request: async (permissionId: string) => {
+          requested.push(permissionId)
+          return true
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'browser-open',
+        actionId: 'copy-url',
+        payload: {
+          url: 'https://example.com',
+        },
+      },
+    })
+
+    expect(result).toMatchObject({ externalAction: true, status: 'started' })
+    expect(writeText).toHaveBeenCalledWith('https://example.com/')
+    expect(requested).toEqual([])
   })
 
   it('pushes direct search and remote suggestions in engine mode', async () => {

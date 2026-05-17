@@ -2,7 +2,8 @@ const { plugin, dialog, logger, TuffItemBuilder, permission } = globalThis
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
-const { spawn } = require('node:child_process')
+const process = require('node:process')
+
 let spawnShellCommand
 try {
   ({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
@@ -18,6 +19,11 @@ const ACTION_ID = 'workspace-scripts'
 const SHELL_PERMISSION_ID = 'system.shell'
 const CONFIG_FILE = 'workspace-scripts.json'
 const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
+const SHELL_STATUS_LABELS = {
+  'available': '可用',
+  'permission-missing': '缺少权限',
+  'unsupported': '不可用',
+}
 
 const DEFAULT_CONFIG = {
   workspacePath: '',
@@ -56,7 +62,7 @@ async function ensurePermission(permissionId, reason) {
 function resolveShellStatus() {
   if (!spawnShellCommand) {
     return {
-      status: 'degraded',
+      status: 'unsupported',
       reason: 'safe-shell-unavailable',
     }
   }
@@ -66,10 +72,53 @@ function resolveShellStatus() {
   }
 }
 
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check) {
+    return {
+      granted: true,
+    }
+  }
+
+  try {
+    return {
+      granted: Boolean(await permission.check(permissionId)),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-workspace-scripts] Failed to check permission', error)
+    return {
+      granted: false,
+      reason: 'permission-check-failed',
+    }
+  }
+}
+
+async function resolveShellCapabilityState() {
+  const shellStatus = resolveShellStatus()
+  if (shellStatus.status !== 'available')
+    return shellStatus
+
+  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
+  if (!permissionStatus.granted) {
+    return {
+      status: 'permission-missing',
+      reason: permissionStatus.reason || 'system-shell-permission-required',
+    }
+  }
+
+  return shellStatus
+}
+
+function formatShellStatusSubtitle(state) {
+  const label = SHELL_STATUS_LABELS[state.status] || state.status
+  return state.reason ? `${label} · ${state.reason}` : label
+}
+
 function buildShellCapability({
   featureId,
   actionId,
   commandKind = 'user-shell',
+  commandSource = 'custom',
   requiresConfirmation = false,
   requiresAdmin = false,
   platform = process.platform,
@@ -88,6 +137,7 @@ function buildShellCapability({
       featureId,
       actionId,
       commandKind,
+      commandSource,
       requiresConfirmation: Boolean(requiresConfirmation),
       requiresAdmin: Boolean(requiresAdmin),
     },
@@ -251,19 +301,98 @@ async function confirmRun(command) {
   return result?.response === 1
 }
 
-function runCommand(command, cwd) {
-  if (SHELL_UNSAFE_PATTERN.test(command)) {
-    logger?.warn?.('[workspace-scripts] blocked unsafe command payload')
-    return
+function validateCommandRequest(command, cwd) {
+  const normalizedCommand = normalizeText(command)
+  if (!normalizedCommand) {
+    return {
+      ok: false,
+      reason: 'empty-command',
+    }
   }
-  const spawnRunner = spawnShellCommand || ((cmd, options) => spawn(cmd, { ...options, shell: true }))
-  const child = spawnRunner(command, {
-    cwd,
+  if (SHELL_UNSAFE_PATTERN.test(normalizedCommand)) {
+    return {
+      ok: false,
+      reason: 'unsafe-command-payload',
+    }
+  }
+
+  const normalizedCwd = normalizeText(cwd) || process.cwd()
+  const resolvedCwd = path.resolve(normalizedCwd)
+  try {
+    if (!fs.existsSync(resolvedCwd) || !fs.statSync(resolvedCwd).isDirectory()) {
+      return {
+        ok: false,
+        reason: 'cwd-unavailable',
+        command: normalizedCommand,
+        cwd: resolvedCwd,
+      }
+    }
+  }
+  catch {
+    return {
+      ok: false,
+      reason: 'cwd-unavailable',
+      command: normalizedCommand,
+      cwd: resolvedCwd,
+    }
+  }
+
+  return {
+    ok: true,
+    command: normalizedCommand,
+    cwd: resolvedCwd,
+  }
+}
+
+function runCommand(command, cwd) {
+  const request = validateCommandRequest(command, cwd)
+  if (!request.ok) {
+    logger?.warn?.('[workspace-scripts] blocked command request', {
+      reason: request.reason,
+      cwd: request.cwd,
+    })
+    return request
+  }
+
+  if (!spawnShellCommand) {
+    const result = {
+      ok: false,
+      reason: 'safe-shell-unavailable',
+      command: request.command,
+      cwd: request.cwd,
+    }
+    logger?.warn?.('[workspace-scripts] safe-shell unavailable; command was not executed')
+    return result
+  }
+
+  const child = spawnShellCommand(request.command, {
+    cwd: request.cwd,
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
   })
-  child.unref()
+  child.unref?.()
+  return {
+    ok: true,
+    command: request.command,
+    cwd: request.cwd,
+    pid: child.pid,
+  }
+}
+
+async function showRunBlocked(result) {
+  if (!dialog?.showMessageBox)
+    return
+
+  await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['好的'],
+    defaultId: 0,
+    cancelId: 0,
+    title: '命令未执行',
+    message: '工作区脚本未执行。',
+    detail: result?.reason || 'unknown',
+  })
 }
 
 const pluginLifecycle = {
@@ -280,6 +409,7 @@ const pluginLifecycle = {
       const workspacePath = config.workspacePath
       const packageCommands = await readPackageScripts(workspacePath)
       const customCommands = Array.isArray(config.commands) ? config.commands : []
+      const shellCapabilityState = await resolveShellCapabilityState()
 
       const headerItems = [
         buildInfoItem({
@@ -293,6 +423,21 @@ const pluginLifecycle = {
           featureId,
           title: '脚本数量',
           subtitle: `内置 ${packageCommands.length} / 自定义 ${customCommands.length}`,
+        }),
+        buildInfoItem({
+          id: `${featureId}-shell-capability`,
+          featureId,
+          title: '命令能力',
+          subtitle: formatShellStatusSubtitle(shellCapabilityState),
+          capability: buildShellCapability({
+            featureId,
+            actionId: 'run-command',
+            commandKind: 'user-shell',
+            commandSource: 'diagnostic',
+            requiresConfirmation: true,
+            status: shellCapabilityState.status,
+            reason: shellCapabilityState.reason,
+          }),
         }),
         buildActionItem({
           id: `${featureId}-config-init`,
@@ -337,7 +482,10 @@ const pluginLifecycle = {
             featureId,
             actionId: 'run-command',
             commandKind: 'user-shell',
+            commandSource: 'package-script',
             requiresConfirmation: true,
+            status: shellCapabilityState.status,
+            reason: shellCapabilityState.reason,
           }),
         }))
       })
@@ -364,7 +512,10 @@ const pluginLifecycle = {
             featureId,
             actionId: 'run-command',
             commandKind: 'user-shell',
+            commandSource: 'custom-command',
             requiresConfirmation: true,
+            status: shellCapabilityState.status,
+            reason: shellCapabilityState.reason,
           }),
         }))
       })
@@ -430,16 +581,26 @@ const pluginLifecycle = {
         if (!command)
           return
 
+        const shellStatus = resolveShellStatus()
+        if (shellStatus.status !== 'available') {
+          await showRunBlocked(shellStatus)
+          return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
+        }
+
         const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行开发命令')
         if (!canRun)
-          return
+          return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
 
         const confirmed = await confirmRun(command)
         if (!confirmed)
-          return
+          return { externalAction: true, status: 'cancelled' }
 
-        runCommand(command, cwd)
-        return { externalAction: true }
+        const result = runCommand(command, cwd)
+        if (!result?.ok) {
+          await showRunBlocked(result)
+          return { externalAction: true, status: 'blocked', reason: result?.reason }
+        }
+        return { externalAction: true, status: 'started', pid: result.pid }
       }
     }
     catch (error) {
@@ -452,8 +613,17 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     buildShellCapability,
+    checkPermissionStatus,
+    formatShellStatusSubtitle,
     parseScriptsConfig,
     parsePackageScriptsMap,
+    resolveShellCapabilityState,
     resolveCommandCwd,
+    resolveShellStatus,
+    runCommand,
+    setSpawnShellCommandForTest(runner) {
+      spawnShellCommand = runner
+    },
+    validateCommandRequest,
   },
 }
