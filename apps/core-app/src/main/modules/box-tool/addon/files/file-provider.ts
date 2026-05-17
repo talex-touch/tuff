@@ -136,6 +136,8 @@ const BASE64_MARKER = 'base64,'
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
 const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
+const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
+const FILE_ICON_WRITE_MAX_QUEUE = 24
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -332,6 +334,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
     return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+  }
+
+  private async waitForCacheWriteCapacity(maxQueued: number, label: string): Promise<boolean> {
+    try {
+      await dbWriteScheduler.waitForCapacity(maxQueued)
+      return true
+    } catch (error) {
+      this.logWarn('Skipped cache write after DB backpressure failure', error, { label })
+      return false
+    }
   }
 
   private indexingStartTime: number | null = null
@@ -1666,6 +1678,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.pendingIconExtractions.add(fileId)
     try {
+      const hasCapacity = await this.waitForCacheWriteCapacity(
+        FILE_ICON_WRITE_MAX_QUEUE,
+        'file-icon.persist'
+      )
+      if (!hasCapacity) {
+        return
+      }
+
       const icon = await this.extractFileIconQueued(filePath)
       if (!icon || icon.length === 0) {
         return
@@ -2944,6 +2964,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       if (extensionsToAdd.length > 0) {
+        const hasCapacity = await this.waitForCacheWriteCapacity(
+          FILE_EXTENSION_WRITE_MAX_QUEUE,
+          'file-index.extensions.upsert'
+        )
+        if (!hasCapacity) {
+          return
+        }
+
         await this.withDbWrite('file-index.extensions.upsert', () =>
           this.dbUtils!.addFileExtensions(extensionsToAdd)
         )

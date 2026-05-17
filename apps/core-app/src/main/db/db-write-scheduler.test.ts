@@ -139,4 +139,34 @@ describe('DbWriteScheduler QoS', () => {
       })
     ).resolves.toBe(1)
   })
+
+  it('可重建的文件缓存写入默认会在 SQLITE_BUSY 后熔断', async () => {
+    const scheduler = new DbWriteScheduler()
+    const busyError = new Error('SQLITE_BUSY: database is locked')
+
+    for (const label of [
+      'file-index.extensions.upsert',
+      'file-icon.persist',
+      'file-opener.icon.persist'
+    ]) {
+      await expect(
+        scheduler.schedule(label, async () => {
+          throw busyError
+        })
+      ).rejects.toThrow('SQLITE_BUSY')
+      await expect(
+        scheduler.schedule(label, async () => {
+          throw busyError
+        })
+      ).rejects.toThrow('SQLITE_BUSY')
+
+      let executed = false
+      await expect(
+        scheduler.schedule(label, async () => {
+          executed = true
+        })
+      ).rejects.toThrow('circuit breaker')
+      expect(executed).toBe(false)
+    }
+  })
 })

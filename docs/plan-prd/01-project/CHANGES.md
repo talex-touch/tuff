@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-16
+> 更新时间：2026-05-18
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,17 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-18
+
+### fix(core-app): apply backpressure to file cache database writes
+
+- `apps/core-app/src/main/db/db-write-scheduler.ts`
+- `apps/core-app/src/main/db/db-write-scheduler.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - File keyword extension writes and icon cache writes no longer inherit the broad `file-index.*` critical/no-drop policy; these rebuildable cache writes now use bounded background/best-effort QoS, stale-task dropping, and SQLITE_BUSY circuit breaking.
+  - File provider now waits for DB write queue capacity before enqueueing keyword extension upserts or extracting/persisting icon cache payloads, preventing full-scan fire-and-forget cache work from flooding the serialized SQLite write queue.
+  - This keeps primary file record/search-index work prioritized while letting rebuildable keyword/icon cache data recover on later scans instead of blocking plugin/dev runtime responsiveness.
 
 ## 2026-05-17
 
