@@ -391,6 +391,7 @@ function buildInfoItem({
     pluginName: PLUGIN_NAME,
     featureId,
     status,
+    keepCoreBoxOpen: true,
   }
 
   if (handoffSessionId) {

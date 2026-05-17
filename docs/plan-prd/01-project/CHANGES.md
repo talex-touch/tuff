@@ -13,6 +13,12 @@
 
 ## 2026-05-17
 
+### fix(plugin): keep touch-intelligence CoreBox session visible
+
+- `plugins/touch-intelligence/index.js`
+  - Intelligence 推送的 placeholder、send、pending、ready、error 项统一标记 `keepCoreBoxOpen`，避免发送 AI 请求、等待响应或展示回答/错误时被 CoreBox auto-hide 提前隐藏。
+  - 复用现有 CoreBox keep-open 语义，不改变普通搜索结果和其他插件 item 的执行流程。
+
 ### feat(widget): add TouchWidget Arrow and WebComponent beta runtimes
 
 - `packages/utils/plugin/widget.ts`
