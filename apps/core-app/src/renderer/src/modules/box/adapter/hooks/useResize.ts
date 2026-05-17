@@ -19,7 +19,7 @@ const HEIGHT_SAFETY_PADDING = 10
 const HEADER_HEIGHT = 64
 const MIN_HEIGHT = 64
 const MAX_HEIGHT = 600
-const RESULT_LAYOUT_SETTLE_MS = 100
+const RESULT_LAYOUT_SETTLE_MS = 180
 
 const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
 
@@ -123,9 +123,11 @@ export function useResize(options: UseResizeOptions): void {
   const transport = useTuffTransport()
 
   let lastPayload: CoreBoxLayoutUpdateRequest | null = null
+  let lastSentAt = 0
   let rafId = 0
   let pendingSource: string | null = null
   let settleTimer: ReturnType<typeof setTimeout> | null = null
+  let throttleTimer: ReturnType<typeof setTimeout> | null = null
 
   function sendLayoutUpdate(source: string): void {
     const activationCount = activeActivations.value?.length ?? 0
@@ -166,12 +168,27 @@ export function useResize(options: UseResizeOptions): void {
 
   function scheduleLayoutUpdate(source: string): void {
     pendingSource = source
-    if (rafId) return
-    rafId = requestAnimationFrame(() => {
-      rafId = 0
-      sendLayoutUpdate(pendingSource ?? 'raf')
-      pendingSource = null
-    })
+    if (rafId || throttleTimer) return
+
+    const elapsed = performance.now() - lastSentAt
+    const delay = lastSentAt > 0 ? Math.max(0, 80 - elapsed) : 0
+
+    const run = () => {
+      throttleTimer = null
+      rafId = requestAnimationFrame(() => {
+        rafId = 0
+        sendLayoutUpdate(pendingSource ?? 'raf')
+        lastSentAt = performance.now()
+        pendingSource = null
+      })
+    }
+
+    if (delay > 0) {
+      throttleTimer = setTimeout(run, delay)
+      return
+    }
+
+    run()
   }
 
   function scheduleSettledLayoutUpdate(source: string): void {
@@ -192,6 +209,10 @@ export function useResize(options: UseResizeOptions): void {
     if (settleTimer) {
       clearTimeout(settleTimer)
       settleTimer = null
+    }
+    if (throttleTimer) {
+      clearTimeout(throttleTimer)
+      throttleTimer = null
     }
 
     window.removeEventListener('corebox:shown', handleCoreBoxShown)
