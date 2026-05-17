@@ -7,6 +7,7 @@ import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -37,9 +38,11 @@ import { useCoreBoxTheme } from './theme'
 import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
+import { resolveCoreBoxSearchState } from './search-state'
 import IndexingHintTag from './tag/IndexingHintTag.vue'
 import TagSection from './tag/TagSection.vue'
 import { devLog } from '~/utils/dev-log'
+import { useI18n } from 'vue-i18n'
 
 declare global {
   interface Window {
@@ -50,6 +53,8 @@ declare global {
 const scrollbar = ref()
 const boxInputRef = ref()
 const transport = useTuffTransport()
+const router = useRouter()
+const { t } = useI18n()
 const boxOptions = reactive<IBoxOptions>({
   lastHidden: -1,
   mode: BoxMode.INPUT,
@@ -71,6 +76,8 @@ const {
   searchVal,
   select,
   res,
+  loading,
+  recommendationPending,
   activeItem,
   activeActivations,
   handleExecute,
@@ -527,6 +534,16 @@ const resultHoverClass = computed(
   () => `CoreBoxResultHover-${themeConfig.value.results.hoverStyle}`
 )
 
+const searchState = computed(() =>
+  resolveCoreBoxSearchState({
+    query: searchVal.value,
+    resultCount: res.value.length,
+    loading: loading.value,
+    recommendationPending: recommendationPending.value,
+    mode: boxOptions.mode
+  })
+)
+
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
 
 const isCanvasLayout = computed(() => canvasEnabled.value && !isDivisionBox.value)
@@ -579,6 +596,18 @@ const customCss = computed(() => {
     .join('\n')
   return sanitizeUserCss(cssText)
 })
+
+async function handleSearchStateAction(actionId: string): Promise<void> {
+  if (actionId === 'retry-search') {
+    await handleSearchImmediate()
+    return
+  }
+
+  if (actionId === 'open-file-index-settings') {
+    void transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+    await router.push({ path: '/setting', query: { section: 'file-index' } }).catch(() => {})
+  }
+}
 </script>
 
 <template>
@@ -713,6 +742,40 @@ const customCss = computed(() => {
                   />
                 </div>
               </Transition>
+              <div
+                v-if="searchState"
+                class="CoreBoxSearchState"
+                :class="`CoreBoxSearchState--${searchState.tone}`"
+                role="status"
+                aria-live="polite"
+              >
+                <TuffIcon
+                  :icon="{ type: 'class', value: searchState.icon }"
+                  class="CoreBoxSearchState-Icon"
+                  :class="{ 'CoreBoxSearchState-Icon--spin': searchState.tone === 'progress' }"
+                />
+                <div class="CoreBoxSearchState-Text">
+                  <div class="CoreBoxSearchState-Title">
+                    {{ t(searchState.titleKey, searchState.titleFallback) }}
+                  </div>
+                  <div class="CoreBoxSearchState-Detail">
+                    {{ t(searchState.detailKey, searchState.detailFallback) }}
+                  </div>
+                  <div v-if="searchState.actions.length" class="CoreBoxSearchState-Actions">
+                    <button
+                      v-for="action in searchState.actions"
+                      :key="action.id"
+                      type="button"
+                      class="CoreBoxSearchState-Action"
+                      :class="{ 'CoreBoxSearchState-Action--primary': action.primary }"
+                      @click="handleSearchStateAction(action.id)"
+                    >
+                      <i :class="action.icon" aria-hidden="true" />
+                      <span>{{ t(action.labelKey, action.labelFallback) }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </TouchScroll>
           <CoreBoxFooter
@@ -988,6 +1051,93 @@ div.CoreBoxRes.CoreBoxRes--widget {
 
 .CoreBoxRes-ScrollContent {
   width: 100%;
+}
+
+.CoreBoxSearchState {
+  min-height: 128px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.CoreBoxSearchState-Icon {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--tx-text-color-placeholder);
+}
+
+.CoreBoxSearchState-Icon--spin {
+  animation: corebox-state-spin 0.9s linear infinite;
+}
+
+.CoreBoxSearchState-Text {
+  min-width: 0;
+  max-width: 420px;
+}
+
+.CoreBoxSearchState-Title {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+}
+
+.CoreBoxSearchState-Detail {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--tx-text-color-secondary);
+}
+
+.CoreBoxSearchState-Actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.CoreBoxSearchState-Action {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tx-bg-color) 88%, var(--tx-fill-color-light));
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.CoreBoxSearchState-Action:hover {
+  color: var(--tx-text-color-primary);
+  border-color: var(--tx-border-color-darker);
+}
+
+.CoreBoxSearchState-Action--primary {
+  border-color: color-mix(in srgb, var(--tx-color-primary) 45%, var(--tx-border-color));
+  color: var(--tx-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 10%, var(--tx-bg-color));
+}
+
+.CoreBoxSearchState--progress .CoreBoxSearchState-Icon {
+  color: var(--tx-color-primary);
+}
+
+.CoreBoxSearchState--warning .CoreBoxSearchState-Icon {
+  color: var(--tx-color-warning);
+}
+
+@keyframes corebox-state-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .CoreBoxRes-ScrollContent.has-footer {

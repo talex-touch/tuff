@@ -13,6 +13,16 @@
 
 ## 2026-05-17
 
+### fix(core-app): align CoreBox empty state and tray menu behavior
+
+- `apps/core-app/src/renderer/src/views/box/search-state.ts`
+- `apps/core-app/src/renderer/src/components/app/MainWindowRuntimeServices.vue`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/tray/tray-menu-builder.ts`
+  - Removed the idle CoreBox empty guidance card so a fully empty query/result state collapses back to the compact input height instead of showing a large blank result area.
+  - Main-window language initialization now starts the renderer-to-main locale sync, and the main process emits a language-changed event after locale updates so tray menus rebuild with the selected language.
+  - Removed the misleading tray `Clipboard History` entry until a dedicated clipboard history route/window exists; clipboard history remains available to SDK/transport consumers but is no longer presented as a direct tray page.
+
 ### fix(core-app): align CoreBox clipboard session settings
 
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`

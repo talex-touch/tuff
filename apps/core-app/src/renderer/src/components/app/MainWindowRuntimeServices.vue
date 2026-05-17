@@ -4,7 +4,7 @@ import { usePermissionStartup } from '~/composables/usePermissionStartup'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
 import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
-import { useLanguage } from '~/modules/lang'
+import { setupLanguageSync, useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -23,6 +23,7 @@ useGlobalBatteryOptimizer()
 async function init(): Promise<void> {
   try {
     await initializeLanguage()
+    setupLanguageSync()
   } catch (error) {
     runtimeLog.error('Failed to initialize language', error)
   }

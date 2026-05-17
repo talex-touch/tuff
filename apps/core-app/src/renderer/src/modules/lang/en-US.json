@@ -1437,6 +1437,18 @@
       "remaining": "Finishes in {time}",
       "inProgress": "Indexing..."
     },
+    "searchState": {
+      "idleTitle": "Ready to search",
+      "idleDetail": "Type a keyword to search apps, files, commands, or AI actions.",
+      "recommendationLoadingTitle": "Preparing recommendations",
+      "recommendationLoadingDetail": "Recent and frequent actions are warming up.",
+      "searchingTitle": "Searching",
+      "searchingDetail": "Checking apps, files, commands, and providers.",
+      "noResultsTitle": "No results",
+      "noResultsDetail": "Try a broader query, or check whether indexing and providers are available.",
+      "retrySearch": "Retry search",
+      "openIndexSettings": "Open index settings"
+    },
     "intelligence": {
       "emptyPrompt": "Type a question to ask the AI",
       "pending": "Preparing AI response…",

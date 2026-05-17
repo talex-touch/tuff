@@ -65,7 +65,7 @@ import {
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
-import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { LanguageChangedEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
 import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
@@ -1472,6 +1472,7 @@ export class CommonChannelModule extends BaseModule {
         const locale = getOptionalStringProp(payload, 'locale')
         if (locale && isLocale(locale)) {
           setLocale(locale)
+          touchEventBus.emit(TalexEvents.LANGUAGE_CHANGED, new LanguageChangedEvent(locale))
         }
       }),
       transport.on(AppEvents.analytics.perfReport, (payload) => {

@@ -33,6 +33,7 @@ export interface IUseSearch {
   select: Ref<number>
   res: Ref<TuffItem[]> | ComputedRef<TuffItem[]>
   loading: Ref<boolean>
+  recommendationPending: Ref<boolean>
   activeItem: ComputedRef<TuffItem>
   activeActivations: Ref<IProviderActivate[] | null>
   handleExecute: (item?: TuffItem) => Promise<void>

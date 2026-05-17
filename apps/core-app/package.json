@@ -47,6 +47,7 @@
     "startup:bench:analyze": "node \"scripts/startup-benchmark-dev.mjs\" --mode analyze",
     "visible:experience:template": "pnpm exec tsx \"scripts/coreapp-visible-experience-template.ts\"",
     "visible:experience:verify": "pnpm exec tsx \"scripts/coreapp-visible-experience-verify.ts\"",
+    "visible:experience:readiness": "pnpm exec tsx \"scripts/coreapp-visible-experience-readiness.ts\"",
     "clipboard:stress": "pnpm exec tsx \"scripts/clipboard-polling-stress.ts\"",
     "clipboard:stress:verify": "pnpm exec tsx \"scripts/clipboard-stress-verify.ts\"",
     "app-index:diagnostic:verify": "pnpm exec tsx \"scripts/app-index-diagnostic-verify.ts\"",
