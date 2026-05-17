@@ -38,7 +38,7 @@ export interface IUseSearch {
   activeActivations: Ref<IProviderActivate[] | null>
   handleExecute: (item?: TuffItem) => Promise<void>
   handleExit: () => Promise<void>
-  handleSearchImmediate: () => Promise<void>
+  handleSearchImmediate: (options?: { force?: boolean }) => Promise<void>
   deactivateProvider: (id?: string) => Promise<boolean>
   deactivateAllProviders: () => Promise<void>
   // 已移除: handleSearch, cancelSearch

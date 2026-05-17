@@ -13,6 +13,18 @@
 
 ## 2026-05-17
 
+### fix(core-app): restore CoreBox search results on reopen
+
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/types.ts`
+  - CoreBox now forces a search refresh when the window is shown, so reopening with a retained query such as `aaa` restores matching results instead of leaving an empty result area.
+  - CoreBox layout reporting now bypasses renderer-side duplicate-payload suppression on `corebox:shown`, allowing the collapsed hidden window to expand back to the existing result height.
+  - Search duplicate suppression now runs before incrementing the renderer search sequence, preventing skipped duplicate queries from invalidating an in-flight result.
+  - Added focused renderer hook coverage for retained-query reopen refresh and duplicate-query in-flight result preservation.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts" "src/renderer/src/modules/box/adapter/hooks/useVisibility.test.ts"` passed; `pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false --pretty false` passed.
+
 ### fix(core-app): align CoreBox empty state and tray menu behavior
 
 - `apps/core-app/src/renderer/src/views/box/search-state.ts`
