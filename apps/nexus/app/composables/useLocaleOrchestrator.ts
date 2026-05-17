@@ -1,4 +1,4 @@
-import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
+import { fetchCurrentUserProfile, patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 
 export type SupportedLocale = 'en' | 'zh'
 type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
@@ -45,8 +45,11 @@ function resolveBrowserLocale(): SupportedLocale {
 
 export function useLocaleOrchestrator() {
   const { locale, setLocale } = useI18n()
-  const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
+  const { status } = useAuth()
+  const { getPreferredLocale, hasManualPreferredLocale, markManualPreferredLocale, markProfilePreferredLocale, persistPreferredLocale } = useLocalePreference()
   const initDone = useState<boolean>('nexus-locale-init-done', () => false)
+  const clientInitDone = useState<boolean>('nexus-locale-client-init-done', () => false)
+  const manualPreferenceActive = useState<boolean>('nexus-locale-manual-preference-active', () => false)
   const profileSyncKey = useState<string | null>('nexus-locale-profile-sync-key', () => null)
   const profileSyncPending = useState<boolean>('nexus-locale-profile-sync-pending', () => false)
   const normalizeHits = useState<Record<SupportedLocale, number>>('nexus-locale-normalize-hits', () => ({
@@ -86,10 +89,48 @@ export function useLocaleOrchestrator() {
     if (!normalized)
       return null
 
-    persistPreferredLocale(normalized)
-    if (import.meta.client)
-      window.localStorage.setItem(LOCALE_SYNC_STORAGE_KEY, normalized)
+    if (source !== 'browser') {
+      persistPreferredLocale(normalized)
+      if (import.meta.client)
+        window.localStorage.setItem(LOCALE_SYNC_STORAGE_KEY, normalized)
+    }
+    if (source === 'manual') {
+      manualPreferenceActive.value = true
+      markManualPreferredLocale()
+    }
+    else if (source === 'profile') {
+      markProfilePreferredLocale()
+    }
     return normalized
+  }
+
+  const updateProfileLocale = async (input: unknown) => {
+    const normalized = normalizeLocaleWithMetrics(input, 'manual')
+    if (!normalized || import.meta.server || status.value !== 'authenticated')
+      return null
+
+    try {
+      await patchCurrentUserProfile({ locale: normalized })
+      return normalized
+    }
+    catch (error) {
+      console.error(`${LOG_PREFIX} profile locale update failed`, error)
+      return null
+    }
+  }
+
+  const setManualLocale = async (input: unknown, options?: { syncProfile?: boolean }) => {
+    const normalized = normalizeLocaleWithMetrics(input, 'manual')
+    if (!normalized)
+      return normalizeLocale(locale.value)
+
+    await setLocaleSerial(normalized, 'manual')
+    persistLocale(normalized, 'manual')
+
+    if (options?.syncProfile !== false)
+      await updateProfileLocale(normalized)
+
+    return normalizeLocale(locale.value) || normalized
   }
 
   const setLocaleSerial = async (input: unknown, source: LocaleSource = 'manual') => {
@@ -120,8 +161,38 @@ export function useLocaleOrchestrator() {
   }
 
   const initLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {
-    if (initDone.value)
+    const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
+    if (import.meta.client && !clientInitDone.value) {
+      const profileLocale = input?.isAuthenticated
+        ? normalizeLocaleWithMetrics(input.profileLocale, 'profile')
+        : null
+      const browserLocale = resolveBrowserLocale()
+      const target = preferredLocale || profileLocale || browserLocale
+      const source: LocaleSource = preferredLocale
+        ? 'cookie'
+        : profileLocale
+          ? 'profile'
+          : 'browser'
+
+      await setLocaleSerial(target, source)
+      persistLocale(target, source)
+      clientInitDone.value = true
+      initDone.value = true
+
+      console.info(`${LOG_PREFIX} initialized`, {
+        source,
+        locale: target,
+        clientReconciled: true,
+      })
+
+      return target
+    }
+
+    if (initDone.value) {
+      if (import.meta.client)
+        clientInitDone.value = true
       return normalizeLocale(locale.value)
+    }
 
     if (localeInitQueue)
       return await localeInitQueue
@@ -130,18 +201,19 @@ export function useLocaleOrchestrator() {
       const profileLocale = input?.isAuthenticated
         ? normalizeLocaleWithMetrics(input.profileLocale, 'profile')
         : null
-      const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
       const browserLocale = resolveBrowserLocale()
-      const target = profileLocale || preferredLocale || browserLocale
-      const source: LocaleSource = profileLocale
-        ? 'profile'
-        : preferredLocale
-          ? 'cookie'
+      const target = preferredLocale || profileLocale || browserLocale
+      const source: LocaleSource = preferredLocale
+        ? 'cookie'
+        : profileLocale
+          ? 'profile'
           : 'browser'
 
       await setLocaleSerial(target, source)
       persistLocale(target, source)
       initDone.value = true
+      if (import.meta.client)
+        clientInitDone.value = true
 
       console.info(`${LOG_PREFIX} initialized`, {
         source,
@@ -185,6 +257,18 @@ export function useLocaleOrchestrator() {
         nextLocale = normalizeLocaleWithMetrics(profile?.locale ?? null, 'profile')
       }
 
+      const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
+      const hasManualPreference = manualPreferenceActive.value || hasManualPreferredLocale()
+      if (hasManualPreference && preferredLocale && nextLocale && preferredLocale !== nextLocale) {
+        console.info(`${LOG_PREFIX} profile sync skipped by local preference`, {
+          userId: userId || null,
+          profileLocale: nextLocale,
+          preferredLocale,
+        })
+        await updateProfileLocale(preferredLocale)
+        return
+      }
+
       if (nextLocale) {
         await setLocaleSerial(nextLocale, 'profile')
         persistLocale(nextLocale, 'profile')
@@ -209,6 +293,7 @@ export function useLocaleOrchestrator() {
     initLocale,
     persistLocale,
     setLocaleSerial,
+    setManualLocale,
     syncFromProfileOnAuth,
   }
 }

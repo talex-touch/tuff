@@ -97,7 +97,8 @@ const QUICK_PROMPTS = [
   { id: 'theme-dark', text: '切换主题到暗色' },
 ]
 
-const { t, locale, setLocale } = useI18n()
+const { t, locale } = useI18n()
+const { setManualLocale } = useLocaleOrchestrator()
 const { toggleDark } = useTheme()
 const { user } = useAuthUser()
 const route = useRoute()
@@ -565,7 +566,7 @@ function applyClientRuntimePreferencesFromExecutionResult(result: {
   if (result.toolId === TOOL_NEXUS_LANGUAGE_SET) {
     const nextLocale = normalizeClientLocale(output.locale)
     if (nextLocale && locale.value !== nextLocale) {
-      void setLocale(nextLocale)
+      void setManualLocale(nextLocale, { syncProfile: false })
     }
     return
   }

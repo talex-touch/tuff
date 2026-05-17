@@ -4,7 +4,7 @@ import { computed } from 'vue'
 import Icon from './icon/Icon.vue'
 
 const { locale, t } = useI18n()
-const { setLocaleSerial, persistLocale } = useLocaleOrchestrator()
+const { setManualLocale } = useLocaleOrchestrator()
 
 const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
 const ariaLabel = computed(() =>
@@ -14,8 +14,7 @@ const tooltipLabel = computed(() =>
   t(nextLocale.value === 'zh' ? 'ui.languageToggle.zhLabel' : 'ui.languageToggle.enLabel'),
 )
 async function toggleLocale(targetLocale: 'en' | 'zh') {
-  await setLocaleSerial(targetLocale, 'manual')
-  persistLocale(targetLocale, 'manual')
+  await setManualLocale(targetLocale)
 }
 
 const _hover = ref(false)
