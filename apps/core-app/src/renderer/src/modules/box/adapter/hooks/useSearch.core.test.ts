@@ -1,0 +1,275 @@
+import type { IBoxOptions } from '..'
+import type { IClipboardOptions } from './types'
+import type { TuffItem, TuffSearchResult } from '@talex-touch/utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { BoxMode } from '..'
+import { useSearch } from './useSearch'
+
+const state = vi.hoisted(() => ({
+  listeners: new Map<string, (payload?: unknown) => void>(),
+  send: vi.fn(),
+  appSetting: {
+    searchEngine: { logsEnabled: false },
+    diagnostics: { verboseLogs: false },
+    recommendation: { enabled: true },
+    tools: {
+      autoHide: true,
+      autoPaste: { time: 5 }
+    }
+  },
+  windowState: {
+    type: 'corebox' as 'corebox' | 'division-box',
+    divisionBox: null
+  },
+  boxItems: [] as TuffItem[],
+  dispatchEvent: vi.fn()
+}))
+
+vi.mock('@talex-touch/utils/transport', () => ({
+  useTuffTransport: () => ({
+    on: (event: { toEventName?: () => string } | string, callback: (payload?: unknown) => void) => {
+      const key = typeof event === 'string' ? event : event.toEventName?.() || String(event)
+      state.listeners.set(key, callback)
+      return () => {
+        state.listeners.delete(key)
+      }
+    },
+    send: state.send
+  })
+}))
+
+function createEvent(name: string) {
+  return {
+    toString: () => name,
+    toEventName: () => name
+  }
+}
+
+vi.mock('@talex-touch/utils/transport/event/builder', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@talex-touch/utils/transport/event/builder')>()
+  return {
+    ...actual,
+    defineRawEvent: (name: string) => createEvent(name)
+  }
+})
+
+vi.mock('@vueuse/core', () => ({
+  useDebounceFn: (fn: (...args: unknown[]) => unknown) => {
+    const debounced = Object.assign((...args: unknown[]) => fn(...args), {
+      cancel: vi.fn()
+    })
+    return debounced
+  }
+}))
+
+vi.mock('vue', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('vue')>()
+  return {
+    ...actual,
+    onMounted: (callback: () => void) => callback(),
+    onBeforeUnmount: vi.fn()
+  }
+})
+
+vi.mock('~/modules/box/item-sdk', () => ({
+  useBoxItems: () => ({
+    items: { value: state.boxItems }
+  })
+}))
+
+vi.mock('~/modules/storage/app-storage', () => ({
+  appSetting: state.appSetting
+}))
+
+vi.mock('~/utils/dev-log', () => ({
+  devLog: vi.fn()
+}))
+
+vi.mock('~/modules/hooks/core-box', () => ({
+  isDivisionBoxMode: () => state.windowState.type === 'division-box',
+  windowState: state.windowState
+}))
+
+vi.mock('./detached-division', () => ({
+  isDetachedDivisionItemMatch: () => false,
+  parseDetachedDivisionConfig: () => null
+}))
+
+vi.mock('../transport/input-transport', () => ({
+  createCoreBoxInputTransport: () => ({
+    broadcast: vi.fn()
+  })
+}))
+
+vi.mock('./app-launch-item', () => ({
+  isBackgroundAppLaunchItem: () => false
+}))
+
+vi.mock('./useResize', () => ({
+  useResize: vi.fn()
+}))
+
+function createBoxOptions(): IBoxOptions {
+  return {
+    lastHidden: -1,
+    mode: BoxMode.INPUT,
+    focus: 0,
+    file: { buffer: null, paths: [] },
+    data: {},
+    layout: undefined
+  }
+}
+
+function createClipboardOptions(): IClipboardOptions {
+  return {
+    last: null,
+    pendingAutoFillItem: null,
+    detectedAt: null,
+    lastClearedTimestamp: null
+  }
+}
+
+function createSearchResult(query: string, index = 1): TuffSearchResult {
+  return {
+    items: [
+      {
+        id: `item-${index}`,
+        kind: 'app',
+        source: { id: 'test-source', type: 'system' },
+        render: { basic: { title: `${query}-${index}` } }
+      } as TuffItem
+    ],
+    query: { text: query, inputs: [] },
+    duration: 1,
+    sources: [],
+    sessionId: `session-${index}`
+  }
+}
+
+function getSearchQueryText(payload: unknown): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const query = (payload as { query?: unknown }).query
+  if (!query || typeof query !== 'object') return ''
+  const text = (query as { text?: unknown }).text
+  return typeof text === 'string' ? text : ''
+}
+
+async function flushPromises(): Promise<void> {
+  await nextTick()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+describe('useSearch CoreBox reopen behavior', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    state.listeners.clear()
+    state.boxItems = []
+    state.windowState.type = 'corebox'
+    state.windowState.divisionBox = null
+    state.appSetting.recommendation.enabled = true
+    state.send.mockReset()
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName.includes('provider')) return []
+      if (eventName === 'core-box:query') {
+        const query = getSearchQueryText(payload)
+        return createSearchResult(query, state.send.mock.calls.length)
+      }
+      return undefined
+    })
+
+    const windowEvents = new EventTarget()
+    const mockWindow = {
+      addEventListener: windowEvents.addEventListener.bind(windowEvents),
+      removeEventListener: windowEvents.removeEventListener.bind(windowEvents),
+      dispatchEvent: vi.fn((event: Event) => {
+        state.dispatchEvent(event)
+        return windowEvents.dispatchEvent(event)
+      }),
+      setTimeout,
+      clearTimeout
+    }
+    Object.defineProperty(globalThis, 'window', {
+      value: mockWindow,
+      configurable: true
+    })
+
+    if (typeof globalThis.CustomEvent === 'undefined') {
+      Object.defineProperty(globalThis, 'CustomEvent', {
+        value: class CustomEvent<T = unknown> extends Event {
+          detail: T
+
+          constructor(type: string, eventInitDict?: CustomEventInit<T>) {
+            super(type, eventInitDict)
+            this.detail = eventInitDict?.detail as T
+          }
+        },
+        configurable: true
+      })
+    }
+  })
+
+  it('refreshes results when CoreBox is shown with an existing query', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    hook.searchVal.value = 'aaa'
+    await nextTick()
+    await flushPromises()
+
+    expect(state.send).toHaveBeenCalledWith(
+      expect.objectContaining({ toEventName: expect.any(Function) }),
+      {
+        query: { text: 'aaa', inputs: [] }
+      }
+    )
+    expect(hook.res.value).toHaveLength(1)
+
+    state.send.mockClear()
+    window.dispatchEvent(new CustomEvent('corebox:shown'))
+    await flushPromises()
+
+    expect(state.send).toHaveBeenCalledWith(
+      expect.objectContaining({ toEventName: expect.any(Function) }),
+      {
+        query: { text: 'aaa', inputs: [] }
+      }
+    )
+  })
+
+  it('does not invalidate an in-flight search when duplicate query is skipped', async () => {
+    const firstSearch = {
+      resolve: null as ((result: TuffSearchResult) => void) | null
+    }
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName.includes('provider')) return []
+      if (eventName !== 'core-box:query') return undefined
+      const query = getSearchQueryText(payload)
+      if (query === 'aaa') {
+        return await new Promise<TuffSearchResult>((resolve) => {
+          firstSearch.resolve = resolve
+        })
+      }
+      return createSearchResult(query)
+    })
+
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = 'aaa'
+    await nextTick()
+    await Promise.resolve()
+    hook.handleSearchImmediate()
+    await Promise.resolve()
+
+    expect(firstSearch.resolve).toBeTypeOf('function')
+    firstSearch.resolve?.(createSearchResult('aaa', 100))
+    await flushPromises()
+
+    expect(hook.res.value.map((item) => item.id)).toEqual(['item-100'])
+  })
+})

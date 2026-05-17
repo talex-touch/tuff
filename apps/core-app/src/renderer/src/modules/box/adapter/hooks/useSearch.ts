@@ -37,6 +37,10 @@ interface SearchEndData {
   sources?: TuffSearchResult['sources']
 }
 
+interface ExecuteSearchOptions {
+  force?: boolean
+}
+
 type BoxData = {
   feature?: TuffItem
   pushedItemIds?: Set<string>
@@ -269,6 +273,59 @@ export function useSearch(
     })
   }
 
+  function clearRecommendationTimeout(): void {
+    if (!recommendationTimeoutId) return
+    clearTimeout(recommendationTimeoutId)
+    recommendationTimeoutId = null
+  }
+
+  function beginSearchSequence(inputs: TuffQueryInput[], options: ExecuteSearchOptions): number {
+    const currentSequence = ++searchSequence
+    pendingSearchEndById.clear()
+    pendingSearchUpdatesById.clear()
+    clearRecommendationTimeout()
+    recommendationPending.value = false
+
+    logDebug('[useSearch] executeSearch start:', {
+      sequence: currentSequence,
+      text: searchVal.value,
+      inputs: inputs.length,
+      activations: activeActivations.value?.length || 0,
+      force: options.force === true
+    })
+
+    return currentSequence
+  }
+
+  function shouldSkipDuplicateQuery(
+    queryKey: string,
+    inputs: TuffQueryInput[],
+    force: boolean
+  ): boolean {
+    if (force) return false
+
+    const now = Date.now()
+    if (inFlightQueryKey === queryKey) {
+      logDebug('[useSearch] Skipping duplicate in-flight query:', {
+        text: searchVal.value,
+        inputs: inputs.length
+      })
+      return true
+    }
+
+    if (queryKey === lastQueryKey && now - lastQueryAt < DUPLICATE_QUERY_WINDOW_MS) {
+      logDebug('[useSearch] Skipping duplicate query (window):', {
+        text: searchVal.value,
+        inputs: inputs.length
+      })
+      return true
+    }
+
+    lastQueryKey = queryKey
+    lastQueryAt = now
+    return false
+  }
+
   const resetSearchState = (): void => {
     searchResults.value = []
     searchResult.value = null
@@ -324,67 +381,37 @@ export function useSearch(
     })
   }
 
-  async function executeSearch(): Promise<void> {
-    const currentSequence = ++searchSequence
+  async function executeSearch(options: ExecuteSearchOptions = {}): Promise<void> {
     const inputs = buildQueryInputs()
     const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
 
-    pendingSearchEndById.clear()
-    pendingSearchUpdatesById.clear()
-
-    logDebug('[useSearch] executeSearch start:', {
-      sequence: currentSequence,
-      text: searchVal.value,
-      inputs: inputs.length,
-      activations: activeActivations.value?.length || 0
-    })
-
-    // Clear any pending recommendation timeout when starting a new search
-    if (recommendationTimeoutId) {
-      clearTimeout(recommendationTimeoutId)
-      recommendationTimeoutId = null
-    }
-
-    recommendationPending.value = false
-
     if (isDivisionBoxMode() && !isDetachedDivisionMode()) {
+      beginSearchSequence(inputs, options)
       const query: TuffQuery = { text: searchVal.value, inputs }
       broadcastDivisionBoxInput(query)
       return
     }
 
     if (!searchVal.value && !activeActivations.value?.length) {
-      boxOptions.focus = 0
       const hasInputs = inputs.length > 0
 
-      searchResults.value = []
-      searchResult.value = null
-      currentSearchId.value = null
-      boxOptions.layout = undefined
-
       if (!hasInputs && appSetting.recommendation?.enabled === false) {
+        beginSearchSequence(inputs, options)
+        boxOptions.focus = 0
         resetSearchState()
         return
       }
 
-      const now = Date.now()
-      if (inFlightQueryKey === queryKey) {
-        logDebug('[useSearch] Skipping duplicate in-flight query:', {
-          text: searchVal.value,
-          inputs: inputs.length
-        })
+      if (shouldSkipDuplicateQuery(queryKey, inputs, options.force === true)) {
         return
       }
-      if (queryKey === lastQueryKey && now - lastQueryAt < DUPLICATE_QUERY_WINDOW_MS) {
-        logDebug('[useSearch] Skipping duplicate query (window):', {
-          text: searchVal.value,
-          inputs: inputs.length
-        })
-        return
-      }
-      lastQueryKey = queryKey
-      lastQueryAt = now
 
+      const currentSequence = beginSearchSequence(inputs, options)
+      boxOptions.focus = 0
+      searchResults.value = []
+      searchResult.value = null
+      currentSearchId.value = null
+      boxOptions.layout = undefined
       loading.value = true
       recommendationPending.value = true
       // Don't collapse immediately - wait for recommendation to load
@@ -416,10 +443,7 @@ export function useSearch(
           ms: Math.round(performance.now() - requestStartedAt),
           sessionId: initialResult?.sessionId
         })
-        if (recommendationTimeoutId) {
-          clearTimeout(recommendationTimeoutId)
-          recommendationTimeoutId = null
-        }
+        clearRecommendationTimeout()
         if (inFlightQueryKey === queryKey) {
           inFlightQueryKey = null
         }
@@ -442,10 +466,7 @@ export function useSearch(
         loading.value = false
         recommendationPending.value = false
       } catch (error) {
-        if (recommendationTimeoutId) {
-          clearTimeout(recommendationTimeoutId)
-          recommendationTimeoutId = null
-        }
+        clearRecommendationTimeout()
         if (inFlightQueryKey === queryKey) {
           inFlightQueryKey = null
         }
@@ -456,6 +477,7 @@ export function useSearch(
     }
 
     if (!searchVal.value) {
+      beginSearchSequence(inputs, options)
       const query: TuffQuery = {
         text: '',
         inputs
@@ -470,24 +492,11 @@ export function useSearch(
       return
     }
 
-    const now = Date.now()
-    if (inFlightQueryKey === queryKey) {
-      logDebug('[useSearch] Skipping duplicate in-flight query:', {
-        text: searchVal.value,
-        inputs: inputs.length
-      })
+    if (shouldSkipDuplicateQuery(queryKey, inputs, options.force === true)) {
       return
     }
-    if (queryKey === lastQueryKey && now - lastQueryAt < DUPLICATE_QUERY_WINDOW_MS) {
-      logDebug('[useSearch] Skipping duplicate query (window):', {
-        text: searchVal.value,
-        inputs: inputs.length
-      })
-      return
-    }
-    lastQueryKey = queryKey
-    lastQueryAt = now
 
+    const currentSequence = beginSearchSequence(inputs, options)
     boxOptions.focus = 0
     loading.value = true
     // Don't clear results immediately - this causes UI flicker
@@ -590,10 +599,10 @@ export function useSearch(
     debouncedSearch()
   }
 
-  async function handleSearchImmediate(): Promise<void> {
+  async function handleSearchImmediate(options: ExecuteSearchOptions = {}): Promise<void> {
     const cancelable = debouncedSearch as unknown as { cancel?: () => void }
     cancelable.cancel?.()
-    await executeSearch()
+    await executeSearch(options)
   }
 
   async function handleExecute(item?: TuffItem): Promise<void> {
@@ -938,8 +947,8 @@ export function useSearch(
 
     if (!isDivisionBoxMode()) {
       coreBoxShownHandler = () => {
-        if (!searchVal.value && !activeActivations.value?.length) {
-          handleSearchImmediate()
+        if (searchVal.value || !activeActivations.value?.length) {
+          handleSearchImmediate({ force: true })
         }
       }
       window.addEventListener('corebox:shown', coreBoxShownHandler)
@@ -958,10 +967,7 @@ export function useSearch(
       coreBoxShownHandler = null
     }
 
-    if (recommendationTimeoutId) {
-      clearTimeout(recommendationTimeoutId)
-      recommendationTimeoutId = null
-    }
+    clearRecommendationTimeout()
   })
 
   const unregSearchEnd = transport.on(CoreBoxEvents.search.end, (payload) => {

@@ -129,7 +129,7 @@ export function useResize(options: UseResizeOptions): void {
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   let throttleTimer: ReturnType<typeof setTimeout> | null = null
 
-  function sendLayoutUpdate(source: string): void {
+  function sendLayoutUpdate(source: string, options: { force?: boolean } = {}): void {
     const activationCount = activeActivations.value?.length ?? 0
     const resultCount = results.value.length
     const isLoading = loading.value
@@ -152,6 +152,7 @@ export function useResize(options: UseResizeOptions): void {
     }
 
     if (
+      !options.force &&
       lastPayload &&
       Math.abs(lastPayload.height - payload.height) < 2 &&
       lastPayload.resultCount === payload.resultCount &&
@@ -229,7 +230,7 @@ export function useResize(options: UseResizeOptions): void {
   })
 
   function handleCoreBoxShown(): void {
-    scheduleLayoutUpdate('shown')
+    sendLayoutUpdate('shown', { force: true })
   }
 
   function handleLayoutRefresh(): void {
