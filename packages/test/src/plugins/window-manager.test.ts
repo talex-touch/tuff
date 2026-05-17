@@ -1,8 +1,43 @@
-import { describe, expect, it } from 'vitest'
-import { loadPluginModule } from './plugin-loader'
+import { describe, expect, it, vi } from 'vitest'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
 const windowPlugin = loadPluginModule(new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url))
 const { __test: windowTest } = windowPlugin
+
+class FakeBuilder {
+  item: Record<string, unknown>
+
+  constructor(id: string) {
+    this.item = { id }
+  }
+
+  setSource() {
+    return this
+  }
+
+  setTitle(title: string) {
+    this.item.title = title
+    return this
+  }
+
+  setSubtitle(subtitle: string) {
+    this.item.subtitle = subtitle
+    return this
+  }
+
+  setIcon() {
+    return this
+  }
+
+  setMeta(meta: Record<string, unknown>) {
+    this.item.meta = meta
+    return this
+  }
+
+  build() {
+    return this.item
+  }
+}
 
 describe('window manager', () => {
   it('builds applescript commands', () => {
@@ -90,6 +125,26 @@ describe('window manager', () => {
     })
   })
 
+  it('keeps action capability state visible when permission is missing', () => {
+    const capability = windowTest.buildActionCapability('window-manager', 'activate', {
+      platform: 'darwin',
+      window: { name: 'Safari' },
+    }, {
+      status: 'permission-missing',
+      reason: 'system-shell-permission-required',
+    })
+
+    expect(capability).toMatchObject({
+      status: 'permission-missing',
+      reason: 'system-shell-permission-required',
+      audit: {
+        pluginName: 'touch-window-manager',
+        featureId: 'window-manager',
+        actionId: 'activate',
+      },
+    })
+  })
+
   it('marks unsupported platform diagnostics explicitly', () => {
     const capability = windowTest.buildShellCapability({
       featureId: 'window-manager',
@@ -99,5 +154,72 @@ describe('window manager', () => {
 
     expect(capability.status).toBe('unsupported')
     expect(capability.reason).toBe('platform:linux')
+  })
+
+  it('shows permission diagnostics without requesting shell permission', async () => {
+    const items: Array<{ title?: string, meta?: any }> = []
+    const request = vi.fn(async () => false)
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url),
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        permission: {
+          check: async () => false,
+          request,
+        },
+        plugin: {
+          feature: {
+            clearItems() { items.length = 0 },
+            pushItems(next: Array<{ title?: string, meta?: any }>) { items.push(...next) },
+          },
+          storage: {
+            async getFile() { return null },
+            async setFile() {},
+          },
+        },
+      }),
+    )
+
+    await pluginModule.onFeatureTriggered('window-app', '')
+
+    if (windowTest.isShellPlatformSupported(process.platform) && windowTest.resolveShellStatus().status === 'available') {
+      expect(items[0]?.title).toBe('缺少系统权限')
+      expect(items[0]?.meta?.capability).toMatchObject({
+        status: 'permission-missing',
+        reason: 'system-shell-permission-required',
+      })
+      expect(request).not.toHaveBeenCalled()
+    }
+  })
+
+  it('blocks window actions before requesting permission when shell support is unavailable', async () => {
+    const request = vi.fn(async () => true)
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => true,
+          request,
+        },
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'window-manager',
+        actionId: 'activate',
+        payload: {
+          platform: 'linux',
+          window: { handle: '1', name: 'App', title: 'App' },
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'platform:linux',
+    })
+    expect(request).not.toHaveBeenCalled()
   })
 })
