@@ -184,6 +184,21 @@
   - 将 `2.4.11` 下一步聚焦到插件 shell capability、动态执行边界、secret backend、runtime console 与 SRP 小切片。
   - 明确算式 evaluator、单位公式 evaluator 与 widget runtime sandbox 属于受控动态执行边界，需要审计/替换/回归计划，而不是泛化 placeholder 问题。
 
+### docs(ai): split 2.5.x local knowledge and ASR roadmaps
+
+- `docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md`
+- `docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md`
+- `docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - 将 2.5.x AI 后续路线拆成三条独立版本线：2.5.3 本地知识检索与 Context Builder、2.5.5 本地文本模型 runtime、2.5.8 ASR Provider Runtime。
+  - 2.5.3 锁定 SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，MVP 不引入独立向量数据库服务。
+  - 2.5.5 明确“不强依赖 Ollama，优先内置 GGUF / llama.cpp runtime”；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录。
+  - 2.5.8 锁定本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto` 策略；TTS、语音唤醒与 streaming 转写不进入 Stable。
+
 ### ref(core-app): remove main runtime `$app` global access
 
 - `apps/core-app/src/main/core/main-runtime-state.ts`
