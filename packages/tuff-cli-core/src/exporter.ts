@@ -1,5 +1,9 @@
 /* eslint-disable no-console */
-import type { WidgetPrecompiledManifestEntry, WidgetPrecompiledMeta } from '@talex-touch/utils/plugin/widget'
+import type {
+  WidgetPrecompiledManifestEntry,
+  WidgetPrecompiledMeta,
+  WidgetRuntime,
+} from '@talex-touch/utils/plugin/widget'
 import type { Plugin as EsbuildPlugin } from 'esbuild'
 import type { Options } from './types'
 import crypto from 'node:crypto'
@@ -12,6 +16,9 @@ import {
   makeWidgetId,
   WIDGET_ALLOWED_PACKAGES,
   WIDGET_COMPILED_DIR,
+  WIDGET_RUNTIMES,
+  resolveWidgetRuntime,
+  resolveWidgetRuntimeStage,
 } from '@talex-touch/utils/plugin/widget'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import cliProgress from 'cli-progress'
@@ -56,6 +63,7 @@ interface WidgetFeatureManifest {
   interaction?: {
     type?: string
     path?: string
+    runtime?: WidgetRuntime
   }
 }
 
@@ -74,6 +82,7 @@ interface WidgetCompileTarget {
 }
 
 const WIDGET_SUPPORTED_EXTENSIONS = new Set(['.vue', '.ts', '.js', '.cjs', '.tsx', '.jsx'])
+const ARROW_WIDGET_SOURCE_PATTERN = /\.arrow\.(ts|js)$/i
 
 function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
   if (!source || typeof source !== 'object')
@@ -332,6 +341,16 @@ function withWidgetExtension(rawPath: string): string {
   return path.extname(rawPath) ? rawPath : `${rawPath}.vue`
 }
 
+function resolveWidgetRuntimeFromPath(feature: WidgetFeatureManifest, sourcePath?: string): WidgetRuntime {
+  const declared = resolveWidgetRuntime(feature.interaction?.runtime)
+  if (declared !== WIDGET_RUNTIMES.VUE) {
+    return declared
+  }
+  return ARROW_WIDGET_SOURCE_PATTERN.test(sourcePath ?? '')
+    ? WIDGET_RUNTIMES.ARROW
+    : WIDGET_RUNTIMES.VUE
+}
+
 function toPosixPath(value: string): string {
   return value.split(path.sep).join('/')
 }
@@ -569,6 +588,8 @@ async function compileWidgetForPackage(
   const ext = path.extname(sourcePath).toLowerCase()
   const baseDependencies = validateWidgetDependencies(context.feature.id, source)
   const dependencies = ext === '.vue' ? ensureVueDependency(baseDependencies) : baseDependencies
+  const runtime = resolveWidgetRuntimeFromPath(context.feature, sourceRelativePath)
+  const runtimeStage = resolveWidgetRuntimeStage(runtime)
   const widgetId = makeWidgetId(context.pluginName, context.feature.id)
   const safeId = makeSafeWidgetFileId(widgetId)
   const compiledRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.cjs`)
@@ -586,6 +607,8 @@ async function compileWidgetForPackage(
       widgetId,
       sourcePath: sourceRelativePath,
       compiledPath: compiledRelativePath,
+      runtime,
+      runtimeStage,
       hash,
       styles: '',
       dependencies: Array.from(bundledDependencies),
@@ -640,6 +663,8 @@ module.exports = __component
     widgetId,
     sourcePath: sourceRelativePath,
     compiledPath: compiledRelativePath,
+    runtime,
+    runtimeStage,
     hash,
     styles,
     dependencies: Array.from(bundledDependencies),
