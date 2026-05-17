@@ -72,10 +72,11 @@ export function useVisibility(options: UseVisibilityOptions) {
   function checkAutoClear(lastHiddenOverride?: number): void {
     const lastHiddenAt =
       typeof lastHiddenOverride === 'number' ? lastHiddenOverride : boxOptions.lastHidden
-    if (appSetting.tools.autoClear === -1 || lastHiddenAt <= 0) return
+    const autoClearSeconds = Number(appSetting.tools.autoClear)
+    if (!Number.isFinite(autoClearSeconds) || autoClearSeconds <= 0 || lastHiddenAt <= 0) return
 
     const timeSinceHidden = Date.now() - lastHiddenAt
-    const autoClearMs = appSetting.tools.autoClear * 1000
+    const autoClearMs = autoClearSeconds * 1000
 
     if (timeSinceHidden > autoClearMs) {
       searchVal.value = ''

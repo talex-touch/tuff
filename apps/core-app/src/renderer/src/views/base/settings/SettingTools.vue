@@ -47,7 +47,7 @@ const saveTimers = new Map<string, number>()
 const initialShortcutSnapshot = ref(new Map<string, { accelerator: string; enabled: boolean }>())
 
 const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
-const AUTO_CLEAR_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
+const AUTO_CLEAR_TIME_OPTIONS = [-1, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
 const CLIPBOARD_POLLING_INTERVAL_OPTIONS = [1, 3, 5, 10, 15, -1] as const
 const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
 const OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS = [300, 450, 600, 800, 1000, 1200, 1500] as const
@@ -682,9 +682,6 @@ watch(shortcutsDialogVisible, (visible) => {
     >
       <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
-      </TxSelectItem>
-      <TxSelectItem :value="0">
-        {{ t('settingTools.noLimit') }}
       </TxSelectItem>
       <TxSelectItem :value="1"> 1 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="3"> 3 {{ t('settingTools.sec') }} </TxSelectItem>
