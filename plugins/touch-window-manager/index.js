@@ -1,5 +1,6 @@
 const { plugin, logger, TuffItemBuilder, permission } = globalThis
 const { execFile, spawn } = require('node:child_process')
+const process = require('node:process')
 
 const PLUGIN_NAME = 'touch-window-manager'
 const SOURCE_ID = 'plugin-features'
@@ -11,6 +12,11 @@ const RECENT_MAX_ITEMS = 30
 const RECENT_SHOW_LIMIT = 8
 const CURRENT_SHOW_LIMIT = 20
 const RECENT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const SHELL_STATUS_LABELS = {
+  'available': '可用',
+  'permission-missing': '缺少权限',
+  'unsupported': '不可用',
+}
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -41,6 +47,27 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check) {
+    return {
+      granted: true,
+    }
+  }
+
+  try {
+    return {
+      granted: Boolean(await permission.check(permissionId)),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-window-manager] Failed to check permission', error)
+    return {
+      granted: false,
+      reason: 'permission-check-failed',
+    }
+  }
+}
+
 function isShellPlatformSupported(platform = process.platform) {
   return platform === 'win32' || platform === 'darwin'
 }
@@ -56,6 +83,27 @@ function resolveShellStatus(platform = process.platform) {
   return {
     status: 'available',
   }
+}
+
+async function resolveFeatureShellCapabilityState(platform = process.platform) {
+  const shellStatus = resolveShellStatus(platform)
+  if (shellStatus.status !== 'available')
+    return shellStatus
+
+  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
+  if (!permissionStatus.granted) {
+    return {
+      status: 'permission-missing',
+      reason: permissionStatus.reason || 'system-shell-permission-required',
+    }
+  }
+
+  return shellStatus
+}
+
+function formatCapabilitySubtitle(state) {
+  const label = SHELL_STATUS_LABELS[state.status] || state.status
+  return state.reason ? `${label} · ${state.reason}` : label
 }
 
 function resolveActionCommandKind(actionId, platform = process.platform) {
@@ -101,12 +149,14 @@ function buildShellCapability({
   return capability
 }
 
-function buildActionCapability(featureId, actionId, payload = {}) {
+function buildActionCapability(featureId, actionId, payload = {}, capabilityState) {
   const platform = payload?.platform || process.platform
   return buildShellCapability({
     featureId,
     actionId,
     platform,
+    status: capabilityState?.status,
+    reason: capabilityState?.reason,
   })
 }
 
@@ -565,7 +615,7 @@ function buildInfoItem({ id, featureId, title, subtitle, capability }) {
     .build()
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability, capabilityState }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -577,7 +627,7 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload, ca
       defaultAction: ACTION_ID,
       actionId,
       payload,
-      capability: capability || buildActionCapability(featureId, actionId, payload),
+      capability: capability || buildActionCapability(featureId, actionId, payload, capabilityState),
     })
     .build()
 }
@@ -591,7 +641,7 @@ function buildSectionHeader(featureId, groupId, title, subtitle) {
   })
 }
 
-function buildQuickActions(featureId, platform, frontWindow, keyword) {
+function buildQuickActions(featureId, platform, frontWindow, keyword, capabilityState) {
   const actions = []
   const basePayload = frontWindow ? { platform, window: frontWindow } : null
 
@@ -603,6 +653,7 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
       subtitle: truncateText(frontWindow.title, 36),
       actionId: 'snap-left',
       payload: basePayload,
+      capabilityState,
     }))
     actions.push(buildActionItem({
       id: `${featureId}-quick-snap-right`,
@@ -611,6 +662,7 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
       subtitle: truncateText(frontWindow.title, 36),
       actionId: 'snap-right',
       payload: basePayload,
+      capabilityState,
     }))
     actions.push(buildActionItem({
       id: `${featureId}-quick-topmost`,
@@ -623,6 +675,7 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
         window: frontWindow,
         toTopmost: !frontWindow.topmost,
       },
+      capabilityState,
     }))
     actions.push(buildActionItem({
       id: `${featureId}-quick-close`,
@@ -631,6 +684,7 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
       subtitle: truncateText(frontWindow.title, 36),
       actionId: 'close',
       payload: basePayload,
+      capabilityState,
     }))
   }
 
@@ -642,6 +696,7 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
       subtitle: truncateText(frontWindow.title, 36),
       actionId: 'hide',
       payload: { platform, appName: frontWindow.name },
+      capabilityState,
     }))
     actions.push(buildActionItem({
       id: `${featureId}-quick-quit`,
@@ -650,6 +705,7 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
       subtitle: truncateText(frontWindow.title, 36),
       actionId: 'quit',
       payload: { platform, appName: frontWindow.name },
+      capabilityState,
     }))
   }
 
@@ -661,13 +717,14 @@ function buildQuickActions(featureId, platform, frontWindow, keyword) {
       subtitle: platform === 'win32' ? 'Start-Process' : 'open -a',
       actionId: 'launch',
       payload: { platform, appName: keyword },
+      capabilityState,
     }))
   }
 
   return actions
 }
 
-function buildWindowActivateItem(featureId, index, group, windowInfo, platform, statusTag = '') {
+function buildWindowActivateItem(featureId, index, group, windowInfo, platform, statusTag = '', capabilityState) {
   return buildActionItem({
     id: `${featureId}-${group}-activate-${index}`,
     featureId,
@@ -675,6 +732,7 @@ function buildWindowActivateItem(featureId, index, group, windowInfo, platform, 
     subtitle: `${truncateText(windowInfo.title, 48)}${statusTag ? ` · ${statusTag}` : ''}`,
     actionId: 'activate',
     payload: { platform, window: windowInfo },
+    capabilityState,
   })
 }
 
@@ -754,8 +812,8 @@ const pluginLifecycle = {
         return true
       }
 
-      const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以管理应用窗口')
-      if (!canRun) {
+      const shellCapabilityState = await resolveFeatureShellCapabilityState(process.platform)
+      if (shellCapabilityState.status === 'permission-missing') {
         plugin.feature.clearItems()
         plugin.feature.pushItems([
           buildInfoItem({
@@ -766,8 +824,26 @@ const pluginLifecycle = {
             capability: buildShellCapability({
               featureId,
               actionId: 'list-windows',
-              status: 'permission-missing',
-              reason: SHELL_PERMISSION_ID,
+              status: shellCapabilityState.status,
+              reason: shellCapabilityState.reason,
+            }),
+          }),
+        ])
+        return true
+      }
+      if (shellCapabilityState.status !== 'available') {
+        plugin.feature.clearItems()
+        plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-shell-capability`,
+            featureId,
+            title: '窗口命令能力',
+            subtitle: formatCapabilitySubtitle(shellCapabilityState),
+            capability: buildShellCapability({
+              featureId,
+              actionId: 'list-windows',
+              status: shellCapabilityState.status,
+              reason: shellCapabilityState.reason,
             }),
           }),
         ])
@@ -784,7 +860,7 @@ const pluginLifecycle = {
 
       const recentAll = await loadRecentWindows()
       const recentWindows = mergeRecentWindows(visibleWindows, recentAll, keyword)
-      const quickActions = buildQuickActions(featureId, platform, frontWindow, keyword)
+      const quickActions = buildQuickActions(featureId, platform, frontWindow, keyword, shellCapabilityState)
       const groupOrder = resolveGroupOrder({
         quickActions,
         frontWindow,
@@ -792,7 +868,20 @@ const pluginLifecycle = {
         visibleWindows,
       })
 
-      const items = []
+      const items = [
+        buildInfoItem({
+          id: `${featureId}-shell-capability`,
+          featureId,
+          title: '窗口命令能力',
+          subtitle: formatCapabilitySubtitle(shellCapabilityState),
+          capability: buildShellCapability({
+            featureId,
+            actionId: 'list-windows',
+            status: shellCapabilityState.status,
+            reason: shellCapabilityState.reason,
+          }),
+        }),
+      ]
 
       groupOrder.forEach((groupId) => {
         if (groupId === 'quick') {
@@ -813,7 +902,7 @@ const pluginLifecycle = {
         if (groupId === 'recent') {
           items.push(buildSectionHeader(featureId, 'recent', '最近窗口', `最多 ${RECENT_SHOW_LIMIT} 项`))
           recentWindows.forEach((windowInfo, index) => {
-            items.push(buildWindowActivateItem(featureId, index, 'recent', windowInfo, platform, 'RECENT'))
+            items.push(buildWindowActivateItem(featureId, index, 'recent', windowInfo, platform, 'RECENT', shellCapabilityState))
           })
         }
 
@@ -821,7 +910,7 @@ const pluginLifecycle = {
           items.push(buildSectionHeader(featureId, 'current', '当前可见窗口', `最多 ${CURRENT_SHOW_LIMIT} 项`))
           visibleWindows.forEach((windowInfo, index) => {
             const tag = frontWindow?.key === windowInfo.key ? 'FRONT' : ''
-            items.push(buildWindowActivateItem(featureId, index, 'current', windowInfo, platform, tag))
+            items.push(buildWindowActivateItem(featureId, index, 'current', windowInfo, platform, tag, shellCapabilityState))
           })
         }
       })
@@ -842,6 +931,7 @@ const pluginLifecycle = {
             subtitle: platform === 'win32' ? 'Start-Process' : 'open -a',
             actionId: 'launch',
             payload: { platform, appName: keyword },
+            capabilityState: shellCapabilityState,
           }))
         }
       }
@@ -875,9 +965,14 @@ const pluginLifecycle = {
     if (!actionId)
       return
 
+    const shellStatus = resolveShellStatus(payload?.platform || process.platform)
+    if (shellStatus.status !== 'available') {
+      return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
+    }
+
     const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以管理应用窗口')
     if (!canRun)
-      return
+      return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
 
     try {
       await executeAction(actionId, payload)
@@ -888,12 +983,13 @@ const pluginLifecycle = {
         await saveRecentWindows(nextRecent)
       }
 
-      return { externalAction: true }
+      return { externalAction: true, status: 'started' }
     }
     catch (error) {
       logger?.error?.('[touch-window-manager] Action failed', error)
       return {
         externalAction: true,
+        status: 'blocked',
         success: false,
         message: error?.message || '窗口调度失败，请检查权限或窗口句柄是否有效',
       }
@@ -908,10 +1004,14 @@ module.exports = {
     buildActionCapability,
     buildShellCapability,
     buildWindowsScript,
+    checkPermissionStatus,
+    formatCapabilitySubtitle,
     isShellPlatformSupported,
     normalizeWindows,
     mergeRecentWindows,
     parseRecentWindows,
+    resolveFeatureShellCapabilityState,
     resolveGroupOrder,
+    resolveShellStatus,
   },
 }

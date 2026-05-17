@@ -1,6 +1,7 @@
 const { plugin, clipboard, logger, TuffItemBuilder, permission, features } = globalThis
 const { execFile, spawn } = require('node:child_process')
 const os = require('node:os')
+
 const fetchImpl = globalThis.fetch
 
 const PLUGIN_NAME = 'touch-browser-open'
@@ -16,6 +17,12 @@ const RECENT_SHOW_LIMIT = 5
 const RECENT_TTL_MS = 30 * 24 * 60 * 60 * 1000
 const SUGGEST_TIMEOUT_MS = 2500
 const SUGGEST_LIMIT = 6
+const SHELL_PERMISSION_ID = 'system.shell'
+const BROWSER_OPEN_STATUS_LABELS = {
+  'available': '可用',
+  'permission-missing': '缺少权限',
+  'unsupported': '不可用',
+}
 
 const SEARCH_ENGINES = [
   {
@@ -110,7 +117,7 @@ const WIN_BROWSER_CANDIDATES = [
     target: 'msedge.exe',
     paths: [
       '$env:ProgramFiles\\Microsoft\\Edge\\Application\\msedge.exe',
-      '${env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application\\msedge.exe',
+      '$' + '{env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application\\msedge.exe',
     ],
   },
   {
@@ -119,7 +126,7 @@ const WIN_BROWSER_CANDIDATES = [
     target: 'chrome.exe',
     paths: [
       '$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe',
-      '${env:ProgramFiles(x86)}\\Google\\Chrome\\Application\\chrome.exe',
+      '$' + '{env:ProgramFiles(x86)}\\Google\\Chrome\\Application\\chrome.exe',
       '$env:LocalAppData\\Google\\Chrome\\Application\\chrome.exe',
     ],
   },
@@ -129,7 +136,7 @@ const WIN_BROWSER_CANDIDATES = [
     target: 'firefox.exe',
     paths: [
       '$env:ProgramFiles\\Mozilla Firefox\\firefox.exe',
-      '${env:ProgramFiles(x86)}\\Mozilla Firefox\\firefox.exe',
+      '$' + '{env:ProgramFiles(x86)}\\Mozilla Firefox\\firefox.exe',
     ],
   },
   {
@@ -138,7 +145,7 @@ const WIN_BROWSER_CANDIDATES = [
     target: 'brave.exe',
     paths: [
       '$env:ProgramFiles\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-      '${env:ProgramFiles(x86)}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+      '$' + '{env:ProgramFiles(x86)}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
       '$env:LocalAppData\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
     ],
   },
@@ -149,7 +156,7 @@ const WIN_BROWSER_CANDIDATES = [
     paths: [
       '$env:LocalAppData\\Programs\\Opera\\opera.exe',
       '$env:ProgramFiles\\Opera\\opera.exe',
-      '${env:ProgramFiles(x86)}\\Opera\\opera.exe',
+      '$' + '{env:ProgramFiles(x86)}\\Opera\\opera.exe',
     ],
   },
 ]
@@ -276,7 +283,7 @@ function getSearchEngineFeatureKeywords(engine) {
 }
 
 function getSearchEngineFeatureCommandTokens(engine) {
-  const tokens = [engine.featureName, ...engine.keywords.filter(keyword => /搜索|引擎/i.test(keyword))]
+  const tokens = [engine.featureName, ...engine.keywords.filter(keyword => /搜索|引擎/.test(keyword))]
   return uniqNormalizedTexts(tokens, tokens.length)
 }
 
@@ -381,6 +388,116 @@ async function ensurePermission(permissionId, reason) {
     return true
   const granted = await permission.request(permissionId, reason)
   return Boolean(granted)
+}
+
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check) {
+    return {
+      granted: true,
+    }
+  }
+
+  try {
+    return {
+      granted: Boolean(await permission.check(permissionId)),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-browser-open] Failed to check permission', error)
+    return {
+      granted: false,
+      reason: 'permission-check-failed',
+    }
+  }
+}
+
+function resolveBrowserOpenSupport(actionId, browserTarget = '', platform = CURRENT_PLATFORM) {
+  if (platform === 'darwin') {
+    return {
+      status: 'available',
+    }
+  }
+
+  if (platform === 'win32') {
+    return {
+      status: 'available',
+    }
+  }
+
+  if (platform === 'linux' && !browserTarget && (actionId === 'default-open' || actionId === 'search-web')) {
+    return {
+      status: 'available',
+    }
+  }
+
+  if (platform === 'linux') {
+    return {
+      status: 'unsupported',
+      reason: 'linux-specific-browser-open-unsupported',
+    }
+  }
+
+  return {
+    status: 'unsupported',
+    reason: 'unsupported-platform',
+  }
+}
+
+async function resolveBrowserOpenCapabilityState(actionId, browserTarget = '') {
+  const platformState = resolveBrowserOpenSupport(actionId, browserTarget)
+  if (platformState.status !== 'available')
+    return platformState
+
+  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
+  if (!permissionStatus.granted) {
+    return {
+      status: 'permission-missing',
+      reason: permissionStatus.reason || 'system-shell-permission-required',
+    }
+  }
+
+  return platformState
+}
+
+function formatCapabilitySubtitle(state) {
+  const label = BROWSER_OPEN_STATUS_LABELS[state.status] || state.status
+  return state.reason ? `${label} · ${state.reason}` : label
+}
+
+function buildBrowserOpenCapability({
+  featureId,
+  actionId,
+  commandSource = 'browser-open',
+  browserTarget = '',
+  status,
+  reason,
+  requiresConfirmation = false,
+  platform = CURRENT_PLATFORM,
+} = {}) {
+  const resolved = status
+    ? { status, reason }
+    : resolveBrowserOpenSupport(actionId, browserTarget)
+  const capability = {
+    id: SHELL_PERMISSION_ID,
+    type: 'shell',
+    permission: SHELL_PERMISSION_ID,
+    status: resolved.status,
+    platform,
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId,
+      commandKind: 'browser-open',
+      commandSource,
+      browserTarget,
+      requiresConfirmation: Boolean(requiresConfirmation),
+    },
+  }
+
+  if (resolved.reason)
+    capability.reason = resolved.reason
+
+  return capability
 }
 
 async function ensureNetworkPermission() {
@@ -643,13 +760,17 @@ function resolveGroupOrder({ quickActions, recommendedItems, recentItems, tips }
   return order
 }
 
-function buildInfoItem({ id, featureId, title, subtitle, icon = ICON }) {
+function buildInfoItem({ id, featureId, title, subtitle, icon = ICON, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(icon)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      ...(capability ? { capability } : {}),
+    })
     .build()
 }
 
@@ -662,7 +783,7 @@ function buildSectionHeader(featureId, sectionId, title, subtitle) {
   })
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload, icon = ICON }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, icon = ICON, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -674,11 +795,21 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload, ic
       defaultAction: ACTION_ID,
       actionId,
       payload,
+      ...(capability ? { capability } : {}),
     })
     .build()
 }
 
-function buildSearchActionItem({ id, featureId, engine, query, title, subtitle, suggestion = false }) {
+function buildSearchActionItem({
+  id,
+  featureId,
+  engine,
+  query,
+  title,
+  subtitle,
+  suggestion = false,
+  capabilityState,
+}) {
   return applyCompletion(buildActionItem({
     id,
     featureId,
@@ -692,6 +823,13 @@ function buildSearchActionItem({ id, featureId, engine, query, title, subtitle, 
       suggestion,
       url: buildSearchUrl(engine.id, query),
     },
+    capability: buildBrowserOpenCapability({
+      featureId,
+      actionId: 'search-web',
+      commandSource: suggestion ? 'search-suggestion' : 'search-direct',
+      status: capabilityState?.status,
+      reason: capabilityState?.reason,
+    }),
   }), query)
 }
 
@@ -717,6 +855,7 @@ function buildSearchItems(featureId, engine, query, suggestions = [], options = 
     query: normalizedQuery,
     title: `${engine.name} 搜索：${truncateText(normalizedQuery, 48)}`,
     subtitle: truncateText(buildSearchUrl(engine.id, normalizedQuery), 88),
+    capabilityState: options.capabilityState,
   }))
 
   uniqNormalizedTexts(suggestions).forEach((suggestion, index) => {
@@ -730,6 +869,7 @@ function buildSearchItems(featureId, engine, query, suggestions = [], options = 
       title: suggestion,
       subtitle: `${engine.name} 搜索建议`,
       suggestion: true,
+      capabilityState: options.capabilityState,
     }))
   })
 
@@ -872,6 +1012,21 @@ async function executeOpenAction(url, browserTarget) {
   throw new Error('当前平台暂不支持浏览器打开')
 }
 
+async function executeBrowserOpenAction(url, browserTarget, actionId) {
+  const support = resolveBrowserOpenSupport(actionId, browserTarget)
+  if (support.status !== 'available') {
+    return {
+      ok: false,
+      reason: support.reason || 'unsupported',
+    }
+  }
+
+  await executeOpenAction(url, browserTarget)
+  return {
+    ok: true,
+  }
+}
+
 async function tryCopyUrl(url) {
   if (!clipboard?.writeText)
     return false
@@ -931,6 +1086,7 @@ async function enterSearchEngineMode(engine, query, signal, options = {}) {
   const featureId = options.featureId || `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
   const request = createSearchRequestSignal(signal)
   const requestToken = beginSearchFeatureRequest(featureId, engine, text)
+  const capabilityState = resolveBrowserOpenSupport('search-web')
 
   try {
     if (!options.preserveInput) {
@@ -939,7 +1095,7 @@ async function enterSearchEngineMode(engine, query, signal, options = {}) {
       await plugin.box?.setInput?.(text)
     }
 
-    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestToken)
+    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], { capabilityState }), requestToken)
 
     if (!text)
       return true
@@ -948,12 +1104,13 @@ async function enterSearchEngineMode(engine, query, signal, options = {}) {
       const suggestions = await loadSuggestions(engine, text, request.signal)
       if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestToken)
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions, { capabilityState }), requestToken)
     }
     catch (error) {
       if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
       await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
+        capabilityState,
         warning: error?.message || '网络请求失败，仅保留直接搜索',
       }), requestToken)
     }
@@ -972,9 +1129,10 @@ async function handleWebSearchFeature(featureId, query, signal) {
   const text = parsed.query
   const request = createSearchRequestSignal(signal)
   const requestToken = beginSearchFeatureRequest(featureId, engine, text)
+  const capabilityState = resolveBrowserOpenSupport('search-web')
 
   try {
-    await pushFeatureItems(buildSearchItems(featureId, engine, text), requestToken)
+    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], { capabilityState }), requestToken)
 
     if (!text)
       return true
@@ -983,12 +1141,13 @@ async function handleWebSearchFeature(featureId, query, signal) {
       const suggestions = await loadSuggestions(engine, text, request.signal)
       if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions), requestToken)
+      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions, { capabilityState }), requestToken)
     }
     catch (error) {
       if (!isCurrentFeatureRequest(requestToken, request.signal))
         return true
       await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
+        capabilityState,
         warning: error?.message || '网络请求失败，仅保留直接搜索',
       }), requestToken)
     }
@@ -1024,19 +1183,6 @@ async function handleBrowserOpenFeature(featureId, query) {
   const requestSeq = beginFeatureRequest()
 
   try {
-    const hasShell = await ensurePermission('system.shell', '需要系统命令权限以打开浏览器')
-    if (!hasShell) {
-      await pushFeatureItems([
-        buildInfoItem({
-          id: `${featureId}-no-permission`,
-          featureId,
-          title: '缺少 system.shell 权限',
-          subtitle: '授予权限后可执行浏览器打开动作',
-        }),
-      ], requestSeq)
-      return true
-    }
-
     const input = getQueryText(query)
     const url = normalizeUrlInput(input)
     const hasInput = normalizeText(input).length > 0
@@ -1059,7 +1205,10 @@ async function handleBrowserOpenFeature(featureId, query) {
       return true
     }
 
-    const availableBrowsers = await detectBrowsers()
+    const defaultOpenCapabilityState = await resolveBrowserOpenCapabilityState('default-open')
+    const availableBrowsers = defaultOpenCapabilityState.status === 'available'
+      ? await detectBrowsers()
+      : []
     const recentBrowsers = await loadRecentBrowsers()
     const recommendedItems = availableBrowsers.map((browser, index) =>
       buildActionItem({
@@ -1069,6 +1218,14 @@ async function handleBrowserOpenFeature(featureId, query) {
         subtitle: truncateText(url, 72),
         actionId: 'open-browser',
         payload: { url, browser },
+        capability: buildBrowserOpenCapability({
+          featureId,
+          actionId: 'open-browser',
+          commandSource: 'specific-browser',
+          browserTarget: browser.target,
+          status: defaultOpenCapabilityState.status,
+          reason: defaultOpenCapabilityState.reason,
+        }),
       }),
     )
 
@@ -1080,6 +1237,14 @@ async function handleBrowserOpenFeature(featureId, query) {
         subtitle: truncateText(url, 72),
         actionId: 'open-browser',
         payload: { url, browser },
+        capability: buildBrowserOpenCapability({
+          featureId,
+          actionId: 'open-browser',
+          commandSource: 'recent-browser',
+          browserTarget: browser.target,
+          status: defaultOpenCapabilityState.status,
+          reason: defaultOpenCapabilityState.reason,
+        }),
       }),
     )
 
@@ -1091,6 +1256,13 @@ async function handleBrowserOpenFeature(featureId, query) {
         subtitle: truncateText(url, 72),
         actionId: 'default-open',
         payload: { url },
+        capability: buildBrowserOpenCapability({
+          featureId,
+          actionId: 'default-open',
+          commandSource: 'default-browser',
+          status: defaultOpenCapabilityState.status,
+          reason: defaultOpenCapabilityState.reason,
+        }),
       }),
       buildActionItem({
         id: `${featureId}-quick-copy`,
@@ -1103,6 +1275,19 @@ async function handleBrowserOpenFeature(featureId, query) {
     ]
 
     const tips = [
+      buildInfoItem({
+        id: `${featureId}-shell-capability`,
+        featureId,
+        title: '打开能力',
+        subtitle: formatCapabilitySubtitle(defaultOpenCapabilityState),
+        capability: buildBrowserOpenCapability({
+          featureId,
+          actionId: 'default-open',
+          commandSource: 'diagnostic',
+          status: defaultOpenCapabilityState.status,
+          reason: defaultOpenCapabilityState.reason,
+        }),
+      }),
       buildInfoItem({
         id: `${featureId}-tip`,
         featureId,
@@ -1225,33 +1410,38 @@ const pluginLifecycle = {
 
     beginFeatureRequest()
 
-    const hasShell = await ensurePermission('system.shell', '需要系统命令权限以打开浏览器')
-    if (!hasShell)
-      return
-
     try {
       if (actionId === 'copy-url') {
         const copied = await tryCopyUrl(url)
         if (!copied) {
           return {
             externalAction: true,
+            status: 'blocked',
             success: false,
             message: '复制失败：缺少 clipboard.write 权限',
           }
         }
-        return { externalAction: true }
+        return { externalAction: true, status: 'started' }
       }
 
+      const hasShell = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以打开浏览器')
+      if (!hasShell)
+        return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
+
       if (actionId === 'default-open') {
-        await executeOpenAction(url, null)
-        return { externalAction: true }
+        const result = await executeBrowserOpenAction(url, null, actionId)
+        if (!result.ok)
+          return { externalAction: true, status: 'blocked', reason: result.reason }
+        return { externalAction: true, status: 'started' }
       }
 
       if (actionId === 'search-web') {
         stopSearchInputSession()
-        await executeOpenAction(url, null)
+        const result = await executeBrowserOpenAction(url, null, actionId)
+        if (!result.ok)
+          return { externalAction: true, status: 'blocked', reason: result.reason }
         plugin.box?.hide?.()
-        return { externalAction: true }
+        return { externalAction: true, status: 'started' }
       }
 
       if (actionId === 'open-browser') {
@@ -1263,7 +1453,9 @@ const pluginLifecycle = {
         if (!browserTarget)
           return
 
-        await executeOpenAction(url, browserTarget)
+        const result = await executeBrowserOpenAction(url, browserTarget, actionId)
+        if (!result.ok)
+          return { externalAction: true, status: 'blocked', reason: result.reason }
 
         if (browserId) {
           const recent = await loadRecentBrowsers()
@@ -1275,13 +1467,14 @@ const pluginLifecycle = {
           await saveRecentBrowsers(next)
         }
 
-        return { externalAction: true }
+        return { externalAction: true, status: 'started' }
       }
     }
     catch (error) {
       logger?.error?.('[touch-browser-open] Action failed', error)
       return {
         externalAction: true,
+        status: 'blocked',
         success: false,
         message: error?.message || '执行失败',
       }
@@ -1297,7 +1490,10 @@ module.exports = {
     buildSearchEngineFeatures,
     buildSearchItems,
     buildSearchUrl,
+    buildBrowserOpenCapability,
+    executeBrowserOpenAction,
     extractEngineModeQuery,
+    formatCapabilitySubtitle,
     isLikelyUrlInput,
     mergeRecentBrowsers,
     normalizeUrlInput,
@@ -1305,6 +1501,8 @@ module.exports = {
     parseEngineSuggestions,
     parseSearchQuery,
     parseRecentBrowsers,
+    resolveBrowserOpenCapabilityState,
+    resolveBrowserOpenSupport,
     resolveGroupOrder,
     touchRecentBrowser,
   },

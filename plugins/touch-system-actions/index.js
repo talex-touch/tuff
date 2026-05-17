@@ -1,7 +1,6 @@
 const { plugin, logger, TuffItemBuilder, permission, dialog, openUrl } = globalThis
-const { exec } = require('node:child_process')
 const process = require('node:process')
-const { promisify } = require('node:util')
+
 let spawnShellCommand
 try {
   ;({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
@@ -10,14 +9,19 @@ catch {
   spawnShellCommand = null
 }
 
-const execAsync = promisify(exec)
 const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 const PLUGIN_NAME = 'touch-system-actions'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'system-actions'
 const SHELL_PERMISSION_ID = 'system.shell'
+const NATIVE_PERMISSION_ID = 'app.window'
 const GROUP_ORDER = ['power', 'audio', 'display', 'window']
+const SHELL_STATUS_LABELS = {
+  'available': '可用',
+  'permission-missing': '缺少权限',
+  'unsupported': '不可用',
+}
 
 const GROUP_META = {
   power: { title: '电源操作', subtitle: '关机 / 重启 / 锁屏' },
@@ -65,6 +69,27 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check) {
+    return {
+      granted: true,
+    }
+  }
+
+  try {
+    return {
+      granted: Boolean(await permission.check(permissionId)),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-system-actions] Failed to check permission', error)
+    return {
+      granted: false,
+      reason: 'permission-check-failed',
+    }
+  }
+}
+
 function isShellPlatformSupported(platform = process.platform) {
   return platform === 'win32' || platform === 'darwin'
 }
@@ -79,11 +104,17 @@ function resolveShellStatus(platform = process.platform) {
 
   if (!spawnShellCommand) {
     return {
-      status: 'degraded',
+      status: 'unsupported',
       reason: 'safe-shell-unavailable',
     }
   }
 
+  return {
+    status: 'available',
+  }
+}
+
+function resolveNativeWindowStatus() {
   return {
     status: 'available',
   }
@@ -130,7 +161,44 @@ function buildShellCapability({
   return capability
 }
 
-function buildActionCapability(featureId, action, platform = process.platform) {
+function buildNativeWindowCapability({
+  featureId,
+  actionId,
+  status,
+  reason,
+} = {}) {
+  const resolved = status ? { status, reason } : resolveNativeWindowStatus()
+  const capability = {
+    id: NATIVE_PERMISSION_ID,
+    type: 'native-window',
+    platform: process.platform,
+    status: resolved.status,
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId,
+      commandKind: 'native-window',
+      requiresConfirmation: false,
+      requiresAdmin: false,
+    },
+  }
+
+  if (resolved.reason)
+    capability.reason = resolved.reason
+
+  return capability
+}
+
+function buildActionCapability(featureId, action, platform = process.platform, capabilityState) {
+  if (action?.id === 'open-main-window') {
+    return buildNativeWindowCapability({
+      featureId,
+      actionId: action?.id,
+      status: capabilityState?.status,
+      reason: capabilityState?.reason,
+    })
+  }
+
   return buildShellCapability({
     featureId,
     actionId: action?.id,
@@ -138,7 +206,30 @@ function buildActionCapability(featureId, action, platform = process.platform) {
     requiresConfirmation: Boolean(action?.requiresAdmin),
     requiresAdmin: Boolean(action?.requiresAdmin),
     platform,
+    status: capabilityState?.status,
+    reason: capabilityState?.reason,
   })
+}
+
+async function resolveFeatureShellCapabilityState(platform = process.platform) {
+  const shellStatus = resolveShellStatus(platform)
+  if (shellStatus.status !== 'available')
+    return shellStatus
+
+  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
+  if (!permissionStatus.granted) {
+    return {
+      status: 'permission-missing',
+      reason: permissionStatus.reason || 'system-shell-permission-required',
+    }
+  }
+
+  return shellStatus
+}
+
+function formatCapabilitySubtitle(state) {
+  const label = SHELL_STATUS_LABELS[state.status] || state.status
+  return state.reason ? `${label} · ${state.reason}` : label
 }
 
 async function openSystemSettings() {
@@ -165,8 +256,7 @@ async function runShellCommand(command) {
     throw new Error('unsafe command payload')
   }
   if (!spawnShellCommand) {
-    await execAsync(command)
-    return
+    throw new Error('safe-shell-unavailable')
   }
 
   await new Promise((resolve, reject) => {
@@ -262,7 +352,7 @@ function createActions(platform = process.platform) {
     execute: async () => {
       const confirmed = await confirmDangerAction('关机', '此操作会立即关闭计算机。')
       if (!confirmed)
-        return
+        return { status: 'cancelled' }
 
       if (isMac) {
         await runShellCommand('osascript -e \'tell app "System Events" to shut down\'')
@@ -283,7 +373,7 @@ function createActions(platform = process.platform) {
     execute: async () => {
       const confirmed = await confirmDangerAction('重启', '此操作会立即重启计算机。')
       if (!confirmed)
-        return
+        return { status: 'cancelled' }
 
       if (isMac) {
         await runShellCommand('osascript -e \'tell app "System Events" to restart\'')
@@ -318,10 +408,10 @@ function createActions(platform = process.platform) {
     group: 'audio',
     execute: async () => {
       if (isMac) {
-        await runShellCommand("osascript -e 'set volume output volume (output volume of (get volume settings) + 10)'")
+        await runShellCommand('osascript -e \'set volume output volume (output volume of (get volume settings) + 10)\'')
       }
       else if (isWindows) {
-        await runShellCommand("powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\"")
+        await runShellCommand('powershell -Command "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName(\'Volume Control\').InvokeVerb(\'properties\')"')
       }
     },
   })
@@ -334,10 +424,10 @@ function createActions(platform = process.platform) {
     group: 'audio',
     execute: async () => {
       if (isMac) {
-        await runShellCommand("osascript -e 'set volume output volume (output volume of (get volume settings) - 10)'")
+        await runShellCommand('osascript -e \'set volume output volume (output volume of (get volume settings) - 10)\'')
       }
       else if (isWindows) {
-        await runShellCommand("powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\"")
+        await runShellCommand('powershell -Command "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName(\'Volume Control\').InvokeVerb(\'properties\')"')
       }
     },
   })
@@ -350,7 +440,7 @@ function createActions(platform = process.platform) {
     group: 'audio',
     execute: async () => {
       if (isMac) {
-        await runShellCommand("osascript -e 'set volume output muted not (output muted of (get volume settings))'")
+        await runShellCommand('osascript -e \'set volume output muted not (output muted of (get volume settings))\'')
       }
       else if (isWindows) {
         await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]173)"')
@@ -455,7 +545,7 @@ function buildSectionHeader(featureId, groupId) {
   })
 }
 
-function buildActionItem(featureId, action) {
+function buildActionItem(featureId, action, capabilityState) {
   return new TuffItemBuilder(`${featureId}-${action.id}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(action.name)
@@ -466,7 +556,7 @@ function buildActionItem(featureId, action) {
       featureId,
       defaultAction: ACTION_ID,
       actionId: action.id,
-      capability: buildActionCapability(featureId, action),
+      capability: buildActionCapability(featureId, action, process.platform, capabilityState),
     })
     .build()
 }
@@ -474,6 +564,8 @@ function buildActionItem(featureId, action) {
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
+      const shellCapabilityState = await resolveFeatureShellCapabilityState(process.platform)
+
       if (!isShellPlatformSupported(process.platform)) {
         plugin.feature.clearItems()
         plugin.feature.pushItems([
@@ -487,26 +579,6 @@ const pluginLifecycle = {
               actionId: 'list-actions',
               status: 'unsupported',
               reason: `platform:${process.platform}`,
-            }),
-          }),
-        ])
-        return true
-      }
-
-      const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行系统操作')
-      if (!hasPermission) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-no-permission`,
-            featureId,
-            title: '缺少系统权限',
-            subtitle: '请授予 system.shell 权限后再试',
-            capability: buildShellCapability({
-              featureId,
-              actionId: 'list-actions',
-              status: 'permission-missing',
-              reason: SHELL_PERMISSION_ID,
             }),
           }),
         ])
@@ -531,14 +603,30 @@ const pluginLifecycle = {
       }
 
       const order = resolveGroupOrder(matched)
-      const items = []
+      const items = [
+        buildInfoItem({
+          id: `${featureId}-shell-capability`,
+          featureId,
+          title: '系统命令能力',
+          subtitle: formatCapabilitySubtitle(shellCapabilityState),
+          capability: buildShellCapability({
+            featureId,
+            actionId: 'list-actions',
+            status: shellCapabilityState.status,
+            reason: shellCapabilityState.reason,
+          }),
+        }),
+      ]
 
       order.forEach((groupId) => {
         items.push(buildSectionHeader(featureId, groupId))
         matched
           .filter(action => action.group === groupId)
           .forEach((action) => {
-            items.push(buildActionItem(featureId, action))
+            const capabilityState = action.id === 'open-main-window'
+              ? resolveNativeWindowStatus()
+              : shellCapabilityState
+            items.push(buildActionItem(featureId, action, capabilityState))
           })
       })
 
@@ -577,9 +665,22 @@ const pluginLifecycle = {
     if (!action)
       return
 
+    if (action.id !== 'open-main-window') {
+      const shellStatus = resolveShellStatus(process.platform)
+      if (shellStatus.status !== 'available') {
+        return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
+      }
+
+      const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行系统操作')
+      if (!hasPermission)
+        return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
+    }
+
     try {
-      await action.execute()
-      return { externalAction: true }
+      const result = await action.execute()
+      if (result?.status === 'cancelled')
+        return { externalAction: true, status: 'cancelled' }
+      return { externalAction: true, status: 'started' }
     }
     catch (error) {
       logger?.error?.(`[touch-system-actions] Action failed: ${action.id}`, error)
@@ -599,6 +700,7 @@ const pluginLifecycle = {
 
       return {
         externalAction: true,
+        status: 'blocked',
         success: false,
         message: error?.message || '执行失败',
       }
@@ -611,10 +713,15 @@ module.exports = {
   __test: {
     buildSearchTokens,
     buildActionCapability,
+    buildNativeWindowCapability,
     buildShellCapability,
+    checkPermissionStatus,
+    formatCapabilitySubtitle,
     isShellPlatformSupported,
     matchActions,
+    resolveFeatureShellCapabilityState,
     resolveActions,
     resolveGroupOrder,
+    resolveShellStatus,
   },
 }
