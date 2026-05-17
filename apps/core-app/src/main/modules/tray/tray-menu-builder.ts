@@ -146,25 +146,12 @@ export class TrayMenuBuilder {
   }
 
   /**
-   * Builds tool menu items (Clipboard History, Terminal, Settings)
+   * Builds tool menu items (Terminal, Settings)
    *
    * @returns Array of tool menu items
    */
   private buildToolsGroup(): MenuItemConstructorOptions[] {
     return [
-      {
-        label: t('tray.clipboardHistory'),
-        click: () => {
-          const touchApp = this.requireTouchApp()
-          const mainWindow = touchApp.window.window
-          mainWindow.show()
-          const channel = touchApp.channel
-          const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
-          tx.sendTo(mainWindow.webContents, AppEvents.window.navigate, {
-            path: '/details'
-          }).catch(() => {})
-        }
-      },
       {
         label: t('tray.terminal'),
         click: () => {

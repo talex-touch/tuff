@@ -21,7 +21,9 @@ const {
   getNativeShareCapabilityPatchMock,
   getPermissionDeepLinkCapabilityPatchMock,
   getEverythingCapabilityPatchMock,
-  getTuffCliCapabilityPatchMock
+  getTuffCliCapabilityPatchMock,
+  setLocaleMock,
+  touchEventBusEmitMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
   execFileMock: vi.fn(
@@ -37,6 +39,8 @@ const {
   loggerWarnMock: vi.fn(),
   perfDisposeMock: vi.fn(),
   getTuffTransportMainMock: vi.fn<(channel?: unknown, keyManager?: unknown) => unknown>(() => null),
+  setLocaleMock: vi.fn(),
+  touchEventBusEmitMock: vi.fn(),
   deviceIdleGetSettingsMock: vi.fn(),
   deviceIdleUpdateSettingsMock: vi.fn(),
   deviceIdleCanRunMock: vi.fn(),
@@ -212,8 +216,18 @@ vi.mock('../core/precore', () => ({
 }))
 
 vi.mock('../core/eventbus/touch-event', () => ({
-  TalexEvents: {},
+  LanguageChangedEvent: class LanguageChangedEvent {
+    language: string
+
+    constructor(language: string) {
+      this.language = language
+    }
+  },
+  TalexEvents: {
+    LANGUAGE_CHANGED: 'language/changed'
+  },
   touchEventBus: {
+    emit: touchEventBusEmitMock,
     on: vi.fn(),
     off: vi.fn(),
     once: vi.fn()
@@ -403,7 +417,7 @@ vi.mock('../utils/common-util', () => ({
 }))
 
 vi.mock('../utils/i18n-helper', () => ({
-  setLocale: vi.fn()
+  setLocale: setLocaleMock
 }))
 
 vi.mock('../utils/logger', () => ({
@@ -611,6 +625,44 @@ describe('CommonChannelModule private helpers', () => {
         configurable: true
       })
     }
+  })
+
+  it('syncs renderer locale to main i18n and emits language change event', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => unknown>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const setLocaleHandler = handlers.get(AppEvents.i18n.setLocale.toEventName())
+    expect(setLocaleHandler).toBeTypeOf('function')
+
+    setLocaleHandler?.({ locale: 'en-US' }, {})
+
+    expect(setLocaleMock).toHaveBeenCalledWith('en-US')
+    expect(touchEventBusEmitMock).toHaveBeenCalledWith(
+      'language/changed',
+      expect.objectContaining({ language: 'en-US' })
+    )
   })
 
   it('registers device idle diagnostic transport handler', async () => {

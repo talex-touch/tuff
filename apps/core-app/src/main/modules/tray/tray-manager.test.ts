@@ -1,6 +1,7 @@
 import type { ModuleInitContext } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setLocale } from '../../utils/i18n-helper'
 
 const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock, trayInstances } =
   vi.hoisted(() => ({
@@ -271,6 +272,90 @@ describe('TrayManager', () => {
     expect(trayManager.initializeTray.mock.invocationCallOrder[0]).toBeLessThan(
       trayManager.updateDockVisibility.mock.invocationCallOrder[0]
     )
+  })
+
+  it('does not expose clipboard history without a dedicated history window', () => {
+    const mainWindow = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      isVisible: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isFocused: vi.fn(() => false),
+      webContents: {}
+    }
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        channel: unknown
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      menuBuilder: { setTouchApp: (touchApp: unknown) => void }
+      initializeTray: () => void
+    }
+
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      channel: {},
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.menuBuilder.setTouchApp(trayManager.touchApp)
+
+    trayManager.initializeTray()
+
+    const menuLabels = trayInstances[0]?.setContextMenu.mock.calls[0]?.[0].map(
+      (item: { label?: string }) => item.label
+    )
+    expect(menuLabels).not.toContain('Clipboard History')
+  })
+
+  it('uses current locale when building tray menu', () => {
+    const mainWindow = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      isVisible: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isFocused: vi.fn(() => false),
+      webContents: {}
+    }
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        channel: unknown
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      menuBuilder: { setTouchApp: (touchApp: unknown) => void }
+      initializeTray: () => void
+    }
+
+    setLocale('zh-CN')
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      channel: {},
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.menuBuilder.setTouchApp(trayManager.touchApp)
+
+    trayManager.initializeTray()
+
+    const menuLabels = trayInstances[0]?.setContextMenu.mock.calls[0]?.[0].map(
+      (item: { label?: string }) => item.label
+    )
+    expect(menuLabels).toContain('隐藏主窗口')
+    expect(menuLabels).toContain('设置')
   })
 
   it('uses localized tray tooltip when initializing tray', () => {

@@ -1037,6 +1037,7 @@ export function useSearch(
     select,
     res,
     loading,
+    recommendationPending,
     activeItem,
     activeActivations,
     handleExecute,

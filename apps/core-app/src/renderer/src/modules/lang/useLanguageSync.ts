@@ -8,11 +8,18 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { watch } from 'vue'
 import { useLanguage } from './useLanguage'
 
+let languageSyncStarted = false
+
 /**
  * Setup language synchronization with main process
  * This should be called once during app initialization
  */
 export function setupLanguageSync() {
+  if (languageSyncStarted) {
+    return
+  }
+  languageSyncStarted = true
+
   const { currentLanguage } = useLanguage()
   const transport = useTuffTransport()
 
