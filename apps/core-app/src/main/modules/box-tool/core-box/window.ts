@@ -98,6 +98,16 @@ export class WindowManager {
   private boundsAnimationTaskId: string | null = null
   private boundsAnimationToken = 0
   private currentAnimationTarget: Electron.Rectangle | null = null
+  private boundsAnimationState: {
+    browserWindow: Electron.BrowserWindow
+    startBounds: Electron.Rectangle
+    target: Electron.Rectangle
+    startTime: number
+    durationMs: number
+    token: number
+    restoreResizable: () => void
+    minHeight?: number
+  } | null = null
   private animationResizeRestore: (() => void) | null = null
   // Track last set bounds to avoid getBounds() latency issues
   private lastSetBounds: { height: number; y: number } | null = null
@@ -335,6 +345,7 @@ export class WindowManager {
       this.boundsAnimationTaskId = null
     }
     this.currentAnimationTarget = null
+    this.boundsAnimationState = null
     this.boundsAnimationToken += 1
     if (this.animationResizeRestore) {
       this.animationResizeRestore()
@@ -366,7 +377,7 @@ export class WindowManager {
   }
 
   /**
-   * Animate window bounds. New target cancels old animation and starts from current position.
+   * Animate window bounds. New target retargets the active animation instead of restarting it.
    */
   private animateWindowBounds(
     window: TouchWindow,
@@ -376,108 +387,148 @@ export class WindowManager {
     if (window.window.isDestroyed()) return
 
     const browserWindow = window.window
-    if (typeof options.minHeight === 'number') {
-      try {
-        browserWindow.setMinimumSize(720, options.minHeight)
-      } catch (error) {
-        coreBoxWindowLog.warn('Failed to update minimum size before bounds animation', { error })
-      }
-    }
     const rawBounds = browserWindow.getBounds()
-
-    // Skip if same target as current animation (prevent duplicate animations)
-    if (
-      this.currentAnimationTarget &&
-      Math.abs(this.currentAnimationTarget.height - target.height) < 3
-    ) {
-      return
-    }
-
-    // Use tracked bounds for start position (more accurate than getBounds)
-    const startBounds = {
+    const isClose = (a: number, b: number, tolerance = 3): boolean => Math.abs(a - b) < tolerance
+    const currentBounds: Electron.Rectangle = {
       ...rawBounds,
       height: this.lastSetBounds?.height ?? rawBounds.height,
       y: this.lastSetBounds?.y ?? rawBounds.y
     }
 
-    // Skip if already at target (within tolerance) - but only if no animation is in progress
     if (
-      !this.boundsAnimationTaskId &&
-      Math.abs(startBounds.height - target.height) < 3 &&
-      Math.abs(startBounds.y - target.y) < 3
+      this.currentAnimationTarget &&
+      isClose(this.currentAnimationTarget.x, target.x) &&
+      isClose(this.currentAnimationTarget.y, target.y) &&
+      isClose(this.currentAnimationTarget.width, target.width) &&
+      isClose(this.currentAnimationTarget.height, target.height, 6)
     ) {
       return
     }
 
-    // Cancel any existing animation and start fresh from current position
-    this.stopBoundsAnimation()
-    this.currentAnimationTarget = { ...target }
-    const token = this.boundsAnimationToken
-    const heightDelta = Math.abs(target.height - startBounds.height)
-    // Duration: 120-220ms based on distance
-    const durationMs = Math.min(220, Math.max(120, 120 + heightDelta * 0.2))
-    const startTime = performance.now()
+    if (
+      !this.boundsAnimationTaskId &&
+      isClose(currentBounds.x, target.x) &&
+      isClose(currentBounds.y, target.y) &&
+      isClose(currentBounds.width, target.width) &&
+      isClose(currentBounds.height, target.height)
+    ) {
+      return
+    }
 
-    const lerp = (from: number, to: number, t: number): number => from + (to - from) * t
-    const easeOutQuart = (t: number): number => 1 - (1 - t) ** 4
+    const createState = (
+      startBounds: Electron.Rectangle,
+      restoreResizable: () => void,
+      token: number
+    ) => {
+      const heightDelta = Math.abs(target.height - startBounds.height)
+      return {
+        browserWindow,
+        startBounds,
+        target: { ...target },
+        startTime: performance.now(),
+        durationMs: Math.min(220, Math.max(120, 120 + heightDelta * 0.16)),
+        token,
+        restoreResizable,
+        minHeight: options.minHeight
+      }
+    }
+
+    this.currentAnimationTarget = { ...target }
+
+    if (this.boundsAnimationState && this.boundsAnimationTaskId) {
+      this.boundsAnimationState = createState(
+        currentBounds,
+        this.boundsAnimationState.restoreResizable,
+        this.boundsAnimationState.token
+      )
+      return
+    }
+
+    const restoreResizable = this.prepareTemporaryResize(browserWindow)
+    this.animationResizeRestore = restoreResizable
+    const token = this.boundsAnimationToken
+    this.boundsAnimationState = createState(currentBounds, restoreResizable, token)
+
+    try {
+      browserWindow.setMinimumSize(720, COREBOX_MIN_HEIGHT)
+    } catch (error) {
+      coreBoxWindowLog.warn('Failed to relax minimum size before bounds animation', { error })
+    }
 
     const taskId = 'core-box.window.bounds-animation'
+    const finishAnimation = (restore: boolean): void => {
+      const state = this.boundsAnimationState
+      this.pollingService.unregister(taskId)
+      if (this.boundsAnimationTaskId === taskId) {
+        this.boundsAnimationTaskId = null
+      }
+      this.boundsAnimationState = null
+      if (restore && state && this.animationResizeRestore === state.restoreResizable) {
+        this.animationResizeRestore = null
+        state.restoreResizable()
+      }
+    }
+
+    const lerp = (from: number, to: number, t: number): number => from + (to - from) * t
+    const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3
+
     this.boundsAnimationTaskId = taskId
     this.pollingService.register(
       taskId,
       () => {
-        if (token !== this.boundsAnimationToken || browserWindow.isDestroyed()) {
-          this.pollingService.unregister(taskId)
-          if (this.boundsAnimationTaskId === taskId) {
-            this.boundsAnimationTaskId = null
-          }
+        const state = this.boundsAnimationState
+        if (
+          !state ||
+          state.token !== this.boundsAnimationToken ||
+          state.browserWindow.isDestroyed()
+        ) {
+          finishAnimation(true)
+          this.currentAnimationTarget = null
           return
         }
 
-        const elapsed = performance.now() - startTime
-        const progress = Math.min(elapsed / durationMs, 1)
-        const eased = easeOutQuart(progress)
-
+        const elapsed = performance.now() - state.startTime
+        const progress = Math.min(elapsed / state.durationMs, 1)
+        const eased = easeOutCubic(progress)
         const nextBounds: Electron.Rectangle = {
-          x: Math.round(lerp(startBounds.x, target.x, eased)),
-          y: Math.round(lerp(startBounds.y, target.y, eased)),
-          width: Math.round(lerp(startBounds.width, target.width, eased)),
-          height: Math.round(lerp(startBounds.height, target.height, eased))
+          x: Math.round(lerp(state.startBounds.x, state.target.x, eased)),
+          y: Math.round(lerp(state.startBounds.y, state.target.y, eased)),
+          width: Math.round(lerp(state.startBounds.width, state.target.width, eased)),
+          height: Math.round(lerp(state.startBounds.height, state.target.height, eased))
         }
 
         try {
-          browserWindow.setBounds(nextBounds, false)
-          // Track the last set bounds for accurate start position on next animation
+          state.browserWindow.setBounds(nextBounds, false)
           this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
           this.syncMetaOverlayBounds()
         } catch (error) {
           coreBoxWindowLog.warn('Failed to animate window bounds', { error })
-          this.pollingService.unregister(taskId)
-          if (this.boundsAnimationTaskId === taskId) {
-            this.boundsAnimationTaskId = null
-          }
+          finishAnimation(true)
+          this.currentAnimationTarget = null
           return
         }
 
         if (progress >= 1) {
-          this.pollingService.unregister(taskId)
-          if (this.boundsAnimationTaskId === taskId) {
-            this.boundsAnimationTaskId = null
-          }
+          finishAnimation(false)
           this.currentAnimationTarget = null
           try {
-            browserWindow.setBounds(target, false)
-            this.lastSetBounds = { height: target.height, y: target.y }
+            state.browserWindow.setBounds(state.target, false)
+            this.lastSetBounds = { height: state.target.height, y: state.target.y }
             this.syncMetaOverlayBounds()
-            if (typeof options.minHeight === 'number') {
-              browserWindow.setMinimumSize(720, options.minHeight)
+            if (typeof state.minHeight === 'number') {
+              state.browserWindow.setMinimumSize(720, state.minHeight)
             }
           } catch (error) {
             coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
+          } finally {
+            if (this.animationResizeRestore === state.restoreResizable) {
+              this.animationResizeRestore = null
+              state.restoreResizable()
+            }
           }
         }
       },
-      { interval: 16, unit: 'milliseconds' }
+      { interval: 16, unit: 'milliseconds', lane: 'critical', backpressure: 'latest_wins' }
     )
     this.pollingService.start()
   }

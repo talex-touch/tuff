@@ -13,6 +13,224 @@
 
 ## 2026-05-17
 
+### test(core-app): record visible experience capture blockers
+
+- `apps/core-app/scripts/dev-electron-wrapper.mjs`
+- `docs/engineering/reports/coreapp-visible-browser-smoke-2026-05-17/README.md`
+- `docs/engineering/reports/coreapp-visible-electron-dev-capture-2026-05-17/README.md`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - Archived the plain-browser CoreApp smoke result as negative evidence: the page is blank because Electron preload is absent and `ipcRenderer` is undefined, so it cannot replace Electron UI proof.
+  - Added opt-in `TUFF_DEV_ELECTRON_BUNDLE_ID` / `TUFF_DEV_ELECTRON_BUNDLE_NAME` support to the macOS dev wrapper so future capture runs can prepare a separate Electron.app bundle without changing the default dev bundle.
+  - Recorded the Electron dev capture blocker: separate dev ports and the isolated bundle both built main/preload and announced a renderer URL, but exited after `start electron app...` without a remote-debugging port or UI artifact.
+  - The visible-experience audit now distinguishes negative capture evidence from completion evidence and keeps first-screen, CoreBox, login recovery, AI, OmniPanel, Review Queue, Provider Admin, packaged cold/hot, Windows, and Nexus evidence marked incomplete.
+
+### fix(core-app): smooth CoreBox height resize animation
+
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+  - CoreBox height animation now relaxes the window minimum height during animated resize instead of clamping expand frames directly to the final height.
+  - Animated resize temporarily enables resizable mode for panel windows, improving macOS/Electron bounds update stability before restoring the original state.
+  - Renderer layout updates are lightly throttled and the settled measurement delay now better matches result transition timing, reducing repeated retarget jitter while typing/searching.
+  - CoreBox resize animation now runs on the critical polling lane and retargets an active animation instead of canceling/restarting it, avoiding pressure-mode frame intervals and stepped resize motion.
+
+### test(core-app): add visible experience evidence gate
+
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/scripts/coreapp-visible-experience-template.ts`
+- `apps/core-app/scripts/coreapp-visible-experience-verify.ts`
+- `apps/core-app/package.json`
+- `docs/plan-prd/TODO.md`
+  - Added a repeatable manifest/checklist generator for CoreApp visible experience evidence, covering packaged hot/cold startup, first screen, CoreBox search states, App Index workbench, browser login recovery, CoreBox AI Ask, OmniPanel Writing Tools, Workflow Review Queue, Provider Registry observability, and provider migration evidence.
+  - The generated checklist now includes per-surface collection steps, recommended artifact filenames, and explicit blocked conditions so UI screenshots, benchmark reports, and migration summaries can be gathered consistently without treating templates as proof.
+  - Added a strict verifier that fails when required surfaces are not passed, artifact paths are missing, visual surfaces lack screenshot/recording artifacts, required checklist evidence is not checked, or referenced artifacts are missing/empty.
+  - The verifier is intentionally evidence-only: an empty generated template remains blocked and cannot be counted as real UI proof.
+  - Added `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md` to map the user-facing objective to concrete artifacts and mark missing packaged benchmark, screenshot/recording, migration, Windows, and Nexus evidence explicitly.
+
+### fix(core-app): make AI provider failure reasons more actionable
+
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.ts`
+- `apps/core-app/src/renderer/src/modules/intelligence/ai-error-recovery.ts`
+  - CoreBox result signals now map credential, secure-store, capability, and permission failure codes to readable labels and next-action hints instead of falling back to opaque reason text.
+  - CoreBox AI Ask and OmniPanel Writing Tools recovery hints now distinguish provider credential issues and permission gaps from generic provider/network failures.
+  - Added focused helper coverage for credential, secure-store, capability, and permission recovery classification.
+
+### feat(core-app): clarify CoreBox search empty states
+
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/views/box/search-state.ts`
+  - CoreBox now shows compact workbench-style status guidance for idle search, recommendation warm-up, active searching, and no-result states instead of leaving an empty result area.
+  - No-result states now expose direct recovery actions to retry the query or jump to File Index diagnostics through the existing settings deep link.
+  - The state resolver keeps feature-owned input and populated result lists out of the empty-state UI, preserving plugin and widget flows.
+  - Added focused helper coverage for search-state resolution.
+
+### feat(core-app): add App Index manager workbench filters
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppIndexManager.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-manager-display.ts`
+  - App Index manager now shows a compact workbench summary for total, needs-attention, found, unchecked, and disabled managed entries.
+  - Added source filters for UWP/Store, Steam, shortcut, protocol, AppRef, and path entries, plus diagnostic filters for attention, found, unchecked, and disabled states.
+  - Filtered empty states now distinguish between no managed entries and no entries matching the current source/diagnostic filter.
+  - Extended focused helper coverage for source/diagnostic filtering and workbench summary counts.
+
+### fix(core-app): make desktop AI failures recoverable
+
+- `apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue`
+- `apps/core-app/src/renderer/src/components/render/custom/core-intelligence-answer.ts`
+  - `apps/core-app/src/renderer/src/modules/intelligence/ai-error-recovery.ts`
+  - `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+  - CoreBox AI Ask and OmniPanel Writing Tools now share recovery hints for common auth, quota, provider, model-capability, and network failures.
+  - Unknown AI failures still keep the original backend error visible so diagnostics are not hidden behind generic copy.
+  - Added focused helper coverage for common AI error recovery classification.
+
+### fix(core-app): make CoreBox result reasons readable
+
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+  - CoreBox result status pills now map common provider, auth, quota, platform, database, and permission reason codes to readable labels.
+  - Unknown reason codes still fall back to the original compact text, preserving diagnostics for new providers.
+  - Added focused coverage for known reason-code mapping and permission-code fallback behavior.
+
+### feat(core-app): clarify Workflow Review Queue next actions
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+  - Review Queue cards now show an explicit next-action hint for pending, copied, clipboard-replaced, and failed outputs.
+  - Failed review items include the captured clipboard/action error in the hint while preserving retry copy, retry replace, and clear-failure actions.
+  - Added focused helper coverage for Review Queue next-action hint mapping.
+
+### feat(nexus): add Provider Registry observability filters
+
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+  - Provider Registry admin now exposes compact filter chips for all/attention/healthy/degraded/unhealthy/unknown providers and all/attention/completed/failed/planned/unknown scenes.
+  - Provider attention highlights degraded/unhealthy providers or failed latest usage, while scene attention highlights failed history or unknown run coverage.
+  - Empty states now distinguish between no registry data and no records matching the selected observability filter.
+  - Added focused helper coverage for provider and scene observability filtering.
+
+### fix(core-app): keep CoreBox result failure reasons visible
+
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.ts`
+  - CoreBox result status pills now show a compact inline reason when failed/degraded/permission metadata already carries an actionable cause.
+  - Failure reasons are normalized to single-line text and trimmed before rendering, so result rows stay stable while still explaining why an item is unavailable.
+  - Added focused utility coverage for compact result-signal reason formatting.
+
+### fix(core-app): make browser login recovery actionable
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/utils/transport/events/auth.ts`
+  - Browser login startup now returns the prepared device authorization URL, short user code, and expiry metadata to the renderer while keeping the existing `initiated` contract.
+  - If the system browser fails to open, the device auth polling session remains active and Settings can still show copy actions for the login URL and short code.
+  - The login dialog now surfaces a manual recovery hint plus copy-link/copy-code actions backed by the typed clipboard transport.
+  - Added focused main-process coverage for the browser-open-failure recovery contract.
+
+### test(core-app): add packaged startup benchmark harness
+
+- `apps/core-app/scripts/startup-benchmark-dev.mjs`
+- `apps/core-app/src/main/polyfills.ts`
+- `apps/core-app/package.json`
+- `docs/engineering/reports/startup-packaged-hot-runs-2026-05-17-preflight/*`
+- `docs/engineering/reports/startup-packaged-hot-runs-2026-05-17-open-a/*`
+- `docs/plan-prd/TODO.md`
+  - Extended the startup benchmark runner with explicit `--target packaged`, `--profile hot|cold`, and `--launchMethod open|exec` options while keeping the existing dev benchmark default unchanged.
+  - Packaged runs now use an isolated `TUFF_STARTUP_BENCHMARK_USER_DATA_DIR` and parse app log deltas from that profile, so cold/hot samples do not write into the user's normal CoreApp data directory.
+  - Added packaged artifact preflight that records app bundle path, executable path, expected package version, bundle version, executable bit, and version-match status before launching the app.
+  - Added `startup:bench:packaged:hot` and `startup:bench:packaged:cold` scripts for repeatable packaged startup evidence collection.
+  - Captured the current local packaged blocker: existing `apps/core-app/dist/mac-arm64/tuff.app` is still `2.4.10-beta.23` while the current package baseline is `2.4.10-beta.25`, so the preflight report blocks timing collection as `packaged_artifact_version_mismatch`; earlier direct launch evidence is kept as an auxiliary blocker note.
+
+### feat(core-app): surface Review Queue runtime cost signals
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+  - Review Queue items now carry and display Use Model latency, total token count, and review risk level from the run step output/metadata.
+  - The workbench card keeps capability/provider/model/trace context while adding cost and risk signals before copy/replace actions.
+  - Extended focused hook coverage so page-local Review Queue items preserve latency, token usage, and medium-risk output contracts.
+
+### feat(core-app): tighten App Index manager workbench signals
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppIndexManager.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-manager-display.ts`
+  - App Index managed entries now show compact source badges for UWP/Store, Steam, shortcut, protocol, AppRef, and path entries.
+  - Entry cards now show a diagnostic summary before the raw JSON block, including unchecked, found, matched-stage, and needs-attention states.
+  - Added focused helper coverage for source grouping and diagnostic summary behavior.
+
+### feat(core-app): tighten CoreBox AI answer preview feedback
+
+- `apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue`
+- `apps/core-app/src/renderer/src/components/render/custom/core-intelligence-answer.ts`
+  - CoreBox AI Ask answer cards now keep copy failures visible inside the answer preview instead of relying only on a transient toast.
+  - The preview footer now surfaces existing provider/model, latency, trace id, and input kind metadata from the AI payload so AI results align with the command-center result model.
+  - Added focused utility coverage for AI preview metadata normalization and invalid latency filtering.
+
+### feat(nexus): surface Provider Registry observability in cards
+
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+  - Provider cards now show compact latest health and latest usage summaries, including status, capability, latency, scene, and error/reference details.
+  - Scene cards now show latest run status, run/provider/capability, recent failure count, and the latest error hint before the edit/run panels.
+  - Added focused utility coverage for provider health precedence, usage-only unhealthy fallback, scene latest run selection, failure counting, and unknown empty states.
+
+### feat(nexus): add Provider Registry observability action hints
+
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/i18n/locales/{en,zh}.ts`
+  - Provider and Scene cards now show a compact next-action hint derived from health checks, usage ledger status, degraded reasons, failed runs, and unknown evidence gaps.
+  - Provider hints distinguish unhealthy credential/endpoint checks, degraded rerun guidance, healthy registry-evidence readiness, and unknown check-first states.
+  - Scene hints distinguish failed run inspection, failed-history dry-run guidance, planned-only execute guidance, completed evidence readiness, and unknown dry-run-first states.
+  - Added focused helper coverage for Provider/Scene observability action hint mapping.
+
+### feat(nexus): make Provider Registry migration evidence copyable
+
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
+- `apps/nexus/app/utils/intelligence-provider-migration.ts`
+  - Provider Registry migration dry-run/execute results now format a copyable evidence summary with mode, readiness, registry-primary safety, counts, blockers, and per-provider action details.
+  - The Intelligence admin migration panel exposes a Copy evidence action so Phase 0/1 retirement evidence can be captured without copying raw UI fragments.
+  - Added focused helper coverage for dry-run, ready execute, and failed migration evidence summaries.
+
+### feat(core-app): add CoreBox result next-action hints
+
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+  - CoreBox result status signals now derive compact next-action hints for auth, quota, provider, permission, database, platform, and indexing reasons.
+  - Result rows keep the existing dense layout while exposing the full reason plus recovery hint through the status tooltip.
+  - Added focused utility coverage for known action-hint mapping and generic failed/degraded fallbacks.
+
+### feat(core-app): clarify OmniPanel selection recovery hints
+
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/selection-recovery.ts`
+  - OmniPanel footer hints now distinguish ready, empty, unsupported, disabled, and failed selected-text capture states with explicit recovery guidance.
+  - Unsupported and failed capture states use warning/danger tone instead of looking like a generic zero-selection state.
+  - Added focused helper coverage for selected-text preview normalization and recovery hint mapping.
+
+### fix(core-app): keep OmniPanel AI clipboard failures visible
+
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+  - OmniPanel Writing Tools now keep copy/replace clipboard failures visible inside the AI preview instead of relying only on a transient toast.
+  - Retrying an AI action or clearing the preview resets the clipboard action error while preserving the existing result preview and replace-confirm flow.
+
+### fix(core-app): make Workflow Review Queue failures recoverable
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+  - Review Queue copy/replace clipboard failures now remain visible with the original error and an explicit recovery action.
+  - Failed review items expose retry copy, retry replace, and clear-failure actions without changing the existing clipboard confirmation flow.
+  - Review Queue now has status filter chips for all/pending/copied/replaced/failed items, with shared summary/filter helpers to keep the workbench state logic testable.
+  - Added focused hook coverage for failed review item recovery and confirmation-state reset.
+
+### fix(core-app): normalize browser login failure messages
+
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+  - Browser login timeout now keeps the dedicated timeout message instead of being collapsed into a generic network error.
+  - Settings login failure dialog now shows the normalized recoverable auth message instead of raw Error text.
+  - Browser-open failures use a clear retry/manual-open hint.
+
 ### feat(nexus): surface provider migration readiness in admin UI
 
 - `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
@@ -20,6 +238,21 @@
   - Added a Provider Registry migration readiness panel that distinguishes dry-run planning, blocked execution, and registry-primary ready states.
   - Exposed `readyForRegistryPrimaryReads` and machine-readable `blockers` in the dashboard so legacy `intelligence_providers` retirement is auditable before promoting registry-primary reads.
   - Added focused utility and migrate API coverage for readiness pass-through and blocker normalization.
+
+### fix(core-app): make file-search degraded notices recoverable
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/{file-provider,everything-provider}.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+  - File Index warm-up and Windows Everything unavailable CoreBox notices now include item actions that open the relevant settings/diagnostics section.
+  - CoreBox action handling supports item-level `navigate` actions without changing default Enter execution semantics.
+  - Settings honors `?section=file-index` / `?section=everything`, reveals the File Index section when advanced settings would otherwise hide it, and scrolls to the requested diagnostic block.
+
+### feat(core-app): show CoreBox result source and status signals
+
+- `apps/core-app/src/renderer/src/components/render/{BoxItem.vue,sourceMeta.ts}`
+  - CoreBox default result rows now surface compact status signals for failed/degraded/elevated-permission/system results next to the existing source badge.
+  - The signal resolver uses existing `source.permission`, `meta.security.permissions`, and provider `meta.extension` status/reason fields, avoiding new TuffItem protocol fields.
+  - Added focused renderer utility coverage for source label fallback and failed/degraded/permission/system signal mapping.
 
 ### fix(nexus): prevent dashboard asset icon dark-mode filter leak
 
