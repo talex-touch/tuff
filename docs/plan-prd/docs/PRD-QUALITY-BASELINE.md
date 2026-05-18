@@ -23,6 +23,7 @@
 - `2.5.3` 本地知识检索方向已锁定：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 是增强项；MVP 不引入独立向量数据库服务。
 - `2.5.5` 本地模型运行时方向已锁定：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重不得进入安装包、同步载荷或普通日志。
 - `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
+- App Data Plugins 与 Everything 收口已新增 Roadmap：新增 Browser Data、Obsidian、VSCode、macOS App Data、Epic 等数据源必须显式授权、只读优先、可清理索引、可见 degraded/unsupported reason；Windows Everything 必须明确 SDK/CLI 策略、路径授权过滤与真机 evidence。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
 - 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；独立 OmniPanel Gate workflow 已于 2026-05-18 删除，不再作为 GitHub Actions 自动门禁；若既有失败阻断，必须记录失败项与最近路径替代验证。
 - 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用；`v2.4.10` release workflow 成功不代表 npm 子包发布成功，当前公共子包缺失版本需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
@@ -65,6 +66,7 @@
 - 生产路径不得返回固定假值成功、mock 支付 URL、伪成功空结果或可消费业务 payload。
 - 不可用能力必须返回明确 status、`unavailable + reason`、`unsupported/degraded reason` 或 migration target。
 - Windows/macOS release-blocking 能力必须有真实设备证据；Linux 差异可 best-effort，但必须有用户可见 reason 与 smoke 记录。
+- 新增 App Data 插件不得默认扫描敏感数据；浏览器历史、macOS Notes/Reminders/Calendar/Contacts、VSCode workspace、Obsidian vault 等必须有用户启用、索引范围、清理入口和错误降级说明；不得把完整业务明文 dump 到普通 JSON、localStorage、日志或同步 payload。
 - 动态执行能力必须有明确输入约束、sandbox/facade、审计或替换计划；PreviewSDK ability 必须声明 parser/sandbox/network/cache 依赖、输入长度、语法约束、是否网络/缓存/动态执行与替换计划。BasicExpression 已替换为小型 parser，单位公式已统一为静态转换核心；`new Function` 仅允许出现在 widget runtime sandbox 等已声明运行时边界中。
 
 ### 4.5 Milestone 质量口径

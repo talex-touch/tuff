@@ -26,6 +26,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
 | AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR；2.5.3 / 2.5.5 / 2.5.8 拆分本地知识检索、本地模型运行时与 ASR |
 | Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场与高级策略 |
+| 插件数据源目标 | 官方插件扩展本地 App 数据搜索，并把 Windows Everything 收口到可诊断、可回归、可受控发布 | 已新增 App Data Plugins 与 Everything Roadmap；先推进 Browser Data、Obsidian、VSCode、macOS App Data、Epic 插件规划与 Everything SDK/CLI/路径过滤/evidence 收口 |
 
 ## 3. 当前版本路线
 
@@ -116,6 +117,21 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 新增接口继续走 typed transport / domain SDK，并复用现有 Provider / Capability / Audit / Workflow 路由。
 - 不实现本地知识库索引、Context Builder、ASR 或 TTS；这些分别归属 2.5.3 与 2.5.8。
 
+### App Data Plugins 与 Everything 收口 - 官方数据源插件路线
+
+**目标**：让 CoreBox 从“应用 + 文件 + 插件功能”扩展到“用户显式授权的本地 App 数据”，并把 Windows Everything 文件搜索从已接入推进到生产化收口。
+
+**方向**：
+
+- 先建立统一数据源/索引诊断基线：source health、permissionState、lastIndexedAt、itemCount、lastError、disable/clear/rebuild 语义。
+- Browser Data 优先真实浏览器书签/历史索引；现有 `touch-browser-bookmarks` 自有收藏保留为 manual/pinned 数据源，不伪装成浏览器真实数据。
+- Obsidian 插件覆盖 vault、Markdown heading/tag/frontmatter/backlink 与 `obsidian://` 打开。
+- VSCode 插件覆盖本地 extensions 与 recent workspaces/projects；Marketplace 搜索不进入首版。
+- macOS App Data 先调研 Notes/Reminders/Calendar/Contacts 的权限与本地只读可行性；无法给出授权/降级 reason 时不接入。
+- Epic 插件先澄清 Epic 指向；若是 Unreal 本地项目，优先 `.uproject` 与最近项目。
+- Everything 收口明确 SDK vs CLI 策略、路径授权过滤、diagnostic evidence 与 Windows 真机回归。
+- 非目标：不包含更新系统 Nexus Hard-Cut；不做跨 App 写回、账号同步或未授权扫描。
+
 ### 2.5.8 - ASR Provider Runtime
 
 **目标**：把语音转文字抽成独立 ASR Provider Runtime，支持本地 `whisper.cpp` 与云端 ASR provider，并让用户按隐私、准确率、成本和设备性能选择策略。
@@ -144,6 +160,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - 2026-05-16 兼容性/占位实现 live-tree 审计未发现新的 P0 假成功；`2.4.11` 首切建议聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
+- App Data Plugins 与 Everything 已新增专题 Roadmap，近期不进入更新系统 Nexus Hard-Cut 范围；Browser Data、Obsidian、VSCode、macOS App Data、Epic 与 Everything 生产化收口按插件/搜索主线推进。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。
 
 ## 6. 关联入口
