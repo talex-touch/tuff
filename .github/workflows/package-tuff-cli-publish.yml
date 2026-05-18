@@ -152,6 +152,11 @@ jobs:
               done
             fi
 
+            if [ "${package}" = "@talex-touch/tuff-cli" ]; then
+              echo "Building @talex-touch/tuff-cli-core for CLI bundle..."
+              pnpm --filter "@talex-touch/tuff-cli-core" run build
+            fi
+
             echo "Building ${package}..."
             pnpm --filter "${package}" run build
 
