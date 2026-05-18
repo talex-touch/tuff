@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-05-16
+> 更新时间：2026-05-18
 > 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
 
 ## 1. 适用范围
@@ -17,7 +17,7 @@
 ## 2. 当前强口径
 
 - 当前基线：`2.4.10`。
-- `2.4.10` release blocker 只聚焦 Windows 真机 evidence、性能 evidence、final acceptance gate 与 Nexus Release Evidence。
+- `2.4.10` 已作为当前稳定基线，当前质量主线转入 `2.4.11` 债务退场与 `2.5.0` AI scope 约束。
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 为 documented best-effort。
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
 - `2.5.3` 本地知识检索方向已锁定：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 是增强项；MVP 不引入独立向量数据库服务。
@@ -67,25 +67,14 @@
 - Windows/macOS release-blocking 能力必须有真实设备证据；Linux 差异可 best-effort，但必须有用户可见 reason 与 smoke 记录。
 - 动态执行能力必须有明确输入约束、sandbox/facade、审计或替换计划；PreviewSDK ability 必须声明 parser/sandbox/network/cache 依赖、输入长度、语法约束、是否网络/缓存/动态执行与替换计划。BasicExpression 已替换为小型 parser，单位公式已统一为静态转换核心；`new Function` 仅允许出现在 widget runtime sandbox 等已声明运行时边界中。
 
-### 4.5 Windows 2.4.10 release evidence
+### 4.5 Milestone 质量口径
 
-正式 `2.4.10` 不得只凭 unit test、macOS 代跑或口头确认放行。必须具备：
+后续 release/milestone 需要新增或调整质量门槛时，必须同步 `TODO`、`CHANGES`、Roadmap 与本文件，并明确：
 
-- Windows acceptance collection plan。
-- Windows required cases 与 capability evidence。
-- Everything target probe。
-- App Index diagnostic evidence。
-- common app launch manual evidence。
-- copied app path / local launch area evidence。
-- update install evidence。
-- DivisionBox detached widget evidence。
-- time-aware recommendation evidence。
-- search trace `200` 样本与 `search-trace-stats/v1`。
-- clipboard stress `120000ms` 与 `clipboard-stress-summary/v1`。
-- `windows:acceptance:verify` final gate passed。
-- Nexus Release Evidence 写入。
-
-模板占位、`N/A`、`TODO`、`TBD`、`-`、`待补`、`无` 不得作为有效 evidence。
+- 平台验证范围。
+- 性能预算和验收脚本。
+- 人工验证与自动校验的边界。
+- 不接受模板占位、`N/A`、`TODO`、`TBD`、`-`、`待补`、`无` 作为有效结果。
 
 ### 4.6 启动与性能
 

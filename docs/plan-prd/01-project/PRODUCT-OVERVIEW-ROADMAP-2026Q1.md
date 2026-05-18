@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-05-16
+> 更新时间：2026-05-18
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -22,32 +22,27 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
 | 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
-| 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；release evidence 继续补齐 |
-| 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前不抢 `2.4.10` Windows evidence gate |
+| 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`2.4.10` 作为当前稳定基线 |
+| 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
 | AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR；2.5.3 / 2.5.5 / 2.5.8 拆分本地知识检索、本地模型运行时与 ASR |
 | Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场与高级策略 |
 
 ## 3. 当前版本路线
 
-### 2.4.10 - Windows App 索引与 release evidence
+### 2.4.10 - 稳定基线
 
-**目标**：完成 Windows App 搜索/启动体验与正式 release evidence 闭环。
+**目标**：作为当前稳定基线，承接已完成的 Windows App 搜索/启动体验、基础 legacy/compat 收口与发版准备。
 
-**Release blockers**：
+**已纳入基线**：
 
-- Windows acceptance collection plan。
-- FileProvider 编译边界已恢复：`file-provider.ts` 已恢复等价导出，`typecheck:node` 已通过；继续补文件搜索最近路径与 Windows fallback 验收。
-- Windows case/manual/performance evidence。
-- Everything target probe、App Index diagnostic、common app launch、copied app path、UWP/Store、Steam、update install、DivisionBox detached widget、time-aware recommendation。
-- search trace `200` 样本。
-- clipboard stress `120000ms`。
-- `windows:acceptance:verify` final gate。
-- Nexus Release Evidence 写入。
+- Windows App 索引与启动体验。
+- FileProvider 编译边界恢复：`file-provider.ts` 已恢复等价导出，`typecheck:node` 已通过。
+- 基础 legacy/compat 收口与 release 准备口径。
 
 **非目标**：
 
-- 不把全部跨平台回归压进 `2.4.10`。
-- 不把 `2.5.0` AI、Provider 高级策略、SRP 大拆分升级为 `2.4.10` blocker。
+- 不继续把 `2.4.10` 项目保留在当前执行清单。
+- 不把 `2.5.0` AI、Provider 高级策略、SRP 大拆分回填为 `2.4.10` 工作。
 
 ### 2.4.11 - 债务退场与跨平台阻塞回归
 
@@ -144,10 +139,9 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ## 5. 当前状态快照
 
 - 当前基线：`2.4.10`。
-- `2.4.10` 正式版发布准备已启动；`2.4.11-beta.1` 保留为已验证 beta pre-release 记录，后续 `2.4.11` 继续收口 legacy/compat/size 债务。
+- `2.4.10` 已作为当前稳定基线；`2.4.11-beta.1` 保留为已验证 beta pre-release 记录，后续 `2.4.11` 继续收口 legacy/compat/size 债务。
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - 2026-05-16 兼容性/占位实现 live-tree 审计未发现新的 P0 假成功；`2.4.11` 首切建议聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片。
-- Windows App Search & Launch Beta 已进入实现态：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单等仍需真机 evidence。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。
 

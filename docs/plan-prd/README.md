@@ -1,6 +1,6 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-05-16
+> 更新时间：2026-05-18
 > 定位：PRD / 规划主入口。历史长文已下沉到 `CHANGES` 与专题文档；当前执行项以 `TODO.md` 为准。
 
 ## 快速入口
@@ -14,34 +14,24 @@
 
 ## 当前单一口径
 
-- 当前基线：`2.4.10`。
-- 当前主线：`2.4.10` 优先解决 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
-- 当前 release blocker：Windows 真机 acceptance evidence、search trace `200` 样本、clipboard stress `120000ms`、`windows:acceptance:verify` final gate、Nexus Release Evidence 写入。
-- 下一版本门槛：`2.4.11` 前关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 保持 documented best-effort。
-- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准。
-- 范围约束：`2.5.0` AI、Provider Registry 高级策略、SRP 大拆分可继续规划/小切片，但不得抢占正式 `2.4.10` Windows evidence gate。
+- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）。
+- 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。
+- 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR，Workflow/Skills/Automation 保持 Beta。
+- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
+- 范围约束：`2.5.0` AI、Provider Registry 高级策略、SRP 大拆分可继续规划/小切片，但不得抢占 `2.4.11` 稳定化与债务退场主线。
 
 ## 当前主线（2 周）
 
-1. 生成 Windows acceptance collection plan。
-2. 采集 Windows case/manual/performance evidence。
-3. 运行 `windows:acceptance:verify` final gate。
-4. 写入 Nexus Release Evidence。
-5. 继续收敛 `2.4.11` legacy/compat/size 债务，不新增 legacy/raw channel/旧 storage/旧 SDK bypass；旧自动清册不再作为 live SoT。
-6. `2.4.11` 首切建议聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片，不再做泛化 placeholder 扫描。
+1. 继续收敛 `2.4.11` legacy/compat/size 债务，不新增 legacy/raw channel/旧 storage/旧 SDK bypass；旧自动清册不再作为 live SoT。
+2. 聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片，不再做泛化 placeholder 扫描。
+3. 补齐 Windows/macOS 阻塞级人工回归；Linux 仅记录 best-effort smoke 与桌面环境限制。
+4. 推进 `2.5.0` AI 桌面入口小切片，但 Stable 范围保持文本 + OCR。
 
 详见：[TODO](./TODO.md)。
 
 ## 未闭环能力
 
-### P0 - 2.4.10
-
-- Windows 真机 evidence 闭环：acceptance manifest、common app launch、copied app path、Everything target probe、update install、DivisionBox detached widget、time-aware recommendation、search trace 与 clipboard stress。
-- Windows App 索引与启动体验：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单已进入实现态，仍需真机验收。
-- FileProvider 最近路径：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复 `fileProvider` 等价导出，仍需按发版节奏补文件搜索最近路径与 Windows fallback 验收。
-- Release Evidence：需要凭证/API key 写入 documentation review、platform matrix、CoreApp targeted tests 与 Windows 真机 evidence。
-
-### P1 - 2.4.11
+### P0 - 2.4.11
 
 - Windows/macOS 阻塞级人工回归证据闭环。
 - Linux best-effort smoke 与限制说明。
@@ -50,8 +40,9 @@
 - 插件 shell capability 诊断统一。
 - Transport Wave A retained alias/hard-cut 继续推进。
 - CoreApp 启动异步化真机 benchmark 与长尾补证。
+- 公共 npm 子包补发：`@talex-touch/utils@1.0.50`、`@talex-touch/tuffex@0.3.5`、`@talex-touch/unplugin-export-plugin@1.2.16`、`@talex-touch/tuff-cli@0.0.3`、`@talex-touch/tuff-core@0.0.1`、`@talex-touch/tuff-intelligence@0.0.2` 仍需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
 
-### P2+
+### P1+
 
 - Tuff 2.5.0 AI 桌面入口：CoreBox AI Ask、handoff session、Nexus invoke credits 扣减、CoreApp credits summary、Tuff-native Tool Kit foundation、Nexus docs prerender routes 与 OmniPanel Writing Tools MVP 已进入 dev 切片，后续 Workflow `Use Model`、完整 Review Queue 与 P0 模板。
 - Tuff 2.5.3 本地知识检索：方向已锁定为 SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，不把向量数据库作为 MVP 第一优先级。

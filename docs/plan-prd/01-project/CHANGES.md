@@ -13,6 +13,18 @@
 
 ## 2026-05-18
 
+### docs: move active roadmap to 2.4.11 stabilization
+
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Updated active planning docs so `2.4.10` is treated as the current stable baseline.
+  - Moved the current 2-week execution window to `2.4.11` stabilization: legacy/compat/size debt, platform regression, secret backend, shell capability diagnostics, PreviewSDK/runtime safety, transport alias hard-cut, and startup benchmark follow-up.
+  - Kept `2.5.0` AI work as scoped dev slices that must not displace the `2.4.11` stabilization line; Stable remains text + OCR.
+
 ### release: prepare 2.4.10 stable line
 
 - `.github/workflows/package-utils-publish.yml`
@@ -29,8 +41,11 @@
   - Root/CoreApp version has been set to `2.4.10` for the stable release line after explicit approval to backfill a lower stable version from the current `2.4.11-beta.1` working tree.
   - Release notes now record that npm package upload is blocked until npm credentials are refreshed; local package dry-runs passed for the publishable subpackages.
   - Local macOS release build completed with `--publish=never`; generated `apps/core-app/dist/mac-arm64/tuff.app` and `apps/core-app/dist/tuff.app.zip`, both reporting `2.4.10` bundle/app version. The mac builder config currently targets `dir`, with zip produced by post-processing.
+  - GitHub Actions `Build and Release` for `v2.4.10` completed successfully on Windows/macOS/Linux, published GitHub Release `Release v2.4.10`, and synced Nexus release metadata successfully. Release assets include Windows setup, macOS app zip, Linux AppImage/deb, update YAML files, builder debug files, and `tuff-release-manifest.json`.
   - Package publish workflows now publish when the current package version is missing from npm even if `package.json` did not change relative to the pushed base; the CLI/build-tool workflow also includes `@talex-touch/tuff-core`.
-  - Existing Windows/Nexus release evidence blockers remain documented and must not be treated as implicitly closed by the version switch.
+  - Public npm package publication remains blocked by the repository `NPM_TOKEN`: GitHub package publish runs reached `npm publish` but npm returned `E404 Not Found - PUT https://registry.npmjs.org/@talex-touch%2f...`, which indicates the token cannot publish the `@talex-touch` scope/current packages. Target versions still missing from npm: `@talex-touch/utils@1.0.50`, `@talex-touch/tuffex@0.3.5`, `@talex-touch/unplugin-export-plugin@1.2.16`, `@talex-touch/tuff-cli@0.0.3`, `@talex-touch/tuff-core@0.0.1`, `@talex-touch/tuff-intelligence@0.0.2`.
+  - Fixed the `Tuff CLI Package CI` lint failure from the release push by aligning newly added CLI i18n `remoteFailure` keys with the repository `quote-props` style; `pnpm -C "packages/tuff-cli" run lint` passed, and tests were not run per request.
+  - Active planning docs now treat `2.4.10` as the current stable baseline; follow-up execution moved to `2.4.11` stabilization and npm package publish recovery.
 
 ### fix(cli): validate Nexus login state and publisher auth preflight
 
