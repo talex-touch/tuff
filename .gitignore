@@ -63,6 +63,7 @@ apps/core-app/src/renderer/src/distinformation.json
 # Cache / Tooling
 # ========================
 .cache/
+.venv/
 .parcel-cache/
 .temp/
 tmp/
@@ -104,6 +105,9 @@ tmp/
 .playwright-mcp/
 .playwright/
 /apps/core-app/.playwright-mcp/
+/apps/.workflow/.debug/
+/apps/nexus/.workflow/
+/apps/nexus/--port/
 /index.js
 /paseo.json
 .spec*
@@ -123,6 +127,9 @@ tmp/
 readme.local.md
 .doc.local/
 output/
+state/
+coreapp-browser-smoke-*.png
+docs/engineering/reports/**/user-data/
 
 # ========================
 # Project-specific (nexus)
