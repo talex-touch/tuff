@@ -252,6 +252,7 @@ export class TpexProvider implements PluginProvider {
         version: targetVersion.version,
         channel: targetVersion.channel,
         packageSize: targetVersion.packageSize,
+        signature: targetVersion.signature,
         installs: plugin.installs,
       },
     }

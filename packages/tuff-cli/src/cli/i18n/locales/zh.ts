@@ -90,6 +90,7 @@ export default {
     authInvalid: '本地登录态已不可用：{reason}',
     authReloginConfirm: '是否清除本地登录态并重新登录？',
     authCleared: '已清除本地登录态。',
+    authIssuedTokenRejected: 'Nexus 拒绝了当前 CLI Token。浏览器授权 Token 请检查 Nexus 的 APP_AUTH_JWT_SECRET/AUTH_SECRET 配置和设备状态；API Key 请检查 plugin:read/plugin:publish scopes。',
   },
   remoteFailure: {
     'missing-token': '未找到登录 Token',

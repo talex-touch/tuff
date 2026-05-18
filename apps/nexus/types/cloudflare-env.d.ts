@@ -9,6 +9,8 @@ declare global {
     IMAGES?: R2Bucket
     PACKAGES?: R2Bucket
     PLUGIN_PACKAGES?: R2Bucket
+    APP_AUTH_JWT_SECRET?: string
+    AUTH_SECRET?: string
     RELEASE_SIGNATURE_PUBLIC_KEY?: string
     UPDATE_SIGNATURE_PUBLIC_KEY?: string
     PROVIDER_REGISTRY_SECURE_STORE_KEY?: string

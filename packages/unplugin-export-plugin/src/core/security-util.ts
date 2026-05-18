@@ -13,7 +13,7 @@ export function generateFilesSha256(filePaths: string[], baseDir: string): Recor
   for (const filePath of filePaths) {
     const fileContent = fs.readFileSync(filePath)
     const hash = crypto.createHash('sha256').update(fileContent).digest('hex')
-    const relativePath = path.relative(baseDir, filePath)
+    const relativePath = path.relative(baseDir, filePath).replace(/\\/g, '/')
     hashes[relativePath] = `sha256-${hash}`
   }
   return hashes

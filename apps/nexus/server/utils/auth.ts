@@ -7,6 +7,7 @@ import { createError, getHeader } from 'h3'
 import { consumeLoginToken, createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
 import { validateApiKey } from './apiKeyStore'
 import { hasRequiredScope } from './apiKeyScopes'
+import { readCloudflareBindings } from './cloudflare'
 import { ensurePersonalTeam } from './creditsStore'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
@@ -61,24 +62,47 @@ async function resolveSessionUserByEmail(event: H3Event, email: string, name: st
   }
 }
 
-function getAppJwtSecret(): string {
-  const config = useRuntimeConfig()
+function normalizeSecret(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  return trimmed.length >= APP_SECRET_MIN_LENGTH ? trimmed : null
+}
+
+function isProductionRuntime() {
+  return process.env.NODE_ENV === 'production' || process.env.NITRO_PRESET === 'cloudflare-pages'
+}
+
+function getAppJwtSecret(event?: H3Event): string {
+  const config = useRuntimeConfig(event)
+  const bindings = event ? readCloudflareBindings(event) : undefined
   const secretCandidates = [
     config.appAuthJwtSecret,
+    bindings?.APP_AUTH_JWT_SECRET,
+    process.env.APP_AUTH_JWT_SECRET,
     config.auth?.secret,
+    bindings?.AUTH_SECRET,
+    process.env.AUTH_SECRET,
   ]
 
   for (const candidate of secretCandidates) {
-    if (typeof candidate === 'string' && candidate.length >= APP_SECRET_MIN_LENGTH) {
-      return candidate
-    }
+    const secret = normalizeSecret(candidate)
+    if (secret)
+      return secret
+  }
+
+  if (isProductionRuntime()) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'APP_AUTH_JWT_SECRET or AUTH_SECRET must be configured for app token authentication.',
+    })
   }
 
   if (!ephemeralJwtSecret) {
     ephemeralJwtSecret = base64UrlEncode(randomBytes(32))
     if (!appSecretWarned) {
       appSecretWarned = true
-      console.warn('[auth] APP_AUTH_JWT_SECRET/Auth secret missing or too short, using ephemeral secret.')
+      console.warn('[auth] APP_AUTH_JWT_SECRET/Auth secret missing or too short, using development-only ephemeral secret.')
     }
   }
   return ephemeralJwtSecret
@@ -179,7 +203,7 @@ export async function createAppToken(
     deviceMeta?: { deviceName?: string | null; platform?: string | null; clientType?: 'app' | 'cli' | 'external' | null }
   }
 ): Promise<string> {
-  const secret = getAppJwtSecret()
+  const secret = getAppJwtSecret(event)
   const now = Math.floor(Date.now() / 1000)
   const hasExplicitDeviceId = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'deviceId'))
   const deviceId = hasExplicitDeviceId ? options?.deviceId ?? null : readDeviceId(event)
@@ -212,8 +236,8 @@ export async function createAppToken(
   return `${signingInput}.${base64UrlEncode(signature)}`
 }
 
-function verifyAppToken(token: string): AppTokenPayload | null {
-  const secret = getAppJwtSecret()
+function verifyAppToken(event: H3Event, token: string): AppTokenPayload | null {
+  const secret = getAppJwtSecret(event)
 
   const parts = token.split('.')
   if (parts.length !== 3) {
@@ -295,7 +319,7 @@ export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  const payload = verifyAppToken(bearerToken)
+  const payload = verifyAppToken(event, bearerToken)
   if (!payload?.sub) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }

@@ -37,7 +37,7 @@ The Nexus deployment reads configuration from `.env*` files locally and from Clo
 Required in production:
 - `AUTH_SECRET` (>= 16 chars, session + token signing fallback)
 - `AUTH_ORIGIN` (public base URL; required by Passkeys)
-- `APP_AUTH_JWT_SECRET` (recommended, >= 16 chars; avoids ephemeral JWT secret)
+- `APP_AUTH_JWT_SECRET` (required for production app/CLI JWTs, >= 16 chars; keep identical across all Cloudflare Pages deployments/isolates)
 - `NUXT_INTELLIGENCE_ENCRYPT_KEY` (recommended, encrypts AI provider API keys)
 - `ADMINSECRET` (required if you enable first-user admin bootstrap flow)
 

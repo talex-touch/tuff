@@ -669,6 +669,8 @@ async function runDeviceAuthLogin(): Promise<boolean> {
         }
 
         await saveTokenLogin(result.token)
+        if (!(await validateSavedToken('login')))
+          return false
         printInfo(t('onboarding.tokenWarning'))
         if (result.grantType === 'short') {
           printWarning(t('onboarding.authModeShortHint', {
@@ -707,7 +709,7 @@ async function ensureAuthenticated(): Promise<boolean> {
   const existingToken = await getAuthToken()
   if (existingToken) {
     printInfo(t('notice.authChecking'))
-    const authCheck = await fetchAccountProfile()
+    const authCheck = await fetchAuthProbe()
     if (authCheck.ok)
       return true
 
@@ -747,6 +749,8 @@ async function ensureAuthenticated(): Promise<boolean> {
       validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
     })
     await saveTokenLogin(token, baseUrl)
+    if (!(await validateSavedToken('login')))
+      return false
     printInfo(t('onboarding.tokenWarning'))
     printInfo(t('onboarding.loginSuccess'))
     return true
@@ -812,6 +816,61 @@ function formatRemoteFailure(result: RemoteFailure): string {
   const status = typeof result.status === 'number' ? `HTTP ${result.status}` : ''
   const detail = result.message || status
   return detail ? `${label} (${detail})` : label
+}
+
+function isApiKeyToken(token: string): boolean {
+  return token.trim().startsWith('tuff_')
+}
+
+async function fetchPublisherAuthProbe(token: string): Promise<AccountProfileResult> {
+  try {
+    const response = await networkClient.request<{ userId?: string, role?: string | null }>({
+      method: 'GET',
+      url: `${getTuffBaseUrl()}/api/dashboard/auth/publisher`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      validateStatus: ALL_HTTP_STATUS,
+    })
+    if (response.status < 200 || response.status >= 300)
+      return mapRemoteFailure(response.status, response.data)
+    return {
+      ok: true,
+      profile: {
+        id: response.data?.userId,
+        role: response.data?.role ?? null,
+      },
+    }
+  }
+  catch (error) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
+async function fetchAuthProbe(): Promise<AccountProfileResult> {
+  const token = await getAuthToken()
+  if (!token)
+    return { ok: false, reason: 'missing-token' }
+  if (isApiKeyToken(token))
+    return await fetchPublisherAuthProbe(token)
+  return await fetchAccountProfile()
+}
+
+async function validateSavedToken(context: 'login' | 'startup'): Promise<boolean> {
+  const authCheck = await fetchAuthProbe()
+  if (authCheck.ok)
+    return true
+
+  if (context === 'login') {
+    await clearAuthToken()
+    printWarning(t('notice.authInvalid', { reason: formatRemoteFailure(authCheck) }))
+    printWarning(t('notice.authIssuedTokenRejected'))
+  }
+  return false
 }
 
 async function fetchAccountProfile(): Promise<AccountProfileResult> {
@@ -903,6 +962,8 @@ async function runLoginCommand(args: string[]): Promise<void> {
 
   if (token) {
     await saveTokenLogin(token)
+    if (!(await validateSavedToken('login')))
+      return
     printInfo(t('onboarding.tokenWarning'))
     printInfo(t('onboarding.loginSuccess'))
     return
