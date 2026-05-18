@@ -13,6 +13,19 @@
 
 ## 2026-05-18
 
+### docs: add App Data Plugins and Everything roadmap
+
+- `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added a focused roadmap for new official app-data plugins and Windows Everything production hardening.
+  - Scoped the plugin line to Browser Data, Obsidian, VSCode, macOS App Data, and Epic clarification, with a shared source health/index diagnostics baseline.
+  - Scoped Everything follow-up to SDK-vs-CLI decision, packaging/CLI guidance, path authorization filtering, diagnostic evidence, performance baseline, and Windows real-device regression.
+  - Explicitly excluded update-system Nexus Hard-Cut from this roadmap.
+
 ### docs: move active roadmap to 2.4.11 stabilization
 
 - `docs/plan-prd/README.md`
