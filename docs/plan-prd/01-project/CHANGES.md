@@ -13,6 +13,18 @@
 
 ## 2026-05-18
 
+### chore(ci): retire standalone OmniPanel Gate workflow
+
+- `.github/workflows/omnipanel-gate.yml`
+- `.github/workflows/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Removed the standalone `OmniPanel Gate / OmniPanel Stable MVP Gate` GitHub Actions workflow entirely.
+  - OmniPanel scoped typecheck/lint/unit/build/smoke no longer runs as an automatic push/PR/manual quality gate.
+  - The current quality baseline now relies on ordinary nearest-path validation or explicit local commands for OmniPanel regressions, while `quality:release` remains the release/milestone entry with documented existing lint debt handling.
+  - Also recorded the current published baseline as `2.4.11-beta.1` in TODO/Roadmap/Quality Baseline.
+
 ### fix(core-app): add packaged auth recovery evidence mode
 
 - `apps/core-app/src/main/modules/auth/index.ts`

@@ -5,10 +5,10 @@
 
 ## 当前执行窗口
 
-- 当前基线：`2.4.10-beta.25`。
+- 当前基线：`2.4.11-beta.1`。
 - 当前主线：`2.4.10` 聚焦 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。
-- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；旧 compat registry / legacy allowlist / size allowlist 已退场，不再作为 live SoT；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 与可见体验工作台优化只能以 dev 小切片推进，不得抢占当前 release gate。
+- 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；旧 compat registry / legacy allowlist / size allowlist 已退场，不再作为 live SoT；2026-05-18 已按维护决策删除独立 `.github/workflows/omnipanel-gate.yml`，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 与可见体验工作台优化只能以 dev 小切片推进，不得抢占当前 release gate。
 
 ## P0 - 2.4.10 Release Blockers
 
@@ -65,7 +65,7 @@
 - Quick Launch 搜索引擎模式、补全隔离、图标与旧结果清理已完成。
 - 插件禁用后 CoreBox push items 门禁已完成。
 - Nexus docs prerender routes 与 docs 切换性能优化已完成。
-- 2.4.8 OmniPanel Gate、v2.4.7 Gate A/B/C/D/E、2.4.9 插件完善主线为 historical done。
+- 2.4.8 OmniPanel Gate、v2.4.7 Gate A/B/C/D/E、2.4.9 插件完善主线为 historical done；2026-05-18 起独立 OmniPanel Gate workflow 已删除，后续 OmniPanel 回归按普通最近路径本地/PR 验证或显式手动命令执行，不再作为自动质量门禁。
 
 ## 长期债务入口
 
