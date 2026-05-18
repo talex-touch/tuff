@@ -48,9 +48,13 @@ const { appMock, touchEventBusMock, getMainConfigMock, getDockIconMock, trayInst
 
 vi.mock('electron', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
-  const electronModule = original?.default ?? original
+  const electronModule = (original?.default ?? original) as Record<string, unknown>
+  const electronRecord = electronModule as {
+    ipcMain?: unknown
+    MessageChannelMain?: unknown
+  }
   const ipcMain =
-    electronModule?.ipcMain ??
+    electronRecord.ipcMain ??
     ({
       on: vi.fn(),
       once: vi.fn(),
@@ -96,7 +100,7 @@ vi.mock('electron', async (importOriginal) => {
       }
     },
     ipcMain,
-    MessageChannelMain: electronModule?.MessageChannelMain ?? MockMessageChannelMain
+    MessageChannelMain: electronRecord.MessageChannelMain ?? MockMessageChannelMain
   }
 })
 
@@ -166,7 +170,7 @@ function createInitContext(
   return {
     runtime: { app: touchApp },
     app: touchApp
-  } as ModuleInitContext<TalexEvents>
+  } as unknown as ModuleInitContext<TalexEvents>
 }
 
 describe('TrayManager', () => {

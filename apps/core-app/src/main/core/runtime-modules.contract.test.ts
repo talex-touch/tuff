@@ -2,6 +2,7 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  symlinkSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
@@ -277,6 +278,106 @@ describe('runtime module manifest contract', () => {
 
     expect(names).toEqual(['promoted-runtime', 'promoted-child', 'required-peer'])
     expect(names).not.toContain('optional-peer')
+  })
+
+  it('resolves transitive dependencies from a symlinked pnpm package real path first', async () => {
+    const paths = createTempWorkspace()
+    const pnpmStore = path.join(paths.workspaceNodeModules, '.pnpm')
+    const runtimeRootReal = await createPackage(
+      path.join(pnpmStore, 'runtime-root@1.0.0/node_modules'),
+      'runtime-root',
+      {
+        dependencies: {
+          'versioned-child': '1.0.0'
+        }
+      }
+    )
+
+    await createPackage(path.join(pnpmStore, 'runtime-root@1.0.0/node_modules'), 'versioned-child', {
+      version: '1.0.0',
+      dependencies: {
+        'runtime-grandchild': '1.0.0'
+      }
+    })
+    await createPackage(
+      path.join(pnpmStore, 'versioned-child@2.0.0/node_modules'),
+      'versioned-child',
+      {
+        version: '2.0.0'
+      }
+    )
+    await createPackage(paths.workspaceNodeModules, 'runtime-grandchild')
+
+    symlinkSync(runtimeRootReal, path.join(paths.targetNodeModules, 'runtime-root'))
+    symlinkSync(
+      path.join(pnpmStore, 'versioned-child@2.0.0/node_modules/versioned-child'),
+      path.join(paths.workspaceNodeModules, 'versioned-child')
+    )
+
+    const closure = collectResourceResolvableRuntimeModuleEntries(['runtime-root'], {
+      ...paths,
+      rootSourceDir: paths.projectRoot
+    })
+    const childEntry = closure.find((entry: { name: string }) => entry.name === 'versioned-child')
+
+    expect(childEntry?.pkgJson.version).toBe('1.0.0')
+    expect(closure.map((entry: { name: string }) => entry.name)).toEqual([
+      'runtime-root',
+      'versioned-child',
+      'runtime-grandchild'
+    ])
+  })
+
+  it('keeps traversing duplicate resource package instances before flattening by name', async () => {
+    const paths = createTempWorkspace()
+    const pnpmStore = path.join(paths.workspaceNodeModules, '.pnpm')
+
+    const runtimeRootA = await createPackage(
+      path.join(pnpmStore, 'runtime-root-a@1.0.0/node_modules'),
+      'runtime-root-a',
+      {
+        dependencies: {
+          'duplicate-child': '2.0.0'
+        }
+      }
+    )
+    const runtimeRootB = await createPackage(
+      path.join(pnpmStore, 'runtime-root-b@1.0.0/node_modules'),
+      'runtime-root-b',
+      {
+        dependencies: {
+          'duplicate-child': '1.0.0'
+        }
+      }
+    )
+
+    await createPackage(path.join(pnpmStore, 'runtime-root-a@1.0.0/node_modules'), 'duplicate-child', {
+      version: '2.0.0'
+    })
+    await createPackage(path.join(pnpmStore, 'runtime-root-b@1.0.0/node_modules'), 'duplicate-child', {
+      version: '1.0.0',
+      dependencies: {
+        'duplicate-grandchild': '1.0.0'
+      }
+    })
+    await createPackage(paths.workspaceNodeModules, 'duplicate-grandchild')
+
+    symlinkSync(runtimeRootA, path.join(paths.targetNodeModules, 'runtime-root-a'))
+    symlinkSync(runtimeRootB, path.join(paths.targetNodeModules, 'runtime-root-b'))
+
+    const closure = collectResourceResolvableRuntimeModuleEntries(
+      ['runtime-root-a', 'runtime-root-b'],
+      {
+        ...paths,
+        rootSourceDir: paths.projectRoot
+      }
+    )
+    const duplicateChildVersions = closure
+      .filter((entry: { name: string }) => entry.name === 'duplicate-child')
+      .map((entry: { pkgJson: { version: string } }) => entry.pkgJson.version)
+
+    expect(duplicateChildVersions).toEqual(['2.0.0', '1.0.0'])
+    expect(closure.map((entry: { name: string }) => entry.name)).toContain('duplicate-grandchild')
   })
 
   it('syncs dependencies for runtime modules that were promoted to resources node_modules', async () => {

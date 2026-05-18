@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -10,29 +10,59 @@ const __dirname = path.dirname(__filename)
 const coreAppRoot = path.resolve(__dirname, '..')
 const repoRoot = path.resolve(coreAppRoot, '..', '..')
 const reportDate = process.env.TUFF_STARTUP_REPORT_DATE || '2026-03-24'
-const reportRoot = path.resolve(
-  repoRoot,
-  'docs',
-  'engineering',
-  'reports',
-  `startup-dev-runs-${reportDate}`
+const defaultPackagedAppPath = path.resolve(
+  coreAppRoot,
+  'dist',
+  process.platform === 'darwin' && process.arch === 'arm64' ? 'mac-arm64' : 'mac',
+  'tuff.app',
+  'Contents',
+  'MacOS',
+  'tuff'
 )
-const logsRoot = path.resolve(reportRoot, 'logs')
-const dataRoot = path.resolve(reportRoot, 'data')
+
+let activeReportRoot = ''
+let activeLogsRoot = ''
+let activeDataRoot = ''
+let expectedPackageVersion = null
+
+function resolveReportRoots(target, profile) {
+  const prefix =
+    target === 'packaged' ? `startup-packaged-${profile}-runs` : 'startup-dev-runs'
+  const reportRoot = path.resolve(
+    repoRoot,
+    'docs',
+    'engineering',
+    'reports',
+    `${prefix}-${reportDate}`
+  )
+  return {
+    reportRoot,
+    logsRoot: path.resolve(reportRoot, 'logs'),
+    dataRoot: path.resolve(reportRoot, 'data')
+  }
+}
 
 function parseArgs(argv) {
   const options = {
     mode: 'run',
+    target: 'dev',
     runs: 30,
     timeoutMs: 180000,
     traceDeprecation: false,
-    continueOnFail: false
+    continueOnFail: false,
+    appPath: process.env.TUFF_STARTUP_BENCHMARK_APP_PATH || defaultPackagedAppPath,
+    profile: 'hot',
+    launchMethod: 'open'
   }
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === '--mode' && argv[i + 1]) {
       options.mode = argv[++i]
+      continue
+    }
+    if (arg === '--target' && argv[i + 1]) {
+      options.target = argv[++i]
       continue
     }
     if (arg === '--runs' && argv[i + 1]) {
@@ -51,6 +81,28 @@ function parseArgs(argv) {
       options.continueOnFail = true
       continue
     }
+    if (arg === '--appPath' && argv[i + 1]) {
+      options.appPath = argv[++i]
+      continue
+    }
+    if (arg === '--profile' && argv[i + 1]) {
+      options.profile = argv[++i]
+      continue
+    }
+    if (arg === '--launchMethod' && argv[i + 1]) {
+      options.launchMethod = argv[++i]
+      continue
+    }
+  }
+
+  if (options.target !== 'dev' && options.target !== 'packaged') {
+    throw new Error('--target 必须是 dev 或 packaged')
+  }
+  if (options.profile !== 'hot' && options.profile !== 'cold') {
+    throw new Error('--profile 必须是 hot 或 cold')
+  }
+  if (options.launchMethod !== 'open' && options.launchMethod !== 'exec') {
+    throw new Error('--launchMethod 必须是 open 或 exec')
   }
 
   if (!Number.isFinite(options.runs) || options.runs <= 0) {
@@ -59,6 +111,11 @@ function parseArgs(argv) {
   if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 5000) {
     throw new Error('--timeoutMs 必须 >= 5000')
   }
+
+  const roots = resolveReportRoots(options.target, options.profile)
+  activeReportRoot = roots.reportRoot
+  activeLogsRoot = roots.logsRoot
+  activeDataRoot = roots.dataRoot
 
   return options
 }
@@ -81,10 +138,102 @@ function percentile(values, p) {
   return sorted[index]
 }
 
-function collectBlockingIssues(parsed) {
+async function readExpectedPackageVersion() {
+  if (expectedPackageVersion) return expectedPackageVersion
+  try {
+    const content = await fs.readFile(path.resolve(coreAppRoot, 'package.json'), 'utf8')
+    const parsed = JSON.parse(content)
+    expectedPackageVersion = typeof parsed.version === 'string' ? parsed.version : null
+  } catch {
+    expectedPackageVersion = null
+  }
+  return expectedPackageVersion
+}
+
+function resolveAppBundlePath(appPath) {
+  return appPath.endsWith('/Contents/MacOS/tuff') ? path.resolve(appPath, '..', '..', '..') : appPath
+}
+
+function readMacBundleVersion(appBundlePath) {
+  if (process.platform !== 'darwin') return null
+  const infoPlistPath = path.resolve(appBundlePath, 'Contents', 'Info.plist')
+  const result = spawnSync('/usr/bin/plutil', ['-extract', 'CFBundleShortVersionString', 'raw', infoPlistPath], {
+    encoding: 'utf8'
+  })
+  if (result.status !== 0) return null
+  const version = result.stdout.trim()
+  return version || null
+}
+
+async function inspectPackagedArtifact(options) {
+  if (options.target !== 'packaged') return null
+
+  const expectedVersion = await readExpectedPackageVersion()
+  const executablePath = options.appPath.endsWith('/Contents/MacOS/tuff')
+    ? options.appPath
+    : path.resolve(options.appPath, 'Contents', 'MacOS', 'tuff')
+  const appBundlePath = resolveAppBundlePath(options.appPath)
+
+  let appExists = false
+  let executableExists = false
+  let executable = false
+  try {
+    const stat = await fs.stat(appBundlePath)
+    appExists = stat.isDirectory()
+  } catch {
+    appExists = false
+  }
+  try {
+    await fs.access(executablePath, fs.constants.X_OK)
+    executableExists = true
+    executable = true
+  } catch {
+    try {
+      const stat = await fs.stat(executablePath)
+      executableExists = stat.isFile()
+    } catch {
+      executableExists = false
+    }
+  }
+
+  const bundleVersion = appExists ? readMacBundleVersion(appBundlePath) : null
+  const versionMatches =
+    expectedVersion != null && bundleVersion != null ? expectedVersion === bundleVersion : null
+
+  return {
+    appPath: options.appPath,
+    appBundlePath,
+    executablePath,
+    appExists,
+    executableExists,
+    executable,
+    expectedVersion,
+    bundleVersion,
+    versionMatches
+  }
+}
+
+function collectBlockingIssues(parsed, rawOutput = '') {
   const issues = []
   const pushUnique = (value) => {
     if (!issues.includes(value)) issues.push(value)
+  }
+
+  const lowerOutput = rawOutput.toLowerCase()
+  if (lowerOutput.includes('klsnoexecutableerr')) {
+    pushUnique('packaged_launch_executable_missing')
+  }
+  if (parsed.artifact?.appExists === false) {
+    pushUnique('packaged_artifact_missing')
+  }
+  if (parsed.artifact?.executableExists === false) {
+    pushUnique('packaged_executable_missing')
+  }
+  if (parsed.artifact?.executable === false) {
+    pushUnique('packaged_executable_not_executable')
+  }
+  if (parsed.artifact?.versionMatches === false) {
+    pushUnique('packaged_artifact_version_mismatch')
   }
 
   if (parsed.deprecations.length > 0) pushUnique('deprecation')
@@ -123,6 +272,13 @@ function collectBlockingIssues(parsed) {
   )
   if (hasNoHandler) pushUnique('ipc_no_handler')
 
+  if (
+    parsed.startupHealthMs == null &&
+    ((parsed.processExitCode != null && parsed.processExitCode !== 0) || parsed.processSignal)
+  ) {
+    pushUnique('process_exited_before_startup_health')
+  }
+
   for (const item of parsed.topSlowModules) {
     if (item.durationMs >= 1200) {
       pushUnique(`slow_module:${item.name}`)
@@ -130,6 +286,14 @@ function collectBlockingIssues(parsed) {
   }
 
   return issues
+}
+
+function isLocalPackagedArtifactWarning(line) {
+  const lower = line.toLowerCase()
+  return (
+    lower.includes('macos autoupdater disabled because app-update.yml is missing') &&
+    lower.includes('/apps/core-app/dist/')
+  )
 }
 
 function parseLogText(text) {
@@ -208,6 +372,9 @@ function parseLogText(text) {
     }
 
     if (hasWarn || isDeprecation || line.includes('CGEventTap timeout')) {
+      if (isLocalPackagedArtifactWarning(line)) {
+        continue
+      }
       warnLines.push(line)
     }
     if (hasError) {
@@ -282,6 +449,21 @@ function renderRunReport(runNo, runData) {
     ? runData.topSlowModules.map((item) => `| ${item.name} | ${item.durationMs}ms |`).join('\n')
     : '| 无 | 0ms |'
 
+  const artifact = runData.artifact
+  const artifactSection = artifact
+    ? `
+## Packaged Artifact
+- appBundlePath: ${artifact.appBundlePath}
+- executablePath: ${artifact.executablePath}
+- appExists: ${artifact.appExists ? 'true' : 'false'}
+- executableExists: ${artifact.executableExists ? 'true' : 'false'}
+- executable: ${artifact.executable ? 'true' : 'false'}
+- expectedVersion: ${artifact.expectedVersion || 'N/A'}
+- bundleVersion: ${artifact.bundleVersion || 'N/A'}
+- versionMatches: ${artifact.versionMatches == null ? 'N/A' : artifact.versionMatches ? 'true' : 'false'}
+`
+    : ''
+
   const retestResult = runData.isPass
     ? '通过（关键阈值与日志告警均满足）'
     : '未通过（存在阻断项，需继续修复）'
@@ -295,10 +477,15 @@ function renderRunReport(runNo, runData) {
 ## 运行环境
 - runNo: ${padRun(runNo)}
 - timestamp: ${runData.timestamp}
-- mode: dev benchmark
-- command: \`pnpm -C "apps/core-app" exec electron-vite dev\`
+- target: ${runData.target}
+- profile: ${runData.profile}
+- launchMethod: ${runData.launchMethod}
+- mode: ${runData.target === 'packaged' ? 'packaged benchmark' : 'dev benchmark'}
+- command: \`${runData.command}\`
 - timeoutMs: ${runData.timeoutMs}
 - traceDeprecation: ${runData.traceDeprecation ? 'true' : 'false'}
+- userDataDir: ${runData.userDataDir || 'default'}
+${artifactSection}
 
 ## 关键耗时
 | 指标 | 数值 |
@@ -338,6 +525,7 @@ ${toMarkdownList(runData.blockingIssues, '未发现阻断问题')}
 
 function renderSummaryReport(allRuns) {
   const sorted = [...allRuns].sort((a, b) => a.runNo - b.runNo)
+  const target = sorted[0]?.target === 'packaged' ? 'packaged' : 'dev'
   const startupHealthValues = sorted
     .map((run) => run.startupHealthMs)
     .filter((value) => typeof value === 'number')
@@ -387,6 +575,12 @@ function renderSummaryReport(allRuns) {
     recent10ErrorTotal === 0 &&
     recent10Pass
 
+  const nextAction = finalPass
+    ? '保持配置，持续抽样验证。'
+    : target === 'packaged'
+      ? '先处理 packaged 启动阻塞，再重新采集 cold/hot benchmark 样本。'
+      : '继续按 Top 问题优先级修复并追加后续报告。'
+
   return `# 汇总报告
 
 ## 统计总览
@@ -416,20 +610,18 @@ ${issueRows}
 ## 结论
 - isPass: ${finalPass ? 'true' : 'false'}
 - blockingIssues: ${topIssues.map(([issue]) => issue).join(', ') || '[]'}
-- nextAction: ${
-    finalPass ? '保持配置，持续抽样验证。' : '继续按 Top 问题优先级修复并追加第31次及以后报告。'
-  }
+- nextAction: ${nextAction}
 `
 }
 
 async function ensureDirs() {
-  await fs.mkdir(logsRoot, { recursive: true })
-  await fs.mkdir(dataRoot, { recursive: true })
+  await fs.mkdir(activeLogsRoot, { recursive: true })
+  await fs.mkdir(activeDataRoot, { recursive: true })
 }
 
 async function readExistingRunNumbers() {
   try {
-    const files = await fs.readdir(reportRoot)
+    const files = await fs.readdir(activeReportRoot)
     return files
       .map((file) => {
         const match = file.match(/^第(\d+)次运行报告\.md$/)
@@ -445,7 +637,7 @@ async function readExistingRunNumbers() {
 async function readAllRunData() {
   let files = []
   try {
-    files = await fs.readdir(dataRoot)
+    files = await fs.readdir(activeDataRoot)
   } catch {
     return []
   }
@@ -453,7 +645,7 @@ async function readAllRunData() {
   const runs = []
   for (const file of files) {
     if (!/^run-\d+\.json$/.test(file)) continue
-    const content = await fs.readFile(path.resolve(dataRoot, file), 'utf8')
+    const content = await fs.readFile(path.resolve(activeDataRoot, file), 'utf8')
     const parsed = JSON.parse(content)
     if (typeof parsed.runNo === 'number') {
       runs.push(parsed)
@@ -488,10 +680,213 @@ function terminateProcessGroup(child) {
   }
 }
 
+async function clearColdProfile(userDataDir) {
+  if (!userDataDir) return
+  await fs.rm(userDataDir, { recursive: true, force: true })
+}
+
+function getBenchmarkUserDataDir(runNo, options) {
+  if (options.target !== 'packaged') return undefined
+  const runScope = options.profile === 'cold' ? `run-${padRun(runNo)}` : 'hot-profile'
+  return path.resolve(activeReportRoot, 'user-data', runScope)
+}
+
+function createLaunchCommand(runNo, options) {
+  if (options.target === 'packaged') {
+    if (options.launchMethod === 'open' && process.platform === 'darwin') {
+      const appBundlePath = options.appPath.endsWith('/Contents/MacOS/tuff')
+        ? path.resolve(options.appPath, '..', '..', '..')
+        : options.appPath
+      return {
+        command: '/usr/bin/open',
+        args: ['-W', '-n', '-j', '-a', appBundlePath],
+        cwd: coreAppRoot,
+        displayCommand: `/usr/bin/open -W -n -j -a "${appBundlePath}"`
+      }
+    }
+
+    return {
+      command: options.appPath,
+      args: [],
+      cwd: coreAppRoot,
+      displayCommand: `"${options.appPath}"`
+    }
+  }
+
+  const devServerPort = String(5600 + runNo)
+  return {
+    command: 'pnpm',
+    args: ['-C', 'apps/core-app', 'exec', 'electron-vite', 'dev'],
+    cwd: repoRoot,
+    displayCommand: 'pnpm -C "apps/core-app" exec electron-vite dev',
+    devServerPort
+  }
+}
+
+async function snapshotLogOffsets(userDataDir) {
+  if (!userDataDir) return new Map()
+  const logDir = path.resolve(userDataDir, 'tuff', 'logs')
+  const offsets = new Map()
+  let files = []
+  try {
+    files = await fs.readdir(logDir)
+  } catch {
+    return offsets
+  }
+
+  for (const file of files) {
+    if (!/^[DE]\.\d{4}-\d{2}-\d{2}\.(log|err)$/.test(file)) continue
+    const filePath = path.resolve(logDir, file)
+    try {
+      const stat = await fs.stat(filePath)
+      offsets.set(filePath, stat.size)
+    } catch {
+      // ignore files that rotate while snapshotting
+    }
+  }
+
+  return offsets
+}
+
+async function readAppLogDelta(userDataDir, offsets) {
+  if (!userDataDir) return ''
+  const logDir = path.resolve(userDataDir, 'tuff', 'logs')
+  let files = []
+  try {
+    files = await fs.readdir(logDir)
+  } catch {
+    return ''
+  }
+
+  const chunks = []
+  for (const file of files.sort()) {
+    if (!/^[DE]\.\d{4}-\d{2}-\d{2}\.(log|err)$/.test(file)) continue
+    const filePath = path.resolve(logDir, file)
+    try {
+      const content = await fs.readFile(filePath, 'utf8')
+      const offset = offsets.get(filePath) ?? 0
+      chunks.push(content.slice(offset))
+    } catch {
+      // ignore files that rotate while reading
+    }
+  }
+
+  return chunks.filter(Boolean).join('\n')
+}
+
+function buildBenchmarkEnv(runId, options, launch, userDataDir, nodeOptions) {
+  const diagPath =
+    options.target === 'packaged'
+      ? path.resolve(activeLogsRoot, `run-${runId}-precore-diagnostic.json`)
+      : undefined
+
+  return {
+    FORCE_COLOR: '0',
+    ...(options.target === 'packaged' ? {} : { NODE_OPTIONS: nodeOptions }),
+    TUFF_STARTUP_BENCHMARK_ONCE: '1',
+    TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS: '1000',
+    TUFF_STARTUP_BENCHMARK_RUN_ID: runId,
+    ...(diagPath ? { TUFF_STARTUP_BENCHMARK_DIAG_PATH: diagPath } : {}),
+    ...(launch.devServerPort
+      ? {
+          TUFF_DEV_SERVER_HOST: '127.0.0.1',
+          TUFF_DEV_SERVER_PORT: launch.devServerPort
+        }
+      : {}),
+    ...(userDataDir ? { TUFF_STARTUP_BENCHMARK_USER_DATA_DIR: userDataDir } : {})
+  }
+}
+
+function appendOpenEnvArgs(launch, env) {
+  if (launch.command !== '/usr/bin/open') return launch
+  const envArgs = Object.entries(env).flatMap(([key, value]) => ['--env', `${key}=${value}`])
+  const appFlagIndex = launch.args.findIndex((arg) => arg === '-a' || arg === '-b')
+  if (appFlagIndex >= 0) {
+    return {
+      ...launch,
+      args: [...launch.args.slice(0, appFlagIndex), ...envArgs, ...launch.args.slice(appFlagIndex)],
+      displayCommand: launch.displayCommand
+    }
+  }
+
+  const appPath = launch.args.at(-1)
+  const prefixArgs = launch.args.slice(0, -1)
+  return {
+    ...launch,
+    args: [...prefixArgs, ...envArgs, appPath],
+    displayCommand: launch.displayCommand
+  }
+}
+
+function getArtifactBlockingIssues(artifact) {
+  if (!artifact) return []
+  const issues = []
+  const push = (issue) => {
+    if (!issues.includes(issue)) issues.push(issue)
+  }
+  if (artifact.appExists === false) push('packaged_artifact_missing')
+  if (artifact.executableExists === false) push('packaged_executable_missing')
+  if (artifact.executable === false) push('packaged_executable_not_executable')
+  if (artifact.versionMatches === false) push('packaged_artifact_version_mismatch')
+  return issues
+}
+
+function renderArtifactPreflightLog(artifact) {
+  if (!artifact) return ''
+  return [
+    'Packaged artifact preflight failed before startup benchmark.',
+    `appBundlePath=${artifact.appBundlePath}`,
+    `executablePath=${artifact.executablePath}`,
+    `appExists=${artifact.appExists}`,
+    `executableExists=${artifact.executableExists}`,
+    `executable=${artifact.executable}`,
+    `expectedVersion=${artifact.expectedVersion || 'N/A'}`,
+    `bundleVersion=${artifact.bundleVersion || 'N/A'}`,
+    `versionMatches=${artifact.versionMatches == null ? 'N/A' : artifact.versionMatches}`
+  ].join('\n')
+}
+
 async function runSingle(runNo, options) {
   const startTime = Date.now()
   const runId = padRun(runNo)
-  const devServerPort = String(5600 + runNo)
+  const userDataDir = getBenchmarkUserDataDir(runNo, options)
+  const artifact = await inspectPackagedArtifact(options)
+  const artifactBlockingIssues = getArtifactBlockingIssues(artifact)
+
+  if (artifactBlockingIssues.length > 0) {
+    const endTime = Date.now()
+    const parsed = parseLogText('')
+    parsed.artifact = artifact
+    parsed.blockingIssues = [
+      ...artifactBlockingIssues,
+      ...collectBlockingIssues(parsed, renderArtifactPreflightLog(artifact)).filter(
+        (issue) => !artifactBlockingIssues.includes(issue)
+      )
+    ]
+    const runData = {
+      runNo,
+      timestamp: new Date(startTime).toISOString(),
+      timeoutMs: options.timeoutMs,
+      traceDeprecation: options.traceDeprecation,
+      target: options.target,
+      profile: options.profile,
+      launchMethod: options.target === 'packaged' ? options.launchMethod : 'exec',
+      command: 'artifact preflight',
+      userDataDir,
+      artifact,
+      wallTimeMs: endTime - startTime,
+      processExitCode: null,
+      processSignal: null,
+      timedOut: false,
+      ...parsed
+    }
+    return { runData, rawLog: renderArtifactPreflightLog(artifact) }
+  }
+
+  if (options.profile === 'cold') {
+    await clearColdProfile(userDataDir)
+  }
+  const logOffsets = await snapshotLogOffsets(userDataDir)
 
   const nodeOptions = [
     '--max-old-space-size=8192',
@@ -500,17 +895,15 @@ async function runSingle(runNo, options) {
     .filter(Boolean)
     .join(' ')
 
-  const child = spawn('pnpm', ['-C', 'apps/core-app', 'exec', 'electron-vite', 'dev'], {
-    cwd: repoRoot,
+  const baseLaunch = createLaunchCommand(runNo, options)
+  const benchmarkEnv = buildBenchmarkEnv(runId, options, baseLaunch, userDataDir, nodeOptions)
+  const launch = appendOpenEnvArgs(baseLaunch, benchmarkEnv)
+
+  const child = spawn(launch.command, launch.args, {
+    cwd: launch.cwd,
     env: {
       ...process.env,
-      FORCE_COLOR: '0',
-      NODE_OPTIONS: nodeOptions,
-      TUFF_STARTUP_BENCHMARK_ONCE: '1',
-      TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS: '1000',
-      TUFF_STARTUP_BENCHMARK_RUN_ID: runId,
-      TUFF_DEV_SERVER_HOST: '127.0.0.1',
-      TUFF_DEV_SERVER_PORT: devServerPort
+      ...benchmarkEnv
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32'
@@ -545,14 +938,25 @@ async function runSingle(runNo, options) {
   })
 
   const endTime = Date.now()
-  const parsed = parseLogText(output)
-  parsed.blockingIssues = collectBlockingIssues(parsed)
+  const appLogDelta = await readAppLogDelta(userDataDir, logOffsets)
+  const combinedOutput = [output, appLogDelta].filter(Boolean).join('\n')
+  const parsed = parseLogText(combinedOutput)
+  parsed.processExitCode = closeResult.code
+  parsed.processSignal = closeResult.signal
+  parsed.artifact = artifact
+  parsed.blockingIssues = collectBlockingIssues(parsed, combinedOutput)
 
   const runData = {
     runNo,
     timestamp: new Date(startTime).toISOString(),
     timeoutMs: options.timeoutMs,
     traceDeprecation: options.traceDeprecation,
+    target: options.target,
+    profile: options.profile,
+    launchMethod: options.target === 'packaged' ? options.launchMethod : 'exec',
+    command: launch.displayCommand,
+    userDataDir,
+    artifact,
     wallTimeMs: endTime - startTime,
     processExitCode: closeResult.code,
     processSignal: closeResult.signal,
@@ -560,14 +964,14 @@ async function runSingle(runNo, options) {
     ...parsed
   }
 
-  return { runData, rawLog: output }
+  return { runData, rawLog: combinedOutput }
 }
 
 async function writeRunArtifacts(runNo, runData, rawLog) {
   const runId = padRun(runNo)
-  const reportPath = path.resolve(reportRoot, reportFileName(runNo))
-  const logPath = path.resolve(logsRoot, `run-${runId}.log`)
-  const jsonPath = path.resolve(dataRoot, `run-${runId}.json`)
+  const reportPath = path.resolve(activeReportRoot, reportFileName(runNo))
+  const logPath = path.resolve(activeLogsRoot, `run-${runId}.log`)
+  const jsonPath = path.resolve(activeDataRoot, `run-${runId}.json`)
 
   await fs.writeFile(logPath, rawLog, 'utf8')
   await fs.writeFile(jsonPath, JSON.stringify(runData, null, 2), 'utf8')
@@ -577,7 +981,7 @@ async function writeRunArtifacts(runNo, runData, rawLog) {
 async function writeSummary() {
   const allRuns = await readAllRunData()
   if (!allRuns.length) return
-  const summaryPath = path.resolve(reportRoot, '汇总报告.md')
+  const summaryPath = path.resolve(activeReportRoot, '汇总报告.md')
   await fs.writeFile(summaryPath, renderSummaryReport(allRuns), 'utf8')
 }
 
@@ -619,9 +1023,9 @@ async function runBench(options) {
   await writeSummary()
 }
 
-async function analyzeBench() {
+async function analyzeBench(options) {
   await ensureDirs()
-  const files = await fs.readdir(logsRoot)
+  const files = await fs.readdir(activeLogsRoot)
   const targets = files
     .filter((file) => /^run-\d+\.log$/.test(file))
     .sort((a, b) => a.localeCompare(b, 'en'))
@@ -630,9 +1034,9 @@ async function analyzeBench() {
     const runNo = Number.parseInt(file.match(/run-(\d+)\.log/)?.[1] || '', 10)
     if (!Number.isFinite(runNo)) continue
 
-    const rawLog = await fs.readFile(path.resolve(logsRoot, file), 'utf8')
+    const rawLog = await fs.readFile(path.resolve(activeLogsRoot, file), 'utf8')
     const parsed = parseLogText(rawLog)
-    parsed.blockingIssues = collectBlockingIssues(parsed)
+    parsed.blockingIssues = collectBlockingIssues(parsed, rawLog)
     const hasStructuredMarkers =
       parsed.startupHealthMs != null ||
       parsed.allModulesLoadedMs != null ||
@@ -642,15 +1046,31 @@ async function analyzeBench() {
       continue
     }
 
+    let previousRunData = {}
+    try {
+      const jsonPath = path.resolve(activeDataRoot, `run-${padRun(runNo)}.json`)
+      previousRunData = JSON.parse(await fs.readFile(jsonPath, 'utf8'))
+    } catch {
+      previousRunData = {}
+    }
+
     const runData = {
+      ...previousRunData,
       runNo,
       timestamp: new Date().toISOString(),
-      timeoutMs: null,
-      traceDeprecation: null,
-      wallTimeMs: null,
-      processExitCode: null,
-      processSignal: null,
-      timedOut: false,
+      target: previousRunData.target ?? options.target,
+      profile: previousRunData.profile ?? options.profile,
+      launchMethod:
+        previousRunData.launchMethod ?? (options.target === 'packaged' ? options.launchMethod : 'exec'),
+      command: previousRunData.command ?? 'analyze',
+      userDataDir: previousRunData.userDataDir ?? null,
+      artifact: previousRunData.artifact ?? null,
+      timeoutMs: previousRunData.timeoutMs ?? null,
+      traceDeprecation: previousRunData.traceDeprecation ?? null,
+      wallTimeMs: previousRunData.wallTimeMs ?? null,
+      processExitCode: previousRunData.processExitCode ?? null,
+      processSignal: previousRunData.processSignal ?? null,
+      timedOut: previousRunData.timedOut ?? false,
       ...parsed
     }
 
@@ -663,7 +1083,7 @@ async function analyzeBench() {
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   if (options.mode === 'analyze') {
-    await analyzeBench()
+    await analyzeBench(options)
     return
   }
   await runBench(options)

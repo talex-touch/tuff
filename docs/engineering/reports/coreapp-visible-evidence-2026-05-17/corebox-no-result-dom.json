@@ -1,0 +1,35 @@
+{
+  "url": "file:///private/tmp/tuff-visible-cdp-9336.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "query": "__tuff_no_result_zzzz_20260517__",
+  "input": "__tuff_no_result_zzzz_20260517__",
+  "text": "__tuff_no_result_zzzz_20260517__\n没有结果\n换个更宽泛的关键词，或检查索引和 Provider 是否可用。\n重试搜索\n打开索引设置\nCoreBox\n↵\n打开\n⌘K\n操作\n最近处理\n共 0 条\n暂无记录",
+  "textLength": 116,
+  "hasRawI18n": false,
+  "searchState": "没有结果\n换个更宽泛的关键词，或检查索引和 Provider 是否可用。\n重试搜索\n打开索引设置",
+  "actionText": "重试搜索\n打开索引设置",
+  "items": [],
+  "snippets": [
+    {
+      "cls": "BoxInput-Display-Completion ml-2 fake-background",
+      "text": ""
+    },
+    {
+      "cls": "CoreBoxRes flex",
+      "text": "没有结果\n换个更宽泛的关键词，或检查索引和 Provider 是否可用。\n重试搜索\n打开索引设置\nCoreBox\n↵\n打开\n⌘K\n操作\n最近处理\n共 0 条\n暂无记录"
+    },
+    {
+      "cls": "CoreBoxSearchState CoreBoxSearchState--warning",
+      "text": "没有结果\n换个更宽泛的关键词，或检查索引和 Provider 是否可用。\n重试搜索\n打开索引设置"
+    },
+    {
+      "cls": "CoreBoxSearchState-Actions",
+      "text": "重试搜索\n打开索引设置"
+    },
+    {
+      "cls": "CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--tx-border-color-lighter)] bg-transparent text-12px text-[color:var(--tx-text-color-secondary)] CoreBoxFooter-Sticky",
+      "text": "CoreBox\n↵\n打开\n⌘K\n操作"
+    }
+  ],
+  "extra": {}
+}

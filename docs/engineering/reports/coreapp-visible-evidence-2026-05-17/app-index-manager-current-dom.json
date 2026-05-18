@@ -1,0 +1,104 @@
+{
+  "href": "file:///private/tmp/tuff-visible-cdp-9338.app/Contents/Resources/app.asar/out/renderer/index.html#/setting?section=file-index",
+  "title": "Tuff",
+  "viewport": [
+    1200,
+    920
+  ],
+  "bodyLength": 3160,
+  "bodyText": "Tuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\n下载中心\n版本\nv2.4.10-beta.25\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的剩余、已用和总额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n辅助功能权限\n仅限 macOS\n\n用于扫描应用和读取前台上下文；自动粘贴还需要 macOS 自动化权限允许 Tuff 控制 System Events。\n\n已授权\n通知权限\n\n允许应用显示系统通知；macOS 授权状态可能需要在系统设置中确认。\n\n状态不可读取\n测试通知\n开机自动启动\n\n系统启动时自动运行应用\n\n显示托盘图标\n\n在系统托盘显示应用图标\n\n不在 Dock 栏显示\n仅限 macOS\n\n关闭主窗口后不在显示 Dock 图标（macOS only）\n\n静默启动\n\n应用启动时不显示窗口，仅在后台运行\n\n安装后自动装载 OmniPanel Feature\n\n启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。\n\n实用工具\n\n实用工具为您提供统一的快速桌面启动器。\n\n自定义占位文本\n\n自定义 CoreBox 输入框的占位提示文本，留空使用默认。\n\n使用\n\n进入时引导您使用应用程序。\n\n快捷方式\n\n集中管理系统级快捷键设置。\n\n共 6 项\n管理\n自动粘贴\n\n复制内容后呼出 CoreBox 时，自动带入新鲜剪贴板内容。\n\n自动清除\n\nCoreBox 隐藏超过指定时间后，下次打开时自动退出上次功能并清空输入。短时间重新打开会保留状态。\n\n自动隐藏\n\n触发模糊时隐藏搜索栏。\n\n智能推荐\n\n启用智能推荐功能，根据使用习惯提供个性化建议。\n\n显示推荐理由\n\n在推荐项目旁显示推荐原因。\n\n文件索引\n\n管理文件搜索索引\n\n索引状态\n\n当前文件索引的运行状态\n\n正常\n重建文件索引\n\n清空文件搜索索引并重新扫描文件，不刷新应用展示名\n\n立即重建\n索引统计\n\n文件索引的详细统计信息\n\n已索引文件\n 1\n·\n索引失败\n 0\n·\n已跳过文件\n 1\n·\n已完成内容索引\n 0\n·\n已生成向量文件\n 0\n·\n向量记录\n 0\n最后检查\n\n最后一次状态检查的时间\n\n08:51:32\n后台索引策略\n\n控制后台索引在空闲与电量条件下的执行\n\n空闲阈值\n\n系统空闲超过该时长才允许后台索引执行\n\n分钟\n最低电量\n\n低于该电量时暂停后台索引（充电时可忽略）\n\n%\n电量禁区\n\n低于该电量时强制暂停后台索引\n\n%\n充电时允许\n\n连接电源时允许忽略最低电量限制\n\n强制执行间隔\n\n超过该时长未执行时允许跳过空闲判断\n\n小时\n空闲策略诊断\n\n当前空闲 0.0 分钟，低于阈值 1.0 小时，后台任务会继续等待。\n\n已拦截\n空闲\n0.0 分钟\n·\n电量\n-\n状态未知\n上次 08:51:32\n刷新\n应用索引调度\n\n控制启动补漏与周期性全量同步\n\n启动补漏\n\n应用启动后后台补漏应用列表\n\n补漏重试次数\n\n补漏失败后的最大重试次数\n\n次\n补漏重试基础间隔\n\n第一次重试的等待时间\n\n秒\n补漏重试最大间隔\n\n指数退避的最大等待时间\n\n分钟\n周期性全量同步\n\n周期性执行全量比对与同步\n\n全量同步间隔\n\n两次全量同步之间的最小间隔\n\n小时\n全量检查频率\n\n检查是否需要全量同步的频率\n\n分钟\n本地启动区 / 应用索引管理\n\n管理手动加入的 Windows 应用条目，支持选择文件、粘贴路径、启用禁用、单项重建与诊断 JSON 复制。\n\n选择应用文件\n刷新\n粘贴路径添加\n总条目\n1\n需要处理\n0\n已命中\n0\n未诊断\n1\n已禁用\n0\n来源\n全部\nUWP / Store\nSteam\n快捷方式\n协议\nAppRef\n路径\n诊断\n全部\n需要处理\n已命中\n未诊断\n已禁用\n没有该来源的条目\n切换来源筛选，或添加匹配的启动目标。\n清空筛选\n应用搜索诊断\n\n输入应用路径、appIdentity、bundleId、显示名或搜索词，检查单个应用的索引内容与查询命中阶段\n\n打开\n下载设置\n\n配置下载行为和存储选项\n\n最大并发下载数\n\n同时进行的下载任务数量（1-10）\n\n自动调整并发数\n\n根据网络状况自动调整并发下载数\n\n网络感知\n\n根据网络质量调整下载行为\n\n基于优先级调度\n\n优先处理高优先级任务\n\n切片大小\n\n大文件下载时每个切片的大小\n\n启用断点续传\n\n支持从中断位置继续下载\n\n自动重试\n\n自动重试失败的下载\n\n最大重试次数\n\n失败切片的最大重试次数\n\n历史记录保留\n\n下载历史记录的保留时长\n\n自动清理\n\n下载完成后自动清理临时文件\n\n网络超时\n\n等待网络响应的最长时间\n\n重试延迟\n\n重试失败请求前的等待时间\n\n网络最大重试次数\n\n网络级别的最大重试次数\n\n临时目录\n\n临时下载文件的存储位置\n\n/private/tmp/tuff-visible-cdp-user-data-6/tuff/modules/download-center/temp\n选择目录\n恢复默认目录\n操作\n\n管理下载设置和临时文件\n\n清理临时文件\n恢复默认设置\n应用更新\n\n管理应用更新下载、状态与检查操作。\n\n自动下载更新\n\n发现新版本时自动下载更新包\n\n状态\n\n上次检查：2026/5/18 08:44:58\n\n操作\n\n立即检查当前渠道是否有新版本。\n\n检查更新\nNexus 数据分析\n\n默认开启，可手动关闭；帮助改进应用体验和产品决策\n\n启用数据上传\n\n上传脱敏后的性能与错误指标，帮助快速定位问题。关闭后停止写入上传队列。\n\n匿名模式\n\n登录后可切换匿名模式。\n\n隐私数据管理\n\n在官网管理您的隐私设置和数据\n\n查看数据分析面板\n\n在 Nexus 查看详细的使用统计和趋势\n\n存储\n\n查看应用存储详情\n\n应用程序规范 (Touch)\n\n开发者模式\n\n显示内部插件与高级选项（谨慎使用）\n\n高级设置\n\n启用后显示文件索引、应用索引调度、下载、数据分析与存储设置\n\n版本\nTalexTouch Master 2.4.10-beta.25 最新\n规格\n26H5 T2\n版本号\n2.4.10-beta.25\n构建 ID\nf6ee8ee\nGit 哈希\ndbd263d\n更新通道\n公测版（Beta）\n构建类型\nrelease\n构建时间\n2026/5/18 08:38:27\n启动耗时\n0.13s 完美\n启动体验优秀\n\n总耗时 0.13s，主进程 --，渲染 0.13s，模块 -- 个。\n\n优秀\n性能详情\n查看详情\nElectron\n41.3.0\nV8 引擎\n14.6.202.33-electron.0\n操作系统\nDarwin Kernel Version 25.2.0: Tue Nov 18 21:09:56 PST 2025; root:xnu-12377.61.12~1/RELEASE_ARM64_T6041\n平台\ndarwin (arm64)\n体验\nTouch 功能体验包 2026.05.18\n应用文件夹\n打开文件夹\nTalexTouch 服务条款\nTalexTouch 软件许可证",
+  "hasSection": true,
+  "hasAppIndexScheduling": true,
+  "hasManager": true,
+  "managerRect": {
+    "x": 678.0234375,
+    "y": 1059.3671875,
+    "width": 456.9765625,
+    "height": 335.796875
+  },
+  "managerText": "选择应用文件\n刷新\n粘贴路径添加\n总条目\n1\n需要处理\n0\n已命中\n0\n未诊断\n1\n已禁用\n0\n来源\n全部\nUWP / Store\nSteam\n快捷方式\n协议\nAppRef\n路径\n诊断\n全部\n需要处理\n已命中\n未诊断\n已禁用\n没有该来源的条目\n切换来源筛选，或添加匹配的启动目标。\n清空筛选",
+  "sourceChips": [
+    {
+      "text": "全部",
+      "active": false
+    },
+    {
+      "text": "UWP / Store",
+      "active": false
+    },
+    {
+      "text": "Steam",
+      "active": true
+    },
+    {
+      "text": "快捷方式",
+      "active": false
+    },
+    {
+      "text": "协议",
+      "active": false
+    },
+    {
+      "text": "AppRef",
+      "active": false
+    },
+    {
+      "text": "路径",
+      "active": false
+    }
+  ],
+  "diagnosticChips": [
+    {
+      "text": "全部",
+      "active": true
+    },
+    {
+      "text": "需要处理",
+      "active": false
+    },
+    {
+      "text": "已命中",
+      "active": false
+    },
+    {
+      "text": "未诊断",
+      "active": false
+    },
+    {
+      "text": "已禁用",
+      "active": false
+    }
+  ],
+  "summaryItems": [
+    "总条目1",
+    "需要处理0",
+    "已命中0",
+    "未诊断1",
+    "已禁用0"
+  ],
+  "entryCount": 0,
+  "entries": [],
+  "emptyText": "没有该来源的条目 切换来源筛选，或添加匹配的启动目标。 清空筛选",
+  "hasRawI18n": false,
+  "rawI18nMatches": [],
+  "scrollY": 0,
+  "preFilter": {
+    "entryCount": 1,
+    "summary": [
+      "总条目1",
+      "需要处理0",
+      "已命中0",
+      "未诊断1",
+      "已禁用0"
+    ],
+    "entries": [
+      "Calculator\n已启用\n路径\n/System/Applications/Calculator.app\n未诊断\n运行诊断以确认召回阶段。\ndisplayName\nCalculator\nlaunchKind\npath\nlaunchTarget\n/System/Applications/Calculator.app\nlaunchArgs\n-\nworkingDirectory\n-\ndisplayPath\n/System/Applications/Calculator.app\n禁用\n重新扫描\n诊断\n复制诊断 JSON\n移除"
+    ],
+    "managerText": "选择应用文件\n刷新\n粘贴路径添加\n总条目\n1\n需要处理\n0\n已命中\n0\n未诊断\n1\n已禁用\n0\n来源\n全部\nUWP / Store\nSteam\n快捷方式\n协议\nAppRef\n路径\n诊断\n全部\n需要处理\n已命中\n未诊断\n已禁用\nCalculator\n已启用\n路径\n/System/Applications/Calculator.app\n未诊断\n运行诊断以确认召回阶段。\ndisplayName\nCalculator\nlaunchKind\npath\nlaunchTarget\n/System/Applications/Calculator.app\nlaunchArgs\n-\nworkingDirectory\n-\ndisplayPath\n/System/Applications/Calculator.app\n禁用\n重新扫描\n诊断\n复制诊断 JSON\n移除"
+  },
+  "seededEntry": {
+    "path": "/System/Applications/Calculator.app",
+    "method": "renderer touchChannel app:app-index:add-path in isolated packaged userData",
+    "scope": "/private/tmp/tuff-visible-cdp-user-data-6"
+  }
+}

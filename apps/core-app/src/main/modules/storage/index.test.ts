@@ -9,7 +9,8 @@ const readFileSyncSpy = vi.hoisted(() => vi.fn())
 
 vi.mock('fs-extra', async () => {
   const actual = await vi.importActual<typeof import('fs-extra')>('fs-extra')
-  const actualDefault = actual.default ?? actual
+  const actualModule = actual as typeof actual & { default?: typeof actual }
+  const actualDefault = actualModule.default ?? actual
   return {
     ...actual,
     default: {
@@ -50,7 +51,7 @@ describe('StorageModule', () => {
     await storage.init({
       app: { channel: {} },
       file: { create: true, dirName: 'config', dirPath: configDir }
-    } as Parameters<StorageModule['init']>[0])
+    } as unknown as Parameters<StorageModule['init']>[0])
 
     expect(readFileSyncSpy).toHaveBeenCalledTimes(1)
     expect(readFileSyncSpy).toHaveBeenCalledWith(accountPath, 'utf-8')

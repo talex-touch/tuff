@@ -10,6 +10,17 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const appRoot = path.resolve(__dirname, '..')
 const markerVersion = 4
+const defaultDevBundleIdentifier = 'com.tagzxia.app.tuff.dev'
+const defaultDevBundleName = 'Tuff Dev'
+
+function readNonEmptyEnv(name, fallback) {
+  const value = process.env[name]?.trim()
+  return value || fallback
+}
+
+function sanitizePathSegment(value) {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '-')
+}
 
 function runElectronVite(env) {
   const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
@@ -40,6 +51,11 @@ function getElectronVersion(electronDist) {
 function ensureDevElectronDist() {
   if (process.platform !== 'darwin') return null
 
+  const bundleIdentifier = readNonEmptyEnv(
+    'TUFF_DEV_ELECTRON_BUNDLE_ID',
+    defaultDevBundleIdentifier
+  )
+  const bundleName = readNonEmptyEnv('TUFF_DEV_ELECTRON_BUNDLE_NAME', defaultDevBundleName)
   const electronRoot = readElectronPackageRoot()
   const sourceDist = path.join(electronRoot, 'dist')
   const sourceApp = path.join(sourceDist, 'Electron.app')
@@ -48,15 +64,25 @@ function ensureDevElectronDist() {
   }
 
   const electronVersion = getElectronVersion(sourceDist)
-  const devRoot = path.join(appRoot, '.dev-electron', 'darwin')
+  const devRoot =
+    bundleIdentifier === defaultDevBundleIdentifier
+      ? path.join(appRoot, '.dev-electron', 'darwin')
+      : path.join(
+          appRoot,
+          '.dev-electron',
+          'darwin',
+          'variants',
+          sanitizePathSegment(bundleIdentifier)
+        )
   const devDist = path.join(devRoot, 'dist')
   const devApp = path.join(devDist, 'Electron.app')
   const markerPath = path.join(devRoot, 'metadata.json')
   const expectedMarker = {
     markerVersion,
     electronVersion,
-    bundleIdentifier: 'com.tagzxia.app.tuff.dev',
+    bundleIdentifier,
     bundleExecutable: 'Electron',
+    bundleName,
     lsuiElement: true
   }
 
@@ -78,20 +104,20 @@ function ensureDevElectronDist() {
     fs.cpSync(sourceDist, devDist, { recursive: true, verbatimSymlinks: true })
   }
 
-  patchDevAppPlist(devApp)
+  patchDevAppPlist(devApp, { bundleIdentifier, bundleName })
   signDevApp(devApp)
   fs.writeFileSync(markerPath, `${JSON.stringify(expectedMarker, null, 2)}\n`)
   return devDist
 }
 
-function patchDevAppPlist(devApp) {
+function patchDevAppPlist(devApp, options) {
   const plist = require('simple-plist')
   const plistPath = path.join(devApp, 'Contents', 'Info.plist')
   const info = plist.readFileSync(plistPath)
 
-  info.CFBundleIdentifier = 'com.tagzxia.app.tuff.dev'
-  info.CFBundleName = 'Tuff Dev'
-  info.CFBundleDisplayName = 'Tuff Dev'
+  info.CFBundleIdentifier = options.bundleIdentifier
+  info.CFBundleName = options.bundleName
+  info.CFBundleDisplayName = options.bundleName
   info.CFBundleExecutable = 'Electron'
   info.LSUIElement = true
   delete info.LSBackgroundOnly
@@ -100,7 +126,7 @@ function patchDevAppPlist(devApp) {
 
   const verified = plist.readFileSync(plistPath)
   if (
-    verified.CFBundleIdentifier !== 'com.tagzxia.app.tuff.dev' ||
+    verified.CFBundleIdentifier !== options.bundleIdentifier ||
     verified.CFBundleExecutable !== 'Electron' ||
     verified.LSUIElement !== true
   ) {
