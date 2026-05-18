@@ -15,7 +15,7 @@
 
 ## 当前状态快照
 
-- 当前基线：`2.4.10-beta.25`。
+- 当前基线：`2.4.10`。
 - 当前主线：`2.4.10` Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 当前阻塞：Windows 真机 evidence、search trace `200` 样本、clipboard stress `120000ms`、Windows final acceptance gate、Nexus Release Evidence 写入。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。

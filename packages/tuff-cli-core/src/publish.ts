@@ -79,10 +79,10 @@ interface AuthTokenDiagnostics {
   hasDeviceId?: boolean
 }
 
-interface AccountMeResponse {
-  id?: string
-  email?: string
-  name?: string | null
+interface PublisherAuthResponse {
+  ok?: boolean
+  userId?: string
+  authType?: 'session' | 'app' | 'apiKey' | 'admin'
   role?: string | null
 }
 
@@ -94,8 +94,8 @@ function getDashboardPluginVersionsUrl(pluginId: string): string {
   return `${getTuffBaseUrl()}/api/dashboard/plugins/${encodeURIComponent(pluginId)}/versions`
 }
 
-function getAuthMeUrl(): string {
-  return `${getTuffBaseUrl()}/api/auth/me`
+function getPublisherAuthUrl(): string {
+  return `${getTuffBaseUrl()}/api/dashboard/auth/publisher`
 }
 
 function formatResponseSnippet(data: unknown): string {
@@ -186,13 +186,11 @@ function formatAuthDiagnostics(diagnostics: AuthTokenDiagnostics): string {
     ].filter(Boolean)
     return parts.join(' ')
   }
-  return 'Detected an opaque bearer token. Use `tuffcli login` or a valid `tuff_` API key.'
+  return `Detected an opaque bearer token. Use \`${CLI_COMMAND_NAME} login\` or a valid \`tuff_\` API key.`
 }
 
-async function preflightAuthToken(token: string): Promise<void> {
-  const diagnostics = inspectAuthToken(token)
-  const url = getAuthMeUrl()
-  const response = await networkClient.request<string>({
+async function requestJsonWithAuth(token: string, url: string): Promise<NetworkResponse<string>> {
+  return await networkClient.request<string>({
     method: 'GET',
     url,
     headers: {
@@ -201,21 +199,46 @@ async function preflightAuthToken(token: string): Promise<void> {
     responseType: 'text',
     validateStatus: ALL_HTTP_STATUS,
   })
+}
 
-  if (response.status >= 200 && response.status < 300) {
-    parseJsonResponse<AccountMeResponse>(response, `Validate auth token (${url})`)
-    return
-  }
-
+function throwPublisherAuthError(
+  response: NetworkResponse<string>,
+  diagnostics: AuthTokenDiagnostics,
+  url: string,
+): never {
   const hint = formatAuthDiagnostics(diagnostics)
   if (response.status === 401) {
-    throw new Error(`Authentication token was rejected by Nexus before publish. ${hint} Run \`${CLI_COMMAND_NAME} login\` to refresh this CLI session.`)
+    throw new Error(`Publisher authentication was rejected by Nexus before publish (${url}). ${hint} Run \`${CLI_COMMAND_NAME} login\` to refresh this CLI session.`)
   }
   if (response.status === 403) {
-    throw new Error(`Authentication token is valid but not allowed to publish. ${hint}`)
+    throw new Error(`Publisher credentials are valid but not allowed to publish (${url}). ${hint}`)
   }
 
-  parseJsonResponse<AccountMeResponse>(response, `Validate auth token (${url})`)
+  parseJsonResponse<PublisherAuthResponse>(response, `Validate publisher access (${url})`)
+  throw new Error(`Validate publisher access (${url}) failed unexpectedly.`)
+}
+
+async function fetchDashboardPlugins(token: string): Promise<DashboardPluginsResponse> {
+  const pluginsUrl = getDashboardPluginsUrl()
+  const pluginsRes = await requestJsonWithAuth(token, pluginsUrl)
+  return parseJsonResponse<DashboardPluginsResponse>(pluginsRes, `Fetch Dashboard plugins (${pluginsUrl})`)
+}
+
+async function preflightPublisherAccess(token: string): Promise<DashboardPluginsResponse | null> {
+  const diagnostics = inspectAuthToken(token)
+  const url = getPublisherAuthUrl()
+  const response = await requestJsonWithAuth(token, url)
+
+  if (response.status >= 200 && response.status < 300) {
+    parseJsonResponse<PublisherAuthResponse>(response, `Validate publisher access (${url})`)
+    return null
+  }
+
+  if (response.status === 404) {
+    return await fetchDashboardPlugins(token)
+  }
+
+  throwPublisherAuthError(response, diagnostics, url)
 }
 
 function normalizeManifestIdToSlug(value: string): string {
@@ -346,27 +369,23 @@ async function readManifest(): Promise<ManifestInfo | null> {
   return null
 }
 
-async function resolveDashboardPublishUrl(token: string, slug: string, manifest: ManifestInfo): Promise<string> {
-  const pluginsUrl = getDashboardPluginsUrl()
-  const pluginsRes = await networkClient.request<string>({
-    method: 'GET',
-    url: pluginsUrl,
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    responseType: 'text',
-    validateStatus: ALL_HTTP_STATUS,
-  })
-  const payload = parseJsonResponse<DashboardPluginsResponse>(pluginsRes, `Fetch Dashboard plugins (${pluginsUrl})`)
-
-  if (!Array.isArray(payload.plugins))
+function resolveDashboardPublishUrlFromPlugins(
+  pluginsPayload: DashboardPluginsResponse,
+  slug: string,
+  manifest: ManifestInfo,
+): string {
+  if (!Array.isArray(pluginsPayload.plugins))
     throw new Error('Dashboard plugins response is missing `plugins`.')
 
-  const plugin = findDashboardPlugin(payload.plugins, slug, manifest)
+  const plugin = findDashboardPlugin(pluginsPayload.plugins, slug, manifest)
   if (!plugin.id)
     throw new Error(`Dashboard plugin "${slug}" is missing id.`)
 
   return getDashboardPluginVersionsUrl(plugin.id)
+}
+
+async function resolveDashboardPublishUrl(token: string, slug: string, manifest: ManifestInfo): Promise<string> {
+  return resolveDashboardPublishUrlFromPlugins(await fetchDashboardPlugins(token), slug, manifest)
 }
 
 function createPublishForm(
@@ -549,8 +568,9 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
     return
   }
 
+  let preflightPlugins: DashboardPluginsResponse | null = null
   try {
-    await preflightAuthToken(token)
+    preflightPlugins = await preflightPublisherAccess(token)
   }
   catch (error) {
     console.error(`❌ ${error instanceof Error ? error.message : error}`)
@@ -561,7 +581,9 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
   console.log('\n📤 Publishing plugin package...')
 
   try {
-    const publishUrl = options.apiUrl || await resolveDashboardPublishUrl(token, dashboardSlug, manifest)
+    const publishUrl = options.apiUrl || (preflightPlugins
+      ? resolveDashboardPublishUrlFromPlugins(preflightPlugins, dashboardSlug, manifest)
+      : await resolveDashboardPublishUrl(token, dashboardSlug, manifest))
     const content = await fs.readFile(target.path)
     const form = createPublishForm(pkg, manifest, tag, channel, notes, target, content)
     const version = await publishPackage(token, publishUrl, form)

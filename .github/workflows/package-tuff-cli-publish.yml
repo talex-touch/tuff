@@ -8,6 +8,7 @@ on:
     paths:
       - 'packages/tuff-cli/package.json'
       - 'packages/tuff-cli-core/package.json'
+      - 'packages/tuff-core/package.json'
       - 'packages/unplugin-export-plugin/package.json'
       - '.github/workflows/package-tuff-cli-publish.yml'
 
@@ -55,11 +56,13 @@ jobs:
           fi
 
           declare -a PACKAGE_NAMES=(
+            "@talex-touch/tuff-core"
             "@talex-touch/unplugin-export-plugin"
             "@talex-touch/tuff-cli"
           )
 
           declare -A PACKAGE_PATHS=(
+            ["@talex-touch/tuff-core"]="packages/tuff-core/package.json"
             ["@talex-touch/unplugin-export-plugin"]="packages/unplugin-export-plugin/package.json"
             ["@talex-touch/tuff-cli"]="packages/tuff-cli/package.json"
           )
@@ -94,7 +97,13 @@ jobs:
             current_version=$(get_version "${pkg_path}")
             prev_version=$(previous_version "${BEFORE_SHA}" "${pkg_path}")
 
-            if [ "${current_version}" != "${prev_version}" ]; then
+            if npm view "${package}@${current_version}" version >/dev/null 2>&1; then
+              npm_has_version=true
+            else
+              npm_has_version=false
+            fi
+
+            if [ "${current_version}" != "${prev_version}" ] || [ "${npm_has_version}" != "true" ]; then
               changed_json=$(echo "${changed_json}" | jq --arg name "${package}" --arg version "${current_version}" '. + [{name:$name, version:$version}]')
             fi
           done

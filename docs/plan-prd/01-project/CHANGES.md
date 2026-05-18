@@ -13,6 +13,40 @@
 
 ## 2026-05-18
 
+### release: prepare 2.4.10 stable line
+
+- `.github/workflows/package-utils-publish.yml`
+- `.github/workflows/package-tuffex-publish.yml`
+- `.github/workflows/package-tuff-cli-publish.yml`
+- `.github/workflows/package-tuff-intelligence-publish.yml`
+- `package.json`
+- `apps/core-app/package.json`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Root/CoreApp version has been set to `2.4.10` for the stable release line after explicit approval to backfill a lower stable version from the current `2.4.11-beta.1` working tree.
+  - Release notes now record that npm package upload is blocked until npm credentials are refreshed; local package dry-runs passed for the publishable subpackages.
+  - Local macOS release build completed with `--publish=never`; generated `apps/core-app/dist/mac-arm64/tuff.app` and `apps/core-app/dist/tuff.app.zip`, both reporting `2.4.10` bundle/app version. The mac builder config currently targets `dir`, with zip produced by post-processing.
+  - Package publish workflows now publish when the current package version is missing from npm even if `package.json` did not change relative to the pushed base; the CLI/build-tool workflow also includes `@talex-touch/tuff-core`.
+  - Existing Windows/Nexus release evidence blockers remain documented and must not be treated as implicitly closed by the version switch.
+
+### fix(cli): validate Nexus login state and publisher auth preflight
+
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli/src/cli/i18n/locales/zh.ts`
+- `packages/tuff-cli/src/cli/i18n/locales/en.ts`
+- `packages/tuff-cli-core/src/publish.ts`
+- `packages/tuff-cli-core/src/__tests__/publish-smoke.test.ts`
+- `apps/nexus/server/api/dashboard/auth/publisher.get.ts`
+- `packages/tuff-core/package.json`
+  - Interactive CLI no longer treats a local token file as a valid login by itself; existing tokens are validated against Nexus before entering the main menu, and rejected/expired sessions prompt for relogin instead of showing a misleading account menu.
+  - Account summary and remote plugin listing now distinguish unavailable auth/network/service states from an actual empty plugin list, while still showing local auth metadata as local-only evidence.
+  - `tuff publish` now preflights publisher access through `/api/dashboard/auth/publisher`, which uses `requireAuthOrApiKey(['plugin:publish'])`; older Nexus deployments fall back to the dashboard plugin lookup, avoiding the previous `/api/auth/me` API-key false rejection path.
+  - `@talex-touch/tuff-core` now has an explicit `tsup src/index.ts` build/dev entry so the publishable package can produce `dist` consistently.
+  - Validation not run per request; CLI/tuff-core publishable builds and package dry-runs were performed after the source change.
+
 ### chore(ci): retire standalone OmniPanel Gate workflow
 
 - `.github/workflows/omnipanel-gate.yml`
@@ -81,7 +115,7 @@
 - `docs/plan-prd/TODO.md`
   - `plugin:publish` API keys now imply `plugin:read`, so legacy publisher keys can pass the CLI's Dashboard plugin lookup before submitting a version package.
   - Newly created Dashboard API keys now default to `plugin:read` + `plugin:publish`, matching the actual publish flow instead of creating write-only keys that fail during preflight lookup.
-  - `tuff publish` now preserves local-only `--dry-run`, but performs an `/api/auth/me` auth preflight before real network publish and reports whether the bearer looks like an app JWT, API key, or opaque token.
+  - `tuff publish` now preserves local-only `--dry-run`; the first auth preflight introduced here was later replaced the same day by the publisher-specific `/api/dashboard/auth/publisher` guard to support API keys without `/api/auth/me` false rejection.
   - This makes app-token rejection cases actionable: users can distinguish expired/rotated device app tokens from API key scope issues before the package upload step.
   - Validation: focused Nexus scope tests and tuff-cli-core publish tests added for scope implication, default key scopes, auth preflight success, and auth rejection messaging.
 
