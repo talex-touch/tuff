@@ -36,6 +36,60 @@
   - Current state: source and focused tests are ready, but `browser-login-recovery` remains blocked until real packaged Electron/CDP screenshot and DOM artifacts are captured.
   - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/auth/index.test.ts" "src/renderer/src/views/base/settings/login-recovery-display.test.ts" "src/renderer/src/modules/auth/useAuth.test.ts"` passed; file-level ESLint passed; `typecheck:node`, `typecheck:web`, `build:unpack`, ad-hoc signing, codesign verify, and scoped `git diff --check` passed before capture was interrupted.
 
+### fix(core-app): pass App Index workbench packaged evidence
+
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppIndexManager.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-manager-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-manager-display.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/packaged-cdp-visible-capture-2026-05-17.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-strict-verify-result.md`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - Settings deep link `?section=file-index` now forces the nested File Index advanced/App Index workbench section open, so packaged evidence can reach the manager without relying on persisted developer settings.
+  - App Index manager no longer emits the raw `common.all` key for source/diagnostic filter chips; the new `appIndexManagerFilterAll` locale key renders localized `全部` / `All`.
+  - Rebuilt and re-signed the local `2.4.10-beta.25` packaged artifact, then recaptured packaged Electron CDP evidence on port `9338` with isolated userData. The capture added `/System/Applications/Calculator.app` through the renderer `app:app-index:add-path` channel, then applied the Steam source filter.
+  - `app-index-manager-current-dom.json` records `hasManager=true`, `preFilter.entryCount=1`, visible summary counts, all source chips, all diagnostic chips, active Steam filtered-empty state text, `hasRawI18n=false`, and no raw `common.all` matches.
+  - Marked `app-index-workbench` passed in the visible-experience manifest/checklist. Strict verification still intentionally fails, but the failure list no longer includes `corebox-search-states` or `app-index-workbench`; remaining blockers are browser login recovery, CoreBox AI Ask, OmniPanel Writing Tools, Workflow Review Queue, Provider Registry observability, and provider migration evidence.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/app-index-manager-display.test.ts"` passed; file-level ESLint passed for the App Index settings/render helper files and locale JSON inputs; `pnpm -C "apps/core-app" run build:unpack` passed; `codesign --verify --deep --strict "apps/core-app/dist/mac-arm64/tuff.app"` passed; strict visible-experience verification exits `1` as expected without `app-index-workbench` in the failure list.
+
+### fix(nexus): align plugin publish auth scopes and CLI diagnostics
+
+- `apps/nexus/server/utils/apiKeyScopes.ts`
+- `apps/nexus/server/api/dashboard/api-keys.post.ts`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `packages/tuff-cli-core/src/publish.ts`
+- `packages/tuff-cli-core/src/__tests__/publish-smoke.test.ts`
+- `apps/nexus/server/utils/__tests__/auth-api-key-scopes.test.ts`
+- `docs/plan-prd/TODO.md`
+  - `plugin:publish` API keys now imply `plugin:read`, so legacy publisher keys can pass the CLI's Dashboard plugin lookup before submitting a version package.
+  - Newly created Dashboard API keys now default to `plugin:read` + `plugin:publish`, matching the actual publish flow instead of creating write-only keys that fail during preflight lookup.
+  - `tuff publish` now preserves local-only `--dry-run`, but performs an `/api/auth/me` auth preflight before real network publish and reports whether the bearer looks like an app JWT, API key, or opaque token.
+  - This makes app-token rejection cases actionable: users can distinguish expired/rotated device app tokens from API key scope issues before the package upload step.
+  - Validation: focused Nexus scope tests and tuff-cli-core publish tests added for scope implication, default key scopes, auth preflight success, and auth rejection messaging.
+
+### fix(core-app): resolve CoreBox footer i18n in packaged evidence
+
+- `apps/core-app/src/renderer/src/components/render/CoreBoxFooter.vue`
+- `apps/core-app/src/renderer/src/components/render/coreBoxFooterDisplay.ts`
+- `apps/core-app/src/renderer/src/components/render/coreBoxFooterDisplay.test.ts`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/packaged-cdp-visible-capture-2026-05-17.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-strict-verify-result.md`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - CoreBox footer title now resolves `$i18n:*` message strings before display, matching the existing completion display i18n repair and preventing raw footer translation keys from leaking into packaged result evidence.
+  - Rebuilt and re-signed the local `2.4.10-beta.25` packaged artifact, then recaptured packaged Electron CDP evidence on port `9336` for CoreBox idle, no-result, searching/loading, and populated result states.
+  - `corebox-result-reasons-dom.json` now records `hasRawI18n=false` with localized completion/footer text, mixed application/system result rows, and source/quick-key signal rails fitting without visible overlap.
+  - Marked `corebox-search-states` passed in the visible-experience manifest/checklist. Strict verification still intentionally fails, but only on the remaining missing UI/provider evidence surfaces: App Index workbench, browser login recovery, CoreBox AI Ask, OmniPanel Writing Tools, Workflow Review Queue, Provider Registry observability, and provider migration evidence.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/components/render/coreBoxFooterDisplay.test.ts" "src/renderer/src/views/box/completion-display.test.ts" "src/renderer/src/components/render/sourceMeta.test.ts"` passed; file-level ESLint passed; `pnpm -C "apps/core-app" run typecheck:web` passed; `pnpm -C "apps/core-app" run build:unpack` passed; `codesign --verify --deep --strict "apps/core-app/dist/mac-arm64/tuff.app"` passed; strict visible-experience verification exits `1` as expected without `corebox-search-states` in the failure list.
+
 ### fix(core-app): apply backpressure to file cache database writes
 
 - `apps/core-app/src/main/db/db-write-scheduler.ts`
@@ -83,6 +137,118 @@
   - Command execution now validates empty commands, newline/null payloads, and cwd availability before spawning, then returns explicit `started`, `blocked`, or `cancelled` action status.
   - Added a local plugin test entrypoint covering shell capability diagnostics, permission-missing state, unsafe payload/cwd blocking, safe-shell fail-closed behavior, package script parsing, and relative cwd resolution.
 
+### feat(nexus): tighten Provider Registry observability empty states
+
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.test.ts`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/plan-prd/TODO.md`
+  - Provider Registry Admin now distinguishes initial empty, filtered empty, no-attention, no-unknown-provider, and no-failed-scene states for Provider and Scene observability lists.
+  - Filtered empty states now include a clear “show all” recovery action, keeping the admin surface closer to the command-center UI direction without changing backend APIs.
+  - Usage Ledger and Health tabs now expose next-action guidance for failed, planned, estimated, completed, unhealthy, degraded, and healthy rows, plus clearer empty-state detail for how to seed evidence.
+  - Usage Ledger and Health tabs now also have local filter chips with per-filter counts, so failed/planned/estimated usage rows and degraded/unhealthy health checks are scannable without adding backend query scope.
+  - Kept this as a source/UI helper improvement only: Provider Admin still needs a real admin session with registry data and visual capture before the visible-experience manifest can pass.
+
+### fix(core-app): broaden CoreBox result signal metadata mapping
+
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.ts`
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.test.ts`
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - CoreBox result signals now also read direct `meta.resultSignal`, top-level `status/reason/error`, provider health metadata, and top-level permissions instead of only relying on `meta.extension`.
+  - This keeps Provider/permission failures visible as status/reason/action pills across more result payload shapes without changing the renderer contract.
+  - CoreBox default result rows now constrain the right-side status/source/quick-key signal rail, truncate long source labels and reason text with full `title` fallbacks, and preserve the main title/subtitle scan area for compact command-center density.
+  - Follow-up packaged CDP recapture on 2026-05-18 confirmed the CoreBox search-state visible-experience item now passes with localized completion/footer text and no visible signal overlap.
+
+### fix(core-app): keep App Index workbench shell visible when empty
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppIndexManager.vue`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/plan-prd/TODO.md`
+  - App Index manager now keeps summary counts and source/diagnostic filter chips visible even when there are no manually managed app entries.
+  - This removes a recapture risk where a fresh or empty profile could only show the add-entry empty state and still fail the workbench summary/filter evidence requirement.
+  - Kept this as a source/UI visibility improvement only: packaged Electron recapture is still required before the App Index workbench visible-experience item can pass.
+
+### feat(core-app): tighten Workflow Review Queue metadata chips
+
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.test.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - Workflow Review Queue items now render labeled metadata chips for capability, provider/model, trace, latency, token count, risk, and failure reason.
+  - Medium-risk and failure chips use warning styling so failed copy/replace states are easier to scan before retrying or clearing failure.
+  - Kept this as a source/UI helper improvement only: packaged Electron workflow-run evidence is still required before the Review Queue visible-experience item can pass.
+
+### feat(core-app): tighten OmniPanel AI preview status metadata
+
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/ai-actions.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/ai-actions.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - OmniPanel Writing Tools preview now shows running, ready, failed, and confirming status details instead of relying on a short status pill only.
+  - AI preview metadata now renders labeled capability, provider, model, and latency chips so the result fits the command-center evidence model.
+  - Kept this as a source/UI helper improvement only: packaged Electron selected-context/result/copy/replace/failure evidence is still required before the OmniPanel visible-experience item can pass.
+
+### feat(store): add CloudShare plugin content packages
+
+- `packages/utils/types/cloud-share.ts`
+- `packages/utils/cloud-share/cloud-share-sdk.ts`
+- `packages/utils/plugin/sdk/cloud-share.ts`
+- `packages/utils/__tests__/cloud-share-sdk.test.ts`
+- `apps/nexus/server/utils/pluginContentStore.ts`
+- `apps/nexus/server/utils/pluginContentStore.test.ts`
+- `apps/nexus/server/api/store/plugin-content/*`
+- `apps/nexus/app/pages/store.vue`
+- `apps/nexus/app/types/store.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+- `plugins/touch-snippets/index.js`
+- `plugins/touch-snippets/index.test.cjs`
+- `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md`
+  - Added CloudShare / Content Store contract separate from private CloudSync semantics, with `PluginContentPackage` types, client SDK, plugin SDK wrapper, Nexus D1/Nitro fallback store, public list/detail/install APIs, authenticated publish API, and focused SDK/store tests.
+  - Nexus Store plugin detail now has a Content tab that lists shared content packages for the selected plugin.
+  - `touch-snippets` now supports snippet pack export/import helpers, sensitive-content filtering for pack export, CloudShare list/install helper actions, and tests for pack normalization/merge/publish/install helpers.
+
+### feat(core-app): tighten CoreBox AI answer status feedback
+
+- `apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue`
+- `apps/core-app/src/renderer/src/components/render/custom/core-intelligence-answer.ts`
+- `apps/core-app/src/renderer/src/components/render/custom/core-intelligence-answer.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - CoreBox AI Ask answer cards now show status-specific tone and readable pending/ready/error hints alongside provider metadata.
+  - Added a provider metadata pending fallback so incomplete AI payloads do not render as an empty footer.
+  - Kept this as a source/UI helper improvement only: packaged Electron answer or recoverable failure evidence is still required before the CoreBox AI Ask visible-experience item can pass.
+
+### docs(nexus): attach provider migration planning evidence
+
+- `apps/nexus/test/api/dashboard/intelligence/providers/migrate.local-dry-run.api.test.ts`
+- `apps/nexus/server/utils/intelligenceProviderRegistryBridge.local-dry-run.test.ts`
+- `apps/nexus/test/helpers/provider-registry-test-utils.ts`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/provider-migration-dry-run.md`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-experience-manifest.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/COREAPP_VISIBLE_EXPERIENCE_CHECKLIST.md`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - Added local isolated Provider Registry migration dry-run coverage through the migration API handler and the real migration bridge against Mock D1, recording the copied evidence format, dry-run readiness semantics, and secret-redaction boundary.
+  - Kept `provider-migration-evidence` blocked in the visible-experience manifest because the artifact is not a user-session Dashboard or real local-binding API dry-run result and must not claim registry-primary readiness.
+  - TODO and the completion audit now distinguish local isolated API/bridge dry-run evidence from required Phase 0/1 real Dashboard/API dry-run or execute evidence.
+
 ### fix(core-app): restore CoreBox search results on reopen
 
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
@@ -94,6 +260,59 @@
   - Search duplicate suppression now runs before incrementing the renderer search sequence, preventing skipped duplicate queries from invalidating an in-flight result.
   - Added focused renderer hook coverage for retained-query reopen refresh and duplicate-query in-flight result preservation.
   - Validation: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts" "src/renderer/src/modules/box/adapter/hooks/useVisibility.test.ts"` passed; `pnpm -C "apps/core-app" exec vue-tsc --noEmit -p tsconfig.web.json --composite false --pretty false` passed.
+
+### fix(core-app): record packaged CDP visible evidence and completion display repair
+
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/renderer/src/views/box/completion-display.ts`
+- `apps/core-app/src/renderer/src/views/box/completion-display.test.ts`
+- `packages/utils/transport/events/auth.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/auth/index.test.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/login-recovery-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/login-recovery-display.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/*`
+- `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
+- `docs/plan-prd/TODO.md`
+  - Captured real packaged Electron CDP evidence for the current `2.4.10-beta.25` local artifact, including first usable onboarding/login screen, Settings/About startup health, CoreBox idle state, no-result state, result-reason state, and loading-state artifacts.
+  - Marked `startup-first-screen` passed in the visible-experience manifest because the packaged app reaches a usable non-blank surface and Settings/About exposes version/build/startup-health, login state, and permission state.
+  - Initially kept `corebox-search-states` blocked because the packaged result-reason capture exposed raw i18n completion/footer text for a system screenshot action.
+  - Added `completion-display` helper coverage and resolved CoreBox completion i18n strings before prefix trimming in source. A 2026-05-18 follow-up rebuilt packaged artifact and CDP recapture closed the CoreBox search-state evidence gap.
+  - Propagated browser-open failure from main auth to renderer as optional login-start metadata, so the login dialog can keep the device authorization session waiting while showing manual login link and short-code recovery copy.
+  - Captured App Index file-index packaged CDP negative evidence: the current packaged artifact reaches App Index scheduling settings, but the manager workbench DOM is absent, so summary/filter evidence cannot be claimed without rebuild/recapture.
+  - Updated the completion audit and TODO to distinguish dev capture blockers from the now-validated packaged CDP capture path, while keeping Login Recovery, AI Ask, App Index, OmniPanel, Review Queue, Provider Admin, and provider migration visual evidence open until rebuilt packaged artifacts or real admin/API evidence are recaptured.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/box/completion-display.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/auth/index.test.ts" "src/renderer/src/views/base/settings/login-recovery-display.test.ts"` passed; `pnpm -C "apps/core-app" exec eslint "src/renderer/src/views/box/completion-display.ts" "src/renderer/src/views/box/completion-display.test.ts" "src/renderer/src/views/box/CoreBox.vue"` passed; `pnpm -C "apps/core-app" exec eslint "src/main/modules/auth/index.ts" "src/main/modules/auth/index.test.ts" "src/renderer/src/modules/auth/useAuth.ts" "src/renderer/src/views/base/settings/SettingUser.vue" "src/renderer/src/views/base/settings/login-recovery-display.ts" "src/renderer/src/views/base/settings/login-recovery-display.test.ts"` passed; `pnpm exec eslint "packages/utils/transport/events/auth.ts"` passed.
+
+### feat(plugins): consolidate snippets into a canonical plugin
+
+- `plugins/touch-snippets/manifest.json`
+- `plugins/touch-snippets/index.js`
+- `plugins/touch-snippets/index.test.cjs`
+- `plugins/touch-text-snippets/manifest.json`
+- `plugins/touch-text-snippets/index.js`
+- `plugins/touch-code-snippets/manifest.json`
+- `plugins/touch-code-snippets/index.js`
+  - Added canonical `touch-snippets` plugin with unified text/code/prompt/template snippet model, CoreBox search, copy, save, manage entries, placeholder replacement, usage metadata, and focused Node tests.
+  - Retired `touch-text-snippets` and `touch-code-snippets` from the CoreBox feature surface by leaving their manifests as legacy placeholders with empty `features`, no clipboard permissions, and inert lifecycle modules; directories remain in place until a separate deletion/migration cleanup is explicitly approved.
+  - Validation: `pnpm -C "plugins/touch-snippets" test` passed; `pnpm exec eslint --no-ignore "plugins/touch-snippets/index.js" "plugins/touch-snippets/index.test.cjs" "plugins/touch-text-snippets/index.js" "plugins/touch-code-snippets/index.js"` passed; `git diff --check -- "plugins/touch-snippets" "plugins/touch-text-snippets/manifest.json" "plugins/touch-text-snippets/index.js" "plugins/touch-code-snippets/manifest.json" "plugins/touch-code-snippets/index.js" "docs/plan-prd/01-project/CHANGES.md" "docs/plan-prd/TODO.md"` passed.
+
+### fix(core-app): stabilize packaged startup runtime closure
+
+- `apps/core-app/scripts/build-target/runtime-modules.js`
+- `apps/core-app/src/main/core/runtime-modules.contract.test.ts`
+- `apps/core-app/scripts/startup-benchmark-dev.mjs`
+- `apps/core-app/src/main/core/precore.ts`
+- `docs/engineering/reports/startup-packaged-hot-runs-2026-05-17/*`
+  - Packaged runtime module discovery now resolves pnpm symlinked dependencies from each package's real install path before falling back to workspace roots, preventing resources-side modules such as `compressing` from binding to an incompatible hoisted transitive dependency.
+  - Resource runtime closure traversal now visits duplicate package instances by package path/version before flattening copied resource modules by name, so nested legacy dependency chains such as `readable-stream -> process-nextick-args` are not silently skipped.
+  - Added contract coverage for pnpm-style symlink resolution and duplicate package instance traversal.
+  - Packaged startup benchmark now supports isolated `userData`, artifact preflight, app log deltas, and an early precore diagnostic file to distinguish "Electron did not enter JS" from later startup failures.
+  - Rebuilt and ad-hoc signed local `2.4.10-beta.25` macOS unpacked artifact, verified packaged startup no longer raises main-process missing-module dialogs, and captured hot benchmark evidence: latest 10 runs pass with Startup health P50 1700ms, P95 1900ms, 0 WARN, and 0 ERROR.
+  - Captured packaged cold benchmark evidence in `docs/engineering/reports/startup-packaged-cold-runs-2026-05-17/`: 10/10 runs pass with Startup health P50 1100ms, P95 3400ms, 0 WARN, and 0 ERROR; the first cold run is near the 3500ms budget and remains a UI first-screen verification target.
 
 ### fix(core-app): align CoreBox empty state and tray menu behavior
 
@@ -131,6 +350,8 @@
 ### test(core-app): record visible experience capture blockers
 
 - `apps/core-app/scripts/dev-electron-wrapper.mjs`
+- `apps/core-app/scripts/coreapp-visible-experience-readiness.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
 - `docs/engineering/reports/coreapp-visible-browser-smoke-2026-05-17/README.md`
 - `docs/engineering/reports/coreapp-visible-electron-dev-capture-2026-05-17/README.md`
 - `docs/engineering/reports/coreapp-visible-experience-completion-audit-2026-05-17.md`
@@ -138,7 +359,9 @@
   - Archived the plain-browser CoreApp smoke result as negative evidence: the page is blank because Electron preload is absent and `ipcRenderer` is undefined, so it cannot replace Electron UI proof.
   - Added opt-in `TUFF_DEV_ELECTRON_BUNDLE_ID` / `TUFF_DEV_ELECTRON_BUNDLE_NAME` support to the macOS dev wrapper so future capture runs can prepare a separate Electron.app bundle without changing the default dev bundle.
   - Recorded the Electron dev capture blocker: separate dev ports and the isolated bundle both built main/preload and announced a renderer URL, but exited after `start electron app...` without a remote-debugging port or UI artifact.
-  - The visible-experience audit now distinguishes negative capture evidence from completion evidence and keeps first-screen, CoreBox, login recovery, AI, OmniPanel, Review Queue, Provider Admin, packaged cold/hot, Windows, and Nexus evidence marked incomplete.
+  - Recorded the OS-level screenshot fallback blocker: macOS Screen Recording permission is not granted for the terminal/Codex process, so no Tuff window screenshot could be captured.
+  - Added `visible:experience:readiness`, a read-only preflight for packaged artifact version, browser-smoke boundary, Electron remote debugging availability, and Screen Recording state; the command now reports the current capture state as blocked instead of relying on manual report interpretation.
+  - The visible-experience audit now distinguishes negative capture evidence from completion evidence: packaged hot/cold startup evidence is covered for the current `2.4.10-beta.25` artifact, while first-screen, CoreBox, login recovery, AI, OmniPanel, Review Queue, Provider Admin, provider migration, Windows, and Nexus evidence remain incomplete.
 
 ### fix(core-app): smooth CoreBox height resize animation
 
@@ -187,6 +410,31 @@
   - Added source filters for UWP/Store, Steam, shortcut, protocol, AppRef, and path entries, plus diagnostic filters for attention, found, unchecked, and disabled states.
   - Filtered empty states now distinguish between no managed entries and no entries matching the current source/diagnostic filter.
   - Extended focused helper coverage for source/diagnostic filtering and workbench summary counts.
+
+### feat(core-app): clarify App Index manager empty states
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppIndexManager.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-manager-display.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+  - App Index manager now gives initial empty, source-filtered empty, attention-clean, no-diagnosed-hit, all-diagnosed, and no-disabled states distinct titles and recovery details.
+  - Empty states expose the relevant next action, either selecting an app file for a clean slate or clearing filters for filtered-out workbench states.
+  - Added focused helper coverage for empty-state resolution without changing the App Index transport or indexing contract.
+
+### fix(core-app): localize recoverable login failure copy
+
+- `apps/core-app/src/renderer/src/modules/auth/auth-error-message.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+  - Settings login failures now use localized, recoverable messages for browser-open failure, timeout, callback/token failure, device authorization, rate limit, quota, permission, expired session, network, and Nexus service outage cases.
+  - The auth error helper now exposes a focused classifier so new transport or callback errors can be tested without duplicating string matching in UI components.
+  - Existing non-component auth call sites keep the fallback message path, avoiding changes to renderer initialization or global toast lifecycle.
+
+### fix(core-app): infer CoreBox result status from known reasons
+
+- `apps/core-app/src/renderer/src/components/render/sourceMeta.ts`
+  - CoreBox result rows now infer failed/degraded status from known provider, auth, quota, permission, database, capability, platform, and indexing reason codes even when the result metadata forgot to set an explicit `status`.
+  - Unknown advisory reasons still stay silent unless a status is provided, avoiding noisy warning pills for feature-specific descriptive metadata.
+  - Extended focused result-signal coverage for reason-only metadata.
 
 ### fix(core-app): make desktop AI failures recoverable
 

@@ -28,6 +28,7 @@
 - `docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md` - Tuff 2.5.3 本地知识检索与上下文构建 PRD。
 - `docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md` - Tuff 2.5.5 本地开源模型运行时 PRD。
 - `docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md` - Tuff 2.5.8 ASR Provider Runtime PRD。
+- `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md` - CloudShare 插件内容包发布与 Store 展示 PRD。
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象。
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md` - 跨平台兼容与占位实现深度复核报告。
