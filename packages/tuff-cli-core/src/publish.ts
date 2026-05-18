@@ -189,12 +189,28 @@ function formatAuthDiagnostics(diagnostics: AuthTokenDiagnostics): string {
   return `Detected an opaque bearer token. Use \`${CLI_COMMAND_NAME} login\` or a valid \`tuff_\` API key.`
 }
 
+async function createDeviceHeaders(): Promise<Record<string, string>> {
+  const authState = await readAuthState()
+  const headers: Record<string, string> = {
+    'X-Device-Client': 'cli',
+  }
+  if (authState?.deviceId)
+    headers['X-Device-Id'] = authState.deviceId
+  if (authState?.deviceName)
+    headers['X-Device-Name'] = authState.deviceName
+  if (authState?.devicePlatform)
+    headers['X-Device-Platform'] = authState.devicePlatform
+  return headers
+}
+
 async function requestJsonWithAuth(token: string, url: string): Promise<NetworkResponse<string>> {
+  const deviceHeaders = await createDeviceHeaders()
   return await networkClient.request<string>({
     method: 'GET',
     url,
     headers: {
       Authorization: `Bearer ${token}`,
+      ...deviceHeaders,
     },
     responseType: 'text',
     validateStatus: ALL_HTTP_STATUS,
