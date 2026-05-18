@@ -7,7 +7,7 @@ import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
-import type { WidgetPrecompiledManifestEntry } from './widget'
+import type { WidgetPrecompiledManifestEntry, WidgetRuntime } from './widget'
 
 import type {
   PluginInstallRequest,
@@ -287,6 +287,10 @@ export interface IPluginFeature {
 
 export interface IFeatureInteraction {
   type: 'webcontent' | 'widget'
+  /**
+   * Widget renderer runtime. `arrow` and `webcomponent` are beta runtimes.
+   */
+  runtime?: WidgetRuntime
   /**
    * The relative path to the html file from the plugin root.
    */

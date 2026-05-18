@@ -39,6 +39,7 @@ function createSource(filePath: string, source: string): WidgetSource {
     hash: 'hash',
     loadedAt: Date.now(),
     pluginName: 'test-plugin',
+    runtime: filePath.includes('.arrow.') ? 'arrow' : 'vue',
     source,
     widgetId: 'test-plugin::test.widget'
   }
@@ -65,6 +66,23 @@ describe('widget processors transform helper contract', () => {
         target: 'node18'
       })
     )
+  })
+
+  it('allows ArrowJS core imports for beta TouchWidget runtime', async () => {
+    const processor = new WidgetScriptProcessor()
+
+    const compiled = await processor.compile(
+      createSource(
+        '/plugin/widgets/panel.arrow.ts',
+        'import { html } from "@arrow-js/core"; export default () => html`<div />`'
+      ),
+      createContext()
+    )
+
+    expect(compiled).toMatchObject({
+      dependencies: ['@arrow-js/core'],
+      runtime: 'arrow'
+    })
   })
 
   it('keeps precompiled cjs widgets out of esbuild', async () => {

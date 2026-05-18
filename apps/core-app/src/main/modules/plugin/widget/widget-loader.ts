@@ -1,7 +1,8 @@
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { WidgetRuntime } from '@talex-touch/utils/plugin/widget'
 import crypto from 'node:crypto'
 import path from 'node:path'
-import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
+import { makeWidgetId, resolveWidgetRuntime } from '@talex-touch/utils/plugin/widget'
 import fse from 'fs-extra'
 import { getNetworkService } from '../../network'
 import { pushWidgetFeatureIssue } from './widget-issue'
@@ -10,6 +11,7 @@ export interface WidgetSource {
   widgetId: string
   pluginName: string
   featureId: string
+  runtime: WidgetRuntime
   source: string
   filePath: string
   hash: string
@@ -17,6 +19,7 @@ export interface WidgetSource {
 }
 
 const WIDGET_ROOT = 'widgets'
+const ARROW_WIDGET_SOURCE_PATTERN = /\.arrow\.(ts|js)$/i
 
 export function resolveWidgetFilePath(pluginPath: string, rawPath: string): string | null {
   const widgetsDir = path.resolve(pluginPath, WIDGET_ROOT)
@@ -33,6 +36,14 @@ export function resolveWidgetFilePath(pluginPath: string, rawPath: string): stri
   }
 
   return path.extname(candidate) ? candidate : `${candidate}.vue`
+}
+
+export function resolveWidgetRuntimeFromFeature(feature: IPluginFeature): WidgetRuntime {
+  const declared = resolveWidgetRuntime(feature.interaction?.runtime)
+  if (declared !== 'vue') {
+    return declared
+  }
+  return ARROW_WIDGET_SOURCE_PATTERN.test(feature.interaction?.path ?? '') ? 'arrow' : 'vue'
 }
 
 export class WidgetLoader {
@@ -94,6 +105,7 @@ export class WidgetLoader {
         widgetId,
         pluginName: plugin.name,
         featureId: feature.id,
+        runtime: resolveWidgetRuntimeFromFeature(feature),
         source,
         filePath: widgetFile,
         hash,
@@ -163,6 +175,7 @@ export class WidgetLoader {
         widgetId,
         pluginName: plugin.name,
         featureId: feature.id,
+        runtime: resolveWidgetRuntimeFromFeature(feature),
         source,
         filePath: widgetUrl,
         hash,

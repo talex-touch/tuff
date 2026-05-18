@@ -225,6 +225,9 @@ importers:
 
   apps/core-app:
     dependencies:
+      '@arrow-js/core':
+        specifier: 1.0.6
+        version: 1.0.6
       '@electron-toolkit/preload':
         specifier: ^3.0.2
         version: 3.0.2(electron@41.3.0)
@@ -857,6 +860,9 @@ importers:
 
   packages/tuff-cli-core:
     dependencies:
+      '@arrow-js/core':
+        specifier: 1.0.6
+        version: 1.0.6
       '@talex-touch/utils':
         specifier: workspace:*
         version: link:../utils
@@ -1295,6 +1301,12 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(typescript@5.9.3)
 
+  plugins/touch-intelligence:
+    dependencies:
+      '@talex-touch/tuff-intelligence':
+        specifier: workspace:^
+        version: link:../../packages/tuff-intelligence
+
   plugins/touch-music:
     dependencies:
       '@milkdown/theme-nord':
@@ -1606,6 +1618,10 @@ packages:
     engines: {node: '>= 20'}
     peerDependencies:
       '@types/json-schema': ^7.0.15
+
+  '@arrow-js/core@1.0.6':
+    resolution: {integrity: sha512-75f4N0iHtHTwgxf9XS8a1vtfGZZmCvqT0Ix+ScDLclNuR9Fqp2yOIK1u8vmN1BPsS4aRfMVTdSFSmgGCqkJSCg==}
+    engines: {node: '>=20.19.0 || >=22.12.0'}
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
@@ -15382,6 +15398,8 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
       js-yaml: 4.1.1
+
+  '@arrow-js/core@1.0.6': {}
 
   '@asamuzakjp/css-color@3.2.0':
     dependencies:

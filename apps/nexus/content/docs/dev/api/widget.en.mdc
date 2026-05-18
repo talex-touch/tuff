@@ -16,6 +16,8 @@ Declare widgets in the manifest, then provide the renderer entry in your plugin 
 | `.ts` | Plain TypeScript | WidgetScriptProcessor |
 | `.js` | Plain JavaScript | WidgetScriptProcessor |
 | `.cjs` | Precompiled CommonJS | WidgetScriptProcessor |
+| `.arrow.ts` | TouchWidget ArrowJS beta | WidgetScriptProcessor |
+| `.arrow.js` | TouchWidget ArrowJS beta | WidgetScriptProcessor |
 
 ## Widget Types
 
@@ -79,6 +81,62 @@ code: |
 
 Remote widgets are fetched on each trigger; local file watching only applies to local sources.
 
+## TouchWidget Beta: ArrowJS
+
+The `arrow` runtime is the new recommended TouchWidget beta entry. Widget paths without an extension still default to `.vue`; ArrowJS widgets should explicitly use `.arrow.ts` or `.arrow.js` and declare `runtime: "arrow"`.
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "type": "widget",
+    "id": "todo.arrow",
+    "title": "Arrow Task Panel",
+    "interaction": {
+      "type": "widget",
+      "runtime": "arrow",
+      "path": "todo-panel.arrow.ts"
+    }
+  }
+---
+:::
+
+`widgets/todo-panel.arrow.ts`
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { component, html, reactive } from '@arrow-js/core'
+
+  export default component((props) => {
+    const state = reactive({ count: 0 })
+
+    return html`<button @click="${() => state.count++}">
+      ${() => props.payload?.title || 'TouchWidget'} ${() => state.count}
+    </button>`
+  })
+---
+:::
+
+## TouchWidget Beta: WebComponent
+
+The `webcomponent` runtime is also beta. The default export may be a defined tag name, an `HTMLElement` subclass, or `{ tagName, define }`. The host passes `item`, `payload`, `preview`, `widgetId`, and `hostKeyEvent` as DOM properties.
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "type": "widget",
+    "id": "todo.webcomponent",
+    "title": "WebComponent Panel",
+    "interaction": {
+      "type": "widget",
+      "runtime": "webcomponent",
+      "path": "todo-card.ts"
+    }
+  }
+---
+:::
+
 ## Vue Widget Example
 
 `widgets/todo-panel.vue`
@@ -137,6 +195,7 @@ code: |
 Widgets run in a sandboxed environment. Only these packages are allowed:
 
 - `vue`
+- `@arrow-js/core` (TouchWidget ArrowJS beta)
 - `@talex-touch/utils`
 - `@talex-touch/utils/plugin`
 - `@talex-touch/utils/plugin/sdk`

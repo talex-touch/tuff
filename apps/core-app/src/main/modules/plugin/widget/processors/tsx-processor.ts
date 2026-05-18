@@ -140,6 +140,7 @@ module.exports = __component
 
       return {
         code: wrappedCode,
+        runtime: source.runtime,
         styles: '', // TSX doesn't have embedded styles like Vue SFC
         dependencies: validation.allowedImports
       }

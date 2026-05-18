@@ -40,6 +40,8 @@ import type {
   TuffTag,
 } from '../tuff/tuff-dsl'
 
+type TuffCustomRenderType = TuffCustomRender['type']
+
 // ==================== Builder 类 ====================
 
 /**
@@ -240,7 +242,7 @@ class TuffItemBuilder {
    * @returns 当前构建器实例，用于链式调用
    */
   setCustomRender(
-    type: 'html' | 'vue' | 'react' | 'markdown',
+    type: TuffCustomRenderType,
     content: string,
     data?: Record<string, any>,
     styles?: string[],

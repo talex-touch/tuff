@@ -3,9 +3,31 @@ export const DEFAULT_WIDGET_RENDERERS = {
   CORE_INTELLIGENCE_ANSWER: 'core-intelligence-answer',
 } as const
 
+export const WIDGET_RUNTIME_BETA = 'beta' as const
+export const TOUCH_WIDGET_RECOMMENDED_RUNTIME = 'arrow' as const
+
+export const WIDGET_RUNTIMES = {
+  VUE: 'vue',
+  WEBCOMPONENT: 'webcomponent',
+  ARROW: TOUCH_WIDGET_RECOMMENDED_RUNTIME,
+} as const
+
+export type WidgetRuntime = (typeof WIDGET_RUNTIMES)[keyof typeof WIDGET_RUNTIMES]
+export type WidgetRuntimeStage = typeof WIDGET_RUNTIME_BETA | 'stable'
+
+export const WIDGET_BETA_RUNTIMES = [
+  WIDGET_RUNTIMES.WEBCOMPONENT,
+  WIDGET_RUNTIMES.ARROW,
+] as const
+
+export function isBetaWidgetRuntime(runtime: WidgetRuntime | undefined): boolean {
+  return runtime === WIDGET_RUNTIMES.WEBCOMPONENT || runtime === WIDGET_RUNTIMES.ARROW
+}
+
 export const WIDGET_COMPILED_DIR = '.compiled'
 export const WIDGET_RUNTIME_COMPILE_ENV = 'TUFF_WIDGET_RUNTIME_COMPILE'
 export const WIDGET_ALLOWED_PACKAGES = [
+  '@arrow-js/core',
   'vue',
   '@talex-touch/utils',
   '@talex-touch/utils/plugin',
@@ -24,6 +46,8 @@ export interface WidgetPrecompiledManifestEntry {
   sourcePath: string
   compiledPath: string
   metaPath?: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   hash: string
   styles: string
   dependencies?: string[]
@@ -35,6 +59,8 @@ export interface WidgetPrecompiledMeta {
   widgetId: string
   sourcePath: string
   compiledPath: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   hash: string
   styles: string
   dependencies?: string[]
@@ -53,6 +79,8 @@ export interface WidgetRegistrationPayload {
   pluginName: string
   featureId: string
   filePath: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   code: string
   styles: string
   hash: string
@@ -67,6 +95,8 @@ export interface WidgetFailurePayload {
   widgetId: string
   pluginName: string
   featureId: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   code: string
   message: string
   filePath?: string
@@ -76,6 +106,17 @@ export interface WidgetFailurePayload {
 
 export function makeWidgetId(pluginName: string, featureId: string): string {
   return `${pluginName}::${featureId}`
+}
+
+export function resolveWidgetRuntime(runtime: unknown): WidgetRuntime {
+  if (runtime === WIDGET_RUNTIMES.WEBCOMPONENT || runtime === WIDGET_RUNTIMES.ARROW) {
+    return runtime
+  }
+  return WIDGET_RUNTIMES.VUE
+}
+
+export function resolveWidgetRuntimeStage(runtime: WidgetRuntime | undefined): WidgetRuntimeStage {
+  return isBetaWidgetRuntime(runtime) ? WIDGET_RUNTIME_BETA : 'stable'
 }
 
 export function makeSafeWidgetFileId(widgetId: string): string {
@@ -89,4 +130,17 @@ export function isAllowedWidgetModule(moduleName: string): boolean {
   }
 
   return WIDGET_ALLOWED_PACKAGES.includes(normalized as WidgetAllowedPackage)
+}
+
+export interface TouchWidgetDefinition<TProps = Record<string, unknown>> {
+  runtime?: WidgetRuntime
+  render?: unknown
+  setup?: (props: TProps) => unknown
+  tagName?: string
+  define?: () => void
+  [key: string]: unknown
+}
+
+export function defineTouchWidget<T extends TouchWidgetDefinition | Function>(widget: T): T {
+  return widget
 }
