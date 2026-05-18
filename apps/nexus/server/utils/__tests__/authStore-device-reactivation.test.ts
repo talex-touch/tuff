@@ -52,11 +52,17 @@ class MockD1Database {
   }
 
   async run(sql: string, args: any[]) {
-    if (sql.includes('UPDATE auth_devices') && sql.includes('token_version = CASE WHEN revoked_at IS NOT NULL')) {
-      const [deviceName, platform, clientType, userAgent, lastSeenAt, deviceId, userId] = args
+    if (sql.includes('UPDATE auth_devices') && sql.includes('reactivateRevoked')) {
+      return { meta: { changes: 0 } }
+    }
+
+    if (sql.includes('UPDATE auth_devices') && sql.includes('token_version = CASE WHEN ? AND revoked_at IS NOT NULL')) {
+      const [deviceName, platform, clientType, userAgent, lastSeenAt, reactivateRevoked, rotateOnReactivation, deviceId, userId] = args
       const key = `${userId}:${deviceId}`
       const row = this.devices.get(key)
       if (row) {
+        const shouldReactivate = Boolean(reactivateRevoked)
+        const shouldRotate = Boolean(rotateOnReactivation)
         const wasRevoked = Boolean(row.revoked_at)
         this.devices.set(key, {
           ...row,
@@ -65,8 +71,8 @@ class MockD1Database {
           client_type: clientType ?? row.client_type,
           user_agent: userAgent ?? row.user_agent,
           last_seen_at: lastSeenAt,
-          revoked_at: null,
-          token_version: wasRevoked ? row.token_version + 1 : row.token_version,
+          revoked_at: shouldReactivate ? null : row.revoked_at,
+          token_version: shouldRotate && wasRevoked ? row.token_version + 1 : row.token_version,
         })
       }
       return { meta: { changes: row ? 1 : 0 } }
@@ -154,28 +160,49 @@ function createEvent(db: MockD1Database) {
   } as any
 }
 
+function seedRevokedDevice(db: MockD1Database) {
+  db.devices.set('user-1:device-1', {
+    id: 'device-1',
+    user_id: 'user-1',
+    device_name: 'Old CLI',
+    platform: 'darwin-arm64',
+    client_type: 'cli',
+    trusted_at: null,
+    user_agent: 'old',
+    last_seen_at: '2026-05-18T00:00:00.000Z',
+    created_at: '2026-05-18T00:00:00.000Z',
+    revoked_at: '2026-05-18T01:00:00.000Z',
+    token_version: 2,
+  })
+}
+
 describe('auth device reactivation', () => {
-  it('reactivates a revoked device and rotates token version on browser re-login', async () => {
+  it('does not reactivate a revoked device during regular device upsert', async () => {
     const db = new MockD1Database()
-    db.devices.set('user-1:device-1', {
-      id: 'device-1',
-      user_id: 'user-1',
-      device_name: 'Old CLI',
-      platform: 'darwin-arm64',
-      client_type: 'cli',
-      trusted_at: null,
-      user_agent: 'old',
-      last_seen_at: '2026-05-18T00:00:00.000Z',
-      created_at: '2026-05-18T00:00:00.000Z',
-      revoked_at: '2026-05-18T01:00:00.000Z',
-      token_version: 2,
-    })
+    seedRevokedDevice(db)
 
     const { upsertDevice } = await import('../authStore')
     const device = await upsertDevice(createEvent(db), 'user-1', 'device-1', {
       deviceName: 'New CLI',
       platform: 'darwin-arm64',
       clientType: 'cli',
+    })
+
+    expect(device.revokedAt).toBe('2026-05-18T01:00:00.000Z')
+    expect(device.tokenVersion).toBe(2)
+    expect(device.deviceName).toBe('New CLI')
+  })
+
+  it('reactivates a revoked device and rotates token version on browser re-login', async () => {
+    const db = new MockD1Database()
+    seedRevokedDevice(db)
+
+    const { upsertDevice } = await import('../authStore')
+    const device = await upsertDevice(createEvent(db), 'user-1', 'device-1', {
+      deviceName: 'New CLI',
+      platform: 'darwin-arm64',
+      clientType: 'cli',
+      reactivateRevoked: true,
     })
 
     expect(device.revokedAt).toBeNull()

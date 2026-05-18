@@ -200,7 +200,7 @@ export async function createAppToken(
     deviceId?: string | null
     ttlSeconds?: number
     grantType?: 'short' | 'long'
-    deviceMeta?: { deviceName?: string | null; platform?: string | null; clientType?: 'app' | 'cli' | 'external' | null }
+    deviceMeta?: { deviceName?: string | null; platform?: string | null; clientType?: 'app' | 'cli' | 'external' | null; reactivateRevoked?: boolean | null }
   }
 ): Promise<string> {
   const secret = getAppJwtSecret(event)
