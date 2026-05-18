@@ -7,9 +7,16 @@ on:
       - master
     paths:
       - 'packages/tuff-cli/package.json'
+      - 'packages/tuff-cli/src/**'
+      - 'packages/tuff-cli/tsup.config.ts'
       - 'packages/tuff-cli-core/package.json'
+      - 'packages/tuff-cli-core/src/**'
+      - 'packages/tuff-cli-core/tsup.config.ts'
       - 'packages/tuff-core/package.json'
+      - 'packages/tuff-core/src/**'
       - 'packages/unplugin-export-plugin/package.json'
+      - 'packages/unplugin-export-plugin/src/**'
+      - 'packages/unplugin-export-plugin/tsup.config.ts'
       - '.github/workflows/package-tuff-cli-publish.yml'
 
 jobs:
