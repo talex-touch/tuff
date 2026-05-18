@@ -47,6 +47,11 @@ const AUTH_PROFILE_REQUEST_RETRY_DELAY_MS = 800
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
 const DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS = 3
+const VISIBLE_AUTH_EVIDENCE_FLAG = 'TUFF_VISIBLE_EVIDENCE_AUTH'
+const VISIBLE_AUTH_EVIDENCE_DEVICE_START_JSON = 'TUFF_VISIBLE_EVIDENCE_AUTH_DEVICE_START_JSON'
+const VISIBLE_AUTH_EVIDENCE_BROWSER_OPEN_FAIL = 'TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL'
+const VISIBLE_AUTH_EVIDENCE_POLL_STATUS = 'TUFF_VISIBLE_EVIDENCE_AUTH_POLL_STATUS'
+const VISIBLE_AUTH_EVIDENCE_POLL_DELAY_MS = 'TUFF_VISIBLE_EVIDENCE_AUTH_POLL_DELAY_MS'
 
 type AuthStateListener = (state: AuthState) => void
 
@@ -179,6 +184,73 @@ export function getDevicePlatform(): string | null {
 
 function resolveAuthBaseUrl(): string {
   return getRuntimeNexusBaseUrl()
+}
+
+function isTruthyEnvFlag(value: string | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+function isVisibleAuthEvidenceMode(): boolean {
+  return (
+    isTruthyEnvFlag(process.env[VISIBLE_AUTH_EVIDENCE_FLAG]) &&
+    (isTruthyEnvFlag(process.env.TUFF_STARTUP_BENCHMARK_ONCE) || process.env.NODE_ENV === 'test')
+  )
+}
+
+function parsePositiveIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim()
+  if (!raw) return fallback
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
+}
+
+function resolveVisibleAuthEvidenceDeviceStart(): DeviceAuthStartResponse | null {
+  if (!isVisibleAuthEvidenceMode()) {
+    return null
+  }
+
+  const raw = process.env[VISIBLE_AUTH_EVIDENCE_DEVICE_START_JSON]?.trim()
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as Partial<DeviceAuthStartResponse>
+      if (typeof parsed.deviceCode === 'string' && typeof parsed.authorizeUrl === 'string') {
+        return {
+          deviceCode: parsed.deviceCode,
+          authorizeUrl: parsed.authorizeUrl,
+          userCode: typeof parsed.userCode === 'string' ? parsed.userCode : undefined,
+          expiresAt: typeof parsed.expiresAt === 'string' ? parsed.expiresAt : undefined,
+          intervalSeconds:
+            typeof parsed.intervalSeconds === 'number' ? parsed.intervalSeconds : undefined
+        }
+      }
+    } catch (error) {
+      authLog.warn('Failed to parse visible auth evidence device start JSON', { error })
+    }
+  }
+
+  return {
+    deviceCode: 'visible-evidence-device-code',
+    userCode: 'TUFF26',
+    authorizeUrl: new URL('/device-auth?code=TUFF26', resolveAuthBaseUrl()).toString(),
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    intervalSeconds: 60
+  }
+}
+
+function shouldForceVisibleAuthBrowserOpenFailure(): boolean {
+  return (
+    isVisibleAuthEvidenceMode() &&
+    isTruthyEnvFlag(process.env[VISIBLE_AUTH_EVIDENCE_BROWSER_OPEN_FAIL])
+  )
+}
+
+async function openAuthUrlExternally(authorizeUrl: string): Promise<void> {
+  if (shouldForceVisibleAuthBrowserOpenFailure()) {
+    throw new Error('Visible auth evidence forced browser open failure')
+  }
+  await shell.openExternal(authorizeUrl)
 }
 
 function normalizeBearerToken(token: string): string {
@@ -528,6 +600,13 @@ interface DeviceAuthStartResponse {
   intervalSeconds?: number
 }
 
+interface BrowserLoginStartResult {
+  authorizeUrl: string
+  userCode?: string
+  expiresAt?: string
+  browserOpenFailed?: boolean
+}
+
 interface DeviceAuthPollResponse {
   status?: string
   appToken?: string
@@ -718,6 +797,18 @@ async function initializeAuthState(): Promise<void> {
 }
 
 async function startDeviceAuthRequest(): Promise<DeviceAuthStartResponse> {
+  const evidenceStart = resolveVisibleAuthEvidenceDeviceStart()
+  if (evidenceStart) {
+    authLog.info('Using visible auth evidence device auth start response', {
+      meta: {
+        hasDeviceCode: Boolean(evidenceStart.deviceCode),
+        hasAuthorizeUrl: Boolean(evidenceStart.authorizeUrl),
+        intervalSeconds: evidenceStart.intervalSeconds ?? null
+      }
+    })
+    return evidenceStart
+  }
+
   const { deviceId, deviceName, devicePlatform } = ensureDeviceProfile()
   const url = new URL('/api/app-auth/device/start', resolveAuthBaseUrl()).toString()
   const startedAt = Date.now()
@@ -777,6 +868,43 @@ async function pollDeviceAuth(
   intervalSeconds = DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS,
   isCurrentAttempt: () => boolean = () => true
 ): Promise<DeviceAuthPollResult> {
+  if (isVisibleAuthEvidenceMode()) {
+    const status = process.env[VISIBLE_AUTH_EVIDENCE_POLL_STATUS]?.trim()
+    if (status) {
+      const delayMs = parsePositiveIntegerEnv(VISIBLE_AUTH_EVIDENCE_POLL_DELAY_MS, 0)
+      if (delayMs > 0) {
+        await delay(delayMs)
+      }
+      if (!isCurrentAttempt()) {
+        return { status: 'cancelled' }
+      }
+      if (status === 'approved') {
+        return {
+          status: 'approved',
+          token: process.env.TUFF_VISIBLE_EVIDENCE_AUTH_APP_TOKEN || 'visible-evidence-app-token'
+        }
+      }
+      if (
+        status === 'expired' ||
+        status === 'cancelled' ||
+        status === 'timeout' ||
+        status === 'browser_closed' ||
+        status === 'rejected'
+      ) {
+        return {
+          status,
+          message:
+            status === 'rejected'
+              ? (process.env.TUFF_VISIBLE_EVIDENCE_AUTH_REJECT_MESSAGE ?? 'Rejected by evidence')
+              : null
+        }
+      }
+      authLog.warn('Ignoring unsupported visible auth evidence poll status', {
+        meta: { status }
+      })
+    }
+  }
+
   const url = new URL('/api/app-auth/device/poll', resolveAuthBaseUrl()).toString()
   const intervalMs = Math.max(1000, intervalSeconds * 1000)
   const startAt = Date.now()
@@ -906,7 +1034,9 @@ async function completeDeviceAuthLogin(
   }
 }
 
-async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
+async function openLoginPage(
+  mode: 'sign-in' | 'sign-up' = 'sign-in'
+): Promise<BrowserLoginStartResult> {
   authLog.info('Opening browser login page', { meta: { mode } })
   const previousDeviceCode = activeDeviceAuthCode
   const attemptId = ++deviceAuthLoginAttempt
@@ -937,7 +1067,19 @@ async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<v
       authorizePath: authorizeUrl.pathname
     }
   })
-  await shell.openExternal(authorizeUrl.toString())
+  const loginStart = {
+    authorizeUrl: authorizeUrl.toString(),
+    userCode: auth.userCode,
+    expiresAt: auth.expiresAt,
+    browserOpenFailed: false
+  }
+
+  try {
+    await openAuthUrlExternally(loginStart.authorizeUrl)
+  } catch (error) {
+    loginStart.browserOpenFailed = true
+    authLog.warn('Failed to open browser login page', { error })
+  }
   void completeDeviceAuthLogin(
     deviceCode,
     auth.intervalSeconds ?? DEVICE_AUTH_DEFAULT_INTERVAL_SECONDS,
@@ -951,6 +1093,7 @@ async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<v
     }
     authLog.warn('Device auth login failed', { error })
   })
+  return loginStart
 }
 
 async function handleExternalAuthCallback(token: string, appToken?: string): Promise<boolean> {
@@ -1405,8 +1548,8 @@ export class AuthModule extends BaseModule<TalexEvents> {
         AuthEvents.legacy.login,
         async (payload: AuthLoginRequest) => {
           const mode = payload?.mode === 'sign-up' ? 'sign-up' : 'sign-in'
-          await openLoginPage(mode)
-          return { initiated: true }
+          const loginStart = await openLoginPage(mode)
+          return { initiated: true, ...loginStart }
         }
       ),
       ...registerAuthHandler(AuthEvents.session.logout, AuthEvents.legacy.logout, async () => {

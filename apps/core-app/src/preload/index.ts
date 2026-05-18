@@ -18,6 +18,9 @@ interface CoreAppPreloadAPI {
   sendPreloadEvent: (event: LoadingEvent) => void
   getStartupContext: () => Promise<StartupContext | null>
   getStartupContextSnapshot: () => StartupContext | null
+  getVisibleEvidenceConfig: () => {
+    authLoginTimeoutMs?: number
+  }
   getProcessInfo: () => {
     arch: string
     platform: string
@@ -77,6 +80,21 @@ const startupContextPromise = requestStartupInfo().then((startupInfo) => {
 
 const isDebugMode = Boolean(process.env.DEBUG) || location.search.includes('debug-preload')
 
+function parsePositiveIntegerEnv(name: string): number | undefined {
+  const raw = process.env[name]?.trim()
+  if (!raw) return undefined
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined
+}
+
+function isVisibleAuthEvidenceEnabled(): boolean {
+  const raw = process.env.TUFF_VISIBLE_EVIDENCE_AUTH?.trim().toLowerCase()
+  return (
+    (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') &&
+    process.env.TUFF_STARTUP_BENCHMARK_ONCE === '1'
+  )
+}
+
 const api: CoreAppPreloadAPI = {
   /**
    * Update loading overlay from renderer when needed.
@@ -95,6 +113,14 @@ const api: CoreAppPreloadAPI = {
   },
   getStartupContextSnapshot() {
     return startupContextSnapshot
+  },
+  getVisibleEvidenceConfig() {
+    if (!isVisibleAuthEvidenceEnabled()) {
+      return {}
+    }
+    return {
+      authLoginTimeoutMs: parsePositiveIntegerEnv('TUFF_VISIBLE_EVIDENCE_AUTH_LOGIN_TIMEOUT_MS')
+    }
   },
   getProcessInfo() {
     return {

@@ -7,6 +7,10 @@ export interface AuthLoginRequest {
 
 export interface AuthInitiatedResponse {
   initiated: boolean
+  authorizeUrl?: string
+  userCode?: string
+  expiresAt?: string
+  browserOpenFailed?: boolean
 }
 
 export interface AuthSuccessResponse {

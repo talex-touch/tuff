@@ -3,7 +3,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import CreditsSummaryBlock from '~/components/account/CreditsSummaryBlock.vue'
@@ -12,6 +12,7 @@ import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { resolveAuthErrorMessage } from '~/modules/auth/auth-error-message'
 import { getSyncPreferenceState, setSyncPreferenceByUser } from '~/modules/auth/sync-preferences'
 import { useAuth } from '~/modules/auth/useAuth'
 import {
@@ -21,6 +22,7 @@ import {
 } from '~/modules/nexus/runtime-base'
 import { triggerManualSync } from '~/modules/sync'
 import { appSetting } from '~/modules/storage/app-storage'
+import { resolveLoginManualHint } from './login-recovery-display'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -244,6 +246,16 @@ const loginDialogDescription = computed(() => {
   }
   return t('settingUser.loginDialogPreparingDesc')
 })
+const loginManualHint = computed(() => {
+  return resolveLoginManualHint(
+    {
+      authorizeUrl: authLoadingState.loginAuthorizeUrl,
+      userCode: authLoadingState.loginUserCode,
+      browserOpenFailed: authLoadingState.loginBrowserOpenFailed
+    },
+    t
+  )
+})
 
 async function handleLogin() {
   loginDialogVisible.value = true
@@ -256,9 +268,9 @@ async function handleLogin() {
       }, 700)
       return
     }
-    loginErrorMessage.value = result.error instanceof Error ? result.error.message : ''
+    loginErrorMessage.value = resolveAuthErrorMessage(result.error, 'AUTH_ERROR', t)
   } catch (error) {
-    loginErrorMessage.value = error instanceof Error ? error.message : ''
+    loginErrorMessage.value = resolveAuthErrorMessage(error, 'AUTH_ERROR', t)
     toast.error(t('settingUser.loginError'))
   }
 }
@@ -268,6 +280,36 @@ async function handleReopenLogin() {
     await reopenBrowserLogin()
   } catch {
     toast.error(t('settingUser.loginError'))
+  }
+}
+
+async function copyLoginAuthorizeUrl() {
+  if (!authLoadingState.loginAuthorizeUrl) {
+    return
+  }
+  try {
+    await transport.send(ClipboardEvents.write, {
+      type: 'text',
+      value: authLoadingState.loginAuthorizeUrl
+    })
+    toast.success(t('settingUser.loginLinkCopied'))
+  } catch {
+    toast.error(t('settingUser.loginLinkCopyFailed'))
+  }
+}
+
+async function copyLoginUserCode() {
+  if (!authLoadingState.loginUserCode) {
+    return
+  }
+  try {
+    await transport.send(ClipboardEvents.write, {
+      type: 'text',
+      value: authLoadingState.loginUserCode
+    })
+    toast.success(t('settingUser.loginCodeCopied'))
+  } catch {
+    toast.error(t('settingUser.loginCodeCopyFailed'))
   }
 }
 
@@ -460,8 +502,21 @@ onMounted(() => {
         />
       </div>
       <p>{{ loginDialogDescription }}</p>
+      <p v-if="loginManualHint" class="login-dialog__manual-hint">
+        {{ loginManualHint }}
+      </p>
     </div>
     <template #footer>
+      <TxButton
+        v-if="authLoadingState.loginAuthorizeUrl"
+        variant="ghost"
+        @click="copyLoginAuthorizeUrl"
+      >
+        {{ t('settingUser.copyLoginLink') }}
+      </TxButton>
+      <TxButton v-if="authLoadingState.loginUserCode" variant="ghost" @click="copyLoginUserCode">
+        {{ t('settingUser.copyLoginCode') }}
+      </TxButton>
       <TxButton
         v-if="authLoadingState.loginStage === 'waiting'"
         variant="ghost"
@@ -578,5 +633,13 @@ onMounted(() => {
 .login-dialog__icon.is-failed {
   color: var(--tx-color-danger);
   background: color-mix(in srgb, var(--tx-color-danger) 14%, transparent);
+}
+
+.login-dialog__manual-hint {
+  max-width: 420px;
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx-text-color-placeholder);
 }
 </style>
