@@ -1,0 +1,96 @@
+{
+  "id": "com.tuffex.snippets",
+  "name": "touch-snippets",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260428,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "统一片段库：搜索、保存并复制文本、代码与提示词模板",
+  "main": "index.js",
+  "permissions": {
+    "required": ["clipboard.write"],
+    "optional": ["clipboard.read"]
+  },
+  "permissionReasons": {
+    "clipboard.write": "复制片段内容到剪贴板",
+    "clipboard.read": "支持 {{clipboard}} 占位符与从剪贴板保存片段"
+  },
+  "features": [
+    {
+      "id": "snippets-search",
+      "name": "片段库",
+      "desc": "搜索并复制文本、代码与提示词片段",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["snippet", "snippets", "片段", "模板", "话术", "代码", "prompt"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["snippet", "snippets", "片段", "模板", "话术", "代码", "prompt"]
+        }
+      ]
+    },
+    {
+      "id": "snippets-save",
+      "name": "保存片段",
+      "desc": "将输入或剪贴板内容保存为片段",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["snippet-save", "保存片段", "新增片段", "save snippet"],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["snippet-save", "保存片段", "新增片段"]
+        }
+      ]
+    },
+    {
+      "id": "snippets-manage",
+      "name": "片段库管理",
+      "desc": "查看片段数量并打开配置目录",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["snippet-manage", "片段管理", "模板管理", "配置"],
+      "push": true,
+      "priority": 3,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["snippet-manage", "片段管理", "模板管理"]
+        }
+      ]
+    }
+  ]
+}
