@@ -1356,6 +1356,8 @@ importers:
         specifier: 7.3.2
         version: 7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
 
+  plugins/touch-snippets: {}
+
   plugins/touch-translation:
     dependencies:
       '@talex-touch/tuff-intelligence':
@@ -1449,6 +1451,8 @@ importers:
       vue-tsc:
         specifier: ^3.2.7
         version: 3.2.7(typescript@5.9.3)
+
+  plugins/touch-workspace-scripts: {}
 
 packages:
 
