@@ -71,6 +71,7 @@ export default defineEventHandler(async (event) => {
       deviceName: request.deviceName ?? null,
       platform: request.devicePlatform ?? null,
       clientType,
+      reactivateRevoked: true,
     },
   })
   await logLoginAttempt(event, {

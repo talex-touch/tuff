@@ -2141,7 +2141,7 @@ export async function upsertDevice(
   event: H3Event,
   userId: string,
   deviceId: string,
-  data?: { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null }
+  data?: { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null, reactivateRevoked?: boolean | null }
 ): Promise<AuthDevice> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -2155,8 +2155,8 @@ export async function upsertDevice(
           client_type = COALESCE(?, client_type),
           user_agent = COALESCE(?, user_agent),
           last_seen_at = ?,
-          revoked_at = NULL,
-          token_version = CASE WHEN revoked_at IS NOT NULL THEN token_version + 1 ELSE token_version END
+          revoked_at = CASE WHEN ? THEN NULL ELSE revoked_at END,
+          token_version = CASE WHEN ? AND revoked_at IS NOT NULL THEN token_version + 1 ELSE token_version END
       WHERE id = ? AND user_id = ?
     `).bind(
       data?.deviceName ?? null,
@@ -2164,6 +2164,8 @@ export async function upsertDevice(
       data?.clientType ?? null,
       getUserAgent(event),
       now,
+      data?.reactivateRevoked ? 1 : 0,
+      data?.reactivateRevoked ? 1 : 0,
       deviceId,
       userId
     ).run()
