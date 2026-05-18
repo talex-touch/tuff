@@ -33,6 +33,9 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - Contributors README automation was retired on `2026-04-22`
   - The previous `readme-contributors.yml` workflow kept generating duplicate README PRs on `master` pushes, so it was disabled and removed to keep the official PR queue stable
 
+- OmniPanel Gate automation was retired on `2026-05-18`
+  - The previous `omnipanel-gate.yml` workflow ran OmniPanel scoped typecheck/lint/unit/build/smoke as an independent GitHub Actions gate. It has been removed; OmniPanel regressions now rely on ordinary nearest-path validation or explicit local commands instead of an automatic standalone gate.
+
 
 ### Package CI Workflows
 
