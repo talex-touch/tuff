@@ -156,6 +156,46 @@ describe('builder widget precompile', () => {
     })
   })
 
+  it('precompiles beta Arrow TouchWidget entries with runtime metadata', async () => {
+    await withPluginFixture(async (root) => {
+      const manifest = await readManifest(root)
+      manifest.features[0].interaction = {
+        type: 'widget',
+        path: 'panel.arrow.ts',
+        runtime: 'arrow',
+      }
+      await writeManifest(root, manifest)
+      await fs.writeFile(
+        path.join(root, 'widgets', 'panel.arrow.ts'),
+        [
+          'import { component, html } from "@arrow-js/core"',
+          'export default component((props) => html`<section class="arrow-panel">${() => props.payload?.title || "Arrow"}</section>`)',
+        ].join('\n'),
+      )
+
+      await build({
+        root,
+        outDir: 'dist',
+        versionSync: { enabled: false },
+      })
+
+      const packagedManifest = await fs.readJson(path.join(root, 'dist', 'build', 'manifest.json'))
+      const widget = packagedManifest.build.widgets[0]
+
+      expect(widget).toMatchObject({
+        dependencies: ['@arrow-js/core'],
+        featureId: 'translate',
+        runtime: 'arrow',
+        runtimeStage: 'beta',
+        sourcePath: 'widgets/panel.arrow.ts',
+        widgetId: 'demo-plugin::translate',
+      })
+      await expect(
+        fs.pathExists(path.join(root, 'dist', 'build', widget.compiledPath)),
+      ).resolves.toBe(true)
+    })
+  })
+
   it('fails when a widget relative import escapes widgets directory', async () => {
     await withPluginFixture(async (root) => {
       await fs.writeFile(

@@ -1,9 +1,11 @@
 import type {
   WidgetFailurePayload,
-  WidgetRegistrationPayload
+  WidgetRegistrationPayload,
+  WidgetRuntime
 } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
-import { WIDGET_ALLOWED_PACKAGES } from '@talex-touch/utils/plugin/widget'
+import { WIDGET_ALLOWED_PACKAGES, WIDGET_RUNTIMES } from '@talex-touch/utils/plugin/widget'
+import * as ArrowCore from '@arrow-js/core'
 import * as TalexUtils from '@talex-touch/utils'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
@@ -15,9 +17,9 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
-import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
-import { devLog } from '~/utils/dev-log'
-import { createRendererLogger } from '~/utils/renderer-log'
+import { registerCustomRenderer, unregisterCustomRenderer } from '../box/custom-render'
+import { devLog } from '../../utils/dev-log'
+import { createRendererLogger } from '../../utils/renderer-log'
 import {
   cacheWidgetRuntimeSource,
   clearWidgetFailure,
@@ -589,6 +591,7 @@ const ALLOWED_PACKAGES: readonly string[] = WIDGET_ALLOWED_PACKAGES
 
 // Pre-loaded module cache using ES imports
 const preloadedModuleCache: Record<string, unknown> = {
+  '@arrow-js/core': ArrowCore,
   vue: Vue,
   '@talex-touch/utils': TalexUtils,
   '@talex-touch/utils/plugin': TalexUtilsPlugin,
@@ -610,6 +613,29 @@ type WidgetComponent = {
 } & Record<string, unknown>
 
 type WidgetFunctionalComponent = (props: Record<string, unknown>, ctx: SetupContext) => unknown
+type WidgetHostProps = {
+  item?: unknown
+  payload?: unknown
+  preview?: boolean
+  widgetId?: string
+  hostKeyEvent?: unknown
+}
+type ArrowHostState = WidgetHostProps & {
+  mounted: boolean
+}
+type ArrowPrimitiveRenderable = string | number | boolean | null | undefined
+type ArrowTemplateLike = ((parent?: Node | DocumentFragment) => unknown) & { isT?: boolean }
+type ArrowComponentCallLike = {
+  h: (...args: unknown[]) => unknown
+  p?: unknown
+  e?: unknown
+  k?: unknown
+}
+type CustomElementDefinitionExport = {
+  tagName?: string
+  define?: () => void
+  element?: typeof HTMLElement
+}
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -661,6 +687,44 @@ function normalizeWidgetExport(exported: unknown, renderExport?: unknown): unkno
     ...(target as Record<string, unknown>),
     render: renderExport
   })
+}
+
+function resolveComponentExport(moduleExports: unknown): {
+  defaultExport: unknown
+  renderExport: unknown
+  exported: unknown
+} {
+  const defaultExport =
+    isObjectLike(moduleExports) && 'default' in moduleExports
+      ? (moduleExports as { default?: unknown }).default
+      : undefined
+  const renderExport =
+    isObjectLike(moduleExports) && 'render' in moduleExports
+      ? (moduleExports as { render?: unknown }).render
+      : undefined
+
+  const hasSetup = (value: unknown): boolean =>
+    Boolean(value && (typeof value === 'object' || typeof value === 'function') && 'setup' in value)
+  const hasRender = (value: unknown): boolean =>
+    Boolean(
+      value && (typeof value === 'object' || typeof value === 'function') && 'render' in value
+    )
+
+  let exported =
+    (hasSetup(defaultExport) ? defaultExport : undefined) ??
+    (hasSetup(moduleExports) ? moduleExports : undefined) ??
+    (hasRender(defaultExport) ? defaultExport : undefined) ??
+    (hasRender(moduleExports) ? moduleExports : undefined) ??
+    defaultExport ??
+    moduleExports
+
+  exported = normalizeWidgetExport(exported, renderExport)
+  if (renderExport && exported && typeof exported === 'object' && !hasRender(exported)) {
+    const target = exported as { render?: unknown }
+    target.render = renderExport
+  }
+
+  return { defaultExport, renderExport, exported }
 }
 
 function copyEnumerableRenderContext(
@@ -831,6 +895,255 @@ function attachPluginInfoToComponent(
   return component
 }
 
+function syncHostElementProps(element: HTMLElement, props: WidgetHostProps): void {
+  Object.assign(element, {
+    item: props.item,
+    payload: props.payload,
+    preview: props.preview,
+    widgetId: props.widgetId,
+    hostKeyEvent: props.hostKeyEvent
+  })
+}
+
+function isHTMLElementConstructor(value: unknown): value is typeof HTMLElement {
+  return (
+    typeof value === 'function' &&
+    typeof HTMLElement !== 'undefined' &&
+    (value === HTMLElement || value.prototype instanceof HTMLElement)
+  )
+}
+
+function makeWebComponentTagName(name: string): string {
+  const normalized = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+  return `tuff-widget-${normalized || 'element'}`
+}
+
+function resolveWebComponentDefinition(exported: unknown): {
+  tagName: string
+  define?: () => void
+} {
+  if (typeof exported === 'string' && exported.includes('-')) {
+    return { tagName: exported }
+  }
+
+  if (isHTMLElementConstructor(exported)) {
+    const tagName = makeWebComponentTagName(exported.name)
+    return {
+      tagName,
+      define: () => {
+        if (!customElements.get(tagName)) {
+          customElements.define(tagName, exported)
+        }
+      }
+    }
+  }
+
+  if (isObjectLike(exported)) {
+    const definition = exported as CustomElementDefinitionExport
+    if (typeof definition.tagName === 'string' && definition.tagName.includes('-')) {
+      return {
+        tagName: definition.tagName,
+        define: definition.define
+      }
+    }
+    if (typeof definition.define === 'function') {
+      throw new Error('[WidgetRegistry] WebComponent widget define() requires a tagName')
+    }
+    if (isHTMLElementConstructor(definition.element)) {
+      const tagName = makeWebComponentTagName(definition.element.name)
+      return {
+        tagName,
+        define: () => {
+          if (!customElements.get(tagName)) {
+            customElements.define(tagName, definition.element!)
+          }
+        }
+      }
+    }
+  }
+
+  throw new Error(
+    '[WidgetRegistry] WebComponent widget must export a tag name, HTMLElement class, or { tagName, define }'
+  )
+}
+
+function createWebComponentHost(exported: unknown): Component {
+  const definition = resolveWebComponentDefinition(exported)
+  if (!customElements.get(definition.tagName) && !definition.define) {
+    throw new Error(
+      `[WidgetRegistry] WebComponent widget tag "${definition.tagName}" is not defined`
+    )
+  }
+  if (!customElements.get(definition.tagName)) {
+    definition.define?.()
+  }
+  if (!customElements.get(definition.tagName)) {
+    throw new Error(`[WidgetRegistry] WebComponent widget failed to define "${definition.tagName}"`)
+  }
+
+  return Vue.defineComponent({
+    name: 'TouchWidgetWebComponentHost',
+    props: ['item', 'payload', 'preview', 'widgetId', 'hostKeyEvent'],
+    setup(props) {
+      const host = Vue.ref<HTMLElement | null>(null)
+      let element: HTMLElement | null = null
+
+      const sync = () => {
+        if (!element) return
+        syncHostElementProps(element, props as WidgetHostProps)
+      }
+
+      Vue.onMounted(() => {
+        if (!host.value) return
+        element = document.createElement(definition.tagName)
+        element.dataset.widgetRuntime = WIDGET_RUNTIMES.WEBCOMPONENT
+        sync()
+        host.value.replaceChildren(element)
+      })
+
+      Vue.watch(
+        () => [props.item, props.payload, props.preview, props.widgetId, props.hostKeyEvent],
+        sync,
+        { deep: true }
+      )
+
+      Vue.onBeforeUnmount(() => {
+        element?.remove()
+        element = null
+      })
+
+      return () => Vue.h('div', { ref: host, class: 'TouchWidgetWebComponentHost' })
+    }
+  })
+}
+
+function isArrowTemplate(value: unknown): value is ArrowTemplateLike {
+  return typeof value === 'function' && (value as ArrowTemplateLike).isT === true
+}
+
+function isArrowComponentCall(value: unknown): value is ArrowComponentCallLike {
+  return Boolean(value && typeof value === 'object' && 'h' in value)
+}
+
+function isArrowPrimitiveRenderable(value: unknown): value is ArrowPrimitiveRenderable {
+  return (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+}
+
+function isArrowRenderable(value: unknown): boolean {
+  if (isArrowPrimitiveRenderable(value) || isArrowTemplate(value) || isArrowComponentCall(value)) {
+    return true
+  }
+  return Array.isArray(value) && value.every(isArrowRenderable)
+}
+
+function resolveArrowRenderable(exported: unknown, props: ArrowHostState): unknown {
+  if (isArrowTemplate(exported) || isArrowComponentCall(exported)) {
+    return exported
+  }
+  return (exported as (props: WidgetHostProps) => unknown)(props)
+}
+
+function createArrowHost(exported: unknown): Component {
+  if (
+    typeof exported !== 'function' &&
+    !isArrowTemplate(exported) &&
+    !isArrowComponentCall(exported)
+  ) {
+    throw new Error(
+      '[WidgetRegistry] Arrow widget must export an Arrow component or template factory'
+    )
+  }
+
+  return Vue.defineComponent({
+    name: 'TouchWidgetArrowHost',
+    props: ['item', 'payload', 'preview', 'widgetId', 'hostKeyEvent'],
+    setup(props) {
+      const host = Vue.ref<HTMLElement | null>(null)
+      let state: ArrowHostState | null = null
+
+      const syncState = () => {
+        if (!state) return
+        state.item = props.item
+        state.payload = props.payload
+        state.preview = props.preview
+        state.widgetId = props.widgetId
+        state.hostKeyEvent = props.hostKeyEvent
+      }
+
+      const mountArrow = () => {
+        if (!host.value) return
+        state = ArrowCore.reactive({
+          mounted: true,
+          item: props.item,
+          payload: props.payload,
+          preview: props.preview,
+          widgetId: props.widgetId,
+          hostKeyEvent: props.hostKeyEvent
+        }) as ArrowHostState
+
+        const root = ArrowCore.html`${() => {
+          if (!state?.mounted) {
+            return ''
+          }
+          const renderable = resolveArrowRenderable(exported, state)
+          if (isArrowRenderable(renderable)) {
+            return renderable
+          }
+          throw new Error(
+            '[WidgetRegistry] Arrow widget render did not return an Arrow template or component'
+          )
+        }}`
+
+        host.value.replaceChildren()
+        root(host.value)
+      }
+
+      const unmountArrow = () => {
+        const target = host.value
+        if (!state) {
+          target?.replaceChildren()
+          return
+        }
+        state.mounted = false
+        state = null
+        void ArrowCore.nextTick(() => {
+          target?.replaceChildren()
+        })
+      }
+
+      Vue.onMounted(mountArrow)
+      Vue.watch(
+        () => [props.item, props.payload, props.preview, props.widgetId, props.hostKeyEvent],
+        syncState,
+        { deep: true }
+      )
+      Vue.onBeforeUnmount(unmountArrow)
+
+      return () => Vue.h('div', { ref: host, class: 'TouchWidgetArrowHost' })
+    }
+  })
+}
+
+function resolveWidgetComponent(exported: unknown, runtime?: WidgetRuntime): Component {
+  if (runtime === WIDGET_RUNTIMES.WEBCOMPONENT) {
+    return createWebComponentHost(exported)
+  }
+  if (runtime === WIDGET_RUNTIMES.ARROW) {
+    return createArrowHost(exported)
+  }
+  return exported as Component
+}
+
 /**
  * Create a sandboxed require function for widgets
  * 为 widget 创建沙箱化的 require 函数
@@ -881,7 +1194,7 @@ function evaluateWidgetComponent(
   dependencies: string[] = [],
   debugLabel?: string,
   sandbox?: WidgetSandboxContext
-): Component {
+): unknown {
   if (!sandbox) {
     throw new Error('[WidgetRegistry] Widget sandbox is required to evaluate component')
   }
@@ -934,35 +1247,7 @@ function evaluateWidgetComponent(
   }
 
   const moduleExports = module.exports
-  const defaultExport =
-    isObjectLike(moduleExports) && 'default' in moduleExports
-      ? (moduleExports as { default?: unknown }).default
-      : undefined
-  const renderExport =
-    isObjectLike(moduleExports) && 'render' in moduleExports
-      ? (moduleExports as { render?: unknown }).render
-      : undefined
-
-  const hasSetup = (value: unknown): boolean =>
-    Boolean(value && (typeof value === 'object' || typeof value === 'function') && 'setup' in value)
-  const hasRender = (value: unknown): boolean =>
-    Boolean(
-      value && (typeof value === 'object' || typeof value === 'function') && 'render' in value
-    )
-
-  let exported =
-    (hasSetup(defaultExport) ? defaultExport : undefined) ??
-    (hasSetup(moduleExports) ? moduleExports : undefined) ??
-    (hasRender(defaultExport) ? defaultExport : undefined) ??
-    (hasRender(moduleExports) ? moduleExports : undefined) ??
-    defaultExport ??
-    moduleExports
-
-  exported = normalizeWidgetExport(exported, renderExport)
-  if (renderExport && exported && typeof exported === 'object' && !hasRender(exported)) {
-    const target = exported as { render?: unknown }
-    target.render = renderExport
-  }
+  const { defaultExport, renderExport, exported } = resolveComponentExport(moduleExports)
 
   if (isDev) {
     devLog('[WidgetRegistry] export resolution', {
@@ -978,7 +1263,7 @@ function evaluateWidgetComponent(
     throw new Error('Widget component did not export a value')
   }
 
-  return exported as Component
+  return exported
 }
 
 function injectStyles(widgetId: string, styles: string): void {
@@ -997,7 +1282,7 @@ function injectStyles(widgetId: string, styles: string): void {
   injectedStyles.set(widgetId, style)
 }
 
-async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
+export async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
   try {
     clearWidgetFailure(payload.widgetId)
     if (isDev) {
@@ -1015,10 +1300,20 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
       }
     }
     const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
-    const component = attachPluginInfoToComponent(
-      evaluateWidgetComponent(payload.code, payload.dependencies || [], payload.widgetId, sandbox),
-      { name: payload.pluginName, featureId: payload.featureId }
+    const exported = evaluateWidgetComponent(
+      payload.code,
+      payload.dependencies || [],
+      payload.widgetId,
+      sandbox
     )
+    const runtimeComponent = resolveWidgetComponent(exported, payload.runtime)
+    const component =
+      payload.runtime === WIDGET_RUNTIMES.VUE || !payload.runtime
+        ? attachPluginInfoToComponent(runtimeComponent, {
+            name: payload.pluginName,
+            featureId: payload.featureId
+          })
+        : runtimeComponent
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     if (isDev) {
@@ -1034,7 +1329,7 @@ async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise
   }
 }
 
-async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
+export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
   try {
     clearWidgetFailure(payload.widgetId)
     if (isDev) {
@@ -1052,10 +1347,20 @@ async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<v
       }
     }
     const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
-    const component = attachPluginInfoToComponent(
-      evaluateWidgetComponent(payload.code, payload.dependencies || [], payload.widgetId, sandbox),
-      { name: payload.pluginName, featureId: payload.featureId }
+    const exported = evaluateWidgetComponent(
+      payload.code,
+      payload.dependencies || [],
+      payload.widgetId,
+      sandbox
     )
+    const runtimeComponent = resolveWidgetComponent(exported, payload.runtime)
+    const component =
+      payload.runtime === WIDGET_RUNTIMES.VUE || !payload.runtime
+        ? attachPluginInfoToComponent(runtimeComponent, {
+            name: payload.pluginName,
+            featureId: payload.featureId
+          })
+        : runtimeComponent
     registerCustomRenderer(payload.widgetId, component)
     injectStyles(payload.widgetId, payload.styles)
     if (isDev) {
@@ -1071,7 +1376,7 @@ async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<v
   }
 }
 
-function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
+export function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
   try {
     if (isDev) {
       devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
@@ -1090,7 +1395,7 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
   }
 }
 
-function handleWidgetFailed(payload: WidgetFailurePayload): void {
+export function handleWidgetFailed(payload: WidgetFailurePayload): void {
   recordWidgetFailure(payload)
   clearWidgetRuntimeSource(payload.widgetId)
   unregisterCustomRenderer(payload.widgetId)

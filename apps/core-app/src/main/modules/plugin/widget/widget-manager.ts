@@ -3,11 +3,18 @@ import type {
   WidgetPrecompiledManifestEntry,
   WidgetPrecompiledMeta,
   WidgetFailurePayload,
-  WidgetRegistrationPayload
+  WidgetRegistrationPayload,
+  WidgetRuntime,
+  WidgetRuntimeStage
 } from '@talex-touch/utils/plugin/widget'
 import type { FSWatcher } from 'chokidar'
 import type { WidgetCompilationContext } from './widget-processor'
-import { WIDGET_RUNTIME_COMPILE_ENV, makeWidgetId } from '@talex-touch/utils/plugin/widget'
+import {
+  WIDGET_RUNTIME_COMPILE_ENV,
+  makeWidgetId,
+  resolveWidgetRuntime,
+  resolveWidgetRuntimeStage
+} from '@talex-touch/utils/plugin/widget'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import crypto from 'node:crypto'
@@ -19,7 +26,11 @@ import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { getCoreBoxWindow } from '../../box-tool/core-box/window'
 import { compileWidgetSource } from './widget-compiler'
 import { pushWidgetFeatureIssue } from './widget-issue'
-import { pluginWidgetLoader, resolveWidgetFilePath } from './widget-loader'
+import {
+  pluginWidgetLoader,
+  resolveWidgetFilePath,
+  resolveWidgetRuntimeFromFeature
+} from './widget-loader'
 import { classifyWidgetCompileError, resolveWidgetCompileCauseCode } from './widget-transform'
 
 type WidgetEvent = 'register' | 'update'
@@ -29,6 +40,8 @@ const WIDGET_FAILURE_CACHE_TTL_MS = 30_000
 type WidgetCompiledMeta = {
   hash: string
   styles: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   dependencies?: string[]
   filePath?: string
   compiledAt?: number
@@ -44,6 +57,8 @@ type WidgetSourceHint = {
 type WidgetCompiledCache = {
   code: string
   styles: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   dependencies: string[]
   filePath: string
   hash: string
@@ -57,6 +72,8 @@ type WidgetPrecompiledLoadFailure = {
   code: string
   message: string
   fromManifestEntry: boolean
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
   filePath?: string | null
   hash?: string
   cause?: string
@@ -65,6 +82,10 @@ type WidgetPrecompiledLoadFailure = {
 type WidgetCompileFailureCache = {
   expiresAt: number
   payload: WidgetFailurePayload
+}
+
+function resolveFeatureWidgetRuntime(feature: IPluginFeature): WidgetRuntime {
+  return resolveWidgetRuntimeFromFeature(feature)
 }
 
 function resolveWidgetCompiledOutputPath(plugin: ITouchPlugin, widgetId: string): string | null {
@@ -133,6 +154,7 @@ async function loadPrecompiledWidget(
   cache: WidgetPrecompiledCache | null
   failure?: WidgetPrecompiledLoadFailure
 }> {
+  const featureRuntime = resolveFeatureWidgetRuntime(feature)
   const entry = findPrecompiledWidgetEntry(plugin, feature, widgetId)
   if (!entry) {
     return {
@@ -140,10 +162,14 @@ async function loadPrecompiledWidget(
       failure: {
         code: 'WIDGET_PRECOMPILED_MISSING',
         message: `Precompiled widget is missing for feature "${feature.id}". Rebuild the plugin with the latest tuff builder.`,
-        fromManifestEntry: false
+        fromManifestEntry: false,
+        runtime: featureRuntime,
+        runtimeStage: resolveWidgetRuntimeStage(featureRuntime)
       }
     }
   }
+  const entryRuntime = resolveWidgetRuntime(entry.runtime ?? featureRuntime)
+  const entryRuntimeStage = entry.runtimeStage ?? resolveWidgetRuntimeStage(entryRuntime)
 
   const compiledPath = resolvePackagedWidgetPackagePath(plugin, entry.compiledPath)
   if (!compiledPath) {
@@ -153,6 +179,8 @@ async function loadPrecompiledWidget(
         code: 'WIDGET_PRECOMPILED_MISSING',
         message: `Precompiled widget path is invalid or outside plugin package: ${entry.compiledPath}`,
         fromManifestEntry: true,
+        runtime: entryRuntime,
+        runtimeStage: entryRuntimeStage,
         filePath: entry.compiledPath,
         hash: entry.hash
       }
@@ -166,6 +194,8 @@ async function loadPrecompiledWidget(
         code: 'WIDGET_PRECOMPILED_MISSING',
         message: `Precompiled widget output does not exist: ${entry.compiledPath}`,
         fromManifestEntry: true,
+        runtime: entryRuntime,
+        runtimeStage: entryRuntimeStage,
         filePath: compiledPath,
         hash: entry.hash
       }
@@ -184,6 +214,8 @@ async function loadPrecompiledWidget(
             code: 'WIDGET_PRECOMPILED_STALE',
             message: `Precompiled widget is stale for feature "${feature.id}". Rebuild the plugin package.`,
             fromManifestEntry: true,
+            runtime: entryRuntime,
+            runtimeStage: entryRuntimeStage,
             filePath: compiledPath,
             hash: entry.hash,
             cause: sourceHash
@@ -214,6 +246,8 @@ async function loadPrecompiledWidget(
           code: 'WIDGET_PRECOMPILED_MISSING',
           message: `Precompiled widget meta path is invalid or outside plugin package: ${entry.metaPath}`,
           fromManifestEntry: true,
+          runtime: entryRuntime,
+          runtimeStage: entryRuntimeStage,
           filePath: entry.metaPath,
           hash: entry.hash
         }
@@ -232,10 +266,13 @@ async function loadPrecompiledWidget(
   }
 
   const code = await fse.readFile(compiledPath, 'utf-8')
+  const runtime = resolveWidgetRuntime(meta?.runtime ?? entry.runtime ?? featureRuntime)
   return {
     cache: {
       code,
       styles: typeof meta?.styles === 'string' ? meta.styles : entry.styles,
+      runtime,
+      runtimeStage: meta?.runtimeStage ?? entry.runtimeStage ?? resolveWidgetRuntimeStage(runtime),
       dependencies: Array.isArray(meta?.dependencies)
         ? meta.dependencies
         : Array.isArray(entry.dependencies)
@@ -328,6 +365,9 @@ async function loadCompiledWidgetCache(
     return {
       code,
       styles,
+      runtime: resolveWidgetRuntime(meta.runtime),
+      runtimeStage:
+        meta.runtimeStage ?? resolveWidgetRuntimeStage(resolveWidgetRuntime(meta.runtime)),
       dependencies,
       filePath: meta.filePath,
       hash: meta.hash
@@ -386,6 +426,10 @@ export class WidgetManager {
       pluginName: plugin.name,
       featureId: feature.id,
       filePath: compiledCache.filePath,
+      runtime: compiledCache.runtime ?? resolveFeatureWidgetRuntime(feature),
+      runtimeStage:
+        compiledCache.runtimeStage ??
+        resolveWidgetRuntimeStage(compiledCache.runtime ?? resolveFeatureWidgetRuntime(feature)),
       hash: compiledCache.hash,
       code: compiledCache.code,
       styles: compiledCache.styles,
@@ -542,6 +586,10 @@ export class WidgetManager {
         pluginName: source.pluginName,
         featureId: source.featureId,
         filePath: compiledCache.filePath,
+        runtime: compiledCache.runtime ?? source.runtime,
+        runtimeStage:
+          compiledCache.runtimeStage ??
+          resolveWidgetRuntimeStage(compiledCache.runtime ?? source.runtime),
         hash: compiledCache.hash,
         code: compiledCache.code,
         styles: compiledCache.styles,
@@ -685,6 +733,8 @@ export class WidgetManager {
           const meta: WidgetCompiledMeta = {
             hash: source.hash,
             styles: compiled.styles,
+            runtime: compiled.runtime ?? source.runtime,
+            runtimeStage: resolveWidgetRuntimeStage(compiled.runtime ?? source.runtime),
             dependencies: compiled.dependencies || [],
             filePath: source.filePath,
             compiledAt: Date.now(),
@@ -705,6 +755,8 @@ export class WidgetManager {
       pluginName: source.pluginName,
       featureId: source.featureId,
       filePath: source.filePath,
+      runtime: compiled.runtime ?? source.runtime,
+      runtimeStage: resolveWidgetRuntimeStage(compiled.runtime ?? source.runtime),
       hash: source.hash,
       code: compiled.code,
       styles: compiled.styles,
@@ -829,6 +881,8 @@ export class WidgetManager {
       widgetId: failure.widgetId,
       pluginName: plugin.name,
       featureId: feature.id,
+      runtime: resolveFeatureWidgetRuntime(feature),
+      runtimeStage: resolveWidgetRuntimeStage(resolveFeatureWidgetRuntime(feature)),
       code: failure.code,
       message: failure.message,
       filePath: failure.filePath ?? undefined,
@@ -871,6 +925,8 @@ export class WidgetManager {
         pluginName: failure.pluginName,
         featureId: failure.featureId,
         widgetId: failure.widgetId,
+        runtime: failure.runtime,
+        runtimeStage: failure.runtimeStage,
         filePath: failure.filePath,
         hash: failure.hash,
         causeCode: failure.cause

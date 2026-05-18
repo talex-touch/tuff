@@ -126,6 +126,23 @@
 
 ## 2026-05-17
 
+### fix(plugin): keep touch-intelligence CoreBox session visible
+
+- `plugins/touch-intelligence/index.js`
+  - Intelligence 推送的 placeholder、send、pending、ready、error 项统一标记 `keepCoreBoxOpen`，避免发送 AI 请求、等待响应或展示回答/错误时被 CoreBox auto-hide 提前隐藏。
+  - 复用现有 CoreBox keep-open 语义，不改变普通搜索结果和其他插件 item 的执行流程。
+
+### feat(widget): add TouchWidget Arrow and WebComponent beta runtimes
+
+- `packages/utils/plugin/widget.ts`
+- `apps/core-app/src/main/modules/plugin/widget/**`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `packages/tuff-cli-core/src/exporter.ts`
+- `apps/nexus/content/docs/dev/api/widget.{zh,en}.mdc`
+  - 新增 `arrow` 与 `webcomponent` Widget runtime，统一标记为 beta；现有 Vue Widget 仍保持默认 stable 路径。
+  - `@arrow-js/core@1.0.6` 进入受控依赖白名单，支持 `.arrow.ts` / `.arrow.js` TouchWidget 推荐入口。
+  - 预编译 manifest 与 runtime payload 记录 `runtime` / `runtimeStage`，renderer 通过轻量 host wrapper 挂载 ArrowJS 与 WebComponent。
+
 ### fix(plugins): harden workspace shell capability diagnostics
 
 - `plugins/touch-workspace-scripts/index.js`

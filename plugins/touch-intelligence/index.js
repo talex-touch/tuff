@@ -479,6 +479,7 @@ function buildInfoItem({
     pluginName: PLUGIN_NAME,
     featureId,
     status,
+    keepCoreBoxOpen: true,
     intelligence: buildIntelligenceMeta({
       ...intelligence,
       status,
