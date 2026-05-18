@@ -14,6 +14,7 @@ export type {
   StandardChannelData,
 } from './transport'
 export * from './cloud-sync'
+export * from './cloud-share'
 export * from './common'
 export * from './core-box'
 export * from './env'

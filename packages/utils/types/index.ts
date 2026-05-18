@@ -1,5 +1,6 @@
 /// <reference path="./path-browserify.d.ts" />
 export * from './agent'
+export * from './cloud-share'
 export * from './cloud-sync'
 export * from './division-box'
 export * from './flow'

@@ -87,7 +87,14 @@ describe('publish', () => {
 
   it('publishes through the Dashboard version endpoint', async () => {
     const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
-      if (options.method === 'GET') {
+      if (options.method === 'GET' && options.url.includes('/api/auth/me')) {
+        return textResponse(options, JSON.stringify({
+          id: 'user-1',
+          role: 'admin',
+        }))
+      }
+
+      if (options.method === 'GET' && options.url.includes('/api/dashboard/plugins')) {
         return textResponse(options, JSON.stringify({
           total: 1,
           plugins: [
@@ -119,14 +126,19 @@ describe('publish', () => {
       expect(process.exitCode).toBeUndefined()
     })
 
-    expect(request).toHaveBeenCalledTimes(2)
-    expect(request.mock.calls[0]?.[0].url).toContain('/api/dashboard/plugins')
-    expect(request.mock.calls[1]?.[0].url).toContain('/api/dashboard/plugins/plugin-1/versions')
+    expect(request).toHaveBeenCalledTimes(3)
+    expect(request.mock.calls[0]?.[0].url).toContain('/api/auth/me')
+    expect(request.mock.calls[1]?.[0].url).toContain('/api/dashboard/plugins')
+    expect(request.mock.calls[2]?.[0].url).toContain('/api/dashboard/plugins/plugin-1/versions')
   })
 
   it('rejects 200 HTML responses from the publish endpoint', async () => {
     vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
-      if (options.method === 'GET') {
+      if (options.method === 'GET' && options.url.includes('/api/auth/me')) {
+        return textResponse(options, JSON.stringify({ id: 'user-1' }))
+      }
+
+      if (options.method === 'GET' && options.url.includes('/api/dashboard/plugins')) {
         return textResponse(options, JSON.stringify({
           total: 1,
           plugins: [{ id: 'plugin-1', slug: 'com.tuffex.demo.plugin' }],
@@ -150,6 +162,10 @@ describe('publish', () => {
 
   it('fails clearly when the Dashboard plugin cannot be found', async () => {
     const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
+      if (options.url.includes('/api/auth/me')) {
+        return textResponse(options, JSON.stringify({ id: 'user-1' }))
+      }
+
       return textResponse(options, JSON.stringify({
         total: 1,
         plugins: [{ id: 'plugin-2', slug: 'com.tuffex.other' }],
@@ -161,7 +177,26 @@ describe('publish', () => {
       expect(process.exitCode).toBe(1)
     })
 
-    expect(request).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenCalledTimes(2)
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('was not found'))
+  })
+
+  it('fails before package resolution when auth token is rejected by Nexus', async () => {
+    const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
+      return textResponse(
+        options,
+        JSON.stringify({ statusCode: 401, message: 'Unauthorized' }),
+        { status: 401 },
+      )
+    })
+
+    await withPluginFixture(async () => {
+      await publish({ notes: 'First release' })
+      expect(process.exitCode).toBe(1)
+    })
+
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls[0]?.[0].url).toContain('/api/auth/me')
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Authentication token was rejected by Nexus before publish'))
   })
 })

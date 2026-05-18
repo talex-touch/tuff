@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import type { NetworkResponse } from '@talex-touch/utils/network'
-import type { Buffer } from 'node:buffer'
 import type { PublishConfig } from './types'
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
@@ -68,12 +68,34 @@ interface DashboardPublishResponse {
   version?: DashboardPublishedVersion
 }
 
+interface AuthTokenDiagnostics {
+  kind: 'apiKey' | 'appJwt' | 'opaque'
+  expired?: boolean
+  expiresAt?: string
+  issuer?: string
+  audience?: string
+  tokenType?: string
+  grantType?: string
+  hasDeviceId?: boolean
+}
+
+interface AccountMeResponse {
+  id?: string
+  email?: string
+  name?: string | null
+  role?: string | null
+}
+
 function getDashboardPluginsUrl(): string {
   return `${getTuffBaseUrl()}/api/dashboard/plugins`
 }
 
 function getDashboardPluginVersionsUrl(pluginId: string): string {
   return `${getTuffBaseUrl()}/api/dashboard/plugins/${encodeURIComponent(pluginId)}/versions`
+}
+
+function getAuthMeUrl(): string {
+  return `${getTuffBaseUrl()}/api/auth/me`
 }
 
 function formatResponseSnippet(data: unknown): string {
@@ -112,6 +134,88 @@ function parseJsonResponse<T>(response: NetworkResponse<string>, context: string
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`${context} returned invalid JSON: ${message}. ${formatResponseSnippet(response.data)}`)
   }
+}
+
+function decodeBase64UrlJson(input: string): Record<string, unknown> | null {
+  try {
+    let normalized = input.replace(/-/g, '+').replace(/_/g, '/')
+    while (normalized.length % 4 !== 0)
+      normalized += '='
+    return JSON.parse(Buffer.from(normalized, 'base64').toString('utf8')) as Record<string, unknown>
+  }
+  catch {
+    return null
+  }
+}
+
+function inspectAuthToken(token: string): AuthTokenDiagnostics {
+  if (token.startsWith('tuff_'))
+    return { kind: 'apiKey' }
+
+  const parts = token.split('.')
+  if (parts.length !== 3)
+    return { kind: 'opaque' }
+
+  const payload = decodeBase64UrlJson(parts[1] ?? '')
+  if (!payload)
+    return { kind: 'opaque' }
+
+  const exp = typeof payload.exp === 'number' ? payload.exp : undefined
+  return {
+    kind: 'appJwt',
+    expired: typeof exp === 'number' ? exp <= Math.floor(Date.now() / 1000) : undefined,
+    expiresAt: typeof exp === 'number' ? new Date(exp * 1000).toISOString() : undefined,
+    issuer: typeof payload.iss === 'string' ? payload.iss : undefined,
+    audience: typeof payload.aud === 'string' ? payload.aud : undefined,
+    tokenType: typeof payload.typ === 'string' ? payload.typ : undefined,
+    grantType: typeof payload.gt === 'string' ? payload.gt : undefined,
+    hasDeviceId: typeof payload.deviceId === 'string' && payload.deviceId.length > 0,
+  }
+}
+
+function formatAuthDiagnostics(diagnostics: AuthTokenDiagnostics): string {
+  if (diagnostics.kind === 'apiKey') {
+    return 'Detected a Nexus API key. Ensure it has both plugin:read and plugin:publish scopes.'
+  }
+  if (diagnostics.kind === 'appJwt') {
+    const parts = [
+      `Detected an app JWT (${diagnostics.grantType ?? 'unknown'} grant).`,
+      diagnostics.expiresAt ? `Expires at ${diagnostics.expiresAt}.` : '',
+      diagnostics.expired ? 'The token is expired.' : '',
+      'If it is not expired, Nexus may be rejecting it because APP_AUTH_JWT_SECRET/AUTH_SECRET changed or the device was revoked.',
+    ].filter(Boolean)
+    return parts.join(' ')
+  }
+  return 'Detected an opaque bearer token. Use `tuffcli login` or a valid `tuff_` API key.'
+}
+
+async function preflightAuthToken(token: string): Promise<void> {
+  const diagnostics = inspectAuthToken(token)
+  const url = getAuthMeUrl()
+  const response = await networkClient.request<string>({
+    method: 'GET',
+    url,
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    responseType: 'text',
+    validateStatus: ALL_HTTP_STATUS,
+  })
+
+  if (response.status >= 200 && response.status < 300) {
+    parseJsonResponse<AccountMeResponse>(response, `Validate auth token (${url})`)
+    return
+  }
+
+  const hint = formatAuthDiagnostics(diagnostics)
+  if (response.status === 401) {
+    throw new Error(`Authentication token was rejected by Nexus before publish. ${hint} Run \`${CLI_COMMAND_NAME} login\` to refresh this CLI session.`)
+  }
+  if (response.status === 403) {
+    throw new Error(`Authentication token is valid but not allowed to publish. ${hint}`)
+  }
+
+  parseJsonResponse<AccountMeResponse>(response, `Validate auth token (${url})`)
 }
 
 function normalizeManifestIdToSlug(value: string): string {
@@ -442,6 +546,15 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
 
   if (options.dryRun) {
     console.log('\n🏃 Dry run mode - no changes will be made')
+    return
+  }
+
+  try {
+    await preflightAuthToken(token)
+  }
+  catch (error) {
+    console.error(`❌ ${error instanceof Error ? error.message : error}`)
+    process.exitCode = 1
     return
   }
 
