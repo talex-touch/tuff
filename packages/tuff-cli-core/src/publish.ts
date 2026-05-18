@@ -9,7 +9,7 @@ import { getTuffBaseUrl, NEXUS_BASE_URL, normalizeBaseUrl } from '@talex-touch/u
 import { networkClient } from '@talex-touch/utils/network'
 import fs from 'fs-extra'
 import { parsePublishArgs } from './args'
-import { clearAuthToken, getAuthToken, getAuthTokenPath, saveAuthToken } from './auth'
+import { clearAuthToken, getAuthToken, getAuthTokenPath, readAuthState, saveAuthToken } from './auth'
 import { resolvePublishConfig } from './config'
 import { ensureCliDeviceInfo } from './device'
 
