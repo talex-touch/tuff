@@ -24,19 +24,37 @@ const {
   error,
   fallbackOptions,
   fetchRegistry,
+  filteredHealthEntries,
+  filteredProviders,
+  filteredScenes,
+  filteredUsageEntries,
   formatDate,
   formatJson,
   formatRunJson,
   getProviderCheckResult,
   getProviderEditPanel,
+  getHealthCheckActionHint,
+  getHealthCheckReason,
+  getProviderObservability,
+  getProviderObservabilityActionHint,
   getSceneEditPanel,
+  getSceneObservability,
+  getSceneObservabilityActionHint,
   getSceneRunPanel,
+  getUsageLedgerActionHint,
+  getUsageLedgerReference,
+  healthCheckEmptyState,
+  healthCheckFilter,
+  healthFilterOptions,
   healthEntries,
   isAdmin,
   loading,
   ownerScopeOptions,
   providerEditPanels,
+  providerFilterOptions,
   providerForm,
+  providerObservabilityFilter,
+  providerObservabilityEmptyState,
   providerOptions,
   providerStatusOptions,
   providers,
@@ -51,12 +69,16 @@ const {
   sceneCapabilities,
   sceneCount,
   sceneEditPanels,
+  sceneFilterOptions,
   sceneForm,
+  sceneObservabilityFilter,
+  sceneObservabilityEmptyState,
   sceneOwnerOptions,
   sceneProviderOptions,
   scenes,
   savingProvider,
   savingScene,
+  observabilityTone,
   statusTone,
   strategyOptions,
   toggleProviderEdit,
@@ -65,6 +87,9 @@ const {
   updateProviderStatus,
   updateSceneStatus,
   usageCount,
+  usageFilterOptions,
+  usageLedgerEmptyState,
+  usageLedgerFilter,
   usageEntries,
 } = useProviderRegistryAdmin()
 </script>
@@ -249,20 +274,60 @@ const {
             </section>
 
             <section>
-              <div class="mb-3 flex items-center justify-between">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 class="text-base font-semibold text-black dark:text-white">
                   {{ t('dashboard.providerRegistry.providers.listTitle', 'Registered providers') }}
                 </h2>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="option in providerFilterOptions"
+                    :key="option.value"
+                    type="button"
+                    class="cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors"
+                    :class="providerObservabilityFilter === option.value
+                      ? 'border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-200'
+                      : 'border-black/10 bg-white/70 text-black/55 hover:bg-black/[0.04] dark:border-white/10 dark:bg-black/15 dark:text-white/55 dark:hover:bg-white/[0.06]'"
+                    @click="providerObservabilityFilter = option.value"
+                  >
+                    {{ t(`dashboard.providerRegistry.filters.${option.value}`, option.label) }}
+                    <span class="ml-1 text-black/35 dark:text-white/35">{{ option.count }}</span>
+                  </button>
+                </div>
               </div>
               <div v-if="loading && !providers.length" class="space-y-3">
                 <TxSkeleton :loading="true" :lines="3" />
               </div>
-              <div v-else-if="!providers.length" class="rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.03] dark:text-white/50">
-                {{ t('dashboard.providerRegistry.providers.empty', 'No providers registered yet.') }}
+              <div
+                v-else-if="providerObservabilityEmptyState"
+                class="rounded-xl border p-4 text-sm"
+                :class="{
+                  'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': providerObservabilityEmptyState.tone === 'success',
+                  'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200': providerObservabilityEmptyState.tone === 'warning',
+                  'border-black/[0.05] bg-black/[0.02] text-black/55 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/55': providerObservabilityEmptyState.tone === 'muted',
+                }"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="font-medium">
+                      {{ t(providerObservabilityEmptyState.titleKey, providerObservabilityEmptyState.titleFallback) }}
+                    </p>
+                    <p class="mt-1 text-xs opacity-75">
+                      {{ t(providerObservabilityEmptyState.detailKey, providerObservabilityEmptyState.detailFallback) }}
+                    </p>
+                  </div>
+                  <TxButton
+                    v-if="providers.length"
+                    variant="secondary"
+                    size="mini"
+                    @click="providerObservabilityFilter = 'all'"
+                  >
+                    {{ t(providerObservabilityEmptyState.actionKey, providerObservabilityEmptyState.actionFallback) }}
+                  </TxButton>
+                </div>
               </div>
               <div v-else class="space-y-3">
                 <article
-                  v-for="provider in providers"
+                  v-for="provider in filteredProviders"
                   :key="provider.id"
                   class="rounded-2xl border border-black/[0.04] bg-white/60 p-4 dark:border-white/[0.06] dark:bg-black/10"
                 >
@@ -305,6 +370,63 @@ const {
                     >
                       {{ capability.capability }}
                     </span>
+                  </div>
+                  <div class="mt-3 grid gap-2 text-xs md:grid-cols-2">
+                    <div class="rounded-xl bg-black/[0.02] px-3 py-2 dark:bg-white/[0.04]">
+                      <div class="mb-1 flex flex-wrap items-center gap-2">
+                        <span class="text-black/45 dark:text-white/45">
+                          {{ t('dashboard.providerRegistry.observability.latestHealth', 'Latest health') }}
+                        </span>
+                        <TxStatusBadge
+                          :text="getProviderObservability(provider.id).status"
+                          :status="observabilityTone(getProviderObservability(provider.id).status)"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="text-black/55 dark:text-white/55">
+                        {{ getProviderObservability(provider.id).latestHealth?.capability || '-' }}
+                        · {{ getProviderObservability(provider.id).latestHealth?.latencyMs ?? '-' }}ms
+                        · {{ getProviderObservability(provider.id).latestHealth?.degradedReason || getProviderObservability(provider.id).latestHealth?.errorCode || '-' }}
+                      </p>
+                    </div>
+                    <div class="rounded-xl bg-black/[0.02] px-3 py-2 dark:bg-white/[0.04]">
+                      <div class="mb-1 flex flex-wrap items-center gap-2">
+                        <span class="text-black/45 dark:text-white/45">
+                          {{ t('dashboard.providerRegistry.observability.latestUsage', 'Latest usage') }}
+                        </span>
+                        <TxStatusBadge
+                          :text="getProviderObservability(provider.id).latestUsage?.status || 'unknown'"
+                          :status="observabilityTone(getProviderObservability(provider.id).latestUsage?.status)"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="text-black/55 dark:text-white/55">
+                        {{ getProviderObservability(provider.id).latestUsage?.sceneId || '-' }}
+                        · {{ getProviderObservability(provider.id).latestUsage?.capability || '-' }}
+                        · {{ getProviderObservability(provider.id).latestUsage?.errorCode || getProviderObservability(provider.id).latestUsage?.providerUsageRef || '-' }}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="mt-3 rounded-xl px-3 py-2 text-xs"
+                    :class="{
+                      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': getProviderObservabilityActionHint(provider.id).tone === 'success',
+                      'bg-amber-500/10 text-amber-700 dark:text-amber-200': getProviderObservabilityActionHint(provider.id).tone === 'warning',
+                      'bg-red-500/10 text-red-700 dark:text-red-200': getProviderObservabilityActionHint(provider.id).tone === 'danger',
+                      'bg-black/[0.03] text-black/55 dark:bg-white/[0.05] dark:text-white/55': getProviderObservabilityActionHint(provider.id).tone === 'muted',
+                    }"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <TxStatusBadge
+                        :text="t('dashboard.providerRegistry.observability.actionHint', 'Next action')"
+                        :status="getProviderObservabilityActionHint(provider.id).tone"
+                        size="sm"
+                      />
+                      <span>{{ t(getProviderObservabilityActionHint(provider.id).labelKey, getProviderObservabilityActionHint(provider.id).fallback) }}</span>
+                    </div>
+                    <p v-if="getProviderObservabilityActionHint(provider.id).detail" class="mt-1 text-black/45 dark:text-white/45">
+                      {{ getProviderObservabilityActionHint(provider.id).detail }}
+                    </p>
                   </div>
                   <div
                     v-if="getProviderCheckResult(provider.id)"
@@ -572,18 +694,60 @@ const {
             </section>
 
             <section>
-              <h2 class="mb-3 text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.providerRegistry.scenes.listTitle', 'Registered scenes') }}
-              </h2>
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-base font-semibold text-black dark:text-white">
+                  {{ t('dashboard.providerRegistry.scenes.listTitle', 'Registered scenes') }}
+                </h2>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="option in sceneFilterOptions"
+                    :key="option.value"
+                    type="button"
+                    class="cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors"
+                    :class="sceneObservabilityFilter === option.value
+                      ? 'border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-200'
+                      : 'border-black/10 bg-white/70 text-black/55 hover:bg-black/[0.04] dark:border-white/10 dark:bg-black/15 dark:text-white/55 dark:hover:bg-white/[0.06]'"
+                    @click="sceneObservabilityFilter = option.value"
+                  >
+                    {{ t(`dashboard.providerRegistry.filters.${option.value}`, option.label) }}
+                    <span class="ml-1 text-black/35 dark:text-white/35">{{ option.count }}</span>
+                  </button>
+                </div>
+              </div>
               <div v-if="loading && !scenes.length" class="space-y-3">
                 <TxSkeleton :loading="true" :lines="3" />
               </div>
-              <div v-else-if="!scenes.length" class="rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.03] dark:text-white/50">
-                {{ t('dashboard.providerRegistry.scenes.empty', 'No scenes configured yet.') }}
+              <div
+                v-else-if="sceneObservabilityEmptyState"
+                class="rounded-xl border p-4 text-sm"
+                :class="{
+                  'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': sceneObservabilityEmptyState.tone === 'success',
+                  'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200': sceneObservabilityEmptyState.tone === 'warning',
+                  'border-black/[0.05] bg-black/[0.02] text-black/55 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/55': sceneObservabilityEmptyState.tone === 'muted',
+                }"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="font-medium">
+                      {{ t(sceneObservabilityEmptyState.titleKey, sceneObservabilityEmptyState.titleFallback) }}
+                    </p>
+                    <p class="mt-1 text-xs opacity-75">
+                      {{ t(sceneObservabilityEmptyState.detailKey, sceneObservabilityEmptyState.detailFallback) }}
+                    </p>
+                  </div>
+                  <TxButton
+                    v-if="scenes.length"
+                    variant="secondary"
+                    size="mini"
+                    @click="sceneObservabilityFilter = 'all'"
+                  >
+                    {{ t(sceneObservabilityEmptyState.actionKey, sceneObservabilityEmptyState.actionFallback) }}
+                  </TxButton>
+                </div>
               </div>
               <div v-else class="space-y-3">
                 <article
-                  v-for="scene in scenes"
+                  v-for="scene in filteredScenes"
                   :key="scene.id"
                   class="rounded-2xl border border-black/[0.04] bg-white/60 p-4 dark:border-white/[0.06] dark:bg-black/10"
                 >
@@ -625,6 +789,61 @@ const {
                       <span v-for="binding in scene.bindings" v-else :key="binding.id" class="mr-2">
                         {{ binding.providerId }} / {{ binding.capability }} / p{{ binding.priority }}
                       </span>
+                    </p>
+                  </div>
+                  <div class="mt-3 grid gap-2 text-xs md:grid-cols-2">
+                    <div class="rounded-xl bg-black/[0.02] px-3 py-2 dark:bg-white/[0.04]">
+                      <div class="mb-1 flex flex-wrap items-center gap-2">
+                        <span class="text-black/45 dark:text-white/45">
+                          {{ t('dashboard.providerRegistry.observability.latestSceneRun', 'Latest scene run') }}
+                        </span>
+                        <TxStatusBadge
+                          :text="getSceneObservability(scene.id).status"
+                          :status="observabilityTone(getSceneObservability(scene.id).status)"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="text-black/55 dark:text-white/55">
+                        {{ getSceneObservability(scene.id).latestUsage?.runId || '-' }}
+                        · {{ getSceneObservability(scene.id).latestUsage?.providerId || '-' }}
+                        · {{ getSceneObservability(scene.id).latestUsage?.capability || '-' }}
+                      </p>
+                    </div>
+                    <div class="rounded-xl bg-black/[0.02] px-3 py-2 dark:bg-white/[0.04]">
+                      <div class="mb-1 flex flex-wrap items-center gap-2">
+                        <span class="text-black/45 dark:text-white/45">
+                          {{ t('dashboard.providerRegistry.observability.recentFailures', 'Recent failures') }}
+                        </span>
+                        <TxStatusBadge
+                          :text="`${getSceneObservability(scene.id).failedUsageCount} failed`"
+                          :status="getSceneObservability(scene.id).failedUsageCount > 0 ? 'danger' : 'muted'"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="text-black/55 dark:text-white/55">
+                        {{ getSceneObservability(scene.id).latestUsage?.errorCode || getSceneObservability(scene.id).latestUsage?.errorMessage || '-' }}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="mt-3 rounded-xl px-3 py-2 text-xs"
+                    :class="{
+                      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': getSceneObservabilityActionHint(scene.id).tone === 'success',
+                      'bg-amber-500/10 text-amber-700 dark:text-amber-200': getSceneObservabilityActionHint(scene.id).tone === 'warning',
+                      'bg-red-500/10 text-red-700 dark:text-red-200': getSceneObservabilityActionHint(scene.id).tone === 'danger',
+                      'bg-black/[0.03] text-black/55 dark:bg-white/[0.05] dark:text-white/55': getSceneObservabilityActionHint(scene.id).tone === 'muted',
+                    }"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <TxStatusBadge
+                        :text="t('dashboard.providerRegistry.observability.actionHint', 'Next action')"
+                        :status="getSceneObservabilityActionHint(scene.id).tone"
+                        size="sm"
+                      />
+                      <span>{{ t(getSceneObservabilityActionHint(scene.id).labelKey, getSceneObservabilityActionHint(scene.id).fallback) }}</span>
+                    </div>
+                    <p v-if="getSceneObservabilityActionHint(scene.id).detail" class="mt-1 text-black/45 dark:text-white/45">
+                      {{ getSceneObservabilityActionHint(scene.id).detail }}
                     </p>
                   </div>
                   <div
@@ -848,14 +1067,54 @@ const {
           </template>
 
           <div class="space-y-3">
+            <div class="flex flex-wrap justify-end gap-2">
+              <button
+                v-for="option in usageFilterOptions"
+                :key="option.value"
+                type="button"
+                class="cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors"
+                :class="usageLedgerFilter === option.value
+                  ? 'border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-200'
+                  : 'border-black/10 bg-white/70 text-black/55 hover:bg-black/[0.04] dark:border-white/10 dark:bg-black/15 dark:text-white/55 dark:hover:bg-white/[0.06]'"
+                @click="usageLedgerFilter = option.value"
+              >
+                {{ t(`dashboard.providerRegistry.filters.${option.value}`, option.label) }}
+                <span class="ml-1 text-black/35 dark:text-white/35">{{ option.count }}</span>
+              </button>
+            </div>
             <div v-if="loading && !usageEntries.length" class="space-y-3">
               <TxSkeleton :loading="true" :lines="3" />
             </div>
-            <div v-else-if="!usageEntries.length" class="rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.03] dark:text-white/50">
-              {{ t('dashboard.providerRegistry.usage.empty', 'No scene run usage recorded yet.') }}
+            <div
+              v-else-if="usageLedgerEmptyState"
+              class="rounded-xl border p-4 text-sm"
+              :class="{
+                'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': usageLedgerEmptyState.tone === 'success',
+                'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200': usageLedgerEmptyState.tone === 'warning',
+                'border-black/[0.05] bg-black/[0.02] text-black/55 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/55': usageLedgerEmptyState.tone === 'muted',
+              }"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="font-medium">
+                    {{ t(usageLedgerEmptyState.titleKey, usageLedgerEmptyState.titleFallback) }}
+                  </p>
+                  <p class="mt-1 text-xs opacity-75">
+                    {{ t(usageLedgerEmptyState.detailKey, usageLedgerEmptyState.detailFallback) }}
+                  </p>
+                </div>
+                <TxButton
+                  v-if="usageEntries.length"
+                  variant="secondary"
+                  size="mini"
+                  @click="usageLedgerFilter = 'all'"
+                >
+                  {{ t(usageLedgerEmptyState.actionKey, usageLedgerEmptyState.actionFallback) }}
+                </TxButton>
+              </div>
             </div>
             <article
-              v-for="entry in usageEntries"
+              v-for="entry in filteredUsageEntries"
               v-else
               :key="entry.id"
               class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]"
@@ -897,9 +1156,30 @@ const {
                     {{ t('dashboard.providerRegistry.usage.providerRef', 'Provider ref') }}
                   </p>
                   <p class="text-xs text-black/60 dark:text-white/60">
-                    {{ entry.providerUsageRef || entry.pricingRef || '-' }}
+                    {{ getUsageLedgerReference(entry) }}
                   </p>
                 </div>
+              </div>
+              <div
+                class="mt-3 rounded-xl px-3 py-2 text-xs"
+                :class="{
+                  'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': getUsageLedgerActionHint(entry).tone === 'success',
+                  'bg-amber-500/10 text-amber-700 dark:text-amber-200': getUsageLedgerActionHint(entry).tone === 'warning',
+                  'bg-red-500/10 text-red-700 dark:text-red-200': getUsageLedgerActionHint(entry).tone === 'danger',
+                  'bg-black/[0.03] text-black/55 dark:bg-white/[0.05] dark:text-white/55': getUsageLedgerActionHint(entry).tone === 'muted',
+                }"
+              >
+                <div class="flex flex-wrap items-center gap-2">
+                  <TxStatusBadge
+                    :text="t('dashboard.providerRegistry.observability.actionHint', 'Next action')"
+                    :status="getUsageLedgerActionHint(entry).tone"
+                    size="sm"
+                  />
+                  <span>{{ t(getUsageLedgerActionHint(entry).labelKey, getUsageLedgerActionHint(entry).fallback) }}</span>
+                </div>
+                <p v-if="getUsageLedgerActionHint(entry).detail" class="mt-1 text-black/45 dark:text-white/45">
+                  {{ getUsageLedgerActionHint(entry).detail }}
+                </p>
               </div>
               <div class="mt-3 grid gap-3 lg:grid-cols-2">
                 <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
@@ -925,14 +1205,54 @@ const {
           </template>
 
           <div class="space-y-3">
+            <div class="flex flex-wrap justify-end gap-2">
+              <button
+                v-for="option in healthFilterOptions"
+                :key="option.value"
+                type="button"
+                class="cursor-pointer rounded-full border px-2.5 py-1 text-xs transition-colors"
+                :class="healthCheckFilter === option.value
+                  ? 'border-teal-500/50 bg-teal-500/10 text-teal-700 dark:text-teal-200'
+                  : 'border-black/10 bg-white/70 text-black/55 hover:bg-black/[0.04] dark:border-white/10 dark:bg-black/15 dark:text-white/55 dark:hover:bg-white/[0.06]'"
+                @click="healthCheckFilter = option.value"
+              >
+                {{ t(`dashboard.providerRegistry.filters.${option.value}`, option.label) }}
+                <span class="ml-1 text-black/35 dark:text-white/35">{{ option.count }}</span>
+              </button>
+            </div>
             <div v-if="loading && !healthEntries.length" class="space-y-3">
               <TxSkeleton :loading="true" :lines="3" />
             </div>
-            <div v-else-if="!healthEntries.length" class="rounded-xl bg-black/[0.02] p-4 text-sm text-black/50 dark:bg-white/[0.03] dark:text-white/50">
-              {{ t('dashboard.providerRegistry.health.empty', 'No provider health checks recorded yet.') }}
+            <div
+              v-else-if="healthCheckEmptyState"
+              class="rounded-xl border p-4 text-sm"
+              :class="{
+                'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': healthCheckEmptyState.tone === 'success',
+                'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-200': healthCheckEmptyState.tone === 'warning',
+                'border-black/[0.05] bg-black/[0.02] text-black/55 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/55': healthCheckEmptyState.tone === 'muted',
+              }"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="font-medium">
+                    {{ t(healthCheckEmptyState.titleKey, healthCheckEmptyState.titleFallback) }}
+                  </p>
+                  <p class="mt-1 text-xs opacity-75">
+                    {{ t(healthCheckEmptyState.detailKey, healthCheckEmptyState.detailFallback) }}
+                  </p>
+                </div>
+                <TxButton
+                  v-if="healthEntries.length"
+                  variant="secondary"
+                  size="mini"
+                  @click="healthCheckFilter = 'all'"
+                >
+                  {{ t(healthCheckEmptyState.actionKey, healthCheckEmptyState.actionFallback) }}
+                </TxButton>
+              </div>
             </div>
             <article
-              v-for="entry in healthEntries"
+              v-for="entry in filteredHealthEntries"
               v-else
               :key="entry.id"
               class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]"
@@ -966,7 +1286,7 @@ const {
                     {{ t('dashboard.providerRegistry.health.reason', 'Reason') }}
                   </p>
                   <p class="text-xs text-black/60 dark:text-white/60">
-                    {{ entry.degradedReason || '-' }}
+                    {{ getHealthCheckReason(entry) }}
                   </p>
                 </div>
                 <div class="rounded-lg bg-white/70 p-3 dark:bg-black/15">
@@ -981,6 +1301,27 @@ const {
               <p v-if="entry.errorMessage" class="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200">
                 {{ entry.errorMessage }}
               </p>
+              <div
+                class="mt-3 rounded-xl px-3 py-2 text-xs"
+                :class="{
+                  'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200': getHealthCheckActionHint(entry).tone === 'success',
+                  'bg-amber-500/10 text-amber-700 dark:text-amber-200': getHealthCheckActionHint(entry).tone === 'warning',
+                  'bg-red-500/10 text-red-700 dark:text-red-200': getHealthCheckActionHint(entry).tone === 'danger',
+                  'bg-black/[0.03] text-black/55 dark:bg-white/[0.05] dark:text-white/55': getHealthCheckActionHint(entry).tone === 'muted',
+                }"
+              >
+                <div class="flex flex-wrap items-center gap-2">
+                  <TxStatusBadge
+                    :text="t('dashboard.providerRegistry.observability.actionHint', 'Next action')"
+                    :status="getHealthCheckActionHint(entry).tone"
+                    size="sm"
+                  />
+                  <span>{{ t(getHealthCheckActionHint(entry).labelKey, getHealthCheckActionHint(entry).fallback) }}</span>
+                </div>
+                <p v-if="getHealthCheckActionHint(entry).detail" class="mt-1 text-black/45 dark:text-white/45">
+                  {{ getHealthCheckActionHint(entry).detail }}
+                </p>
+              </div>
             </article>
           </div>
         </TxTabItem>

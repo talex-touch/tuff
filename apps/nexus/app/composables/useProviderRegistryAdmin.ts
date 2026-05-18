@@ -9,6 +9,10 @@ import {
   createSceneRunPanel,
   ensureUniqueCapabilities,
   fallbackOptions,
+  filterHealthCheckEntries,
+  filterProvidersByObservability,
+  filterScenesByObservability,
+  filterUsageLedgerEntries,
   formatDate,
   formatJson,
   formatRunJson,
@@ -17,31 +21,54 @@ import {
   parseCommaList,
   parseJsonObjectField,
   providerStatusOptions,
+  providerObservabilityFilters,
   providerVendorOptions,
+  observabilityTone,
+  healthCheckFilters,
+  resolveProviderObservability,
+  resolveProviderObservabilityActionHint,
+  resolveProviderObservabilityEmptyState,
+  resolveHealthCheckActionHint,
+  resolveHealthCheckEmptyState,
+  resolveHealthCheckReason,
+  resolveSceneObservability,
+  resolveSceneObservabilityActionHint,
+  resolveSceneObservabilityEmptyState,
+  resolveUsageLedgerActionHint,
+  resolveUsageLedgerEmptyState,
+  resolveUsageLedgerReference,
+  sceneObservabilityFilters,
   sceneCapabilities,
   sceneOwnerOptions,
   statusTone,
   strategyOptions,
+  usageLedgerFilters,
   type BindingFormRow,
   type BindingStatus,
   type CapabilityFormRow,
+  type HealthCheckFilter,
   type OwnerScope,
   type ProviderAuthType,
   type ProviderCapabilityRecord,
   type ProviderCheckResult,
   type ProviderEditPanelState,
   type ProviderHealthCheckEntry,
+  type ProviderObservabilityFilter,
+  type ProviderObservabilitySummary,
   type ProviderRegistryRecord,
   type ProviderStatus,
   type ProviderUsageLedgerEntry,
   type ProviderVendor,
   type SceneEditPanelState,
   type SceneFallback,
+  type SceneObservabilityFilter,
+  type SceneObservabilitySummary,
   type SceneOwner,
   type SceneRegistryRecord,
   type SceneRunPanelState,
   type SceneRunResult,
   type SceneStrategyMode,
+  type UsageLedgerFilter,
 } from '~/utils/provider-registry-admin'
 
 function providerCapabilityCollectionUrl(providerId: string): string {
@@ -76,6 +103,10 @@ export function useProviderRegistryAdmin() {
   const savingScene = ref(false)
   const actionPending = ref<string | null>(null)
   const providerCheckResults = ref<Record<string, ProviderCheckResult>>({})
+  const providerObservabilityFilter = ref<ProviderObservabilityFilter>('all')
+  const sceneObservabilityFilter = ref<SceneObservabilityFilter>('all')
+  const usageLedgerFilter = ref<UsageLedgerFilter>('all')
+  const healthCheckFilter = ref<HealthCheckFilter>('all')
   const sceneRunPanels = reactive<Record<string, SceneRunPanelState>>({})
   const providerEditPanels = reactive<Record<string, ProviderEditPanelState>>({})
   const sceneEditPanels = reactive<Record<string, SceneEditPanelState>>({})
@@ -140,6 +171,74 @@ export function useProviderRegistryAdmin() {
   const providerOptions = computed(() => providers.value.map(provider => ({
     value: provider.id,
     label: `${provider.displayName} · ${provider.vendor}`,
+  })))
+  const providerObservabilityById = computed<Record<string, ProviderObservabilitySummary>>(() => Object.fromEntries(
+    providers.value.map(provider => [
+      provider.id,
+      resolveProviderObservability(provider.id, healthEntries.value, usageEntries.value),
+    ]),
+  ))
+  const sceneObservabilityById = computed<Record<string, SceneObservabilitySummary>>(() => Object.fromEntries(
+    scenes.value.map(scene => [
+      scene.id,
+      resolveSceneObservability(scene.id, usageEntries.value),
+    ]),
+  ))
+  const filteredProviders = computed(() => filterProvidersByObservability(
+    providers.value,
+    providerObservabilityById.value,
+    providerObservabilityFilter.value,
+  ))
+  const filteredScenes = computed(() => filterScenesByObservability(
+    scenes.value,
+    sceneObservabilityById.value,
+    sceneObservabilityFilter.value,
+  ))
+  const filteredUsageEntries = computed(() => filterUsageLedgerEntries(
+    usageEntries.value,
+    usageLedgerFilter.value,
+  ))
+  const filteredHealthEntries = computed(() => filterHealthCheckEntries(
+    healthEntries.value,
+    healthCheckFilter.value,
+  ))
+  const providerObservabilityEmptyState = computed(() => resolveProviderObservabilityEmptyState(
+    providers.value,
+    providerObservabilityById.value,
+    providerObservabilityFilter.value,
+  ))
+  const sceneObservabilityEmptyState = computed(() => resolveSceneObservabilityEmptyState(
+    scenes.value,
+    sceneObservabilityById.value,
+    sceneObservabilityFilter.value,
+  ))
+  const usageLedgerEmptyState = computed(() => resolveUsageLedgerEmptyState(
+    usageEntries.value,
+    usageLedgerFilter.value,
+  ))
+  const healthCheckEmptyState = computed(() => resolveHealthCheckEmptyState(
+    healthEntries.value,
+    healthCheckFilter.value,
+  ))
+  const providerFilterOptions = computed(() => providerObservabilityFilters.map(filter => ({
+    value: filter,
+    label: filter,
+    count: filterProvidersByObservability(providers.value, providerObservabilityById.value, filter).length,
+  })))
+  const sceneFilterOptions = computed(() => sceneObservabilityFilters.map(filter => ({
+    value: filter,
+    label: filter,
+    count: filterScenesByObservability(scenes.value, sceneObservabilityById.value, filter).length,
+  })))
+  const usageFilterOptions = computed(() => usageLedgerFilters.map(filter => ({
+    value: filter,
+    label: filter,
+    count: filterUsageLedgerEntries(usageEntries.value, filter).length,
+  })))
+  const healthFilterOptions = computed(() => healthCheckFilters.map(filter => ({
+    value: filter,
+    label: filter,
+    count: filterHealthCheckEntries(healthEntries.value, filter).length,
   })))
 
   function addCapabilityRow() {
@@ -305,6 +404,38 @@ export function useProviderRegistryAdmin() {
 
   function getProviderCheckResult(providerId: string): ProviderCheckResult | null {
     return providerCheckResults.value[providerId] ?? null
+  }
+
+  function getProviderObservability(providerId: string) {
+    return providerObservabilityById.value[providerId] ?? resolveProviderObservability(providerId, healthEntries.value, usageEntries.value)
+  }
+
+  function getProviderObservabilityActionHint(providerId: string) {
+    return resolveProviderObservabilityActionHint(getProviderObservability(providerId))
+  }
+
+  function getUsageLedgerActionHint(entry: ProviderUsageLedgerEntry) {
+    return resolveUsageLedgerActionHint(entry)
+  }
+
+  function getUsageLedgerReference(entry: ProviderUsageLedgerEntry) {
+    return resolveUsageLedgerReference(entry)
+  }
+
+  function getHealthCheckActionHint(entry: ProviderHealthCheckEntry) {
+    return resolveHealthCheckActionHint(entry)
+  }
+
+  function getHealthCheckReason(entry: ProviderHealthCheckEntry) {
+    return resolveHealthCheckReason(entry)
+  }
+
+  function getSceneObservability(sceneId: string) {
+    return sceneObservabilityById.value[sceneId] ?? resolveSceneObservability(sceneId, usageEntries.value)
+  }
+
+  function getSceneObservabilityActionHint(sceneId: string) {
+    return resolveSceneObservabilityActionHint(getSceneObservability(sceneId))
   }
 
   async function fetchRegistry() {
@@ -731,19 +862,37 @@ export function useProviderRegistryAdmin() {
     error,
     fallbackOptions,
     fetchRegistry,
+    filteredHealthEntries,
+    filteredProviders,
+    filteredScenes,
+    filteredUsageEntries,
     formatDate,
     formatJson,
     formatRunJson,
     getProviderCheckResult,
     getProviderEditPanel,
+    getHealthCheckActionHint,
+    getHealthCheckReason,
+    getProviderObservability,
+    getProviderObservabilityActionHint,
     getSceneEditPanel,
+    getSceneObservability,
+    getSceneObservabilityActionHint,
     getSceneRunPanel,
+    getUsageLedgerActionHint,
+    getUsageLedgerReference,
+    healthCheckEmptyState,
+    healthCheckFilter,
+    healthFilterOptions,
     healthEntries,
     isAdmin,
     loading,
     ownerScopeOptions,
     providerEditPanels,
     providerForm,
+    providerFilterOptions,
+    providerObservabilityFilter,
+    providerObservabilityEmptyState,
     providerOptions,
     providerStatusOptions,
     providers,
@@ -758,12 +907,16 @@ export function useProviderRegistryAdmin() {
     sceneCapabilities,
     sceneCount,
     sceneEditPanels,
+    sceneFilterOptions,
     sceneForm,
+    sceneObservabilityFilter,
+    sceneObservabilityEmptyState,
     sceneOwnerOptions,
     sceneProviderOptions,
     scenes,
     savingProvider,
     savingScene,
+    observabilityTone,
     statusTone,
     strategyOptions,
     toggleProviderEdit,
@@ -772,6 +925,9 @@ export function useProviderRegistryAdmin() {
     updateProviderStatus,
     updateSceneStatus,
     usageCount,
+    usageFilterOptions,
+    usageLedgerEmptyState,
+    usageLedgerFilter,
     usageEntries,
   }
 }

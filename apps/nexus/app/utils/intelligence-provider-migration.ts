@@ -5,6 +5,22 @@ export interface IntelligenceProviderMigrationReadinessInput {
   failed?: number
 }
 
+export interface IntelligenceProviderMigrationEvidenceItem {
+  providerId: string
+  providerName: string
+  action: string
+  registryProviderId: string | null
+  migratedApiKey: boolean
+  reason: string | null
+}
+
+export interface IntelligenceProviderMigrationEvidenceInput extends IntelligenceProviderMigrationReadinessInput {
+  total: number
+  migrated: number
+  skipped: number
+  items: IntelligenceProviderMigrationEvidenceItem[]
+}
+
 export type IntelligenceProviderMigrationReadinessStatus = 'ready' | 'blocked' | 'planning'
 export type IntelligenceProviderMigrationReadinessTone = 'success' | 'warning' | 'danger'
 
@@ -54,4 +70,34 @@ export function resolveMigrationReadiness(
     registryPrimaryReady: false,
     blockers: blockers.length ? blockers : ['migration_not_executed'],
   }
+}
+
+export function formatMigrationEvidenceSummary(input: IntelligenceProviderMigrationEvidenceInput): string {
+  const readiness = resolveMigrationReadiness(input)
+  const lines = [
+    '# Provider Registry migration evidence',
+    '',
+    `mode: ${input.dryRun ? 'dry-run' : 'execute'}`,
+    `readiness: ${readiness.status}`,
+    `registryPrimaryReady: ${readiness.registryPrimaryReady ? 'yes' : 'no'}`,
+    `total: ${input.total}`,
+    `migrated: ${input.migrated}`,
+    `skipped: ${input.skipped}`,
+    `failed: ${input.failed ?? 0}`,
+    `blockers: ${readiness.blockers.length ? readiness.blockers.join(', ') : 'none'}`,
+    '',
+    'items:',
+  ]
+
+  for (const item of input.items) {
+    const registry = item.registryProviderId ? ` -> ${item.registryProviderId}` : ''
+    const keyState = item.migratedApiKey ? 'secret=migrated' : 'secret=unchanged'
+    const reason = item.reason ? ` reason=${item.reason}` : ''
+    lines.push(`- ${item.providerName} (${item.providerId}): ${item.action}${registry}; ${keyState}${reason}`)
+  }
+
+  if (!input.items.length)
+    lines.push('- none')
+
+  return lines.join('\n')
 }

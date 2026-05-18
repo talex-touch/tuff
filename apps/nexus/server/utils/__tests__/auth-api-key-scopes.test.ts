@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { API_KEY_SCOPES, hasRequiredScope, isApiKeyScope } from '../apiKeyScopes'
+import { API_KEY_SCOPES, DEFAULT_PLUGIN_API_KEY_SCOPES, hasRequiredScope, isApiKeyScope } from '../apiKeyScopes'
 
 describe('auth API key scopes', () => {
   it('exposes only granular release scopes for new API keys', () => {
@@ -19,5 +19,15 @@ describe('auth API key scopes', () => {
     expect(hasRequiredScope(['release:sync'], 'release:write')).toBe(false)
     expect(hasRequiredScope(['release:sync'], 'release:evidence')).toBe(false)
     expect(hasRequiredScope(['release:evidence'], 'release:evidence')).toBe(true)
+  })
+
+  it('defaults plugin API keys to read and publish scopes', () => {
+    expect(DEFAULT_PLUGIN_API_KEY_SCOPES).toEqual(['plugin:read', 'plugin:publish'])
+  })
+
+  it('lets plugin publish scope satisfy plugin read checks for legacy keys', () => {
+    expect(hasRequiredScope(['plugin:publish'], 'plugin:read')).toBe(true)
+    expect(hasRequiredScope(['plugin:publish'], 'plugin:publish')).toBe(true)
+    expect(hasRequiredScope(['plugin:read'], 'plugin:publish')).toBe(false)
   })
 })

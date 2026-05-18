@@ -2,6 +2,8 @@
 import type { SharedPluginDetail } from '@talex-touch/utils/renderer/shared/plugin-detail'
 import type {
   FilterCategory,
+  StorePluginContentListResponse,
+  StorePluginContentPackage,
   StorePluginDetail,
   StorePluginRatingResponse,
   StorePluginRatingSummary,
@@ -11,12 +13,12 @@ import type {
   StorePluginSummary,
 } from '~/types/store'
 import { TxButton, TxTabItem, TxTabs } from '@talex-touch/tuffex'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import {
   SharedPluginDetailReadme,
   SharedPluginDetailVersions,
 } from '@talex-touch/utils/renderer/shared/components'
 import { computed, reactive, ref, watch } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
 import StoreItem from '~/components/store/StoreItem.vue'
 import StoreSearch from '~/components/store/StoreSearch.vue'
@@ -68,8 +70,11 @@ const selectedPlugin = ref<StorePluginDetail | null>(null)
 const detailOverlaySource = ref<HTMLElement | null>(null)
 const detailPending = ref(false)
 const detailError = ref<string | null>(null)
-const detailTab = ref<'overview' | 'versions' | 'reviews'>('overview')
+const detailTab = ref<'overview' | 'versions' | 'content' | 'reviews'>('overview')
 const reviews = ref<StorePluginReview[]>([])
+const contentPackages = ref<StorePluginContentPackage[]>([])
+const contentPackagesPending = ref(false)
+const contentPackagesError = ref<string | null>(null)
 const reviewsPending = ref(false)
 const reviewsError = ref<string | null>(null)
 const reviewsMeta = reactive({
@@ -98,7 +103,7 @@ const {
   }))
 
 const { resolveCategoryLabel, matchesCategory } = useStoreCategories()
-const { formatDate, formatInstalls, formatPackageSize } = useStoreFormatters()
+const { formatDate, formatPackageSize } = useStoreFormatters()
 
 const allPlugins = computed(() => (pluginsPayload.value?.plugins ?? []).filter(plugin => plugin.latestVersion))
 
@@ -147,6 +152,12 @@ function resetReviewState() {
   reviewForm.content = ''
 }
 
+function resetContentPackageState() {
+  contentPackages.value = []
+  contentPackagesPending.value = false
+  contentPackagesError.value = null
+}
+
 function resolveStarClass(value: number, rating: number) {
   return value <= rating
     ? 'i-carbon-star-filled text-amber-500'
@@ -177,6 +188,28 @@ async function loadPluginCommunity(slug: string) {
   }
   finally {
     reviewsPending.value = false
+  }
+}
+
+async function loadPluginContentPackages(plugin: StorePluginDetail) {
+  contentPackagesPending.value = true
+  contentPackagesError.value = null
+  try {
+    const response = await requestJson<StorePluginContentListResponse>('/api/store/plugin-content', {
+      query: {
+        pluginId: plugin.slug,
+        limit: 20,
+      },
+    })
+    contentPackages.value = response.packages ?? []
+  }
+  catch (error: unknown) {
+    contentPackagesError.value = error instanceof Error
+      ? error.message
+      : t('store.detail.content.error', 'Unable to load shared content.')
+  }
+  finally {
+    contentPackagesPending.value = false
   }
 }
 
@@ -269,10 +302,12 @@ async function openPluginDetail(plugin: StorePluginSummary, source: HTMLElement 
   detailError.value = null
   detailTab.value = 'overview'
   resetReviewState()
+  resetContentPackageState()
   try {
     const response = await requestJson<{ plugin: StorePluginDetail }>(`/api/store/plugins/${plugin.slug}`)
     selectedPlugin.value = response.plugin
     void loadPluginCommunity(plugin.slug)
+    void loadPluginContentPackages(response.plugin)
   }
   catch (error: unknown) {
     detailError.value = error instanceof Error ? error.message : t('store.detail.error', 'Unable to load plugin details.')
@@ -289,6 +324,7 @@ function closePluginDetail() {
   detailError.value = null
   detailTab.value = 'overview'
   resetReviewState()
+  resetContentPackageState()
 }
 
 const filteredPlugins = computed(() => {
@@ -463,6 +499,48 @@ useSeoMeta({
                         />
                       </div>
                     </div>
+                  </TxTabItem>
+
+                  <TxTabItem name="content" icon-class="i-carbon-package">
+                    <template #name>
+                      {{ t('store.detail.tabs.content', 'Content') }}
+                    </template>
+                    <section class="space-y-4 py-1">
+                      <div v-if="contentPackagesPending" class="StoreDetailTextSubtle flex items-center gap-2 py-6 text-sm">
+                        <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                        <span>{{ t('store.detail.content.loading', 'Loading shared content...') }}</span>
+                      </div>
+                      <div v-else-if="contentPackagesError" class="StoreDetailError rounded-xl p-4 text-sm">
+                        {{ contentPackagesError }}
+                      </div>
+                      <p v-else-if="!contentPackages.length" class="StoreDetailTextSubtle text-sm">
+                        {{ t('store.detail.content.empty', 'No shared content packages yet.') }}
+                      </p>
+                      <div v-else class="space-y-3">
+                        <article
+                          v-for="contentPackage in contentPackages"
+                          :key="contentPackage.id"
+                          class="StoreDetailPanel StoreDetailText p-4 text-sm"
+                        >
+                          <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div class="min-w-0">
+                              <p class="StoreDetailTextStrong text-sm font-semibold">
+                                {{ contentPackage.title }}
+                              </p>
+                              <p v-if="contentPackage.summary" class="StoreDetailTextMuted mt-1 text-xs">
+                                {{ contentPackage.summary }}
+                              </p>
+                            </div>
+                            <Tag :label="contentPackage.kind" size="sm" icon="i-carbon-package" />
+                          </div>
+                          <div class="StoreDetailTextMuted mt-3 flex flex-wrap items-center gap-3 text-xs">
+                            <span>{{ contentPackage.manifest?.format || contentPackage.kind }}</span>
+                            <span>{{ t('store.detail.content.installs', { count: contentPackage.installCount }) }}</span>
+                            <span>{{ formatDate(contentPackage.publishedAt || contentPackage.updatedAt) }}</span>
+                          </div>
+                        </article>
+                      </div>
+                    </section>
                   </TxTabItem>
 
                   <TxTabItem name="reviews" icon-class="i-carbon-chat">
@@ -716,5 +794,4 @@ useSeoMeta({
 .StoreDetailStarEmpty {
   color: color-mix(in srgb, var(--tx-text-color-secondary, #4b5563) 40%, transparent);
 }
-
 </style>

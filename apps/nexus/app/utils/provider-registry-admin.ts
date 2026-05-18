@@ -256,6 +256,40 @@ export interface ProviderHealthCheckEntry {
   checkedAt: string
 }
 
+export interface ProviderObservabilitySummary {
+  latestHealth: ProviderHealthCheckEntry | null
+  latestUsage: ProviderUsageLedgerEntry | null
+  status: 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
+}
+
+export interface SceneObservabilitySummary {
+  latestUsage: ProviderUsageLedgerEntry | null
+  failedUsageCount: number
+  status: 'planned' | 'completed' | 'failed' | 'unknown'
+}
+
+export interface ObservabilityActionHint {
+  tone: 'success' | 'warning' | 'danger' | 'muted'
+  labelKey: string
+  fallback: string
+  detail: string | null
+}
+
+export interface ObservabilityEmptyState {
+  tone: 'muted' | 'warning' | 'success'
+  titleKey: string
+  titleFallback: string
+  detailKey: string
+  detailFallback: string
+  actionKey: string
+  actionFallback: string
+}
+
+export type ProviderObservabilityFilter = 'all' | 'attention' | 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
+export type SceneObservabilityFilter = 'all' | 'attention' | 'completed' | 'failed' | 'planned' | 'unknown'
+export type UsageLedgerFilter = 'all' | 'attention' | 'completed' | 'failed' | 'planned' | 'estimated'
+export type HealthCheckFilter = 'all' | 'attention' | 'healthy' | 'degraded' | 'unhealthy'
+
 export interface SceneRunPanelState {
   expanded: boolean
   inputText: string
@@ -273,6 +307,10 @@ export const sceneOwnerOptions: SceneOwner[] = ['nexus', 'core-app', 'app', 'plu
 export const strategyOptions: SceneStrategyMode[] = ['priority', 'least_cost', 'lowest_latency', 'balanced', 'manual']
 export const fallbackOptions: SceneFallback[] = ['enabled', 'disabled']
 export const bindingStatusOptions: BindingStatus[] = ['enabled', 'disabled']
+export const providerObservabilityFilters: ProviderObservabilityFilter[] = ['all', 'attention', 'healthy', 'degraded', 'unhealthy', 'unknown']
+export const sceneObservabilityFilters: SceneObservabilityFilter[] = ['all', 'attention', 'completed', 'failed', 'planned', 'unknown']
+export const usageLedgerFilters: UsageLedgerFilter[] = ['all', 'attention', 'completed', 'failed', 'planned', 'estimated']
+export const healthCheckFilters: HealthCheckFilter[] = ['all', 'attention', 'healthy', 'degraded', 'unhealthy']
 
 export function statusTone(status: string) {
   if (status === 'enabled' || status === 'success' || status === 'completed')
@@ -282,6 +320,543 @@ export function statusTone(status: string) {
   if (status === 'failed')
     return 'danger'
   return 'muted'
+}
+
+export function observabilityTone(status: string | null | undefined) {
+  if (status === 'healthy' || status === 'completed')
+    return 'success'
+  if (status === 'degraded' || status === 'planned')
+    return 'warning'
+  if (status === 'unhealthy' || status === 'failed')
+    return 'danger'
+  return 'muted'
+}
+
+function compareNewestFirst(left: string, right: string) {
+  const leftTime = Date.parse(left)
+  const rightTime = Date.parse(right)
+  if (!Number.isFinite(leftTime) && !Number.isFinite(rightTime))
+    return 0
+  if (!Number.isFinite(leftTime))
+    return 1
+  if (!Number.isFinite(rightTime))
+    return -1
+  return rightTime - leftTime
+}
+
+function newestBy<T>(entries: T[], getDate: (entry: T) => string): T | null {
+  return [...entries].sort((left, right) => compareNewestFirst(getDate(left), getDate(right)))[0] ?? null
+}
+
+export function resolveProviderObservability(
+  providerId: string,
+  healthEntries: ProviderHealthCheckEntry[],
+  usageEntries: ProviderUsageLedgerEntry[],
+): ProviderObservabilitySummary {
+  const latestHealth = newestBy(
+    healthEntries.filter(entry => entry.providerId === providerId),
+    entry => entry.checkedAt,
+  )
+  const latestUsage = newestBy(
+    usageEntries.filter(entry => entry.providerId === providerId),
+    entry => entry.createdAt,
+  )
+
+  return {
+    latestHealth,
+    latestUsage,
+    status: latestHealth?.status ?? (latestUsage?.status === 'failed' ? 'unhealthy' : 'unknown'),
+  }
+}
+
+export function resolveSceneObservability(
+  sceneId: string,
+  usageEntries: ProviderUsageLedgerEntry[],
+): SceneObservabilitySummary {
+  const sceneUsage = usageEntries.filter(entry => entry.sceneId === sceneId)
+  const latestUsage = newestBy(sceneUsage, entry => entry.createdAt)
+
+  return {
+    latestUsage,
+    failedUsageCount: sceneUsage.filter(entry => entry.status === 'failed').length,
+    status: latestUsage?.status ?? 'unknown',
+  }
+}
+
+function providerFailureReason(summary: ProviderObservabilitySummary) {
+  return summary.latestUsage?.errorCode
+    || summary.latestUsage?.errorMessage
+    || summary.latestHealth?.errorCode
+    || summary.latestHealth?.errorMessage
+    || summary.latestHealth?.degradedReason
+    || null
+}
+
+export function resolveProviderObservabilityActionHint(summary: ProviderObservabilitySummary): ObservabilityActionHint {
+  if (summary.latestUsage?.status === 'failed' || summary.status === 'unhealthy') {
+    return {
+      tone: 'danger',
+      labelKey: 'dashboard.providerRegistry.observability.actions.providerUnhealthy',
+      fallback: 'Check credentials, endpoint, and provider health before using this provider.',
+      detail: providerFailureReason(summary),
+    }
+  }
+
+  if (summary.status === 'degraded') {
+    return {
+      tone: 'warning',
+      labelKey: 'dashboard.providerRegistry.observability.actions.providerDegraded',
+      fallback: 'Review the degraded reason, then rerun the provider check.',
+      detail: providerFailureReason(summary),
+    }
+  }
+
+  if (summary.status === 'healthy') {
+    return {
+      tone: 'success',
+      labelKey: 'dashboard.providerRegistry.observability.actions.providerHealthy',
+      fallback: 'Healthy. Ready for scene dry-run or registry evidence.',
+      detail: summary.latestHealth?.capability ?? null,
+    }
+  }
+
+  return {
+    tone: 'muted',
+    labelKey: 'dashboard.providerRegistry.observability.actions.providerUnknown',
+    fallback: 'Run a provider check before relying on this provider.',
+    detail: null,
+  }
+}
+
+function sceneFailureReason(summary: SceneObservabilitySummary) {
+  return summary.latestUsage?.errorCode
+    || summary.latestUsage?.errorMessage
+    || null
+}
+
+export function resolveSceneObservabilityActionHint(summary: SceneObservabilitySummary): ObservabilityActionHint {
+  if (summary.status === 'failed') {
+    return {
+      tone: 'danger',
+      labelKey: 'dashboard.providerRegistry.observability.actions.sceneFailed',
+      fallback: 'Inspect the error and fallback trail, then rerun a dry-run.',
+      detail: sceneFailureReason(summary),
+    }
+  }
+
+  if (summary.failedUsageCount > 0) {
+    return {
+      tone: 'warning',
+      labelKey: 'dashboard.providerRegistry.observability.actions.sceneFailedHistory',
+      fallback: 'Recent failures exist. Dry-run before the next execute.',
+      detail: `${summary.failedUsageCount} failed`,
+    }
+  }
+
+  if (summary.status === 'planned') {
+    return {
+      tone: 'warning',
+      labelKey: 'dashboard.providerRegistry.observability.actions.scenePlanned',
+      fallback: 'Only planned usage exists. Execute once with a safe sample input.',
+      detail: summary.latestUsage?.runId ?? null,
+    }
+  }
+
+  if (summary.status === 'completed') {
+    return {
+      tone: 'success',
+      labelKey: 'dashboard.providerRegistry.observability.actions.sceneCompleted',
+      fallback: 'Completed. Latest run can support registry evidence if output is clean.',
+      detail: summary.latestUsage?.runId ?? null,
+    }
+  }
+
+  return {
+    tone: 'muted',
+    labelKey: 'dashboard.providerRegistry.observability.actions.sceneUnknown',
+    fallback: 'Run a scene dry-run to seed health and usage evidence.',
+    detail: null,
+  }
+}
+
+function usageLedgerReason(entry: ProviderUsageLedgerEntry) {
+  return entry.errorCode
+    || entry.errorMessage
+    || entry.providerUsageRef
+    || entry.pricingRef
+    || entry.runId
+    || null
+}
+
+export function resolveUsageLedgerActionHint(entry: ProviderUsageLedgerEntry): ObservabilityActionHint {
+  if (entry.status === 'failed') {
+    return {
+      tone: 'danger',
+      labelKey: 'dashboard.providerRegistry.observability.actions.usageFailed',
+      fallback: 'Inspect the trace and fallback trail before reusing this scene.',
+      detail: usageLedgerReason(entry),
+    }
+  }
+
+  if (entry.status === 'planned') {
+    return {
+      tone: 'warning',
+      labelKey: 'dashboard.providerRegistry.observability.actions.usagePlanned',
+      fallback: 'Dry-run evidence only. Execute with a safe sample before marking runtime ready.',
+      detail: entry.runId,
+    }
+  }
+
+  if (entry.estimated) {
+    return {
+      tone: 'warning',
+      labelKey: 'dashboard.providerRegistry.observability.actions.usageEstimated',
+      fallback: 'Usage is estimated. Confirm provider billing reference before using it as final evidence.',
+      detail: entry.providerUsageRef || entry.pricingRef || entry.runId,
+    }
+  }
+
+  return {
+    tone: 'success',
+    labelKey: 'dashboard.providerRegistry.observability.actions.usageCompleted',
+    fallback: 'Completed usage row is ready for evidence review.',
+    detail: entry.providerUsageRef || entry.pricingRef || entry.runId,
+  }
+}
+
+export function resolveUsageLedgerReference(entry: ProviderUsageLedgerEntry) {
+  return entry.providerUsageRef || entry.pricingRef || entry.runId || '-'
+}
+
+function healthCheckReason(entry: ProviderHealthCheckEntry) {
+  return entry.degradedReason
+    || entry.errorCode
+    || entry.errorMessage
+    || entry.requestId
+    || null
+}
+
+export function resolveHealthCheckActionHint(entry: ProviderHealthCheckEntry): ObservabilityActionHint {
+  if (entry.status === 'unhealthy') {
+    return {
+      tone: 'danger',
+      labelKey: 'dashboard.providerRegistry.observability.actions.healthUnhealthy',
+      fallback: 'Health check failed. Verify credentials, endpoint, and provider availability.',
+      detail: healthCheckReason(entry),
+    }
+  }
+
+  if (entry.status === 'degraded') {
+    return {
+      tone: 'warning',
+      labelKey: 'dashboard.providerRegistry.observability.actions.healthDegraded',
+      fallback: 'Provider is degraded. Review the reason and rerun health check before routing traffic.',
+      detail: healthCheckReason(entry),
+    }
+  }
+
+  return {
+    tone: 'success',
+    labelKey: 'dashboard.providerRegistry.observability.actions.healthHealthy',
+    fallback: 'Latest health check is healthy.',
+    detail: entry.requestId || entry.capability || null,
+  }
+}
+
+export function resolveHealthCheckReason(entry: ProviderHealthCheckEntry) {
+  return healthCheckReason(entry) || '-'
+}
+
+function usageLedgerNeedsAttention(entry: ProviderUsageLedgerEntry) {
+  return entry.status === 'failed'
+    || entry.status === 'planned'
+    || entry.estimated
+}
+
+export function filterUsageLedgerEntries(
+  entries: ProviderUsageLedgerEntry[],
+  filter: UsageLedgerFilter,
+) {
+  if (filter === 'all')
+    return entries
+
+  return entries.filter((entry) => {
+    if (filter === 'attention')
+      return usageLedgerNeedsAttention(entry)
+
+    if (filter === 'estimated')
+      return entry.estimated
+
+    return entry.status === filter
+  })
+}
+
+export function filterHealthCheckEntries(
+  entries: ProviderHealthCheckEntry[],
+  filter: HealthCheckFilter,
+) {
+  if (filter === 'all')
+    return entries
+
+  return entries.filter((entry) => {
+    if (filter === 'attention')
+      return entry.status !== 'healthy'
+
+    return entry.status === filter
+  })
+}
+
+export function resolveUsageLedgerEmptyState(
+  entries: ProviderUsageLedgerEntry[],
+  filter: UsageLedgerFilter,
+): ObservabilityEmptyState | null {
+  if (entries.length === 0) {
+    return {
+      tone: 'muted',
+      titleKey: 'dashboard.providerRegistry.usage.empty',
+      titleFallback: 'No scene run usage recorded yet.',
+      detailKey: 'dashboard.providerRegistry.usage.emptyDetail',
+      detailFallback: 'Run a scene dry-run or execute flow to seed usage, trace, and fallback evidence.',
+      actionKey: 'dashboard.providerRegistry.usage.emptyAction',
+      actionFallback: 'Run scene',
+    }
+  }
+
+  if (filterUsageLedgerEntries(entries, filter).length > 0)
+    return null
+
+  if (filter === 'attention') {
+    return {
+      tone: 'success',
+      titleKey: 'dashboard.providerRegistry.usage.emptyAttention',
+      titleFallback: 'No usage rows need attention',
+      detailKey: 'dashboard.providerRegistry.usage.emptyAttentionDetail',
+      detailFallback: 'No failed, planned, or estimated usage rows match this view.',
+      actionKey: 'dashboard.providerRegistry.usage.clearFilter',
+      actionFallback: 'Show all usage',
+    }
+  }
+
+  return {
+    tone: filter === 'failed' || filter === 'estimated' ? 'success' : 'muted',
+    titleKey: 'dashboard.providerRegistry.usage.emptyFiltered',
+    titleFallback: 'No usage rows match the selected filter.',
+    detailKey: 'dashboard.providerRegistry.usage.emptyFilteredDetail',
+    detailFallback: 'Switch filters or run a scene to refresh usage ledger evidence.',
+    actionKey: 'dashboard.providerRegistry.usage.clearFilter',
+    actionFallback: 'Show all usage',
+  }
+}
+
+export function resolveHealthCheckEmptyState(
+  entries: ProviderHealthCheckEntry[],
+  filter: HealthCheckFilter,
+): ObservabilityEmptyState | null {
+  if (entries.length === 0) {
+    return {
+      tone: 'muted',
+      titleKey: 'dashboard.providerRegistry.health.empty',
+      titleFallback: 'No provider health checks recorded yet.',
+      detailKey: 'dashboard.providerRegistry.health.emptyDetail',
+      detailFallback: 'Run a provider check to capture latency, request id, degraded reason, and failure diagnostics.',
+      actionKey: 'dashboard.providerRegistry.health.emptyAction',
+      actionFallback: 'Run provider check',
+    }
+  }
+
+  if (filterHealthCheckEntries(entries, filter).length > 0)
+    return null
+
+  if (filter === 'attention') {
+    return {
+      tone: 'success',
+      titleKey: 'dashboard.providerRegistry.health.emptyAttention',
+      titleFallback: 'No health checks need attention',
+      detailKey: 'dashboard.providerRegistry.health.emptyAttentionDetail',
+      detailFallback: 'No degraded or unhealthy health checks match this view.',
+      actionKey: 'dashboard.providerRegistry.health.clearFilter',
+      actionFallback: 'Show all health checks',
+    }
+  }
+
+  return {
+    tone: filter === 'degraded' || filter === 'unhealthy' ? 'success' : 'muted',
+    titleKey: 'dashboard.providerRegistry.health.emptyFiltered',
+    titleFallback: 'No health checks match the selected filter.',
+    detailKey: 'dashboard.providerRegistry.health.emptyFilteredDetail',
+    detailFallback: 'Switch filters or run provider checks to refresh health evidence.',
+    actionKey: 'dashboard.providerRegistry.health.clearFilter',
+    actionFallback: 'Show all health checks',
+  }
+}
+
+function providerNeedsAttention(summary: ProviderObservabilitySummary) {
+  return summary.status === 'degraded'
+    || summary.status === 'unhealthy'
+    || summary.latestUsage?.status === 'failed'
+}
+
+function sceneNeedsAttention(summary: SceneObservabilitySummary) {
+  return summary.status === 'failed'
+    || summary.status === 'unknown'
+    || summary.failedUsageCount > 0
+}
+
+export function filterProvidersByObservability(
+  providers: ProviderRegistryRecord[],
+  observabilityById: Record<string, ProviderObservabilitySummary>,
+  filter: ProviderObservabilityFilter,
+) {
+  if (filter === 'all')
+    return providers
+
+  return providers.filter((provider) => {
+    const summary = observabilityById[provider.id] ?? {
+      latestHealth: null,
+      latestUsage: null,
+      status: 'unknown',
+    }
+
+    if (filter === 'attention')
+      return providerNeedsAttention(summary)
+
+    return summary.status === filter
+  })
+}
+
+export function filterScenesByObservability(
+  scenes: SceneRegistryRecord[],
+  observabilityById: Record<string, SceneObservabilitySummary>,
+  filter: SceneObservabilityFilter,
+) {
+  if (filter === 'all')
+    return scenes
+
+  return scenes.filter((scene) => {
+    const summary = observabilityById[scene.id] ?? {
+      latestUsage: null,
+      failedUsageCount: 0,
+      status: 'unknown',
+    }
+
+    if (filter === 'attention')
+      return sceneNeedsAttention(summary)
+
+    if (filter === 'failed')
+      return summary.status === 'failed' || summary.failedUsageCount > 0
+
+    return summary.status === filter
+  })
+}
+
+export function resolveProviderObservabilityEmptyState(
+  providers: ProviderRegistryRecord[],
+  observabilityById: Record<string, ProviderObservabilitySummary>,
+  filter: ProviderObservabilityFilter,
+): ObservabilityEmptyState | null {
+  if (providers.length === 0) {
+    return {
+      tone: 'muted',
+      titleKey: 'dashboard.providerRegistry.providers.empty',
+      titleFallback: 'No providers registered yet.',
+      detailKey: 'dashboard.providerRegistry.providers.emptyDetail',
+      detailFallback: 'Create a provider before checking health, usage, or scene bindings.',
+      actionKey: 'dashboard.providerRegistry.providers.emptyAction',
+      actionFallback: 'Create provider',
+    }
+  }
+
+  if (filterProvidersByObservability(providers, observabilityById, filter).length > 0)
+    return null
+
+  if (filter === 'attention') {
+    return {
+      tone: 'success',
+      titleKey: 'dashboard.providerRegistry.providers.emptyAttention',
+      titleFallback: 'No providers need attention',
+      detailKey: 'dashboard.providerRegistry.providers.emptyAttentionDetail',
+      detailFallback: 'No degraded, unhealthy, or failed-usage providers match this view.',
+      actionKey: 'dashboard.providerRegistry.providers.clearFilter',
+      actionFallback: 'Show all providers',
+    }
+  }
+
+  if (filter === 'unknown') {
+    return {
+      tone: 'warning',
+      titleKey: 'dashboard.providerRegistry.providers.emptyUnknown',
+      titleFallback: 'No providers without evidence',
+      detailKey: 'dashboard.providerRegistry.providers.emptyUnknownDetail',
+      detailFallback: 'Every provider in this set already has health or usage evidence.',
+      actionKey: 'dashboard.providerRegistry.providers.clearFilter',
+      actionFallback: 'Show all providers',
+    }
+  }
+
+  return {
+    tone: 'muted',
+    titleKey: 'dashboard.providerRegistry.providers.emptyFiltered',
+    titleFallback: 'No providers match the selected filter.',
+    detailKey: 'dashboard.providerRegistry.providers.emptyFilteredDetail',
+    detailFallback: 'Switch filters or run provider checks to refresh observability evidence.',
+    actionKey: 'dashboard.providerRegistry.providers.clearFilter',
+    actionFallback: 'Show all providers',
+  }
+}
+
+export function resolveSceneObservabilityEmptyState(
+  scenes: SceneRegistryRecord[],
+  observabilityById: Record<string, SceneObservabilitySummary>,
+  filter: SceneObservabilityFilter,
+): ObservabilityEmptyState | null {
+  if (scenes.length === 0) {
+    return {
+      tone: 'muted',
+      titleKey: 'dashboard.providerRegistry.scenes.empty',
+      titleFallback: 'No scenes configured yet.',
+      detailKey: 'dashboard.providerRegistry.scenes.emptyDetail',
+      detailFallback: 'Create a scene and bind provider capabilities before collecting run evidence.',
+      actionKey: 'dashboard.providerRegistry.scenes.emptyAction',
+      actionFallback: 'Create scene',
+    }
+  }
+
+  if (filterScenesByObservability(scenes, observabilityById, filter).length > 0)
+    return null
+
+  if (filter === 'attention') {
+    return {
+      tone: 'success',
+      titleKey: 'dashboard.providerRegistry.scenes.emptyAttention',
+      titleFallback: 'No scene runs need attention',
+      detailKey: 'dashboard.providerRegistry.scenes.emptyAttentionDetail',
+      detailFallback: 'No failed, unknown, or failed-history scenes match this view.',
+      actionKey: 'dashboard.providerRegistry.scenes.clearFilter',
+      actionFallback: 'Show all scenes',
+    }
+  }
+
+  if (filter === 'failed') {
+    return {
+      tone: 'success',
+      titleKey: 'dashboard.providerRegistry.scenes.emptyFailed',
+      titleFallback: 'No failed scene evidence',
+      detailKey: 'dashboard.providerRegistry.scenes.emptyFailedDetail',
+      detailFallback: 'No latest failures or failed-history scenes match this view.',
+      actionKey: 'dashboard.providerRegistry.scenes.clearFilter',
+      actionFallback: 'Show all scenes',
+    }
+  }
+
+  return {
+    tone: 'muted',
+    titleKey: 'dashboard.providerRegistry.scenes.emptyFiltered',
+    titleFallback: 'No scenes match the selected filter.',
+    detailKey: 'dashboard.providerRegistry.scenes.emptyFilteredDetail',
+    detailFallback: 'Switch filters or run a scene dry-run to refresh usage evidence.',
+    actionKey: 'dashboard.providerRegistry.scenes.clearFilter',
+    actionFallback: 'Show all scenes',
+  }
 }
 
 export function normalizeError(err: any, fallback: string) {

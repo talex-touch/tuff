@@ -1,7 +1,7 @@
 import { createError, readBody } from 'h3'
 import { createApiKey } from '../../utils/apiKeyStore'
 import { getUserById } from '../../utils/authStore'
-import { isApiKeyScope } from '../../utils/apiKeyScopes'
+import { DEFAULT_PLUGIN_API_KEY_SCOPES, isApiKeyScope } from '../../utils/apiKeyScopes'
 import { requireAuth } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   const isAdmin = user?.role === 'admin'
   const requestedScopes = Array.isArray(scopes)
     ? scopes.filter(isApiKeyScope)
-    : ['plugin:publish']
+    : DEFAULT_PLUGIN_API_KEY_SCOPES
   const keyScopes = (isAdmin
     ? requestedScopes
     : requestedScopes.filter((scope: string) => !scope.startsWith('release:'))

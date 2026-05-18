@@ -5,7 +5,7 @@ import { defineComponent, h, inject } from 'vue'
 import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
-import { resolveMigrationReadiness, type IntelligenceProviderMigrationReadinessStatus } from '~/utils/intelligence-provider-migration'
+import { formatMigrationEvidenceSummary, resolveMigrationReadiness, type IntelligenceProviderMigrationReadinessStatus } from '~/utils/intelligence-provider-migration'
 import type { ProviderRegistryRecord, SceneRegistryRecord, SceneStrategyMode } from '~/utils/provider-registry-admin'
 
 const { t } = useI18n()
@@ -176,11 +176,18 @@ const sceneSaving = ref(false)
 const migrationLoading = ref(false)
 const migrationError = ref<string | null>(null)
 const migrationResult = ref<MigrationResult | null>(null)
+const migrationEvidenceCopied = ref(false)
 const migrationReadiness = computed(() => {
   if (!migrationResult.value)
     return null
 
   return resolveMigrationReadiness(migrationResult.value)
+})
+const migrationEvidenceSummary = computed(() => {
+  if (!migrationResult.value)
+    return ''
+
+  return formatMigrationEvidenceSummary(migrationResult.value)
 })
 const settingsSaving = ref(false)
 const auditLogs = ref<AuditLog[]>([])
@@ -655,6 +662,7 @@ async function saveSceneConfig() {
 async function runProviderRegistryMigration(dryRun: boolean) {
   migrationLoading.value = true
   migrationError.value = null
+  migrationEvidenceCopied.value = false
   try {
     const result = await rawFetch<{ migration: MigrationResult }>('/api/dashboard/intelligence/providers/migrate', {
       method: 'POST',
@@ -671,6 +679,19 @@ async function runProviderRegistryMigration(dryRun: boolean) {
   }
   finally {
     migrationLoading.value = false
+  }
+}
+
+async function copyProviderRegistryMigrationEvidence() {
+  if (!migrationEvidenceSummary.value)
+    return
+
+  try {
+    await navigator.clipboard.writeText(migrationEvidenceSummary.value)
+    migrationEvidenceCopied.value = true
+  }
+  catch (e: any) {
+    migrationError.value = e?.message || t('dashboard.sections.intelligence.providers.migration.copyEvidenceFailed', 'Failed to copy migration evidence.')
   }
 }
 
@@ -1951,6 +1972,14 @@ function formatEndpointCandidates(list?: string[]) {
                   <span>{{ t('dashboard.sections.intelligence.providers.migration.total', '总数') }}: {{ migrationResult.total }}</span>
                   <span>{{ t('dashboard.sections.intelligence.providers.migration.migrated', '已迁移') }}: {{ migrationResult.migrated }}</span>
                   <span>{{ t('dashboard.sections.intelligence.providers.migration.failed', '失败') }}: {{ migrationResult.failed }}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <TxButton variant="secondary" size="mini" @click="copyProviderRegistryMigrationEvidence">
+                    {{ t('dashboard.sections.intelligence.providers.migration.copyEvidence', 'Copy evidence') }}
+                  </TxButton>
+                  <span v-if="migrationEvidenceCopied" class="text-xs text-emerald-600 dark:text-emerald-300">
+                    {{ t('dashboard.sections.intelligence.providers.migration.evidenceCopied', 'Evidence copied.') }}
+                  </span>
                 </div>
                 <div v-if="migrationReadiness" class="rounded-xl bg-white/55 p-3 dark:bg-white/[0.04]">
                   <div class="flex flex-wrap items-center justify-between gap-2">
