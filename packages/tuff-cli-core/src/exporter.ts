@@ -14,11 +14,11 @@ import {
   isAllowedWidgetModule,
   makeSafeWidgetFileId,
   makeWidgetId,
+  resolveWidgetRuntime,
+  resolveWidgetRuntimeStage,
   WIDGET_ALLOWED_PACKAGES,
   WIDGET_COMPILED_DIR,
   WIDGET_RUNTIMES,
-  resolveWidgetRuntime,
-  resolveWidgetRuntimeStage,
 } from '@talex-touch/utils/plugin/widget'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import cliProgress from 'cli-progress'
@@ -82,7 +82,7 @@ interface WidgetCompileTarget {
 }
 
 const WIDGET_SUPPORTED_EXTENSIONS = new Set(['.vue', '.ts', '.js', '.cjs', '.tsx', '.jsx'])
-const ARROW_WIDGET_SOURCE_PATTERN = /\.arrow\.(ts|js)$/i
+const ARROW_WIDGET_SOURCE_PATTERN = /\.arrow\.(?:ts|js)$/i
 
 function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
   if (!source || typeof source !== 'object')

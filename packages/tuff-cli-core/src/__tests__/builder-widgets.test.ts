@@ -169,7 +169,7 @@ describe('builder widget precompile', () => {
         path.join(root, 'widgets', 'panel.arrow.ts'),
         [
           'import { component, html } from "@arrow-js/core"',
-          'export default component((props) => html`<section class="arrow-panel">${() => props.payload?.title || "Arrow"}</section>`)',
+          'export default component((props) => html`<section class="arrow-panel">' + '$' + '{() => props.payload?.title || "Arrow"}</section>`)',
         ].join('\n'),
       )
 
