@@ -13,6 +13,14 @@
 
 ## 2026-05-18
 
+### fix(tuff-cli): declare Vue SFC compiler runtime dependency
+
+- `packages/tuff-cli/package.json`
+- `pnpm-lock.yaml`
+  - Added `@vue/compiler-sfc` to the published `@talex-touch/tuff-cli@0.0.4` runtime dependency set.
+  - Prevents globally installed `tuff`/`tuffcli` from failing with `ERR_MODULE_NOT_FOUND` when the bundled CLI core imports the Vue SFC compiler for widget builds.
+  - Local validation: `pnpm -C "packages/tuff-cli" run build` and `node "packages/tuff-cli/bin/tuff.js" --version` passed.
+
 ### docs: add App Data Plugins and Everything roadmap
 
 - `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md`

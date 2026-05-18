@@ -808,6 +808,9 @@ importers:
 
   packages/tuff-cli:
     dependencies:
+      '@vue/compiler-sfc':
+        specifier: ^3.5.33
+        version: 3.5.33
       chalk:
         specifier: ^5.6.0
         version: 5.6.2
