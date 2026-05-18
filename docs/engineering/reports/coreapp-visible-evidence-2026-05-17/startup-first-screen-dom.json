@@ -1,0 +1,16 @@
+{
+  "href": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "ready": "complete",
+  "bodyText": "万物尽在塔内\nCoreBox\n↵\n打开\n⌘K\n操作\n⌘1-0\n快速选择\n最近处理\n共 0 条\n暂无记录",
+  "bodyLength": 51,
+  "keys": [
+    "__SENTRY_IPC__",
+    "electron",
+    "api",
+    "__talex_touch_storages__",
+    "__talex_touch_storage_singletons__",
+    "__TUFF_ENV"
+  ],
+  "rootHtml": "<div data-v-48f7c0a2=\"\" class=\"AppEntrance absolute inset-0\"><!-- Remove item from normal navigation flow, only available via hotkey --><section aria-label=\"Notifications alt+T\" tabindex=\"-1\" aria-live=\"polite\" aria-relevant=\"additions text\" aria-atomic=\"false\"><ol data-sonner-toaster=\"\" data-sonner-theme=\"light\" class=\"\" dir=\"ltr\" tabindex=\"-1\" data-theme=\"system\" data-rich-colors=\"true\" data-y-position=\"bottom\" data-x-position=\"left\" style=\"--front-toast-height: 0px; --width: 356px; --gap: 14px; --offset-top: 24px; --offset-right: 24px; --offset-bottom: 24px; --offset-left: 24px; --mobile-offset-top: 16px; --mobile-offset-right: 16px; --mobile-offset-bottom: 16px; --mobile-offset-left: 16px;\"></ol></section><div class=\"CoreBox-Wrapper CoreBoxInputBorder-bottom CoreBoxInputBg-transparent CoreBoxResultHover-background\" style=\"--corebox-logo-size: 24px; --corebox-logo-position: left; --corebox-input-radius: 8px; --corebox-input-border: bottom; --corebox-input-bg: transparent; --corebox-"
+}

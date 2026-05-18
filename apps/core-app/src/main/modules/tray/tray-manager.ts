@@ -321,7 +321,7 @@ export class TrayManager extends BaseModule {
       return
     }
 
-    this.registerWindowListener('close', (event: { preventDefault: () => void }) => {
+    this.registerWindowListener('close', (event: unknown) => {
       const safeWindow = useAliveTarget(mainWindow)
       if (!safeWindow) return
       const configData = this.touchApp?.config.data as
@@ -332,7 +332,7 @@ export class TrayManager extends BaseModule {
       const canCloseToTray = this.shouldShowTray() && this.tray !== null
 
       if (closeToTray && !isQuitting && canCloseToTray) {
-        event.preventDefault()
+        ;(event as { preventDefault: () => void }).preventDefault()
         safeWindow.hide()
         touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
 

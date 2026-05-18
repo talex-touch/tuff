@@ -1,0 +1,74 @@
+{
+  "runNo": 6,
+  "timestamp": "2026-05-17T08:28:23.983Z",
+  "timeoutMs": 60000,
+  "traceDeprecation": false,
+  "target": "packaged",
+  "profile": "cold",
+  "launchMethod": "exec",
+  "command": "\"/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff\"",
+  "userDataDir": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/docs/engineering/reports/startup-packaged-cold-runs-2026-05-17/user-data/run-06",
+  "artifact": {
+    "appPath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appBundlePath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+    "executablePath": "/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appExists": true,
+    "executableExists": true,
+    "executable": true,
+    "expectedVersion": "2.4.10-beta.25",
+    "bundleVersion": "2.4.10-beta.25",
+    "versionMatches": true
+  },
+  "wallTimeMs": 5809,
+  "processExitCode": 0,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": 1100,
+  "startupHealthMs": 1100,
+  "startupAnalyticsMs": 1658,
+  "rendererReadyMs": 1000,
+  "warnCount": 0,
+  "errorCount": 0,
+  "warnLines": [],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "NetworkModule",
+      "durationMs": 404
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 147
+    },
+    {
+      "name": "Database",
+      "durationMs": 79
+    },
+    {
+      "name": "OmniPanel",
+      "durationMs": 45
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 36
+    },
+    {
+      "name": "NativeCapabilitiesModule",
+      "durationMs": 32
+    },
+    {
+      "name": "Permission",
+      "durationMs": 29
+    },
+    {
+      "name": "DownloadCenter",
+      "durationMs": 28
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": true,
+  "blockingIssues": [],
+  "analysisCutoffReached": true
+}

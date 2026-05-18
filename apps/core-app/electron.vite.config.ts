@@ -5,7 +5,8 @@ import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
-import type { Plugin, PluginOption } from 'vite'
+import type { UserConfig } from 'electron-vite'
+import type { Plugin } from 'vite'
 import Unocss from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -58,7 +59,7 @@ const tuffIntelligenceAliases = [
   { find: /^@talex-touch\/tuff-intelligence$/, replacement: tuffIntelligenceRendererEntry }
 ]
 const utilsAliases = [{ find: /^@talex-touch\/utils\/renderer$/, replacement: utilsRendererEntry }]
-const tuffexDevPlugins: PluginOption[] = isProduction
+const tuffexDevPlugins: Plugin[] = isProduction
   ? []
   : [
       {
@@ -96,7 +97,7 @@ const filteredVueSetupExtend: Plugin = {
   }
 }
 
-async function resolveSentryRendererPlugins(): Promise<PluginOption[]> {
+async function resolveSentryRendererPlugins(): Promise<Plugin[]> {
   // Dev server阶段不加载 Sentry bundler plugin，避免拉起 @sentry/cli 旧依赖链触发 DEP0040。
   if (disableSentry || !isProduction || !uploadSentrySourcemaps) {
     return []
@@ -108,157 +109,156 @@ async function resolveSentryRendererPlugins(): Promise<PluginOption[]> {
       project: 'tuff',
       telemetry: false,
       disable: disableSentry
-    })
+    }) as unknown as Plugin
   ]
 }
 
-export default defineConfig(async () => {
-  const sentryRendererPlugins = await resolveSentryRendererPlugins()
-  return {
-    main: {
-      plugins: [
-        // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体
-        externalizeDepsPlugin({
-          exclude: [
-            '@talex-touch/utils', // workspace 包必须打包
-            '@talex-touch/tuff-intelligence' // 避免运行时直接加载 TS ESM 源码导致导入解析失败
-          ]
-        })
-      ],
-      resolve: {
-        alias: {
-          // 强制 @libsql/isomorphic-ws 使用 web 版本而不是 node 版本
-          // 这样就不会引入 ws 模块，避免原生依赖问题
-          '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs'
-        }
-      },
-      define: {
-        // 这些环境变量现在不再需要，因为我们完全避免了 ws
-        // 'process.env.WS_NO_BUFFER_UTIL': 'true',
-        // 'process.env.WS_NO_UTF_8_VALIDATE': 'true'
-      },
-      build: {
-        sourcemap: enableSourcemap,
-        commonjsOptions: {
-          // libsql chooses native binding at runtime via dynamic require
-          ignoreDynamicRequires: true
-        },
-        rollupOptions: {
-          input: {
-            index: 'src/main/index.ts',
-            'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
-            'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
-            'file-reconcile-worker':
-              'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
-            'file-index-worker':
-              'src/main/modules/box-tool/addon/files/workers/file-index-worker.ts',
-            'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts',
-            'thumbnail-worker': 'src/main/modules/box-tool/addon/files/workers/thumbnail-worker.ts',
-            'search-index-worker':
-              'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts'
-          },
-          output: {
-            entryFileNames: (chunkInfo) => {
-              if (chunkInfo.name === 'ocr-worker') {
-                return 'ocr-worker.js'
-              } else if (chunkInfo.name === 'file-scan-worker') {
-                return 'file-scan-worker.js'
-              } else if (chunkInfo.name === 'file-reconcile-worker') {
-                return 'file-reconcile-worker.js'
-              } else if (chunkInfo.name === 'file-index-worker') {
-                return 'file-index-worker.js'
-              } else if (chunkInfo.name === 'icon-worker') {
-                return 'icon-worker.js'
-              } else if (chunkInfo.name === 'thumbnail-worker') {
-                return 'thumbnail-worker.js'
-              } else if (chunkInfo.name === 'search-index-worker') {
-                return 'search-index-worker.js'
-              } else if (chunkInfo.name === 'index') {
-                return 'index.js'
-              }
-              return '[name]-[hash].js'
-            }
-          }
-        }
-      }
-    },
+const sentryRendererPlugins = await resolveSentryRendererPlugins()
+type ElectronVitePlugins = NonNullable<UserConfig['renderer']>['plugins']
 
-    preload: {
-      plugins: [
-        externalizeDepsPlugin({
-          exclude: [
-            '@electron-toolkit/preload',
-            '@talex-touch/utils', // workspace 包必须打包
-            '@talex-touch/tuff-intelligence'
-          ]
-        })
-      ],
-      build: {
-        sourcemap: enableSourcemap
-      }
-    },
-
-    renderer: {
-      resolve: {
-        alias: [
-          {
-            find: /^~\//,
-            replacement: `${rendererPath}/`
-          },
-          {
-            find: /^assets\//,
-            replacement: `${path.join(rendererPath, 'assets')}/`
-          },
-          ...tuffexAliases,
-          ...tuffBusinessAliases,
-          ...tuffIntelligenceAliases,
-          ...utilsAliases
+export default defineConfig({
+  main: {
+    plugins: [
+      // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体
+      externalizeDepsPlugin({
+        exclude: [
+          '@talex-touch/utils', // workspace 包必须打包
+          '@talex-touch/tuff-intelligence' // 避免运行时直接加载 TS ESM 源码导致导入解析失败
         ]
+      })
+    ],
+    resolve: {
+      alias: {
+        // 强制 @libsql/isomorphic-ws 使用 web 版本而不是 node 版本
+        // 这样就不会引入 ws 模块，避免原生依赖问题
+        '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs'
+      }
+    },
+    define: {
+      // 这些环境变量现在不再需要，因为我们完全避免了 ws
+      // 'process.env.WS_NO_BUFFER_UTIL': 'true',
+      // 'process.env.WS_NO_UTF_8_VALIDATE': 'true'
+    },
+    build: {
+      sourcemap: enableSourcemap,
+      commonjsOptions: {
+        // libsql chooses native binding at runtime via dynamic require
+        ignoreDynamicRequires: true
       },
-      server: {
-        host: devServerHost,
-        port: devServerPort,
-        strictPort: true,
-        fs: {
-          // workspace packages (pnpm symlinks) may resolve outside renderer root
-          allow: [workspaceRoot]
-        }
-      },
-      define: {
-        __VUE_OPTIONS_API__: true,
-        __VUE_PROD_DEVTOOLS__: false
-      },
-      optimizeDeps: {
-        exclude: ['electron', 'fs', 'child_process', 'original-fs']
-      },
-      build: {
-        sourcemap: enableSourcemap,
-        rollupOptions: {
-          external: ['electron', 'fs', 'child_process', 'original-fs'],
-          output: {
-            assetFileNames: 'assets/[name]-[hash][extname]',
-            chunkFileNames: 'assets/[name]-[hash].js',
-            entryFileNames: 'assets/[name]-[hash].js'
+      rollupOptions: {
+        input: {
+          index: 'src/main/index.ts',
+          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
+          'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
+          'file-reconcile-worker':
+            'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
+          'file-index-worker': 'src/main/modules/box-tool/addon/files/workers/file-index-worker.ts',
+          'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts',
+          'thumbnail-worker': 'src/main/modules/box-tool/addon/files/workers/thumbnail-worker.ts',
+          'search-index-worker':
+            'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts'
+        },
+        output: {
+          entryFileNames: (chunkInfo) => {
+            if (chunkInfo.name === 'ocr-worker') {
+              return 'ocr-worker.js'
+            } else if (chunkInfo.name === 'file-scan-worker') {
+              return 'file-scan-worker.js'
+            } else if (chunkInfo.name === 'file-reconcile-worker') {
+              return 'file-reconcile-worker.js'
+            } else if (chunkInfo.name === 'file-index-worker') {
+              return 'file-index-worker.js'
+            } else if (chunkInfo.name === 'icon-worker') {
+              return 'icon-worker.js'
+            } else if (chunkInfo.name === 'thumbnail-worker') {
+              return 'thumbnail-worker.js'
+            } else if (chunkInfo.name === 'search-index-worker') {
+              return 'search-index-worker.js'
+            } else if (chunkInfo.name === 'index') {
+              return 'index.js'
+            }
+            return '[name]-[hash].js'
           }
         }
-      },
-      plugins: [
-        ...tuffexDevPlugins,
-        generatorInformation(),
-        vue(),
-        Unocss(),
-        vueJsx(),
-        AutoImport({
-          imports: ['vue', 'vue-router'],
-          dts: true
-        }),
-        Components(),
-        filteredVueSetupExtend,
-        VueI18nPlugin({
-          runtimeOnly: false
-        }),
-        ...sentryRendererPlugins
-      ]
+      }
     }
+  },
+
+  preload: {
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: [
+          '@electron-toolkit/preload',
+          '@talex-touch/utils', // workspace 包必须打包
+          '@talex-touch/tuff-intelligence'
+        ]
+      })
+    ],
+    build: {
+      sourcemap: enableSourcemap
+    }
+  },
+
+  renderer: {
+    resolve: {
+      alias: [
+        {
+          find: /^~\//,
+          replacement: `${rendererPath}/`
+        },
+        {
+          find: /^assets\//,
+          replacement: `${path.join(rendererPath, 'assets')}/`
+        },
+        ...tuffexAliases,
+        ...tuffBusinessAliases,
+        ...tuffIntelligenceAliases,
+        ...utilsAliases
+      ]
+    },
+    server: {
+      host: devServerHost,
+      port: devServerPort,
+      strictPort: true,
+      fs: {
+        // workspace packages (pnpm symlinks) may resolve outside renderer root
+        allow: [workspaceRoot]
+      }
+    },
+    define: {
+      __VUE_OPTIONS_API__: true,
+      __VUE_PROD_DEVTOOLS__: false
+    },
+    optimizeDeps: {
+      exclude: ['electron', 'fs', 'child_process', 'original-fs']
+    },
+    build: {
+      sourcemap: enableSourcemap,
+      rollupOptions: {
+        external: ['electron', 'fs', 'child_process', 'original-fs'],
+        output: {
+          assetFileNames: 'assets/[name]-[hash][extname]',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          entryFileNames: 'assets/[name]-[hash].js'
+        }
+      }
+    },
+    plugins: [
+      ...tuffexDevPlugins,
+      generatorInformation(),
+      vue(),
+      Unocss(),
+      vueJsx(),
+      AutoImport({
+        imports: ['vue', 'vue-router'],
+        dts: true
+      }),
+      Components(),
+      filteredVueSetupExtend,
+      VueI18nPlugin({
+        runtimeOnly: false
+      }),
+      ...sentryRendererPlugins
+    ] as unknown as ElectronVitePlugins
   }
 })

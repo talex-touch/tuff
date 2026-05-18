@@ -1,0 +1,33 @@
+{
+  "query": "ai hello",
+  "input": "ai hello",
+  "text": "ai hello\n正在搜索\n正在检查应用、文件、命令和 Provider。\nCoreBox\n↵\n打开\n⌘K\n操作\n最近处理\n共 0 条\n暂无记录",
+  "textLength": 72,
+  "items": [
+    {
+      "cls": "CoreBoxSearchState CoreBoxSearchState--progress",
+      "text": "正在搜索正在检查应用、文件、命令和 Provider。"
+    },
+    {
+      "cls": "TuffIcon CoreBoxSearchState-Icon CoreBoxSearchState-Icon--spin",
+      "text": ""
+    },
+    {
+      "cls": "CoreBoxSearchState-Text",
+      "text": "正在搜索正在检查应用、文件、命令和 Provider。"
+    },
+    {
+      "cls": "CoreBoxSearchState-Title",
+      "text": "正在搜索"
+    },
+    {
+      "cls": "CoreBoxSearchState-Detail",
+      "text": "正在检查应用、文件、命令和 Provider。"
+    },
+    {
+      "cls": "TuffItemAddon transition-cubic",
+      "text": ""
+    }
+  ],
+  "html": "<!----><div class=\"CoreBox\"><div class=\"prefix-part-container\"><div class=\"CoreBox-Icon\"><div data-v-6bda99bb=\"\" class=\"PrefixIcon transition-cubic\"><img data-v-6bda99bb=\"\" class=\"transition-cubic\" src=\"data:image/svg+xml,%3csvg%20viewBox='0%200%20100%20100'%20xmlns='http://www.w3.org/2000/svg'%3e%3cdefs%3e%3clinearGradient%20id='myGradient'%20gradientTransform='rotate(45)'%3e%3cstop%20offset='0%25'%20stop-color='%23199FFE'%20/%3e%3cstop%20offset='100%25'%20stop-color='%23810DC6'%20/%3e%3c/linearGradient%3e%3cfilter%20id='blurFilter'%20x='-50%25'%20y='-50%25'%20width='200%25'%20height='200%25'%3e%3cfeGaussianBlur%20in='SourceGraphic'%20stdDeviation='5'%20/%3e%3c/filter%3e%3cradialGradient%20id='outerGradient'%20cx='50%25'%20cy='50%25'%20r='50%25'%20fx='50%25'%20fy='50%25'%3e%3cstop%20offset='0%25'%20stop-color='%23D73E4D'%20stop-opacity='0.4'%20/%3e%3cstop%20offset='100%25'%20stop-color='%237F007F'%20stop-opacity='0.4'%20/%3e%3c/radialGradient%3e%3c/defs%3e%3crect%20x='15'%20y='15'%20width='70'%20height='70'%20rx='30'%20fill='none'%20stroke='%234C4CFF'%20stroke-width='2'%20filter='url(%23blurFilter)'%20/%3e%3ccircle%20cx='50'%20cy='50'%20r='32'%20fill='none'%20stroke='url(%23outerGradient)'%20stroke-width='4'%20/%3e%3cpath%20d='M30,70%20C35,65%2045,65%2050,70%20Q55,75%2060,70%20L70,60%20C75,55%2075,45%2070,40%20L60,30%20Q55,25%2050,30%20Q45,35%2040,30%20L30,40%20C25,45%2025,55%2030,60%20Z'%20fill='url(%23myGradient)'%20filter='url(%23blurFilter)'%20/%3e%3c/svg%3e\"><!----></div></div></div><div data-v-03b0ad21=\"\" class=\"BoxInput-Wrapper\"><span data-v-03b0ad21=\"\" class=\"hidden BoxInput-Placeholder transition-cubic\">万物尽在塔内</span><input data-v-03b0ad21=\"\" id=\"core-box-input\"><div data-v-03b0ad21=\"\" class=\"BoxInput-Display\"><span data-v-03b0ad21=\"\" class=\"opacity-0\">ai hello</span><div data-v-03b0ad21=\"\" class=\"BoxInput-Display-Completion ml-2 fake-background\"><div class=\"text-sm truncate\"></div></div></div></div><!----><div class=\"CoreBox-Configure\"><!----><span data-v-39ec6b52=\"\" title=\"固定 CoreBox\" role=\"img\" class=\"TuffIcon\" data-icon-type=\"class\" data-icon-value=\"i-ri-pushpin-2-line\"><span data-v-39ec6b52=\"\" class=\"class\"><i data-v-39ec6b52=\"\" class=\"i-ri-pushpin-2-line\"></i></span></span></div></div><div class=\"CoreBoxRes flex\"><div class=\"CoreBoxRes-Main\"><div data-v-14da442b=\"\" data-v-cdb667c5=\"\" class=\"tx-scroll is-native touch-scroll scroll-area scroll-area\"><div data-v-14da442b=\"\" class=\"tx-scroll__native\" style=\"overflow: hidden auto; overscroll-behavior: auto contain;\"><div data-v-14da442b=\"\" class=\"tx-scroll__content\" style=\"padding: 0px;\"><div class=\"CoreBoxRes-ScrollContent\"><div class=\"item-list\"></div><div class=\"CoreBoxSearchState CoreBoxSearchState--progress\" role=\"status\" aria-live=\"polite\"><span data-v-39ec6b52=\"\" role=\"img\" class=\"TuffIcon CoreBoxSearchState-Icon CoreBoxSearchState-Icon--spin\" data-icon-type=\"class\" data-icon-value=\"i-ri-search-line\"><span data-v-39ec6b52=\"\" class=\"class\"><i data-v-39ec6b52=\"\" class=\"i-ri-search-line\"></i></span></span><div class=\"CoreBoxSearchState-Text\"><div class=\"CoreBoxSearchState-Title\">正在搜索</div><div class=\"CoreBoxSearchState-Detail\">正在检查应用、文件、命令和 Provider。</div><!----></div></div></div></div></div></div><div data-v-9a67df40=\"\" class=\"CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--tx-border-color-lighter)] bg-transparent text-12px text-[color:var(--tx-text-color-secondary)] CoreBoxFooter-Sticky\"><div data-v-9a67df40=\"\" class=\"FooterInfo\"><span data-v-39ec6b52=\"\" data-v-9a67df40=\"\" title=\"CoreBox\" role=\"img\" class=\"TuffIcon FooterIcon\" data-icon-type=\"url\" data-icon-value=\"\" style=\"font-size: 20px;\"><span data-v-39ec6b52=\"\" class=\"TuffIcon-Empty\"><img data-v-39ec6b52=\"\" alt=\"CoreBox\" src=\"file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/assets/EmptyAppPlaceholder-e2FJK8JW.svg\"></span></span><div data-v-9a67df40=\"\" class=\"FooterText\"><span data-v-9a67df40=\"\" class=\"FooterTitle\" title=\"CoreBox\">CoreBox</span><!----></div><!----></div><div data-v-9a67df40=\"\" class=\"FooterHints\"><!----><div data-v-9a67df40=\"\" class=\"FooterHint\"><span data-v-9a67df40=\"\" class=\"HintKey\">↵</span><span data-v-9a67df40=\"\" class=\"HintLabel\">打开</span></div><div data-v-9a67df40=\"\" class=\"FooterHint\"><span data-v-9a67df40=\"\" class=\"HintKey\">⌘K</span><span data-v-9a67df40=\"\" class=\"HintLabel\">操作</span></div></div></div></div><div data-v-3f361b3d=\"\" class=\"TuffItemAddon transition-cubic\"><!----></div><div data-v-28c61fe3=\"\" class=\"PreviewHistoryPanel\" aria-hidden=\"true\"><div data-v-28c61fe3=\"\" class=\"panel\"><header data-v-28c61fe3=\"\"><div data-v-28c61fe3=\"\" class=\"title-row\"><span data-v-28c61fe3=\"\" class=\"title\">最近处理</span><span data-v-28c61fe3=\"\" class=\"count\">共 0 条</span></div></header><div data-v-28c61fe3=\"\" class=\"panel-body\"><div data-v-28c61fe3=\"\" class=\"state\">暂无记录</div></div></div></div></div>"
+}

@@ -121,6 +121,17 @@ function uniqueModuleNames(moduleNames) {
   })
 }
 
+function uniqueModuleEntriesByName(moduleEntries) {
+  const seen = new Set()
+  return moduleEntries.filter((moduleEntry) => {
+    if (!moduleEntry?.name || seen.has(moduleEntry.name)) {
+      return false
+    }
+    seen.add(moduleEntry.name)
+    return true
+  })
+}
+
 function normalizeRuntimeModuleSpec(moduleSpec) {
   if (typeof moduleSpec === 'string') {
     return { name: moduleSpec }
@@ -243,6 +254,14 @@ function tryResolvePackageRoot(candidatePath) {
   return null
 }
 
+function getRealPath(candidatePath) {
+  try {
+    return fs.realpathSync.native(candidatePath)
+  } catch {
+    return candidatePath
+  }
+}
+
 function getResolutionPaths(runtimePaths, sourceDir) {
   return uniqueModuleNames(
     [
@@ -281,12 +300,17 @@ function resolveRuntimeModuleRoot(moduleName, runtimePaths, sourceDir, options =
 
   const directCandidates = []
   if (sourceDir) {
+    const realSourceDir = getRealPath(sourceDir)
     const sourceNodeModulesCandidate = path.join(sourceDir, 'node_modules', moduleName)
     if (
       options.includeTargetNodeModules !== false ||
       !isSubPath(runtimePaths.targetNodeModules, sourceNodeModulesCandidate)
     ) {
       directCandidates.push(sourceNodeModulesCandidate)
+    }
+    if (realSourceDir !== sourceDir) {
+      directCandidates.push(path.join(realSourceDir, 'node_modules', moduleName))
+      directCandidates.push(path.join(path.dirname(realSourceDir), moduleName))
     }
   }
   directCandidates.push(path.join(runtimePaths.workspaceNodeModules, moduleName))
@@ -559,7 +583,7 @@ function collectResourceResolvableRuntimeModuleEntries(rootModules, options = {}
       'optionalDependencies',
       'peerDependencies'
     ],
-    dedupeBy: options.dedupeBy || 'name',
+    dedupeBy: options.dedupeBy || 'package',
     includeOptionalPeerDependencies: options.includeOptionalPeerDependencies ?? false,
     missingDependencyStrategy: options.missingDependencyStrategy || 'skip-optional',
     treatPeerDependenciesAsOptional: options.treatPeerDependenciesAsOptional ?? false
@@ -804,15 +828,17 @@ function syncPackagedResourceModules(searchRoot, options = {}) {
   const resourceNodeModulesDir = path.join(resourcesDir, 'node_modules')
   fs.mkdirSync(resourceNodeModulesDir, { recursive: true })
 
-  resourceModuleEntries.forEach((moduleEntry) => {
+  const copyModuleEntries = uniqueModuleEntriesByName(resourceModuleEntries)
+
+  copyModuleEntries.forEach((moduleEntry) => {
     copyModuleToResources(resourcesDir, moduleEntry, options)
   })
 
   console.log(
-    `${logPrefix} Synced resources runtime module closure: ${resourceModuleEntries.length} modules`
+    `${logPrefix} Synced resources runtime module closure: ${copyModuleEntries.length} modules`
   )
 
-  return resourceModuleEntries.map((entry) => entry.name)
+  return copyModuleEntries.map((entry) => entry.name)
 }
 
 function syncMissingPackagedRuntimeModules(searchRoot, options = {}) {

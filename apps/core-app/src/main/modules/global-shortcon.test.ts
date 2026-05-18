@@ -132,8 +132,31 @@ class InMemoryShortcutStorage {
   }
 }
 
+type ShortcutModuleHarness = Omit<
+  ShortcutModule,
+  | 'storage'
+  | 'registerMainShortcut'
+  | 'unregisterMainShortcut'
+  | 'registerMainTrigger'
+  | 'unregisterMainTrigger'
+  | 'registerBeforeQuitTeardownListener'
+  | 'shortcutStatusMap'
+  | 'reregisterAllShortcuts'
+  | 'onDestroy'
+> & {
+  storage: InMemoryShortcutStorage
+  registerMainShortcut: ShortcutModule['registerMainShortcut']
+  unregisterMainShortcut: ShortcutModule['unregisterMainShortcut']
+  registerMainTrigger: ShortcutModule['registerMainTrigger']
+  unregisterMainTrigger: ShortcutModule['unregisterMainTrigger']
+  registerBeforeQuitTeardownListener?: () => void
+  shortcutStatusMap?: Map<string, { state?: string; reason?: string }>
+  reregisterAllShortcuts?: () => void
+  onDestroy: ShortcutModule['onDestroy']
+}
+
 function createModule() {
-  const module = new ShortcutModule() as ShortcutModule & { storage: InMemoryShortcutStorage }
+  const module = new ShortcutModule() as unknown as ShortcutModuleHarness
   const storage = new InMemoryShortcutStorage()
   module.storage = storage
   return { module, storage }

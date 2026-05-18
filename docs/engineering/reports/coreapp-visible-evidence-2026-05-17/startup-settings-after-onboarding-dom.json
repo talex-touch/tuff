@@ -1,0 +1,73 @@
+{
+  "url": "file:///Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/Resources/app.asar/out/renderer/index.html#/setting",
+  "title": "Tuff",
+  "bodyText": "请在浏览器中完成登录\nTuff\n应用设置\n\n主要\n\n设置\n智能\n市场\n样式\n下载中心\n版本\nv2.4.10-beta.25\nTUFF\n\n为创造者们重新构想的命令栏。\n\nChromium: 146.0.7680.188\nNode.js: 24.15.0\nVue: ^3.5.33\n账户\n\n管理您的账户信息和登录状态。\n\n无账户\n\n当前无法访问账户。\n\n登录\nAI 积分\n\n查看 Nexus AI credits 的剩余、已用和总额度。\n\nAI 积分\n\n登录后可查看 credits 剩余和消耗。\n\n需要登录\n\n请先登录 Tuff 账户以读取 Nexus credits summary。\n\n语言设置\n\n选择您喜欢的应用程序语言。\n\n跟随系统语言\n\n自动匹配系统语言设置。\n\n选择语言\n\n手动选择您喜欢的显示语言。\n\n简体中文\nEnglish\n通用配置\n\n配置权限和基础设置\n\n辅助功能权限\n仅限 macOS\n\n用于扫描应用和读取前台上下文；自动粘贴还需要 macOS 自动化权限允许 Tuff 控制 System Events。\n\n已授权\n通知权限\n\n允许应用显示系统通知；macOS 授权状态可能需要在系统设置中确认。\n\n状态不可读取\n测试通知\n开机自动启动\n\n系统启动时自动运行应用\n\n显示托盘图标\n\n在系统托盘显示应用图标\n\n不在 Dock 栏显示\n仅限 macOS\n\n关闭主窗口后不在显示 Dock 图标（macOS only）\n\n静默启动\n\n应用启动时不显示窗口，仅在后台运行\n\n安装后自动装载 OmniPanel Feature\n\n启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。\n\n实用工具\n\n实用工具为您提供统一的快速桌面启动器。\n\n自定义占位文本\n\n自定义 CoreBox 输入框的占位提示文本，留空使用默认。\n\n使用\n\n进入时引导您使用应用程序。\n\n快捷方式\n\n集中管理系统级快捷键设置。\n\n共 6 项\n管理\n自动粘贴\n\n复制内容后呼出 CoreBox 时，自动带入新鲜剪贴板内容。\n\n自动清除\n\nCoreBox 隐藏超过指定时间后，下次打开时自动退出上次功能并清空输入。短时间重新打开会保留状态。\n\n自动隐藏\n\n触发模糊时隐藏搜索栏。\n\n智能推荐\n\n启用智能推荐功能，根据使用习惯提供个性化建议。\n\n显示推荐理由\n\n在推荐项目旁显示推荐原因。\n\n应用更新\n\n管理应用更新下载、状态与检查操作。\n\n自动下载更新\n\n发现新版本时自动下载更新包\n\n状态\n\n尚未检查过更新\n\n操作\n\n立即检查当前渠道是否有新版本。\n\n检查更新\n应用程序规范 (Touch)\n\n开发者模式\n\n显示内部插件与高级选项（谨慎使用）\n\n高级设置\n\n启用后显示文件索引、应用索引调度、下载、数据分析与存储设置\n\n版本\nTalexTouch Master 2.4.10-beta.25 最新\n规格\n26H5 T2\n版本号\n2.4.10-beta.25\n构建 ID\nf090540\nGit 哈希\na2c692d\n更新通道\n公测版（Beta）\n构建类型\nrelease\n构建时间\n2026/5/17 15:50:33\n启动耗时\n0.23s 完美\n启动体验优秀\n\n总耗时 0.23s，主进程 --，渲染 0.23s，模块 -- 个。\n\n优秀\n性能详情\n查看详情\nElectron\n41.3.0\nV8 引擎\n14.6.202.33-electron.0\n操作系统\nDarwin Kernel Version 25.2.0: Tue Nov 18 21:09:56 PST 2025; root:xnu-12377.61.12~1/RELEASE_ARM64_T6041\n平台\ndarwin (arm64)\n体验\nTouch 功能体验包 2026.05.17\n应用文件夹\n打开文件夹\nTalexTouch 服务条款\nTalexTouch 软件许可证\n返回\n登录 推荐\n创建账户或登录以解锁完整能力，跨设备同步数据并访问云服务。 了解更多\n离线继续\n您可以不登录继续使用应用，但无法进行跨设备同步，也无法使用云端功能。\n登录",
+  "bodyLength": 1715,
+  "overlay": false,
+  "hasStartup": true,
+  "buttons": [
+    {
+      "text": "下载中心",
+      "x": 8,
+      "y": 640,
+      "w": 183,
+      "h": 32
+    },
+    {
+      "text": "登录",
+      "x": 915,
+      "y": 378.3984375,
+      "w": 120,
+      "h": 32
+    },
+    {
+      "text": "简体中文",
+      "x": 910.1953125,
+      "y": 746.7890625,
+      "w": 64,
+      "h": 20
+    },
+    {
+      "text": "English",
+      "x": 976.1953125,
+      "y": 746.7890625,
+      "w": 56.8046875,
+      "h": 20
+    },
+    {
+      "text": "测试通知",
+      "x": 915,
+      "y": 921.984375,
+      "w": 120,
+      "h": 32
+    },
+    {
+      "text": "管理",
+      "x": 915,
+      "y": 1439.1796875,
+      "w": 120,
+      "h": 32
+    },
+    {
+      "text": "检查更新",
+      "x": 915,
+      "y": 1956.375,
+      "w": 120,
+      "h": 32
+    },
+    {
+      "text": "返回",
+      "x": 181,
+      "y": 67,
+      "w": 63,
+      "h": 26
+    },
+    {
+      "text": "登录",
+      "x": 490,
+      "y": 533,
+      "w": 120,
+      "h": 32
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { release } from 'node:os'
+import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 /**
@@ -68,8 +69,64 @@ function parseBooleanEnv(value: string | undefined): boolean {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
+function safeGetUserDataPath(): string | undefined {
+  try {
+    return app.getPath('userData')
+  } catch {
+    return undefined
+  }
+}
+
+function writeStartupBenchmarkPrecoreDiagnostic(
+  benchmarkUserDataPath: string | undefined,
+  userDataBefore: string | undefined,
+  userDataAfter: string | undefined
+): void {
+  const diagPath = process.env.TUFF_STARTUP_BENCHMARK_DIAG_PATH?.trim()
+  if (!diagPath) return
+
+  try {
+    fs.mkdirSync(path.dirname(diagPath), { recursive: true })
+    fs.writeFileSync(
+      diagPath,
+      JSON.stringify(
+        {
+          phase: 'precore',
+          pid: process.pid,
+          timestamp: new Date().toISOString(),
+          packaged: app.isPackaged,
+          benchmarkUserDataPath,
+          userDataBefore,
+          userDataAfter
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
+  } catch {
+    // Keep benchmark diagnostics best-effort; startup must not depend on this file.
+  }
+}
+
+function applyStartupBenchmarkUserDataOverride(): void {
+  const benchmarkUserDataPath = process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR?.trim()
+  const userDataBefore = safeGetUserDataPath()
+  if (!benchmarkUserDataPath) {
+    writeStartupBenchmarkPrecoreDiagnostic(undefined, userDataBefore, userDataBefore)
+    return
+  }
+  app.setPath('userData', benchmarkUserDataPath)
+  writeStartupBenchmarkPrecoreDiagnostic(
+    benchmarkUserDataPath,
+    userDataBefore,
+    safeGetUserDataPath()
+  )
+}
+
 registerEarlyUnhandledRejectionHandler()
 applyDeprecationTraceSwitch()
+applyStartupBenchmarkUserDataOverride()
 
 export const innerRootPath = getRootPath()
 checkDirWithCreate(innerRootPath)

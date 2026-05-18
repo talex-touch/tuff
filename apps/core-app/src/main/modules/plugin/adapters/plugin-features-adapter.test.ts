@@ -131,7 +131,7 @@ describe('plugin-features-adapter', () => {
     const result = await adapter.handleActiveFeatureInput({
       input: '',
       query,
-      source: 'keyboard'
+      source: 'renderer'
     } satisfies CoreBoxInputChangeRequest)
 
     expect(result).toBe(true)

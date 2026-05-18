@@ -1,0 +1,154 @@
+{
+  "schema": "coreapp-visible-experience-evidence/v1",
+  "generatedAt": "2026-05-18T00:53:33Z",
+  "baselineVersion": "2.4.10-beta.25",
+  "verification": {
+    "recommendedCommand": "pnpm -C \"apps/core-app\" run visible:experience:verify -- --input \"../../docs/engineering/reports/coreapp-visible-evidence-2026-05-17/coreapp-visible-experience-manifest.json\" --requireAllPassed --requireArtifactPaths --requireVisualArtifacts --requireCheckedEvidence --requireExistingArtifacts --requireNonEmptyArtifacts"
+  },
+  "surfaces": [
+    {
+      "id": "startup-packaged-hot",
+      "status": "passed",
+      "artifactPaths": [
+        "../startup-packaged-hot-runs-2026-05-17/汇总报告.md",
+        "../startup-packaged-hot-runs-2026-05-17/第23次运行报告.md"
+      ],
+      "checkedEvidence": [
+        "Current package version is used by the packaged artifact",
+        "Hot-start benchmark summary path is attached",
+        "Startup health and renderer-ready timing are captured",
+        "Warnings/errors are recorded without redaction of failure codes"
+      ],
+      "notes": "Current local packaged artifact is 2.4.10-beta.25 and matches apps/core-app/package.json. codesign --verify --deep --strict passed with no output. The latest 10 hot runs pass with Startup health P50 1700ms, P95 1900ms, 0 WARN, and 0 ERROR."
+    },
+    {
+      "id": "startup-packaged-cold",
+      "status": "passed",
+      "artifactPaths": [
+        "../startup-packaged-cold-runs-2026-05-17/汇总报告.md",
+        "../startup-packaged-cold-runs-2026-05-17/第01次运行报告.md",
+        "startup-packaged-cold-long-tail-notes.md"
+      ],
+      "checkedEvidence": [
+        "Current package version is used by the packaged artifact",
+        "Cold-start benchmark summary path is attached",
+        "Isolated userData path is used",
+        "WAL/health long-tail notes are attached"
+      ],
+      "notes": "Current local packaged artifact is 2.4.10-beta.25 and matches apps/core-app/package.json. 10/10 cold runs pass with Startup health P50 1100ms, P95 3400ms, 0 WARN, and 0 ERROR. Run 01 remains the long-tail sample and must be paired with first-screen visual evidence before closing the broader startup UX item."
+    },
+    {
+      "id": "startup-first-screen",
+      "status": "passed",
+      "artifactPaths": [
+        "startup-first-screen-onboarding.png",
+        "startup-settings-after-onboarding.png",
+        "startup-first-screen-onboarding-dom.json",
+        "startup-settings-after-onboarding-dom.json",
+        "cdp-target-inventory.json"
+      ],
+      "checkedEvidence": [
+        "Screenshot or recording shows the first usable CoreApp screen",
+        "No blank or blocked loading surface is visible",
+        "Startup health summary is reachable from Settings/About"
+      ],
+      "notes": "Packaged Electron CDP evidence captured from the current 2.4.10-beta.25 local artifact. The first usable screen is an onboarding/login surface rather than a blank page, and Settings/About remains reachable with version, build id, login state, permission state, and startup health visible."
+    },
+    {
+      "id": "corebox-search-states",
+      "status": "passed",
+      "artifactPaths": [
+        "corebox-idle.png",
+        "corebox-no-result.png",
+        "corebox-result-reasons.png",
+        "corebox-ai-recovery.png",
+        "corebox-idle-dom.json",
+        "corebox-no-result-dom.json",
+        "corebox-result-reasons-dom.json",
+        "corebox-ai-recovery-dom.json"
+      ],
+      "checkedEvidence": [
+        "Idle state is visible before query input",
+        "Searching or recommendation warm-up state is visible",
+        "No-result state shows retry and File Index settings actions",
+        "Result source/status/reason pills fit without overlap"
+      ],
+      "notes": "Rebuilt packaged Electron CDP evidence on port 9336 covers idle, no-result, searching/loading, and populated result states from the current 2.4.10-beta.25 local artifact. No-result evidence shows retry and File Index settings actions. The result capture includes mixed application/system rows, completion/footer text is localized with hasRawI18n=false, and source/quick-key signal rails fit without visible overlap."
+    },
+    {
+      "id": "app-index-workbench",
+      "status": "passed",
+      "artifactPaths": [
+        "app-index-manager-current.png",
+        "app-index-manager-current-dom.json"
+      ],
+      "checkedEvidence": [
+        "Summary counts are visible",
+        "Source filters cover UWP/Store, Steam, shortcuts, protocol, AppRef, and path entries",
+        "Diagnostic filters distinguish attention, found, unchecked, and disabled entries",
+        "Empty states distinguish no entries from filtered-out entries"
+      ],
+      "notes": "Rebuilt packaged Electron CDP evidence on port 9338 reaches Settings -> file-index and contains the App Index manager workbench DOM. The capture used isolated userData at /private/tmp/tuff-visible-cdp-user-data-6 and added /System/Applications/Calculator.app through the renderer app:app-index:add-path channel before applying the Steam source filter. app-index-manager-current-dom.json records preFilter entryCount=1 with summary counts, all source and diagnostic chips, active Steam filtered-empty state text, hasRawI18n=false, and no raw common.all keys.",
+      "checkedAt": "2026-05-18T00:53:33Z"
+    },
+    {
+      "id": "browser-login-recovery",
+      "status": "blocked",
+      "artifactPaths": [],
+      "checkedEvidence": [],
+      "notes": "Startup/settings CDP evidence shows unauthenticated account state and login entry points. Source now propagates browser-open failure from main auth to renderer, shows manual login link/code recovery copy while keeping the device authorization session waiting, and classifies Settings login failures into localized browser-open, timeout, callback/token, device-authorization, rate-limit, quota, permission, expired-session, network, and service-outage recovery copy with focused tests. Real packaged UI evidence for forced browser-open failure, manual URL copy, short-code copy, and timeout/network recovery copy still needs recapture."
+    },
+    {
+      "id": "corebox-ai-ask",
+      "status": "blocked",
+      "artifactPaths": [
+        "corebox-ai-recovery.png",
+        "corebox-ai-recovery-dom.json",
+        "ai-desktop-source-coverage-blocked-2026-05-17.md"
+      ],
+      "checkedEvidence": [],
+      "notes": "Current packaged CDP artifact only captures a CoreBox AI/search loading state. Source now covers status tone, pending/ready/error hints, provider metadata, copy failure visibility, and metadata-pending fallback with focused tests, but there is no packaged Electron answer preview or recoverable failure capture. This surface remains blocked until packaged UI evidence shows answer metadata, copy failure visibility, and auth/quota/provider/capability recovery hints."
+    },
+    {
+      "id": "omnipanel-writing-tools",
+      "status": "blocked",
+      "artifactPaths": [
+        "ai-desktop-source-coverage-blocked-2026-05-17.md"
+      ],
+      "checkedEvidence": [],
+      "notes": "Source now covers selected-context preview, running/ready/failed/confirming status details, labeled capability/provider/model/latency metadata chips, inline clipboard action failures, retry, copy, replace, and replace confirmation with focused tests. No packaged Electron selected-context, action list, result preview, copy/replace/retry, or replace-confirmation artifact is attached."
+    },
+    {
+      "id": "workflow-use-model-review-queue",
+      "status": "blocked",
+      "artifactPaths": [
+        "ai-desktop-source-coverage-blocked-2026-05-17.md"
+      ],
+      "checkedEvidence": [],
+      "notes": "Source now covers Review Queue filters, labeled runtime metadata chips, copy/replace confirmation, retry labels, clear-failure recovery, and focused tests. No packaged Electron workflow run artifact proves Use Model output entering Review Queue or the pending/copied/clipboard-replaced/failed states."
+    },
+    {
+      "id": "provider-registry-observability",
+      "status": "blocked",
+      "artifactPaths": [
+        "provider-registry-observability-blocked-2026-05-17.md"
+      ],
+      "checkedEvidence": [],
+      "notes": "A local Nexus Admin capture attempt is archived as negative evidence. Provider Registry Admin requires an active admin session and real registry data, while the local dev server was not stable enough to capture UI because Nuxt repeatedly exited with EMFILE watcher errors. Source now distinguishes Provider/Scene initial empty, filtered empty, no-attention, no-unknown-provider, and no-failed-scene states, filtered lists include a show-all recovery action, and Usage Ledger / Health tabs expose local filter chips and next-action guidance for failed, planned, estimated, completed, unhealthy, degraded, and healthy rows with focused helper tests. This surface remains blocked until a real Dashboard Admin or real local-binding API/browser capture shows provider health, usage, scene run state, filters, and next-action hints."
+    },
+    {
+      "id": "provider-migration-evidence",
+      "status": "blocked",
+      "artifactPaths": [
+        "provider-migration-dry-run.md"
+      ],
+      "checkedEvidence": [
+        "Dry-run or execute migration evidence summary is attached",
+        "Readiness, blockers, migrated/skipped/failed counts are visible",
+        "No provider secret is copied into metadata or evidence text",
+        "Registry-primary readiness is not claimed for dry-run-only evidence"
+      ],
+      "notes": "A local isolated dry-run artifact is attached from focused tests that execute the Provider Registry migration API handler and real migration bridge against Mock D1, verifying no registry or secure-store write occurs. It is not a user-session Dashboard or real local-binding API migration dry-run result, so this surface remains blocked until a real dry-run or execute summary is captured without secrets."
+    }
+  ]
+}

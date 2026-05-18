@@ -195,8 +195,8 @@ describe('StartupAnalytics averages', () => {
 
     expect(body.metadata.startupSummary).toBeDefined()
     expect(body.metadata.moduleSummary).toBeDefined()
-    expect(body.metadata.startupSummary.samples).toBe(2)
-    expect(body.metadata.moduleSummary['module-a'].avgLoadTime).toBe(100)
+    expect(body.metadata.startupSummary?.samples).toBe(2)
+    expect(body.metadata.moduleSummary?.['module-a']?.avgLoadTime).toBe(100)
   })
 
   it('registers startup outbox flush task only once', () => {
