@@ -239,9 +239,11 @@ jobs:
               link: "https://www.npmjs.com/org/talex-touch"
             }')
 
-          curl -sS -f \
+          if ! curl -sS -f \
             -X POST "${NEXUS_BASE_URL}/api/dashboard/updates" \
             -H "Authorization: Bearer ${NEXUS_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "${payload}" \
-            -o /tmp/nexus-cli-updates.json
+            -o /tmp/nexus-cli-updates.json; then
+            echo "::warning::Nexus update news sync failed; npm package publish already completed. Check NEXUS_API_KEY release:news scope and admin ownership."
+          fi
