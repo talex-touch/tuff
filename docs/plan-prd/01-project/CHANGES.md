@@ -19,7 +19,8 @@
 - `pnpm-lock.yaml`
   - Added `@vue/compiler-sfc` to the published `@talex-touch/tuff-cli@0.0.4` runtime dependency set.
   - Prevents globally installed `tuff`/`tuffcli` from failing with `ERR_MODULE_NOT_FOUND` when the bundled CLI core imports the Vue SFC compiler for widget builds.
-  - Local validation: `pnpm -C "packages/tuff-cli" run build` and `node "packages/tuff-cli/bin/tuff.js" --version` passed.
+  - Local validation: `pnpm -C "packages/tuff-cli" run lint`, `pnpm -C "packages/tuff-cli" run build`, `node "packages/tuff-cli/bin/tuff.js" --version`, and local tarball smoke tests passed.
+  - Publish dry-run for `@talex-touch/tuff-cli@0.0.4` passed, but the real npm publish is blocked by current npm credentials/scope permission: npm returned `E404 Not Found - PUT https://registry.npmjs.org/@talex-touch%2ftuff-cli`.
 
 ### docs: add App Data Plugins and Everything roadmap
 
