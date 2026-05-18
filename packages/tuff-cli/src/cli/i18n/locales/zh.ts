@@ -93,11 +93,11 @@ export default {
   },
   remoteFailure: {
     'missing-token': '未找到登录 Token',
-    unauthorized: '认证已失效',
-    forbidden: '权限不足',
-    network: '网络请求失败',
-    server: 'Nexus 服务异常',
-    unknown: '未知错误',
+    'unauthorized': '认证已失效',
+    'forbidden': '权限不足',
+    'network': '网络请求失败',
+    'server': 'Nexus 服务异常',
+    'unknown': '未知错误',
   },
   plugins: {
     title: '🧩 插件相关',

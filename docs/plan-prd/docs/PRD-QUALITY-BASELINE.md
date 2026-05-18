@@ -17,7 +17,7 @@
 ## 2. 当前强口径
 
 - 当前基线：`2.4.10`。
-- `2.4.10` 已作为当前稳定基线，当前质量主线转入 `2.4.11` 债务退场与 `2.5.0` AI scope 约束。
+- `2.4.10` GitHub Release 与 Nexus release metadata sync 已完成；Windows acceptance evidence、release evidence 内容与公共 npm 子包补发仍按 TODO 跟踪，不把这些阻塞项视为全绿。当前质量主线转入 `2.4.11` 债务退场与 `2.5.0` AI scope 约束。
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 为 documented best-effort。
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
 - `2.5.3` 本地知识检索方向已锁定：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 是增强项；MVP 不引入独立向量数据库服务。
@@ -25,7 +25,7 @@
 - `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
 - 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；独立 OmniPanel Gate workflow 已于 2026-05-18 删除，不再作为 GitHub Actions 自动门禁；若既有失败阻断，必须记录失败项与最近路径替代验证。
-- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用。
+- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用；`v2.4.10` release workflow 成功不代表 npm 子包发布成功，当前公共子包缺失版本需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
 
 ## 3. 活跃 PRD 必须包含
 

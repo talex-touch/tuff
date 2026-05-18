@@ -72,18 +72,20 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Runs lint and tests; TypeScript source package has no build step
 
 - **`package-utils-publish.yml`** - Publish for `@talex-touch/utils`
-  - Triggers on version changes in `packages/utils/package.json` (push to `main` / `master`)
+  - Triggers on version changes in `packages/utils/package.json` (push to `main` / `master`), or when the workflow itself changes
+  - Publishes when the current version is missing from npm, even if the pushed `package.json` version did not change relative to the previous commit
   - Runs `packages/utils` tests before publish
   - Publishes to npm with `latest` for stable versions and `next` for prereleases
   - If npm reports the target version was already published, the workflow re-probes the registry and treats the run as success when the version is already visible
-  - Requires repository secret `NPM_TOKEN` with publish permission for `@talex-touch/utils`
+  - Requires repository secret `NPM_TOKEN` with publish permission for the `@talex-touch` scope
 
 - **`package-tuffex-ci.yml`** - CI for `@talex-touch/tuffex`
   - Triggers on changes to `packages/tuffex/**`
   - Runs build process
 
 - **`package-tuffex-publish.yml`** - Publish for `@talex-touch/tuffex`
-  - Triggers on version changes in `packages/tuffex/package.json` (push to main)
+  - Triggers on `packages/tuffex/**` changes or workflow changes (push to `main` / `master`)
+  - Publishes when the current version is missing from npm, even if the package version did not change relative to the pushed base
   - Builds and publishes to npm with `latest` / `next` dist-tag selection
   - Skips when the target version already exists on npm
 
@@ -92,7 +94,8 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Runs `tuff-cli-core` lint/test/build, then `tuff-cli` lint/build
 
 - **`package-tuff-cli-publish.yml`** - Publish for CLI/build-tool packages
-  - Publishes `@talex-touch/unplugin-export-plugin` first, then `@talex-touch/tuff-cli`
+  - Publishes `@talex-touch/tuff-core`, `@talex-touch/unplugin-export-plugin`, and `@talex-touch/tuff-cli`
+  - Publishes when a package version changed or the current version is missing from npm
   - Does not publish internal `@talex-touch/tuff-cli-core`
   - Does not publish the removed `@talex-touch/tuffcli` compatibility package
   - Waits for the current `@talex-touch/utils` version before publishing `@talex-touch/unplugin-export-plugin`
@@ -108,10 +111,11 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Runs lint and build
 
 - **`package-tuff-intelligence-publish.yml`** - Publish for `@talex-touch/tuff-intelligence`
-  - Triggers on version changes in `packages/tuff-intelligence/package.json` (push to `main` / `master`)
+  - Triggers on `packages/tuff-intelligence/package.json`, `packages/utils/package.json`, or workflow changes (push to `main` / `master`)
+  - Publishes when the current package version is missing from npm, even if the package version did not change relative to the pushed base
   - Waits for the current `@talex-touch/utils` version to be visible on npm before publishing
   - Publishes to npm with `latest` / `next` dist-tag selection
-  - Requires repository secret `NPM_TOKEN`
+  - Requires repository secret `NPM_TOKEN` with publish permission for the `@talex-touch` scope
 
 ## Adding CI for a New Package
 
