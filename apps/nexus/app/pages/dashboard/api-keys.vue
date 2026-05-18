@@ -60,7 +60,8 @@ const createOverlaySource = ref<HTMLElement | null>(null)
 const createTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const emptyCreateTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const newKeyName = ref('')
-const newKeyScopes = ref<string[]>(['plugin:publish'])
+const DEFAULT_PLUGIN_API_KEY_SCOPES = ['plugin:read', 'plugin:publish']
+const newKeyScopes = ref<string[]>([...DEFAULT_PLUGIN_API_KEY_SCOPES])
 const newKeyExpiry = ref<TxSelectValue | undefined>(undefined)
 
 // Newly created key (show once)
@@ -114,7 +115,7 @@ async function createKey() {
 
     showCreateModal.value = false
     newKeyName.value = ''
-    newKeyScopes.value = ['plugin:publish']
+    newKeyScopes.value = [...DEFAULT_PLUGIN_API_KEY_SCOPES]
     newKeyExpiry.value = undefined
 
     await fetchKeys()

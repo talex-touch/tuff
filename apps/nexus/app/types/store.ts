@@ -38,6 +38,37 @@ export interface StorePluginDetail extends StorePluginSummary {
   versions?: StorePluginVersion[]
 }
 
+export interface StorePluginContentPackage {
+  id: string
+  pluginId: string
+  kind: string
+  title: string
+  summary?: string | null
+  schemaVersion: number
+  visibility: 'private' | 'unlisted' | 'team' | 'public'
+  manifest: {
+    importTarget: string
+    format: string
+    minPluginVersion?: string
+    [key: string]: unknown
+  }
+  contentRef?: string | null
+  contentInline?: unknown
+  createdBy: string
+  status: 'draft' | 'pending' | 'published' | 'rejected'
+  installCount: number
+  createdAt: string
+  updatedAt: string
+  publishedAt?: string | null
+}
+
+export interface StorePluginContentListResponse {
+  packages: StorePluginContentPackage[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export type StorePluginReviewStatus = 'pending' | 'approved' | 'rejected'
 
 export interface StorePluginReviewAuthor {
