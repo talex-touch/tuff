@@ -873,16 +873,30 @@ async function validateSavedToken(context: 'login' | 'startup'): Promise<boolean
   return false
 }
 
+function createDeviceHeaders(authState?: Awaited<ReturnType<typeof readAuthState>> | null): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (authState?.deviceId)
+    headers['X-Device-Id'] = authState.deviceId
+  if (authState?.deviceName)
+    headers['X-Device-Name'] = authState.deviceName
+  if (authState?.devicePlatform)
+    headers['X-Device-Platform'] = authState.devicePlatform
+  headers['X-Device-Client'] = 'cli'
+  return headers
+}
+
 async function fetchAccountProfile(): Promise<AccountProfileResult> {
   const token = await getAuthToken()
   if (!token)
     return { ok: false, reason: 'missing-token' }
+  const authState = await readAuthState()
   try {
     const response = await networkClient.request<AccountProfile>({
       method: 'GET',
       url: `${getTuffBaseUrl()}/api/auth/me`,
       headers: {
         Authorization: `Bearer ${token}`,
+        ...createDeviceHeaders(authState),
       },
       validateStatus: ALL_HTTP_STATUS,
     })
@@ -903,12 +917,14 @@ async function fetchUserPlugins(): Promise<UserPluginsResult> {
   const token = await getAuthToken()
   if (!token)
     return { ok: false, reason: 'missing-token' }
+  const authState = await readAuthState()
   try {
     const response = await networkClient.request<{ total?: number, plugins?: any[] }>({
       method: 'GET',
       url: `${getTuffBaseUrl()}/api/dashboard/plugins`,
       headers: {
         Authorization: `Bearer ${token}`,
+        ...createDeviceHeaders(authState),
       },
       validateStatus: ALL_HTTP_STATUS,
     })

@@ -2154,7 +2154,9 @@ export async function upsertDevice(
           platform = COALESCE(?, platform),
           client_type = COALESCE(?, client_type),
           user_agent = COALESCE(?, user_agent),
-          last_seen_at = ?
+          last_seen_at = ?,
+          revoked_at = NULL,
+          token_version = CASE WHEN revoked_at IS NOT NULL THEN token_version + 1 ELSE token_version END
       WHERE id = ? AND user_id = ?
     `).bind(
       data?.deviceName ?? null,

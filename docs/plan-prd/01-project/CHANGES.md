@@ -13,6 +13,17 @@
 
 ## 2026-05-18
 
+### fix(nexus): reactivate CLI devices during browser auth
+
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/__tests__/authStore-device-reactivation.test.ts`
+- `packages/tuff-cli/package.json`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli-core/src/publish.ts`
+  - Browser OAuth device re-login now reactivates previously revoked device rows and rotates `token_version`, preventing Nexus from issuing an App JWT that is immediately rejected because the device remains revoked.
+  - CLI account/login/publish auth probes now send saved device headers with App JWT requests so Nexus can resolve the CLI device consistently.
+  - Prepared `@talex-touch/tuff-cli@0.0.6` for npm publish.
+
 ### fix(nexus): harden CLI app auth and plugin package integrity
 
 - `apps/nexus/server/utils/auth.ts`
