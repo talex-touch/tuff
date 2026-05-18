@@ -143,8 +143,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ## 5. 当前状态快照
 
-- 当前基线：`2.4.11-beta.1`。
-- `2.4.11-beta.1` 已完成 tag-push beta pre-release，GitHub Build and Release 及 Nexus 同步通过。
+- 当前基线：`2.4.10`。
+- `2.4.10` 正式版发布准备已启动；`2.4.11-beta.1` 保留为已验证 beta pre-release 记录，后续 `2.4.11` 继续收口 legacy/compat/size 债务。
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - 2026-05-16 兼容性/占位实现 live-tree 审计未发现新的 P0 假成功；`2.4.11` 首切建议聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片。
 - Windows App Search & Launch Beta 已进入实现态：应用索引管理页、UWP/Store 诊断字段、Steam 最小 provider、`protocol` 启动白名单等仍需真机 evidence。

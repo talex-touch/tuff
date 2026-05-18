@@ -48,6 +48,13 @@ jobs:
 
           echo "current_version=${current_version}" >> "$GITHUB_OUTPUT"
 
+          if npm view "@talex-touch/tuff-intelligence@${current_version}" version >/dev/null 2>&1; then
+            npm_has_version=true
+          else
+            npm_has_version=false
+          fi
+          echo "npm_has_version=${npm_has_version}" >> "$GITHUB_OUTPUT"
+
           if [ "${before_sha}" = "0000000000000000000000000000000000000000" ]; then
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -56,15 +63,15 @@ jobs:
           previous_version=$(git show "${before_sha}:packages/tuff-intelligence/package.json" | node -e "const fs=require('fs'); const pkg=JSON.parse(fs.readFileSync(0,'utf8')); console.log(pkg.version)")
           echo "previous_version=${previous_version}" >> "$GITHUB_OUTPUT"
 
-          if [ "${current_version}" != "${previous_version}" ]; then
+          if [ "${current_version}" != "${previous_version}" ] || [ "${npm_has_version}" != "true" ]; then
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_publish=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Skip publish (version unchanged)
+      - name: Skip publish (version unchanged and already on npm)
         if: steps.version_check.outputs.should_publish != 'true'
-        run: echo "Tuff Intelligence version unchanged. Skipping publish."
+        run: echo "Tuff Intelligence version unchanged and already published. Skipping publish."
 
       - name: Build package
         if: steps.version_check.outputs.should_publish == 'true'

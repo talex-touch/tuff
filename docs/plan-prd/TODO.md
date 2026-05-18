@@ -5,7 +5,7 @@
 
 ## 当前执行窗口
 
-- 当前基线：`2.4.11-beta.1`。
+- 当前基线：`2.4.10`。
 - 当前主线：`2.4.10` 聚焦 Windows App 索引、Windows 应用启动体验、基础 legacy/compat 收口与 release evidence。
 - 下一版本门槛：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。
 - 执行约束：PR lint 已收敛为 changed-file lint，但 `quality:release` 仍保留全仓 lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；旧 compat registry / legacy allowlist / size allowlist 已退场，不再作为 live SoT；2026-05-18 已按维护决策删除独立 `.github/workflows/omnipanel-gate.yml`，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；Windows 真机 evidence 与 Nexus Release Evidence 未闭环前，不宣称正式 `2.4.10` gate 通过；`2.5.0` AI/Provider 与可见体验工作台优化只能以 dev 小切片推进，不得抢占当前 release gate。
@@ -47,7 +47,7 @@
 | P2-PROVIDER | Nexus Provider Registry / Scene 编排 | 进行中 | 已有 D1 secure store、Scene run、Dashboard dry-run/execute、AI mirror、health/usage ledger 与最小策略路由；旧 `intelligence_providers` 表退场已补实施计划 `docs/plan-prd/04-implementation/NexusIntelligenceProviderRetirement-2026-05-16.md`。2026-05-17 已在 `docs/engineering/reports/coreapp-visible-evidence-2026-05-17/provider-migration-dry-run.md` 补本地隔离 API/bridge dry-run 证据，使用 migration API handler + 真实 migration bridge + Mock D1 确认 dry-run 输出不会声称 registry-primary ready、不含 secret，且不会写 registry / secure store；Provider Registry Admin observability list 已补 initial/filtered/no-attention/no-unknown/no-failed empty states 与 “show all” 过滤恢复动作，Usage Ledger / Health tabs 已补 failed/planned/estimated/completed/unhealthy/degraded/healthy next-action guidance，以及 all/attention/status 本地过滤和计数，并有 focused helper tests；这些仍不是真实 Dashboard/Admin UI evidence。后续仍需按 Phase 0/1 采集真实 dry-run/execute evidence 和真实 Provider Admin health/usage/scene/filter 视觉证据，再推进 registry-primary reads、user-scope OCR 自动绑定、success rate/配额/dynamic pricingRef。 |
 | P2-NATIVE | Native transport V1 真机 smoke | 待执行 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort；打包预览确认 `sharp` 与 ffmpeg/ffprobe 可执行。 |
 | P2-QUICK-LAUNCH | Quick Launch 真机验收 | 待执行 | macOS/Windows/Linux 验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。 |
-| P2-PUBLISHER | 插件发布管理端到端证据 | 进行中 | CoreApp `/store/publisher` 与 Nexus assets/API key 流程已接入；2026-05-18 已修复发布认证 scope 口径：`plugin:publish` 隐含 `plugin:read`，新建 API key 默认带 `plugin:read` + `plugin:publish`，CLI 真实 publish 前会预检 `/api/auth/me` 并区分 app JWT / API key / opaque token 失败原因，`--dry-run` 保持本地预览；`touch-snippets` 已收口 text/code/prompt/template 片段的 CoreBox 搜索、复制、保存与管理入口，旧 `touch-text-snippets` / `touch-code-snippets` 已从 CoreBox feature surface 退为 legacy placeholder；仍需补 package policy/security scan、真实 `.tpex` 上传端到端证据，以及旧 snippets 目录删除/迁移策略确认。 |
+| P2-PUBLISHER | 插件发布管理端到端证据 | 进行中 | CoreApp `/store/publisher` 与 Nexus assets/API key 流程已接入；2026-05-18 已修复发布认证 scope 口径：`plugin:publish` 隐含 `plugin:read`，新建 API key 默认带 `plugin:read` + `plugin:publish`；CLI 真实 publish 前改用 `/api/dashboard/auth/publisher` 进行 publisher 预检并兼容 API Key，旧 Nexus 缺少该 endpoint 时回退 Dashboard plugin lookup，避免 `/api/auth/me` 误杀 API Key；交互 CLI 已区分本地 token 文件与远端可用登录态，账号/云端插件列表会显示认证或网络失败原因而非伪装为空列表；`--dry-run` 保持本地预览；`touch-snippets` 已收口 text/code/prompt/template 片段的 CoreBox 搜索、复制、保存与管理入口，旧 `touch-text-snippets` / `touch-code-snippets` 已从 CoreBox feature surface 退为 legacy placeholder；仍需补 package policy/security scan、真实 `.tpex` 上传端到端证据，以及旧 snippets 目录删除/迁移策略确认。 |
 | P2-CLOUDSHARE | CloudShare 插件内容包发布/安装 MVP | 进行中 | 已新增 `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md`、`CloudShareSDK`、Nexus `/api/store/plugin-content/*`、Store 详情页 Content tab 与 `touch-snippets` snippet pack 导出/导入/list/install 基础能力；仍需补插件 Surface/CoreApp Store 的登录发布 UI、内容审核队列、团队可见与订阅/fork。 |
 
 ## 已完成/历史不再重复开发
@@ -59,7 +59,7 @@
 - 2026-05-16 Nexus PWA precache 已排除 Nuxt Content SQL dump、sqlite wasm 与 sqlite worker 资产，并在 Worker bundle analyzer 中增加回潮检查；`nativeSqlite` 仍需保留，直接关闭会触发 `better-sqlite3` build 依赖。
 - 2026-05-16 Nexus 公开站低风险清理与性能小切片已完成：生产测试页、`.DS_Store`、旧 GIF 退场；Landing 大图切到压缩 JPG；highlight.js 改为 docs 按需加载；公开页预渲染范围扩大。
 - 2026-05-16 Nexus OAuth 回调缺失 session 时已增加错误兜底与重试入口，避免官网登录回调一直停留在处理中状态。
-- `2.4.10-beta.25` beta notes 与 tag-push pre-release 准备已完成；真实 commit/push/tag 仍需用户确认。
+- `2.4.10` 正式版发布准备已启动：根/CoreApp 版本已切到 `2.4.10`，子包 pack dry-run 已完成；macOS 本地 release build 已用 `--publish=never` 产出 `apps/core-app/dist/mac-arm64/tuff.app` 与 `apps/core-app/dist/tuff.app.zip`；npm 发布当前因本机 npm 登录态 `E401` 阻塞，已修正 package publish workflows 以便 push 后用仓库 `NPM_TOKEN` 补发 npm 缺失版本。
 - Widget production precompile gate 已完成。
 - CoreApp 启动异步化 P0/P1/P2/P3 主要代码切片已完成，剩余为真机补证。
 - Quick Launch 搜索引擎模式、补全隔离、图标与旧结果清理已完成。

@@ -87,9 +87,11 @@ describe('publish', () => {
 
   it('publishes through the Dashboard version endpoint', async () => {
     const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
-      if (options.method === 'GET' && options.url.includes('/api/auth/me')) {
+      if (options.method === 'GET' && options.url.includes('/api/dashboard/auth/publisher')) {
         return textResponse(options, JSON.stringify({
-          id: 'user-1',
+          ok: true,
+          userId: 'user-1',
+          authType: 'app',
           role: 'admin',
         }))
       }
@@ -127,15 +129,15 @@ describe('publish', () => {
     })
 
     expect(request).toHaveBeenCalledTimes(3)
-    expect(request.mock.calls[0]?.[0].url).toContain('/api/auth/me')
+    expect(request.mock.calls[0]?.[0].url).toContain('/api/dashboard/auth/publisher')
     expect(request.mock.calls[1]?.[0].url).toContain('/api/dashboard/plugins')
     expect(request.mock.calls[2]?.[0].url).toContain('/api/dashboard/plugins/plugin-1/versions')
   })
 
   it('rejects 200 HTML responses from the publish endpoint', async () => {
     vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
-      if (options.method === 'GET' && options.url.includes('/api/auth/me')) {
-        return textResponse(options, JSON.stringify({ id: 'user-1' }))
+      if (options.method === 'GET' && options.url.includes('/api/dashboard/auth/publisher')) {
+        return textResponse(options, JSON.stringify({ ok: true, userId: 'user-1' }))
       }
 
       if (options.method === 'GET' && options.url.includes('/api/dashboard/plugins')) {
@@ -162,8 +164,8 @@ describe('publish', () => {
 
   it('fails clearly when the Dashboard plugin cannot be found', async () => {
     const request = vi.spyOn(networkClient, 'request').mockImplementation(async (options: NetworkRequestOptions) => {
-      if (options.url.includes('/api/auth/me')) {
-        return textResponse(options, JSON.stringify({ id: 'user-1' }))
+      if (options.url.includes('/api/dashboard/auth/publisher')) {
+        return textResponse(options, JSON.stringify({ ok: true, userId: 'user-1' }))
       }
 
       return textResponse(options, JSON.stringify({
@@ -178,6 +180,7 @@ describe('publish', () => {
     })
 
     expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls[0]?.[0].url).toContain('/api/dashboard/auth/publisher')
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('was not found'))
   })
 
@@ -196,7 +199,7 @@ describe('publish', () => {
     })
 
     expect(request).toHaveBeenCalledTimes(1)
-    expect(request.mock.calls[0]?.[0].url).toContain('/api/auth/me')
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Authentication token was rejected by Nexus before publish'))
+    expect(request.mock.calls[0]?.[0].url).toContain('/api/dashboard/auth/publisher')
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Publisher authentication was rejected by Nexus before publish'))
   })
 })

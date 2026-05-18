@@ -706,7 +706,21 @@ async function ensureAuthenticated(): Promise<boolean> {
 
   const existingToken = await getAuthToken()
   if (existingToken) {
-    return true
+    printInfo(t('notice.authChecking'))
+    const authCheck = await fetchAccountProfile()
+    if (authCheck.ok)
+      return true
+
+    printWarning(t('notice.authInvalid', { reason: formatRemoteFailure(authCheck) }))
+    if (process.env.TUFF_NON_INTERACTIVE === '1')
+      return false
+
+    const relogin = await askConfirm(t('notice.authReloginConfirm'), true)
+    if (!relogin)
+      return false
+
+    await clearAuthToken()
+    printInfo(t('notice.authCleared'))
   }
 
   if (cliLocalMode) {
@@ -748,10 +762,62 @@ interface AccountProfile {
   role?: string | null
 }
 
-async function fetchAccountProfile(): Promise<AccountProfile | null> {
+type RemoteFailureReason = 'missing-token' | 'unauthorized' | 'forbidden' | 'network' | 'server' | 'unknown'
+
+interface RemoteFailure {
+  ok: false
+  reason: RemoteFailureReason
+  status?: number
+  message?: string
+}
+
+interface AccountProfileSuccess {
+  ok: true
+  profile: AccountProfile
+}
+
+interface UserPluginsSuccess {
+  ok: true
+  total: number
+  plugins: any[]
+}
+
+type AccountProfileResult = AccountProfileSuccess | RemoteFailure
+type UserPluginsResult = UserPluginsSuccess | RemoteFailure
+
+function readResponseMessage(data: unknown): string {
+  if (!data || typeof data !== 'object')
+    return ''
+  const record = data as Record<string, unknown>
+  for (const key of ['message', 'statusMessage', 'error']) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim())
+      return value.trim()
+  }
+  return ''
+}
+
+function mapRemoteFailure(status: number, data: unknown): RemoteFailure {
+  if (status === 401)
+    return { ok: false, reason: 'unauthorized', status, message: readResponseMessage(data) }
+  if (status === 403)
+    return { ok: false, reason: 'forbidden', status, message: readResponseMessage(data) }
+  if (status >= 500)
+    return { ok: false, reason: 'server', status, message: readResponseMessage(data) }
+  return { ok: false, reason: 'unknown', status, message: readResponseMessage(data) }
+}
+
+function formatRemoteFailure(result: RemoteFailure): string {
+  const label = t(`remoteFailure.${result.reason}`)
+  const status = typeof result.status === 'number' ? `HTTP ${result.status}` : ''
+  const detail = result.message || status
+  return detail ? `${label} (${detail})` : label
+}
+
+async function fetchAccountProfile(): Promise<AccountProfileResult> {
   const token = await getAuthToken()
   if (!token)
-    return null
+    return { ok: false, reason: 'missing-token' }
   try {
     const response = await networkClient.request<AccountProfile>({
       method: 'GET',
@@ -762,18 +828,22 @@ async function fetchAccountProfile(): Promise<AccountProfile | null> {
       validateStatus: ALL_HTTP_STATUS,
     })
     if (response.status < 200 || response.status >= 300)
-      return null
-    return response.data
+      return mapRemoteFailure(response.status, response.data)
+    return { ok: true, profile: response.data }
   }
-  catch {
-    return null
+  catch (error) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
-async function fetchUserPlugins(): Promise<{ total: number, plugins: any[] } | null> {
+async function fetchUserPlugins(): Promise<UserPluginsResult> {
   const token = await getAuthToken()
   if (!token)
-    return null
+    return { ok: false, reason: 'missing-token' }
   try {
     const response = await networkClient.request<{ total?: number, plugins?: any[] }>({
       method: 'GET',
@@ -784,15 +854,20 @@ async function fetchUserPlugins(): Promise<{ total: number, plugins: any[] } | n
       validateStatus: ALL_HTTP_STATUS,
     })
     if (response.status < 200 || response.status >= 300)
-      return null
+      return mapRemoteFailure(response.status, response.data)
     const data = response.data
     return {
+      ok: true,
       total: typeof data.total === 'number' ? data.total : (data.plugins?.length ?? 0),
       plugins: Array.isArray(data.plugins) ? data.plugins : [],
     }
   }
-  catch {
-    return null
+  catch (error) {
+    return {
+      ok: false,
+      reason: 'network',
+      message: error instanceof Error ? error.message : String(error),
+    }
   }
 }
 
@@ -838,9 +913,10 @@ async function runLoginCommand(args: string[]): Promise<void> {
 
 async function showAccountSummary(): Promise<void> {
   printHeader(t('account.title'))
-  const profile = await fetchAccountProfile()
+  const result = await fetchAccountProfile()
   const authState = await readAuthState()
-  if (profile) {
+  if (result.ok) {
+    const { profile } = result
     const name = profile.name || profile.email || profile.id || t('account.userFallback')
     printInfo(t('account.greeting', { name }))
     if (profile.email)
@@ -849,7 +925,7 @@ async function showAccountSummary(): Promise<void> {
       printInfo(t('account.role', { role: profile.role }))
   }
   else {
-    printInfo(t('account.profileUnavailable'))
+    printWarning(t('account.profileUnavailable', { reason: formatRemoteFailure(result) }))
   }
 
   if (authState?.baseUrl)
@@ -865,7 +941,11 @@ async function showAccountSummary(): Promise<void> {
 async function showRemotePlugins(): Promise<void> {
   printHeader(t('account.pluginsTitle'))
   const result = await fetchUserPlugins()
-  if (!result || result.total === 0) {
+  if (!result.ok) {
+    printWarning(t('account.pluginsUnavailable', { reason: formatRemoteFailure(result) }))
+    return
+  }
+  if (result.total === 0) {
     printInfo(t('account.pluginsEmpty'))
     return
   }
@@ -1069,7 +1149,8 @@ async function runInteractiveMode(): Promise<void> {
     cli: getCliConfigPath(),
     auth: getAuthTokenPath(),
   }))
-  const profile = await fetchAccountProfile()
+  const profileResult = await fetchAccountProfile()
+  const profile = profileResult.ok ? profileResult.profile : null
   const greetingName = profile?.name || profile?.email || ''
   const greeting = greetingName
     ? t('welcome.greeting', { name: greetingName })

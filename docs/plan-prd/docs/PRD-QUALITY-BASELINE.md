@@ -16,7 +16,7 @@
 
 ## 2. 当前强口径
 
-- 当前基线：`2.4.11-beta.1`。
+- 当前基线：`2.4.10`。
 - `2.4.10` release blocker 只聚焦 Windows 真机 evidence、性能 evidence、final acceptance gate 与 Nexus Release Evidence。
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 为 documented best-effort。
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
