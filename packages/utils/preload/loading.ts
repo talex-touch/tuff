@@ -23,4 +23,7 @@ export interface PreloadAPI {
   sendPreloadEvent: (event: LoadingEvent) => void
   getStartupContext: () => Promise<StartupContext>
   getStartupContextSnapshot: () => StartupContext | null
+  getVisibleEvidenceConfig?: () => {
+    authLoginTimeoutMs?: number
+  }
 }

@@ -11,7 +11,8 @@ const {
   transportOnMock,
   transportBroadcastMock,
   openExternalMock,
-  authLoggerMock
+  authLoggerMock,
+  resolveMainRuntimeMock
 } = vi.hoisted(() => ({
   getMainConfigMock: vi.fn(),
   saveMainConfigMock: vi.fn(),
@@ -26,8 +27,10 @@ const {
   authLoggerMock: {
     warn: vi.fn(),
     info: vi.fn(),
+    debug: vi.fn(),
     error: vi.fn()
-  }
+  },
+  resolveMainRuntimeMock: vi.fn((ctx: unknown) => ctx)
 }))
 
 vi.mock('@talex-touch/utils', () => ({
@@ -67,6 +70,19 @@ vi.mock('@talex-touch/utils/common/storage/entity/app-settings', () => ({
 }))
 
 vi.mock('@talex-touch/utils/transport/event/builder', () => ({
+  defineEvent: vi.fn((domain: string) => ({
+    module(moduleName: string) {
+      return {
+        event(eventName: string) {
+          return {
+            define: vi.fn(() => ({
+              toEventName: () => `${domain}:${moduleName}:${eventName}`
+            }))
+          }
+        }
+      }
+    }
+  })),
   defineRawEvent: vi.fn((name: string) => ({
     toEventName: () => name
   }))
@@ -86,7 +102,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../../core/runtime-accessor', () => ({
-  resolveMainRuntime: vi.fn()
+  resolveMainRuntime: resolveMainRuntimeMock
 }))
 
 vi.mock('../../utils/secure-store', () => ({
@@ -174,6 +190,7 @@ describe('auth secure storage preference', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    resolveMainRuntimeMock.mockImplementation((ctx: unknown) => ctx)
 
     appSettingState = createAppSetting()
     getMainConfigMock.mockImplementation(() => appSettingState)
@@ -194,6 +211,12 @@ describe('auth secure storage preference', () => {
   afterEach(async () => {
     const authModule = await import('./index')
     authModule.__test__.resetState()
+    delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH
+    delete process.env.TUFF_STARTUP_BENCHMARK_ONCE
+    delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL
+    delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH_DEVICE_START_JSON
+    delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_STATUS
+    delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_DELAY_MS
   })
 
   it('defaults missing secure storage preference to persistent protection mode', async () => {
@@ -374,5 +397,108 @@ describe('auth secure storage preference', () => {
 
     expect(appSettingState.auth?.secureStorageUnavailable).toBe(false)
     expect(authModule.getAuthToken()).toBe('fallback-token')
+  })
+
+  it('returns device auth recovery details when the browser cannot open', async () => {
+    openExternalMock.mockRejectedValueOnce(new Error('open failed'))
+    networkRequestMock
+      .mockResolvedValueOnce({
+        status: 200,
+        data: {
+          deviceCode: 'device-code-1',
+          userCode: 'ABC123',
+          authorizeUrl: 'https://example.test/sign-in?redirect_url=%2Fdevice-auth%3Fcode%3DABC123',
+          expiresAt: '2026-05-17T05:00:00.000Z',
+          intervalSeconds: 3
+        }
+      })
+      .mockResolvedValue({
+        status: 400,
+        data: { status: 'pending' }
+      })
+
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+    const module = new authModule.AuthModule()
+    module.onInit({
+      app: {
+        rootPath: '/tmp/tuff'
+      },
+      channel: {
+        keyManager: {},
+        sendMain: vi.fn()
+      }
+    } as unknown as Parameters<typeof module.onInit>[0])
+
+    const loginHandler = (
+      transportOnMock.mock.calls as unknown as Array<
+        [{ toEventName?: () => string }, (payload: unknown) => Promise<unknown>]
+      >
+    ).find(([event]) => event?.toEventName?.() === 'auth:session:login')?.[1]
+
+    expect(loginHandler).toBeTypeOf('function')
+    if (!loginHandler) throw new Error('login handler was not registered')
+
+    const response = await loginHandler({ mode: 'sign-in' })
+
+    expect(response).toMatchObject({
+      initiated: true,
+      authorizeUrl: 'https://example.test/sign-in?redirect_url=%2Fdevice-auth%3Fcode%3DABC123',
+      userCode: 'ABC123',
+      expiresAt: '2026-05-17T05:00:00.000Z',
+      browserOpenFailed: true
+    })
+    expect(openExternalMock).toHaveBeenCalledWith(
+      'https://example.test/sign-in?redirect_url=%2Fdevice-auth%3Fcode%3DABC123'
+    )
+    expect(authLoggerMock.warn).toHaveBeenCalledWith(
+      'Failed to open browser login page',
+      expect.objectContaining({ error: expect.any(Error) })
+    )
+  })
+
+  it('uses visible auth evidence device flow only in benchmark evidence mode', async () => {
+    process.env.TUFF_VISIBLE_EVIDENCE_AUTH = '1'
+    process.env.TUFF_STARTUP_BENCHMARK_ONCE = '1'
+    process.env.TUFF_VISIBLE_EVIDENCE_AUTH_BROWSER_OPEN_FAIL = '1'
+    process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_STATUS = 'timeout'
+    process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_DELAY_MS = '1'
+
+    const authModule = await import('./index')
+    authModule.__test__.resetState()
+    authModule.__test__.setState({ appRootPath: '/tmp/tuff' })
+
+    const module = new authModule.AuthModule()
+    module.onInit({
+      app: {
+        rootPath: '/tmp/tuff'
+      },
+      channel: {
+        keyManager: {},
+        sendMain: vi.fn()
+      }
+    } as unknown as Parameters<typeof module.onInit>[0])
+
+    const loginHandler = (
+      transportOnMock.mock.calls as unknown as Array<
+        [{ toEventName?: () => string }, (payload: unknown) => Promise<unknown>]
+      >
+    ).find(([event]) => event?.toEventName?.() === 'auth:session:login')?.[1]
+
+    expect(loginHandler).toBeTypeOf('function')
+    if (!loginHandler) throw new Error('login handler was not registered')
+
+    const response = await loginHandler({ mode: 'sign-in' })
+
+    expect(networkRequestMock).not.toHaveBeenCalled()
+    expect(openExternalMock).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      initiated: true,
+      authorizeUrl: 'https://example.test/device-auth?code=TUFF26',
+      userCode: 'TUFF26',
+      browserOpenFailed: true
+    })
   })
 })

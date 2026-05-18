@@ -13,6 +13,29 @@
 
 ## 2026-05-18
 
+### fix(core-app): add packaged auth recovery evidence mode
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/auth/index.test.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-error-message.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/login-recovery-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/login-recovery-display.test.ts`
+- `packages/utils/transport/events/auth.ts`
+- `packages/utils/preload/loading.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/engineering/reports/coreapp-visible-evidence-2026-05-18/browser-login-recovery-evidence-mode.md`
+  - Settings browser login now preserves device-auth start metadata in renderer state, including manual authorize URL, short user code, expiry, and browser-open failure status.
+  - The login dialog exposes localized manual recovery copy and copy-to-clipboard actions while keeping the pending device authorization session alive.
+  - Auth errors now classify browser-open, timeout, callback/token, device authorization, rate limit, quota, permission, expired session, network, service outage, and generic auth failures into localized recovery copy.
+  - Added a strictly gated packaged evidence mode: it requires `TUFF_VISIBLE_EVIDENCE_AUTH=1` plus startup benchmark mode before using deterministic device-auth metadata, forced browser-open failure, controllable poll status, or shortened renderer timeout.
+  - Current state: source and focused tests are ready, but `browser-login-recovery` remains blocked until real packaged Electron/CDP screenshot and DOM artifacts are captured.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/auth/index.test.ts" "src/renderer/src/views/base/settings/login-recovery-display.test.ts" "src/renderer/src/modules/auth/useAuth.test.ts"` passed; file-level ESLint passed; `typecheck:node`, `typecheck:web`, `build:unpack`, ad-hoc signing, codesign verify, and scoped `git diff --check` passed before capture was interrupted.
+
 ### fix(core-app): apply backpressure to file cache database writes
 
 - `apps/core-app/src/main/db/db-write-scheduler.ts`
