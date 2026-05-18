@@ -298,13 +298,23 @@ async function publishSnippetPack(pack, options = {}) {
   return response?.data?.package || response?.package || response?.data
 }
 
+function getAccountAuthTokenEventName() {
+  try {
+    const { AccountEvents } = require('@talex-touch/utils/transport/events')
+    return AccountEvents.auth.getToken.toEventName()
+  }
+  catch {
+    return 'account:auth:get-token'
+  }
+}
+
 async function resolveAccountAuthToken(options = {}) {
   if (typeof options.authToken === 'string' && options.authToken.trim())
     return options.authToken.trim()
   const channel = options.touchChannel || touchChannel
   if (!channel || typeof channel.send !== 'function')
     return ''
-  const token = await channel.send('account:auth:get-token')
+  const token = await channel.send(getAccountAuthTokenEventName())
   return normalizeText(token)
 }
 
