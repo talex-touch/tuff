@@ -13,6 +13,33 @@
 
 ## 2026-05-18
 
+### fix(nexus): harden CLI app auth and plugin package integrity
+
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/types/cloudflare-env.d.ts`
+- `apps/nexus/server/utils/tpex.ts`
+- `apps/nexus/server/utils/pluginsStore.ts`
+- `apps/nexus/server/api/store/plugins/[slug]/versions.get.ts`
+- `packages/tuff-cli/package.json`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `packages/tuff-cli/src/cli/i18n/locales/zh.ts`
+- `packages/tuff-cli/src/cli/i18n/locales/en.ts`
+- `packages/tuff-cli-core/src/security-util.ts`
+- `packages/tuff-cli-core/src/__tests__/security-util.test.ts`
+- `packages/unplugin-export-plugin/src/core/security-util.ts`
+- `packages/utils/plugin/providers/tpex-provider.ts`
+- `apps/nexus/README.md`
+- `apps/nexus/SETUP.md`
+- `plugins/touch-intelligence/package.json`
+- `plugins/touch-intelligence/manifest.json`
+  - Nexus App JWT signing and verification now resolve the same stable secret chain: runtime config, Cloudflare bindings, then process env; production no longer falls back to an ephemeral per-isolate secret when `APP_AUTH_JWT_SECRET` / `AUTH_SECRET` is missing.
+  - CLI browser/manual token login now immediately validates the saved token against Nexus and clears it when Nexus rejects the newly issued token, avoiding a misleading “login succeeded” state before publish; `tuff_` API keys use the publisher preflight endpoint so plugin publish tokens are not misclassified by `/api/auth/me`.
+  - Nexus plugin publish/re-edit now verifies the `.tpex` internal manifest `_files` SHA-256 map and `_signature` against archive contents before accepting uploads, keeping publish-side integrity checks aligned with CLI package generation and CoreApp outer package SHA-256 install verification.
+  - CLI package generators now normalize manifest `_files` keys to POSIX paths; Nexus verification remains compatible with legacy Windows-built packages whose manifest keys used backslashes.
+  - Store plugin detail/list/version APIs now expose package signature metadata consistently, and the shared utils TPEX provider forwards Nexus `signature` metadata like the CoreApp provider so downstream installers can perform the same outer package SHA-256 verification.
+  - Deployment docs now state that `APP_AUTH_JWT_SECRET` is required and must stay stable across Cloudflare Pages production/preview deployments.
+  - Prepared `@talex-touch/tuff-cli@0.0.5` for npm publish and included the `touch-intelligence` plugin `1.0.2` version bump for the publish retry.
+
 ### fix(tuff-cli): declare Vue SFC compiler runtime dependency
 
 - `packages/tuff-cli/package.json`
@@ -20,7 +47,8 @@
   - Added `@vue/compiler-sfc` to the published `@talex-touch/tuff-cli@0.0.4` runtime dependency set.
   - Prevents globally installed `tuff`/`tuffcli` from failing with `ERR_MODULE_NOT_FOUND` when the bundled CLI core imports the Vue SFC compiler for widget builds.
   - Local validation: `pnpm -C "packages/tuff-cli" run lint`, `pnpm -C "packages/tuff-cli" run build`, `node "packages/tuff-cli/bin/tuff.js" --version`, and local tarball smoke tests passed.
-  - Publish dry-run for `@talex-touch/tuff-cli@0.0.4` passed, but the real npm publish is blocked by current npm credentials/scope permission: npm returned `E404 Not Found - PUT https://registry.npmjs.org/@talex-touch%2ftuff-cli`.
+  - Local npm publish remained blocked by the machine npm credentials/scope permission, but GitHub Actions published `@talex-touch/tuff-cli@0.0.4` successfully with `latest` dist-tag.
+  - Public npm install smoke for `@talex-touch/tuff-cli@0.0.4` passed; the GitHub workflow is still marked failed because the post-publish Nexus update-news sync returned `403`.
 
 ### docs: add App Data Plugins and Everything roadmap
 

@@ -90,6 +90,7 @@ export default {
     authInvalid: 'Local login session is no longer usable: {reason}',
     authReloginConfirm: 'Clear the local login session and login again?',
     authCleared: 'Local login session cleared.',
+    authIssuedTokenRejected: 'Nexus rejected the current CLI token. For browser-issued tokens, check Nexus APP_AUTH_JWT_SECRET/AUTH_SECRET configuration and device status; for API keys, check plugin:read/plugin:publish scopes.',
   },
   remoteFailure: {
     'missing-token': 'Login token not found',

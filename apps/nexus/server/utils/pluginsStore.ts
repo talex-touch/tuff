@@ -1768,6 +1768,12 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   const signature = await sha256Hex(packageBuffer)
 
   const metadata = await extractTpexMetadata(packageBuffer)
+  if (!metadata.integrity.valid) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
+    })
+  }
 
   // Auto-extract and upload icon from package if plugin doesn't have one
   let iconKey = plugin.iconKey ?? null
@@ -2004,6 +2010,12 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
   const packageBuffer = Buffer.from(packageArrayBuffer)
   const signature = await sha256Hex(packageBuffer)
   const metadata = await extractTpexMetadata(packageBuffer)
+  if (!metadata.integrity.valid) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
+    })
+  }
 
   let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
   let iconUrl = targetVersion.iconUrl ?? plugin.iconUrl ?? null
