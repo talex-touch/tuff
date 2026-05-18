@@ -1384,6 +1384,18 @@
 
 ## 2026-05-18
 
+### feat(intelligence): expose local skills gate summary
+
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-local-environment.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - Local AI environment scan now returns a read-only `gate` summary for each Codex skill provider: ready core skills, approval-required high-risk/external skills, and unavailable not-installed skills.
+  - Gate summaries expose deterministic scene hint ids without claiming scene registration or execution readiness, keeping execution policy out of this slice.
+  - Intelligence settings now shows permission gate counts and per-skill gate labels using localized copy.
+
 ### fix(nexus): reactivate CLI devices during browser auth
 
 - `.github/workflows/package-tuff-cli-publish.yml`
