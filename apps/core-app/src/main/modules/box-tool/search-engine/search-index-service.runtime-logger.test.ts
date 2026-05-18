@@ -6,7 +6,7 @@ vi.mock('./search-logger', () => {
 
 import { SearchIndexService } from './search-index-service'
 
-type SearchIndexHarness = SearchIndexService & { initialized: boolean }
+type SearchIndexHarness = Omit<SearchIndexService, 'initialized'> & { initialized: boolean }
 
 describe('SearchIndexService runtime logger', () => {
   it('uses noop logger by default and does not load search-logger implicitly', async () => {
@@ -14,7 +14,7 @@ describe('SearchIndexService runtime logger', () => {
       all: vi.fn(async () => [])
     }
     const service = new SearchIndexService(
-      db as ConstructorParameters<typeof SearchIndexService>[0]
+      db as unknown as ConstructorParameters<typeof SearchIndexService>[0]
     ) as unknown as SearchIndexHarness
     service.initialized = true
 
@@ -35,7 +35,7 @@ describe('SearchIndexService runtime logger', () => {
       indexSearchComplete: vi.fn()
     }
     const service = new SearchIndexService(
-      db as ConstructorParameters<typeof SearchIndexService>[0],
+      db as unknown as ConstructorParameters<typeof SearchIndexService>[0],
       { logger }
     ) as unknown as SearchIndexHarness
     service.initialized = true

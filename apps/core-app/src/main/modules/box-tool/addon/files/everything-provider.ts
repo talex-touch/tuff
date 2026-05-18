@@ -379,6 +379,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       .setSubtitle('Everything dependency missing or disabled')
       .setDescription(reason)
       .setAccessory('Everything')
+      .setActions([
+        {
+          id: 'open-everything-settings',
+          type: 'navigate',
+          label: 'Open Everything settings',
+          description: 'Check Everything backend, diagnostics, and install guidance.',
+          icon: { type: 'class', value: 'i-ri-settings-3-line' },
+          payload: {
+            path: '/setting?section=everything',
+            section: 'everything'
+          }
+        }
+      ])
       .setFinalScore(1)
       .build()
   }

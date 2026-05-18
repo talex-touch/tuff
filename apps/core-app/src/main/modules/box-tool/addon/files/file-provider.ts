@@ -800,6 +800,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .setSubtitle('Partial file results')
       .setDescription(detail)
       .setAccessory('File Index')
+      .setActions([
+        {
+          id: 'open-file-index-settings',
+          type: 'navigate',
+          label: 'Open File Index settings',
+          description: 'Review file index status, failed files, and rebuild controls.',
+          icon: { type: 'class', value: 'i-ri-settings-3-line' },
+          payload: {
+            path: '/setting?section=file-index',
+            section: 'file-index'
+          }
+        }
+      ])
       .setFinalScore(0.05)
       .build()
   }

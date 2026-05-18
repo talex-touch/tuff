@@ -19,10 +19,11 @@ import { devLog } from '~/utils/dev-log'
 interface UseActionPanelOptions {
   openFlowSelector?: (item: TuffItem) => void
   refreshSearch?: () => void
+  navigate?: (path: string) => void
 }
 
 export function useActionPanel(options: UseActionPanelOptions = {}) {
-  const { openFlowSelector, refreshSearch } = options
+  const { openFlowSelector, refreshSearch, navigate } = options
   const { t } = useI18n()
   const transport = useTuffTransport()
   const appSdk = useAppSdk()
@@ -67,6 +68,8 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   }
 
   async function executeAction(actionId: string, targetItem: TuffItem): Promise<void> {
+    const itemAction = targetItem.actions?.find((action) => action.id === actionId)
+
     switch (actionId) {
       case 'toggle-pin':
         await togglePin(targetItem)
@@ -114,6 +117,13 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         break
       }
       default:
+        if (itemAction?.type === 'navigate') {
+          const path = typeof itemAction.payload?.path === 'string' ? itemAction.payload.path : ''
+          if (path) {
+            navigate?.(path)
+            return
+          }
+        }
         devLog('[useActionPanel] Fallback execute for MetaOverlay action:', actionId, targetItem.id)
         try {
           await transport.send(CoreBoxEvents.item.execute, {

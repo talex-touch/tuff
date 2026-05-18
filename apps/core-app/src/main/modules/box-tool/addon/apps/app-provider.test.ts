@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { IExecuteArgs } from '@talex-touch/utils'
+import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addWatchPathMock,
@@ -40,6 +40,25 @@ type TestFilePayload = Record<string, unknown> & {
   displayName?: string | null
 }
 
+function executeItem(overrides: Partial<TuffItem>): TuffItem {
+  return {
+    id: 'test-app',
+    source: {
+      type: 'application',
+      id: 'app-provider',
+      name: 'Applications',
+      permission: 'safe'
+    },
+    render: {
+      mode: 'default',
+      basic: {
+        title: 'Test App'
+      }
+    },
+    ...overrides
+  } as TuffItem
+}
+
 describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -75,7 +94,7 @@ describe('appProvider rebuild maintenance', () => {
       await appProvider.onLoad({
         databaseManager: { getDb: vi.fn() },
         searchIndex: { indexItems: vi.fn() }
-      } as Parameters<typeof appProvider.onLoad>[0])
+      } as unknown as Parameters<typeof appProvider.onLoad>[0])
 
       expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
       expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
@@ -417,7 +436,7 @@ describe('appProvider rebuild maintenance', () => {
     shellOpenPathMock.mockReturnValueOnce(launchDeferred.promise)
 
     await appProvider.onExecute({
-      item: {
+      item: executeItem({
         id: 'path-app',
         render: { mode: 'default', basic: { title: 'Slow App' } },
         meta: {
@@ -427,7 +446,7 @@ describe('appProvider rebuild maintenance', () => {
             launchTarget: '/Applications/Slow.app'
           }
         }
-      }
+      })
     } satisfies IExecuteArgs)
 
     expect(shellOpenPathMock).not.toHaveBeenCalled()
@@ -448,7 +467,7 @@ describe('appProvider rebuild maintenance', () => {
     shellOpenPathMock.mockResolvedValueOnce('access denied')
 
     await appProvider.onExecute({
-      item: {
+      item: executeItem({
         id: 'path-app-failed',
         render: { mode: 'default', basic: { title: 'Blocked App' } },
         meta: {
@@ -458,7 +477,7 @@ describe('appProvider rebuild maintenance', () => {
             launchTarget: '/Applications/Blocked.app'
           }
         }
-      }
+      })
     } satisfies IExecuteArgs)
 
     await flushPromises()
@@ -479,7 +498,7 @@ describe('appProvider rebuild maintenance', () => {
     })
 
     await appProvider.onExecute({
-      item: {
+      item: executeItem({
         id: 'shortcut-app-failed',
         render: { mode: 'default', basic: { title: 'Shortcut App' } },
         meta: {
@@ -489,7 +508,7 @@ describe('appProvider rebuild maintenance', () => {
             launchTarget: 'C:\\Program Files\\Foo\\Foo.exe'
           }
         }
-      }
+      })
     } satisfies IExecuteArgs)
 
     await flushPromises()
@@ -510,7 +529,7 @@ describe('appProvider rebuild maintenance', () => {
     spawnSafeMock.mockReturnValueOnce(child)
 
     await appProvider.onExecute({
-      item: {
+      item: executeItem({
         id: 'shortcut-app-exit',
         render: { mode: 'default', basic: { title: 'Crashing Shortcut' } },
         meta: {
@@ -520,7 +539,7 @@ describe('appProvider rebuild maintenance', () => {
             launchTarget: 'C:\\Program Files\\Crash\\Crash.exe'
           }
         }
-      }
+      })
     } satisfies IExecuteArgs)
 
     await flushPromises()
@@ -757,7 +776,7 @@ describe('appProvider rebuild maintenance', () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
-      item: {
+      item: executeItem({
         id: 'shortcut-app',
         meta: {
           app: {
@@ -768,7 +787,7 @@ describe('appProvider rebuild maintenance', () => {
             workingDirectory: 'C:\\Program Files\\Foo'
           }
         }
-      }
+      })
     } satisfies IExecuteArgs)
 
     await flushPromises()
@@ -790,7 +809,7 @@ describe('appProvider rebuild maintenance', () => {
     const { appProvider } = await loadSubject()
 
     await appProvider.onExecute({
-      item: {
+      item: executeItem({
         id: 'uwp-app',
         meta: {
           app: {
@@ -799,7 +818,7 @@ describe('appProvider rebuild maintenance', () => {
             launchTarget: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'
           }
         }
-      }
+      })
     } satisfies IExecuteArgs)
 
     await flushPromises()

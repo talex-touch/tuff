@@ -1,5 +1,6 @@
 <script lang="ts" name="AppSettings" setup>
-import { computed, defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent, nextTick, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -18,7 +19,27 @@ const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue')
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 
 const { isWindows } = useRendererPlatform()
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const route = useRoute()
+const targetSection = computed(() =>
+  typeof route.query.section === 'string' ? route.query.section : ''
+)
+const showAdvancedSettings = computed(() =>
+  Boolean(appSetting?.dev?.advancedSettings || targetSection.value === 'file-index')
+)
+
+watch(
+  targetSection,
+  async (section) => {
+    if (!section) return
+
+    await nextTick()
+    document.querySelector(`[data-settings-section="${section}"]`)?.scrollIntoView({
+      block: 'start',
+      behavior: 'smooth'
+    })
+  },
+  { immediate: true }
+)
 </script>
 <template>
   <ViewTemplate title="$I18n:router.appSettings">
@@ -33,9 +54,16 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
 
       <SettingTools />
 
-      <SettingFileIndex v-if="showAdvancedSettings" />
+      <div data-settings-section="file-index">
+        <SettingFileIndex
+          v-if="showAdvancedSettings"
+          :force-advanced-settings="targetSection === 'file-index'"
+        />
+      </div>
 
-      <SettingEverything v-if="isWindows" />
+      <div data-settings-section="everything">
+        <SettingEverything v-if="isWindows" />
+      </div>
 
       <SettingDownload v-if="showAdvancedSettings" />
 

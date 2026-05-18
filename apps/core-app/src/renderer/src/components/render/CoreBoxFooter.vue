@@ -7,6 +7,7 @@ import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { resolveCoreBoxFooterTitle } from './coreBoxFooterDisplay'
 import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
@@ -70,7 +71,7 @@ const displayIcon = computed(() => {
   return defaultIcon
 })
 
-const title = computed(() => props.item?.render?.basic?.title || 'CoreBox')
+const title = computed(() => resolveCoreBoxFooterTitle(props.item, t))
 const subtitleMeta = computed(() => resolveSourceMeta(props.item || undefined, t))
 
 /** 获取当前 item 的 footerHints 配置 */

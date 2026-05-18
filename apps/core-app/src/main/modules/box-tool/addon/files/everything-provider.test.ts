@@ -258,10 +258,24 @@ describe('everything-provider fallback chain', () => {
 
       const item = provider.buildUnavailableNotice({ text: 'report', inputs: [] }) as {
         render?: { basic?: { title?: string; description?: string } }
+        actions?: Array<{
+          id?: string
+          type?: string
+          payload?: {
+            path?: string
+          }
+        }>
       } | null
 
       expect(item?.render?.basic?.title).toBe('Windows file search is not ready')
       expect(item?.render?.basic?.description).toContain('Everything')
+      expect(item?.actions).toEqual([
+        expect.objectContaining({
+          id: 'open-everything-settings',
+          type: 'navigate',
+          payload: expect.objectContaining({ path: '/setting?section=everything' })
+        })
+      ])
     })
   })
 

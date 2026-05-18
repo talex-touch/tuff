@@ -5,6 +5,8 @@ import {
   isOmniPanelAiAction,
   looksLikeCode,
   normalizeOmniPanelAiResult,
+  resolveOmniPanelAiPreviewChips,
+  resolveOmniPanelAiPreviewStatus,
   resolveOmniPanelAiInput
 } from './ai-actions'
 
@@ -127,6 +129,54 @@ describe('omni-panel ai actions', () => {
     expect(preview.text).toContain('Review summary')
     expect(preview.text).toContain('Possible issue')
     expect(preview.traceId).toBe('trace-1')
+  })
+
+  it('creates labeled metadata chips without empty provider details', () => {
+    const chips = resolveOmniPanelAiPreviewChips({
+      capabilityId: 'text.rewrite',
+      provider: '  nexus ',
+      model: '',
+      latency: 12.6
+    })
+
+    expect(chips).toEqual([
+      {
+        labelKey: 'corebox.omniPanel.aiMetaCapability',
+        fallback: 'Capability',
+        value: 'text.rewrite'
+      },
+      {
+        labelKey: 'corebox.omniPanel.aiMetaProvider',
+        fallback: 'Provider',
+        value: 'nexus'
+      },
+      {
+        labelKey: 'corebox.omniPanel.aiMetaLatency',
+        fallback: 'Latency',
+        value: '13ms'
+      }
+    ])
+  })
+
+  it('maps preview status to user-readable recovery detail', () => {
+    expect(resolveOmniPanelAiPreviewStatus({ status: 'running', confirming: false })).toMatchObject(
+      {
+        tone: 'working',
+        detailKey: 'corebox.omniPanel.aiStatusRunningDetail'
+      }
+    )
+    expect(resolveOmniPanelAiPreviewStatus({ status: 'done', confirming: false })).toMatchObject({
+      tone: 'success',
+      detailKey: 'corebox.omniPanel.aiStatusReadyDetail'
+    })
+    expect(resolveOmniPanelAiPreviewStatus({ status: 'done', confirming: true })).toMatchObject({
+      tone: 'warning',
+      detailKey: 'corebox.omniPanel.aiStatusConfirmingDetail'
+    })
+    expect(resolveOmniPanelAiPreviewStatus({ status: 'error', confirming: true })).toMatchObject({
+      tone: 'danger',
+      detailKey: 'corebox.omniPanel.aiStatusFailedDetail'
+    })
   })
 
   it('identifies only built-in AI action ids', () => {
