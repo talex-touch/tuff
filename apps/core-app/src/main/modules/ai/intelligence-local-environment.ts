@@ -1,6 +1,7 @@
 import type {
   IntelligenceLocalConfigFileSummary,
   IntelligenceLocalEnvironmentSummary,
+  IntelligenceLocalSkillGateSummary,
   IntelligenceLocalSkillProviderSummary
 } from '@talex-touch/tuff-intelligence'
 import { access, readdir, readFile, stat } from 'node:fs/promises'
@@ -55,6 +56,21 @@ const CAPABILITY_BY_SKILL: Record<string, string[]> = {
   linear: ['project.linear.manage'],
   'cloudflare-deploy': ['deploy.cloudflare.plan'],
   'netlify-deploy': ['deploy.netlify.plan']
+}
+
+const SCENE_BY_SKILL: Record<string, string[]> = {
+  'openai-docs': ['docs.openai.answer'],
+  playwright: ['browser.qa.run'],
+  screenshot: ['desktop.screenshot.capture'],
+  pdf: ['document.pdf.review'],
+  doc: ['document.docx.review'],
+  'frontend-skill': ['frontend.prototype.review'],
+  'gh-fix-ci': ['github.ci.review'],
+  'gh-address-comments': ['github.pr.review'],
+  sentry: ['observability.sentry.review'],
+  linear: ['project.linear.review'],
+  'cloudflare-deploy': ['deploy.cloudflare.review'],
+  'netlify-deploy': ['deploy.netlify.review']
 }
 
 interface RuntimePaths {
@@ -206,17 +222,19 @@ async function readSkillManifest(
     : GATED_SKILL_IDS.has(skillId)
       ? 'gated'
       : 'external'
+  const installed = true
 
   return {
     id: skillId,
     name: frontmatter.name || skillId,
     description: frontmatter.description || '',
     source: 'codex-local' as const,
-    installed: true,
+    installed,
     enabled: mode === 'core',
     mode,
     riskLevel: mode === 'gated' ? ('high' as const) : ('low' as const),
     capabilities: CAPABILITY_BY_SKILL[skillId] ?? [],
+    gate: buildSkillGate(skillId, mode, installed),
     path: skillPath,
     manifestPath,
     updatedAt: await getMtime(manifestPath)
@@ -256,16 +274,18 @@ async function resolveSkillProviders(
       const mode: IntelligenceLocalSkillProviderSummary['mode'] = CORE_SKILL_IDS.has(skillId)
         ? 'core'
         : 'gated'
+      const installed = false
       providers.push({
         id: skillId,
         name: skillId,
         description: '',
         source: 'codex-local' as const,
-        installed: false,
+        installed,
         enabled: false,
         mode,
         riskLevel: mode === 'gated' ? ('high' as const) : ('low' as const),
         capabilities: CAPABILITY_BY_SKILL[skillId] ?? [],
+        gate: buildSkillGate(skillId, mode, installed),
         path: skillPath,
         manifestPath: join(skillPath, 'SKILL.md')
       })
@@ -273,6 +293,37 @@ async function resolveSkillProviders(
   }
 
   return providers
+}
+
+function buildSkillGate(
+  skillId: string,
+  mode: IntelligenceLocalSkillProviderSummary['mode'],
+  installed: boolean
+): IntelligenceLocalSkillGateSummary {
+  if (!installed) {
+    return {
+      status: 'unavailable',
+      reason: 'not_installed',
+      approvalRequired: false,
+      sceneIds: []
+    }
+  }
+
+  if (mode === 'core') {
+    return {
+      status: 'ready',
+      reason: 'trusted_core',
+      approvalRequired: false,
+      sceneIds: SCENE_BY_SKILL[skillId] ?? []
+    }
+  }
+
+  return {
+    status: 'approval_required',
+    reason: mode === 'gated' ? 'high_risk' : 'external_unreviewed',
+    approvalRequired: true,
+    sceneIds: SCENE_BY_SKILL[skillId] ?? []
+  }
 }
 
 function buildDocCandidatePaths(paths: RuntimePaths) {

@@ -2607,7 +2607,15 @@
         "loading": "正在扫描本地环境...",
         "noTools": "未发现 Codex 或 Claude CLI",
         "noSkills": "未发现可用 skills",
+        "noReadySkills": "已安装 skills 均需审批后使用",
         "configSummary": "已识别 {count} 个配置或说明入口，敏感字段仅记录键名。",
+        "gateTitle": "权限门控",
+        "gateSummary": "可直接使用 {ready} 个，需审批 {approval} 个，未安装 {unavailable} 个，已关联 {scenes} 个场景提示。",
+        "gateStatus": {
+          "ready": "可用",
+          "approval_required": "需审批",
+          "unavailable": "未安装"
+        },
         "gatedHint": "{count} 个高风险 provider 默认仅展示，执行需审批。",
         "refreshFailed": "刷新本地 AI 环境失败"
       },
