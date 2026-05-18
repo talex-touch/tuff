@@ -22,7 +22,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
 | 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-16 live-tree 审计未发现新的 P0 fixed fake-success；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
-| 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`2.4.10` 作为当前稳定基线 |
+| 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`v2.4.10` GitHub Release 与 Nexus release metadata sync 已成功，公共 npm 子包补发仍受 `NPM_TOKEN` scope publish 权限阻塞 |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
 | AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR；2.5.3 / 2.5.5 / 2.5.8 拆分本地知识检索、本地模型运行时与 ASR |
 | Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场与高级策略 |
@@ -38,10 +38,11 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Windows App 索引与启动体验。
 - FileProvider 编译边界恢复：`file-provider.ts` 已恢复等价导出，`typecheck:node` 已通过。
 - 基础 legacy/compat 收口与 release 准备口径。
+- `v2.4.10` GitHub Release 已发布，Windows setup、macOS app zip、Linux AppImage/deb、更新 YAML、builder debug 与 manifest 资产已上传；Nexus release metadata sync 已成功。
 
 **非目标**：
 
-- 不继续把 `2.4.10` 项目保留在当前执行清单。
+- 不把 `v2.4.10` release workflow 成功等同于全量 release gate 全绿；Windows acceptance evidence、release evidence 内容与公共 npm 子包补发仍按 TODO 跟踪。
 - 不把 `2.5.0` AI、Provider 高级策略、SRP 大拆分回填为 `2.4.10` 工作。
 
 ### 2.4.11 - 债务退场与跨平台阻塞回归
@@ -139,7 +140,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ## 5. 当前状态快照
 
 - 当前基线：`2.4.10`。
-- `2.4.10` 已作为当前稳定基线；`2.4.11-beta.1` 保留为已验证 beta pre-release 记录，后续 `2.4.11` 继续收口 legacy/compat/size 债务。
+- `2.4.10` 已作为当前稳定基线；GitHub Release 与 Nexus release metadata sync 已成功；公共 npm 子包缺失版本仍需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发；`2.4.11-beta.1` 保留为已验证 beta pre-release 记录，后续 `2.4.11` 继续收口 legacy/compat/size 债务。
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - 2026-05-16 兼容性/占位实现 live-tree 审计未发现新的 P0 假成功；`2.4.11` 首切建议聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。

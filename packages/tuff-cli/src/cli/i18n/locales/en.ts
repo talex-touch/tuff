@@ -93,11 +93,11 @@ export default {
   },
   remoteFailure: {
     'missing-token': 'Login token not found',
-    unauthorized: 'Authentication expired or rejected',
-    forbidden: 'Insufficient permission',
-    network: 'Network request failed',
-    server: 'Nexus service error',
-    unknown: 'Unknown error',
+    'unauthorized': 'Authentication expired or rejected',
+    'forbidden': 'Insufficient permission',
+    'network': 'Network request failed',
+    'server': 'Nexus service error',
+    'unknown': 'Unknown error',
   },
   plugins: {
     title: '🧩 Plugins',
