@@ -125,9 +125,9 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     expect(events).toHaveLength(6)
     expect(events[0]?.seq).toBe(1000)
     expect(events[events.length - 1]?.seq).toBe(1005)
-    expect(events.every((event: { contractVersion?: number }) => event.contractVersion === 3)).toBe(
-      true
-    )
+    expect(
+      events.every((event) => (event as { contractVersion?: number }).contractVersion === 3)
+    ).toBe(true)
   })
 
   it('excludes pre-v3 trace events without seq from replay', async () => {

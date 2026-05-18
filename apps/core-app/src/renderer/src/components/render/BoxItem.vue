@@ -7,7 +7,7 @@ import TuffIcon from '~/components/base/TuffIcon.vue'
 import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import ItemSubtitle from './ItemSubtitle.vue'
-import { resolveSourceMeta } from './sourceMeta'
+import { formatResultSignalReason, resolveResultSignal, resolveSourceMeta } from './sourceMeta'
 
 interface Props {
   item: TuffItem
@@ -148,6 +148,14 @@ function escapeHtml(str: string): string {
 }
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
+const resultSignal = computed(() => resolveResultSignal(props.item, t))
+const resultSignalReason = computed(() => formatResultSignalReason(resultSignal.value?.reason))
+const resultSignalTitle = computed(() => {
+  const signal = resultSignal.value
+  if (!signal) return ''
+
+  return [signal.reason || signal.label, signal.actionHint].filter(Boolean).join(' · ')
+})
 const recommendation = computed(() => props.item.meta?.recommendation)
 const isNoticeItem = computed(() => props.item.kind === 'notification')
 const noticeDescription = computed(() => resolveI18nText(props.render.basic?.description || '', t))
@@ -208,7 +216,7 @@ const shouldShowNoticeReason = computed(
       </div>
     </div>
 
-    <div class="flex-1 overflow-hidden">
+    <div class="BoxItem__content flex-1 overflow-hidden">
       <!-- eslint-disable vue/no-v-html -->
       <h5
         class="text-sm font-semibold truncate"
@@ -225,13 +233,25 @@ const shouldShowNoticeReason = computed(
       <ItemSubtitle v-else :item="item" :render="render" />
     </div>
 
-    <div class="ml-auto flex items-center gap-2">
+    <div class="BoxItemSignals ml-auto flex items-center gap-2">
+      <span
+        v-if="resultSignal && !isNoticeItem"
+        class="ResultSignal"
+        :class="`ResultSignal--${resultSignal.tone}`"
+        :title="resultSignalTitle"
+      >
+        <span class="ResultSignal__label">{{ resultSignal.label }}</span>
+        <span v-if="resultSignalReason" class="ResultSignal__reason">
+          · {{ resultSignalReason }}
+        </span>
+      </span>
       <span
         v-if="sourceMeta && !isNoticeItem"
         class="SourceBadge text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold"
+        :title="sourceMeta.label"
       >
         <i :class="sourceMeta.icon" class="text-[var(--tx-text-color-secondary)]" />
-        <span>{{ sourceMeta.label }}</span>
+        <span class="SourceBadge__label">{{ sourceMeta.label }}</span>
       </span>
       <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
     </div>
@@ -249,10 +269,22 @@ const shouldShowNoticeReason = computed(
   border-bottom: var(--corebox-result-divider, none);
 }
 
+.BoxItem__content {
+  min-width: 0;
+}
+
+.BoxItemSignals {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 48%;
+  overflow: hidden;
+}
+
 .QuickKeyPill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   padding: 0 6px;
   min-width: 22px;
   height: 16px;
@@ -266,8 +298,63 @@ const shouldShowNoticeReason = computed(
 .SourceBadge {
   display: inline-flex;
   align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 96px;
   gap: 4px;
   letter-spacing: 0.4px;
+  overflow: hidden;
+}
+
+.SourceBadge__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ResultSignal {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 148px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ResultSignal__label {
+  flex: 0 0 auto;
+}
+
+.ResultSignal__reason {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  opacity: 0.78;
+}
+
+.ResultSignal--info {
+  color: var(--tx-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 12%, transparent);
+}
+
+.ResultSignal--warning {
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+}
+
+.ResultSignal--danger {
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
 }
 
 .BoxItem--notice {

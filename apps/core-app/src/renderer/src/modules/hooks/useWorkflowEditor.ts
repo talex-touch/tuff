@@ -31,6 +31,15 @@ export type WorkflowValidationErrorCode =
   | 'context_config_json'
 
 export type WorkflowReviewQueueItemStatus = SharedWorkflowReviewQueueItemStatus
+export type WorkflowReviewQueueFilter = 'all' | Exclude<WorkflowReviewQueueItemStatus, 'dismissed'>
+
+export interface WorkflowReviewQueueSummary {
+  total: number
+  pending: number
+  copied: number
+  clipboardReplaced: number
+  failed: number
+}
 
 export class WorkflowValidationError extends Error {
   constructor(
@@ -113,12 +122,31 @@ export interface WorkflowReviewQueueItem {
   traceId?: string
   provider?: string
   model?: string
+  latency?: number
+  totalTokens?: number
   riskLevel: 'low' | 'medium'
   text: string
   preview: string
   status: WorkflowReviewQueueItemStatus
   error?: string
   createdAt: number
+}
+
+export interface WorkflowReviewQueueFilterOption {
+  value: WorkflowReviewQueueFilter
+  count: number
+}
+
+export interface WorkflowReviewQueueActionHint {
+  tone: 'default' | 'success' | 'warning'
+  labelKey: string
+}
+
+export interface WorkflowReviewQueueMetaChip {
+  labelKey: string
+  fallback: string
+  value: string
+  tone?: 'default' | 'warning'
 }
 
 export interface WorkflowRunStepSummary {
@@ -512,6 +540,11 @@ function buildReviewQueueItems(
         traceId: firstString(output.traceId, metadata.traceId),
         provider: firstString(output.provider, metadata.provider),
         model: firstString(output.model, metadata.model),
+        latency: firstFiniteNumber(output.latency, metadata.latency),
+        totalTokens: firstFiniteNumber(
+          toRecord(output.usage).totalTokens,
+          toRecord(metadata.usage).totalTokens
+        ),
         riskLevel: outputContract.riskLevel === 'medium' ? 'medium' : 'low',
         text,
         preview: text.length > 500 ? `${text.slice(0, 500)}...` : text,
@@ -521,6 +554,148 @@ function buildReviewQueueItems(
       }
     })
     .filter((item): item is WorkflowReviewQueueItem => Boolean(item))
+}
+
+export function summarizeReviewQueueItems(
+  items: WorkflowReviewQueueItem[]
+): WorkflowReviewQueueSummary {
+  const summary: WorkflowReviewQueueSummary = {
+    total: items.length,
+    pending: 0,
+    copied: 0,
+    clipboardReplaced: 0,
+    failed: 0
+  }
+
+  for (const item of items) {
+    if (item.status === 'copied') {
+      summary.copied += 1
+    } else if (item.status === 'clipboard_replaced') {
+      summary.clipboardReplaced += 1
+    } else if (item.status === 'failed') {
+      summary.failed += 1
+    } else {
+      summary.pending += 1
+    }
+  }
+
+  return summary
+}
+
+export function filterReviewQueueItems(
+  items: WorkflowReviewQueueItem[],
+  filter: WorkflowReviewQueueFilter
+): WorkflowReviewQueueItem[] {
+  if (filter === 'all') {
+    return items
+  }
+  return items.filter((item) => item.status === filter)
+}
+
+export function resolveReviewQueueActionHint(
+  item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>
+): WorkflowReviewQueueActionHint {
+  if (item.status === 'failed') {
+    return {
+      tone: 'warning',
+      labelKey: item.error ? 'reviewHintFailedWithError' : 'reviewHintFailed'
+    }
+  }
+
+  if (item.status === 'copied') {
+    return {
+      tone: 'success',
+      labelKey: 'reviewHintCopied'
+    }
+  }
+
+  if (item.status === 'clipboard_replaced') {
+    return {
+      tone: 'success',
+      labelKey: 'reviewHintClipboardReplaced'
+    }
+  }
+
+  return {
+    tone: 'default',
+    labelKey: 'reviewHintPending'
+  }
+}
+
+export function resolveReviewQueueMetaChips(
+  item: Pick<
+    WorkflowReviewQueueItem,
+    | 'capabilityId'
+    | 'provider'
+    | 'model'
+    | 'traceId'
+    | 'latency'
+    | 'totalTokens'
+    | 'riskLevel'
+    | 'status'
+    | 'error'
+  >
+): WorkflowReviewQueueMetaChip[] {
+  const chips: WorkflowReviewQueueMetaChip[] = [
+    {
+      labelKey: 'reviewMetaCapability',
+      fallback: 'Capability',
+      value: item.capabilityId || 'workflow.output'
+    }
+  ]
+
+  const providerModel = [item.provider, item.model]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' / ')
+  if (providerModel) {
+    chips.push({
+      labelKey: 'reviewMetaProvider',
+      fallback: 'Provider',
+      value: providerModel
+    })
+  }
+
+  if (item.traceId) {
+    chips.push({
+      labelKey: 'reviewMetaTrace',
+      fallback: 'Trace',
+      value: item.traceId
+    })
+  }
+
+  if (item.latency !== undefined) {
+    chips.push({
+      labelKey: 'reviewMetaLatency',
+      fallback: 'Latency',
+      value: `${Math.max(0, Math.round(item.latency))}ms`
+    })
+  }
+
+  if (item.totalTokens !== undefined) {
+    chips.push({
+      labelKey: 'reviewMetaTokens',
+      fallback: 'Tokens',
+      value: String(Math.max(0, Math.round(item.totalTokens)))
+    })
+  }
+
+  chips.push({
+    labelKey: 'reviewMetaRisk',
+    fallback: 'Risk',
+    value: item.riskLevel,
+    tone: item.riskLevel === 'medium' ? 'warning' : 'default'
+  })
+
+  if (item.status === 'failed' && item.error) {
+    chips.push({
+      labelKey: 'reviewMetaFailure',
+      fallback: 'Failure',
+      value: item.error,
+      tone: 'warning'
+    })
+  }
+
+  return chips
 }
 
 async function writeClipboardText(text: string): Promise<void> {
@@ -724,6 +899,15 @@ export function useWorkflowEditor() {
     if (reviewQueueReplaceConfirmId.value === itemId) {
       reviewQueueReplaceConfirmId.value = null
     }
+  }
+
+  async function resetReviewItemStatus(itemId: string): Promise<WorkflowReviewQueueItem> {
+    const item = getReviewQueueItem(itemId)
+    await setReviewQueueItemStatus(itemId, 'pending')
+    if (reviewQueueReplaceConfirmId.value === itemId) {
+      reviewQueueReplaceConfirmId.value = null
+    }
+    return { ...item, status: 'pending', error: undefined }
   }
 
   function buildWorkflowDefinition(): WorkflowDefinition {
@@ -999,6 +1183,7 @@ export function useWorkflowEditor() {
     copyReviewItemToClipboard,
     replaceClipboardWithReviewItem,
     dismissReviewItem,
+    resetReviewItemStatus,
     saveWorkflow,
     deleteWorkflow,
     runWorkflow,

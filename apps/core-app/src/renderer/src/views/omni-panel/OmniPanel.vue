@@ -27,11 +27,15 @@ import {
   createOmniPanelAiInputPreview,
   isOmniPanelAiAction,
   normalizeOmniPanelAiResult,
+  resolveOmniPanelAiPreviewChips,
+  resolveOmniPanelAiPreviewStatus,
   resolveOmniPanelAiInput,
   type OmniPanelAiActionId
 } from './ai-actions'
 import { filterOmniPanelFeatures } from './filter-features'
 import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
+import { resolveOmniPanelSelectionRecovery } from './selection-recovery'
+import { resolveIntelligenceErrorRecovery } from '../../modules/intelligence/ai-error-recovery'
 import { createRendererLogger } from '../../utils/renderer-log'
 
 const { t } = useI18n()
@@ -58,6 +62,7 @@ const features = ref<OmniPanelFeatureItemPayload[]>([])
 const focusedIndex = ref(-1)
 const searchBarRef = ref<InstanceType<typeof OmniPanelSearchBar> | null>(null)
 const replaceClipboardConfirming = ref(false)
+const aiClipboardError = ref('')
 let previousFocusedElement: HTMLElement | null = null
 
 interface AiPreviewState {
@@ -85,26 +90,26 @@ const executeCodeMessageMap: Record<string, string> = {
 }
 
 const footerHint = computed(() => {
-  if (!hasSelection.value) {
-    if (selectionIssueCode.value === 'unsupported') {
-      const base = t('corebox.omniPanel.selectionUnavailable')
-      return selectionIssueMessage.value ? `${base} · ${selectionIssueMessage.value}` : base
-    }
-    if (selectionIssueCode.value === 'failed' || selectionIssueCode.value === 'disabled') {
-      const base = t('corebox.omniPanel.selectionCaptureFailed')
-      return selectionIssueMessage.value ? `${base} · ${selectionIssueMessage.value}` : base
-    }
-    return t('corebox.omniPanel.selectionCount', { count: 0 })
-  }
-
-  const trimmed = selectedText.value.replace(/\s+/g, ' ').trim()
-  if (!trimmed) {
-    return t('corebox.omniPanel.selectionCount', { count: 0 })
-  }
-
-  const preview = trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed
-  return t('corebox.omniPanel.selectionPreview', { preview })
+  const recovery = resolveOmniPanelSelectionRecovery({
+    hasSelection: hasSelection.value,
+    selectedText: selectedText.value,
+    issueCode: selectionIssueCode.value,
+    issueMessage: selectionIssueMessage.value,
+    supportLevel: selectionSupportLevel.value
+  })
+  const base = t(recovery.labelKey, recovery.fallback)
+  return recovery.detail ? `${base} · ${recovery.detail}` : base
 })
+const footerHintTone = computed(
+  () =>
+    resolveOmniPanelSelectionRecovery({
+      hasSelection: hasSelection.value,
+      selectedText: selectedText.value,
+      issueCode: selectionIssueCode.value,
+      issueMessage: selectionIssueMessage.value,
+      supportLevel: selectionSupportLevel.value
+    }).tone
+)
 
 const filteredFeatures = computed(() => {
   return filterOmniPanelFeatures(features.value, searchKeyword.value)
@@ -116,12 +121,38 @@ const aiPreviewInputPreview = computed(() => {
 })
 
 const aiPreviewStatusLabel = computed(() => {
-  const status = aiPreview.value?.status
-  if (status === 'running') return t('corebox.omniPanel.aiStatusRunning')
-  if (status === 'error') return t('corebox.omniPanel.aiStatusFailed')
-  if (replaceClipboardConfirming.value) return t('corebox.omniPanel.aiStatusConfirming')
-  return t('corebox.omniPanel.aiStatusReady')
+  const status = aiPreview.value?.status || 'done'
+  const resolved = resolveOmniPanelAiPreviewStatus({
+    status,
+    confirming: replaceClipboardConfirming.value
+  })
+  return t(resolved.labelKey, resolved.labelFallback)
 })
+const aiPreviewStatusDetail = computed(() => {
+  const status = aiPreview.value?.status || 'done'
+  const resolved = resolveOmniPanelAiPreviewStatus({
+    status,
+    confirming: replaceClipboardConfirming.value
+  })
+  return t(resolved.detailKey, resolved.detailFallback)
+})
+const aiPreviewStatusTone = computed(() => {
+  const status = aiPreview.value?.status || 'done'
+  return resolveOmniPanelAiPreviewStatus({
+    status,
+    confirming: replaceClipboardConfirming.value
+  }).tone
+})
+const aiPreviewMetaChips = computed(() => {
+  const preview = aiPreview.value
+  if (!preview) return []
+  return resolveOmniPanelAiPreviewChips(preview)
+})
+const aiPreviewErrorRecovery = computed(() =>
+  aiPreview.value?.status === 'error'
+    ? resolveIntelligenceErrorRecovery({ error: aiPreview.value.error }, t)
+    : null
+)
 
 watch(
   () => filteredFeatures.value.length,
@@ -208,6 +239,7 @@ async function executeAiFeature(
 
   executingId.value = item.id
   replaceClipboardConfirming.value = false
+  aiClipboardError.value = ''
 
   const request = buildOmniPanelAiInvokeRequest({
     actionId,
@@ -235,6 +267,7 @@ async function executeAiFeature(
       request.options
     )) as IntelligenceInvokeResult<unknown>
     const preview = normalizeOmniPanelAiResult(result)
+    aiClipboardError.value = ''
     aiPreview.value = {
       featureId: actionId,
       title: item.title,
@@ -263,6 +296,7 @@ async function executeAiFeature(
       status: 'error',
       error: message
     }
+    aiClipboardError.value = ''
     toast.error(message)
   } finally {
     executingId.value = null
@@ -272,6 +306,7 @@ async function executeAiFeature(
 async function retryAiPreview(): Promise<void> {
   const current = aiPreview.value
   if (!current) return
+  aiClipboardError.value = ''
   const item = features.value.find((feature) => feature.id === current.featureId)
   if (!item) return
   await executeAiFeature(item, current.featureId)
@@ -283,9 +318,12 @@ async function copyAiResult(): Promise<void> {
   try {
     await navigator.clipboard.writeText(text)
     replaceClipboardConfirming.value = false
+    aiClipboardError.value = ''
     toast.success(t('corebox.omniPanel.aiCopied'))
   } catch (error) {
     omniPanelLog.error('Failed to copy OmniPanel AI result', error)
+    aiClipboardError.value =
+      error instanceof Error ? error.message : t('corebox.omniPanel.aiCopyFailed')
     toast.error(t('corebox.omniPanel.aiCopyFailed'))
   }
 }
@@ -302,9 +340,12 @@ async function replaceClipboardWithAiResult(): Promise<void> {
   try {
     await navigator.clipboard.writeText(text)
     replaceClipboardConfirming.value = false
+    aiClipboardError.value = ''
     toast.success(t('corebox.omniPanel.aiClipboardReplaced'))
   } catch (error) {
     omniPanelLog.error('Failed to replace clipboard with OmniPanel AI result', error)
+    aiClipboardError.value =
+      error instanceof Error ? error.message : t('corebox.omniPanel.aiCopyFailed')
     toast.error(t('corebox.omniPanel.aiCopyFailed'))
   }
 }
@@ -312,6 +353,7 @@ async function replaceClipboardWithAiResult(): Promise<void> {
 function clearAiPreview(): void {
   aiPreview.value = null
   replaceClipboardConfirming.value = false
+  aiClipboardError.value = ''
 }
 
 function handleContext(payload: OmniPanelContextPayload): void {
@@ -439,7 +481,7 @@ onBeforeUnmount(() => {
       @execute="executeFeature"
     />
 
-    <section v-if="aiPreview" class="OmniPanelAiPreview" :class="`is-${aiPreview.status}`">
+    <section v-if="aiPreview" class="OmniPanelAiPreview" :class="`is-${aiPreviewStatusTone}`">
       <header class="OmniPanelAiPreview__header">
         <div class="OmniPanelAiPreview__heading">
           <h2 class="OmniPanelAiPreview__title">{{ aiPreview.title }}</h2>
@@ -459,18 +501,31 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </header>
+      <p class="OmniPanelAiPreview__statusDetail">{{ aiPreviewStatusDetail }}</p>
       <div v-if="aiPreview.status === 'running'" class="OmniPanelAiPreview__state">
         {{ t('corebox.omniPanel.aiRunning') }}
       </div>
       <div v-else-if="aiPreview.status === 'error'" class="OmniPanelAiPreview__error">
-        {{ aiPreview.error || t('corebox.omniPanel.executeFailed') }}
+        <strong>{{ aiPreviewErrorRecovery?.title }}</strong>
+        <span>{{ aiPreviewErrorRecovery?.detail }}</span>
+        <small
+          v-if="
+            aiPreviewErrorRecovery?.code !== 'unknown' &&
+            aiPreview.error &&
+            aiPreview.error !== aiPreviewErrorRecovery?.detail
+          "
+        >
+          {{ aiPreview.error }}
+        </small>
       </div>
       <pre v-else class="OmniPanelAiPreview__result">{{ aiPreview.resultText }}</pre>
+      <div v-if="aiClipboardError" class="OmniPanelAiPreview__actionError">
+        {{ aiClipboardError }}
+      </div>
       <div class="OmniPanelAiPreview__metaGrid">
-        <span>{{ aiPreview.capabilityId }}</span>
-        <span v-if="aiPreview.provider">{{ aiPreview.provider }}</span>
-        <span v-if="aiPreview.model">{{ aiPreview.model }}</span>
-        <span v-if="aiPreview.latency > 0">{{ aiPreview.latency }}ms</span>
+        <span v-for="chip in aiPreviewMetaChips" :key="`${chip.labelKey}:${chip.value}`">
+          {{ t(chip.labelKey, chip.fallback) }}: {{ chip.value }}
+        </span>
       </div>
       <footer class="OmniPanelAiPreview__footer">
         <span class="OmniPanelAiPreview__trace">
@@ -510,7 +565,7 @@ onBeforeUnmount(() => {
     </section>
 
     <div class="OmniPanel__divider" />
-    <p class="OmniPanel__hint">{{ footerHint }}</p>
+    <p class="OmniPanel__hint" :class="`is-${footerHintTone}`">{{ footerHint }}</p>
   </div>
 </template>
 
@@ -551,6 +606,14 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.OmniPanel__hint.is-warning {
+  color: var(--tx-color-warning);
+}
+
+.OmniPanel__hint.is-danger {
+  color: var(--tx-color-danger);
 }
 
 .OmniPanelAiPreview {
@@ -614,14 +677,31 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
 }
 
-.OmniPanelAiPreview.is-running .OmniPanelAiPreview__status {
+.OmniPanelAiPreview.is-working .OmniPanelAiPreview__status {
   color: var(--tx-color-warning);
   background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
 }
 
-.OmniPanelAiPreview.is-error .OmniPanelAiPreview__status {
+.OmniPanelAiPreview.is-danger .OmniPanelAiPreview__status {
   color: var(--tx-color-danger);
   background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
+}
+
+.OmniPanelAiPreview.is-warning .OmniPanelAiPreview__status {
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+}
+
+.OmniPanelAiPreview.is-success .OmniPanelAiPreview__status {
+  color: var(--tx-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 10%, transparent);
+}
+
+.OmniPanelAiPreview__statusDetail {
+  margin: -2px 0 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .OmniPanelAiPreview__close {
@@ -654,7 +734,35 @@ onBeforeUnmount(() => {
 }
 
 .OmniPanelAiPreview__error {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   color: var(--tx-color-danger);
+}
+
+.OmniPanelAiPreview__error strong {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.OmniPanelAiPreview__error span {
+  color: var(--tx-text-color-primary);
+}
+
+.OmniPanelAiPreview__error small {
+  color: var(--tx-text-color-secondary);
+  font-size: 9px;
+  word-break: break-word;
+}
+
+.OmniPanelAiPreview__actionError {
+  border: 1px solid color-mix(in srgb, var(--tx-color-danger) 26%, transparent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 8%, transparent);
+  font-size: 12px;
+  word-break: break-word;
 }
 
 .OmniPanelAiPreview__metaGrid {

@@ -180,6 +180,13 @@ interface MutableFileProvider {
         description?: string
       }
     }
+    actions?: Array<{
+      id?: string
+      type?: string
+      payload?: {
+        path?: string
+      }
+    }>
   } | null
 }
 
@@ -225,7 +232,7 @@ describe('file-provider startup readiness', () => {
 
     await provider.onLoad(createContext())
 
-    expect(transportOn).toHaveBeenCalledTimes(1)
+    expect(transportOn).toHaveBeenCalledTimes(2)
     expect(searchIndexWorkerInit).not.toHaveBeenCalled()
     expect(watchServiceInitialize).not.toHaveBeenCalled()
     expect(watchServiceEnsure).not.toHaveBeenCalled()
@@ -281,5 +288,12 @@ describe('file-provider startup readiness', () => {
 
     expect(notice?.render?.basic?.title).toBe('File search is warming up')
     expect(notice?.render?.basic?.description).toContain('partial')
+    expect(notice?.actions).toEqual([
+      expect.objectContaining({
+        id: 'open-file-index-settings',
+        type: 'navigate',
+        payload: expect.objectContaining({ path: '/setting?section=file-index' })
+      })
+    ])
   })
 })

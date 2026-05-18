@@ -13,6 +13,15 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
+import {
+  type AppIndexEntryDiagnosticFilter,
+  type AppIndexEntrySourceFilter,
+  filterAppIndexManagedEntries,
+  resolveAppIndexManagerSummary,
+  resolveAppIndexManagerEmptyState,
+  resolveAppIndexEntryDiagnosticSummary,
+  resolveAppIndexEntrySource
+} from './app-index-manager-display'
 
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
@@ -35,8 +44,50 @@ const loading = ref(false)
 const adding = ref(false)
 const busyPath = ref<string | null>(null)
 const diagnosticMap = ref<Record<string, AppIndexDiagnoseResult>>({})
+const sourceFilter = ref<AppIndexEntrySourceFilter>('all')
+const diagnosticFilter = ref<AppIndexEntryDiagnosticFilter>('all')
 
 const hasEntries = computed(() => entries.value.length > 0)
+const managerSummary = computed(() =>
+  resolveAppIndexManagerSummary(entries.value, diagnosticMap.value)
+)
+const visibleEntries = computed(() =>
+  filterAppIndexManagedEntries(entries.value, diagnosticMap.value, {
+    source: sourceFilter.value,
+    diagnostic: diagnosticFilter.value
+  })
+)
+const hasVisibleEntries = computed(() => visibleEntries.value.length > 0)
+const emptyState = computed(() =>
+  resolveAppIndexManagerEmptyState(
+    entries.value,
+    diagnosticMap.value,
+    {
+      source: sourceFilter.value,
+      diagnostic: diagnosticFilter.value
+    },
+    t
+  )
+)
+
+const sourceFilterOptions = computed<{ value: AppIndexEntrySourceFilter; label: string }[]>(() => [
+  { value: 'all', label: t('settings.settingFileIndex.appIndexManagerFilterAll') },
+  { value: 'uwp', label: t('settings.settingFileIndex.appIndexManagerSourceUwp') },
+  { value: 'steam', label: t('settings.settingFileIndex.appIndexManagerSourceSteam') },
+  { value: 'shortcut', label: t('settings.settingFileIndex.appIndexManagerSourceShortcut') },
+  { value: 'protocol', label: t('settings.settingFileIndex.appIndexManagerSourceProtocol') },
+  { value: 'appref', label: t('settings.settingFileIndex.appIndexManagerSourceAppRef') },
+  { value: 'path', label: t('settings.settingFileIndex.appIndexManagerSourcePath') }
+])
+const diagnosticFilterOptions = computed<{ value: AppIndexEntryDiagnosticFilter; label: string }[]>(
+  () => [
+    { value: 'all', label: t('settings.settingFileIndex.appIndexManagerFilterAll') },
+    { value: 'attention', label: t('settings.settingFileIndex.appIndexManagerFilterAttention') },
+    { value: 'found', label: t('settings.settingFileIndex.appIndexManagerDiagnosticFound') },
+    { value: 'not-run', label: t('settings.settingFileIndex.appIndexManagerDiagnosticNotRun') },
+    { value: 'disabled', label: t('settings.settingFileIndex.appIndexManagerEntryDisabled') }
+  ]
+)
 
 function normalizeInput(): string {
   return pathInput.value.trim()
@@ -50,11 +101,24 @@ function getEntryTitle(entry: AppIndexManagedEntry): string {
   return entry.displayName || entry.name || entry.path
 }
 
+function getEntrySource(entry: AppIndexManagedEntry) {
+  return resolveAppIndexEntrySource(entry, t)
+}
+
+function getEntryDiagnosticSummary(entry: AppIndexManagedEntry) {
+  return resolveAppIndexEntryDiagnosticSummary(diagnosticMap.value[entry.path], t)
+}
+
 function setEntryDiagnostic(path: string, result: AppIndexDiagnoseResult): void {
   diagnosticMap.value = {
     ...diagnosticMap.value,
     [path]: result
   }
+}
+
+function clearFilters(): void {
+  sourceFilter.value = 'all'
+  diagnosticFilter.value = 'all'
 }
 
 async function loadEntries(): Promise<void> {
@@ -268,12 +332,102 @@ onMounted(() => {
         </TxButton>
       </div>
 
-      <div v-if="!hasEntries" class="app-index-manager-empty">
-        {{ loading ? t('common.loading') : t('settings.settingFileIndex.appIndexManagerEmpty') }}
+      <div class="app-index-manager-summary">
+        <div class="app-index-manager-summary-item">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryTotal') }}</span>
+          <strong>{{ managerSummary.total }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item is-attention">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryAttention') }}</span>
+          <strong>{{ managerSummary.attention }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item is-found">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticFound') }}</span>
+          <strong>{{ managerSummary.found }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticNotRun') }}</span>
+          <strong>{{ managerSummary.notRun }}</strong>
+        </div>
+        <div class="app-index-manager-summary-item">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}</span>
+          <strong>{{ managerSummary.disabled }}</strong>
+        </div>
+      </div>
+
+      <div class="app-index-manager-filters">
+        <div class="app-index-manager-filter-group">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerFilterSource') }}</span>
+          <button
+            v-for="option in sourceFilterOptions"
+            :key="option.value"
+            type="button"
+            :class="[
+              'app-index-manager-filter-chip',
+              { 'is-active': sourceFilter === option.value }
+            ]"
+            @click="sourceFilter = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <div class="app-index-manager-filter-group">
+          <span>{{ t('settings.settingFileIndex.appIndexManagerFilterDiagnostic') }}</span>
+          <button
+            v-for="option in diagnosticFilterOptions"
+            :key="option.value"
+            type="button"
+            :class="[
+              'app-index-manager-filter-chip',
+              { 'is-active': diagnosticFilter === option.value }
+            ]"
+            @click="diagnosticFilter = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-if="!hasEntries"
+        :class="['app-index-manager-empty', `is-${emptyState?.tone || 'neutral'}`]"
+      >
+        <template v-if="loading">
+          {{ t('common.loading') }}
+        </template>
+        <template v-else-if="emptyState">
+          <strong>{{ emptyState.title }}</strong>
+          <span>{{ emptyState.detail }}</span>
+          <TxButton
+            v-if="emptyState.actionKind === 'add-entry'"
+            variant="flat"
+            size="sm"
+            :disabled="adding"
+            @click="selectAppFile"
+          >
+            {{ emptyState.actionLabel }}
+          </TxButton>
+        </template>
+      </div>
+
+      <div
+        v-else-if="!hasVisibleEntries && emptyState"
+        :class="['app-index-manager-empty', `is-${emptyState.tone}`]"
+      >
+        <strong>{{ emptyState.title }}</strong>
+        <span>{{ emptyState.detail }}</span>
+        <TxButton
+          v-if="emptyState.actionKind === 'clear-filters'"
+          variant="flat"
+          size="sm"
+          @click="clearFilters"
+        >
+          {{ emptyState.actionLabel }}
+        </TxButton>
       </div>
 
       <div v-else class="app-index-manager-list">
-        <div v-for="entry in entries" :key="entry.path" class="app-index-entry">
+        <div v-for="entry in visibleEntries" :key="entry.path" class="app-index-entry">
           <div class="app-index-entry-main">
             <div class="app-index-entry-title-row">
               <strong>{{ getEntryTitle(entry) }}</strong>
@@ -286,8 +440,20 @@ onMounted(() => {
                     : t('settings.settingFileIndex.appIndexManagerEntryDisabled')
                 }}
               </span>
+              <span :class="['app-index-entry-source', `is-${getEntrySource(entry).tone}`]">
+                {{ getEntrySource(entry).label }}
+              </span>
             </div>
             <div class="app-index-entry-path">{{ entry.path }}</div>
+            <div
+              :class="[
+                'app-index-entry-diagnostic-summary',
+                `is-${getEntryDiagnosticSummary(entry).tone}`
+              ]"
+            >
+              <strong>{{ getEntryDiagnosticSummary(entry).label }}</strong>
+              <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
+            </div>
             <div class="app-index-entry-grid">
               <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
               <span>launchKind</span><strong>{{ entry.launchKind }}</strong>
@@ -379,9 +545,112 @@ onMounted(() => {
 }
 
 .app-index-manager-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 22%, transparent);
+  border-radius: 8px;
   color: var(--tx-text-color-secondary);
+  background: rgba(127, 127, 127, 0.06);
   font-size: 12px;
   text-align: right;
+}
+
+.app-index-manager-empty strong {
+  color: var(--tx-text-color-primary);
+  font-size: 13px;
+}
+
+.app-index-manager-empty span {
+  max-width: 460px;
+}
+
+.app-index-manager-empty.is-attention {
+  border-color: rgba(52, 199, 89, 0.3);
+  background: rgba(52, 199, 89, 0.08);
+}
+
+.app-index-manager-empty.is-filtered {
+  border-color: rgba(50, 173, 230, 0.28);
+  background: rgba(50, 173, 230, 0.08);
+}
+
+.app-index-manager-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.app-index-manager-summary-item {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 22%, transparent);
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.app-index-manager-summary-item span {
+  display: block;
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+}
+
+.app-index-manager-summary-item strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--tx-text-color-primary);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.app-index-manager-summary-item.is-attention strong {
+  color: #ff9500;
+}
+
+.app-index-manager-summary-item.is-found strong {
+  color: #34c759;
+}
+
+.app-index-manager-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.06);
+}
+
+.app-index-manager-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-index-manager-filter-group > span {
+  color: var(--tx-text-color-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.app-index-manager-filter-chip {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color, #888) 28%, transparent);
+  border-radius: 999px;
+  color: var(--tx-text-color-secondary);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-index-manager-filter-chip.is-active {
+  border-color: rgba(50, 173, 230, 0.46);
+  color: #32ade6;
+  background: rgba(50, 173, 230, 0.12);
 }
 
 .app-index-manager-list {
@@ -430,6 +699,13 @@ onMounted(() => {
   font-weight: 600;
 }
 
+.app-index-entry-source {
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .app-index-entry-status.is-enabled {
   color: #34c759;
   background: rgba(52, 199, 89, 0.12);
@@ -440,9 +716,53 @@ onMounted(() => {
   background: rgba(255, 149, 0, 0.12);
 }
 
+.app-index-entry-source.is-system {
+  color: #32ade6;
+  background: rgba(50, 173, 230, 0.12);
+}
+
+.app-index-entry-source.is-managed {
+  color: #64d2ff;
+  background: rgba(100, 210, 255, 0.12);
+}
+
+.app-index-entry-source.is-warning {
+  color: #ff9500;
+  background: rgba(255, 149, 0, 0.12);
+}
+
 .app-index-entry-path {
   color: var(--tx-text-color-secondary);
   font-size: 12px;
+}
+
+.app-index-entry-diagnostic-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.app-index-entry-diagnostic-summary strong {
+  font-weight: 700;
+}
+
+.app-index-entry-diagnostic-summary.is-success {
+  color: #34c759;
+  background: rgba(52, 199, 89, 0.1);
+}
+
+.app-index-entry-diagnostic-summary.is-warning {
+  color: #ff9500;
+  background: rgba(255, 149, 0, 0.1);
+}
+
+.app-index-entry-diagnostic-summary.is-muted {
+  color: var(--tx-text-color-secondary);
+  background: rgba(127, 127, 127, 0.08);
 }
 
 .app-index-entry-grid {
@@ -479,6 +799,10 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
+  .app-index-manager-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .app-index-entry {
     flex-direction: column;
   }

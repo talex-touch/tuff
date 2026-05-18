@@ -36,10 +36,24 @@ const revealInFolderLabel = computed(() =>
   t('corebox.actions.revealInFinder', isMac.value ? '在 Finder 中显示' : '在文件管理器中显示')
 )
 
+const itemActions = computed<ActionItem[]>(() => {
+  if (props.item?.kind !== 'notification') return []
+
+  return (props.item.actions ?? []).map((action) => ({
+    id: action.id,
+    label: action.label || action.id,
+    icon:
+      typeof action.icon === 'object' && action.icon?.type === 'class'
+        ? action.icon.value
+        : 'i-ri-settings-3-line',
+    shortcut: action.shortcut
+  }))
+})
+
 const actions = computed<ActionItem[]>(() => {
   if (!props.item) return []
 
-  const list: ActionItem[] = []
+  const list: ActionItem[] = [...itemActions.value]
 
   // Pin/Unpin action
   list.push({

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SearchIndexItem, SearchIndexKeyword } from './search-index-service'
 import { SearchIndexService } from './search-index-service'
 
-type SearchIndexHarness = SearchIndexService & {
+type SearchIndexHarness = Omit<SearchIndexService, 'buildKeywordHash' | 'prepareDocument'> & {
   buildKeywordHash: (entries: SearchIndexKeyword[]) => string
   prepareDocument: (item: SearchIndexItem) => Promise<{
     keywordEntries: SearchIndexKeyword[]

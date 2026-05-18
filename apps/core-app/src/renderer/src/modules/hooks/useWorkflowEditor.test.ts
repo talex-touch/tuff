@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { WorkflowDefinition, WorkflowRunRecord } from '@talex-touch/tuff-intelligence'
+import type {
+  WorkflowDefinition,
+  WorkflowReviewQueueItemStatus,
+  WorkflowRunRecord
+} from '@talex-touch/tuff-intelligence'
+import type { WorkflowReviewQueueItem } from './useWorkflowEditor'
 
 async function loadTarget() {
   vi.resetModules()
@@ -48,12 +53,16 @@ async function loadTarget() {
             provider: 'openai',
             model: 'gpt-4.1-mini',
             traceId: 'trace-1',
-            capabilityId: 'text.summarize'
+            capabilityId: 'text.summarize',
+            latency: 980.4,
+            usage: {
+              totalTokens: 42
+            }
           },
           metadata: {
             modelContract: {
               output: {
-                riskLevel: 'low'
+                riskLevel: 'medium'
               }
             }
           },
@@ -267,12 +276,16 @@ describe('useWorkflowEditor', () => {
             provider: 'openai',
             model: 'gpt-4.1-mini',
             traceId: 'trace-1',
-            capabilityId: 'text.summarize'
+            capabilityId: 'text.summarize',
+            latency: 980.4,
+            usage: {
+              totalTokens: 42
+            }
           },
           metadata: {
             modelContract: {
               output: {
-                riskLevel: 'low'
+                riskLevel: 'medium'
               }
             }
           },
@@ -305,6 +318,9 @@ describe('useWorkflowEditor', () => {
       traceId: 'trace-1',
       provider: 'openai',
       model: 'gpt-4.1-mini',
+      latency: 980,
+      totalTokens: 42,
+      riskLevel: 'medium',
       text: 'summary text',
       status: 'pending'
     })
@@ -338,6 +354,94 @@ describe('useWorkflowEditor', () => {
     await editor.dismissReviewItem(item!.id)
 
     expect(editor.reviewQueueItems.value).toHaveLength(0)
+  })
+
+  it('keeps failed review queue items recoverable', async () => {
+    const writeText = vi.fn(async () => {
+      throw new Error('Clipboard permission denied')
+    })
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+
+    const { intelligenceSdk, useWorkflowEditor } = await loadTarget()
+    const run = {
+      id: 'run-1',
+      workflowId: 'workflow-1',
+      workflowName: 'Review Workflow',
+      status: 'completed',
+      triggerType: 'manual',
+      inputs: {},
+      outputs: {},
+      startedAt: 1,
+      completedAt: 2,
+      steps: [
+        {
+          id: 'run-step-1',
+          workflowStepId: 'model-step',
+          kind: 'model',
+          name: 'Summarize',
+          status: 'completed',
+          input: { capabilityId: 'text.summarize' },
+          output: {
+            result: 'summary text',
+            provider: 'openai',
+            model: 'gpt-4.1-mini',
+            traceId: 'trace-1',
+            capabilityId: 'text.summarize'
+          },
+          metadata: {
+            modelContract: {
+              output: {
+                riskLevel: 'low'
+              }
+            }
+          },
+          completedAt: 2
+        }
+      ],
+      metadata: {}
+    } satisfies WorkflowRunRecord
+
+    intelligenceSdk.workflowRun.mockResolvedValueOnce(run)
+
+    const editor = useWorkflowEditor()
+    editor.workflowDraft.value.name = 'Review Workflow'
+    editor.workflowDraft.value.steps[0]!.kind = 'model'
+    editor.workflowDraft.value.steps[0]!.name = 'Summarize'
+    editor.workflowDraft.value.steps[0]!.instruction = 'Summarize the input'
+    editor.workflowDraft.value.steps[0]!.input = '{"capabilityId":"text.summarize"}'
+
+    await editor.runWorkflow()
+
+    const item = editor.reviewQueueItems.value[0]
+    await expect(editor.copyReviewItemToClipboard(item!.id)).rejects.toThrow(
+      'Clipboard permission denied'
+    )
+
+    expect(intelligenceSdk.workflowReviewUpdate).toHaveBeenLastCalledWith({
+      runId: 'run-1',
+      itemId: item!.id,
+      status: 'failed',
+      error: 'Clipboard permission denied'
+    })
+    expect(editor.reviewQueueItems.value[0]).toMatchObject({
+      status: 'failed',
+      error: 'Clipboard permission denied'
+    })
+
+    editor.reviewQueueReplaceConfirmId.value = item!.id
+    await editor.resetReviewItemStatus(item!.id)
+
+    expect(intelligenceSdk.workflowReviewUpdate).toHaveBeenLastCalledWith({
+      runId: 'run-1',
+      itemId: item!.id,
+      status: 'pending',
+      error: undefined
+    })
+    expect(editor.reviewQueueItems.value[0]).toMatchObject({
+      status: 'pending',
+      error: undefined
+    })
+    expect(editor.reviewQueueReplaceConfirmId.value).toBeNull()
   })
 
   it('summarizes Use Model run metadata for runtime display', async () => {
@@ -376,5 +480,122 @@ describe('useWorkflowEditor', () => {
       totalTokens: 15,
       errorCode: 'IGNORED_METADATA_ERROR'
     })
+  })
+
+  it('summarizes and filters review queue items for the workbench view', async () => {
+    const { filterReviewQueueItems, summarizeReviewQueueItems } = await loadTarget()
+    const rawItems: Array<{ id: string; status: WorkflowReviewQueueItemStatus }> = [
+      { id: 'item-pending', status: 'pending' },
+      { id: 'item-copied', status: 'copied' },
+      { id: 'item-replaced', status: 'clipboard_replaced' },
+      { id: 'item-failed', status: 'failed' },
+      { id: 'item-failed-2', status: 'failed' }
+    ]
+    const items: WorkflowReviewQueueItem[] = rawItems.map((item) => ({
+      ...item,
+      runId: 'run-1',
+      workflowId: 'workflow-1',
+      stepId: item.id,
+      riskLevel: 'low' as const,
+      text: item.id,
+      preview: item.id,
+      createdAt: 1
+    }))
+
+    expect(summarizeReviewQueueItems(items)).toEqual({
+      total: 5,
+      pending: 1,
+      copied: 1,
+      clipboardReplaced: 1,
+      failed: 2
+    })
+    expect(filterReviewQueueItems(items, 'all').map((item) => item.id)).toEqual([
+      'item-pending',
+      'item-copied',
+      'item-replaced',
+      'item-failed',
+      'item-failed-2'
+    ])
+    expect(filterReviewQueueItems(items, 'failed').map((item) => item.id)).toEqual([
+      'item-failed',
+      'item-failed-2'
+    ])
+  })
+
+  it('resolves review queue next-action hints by item status', async () => {
+    const { resolveReviewQueueActionHint } = await loadTarget()
+
+    expect(resolveReviewQueueActionHint({ status: 'pending' })).toEqual({
+      tone: 'default',
+      labelKey: 'reviewHintPending'
+    })
+    expect(resolveReviewQueueActionHint({ status: 'copied' })).toEqual({
+      tone: 'success',
+      labelKey: 'reviewHintCopied'
+    })
+    expect(resolveReviewQueueActionHint({ status: 'clipboard_replaced' })).toEqual({
+      tone: 'success',
+      labelKey: 'reviewHintClipboardReplaced'
+    })
+    expect(resolveReviewQueueActionHint({ status: 'failed', error: 'Clipboard denied' })).toEqual({
+      tone: 'warning',
+      labelKey: 'reviewHintFailedWithError'
+    })
+  })
+
+  it('creates labeled review queue metadata chips for the workbench', async () => {
+    const { resolveReviewQueueMetaChips } = await loadTarget()
+
+    expect(
+      resolveReviewQueueMetaChips({
+        capabilityId: 'text.summarize',
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        traceId: 'trace-1',
+        latency: 980.4,
+        totalTokens: 42,
+        riskLevel: 'medium',
+        status: 'failed',
+        error: 'Clipboard permission denied'
+      })
+    ).toEqual([
+      {
+        labelKey: 'reviewMetaCapability',
+        fallback: 'Capability',
+        value: 'text.summarize'
+      },
+      {
+        labelKey: 'reviewMetaProvider',
+        fallback: 'Provider',
+        value: 'openai / gpt-4.1-mini'
+      },
+      {
+        labelKey: 'reviewMetaTrace',
+        fallback: 'Trace',
+        value: 'trace-1'
+      },
+      {
+        labelKey: 'reviewMetaLatency',
+        fallback: 'Latency',
+        value: '980ms'
+      },
+      {
+        labelKey: 'reviewMetaTokens',
+        fallback: 'Tokens',
+        value: '42'
+      },
+      {
+        labelKey: 'reviewMetaRisk',
+        fallback: 'Risk',
+        value: 'medium',
+        tone: 'warning'
+      },
+      {
+        labelKey: 'reviewMetaFailure',
+        fallback: 'Failure',
+        value: 'Clipboard permission denied',
+        tone: 'warning'
+      }
+    ])
   })
 })

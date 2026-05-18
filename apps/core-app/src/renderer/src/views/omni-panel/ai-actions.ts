@@ -32,6 +32,14 @@ export interface OmniPanelAiPreviewResult {
   latency: number
 }
 
+export interface OmniPanelAiPreviewChip {
+  labelKey: string
+  fallback: string
+  value: string
+}
+
+export type OmniPanelAiPreviewStatusTone = 'working' | 'success' | 'danger' | 'warning'
+
 const AI_ACTION_IDS = new Set<string>([
   'builtin.ai.translate',
   'builtin.ai.summarize',
@@ -167,6 +175,98 @@ export function normalizeOmniPanelAiResult(
     model: result.model,
     traceId: result.traceId,
     latency: result.latency
+  }
+}
+
+export function resolveOmniPanelAiPreviewChips(input: {
+  capabilityId: string
+  provider?: string
+  model?: string
+  latency?: number
+}): OmniPanelAiPreviewChip[] {
+  const chips: OmniPanelAiPreviewChip[] = [
+    {
+      labelKey: 'corebox.omniPanel.aiMetaCapability',
+      fallback: 'Capability',
+      value: input.capabilityId
+    }
+  ]
+
+  const provider = input.provider?.trim()
+  if (provider) {
+    chips.push({
+      labelKey: 'corebox.omniPanel.aiMetaProvider',
+      fallback: 'Provider',
+      value: provider
+    })
+  }
+
+  const model = input.model?.trim()
+  if (model) {
+    chips.push({
+      labelKey: 'corebox.omniPanel.aiMetaModel',
+      fallback: 'Model',
+      value: model
+    })
+  }
+
+  if (typeof input.latency === 'number' && Number.isFinite(input.latency) && input.latency > 0) {
+    chips.push({
+      labelKey: 'corebox.omniPanel.aiMetaLatency',
+      fallback: 'Latency',
+      value: `${Math.round(input.latency)}ms`
+    })
+  }
+
+  return chips
+}
+
+export function resolveOmniPanelAiPreviewStatus(input: {
+  status: 'running' | 'done' | 'error'
+  confirming: boolean
+}): {
+  labelKey: string
+  detailKey: string
+  labelFallback: string
+  detailFallback: string
+  tone: OmniPanelAiPreviewStatusTone
+} {
+  if (input.status === 'running') {
+    return {
+      labelKey: 'corebox.omniPanel.aiStatusRunning',
+      detailKey: 'corebox.omniPanel.aiStatusRunningDetail',
+      labelFallback: 'Running',
+      detailFallback: 'Keeping the selected context attached while the provider responds.',
+      tone: 'working'
+    }
+  }
+
+  if (input.status === 'error') {
+    return {
+      labelKey: 'corebox.omniPanel.aiStatusFailed',
+      detailKey: 'corebox.omniPanel.aiStatusFailedDetail',
+      labelFallback: 'Failed',
+      detailFallback: 'Review the recovery reason, then retry this writing action.',
+      tone: 'danger'
+    }
+  }
+
+  if (input.confirming) {
+    return {
+      labelKey: 'corebox.omniPanel.aiStatusConfirming',
+      detailKey: 'corebox.omniPanel.aiStatusConfirmingDetail',
+      labelFallback: 'Confirming',
+      detailFallback: 'Confirm before replacing the clipboard with this AI result.',
+      tone: 'warning'
+    }
+  }
+
+  return {
+    labelKey: 'corebox.omniPanel.aiStatusReady',
+    detailKey: 'corebox.omniPanel.aiStatusReadyDetail',
+    labelFallback: 'Ready',
+    detailFallback: 'Review the result and metadata before copying or replacing clipboard.',
+    tone: 'success'
   }
 }
 

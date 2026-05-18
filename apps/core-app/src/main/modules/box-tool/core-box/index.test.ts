@@ -137,7 +137,7 @@ describe('CoreBoxModule', () => {
     await module.onInit({
       app: {},
       manager: { loadModule: vi.fn(async () => undefined) }
-    } as Parameters<CoreBoxModule['onInit']>[0])
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
 
     expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
       'core.box.toggle',

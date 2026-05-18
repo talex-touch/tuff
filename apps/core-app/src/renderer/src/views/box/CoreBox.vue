@@ -38,6 +38,7 @@ import { useCoreBoxTheme } from './theme'
 import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
+import { resolveCoreBoxCompletionDisplay } from './completion-display'
 import { resolveCoreBoxSearchState } from './search-state'
 import IndexingHintTag from './tag/IndexingHintTag.vue'
 import TagSection from './tag/TagSection.vue'
@@ -163,11 +164,7 @@ const completionDisplay = computed(() => {
   const completion =
     activeItem.value.render.completion ?? activeItem.value.render.basic?.title ?? ''
 
-  if (completion.startsWith(searchVal.value)) {
-    return completion.substring(searchVal.value.length)
-  }
-
-  return completion
+  return resolveCoreBoxCompletionDisplay(completion, searchVal.value, t)
 })
 
 const shouldLog = () => appSetting.diagnostics?.verboseLogs === true
@@ -455,7 +452,11 @@ const detach = useDetach({
 // Action Panel hook
 const actionPanel = useActionPanel({
   openFlowSelector: detach.openFlowSelector,
-  refreshSearch: handleSearchImmediate
+  refreshSearch: handleSearchImmediate,
+  navigate: (path) => {
+    void transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+    void router.push(path).catch(() => {})
+  }
 })
 
 // Channel: focus input

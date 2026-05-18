@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SearchIndexService } from './search-index-service'
 
-type SearchIndexHarness = SearchIndexService & {
+type SearchIndexHarness = Omit<SearchIndexService, 'recordOperationLog'> & {
   recordOperationLog: (
     action: 'index' | 'remove' | 'removeByProvider',
     items: number,

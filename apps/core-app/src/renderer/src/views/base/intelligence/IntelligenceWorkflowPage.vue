@@ -1,11 +1,20 @@
 <script lang="ts" name="IntelligenceWorkflowPage" setup>
 import type { WorkflowStepKind } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex'
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
-import { useWorkflowEditor, WorkflowValidationError } from '~/modules/hooks/useWorkflowEditor'
+import {
+  filterReviewQueueItems,
+  resolveReviewQueueActionHint,
+  resolveReviewQueueMetaChips,
+  summarizeReviewQueueItems,
+  useWorkflowEditor,
+  WorkflowValidationError,
+  type WorkflowReviewQueueFilter,
+  type WorkflowReviewQueueItem
+} from '~/modules/hooks/useWorkflowEditor'
 
 const { t } = useI18n()
 
@@ -45,8 +54,11 @@ const {
   approveTicket,
   copyReviewItemToClipboard,
   replaceClipboardWithReviewItem,
-  dismissReviewItem
+  dismissReviewItem,
+  resetReviewItemStatus
 } = useWorkflowEditor()
+
+const reviewQueueFilter = ref<WorkflowReviewQueueFilter>('all')
 
 const runStatusText = computed(() => {
   switch (currentRun.value?.status) {
@@ -81,28 +93,37 @@ const runStatusClass = computed(() => {
 })
 
 const activeStepCount = computed(() => workflowDraft.value.steps.length)
-const reviewQueueSummary = computed(() => {
-  const summary = {
-    pending: 0,
-    copied: 0,
-    clipboardReplaced: 0,
-    failed: 0
+const reviewQueueSummary = computed(() => summarizeReviewQueueItems(reviewQueueItems.value))
+const reviewQueueFilters = computed(() => [
+  {
+    value: 'all' as const,
+    label: t('intelligence.workflow.reviewFilterAll'),
+    count: reviewQueueSummary.value.total
+  },
+  {
+    value: 'pending' as const,
+    label: t('intelligence.workflow.reviewSummaryPending'),
+    count: reviewQueueSummary.value.pending
+  },
+  {
+    value: 'copied' as const,
+    label: t('intelligence.workflow.reviewSummaryCopied'),
+    count: reviewQueueSummary.value.copied
+  },
+  {
+    value: 'clipboard_replaced' as const,
+    label: t('intelligence.workflow.reviewSummaryClipboardReplaced'),
+    count: reviewQueueSummary.value.clipboardReplaced
+  },
+  {
+    value: 'failed' as const,
+    label: t('intelligence.workflow.reviewSummaryFailed'),
+    count: reviewQueueSummary.value.failed
   }
-
-  for (const item of reviewQueueItems.value) {
-    if (item.status === 'copied') {
-      summary.copied += 1
-    } else if (item.status === 'clipboard_replaced') {
-      summary.clipboardReplaced += 1
-    } else if (item.status === 'failed') {
-      summary.failed += 1
-    } else {
-      summary.pending += 1
-    }
-  }
-
-  return summary
-})
+])
+const filteredReviewQueueItems = computed(() =>
+  filterReviewQueueItems(reviewQueueItems.value, reviewQueueFilter.value)
+)
 
 function formatJson(value: unknown): string {
   try {
@@ -152,6 +173,34 @@ function reviewStatusText(status: string): string {
     default:
       return t('intelligence.workflow.reviewStatusPending')
   }
+}
+
+function reviewCopyButtonText(status: string): string {
+  return status === 'failed'
+    ? t('intelligence.workflow.retryCopyReviewItem')
+    : t('intelligence.workflow.copyReviewItem')
+}
+
+function reviewReplaceButtonText(item: { id: string; status: string }): string {
+  if (reviewQueueReplaceConfirmId.value === item.id) {
+    return t('intelligence.workflow.confirmReplaceClipboard')
+  }
+  return item.status === 'failed'
+    ? t('intelligence.workflow.retryReplaceClipboard')
+    : t('intelligence.workflow.replaceClipboard')
+}
+
+function reviewActionHint(item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>) {
+  return resolveReviewQueueActionHint(item)
+}
+
+function reviewActionHintText(item: Pick<WorkflowReviewQueueItem, 'status' | 'error'>): string {
+  const hint = reviewActionHint(item)
+  return t(`intelligence.workflow.${hint.labelKey}`, { error: item.error || '' })
+}
+
+function reviewMetaChips(item: WorkflowReviewQueueItem) {
+  return resolveReviewQueueMetaChips(item)
 }
 
 function workflowStatusText(enabled: boolean): string {
@@ -267,6 +316,15 @@ async function handleDismissReviewItem(itemId: string): Promise<void> {
   }
 }
 
+async function handleResetReviewItem(itemId: string): Promise<void> {
+  try {
+    await resetReviewItemStatus(itemId)
+    toast.success(t('intelligence.workflow.toastReviewReset'))
+  } catch (error) {
+    toast.error(resolveValidationMessage(error))
+  }
+}
+
 function handleToolSourceToggle(source: 'builtin' | 'mcp', event: Event): void {
   const target = event.target
   updateToolSource(source, target instanceof HTMLInputElement ? target.checked : false)
@@ -278,6 +336,15 @@ watch(
     await loadHistory(workflowId || undefined)
   }
 )
+
+watch(reviewQueueItems, (items) => {
+  if (
+    reviewQueueFilter.value !== 'all' &&
+    !items.some((item) => item.status === reviewQueueFilter.value)
+  ) {
+    reviewQueueFilter.value = 'all'
+  }
+})
 
 onMounted(async () => {
   try {
@@ -865,44 +932,77 @@ onMounted(async () => {
             </div>
           </div>
 
+          <div v-if="reviewQueueItems.length > 0" class="review-filter-bar">
+            <button
+              v-for="filter in reviewQueueFilters"
+              :key="filter.value"
+              class="review-filter-chip"
+              :class="{ 'review-filter-chip--active': reviewQueueFilter === filter.value }"
+              type="button"
+              @click="reviewQueueFilter = filter.value"
+            >
+              <span>{{ filter.label }}</span>
+              <strong>{{ filter.count }}</strong>
+            </button>
+          </div>
+
           <div v-if="reviewQueueItems.length === 0" class="empty-state">
             {{ t('intelligence.workflow.emptyReviewQueue') }}
           </div>
+          <div v-else-if="filteredReviewQueueItems.length === 0" class="empty-state">
+            {{ t('intelligence.workflow.emptyFilteredReviewQueue') }}
+          </div>
 
-          <article v-for="item in reviewQueueItems" :key="item.id" class="small-card">
+          <article
+            v-for="item in filteredReviewQueueItems"
+            :key="item.id"
+            class="small-card"
+            :class="{ 'small-card--failed': item.status === 'failed' }"
+          >
             <div class="review-title">
               <span>{{ item.stepName || item.stepId }}</span>
               <span class="mini-badge">{{ reviewStatusText(item.status) }}</span>
             </div>
-            <div class="small-card__meta">
-              <span>{{ item.capabilityId || 'workflow.output' }}</span>
-              <span v-if="item.provider || item.model">
-                {{ [item.provider, item.model].filter(Boolean).join(' / ') }}
+            <div class="review-meta-grid">
+              <span
+                v-for="chip in reviewMetaChips(item)"
+                :key="`${chip.labelKey}:${chip.value}`"
+                class="review-meta-chip"
+                :class="{ 'review-meta-chip--warning': chip.tone === 'warning' }"
+              >
+                {{ t(`intelligence.workflow.${chip.labelKey}`, chip.fallback) }}:
+                {{ chip.value }}
               </span>
             </div>
-            <div v-if="item.traceId" class="small-card__meta">trace: {{ item.traceId }}</div>
             <pre class="result-pre">{{ item.preview }}</pre>
             <div v-if="item.error" class="runtime-error">
               {{ item.error }}
+            </div>
+            <div
+              class="review-action-hint"
+              :class="`review-action-hint--${reviewActionHint(item).tone}`"
+            >
+              {{ reviewActionHintText(item) }}
             </div>
             <div class="approval-actions">
               <TxButton variant="flat" @click="handleDismissReviewItem(item.id)">
                 <span>{{ t('intelligence.workflow.dismissReviewItem') }}</span>
               </TxButton>
+              <TxButton
+                v-if="item.status === 'failed'"
+                variant="ghost"
+                @click="handleResetReviewItem(item.id)"
+              >
+                <span>{{ t('intelligence.workflow.resetReviewItem') }}</span>
+              </TxButton>
               <TxButton variant="flat" @click="handleCopyReviewItem(item.id)">
-                <span>{{ t('intelligence.workflow.copyReviewItem') }}</span>
+                <span>{{ reviewCopyButtonText(item.status) }}</span>
               </TxButton>
               <TxButton
                 :variant="reviewQueueReplaceConfirmId === item.id ? 'flat' : 'ghost'"
                 @click="handleReplaceClipboardReviewItem(item.id)"
               >
-                <span>
-                  {{
-                    reviewQueueReplaceConfirmId === item.id
-                      ? t('intelligence.workflow.confirmReplaceClipboard')
-                      : t('intelligence.workflow.replaceClipboard')
-                  }}
-                </span>
+                <span>{{ reviewReplaceButtonText(item) }}</span>
               </TxButton>
             </div>
           </article>
@@ -1110,6 +1210,68 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 
+.review-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.review-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.72);
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.review-filter-chip:hover,
+.review-filter-chip--active {
+  border-color: rgba(106, 201, 255, 0.38);
+  background: rgba(106, 201, 255, 0.1);
+  color: #dff6ff;
+}
+
+.review-filter-chip strong {
+  color: #fff;
+}
+
+.review-meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.review-meta-chip {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.review-meta-chip--warning {
+  border-color: rgba(255, 149, 0, 0.28);
+  color: #ffe1b8;
+  background: rgba(255, 149, 0, 0.08);
+}
+
 .review-summary-card {
   display: flex;
   align-items: center;
@@ -1199,6 +1361,11 @@ textarea {
   gap: 10px;
 }
 
+.small-card--failed {
+  border-color: rgba(255, 87, 87, 0.24);
+  background: rgba(255, 87, 87, 0.045);
+}
+
 .step-card__title {
   font-size: 16px;
   font-weight: 600;
@@ -1208,6 +1375,27 @@ textarea {
   color: #ffb5b5;
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+.review-action-hint {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
+}
+
+.review-action-hint--success {
+  border-color: rgba(52, 199, 89, 0.26);
+  color: #c8ffd4;
+  background: rgba(52, 199, 89, 0.08);
+}
+
+.review-action-hint--warning {
+  border-color: rgba(255, 149, 0, 0.28);
+  color: #ffe1b8;
+  background: rgba(255, 149, 0, 0.08);
 }
 
 .result-pre {

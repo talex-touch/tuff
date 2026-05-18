@@ -33,6 +33,15 @@ import {
 } from './device-idle-diagnostics'
 import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 
+const props = withDefaults(
+  defineProps<{
+    forceAdvancedSettings?: boolean
+  }>(),
+  {
+    forceAdvancedSettings: false
+  }
+)
+
 const {
   getIndexStatus,
   getIndexStats,
@@ -54,7 +63,9 @@ const indexStats = ref<FileIndexStats | null>(null)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const showAdvancedSettings = computed(() =>
+  Boolean(props.forceAdvancedSettings || appSetting?.dev?.advancedSettings)
+)
 
 const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
   idleThresholdMs: 60 * 60 * 1000,
