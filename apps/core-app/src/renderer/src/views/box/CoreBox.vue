@@ -1035,7 +1035,8 @@ div.CoreBoxRes {
 
     :deep(.tx-scroll__native) {
       overflow-x: hidden !important;
-      scrollbar-gutter: stable;
+      overflow-y: scroll !important;
+      scrollbar-gutter: stable both-edges;
     }
   }
 }
