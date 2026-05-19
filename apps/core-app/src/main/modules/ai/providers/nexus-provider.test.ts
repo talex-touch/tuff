@@ -5,12 +5,22 @@ const networkMocks = vi.hoisted(() => ({
   request: vi.fn()
 }))
 
+const sceneMocks = vi.hoisted(() => ({
+  runNexusScene: vi.fn(),
+  extractTranslatedImageFromSceneRun: vi.fn()
+}))
+
 vi.mock('../../network', () => ({
   getNetworkService: () => networkMocks
 }))
 
 vi.mock('../../nexus/runtime-base', () => ({
   getRuntimeNexusBaseUrl: () => 'https://nexus.example.com'
+}))
+
+vi.mock('../../nexus/scene-client', () => ({
+  runNexusScene: sceneMocks.runNexusScene,
+  extractTranslatedImageFromSceneRun: sceneMocks.extractTranslatedImageFromSceneRun
 }))
 
 import { isNexusProviderConfig, NexusProvider } from './nexus-provider'
@@ -30,6 +40,20 @@ describe('NexusProvider', () => {
           provider: 'ip_nexus_ai'
         }
       }
+    })
+    sceneMocks.runNexusScene.mockResolvedValue({
+      runId: 'run_image_1',
+      sceneId: 'corebox.screenshot.translate',
+      status: 'completed',
+      mode: 'execute',
+      output: {}
+    })
+    sceneMocks.extractTranslatedImageFromSceneRun.mockReturnValue({
+      translatedImageBase64: 'dHJhbnNsYXRlZA==',
+      imageMimeType: 'image/png',
+      sourceText: 'hello',
+      targetText: '你好',
+      overlay: { blocks: [] }
     })
   })
 
@@ -97,5 +121,52 @@ describe('NexusProvider', () => {
       provider.chat({ messages: [{ role: 'user', content: 'hi' }] }, {})
     ).rejects.toThrow('NEXUS_AUTH_REQUIRED')
     expect(networkMocks.request).not.toHaveBeenCalled()
+  })
+
+  it('通过 Nexus scene 执行端到端图片翻译', async () => {
+    const provider = new NexusProvider({
+      id: 'tuff-nexus-default',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Tuff Nexus',
+      enabled: true,
+      apiKey: 'app-token',
+      defaultModel: 'nexus-image',
+      priority: 1,
+      metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
+    })
+
+    const result = await provider.imageTranslateE2e(
+      {
+        imageBase64: 'aW1hZ2U=',
+        imageMimeType: 'image/png',
+        targetLang: 'zh',
+        sourceLang: 'en'
+      },
+      { timeout: 15_000, preferredProviderId: 'tencent-image' }
+    )
+
+    expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
+      input: {
+        imageBase64: 'aW1hZ2U=',
+        targetLang: 'zh',
+        sourceLang: 'en',
+        imageMimeType: 'image/png'
+      },
+      capability: 'image.translate.e2e',
+      providerId: 'tencent-image',
+      timeoutMs: 15_000
+    })
+    expect(result).toMatchObject({
+      result: {
+        translatedImageBase64: 'dHJhbnNsYXRlZA==',
+        imageMimeType: 'image/png',
+        sourceText: 'hello',
+        targetText: '你好',
+        overlay: { blocks: [] }
+      },
+      model: 'nexus-image',
+      traceId: 'run_image_1',
+      provider: 'tuff-nexus-default'
+    })
   })
 })

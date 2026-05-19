@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-18
+> 更新时间：2026-05-19
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,28 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-19
+
+### feat(plugins): translate clipboard images through DivisionBox
+
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-{config,module,sdk}.ts`
+- `apps/core-app/src/main/modules/ai/runtime/base-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/nexus-provider.ts`
+- `apps/core-app/src/main/modules/division-box/{layout,session}.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `packages/utils/plugin/sdk/division-box.ts`
+- `packages/utils/__tests__/plugin-sdk-lifecycle.test.ts`
+- `plugins/touch-translation/{manifest.json,index.js,index/main.ts,index/utils.ts}`
+- `plugins/touch-translation/widgets/{screenshot-translate.vue,image-translate-result.vue}`
+- `docs/plan-prd/TODO.md`
+  - Added `image.translate.e2e` to the shared Intelligence capability contract and wired the Tuff Nexus provider to run `corebox.screenshot.translate`, so Translation can reuse Nexus image-translation providers such as Tencent adapt instead of owning provider-specific logic.
+  - `touch-translation` now detects clipboard image data URLs on `screenshot-translate`, calls the Intelligence capability, and presents the translated image in a detached DivisionBox widget with CoreBox fallback when the window path is unavailable.
+  - Fixed the DivisionBox open failure path for plugin calls by declaring `window.create` in the Translation manifest, accepting direct `SessionInfo` SDK responses, and checking the returned `sessionId` before state updates.
+  - DivisionBox now honors `header.show=false` and `ui.showInput=false` across main-process WebContentsView bounds and CoreBox renderer layout, allowing tool windows without the launcher header/input chrome.
+  - Added focused coverage for image data URL helpers, Nexus scene invocation, DivisionBox header height resolution, and direct `SessionInfo` SDK open responses; packaged Electron/manual clipboard-image evidence remains a follow-up.
 
 ## 2026-05-18
 

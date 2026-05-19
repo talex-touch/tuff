@@ -5,6 +5,8 @@ import type {
   IntelligenceCodeReviewPayload,
   IntelligenceCodeReviewResult,
   IntelligenceEmbeddingPayload,
+  IntelligenceImageTranslateE2ePayload,
+  IntelligenceImageTranslateE2eResult,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceRewritePayload,
@@ -18,7 +20,9 @@ import type {
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID } from '../../../../shared/events/corebox-scenes'
 import { getNetworkService } from '../../network'
+import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/scene-client'
 import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
@@ -236,6 +240,44 @@ export class NexusProvider extends IntelligenceProvider {
     options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
     return this.invokeNexus('vision.ocr', payload, options)
+  }
+
+  async imageTranslateE2e(
+    payload: IntelligenceImageTranslateE2ePayload,
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>> {
+    this.assertAuthToken()
+    const startedAt = Date.now()
+    const run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
+      input: {
+        imageBase64: payload.imageBase64,
+        targetLang: payload.targetLang || 'zh',
+        sourceLang: payload.sourceLang,
+        imageMimeType: payload.imageMimeType
+      },
+      capability: 'image.translate.e2e',
+      providerId: options.preferredProviderId,
+      timeoutMs: options.timeout ?? this.config.timeout ?? 30_000
+    })
+    const translated = extractTranslatedImageFromSceneRun(run)
+    if (!translated) {
+      throw new Error('NEXUS_IMAGE_TRANSLATE_EMPTY_RESPONSE')
+    }
+
+    return {
+      result: {
+        translatedImageBase64: translated.translatedImageBase64,
+        imageMimeType: translated.imageMimeType,
+        sourceText: translated.sourceText,
+        targetText: translated.targetText,
+        overlay: translated.overlay
+      },
+      usage: normalizeUsage(),
+      model: this.config.defaultModel || this.config.models?.[0] || 'nexus-image-translate',
+      latency: Date.now() - startedAt,
+      traceId: typeof run?.runId === 'string' ? run.runId : this.generateTraceId(),
+      provider: this.config.id
+    }
   }
 
   tts(

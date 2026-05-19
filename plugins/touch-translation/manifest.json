@@ -27,7 +27,13 @@
     }
   },
   "permissions": {
-    "required": ["clipboard.read", "network.internet", "intelligence.basic", "storage.plugin"],
+    "required": [
+      "clipboard.read",
+      "network.internet",
+      "intelligence.basic",
+      "storage.plugin",
+      "window.create"
+    ],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
@@ -35,6 +41,7 @@
     "network.internet": "连接翻译服务 API（如 Google、DeepL、百度等）",
     "intelligence.basic": "调用智能翻译服务",
     "storage.plugin": "保存翻译源配置与本地密钥引用",
+    "window.create": "打开 DivisionBox 独立窗口展示图片翻译结果",
     "clipboard.write": "将翻译结果复制到剪贴板"
   },
   "features": [

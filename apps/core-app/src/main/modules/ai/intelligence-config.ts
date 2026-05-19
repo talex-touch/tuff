@@ -316,6 +316,18 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
 
   const enabledProviderCount = config.providers.filter((provider) => provider.enabled).length
   const nexusProvider = config.providers.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
+  if (nexusProvider) {
+    const defaultCapabilities = nexusDefault?.capabilities ?? []
+    const capabilities = new Set([...(nexusProvider.capabilities ?? []), ...defaultCapabilities])
+    if (!capabilities.has('image.translate.e2e')) {
+      capabilities.add('image.translate.e2e')
+    }
+    if (JSON.stringify(nexusProvider.capabilities ?? []) !== JSON.stringify([...capabilities])) {
+      nexusProvider.capabilities = [...capabilities]
+      changed = true
+    }
+  }
+
   if (enabledProviderCount === 0 && nexusProvider && nexusProvider.enabled !== true) {
     nexusProvider.enabled = true
     changed = true
@@ -335,6 +347,13 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       priority: 1,
       enabled: true
     })
+    changed = true
+  }
+
+  if (!config.capabilities['image.translate.e2e']) {
+    config.capabilities['image.translate.e2e'] = cloneValue(
+      DEFAULT_CAPABILITIES['image.translate.e2e']
+    )
     changed = true
   }
 
