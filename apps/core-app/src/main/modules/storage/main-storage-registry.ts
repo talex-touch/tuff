@@ -20,6 +20,7 @@ import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 
 export interface EverythingSettings {
   enabled?: boolean
+  cliPath?: string | null
 }
 
 export interface NotificationCenterStore {
@@ -166,7 +167,7 @@ export const mainStorageRegistry = {
   }),
   [StorageList.EVERYTHING_SETTINGS]: defineEntry<EverythingSettings>({
     key: StorageList.EVERYTHING_SETTINGS,
-    defaultValue: { enabled: true },
+    defaultValue: { enabled: true, cliPath: null },
     normalize: normalizeObject
   }),
   [StorageList.FLOW_CONSENT]: defineEntry<FlowConsentSnapshot>({

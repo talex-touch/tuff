@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import type { EverythingDiagnosticEvidencePayload } from './everything-diagnostic-verifier'
+import type { EverythingStatusResponse } from '../../../shared/events/everything'
 import {
   evaluateEverythingDiagnosticEvidence,
   verifyEverythingDiagnosticEvidence
 } from './everything-diagnostic-verifier'
+
+const DEFAULT_PATH_FILTERING: EverythingStatusResponse['pathFiltering'] = {
+  enabled: true,
+  allowedRootCount: 1,
+  lastRawResultCount: 10,
+  lastFilteredResultCount: 8,
+  lastDroppedResultCount: 2,
+  lastChecked: 1_700_000_000_000,
+  reason: 'outside-file-index-watch-roots'
+}
 
 function buildEvidence(
   overrides: Partial<EverythingDiagnosticEvidencePayload> = {}
@@ -20,12 +31,14 @@ function buildEvidence(
       healthReason: null,
       version: '1.5.0',
       esPath: 'C:\\Program Files\\Everything\\es.exe',
+      configuredCliPath: null,
       error: null,
       errorCode: null,
       lastBackendError: null,
       backendAttemptErrors: {},
       fallbackChain: ['sdk-napi', 'cli', 'unavailable'],
-      lastChecked: 1_700_000_000_000
+      lastChecked: 1_700_000_000_000,
+      pathFiltering: DEFAULT_PATH_FILTERING
     },
     verdict: {
       ready: true,
@@ -44,6 +57,8 @@ function buildEvidence(
         health: 'healthy',
         version: '1.5.0',
         esPath: 'C:\\Program Files\\Everything\\es.exe',
+        configuredCliPath: null,
+        pathFiltering: DEFAULT_PATH_FILTERING,
         errorCode: null,
         lastBackendError: null
       }
@@ -397,6 +412,67 @@ describe('everything-diagnostic-verifier', () => {
       'Everything CLI backend is missing esPath',
       'Everything CLI backend is missing version'
     ])
+  })
+
+  it('rejects inconsistent Everything path filtering evidence', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidence({
+          status: {
+            ...buildEvidence().status,
+            pathFiltering: {
+              enabled: false,
+              allowedRootCount: -1,
+              lastRawResultCount: 4,
+              lastFilteredResultCount: 3,
+              lastDroppedResultCount: 3,
+              lastChecked: 1_700_000_000_000,
+              reason: 'outside-file-index-watch-roots'
+            }
+          },
+          manualRegression: {
+            ...buildEvidence().manualRegression,
+            suggestedEvidenceFields: {
+              ...buildEvidence().manualRegression.suggestedEvidenceFields,
+              pathFiltering: {
+                enabled: true,
+                allowedRootCount: 1,
+                lastRawResultCount: 4,
+                lastFilteredResultCount: 3,
+                lastDroppedResultCount: 1,
+                lastChecked: 1_700_000_000_000,
+                reason: null
+              }
+            }
+          }
+        })
+      ).failures
+    ).toEqual([
+      'Everything path filtering is disabled while diagnostic is ready',
+      'Everything path filtering allowedRootCount is negative',
+      'Everything path filtering result counts are inconsistent',
+      'Everything suggested pathFiltering enabled field does not match status',
+      'Everything suggested pathFiltering allowedRootCount field does not match status',
+      'Everything suggested pathFiltering lastDroppedResultCount field does not match status'
+    ])
+  })
+
+  it('keeps legacy Everything diagnostic evidence without path filtering compatible', () => {
+    const evidence = buildEvidence({
+      status: {
+        ...buildEvidence().status,
+        pathFiltering: undefined
+      },
+      manualRegression: {
+        ...buildEvidence().manualRegression,
+        suggestedEvidenceFields: {
+          ...buildEvidence().manualRegression.suggestedEvidenceFields,
+          pathFiltering: undefined
+        }
+      }
+    })
+
+    expect(evaluateEverythingDiagnosticEvidence(evidence).passed).toBe(true)
   })
 
   it('returns evidence with a recomputed gate', () => {

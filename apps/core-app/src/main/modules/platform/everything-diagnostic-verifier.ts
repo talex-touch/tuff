@@ -3,11 +3,15 @@ import type { EverythingStatusResponse } from '../../../shared/events/everything
 export const EVERYTHING_DIAGNOSTIC_EVIDENCE_KIND = 'everything-diagnostic-evidence'
 export const EVERYTHING_DIAGNOSTIC_EVIDENCE_SCHEMA_VERSION = 1
 
+type EverythingDiagnosticEvidenceStatus = Omit<EverythingStatusResponse, 'pathFiltering'> & {
+  pathFiltering?: EverythingStatusResponse['pathFiltering']
+}
+
 export interface EverythingDiagnosticEvidencePayload {
   schemaVersion: typeof EVERYTHING_DIAGNOSTIC_EVIDENCE_SCHEMA_VERSION
   kind: typeof EVERYTHING_DIAGNOSTIC_EVIDENCE_KIND
   createdAt: string
-  status: EverythingStatusResponse
+  status: EverythingDiagnosticEvidenceStatus
   verdict: {
     ready: boolean
     blocker?: 'disabled' | 'unsupported' | 'backend-unavailable'
@@ -26,6 +30,8 @@ export interface EverythingDiagnosticEvidencePayload {
       health: EverythingStatusResponse['health']
       version: string | null
       esPath: string | null
+      configuredCliPath?: string | null
+      pathFiltering?: EverythingDiagnosticEvidenceStatus['pathFiltering']
       errorCode: string | null
       lastBackendError: string | null
     }
@@ -101,6 +107,38 @@ export function evaluateEverythingDiagnosticEvidence(
     failures.push('Everything active backend has a recorded attempt error')
   }
 
+  const pathFiltering = evidence.status.pathFiltering
+  if (pathFiltering) {
+    if (evidence.verdict.ready && pathFiltering.enabled !== true) {
+      failures.push('Everything path filtering is disabled while diagnostic is ready')
+    }
+
+    if (pathFiltering.allowedRootCount < 0) {
+      failures.push('Everything path filtering allowedRootCount is negative')
+    }
+
+    const rawCount = pathFiltering.lastRawResultCount
+    const filteredCount = pathFiltering.lastFilteredResultCount
+    const droppedCount = pathFiltering.lastDroppedResultCount
+    if (rawCount !== null && rawCount < 0) {
+      failures.push('Everything path filtering raw result count is negative')
+    }
+    if (filteredCount !== null && filteredCount < 0) {
+      failures.push('Everything path filtering filtered result count is negative')
+    }
+    if (droppedCount !== null && droppedCount < 0) {
+      failures.push('Everything path filtering dropped result count is negative')
+    }
+    if (
+      rawCount !== null &&
+      filteredCount !== null &&
+      droppedCount !== null &&
+      rawCount - filteredCount !== droppedCount
+    ) {
+      failures.push('Everything path filtering result counts are inconsistent')
+    }
+  }
+
   const fallbackBackends = new Set(evidence.status.fallbackChain)
   for (const [backend, error] of Object.entries(evidence.status.backendAttemptErrors)) {
     if (!fallbackBackends.has(backend as EverythingStatusResponse['backend'])) {
@@ -159,6 +197,31 @@ export function evaluateEverythingDiagnosticEvidence(
   }
   if ((suggested.esPath ?? null) !== (evidence.status.esPath ?? null)) {
     failures.push('Everything suggested esPath field does not match status')
+  }
+  if (
+    'configuredCliPath' in suggested &&
+    (suggested.configuredCliPath ?? null) !== (evidence.status.configuredCliPath ?? null)
+  ) {
+    failures.push('Everything suggested configuredCliPath field does not match status')
+  }
+  if ('pathFiltering' in suggested) {
+    const suggestedPathFiltering = suggested.pathFiltering
+    const statusPathFiltering = evidence.status.pathFiltering
+    if (suggestedPathFiltering?.enabled !== statusPathFiltering?.enabled) {
+      failures.push('Everything suggested pathFiltering enabled field does not match status')
+    }
+    if (suggestedPathFiltering?.allowedRootCount !== statusPathFiltering?.allowedRootCount) {
+      failures.push(
+        'Everything suggested pathFiltering allowedRootCount field does not match status'
+      )
+    }
+    if (
+      suggestedPathFiltering?.lastDroppedResultCount !== statusPathFiltering?.lastDroppedResultCount
+    ) {
+      failures.push(
+        'Everything suggested pathFiltering lastDroppedResultCount field does not match status'
+      )
+    }
   }
   if ((suggested.errorCode ?? null) !== (evidence.status.errorCode ?? null)) {
     failures.push('Everything suggested errorCode field does not match status')

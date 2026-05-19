@@ -9,6 +9,16 @@ import {
   shouldShowEverythingToggle
 } from './setting-everything-state'
 
+const DEFAULT_PATH_FILTERING: EverythingStatusResponse['pathFiltering'] = {
+  enabled: true,
+  allowedRootCount: 1,
+  lastRawResultCount: null,
+  lastFilteredResultCount: null,
+  lastDroppedResultCount: null,
+  lastChecked: null,
+  reason: null
+}
+
 function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): EverythingStatusResponse {
   return {
     enabled: true,
@@ -18,12 +28,14 @@ function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): Everyth
     healthReason: null,
     version: '1.5.0',
     esPath: 'C:\\Program Files\\Everything\\es.exe',
+    configuredCliPath: null,
     error: null,
     errorCode: null,
     lastBackendError: null,
     backendAttemptErrors: {},
     fallbackChain: ['sdk-napi', 'cli', 'unavailable'],
     lastChecked: Date.now(),
+    pathFiltering: DEFAULT_PATH_FILTERING,
     ...overrides
   }
 }
