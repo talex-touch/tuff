@@ -1,3 +1,5 @@
+const { randomUUID } = require('node:crypto')
+
 const { plugin, clipboard, logger, TuffItemBuilder, permission, http, touchChannel } = globalThis
 
 const PLUGIN_NAME = 'touch-snippets'
@@ -93,6 +95,17 @@ function formatDate(date, pattern) {
     .replace(/ss/g, String(second))
 }
 
+function resolveUuid(options) {
+  if (typeof options.uuid === 'string' && options.uuid.trim())
+    return options.uuid.trim()
+  if (typeof options.uuidFactory === 'function') {
+    const value = options.uuidFactory()
+    if (typeof value === 'string' && value.trim())
+      return value.trim()
+  }
+  return randomUUID()
+}
+
 function applyPlaceholders(content, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date()
   const clipboardText = typeof options.clipboardText === 'string' ? options.clipboardText : ''
@@ -100,6 +113,8 @@ function applyPlaceholders(content, options = {}) {
 
   result = result.replace(/\{\{date\}\}/gi, formatDate(now, 'YYYY-MM-DD'))
   result = result.replace(/\{\{time\}\}/gi, formatDate(now, 'HH:mm:ss'))
+  if (/\{\{uuid\}\}/i.test(result))
+    result = result.replace(/\{\{uuid\}\}/gi, resolveUuid(options))
   if (/\{\{clipboard\}\}/i.test(result))
     result = result.replace(/\{\{clipboard\}\}/gi, clipboardText)
 
