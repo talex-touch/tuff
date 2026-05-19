@@ -1,8 +1,8 @@
 # App Data Plugins 与 Everything 收口 Roadmap
 
-> 状态：Roadmap / 待执行  
-> 更新时间：2026-05-18  
-> 范围：官方插件数据源、macOS App Data 搜索、Windows Everything 生产化收口  
+> 状态：Roadmap / 进行中
+> 更新时间：2026-05-19
+> 范围：官方插件数据源、macOS App Data 搜索、Windows Everything 生产化收口
 > 非目标：更新系统 Nexus Hard-Cut、AI Provider Registry、高级同步能力
 
 ## 1. North Star
@@ -19,11 +19,12 @@
 | --- | --- | --- |
 | Browser Open | 已有 `plugins/touch-browser-open`，支持 URL 打开、指定浏览器打开、网页搜索与搜索建议 | 不读取真实浏览器书签/历史；只记录最近使用浏览器 |
 | Browser Bookmarks | 已有 `plugins/touch-browser-bookmarks`，管理自有 `bookmarks.json` / `recent-urls.json` | 不是 Chrome/Safari/Edge/Firefox 的真实书签/历史索引 |
+| Browser Data | `plugins/touch-browser-data` 首版已新增，只读扫描 Chrome/Edge/Brave/Arc 的 Chromium `Bookmarks` JSON，支持 title/url/folder 搜索、打开 URL 与复制 URL action | History SQLite、Safari、持久索引/清理、真机 evidence 与 Store metadata 仍后置 |
 | Obsidian | 可通过 FileProvider 搜 `.md` 文件 | 无 vault 配置、tag/frontmatter/backlink、`obsidian://` 打开能力 |
 | VSCode | AppProvider 能搜 VSCode 应用本身 | 无 VSCode 扩展、workspace/recent project 搜索插件 |
 | Epic | 未发现插件 | 未定义 Epic 数据源类型、认证方式与项目检索模型 |
 | macOS App Data | Spotlight provider 只搜默认目录文件名/display name | 未接入 Notes/Reminders/Calendar/Contacts/Mail 等 App 数据 |
-| Everything | Windows provider 已有 `sdk-napi -> cli -> unavailable`、设置页、diagnostics、fallback 单测 | SDK 是否随包未闭环；路径授权过滤未闭环；缺 Windows 真机 evidence |
+| Everything | Windows provider 已有 `sdk-napi -> cli -> unavailable`、设置页、diagnostics、CLI 手动选择、File Index watch-root 路径过滤与 fallback 单测 | SDK 是否随包未闭环；缺 Windows 真机 evidence 与性能基线 |
 
 ## 3. 总体原则
 
@@ -52,13 +53,13 @@
 
 | ID | 事项 | 范围 |
 | --- | --- | --- |
-| BR-010 | Chrome/Edge/Brave/Arc 书签索引 | 读取 Bookmarks JSON；只读；支持 title/url/folder 搜索 |
+| BR-010 | Chrome/Edge/Brave/Arc 书签索引 | 已落地首版：`touch-browser-data` 即时只读读取 Bookmarks JSON；支持 title/url/folder/browser 搜索，不持久化完整书签索引 |
 | BR-020 | Chrome/Edge/Brave/Arc 历史索引 | 复制 SQLite 到临时只读副本后读取；默认限制最近 N 天/N 条 |
 | BR-030 | Safari 书签/历史调研 | 明确 macOS 权限、数据库位置、可行性与降级 reason |
-| BR-040 | CoreBox 打开动作 | 默认浏览器打开、指定浏览器打开、复制 URL；复用 browser-open capability diagnostics |
+| BR-040 | CoreBox 打开动作 | 已落地默认打开 URL 与复制 URL action；指定浏览器打开与 browser-open capability diagnostics 复用后置 |
 | BR-050 | 迁移现有自管理收藏 | `touch-browser-bookmarks` 自有收藏保留为“Pinned / Manual bookmarks”，不伪装成浏览器真实数据 |
 
-首版非目标：同步浏览器账号数据、写回浏览器书签、绕过浏览器权限模型。
+首版非目标：同步浏览器账号数据、写回浏览器书签、绕过浏览器权限模型、读取 History SQLite、持久化完整书签索引。
 
 ### M2 - Obsidian 官方插件
 
@@ -109,8 +110,8 @@ Epic 的定义需要先锁定：Epic Games Launcher 项目、Unreal/Epic Marketp
 | EV-010 | SDK vs CLI 策略决策 | 明确正式目标：随包 SDK/NAPI 或 CLI-only；文档、设置页、打包配置一致 |
 | EV-020 | SDK 打包闭环 | 若选择 SDK：确认 `everything.node` 或 `@talex-touch/tuff-native/everything` 随 Windows 包可用 |
 | EV-030 | CLI-only 闭环 | 若选择 CLI-only：移除误导性 SDK 承诺，强化安装引导和 `es.exe` 检测 |
-| EV-040 | 路径授权过滤 | Everything 返回结果必须经过授权 roots / FileProvider watch paths 二次过滤 |
-| EV-050 | 诊断 evidence | 导出 backend、fallbackChain、attempt errors、query sample、duration、path filtering 状态 |
+| EV-040 | 路径授权过滤 | 代码层已完成：Everything 返回结果经过 FileProvider watch paths 二次过滤；仍需 Windows 真机 evidence 证明 |
+| EV-050 | 诊断 evidence | 已导出 backend、fallbackChain、attempt errors、CLI path、duration 与 path filtering 状态；仍需 Windows 真机样本归档 |
 | EV-060 | Windows 真机回归 | SDK/CLI/unavailable 三场景各有截图/日志/evidence；普通搜索、显式 `@file`、结构化 filter 均覆盖 |
 | EV-070 | 性能基线 | 记录 P50/P95、timeout、fallback ratio；不阻塞主搜索链路 |
 
@@ -118,7 +119,7 @@ Epic 的定义需要先锁定：Epic Games Launcher 项目、Unreal/Epic Marketp
 
 | 插件 | 类型 | 建议路径 | 优先级 | 说明 |
 | --- | --- | --- | --- | --- |
-| Browser Data | 新插件或拆分自 browser-bookmarks | `plugins/touch-browser-data` | P0 | 真实浏览器书签/历史索引 |
+| Browser Data | 新插件 | `plugins/touch-browser-data` | P0 | 真实浏览器书签首版已落地；历史索引与 Safari 后置 |
 | Obsidian | 新插件 | `plugins/touch-obsidian` | P1 | Vault Markdown 搜索 |
 | VSCode | 新插件 | `plugins/touch-vscode` | P1 | extensions + recent workspaces |
 | macOS App Data | 新插件集合或 provider | `plugins/touch-macos-data` / core provider | P2 | Notes 等需权限调研 |
