@@ -36,16 +36,36 @@ const revealInFolderLabel = computed(() =>
   t('corebox.actions.revealInFinder', isMac.value ? '在 Finder 中显示' : '在文件管理器中显示')
 )
 
+function resolveActionIcon(action: NonNullable<TuffItem['actions']>[number]): string {
+  if (typeof action.icon === 'object' && action.icon?.type === 'class') {
+    return action.icon.value
+  }
+
+  switch (action.type) {
+    case 'copy':
+      return 'i-ri-file-copy-line'
+    case 'open':
+      return 'i-ri-external-link-line'
+    case 'navigate':
+      return 'i-ri-arrow-right-up-line'
+    case 'delete':
+      return 'i-ri-delete-bin-line'
+    case 'edit':
+      return 'i-ri-edit-line'
+    case 'share':
+      return 'i-ri-share-forward-line'
+    default:
+      return 'i-ri-settings-3-line'
+  }
+}
+
 const itemActions = computed<ActionItem[]>(() => {
-  if (props.item?.kind !== 'notification') return []
+  if (!props.item?.actions?.length) return []
 
   return (props.item.actions ?? []).map((action) => ({
     id: action.id,
     label: action.label || action.id,
-    icon:
-      typeof action.icon === 'object' && action.icon?.type === 'class'
-        ? action.icon.value
-        : 'i-ri-settings-3-line',
+    icon: resolveActionIcon(action),
     shortcut: action.shortcut
   }))
 })

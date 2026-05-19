@@ -19,6 +19,34 @@ const PREVIEW_COMPONENT_NAME = DEFAULT_WIDGET_RENDERERS.CORE_PREVIEW_CARD
 const SOURCE_ID = 'preview-provider'
 const previewLog = createLogger('PreviewProvider')
 
+interface PreparedPreviewQuery {
+  originalQuery: TuffQuery
+  sdkQuery: TuffQuery
+  explicitCommand?: string
+}
+
+function extractExplicitCalculatorQuery(query: TuffQuery): PreparedPreviewQuery {
+  const originalText = query.text?.trim() ?? ''
+  const match = /^(calc(?:ulator)?|calculate|计算|换算)(?:\s*(?::|：)\s*|\s+)(.+)$/i.exec(
+    originalText
+  )
+  if (!match) {
+    return {
+      originalQuery: query,
+      sdkQuery: query
+    }
+  }
+
+  return {
+    originalQuery: query,
+    sdkQuery: {
+      ...query,
+      text: match[2].trim()
+    },
+    explicitCommand: match[1].toLowerCase()
+  }
+}
+
 export class PreviewProvider implements ISearchProvider<ProviderContext> {
   readonly id = SOURCE_ID
   readonly type = 'system' as const
@@ -31,17 +59,18 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
 
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     const startedAt = performance.now()
-    const normalized = query.text?.trim() ?? ''
+    const preparedQuery = extractExplicitCalculatorQuery(query)
+    const normalized = preparedQuery.sdkQuery.text?.trim() ?? ''
     if (!normalized) {
       return this.createEmptyResult(query, startedAt)
     }
 
-    const result = await this.sdk.resolve({ query, signal })
+    const result = await this.sdk.resolve({ query: preparedQuery.sdkQuery, signal })
     if (!result) {
       return this.createEmptyResult(query, startedAt)
     }
 
-    const item = this.buildPreviewItem(query, result)
+    const item = this.buildPreviewItem(preparedQuery, result)
     const duration = performance.now() - startedAt
 
     return new TuffSearchResultBuilder(query)
@@ -96,29 +125,47 @@ export class PreviewProvider implements ISearchProvider<ProviderContext> {
       .build()
   }
 
-  private buildPreviewItem(query: TuffQuery, abilityResult: PreviewAbilityResult) {
+  private buildPreviewItem(query: PreparedPreviewQuery, abilityResult: PreviewAbilityResult) {
     const hash = crypto.createHash('sha1')
-    hash.update(`${abilityResult.abilityId}:${query.text ?? ''}`)
+    hash.update(`${abilityResult.abilityId}:${query.originalQuery.text ?? ''}`)
     const id = `${this.id}:${hash.digest('hex')}`
+    const previewMeta: NonNullable<NonNullable<TuffItem['meta']>['preview']> = {
+      abilityId: abilityResult.abilityId,
+      confidence: abilityResult.confidence
+    }
+
+    if (query.explicitCommand) {
+      previewMeta.expression = query.sdkQuery.text
+    }
+
+    const payload: PreviewCardPayload = query.explicitCommand
+      ? {
+          ...abilityResult.payload,
+          badges: ['Calculator', ...(abilityResult.payload.badges ?? [])],
+          meta: {
+            ...abilityResult.payload.meta,
+            explicitCommand: query.explicitCommand,
+            rawQuery: query.originalQuery.text ?? '',
+            resolvedQuery: query.sdkQuery.text ?? ''
+          }
+        }
+      : abilityResult.payload
 
     const builder = new TuffItemBuilder(id)
       .setSource(this.type, this.id)
       .setKind('preview')
       .setCustomRender('vue', PREVIEW_COMPONENT_NAME, {
-        ...abilityResult.payload,
+        ...payload,
         confidence: abilityResult.confidence
       })
       .setMeta({
-        preview: {
-          abilityId: abilityResult.abilityId,
-          confidence: abilityResult.confidence
-        }
+        preview: previewMeta
       })
       .setClassName('core-preview-card')
       .setFinalScore(1)
 
-    if (abilityResult.payload.title) {
-      builder.setTitle(abilityResult.payload.title)
+    if (payload.title) {
+      builder.setTitle(payload.title)
     }
 
     return builder.build()
