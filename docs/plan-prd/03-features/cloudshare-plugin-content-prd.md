@@ -1,7 +1,7 @@
 # CloudShare Plugin Content PRD
 
 > 状态：MVP implementation slice
-> 更新时间：2026-05-17
+> 更新时间：2026-05-19
 > 适用范围：插件内容包发布、公开读取、安装计数与 snippets pack 首个验证场景。
 
 ## 背景
@@ -21,6 +21,7 @@
   - 登录或 API key 发布内容包。
   - 安装时返回内容包并递增 install count。
 - Nexus Store 插件详情页增加 Content tab，展示插件共享内容包。
+- CoreApp Store 插件详情页展示公开 Content 区块，目标插件已安装时允许安装内容包到本地插件存储。
 - `touch-snippets` 增加 snippet pack 导出、导入、云端列表和安装的基础能力。
 
 ## 非目标
@@ -134,16 +135,30 @@ const installed = await share.install(packs.packages[0].id)
 
 - `packages/utils/types/cloud-share.ts`
 - `packages/utils/cloud-share/cloud-share-sdk.ts`
+- `packages/utils/cloud-share/snippet-pack.ts`
 - `packages/utils/plugin/sdk/cloud-share.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/plugin.ts`
 - `apps/nexus/server/utils/pluginContentStore.ts`
 - `apps/nexus/server/api/store/plugin-content/*`
 - `apps/nexus/app/pages/store.vue`
+- `apps/core-app/src/main/modules/plugin/plugin-content-installer.ts`
+- `apps/core-app/src/renderer/src/composables/store/usePluginContentPackages.ts`
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
 - `plugins/touch-snippets/index.js`
+
+CoreApp 首版安装边界：
+
+- 只支持安装 `touch-snippets` 的 `snippet-pack`。
+- 目标插件必须已安装；未安装时只提示先安装插件，不自动串联插件安装。
+- `plugin-content:install` 仅接受 `manifest.importTarget === "touch-snippets"` 且 `manifest.format === "tuff.snippet-pack+json"` 的内容包。
+- 安装通过插件本地存储边界读取/写入 `snippets.json`，并复用 shared snippet pack normalization / merge 规则。
+- 本地写入成功后再调用 CloudShare install API 递增 `installCount`；安装数同步失败会以明确错误码暴露，但不会伪装为本地写入失败。
 
 ## 后续切片
 
-1. CoreApp Store 安装内容包：安装插件与安装插件内容分开，但在同一 Store 心智内。
-2. 插件 Surface 发布 UI：登录、预览、敏感内容确认、发布状态查看。
-3. Nexus Dashboard 内容审核：pending/approved/rejected 队列。
-4. Team visibility：团队可见与团队密钥策略。
-5. 订阅更新与 fork：用户安装后可选择跟随作者更新或 fork 成本地副本。
+1. 插件 Surface / CoreApp Store 发布 UI：登录、预览、敏感内容确认、发布状态查看。
+2. Nexus Dashboard 内容审核：pending/approved/rejected 队列。
+3. Team visibility：团队可见与团队密钥策略。
+4. 订阅更新与 fork：用户安装后可选择跟随作者更新或 fork 成本地副本。
+5. 大内容 `contentRef` 下载、校验与本地导入。

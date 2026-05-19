@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { ITouchPlugin } from '../../../plugin'
+import type { PluginContentPackage } from '../../../types/cloud-share'
 import type {
   PluginInstallConfirmRequest,
   PluginInstallConfirmResponse,
@@ -529,6 +530,19 @@ export interface PluginInstallSourceResponse {
   provider?: unknown
   official?: boolean
   message?: string
+  error?: string
+}
+
+export interface PluginContentInstallRequest {
+  packageId: string
+  targetPluginName: string
+  contentPackage: PluginContentPackage
+}
+
+export interface PluginContentInstallResponse {
+  success: boolean
+  importedCount?: number
+  skippedCount?: number
   error?: string
 }
 

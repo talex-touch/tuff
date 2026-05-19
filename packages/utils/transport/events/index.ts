@@ -343,6 +343,8 @@ import type {
   PluginEnableRequest,
   PluginIndexCommunicateRequest,
   PluginIndexCommunicateResponse,
+  PluginContentInstallRequest,
+  PluginContentInstallResponse,
   PluginInfo,
   PluginInstallConfirmPayload,
   PluginInstallConfirmResponsePayload,
@@ -1706,6 +1708,13 @@ export const PluginEvents = {
     completed: defineRawEvent<PluginInstallCompletedPayload, void>(
       "plugin:install-completed",
     ),
+  },
+
+  content: {
+    install: defineRawEvent<
+      PluginContentInstallRequest,
+      PluginContentInstallResponse
+    >("plugin-content:install"),
   },
 
   devServer: {

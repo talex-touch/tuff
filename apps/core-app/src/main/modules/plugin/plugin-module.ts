@@ -67,6 +67,7 @@ import {
   setSecureStoreValue
 } from '../../utils/secure-store'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+import { installPluginContentPackageToLocalPlugin } from './plugin-content-installer'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
@@ -3088,6 +3089,20 @@ export class PluginModule extends BaseModule {
     )
 
     this.transportDisposers.push(
+      transport.on(PluginEvents.content.install, async (payload) => {
+        try {
+          return installPluginContentPackageToLocalPlugin(
+            {
+              getPluginByName: (name) => manager.getPluginByName(name) as TouchPlugin | undefined
+            },
+            payload
+          )
+        } catch (error) {
+          logIpcHandlerError('plugin-content:install', error)
+          return { success: false, error: toErrorMessage(error) }
+        }
+      }),
+
       transport.on(PluginEvents.api.enable, async (payload) => {
         try {
           const name = payload?.name
