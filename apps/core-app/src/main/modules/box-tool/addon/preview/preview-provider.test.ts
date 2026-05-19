@@ -68,6 +68,38 @@ describe('PreviewProvider', () => {
     })
   })
 
+  it('supports explicit calculator command prefixes through PreviewSDK', async () => {
+    const sdk = createSdk()
+    const provider = new PreviewProvider(sdk)
+
+    const result = await provider.onSearch(
+      { text: 'calc: 2 + 2', inputs: [] },
+      new AbortController().signal
+    )
+
+    expect(sdk.resolve).toHaveBeenCalledWith({
+      query: { text: '2 + 2', inputs: [] },
+      signal: expect.any(AbortSignal)
+    })
+    expect(result.query.text).toBe('calc: 2 + 2')
+    expect(result.items).toHaveLength(1)
+    expect(result.items[0]?.meta?.preview).toEqual({
+      abilityId: 'preview.expression.basic',
+      confidence: 0.6,
+      expression: '2 + 2'
+    })
+    expect(result.items[0]?.render.custom?.data).toEqual(
+      expect.objectContaining({
+        badges: ['Calculator'],
+        meta: expect.objectContaining({
+          explicitCommand: 'calc',
+          rawQuery: 'calc: 2 + 2',
+          resolvedQuery: '2 + 2'
+        })
+      })
+    )
+  })
+
   it('copies primary value and records preview history on execute', async () => {
     const provider = new PreviewProvider(createSdk())
     const searchResult = await provider.onSearch(
