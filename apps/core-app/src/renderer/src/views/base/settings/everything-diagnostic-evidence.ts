@@ -23,6 +23,8 @@ export interface EverythingDiagnosticEvidencePayload {
       health: EverythingStatusResponse['health']
       version: string | null
       esPath: string | null
+      configuredCliPath: string | null
+      pathFiltering: EverythingStatusResponse['pathFiltering']
       errorCode: string | null
       lastBackendError: string | null
     }
@@ -72,6 +74,8 @@ export function buildEverythingDiagnosticEvidencePayload(options: {
         health: status.health,
         version: status.version,
         esPath: status.esPath,
+        configuredCliPath: status.configuredCliPath,
+        pathFiltering: status.pathFiltering,
         errorCode: status.errorCode ?? null,
         lastBackendError: status.lastBackendError
       }

@@ -61,11 +61,21 @@ const mocks = vi.hoisted(() => ({
     healthReason: 'not-windows',
     version: null,
     esPath: null,
+    configuredCliPath: null,
     error: null,
     lastBackendError: null,
     backendAttemptErrors: {},
     fallbackChain: [],
-    lastChecked: null
+    lastChecked: null,
+    pathFiltering: {
+      enabled: true,
+      allowedRootCount: 0,
+      lastRawResultCount: null,
+      lastFilteredResultCount: null,
+      lastDroppedResultCount: null,
+      lastChecked: null,
+      reason: null
+    }
   })),
   everythingSearch: vi.fn(async (query) => ({
     items: [{ id: 'everything-item' }],

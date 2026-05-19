@@ -6,6 +6,16 @@ import {
   formatEverythingDiagnosticEvidenceJson
 } from './everything-diagnostic-evidence'
 
+const DEFAULT_PATH_FILTERING: EverythingStatusResponse['pathFiltering'] = {
+  enabled: true,
+  allowedRootCount: 1,
+  lastRawResultCount: 10,
+  lastFilteredResultCount: 8,
+  lastDroppedResultCount: 2,
+  lastChecked: 1_700_000_000_000,
+  reason: 'outside-file-index-watch-roots'
+}
+
 function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): EverythingStatusResponse {
   return {
     enabled: true,
@@ -15,12 +25,14 @@ function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): Everyth
     healthReason: null,
     version: '1.5.0',
     esPath: 'C:\\Program Files\\Everything\\es.exe',
+    configuredCliPath: null,
     error: null,
     errorCode: null,
     lastBackendError: null,
     backendAttemptErrors: {},
     fallbackChain: ['sdk-napi', 'cli', 'unavailable'],
     lastChecked: 1_700_000_000_000,
+    pathFiltering: DEFAULT_PATH_FILTERING,
     ...overrides
   }
 }
@@ -51,6 +63,8 @@ describe('everything diagnostic evidence', () => {
           health: 'healthy',
           version: '1.5.0',
           esPath: 'C:\\Program Files\\Everything\\es.exe',
+          configuredCliPath: null,
+          pathFiltering: DEFAULT_PATH_FILTERING,
           errorCode: null,
           lastBackendError: null
         }

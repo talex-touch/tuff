@@ -1,13 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { transportOn, appTaskWaitForIdle, iconWorkerExtract, execFileMock, fileProviderOnSearch } =
-  vi.hoisted(() => ({
-    transportOn: vi.fn(),
-    appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
-    iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
-    execFileMock: vi.fn(),
-    fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> }))
-  }))
+const {
+  transportOn,
+  appTaskWaitForIdle,
+  iconWorkerExtract,
+  execFileMock,
+  fileProviderOnSearch,
+  fileProviderGetWatchedPaths
+} = vi.hoisted(() => ({
+  transportOn: vi.fn(),
+  appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
+  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
+  execFileMock: vi.fn(),
+  fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> })),
+  fileProviderGetWatchedPaths: vi.fn(() => ['C:\\'])
+}))
 
 vi.mock('electron', () => ({
   shell: {
@@ -61,12 +68,14 @@ vi.mock('./workers/icon-worker-client', () => ({
 
 vi.mock('./file-provider', () => ({
   fileProvider: {
-    onSearch: fileProviderOnSearch
+    onSearch: fileProviderOnSearch,
+    getWatchedPaths: fileProviderGetWatchedPaths
   }
 }))
 
 import { everythingProvider } from './everything-provider'
 import {
+  everythingSetCliPathEvent,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent
@@ -80,9 +89,19 @@ interface MutableEverythingProvider {
   initializationError: Error | null
   lastBackendError: string | null
   backendAttemptErrors: Record<string, string>
+  pathFilteringStatus: {
+    enabled: boolean
+    allowedRootCount: number
+    lastRawResultCount: number | null
+    lastFilteredResultCount: number | null
+    lastDroppedResultCount: number | null
+    lastChecked: number | null
+    reason: string | null
+  }
   diagnostics: { stages: Record<string, unknown>; lastUpdated: number | null }
   sdkAddon: unknown
   esPath: string | null
+  configuredCliPath: string | null
   iconCache: Map<string, string>
   iconExtractions: Map<string, Promise<string | null>>
   searchEverything: (query: string, maxResults: number, signal?: AbortSignal) => Promise<unknown[]>
@@ -97,11 +116,17 @@ interface MutableEverythingProvider {
     maxResults: number,
     signal?: AbortSignal
   ) => Promise<unknown[]>
+  filterAuthorizedResults: (results: unknown[]) => unknown[]
   tryInitializeCliBackend: () => Promise<boolean>
+  detectEverything: () => Promise<void>
+  probeEverythingCli: (esPath: string) => Promise<{ version: string | null }>
   buildUnavailableNotice: (query: { text: string; inputs: unknown[] }) => unknown
   buildEverythingQuery: (searchText: string) => string
   parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
   parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
+  getStatusSnapshot: () => {
+    pathFiltering: MutableEverythingProvider['pathFilteringStatus']
+  }
   onSearch: (
     query: { text: string; inputs: unknown[] },
     signal: AbortSignal
@@ -144,6 +169,15 @@ function buildResult(path: string) {
   }
 }
 
+function getTransportHandler<THandler>(event: { toEventName: () => string }): THandler {
+  const handler = transportOn.mock.calls.find(([registeredEvent]) => {
+    return registeredEvent?.toEventName?.() === event.toEventName()
+  })?.[1] as THandler | undefined
+
+  expect(handler).toBeTypeOf('function')
+  return handler as THandler
+}
+
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T> | T): Promise<T> {
   const originalPlatform = process.platform
   Object.defineProperty(process, 'platform', {
@@ -168,9 +202,19 @@ afterEach(() => {
   provider.initializationError = null
   provider.lastBackendError = null
   provider.backendAttemptErrors = {}
+  provider.pathFilteringStatus = {
+    enabled: true,
+    allowedRootCount: 0,
+    lastRawResultCount: null,
+    lastFilteredResultCount: null,
+    lastDroppedResultCount: null,
+    lastChecked: null,
+    reason: null
+  }
   provider.diagnostics = { stages: {}, lastUpdated: null }
   provider.sdkAddon = null
   provider.esPath = null
+  provider.configuredCliPath = null
   provider.startupRefreshPromise = null
   provider.iconCache.clear()
   provider.iconExtractions.clear()
@@ -183,6 +227,8 @@ afterEach(() => {
   execFileMock.mockReset()
   fileProviderOnSearch.mockReset()
   fileProviderOnSearch.mockResolvedValue({ items: [] as Array<unknown> })
+  fileProviderGetWatchedPaths.mockReset()
+  fileProviderGetWatchedPaths.mockReturnValue(['C:\\'])
   vi.restoreAllMocks()
 })
 
@@ -195,7 +241,7 @@ describe('everything-provider fallback chain', () => {
 
       await provider.onLoad({ touchApp: { channel: {} } })
 
-      expect(transportOn).toHaveBeenCalledTimes(3)
+      expect(transportOn).toHaveBeenCalledTimes(4)
       expect(refreshSpy).not.toHaveBeenCalled()
       expect(provider.startupRefreshPromise).toBeInstanceOf(Promise)
     })
@@ -326,6 +372,79 @@ describe('everything-provider fallback chain', () => {
     ])
   })
 
+  it('filters Everything results to File Index watch roots', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    fileProviderGetWatchedPaths.mockReturnValue(['C:\\Users\\demo\\Documents'])
+
+    const allowed = buildResult('C:\\Users\\demo\\Documents\\allowed.txt')
+    const dropped = buildResult('C:\\Windows\\secret.txt')
+    vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([allowed, dropped])
+
+    const results = await provider.searchEverything('demo', 10)
+
+    expect(results).toEqual([allowed])
+    expect(provider.pathFilteringStatus).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        allowedRootCount: 1,
+        lastRawResultCount: 2,
+        lastFilteredResultCount: 1,
+        lastDroppedResultCount: 1,
+        reason: 'outside-file-index-watch-roots'
+      })
+    )
+    expect(provider.pathFilteringStatus.lastChecked).toEqual(expect.any(Number))
+  })
+
+  it('fails closed when File Index watch roots are empty', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    fileProviderGetWatchedPaths.mockReturnValue([])
+
+    const result = buildResult('C:\\Users\\demo\\Documents\\allowed.txt')
+    vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([result])
+
+    await expect(provider.searchEverything('demo', 10)).resolves.toEqual([])
+    expect(provider.pathFilteringStatus).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        allowedRootCount: 0,
+        lastRawResultCount: 1,
+        lastFilteredResultCount: 0,
+        lastDroppedResultCount: 1,
+        reason: 'no-file-index-watch-roots'
+      })
+    )
+  })
+
+  it('exposes path filtering status in Everything status snapshots', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    fileProviderGetWatchedPaths.mockReturnValue(['C:\\Users\\demo\\Documents'])
+
+    vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([
+      buildResult('C:\\Users\\demo\\Documents\\allowed.txt'),
+      buildResult('C:\\Windows\\secret.txt')
+    ])
+
+    await provider.searchEverything('demo', 10)
+
+    expect(provider.getStatusSnapshot().pathFiltering).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        allowedRootCount: 1,
+        lastRawResultCount: 2,
+        lastFilteredResultCount: 1,
+        lastDroppedResultCount: 1,
+        reason: 'outside-file-index-watch-roots'
+      })
+    )
+  })
+
   it('attaches AI-safe file context metadata to Everything results', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
@@ -431,11 +550,10 @@ describe('everything-provider fallback chain', () => {
 
     provider.registerChannels({ touchApp: { channel: {} } })
 
-    const statusHandler = transportOn.mock.calls.find(
-      ([event]) => event === everythingStatusEvent
-    )?.[1] as ((payload?: { refresh?: boolean }) => Promise<unknown>) | undefined
-
-    expect(statusHandler).toBeTypeOf('function')
+    const statusHandler =
+      getTransportHandler<(payload?: { refresh?: boolean }) => Promise<unknown>>(
+        everythingStatusEvent
+      )
 
     await statusHandler?.({ refresh: true })
 
@@ -449,18 +567,101 @@ describe('everything-provider fallback chain', () => {
 
     provider.registerChannels({ touchApp: { channel: {} } })
 
-    const toggleHandler = transportOn.mock.calls.find(
-      ([event]) => event === everythingToggleEvent
-    )?.[1] as
-      | ((payload: { enabled: boolean }) => Promise<{ success: boolean; enabled: boolean }>)
-      | undefined
-
-    expect(toggleHandler).toBeTypeOf('function')
+    const toggleHandler =
+      getTransportHandler<
+        (payload: { enabled: boolean }) => Promise<{ success: boolean; enabled: boolean }>
+      >(everythingToggleEvent)
 
     const result = await toggleHandler?.({ enabled: true })
 
     expect(refreshSpy).toHaveBeenCalledWith('toggle-enable')
     expect(result).toEqual({ success: true, enabled: true })
+  })
+
+  it('saves a manually selected Everything CLI path after probing it', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.isEnabled = true
+      const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
+
+      execFileMock.mockImplementation((_file, _args, _options, callback) => {
+        callback(null, { stdout: 'Everything ES 1.1.0' })
+      })
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+
+      const setCliPathHandler = getTransportHandler<
+        (payload: { path?: string | null }) => Promise<{
+          success: boolean
+          cliPath: string | null
+          status: { configuredCliPath: string | null }
+        }>
+      >(everythingSetCliPathEvent)
+
+      const result = await setCliPathHandler({ path: '  D:\\Tools\\Everything\\es.exe  ' })
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'D:\\Tools\\Everything\\es.exe',
+        ['-v'],
+        expect.objectContaining({
+          timeout: 3000,
+          windowsHide: true
+        }),
+        expect.any(Function)
+      )
+      expect(refreshSpy).toHaveBeenCalledWith('manual-check')
+      expect(result).toEqual(
+        expect.objectContaining({
+          success: true,
+          cliPath: 'D:\\Tools\\Everything\\es.exe',
+          status: expect.objectContaining({
+            configuredCliPath: 'D:\\Tools\\Everything\\es.exe'
+          })
+        })
+      )
+      expect(provider.configuredCliPath).toBe('D:\\Tools\\Everything\\es.exe')
+    })
+  })
+
+  it('detects Everything CLI from the configured path before fallback locations', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.configuredCliPath = 'D:\\Tools\\Everything\\es.exe'
+
+      execFileMock.mockImplementation((_file, _args, _options, callback) => {
+        callback(null, { stdout: 'Everything ES 1.1.0' })
+      })
+
+      await provider.detectEverything()
+
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+      expect(execFileMock.mock.calls[0]?.[0]).toBe('D:\\Tools\\Everything\\es.exe')
+      expect(provider.esPath).toBe('D:\\Tools\\Everything\\es.exe')
+    })
+  })
+
+  it('rejects an invalid manually selected CLI path without saving it', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.configuredCliPath = null
+
+      execFileMock.mockImplementation((_file, _args, _options, callback) => {
+        callback(null, { stdout: 'not the expected binary' })
+      })
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+
+      const setCliPathHandler =
+        getTransportHandler<(payload: { path?: string | null }) => Promise<unknown>>(
+          everythingSetCliPathEvent
+        )
+
+      await expect(setCliPathHandler({ path: 'D:\\Tools\\not-es.exe' })).rejects.toThrow(
+        'Selected file is not Everything CLI (es.exe)'
+      )
+
+      expect(provider.configuredCliPath).toBeNull()
+    })
   })
 
   it('degrades to file-provider during the same query when CLI runtime fails', async () => {
@@ -561,18 +762,16 @@ describe('everything-provider fallback chain', () => {
 
     provider.registerChannels({ touchApp: { channel: {} } })
 
-    const testHandler = transportOn.mock.calls.find(
-      ([event]) => event === everythingTestEvent
-    )?.[1] as
-      | (() => Promise<{
-          success: boolean
-          error?: string
-          backend?: string
-          query?: string
-          backendAttempts?: unknown
-          durationByStage?: unknown
-        }>)
-      | undefined
+    const testHandler = getTransportHandler<
+      () => Promise<{
+        success: boolean
+        error?: string
+        backend?: string
+        query?: string
+        backendAttempts?: unknown
+        durationByStage?: unknown
+      }>
+    >(everythingTestEvent)
 
     const result = await testHandler?.()
 

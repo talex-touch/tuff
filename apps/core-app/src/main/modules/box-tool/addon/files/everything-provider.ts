@@ -26,11 +26,13 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { shell } from 'electron'
 import {
+  everythingSetCliPathEvent,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
   type EverythingStatusResponse,
-  type EverythingBackendType
+  type EverythingBackendType,
+  type EverythingPathFilteringStatus
 } from '../../../../../shared/events/everything'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
 import { formatDuration } from '../../../../utils/logger'
@@ -119,6 +121,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   readonly expectedDuration = 50
 
   private esPath: string | null = null
+  private configuredCliPath: string | null = null
   private isAvailable = false
   private initializationError: Error | null = null
   private isEnabled = true
@@ -130,6 +133,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private pathFilteringStatus: EverythingPathFilteringStatus = {
+    enabled: true,
+    allowedRootCount: 0,
+    lastRawResultCount: null,
+    lastFilteredResultCount: null,
+    lastDroppedResultCount: null,
+    lastChecked: null,
+    reason: null
+  }
   private startupRefreshPromise: Promise<void> | null = null
   private readonly diagnosticsTracker = new EverythingDiagnosticsTracker()
   private readonly iconCache = new EverythingIconCache()
@@ -279,8 +291,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private async loadSettings(_context: ProviderContext): Promise<void> {
     try {
       const settings = getMainConfig(StorageList.EVERYTHING_SETTINGS) as
-        | { enabled?: boolean }
+        | { enabled?: boolean; cliPath?: string | null }
         | undefined
+      this.configuredCliPath = this.normalizeCliPath(settings?.cliPath)
       if (settings && typeof settings.enabled === 'boolean') {
         this.isEnabled = settings.enabled
       } else {
@@ -290,17 +303,25 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     } catch (error) {
       this.logWarn('Failed to load settings, using defaults', error)
       this.isEnabled = true
+      this.configuredCliPath = null
     }
   }
 
   private saveSettings(): void {
     try {
       saveMainConfig(StorageList.EVERYTHING_SETTINGS, {
-        enabled: this.isEnabled
+        enabled: this.isEnabled,
+        cliPath: this.configuredCliPath
       })
     } catch (error) {
       this.logError('Failed to save settings', error)
     }
+  }
+
+  private normalizeCliPath(value: unknown): string | null {
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    return trimmed || null
   }
 
   private getHealthStatus(): {
@@ -345,12 +366,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       healthReason: healthStatus.reason,
       version: this.everythingVersion,
       esPath: this.esPath,
+      configuredCliPath: this.configuredCliPath,
       error: this.initializationError?.message || null,
       errorCode: this.lastBackendErrorCode,
       lastBackendError: this.lastBackendError,
       backendAttemptErrors: this.backendAttemptErrors,
       fallbackChain: this.fallbackChain,
       lastChecked: this.lastChecked,
+      pathFiltering: this.pathFilteringStatus,
       diagnostics: this.diagnosticsTracker.snapshot()
     }
   }
@@ -424,6 +447,31 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       this.logInfo('Everything toggled', { enabled: this.isEnabled })
       return { success: true, enabled: this.isEnabled }
+    })
+
+    transport.on(everythingSetCliPathEvent, async (payload) => {
+      const nextCliPath = this.normalizeCliPath(payload?.path)
+
+      if (nextCliPath && process.platform !== 'win32') {
+        throw new Error('Everything CLI path can only be configured on Windows')
+      }
+
+      if (nextCliPath) {
+        await this.probeEverythingCli(nextCliPath)
+      }
+
+      this.configuredCliPath = nextCliPath
+      this.saveSettings()
+
+      if (this.isEnabled) {
+        await this.refreshBackendState('manual-check')
+      }
+
+      return {
+        success: true,
+        cliPath: this.configuredCliPath,
+        status: this.getStatusSnapshot()
+      }
     })
 
     transport.on(everythingTestEvent, async () => {
@@ -634,27 +682,27 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
    */
   private async detectEverything(): Promise<void> {
     const possiblePaths = [
+      this.configuredCliPath,
       'es.exe', // In PATH
       'C:\\Program Files\\Everything\\es.exe',
       'C:\\Program Files (x86)\\Everything\\es.exe',
       path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Everything', 'es.exe'),
       path.join(process.env.PROGRAMFILES || '', 'Everything', 'es.exe'),
       path.join(process.env['PROGRAMFILES(X86)'] || '', 'Everything', 'es.exe')
-    ]
+    ].filter((candidate): candidate is string => Boolean(candidate))
 
     for (const esPath of possiblePaths) {
       try {
-        const { stdout } = await execFileAsync(esPath, ['-v'], { timeout: 3000 })
-        if (stdout.includes('es') || stdout.includes('Everything')) {
-          this.esPath = esPath
-          this.everythingVersion = this.parseVersion(stdout)
-          this.logInfo('Found Everything CLI', {
-            path: esPath,
-            version: this.everythingVersion
-          })
-          return
-        }
-      } catch (_error) {
+        const { version } = await this.probeEverythingCli(esPath)
+        this.esPath = esPath
+        this.everythingVersion = version
+        this.logInfo('Found Everything CLI', {
+          path: esPath,
+          version: this.everythingVersion
+        })
+        return
+      } catch (error) {
+        this.backendAttemptErrors[esPath] = getErrorMessage(error)
         // Continue to next path
       }
     }
@@ -662,6 +710,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     throw new Error(
       'Everything Command-line Interface (es.exe) not found. Please install Everything from https://www.voidtools.com/'
     )
+  }
+
+  private async probeEverythingCli(esPath: string): Promise<{ version: string | null }> {
+    const { stdout } = await execFileAsync(esPath, ['-v'], {
+      timeout: 3000,
+      windowsHide: true
+    })
+
+    if (!stdout.includes('es') && !stdout.includes('Everything')) {
+      throw new Error('Selected file is not Everything CLI (es.exe)')
+    }
+
+    return { version: this.parseVersion(stdout) }
   }
 
   private parseVersion(versionOutput: string): string | null {
@@ -681,7 +742,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
     if (this.backend === 'sdk-napi') {
       try {
-        return await this.searchEverythingWithSdk(query, maxResults, signal)
+        const sdkResults = await this.searchEverythingWithSdk(query, maxResults, signal)
+        return this.filterAuthorizedResults(sdkResults)
       } catch (error) {
         if (isAbortError(error) || isSearchFallbackError(error)) {
           throw error
@@ -694,10 +756,81 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (this.backend === 'cli') {
-      return this.searchEverythingWithCli(query, maxResults, signal)
+      const cliResults = await this.searchEverythingWithCli(query, maxResults, signal)
+      return this.filterAuthorizedResults(cliResults)
     }
 
     return []
+  }
+
+  private normalizeWindowsPathForFilter(value: string): string {
+    return path.win32
+      .normalize(value.trim())
+      .replace(/[\\/]+$/, '')
+      .toLowerCase()
+  }
+
+  private isWithinAllowedRoots(filePath: string, roots: string[]): boolean {
+    const normalizedPath = this.normalizeWindowsPathForFilter(filePath)
+
+    return roots.some((root) => {
+      const normalizedRoot = this.normalizeWindowsPathForFilter(root)
+      return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}\\`)
+    })
+  }
+
+  private updatePathFilteringStatus(options: {
+    allowedRootCount: number
+    rawCount: number
+    filteredCount: number
+    reason: string | null
+  }): void {
+    this.pathFilteringStatus = {
+      enabled: true,
+      allowedRootCount: options.allowedRootCount,
+      lastRawResultCount: options.rawCount,
+      lastFilteredResultCount: options.filteredCount,
+      lastDroppedResultCount: options.rawCount - options.filteredCount,
+      lastChecked: Date.now(),
+      reason: options.reason
+    }
+  }
+
+  private filterAuthorizedResults(results: EverythingSearchResult[]): EverythingSearchResult[] {
+    let roots: string[]
+    try {
+      roots = fileProvider.getWatchedPaths()
+    } catch (error) {
+      this.logWarn('Everything path filtering could not read File Index watch roots', error)
+      this.updatePathFilteringStatus({
+        allowedRootCount: 0,
+        rawCount: results.length,
+        filteredCount: 0,
+        reason: 'file-index-watch-roots-unavailable'
+      })
+      return []
+    }
+
+    const usableRoots = roots.filter((root) => typeof root === 'string' && root.trim().length > 0)
+    if (usableRoots.length === 0) {
+      this.updatePathFilteringStatus({
+        allowedRootCount: 0,
+        rawCount: results.length,
+        filteredCount: 0,
+        reason: 'no-file-index-watch-roots'
+      })
+      return []
+    }
+
+    const filtered = results.filter((result) => this.isWithinAllowedRoots(result.path, usableRoots))
+    this.updatePathFilteringStatus({
+      allowedRootCount: usableRoots.length,
+      rawCount: results.length,
+      filteredCount: filtered.length,
+      reason: filtered.length === results.length ? null : 'outside-file-index-watch-roots'
+    })
+
+    return filtered
   }
 
   private async ensureCliFallback(): Promise<void> {

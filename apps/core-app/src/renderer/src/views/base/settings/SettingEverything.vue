@@ -1,11 +1,13 @@
 <script setup lang="ts" name="SettingEverything">
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   type EverythingHealthState,
+  everythingSetCliPathEvent,
   everythingStatusEvent,
   everythingTestEvent,
   everythingToggleEvent,
@@ -34,9 +36,21 @@ const { t } = useI18n()
 const transport = useTuffTransport()
 const settingEverythingLog = createRendererLogger('SettingEverything')
 
+const openFileEvent = defineRawEvent<
+  {
+    title?: string
+    defaultPath?: string
+    buttonLabel?: string
+    filters?: { name: string; extensions: string[] }[]
+    properties?: string[]
+  },
+  { filePaths?: string[] }
+>('dialog:open-file')
+
 const everythingStatus = ref<EverythingStatusResponse | null>(null)
 const isChecking = ref(false)
 const isTesting = ref(false)
+const isSavingCliPath = ref(false)
 
 function mapBackendLabel(backend: EverythingBackendType): string {
   if (backend === 'sdk-napi') return t('settings.settingEverything.backendSdk')
@@ -138,6 +152,61 @@ async function testSearch() {
   }
 }
 
+async function saveCliPath(path: string | null) {
+  if (isSavingCliPath.value) return
+
+  isSavingCliPath.value = true
+  try {
+    const result = await transport.send(everythingSetCliPathEvent, { path })
+    everythingStatus.value = result.status
+    toast.success(
+      path
+        ? t('settings.settingEverything.cliPathSaved')
+        : t('settings.settingEverything.cliPathCleared')
+    )
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    settingEverythingLog.error('Failed to save Everything CLI path', error)
+    toast.error(
+      t('settings.settingEverything.cliPathSaveFailed', {
+        error: message
+      })
+    )
+  } finally {
+    isSavingCliPath.value = false
+  }
+}
+
+async function selectCliPath() {
+  try {
+    const defaultPath = everythingStatus.value?.configuredCliPath || everythingStatus.value?.esPath
+    const result = await transport.send(openFileEvent, {
+      title: t('settings.settingEverything.cliPathSelect'),
+      defaultPath: defaultPath || undefined,
+      buttonLabel: t('common.confirm'),
+      properties: ['openFile'],
+      filters: [
+        {
+          name: t('settings.settingEverything.cliPathFileFilter'),
+          extensions: ['exe']
+        }
+      ]
+    })
+
+    const selected = result.filePaths?.[0]
+    if (selected) {
+      await saveCliPath(selected)
+    }
+  } catch (error) {
+    settingEverythingLog.error('Failed to select Everything CLI path', error)
+    toast.error(t('settings.settingEverything.cliPathSelectFailed'))
+  }
+}
+
+async function clearCliPath() {
+  await saveCliPath(null)
+}
+
 function openEverythingDownload() {
   window.open('https://www.voidtools.com/', '_blank')
 }
@@ -223,6 +292,20 @@ const fallbackChainText = computed(() => {
     return '-'
   }
   return everythingStatus.value.fallbackChain.map((item) => mapBackendLabel(item)).join(' → ')
+})
+
+const configuredCliPathText = computed(() => {
+  return everythingStatus.value?.configuredCliPath || '-'
+})
+
+const activeCliPathText = computed(() => {
+  return everythingStatus.value?.esPath || '-'
+})
+
+const cliPathDescription = computed(() => {
+  return everythingStatus.value?.configuredCliPath
+    ? t('settings.settingEverything.cliPathDesc')
+    : t('settings.settingEverything.cliPathAutoDesc')
 })
 
 const healthText = computed(() => {
@@ -341,6 +424,45 @@ onUnmounted(() => {
     >
       <div class="version-info">
         {{ fallbackChainText }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.cliPathTitle')"
+      :description="cliPathDescription"
+      default-icon="i-carbon-terminal"
+      active-icon="i-carbon-terminal"
+    >
+      <div class="cli-path-panel">
+        <div class="cli-path-row">
+          <span>{{ t('settings.settingEverything.configuredCliPath') }}</span>
+          <code>{{ configuredCliPathText }}</code>
+        </div>
+        <div class="cli-path-row">
+          <span>{{ t('settings.settingEverything.activeCliPath') }}</span>
+          <code>{{ activeCliPathText }}</code>
+        </div>
+        <div class="install-buttons">
+          <TxButton variant="flat" :disabled="isSavingCliPath" @click="selectCliPath">
+            {{ t('settings.settingEverything.cliPathSelect') }}
+          </TxButton>
+          <TxButton
+            v-if="everythingStatus.configuredCliPath"
+            variant="flat"
+            :disabled="isSavingCliPath"
+            @click="clearCliPath"
+          >
+            {{ t('settings.settingEverything.cliPathClear') }}
+          </TxButton>
+          <TxButton variant="flat" :disabled="isChecking" @click="checkStatus(true)">
+            {{
+              isChecking
+                ? t('settings.settingEverything.checking')
+                : t('settings.settingEverything.checkNow')
+            }}
+          </TxButton>
+        </div>
       </div>
     </TuffBlockSlot>
 
@@ -502,6 +624,32 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.cli-path-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 280px;
+  max-width: 520px;
+}
+
+.cli-path-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--tuff-text-secondary);
+
+  code {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--tuff-text-primary);
+    font-family: 'JetBrains Mono', monospace;
+  }
 }
 
 .diagnostics-list {

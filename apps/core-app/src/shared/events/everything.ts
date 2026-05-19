@@ -22,6 +22,16 @@ export interface EverythingDiagnostics {
   lastUpdated: number | null
 }
 
+export interface EverythingPathFilteringStatus {
+  enabled: boolean
+  allowedRootCount: number
+  lastRawResultCount: number | null
+  lastFilteredResultCount: number | null
+  lastDroppedResultCount: number | null
+  lastChecked: number | null
+  reason: string | null
+}
+
 export interface EverythingResultSample {
   path: string
   name: string
@@ -43,12 +53,14 @@ export interface EverythingStatusResponse {
   healthReason: string | null
   version: string | null
   esPath: string | null
+  configuredCliPath: string | null
   error: string | null
   errorCode?: string | null
   lastBackendError: string | null
   backendAttemptErrors: Record<string, string>
   fallbackChain: EverythingBackendType[]
   lastChecked: number | null
+  pathFiltering: EverythingPathFilteringStatus
   diagnostics?: EverythingDiagnostics
 }
 
@@ -59,6 +71,16 @@ export interface EverythingToggleRequest {
 export interface EverythingToggleResponse {
   success: boolean
   enabled: boolean
+}
+
+export interface EverythingSetCliPathRequest {
+  path?: string | null
+}
+
+export interface EverythingSetCliPathResponse {
+  success: boolean
+  cliPath: string | null
+  status: EverythingStatusResponse
 }
 
 export interface EverythingTestResponse {
@@ -84,5 +106,10 @@ export const everythingToggleEvent = defineRawEvent<
   EverythingToggleRequest,
   EverythingToggleResponse
 >('everything:toggle')
+
+export const everythingSetCliPathEvent = defineRawEvent<
+  EverythingSetCliPathRequest,
+  EverythingSetCliPathResponse
+>('everything:set-cli-path')
 
 export const everythingTestEvent = defineRawEvent<void, EverythingTestResponse>('everything:test')
