@@ -13,6 +13,7 @@ declare global {
   const EffectScope: typeof import('vue').EffectScope
   const GoogleTranslateProvider: typeof import('./src/providers/google-translate').GoogleTranslateProvider
   const MyMemoryTranslateProvider: typeof import('./src/providers/mymemory-translate').MyMemoryTranslateProvider
+  const PROVIDER_SECRET_FIELDS: typeof import('./src/composables/useTranslationProvider').PROVIDER_SECRET_FIELDS
   const TencentTranslateProvider: typeof import('./src/providers/tencent-translate').TencentTranslateProvider
   const TuffIntelligenceTranslateProvider: typeof import('./src/providers/tuffintelligence-translate').TuffIntelligenceTranslateProvider
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
@@ -46,6 +47,7 @@ declare global {
   const getCurrentScope: typeof import('vue').getCurrentScope
   const getCurrentWatcher: typeof import('vue').getCurrentWatcher
   const h: typeof import('vue').h
+  const hasProviderSecretDefinition: typeof import('./src/composables/useTranslationProvider').hasProviderSecretDefinition
   const ignorableWatch: typeof import('@vueuse/core').ignorableWatch
   const inject: typeof import('vue').inject
   const injectLocal: typeof import('@vueuse/core').injectLocal
@@ -353,6 +355,7 @@ declare module 'vue' {
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
     readonly GoogleTranslateProvider: UnwrapRef<typeof import('./src/providers/google-translate')['GoogleTranslateProvider']>
     readonly MyMemoryTranslateProvider: UnwrapRef<typeof import('./src/providers/mymemory-translate')['MyMemoryTranslateProvider']>
+    readonly PROVIDER_SECRET_FIELDS: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['PROVIDER_SECRET_FIELDS']>
     readonly TencentTranslateProvider: UnwrapRef<typeof import('./src/providers/tencent-translate')['TencentTranslateProvider']>
     readonly TuffIntelligenceTranslateProvider: UnwrapRef<typeof import('./src/providers/tuffintelligence-translate')['TuffIntelligenceTranslateProvider']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
@@ -386,6 +389,7 @@ declare module 'vue' {
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
+    readonly hasProviderSecretDefinition: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['hasProviderSecretDefinition']>
     readonly ignorableWatch: UnwrapRef<typeof import('@vueuse/core')['ignorableWatch']>
     readonly inject: UnwrapRef<typeof import('vue')['inject']>
     readonly injectLocal: UnwrapRef<typeof import('@vueuse/core')['injectLocal']>
