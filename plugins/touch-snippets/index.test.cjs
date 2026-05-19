@@ -60,13 +60,19 @@ const {
   serializeSnippets,
 } = require('./index.js').__test
 
-test('applyPlaceholders resolves date time and clipboard placeholders', () => {
-  const resolved = applyPlaceholders('{{date}} {{time}} {{clipboard}}', {
+test('applyPlaceholders resolves date time uuid and clipboard placeholders', () => {
+  let uuidCalls = 0
+  const resolved = applyPlaceholders('{{date}} {{time}} {{uuid}} {{uuid}} {{clipboard}}', {
     now: new Date(2026, 4, 17, 8, 9, 10),
     clipboardText: 'copied',
+    uuidFactory: () => {
+      uuidCalls += 1
+      return '123e4567-e89b-12d3-a456-426614174000'
+    },
   })
 
-  assert.equal(resolved, '2026-05-17 08:09:10 copied')
+  assert.equal(resolved, '2026-05-17 08:09:10 123e4567-e89b-12d3-a456-426614174000 123e4567-e89b-12d3-a456-426614174000 copied')
+  assert.equal(uuidCalls, 1)
 })
 
 test('parseSnippets accepts string payloads and keeps legacy snippet shape', () => {
