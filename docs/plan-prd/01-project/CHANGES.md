@@ -33,6 +33,129 @@
   - DivisionBox now honors `header.show=false` and `ui.showInput=false` across main-process WebContentsView bounds and CoreBox renderer layout, allowing tool windows without the launcher header/input chrome.
   - Added focused coverage for image data URL helpers, Nexus scene invocation, DivisionBox header height resolution, and direct `SessionInfo` SDK open responses; packaged Electron/manual clipboard-image evidence remains a follow-up.
 
+### feat(plugins): add snippets uuid placeholder
+
+- `plugins/touch-snippets/index.js`
+- `plugins/touch-snippets/index.test.cjs`
+- `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md`
+- `docs/plan-prd/TODO.md`
+  - Extended `touch-snippets` placeholder resolution with `{{uuid}}` using Node `randomUUID()`, keeping `{{date}}`, `{{time}}`, and `{{clipboard}}` behavior unchanged.
+  - Added deterministic focused coverage so repeated `{{uuid}}` placeholders inside one snippet resolve to the same generated value.
+  - Updated the Raycast/uTools gap matrix and TODO status to mark the first placeholder batch as landed while leaving browser-tab, cursor, hot string/autopaste, and cross-device evidence as follow-ups.
+
+### feat(plugins): add emoji and symbol picker plugin
+
+- `plugins/touch-emoji-symbols/manifest.json`
+- `plugins/touch-emoji-symbols/index.js`
+- `plugins/touch-emoji-symbols/index.test.cjs`
+- `plugins/touch-emoji-symbols/package.json`
+- `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md`
+- `docs/plan-prd/TODO.md`
+  - Added a dedicated `touch-emoji-symbols` Prelude plugin with built-in common emoji, arrows, punctuation, currency, and math symbols.
+  - The plugin supports `emoji`, `symbol`, `symbols`, `表情`, `符号`, and `特殊字符` command prefixes, CoreBox search, and clipboard copy actions.
+  - Added focused Node tests for prefix parsing, English/Chinese keyword matching, copy-item construction, and empty state; recent usage, larger datasets, grouping, Store metadata, and install evidence remain follow-ups.
+
+### docs(tuffex): improve CommandPalette launcher demo
+
+- `apps/nexus/app/components/content/demos/CommandPaletteCommandPaletteDemo.vue`
+- `apps/nexus/content/docs/dev/components/command-palette.{zh,en}.mdc`
+- `packages/tuffex/docs/components/command-palette.md`
+- `docs/plan-prd/TODO.md`
+  - Reworked the CommandPalette demo from a minimal button/list example into a Raycast/uTools-style launcher scenario with command icons, keyboard hints, keyword-backed filtering, disabled command state, empty text, and last-action feedback.
+  - Updated the bilingual Nexus component docs to describe launcher usage, UX notes, keyword behavior, disabled states, and the `closeOnSelect=false` workflow option.
+  - Synced the package-level TuffEx component doc so local package docs and Nexus docs show the same component behavior.
+
+### docs(nexus): refresh plugin SDK workflow
+
+- `apps/nexus/content/docs/dev/getting-started/plugin-workflow.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/quickstart.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/reference/manifest.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/release/publish.{zh,en}.md`
+- `apps/nexus/content/docs/dev/index.{zh,en}.mdc`
+- `apps/nexus/app/data/tuffSdkItems.ts`
+- `apps/nexus/app/data/search/featureIndex.ts`
+- `docs/plan-prd/TODO.md`
+  - Added a bilingual plugin development workflow that connects Manifest, `index.js` Prelude, SDK selection, validation, build, publish preflight, and plugin package vs CloudShare content package boundaries.
+  - Updated quickstart and manifest docs away from the legacy `entry` / `init(ctx)` model toward `main: "index.js"` and `module.exports = { onFeatureTriggered, onItemAction }`.
+  - Updated publish docs to use `tuff validate --strict`, `tuff build`, `tuff publish --dry-run`, publisher auth preflight, and API key scope guidance instead of older generic package commands.
+  - Added Nexus Developer Hub, Getting Started, Reference, Release, landing SDK card, and search index entries for the workflow.
+
+### feat(core-app): add explicit calculator preview prefixes
+
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+- `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md`
+- `docs/plan-prd/TODO.md`
+  - CoreBox preview now treats `calc`, `calculator`, `calculate`, `计算`, and `换算` prefixes as explicit calculator commands and strips the prefix before resolving through PreviewSDK.
+  - Explicit calculator results keep the original query for search history while passing the resolved expression/unit query to PreviewSDK, avoiding a duplicate calculator implementation in plugins.
+  - The Raycast/uTools gap matrix now marks the explicit calculator entry as landed; Store discoverability and richer history management remain follow-up work.
+
+### docs: add Raycast/uTools capability gap matrix
+
+- `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+  - Added a competitor capability baseline for Raycast/uTools-style desktop productivity workflows, grounded in current plugin manifests, PreviewSDK abilities, App Data roadmap, Nexus SDK navigation, and TuffEx component docs.
+  - Prioritized Calculator explicit entry, Browser Data, Everything real-device evidence, App Launcher evidence, Snippets placeholders, Emoji/Symbol picker, Quicklinks unification, Context Actions, SDK task-flow docs, and TuffEx scenario demos.
+  - Kept the matrix as a P1 execution input and did not change the `2.4.11` P0 stabilization line.
+
+### feat(core-app): allow manual Everything CLI path
+
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/everything-diagnostic-evidence.ts`
+- `apps/core-app/src/main/modules/platform/everything-diagnostic-verifier.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/everything-integration.md`
+  - Settings Everything now lets users select or clear a custom Everything CLI (`es.exe`) path through typed transport.
+  - The provider persists `cliPath`, validates selected binaries with `es.exe -v` before saving, and probes the configured path before PATH/default install directories.
+  - Everything status and diagnostic evidence now include `configuredCliPath` alongside the active `esPath`, keeping Windows regression evidence explicit about user configuration.
+  - Everything SDK/CLI results now fail closed through File Index watch-root filtering before reaching CoreBox; diagnostic evidence records only path-filtering counts/reason, not watched root paths.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/everything-provider.test.ts" "src/renderer/src/views/base/settings/setting-everything-state.test.ts" "src/renderer/src/views/base/settings/everything-diagnostic-evidence.test.ts" "src/main/modules/platform/everything-diagnostic-verifier.test.ts" "src/main/modules/native-capabilities/index.test.ts" --reporter dot` passed.
+
+### feat(core-app): manage scanned App Index entries
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-index-metadata.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider-diagnostics.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndexAppIndexManager.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/app-index-manager-display.ts`
+  - App Index manager now lists scanned apps alongside manually added launch entries, including source, removability, bundleId, and identity kind metadata.
+  - Scanned app entries can be enabled or disabled through the existing typed settings SDK; disabled scanned apps are removed from the search index and filtered out of recommendation/search mapping.
+  - Single-app diagnostics, metadata update paths, mdls update repair, and managed-entry reindex now route through the same enabled-state check instead of directly rebuilding keywords.
+  - Scanned entries remain non-removable in the manager; deletion is still limited to manually added entries.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" "src/main/modules/box-tool/addon/apps/search-processing-service.test.ts" "src/renderer/src/views/base/settings/app-index-manager-display.test.ts" --reporter dot` passed.
+
+### feat(core-app): install CloudShare snippet packs from Store details
+
+- `packages/utils/cloud-share/snippet-pack.ts`
+- `packages/utils/cloud-share/index.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/plugin.ts`
+- `packages/utils/transport/sdk/domains/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-content-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/renderer/src/composables/store/usePluginContentPackages.ts`
+- `apps/core-app/src/renderer/src/composables/store/plugin-content-error-utils.ts`
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `packages/utils/__tests__/cloud-share-snippet-pack.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-content-installer.test.ts`
+- `apps/core-app/src/renderer/src/composables/store/usePluginContentPackages.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md`
+  - CoreApp Store plugin detail now renders a Content section backed by public Nexus `/api/store/plugin-content?pluginId=...&limit=20`, showing title, summary, kind, format, install count, and update time.
+  - Added `plugin-content:install` transport flow and a main-process installer that only writes to an already-installed `touch-snippets` plugin, only accepts `manifest.importTarget === "touch-snippets"` and `format === "tuff.snippet-pack+json"`, and writes through the existing plugin storage boundary.
+  - Extracted shared snippet pack normalization/import helpers under `packages/utils/cloud-share` so CoreApp install uses the same merge and sensitive-filter semantics as `touch-snippets`.
+  - Installation count is synced through the public CloudShare install API after local import succeeds; unsupported target/format, missing target plugin, network sync, and storage write failures return explicit error codes.
+  - Validation: `pnpm -C "packages/utils" exec vitest run "__tests__/cloud-share-sdk.test.ts" "__tests__/cloud-share-snippet-pack.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-content-installer.test.ts" "src/renderer/src/composables/store/usePluginContentPackages.test.ts" "src/renderer/src/composables/store/store-rating-error-utils.test.ts"` passed.
+
 ## 2026-05-18
 
 ### fix(nexus): reactivate CLI devices during browser auth
