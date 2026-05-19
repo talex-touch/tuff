@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.emoji-symbols",
+  "name": "touch-emoji-symbols",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260428,
+  "category": "utilities",
+  "icon": {
+    "type": "emoji",
+    "value": "🙂"
+  },
+  "description": "Emoji 与符号选择器：搜索并复制常用表情、标点、货币与数学符号",
+  "main": "index.js",
+  "permissions": {
+    "required": ["clipboard.write"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "clipboard.write": "将选中的 Emoji 或符号复制到剪贴板"
+  },
+  "features": [
+    {
+      "id": "emoji-symbols",
+      "name": "Emoji 与符号",
+      "desc": "搜索并复制常用 emoji、标点、货币与数学符号",
+      "icon": {
+        "type": "emoji",
+        "value": "🙂"
+      },
+      "keywords": ["emoji", "symbol", "symbols", "表情", "符号", "颜文字", "特殊字符"],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["emoji", "symbol", "symbols", "表情", "符号", "特殊字符"]
+        }
+      ]
+    }
+  ]
+}
