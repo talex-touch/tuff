@@ -10,10 +10,12 @@ const props = withDefaults(
   defineProps<{
     noPadding?: boolean
     native?: boolean
+    nativeAutoFallback?: boolean
   }>(),
   {
     noPadding: false,
-    native: false
+    native: false,
+    nativeAutoFallback: true
   }
 )
 
@@ -87,6 +89,7 @@ defineExpose({
     v-bind="$attrs"
     :no-padding="noPadding"
     :native="useNative"
+    :native-auto-fallback="nativeAutoFallback"
     :options="resolvedBScrollOptions"
     @scroll="(info) => emit('scroll', info)"
   >
