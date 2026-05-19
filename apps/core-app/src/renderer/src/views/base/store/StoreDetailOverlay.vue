@@ -1,4 +1,5 @@
 <script lang="ts" name="StoreDetail" setup>
+import type { PluginContentPackage } from '@talex-touch/utils/types/cloud-share'
 import type { StorePluginListItem } from '~/composables/store/useStoreData'
 /**
  * StoreDetail - Plugin detail page component
@@ -8,11 +9,13 @@ import type { StorePluginListItem } from '~/composables/store/useStoreData'
  * - Sidebar with plugin metadata
  */
 import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
-import { TxRating } from '@talex-touch/tuffex'
+import { TxButton, TxRating } from '@talex-touch/tuffex'
 import { computed, onMounted, watch } from 'vue'
 import StoreInstallButton from '~/components/store/StoreInstallButton.vue'
 import { useI18n } from 'vue-i18n'
 import StoreDetailSkeleton from '~/components/store/StoreDetailSkeleton.vue'
+import { resolvePluginContentErrorReason } from '~/composables/store/plugin-content-error-utils'
+import { usePluginContentPackages } from '~/composables/store/usePluginContentPackages'
 import { useStoreData } from '~/composables/store/useStoreData'
 import { useStoreDetail } from '~/composables/store/useStoreDetail'
 import { resolveStoreRatingErrorMessage } from '~/composables/store/store-rating-error-utils'
@@ -66,6 +69,16 @@ const installTask = computed(() =>
 const { detailMeta } = useStoreDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeMarkdown, readmeLoading, readmeError } = useStoreReadme(readmeUrl, t)
+const contentPluginId = computed(() => activePlugin.value?.id ?? null)
+const {
+  packages: contentPackages,
+  loading: contentLoading,
+  error: contentError,
+  installingPackageId,
+  installError,
+  load: loadContentPackages,
+  installPackage
+} = usePluginContentPackages(contentPluginId)
 
 const canRate = computed(() => {
   return (
@@ -90,11 +103,51 @@ const ratingErrorText = computed(() => {
   return resolveStoreRatingErrorMessage(ratingError.value, t)
 })
 
+const contentErrorText = computed(() => {
+  return contentError.value ? resolvePluginContentErrorReason(contentError.value, t) : null
+})
+
+const installErrorText = computed(() => {
+  return installError.value ? resolvePluginContentErrorReason(installError.value, t) : null
+})
+
+function formatContentPackageDate(value: string | null | undefined): string {
+  if (!value) return t('store.detailDialog.contentUnknownDate')
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return t('store.detailDialog.contentUnknownDate')
+
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit'
+  }).format(date)
+}
+
 async function onInstallActivePlugin(): Promise<void> {
   if (!activePlugin.value) return
   await handleInstall(
     activePlugin.value,
     pluginStatus.value.hasUpgrade ? { isUpgrade: true, autoReEnable: true } : undefined
+  )
+}
+
+async function onInstallContentPackage(contentPackage: PluginContentPackage): Promise<void> {
+  const result = await installPackage(contentPackage)
+  if (result.success) {
+    await forTouchTip(
+      t('store.detailDialog.contentInstallSuccessTitle'),
+      t('store.detailDialog.contentInstallSuccessMessage', {
+        title: contentPackage.title,
+        count: result.importedCount ?? 0
+      })
+    )
+    return
+  }
+
+  await forTouchTip(
+    t('store.detailDialog.contentInstallFailedTitle'),
+    resolvePluginContentErrorReason(result.error, t)
   )
 }
 
@@ -163,6 +216,106 @@ onMounted(() => {
             :empty-text="t('store.detailDialog.readmeEmpty')"
             content-class="readme-content"
           />
+
+          <section class="content-section">
+            <div class="content-section-header">
+              <div>
+                <h3>{{ t('store.detailDialog.contentTitle') }}</h3>
+                <p>{{ t('store.detailDialog.contentSubtitle') }}</p>
+              </div>
+              <TxButton
+                variant="flat"
+                size="sm"
+                :loading="contentLoading"
+                @click="loadContentPackages"
+              >
+                <i class="i-ri-refresh-line" />
+                {{ t('store.detailDialog.contentRefresh') }}
+              </TxButton>
+            </div>
+
+            <div v-if="contentLoading && contentPackages.length === 0" class="content-state">
+              <i class="i-ri-loader-4-line animate-spin" />
+              <span>{{ t('store.detailDialog.contentLoading') }}</span>
+            </div>
+            <div v-else-if="contentErrorText" class="content-state error">
+              <i class="i-ri-error-warning-line" />
+              <span>{{ contentErrorText }}</span>
+            </div>
+            <div v-else-if="contentPackages.length === 0" class="content-state">
+              <i class="i-ri-inbox-line" />
+              <span>{{ t('store.detailDialog.contentEmpty') }}</span>
+            </div>
+
+            <div v-else class="content-package-list">
+              <article
+                v-for="contentPackage in contentPackages"
+                :key="contentPackage.id"
+                class="content-package"
+              >
+                <div class="content-package-main">
+                  <div class="content-package-title-row">
+                    <h4>{{ contentPackage.title }}</h4>
+                    <span class="content-package-kind">
+                      {{ contentPackage.kind }}
+                    </span>
+                  </div>
+                  <p v-if="contentPackage.summary" class="content-package-summary">
+                    {{ contentPackage.summary }}
+                  </p>
+                  <div class="content-package-meta">
+                    <span>{{ contentPackage.manifest.format }}</span>
+                    <span>
+                      {{
+                        t('store.detailDialog.contentInstalls', {
+                          count: contentPackage.installCount
+                        })
+                      }}
+                    </span>
+                    <span>
+                      {{
+                        t('store.detailDialog.contentUpdatedAt', {
+                          date: formatContentPackageDate(contentPackage.updatedAt)
+                        })
+                      }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="content-package-actions">
+                  <TxButton
+                    v-if="!pluginStatus.isInstalled"
+                    variant="flat"
+                    size="sm"
+                    @click="onInstallActivePlugin"
+                  >
+                    <i class="i-ri-plug-line" />
+                    {{ t('store.detailDialog.contentInstallPluginFirst') }}
+                  </TxButton>
+                  <TxButton
+                    v-else
+                    variant="flat"
+                    type="primary"
+                    size="sm"
+                    :loading="installingPackageId === contentPackage.id"
+                    :disabled="Boolean(installingPackageId)"
+                    @click="onInstallContentPackage(contentPackage)"
+                  >
+                    <i class="i-ri-download-cloud-2-line" />
+                    {{
+                      installingPackageId === contentPackage.id
+                        ? t('store.detailDialog.contentInstalling')
+                        : t('store.detailDialog.contentInstall')
+                    }}
+                  </TxButton>
+                </div>
+              </article>
+            </div>
+
+            <p v-if="installErrorText" class="content-install-error">
+              {{ installErrorText }}
+            </p>
+          </section>
         </div>
 
         <div class="sidebar">
@@ -348,6 +501,129 @@ onMounted(() => {
   }
 }
 
+.content-section {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--tx-border-color-lighter);
+}
+
+.content-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 650;
+    color: var(--tx-text-color-primary);
+  }
+
+  p {
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: var(--tx-text-color-secondary);
+  }
+}
+
+.content-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 88px;
+  border: 1px dashed var(--tx-border-color);
+  border-radius: 8px;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.9rem;
+
+  i {
+    font-size: 1.1rem;
+  }
+
+  &.error {
+    color: var(--tx-color-danger);
+    border-color: color-mix(in srgb, var(--tx-color-danger) 40%, transparent);
+  }
+}
+
+.content-package-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.content-package {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 8px;
+  background: var(--tx-fill-color-extra-light);
+}
+
+.content-package-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.content-package-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  h4 {
+    margin: 0;
+    overflow: hidden;
+    color: var(--tx-text-color-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.content-package-kind {
+  flex-shrink: 0;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-secondary);
+  font-size: 0.72rem;
+}
+
+.content-package-summary {
+  margin: 0.4rem 0 0;
+  color: var(--tx-text-color-regular);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.content-package-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  margin-top: 0.55rem;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.75rem;
+}
+
+.content-package-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.content-install-error {
+  margin: 0.75rem 0 0;
+  color: var(--tx-color-danger);
+  font-size: 0.85rem;
+}
+
 .sidebar {
   width: 260px;
   flex-shrink: 0;
@@ -433,6 +709,16 @@ onMounted(() => {
   .sidebar {
     width: 100%;
     max-height: none;
+  }
+
+  .content-package {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .content-package-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 

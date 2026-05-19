@@ -32,6 +32,8 @@ import type {
   PluginApiSaveWidgetFileRequest,
   PluginApiSaveWidgetFileResponse,
   PluginApiTriggerFeatureRequest,
+  PluginContentInstallRequest,
+  PluginContentInstallResponse,
   PluginDevServerStatusRequest,
   PluginDevServerStatusResponse,
   PluginInstallConfirmPayload,
@@ -85,6 +87,7 @@ export interface PluginSdk {
   sendInstallConfirmResponse: (payload: PluginInstallConfirmResponsePayload) => Promise<void>
 
   installFromSource: (payload: PluginInstallSourceRequest) => Promise<PluginInstallSourceResponse>
+  installContent: (payload: PluginContentInstallRequest) => Promise<PluginContentInstallResponse>
 }
 
 export function createPluginSdk(transport: ITuffTransport): PluginSdk {
@@ -140,5 +143,6 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     },
 
     installFromSource: async payload => transport.send(PluginEvents.install.source, payload),
+    installContent: async payload => transport.send(PluginEvents.content.install, payload),
   }
 }

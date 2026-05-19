@@ -1,6 +1,6 @@
 # Tuff TODO
 
-> 更新时间：2026-05-18
+> 更新时间：2026-05-19
 > 定位：当前 2 周执行清单。历史完整清单已归档到 `docs/plan-prd/docs/archive/TODO-pre-compression-2026-05-14.md`；长期债务见 `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`。
 
 ## 当前执行窗口
@@ -36,7 +36,7 @@
 | P1-NATIVE | Native transport V1 真机 smoke | 待执行 | 补 macOS 屏幕录制授权、Windows 多屏、Linux X11/Wayland best-effort；打包预览确认 `sharp` 与 ffmpeg/ffprobe 可执行。 |
 | P1-QUICK-LAUNCH | Quick Launch 真机验收 | 待执行 | macOS/Windows/Linux 验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。 |
 | P1-PUBLISHER | 插件发布管理端到端证据 | 进行中 | CoreApp `/store/publisher` 与 Nexus assets/API key 流程已接入；2026-05-18 已修复发布认证 scope 口径：`plugin:publish` 隐含 `plugin:read`，新建 API key 默认带 `plugin:read` + `plugin:publish`；CLI 真实 publish 前改用 `/api/dashboard/auth/publisher` 进行 publisher 预检并兼容 API Key，旧 Nexus 缺少该 endpoint 时回退 Dashboard plugin lookup，避免 `/api/auth/me` 误杀 API Key；交互 CLI 已区分本地 token 文件与远端可用登录态，账号/云端插件列表会显示认证或网络失败原因而非伪装为空列表；`--dry-run` 保持本地预览；`touch-snippets` 已收口 text/code/prompt/template 片段的 CoreBox 搜索、复制、保存与管理入口，旧 `touch-text-snippets` / `touch-code-snippets` 已从 CoreBox feature surface 退为 legacy placeholder；仍需补 package policy/security scan、真实 `.tpex` 上传端到端证据，以及旧 snippets 目录删除/迁移策略确认。 |
-| P1-CLOUDSHARE | CloudShare 插件内容包发布/安装 MVP | 进行中 | 已新增 `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md`、`CloudShareSDK`、Nexus `/api/store/plugin-content/*`、Store 详情页 Content tab 与 `touch-snippets` snippet pack 导出/导入/list/install 基础能力；仍需补插件 Surface/CoreApp Store 的登录发布 UI、内容审核队列、团队可见与订阅/fork。 |
+| P1-CLOUDSHARE | CloudShare 插件内容包发布/安装 MVP | 进行中 | 已新增 `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md`、`CloudShareSDK`、Nexus `/api/store/plugin-content/*`、Store 详情页 Content tab 与 `touch-snippets` snippet pack 导出/导入/list/install 基础能力；2026-05-19 CoreApp Store 插件详情页已接入公开 Content 区块，目标插件已安装时可通过 `plugin-content:install` 将 `tuff.snippet-pack+json` 写入本地 `touch-snippets/snippets.json`，未安装时只提示先安装插件，不做自动串联。仍需补插件 Surface/CoreApp Store 的登录发布 UI、内容审核队列、团队可见与订阅/fork。 |
 | P1-APP-DATA | App Data Plugins 与 Everything 收口 | 待执行 | 已新增 `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md`。近期目标是先建统一数据源/索引诊断基线，再推进 `touch-browser-data` 真实浏览器书签/历史、`touch-obsidian`、`touch-vscode`、macOS App Data 调研/插件、Epic 定义澄清，并收口 Windows Everything SDK/CLI 策略、路径授权过滤、诊断 evidence 与真机回归；明确不包含更新系统 Nexus Hard-Cut。 |
 
 ## 已完成/历史不再重复开发
