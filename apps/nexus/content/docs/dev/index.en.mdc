@@ -5,12 +5,14 @@
 ## Getting Started
 1. **[Developer Overview](./getting-started/overview.en.md)** — understand the plugin model and architecture.
 2. **[Quickstart](./getting-started/quickstart.en.md)** — scaffold your first plugin in minutes.
-3. **[Manifest Reference](./reference/manifest.en.md)** — configure capabilities and permissions.
-4. **[Legacy Plugin Migration](./release/migration.en.md)** — upgrade legacy plugins to the new SDK model.
+3. **[Plugin Development Workflow](./getting-started/plugin-workflow.en.md)** — end-to-end path from Manifest and Prelude to SDK choices, build, and publish.
+4. **[Manifest Reference](./reference/manifest.en.md)** — configure capabilities and permissions.
+5. **[Legacy Plugin Migration](./release/migration.en.md)** — upgrade legacy plugins to the new SDK model.
 
 ## Deep Dive
 - **[API Reference](./api/)** — typed interfaces for storage, channels, and UI.
 - **[Extensions](./extensions/)** — advanced patterns for complex integrations.
+- **[Plugin Packages vs Content Packages](./getting-started/plugin-workflow.en.md#plugin-packages-vs-content-packages)** — separate `.tpex`, CloudShare content packages, and CloudSync private sync.
 - **[Core App startup and runtime env](./reference/runtime-startup-env.en.md)** — startup gates, dev.source fallback, env inventory, cleanup candidates.
 - **[Examples](./reference/examples.en.md)** — entry point backed by `examples/`.
 - **[Code Snippets](./reference/snippets.en.md)** — copy-paste examples for common tasks.

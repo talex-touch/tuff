@@ -6,3 +6,4 @@ For newcomers to plugin development, focusing on structure and essential workflo
 ## Suggested order
 - [Development overview](./overview.en.md)
 - [Plugin quick start](./quickstart.en.md)
+- [Plugin development workflow](./plugin-workflow.en.md)

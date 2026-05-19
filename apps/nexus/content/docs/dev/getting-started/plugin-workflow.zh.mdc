@@ -1,0 +1,182 @@
+# 插件开发任务流
+
+> 从一个 CoreBox 指令到可发布插件包的最短稳定路径。
+
+## 适用场景
+
+这份任务流适合开发 `index.js` 先导脚本插件：在 CoreBox 中声明指令、返回搜索结果、执行复制/打开/导入等动作，然后通过 TUFF CLI 构建 `.tpex` 并发布到 Nexus。
+
+如果你的插件需要重量级 Vue/React UI，仍然沿用同一条任务流：Manifest 声明能力，`index.js` 负责轻量注册与调度，Surface/UI 只在需要时加载。
+
+## 1. Manifest
+
+新插件优先使用 `main: "index.js"`，并声明最新 `sdkapi`、分类、权限和权限用途。
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.example.quick-note",
+    "name": "quick-note",
+    "version": "0.1.0",
+    "author": "Example",
+    "sdkapi": 260428,
+    "category": "productivity",
+    "description": "Save selected text as a quick note.",
+    "main": "index.js",
+    "permissions": {
+      "required": ["clipboard.read"],
+      "optional": ["clipboard.write"]
+    },
+    "permissionReasons": {
+      "clipboard.read": "读取剪贴板中的文本作为笔记内容",
+      "clipboard.write": "将处理后的笔记内容复制回剪贴板"
+    },
+    "features": [
+      {
+        "id": "quick-note.save",
+        "name": "保存快速笔记",
+        "desc": "将输入或剪贴板文本保存为笔记",
+        "keywords": ["note", "memo", "笔记"],
+        "push": true,
+        "acceptedInputTypes": ["text"],
+        "commands": [
+          { "type": "over", "value": ["note", "memo", "笔记"] }
+        ]
+      }
+    ]
+  }
+---
+:::
+
+检查点：
+- `sdkapi >= 260114` 时必须声明 `category`。
+- `permissions.required` 只放启动或核心路径必需的权限。
+- 每个非自动授权权限都要写 `permissionReasons`，便于用户理解授权原因。
+
+## 2. Prelude
+
+`index.js` 是插件的先导脚本。它运行在 Node.js 沙箱中，通过 `globalThis` 获取插件上下文。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const { clipboard, logger, box, TuffItemBuilder } = globalThis
+
+  const PLUGIN_NAME = 'quick-note'
+  const COPY_ACTION_ID = 'copy'
+
+  function getQueryText(query) {
+    return typeof query === 'string' ? query : query?.text ?? ''
+  }
+
+  function buildCopyItem(text) {
+    return new TuffItemBuilder('quick-note.copy')
+      .setSource('plugin', 'plugin-features', PLUGIN_NAME)
+      .setTitle('复制笔记内容')
+      .setSubtitle(text.slice(0, 80))
+      .setMeta({
+        pluginName: PLUGIN_NAME,
+        defaultAction: COPY_ACTION_ID,
+      })
+      .createAndAddAction(COPY_ACTION_ID, 'copy', '复制', text)
+      .build()
+  }
+
+  module.exports = {
+    async onFeatureTriggered(featureId, query, feature, signal) {
+      const text = getQueryText(query).trim()
+      if (!text) {
+        return []
+      }
+      logger.info('feature triggered', { featureId, featureName: feature?.name })
+      return [buildCopyItem(text)]
+    },
+
+    async onItemAction(item) {
+      const action = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === 'copy')
+      if (action?.payload) {
+        clipboard.writeText(action.payload)
+      }
+      box?.hide?.()
+    },
+  }
+---
+:::
+
+检查点：
+- 不再使用旧的 `init(ctx)` 模型。
+- 处理 `query` 时兼容字符串和 `TuffQuery` 对象。
+- 搜索结果用 `TuffItemBuilder`，并在 `meta` 中写清 `pluginName` 和默认动作。
+- 异步搜索、网络请求或长任务要尊重 `signal`，便于 CoreBox 取消过期请求。
+
+## 3. 选择 SDK
+
+优先按任务选择最小 SDK，不要为了“以后可能会用”提前申请权限。
+
+| 任务 | 推荐入口 | 说明 |
+| --- | --- | --- |
+| CoreBox 搜索结果 | `TuffItemBuilder`、Feature SDK | 先导脚本内直接构建 item；复杂动态列表再使用 Feature SDK。 |
+| 剪贴板 | `clipboard` 或 `useClipboard()` | 写剪贴板通常为低风险；读剪贴板要声明 `clipboard.read` 并按需请求。 |
+| 插件配置 | `storage` 或 `usePluginStorage()` | 适合普通设置和非敏感数据，每插件有容量限制。 |
+| 插件结构化数据 | `usePluginSqlite()` | 需要 `sdkapi >= 260215` 和 `storage.sqlite`。 |
+| Secret | `usePluginSecret()` | API Key、Token、Provider secret 不允许明文写入 JSON、localStorage 或日志。 |
+| 用户私有同步 | `CloudSyncSDK` | 走 `/api/v1/sync/*`，同步载荷必须使用密文 `payload_enc` 或 `payload_ref`。 |
+| 内容包分享 | `CloudShareSDK` | 用于公开或团队可见的插件内容包，例如 snippet pack；不要混作用户私有同步。 |
+| 传输通道 | typed transport SDK | 新能力优先走 typed transport，不新增 raw IPC 依赖。 |
+
+## 4. 验证
+
+发布前至少完成这些本地检查：
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff validate --strict
+  tuff build
+  tuff publish --dry-run
+---
+:::
+
+仓库内改动还应补最近路径验证，例如 focused Vitest、文件级 ESLint 和 `git diff --check`。不要把全仓历史 lint 噪声当作当前插件改动失败。
+
+## 5. 构建与发布
+
+常规发布路径：
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff login
+  tuff validate --strict
+  tuff build
+  tuff publish --dry-run
+  tuff publish --tag 0.1.0 --channel BETA
+---
+:::
+
+发布注意事项：
+- `tuff build` 会生成 `dist/build/` 和 `.tpex` 插件包。
+- `tuff publish --dry-run` 只做本地预览，不上传。
+- Nexus API Key 至少需要 `plugin:publish`，当前发布预检会按 publisher 权限校验；`plugin:publish` 口径包含发布前读取插件信息所需的能力。
+- 如果 Nexus 拒绝 CLI Token，先执行 `tuff login` 刷新浏览器授权会话，或检查 API Key scopes。
+
+## 6. 插件包与内容包边界
+
+插件包发布和插件内容包发布是两条不同链路：
+
+- 插件包：发布 `.tpex`，更新插件代码、Manifest、资产和 Surface。
+- 内容包：发布插件可导入的数据，例如 `touch-snippets` 的 `tuff.snippet-pack+json`。
+- CloudSync：同步用户自己的加密业务数据，不用于公开市场内容。
+- CloudShare：分发可安装内容包，内容应经过敏感信息过滤与目标插件校验。
+
+当插件同时支持“同步”和“分享”时，建议把同步数据结构、分享数据结构、导入合并逻辑拆开维护，避免把用户私有数据直接发布成公开内容。
+
+## 相关文档
+
+- [快速上手](./quickstart.zh.md)
+- [Manifest 参考](../reference/manifest.zh.md)
+- [Plugin Context](../api/plugin-context.zh.md)
+- [Storage API](../api/storage.zh.md)
+- [Cloud Sync SDK](../extensions/cloud-sync.zh.md)
+- [发布流程](../release/publish.zh.md)

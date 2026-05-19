@@ -9,40 +9,91 @@ code: |
   pnpm install
 ---
 :::
-The CLI generates the manifest, `init/index.ts`, `preload/index.ts`, and a sample component.
+The scaffold includes the Manifest, `index.js` Prelude, optional UI directory, and baseline build configuration.
 
 ## 2. Manifest
-`manifest.json`
+Start with plugin identity, entrypoint, SDK version, category, permissions, and a CoreBox feature in `manifest.json`.
+
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
     "id": "com.example.my-plugin",
-    "name": "Sample Plugin",
+    "name": "my-plugin",
     "version": "0.1.0",
+    "author": "Example",
+    "sdkapi": 260428,
+    "category": "utilities",
+    "description": "Return a copy action from CoreBox.",
+    "main": "index.js",
     "dev": { "enable": true },
-    "entry": "init/index.ts",
-    "permissions": ["clipboard", "network"],
-    "acceptedInputTypes": ["text"]
+    "permissions": {
+      "required": [],
+      "optional": ["clipboard.write"]
+    },
+    "permissionReasons": {
+      "clipboard.write": "Copy processed text to the clipboard"
+    },
+    "features": [
+      {
+        "id": "my-plugin.copy",
+        "name": "Copy Input Text",
+        "desc": "Type text in CoreBox and copy it",
+        "keywords": ["copy", "text"],
+        "push": true,
+        "acceptedInputTypes": ["text"],
+        "commands": [
+          { "type": "over", "value": ["copy"] }
+        ]
+      }
+    ]
   }
 ---
 :::
 
-## 3. Init Script
-`init/index.ts`
-:::TuffCodeBlock{lang="ts"}
+## 3. Prelude Script
+`index.js` runs in the plugin sandbox and reads context APIs from `globalThis`.
+
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
-  import type { PluginContext } from '@talex-touch/utils'
-  
-  export default async function init(ctx: PluginContext) {
-    const { logger, channel } = ctx
-    logger.info('Plugin ready')
-  
-    channel.reg('my-plugin:ping', async payload => {
-      logger.debug('payload', payload)
-      return { pong: true }
-    })
+  const { clipboard, box, TuffItemBuilder } = globalThis
+  const PLUGIN_NAME = 'my-plugin'
+  const COPY_ACTION_ID = 'copy'
+
+  function getQueryText(query) {
+    return typeof query === 'string' ? query : query?.text ?? ''
+  }
+
+  module.exports = {
+    async onFeatureTriggered(featureId, query) {
+      const text = getQueryText(query).trim()
+      if (!text) {
+        return []
+      }
+
+      return [
+        new TuffItemBuilder('my-plugin.copy-result')
+          .setSource('plugin', 'plugin-features', PLUGIN_NAME)
+          .setTitle('Copy Input Text')
+          .setSubtitle(text.slice(0, 80))
+          .setMeta({
+            pluginName: PLUGIN_NAME,
+            featureId,
+            defaultAction: COPY_ACTION_ID,
+          })
+          .createAndAddAction(COPY_ACTION_ID, 'copy', 'Copy', text)
+          .build(),
+      ]
+    },
+
+    async onItemAction(item) {
+      const action = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === 'copy')
+      if (action?.payload) {
+        clipboard.writeText(action.payload)
+      }
+      box?.hide?.()
+    },
   }
 ---
 :::
@@ -50,13 +101,16 @@ code: |
 ## 4. Debug
 - `pnpm core:dev` keeps the plugin hot-reloaded.
 - Logs show up in DevTools and `logs/plugins/<id>.log`.
-- Call `ctx.devtools.open()` to pop DevTools for the plugin window.
+- Use `logger` for plugin logs, and avoid writing sensitive parameters to logs.
 
-## 5. Build
+## 5. Validate And Build
 :::TuffCodeBlock{lang="bash"}
 ---
 code: |
-  pnpm build
+  tuff validate --strict
+  tuff build
 ---
 :::
-The `dist/` folder contains compiled scripts, assets, and the update manifest.
+`tuff build` creates `dist/build/` and a `.tpex` package. Before publishing, run `tuff publish --dry-run` to preview the upload.
+
+Continue with [Plugin Development Workflow](./plugin-workflow.en.md).

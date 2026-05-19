@@ -16,18 +16,17 @@ code: |
   plugins/
   └── my-plugin/
       ├── manifest.json
-      ├── init/
-      │   └── index.ts
-      ├── preload/
-      └── src/
+      ├── index.js
+      ├── assets/
+      └── widgets/
 ---
 :::
 
 ## 生命周期
-1. **加载**：Manifest 被解析，注册入口脚本。
-2. **初始化**：`init/index.ts` 执行，注入上下文（日志、存储、Channel）。
-3. **运行**：插件监听事件、渲染 UI 或提供后台服务。
-4. **销毁**：停用或卸载时触发 `onDestroy`，清理资源。
+1. **加载**：Manifest 被解析，`main` 指向的先导脚本被载入。
+2. **注册**：`index.js` 从 `globalThis` 读取上下文，并导出 `onFeatureTriggered`、`onItemAction` 等 hooks。
+3. **运行**：CoreBox 触发 feature，插件返回 item、渲染 UI 或提供后台服务。
+4. **清理**：停用或卸载时清理定时器、监听器、临时文件和外部资源。
 
 ## 沙箱策略
 - 文件访问限制在插件私有目录。
@@ -36,5 +35,5 @@ code: |
 
 ## 开发体验
 - `pnpm core:dev`：启动 Electron + 插件热重载。
-- `pnpm utils:test`：运行工具包测试，保证 SDK 行为一致。
-- 使用 `pnpm core:build:snapshot` 检查发布包完整性。
+- `tuff validate --strict`：校验 Manifest、SDK API 版本、分类和权限声明。
+- `tuff build`：构建 `.tpex` 插件包。
