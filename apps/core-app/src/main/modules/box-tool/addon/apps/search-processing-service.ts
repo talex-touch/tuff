@@ -16,12 +16,10 @@ import { formatLog, generateAcronym, LogStyle, parseStringList } from './app-uti
 import { resolveDisplayName } from './display-name-sync-utils'
 import { calculateHighlights } from './highlighting-service'
 import { createLogger } from '../../../../utils/logger'
+import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
 const searchProcessingLog = createLogger('AppScanner').child('SearchProcessing')
-const MANAGED_ENTRY_SOURCE_KEY = 'entrySource'
-const MANAGED_ENTRY_ENABLED_KEY = 'entryEnabled'
-const MANAGED_ENTRY_SOURCE_VALUE = 'manual'
 const ALTERNATE_NAMES_EXTENSION_KEY = 'alternateNames'
 const APP_FALLBACK_ICON = 'i-ri-apps-line'
 
@@ -38,11 +36,7 @@ interface AppMatchState {
 }
 
 export function isSearchableAppRow(app: AppSearchRow): boolean {
-  if (app.extensions[MANAGED_ENTRY_SOURCE_KEY] !== MANAGED_ENTRY_SOURCE_VALUE) {
-    return true
-  }
-  const enabled = app.extensions[MANAGED_ENTRY_ENABLED_KEY]
-  return enabled !== '0' && enabled !== 'false'
+  return isAppEntryEnabledExtensionMap(app.extensions)
 }
 
 function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): ProcessedTuffItem {

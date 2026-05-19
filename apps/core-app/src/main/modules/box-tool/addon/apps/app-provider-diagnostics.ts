@@ -20,6 +20,7 @@ import {
   normalizeDisplayName,
   resolveDisplayName
 } from './display-name-sync-utils'
+import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
@@ -36,7 +37,7 @@ export interface AppProviderDiagnosticsContext {
   mapDbAppToScannedInfo(app: DbAppWithExtensions): ScannedAppInfo
   generateKeywordsForApp(appInfo: ScannedAppInfo): Promise<Set<string>>
   getAliasesForApp(appInfo: ScannedAppInfo): string[]
-  syncKeywordsForApp(appInfo: ScannedAppInfo): Promise<void>
+  syncIndexedAppState(app: DbAppWithExtensions): Promise<void>
   addAppByPath(rawPath: string): Promise<AppIndexAddPathResult>
   buildFtsQuery(terms: string[]): string
   logError(message: string, meta?: Record<string, unknown>): void
@@ -47,7 +48,6 @@ const APP_IDENTITY_KIND_EXTENSION_KEY = 'identityKind'
 const APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY = 'displayNameSource'
 const APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY = 'displayNameQuality'
 const APP_ENTRY_SOURCE_EXTENSION_KEY = 'entrySource'
-const APP_ENTRY_ENABLED_EXTENSION_KEY = 'entryEnabled'
 
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim()
@@ -76,16 +76,6 @@ function resolveAppItemIds(value: {
     value.path,
     value.bundleId
   ])
-}
-
-function isManagedEntryEnabledExtensionMap(
-  extensions: Record<string, string | null> | undefined
-): boolean {
-  if (extensions?.[APP_ENTRY_SOURCE_EXTENSION_KEY] !== 'manual') {
-    return true
-  }
-  const raw = extensions?.[APP_ENTRY_ENABLED_EXTENSION_KEY]
-  return raw !== '0' && raw !== 'false'
 }
 
 async function findDiagnosticApp(
@@ -283,7 +273,7 @@ function toDiagnosticApp(
     description: appInfo.description,
     alternateNames: appInfo.alternateNames ?? [],
     entrySource: app.extensions[APP_ENTRY_SOURCE_EXTENSION_KEY] || undefined,
-    entryEnabled: isManagedEntryEnabledExtensionMap(app.extensions)
+    entryEnabled: isAppEntryEnabledExtensionMap(app.extensions)
   }
 }
 
@@ -587,7 +577,7 @@ export async function reindexAppSearchTarget(
     }
   }
 
-  await context.syncKeywordsForApp(context.mapDbAppToScannedInfo(match.app))
+  await context.syncIndexedAppState(match.app)
   return {
     success: true,
     status: 'reindexed',

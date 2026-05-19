@@ -23,6 +23,16 @@ export interface AppIndexAddPathResult {
 }
 
 export type AppIndexEntryLaunchKind = "path" | "shortcut" | "uwp" | "protocol";
+export type AppIndexManagedEntrySource = "manual" | "scanned";
+export type AppIndexEntryIdentityKind =
+  | "macos-path"
+  | "macos-bundle"
+  | "windows-uwp"
+  | "windows-shortcut"
+  | "windows-path"
+  | "windows-protocol"
+  | "linux-desktop"
+  | "fallback";
 
 export interface AppIndexManagedEntry {
   path: string;
@@ -30,6 +40,10 @@ export interface AppIndexManagedEntry {
   displayName?: string;
   icon?: string;
   enabled: boolean;
+  source?: AppIndexManagedEntrySource;
+  removable?: boolean;
+  bundleId?: string;
+  identityKind?: AppIndexEntryIdentityKind;
   launchKind: AppIndexEntryLaunchKind;
   launchTarget: string;
   launchArgs?: string;
@@ -79,15 +93,7 @@ export interface AppIndexDiagnosticApp {
   displayName?: string;
   rawDisplayName?: string;
   displayNameStatus?: "clean" | "fallback" | "missing";
-  identityKind?:
-    | "macos-path"
-    | "macos-bundle"
-    | "windows-uwp"
-    | "windows-shortcut"
-    | "windows-path"
-    | "windows-protocol"
-    | "linux-desktop"
-    | "fallback";
+  identityKind?: AppIndexEntryIdentityKind;
   displayNameSource?: string;
   displayNameQuality?:
     | "localized"

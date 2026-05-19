@@ -99,9 +99,10 @@ export function isManagedEntryExtensionMap(extensions: AppExtensionMap | undefin
 export function isManagedEntryEnabledExtensionMap(
   extensions: AppExtensionMap | undefined
 ): boolean {
-  if (!isManagedEntryExtensionMap(extensions)) {
-    return true
-  }
+  return isAppEntryEnabledExtensionMap(extensions)
+}
+
+export function isAppEntryEnabledExtensionMap(extensions: AppExtensionMap | undefined): boolean {
   const raw = extensions?.[APP_ENTRY_ENABLED_EXTENSION_KEY]
   return raw !== '0' && raw !== 'false'
 }
