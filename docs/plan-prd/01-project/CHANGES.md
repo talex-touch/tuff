@@ -168,6 +168,15 @@
   - Installation count is synced through the public CloudShare install API after local import succeeds; unsupported target/format, missing target plugin, network sync, and storage write failures return explicit error codes.
   - Validation: `pnpm -C "packages/utils" exec vitest run "__tests__/cloud-share-sdk.test.ts" "__tests__/cloud-share-snippet-pack.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-content-installer.test.ts" "src/renderer/src/composables/store/usePluginContentPackages.test.ts" "src/renderer/src/composables/store/store-rating-error-utils.test.ts"` passed.
 
+
+### fix(core-app): stabilize Windows CoreBox first-show and result list layout
+
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+  - Added a short blur-hide suppression window during CoreBox show on Windows-path runtime to prevent first-show focus/blur races from immediately auto-hiding the window.
+  - Hardened blur auto-hide guard to respect suppression both before and after the async UI focus handoff check.
+  - Forced stable vertical scrollbar reservation for CoreBox result area (`overflow-y: scroll` + `scrollbar-gutter: stable both-edges`) to remove horizontal layout jitter when search results change.
+
 ## 2026-05-18
 
 ### fix(nexus): reactivate CLI devices during browser auth

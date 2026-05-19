@@ -113,6 +113,7 @@ export class WindowManager {
   private lastSetBounds: { height: number; y: number } | null = null
   private customTopPercent: number | null = null // Custom position offset (0-1)
   private readonly pollingService = PollingService.getInstance()
+  private suppressBlurHideUntil = 0
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -292,6 +293,10 @@ export class WindowManager {
         return
       }
 
+      if (Date.now() < this.suppressBlurHideUntil) {
+        return
+      }
+
       const isUIMode = coreBoxManager.isUIMode
 
       if (!isUIMode) {
@@ -301,7 +306,7 @@ export class WindowManager {
 
       await sleep(17)
 
-      if (!this.uiViewFocused) {
+      if (!this.uiViewFocused && Date.now() >= this.suppressBlurHideUntil) {
         coreBoxManager.trigger(false)
       }
     })
@@ -646,6 +651,7 @@ export class WindowManager {
     this.updatePosition(window)
 
     const shouldFocus = triggeredByShortcut || coreBoxManager.isUIMode || !!this.uiView
+    this.suppressBlurHideUntil = Date.now() + 400
     if (shouldFocus) {
       window.window.show()
     } else {
