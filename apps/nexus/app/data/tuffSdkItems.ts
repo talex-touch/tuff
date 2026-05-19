@@ -9,6 +9,14 @@ export interface TuffSdkItem {
 
 export const tuffSdkItems: TuffSdkItem[] = [
   {
+    id: 'plugin-workflow',
+    title: 'Plugin Workflow',
+    description: 'Manifest, Prelude, validation & publish flow.',
+    tag: 'tuff validate',
+    color: '#14b8a6',
+    icon: 'i-carbon-flow-stream',
+  },
+  {
     id: 'box-sdk',
     title: 'Box SDK',
     description: 'CoreBox window control.',

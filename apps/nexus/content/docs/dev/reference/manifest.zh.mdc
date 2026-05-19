@@ -9,12 +9,13 @@
 | `version` | string | 是 | 语义化版本 |
 | `sdkapi` | number | **推荐** | SDK API 版本，格式 YYMMDD（如 260428） |
 | `category` | string | 条件必填 | 分类 ID（与 Nexus 同步，如 `utilities`、`productivity`），用于 UI 分组（`sdkapi >= 260114` 必填） |
-| `entry` | string | 是 | init 入口文件路径 |
+| `main` | string | 是 | 先导脚本入口，通常为 `index.js` |
+| `entry` | string | 旧字段 | 旧版 init 入口；新插件不要继续使用 |
 | `preload` | string | 否 | 渲染层预加载脚本 |
 | `dev.enable` | boolean | 否 | 开发模式热重载 |
 | `permissions` | object | 否 | 权限声明，见下方详情 |
 | `permissionReasons` | object | 否 | 权限用途说明 |
-| `acceptedInputTypes` | string[] | 否 | `text`、`image`、`files`、`html` |
+| `features[].acceptedInputTypes` | string[] | 否 | `text`、`image`、`files`、`html` |
 | `features` | object[] | 否 | CoreBox 指令、Widget、Workflow 节点 |
 
 ## SDK API 版本 (sdkapi)
@@ -92,14 +93,18 @@ code: |
     "version": "1.3.0",
     "sdkapi": 260428,
     "category": "utilities",
-    "entry": "init/index.ts",
+    "main": "index.js",
     "features": [
       {
-        "type": "corebox",
         "id": "todo.new",
-        "title": "快速创建待办",
+        "name": "快速创建待办",
+        "desc": "从输入文本创建本地待办",
         "keywords": ["todo", "task"],
-        "queryMode": "text"
+        "push": true,
+        "acceptedInputTypes": ["text", "files"],
+        "commands": [
+          { "type": "over", "value": ["todo", "task"] }
+        ]
       }
     ],
     "permissions": {
@@ -109,20 +114,21 @@ code: |
     "permissionReasons": {
       "clipboard.read": "读取剪贴板中的待办内容",
       "storage.sqlite": "将待办数据存储到本地 SQLite"
-    },
-    "acceptedInputTypes": ["text", "files"]
+    }
   }
 ---
 :::
 
 ## 校验
-- `id` 必须唯一且只含字母数字点。
+- `id` 必须唯一，建议使用反向域名。
 - `version` 需遵循 `major.minor.patch`，自动比较以确定更新顺序。
+- 新插件使用 `main: "index.js"` 和 `module.exports = { onFeatureTriggered, onItemAction }`。
 - 当 `permissions` 包含 `network` 时需声明允许的域名。
 
 ## 常见错误
 | 情况 | 解决办法 |
 | --- | --- |
-| 未填写 entry | 指定 `init/index.ts` 并确保文件存在 |
+| 未填写 main | 指定 `index.js` 并确保文件存在 |
+| 继续使用 `entry` / `init(ctx)` | 按 [插件开发任务流](../getting-started/plugin-workflow.zh.md) 迁移到先导脚本模型 |
 | 权限过多被拒 | 仅声明实际需要的权限，首版尽量最小化 |
 | features 关键词冲突 | 使用命名空间（如 `todo.` 前缀）避免重复 |

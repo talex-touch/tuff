@@ -16,18 +16,17 @@ code: |
   plugins/
   └── my-plugin/
       ├── manifest.json
-      ├── init/
-      │   └── index.ts
-      ├── preload/
-      └── src/
+      ├── index.js
+      ├── assets/
+      └── widgets/
 ---
 :::
 
 ## Lifecycle
-1. **Load** – manifest is parsed and entry scripts are registered.
-2. **Init** – `init/index.ts` runs with context (logger, storage, channel).
-3. **Run** – plugin listens to events, renders UI, or exposes services.
-4. **Destroy** – `onDestroy` clears timers, listeners, and temporary files.
+1. **Load** – Manifest is parsed and the Prelude script referenced by `main` is loaded.
+2. **Register** – `index.js` reads context from `globalThis` and exports hooks such as `onFeatureTriggered` and `onItemAction`.
+3. **Run** – CoreBox triggers features, while the plugin returns items, renders UI, or exposes services.
+4. **Cleanup** – disabled or removed plugins clear timers, listeners, temporary files, and external resources.
 
 ## Sandbox Policy
 - File access is scoped to the plugin directory.
@@ -36,5 +35,5 @@ code: |
 
 ## Developer Loop
 - `pnpm core:dev` launches Electron with hot reload for plugins.
-- `pnpm utils:test` validates shared SDK behavior.
-- `pnpm core:build:snapshot` ensures the packaged app loads your plugin.
+- `tuff validate --strict` checks Manifest, SDK API version, category, and permission declarations.
+- `tuff build` creates the `.tpex` plugin package.

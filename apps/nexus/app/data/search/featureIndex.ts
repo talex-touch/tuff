@@ -27,6 +27,7 @@ const HERO_HIGHLIGHT_PATHS: Record<string, string> = {
 }
 
 const SDK_DOCS_MAP: Record<string, string> = {
+  'plugin-workflow': '/docs/dev/getting-started/plugin-workflow',
   'box-sdk': 'box',
   'clipboard-sdk': 'clipboard',
   'tempfile-sdk': 'temp-file',
@@ -83,13 +84,14 @@ const sdkItems: FeatureSearchItem[] = tuffSdkItems.flatMap((item) => {
   const slug = SDK_DOCS_MAP[item.id]
   if (!slug)
     return []
+  const path = slug.startsWith('/') ? slug : `/docs/dev/api/${slug}`
   return [
     {
       id: item.id,
       titleKey: item.title,
       descriptionKey: item.description,
       icon: item.icon,
-      path: `/docs/dev/api/${slug}`,
+      path,
       searchTokens: [item.tag, slug, 'sdk'],
     },
   ]

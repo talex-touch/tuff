@@ -9,12 +9,13 @@
 | `version` | string | ✓ | SemVer |
 | `sdkapi` | number | **Recommended** | SDK API version, format YYMMDD (e.g., 260428) |
 | `category` | string | Conditional | Category id synced with Nexus (e.g., `utilities`, `productivity`) (required when `sdkapi >= 260114`) |
-| `entry` | string | ✓ | Path to init entry |
+| `main` | string | ✓ | Prelude script entry, usually `index.js` |
+| `entry` | string | Legacy | Legacy init entry; do not use for new plugins |
 | `preload` | string |  | Renderer preload file |
 | `dev.enable` | boolean |  | Enable hot reload |
 | `permissions` | object |  | Permission declarations, see below |
 | `permissionReasons` | object |  | Reasons for permissions |
-| `acceptedInputTypes` | string[] |  | `text`, `image`, `files`, `html` |
+| `features[].acceptedInputTypes` | string[] |  | `text`, `image`, `files`, `html` |
 | `features` | object[] |  | CoreBox commands, widgets, workflow nodes |
 
 ## SDK API Version (sdkapi)
@@ -90,14 +91,18 @@ code: |
     "version": "1.3.0",
     "sdkapi": 260428,
     "category": "utilities",
-    "entry": "init/index.ts",
+    "main": "index.js",
     "features": [
       {
-        "type": "corebox",
         "id": "todo.new",
-        "title": "Create Todo",
+        "name": "Create Todo",
+        "desc": "Create a local todo from input text",
         "keywords": ["todo", "task"],
-        "queryMode": "text"
+        "push": true,
+        "acceptedInputTypes": ["text", "files"],
+        "commands": [
+          { "type": "over", "value": ["todo", "task"] }
+        ]
       }
     ],
     "permissions": {
@@ -107,20 +112,21 @@ code: |
     "permissionReasons": {
       "clipboard.read": "Read todo content from clipboard",
       "storage.sqlite": "Store todo data in local SQLite"
-    },
-    "acceptedInputTypes": ["text", "files"]
+    }
   }
 ---
 :::
 
 ## Validation Checklist
-- `id` must be unique and alphanumeric with dots.
+- `id` must be unique; reverse-domain IDs are recommended.
 - `version` follows `major.minor.patch` for update ordering.
+- New plugins use `main: "index.js"` and `module.exports = { onFeatureTriggered, onItemAction }`.
 - Declaring `network` requires whitelisting external domains.
 
 ## Frequent Issues
 | Issue | Fix |
 | --- | --- |
-| Missing entry | Set `entry` to `init/index.ts` and ensure the file exists. |
+| Missing main | Set `main` to `index.js` and ensure the file exists. |
+| Still using `entry` / `init(ctx)` | Migrate to the Prelude model through [Plugin Development Workflow](../getting-started/plugin-workflow.en.md). |
 | Excessive permissions | Request only what you truly need, especially for v1. |
 | Keyword collisions | Namespace features like `todo.*` to avoid conflicts. |

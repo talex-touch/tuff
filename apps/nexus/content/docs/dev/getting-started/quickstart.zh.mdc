@@ -9,40 +9,91 @@ code: |
   pnpm install
 ---
 :::
-脚手架会生成 Manifest、`init/index.ts`、`preload/index.ts` 与示例组件。
+脚手架会生成 Manifest、`index.js` 先导脚本、可选 UI 目录与基础构建配置。
 
 ## 2. Manifest
-在 `manifest.json` 中填写：
+在 `manifest.json` 中先声明插件身份、入口、SDK 版本、分类、权限与 CoreBox feature。
+
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
     "id": "com.example.my-plugin",
-    "name": "示例插件",
+    "name": "my-plugin",
     "version": "0.1.0",
+    "author": "Example",
+    "sdkapi": 260428,
+    "category": "utilities",
+    "description": "Return a copy action from CoreBox.",
+    "main": "index.js",
     "dev": { "enable": true },
-    "entry": "init/index.ts",
-    "permissions": ["clipboard", "network"],
-    "acceptedInputTypes": ["text"]
+    "permissions": {
+      "required": [],
+      "optional": ["clipboard.write"]
+    },
+    "permissionReasons": {
+      "clipboard.write": "将处理后的文本复制到剪贴板"
+    },
+    "features": [
+      {
+        "id": "my-plugin.copy",
+        "name": "复制输入文本",
+        "desc": "在 CoreBox 中输入文本并复制",
+        "keywords": ["copy", "text", "复制"],
+        "push": true,
+        "acceptedInputTypes": ["text"],
+        "commands": [
+          { "type": "over", "value": ["copy", "复制"] }
+        ]
+      }
+    ]
   }
 ---
 :::
 
-## 3. 初始化脚本
-`init/index.ts`：
-:::TuffCodeBlock{lang="ts"}
+## 3. 先导脚本
+`index.js` 运行在插件沙箱中，通过 `globalThis` 访问上下文 API。
+
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
-  import type { PluginContext } from '@talex-touch/utils'
-  
-  export default async function init(ctx: PluginContext) {
-    const { logger, channel } = ctx
-    logger.info('插件初始化完成')
-  
-    channel.reg('my-plugin:ping', async payload => {
-      logger.debug('收到请求', payload)
-      return { pong: true }
-    })
+  const { clipboard, box, TuffItemBuilder } = globalThis
+  const PLUGIN_NAME = 'my-plugin'
+  const COPY_ACTION_ID = 'copy'
+
+  function getQueryText(query) {
+    return typeof query === 'string' ? query : query?.text ?? ''
+  }
+
+  module.exports = {
+    async onFeatureTriggered(featureId, query) {
+      const text = getQueryText(query).trim()
+      if (!text) {
+        return []
+      }
+
+      return [
+        new TuffItemBuilder('my-plugin.copy-result')
+          .setSource('plugin', 'plugin-features', PLUGIN_NAME)
+          .setTitle('复制输入文本')
+          .setSubtitle(text.slice(0, 80))
+          .setMeta({
+            pluginName: PLUGIN_NAME,
+            featureId,
+            defaultAction: COPY_ACTION_ID,
+          })
+          .createAndAddAction(COPY_ACTION_ID, 'copy', '复制', text)
+          .build(),
+      ]
+    },
+
+    async onItemAction(item) {
+      const action = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === 'copy')
+      if (action?.payload) {
+        clipboard.writeText(action.payload)
+      }
+      box?.hide?.()
+    },
   }
 ---
 :::
@@ -50,13 +101,16 @@ code: |
 ## 4. 调试
 - 在 `pnpm core:dev` 运行时，插件保存即热重载。
 - 调试输出位于 DevTools Console 与 `logs/plugins/<id>.log`。
-- 使用 `ctx.devtools.open()` 打开插件专属 DevTools。
+- 使用 `logger` 输出插件日志，避免把敏感参数写入日志。
 
-## 5. 打包
+## 5. 校验与打包
 :::TuffCodeBlock{lang="bash"}
 ---
 code: |
-  pnpm build
+  tuff validate --strict
+  tuff build
 ---
 :::
-将会输出 `dist/`，包含编译后的脚本、资源与更新清单。
+`tuff build` 会输出 `dist/build/` 和 `.tpex` 插件包。发布前继续执行 `tuff publish --dry-run` 预览上传内容。
+
+继续阅读：[插件开发任务流](./plugin-workflow.zh.md)。
