@@ -176,12 +176,47 @@ describe('app-index-manager-display', () => {
     expect(
       resolveAppIndexManagerEmptyState([], {}, { source: 'all', diagnostic: 'all' }, t)
     ).toMatchObject({
-      title: 'No manually managed app entries',
-      detail: 'Add a Windows app file or paste a launch target to start managing search recall.',
+      title: 'No app index entries',
+      detail: 'Add an app file or run app scanning to start managing search recall.',
       actionKind: 'add-entry',
       actionLabel: 'Select App File',
       tone: 'neutral'
     })
+  })
+
+  it('summarizes scanned app entries with the same diagnostic model', () => {
+    const scanned = entry({
+      path: '/Applications/Preview.app',
+      source: 'scanned',
+      removable: false,
+      bundleId: 'com.apple.Preview',
+      identityKind: 'macos-bundle'
+    })
+    const disabledScanned = entry({
+      path: '/Applications/Disabled.app',
+      source: 'scanned',
+      removable: false,
+      enabled: false
+    })
+
+    expect(resolveAppIndexManagerSummary([scanned, disabledScanned], {})).toEqual({
+      total: 2,
+      enabled: 1,
+      disabled: 1,
+      found: 0,
+      notRun: 2,
+      attention: 1
+    })
+    expect(
+      filterAppIndexManagedEntries(
+        [scanned, disabledScanned],
+        {},
+        {
+          source: 'all',
+          diagnostic: 'disabled'
+        }
+      )
+    ).toEqual([disabledScanned])
   })
 
   it('explains source-filtered empty results with a clear action', () => {

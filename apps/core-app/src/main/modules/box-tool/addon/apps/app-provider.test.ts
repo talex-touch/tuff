@@ -1552,6 +1552,231 @@ describe('appProvider rebuild maintenance', () => {
     expect(fileRows).toEqual([])
   })
 
+  it('lists scanned and manual app index entries with management metadata', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const scannedPath = '/Applications/Preview.app'
+    const manualPath = '/Users/demo/bin/demo-script.sh'
+    const appRows = [
+      {
+        id: 1,
+        path: scannedPath,
+        name: 'Preview',
+        displayName: 'Preview',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      },
+      {
+        id: 2,
+        path: manualPath,
+        name: 'Demo Script',
+        displayName: 'Demo Script',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      }
+    ]
+    const rowsWithExtensions = [
+      {
+        ...appRows[0],
+        extensions: {
+          bundleId: 'com.apple.Preview',
+          appIdentity: 'bundle:com.apple.preview',
+          identityKind: 'macos-bundle',
+          launchKind: 'path',
+          launchTarget: scannedPath,
+          entryEnabled: '0'
+        }
+      },
+      {
+        ...appRows[1],
+        extensions: {
+          entrySource: 'manual',
+          entryEnabled: '1',
+          launchKind: 'shortcut',
+          launchTarget: manualPath
+        }
+      }
+    ]
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => appRows)
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => rowsWithExtensions)
+
+    const entries = await appProvider.listManagedEntries()
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: scannedPath,
+          enabled: false,
+          source: 'scanned',
+          removable: false,
+          bundleId: 'com.apple.Preview',
+          identityKind: 'macos-bundle'
+        }),
+        expect.objectContaining({
+          path: manualPath,
+          enabled: true,
+          source: 'manual',
+          removable: true,
+          launchKind: 'shortcut'
+        })
+      ])
+    )
+  })
+
+  it('allows disabling scanned app entries but keeps them non-removable', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const scannedPath = '/Applications/Preview.app'
+    const scannedFile = {
+      id: 7,
+      path: scannedPath,
+      name: 'Preview',
+      displayName: 'Preview',
+      type: 'app',
+      mtime: new Date(0),
+      ctime: new Date(0)
+    }
+    const extensionRows = [
+      { fileId: 7, key: 'bundleId', value: 'com.apple.Preview' },
+      { fileId: 7, key: 'appIdentity', value: 'bundle:com.apple.preview' },
+      { fileId: 7, key: 'identityKind', value: 'macos-bundle' },
+      { fileId: 7, key: 'launchKind', value: 'path' },
+      { fileId: 7, key: 'launchTarget', value: scannedPath }
+    ]
+    const addFileExtensionMock = vi.fn(async (fileId: number, key: string, value: string) => {
+      upsertExtensionRows(extensionRows, [{ fileId, key, value }])
+    })
+    const getDbMock = vi.fn()
+    const removeItemsMock = vi.fn(async () => undefined)
+
+    privateProvider.dbUtils = {
+      getDb: getDbMock,
+      getFileByPath: vi.fn(async (value: string) =>
+        value === scannedPath ? scannedFile : undefined
+      ),
+      getFileExtensions: vi.fn(async (fileId: number) =>
+        extensionRows.filter((row) => row.fileId === fileId)
+      ),
+      addFileExtension: addFileExtensionMock
+    }
+    privateProvider.searchIndex = {
+      removeItems: removeItemsMock
+    }
+
+    const disabled = await appProvider.setManagedEntryEnabled(scannedPath, false)
+
+    expect(disabled).toMatchObject({
+      success: true,
+      status: 'updated',
+      entry: {
+        path: scannedPath,
+        enabled: false,
+        source: 'scanned',
+        removable: false
+      }
+    })
+    expect(addFileExtensionMock).toHaveBeenCalledWith(7, 'entryEnabled', '0')
+    expect(removeItemsMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['bundle:com.apple.preview', scannedPath, 'com.apple.Preview'])
+    )
+
+    const removed = await appProvider.removeManagedEntry(scannedPath)
+
+    expect(removed).toEqual({
+      success: false,
+      status: 'invalid',
+      reason: 'not-user-managed'
+    })
+    expect(getDbMock).not.toHaveBeenCalled()
+  })
+
+  it('reindexes enabled scanned and manual entries after provider rebuild cleanup', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const rows = [
+      {
+        id: 1,
+        path: '/Applications/Preview.app',
+        name: 'Preview',
+        displayName: 'Preview',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      },
+      {
+        id: 2,
+        path: '/Applications/Disabled.app',
+        name: 'Disabled',
+        displayName: 'Disabled',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      },
+      {
+        id: 3,
+        path: '/Users/demo/bin/script.sh',
+        name: 'Script',
+        displayName: 'Script',
+        type: 'app',
+        mtime: new Date(0),
+        ctime: new Date(0)
+      }
+    ]
+    const rowsWithExtensions = [
+      {
+        ...rows[0],
+        extensions: {
+          appIdentity: '/Applications/Preview.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Preview.app'
+        }
+      },
+      {
+        ...rows[1],
+        extensions: {
+          appIdentity: '/Applications/Disabled.app',
+          entryEnabled: '0',
+          launchKind: 'path',
+          launchTarget: '/Applications/Disabled.app'
+        }
+      },
+      {
+        ...rows[2],
+        extensions: {
+          entrySource: 'manual',
+          entryEnabled: '1',
+          launchKind: 'shortcut',
+          launchTarget: '/Users/demo/bin/script.sh'
+        }
+      }
+    ]
+    const syncKeywordsMock = vi.fn(async () => undefined)
+
+    privateProvider.dbUtils = {
+      getFilesByType: vi.fn(async () => rows)
+    }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async () => rowsWithExtensions)
+    privateProvider._syncKeywordsForApp = syncKeywordsMock
+
+    await privateProvider.reindexManagedEntries()
+
+    expect(syncKeywordsMock).toHaveBeenCalledTimes(2)
+    expect(syncKeywordsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/Applications/Preview.app' })
+    )
+    expect(syncKeywordsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/Users/demo/bin/script.sh' })
+    )
+    expect(syncKeywordsMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/Applications/Disabled.app' })
+    )
+  })
+
   it('rejects managed launcher entries that collide with scanned apps', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)

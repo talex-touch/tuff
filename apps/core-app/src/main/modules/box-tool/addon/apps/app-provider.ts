@@ -80,11 +80,13 @@ import {
   APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY,
   APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY,
   APP_ENTRY_ENABLED_EXTENSION_KEY,
+  APP_ENTRY_SOURCE_MANUAL,
   APP_IDENTIFIER_EXTENSION_KEYS,
   APP_SCANNED_OPTIONAL_EXTENSION_KEYS,
   buildAppExtensions,
   buildManagedEntryExtensions,
   isAppIdentifierExtensionKey,
+  isAppEntryEnabledExtensionMap,
   isManagedEntryEnabledExtensionMap,
   isManagedEntryExtensionMap,
   normalizeAppDisplayNameQuality,
@@ -537,9 +539,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       mapDbAppToScannedInfo: (app: DbAppWithExtensions) => this._mapDbAppToScannedInfo(app),
       generateKeywordsForApp: (appInfo: ScannedAppInfo) => this._generateKeywordsForApp(appInfo),
       getAliasesForApp: (appInfo: ScannedAppInfo) => this._getAliasesForApp(appInfo),
-      syncKeywordsForApp: (appInfo: ScannedAppInfo) => this._syncKeywordsForApp(appInfo),
       addAppByPath: (rawPath: string) => this.addAppByPath(rawPath),
       buildFtsQuery: (terms: string[]) => this.buildFtsQuery(terms),
+      syncIndexedAppState: (app: DbAppWithExtensions) =>
+        this.syncIndexedAppState(this._mapDbAppToScannedInfo(app), app.extensions),
       logError: (message: string, meta?: Record<string, unknown>) =>
         logApp(message, LogStyle.error, meta)
     }
@@ -551,8 +554,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const allApps = await this.dbUtils.getFilesByType('app')
     const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
 
-    return this.partitionDbApps(appsWithExtensions)
-      .managedEntries.map((app) => this.mapManagedEntry(app))
+    return appsWithExtensions
+      .map((app) => this.mapManagedEntry(app))
       .sort((left, right) =>
         resolveDisplayName(left.displayName, left.name).localeCompare(
           resolveDisplayName(right.displayName, right.name)
@@ -718,10 +721,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const existingExtensions = this.toExtensionMap(
       await this.dbUtils.getFileExtensions(existingFile.id)
     )
-    if (!isManagedEntryExtensionMap(existingExtensions)) {
-      return { success: false, status: 'invalid', reason: 'not-user-managed' }
-    }
-
     const nextExtensions = {
       ...existingExtensions,
       [APP_ENTRY_ENABLED_EXTENSION_KEY]: enabled ? '1' : '0'
@@ -738,11 +737,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       extensions: nextExtensions
     })
 
-    if (enabled) {
-      await this._syncKeywordsForApp(appInfo)
-    } else {
-      await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
-    }
+    await this.syncIndexedAppState(appInfo, nextExtensions)
 
     return {
       success: true,
@@ -870,10 +865,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const allApps = await this.dbUtils.getFilesByType('app')
     const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
-    const { managedEntries } = this.partitionDbApps(appsWithExtensions)
 
-    for (const app of managedEntries) {
-      if (!isManagedEntryEnabledExtensionMap(app.extensions)) {
+    for (const app of appsWithExtensions) {
+      if (!isAppEntryEnabledExtensionMap(app.extensions)) {
         continue
       }
       await this._syncKeywordsForApp(this._mapDbAppToScannedInfo(app))
@@ -882,12 +876,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private mapManagedEntry(app: DbAppWithExtensions): AppIndexManagedEntry {
     const appInfo = this._mapDbAppToScannedInfo(app)
+    const isManualEntry = isManagedEntryExtensionMap(app.extensions)
     return {
       path: app.path,
       name: appInfo.name,
       displayName: appInfo.displayName,
       icon: appInfo.icon || undefined,
       enabled: isManagedEntryEnabledExtensionMap(app.extensions),
+      source: isManualEntry ? APP_ENTRY_SOURCE_MANUAL : 'scanned',
+      removable: isManualEntry,
+      bundleId: appInfo.bundleId || undefined,
+      identityKind: appInfo.identityKind,
       launchKind: appInfo.launchKind,
       launchTarget: appInfo.launchTarget,
       launchArgs: appInfo.launchArgs,
@@ -1259,7 +1258,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           existingDisplayName: dbApp.displayName,
           existingDisplayNameQuality: normalizeAppDisplayNameQuality(
             dbApp.extensions[APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY]
-          )
+          ),
+          existingExtensions: dbApp.extensions
         }
       })
       .filter(Boolean) as Array<{
@@ -1267,6 +1267,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       app: ScannedAppInfo
       existingDisplayName: string | null
       existingDisplayNameQuality?: ScannedAppInfo['displayNameQuality']
+      existingExtensions: Record<string, string | null>
     }>
 
     ;(dbApps as unknown[]).length = 0
@@ -1345,7 +1346,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await runAdaptiveTaskQueue(
         toUpdateMetadata,
-        async ({ fileId, app, existingDisplayName, existingDisplayNameQuality }, index) => {
+        async (
+          { fileId, app, existingDisplayName, existingDisplayNameQuality, existingExtensions },
+          index
+        ) => {
           const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
 
           try {
@@ -1362,7 +1366,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             }
 
             await this.syncScannedAppExtensions(fileId, app)
-            await this._syncKeywordsForApp({ ...app, displayName: nextDisplayName })
+            await this.syncIndexedAppState(
+              { ...app, displayName: nextDisplayName },
+              existingExtensions
+            )
             updatedCount += 1
           } catch (error) {
             failedCount += 1
@@ -1644,6 +1651,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this.searchIndex.indexItems([indexItem])
   }
 
+  private async syncIndexedAppState(
+    appInfo: ScannedAppInfo,
+    extensions: Record<string, string | null> | undefined
+  ): Promise<void> {
+    if (isAppEntryEnabledExtensionMap(extensions)) {
+      await this._syncKeywordsForApp(appInfo)
+      return
+    }
+
+    await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
+  }
+
   private _isAcronymForApp(keyword: string, appInfo: ScannedAppInfo): boolean {
     const names = [
       appInfo.name,
@@ -1793,6 +1812,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       app: ScannedAppInfo
       existingDisplayName: string | null
       existingDisplayNameQuality?: ScannedAppInfo['displayNameQuality']
+      existingExtensions: Record<string, string | null>
       existingName: string
     }> = []
     const missingApps: Array<{ id: number; path: string; uniqueId: string }> = []
@@ -1845,6 +1865,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             existingDisplayNameQuality: normalizeAppDisplayNameQuality(
               dbApp.extensions[APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY]
             ),
+            existingExtensions: dbApp.extensions,
             existingName: dbApp.name
           })
         }
@@ -1932,7 +1953,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         toUpdate,
         async (
-          { fileId, app, existingDisplayName, existingDisplayNameQuality, existingName },
+          {
+            fileId,
+            app,
+            existingDisplayName,
+            existingDisplayNameQuality,
+            existingExtensions,
+            existingName
+          },
           index
         ) => {
           const nextName = isProbablyCorruptedDisplayName(app.name) ? existingName : app.name
@@ -1954,11 +1982,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
 
           await this.syncScannedAppExtensions(fileId, app)
-          await this._syncKeywordsForApp({
-            ...app,
-            name: nextName,
-            displayName: updateData.displayName ?? existingDisplayName ?? nextDisplayName
-          })
+          await this.syncIndexedAppState(
+            {
+              ...app,
+              name: nextName,
+              displayName: updateData.displayName ?? existingDisplayName ?? nextDisplayName
+            },
+            existingExtensions
+          )
 
           // 改为每100个输出一次，但保持10个一组的处理
           if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
@@ -2119,11 +2150,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         await this.syncScannedAppExtensions(existingFile.id, appInfo)
       }
 
-      await this._syncKeywordsForApp({
+      const indexedAppInfo = {
         ...appInfo,
         name: updateData.name ?? appInfo.name,
         displayName: updateData.displayName ?? existingFile.displayName ?? normalizedDisplayName
-      })
+      }
+      if (options.managedEntry === true) {
+        await this._syncKeywordsForApp(indexedAppInfo)
+      } else {
+        await this.syncIndexedAppState(indexedAppInfo, existingExtensions)
+      }
       logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
       return 'updated'
     }
@@ -3195,8 +3231,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           }
         })
 
-        await this.removeIndexedAppItems(resolveAppItemIds(appInfo))
-        await this._syncKeywordsForApp(appInfo)
+        await this.syncIndexedAppState(appInfo, dbApp.extensions)
       }
     }
 

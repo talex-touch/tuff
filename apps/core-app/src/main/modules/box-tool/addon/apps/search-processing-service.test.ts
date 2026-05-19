@@ -182,22 +182,34 @@ describe('search-processing-service', () => {
     })
   })
 
-  it('skips disabled managed launcher entries in recommendation mapping', () => {
-    const items = mapAppsToRecommendationItems(
-      [
-        {
-          name: 'Managed Script',
-          displayName: 'Managed Script',
-          path: '/Users/demo/bin/script.sh',
-          extensions: {
-            entrySource: 'manual',
-            entryEnabled: '0',
-            launchKind: 'shortcut',
-            launchTarget: '/Users/demo/bin/script.sh'
-          }
+  it('skips disabled app entries in recommendation mapping', () => {
+    const rows: Array<
+      Partial<AppSearchTestRow> & Pick<AppSearchTestRow, 'name' | 'path' | 'extensions'>
+    > = [
+      {
+        name: 'Managed Script',
+        displayName: 'Managed Script',
+        path: '/Users/demo/bin/script.sh',
+        extensions: {
+          entrySource: 'manual',
+          entryEnabled: '0',
+          launchKind: 'shortcut',
+          launchTarget: '/Users/demo/bin/script.sh'
         }
-      ].map((row) => createAppSearchRow(row))
-    )
+      },
+      {
+        name: 'Disabled Scanned',
+        displayName: 'Disabled Scanned',
+        path: '/Applications/Disabled.app',
+        extensions: {
+          entryEnabled: 'false',
+          appIdentity: '/Applications/Disabled.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Disabled.app'
+        }
+      }
+    ]
+    const items = mapAppsToRecommendationItems(rows.map((row) => createAppSearchRow(row)))
 
     expect(items).toEqual([])
   })

@@ -284,10 +284,10 @@ export function resolveAppIndexManagerEmptyState(
 ): AppIndexManagerEmptyState | null {
   if (entries.length === 0) {
     return {
-      title: t('settings.settingFileIndex.appIndexManagerEmpty', 'No manually managed app entries'),
+      title: t('settings.settingFileIndex.appIndexManagerEmpty', 'No app index entries'),
       detail: t(
         'settings.settingFileIndex.appIndexManagerEmptyDesc',
-        'Add a Windows app file or paste a launch target to start managing search recall.'
+        'Add an app file or run app scanning to start managing search recall.'
       ),
       actionKind: 'add-entry',
       actionLabel: t('settings.settingFileIndex.appIndexManagerSelectFile', 'Select App File'),

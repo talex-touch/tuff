@@ -109,6 +109,12 @@ function getEntryDiagnosticSummary(entry: AppIndexManagedEntry) {
   return resolveAppIndexEntryDiagnosticSummary(diagnosticMap.value[entry.path], t)
 }
 
+function getEntryOriginLabel(entry: AppIndexManagedEntry): string {
+  return entry.source === 'scanned'
+    ? t('settings.settingFileIndex.appIndexManagerOriginScanned', 'Scanned')
+    : t('settings.settingFileIndex.appIndexManagerOriginManual', 'Manual')
+}
+
 function setEntryDiagnostic(path: string, result: AppIndexDiagnoseResult): void {
   diagnosticMap.value = {
     ...diagnosticMap.value,
@@ -443,6 +449,14 @@ onMounted(() => {
               <span :class="['app-index-entry-source', `is-${getEntrySource(entry).tone}`]">
                 {{ getEntrySource(entry).label }}
               </span>
+              <span
+                :class="[
+                  'app-index-entry-origin',
+                  entry.source === 'scanned' ? 'is-scanned' : 'is-manual'
+                ]"
+              >
+                {{ getEntryOriginLabel(entry) }}
+              </span>
             </div>
             <div class="app-index-entry-path">{{ entry.path }}</div>
             <div
@@ -456,6 +470,9 @@ onMounted(() => {
             </div>
             <div class="app-index-entry-grid">
               <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
+              <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
+              <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
+              <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
               <span>launchKind</span><strong>{{ entry.launchKind }}</strong>
               <span>launchTarget</span><strong>{{ formatOptional(entry.launchTarget) }}</strong>
               <span>launchArgs</span><strong>{{ formatOptional(entry.launchArgs) }}</strong>
@@ -506,6 +523,7 @@ onMounted(() => {
               {{ t('settings.settingFileIndex.appIndexManagerCopyJson') }}
             </TxButton>
             <TxButton
+              v-if="entry.removable !== false"
               variant="flat"
               size="sm"
               type="danger"
@@ -699,7 +717,8 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.app-index-entry-source {
+.app-index-entry-source,
+.app-index-entry-origin {
   padding: 2px 6px;
   border-radius: 999px;
   font-size: 11px;
@@ -729,6 +748,16 @@ onMounted(() => {
 .app-index-entry-source.is-warning {
   color: #ff9500;
   background: rgba(255, 149, 0, 0.12);
+}
+
+.app-index-entry-origin.is-manual {
+  color: #bf5af2;
+  background: rgba(191, 90, 242, 0.12);
+}
+
+.app-index-entry-origin.is-scanned {
+  color: #30d158;
+  background: rgba(48, 209, 88, 0.12);
 }
 
 .app-index-entry-path {
