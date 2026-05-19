@@ -52,6 +52,42 @@ export interface BuildConfig {
   sourcemap?: boolean
 }
 
+export interface PreludeConfig {
+  /**
+   * Prelude source entry. Final output is always `index.js`.
+   * @default 'src/prelude/main.ts' or the first detected main/index js/ts file
+   */
+  entry?: string
+
+  /**
+   * Output module format.
+   * @default 'cjs'
+   */
+  format?: 'cjs' | 'esm'
+
+  /**
+   * esbuild target for the Prelude runtime.
+   * @default 'node18'
+   */
+  target?: string
+
+  /**
+   * External dependencies that should not be bundled into index.js.
+   * @default ['electron', 'node:*']
+   */
+  external?: string[]
+
+  /**
+   * Minify Prelude output in build mode.
+   */
+  minify?: boolean
+
+  /**
+   * Generate source maps for Prelude output.
+   */
+  sourcemap?: boolean
+}
+
 export interface DevConfig {
   /**
    * Dev server host

@@ -37,6 +37,7 @@
 | P1-QUICK-LAUNCH | Quick Launch 真机验收 | 待执行 | macOS/Windows/Linux 验证默认浏览器打开、`network.internet` 授权/拒绝、suggestion 超时降级、URL 打开与网页搜索互不抢占。 |
 | P1-PUBLISHER | 插件发布管理端到端证据 | 进行中 | CoreApp `/store/publisher` 与 Nexus assets/API key 流程已接入；2026-05-18 已修复发布认证 scope 口径：`plugin:publish` 隐含 `plugin:read`，新建 API key 默认带 `plugin:read` + `plugin:publish`；CLI 真实 publish 前改用 `/api/dashboard/auth/publisher` 进行 publisher 预检并兼容 API Key，旧 Nexus 缺少该 endpoint 时回退 Dashboard plugin lookup，避免 `/api/auth/me` 误杀 API Key；交互 CLI 已区分本地 token 文件与远端可用登录态，账号/云端插件列表会显示认证或网络失败原因而非伪装为空列表；`--dry-run` 保持本地预览；`touch-snippets` 已收口 text/code/prompt/template 片段的 CoreBox 搜索、复制、保存与管理入口，旧 `touch-text-snippets` / `touch-code-snippets` 已从 CoreBox feature surface 退为 legacy placeholder；仍需补 package policy/security scan、真实 `.tpex` 上传端到端证据，以及旧 snippets 目录删除/迁移策略确认。 |
 | P1-CLOUDSHARE | CloudShare 插件内容包发布/安装 MVP | 进行中 | 已新增 `docs/plan-prd/03-features/cloudshare-plugin-content-prd.md`、`CloudShareSDK`、Nexus `/api/store/plugin-content/*`、Store 详情页 Content tab 与 `touch-snippets` snippet pack 导出/导入/list/install 基础能力；仍需补插件 Surface/CoreApp Store 的登录发布 UI、内容审核队列、团队可见与订阅/fork。 |
+| P1-PLUGIN-PRELUDE | 插件 Prelude 工程化 | 已落地 | 新插件推荐使用 `src/prelude/` 组织 Prelude 源码，DevKit dev 态增量打包虚拟 `index.js`，`/_tuff_devkit/update` 暴露变化状态，core-app 监控到 `index.js.changed` 后自动 reload 插件生命周期；`tuff builder` 构建态输出 `dist/build/index.js`。旧根 `index.js`、`manifest.build.index` 与 `index/` 目录保持兼容。 |
 
 ## 已完成/历史不再重复开发
 
