@@ -1,18 +1,29 @@
 /* eslint-disable no-console */
 import type { ViteDevServer } from 'vite'
 import type { Options } from './types'
+import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import Debug from 'debug'
 import fs from 'fs-extra'
 import path from 'pathe'
 import { createUnplugin } from 'unplugin'
+import {
+  DEFAULT_PRELUDE_EXTERNAL,
+  LEGACY_INDEX_DIR,
+  PRELUDE_OUTPUT_FILE,
+  createPreludeAlias,
+  resolvePreludeBundleConfig,
+  resolvePreludeDir,
+  toProjectRelative,
+  type PreludeBuildConfig,
+} from './core/prelude'
 
-const INDEX_FOLDER = 'index'
-let indexBuildContext: any = null
-let indexBuildPromise: Promise<string | null> | null = null
-let lastIndexBuildTime = 0
-let lastIndexEntryPath: string | null = null
-let forceRebuildIndex = false
+let preludeBuildContext: any = null
+let preludeBuildPromise: Promise<string | null> | null = null
+let lastPreludeBuildTime = 0
+let lastPreludeBuildSize = 0
+let lastPreludeEntryPath: string | null = null
+let forceRebuildPrelude = false
 
 const VIRTUAL_PREFIX = 'virtual:tuff-raw/'
 const VIRTUAL_PREFIX_RESOLVED = `\0${VIRTUAL_PREFIX}`
@@ -20,115 +31,101 @@ const VIRTUAL_PREFIX_RESOLVED = `\0${VIRTUAL_PREFIX}`
 const debug = Debug('unplugin-tuff:core')
 
 /**
- * Build index/ folder to index.js using esbuild (for dev mode)
+ * Build the Prelude source folder to index.js using esbuild (for dev mode).
  */
-async function buildIndexFolder(projectRoot: string, chalk: any): Promise<string | null> {
-  const indexDir = path.join(projectRoot, INDEX_FOLDER)
-  if (!await fs.pathExists(indexDir)) {
-    return null
-  }
-
-  const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
-  let entryPath: string | null = null
-  for (const file of entryFiles) {
-    const fullPath = path.join(indexDir, file)
-    if (await fs.pathExists(fullPath)) {
-      entryPath = fullPath
-      break
-    }
-  }
-
-  if (!entryPath) {
-    console.warn(chalk.yellow('[Tuff DevKit] index/ folder found but no entry file (main.ts/js, index.ts/js)'))
-    return null
-  }
-
+async function buildPreludeBundle(
+  projectRoot: string,
+  config: PreludeBuildConfig,
+  manifest: { name?: string, version?: string },
+  chalk: any,
+): Promise<string | null> {
   try {
     const esbuild = await import('esbuild')
-    const manifestPath = path.join(projectRoot, 'manifest.json')
-    let manifest = { name: 'unknown', version: '0.0.0' }
-    if (await fs.pathExists(manifestPath)) {
-      manifest = JSON.parse(await fs.readFile(manifestPath, 'utf-8'))
-    }
-
     const startTime = Date.now()
 
-    // Check if entry path changed or force rebuild requested
-    const needsRebuild = lastIndexEntryPath !== entryPath || forceRebuildIndex
-    if (needsRebuild && indexBuildContext) {
-      // Dispose old context when entry changes or force rebuild
-      await indexBuildContext.dispose()
-      indexBuildContext = null
-      forceRebuildIndex = false
+    const needsRebuild = lastPreludeEntryPath !== config.entry || forceRebuildPrelude
+    if (needsRebuild && preludeBuildContext) {
+      await preludeBuildContext.dispose()
+      preludeBuildContext = null
+      forceRebuildPrelude = false
     }
 
-    // Use incremental build context for faster rebuilds
-    if (!indexBuildContext) {
-      lastIndexEntryPath = entryPath
-      indexBuildContext = await esbuild.context({
-        entryPoints: [entryPath],
+    if (!preludeBuildContext) {
+      lastPreludeEntryPath = config.entry
+      preludeBuildContext = await esbuild.context({
+        entryPoints: [config.entry],
         bundle: true,
-        format: 'cjs',
-        target: 'node18',
+        format: config.format ?? 'cjs',
+        target: config.target ?? 'node18',
         platform: 'node',
         write: false,
-        external: ['electron'],
+        external: config.external ?? DEFAULT_PRELUDE_EXTERNAL,
         minify: false,
         sourcemap: 'inline',
         define: {
-          __PLUGIN_NAME__: JSON.stringify(manifest.name),
-          __PLUGIN_VERSION__: JSON.stringify(manifest.version),
+          __PLUGIN_NAME__: JSON.stringify(manifest.name ?? 'unknown'),
+          __PLUGIN_VERSION__: JSON.stringify(manifest.version ?? '0.0.0'),
         },
-        alias: {
-          '@': indexDir,
-          '~': indexDir,
-        },
+        alias: createPreludeAlias(config.entry),
         logLevel: 'warning',
       })
     }
 
-    const result = await indexBuildContext.rebuild()
+    const result = await preludeBuildContext.rebuild()
     const duration = Date.now() - startTime
-    lastIndexBuildTime = Date.now()
+    lastPreludeBuildTime = Date.now()
 
     if (result.errors.length > 0) {
-      console.error(chalk.red('[Tuff DevKit] Index folder build failed:'))
+      console.error(chalk.red('[Tuff DevKit] Prelude build failed:'))
       result.errors.forEach((err: any) => console.error(chalk.red(`  - ${err.text}`)))
       return null
     }
 
     const output = result.outputFiles?.[0]?.text || ''
-    console.log(chalk.green(`[Tuff DevKit] index/ rebuilt in ${duration}ms`))
+    lastPreludeBuildSize = Buffer.byteLength(output, 'utf-8')
+    console.log(
+      chalk.green(
+        `[Tuff DevKit] ${toProjectRelative(projectRoot, config.entry)} rebuilt as index.js in ${duration}ms`,
+      ),
+    )
     return output
   }
   catch (error: any) {
-    console.error(chalk.red(`[Tuff DevKit] Failed to build index/: ${error.message}`))
+    console.error(chalk.red(`[Tuff DevKit] Failed to build Prelude: ${error.message}`))
     return null
   }
 }
 
 /**
- * Debounced index folder build
+ * Debounced Prelude build.
  */
-function debouncedIndexBuild(projectRoot: string, chalk: any, delay = 100): Promise<string | null> {
-  if (indexBuildPromise) {
-    return indexBuildPromise
+function debouncedPreludeBuild(
+  projectRoot: string,
+  config: PreludeBuildConfig,
+  manifest: { name?: string, version?: string },
+  chalk: any,
+  delay = 100,
+): Promise<string | null> {
+  if (preludeBuildPromise) {
+    return preludeBuildPromise
   }
 
-  indexBuildPromise = new Promise((resolve) => {
+  preludeBuildPromise = new Promise((resolve) => {
     setTimeout(async () => {
-      const result = await buildIndexFolder(projectRoot, chalk)
-      indexBuildPromise = null
+      const result = await buildPreludeBundle(projectRoot, config, manifest, chalk)
+      preludeBuildPromise = null
       resolve(result)
     }, delay)
   })
 
-  return indexBuildPromise
+  return preludeBuildPromise
 }
 
 export default createUnplugin<Options | undefined>((options, meta) => {
   const projectRoot = process.cwd()
   let filesToVirtualize: string[] = []
+  let preludeConfig: PreludeBuildConfig | null = null
+  let manifestCache: Record<string, any> = {}
 
   let chalkPromise: Promise<any> | undefined
   const getChalk = () => {
@@ -147,6 +144,11 @@ export default createUnplugin<Options | undefined>((options, meta) => {
       const chalk = await getChalk()
       console.log(chalk.cyan('[Tuff DevKit]'), 'Plugin instance created.')
 
+      const manifestPath = path.join(projectRoot, 'manifest.json')
+      manifestCache = await fs.pathExists(manifestPath)
+        ? await fs.readJson(manifestPath)
+        : {}
+
       const potentialFiles = ['manifest.json', 'index.js', 'preload.js']
       filesToVirtualize = []
       for (const file of potentialFiles) {
@@ -159,11 +161,24 @@ export default createUnplugin<Options | undefined>((options, meta) => {
         }
       }
 
-      // Check for index/ folder - if exists, add virtual index.js
-      const indexDir = path.join(projectRoot, INDEX_FOLDER)
-      if (await fs.pathExists(indexDir) && !filesToVirtualize.includes('index.js')) {
+      preludeConfig = resolvePreludeBundleConfig(
+        {
+          root: projectRoot,
+          sourceDir: options?.sourceDir ?? 'src',
+          indexDir: options?.indexDir ?? LEGACY_INDEX_DIR,
+          external: options?.external,
+          minify: false,
+          sourcemap: true,
+        },
+        manifestCache,
+      )
+
+      if (preludeConfig && !filesToVirtualize.includes(PRELUDE_OUTPUT_FILE)) {
         filesToVirtualize.push('index.js')
-        console.log(chalk.cyan('[Tuff DevKit]'), 'Detected index/ folder, enabling real-time compilation')
+        console.log(
+          chalk.cyan('[Tuff DevKit]'),
+          `Detected Prelude source ${chalk.yellow(toProjectRelative(projectRoot, preludeConfig.entry))}, enabling real-time compilation`,
+        )
       }
 
       debug('Virtualizing files:', filesToVirtualize)
@@ -184,15 +199,17 @@ export default createUnplugin<Options | undefined>((options, meta) => {
         const originalId = id.slice(VIRTUAL_PREFIX_RESOLVED.length)
         const filePath = path.join(projectRoot, originalId)
 
-        // Special handling for index.js when index/ folder exists
-        if (originalId === 'index.js') {
-          const indexDir = path.join(projectRoot, INDEX_FOLDER)
-          if (await fs.pathExists(indexDir)) {
-            const chalk = await getChalk()
-            const bundledCode = await buildIndexFolder(projectRoot, chalk)
-            if (bundledCode) {
-              return bundledCode
-            }
+        // Special handling for virtual index.js when Prelude source is configured or detected
+        if (originalId === PRELUDE_OUTPUT_FILE && preludeConfig) {
+          const chalk = await getChalk()
+          const bundledCode = await buildPreludeBundle(
+            projectRoot,
+            preludeConfig,
+            manifestCache,
+            chalk,
+          )
+          if (bundledCode) {
+            return bundledCode
           }
         }
 
@@ -216,7 +233,18 @@ export default createUnplugin<Options | undefined>((options, meta) => {
 
     vite: {
       configureServer(server: ViteDevServer) {
-        const filesToWatch = [...filesToVirtualize, 'widgets', 'README.md', INDEX_FOLDER]
+        const sourceDir = options?.sourceDir ?? 'src'
+        const indexDir = options?.indexDir ?? LEGACY_INDEX_DIR
+        const preludeDir = resolvePreludeDir(projectRoot, sourceDir)
+        const legacyIndexDir = path.join(projectRoot, indexDir)
+        const preludeWatchDir = toProjectRelative(projectRoot, preludeDir)
+        const filesToWatch = [
+          ...filesToVirtualize,
+          'widgets',
+          'README.md',
+          preludeWatchDir,
+          indexDir,
+        ]
         const watcher = server.watcher
 
         for (const file of filesToWatch) {
@@ -228,20 +256,23 @@ export default createUnplugin<Options | undefined>((options, meta) => {
 
         const handleFileChange = async (file: string) => {
           const relativePath = path.relative(projectRoot, file)
+          const normalizedRelativePath = relativePath.replace(/\\/g, '/')
           debug(`File changed: ${relativePath}, triggering HMR.`)
 
-          // If file is in index/ folder, rebuild and invalidate index.js
-          if (relativePath.startsWith(`${INDEX_FOLDER}/`) || relativePath.startsWith(`${INDEX_FOLDER}\\`)) {
+          const isPreludeFile = preludeConfig && (
+            path.resolve(file) === path.resolve(preludeConfig.entry) ||
+            normalizedRelativePath.startsWith(`${preludeWatchDir}/`) ||
+            normalizedRelativePath.startsWith(`${indexDir}/`)
+          )
+
+          if (isPreludeFile && preludeConfig) {
             const chalk = await getChalk()
-            console.log(chalk.cyan('[Tuff DevKit]'), `index/ changed: ${relativePath}`)
+            console.log(chalk.cyan('[Tuff DevKit]'), `Prelude changed: ${relativePath}`)
 
-            // Force rebuild context to pick up new/deleted dependencies
-            forceRebuildIndex = true
+            forceRebuildPrelude = true
 
-            // Rebuild index folder
-            await debouncedIndexBuild(projectRoot, chalk)
+            await debouncedPreludeBuild(projectRoot, preludeConfig, manifestCache, chalk)
 
-            // Invalidate virtual index.js module
             const virtualIndexId = `${VIRTUAL_PREFIX_RESOLVED}index.js`
             const indexMod = server.moduleGraph.getModuleById(virtualIndexId)
             if (indexMod) {
@@ -251,7 +282,9 @@ export default createUnplugin<Options | undefined>((options, meta) => {
             server.ws.send('tuff:update', {
               path: 'index.js',
               timestamp: Date.now(),
-              source: 'index-folder',
+              source: preludeConfig.source === 'src-prelude' || preludeConfig.source === 'manifest-prelude'
+                ? 'prelude'
+                : 'index-folder',
             })
             return
           }
@@ -281,9 +314,26 @@ export default createUnplugin<Options | undefined>((options, meta) => {
             lastModified: number | null
             path: string
             size: number | null
+            source?: string
           }> = {}
 
           for (const file of filesToCheck) {
+            if (file === PRELUDE_OUTPUT_FILE && preludeConfig) {
+              const lastModified = lastPreludeBuildTime || fs.statSync(preludeConfig.entry).mtime.getTime()
+              status[file] = {
+                exist: true,
+                changed: lastUpdateStatus[file] !== lastModified,
+                lastModified,
+                path: preludeConfig.entry,
+                size: lastPreludeBuildSize || fs.statSync(preludeConfig.entry).size,
+                source: preludeConfig.source === 'src-prelude' || preludeConfig.source === 'manifest-prelude'
+                  ? 'prelude'
+                  : 'index-folder',
+              }
+              lastUpdateStatus[file] = lastModified
+              continue
+            }
+
             const filePath = path.join(projectRoot, file)
             try {
               const stats = await fs.stat(filePath)

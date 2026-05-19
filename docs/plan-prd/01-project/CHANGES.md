@@ -11,6 +11,22 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-19
+
+### feat(plugin): standardize src/prelude engineering
+
+- `packages/unplugin-export-plugin/src/core/prelude.ts`
+- `packages/unplugin-export-plugin/src/index.ts`
+- `packages/unplugin-export-plugin/src/core/exporter.ts`
+- `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
+- `packages/unplugin-export-plugin/README.md`
+- `packages/unplugin-export-plugin/docs/index-folder-indexjs.md`
+  - 新插件 Prelude 标准源码目录切到 `src/prelude/`，最终运行时与 `.tpex` 产物仍只暴露单个 `index.js`。
+  - DevKit dev 态会将 `src/prelude` 增量打包成虚拟 `index.js`，并通过 `/_tuff_devkit/update` 暴露 `index.js` 变化状态。
+  - CoreApp DevServerHealthMonitor 监控到 `index.js.changed` 后自动 reload 对应 dev 插件生命周期，形成 HMR 体感而不引入函数级热替换 runtime。
+  - `tuff builder` 构建态会将 `src/prelude` 落盘到 `dist/build/index.js`；第三方依赖默认 bundle，`electron` 与 Node 内置模块保持 external。
+  - 旧根 `index.js`、`manifest.build.index` 与 `index/` 目录继续兼容。
+
 ## 2026-05-18
 
 ### docs: move active roadmap to 2.4.11 stabilization
