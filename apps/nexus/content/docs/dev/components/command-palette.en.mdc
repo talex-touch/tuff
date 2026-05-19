@@ -1,43 +1,107 @@
 ---
 title: "CommandPalette"
-description: "Global command/search palette for quick actions."
-category: Form
+description: "Command palette for global shortcuts, plugin entries, and search actions."
+category: Navigation
 syncStatus: migrated
 ---
 # CommandPalette
 
-A global command palette for quick actions and search.
+Command palette for global shortcuts, plugin entries, and search actions. Use it for Raycast / uTools-style keyboard-first launchers.
 
-## Basic Usage
+## Launcher Scenario
 
 ::TuffDemoWrapper{demo="CommandPaletteCommandPaletteDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { ref } from 'vue'
+  import { computed, ref } from 'vue'
+
+  interface CommandItem {
+    id: string
+    title: string
+    description: string
+    keywords: string[]
+    icon: string
+    shortcut: string
+    disabled?: boolean
+  }
 
   const open = ref(false)
-  const selected = ref('')
+  const selectedId = ref('search-files')
 
-  const commands = [
-    { id: 'open', title: 'Open File', description: 'Quickly open a file', shortcut: 'Cmd/Ctrl+O' },
-    { id: 'search', title: 'Global Search', description: 'Search across content', shortcut: 'Cmd/Ctrl+K' },
-    { id: 'settings', title: 'Settings', description: 'Open preferences', shortcut: 'Cmd/Ctrl+,' },
+  const commands: CommandItem[] = [
+    {
+      id: 'search-files',
+      title: 'Search Files',
+      description: 'Find local files across Documents, Downloads, and Desktop',
+      keywords: ['file', 'finder', 'everything'],
+      icon: 'i-carbon-search',
+      shortcut: '⌘ K',
+    },
+    {
+      id: 'quick-note',
+      title: 'Save Quick Note',
+      description: 'Save clipboard text into the snippets library',
+      keywords: ['snippet', 'note', 'clipboard'],
+      icon: 'i-carbon-notebook',
+      shortcut: '⌘ ⇧ N',
+    },
+    {
+      id: 'browser-open',
+      title: 'Open In Browser',
+      description: 'Open the typed URL in the default browser',
+      keywords: ['url', 'link', 'browser'],
+      icon: 'i-carbon-launch',
+      shortcut: '⌘ ↵',
+    },
+    {
+      id: 'locked-admin',
+      title: 'Admin Script',
+      description: 'Requires administrator permission before running',
+      keywords: ['admin', 'shell', 'script'],
+      icon: 'i-carbon-locked',
+      shortcut: '⌘ ⇧ S',
+      disabled: true,
+    },
   ]
 
-  function onSelect(command: { title: string }) {
-    selected.value = command.title
+  const selected = computed(() => commands.find(command => command.id === selectedId.value))
+
+  function onSelect(command: CommandItem) {
+    selectedId.value = command.id
   }
   </script>
 
   <template>
-    <TxButton variant="primary" @click="open = true">
-      Open command palette
-    </TxButton>
-    <TxCommandPalette v-model="open" :commands="commands" @select="onSelect" />
+    <div class="tx-demo tx-demo__col tx-demo--max-520">
+      <TxButton variant="primary" @click="open = true">
+        Open command palette
+      </TxButton>
+      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+        <div class="tx-demo__meta">
+          Last action: {{ selected?.title }}
+        </div>
+      </TxCard>
+    </div>
+
+    <TxCommandPalette
+      v-model="open"
+      :commands="commands"
+      placeholder="Search commands, plugins, or settings..."
+      empty-text="No matching commands"
+      :max-height="280"
+      @select="onSelect"
+    />
   </template>
 ---
 ::
+
+## UX Notes
+
+- Title, description, and `keywords` all participate in filtering. Put aliases, localized terms, and plugin keywords on the same command.
+- `icon` accepts an icon class or `TxIconSource`; `shortcut` only renders the keyboard hint and does not register a global shortcut.
+- `disabled` commands remain visible but cannot be selected, which is useful for missing permissions, unsupported platforms, or disabled features.
+- Use `closeOnSelect=false` for batch workflows or settings panels. The default closes the palette after selection.
 
 ## API
 

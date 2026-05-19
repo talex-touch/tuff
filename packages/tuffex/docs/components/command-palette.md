@@ -1,34 +1,73 @@
 # CommandPalette 命令面板
 
-用于全局快捷指令/搜索的命令面板。
+用于全局快捷指令、插件入口和搜索动作的命令面板，适合构建 Raycast / uTools 风格的键盘优先启动器。
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const open = ref(false)
-const selected = ref('')
+const selectedId = ref('search-files')
 
 const commands = [
-  { id: 'open', title: 'Open File', description: '打开文件', shortcut: '⌘O' },
-  { id: 'search', title: 'Search', description: '全局搜索', shortcut: '⌘K' },
-  { id: 'settings', title: 'Settings', description: '应用设置', shortcut: '⌘,' },
+  {
+    id: 'search-files',
+    title: '搜索文件',
+    description: '在文档、下载和桌面中查找本地文件',
+    keywords: ['file', 'finder', 'everything', '文件'],
+    icon: 'i-carbon-search',
+    shortcut: '⌘ K',
+  },
+  {
+    id: 'quick-note',
+    title: '保存快速笔记',
+    description: '把当前剪贴板文本保存到片段库',
+    keywords: ['snippet', 'note', 'clipboard', '片段'],
+    icon: 'i-carbon-notebook',
+    shortcut: '⌘ ⇧ N',
+  },
+  {
+    id: 'browser-open',
+    title: '用浏览器打开',
+    description: '使用默认浏览器打开输入的 URL',
+    keywords: ['url', 'link', 'browser', '网页'],
+    icon: 'i-carbon-launch',
+    shortcut: '⌘ ↵',
+  },
+  {
+    id: 'locked-admin',
+    title: '管理员脚本',
+    description: '需要管理员权限后才能运行',
+    keywords: ['admin', 'shell', 'script', '权限'],
+    icon: 'i-carbon-locked',
+    shortcut: '⌘ ⇧ S',
+    disabled: true,
+  },
 ]
 
+const selected = computed(() => commands.find(command => command.id === selectedId.value))
+
 function onSelect(cmd: { title: string }) {
-  selected.value = cmd.title
+  selectedId.value = commands.find(command => command.title === cmd.title)?.id ?? selectedId.value
 }
 </script>
 
-## 基础用法
+## 启动器场景
 
 <div class="group" style="max-width: 360px;">
   <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
   <span style="margin-left: 8px; font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-    选中：{{ selected || '—' }}
+    最近动作：{{ selected?.title || '—' }}
   </span>
 </div>
 
-<TxCommandPalette v-model="open" :commands="commands" @select="onSelect" />
+<TxCommandPalette
+  v-model="open"
+  :commands="commands"
+  placeholder="搜索命令、插件或设置..."
+  empty-text="没有匹配的命令"
+  :max-height="280"
+  @select="onSelect"
+/>
 
 :::: details Show Code
 ```vue
@@ -36,15 +75,35 @@ function onSelect(cmd: { title: string }) {
 import { ref } from 'vue'
 
 const open = ref(false)
-const commands = [{ id: 'open', title: 'Open File' }]
+const commands = [
+  {
+    id: 'search-files',
+    title: '搜索文件',
+    description: '在文档、下载和桌面中查找本地文件',
+    keywords: ['file', 'finder', 'everything', '文件'],
+    icon: 'i-carbon-search',
+    shortcut: '⌘ K',
+  },
+]
 </script>
 
 <template>
   <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
-  <TxCommandPalette v-model="open" :commands="commands" />
+  <TxCommandPalette
+    v-model="open"
+    :commands="commands"
+    placeholder="搜索命令、插件或设置..."
+  />
 </template>
 ```
 ::::
+
+## 体验要点
+
+- 标题、描述和 `keywords` 都会参与过滤，适合把英文别名、中文别名和插件关键词放在同一条命令上。
+- `icon` 可传图标类名或 `TxIconSource`；`shortcut` 用于展示键盘提示，不负责注册全局快捷键。
+- `disabled` 命令会显示但无法选中，适合表达缺权限、平台不支持或功能未启用的状态。
+- `closeOnSelect=false` 可用于批量动作或设置面板，默认选中后关闭。
 
 ## API
 
