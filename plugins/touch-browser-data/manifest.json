@@ -1,0 +1,48 @@
+{
+  "id": "com.tuffex.browser-data",
+  "name": "touch-browser-data",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260428,
+  "category": "utilities",
+  "icon": {
+    "type": "emoji",
+    "value": "🌐"
+  },
+  "description": "浏览器数据：只读搜索 Chrome、Edge、Brave、Arc 的本地书签",
+  "main": "index.js",
+  "permissions": {
+    "required": ["fs.read"],
+    "optional": ["clipboard.write"]
+  },
+  "permissionReasons": {
+    "fs.read": "只读扫描本机浏览器 Bookmarks JSON 文件用于搜索书签",
+    "clipboard.write": "复制书签 URL 到剪贴板"
+  },
+  "features": [
+    {
+      "id": "browser-data",
+      "name": "浏览器数据",
+      "desc": "只读搜索本机浏览器书签",
+      "icon": {
+        "type": "emoji",
+        "value": "🌐"
+      },
+      "keywords": ["browser-data", "browser", "chrome", "edge", "brave", "arc", "bookmarks", "浏览器", "书签"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["browser-data", "browser", "chrome", "edge", "brave", "arc", "bookmarks", "浏览器", "书签"]
+        }
+      ]
+    }
+  ]
+}
