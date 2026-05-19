@@ -13,6 +13,18 @@
 
 ## 2026-05-19
 
+### docs(plan): add compat placeholder incremental audit
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-incremental-audit-2026-05-19.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added a live-tree incremental audit for `2.4.11-beta.2`, confirming no new P0 fixed fake-success after the 2026-05-16 deep audit.
+  - Updated the current quality口径 to prioritize `touch-snipaste` shell capability fail-closed diagnostics, `touch-window-presets` non-mutating permission checks, Browser Data source-level diagnostics, widget runtime sandbox evidence, and SRP small-slice refactors.
+  - Recorded that `touch-browser-data` scans real Chromium Bookmarks JSON rather than returning fake data, while Linux Arc wording, source health, clear/rebuild/disable, and cross-platform evidence remain follow-ups.
+
 ### feat(plugins): translate clipboard images through DivisionBox
 
 - `packages/tuff-intelligence/src/types/intelligence.ts`
