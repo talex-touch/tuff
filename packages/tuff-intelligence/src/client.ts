@@ -1,6 +1,8 @@
 import { createIntelligenceSdk } from './transport/sdk/domains/intelligence'
 import type { IntelligenceSdk, IntelligenceSdkTransport } from './transport/sdk/domains/intelligence'
 export type {
+  IntelligenceImageTranslateE2ePayload,
+  IntelligenceImageTranslateE2eResult,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceTtsSpeakPayload,

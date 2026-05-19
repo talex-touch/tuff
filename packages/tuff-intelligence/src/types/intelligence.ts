@@ -45,6 +45,7 @@ export enum IntelligenceCapabilityType {
   VISION_OCR = 'vision-ocr',
   IMAGE_CAPTION = 'image-caption',
   IMAGE_ANALYZE = 'image-analyze',
+  IMAGE_TRANSLATE_E2E = 'image-translate-e2e',
   IMAGE_GENERATE = 'image-generate',
   IMAGE_EDIT = 'image-edit',
   // RAG & Search capabilities
@@ -1124,6 +1125,40 @@ export interface IntelligenceImageAnalyzeResult {
 }
 
 /**
+ * Payload for end-to-end image translation capability.
+ */
+export interface IntelligenceImageTranslateE2ePayload {
+  /** Base64 encoded image data without data URL prefix. */
+  imageBase64: string
+  /** Target language. */
+  targetLang?: string
+  /** Source language hint. */
+  sourceLang?: string
+  /** Source image MIME type. */
+  imageMimeType?: string
+  /** Additional metadata. */
+  metadata?: Record<string, any>
+}
+
+/**
+ * Result from end-to-end image translation capability.
+ */
+export interface IntelligenceImageTranslateE2eResult {
+  /** Translated image payload as base64. */
+  translatedImageBase64: string
+  /** Output image MIME type. */
+  imageMimeType?: string
+  /** Detected/source text. */
+  sourceText?: string
+  /** Translated target text. */
+  targetText?: string
+  /** Overlay metadata returned by the provider or scene. */
+  overlay?: any
+  /** Provider request ID. */
+  providerRequestId?: string
+}
+
+/**
  * Payload for image generation capability.
  */
 export interface IntelligenceImageGeneratePayload {
@@ -1906,6 +1941,7 @@ export interface IntelligenceProviderAdapter {
   visionOcr: (payload: IntelligenceVisionOcrPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>
   imageCaption?: (payload: IntelligenceImageCaptionPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>
   imageAnalyze?: (payload: IntelligenceImageAnalyzePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
+  imageTranslateE2e?: (payload: IntelligenceImageTranslateE2ePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>>
   imageGenerate?: (payload: IntelligenceImageGeneratePayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
   imageEdit?: (payload: IntelligenceImageEditPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>
 
@@ -2097,6 +2133,15 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     defaultModel: 'gpt-4o-mini',
     timeout: 30000,
     rateLimit: {},
+    capabilities: [
+      'text.chat',
+      'text.translate',
+      'text.summarize',
+      'text.rewrite',
+      'vision.ocr',
+      'image.translate.e2e',
+      'audio.tts',
+    ],
     metadata: {
       origin: 'tuff-nexus',
     },
@@ -2179,6 +2224,14 @@ export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> 
         priority: 3,
         enabled: false,
       },
+    ],
+  },
+  'image.translate.e2e': {
+    id: 'image.translate.e2e',
+    label: '图片翻译 / Image Translation',
+    description: '将图片中的文字翻译并返回译后图片',
+    providers: [
+      { providerId: 'tuff-nexus-default', priority: 1, enabled: true },
     ],
   },
   'text.translate': {

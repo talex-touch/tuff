@@ -219,6 +219,12 @@ const showInput = computed(() => {
   return divisionBoxConfig.value.ui?.showInput !== false
 })
 
+const showDivisionBoxHeader = computed(() => {
+  if (!isDivisionBox.value) return false
+  if (!divisionBoxConfig.value) return true
+  return divisionBoxConfig.value.header?.show !== false
+})
+
 const inputPlaceholder = computed(() => {
   if (isDivisionBox.value && divisionBoxConfig.value?.ui?.inputPlaceholder) {
     return divisionBoxConfig.value.ui.inputPlaceholder
@@ -625,7 +631,8 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
       inputBorderClass,
       inputBgClass,
       resultHoverClass,
-      { 'CoreBox-Wrapper--canvas': isCanvasLayout }
+      { 'CoreBox-Wrapper--canvas': isCanvasLayout },
+      { 'CoreBox-Wrapper--division-no-header': isDivisionBox && !showDivisionBoxHeader }
     ]"
   >
     <component :is="'style'" v-if="customCss">{{ customCss }}</component>
@@ -635,7 +642,7 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
       @paste="() => handlePaste({ overrideDismissed: true })"
     >
       <!-- DivisionBox Mode Header -->
-      <template v-if="isDivisionBox">
+      <template v-if="isDivisionBox && showDivisionBoxHeader">
         <DivisionBoxHeader
           v-model:search-val="searchVal"
           :box-options="boxOptions"
@@ -932,6 +939,19 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
 
 .CoreBox-Wrapper.CoreBoxResultHover-scale .BoxItem:hover {
   transform: scale(1.01);
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--division-no-header {
+  div.CoreBox {
+    display: none !important;
+  }
+
+  div.CoreBoxRes {
+    top: 0;
+    height: 100%;
+    border-radius: var(--corebox-container-radius, 8px);
+    border-top: none;
+  }
 }
 
 .CoreBox-LogoRight {

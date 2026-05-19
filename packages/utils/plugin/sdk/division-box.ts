@@ -8,6 +8,7 @@
 import type {
   CloseOptions,
   DivisionBoxConfig,
+  IPCResponse,
   DivisionBoxState,
   SessionInfo,
   StateChangeEvent,
@@ -20,6 +21,26 @@ import { tryGetPluginSdkApi } from './plugin-info'
 
 function resolveSdkApi(): number | undefined {
   return tryGetPluginSdkApi()
+}
+
+function isSessionInfo(value: unknown): value is SessionInfo {
+  return Boolean(value && typeof value === 'object' && typeof (value as SessionInfo).sessionId === 'string')
+}
+
+function unwrapSessionInfoResponse(result: IPCResponse<SessionInfo> | SessionInfo): SessionInfo {
+  if (isSessionInfo(result)) {
+    return result
+  }
+
+  if (!result?.success) {
+    throw new Error(result?.error?.message || 'Failed to open DivisionBox')
+  }
+
+  if (!isSessionInfo(result.data)) {
+    throw new Error('Failed to open DivisionBox')
+  }
+
+  return result.data
 }
 
 /**
@@ -263,17 +284,9 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
       const result = await transport.send(DivisionBoxEvents.open, {
         ...(config as any),
         _sdkapi: resolveSdkApi(),
-      })
+      }) as IPCResponse<SessionInfo> | SessionInfo
 
-      if (!result.success) {
-        throw new Error(result.error?.message || 'Failed to open DivisionBox')
-      }
-
-      if (!result.data) {
-        throw new Error('Failed to open DivisionBox')
-      }
-
-      return result.data
+      return unwrapSessionInfoResponse(result)
     },
 
     async close(sessionId: string, options?: CloseOptions): Promise<void> {

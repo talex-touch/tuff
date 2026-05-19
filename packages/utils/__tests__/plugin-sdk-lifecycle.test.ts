@@ -11,7 +11,7 @@ function createMockChannel() {
   const listeners = new Map<string, Set<Handler>>()
 
   const channel = {
-    send: vi.fn(async () => undefined),
+    send: vi.fn(async (_eventName: string, _payload?: unknown): Promise<unknown> => undefined),
     regChannel: vi.fn((eventName: string, handler: Handler) => {
       const bucket = listeners.get(eventName) || new Set<Handler>()
       bucket.add(handler)
@@ -122,6 +122,19 @@ describe('plugin sdk lifecycle', () => {
 
     sdk.dispose()
     expect(listenerCount(eventName)).toBe(0)
+  })
+
+  it('division box sdk accepts direct session info open responses', async () => {
+    const { channel } = createMockChannel()
+    channel.send.mockResolvedValueOnce({ sessionId: 's1', state: 'active' })
+    const sdk = createDivisionBoxSDK(channel as any)
+
+    await expect(
+      sdk.open({
+        url: 'tuff://detached?itemId=demo',
+        title: 'Demo',
+      }),
+    ).resolves.toMatchObject({ sessionId: 's1' })
   })
 
   it('meta sdk clears execute listener after dispose', async () => {

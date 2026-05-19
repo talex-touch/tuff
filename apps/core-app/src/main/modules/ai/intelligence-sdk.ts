@@ -25,6 +25,8 @@ import type {
   IntelligenceImageCaptionResult,
   IntelligenceImageGeneratePayload,
   IntelligenceImageGenerateResult,
+  IntelligenceImageTranslateE2ePayload,
+  IntelligenceImageTranslateE2eResult,
   IntelligenceIntentDetectPayload,
   IntelligenceIntentDetectResult,
   IntelligenceInvokeOptions,
@@ -176,6 +178,7 @@ const CAPABILITY_METHOD_MAP: Record<
   'vision-ocr': { method: 'visionOcr', requiresOverride: true },
   'image-caption': { method: 'imageCaption', requiresOverride: true },
   'image-analyze': { method: 'imageAnalyze', requiresOverride: true },
+  'image-translate-e2e': { method: 'imageTranslateE2e', requiresOverride: true },
   'image-generate': { method: 'imageGenerate', requiresOverride: true },
   'image-edit': { method: 'imageEdit', requiresOverride: true },
   tts: { method: 'tts', requiresOverride: true },
@@ -1084,6 +1087,11 @@ export class TuffIntelligenceSDK {
           payload as IntelligenceImageAnalyzePayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
+      case 'image-translate-e2e':
+        return (await provider.imageTranslateE2e!(
+          payload as IntelligenceImageTranslateE2ePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
       case 'image-generate':
         return (await provider.imageGenerate!(
           payload as IntelligenceImageGeneratePayload,
@@ -1619,6 +1627,13 @@ export class TuffIntelligenceSDK {
 
     generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
       this.invoke<IntelligenceImageGenerateResult>('image.generate', payload, options)
+  }
+
+  image = {
+    translateE2e: (
+      payload: IntelligenceImageTranslateE2ePayload,
+      options?: IntelligenceInvokeOptions
+    ) => this.invoke<IntelligenceImageTranslateE2eResult>('image.translate.e2e', payload, options)
   }
 
   rag = {

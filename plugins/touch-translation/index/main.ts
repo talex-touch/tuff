@@ -1,5 +1,6 @@
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence/client'
+import type { IntelligenceImageTranslateE2eResult } from '@talex-touch/tuff-intelligence/client'
 import {
   applyProviderPresentation,
   DEFAULT_ENABLED_PROVIDER_IDS,
@@ -14,10 +15,14 @@ import {
   resolveTargetLanguage,
 } from '@talex-touch/utils/plugin'
 import { GoogleProvider, TuffIntelligenceProvider } from './providers'
+import { parseImageDataUrl, toImageDataUrl } from './utils'
 const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis as any
 
 const PLUGIN_NAME = 'touch-translation'
 const WIDGET_ITEM_ID = 'translation-widget'
+const IMAGE_TRANSLATION_ITEM_ID = 'image-translation-widget'
+const IMAGE_TRANSLATION_TARGET_LANG = 'zh'
+const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
 
 interface ProviderState {
@@ -53,6 +58,21 @@ interface WidgetState {
   targetLang: string
   providers: ProviderState[]
   error?: string | null
+  updatedAt: number
+}
+
+interface ImageTranslationWidgetPayload {
+  mode: 'image-translation'
+  requestId: string
+  status: 'complete' | 'error'
+  sourceImageDataUrl: string
+  translatedImageDataUrl?: string
+  sourceText?: string
+  targetText?: string
+  provider?: string
+  model?: string
+  traceId?: string
+  error?: string
   updatedAt: number
 }
 
@@ -230,6 +250,182 @@ function buildWidgetItem(featureId: string, state: WidgetState) {
       keepCoreBoxOpen: true,
     })
     .build()
+}
+
+function buildImageTranslationItem(
+  featureId: string,
+  payload: ImageTranslationWidgetPayload,
+) {
+  const title = payload.status === 'complete' ? '图片翻译完成' : '图片翻译失败'
+  const subtitle = payload.status === 'complete'
+    ? '已生成译文图片'
+    : payload.error || '无法完成图片翻译'
+
+  return new TuffItemBuilder(IMAGE_TRANSLATION_ITEM_ID)
+    .setSource('plugin', 'plugin-features', PLUGIN_NAME)
+    .setTitle(title)
+    .setSubtitle(subtitle)
+    .setIcon({ type: 'file', value: 'assets/logo.svg' })
+    .setCustomRender('vue', makeWidgetId(PLUGIN_NAME, featureId), payload)
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      pluginType: 'translation',
+      keepCoreBoxOpen: true,
+    })
+    .build()
+}
+
+function buildDetachedFeatureUrl(item: any, query: string, pluginId: string): string {
+  const params = new URLSearchParams({
+    itemId: item.id,
+    query,
+    source: pluginId,
+    providerSource: item.source?.id || 'plugin-features',
+  })
+  return `tuff://detached?${params.toString()}`
+}
+
+function buildDetachedPayload(item: any, query: string) {
+  return {
+    item: JSON.parse(JSON.stringify(item)),
+    query,
+  }
+}
+
+async function openImageTranslationDivisionBox(
+  featureId: string,
+  payload: ImageTranslationWidgetPayload,
+): Promise<boolean> {
+  const item = buildImageTranslationItem(featureId, payload)
+  if (!plugin?.divisionBox?.open) {
+    upsertFeatureItem(item)
+    return false
+  }
+
+  const detachedPayload = buildDetachedPayload(item, '')
+  const session = await plugin.divisionBox.open({
+    url: buildDetachedFeatureUrl(item, '', PLUGIN_NAME),
+    title: '图片翻译',
+    icon: { type: 'file', value: 'assets/logo.svg' },
+    size: 'expanded',
+    keepAlive: true,
+    pluginId: PLUGIN_NAME,
+    header: { show: false },
+    ui: { showInput: false, initialInput: '' },
+    initialState: {
+      [DETACHED_PAYLOAD_STATE_KEY]: detachedPayload,
+    },
+  })
+
+  if (!session?.sessionId) {
+    throw new Error('DivisionBox session was not created')
+  }
+
+  if (typeof plugin.divisionBox.updateState === 'function') {
+    await plugin.divisionBox.updateState(session.sessionId, DETACHED_PAYLOAD_STATE_KEY, detachedPayload)
+  }
+
+  return true
+}
+
+async function presentImageTranslationResult(
+  featureId: string,
+  payload: ImageTranslationWidgetPayload,
+): Promise<void> {
+  try {
+    const opened = await openImageTranslationDivisionBox(featureId, payload)
+    if (!opened) {
+      upsertFeatureItem(buildImageTranslationItem(featureId, payload))
+    }
+  }
+  catch (error) {
+    logger.warn('Failed to open image translation DivisionBox:', error)
+    upsertFeatureItem(buildImageTranslationItem(featureId, payload))
+  }
+}
+
+async function translateImageFromClipboardInput(
+  featureId: string,
+  query: unknown,
+): Promise<boolean> {
+  const imageDataUrl = extractImageDataUrl(query)
+  if (!imageDataUrl) {
+    return false
+  }
+
+  const parsed = parseImageDataUrl(imageDataUrl)
+  if (!parsed) {
+    return false
+  }
+
+  const requestId = `image-translation-${Date.now()}`
+  const hasAiPermission = await ensureAiPermission()
+  if (!hasAiPermission) {
+    await presentImageTranslationResult(featureId, {
+      mode: 'image-translation',
+      requestId,
+      status: 'error',
+      sourceImageDataUrl: imageDataUrl,
+      error: PERMISSION_DENIED_MESSAGE,
+      updatedAt: Date.now(),
+    })
+    return true
+  }
+
+  try {
+    const aiClient = createIntelligenceClient()
+    const response = await aiClient.invoke<IntelligenceImageTranslateE2eResult>(
+      'image.translate.e2e',
+      {
+        imageBase64: parsed.base64,
+        imageMimeType: parsed.mime,
+        targetLang: IMAGE_TRANSLATION_TARGET_LANG,
+        metadata: {
+          caller: PLUGIN_NAME,
+          entry: featureId,
+        },
+      },
+      {
+        metadata: {
+          caller: PLUGIN_NAME,
+          entry: featureId,
+        },
+      },
+    )
+
+    const result = response?.result
+    if (!result?.translatedImageBase64) {
+      throw new Error('EMPTY_IMAGE_TRANSLATE_RESULT')
+    }
+
+    await presentImageTranslationResult(featureId, {
+      mode: 'image-translation',
+      requestId,
+      status: 'complete',
+      sourceImageDataUrl: imageDataUrl,
+      translatedImageDataUrl: toImageDataUrl(result.translatedImageBase64, result.imageMimeType),
+      sourceText: result.sourceText,
+      targetText: result.targetText,
+      provider: response.provider,
+      model: response.model,
+      traceId: response.traceId,
+      updatedAt: Date.now(),
+    })
+  }
+  catch (error) {
+    const errorPayload: ImageTranslationWidgetPayload = {
+      mode: 'image-translation',
+      requestId,
+      status: 'error',
+      sourceImageDataUrl: imageDataUrl,
+      error: normalizeCallFailureMessage(describeRuntimeError(error)),
+      updatedAt: Date.now(),
+    }
+    await presentImageTranslationResult(featureId, errorPayload)
+  }
+
+  return true
 }
 
 function describeRuntimeError(error: unknown): string {
@@ -476,6 +672,10 @@ const pluginLifecycle = {
   async onFeatureTriggered(featureId: string, query: any, _feature: any, signal: AbortSignal) {
     try {
       if (SUPPORTED_TRANSLATION_FEATURES.has(featureId)) {
+        if (featureId === 'screenshot-translate' && await translateImageFromClipboardInput(featureId, query)) {
+          return true
+        }
+
         const resolvedInput = await resolveTextToTranslate(featureId, query)
         const textToTranslate = resolvedInput.text.trim()
         if (!textToTranslate) {

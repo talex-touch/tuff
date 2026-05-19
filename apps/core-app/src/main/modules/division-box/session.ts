@@ -22,6 +22,7 @@ import { useAliveWebContents } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
+import { resolveDivisionBoxHeaderHeight } from './layout'
 
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
@@ -181,6 +182,10 @@ export class DivisionBoxSession {
     })
   }
 
+  private getHeaderHeight(): number {
+    return resolveDivisionBoxHeaderHeight(this.config)
+  }
+
   /**
    * Registers a state change listener
    *
@@ -304,12 +309,12 @@ export class DivisionBoxSession {
     if (!this.touchWindow || !this.uiView) return
 
     const bounds = this.touchWindow.window.getBounds()
-    const headerHeight = 64 // Match .CoreBox height in CoreBox.vue
+    const headerHeight = this.getHeaderHeight()
     this.uiView.setBounds({
       x: 0,
       y: headerHeight,
       width: bounds.width,
-      height: bounds.height - headerHeight
+      height: Math.max(0, bounds.height - headerHeight)
     })
   }
 
@@ -381,12 +386,12 @@ export class DivisionBoxSession {
 
     // Set bounds (below header area)
     const bounds = this.touchWindow.window.getBounds()
-    const headerHeight = 60
+    const headerHeight = this.getHeaderHeight()
     this.uiView.setBounds({
       x: 0,
       y: headerHeight,
       width: bounds.width,
-      height: bounds.height - headerHeight
+      height: Math.max(0, bounds.height - headerHeight)
     })
 
     // Handle dom-ready

@@ -29,6 +29,8 @@ import type {
   IntelligenceImageEditResult,
   IntelligenceImageGeneratePayload,
   IntelligenceImageGenerateResult,
+  IntelligenceImageTranslateE2ePayload,
+  IntelligenceImageTranslateE2eResult,
   IntelligenceIntentDetectPayload,
   IntelligenceIntentDetectResult,
   IntelligenceInvokeOptions,
@@ -431,6 +433,13 @@ export abstract class IntelligenceProvider implements IntelligenceProviderAdapte
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>> {
     return Promise.reject(new Error(`[${this.type}] Image analyze capability is unsupported`))
+  }
+
+  imageTranslateE2e(
+    _payload: IntelligenceImageTranslateE2ePayload,
+    _options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>> {
+    return Promise.reject(new Error(`[${this.type}] Image translate capability is unsupported`))
   }
 
   imageGenerate(

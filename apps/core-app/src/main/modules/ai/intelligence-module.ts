@@ -820,6 +820,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     })
 
     intelligenceCapabilityRegistry.register({
+      id: 'image.translate.e2e',
+      type: IntelligenceCapabilityType.IMAGE_TRANSLATE_E2E,
+      name: 'Image Translation',
+      description: 'Translate text in an image and return the translated image',
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
+    })
+
+    intelligenceCapabilityRegistry.register({
       id: 'image.generate',
       type: IntelligenceCapabilityType.IMAGE_GENERATE,
       name: 'Image Generation',
