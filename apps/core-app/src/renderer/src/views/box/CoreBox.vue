@@ -720,7 +720,13 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
               @trigger="handleItemTrigger(0, widgetItemToRender)"
             />
           </div>
-          <TouchScroll v-else ref="scrollbar" no-padding class="scroll-area">
+          <TouchScroll
+            v-else
+            ref="scrollbar"
+            no-padding
+            class="scroll-area"
+            :native-auto-fallback="false"
+          >
             <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
               <Transition :name="resultTransitionName" mode="out-in">
                 <BoxGrid
@@ -1026,6 +1032,11 @@ div.CoreBoxRes {
     display: flex;
     flex-direction: column;
     min-height: 0;
+
+    :deep(.tx-scroll__native) {
+      overflow-x: hidden !important;
+      scrollbar-gutter: stable;
+    }
   }
 }
 
