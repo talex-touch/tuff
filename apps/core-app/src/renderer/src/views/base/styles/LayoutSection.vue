@@ -28,8 +28,6 @@ const mainEditorSource = ref<HTMLElement | null>(null)
 const coreBoxEditorSource = ref<HTMLElement | null>(null)
 const remotePresetSource = ref<HTMLElement | null>(null)
 
-const enabledLayouts = new Set(['simple', 'flat'])
-
 interface LayoutPreviewState {
   component: Component | null
   loading: boolean
@@ -62,9 +60,7 @@ watch(
 )
 
 const displayLayouts = computed(() => {
-  return Object.entries(availableLayouts.value).filter(
-    ([key]) => key !== 'custom' && enabledLayouts.has(key)
-  )
+  return Object.entries(availableLayouts.value).filter(([key]) => key !== 'custom')
 })
 const showPresetEditors = computed(
   () => startupInfo.value?.isDev === true && Boolean(appSetting?.dev?.advancedSettings)
