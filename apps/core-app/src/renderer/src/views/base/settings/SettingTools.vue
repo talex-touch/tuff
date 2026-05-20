@@ -62,7 +62,13 @@ const DEFAULT_RECOMMENDATION_CONTEXT_SOURCES = {
   power: true,
   location: true
 } as const
+const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS = {
+  localVectorEnabled: true,
+  aiRerankEnabled: false,
+  aiEmbeddingEnabled: false
+} as const
 type RecommendationContextSourceKey = keyof typeof DEFAULT_RECOMMENDATION_CONTEXT_SOURCES
+type RecommendationSemanticSettingKey = keyof typeof DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS
 const recommendationContextSourceItems: Array<{
   key: RecommendationContextSourceKey
   titleKey: string
@@ -125,6 +131,35 @@ const recommendationContextSourceItems: Array<{
     descriptionKey: 'settingTools.recommendationContextLocationDesc',
     defaultIcon: 'i-carbon-location',
     activeIcon: 'i-carbon-location-filled'
+  }
+]
+const recommendationSemanticItems: Array<{
+  key: RecommendationSemanticSettingKey
+  titleKey: string
+  descriptionKey: string
+  defaultIcon: string
+  activeIcon: string
+}> = [
+  {
+    key: 'localVectorEnabled',
+    titleKey: 'settingTools.recommendationSemanticLocalVector',
+    descriptionKey: 'settingTools.recommendationSemanticLocalVectorDesc',
+    defaultIcon: 'i-carbon-network-3',
+    activeIcon: 'i-carbon-network-3'
+  },
+  {
+    key: 'aiRerankEnabled',
+    titleKey: 'settingTools.recommendationSemanticAiRerank',
+    descriptionKey: 'settingTools.recommendationSemanticAiRerankDesc',
+    defaultIcon: 'i-carbon-machine-learning-model',
+    activeIcon: 'i-carbon-machine-learning-model'
+  },
+  {
+    key: 'aiEmbeddingEnabled',
+    titleKey: 'settingTools.recommendationSemanticAiEmbedding',
+    descriptionKey: 'settingTools.recommendationSemanticAiEmbeddingDesc',
+    defaultIcon: 'i-carbon-vector',
+    activeIcon: 'i-carbon-vector'
   }
 ]
 
@@ -299,6 +334,7 @@ function ensureRecommendationContextSettings(): void {
       enabled: true,
       maxItems: 10,
       showReason: true,
+      semantic: { ...DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS },
       contextSources: { ...DEFAULT_RECOMMENDATION_CONTEXT_SOURCES }
     }
     return
@@ -306,6 +342,7 @@ function ensureRecommendationContextSettings(): void {
 
   const recommendation = appSetting.recommendation as typeof appSetting.recommendation & {
     contextSources?: Partial<Record<RecommendationContextSourceKey, boolean>> | null
+    semantic?: Partial<Record<RecommendationSemanticSettingKey, boolean>> | null
   }
 
   if (typeof recommendation.enabled !== 'boolean') {
@@ -316,6 +353,17 @@ function ensureRecommendationContextSettings(): void {
   }
   if (typeof recommendation.showReason !== 'boolean') {
     recommendation.showReason = true
+  }
+  if (!recommendation.semantic || typeof recommendation.semantic !== 'object') {
+    recommendation.semantic = { ...DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS }
+  } else {
+    for (const key of Object.keys(
+      DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS
+    ) as RecommendationSemanticSettingKey[]) {
+      if (typeof recommendation.semantic[key] !== 'boolean') {
+        recommendation.semantic[key] = DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS[key]
+      }
+    }
   }
   if (!recommendation.contextSources || typeof recommendation.contextSources !== 'object') {
     recommendation.contextSources = { ...DEFAULT_RECOMMENDATION_CONTEXT_SOURCES }
@@ -898,6 +946,16 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSelect>
 
     <template v-if="showAdvancedSettings">
+      <TuffBlockSwitch
+        v-for="item in recommendationSemanticItems"
+        :key="item.key"
+        v-model="appSetting.recommendation.semantic[item.key]"
+        :title="t(item.titleKey)"
+        :description="t(item.descriptionKey)"
+        :default-icon="item.defaultIcon"
+        :active-icon="item.activeIcon"
+      />
+
       <TuffBlockSwitch
         v-for="source in recommendationContextSourceItems"
         :key="source.key"
