@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-05-20
+> 更新时间：2026-05-21
 > 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
 
 ## 1. 适用范围
@@ -25,8 +25,8 @@
 - `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
 - App Data Plugins 与 Everything 收口已新增 Roadmap：新增 Browser Data、Obsidian、VSCode、macOS App Data、Epic 等数据源必须显式授权、只读优先、可清理索引、可见 degraded/unsupported reason；Windows Everything 必须明确 SDK/CLI 策略、路径授权过滤与真机 evidence。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
-- 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；独立 OmniPanel Gate workflow 已于 2026-05-18 删除，不再作为 GitHub Actions 自动门禁；若既有失败阻断，必须记录失败项与最近路径替代验证。
-- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，且本轮已收口 `touch-snipaste` shell capability、`touch-window-presets` 展示期 non-mutating permission check、Browser Data source-level diagnostics、Widget Runtime Safety 基线、CoreBox app launch immediate-hide handoff、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint HTTP `410` 合同测试；Credential Locker/libsecret、裸 console、真实平台 evidence 与 SRP 大文件仍是优先治理点；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用；`v2.4.10` release workflow 成功不代表 npm 子包发布成功，当前公共子包缺失版本需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
+- 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；`pnpm test:targeted` 的 Nexus sync route test 已指向当前 `apps/nexus/test/api/sync/sync-routes-410.test.ts` 路径；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；独立 OmniPanel Gate workflow 已于 2026-05-18 删除，不再作为 GitHub Actions 自动门禁；若既有失败阻断，必须记录失败项与最近路径替代验证。
+- 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，且本轮已收口 `touch-snipaste` shell capability、`touch-window-presets` 展示期 non-mutating permission check、Browser Data source-level diagnostics、Widget Runtime Safety 基线、CoreBox app launch immediate-hide handoff、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint HTTP `410` 合同测试；2026-05-21 focused tests 覆盖 Assistant 截屏翻译 typed event、推荐系统上下文信号、可选 AI embedding/rerank fail-open、壁纸状态归一化、TuffEx 基础组件与 Nexus storage governance telemetry；Credential Locker/libsecret、裸 console、真实平台 evidence 与 SRP 大文件仍是优先治理点；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用；`v2.4.10` release workflow 成功不代表 npm 子包发布成功，当前公共子包缺失版本需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
 
 ## 3. 活跃 PRD 必须包含
 
