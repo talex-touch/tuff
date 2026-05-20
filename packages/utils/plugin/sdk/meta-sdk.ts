@@ -4,7 +4,11 @@
  * MetaSDK is kept as a compatibility alias to avoid breaking existing plugins.
  */
 
-import type { QuickActionExecuteHandler, QuickActionsSDK } from './quick-actions-sdk'
+import type {
+  QuickActionExecuteHandler,
+  QuickActionsSDK,
+  QuickActionsSDKOptions
+} from './quick-actions-sdk'
 import { createQuickActionsSDK } from './quick-actions-sdk'
 
 /**
@@ -20,6 +24,10 @@ export interface MetaSDK extends QuickActionsSDK {}
 /**
  * @deprecated Use createQuickActionsSDK.
  */
-export function createMetaSDK(channel: any, pluginId: string): MetaSDK {
-  return createQuickActionsSDK(channel, pluginId)
+export function createMetaSDK(
+  channel: any,
+  pluginId: string,
+  options?: QuickActionsSDKOptions
+): MetaSDK {
+  return createQuickActionsSDK(channel, pluginId, options)
 }

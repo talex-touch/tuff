@@ -1919,7 +1919,9 @@ export class TouchPlugin implements ITouchPlugin {
     const divisionBoxSDK = createDivisionBoxSDK(channelBridge)
     const boxSDK = createBoxSDK(boxChannel)
     const featureSDK = createFeatureSDK(boxItems, channelBridge)
-    const quickActionsSDK = createQuickActionsSDK(channelBridge, this.name)
+    const quickActionsSDK = createQuickActionsSDK(channelBridge, this.name, {
+      sdkapi: this.sdkapi
+    })
 
     // 新版 API: 统一使用 plugin.* 前缀
     const pluginAPI = {
