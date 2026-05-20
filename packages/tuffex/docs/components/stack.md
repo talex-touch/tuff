@@ -7,6 +7,20 @@ For more granular flex control (row-reverse, wrap-reverse, etc.), see [Flex](/co
 <script setup lang="ts">
 import StackBasicDemo from '../.vitepress/theme/components/demos/StackBasicDemo.vue'
 import StackBasicDemoSource from '../.vitepress/theme/components/demos/StackBasicDemo.vue?raw'
+const stackApiRows1 = [
+  { name: 'direction', description: 'The stacking direction.', type: '\"vertical\" | \"horizontal\"', default: '\"vertical\"' },
+  { name: 'gap', description: 'Spacing between children. Accepts a number (px) or CSS string.', type: 'number | string', default: '12' },
+  { name: 'align', description: 'Cross-axis alignment (maps to align-items).', type: 'string', default: '\"stretch\"' },
+  { name: 'justify', description: 'Main-axis distribution (maps to justify-content).', type: 'string', default: '\"flex-start\"' },
+  { name: 'wrap', description: 'When true, allows children to wrap to the next line.', type: 'boolean', default: 'false' },
+  { name: 'inline', description: 'When true, uses inline-flex instead of flex.', type: 'boolean', default: 'false' },
+
+]
+
+const stackApiRows2 = [
+  { name: 'default', description: 'The content to arrange within the stack.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -81,17 +95,8 @@ Combine `align` and `justify` to position children within the stack.
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'direction', description: 'The stacking direction.', type: '\"vertical\" | \"horizontal\"', default: '\"vertical\"' },
-  { name: 'gap', description: 'Spacing between children. Accepts a number (px) or CSS string.', type: 'number | string', default: '12' },
-  { name: 'align', description: 'Cross-axis alignment (maps to align-items).', type: 'string', default: '\"stretch\"' },
-  { name: 'justify', description: 'Main-axis distribution (maps to justify-content).', type: 'string', default: '\"flex-start\"' },
-  { name: 'wrap', description: 'When true, allows children to wrap to the next line.', type: 'boolean', default: 'false' },
-  { name: 'inline', description: 'When true, uses inline-flex instead of flex.', type: 'boolean', default: 'false' },
-]" />
+<ApiSpecTable :rows="stackApiRows1" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'The content to arrange within the stack.' },
-]" />
+<ApiSpecTable title="Slots" :rows="stackApiRows2" />

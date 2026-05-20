@@ -89,11 +89,11 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
 const osIconClass = computed(() => {
   switch (props.os) {
     case 'macos':
-      return 'i-carbon-logo-apple'
+      return 'i-simple-icons-apple'
     case 'windows':
-      return 'i-carbon-logo-windows'
+      return 'i-simple-icons-windows'
     case 'linux':
-      return 'i-carbon-logo-tux'
+      return 'i-simple-icons-linux'
     default:
       return ''
   }

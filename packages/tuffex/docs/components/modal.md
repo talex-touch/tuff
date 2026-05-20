@@ -8,6 +8,25 @@ Use modals for confirmations, forms, or content that requires a deliberate respo
 import { ref } from 'vue'
 
 const visible = ref(false)
+const modalApiRows1 = [
+  { name: 'modelValue / v-model', description: 'Controls the visibility of the modal.', type: 'boolean' },
+  { name: 'title', description: 'The title displayed in the modal header.', type: 'string', default: '\"\"' },
+  { name: 'width', description: 'The width of the modal dialog.', type: 'string', default: '\"480px\"' },
+
+]
+
+const modalApiRows2 = [
+  { name: 'update:modelValue', description: 'Fires when the visible state changes.', type: '(value: boolean) => void' },
+  { name: 'close', description: 'Fires when the modal is closed by backdrop click, Escape, or close button.' },
+
+]
+
+const modalApiRows3 = [
+  { name: 'default', description: 'The main content of the modal.' },
+  { name: 'header', description: 'Custom header content. Replaces the title prop.' },
+  { name: 'footer', description: 'Footer area, typically used for action buttons.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -66,23 +85,12 @@ const visible = ref(false)
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'Controls the visibility of the modal.', type: 'boolean' },
-  { name: 'title', description: 'The title displayed in the modal header.', type: 'string', default: '\"\"' },
-  { name: 'width', description: 'The width of the modal dialog.', type: 'string', default: '\"480px\"' },
-]" />
+<ApiSpecTable :rows="modalApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'update:modelValue', description: 'Fires when the visible state changes.', type: '(value: boolean) => void' },
-  { name: 'close', description: 'Fires when the modal is closed by backdrop click, Escape, or close button.' },
-]" />
+<ApiSpecTable title="Events" :rows="modalApiRows2" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'The main content of the modal.' },
-  { name: 'header', description: 'Custom header content. Replaces the title prop.' },
-  { name: 'footer', description: 'Footer area, typically used for action buttons.' },
-]" />
+<ApiSpecTable title="Slots" :rows="modalApiRows3" />

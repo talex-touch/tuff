@@ -33,7 +33,7 @@ export default defineConfig({
   },
 
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
   ],
 
   themeConfig: {
@@ -60,6 +60,7 @@ export default defineConfig({
           text: '基础',
           items: [
             { text: '按钮 Button', link: '/components/button' },
+            { text: '扁平按钮 FlatButton', link: '/components/flat-button' },
             { text: '图标 Icon', link: '/components/icon' },
             { text: '头像 Avatar', link: '/components/avatar' },
             { text: '头像变体 AvatarVariants', link: '/components/avatar-variants' },
@@ -67,6 +68,9 @@ export default defineConfig({
             { text: '角标容器 CornerOverlay', link: '/components/corner-overlay' },
             { text: '标签 Tag', link: '/components/tag' },
             { text: '状态徽标 StatusBadge', link: '/components/status-badge' },
+            { text: '分割线 Divider', link: '/components/divider' },
+            { text: '键盘键 Kbd', link: '/components/kbd' },
+            { text: '复制按钮 CopyButton', link: '/components/copy-button' },
             { text: '提示 Alert', link: '/components/alert' },
             { text: '徽标 Badge', link: '/components/badge' },
             { text: '面包屑 Breadcrumb', link: '/components/breadcrumb' },
@@ -76,6 +80,9 @@ export default defineConfig({
           text: '表单',
           items: [
             { text: '输入框 Input', link: '/components/input' },
+            { text: '文本域 Textarea', link: '/components/textarea' },
+            { text: '数字输入 NumberInput', link: '/components/number-input' },
+            { text: '扁平输入 FlatInput', link: '/components/flat-input' },
             { text: '代码编辑器 CodeEditor', link: '/components/code-editor' },
             { text: '搜索输入框 SearchInput', link: '/components/search-input' },
             { text: '搜索选择器 SearchSelect', link: '/components/search-select' },
@@ -83,8 +90,10 @@ export default defineConfig({
             { text: '标签输入 TagInput', link: '/components/tag-input' },
             { text: '复选框 Checkbox', link: '/components/checkbox' },
             { text: '单选框 Radio', link: '/components/radio' },
+            { text: '扁平单选 FlatRadio', link: '/components/flat-radio' },
             { text: '开关 Switch', link: '/components/switch' },
             { text: '选择器 Select', link: '/components/select' },
+            { text: '扁平选择 FlatSelect', link: '/components/flat-select' },
             { text: '滚轮选择 Picker', link: '/components/picker' },
             { text: '日期选择 DatePicker', link: '/components/date-picker' },
             { text: '树形 Tree', link: '/components/tree' },
@@ -101,8 +110,11 @@ export default defineConfig({
             { text: '卡片 Card', link: '/components/card' },
             { text: '卡片项 CardItem', link: '/components/card-item' },
             { text: '数据表格 DataTable', link: '/components/data-table' },
+            { text: '穿梭框 Transfer', link: '/components/transfer' },
             { text: '空状态 Empty', link: '/components/empty' },
             { text: '空态引导 EmptyState', link: '/components/empty-state' },
+            { text: '引导状态 GuideState', link: '/components/guide-state' },
+            { text: '错误状态 ErrorState', link: '/components/error-state' },
             { text: '空白页 BlankSlate', link: '/components/blank-slate' },
             { text: '加载态 LoadingState', link: '/components/loading-state' },
             { text: '未选择 NoSelection', link: '/components/no-selection' },
@@ -165,6 +177,7 @@ export default defineConfig({
             { text: '命令面板 CommandPalette', link: '/components/command-palette' },
             { text: '模态框 Modal', link: '/components/modal' },
             { text: '翻转覆盖 FlipOverlay', link: '/components/flip-overlay' },
+            { text: '裂缝锚点 BaseAnchor', link: '/components/base-anchor' },
           ],
         },
         {
@@ -195,7 +208,9 @@ export default defineConfig({
             { text: '玻璃拟态 GlassSurface', link: '/components/glass-surface' },
             { text: '渐变模糊 GradualBlur', link: '/components/gradual-blur' },
             { text: '边缘渐隐 EdgeFadeMask', link: '/components/edge-fade-mask' },
+            { text: '基础表面 BaseSurface', link: '/components/base-surface' },
             { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
+            { text: '浮动层 Floating', link: '/components/floating' },
             { text: '扫光 GlowText', link: '/components/glow-text' },
             { text: '关键帧描边 KeyframeStrokeText', link: '/components/keyframe-stroke-text' },
             { text: 'Logo 描边 TuffLogoStroke', link: '/components/tuff-logo-stroke' },

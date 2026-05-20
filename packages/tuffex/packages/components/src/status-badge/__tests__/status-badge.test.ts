@@ -48,7 +48,7 @@ describe('txStatusBadge', () => {
 
     const icons = wrapper.findAll('.tx-status-badge__icon')
     expect(icons).toHaveLength(2)
-    expect(icons[0].classes()).toContain('i-carbon-logo-apple')
+    expect(icons[0].classes()).toContain('i-simple-icons-apple')
     expect(icons[1].classes()).toContain('i-carbon-information')
 
     const osOnly = mount(TxStatusBadge, {
@@ -59,7 +59,7 @@ describe('txStatusBadge', () => {
       },
     })
     expect(osOnly.findAll('.tx-status-badge__icon')).toHaveLength(1)
-    expect(osOnly.find('.tx-status-badge__icon').classes()).toContain('i-carbon-logo-tux')
+    expect(osOnly.find('.tx-status-badge__icon').classes()).toContain('i-simple-icons-linux')
   })
 
   it('uses custom icon and emits click', async () => {

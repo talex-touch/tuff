@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const value = ref(30)
 
@@ -168,7 +168,8 @@ const tooltipMotionDuration = ref(currentPreset.motionDuration)
 const tooltipMotionBlurPx = ref(currentPreset.motionBlurPx)
 const tooltipDistortSkewDeg = ref(currentPreset.distortSkewDeg)
 
-const tooltipJelly = ref(currentPreset.jelly)
+const tooltipJellyMode = ref<'on' | 'off'>(currentPreset.jelly ? 'on' : 'off')
+const tooltipJelly = computed(() => tooltipJellyMode.value === 'on')
 const tooltipJellyFrequency = ref(currentPreset.jellyFrequency)
 const tooltipJellyDecay = ref(currentPreset.jellyDecay)
 const tooltipJellyRotateDeg = ref(currentPreset.jellyRotateDeg)
@@ -187,7 +188,7 @@ function applyPreset(p: Preset) {
   tooltipMotionBlurPx.value = p.motionBlurPx
   tooltipDistortSkewDeg.value = p.distortSkewDeg
 
-  tooltipJelly.value = p.jelly
+  tooltipJellyMode.value = p.jelly ? 'on' : 'off'
   tooltipJellyFrequency.value = p.jellyFrequency
   tooltipJellyDecay.value = p.jellyDecay
   tooltipJellyRotateDeg.value = p.jellyRotateDeg
@@ -351,11 +352,11 @@ watch(
           jelly
         </div>
         <div style="flex: 1; min-width: 0;">
-          <TxRadioGroup v-model="tooltipJelly" type="button" :indicator-variant="indicatorVariant">
-            <TxRadio :value="true">
+          <TxRadioGroup v-model="tooltipJellyMode" type="button" :indicator-variant="indicatorVariant">
+            <TxRadio value="on">
               On
             </TxRadio>
-            <TxRadio :value="false">
+            <TxRadio value="off">
               Off
             </TxRadio>
           </TxRadioGroup>

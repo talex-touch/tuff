@@ -18,6 +18,47 @@ const data = [
 ]
 
 const selectedKeys = ref<number[]>([])
+const dataTableApiRows1 = [
+  { name: 'columns', description: 'Column definitions.', type: 'DataTableColumn[]', default: '[]' },
+  { name: 'data', description: 'Row data source.', type: 'any[]', default: '[]' },
+  { name: 'rowKey', description: 'Unique key field or function for each row.', type: 'string | ((row, index) => string | number)', default: '\"index\"' },
+  { name: 'loading', description: 'Show loading overlay.', type: 'boolean', default: 'false' },
+  { name: 'emptyText', description: 'Text shown when data is empty.', type: 'string', default: '\"No data\"' },
+  { name: 'striped', description: 'Alternate row background.', type: 'boolean', default: 'false' },
+  { name: 'bordered', description: 'Show table borders.', type: 'boolean', default: 'false' },
+  { name: 'hover', description: 'Highlight row on hover.', type: 'boolean', default: 'true' },
+  { name: 'selectable', description: 'Enable row checkboxes.', type: 'boolean', default: 'false' },
+  { name: 'selectedKeys', description: 'Array of selected row keys.', type: 'Array<string | number>', default: '[]' },
+  { name: 'defaultSort', description: 'Initial sort state.', type: '{ key: string, order: \"asc\" | \"desc\" | null }', default: 'null' },
+  { name: 'sortOnClient', description: 'Whether to sort data client-side.', type: 'boolean', default: 'true' },
+
+]
+
+const dataTableApiRows2 = [
+  { name: 'key', description: 'Column identifier.', type: 'string' },
+  { name: 'title', description: 'Header text.', type: 'string' },
+  { name: 'dataIndex', description: 'Data field name (defaults to key).', type: 'string' },
+  { name: 'width', description: 'Column width.', type: 'string | number' },
+  { name: 'align', description: 'Text alignment.', type: '\"left\" | \"center\" | \"right\"' },
+  { name: 'sortable', description: 'Enable sorting for this column.', type: 'boolean' },
+  { name: 'sorter', description: 'Custom sort comparator.', type: '(a, b) => number' },
+  { name: 'format', description: 'Format cell value as text.', type: '(value, row, index) => string' },
+
+]
+
+const dataTableApiRows3 = [
+  { name: 'selectionChange', description: 'Fires when selected rows change.', type: '(keys: Array<string | number>) => void' },
+  { name: 'sortChange', description: 'Fires when sort state changes.', type: '(sort: { key: string, order: string }) => void' },
+  { name: 'rowClick', description: 'Fires when a row is clicked.', type: '(payload: { row: any, index: number }) => void' },
+
+]
+
+const dataTableApiRows4 = [
+  { name: 'header-{columnKey}', description: 'Custom header content for a specific column.' },
+  { name: 'cell-{columnKey}', description: 'Custom cell content for a specific column.', type: '{ row: any, value: any, index: number }' },
+  { name: 'empty', description: 'Custom empty state content.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -105,46 +146,16 @@ const selectedKeys = ref([])
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'columns', description: 'Column definitions.', type: 'DataTableColumn[]', default: '[]' },
-  { name: 'data', description: 'Row data source.', type: 'any[]', default: '[]' },
-  { name: 'rowKey', description: 'Unique key field or function for each row.', type: 'string | ((row, index) => string | number)', default: '\"index\"' },
-  { name: 'loading', description: 'Show loading overlay.', type: 'boolean', default: 'false' },
-  { name: 'emptyText', description: 'Text shown when data is empty.', type: 'string', default: '\"No data\"' },
-  { name: 'striped', description: 'Alternate row background.', type: 'boolean', default: 'false' },
-  { name: 'bordered', description: 'Show table borders.', type: 'boolean', default: 'false' },
-  { name: 'hover', description: 'Highlight row on hover.', type: 'boolean', default: 'true' },
-  { name: 'selectable', description: 'Enable row checkboxes.', type: 'boolean', default: 'false' },
-  { name: 'selectedKeys', description: 'Array of selected row keys.', type: 'Array<string | number>', default: '[]' },
-  { name: 'defaultSort', description: 'Initial sort state.', type: '{ key: string, order: \"asc\" | \"desc\" | null }', default: 'null' },
-  { name: 'sortOnClient', description: 'Whether to sort data client-side.', type: 'boolean', default: 'true' },
-]" />
+<ApiSpecTable :rows="dataTableApiRows1" />
 
 ### DataTableColumn
 
-<ApiSpecTable title="DataTableColumn" :rows="[
-  { name: 'key', description: 'Column identifier.', type: 'string' },
-  { name: 'title', description: 'Header text.', type: 'string' },
-  { name: 'dataIndex', description: 'Data field name (defaults to key).', type: 'string' },
-  { name: 'width', description: 'Column width.', type: 'string | number' },
-  { name: 'align', description: 'Text alignment.', type: '\"left\" | \"center\" | \"right\"' },
-  { name: 'sortable', description: 'Enable sorting for this column.', type: 'boolean' },
-  { name: 'sorter', description: 'Custom sort comparator.', type: '(a, b) => number' },
-  { name: 'format', description: 'Format cell value as text.', type: '(value, row, index) => string' },
-]" />
+<ApiSpecTable title="DataTableColumn" :rows="dataTableApiRows2" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'selectionChange', description: 'Fires when selected rows change.', type: '(keys: Array<string | number>) => void' },
-  { name: 'sortChange', description: 'Fires when sort state changes.', type: '(sort: { key: string, order: string }) => void' },
-  { name: 'rowClick', description: 'Fires when a row is clicked.', type: '(payload: { row: any, index: number }) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="dataTableApiRows3" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'header-{columnKey}', description: 'Custom header content for a specific column.' },
-  { name: 'cell-{columnKey}', description: 'Custom cell content for a specific column.', type: '{ row: any, value: any, index: number }' },
-  { name: 'empty', description: 'Custom empty state content.' },
-]" />
+<ApiSpecTable title="Slots" :rows="dataTableApiRows4" />

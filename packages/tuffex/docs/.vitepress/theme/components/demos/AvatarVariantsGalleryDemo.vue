@@ -129,7 +129,7 @@ function isActive(category: Category) {
         <template #preview>
           <TxCornerOverlay placement="top-right" :offset-x="-2" :offset-y="-2">
             <TxAvatar shape="rounded" size="large" background-color="var(--tx-fill-color-light)">
-              <TxIcon name="i-carbon-podcast" :size="24" style="color: #7c3aed" />
+              <TxIcon name="i-carbon-music" :size="24" style="color: #7c3aed" />
             </TxAvatar>
             <template #overlay>
               <span class="tx-avatar-variants__ping">
@@ -228,7 +228,7 @@ function isActive(category: Category) {
           <div class="tx-avatar-variants__platform-tile">
             <span class="tx-avatar-variants__platform-label">APP</span>
             <span class="tx-avatar-variants__platform-corner tx-avatar-variants__platform-corner--win">
-              <TxIcon name="i-carbon-logo-windows" :size="14" class="tx-avatar-variants__icon--white" />
+              <TxIcon name="i-simple-icons-windows" :size="14" class="tx-avatar-variants__icon--white" />
             </span>
           </div>
         </template>
@@ -239,7 +239,7 @@ function isActive(category: Category) {
           <div class="tx-avatar-variants__platform-tile">
             <span class="tx-avatar-variants__platform-label">DMG</span>
             <span class="tx-avatar-variants__platform-corner tx-avatar-variants__platform-corner--mac">
-              <TxIcon name="i-carbon-logo-apple" :size="14" class="tx-avatar-variants__icon--white" />
+              <TxIcon name="i-simple-icons-apple" :size="14" class="tx-avatar-variants__icon--white" />
             </span>
           </div>
         </template>
@@ -407,7 +407,7 @@ function isActive(category: Category) {
             <TxAvatar src="https://i.pravatar.cc/150?u=birthday" size="large" />
             <template #overlay>
               <span class="tx-avatar-variants__badge tx-avatar-variants__badge--pink tx-avatar-variants__tilt">
-                <TxIcon name="i-carbon-cake" :size="16" style="color: #db2777" />
+                <TxIcon name="i-carbon-gift" :size="16" style="color: #db2777" />
               </span>
             </template>
           </TxCornerOverlay>
@@ -432,7 +432,7 @@ function isActive(category: Category) {
               <TxAvatar src="https://i.pravatar.cc/150?u=premium" size="large" />
             </TxOutlineBorder>
             <template #overlay>
-              <TxIcon name="i-carbon-crown" :size="18" style="color: #facc15" />
+              <TxIcon name="i-carbon-trophy-filled" :size="18" style="color: #facc15" />
             </template>
           </TxCornerOverlay>
         </template>

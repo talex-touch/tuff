@@ -14,6 +14,31 @@ const items = Array.from({ length: 1000 }, (_, i) => ({
 }))
 
 const shortItems = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
+const virtualListApiRows1 = [
+  { name: 'items', description: 'The data array to render.', type: 'T[]', default: '[]' },
+  { name: 'itemHeight', description: 'The fixed height (in pixels) of each row. Required for layout calculation.', type: 'number', default: '—' },
+  { name: 'height', description: 'The container height. Accepts a number (px) or CSS string.', type: 'number | string', default: '320' },
+  { name: 'overscan', description: 'Number of extra rows rendered above and below the visible area.', type: 'number', default: '4' },
+  { name: 'itemKey', description: 'A property name or function to generate a unique key for each item.', type: 'string | ((item: T, index: number) => string | number)', default: 'index' },
+
+]
+
+const virtualListApiRows2 = [
+  { name: 'scroll', description: 'Fires on scroll with the current scroll state.', type: '({ scrollTop, startIndex, endIndex }) => void' },
+
+]
+
+const virtualListApiRows3 = [
+  { name: 'item', description: 'Custom renderer for each row. Receives the item data and its index.', type: '{ item: T, index: number }' },
+
+]
+
+const virtualListApiRows4 = [
+  { name: 'scrollToIndex(index)', description: 'Scroll the list to bring the item at the given index into view.' },
+  { name: 'scrollToTop()', description: 'Scroll to the beginning of the list.' },
+  { name: 'scrollToBottom()', description: 'Scroll to the end of the list.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -109,30 +134,16 @@ const items = Array.from({ length: 1000 }, (_, i) => ({
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'items', description: 'The data array to render.', type: 'T[]', default: '[]' },
-  { name: 'itemHeight', description: 'The fixed height (in pixels) of each row. Required for layout calculation.', type: 'number', default: '—' },
-  { name: 'height', description: 'The container height. Accepts a number (px) or CSS string.', type: 'number | string', default: '320' },
-  { name: 'overscan', description: 'Number of extra rows rendered above and below the visible area.', type: 'number', default: '4' },
-  { name: 'itemKey', description: 'A property name or function to generate a unique key for each item.', type: 'string | ((item: T, index: number) => string | number)', default: 'index' },
-]" />
+<ApiSpecTable :rows="virtualListApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'scroll', description: 'Fires on scroll with the current scroll state.', type: '({ scrollTop, startIndex, endIndex }) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="virtualListApiRows2" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'item', description: 'Custom renderer for each row. Receives the item data and its index.', type: '{ item: T, index: number }' },
-]" />
+<ApiSpecTable title="Slots" :rows="virtualListApiRows3" />
 
 ### Exposed Methods
 
-<ApiSpecTable title="Methods" :rows="[
-  { name: 'scrollToIndex(index)', description: 'Scroll the list to bring the item at the given index into view.' },
-  { name: 'scrollToTop()', description: 'Scroll to the beginning of the list.' },
-  { name: 'scrollToBottom()', description: 'Scroll to the end of the list.' },
-]" />
+<ApiSpecTable title="Methods" :rows="virtualListApiRows4" />
