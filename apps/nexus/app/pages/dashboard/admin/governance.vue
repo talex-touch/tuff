@@ -28,6 +28,8 @@ type GovernanceConfigType =
   | 'storage_channel'
   | 'notification_channel'
   | 'intelligence_provider_quota'
+type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
+type StoragePolicyEvaluationStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
 
 interface GovernanceSummary {
   totalEvents: number
@@ -135,6 +137,43 @@ interface GovernanceConfig {
 
 interface ConfigListResponse {
   configs: GovernanceConfig[]
+  generatedAt: string
+}
+
+interface StoragePolicyEvaluation {
+  policyId: string
+  name: string
+  channel: string
+  provider: string | null
+  enabled: boolean
+  days: number
+  status: StoragePolicyEvaluationStatus
+  reasons: string[]
+  usage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    writes: number
+    reads: number
+    deletes: number
+  }
+  limits: {
+    maxBytes: number | null
+    trafficBytes: number | null
+    maxOperations: number | null
+    alertBytes: number | null
+    warningThreshold: number | null
+  }
+  utilization: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+  }
+}
+
+interface StoragePoliciesResponse {
+  policies: GovernanceConfig[]
+  evaluations: StoragePolicyEvaluation[]
   generatedAt: string
 }
 
@@ -272,7 +311,26 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
   },
 )
 
+const { data: storagePoliciesData, pending: storagePoliciesPending, error: storagePoliciesError, refresh: refreshStoragePolicies } = await useAsyncData<StoragePoliciesResponse>(
+  'dashboard-governance-storage-policies',
+  async () => await requestJson<StoragePoliciesResponse>('/api/dashboard/storage/policies', {
+    query: {
+      days: summaryDays.value,
+      limit: 5000,
+    },
+  }),
+  {
+    default: () => ({
+      policies: [],
+      evaluations: [],
+      generatedAt: '',
+    }),
+    server: false,
+  },
+)
+
 const configs = computed(() => configsData.value?.configs ?? [])
+const storageEvaluations = computed(() => storagePoliciesData.value?.evaluations ?? [])
 const groupedConfigs = computed(() => ({
   analytics: configs.value.filter(item => item.configType === 'analytics_collection'),
   storage: configs.value.filter(item => item.configType === 'storage_channel'),
@@ -338,7 +396,7 @@ async function saveConfig(
       },
     })
     saveMessage.value = t('dashboard.governance.saved', 'Saved.')
-    await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics()])
+    await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics(), refreshStoragePolicies()])
   }
   catch (error) {
     saveError.value = error instanceof Error ? error.message : t('dashboard.governance.saveFailed', 'Save failed.')
@@ -349,7 +407,7 @@ async function saveConfig(
 }
 
 async function refreshAll(): Promise<void> {
-  await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics()])
+  await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshStoragePolicies()])
 }
 
 function formatNumber(value: number): string {
@@ -390,6 +448,30 @@ function configTypeLabel(type: GovernanceConfigType): string {
     return t('dashboard.governance.types.notification', 'Notification')
   return t('dashboard.governance.types.providerQuota', 'Provider quota')
 }
+
+function storageEvaluationTone(status: StoragePolicyEvaluationStatus): StatusTone {
+  if (status === 'ok')
+    return 'success'
+  if (status === 'warning')
+    return 'warning'
+  if (status === 'blocked')
+    return 'danger'
+  return 'muted'
+}
+
+function storageEvaluationLabel(status: StoragePolicyEvaluationStatus): string {
+  if (status === 'ok')
+    return t('dashboard.governance.storagePolicy.ok', 'OK')
+  if (status === 'warning')
+    return t('dashboard.governance.storagePolicy.warning', 'Warning')
+  if (status === 'blocked')
+    return t('dashboard.governance.storagePolicy.blocked', 'Blocked')
+  return t('dashboard.governance.storagePolicy.disabled', 'Disabled')
+}
+
+function formatRatio(value: number | null): string {
+  return value == null ? '-' : formatPercent(value)
+}
 </script>
 
 <template>
@@ -403,9 +485,9 @@ function configTypeLabel(type: GovernanceConfigType): string {
           {{ t('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
         </p>
       </div>
-      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending" @click="refreshAll">
-        <TxSpinner v-if="summaryPending || configsPending || analyticsPending" :size="14" />
-        <span :class="summaryPending || configsPending || analyticsPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
+      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending || storagePoliciesPending" @click="refreshAll">
+        <TxSpinner v-if="summaryPending || configsPending || analyticsPending || storagePoliciesPending" :size="14" />
+        <span :class="summaryPending || configsPending || analyticsPending || storagePoliciesPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
     </header>
 
@@ -413,8 +495,8 @@ function configTypeLabel(type: GovernanceConfigType): string {
       {{ t('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
     </div>
 
-    <div v-if="summaryError || configsError || analyticsError || saveError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-      {{ saveError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message }}
+    <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || saveError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+      {{ saveError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message }}
     </div>
 
     <div v-if="saveMessage" class="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
@@ -725,6 +807,52 @@ function configTypeLabel(type: GovernanceConfigType): string {
                 {{ item.resourceType }} · {{ formatNumber(item.events) }} events · {{ formatNumber(item.uniqueActors) }} actors
               </p>
             </div>
+          </div>
+        </section>
+
+        <section class="apple-card-lg p-5">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-base font-semibold text-black dark:text-white">
+              {{ t('dashboard.governance.storagePolicy.title', 'Storage policy health') }}
+            </h2>
+            <span class="text-xs text-black/45 dark:text-white/45">
+              {{ formatDate(storagePoliciesData.generatedAt) }}
+            </span>
+          </div>
+          <div class="mt-4 space-y-3">
+            <div v-for="item in storageEvaluations.slice(0, 6)" :key="item.policyId" class="rounded-xl border border-black/[0.06] p-3 text-sm dark:border-white/[0.08]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">{{ item.name }}</span>
+                <TxStatusBadge
+                  :text="storageEvaluationLabel(item.status)"
+                  size="sm"
+                  :status="storageEvaluationTone(item.status)"
+                />
+              </div>
+              <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                {{ item.channel }} · {{ item.provider || 'unknown' }} · {{ item.days }}d
+              </p>
+              <div class="mt-3 grid gap-2 text-xs text-black/55 dark:text-white/55">
+                <div class="flex items-center justify-between gap-3">
+                  <span>{{ t('dashboard.governance.storagePolicy.stored', 'Stored') }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.storedBytes) }} · {{ formatRatio(item.utilization.storedBytes) }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>{{ t('dashboard.governance.storagePolicy.traffic', 'Traffic') }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.trafficBytes) }} · {{ formatRatio(item.utilization.trafficBytes) }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>{{ t('dashboard.governance.storagePolicy.operations', 'Operations') }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatNumber(item.usage.operations) }} · {{ formatRatio(item.utilization.operations) }}</span>
+                </div>
+              </div>
+              <p v-if="item.reasons.length" class="mt-2 truncate text-xs text-amber-600 dark:text-amber-200">
+                {{ item.reasons.join(', ') }}
+              </p>
+            </div>
+            <p v-if="storageEvaluations.length === 0" class="text-sm text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.storagePolicy.empty', 'No storage policy evaluation yet.') }}
+            </p>
           </div>
         </section>
 
