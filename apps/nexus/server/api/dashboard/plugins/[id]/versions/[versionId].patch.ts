@@ -1,6 +1,7 @@
 import { createError, readBody } from 'h3'
 import { requireAuth } from '../../../../../utils/auth'
 import { getUserById } from '../../../../../utils/authStore'
+import { dispatchNotificationEvent } from '../../../../../utils/notificationDispatcher'
 import { recordPlatformGovernanceEvent } from '../../../../../utils/platformGovernanceStore'
 import { getPluginById, setPluginVersionStatus } from '../../../../../utils/pluginsStore'
 
@@ -48,6 +49,20 @@ export default defineEventHandler(async (event) => {
     unit: 'event',
     quantity: 1,
     metadata: {
+      versionId,
+      version: version.version,
+      status,
+    },
+  }).catch(() => {})
+
+  await dispatchNotificationEvent(event, {
+    action: status === 'approved' ? 'plugin.version.approved' : status === 'rejected' ? 'plugin.version.rejected' : 'plugin.version.pending',
+    actorId: userId,
+    resourceType: 'plugin',
+    resourceId: id,
+    metadata: {
+      pluginId: id,
+      pluginSlug: plugin.slug,
       versionId,
       version: version.version,
       status,
