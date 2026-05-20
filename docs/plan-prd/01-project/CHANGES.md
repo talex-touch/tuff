@@ -21,6 +21,8 @@
 - `apps/nexus/server/api/dashboard/plugins/[id]/analytics.get.ts`
 - `apps/nexus/server/api/dashboard/{storage/policies,notifications/channels}.*.ts`
 - `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.*.ts`
+- `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
 - `apps/nexus/app/pages/dashboard/admin/governance.vue`
 - `apps/nexus/app/components/dashboard/DashboardNav.vue`
   - Added `/api/dashboard/governance/analytics` for anonymized cockpit aggregates across visits, searches, plugin downloads/invocations, upload health, storage/notification events, and provider request/token usage.
@@ -28,7 +30,8 @@
   - Plugin downloads, plugin invocation telemetry, search/visit telemetry, resource uploads, image/release-asset storage read/write usage, plugin review status changes, and provider scene execution now feed the governance layer without storing raw actor identifiers, raw search queries, or plaintext secrets.
   - Dashboard admins can open Data Governance to inspect the analytics cockpit, storage policy health evaluation, and configure analytics, storage, notification, and provider quota policies; plugin owners/admins can query per-plugin analytics.
   - Storage channel policy evaluation now reports stored bytes, traffic bytes, operation counts, utilization, and `ok` / `warning` / `blocked` status for configured storage channels.
-  - Validation: focused `platformGovernanceStore.test.ts` and `telemetryStore.test.ts` Vitest, affected-file ESLint, and `git diff --check` passed.
+  - Plugin version moderation now plans notification delivery for configured browser/email/Feishu/Lark/webhook channels and records `planned` / `skipped` / `failed` delivery audit events without sending external requests or persisting raw recipients/secrets.
+  - Validation: focused `platformGovernanceStore.test.ts`, `telemetryStore.test.ts`, and `notificationDispatcher.test.ts` Vitest, affected-file ESLint, and `git diff --check` passed.
 
 ### feat(sdk): expose native share helpers from MetaK quick actions
 

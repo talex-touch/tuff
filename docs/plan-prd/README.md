@@ -50,7 +50,7 @@
 - Tuff 2.5.8 ASR Provider Runtime：方向已锁定为本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto` 策略；TTS 不进入该版本 Stable。
 - App Data Plugins 与 Everything 收口：新增 Roadmap 与 Raycast/uTools 常用能力差距矩阵，Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地；后续聚焦 Browser Data、Everything/App Launcher evidence、Quicklinks、Context Actions，以及 Windows Everything SDK/CLI 策略、路径授权过滤与真机 evidence；Nexus SDK 插件开发任务流文档已落地，TuffEx 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
 - Nexus Provider Registry / Scene 编排：已具备 secure store、Scene run、Dashboard run、AI mirror、health/usage ledger 与最小策略路由，后续补旧 AI provider 表退场与高级策略。
-- Nexus Data Governance / Analytics：已新增共享治理事件与配置层、`/api/dashboard/governance/analytics` 聚合 API、search/visit telemetry bridge 与后台 Data Governance analytics cockpit，覆盖脱敏插件下载/调用、搜索上下文、上传健康、图片/发布资产 storage read/write telemetry、存储渠道策略评估、通知渠道策略、Provider quota 与 provider token/request 消耗；后续补真实浏览器证据、通知投递 adapter、OSS/R2/S3/local 渠道执行器、生产 D1 migration/backfill 与更完整运营大屏。
+- Nexus Data Governance / Analytics：已新增共享治理事件与配置层、`/api/dashboard/governance/analytics` 聚合 API、search/visit telemetry bridge 与后台 Data Governance analytics cockpit，覆盖脱敏插件下载/调用、搜索上下文、上传健康、图片/发布资产 storage read/write telemetry、存储渠道策略评估、通知渠道策略、插件审核通知投递计划/审计、Provider quota 与 provider token/request 消耗；后续补真实浏览器证据、真实 Resend/SMTP/Feishu/browser 投递 adapter、OSS/R2/S3/local 渠道执行器、生产 D1 migration/backfill 与更完整运营大屏。
 - Native transport V1：补 macOS/Windows/Linux 真机 smoke 与打包依赖验证。
 - AttachUIView、Multi Attach View、Widget Sandbox、Flow Transfer、DivisionBox 等进入长期债务池。
 

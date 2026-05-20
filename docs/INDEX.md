@@ -46,7 +46,7 @@
 - 2.5.3 本地知识方向：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，不把向量数据库作为 MVP 第一优先级。
 - 2.5.5 本地模型方向：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录。
 - 2.5.8 ASR 方向：本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto`；TTS 不进入 Stable。
-- Nexus 数据治理方向：共享 governance event/config foundation、`/api/dashboard/governance/analytics` 聚合 API、search/visit telemetry bridge 与后台 analytics cockpit 已覆盖脱敏插件下载/调用、搜索上下文、上传健康、图片/发布资产 storage read/write telemetry、存储渠道策略评估、通知渠道策略、Provider quota 与 provider token/request 消耗；后续继续补真实浏览器证据、通知投递 adapter、OSS/R2/S3/local 执行器、生产 D1 migration/backfill 和更完整运营大屏。
+- Nexus 数据治理方向：共享 governance event/config foundation、`/api/dashboard/governance/analytics` 聚合 API、search/visit telemetry bridge 与后台 analytics cockpit 已覆盖脱敏插件下载/调用、搜索上下文、上传健康、图片/发布资产 storage read/write telemetry、存储渠道策略评估、通知渠道策略、插件审核通知投递计划/审计、Provider quota 与 provider token/request 消耗；后续继续补真实浏览器证据、真实 Resend/SMTP/Feishu/browser 投递 adapter、OSS/R2/S3/local 执行器、生产 D1 migration/backfill 和更完整运营大屏。
 - App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，后续继续补 Browser Data、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
 - 插件发布当前切片：`touch-intelligence` 已补齐 Nexus 发布资产并修复 1.0.0 运行时加载源码 TS 的问题；1.0.1 包使用 bundled prelude 与 `@talex-touch/tuff-intelligence/client` CJS 入口，可重新发布到 Nexus；公共 npm 子包补发仍等待具备 `@talex-touch` publish 权限的 `NPM_TOKEN`。
 
