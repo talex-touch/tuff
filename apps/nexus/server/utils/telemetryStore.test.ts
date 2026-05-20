@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { listPlatformGovernanceEvents } from './platformGovernanceStore'
 import { getAnalyticsSummary, recordTelemetryEvent } from './telemetryStore'
 
 interface TelemetryRow {
@@ -25,6 +26,22 @@ interface DailyStatRow {
   stat_type: string
   stat_key: string
   value: number
+}
+
+interface GovernanceEventRow {
+  id: string
+  scope: string
+  action: string
+  actor_hash: string | null
+  context_hash: string | null
+  resource_type: string | null
+  resource_id: string | null
+  channel: string | null
+  unit: string
+  quantity: number
+  metadata_json: string | null
+  occurred_at: string
+  created_at: string
 }
 
 class MockStatement {
@@ -55,6 +72,7 @@ class MockStatement {
 
 class MockD1Database {
   telemetryRows: TelemetryRow[] = []
+  governanceRows: GovernanceEventRow[] = []
   dailyStats = new Map<string, DailyStatRow>()
 
   prepare(sql: string) {
@@ -110,6 +128,40 @@ class MockD1Database {
         input_types: inputTypes == null ? null : String(inputTypes),
         metadata: metadata == null ? null : String(metadata),
         is_anonymous: Number(isAnonymous),
+        created_at: String(createdAt),
+      })
+      return { meta: { changes: 1 } }
+    }
+
+    if (sql.includes('INSERT INTO platform_governance_events')) {
+      const [
+        id,
+        scope,
+        action,
+        actorHash,
+        contextHash,
+        resourceType,
+        resourceId,
+        channel,
+        unit,
+        quantity,
+        metadataJson,
+        occurredAt,
+        createdAt,
+      ] = args
+      this.governanceRows.push({
+        id: String(id),
+        scope: String(scope),
+        action: String(action),
+        actor_hash: actorHash == null ? null : String(actorHash),
+        context_hash: contextHash == null ? null : String(contextHash),
+        resource_type: resourceType == null ? null : String(resourceType),
+        resource_id: resourceId == null ? null : String(resourceId),
+        channel: channel == null ? null : String(channel),
+        unit: String(unit),
+        quantity: Number(quantity),
+        metadata_json: metadataJson == null ? null : String(metadataJson),
+        occurred_at: String(occurredAt),
         created_at: String(createdAt),
       })
       return { meta: { changes: 1 } }
@@ -177,6 +229,10 @@ class MockD1Database {
 
     if (sql.includes('SELECT version') && sql.includes('FROM telemetry_events')) {
       return []
+    }
+
+    if (sql.includes('FROM platform_governance_events')) {
+      return [...this.governanceRows]
     }
 
     return []
@@ -285,5 +341,32 @@ describe('telemetryStore search provider metrics', () => {
         timeoutCount: 0,
       }),
     ]))
+
+    const governanceRows = await listPlatformGovernanceEvents(makeEvent(), {
+      scope: 'app',
+      action: 'search',
+      resourceType: 'search',
+      limit: 10,
+    })
+    expect(governanceRows).toHaveLength(1)
+    expect(governanceRows[0]).toMatchObject({
+      scope: 'app',
+      action: 'search',
+      resourceId: 'text',
+      channel: 'all',
+      unit: 'search',
+      quantity: 1,
+    })
+    expect(governanceRows[0]?.actorHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(governanceRows[0]?.actorHash).not.toBe('client-a')
+    expect(JSON.stringify(governanceRows[0])).not.toContain('private query')
+    expect(governanceRows[0]?.metadata).toMatchObject({
+      queryLength: 12,
+      inputTypes: ['text'],
+      providerTimings: {
+        'app-provider': 120,
+        'everything-provider': 900,
+      },
+    })
   })
 })
