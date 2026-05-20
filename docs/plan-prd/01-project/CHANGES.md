@@ -53,7 +53,7 @@
   - 推荐排序新增本地语义向量增强，默认启用本地打分；本地向量同时融合当前上下文、历史使用偏好与重复取消负反馈，只沉淀类别/任务语义，避免把单个应用 ID 直接放大；AI rerank 与 AI embedding 作为显式 opt-in 开关，失败或超时保持 fail-open，不阻断推荐结果。
   - 本地启动区 / 应用索引管理从设置页内联长列表改为按钮打开的弹窗，诊断入口继续保留在设置页。
   - 更新下载包弹窗改为展示当前 release 的全部下载包；当前设备无匹配包时明确提示，并为每个包标注平台/架构/链接/校验信息状态。
-  - 验证：focused recommendation/context/semantic Vitest 覆盖上下文开关、系统信号失败降级、cache key 隐私边界、本地语义排序、历史偏好向量、重复取消负反馈向量、语义关闭回退、AI embedding/rerank 成功排序与失败 fail-open、隐私安全 profile；affected-file ESLint、node typecheck 和 `git diff --check` 由本轮收口继续补证。
+  - 验证：focused recommendation/context/semantic Vitest 覆盖上下文开关、系统信号失败降级、cache key 隐私边界、本地语义排序、历史偏好向量、重复取消负反馈向量、语义关闭回退、AI embedding/rerank 成功排序与失败 fail-open、隐私安全 profile；affected-file ESLint、node typecheck 和 `git diff --check` passed。
 
 ### feat(core-app): wire Assistant screenshot translate action
 
