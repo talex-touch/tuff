@@ -105,6 +105,32 @@ const statusDescription = computed(() => {
   })
 })
 
+const runtimeArch = computed(() => getRuntimeArch())
+const currentRuntimeLabel = computed(() =>
+  t('settings.settingUpdate.assetsCurrentRuntime', {
+    platform: formatPlatform(platform.value as DownloadAsset['platform']),
+    arch: runtimeArch.value || t('settings.settingUpdate.status.unknownVersion')
+  })
+)
+const allCachedAssets = computed(() => {
+  if (!cachedRelease.value?.release) {
+    return [] as DownloadAsset[]
+  }
+  return githubProvider.getDownloadAssets(cachedRelease.value.release)
+})
+const cachedAssets = computed(() => {
+  const arch = runtimeArch.value
+  if (!arch) {
+    return [] as DownloadAsset[]
+  }
+  return allCachedAssets.value.filter(
+    (asset) => asset.platform === platform.value && asset.arch === arch
+  )
+})
+const hasCachedReleaseAssetMismatch = computed(
+  () => Boolean(cachedRelease.value?.release) && cachedAssets.value.length === 0
+)
+
 const statusMessage = computed(() => {
   if (downloadReady.value) {
     return {
@@ -116,6 +142,14 @@ const statusMessage = computed(() => {
             version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
           }),
       warning: false
+    }
+  }
+  if (hasCachedReleaseAssetMismatch.value) {
+    return {
+      text: t('settings.settingUpdate.assetsNoMatchingCurrent', {
+        runtime: currentRuntimeLabel.value
+      }),
+      warning: true
     }
   }
   if (appStates.updateErrorMessage) {
@@ -133,7 +167,10 @@ const assetsSummary = computed(() => {
   if (!cachedRelease.value?.release) {
     return t('settings.settingUpdate.assetsEmpty')
   }
-  const countText = t('settings.settingUpdate.assetsCount', { count: cachedAssets.value.length })
+  const countText = t('settings.settingUpdate.assetsMatchingCount', {
+    matching: cachedAssets.value.length,
+    total: allCachedAssets.value.length
+  })
   return `${cachedRelease.value.release.tag_name} · ${countText}`
 })
 const autoDownloadDescription = computed(() => {
@@ -161,17 +198,6 @@ const installActionLabel = computed(() => {
   return isMacAutoInstallPlatform.value
     ? t('settings.settingUpdate.actions.installNow')
     : t('settings.settingUpdate.actions.openInstaller')
-})
-const cachedAssets = computed(() => {
-  if (!cachedRelease.value?.release) {
-    return [] as DownloadAsset[]
-  }
-  const assets = githubProvider.getDownloadAssets(cachedRelease.value.release)
-  const arch = getRuntimeArch()
-  if (!arch) {
-    return [] as DownloadAsset[]
-  }
-  return assets.filter((asset) => asset.platform === platform.value && asset.arch === arch)
 })
 
 onMounted(async () => {
@@ -387,12 +413,23 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
     toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))
     return
   }
+  if (!isAssetCompatibleWithCurrentRuntime(asset)) {
+    toast.error(
+      t('settings.settingUpdate.assetsNoMatchingCurrent', {
+        runtime: currentRuntimeLabel.value
+      })
+    )
+    return
+  }
   if (!cachedRelease.value?.release) {
     toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))
     return
   }
   try {
-    await handleDownloadUpdate(cachedRelease.value.release)
+    await handleDownloadUpdate({
+      ...cachedRelease.value.release,
+      assets: [asset]
+    })
   } catch (error) {
     settingUpdateLog.error('Failed to download update', error)
   }
@@ -533,6 +570,48 @@ function formatPlatform(platform: DownloadAsset['platform']): string {
   if (platform === 'darwin') return 'macOS'
   if (platform === 'linux') return 'Linux'
   return platform
+}
+
+function isAssetCompatibleWithCurrentRuntime(asset: DownloadAsset): boolean {
+  return Boolean(asset.url && asset.platform === platform.value && asset.arch === runtimeArch.value)
+}
+
+function getAssetCompatibilityLabels(asset: DownloadAsset): string[] {
+  const labels: string[] = []
+
+  if (!asset.url) {
+    labels.push(t('settings.settingUpdate.assetsCompatibilityNoUrl'))
+  } else if (asset.platform !== platform.value) {
+    labels.push(
+      t('settings.settingUpdate.assetsCompatibilityPlatformMismatch', {
+        platform: formatPlatform(asset.platform)
+      })
+    )
+  } else if (asset.arch !== runtimeArch.value) {
+    labels.push(
+      t('settings.settingUpdate.assetsCompatibilityArchMismatch', {
+        arch: asset.arch
+      })
+    )
+  } else {
+    labels.push(t('settings.settingUpdate.assetsCompatibilityCurrent'))
+  }
+
+  if (!asset.checksum) {
+    labels.push(t('settings.settingUpdate.assetsCompatibilityMissingChecksum'))
+  }
+
+  return labels
+}
+
+function getAssetCompatibilityTone(asset: DownloadAsset): 'ok' | 'warn' | 'blocked' {
+  if (!asset.url || asset.platform !== platform.value || asset.arch !== runtimeArch.value) {
+    return 'blocked'
+  }
+  if (!asset.checksum) {
+    return 'warn'
+  }
+  return 'ok'
 }
 
 function openAssetsDialog(): void {
@@ -698,10 +777,31 @@ function openAssetsDialog(): void {
         <div class="assets-header">
           <span class="assets-version">{{ cachedRelease.release.tag_name }}</span>
           <span class="assets-count">{{
-            t('settings.settingUpdate.assetsCount', { count: cachedAssets.length })
+            t('settings.settingUpdate.assetsMatchingCount', {
+              matching: cachedAssets.length,
+              total: allCachedAssets.length
+            })
           }}</span>
         </div>
-        <div v-for="asset in cachedAssets" :key="asset.name" class="asset-item">
+        <div class="assets-runtime">
+          {{ currentRuntimeLabel }}
+        </div>
+        <div v-if="hasCachedReleaseAssetMismatch" class="assets-mismatch">
+          {{
+            t('settings.settingUpdate.assetsNoMatchingCurrent', {
+              runtime: currentRuntimeLabel
+            })
+          }}
+        </div>
+        <div v-if="allCachedAssets.length === 0" class="assets-empty">
+          {{ t('settings.settingUpdate.assetsNoPackages') }}
+        </div>
+        <div
+          v-for="asset in allCachedAssets"
+          :key="asset.name"
+          class="asset-item"
+          :class="`tone-${getAssetCompatibilityTone(asset)}`"
+        >
           <div class="asset-main">
             <div class="asset-name">
               {{ asset.name }}
@@ -710,12 +810,27 @@ function openAssetsDialog(): void {
               {{ formatPlatform(asset.platform) }} · {{ asset.arch }} ·
               {{ formatFileSize(asset.size) }}
             </div>
+            <div class="asset-compatibility">
+              <span
+                v-for="label in getAssetCompatibilityLabels(asset)"
+                :key="label"
+                class="asset-compatibility-tag"
+              >
+                {{ label }}
+              </span>
+            </div>
           </div>
           <div class="asset-actions">
             <TxButton variant="flat" size="sm" @click="handleCopyAssetUrl(asset)">
               {{ t('settings.settingUpdate.assets.copyLink') }}
             </TxButton>
-            <TxButton variant="flat" type="primary" size="sm" @click="handleDownloadAsset(asset)">
+            <TxButton
+              variant="flat"
+              type="primary"
+              size="sm"
+              :disabled="!isAssetCompatibleWithCurrentRuntime(asset)"
+              @click="handleDownloadAsset(asset)"
+            >
               {{ t('settings.settingUpdate.assets.download') }}
             </TxButton>
           </div>
@@ -773,6 +888,20 @@ function openAssetsDialog(): void {
   color: var(--tx-text-color-primary);
 }
 
+.assets-runtime,
+.assets-mismatch {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.assets-mismatch {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--tx-color-warning) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-color-warning) 10%, transparent);
+  color: var(--tx-color-warning);
+}
+
 .asset-item {
   display: flex;
   align-items: center;
@@ -782,6 +911,18 @@ function openAssetsDialog(): void {
   border: 1px solid var(--tx-border-color-lighter);
   border-radius: 10px;
   background: var(--tx-fill-color-light);
+}
+
+.asset-item.tone-ok {
+  border-color: color-mix(in srgb, var(--tx-color-success) 24%, var(--tx-border-color-lighter));
+}
+
+.asset-item.tone-warn {
+  border-color: color-mix(in srgb, var(--tx-color-warning) 24%, var(--tx-border-color-lighter));
+}
+
+.asset-item.tone-blocked {
+  opacity: 0.82;
 }
 
 .asset-main {
@@ -801,9 +942,26 @@ function openAssetsDialog(): void {
   color: var(--tx-text-color-secondary);
 }
 
+.asset-compatibility {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.asset-compatibility-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color);
+}
+
 .asset-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .evidence-actions {
