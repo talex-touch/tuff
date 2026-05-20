@@ -60,7 +60,10 @@ export default defineEventHandler(async (event) => {
   // Priority 1: User-uploaded icon file
   if (isFile(iconFile) && iconFile.size > 0) {
     try {
-      const iconResult = await uploadImage(event, iconFile)
+      const iconResult = await uploadImage(event, iconFile, {
+        actorId: userId,
+        resourceType: 'plugin-icon',
+      })
       iconKey = iconResult.key
       iconUrl = iconResult.url
     }
@@ -82,6 +85,10 @@ export default defineEventHandler(async (event) => {
           metadata.iconBuffer,
           metadata.iconFileName,
           metadata.iconMimeType,
+          {
+            actorId: userId,
+            resourceType: 'plugin-icon',
+          },
         )
         iconKey = iconResult.key
         iconUrl = iconResult.url

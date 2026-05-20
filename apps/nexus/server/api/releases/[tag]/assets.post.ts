@@ -9,7 +9,7 @@ import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStor
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  await requireAdminOrApiKey(event, ['release:assets'])
+  const { userId } = await requireAdminOrApiKey(event, ['release:assets'])
 
   const tag = event.context.params?.tag
 
@@ -41,7 +41,10 @@ export default defineEventHandler(async (event) => {
   const fileKey = `releases/${tag}/${platform}-${arch}/${file.name}`
   const downloadUrl = `/api/releases/${tag}/download/${platform}/${arch}`
 
-  await uploadReleaseAsset(event, fileKey, buffer, file.type)
+  await uploadReleaseAsset(event, fileKey, buffer, file.type, {
+    actorId: userId,
+    resourceType: 'release-asset',
+  })
 
   let signatureKey: string | null = null
   if (isFile(signatureFile) && signatureFile.size > 0) {
@@ -52,6 +55,10 @@ export default defineEventHandler(async (event) => {
       signatureKey,
       signatureBuffer,
       signatureFile.type || 'application/octet-stream',
+      {
+        actorId: userId,
+        resourceType: 'release-signature',
+      },
     )
   }
 
