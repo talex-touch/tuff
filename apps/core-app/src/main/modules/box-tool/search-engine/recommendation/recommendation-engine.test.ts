@@ -93,6 +93,40 @@ const afternoonContext: ContextSignal = {
   }
 }
 
+const devFocusCodeContext: ContextSignal = {
+  ...morningContext,
+  clipboard: {
+    type: 'files',
+    content: 'hash_only',
+    timestamp: new Date('2026-05-04T09:00:00.000Z').getTime(),
+    contentType: 'file',
+    meta: {
+      fileType: 'code',
+      language: 'typescript'
+    }
+  },
+  foregroundApp: {
+    bundleId: 'dev.workspace.editor',
+    name: 'Visual Studio Code'
+  },
+  systemState: {
+    isOnline: true,
+    networkType: 'wifi',
+    networkIdHash: 'net_focus',
+    batteryLevel: 80,
+    isCharging: true,
+    isOnBattery: false,
+    powerMode: 'charging',
+    isDNDEnabled: true,
+    focusMode: 'active',
+    bluetoothAvailable: true,
+    bluetoothConnectedCount: 1,
+    locationBucket: 'loc_work',
+    timezone: 'Asia/Shanghai',
+    unavailableSignals: []
+  }
+}
+
 type RecommendationCacheRecord = {
   cacheKey: string
   recommendedItems: string
@@ -439,6 +473,110 @@ describe('RecommendationEngine', () => {
 
     expect(ids[0]).toBe('com.apple.Terminal')
     expect(socialRank === -1 || socialRank > 0).toBe(true)
+  })
+
+  it('uses local semantic scoring to prefer developer tools in a focused code context', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:semantic-on`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: true,
+        aiRerankEnabled: false,
+        aiEmbeddingEnabled: false
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 5 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 5 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.microsoft.VSCode',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.microsoft.VSCode', { executeCount: 5 })
+          }
+        ],
+        perf: candidatePerf(3, 3)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+    const ids = result.items.map((item) => item.id)
+
+    expect(ids.indexOf('com.apple.Terminal')).toBeLessThan(ids.indexOf('discord'))
+    expect(ids.indexOf('com.microsoft.VSCode')).toBeLessThan(ids.indexOf('discord'))
+  })
+
+  it('falls back to frequency ranking when local semantic scoring is disabled', async () => {
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:semantic-off`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: false,
+        aiRerankEnabled: false,
+        aiEmbeddingEnabled: false
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.microsoft.VSCode',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.microsoft.VSCode', { executeCount: 1 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 5 })
+          }
+        ],
+        perf: candidatePerf(3, 3)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items[0]?.id).toBe('discord')
   })
 
   it('keeps time stats when duplicate frequent candidates are also time-based', async () => {
