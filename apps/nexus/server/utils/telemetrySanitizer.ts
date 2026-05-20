@@ -355,6 +355,7 @@ function sanitizeFeatureUseMetadata(value: Record<string, unknown> | undefined):
     ['sourceName', 128],
     ['sourceVersion', 64],
     ['itemKind', 64],
+    ['pluginId', 128],
     ['pluginName', 128],
     ['featureId', 128],
   ]
