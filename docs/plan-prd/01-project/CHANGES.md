@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-20
+> 更新时间：2026-05-21
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -11,7 +11,120 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-21
+
+### feat(nexus): add data governance analytics foundation
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/api/dashboard/governance/*`
+- `apps/nexus/server/api/dashboard/plugins/[id]/analytics.get.ts`
+- `apps/nexus/server/api/dashboard/{storage/policies,notifications/channels}.*.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.*.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+  - Added `/api/dashboard/governance/analytics` for anonymized cockpit aggregates across visits, searches, plugin downloads/invocations, upload health, storage/notification events, and provider request/token usage.
+  - Nexus now has a shared governance event/config layer for hashed analytics events, plugin download/invoke metrics, upload success/failure health, storage channel policies, notification channel policies, and Intelligence provider quota policies.
+  - Plugin downloads, plugin invocation telemetry, search/visit telemetry, resource uploads, image/release-asset storage read/write usage, plugin review status changes, and provider scene execution now feed the governance layer without storing raw actor identifiers, raw search queries, or plaintext secrets.
+  - Dashboard admins can open Data Governance to inspect the analytics cockpit, storage policy health evaluation, and configure analytics, storage, notification, and provider quota policies; plugin owners/admins can query per-plugin analytics.
+  - Storage channel policy evaluation now reports stored bytes, traffic bytes, operation counts, utilization, and `ok` / `warning` / `blocked` status for configured storage channels.
+  - Validation: focused `platformGovernanceStore.test.ts` and `telemetryStore.test.ts` Vitest, affected-file ESLint, and `git diff --check` passed.
+
+### feat(sdk): expose native share helpers from MetaK quick actions
+
+- `packages/utils/plugin/sdk/quick-actions-sdk.ts`
+- `packages/utils/plugin/sdk/meta-sdk.ts`
+- `packages/utils/plugin/sdk/meta/README.md`
+- `docs/plan-prd/03-features/meta-overlay/META-OVERLAY-PRD.md`
+- `docs/plan-prd/02-architecture/platform-capabilities-prd.md`
+  - MetaK / QuickActions SDK now exposes native share helpers for plugins: native target discovery, item-to-share payload building, and FlowBus-backed native share execution.
+  - Deprecated `MetaSDK` remains a compatibility alias while forwarding the same SDK options and native share surface.
+  - Platform docs now spell out macOS AirDrop / Mail / Messages support and Windows/Linux mail-only fallback semantics.
+  - Validation: focused SDK lifecycle tests and file-scoped ESLint cover the new FlowBus event mapping and item payload builder.
+
+### feat(core-app): expand smart context settings and update package diagnostics
+
+- `packages/utils/core-box/recommendation.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/{context-provider,recommendation-engine}.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/{SettingTools,SettingFileIndex,SettingUpdate}.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - 智能推荐默认纳入时间、前台应用、剪贴板、网络、蓝牙、专注状态、电源/电量与粗粒度位置桶，并在高级设置中暴露上下文源开关。
+  - 推荐排序新增本地语义向量增强，默认启用本地打分；本地向量同时融合当前上下文、历史使用偏好与重复取消负反馈，只沉淀类别/任务语义，避免把单个应用 ID 直接放大；AI rerank 与 AI embedding 作为显式 opt-in 开关，失败或超时保持 fail-open，不阻断推荐结果。
+  - 本地启动区 / 应用索引管理从设置页内联长列表改为按钮打开的弹窗，诊断入口继续保留在设置页。
+  - 更新下载包弹窗改为展示当前 release 的全部下载包；当前设备无匹配包时明确提示，并为每个包标注平台/架构/链接/校验信息状态。
+  - 验证：focused recommendation/context/semantic Vitest 覆盖上下文开关、系统信号失败降级、cache key 隐私边界、本地语义排序、历史偏好向量、重复取消负反馈向量、语义关闭回退、AI embedding/rerank 成功排序与失败 fail-open、隐私安全 profile；affected-file ESLint、node typecheck 和 `git diff --check` 由本轮收口继续补证。
+
+### feat(core-app): wire Assistant screenshot translate action
+
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/assistant/module.contract.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate.test.ts`
+- `apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `packages/utils/transport/events/assistant.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+  - Assistant VoicePanel now exposes a screenshot translate action next to text handoff.
+  - The action uses typed `assistant:voice-panel:translate-screenshot`, temporarily hides Assistant windows, captures the cursor display through native screenshot as a data URL, and reuses the existing `corebox.screenshot.translate` / `image.translate.e2e` path through `translateImageBase64`.
+  - Translated screenshots open in the existing image translation pin window instead of introducing a second result surface.
+  - CoreApp visible experience evidence now tracks Assistant floating ball entry and Assistant screenshot translation as required visual surfaces, including drag persistence, VoicePanel opening, permission denial, and provider fallback evidence.
+  - Validation: focused Assistant contract, CoreBox image translate helper, transport event, and visible experience evidence tests cover the new typed event, scene reuse path, and manual evidence gate; packaged Electron permission and provider fallback artifacts remain follow-up.
+
+### feat(core-app): make style personalization wallpaper controls usable
+
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/sub/{ThemePreference,theme-preference-state}.ts`
+- `apps/core-app/src/renderer/src/modules/layout/{useWallpaper,wallpaper-state}.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/common/wallpaper.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Style personalization now exposes homepage wallpaper controls without the dev-only advanced gate.
+  - Added first-class `auto` wallpaper source as the default: it silently tries the desktop wallpaper first and falls back to Bing wallpaper.
+  - Custom and folder wallpaper paths now share normalized state handling, with local library path preference when copied.
+  - Wallpaper folder scanning and image picking now share one supported-image source of truth and support `.bmp` / `.avif` in addition to the existing formats.
+  - Wallpaper adjustment sliders now use TuffEx `TxSlider` instead of raw range inputs.
+  - Fixed the window material detail entry to route to `/styles/theme` instead of the stale named route.
+  - The window material detail page now acts as a usable selector with active state, recommended material, apply action, and a return path to the full style settings page.
+  - Cloud sync remains intentionally hidden from the public style page until the Nexus upload path exists.
+  - Validation: focused wallpaper state, wallpaper runtime, section route, material detail state, and shared wallpaper helper tests cover default `auto`, desktop-first loading, Bing fallback, folder empty state, library path preference, route generation, material option normalization, and supported image formats.
+
+### test(core-app): cover optional recommendation AI scoring fallback
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.test.ts`
+  - Added focused coverage for optional AI embedding scores and AI rerank scores improving semantic recommendation order.
+  - Added fail-open tests for embedding/rerank failures so local recommendation ranking remains available when optional AI scoring is unavailable.
+  - Validation: focused recommendation engine Vitest, file-scoped ESLint, and `git diff --check` passed.
+
+### feat(tuffex): add base components and docs coverage
+
+- `packages/tuffex/packages/components/src/{copy-button,divider,kbd,number-input,textarea}`
+- `packages/tuffex/packages/components/src/{components,flat-input,status-badge,transfer}*`
+- `packages/tuffex/docs/components/*`
+- `packages/tuffex/docs/.vitepress/*`
+  - Added installable `TxCopyButton`, `TxDivider`, `TxKbd`, `TxNumberInput`, and `TxTextarea` base components with focused tests.
+  - Expanded component exports and docs navigation, including docs pages for copy button, divider, kbd, number input, textarea, transfer, flat radio, and flat select.
+  - Polished StatusBadge platform icons, responsive Transfer layout, docs logo, and per-component examples for existing TuffEx docs.
+  - Validation: focused TuffEx component Vitest, affected-file ESLint, `pnpm -C "packages/tuffex" docs:build`, and `git diff --check` passed; docs build still reports the existing large-chunk warning.
+
 ## 2026-05-20
+
+### feat(core-app): enable Assistant floating ball settings entry
+
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/assistant/module.contract.test.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAssistant.vue`
+- `apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+  - Assistant is now loaded as a normal CoreApp module instead of being gated by `TUFF_ENABLE_ASSISTANT_EXPERIMENT`.
+  - The floating ball remains default-off through app settings, with a visible settings entry for enabling Assistant, showing the floating ball, naming the assistant, and controlling voice wake separately.
+  - VoicePanel now respects disabled voice wake by opening in text-only mode without automatically invoking Web Speech or requesting microphone access.
+  - Validation: focused Assistant module contract test, file-scoped ESLint, locale JSON parse, and CoreApp node/web typecheck passed; web typecheck still prints existing TuffEx docs dts noise.
 
 ### fix(core-app): route MetaOverlay actions through renderer action pipeline
 
@@ -35,6 +148,14 @@
   - Existing `intelligence-lab/*` and old `intelligence-agent/orchestrator/*` endpoints now have tests asserting HTTP `410` with migration targets instead of a consumable fake-success payload.
   - Historical `retired-ai-app` `livechat/random` / prompt detail / catch-all references remain archive evidence only and are not restored into the live tree.
   - Validation: `pnpm -C "apps/nexus" exec vitest run "test/api/admin/intelligence-compat-retired.api.test.ts" --reporter dot` passed.
+
+### test(ci): restore targeted Nexus sync route test path
+
+- `package.json`
+- `apps/nexus/test/api/sync/sync-routes-410.test.ts`
+  - Updated root `pnpm test:targeted` to run the current Nexus sync route test path under `apps/nexus/test/api/sync/` instead of the retired Nitro route-tree `server/api/sync/__tests__/` path.
+  - This unblocks the PR Quality path that failed after Nexus API tests were moved out of `server/api`.
+  - Validation: `pnpm -C "apps/nexus" exec vitest run "test/api/sync/sync-routes-410.test.ts"` and `pnpm test:targeted` passed.
 
 ### fix(core-app): prefer system safeStorage for secure store
 
