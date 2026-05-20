@@ -7,6 +7,20 @@ Use Flex for one-dimensional layouts where items flow in a single direction. For
 <script setup lang="ts">
 import FlexBasicDemo from '../.vitepress/theme/components/demos/FlexBasicDemo.vue'
 import FlexBasicDemoSource from '../.vitepress/theme/components/demos/FlexBasicDemo.vue?raw'
+const flexApiRows1 = [
+  { name: 'direction', description: 'The flex-direction of the container.', type: '\"row\" | \"row-reverse\" | \"column\" | \"column-reverse\"', default: '\"row\"' },
+  { name: 'gap', description: 'Spacing between children. Accepts a number (px) or CSS string.', type: 'number | string', default: '12' },
+  { name: 'align', description: 'Cross-axis alignment (maps to align-items).', type: 'string', default: '\"stretch\"' },
+  { name: 'justify', description: 'Main-axis distribution (maps to justify-content).', type: 'string', default: '\"flex-start\"' },
+  { name: 'wrap', description: 'Controls whether children wrap onto multiple lines.', type: '\"nowrap\" | \"wrap\" | \"wrap-reverse\"', default: '\"nowrap\"' },
+  { name: 'inline', description: 'When true, uses inline-flex instead of flex.', type: 'boolean', default: 'false' },
+
+]
+
+const flexApiRows2 = [
+  { name: 'default', description: 'The content to arrange within the flex container.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -107,17 +121,8 @@ Set `wrap="wrap"` to allow children to flow onto multiple lines when they exceed
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'direction', description: 'The flex-direction of the container.', type: '\"row\" | \"row-reverse\" | \"column\" | \"column-reverse\"', default: '\"row\"' },
-  { name: 'gap', description: 'Spacing between children. Accepts a number (px) or CSS string.', type: 'number | string', default: '12' },
-  { name: 'align', description: 'Cross-axis alignment (maps to align-items).', type: 'string', default: '\"stretch\"' },
-  { name: 'justify', description: 'Main-axis distribution (maps to justify-content).', type: 'string', default: '\"flex-start\"' },
-  { name: 'wrap', description: 'Controls whether children wrap onto multiple lines.', type: '\"nowrap\" | \"wrap\" | \"wrap-reverse\"', default: '\"nowrap\"' },
-  { name: 'inline', description: 'When true, uses inline-flex instead of flex.', type: 'boolean', default: 'false' },
-]" />
+<ApiSpecTable :rows="flexApiRows1" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'The content to arrange within the flex container.' },
-]" />
+<ApiSpecTable title="Slots" :rows="flexApiRows2" />

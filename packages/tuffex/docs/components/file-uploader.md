@@ -6,6 +6,40 @@ A general-purpose file upload component with drag-and-drop support, multi-file s
 import { ref } from 'vue'
 
 const files = ref([])
+const fileUploaderApiRows1 = [
+  { name: 'modelValue / v-model', description: 'Array of managed file objects.', type: 'FileUploaderFile[]', default: '[]' },
+  { name: 'multiple', description: 'Allow selecting multiple files.', type: 'boolean', default: 'true' },
+  { name: 'accept', description: 'Accepted file types (MIME or extensions).', type: 'string', default: '\"*/*\"' },
+  { name: 'disabled', description: 'Disables all interaction.', type: 'boolean', default: 'false' },
+  { name: 'max', description: 'Maximum number of files.', type: 'number', default: '10' },
+  { name: 'showSize', description: 'Show file size in the list.', type: 'boolean', default: 'true' },
+  { name: 'allowDrop', description: 'Enable drag-and-drop zone.', type: 'boolean', default: 'true' },
+  { name: 'buttonText', description: 'Label for the browse button.', type: 'string', default: '\"Choose files\"' },
+  { name: 'dropText', description: 'Text shown in the drop zone.', type: 'string', default: '\"Drop files here\"' },
+  { name: 'hintText', description: 'Secondary hint text.', type: 'string', default: '\"or click to browse\"' },
+
+]
+
+const fileUploaderApiRows2 = [
+  { name: 'change', description: 'Fires when the file list changes.', type: '(files: FileUploaderFile[]) => void' },
+  { name: 'add', description: 'Fires when new files are added.', type: '(files: FileUploaderFile[]) => void' },
+  { name: 'remove', description: 'Fires when a file is removed.', type: '(payload: { id: string, value: FileUploaderFile[] }) => void' },
+
+]
+
+const fileUploaderApiRows3 = [
+  { name: 'pick()', description: 'Programmatically opens the system file chooser.' },
+
+]
+
+const fileUploaderApiRows4 = [
+  { name: 'id', description: 'Unique identifier.', type: 'string' },
+  { name: 'name', description: 'File name.', type: 'string' },
+  { name: 'size', description: 'File size in bytes.', type: 'number' },
+  { name: 'type', description: 'MIME type.', type: 'string' },
+  { name: 'file', description: 'The raw File object.', type: 'File' },
+
+]
 </script>
 
 ## Basic Usage
@@ -48,39 +82,16 @@ const files = ref([])
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'Array of managed file objects.', type: 'FileUploaderFile[]', default: '[]' },
-  { name: 'multiple', description: 'Allow selecting multiple files.', type: 'boolean', default: 'true' },
-  { name: 'accept', description: 'Accepted file types (MIME or extensions).', type: 'string', default: '\"*/*\"' },
-  { name: 'disabled', description: 'Disables all interaction.', type: 'boolean', default: 'false' },
-  { name: 'max', description: 'Maximum number of files.', type: 'number', default: '10' },
-  { name: 'showSize', description: 'Show file size in the list.', type: 'boolean', default: 'true' },
-  { name: 'allowDrop', description: 'Enable drag-and-drop zone.', type: 'boolean', default: 'true' },
-  { name: 'buttonText', description: 'Label for the browse button.', type: 'string', default: '\"Choose files\"' },
-  { name: 'dropText', description: 'Text shown in the drop zone.', type: 'string', default: '\"Drop files here\"' },
-  { name: 'hintText', description: 'Secondary hint text.', type: 'string', default: '\"or click to browse\"' },
-]" />
+<ApiSpecTable :rows="fileUploaderApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'change', description: 'Fires when the file list changes.', type: '(files: FileUploaderFile[]) => void' },
-  { name: 'add', description: 'Fires when new files are added.', type: '(files: FileUploaderFile[]) => void' },
-  { name: 'remove', description: 'Fires when a file is removed.', type: '(payload: { id: string, value: FileUploaderFile[] }) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="fileUploaderApiRows2" />
 
 ### Exposed Methods
 
-<ApiSpecTable title="Methods" :rows="[
-  { name: 'pick()', description: 'Programmatically opens the system file chooser.' },
-]" />
+<ApiSpecTable title="Methods" :rows="fileUploaderApiRows3" />
 
 ### FileUploaderFile Interface
 
-<ApiSpecTable title="FileUploaderFile" :rows="[
-  { name: 'id', description: 'Unique identifier.', type: 'string' },
-  { name: 'name', description: 'File name.', type: 'string' },
-  { name: 'size', description: 'File size in bytes.', type: 'number' },
-  { name: 'type', description: 'MIME type.', type: 'string' },
-  { name: 'file', description: 'The raw File object.', type: 'File' },
-]" />
+<ApiSpecTable title="FileUploaderFile" :rows="fileUploaderApiRows4" />

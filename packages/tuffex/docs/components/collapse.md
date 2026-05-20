@@ -7,6 +7,31 @@ import { ref } from 'vue'
 
 const active = ref(['1'])
 const accordion = ref('1')
+const collapseApiRows1 = [
+  { name: 'modelValue / v-model', description: 'Active panel name(s).', type: 'string | string[]' },
+  { name: 'accordion', description: 'When true, only one panel can be open at a time.', type: 'boolean', default: 'false' },
+
+]
+
+const collapseApiRows2 = [
+  { name: 'update:modelValue', description: 'Fires for v-model active panel updates.', type: '(value: string | string[]) => void' },
+  { name: 'change', description: 'Fires when the active panel changes.', type: '(value: string | string[]) => void' },
+
+]
+
+const collapseApiRows3 = [
+  { name: 'title', description: 'The header text.', type: 'string' },
+  { name: 'name', description: 'Unique identifier for this panel.', type: 'string' },
+  { name: 'disabled', description: 'Prevents the panel from being toggled.', type: 'boolean', default: 'false' },
+  { name: 'arrowIcon', description: 'Icon name for the disclosure arrow.', type: 'string', default: 'chevron-down' },
+
+]
+
+const collapseApiRows4 = [
+  { name: 'default', description: 'The collapsible content.' },
+  { name: 'title', description: 'Custom header content. Replaces the title prop.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -101,30 +126,16 @@ Set `accordion` to allow only one item to be open at a time.
 
 ### TxCollapse Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'Active panel name(s).', type: 'string | string[]' },
-  { name: 'accordion', description: 'When true, only one panel can be open at a time.', type: 'boolean', default: 'false' },
-]" />
+<ApiSpecTable :rows="collapseApiRows1" />
 
 ### TxCollapse Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'update:modelValue', description: 'Fires for v-model active panel updates.', type: '(value: string | string[]) => void' },
-  { name: 'change', description: 'Fires when the active panel changes.', type: '(value: string | string[]) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="collapseApiRows2" />
 
 ### TxCollapseItem Props
 
-<ApiSpecTable :rows="[
-  { name: 'title', description: 'The header text.', type: 'string' },
-  { name: 'name', description: 'Unique identifier for this panel.', type: 'string' },
-  { name: 'disabled', description: 'Prevents the panel from being toggled.', type: 'boolean', default: 'false' },
-  { name: 'arrowIcon', description: 'Icon name for the disclosure arrow.', type: 'string', default: 'chevron-down' },
-]" />
+<ApiSpecTable :rows="collapseApiRows3" />
 
 ### TxCollapseItem Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'The collapsible content.' },
-  { name: 'title', description: 'Custom header content. Replaces the title prop.' },
-]" />
+<ApiSpecTable title="Slots" :rows="collapseApiRows4" />

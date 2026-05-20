@@ -6,6 +6,28 @@ A page navigation control for browsing through paged data. Pagination shows the 
 import { ref } from 'vue'
 
 const page = ref(1)
+const paginationApiRows1 = [
+  { name: 'currentPage / v-model:current-page', description: 'The active page number.', type: 'number', default: '1' },
+  { name: 'pageSize', description: 'Items per page, used to calculate total pages.', type: 'number', default: '10' },
+  { name: 'total', description: 'Total number of items.', type: 'number' },
+  { name: 'totalPages', description: 'Explicit total page count. Overrides total/pageSize calculation.', type: 'number' },
+  { name: 'prevIcon', description: 'Icon name for the previous page button.', type: 'string', default: 'chevron-left' },
+  { name: 'nextIcon', description: 'Icon name for the next page button.', type: 'string', default: 'chevron-right' },
+  { name: 'showInfo', description: 'Whether to display page info text.', type: 'boolean', default: 'false' },
+  { name: 'showFirstLast', description: 'Whether to show first/last page buttons.', type: 'boolean', default: 'false' },
+
+]
+
+const paginationApiRows2 = [
+  { name: 'update:currentPage', description: 'Fires for v-model current page updates.', type: '(page: number) => void' },
+  { name: 'pageChange', description: 'Fires when the user navigates to a different page.', type: '(page: number) => void' },
+
+]
+
+const paginationApiRows3 = [
+  { name: 'info', description: 'Custom page info display.', type: '{ currentPage: number, totalPages: number, total?: number }' },
+
+]
 </script>
 
 ## Basic Usage
@@ -45,26 +67,12 @@ const page = ref(1)
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'currentPage / v-model:current-page', description: 'The active page number.', type: 'number', default: '1' },
-  { name: 'pageSize', description: 'Items per page, used to calculate total pages.', type: 'number', default: '10' },
-  { name: 'total', description: 'Total number of items.', type: 'number' },
-  { name: 'totalPages', description: 'Explicit total page count. Overrides total/pageSize calculation.', type: 'number' },
-  { name: 'prevIcon', description: 'Icon name for the previous page button.', type: 'string', default: 'chevron-left' },
-  { name: 'nextIcon', description: 'Icon name for the next page button.', type: 'string', default: 'chevron-right' },
-  { name: 'showInfo', description: 'Whether to display page info text.', type: 'boolean', default: 'false' },
-  { name: 'showFirstLast', description: 'Whether to show first/last page buttons.', type: 'boolean', default: 'false' },
-]" />
+<ApiSpecTable :rows="paginationApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'update:currentPage', description: 'Fires for v-model current page updates.', type: '(page: number) => void' },
-  { name: 'pageChange', description: 'Fires when the user navigates to a different page.', type: '(page: number) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="paginationApiRows2" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'info', description: 'Custom page info display.', type: '{ currentPage: number, totalPages: number, total?: number }' },
-]" />
+<ApiSpecTable title="Slots" :rows="paginationApiRows3" />

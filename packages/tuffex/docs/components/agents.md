@@ -37,6 +37,31 @@ const agents = [
     disabled: true,
   },
 ]
+const agentsApiRows1 = [
+  { name: 'agents', description: 'Array of agent objects to display.', type: 'AgentItemProps[]' },
+  { name: 'selectedId', description: 'ID of the currently selected agent.', type: 'string | null', default: 'null' },
+  { name: 'loading', description: 'Show a loading overlay on the list.', type: 'boolean', default: 'false' },
+  { name: 'enabledTitle', description: 'Section title for enabled agents.', type: 'string', default: '\"Enabled\"' },
+  { name: 'disabledTitle', description: 'Section title for disabled agents.', type: 'string', default: '\"Disabled\"' },
+  { name: 'emptyText', description: 'Text shown when the list is empty.', type: 'string', default: '\"No agents\"' },
+
+]
+
+const agentsApiRows2 = [
+  { name: 'select', description: 'Fires when an enabled agent item is clicked or activated with Enter/Space.', type: '(id: string) => void' },
+
+]
+
+const agentsApiRows3 = [
+  { name: 'id', description: 'Unique agent identifier.', type: 'string' },
+  { name: 'name', description: 'Agent display name.', type: 'string' },
+  { name: 'description', description: 'Short agent description.', type: 'string', default: '\"\"' },
+  { name: 'iconClass', description: 'Icon class for the agent avatar.', type: 'string', default: '\"i-carbon-bot\"' },
+  { name: 'selected', description: 'Whether this item is selected.', type: 'boolean', default: 'false' },
+  { name: 'disabled', description: 'Prevents interaction.', type: 'boolean', default: 'false' },
+  { name: 'badgeText', description: 'Badge content (count or label).', type: 'string | number', default: '\"\"' },
+
+]
 </script>
 
 ## Basic Usage
@@ -98,29 +123,12 @@ const agents = [
 
 ### TxAgentsList Props
 
-<ApiSpecTable :rows="[
-  { name: 'agents', description: 'Array of agent objects to display.', type: 'AgentItemProps[]' },
-  { name: 'selectedId', description: 'ID of the currently selected agent.', type: 'string | null', default: 'null' },
-  { name: 'loading', description: 'Show a loading overlay on the list.', type: 'boolean', default: 'false' },
-  { name: 'enabledTitle', description: 'Section title for enabled agents.', type: 'string', default: '\"Enabled\"' },
-  { name: 'disabledTitle', description: 'Section title for disabled agents.', type: 'string', default: '\"Disabled\"' },
-  { name: 'emptyText', description: 'Text shown when the list is empty.', type: 'string', default: '\"No agents\"' },
-]" />
+<ApiSpecTable :rows="agentsApiRows1" />
 
 ### TxAgentsList Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'select', description: 'Fires when an enabled agent item is clicked or activated with Enter/Space.', type: '(id: string) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="agentsApiRows2" />
 
 ### TxAgentItem Props
 
-<ApiSpecTable title="TxAgentItem Props" :rows="[
-  { name: 'id', description: 'Unique agent identifier.', type: 'string' },
-  { name: 'name', description: 'Agent display name.', type: 'string' },
-  { name: 'description', description: 'Short agent description.', type: 'string', default: '\"\"' },
-  { name: 'iconClass', description: 'Icon class for the agent avatar.', type: 'string', default: '\"i-carbon-bot\"' },
-  { name: 'selected', description: 'Whether this item is selected.', type: 'boolean', default: 'false' },
-  { name: 'disabled', description: 'Prevents interaction.', type: 'boolean', default: 'false' },
-  { name: 'badgeText', description: 'Badge content (count or label).', type: 'string | number', default: '\"\"' },
-]" />
+<ApiSpecTable title="TxAgentItem Props" :rows="agentsApiRows3" />
