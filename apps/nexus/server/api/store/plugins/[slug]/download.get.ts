@@ -1,5 +1,7 @@
 import { createError, sendRedirect } from 'h3'
 import { getPluginBySlug, incrementPluginInstalls } from '../../../../utils/pluginsStore'
+import { recordPlatformGovernanceEvent } from '../../../../utils/platformGovernanceStore'
+import { resolveRequestGeo } from '../../../../utils/requestGeo'
 
 // region debug [DBG-nexus-coreapp-planprd-2026-01-12]
 const DBG_SID = 'DBG-nexus-coreapp-planprd-2026-01-12'
@@ -74,6 +76,22 @@ export default defineEventHandler(async (event) => {
 
   // Track install count (fire and forget to avoid blocking redirect)
   incrementPluginInstalls(event, plugin.id).catch(() => {})
+  recordPlatformGovernanceEvent(event, {
+    scope: 'plugin',
+    action: 'download',
+    resourceType: 'plugin',
+    resourceId: plugin.id,
+    channel: targetVersion.channel,
+    unit: 'download',
+    quantity: 1,
+    metadata: {
+      slug: plugin.slug,
+      version: targetVersion.version,
+      artifactType: plugin.artifactType,
+      packageSize: targetVersion.packageSize,
+      countryCode: resolveRequestGeo(event).countryCode,
+    },
+  }).catch(() => {})
 
   return sendRedirect(event, targetVersion.packageUrl, 302)
 })

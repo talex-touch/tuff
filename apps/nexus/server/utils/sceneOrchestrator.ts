@@ -4,6 +4,7 @@ import type { SceneRegistryRecord, SceneStrategyBindingRecord } from './sceneReg
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { getLatestProviderHealthChecks, type ProviderHealthCheckEntry } from './providerHealthStore'
+import { assertIntelligenceProviderQuota, recordIntelligenceProviderRequest, recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { getProviderRegistryEntry } from './providerRegistryStore'
 import { recordProviderUsageLedger } from './providerUsageLedgerStore'
 import { getSceneRegistryEntry } from './sceneRegistryStore'
@@ -853,7 +854,40 @@ async function finalizeSceneRun(event: H3Event, run: SceneRunResult): Promise<Sc
   catch (error) {
     console.warn('[sceneOrchestrator] Failed to record provider usage ledger', error)
   }
+  for (const usage of run.usage) {
+    const providerId = usage.providerId
+    if (!providerId)
+      continue
+    try {
+      await recordPlatformGovernanceUsage(event, providerId, usage)
+    }
+    catch (error) {
+      console.warn('[sceneOrchestrator] Failed to record governance usage', error)
+    }
+  }
   return run
+}
+
+async function recordPlatformGovernanceUsage(
+  event: H3Event,
+  providerId: string,
+  usage: SceneRunUsage,
+): Promise<void> {
+  await recordPlatformGovernanceEvent(event, {
+    scope: 'intelligence',
+    action: 'provider.usage',
+    resourceType: 'provider',
+    resourceId: providerId,
+    channel: usage.capability ?? 'unknown',
+    unit: usage.unit,
+    quantity: usage.quantity,
+    metadata: {
+      billable: usage.billable,
+      estimated: usage.estimated === true,
+      pricingRef: usage.pricingRef ?? null,
+      providerUsageRef: usage.providerUsageRef ?? null,
+    },
+  })
 }
 
 async function throwRunError(
@@ -1037,6 +1071,8 @@ export async function runSceneOrchestrator(
       }
 
       try {
+        await assertIntelligenceProviderQuota(event, provider.id)
+        await recordIntelligenceProviderRequest(event, provider.id, plan.capability)
         const adapterInput = buildCapabilityInput(plan.capability, request.input, outputs)
         const result = await adapter({
           event,
