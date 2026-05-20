@@ -1,5 +1,13 @@
 <script name="ThemeStyle" lang="ts" setup>
-import { TxButton, TxSelectItem, TxSpinner, TxStatusBadge, TxTooltip } from '@talex-touch/tuffex'
+import {
+  TxButton,
+  TxSelectItem,
+  TxSlider,
+  TxSpinner,
+  TxStatusBadge,
+  TxTooltip
+} from '@talex-touch/tuffex'
+import { WALLPAPER_IMAGE_EXTENSIONS } from '@talex-touch/utils/common/wallpaper'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -11,6 +19,13 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import {
+  DEFAULT_WALLPAPER_FILTER,
+  WALLPAPER_SOURCES,
+  hasConfiguredWallpaperSource,
+  normalizeWallpaperBackground,
+  type WallpaperSource
+} from '~/modules/layout/wallpaper-state'
 import { appSetting } from '~/modules/storage/app-storage'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import {
@@ -75,9 +90,6 @@ function showWindowPreferenceLoading(): void {
   }, 480)
 }
 
-type WallpaperSource = 'none' | 'bing' | 'custom' | 'folder' | 'desktop'
-const WALLPAPER_SOURCES: WallpaperSource[] = ['none', 'bing', 'custom', 'folder', 'desktop']
-const defaultFilter = { brightness: 100, contrast: 100, saturate: 100 }
 let wallpaperSourceSwitchToken = 0
 
 function toErrorMessage(error: unknown): string {
@@ -86,68 +98,24 @@ function toErrorMessage(error: unknown): string {
 }
 
 function ensureBackground() {
+  const normalized = normalizeWallpaperBackground(appSetting.background)
   if (!appSetting.background) {
-    appSetting.background = {
-      source: 'none',
-      customPath: '',
-      folderPath: '',
-      folderIntervalMinutes: 30,
-      folderRandom: true,
-      blur: 0,
-      opacity: 100,
-      filter: { ...defaultFilter },
-      desktopPath: '',
-      library: {
-        enabled: false,
-        folderStoredPath: '',
-        fileStoredPath: ''
-      },
-      sync: {
-        enabled: false
-      }
-    }
+    appSetting.background = normalized
     return
   }
 
   const background = appSetting.background
-  background.source = background.source ?? 'none'
-  background.customPath = background.customPath ?? ''
-  background.folderPath = background.folderPath ?? ''
-  background.folderIntervalMinutes =
-    typeof background.folderIntervalMinutes === 'number' ? background.folderIntervalMinutes : 30
-  background.folderRandom = background.folderRandom !== false
-  background.blur = typeof background.blur === 'number' ? background.blur : 0
-  background.opacity = typeof background.opacity === 'number' ? background.opacity : 100
-  if (!background.filter) {
-    background.filter = { ...defaultFilter }
-  }
-  background.filter.brightness =
-    typeof background.filter.brightness === 'number'
-      ? background.filter.brightness
-      : defaultFilter.brightness
-  background.filter.contrast =
-    typeof background.filter.contrast === 'number'
-      ? background.filter.contrast
-      : defaultFilter.contrast
-  background.filter.saturate =
-    typeof background.filter.saturate === 'number'
-      ? background.filter.saturate
-      : defaultFilter.saturate
-  background.desktopPath = background.desktopPath ?? ''
-  if (!background.library) {
-    background.library = {
-      enabled: false,
-      folderStoredPath: '',
-      fileStoredPath: ''
-    }
-  }
-  background.library.enabled = Boolean(background.library.enabled)
-  background.library.folderStoredPath = background.library.folderStoredPath ?? ''
-  background.library.fileStoredPath = background.library.fileStoredPath ?? ''
-  if (!background.sync) {
-    background.sync = { enabled: false }
-  }
-  background.sync.enabled = Boolean(background.sync.enabled)
+  background.source = normalized.source
+  background.customPath = normalized.customPath
+  background.folderPath = normalized.folderPath
+  background.folderIntervalMinutes = normalized.folderIntervalMinutes
+  background.folderRandom = normalized.folderRandom
+  background.blur = normalized.blur
+  background.opacity = normalized.opacity
+  background.filter = { ...normalized.filter }
+  background.desktopPath = normalized.desktopPath
+  background.library = { ...normalized.library }
+  background.sync = { ...normalized.sync }
 }
 
 watchEffect(() => {
@@ -170,7 +138,7 @@ onBeforeUnmount(() => {
 
 const bgSourceValue = computed({
   get: () => {
-    const source = (appSetting.background?.source ?? 'none') as WallpaperSource
+    const source = normalizeWallpaperBackground(appSetting.background).source
     const index = WALLPAPER_SOURCES.indexOf(source)
     return index >= 0 ? index : 0
   },
@@ -201,19 +169,19 @@ const bgOpacity = computed({
   }
 })
 const bgBrightness = computed({
-  get: () => appSetting.background?.filter?.brightness ?? defaultFilter.brightness,
+  get: () => appSetting.background?.filter?.brightness ?? DEFAULT_WALLPAPER_FILTER.brightness,
   set: (val: number) => {
     if (appSetting.background?.filter) appSetting.background.filter.brightness = val
   }
 })
 const bgContrast = computed({
-  get: () => appSetting.background?.filter?.contrast ?? defaultFilter.contrast,
+  get: () => appSetting.background?.filter?.contrast ?? DEFAULT_WALLPAPER_FILTER.contrast,
   set: (val: number) => {
     if (appSetting.background?.filter) appSetting.background.filter.contrast = val
   }
 })
 const bgSaturate = computed({
-  get: () => appSetting.background?.filter?.saturate ?? defaultFilter.saturate,
+  get: () => appSetting.background?.filter?.saturate ?? DEFAULT_WALLPAPER_FILTER.saturate,
   set: (val: number) => {
     if (appSetting.background?.filter) appSetting.background.filter.saturate = val
   }
@@ -224,16 +192,15 @@ const folderIntervalMinutes = computed({
     if (appSetting.background) appSetting.background.folderIntervalMinutes = val
   }
 })
-const isCustomSource = computed(() => bgSourceValue.value === 2)
-const isFolderSource = computed(() => bgSourceValue.value === 3)
-const isDesktopSource = computed(() => bgSourceValue.value === 4)
+const currentWallpaperSource = computed(() => WALLPAPER_SOURCES[bgSourceValue.value] ?? 'auto')
+const isCustomSource = computed(() => currentWallpaperSource.value === 'custom')
+const isFolderSource = computed(() => currentWallpaperSource.value === 'folder')
+const isDesktopSource = computed(() => currentWallpaperSource.value === 'desktop')
+const wallpaperLibrarySupported = computed(
+  () => currentWallpaperSource.value === 'custom' || currentWallpaperSource.value === 'folder'
+)
 const wallpaperAdjustable = computed(() => {
-  const source = appSetting.background?.source ?? 'none'
-  if (source === 'none') return false
-  if (source === 'custom') return customBgPath.value.length > 0
-  if (source === 'folder') return folderBgPath.value.length > 0
-  if (source === 'desktop') return desktopBgPath.value.length > 0
-  return true
+  return hasConfiguredWallpaperSource(normalizeWallpaperBackground(appSetting.background))
 })
 const libraryEnabled = computed({
   get: () => appSetting.background?.library?.enabled ?? false,
@@ -243,17 +210,6 @@ const libraryEnabled = computed({
     if (!val && appSetting.background?.sync) {
       appSetting.background.sync.enabled = false
     }
-    if (val) {
-      void syncWallpaperLibrary()
-    }
-  }
-})
-const syncEnabled = computed({
-  get: () => appSetting.background?.sync?.enabled ?? false,
-  set: (val: boolean) => {
-    ensureBackground()
-    if (!libraryEnabled.value) return
-    appSetting.background!.sync!.enabled = val
     if (val) {
       void syncWallpaperLibrary()
     }
@@ -335,7 +291,7 @@ async function selectBackgroundImageInternal(options?: { setSource?: boolean }):
   try {
     const result = await transport.send(openFileEvent, {
       title: t('themeStyle.selectBackgroundImage', 'Select Background Image'),
-      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }],
+      filters: [{ name: 'Images', extensions: [...WALLPAPER_IMAGE_EXTENSIONS] }],
       properties: ['openFile']
     })
     if (result && result.filePaths && result.filePaths.length > 0) {
@@ -497,14 +453,13 @@ function clearBackgroundFolder() {
 watch(
   () => appSetting.background?.source,
   (source) => {
-    if (source === 'desktop' && !desktopBgPath.value) {
+    if ((source === 'desktop' || source === 'auto') && !desktopBgPath.value) {
       void refreshDesktopWallpaperInternal({ silentError: true })
     }
   }
 )
 
 const bgSaving = computed(() => appSettings.savingState?.value ?? false)
-const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 </script>
 
 <template>
@@ -554,254 +509,200 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
           </TxSelectItem>
         </TuffBlockSelect>
 
-        <template v-if="showAdvancedSettings">
-          <TuffBlockSelect
-            v-model="bgSourceValue"
-            :title="t('themeStyle.homepageWallpaper')"
-            :description="t('themeStyle.homepageWallpaperDesc')"
-          >
-            <template #icon="{ active }">
-              <TxSpinner v-if="bgSaving" :size="14" />
-              <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
-            </template>
-            <TxSelectItem :value="0">
-              {{ t('themeStyle.noBackground') }}
-            </TxSelectItem>
-            <TxSelectItem :value="1">
-              {{ t('themeStyle.bing') }}
-            </TxSelectItem>
-            <TxSelectItem :value="2">
-              {{ t('themeStyle.customImage') }}
-            </TxSelectItem>
-            <TxSelectItem :value="3">
-              {{ t('themeStyle.folder') }}
-            </TxSelectItem>
-            <TxSelectItem :value="4">
-              {{ t('themeStyle.desktopWallpaper') }}
-            </TxSelectItem>
-          </TuffBlockSelect>
+        <TuffBlockSelect
+          v-model="bgSourceValue"
+          :title="t('themeStyle.homepageWallpaper')"
+          :description="t('themeStyle.homepageWallpaperDesc')"
+        >
+          <template #icon="{ active }">
+            <TxSpinner v-if="bgSaving" :size="14" />
+            <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
+          </template>
+          <TxSelectItem :value="0">
+            {{ t('themeStyle.autoWallpaper') }}
+          </TxSelectItem>
+          <TxSelectItem :value="1">
+            {{ t('themeStyle.noBackground') }}
+          </TxSelectItem>
+          <TxSelectItem :value="2">
+            {{ t('themeStyle.bing') }}
+          </TxSelectItem>
+          <TxSelectItem :value="3">
+            {{ t('themeStyle.customImage') }}
+          </TxSelectItem>
+          <TxSelectItem :value="4">
+            {{ t('themeStyle.folder') }}
+          </TxSelectItem>
+          <TxSelectItem :value="5">
+            {{ t('themeStyle.desktopWallpaper') }}
+          </TxSelectItem>
+        </TuffBlockSelect>
 
-          <!-- Custom background image upload -->
-          <div v-if="isCustomSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex-1">
-                <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                  {{ t('themeStyle.customBackgroundImage', 'Custom Background Image') }}
-                </p>
-                <p
-                  v-if="customBgPath"
-                  class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
-                >
-                  {{ customBgPath }}
-                </p>
-                <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                  {{ t('themeStyle.noImageSelected', 'No image selected') }}
-                </p>
-              </div>
-              <div class="flex gap-2">
-                <TxButton
-                  variant="bare"
-                  class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                  @click="selectBackgroundImage"
-                >
-                  {{ t('themeStyle.selectImage', 'Select') }}
-                </TxButton>
-                <TxButton
-                  v-if="customBgPath"
-                  variant="bare"
-                  class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
-                  @click="clearBackgroundImage"
-                >
-                  {{ t('themeStyle.clearImage', 'Clear') }}
-                </TxButton>
-              </div>
-            </div>
-
-            <!-- Preview -->
-            <div v-if="customBgPath" class="mt-3 overflow-hidden rounded-lg">
-              <img
-                :src="customBgPreviewUrl"
-                class="h-24 w-full object-cover"
-                :style="{
-                  filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
-                  opacity: bgOpacity / 100
-                }"
-              />
-            </div>
-          </div>
-
-          <!-- Folder background image -->
-          <div v-if="isFolderSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex-1">
-                <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                  {{ t('themeStyle.folder') }}
-                </p>
-                <p
-                  v-if="folderBgPath"
-                  class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
-                >
-                  {{ folderBgPath }}
-                </p>
-                <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                  {{ t('themeStyle.noImageSelected') }}
-                </p>
-              </div>
-              <div class="flex gap-2">
-                <TxButton
-                  variant="bare"
-                  class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                  @click="selectBackgroundFolder"
-                >
-                  {{ t('themeStyle.selectFolder') }}
-                </TxButton>
-                <TxButton
-                  v-if="folderBgPath"
-                  variant="bare"
-                  class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
-                  @click="clearBackgroundFolder"
-                >
-                  {{ t('themeStyle.clearFolder') }}
-                </TxButton>
-              </div>
-            </div>
-
-            <div v-if="folderBgPath" class="mt-4 space-y-2">
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-black/60 dark:text-white/60">{{
-                  t('themeStyle.rotationInterval')
-                }}</span>
-                <span class="font-medium text-black/80 dark:text-white/80">
-                  {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
-                </span>
-              </div>
-              <input
-                v-model.number="folderIntervalMinutes"
-                type="range"
-                min="5"
-                max="240"
-                class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-              />
-              <p class="text-xs text-black/40 dark:text-white/40">
-                {{ t('themeStyle.folderRandomHint') }}
+        <div v-if="isCustomSource" class="theme-style-wallpaper-panel">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-black/80 dark:text-white/80">
+                {{ t('themeStyle.customBackgroundImage', 'Custom Background Image') }}
+              </p>
+              <p v-if="customBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
+                {{ customBgPath }}
+              </p>
+              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+                {{ t('themeStyle.noImageSelected', 'No image selected') }}
               </p>
             </div>
-          </div>
-
-          <!-- Desktop wallpaper -->
-          <div v-if="isDesktopSource" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-            <div class="flex items-center justify-between gap-4">
-              <div class="flex-1">
-                <p class="text-sm font-medium text-black/80 dark:text-white/80">
-                  {{ t('themeStyle.desktopWallpaper') }}
-                </p>
-                <p
-                  v-if="desktopBgPath"
-                  class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
-                >
-                  {{ desktopBgPath }}
-                </p>
-                <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
-                  {{ t('themeStyle.noImageSelected') }}
-                </p>
-              </div>
-              <div class="flex gap-2">
-                <TxButton
-                  variant="bare"
-                  class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
-                  @click="refreshDesktopWallpaper"
-                >
-                  {{ t('themeStyle.refreshDesktopWallpaper') }}
-                </TxButton>
-              </div>
+            <div class="flex gap-2">
+              <TxButton
+                variant="bare"
+                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                @click="selectBackgroundImage"
+              >
+                {{ t('themeStyle.selectImage', 'Select') }}
+              </TxButton>
+              <TxButton
+                v-if="customBgPath"
+                variant="bare"
+                class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+                @click="clearBackgroundImage"
+              >
+                {{ t('themeStyle.clearImage', 'Clear') }}
+              </TxButton>
             </div>
           </div>
 
-          <!-- Wallpaper adjustments -->
-          <div v-if="wallpaperAdjustable" class="mt-3 rounded-xl bg-black/5 p-4 dark:bg-white/5">
-            <div class="space-y-3">
-              <div>
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur') }}</span>
-                  <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
-                </div>
-                <input
-                  v-model.number="bgBlur"
-                  type="range"
-                  min="0"
-                  max="20"
-                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-                />
-              </div>
-              <div>
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-black/60 dark:text-white/60">{{
-                    t('themeStyle.opacity')
-                  }}</span>
-                  <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
-                </div>
-                <input
-                  v-model.number="bgOpacity"
-                  type="range"
-                  min="10"
-                  max="100"
-                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-                />
-              </div>
-              <div>
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-black/60 dark:text-white/60">{{
-                    t('themeStyle.brightness')
-                  }}</span>
-                  <span class="font-medium text-black/80 dark:text-white/80"
-                    >{{ bgBrightness }}%</span
-                  >
-                </div>
-                <input
-                  v-model.number="bgBrightness"
-                  type="range"
-                  min="50"
-                  max="150"
-                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-                />
-              </div>
-              <div>
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-black/60 dark:text-white/60">{{
-                    t('themeStyle.contrast')
-                  }}</span>
-                  <span class="font-medium text-black/80 dark:text-white/80"
-                    >{{ bgContrast }}%</span
-                  >
-                </div>
-                <input
-                  v-model.number="bgContrast"
-                  type="range"
-                  min="50"
-                  max="150"
-                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-                />
-              </div>
-              <div>
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-black/60 dark:text-white/60">{{
-                    t('themeStyle.saturate')
-                  }}</span>
-                  <span class="font-medium text-black/80 dark:text-white/80"
-                    >{{ bgSaturate }}%</span
-                  >
-                </div>
-                <input
-                  v-model.number="bgSaturate"
-                  type="range"
-                  min="50"
-                  max="150"
-                  class="mt-1 h-1 w-full cursor-pointer appearance-none rounded-full bg-black/10 dark:bg-white/10"
-                />
-              </div>
+          <div v-if="customBgPath" class="theme-style-wallpaper-preview">
+            <img
+              :src="customBgPreviewUrl"
+              class="h-24 w-full object-cover"
+              :style="{
+                filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,
+                opacity: bgOpacity / 100
+              }"
+            />
+          </div>
+        </div>
+
+        <div v-if="isFolderSource" class="theme-style-wallpaper-panel">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-black/80 dark:text-white/80">
+                {{ t('themeStyle.folder') }}
+              </p>
+              <p v-if="folderBgPath" class="mt-1 truncate text-xs text-black/50 dark:text-white/50">
+                {{ folderBgPath }}
+              </p>
+              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+                {{ t('themeStyle.noImageSelected') }}
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <TxButton
+                variant="bare"
+                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                @click="selectBackgroundFolder"
+              >
+                {{ t('themeStyle.selectFolder') }}
+              </TxButton>
+              <TxButton
+                v-if="folderBgPath"
+                variant="bare"
+                class="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+                @click="clearBackgroundFolder"
+              >
+                {{ t('themeStyle.clearFolder') }}
+              </TxButton>
             </div>
           </div>
 
+          <div v-if="folderBgPath" class="mt-4 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-black/60 dark:text-white/60">{{
+                t('themeStyle.rotationInterval')
+              }}</span>
+              <span class="font-medium text-black/80 dark:text-white/80">
+                {{ folderIntervalMinutes }}{{ t('themeStyle.minutes') }}
+              </span>
+            </div>
+            <TxSlider v-model="folderIntervalMinutes" :min="5" :max="240" :step="5" />
+            <p class="text-xs text-black/40 dark:text-white/40">
+              {{ t('themeStyle.folderRandomHint') }}
+            </p>
+          </div>
+        </div>
+
+        <div v-if="isDesktopSource" class="theme-style-wallpaper-panel">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex-1">
+              <p class="text-sm font-medium text-black/80 dark:text-white/80">
+                {{ t('themeStyle.desktopWallpaper') }}
+              </p>
+              <p
+                v-if="desktopBgPath"
+                class="mt-1 truncate text-xs text-black/50 dark:text-white/50"
+              >
+                {{ desktopBgPath }}
+              </p>
+              <p v-else class="mt-1 text-xs text-black/40 dark:text-white/40">
+                {{ t('themeStyle.noImageSelected') }}
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <TxButton
+                variant="bare"
+                class="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition hover:bg-primary/20"
+                @click="refreshDesktopWallpaper"
+              >
+                {{ t('themeStyle.refreshDesktopWallpaper') }}
+              </TxButton>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="wallpaperAdjustable" class="theme-style-wallpaper-panel">
+          <div class="space-y-3">
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.blur') }}</span>
+                <span class="font-medium text-black/80 dark:text-white/80">{{ bgBlur }}px</span>
+              </div>
+              <TxSlider v-model="bgBlur" :min="0" :max="20" :step="1" />
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.opacity') }}</span>
+                <span class="font-medium text-black/80 dark:text-white/80">{{ bgOpacity }}%</span>
+              </div>
+              <TxSlider v-model="bgOpacity" :min="10" :max="100" :step="1" />
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-black/60 dark:text-white/60">{{
+                  t('themeStyle.brightness')
+                }}</span>
+                <span class="font-medium text-black/80 dark:text-white/80"
+                  >{{ bgBrightness }}%</span
+                >
+              </div>
+              <TxSlider v-model="bgBrightness" :min="50" :max="150" :step="1" />
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.contrast') }}</span>
+                <span class="font-medium text-black/80 dark:text-white/80">{{ bgContrast }}%</span>
+              </div>
+              <TxSlider v-model="bgContrast" :min="50" :max="150" :step="1" />
+            </div>
+            <div>
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-black/60 dark:text-white/60">{{ t('themeStyle.saturate') }}</span>
+                <span class="font-medium text-black/80 dark:text-white/80">{{ bgSaturate }}%</span>
+              </div>
+              <TxSlider v-model="bgSaturate" :min="50" :max="150" :step="1" />
+            </div>
+          </div>
+        </div>
+
+        <template v-if="wallpaperLibrarySupported">
           <TuffBlockSwitch
             v-model="libraryEnabled"
             :title="t('themeStyle.copyToLibrary')"
@@ -821,28 +722,8 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
                   <span class="i-carbon-information text-xs" />
                 </TxButton>
               </TxTooltip>
-              <TxTooltip
-                v-if="!libraryEnabled"
-                :content="t('themeStyle.syncRequiresLibrary')"
-                :anchor="{ placement: 'top', showArrow: true }"
-              >
-                <TxButton
-                  variant="bare"
-                  native-type="button"
-                  class="theme-style-hint-btn theme-style-hint-btn--warning"
-                  @click.stop
-                >
-                  <span class="i-carbon-warning text-xs" />
-                </TxButton>
-              </TxTooltip>
             </template>
           </TuffBlockSwitch>
-          <TuffBlockSwitch
-            v-model="syncEnabled"
-            :title="t('themeStyle.syncToCloud')"
-            :description="t('themeStyle.syncToCloudDesc')"
-            :disabled="!libraryEnabled"
-          />
         </template>
       </TuffGroupBlock>
 
@@ -1015,8 +896,19 @@ const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSet
   color: var(--tx-text-color-secondary);
 }
 
-.theme-style-hint-btn--warning {
-  color: var(--tx-color-warning, #f59e0b);
+.theme-style-wallpaper-panel {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-fill-color) 82%, transparent);
+}
+
+.theme-style-wallpaper-preview {
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--tx-border-color);
 }
 
 .ThemeStyle-WindowLoadingMask {
