@@ -13,6 +13,40 @@
 
 ## 2026-05-20
 
+### fix(core-app): route MetaOverlay actions through renderer action pipeline
+
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.test.ts`
+  - MetaOverlay built-in and item actions now bridge through `CoreBoxEvents.metaOverlay.itemAction` / retained legacy alias so the renderer action pipeline owns clipboard, reveal, pin, flow-transfer, and item fallback behavior.
+  - Plugin actions still use plugin `metaOverlay.actionExecuted` canonical + legacy notification channels.
+  - CoreBox stale-session auto-clear now hides MetaOverlay as part of visibility reset.
+  - Validation: focused CoreBox main/renderer hook tests cover MetaOverlay action bridging, copy-title/toggle-pin routing, and autoClear MetaOverlay hide behavior.
+
+### test(nexus): pin retired intelligence endpoints
+
+- `apps/nexus/test/api/admin/intelligence-compat-retired.api.test.ts`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added focused API contract coverage for current production AI compatibility retirement paths.
+  - Existing `intelligence-lab/*` and old `intelligence-agent/orchestrator/*` endpoints now have tests asserting HTTP `410` with migration targets instead of a consumable fake-success payload.
+  - Historical `retired-ai-app` `livechat/random` / prompt detail / catch-all references remain archive evidence only and are not restored into the live tree.
+  - Validation: `pnpm -C "apps/nexus" exec vitest run "test/api/admin/intelligence-compat-retired.api.test.ts" --reporter dot` passed.
+
+### fix(core-app): prefer system safeStorage for secure store
+
+- `apps/core-app/src/main/utils/secure-store.ts`
+- `apps/core-app/src/main/utils/secure-store.test.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - CoreApp secure-store now prefers Electron `safeStorage` when system encryption is available and keeps `local-secret` as the degraded fallback.
+  - Shared transport health types now include `safe-storage`, matching the main-process health response and plugin/app SDK contract.
+  - Validation: `pnpm -C "apps/core-app" exec vitest run "src/main/utils/secure-store.test.ts"` and `pnpm -C "apps/core-app" run typecheck:node` passed.
+
 ### fix(core-app): hide CoreBox before app launch handoff
 
 - `packages/utils/transport/events/types/core-box.ts`
