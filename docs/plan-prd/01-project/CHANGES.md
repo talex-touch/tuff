@@ -13,6 +13,22 @@
 
 ## 2026-05-20
 
+### fix(core-app): hide CoreBox before app launch handoff
+
+- `packages/utils/transport/events/types/core-box.ts`
+- `packages/utils/transport/events/core-box-retained.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/{ipc,manager,window}.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `packages/utils/plugin/sdk/box-sdk.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.test.ts`
+- `packages/utils/__tests__/plugin-box-sdk.test.ts`
+  - Added an optional typed CoreBox hide payload with `immediate` / `reason`, while keeping legacy no-payload hide calls compatible.
+  - Background App Provider launches now await `CoreBoxEvents.ui.hide` with `{ immediate: true, reason: 'execute' }` before dispatching `CoreBoxEvents.item.execute`, preventing slow OS app handoff from leaving the visible launcher frozen.
+  - `WindowManager.hide({ immediate: true })` bypasses the normal delayed hide timer and hides the BrowserWindow synchronously; default hide behavior remains delayed/offscreen for existing flows.
+  - Validation: focused CoreBox renderer/manager and plugin Box SDK tests passed; full CoreApp web/node typecheck still reports existing TuffEx TS6307 include-boundary debt unrelated to this change.
+
 ### docs(plan): add automation compat audit
 
 - `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md`

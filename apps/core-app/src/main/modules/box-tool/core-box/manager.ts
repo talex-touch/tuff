@@ -38,6 +38,8 @@ interface ExpandOptions {
 interface TriggerOptions {
   /** Whether the trigger was initiated by a keyboard shortcut */
   triggeredByShortcut?: boolean
+  /** Hide the CoreBox window synchronously before continuing follow-up work. */
+  immediate?: boolean
 }
 
 export class CoreBoxManager {
@@ -161,7 +163,7 @@ export class CoreBoxManager {
         this._isCollapsed = true
         this._expandState = {}
       }
-      windowManager.hide()
+      windowManager.hide({ immediate: options?.immediate === true })
       this.pollingService.clearGlobalPressure(COREBOX_PRESSURE_REASON)
     }
   }

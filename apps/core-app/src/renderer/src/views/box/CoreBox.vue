@@ -462,7 +462,7 @@ const actionPanel = useActionPanel({
   openFlowSelector: detach.openFlowSelector,
   refreshSearch: handleSearchImmediate,
   navigate: (path) => {
-    void transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+    void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     void router.push(path).catch(() => {})
   }
 })
@@ -613,7 +613,7 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
   }
 
   if (actionId === 'open-file-index-settings') {
-    void transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+    void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     await router.push({ path: '/setting', query: { section: 'file-index' } }).catch(() => {})
   }
 }

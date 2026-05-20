@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
     type: 'corebox' as 'corebox' | 'division-box',
     divisionBox: null
   },
+  backgroundAppLaunch: false,
   boxItems: [] as TuffItem[],
   dispatchEvent: vi.fn()
 }))
@@ -103,7 +104,7 @@ vi.mock('../transport/input-transport', () => ({
 }))
 
 vi.mock('./app-launch-item', () => ({
-  isBackgroundAppLaunchItem: () => false
+  isBackgroundAppLaunchItem: () => state.backgroundAppLaunch
 }))
 
 vi.mock('./useResize', () => ({
@@ -168,6 +169,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     state.boxItems = []
     state.windowState.type = 'corebox'
     state.windowState.divisionBox = null
+    state.backgroundAppLaunch = false
     state.appSetting.recommendation.enabled = true
     state.send.mockReset()
     state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
@@ -238,6 +240,32 @@ describe('useSearch CoreBox reopen behavior', () => {
         query: { text: 'aaa', inputs: [] }
       }
     )
+  })
+
+  it('hides CoreBox immediately before dispatching background app launch', async () => {
+    state.backgroundAppLaunch = true
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    const appItem = {
+      id: 'app-1',
+      kind: 'app',
+      source: { id: 'app-provider', type: 'application' },
+      render: { basic: { title: 'Slow App' } },
+      meta: { app: { path: '/Applications/Slow.app' } }
+    } as TuffItem
+
+    await hook.handleExecute(appItem)
+    await flushPromises()
+
+    expect(state.send).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ toEventName: expect.any(Function) }),
+      { immediate: true, reason: 'execute' }
+    )
+    expect(String(state.send.mock.calls[0][0])).toBe('core-box:ui:hide')
+    expect(String(state.send.mock.calls[1][0])).toBe('core-box:execute')
   })
 
   it('does not invalidate an in-flight search when duplicate query is skipped', async () => {

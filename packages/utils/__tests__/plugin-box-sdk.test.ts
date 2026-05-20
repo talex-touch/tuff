@@ -27,7 +27,7 @@ describe('Plugin Box SDK', () => {
     await box.expand({ length: 3 })
     await box.shrink()
 
-    expect(mocks.send).toHaveBeenNthCalledWith(1, CoreBoxEvents.ui.hide)
+    expect(mocks.send).toHaveBeenNthCalledWith(1, CoreBoxEvents.ui.hide, undefined)
     expect(mocks.send).toHaveBeenNthCalledWith(2, CoreBoxEvents.ui.show)
     expect(mocks.send).toHaveBeenNthCalledWith(
       3,

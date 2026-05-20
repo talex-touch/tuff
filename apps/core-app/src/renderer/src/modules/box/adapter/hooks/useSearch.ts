@@ -634,7 +634,9 @@ export function useSearch(
         ? JSON.parse(JSON.stringify(searchResult.value))
         : null
 
-      void transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+      await transport
+        .send(CoreBoxEvents.ui.hide, { immediate: true, reason: 'execute' })
+        .catch(() => {})
       void transport
         .send(
           CoreBoxEvents.item.execute,
@@ -655,7 +657,7 @@ export function useSearch(
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
       searchVal.value = ''
-      await transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+      await transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     }
 
     if (isPluginFeature) {
@@ -841,7 +843,7 @@ export function useSearch(
     } else if (searchVal.value) {
       searchVal.value = ''
     } else {
-      transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+      transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     }
   }
 
