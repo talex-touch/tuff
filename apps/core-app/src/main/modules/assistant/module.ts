@@ -8,7 +8,10 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
-import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
+import type {
+  AssistantRuntimeConfig,
+  AssistantScreenshotTranslateResponse
+} from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -23,7 +26,12 @@ import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import {
+  normalizeImageBase64Payload,
+  translateImageBase64
+} from '../box-tool/core-box/image-translate'
 import { windowManager } from '../box-tool/core-box/window'
+import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 interface FloatingBallPosition {
@@ -55,8 +63,7 @@ const VOICE_PANEL_WIDTH = 420
 const VOICE_PANEL_HEIGHT = 260
 const ASSISTANT_DEFAULT_NAME = '阿洛 aler'
 const ASSISTANT_DEFAULT_ID = 'aler'
-const ASSISTANT_EXPERIMENT_DEFAULT_ENABLED = false
-const ASSISTANT_EXPERIMENT_ENV_KEY = 'TUFF_ENABLE_ASSISTANT_EXPERIMENT'
+const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
@@ -69,6 +76,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function waitForAssistantWindowHidden(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 160))
 }
 
 export class AssistantModule extends BaseModule {
@@ -84,13 +95,9 @@ export class AssistantModule extends BaseModule {
   private positionSaveTimer: NodeJS.Timeout | null = null
 
   constructor() {
-    super(
-      AssistantModule.key,
-      {
-        create: false
-      },
-      ASSISTANT_EXPERIMENT_ENV_KEY
-    )
+    super(AssistantModule.key, {
+      create: false
+    })
   }
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
@@ -171,6 +178,12 @@ export class AssistantModule extends BaseModule {
         return await this.handleVoiceSubmit(payload?.text)
       })
     )
+
+    this.transportDisposers.push(
+      this.transport.on(AssistantEvents.voice.translateScreenshot, async (payload) => {
+        return await this.handleScreenshotTranslate(payload?.targetLang)
+      })
+    )
   }
 
   private watchAppSetting(): void {
@@ -203,7 +216,7 @@ export class AssistantModule extends BaseModule {
       setting.assistant = {
         name: ASSISTANT_DEFAULT_NAME,
         identifier: ASSISTANT_DEFAULT_ID,
-        enabled: ASSISTANT_EXPERIMENT_DEFAULT_ENABLED
+        enabled: ASSISTANT_DEFAULT_ENABLED
       }
       changed = true
     } else {
@@ -219,7 +232,7 @@ export class AssistantModule extends BaseModule {
         changed = true
       }
       if (typeof setting.assistant.enabled !== 'boolean') {
-        setting.assistant.enabled = ASSISTANT_EXPERIMENT_DEFAULT_ENABLED
+        setting.assistant.enabled = ASSISTANT_DEFAULT_ENABLED
         changed = true
       }
     }
@@ -316,7 +329,7 @@ export class AssistantModule extends BaseModule {
     return changed
   }
 
-  private isAssistantExperimentEnabled(setting: AppSetting): boolean {
+  private isAssistantEnabled(setting: AppSetting): boolean {
     return setting.assistant?.enabled === true
   }
 
@@ -360,7 +373,7 @@ export class AssistantModule extends BaseModule {
 
   private buildRuntimeConfig(setting: AppSetting): AssistantRuntimeConfig {
     const voiceWake = this.getVoiceWakeSetting(setting)
-    const assistantEnabled = this.isAssistantExperimentEnabled(setting)
+    const assistantEnabled = this.isAssistantEnabled(setting)
     const assistantName =
       typeof setting.assistant?.name === 'string' && setting.assistant.name.trim()
         ? setting.assistant.name
@@ -377,7 +390,7 @@ export class AssistantModule extends BaseModule {
   }
 
   private async applySettingSnapshot(setting: AppSetting): Promise<void> {
-    if (!this.isAssistantExperimentEnabled(setting)) {
+    if (!this.isAssistantEnabled(setting)) {
       this.hideVoicePanel()
       this.destroyVoicePanelWindow()
       this.destroyFloatingBallWindow()
@@ -533,7 +546,7 @@ export class AssistantModule extends BaseModule {
 
   private async showVoicePanel(source: string): Promise<void> {
     const setting = this.readAppSetting()
-    if (!this.isAssistantExperimentEnabled(setting)) {
+    if (!this.isAssistantEnabled(setting)) {
       return
     }
 
@@ -593,9 +606,37 @@ export class AssistantModule extends BaseModule {
     this.voicePanelWindow.window.hide()
   }
 
+  private hideFloatingBall(): void {
+    if (!this.floatingBallWindow || this.floatingBallWindow.window.isDestroyed()) {
+      return
+    }
+    this.floatingBallWindow.window.hide()
+  }
+
+  private restoreAssistantWindows(voiceWasVisible: boolean, floatingWasVisible: boolean): void {
+    if (
+      floatingWasVisible &&
+      this.floatingBallWindow &&
+      !this.floatingBallWindow.window.isDestroyed() &&
+      !this.floatingBallWindow.window.isVisible()
+    ) {
+      this.floatingBallWindow.window.showInactive()
+    }
+
+    if (
+      voiceWasVisible &&
+      this.voicePanelWindow &&
+      !this.voicePanelWindow.window.isDestroyed() &&
+      !this.voicePanelWindow.window.isVisible()
+    ) {
+      this.voicePanelWindow.window.show()
+      this.voicePanelWindow.window.focus()
+    }
+  }
+
   private async handleVoiceSubmit(rawText?: string): Promise<{ accepted: boolean }> {
     const setting = this.readAppSetting()
-    if (!this.isAssistantExperimentEnabled(setting)) {
+    if (!this.isAssistantEnabled(setting)) {
       return { accepted: false }
     }
 
@@ -627,6 +668,80 @@ export class AssistantModule extends BaseModule {
     }, 120)
 
     return { accepted: true }
+  }
+
+  private async handleScreenshotTranslate(
+    targetLang?: string
+  ): Promise<AssistantScreenshotTranslateResponse> {
+    const setting = this.readAppSetting()
+    if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
+      return {
+        success: false,
+        code: 'ASSISTANT_DISABLED',
+        error: 'Assistant floating ball is disabled.'
+      }
+    }
+
+    const voiceWasVisible =
+      Boolean(this.voicePanelWindow) &&
+      !this.voicePanelWindow!.window.isDestroyed() &&
+      this.voicePanelWindow!.window.isVisible()
+    const floatingWasVisible =
+      Boolean(this.floatingBallWindow) &&
+      !this.floatingBallWindow!.window.isDestroyed() &&
+      this.floatingBallWindow!.window.isVisible()
+
+    this.hideVoicePanel()
+    this.hideFloatingBall()
+    await waitForAssistantWindowHidden()
+
+    let imageBase64: string | null = null
+    try {
+      const screenshot = await getNativeScreenshotService().capture({
+        target: 'cursor-display',
+        output: 'data-url',
+        writeClipboard: false
+      })
+      imageBase64 =
+        typeof screenshot.dataUrl === 'string'
+          ? normalizeImageBase64Payload(screenshot.dataUrl)
+          : null
+    } catch (error) {
+      assistantLog.warn('Assistant screenshot capture failed', { error })
+      this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
+      return {
+        success: false,
+        code: 'SCREENSHOT_UNAVAILABLE',
+        error: error instanceof Error ? error.message : 'Screenshot capture failed.'
+      }
+    }
+
+    this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
+    if (!imageBase64) {
+      return {
+        success: false,
+        code: 'IMAGE_UNAVAILABLE',
+        error: 'Screenshot image payload is unavailable.'
+      }
+    }
+
+    const result = await translateImageBase64(imageBase64, targetLang || 'zh', {
+      openPinWindow: true
+    })
+    if (!result.success) {
+      return {
+        success: false,
+        code: result.code === 'SCENE_UNAVAILABLE' ? 'SCENE_UNAVAILABLE' : 'IMAGE_UNAVAILABLE',
+        error: result.error
+      }
+    }
+
+    return {
+      success: true,
+      translatedImageBase64: result.translatedImageBase64,
+      sourceText: result.sourceText,
+      targetText: result.targetText
+    }
   }
 
   private destroyFloatingBallWindow(): void {

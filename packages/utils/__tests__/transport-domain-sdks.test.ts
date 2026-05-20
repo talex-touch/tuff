@@ -117,6 +117,14 @@ describe('transport domain sdk mappings', () => {
       module: 'voice-panel',
       action: 'submit',
     })
+    expect(AssistantEvents.voice.translateScreenshot.toEventName()).toBe(
+      'assistant:voice-panel:translate-screenshot',
+    )
+    expect(AssistantEvents.voice.translateScreenshot).toMatchObject({
+      namespace: 'assistant',
+      module: 'voice-panel',
+      action: 'translate-screenshot',
+    })
   })
 
   it('plugin widget events use typed transport metadata without changing event names', () => {

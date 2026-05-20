@@ -1,5 +1,8 @@
 <script lang="ts" setup name="VoicePanel">
-import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
+import type {
+  AssistantRuntimeConfig,
+  AssistantScreenshotTranslateErrorCode
+} from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { useI18n } from 'vue-i18n'
@@ -23,6 +26,13 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
+const SCREENSHOT_TRANSLATE_ERROR_KEYS: Record<AssistantScreenshotTranslateErrorCode, string> = {
+  ASSISTANT_DISABLED: 'assistant.voicePanel.screenshotTranslateAssistantDisabled',
+  SCREENSHOT_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslatePermissionDenied',
+  IMAGE_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateImageUnavailable',
+  SCENE_UNAVAILABLE: 'assistant.voicePanel.screenshotTranslateProviderUnavailable'
+}
+
 const transport = useTuffTransport()
 const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
@@ -37,9 +47,11 @@ const runtimeConfig = ref<AssistantRuntimeConfig>({
 
 const listening = ref(false)
 const submitting = ref(false)
+const translatingScreenshot = ref(false)
 const inputText = ref('')
 const interimText = ref('')
 const errorMessage = ref('')
+const statusMessage = ref('')
 const sourceText = ref('')
 
 let recognition: SpeechRecognitionLike | null = null
@@ -51,6 +63,13 @@ const mergedText = computed(() => {
   const finalText = inputText.value.trim()
   const interim = interimText.value.trim()
   return interim ? `${finalText} ${interim}`.trim() : finalText
+})
+const voiceWakeEnabled = computed(() => runtimeConfig.value.enabled)
+const panelStatusText = computed(() => {
+  if (voiceWakeEnabled.value) {
+    return listening.value ? t('assistant.voicePanel.listening') : t('assistant.voicePanel.waiting')
+  }
+  return t('assistant.voicePanel.textOnly')
 })
 
 function resolveSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
@@ -102,6 +121,10 @@ function scheduleRestart(): void {
 }
 
 function startRecognition(): void {
+  if (!voiceWakeEnabled.value) {
+    errorMessage.value = t('assistant.voicePanel.voiceWakeDisabled')
+    return
+  }
   if (!keepListening || recognition) return
 
   const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
@@ -166,14 +189,29 @@ function startRecognition(): void {
   }
 }
 
+function formatScreenshotTranslateError(
+  code?: AssistantScreenshotTranslateErrorCode,
+  fallback?: string
+): string {
+  if (code) {
+    return t(SCREENSHOT_TRANSLATE_ERROR_KEYS[code])
+  }
+  return fallback || t('assistant.voicePanel.screenshotTranslateFailed')
+}
+
 async function handlePanelOpened(payload?: { source?: string }): Promise<void> {
   sourceText.value = payload?.source || ''
   inputText.value = ''
   interimText.value = ''
   errorMessage.value = ''
+  statusMessage.value = ''
   await loadRuntimeConfig()
-  keepListening = true
-  startRecognition()
+  keepListening = voiceWakeEnabled.value
+  if (keepListening) {
+    startRecognition()
+  } else {
+    stopRecognition()
+  }
 }
 
 async function submitText(): Promise<void> {
@@ -201,6 +239,33 @@ async function submitText(): Promise<void> {
     errorMessage.value = error instanceof Error ? error.message : String(error)
   } finally {
     submitting.value = false
+  }
+}
+
+async function translateScreenshot(): Promise<void> {
+  if (translatingScreenshot.value) return
+
+  keepListening = false
+  stopRecognition()
+  translatingScreenshot.value = true
+  errorMessage.value = ''
+  statusMessage.value = t('assistant.voicePanel.screenshotTranslating')
+
+  try {
+    const response = await transport.send(AssistantEvents.voice.translateScreenshot, {
+      targetLang: 'zh'
+    })
+    if (!response?.success) {
+      statusMessage.value = ''
+      errorMessage.value = formatScreenshotTranslateError(response?.code, response?.error)
+      return
+    }
+    statusMessage.value = t('assistant.voicePanel.screenshotTranslateReady')
+  } catch (error) {
+    statusMessage.value = ''
+    errorMessage.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    translatingScreenshot.value = false
   }
 }
 
@@ -232,9 +297,7 @@ onBeforeUnmount(() => {
         <div class="title-wrap">
           <p class="title">{{ runtimeConfig.assistantName }}</p>
           <p class="subtitle">
-            {{
-              listening ? t('assistant.voicePanel.listening') : t('assistant.voicePanel.waiting')
-            }}
+            {{ panelStatusText }}
             <span v-if="sourceText"> · {{ sourceText }}</span>
           </p>
         </div>
@@ -250,11 +313,29 @@ onBeforeUnmount(() => {
           :placeholder="t('assistant.voicePanel.placeholder')"
         />
         <p v-if="interimText" class="interim-text">{{ interimText }}</p>
+        <p v-if="statusMessage" class="status-text">{{ statusMessage }}</p>
         <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
       </main>
 
       <footer class="voice-panel-footer">
-        <button class="secondary-btn" type="button" @click="startRecognition">
+        <button
+          class="secondary-btn"
+          type="button"
+          :disabled="translatingScreenshot"
+          @click="translateScreenshot"
+        >
+          {{
+            translatingScreenshot
+              ? t('assistant.voicePanel.screenshotTranslatingShort')
+              : t('assistant.voicePanel.translateScreenshot')
+          }}
+        </button>
+        <button
+          class="secondary-btn"
+          type="button"
+          :disabled="!voiceWakeEnabled"
+          @click="startRecognition"
+        >
           {{
             listening
               ? t('assistant.voicePanel.listeningAction')
@@ -369,11 +450,18 @@ onBeforeUnmount(() => {
   color: #dc2626;
 }
 
+.status-text {
+  margin: 0;
+  font-size: 12px;
+  color: #047857;
+}
+
 .voice-panel-footer {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .secondary-btn,
@@ -396,6 +484,7 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.secondary-btn:disabled,
 .primary-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;

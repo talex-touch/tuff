@@ -24,6 +24,25 @@ export interface AssistantVoiceSubmitPayload {
   source?: 'voice' | 'manual'
 }
 
+export type AssistantScreenshotTranslateErrorCode =
+  | 'ASSISTANT_DISABLED'
+  | 'SCREENSHOT_UNAVAILABLE'
+  | 'IMAGE_UNAVAILABLE'
+  | 'SCENE_UNAVAILABLE'
+
+export interface AssistantScreenshotTranslatePayload {
+  targetLang?: string
+}
+
+export interface AssistantScreenshotTranslateResponse {
+  success: boolean
+  translatedImageBase64?: string
+  sourceText?: string
+  targetText?: string
+  error?: string
+  code?: AssistantScreenshotTranslateErrorCode
+}
+
 export const AssistantEvents = {
   floatingBall: {
     getRuntimeConfig: defineEvent('assistant')
@@ -51,6 +70,10 @@ export const AssistantEvents = {
     submitText: defineEvent('assistant')
       .module('voice-panel')
       .event('submit')
-      .define<AssistantVoiceSubmitPayload, { accepted: boolean }>()
+      .define<AssistantVoiceSubmitPayload, { accepted: boolean }>(),
+    translateScreenshot: defineEvent('assistant')
+      .module('voice-panel')
+      .event('translate-screenshot')
+      .define<AssistantScreenshotTranslatePayload | void, AssistantScreenshotTranslateResponse>()
   }
 } as const
