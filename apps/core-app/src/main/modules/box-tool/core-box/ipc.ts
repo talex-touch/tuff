@@ -3,6 +3,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   ActivationState,
   AllowClipboardRequest,
+  CoreBoxHideRequest,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
@@ -207,16 +208,12 @@ export class IpcManager {
       })
     )
 
-    this.transportDisposers.push(
-      transport.on(CoreBoxEvents.ui.hide, () => {
-        coreBoxManager.trigger(false)
-      })
-    )
-    this.transportDisposers.push(
-      transport.on(CoreBoxRetainedEvents.legacy.hide, () => {
-        coreBoxManager.trigger(false)
-      })
-    )
+    const handleHide = (payload?: CoreBoxHideRequest | void) => {
+      coreBoxManager.trigger(false, { immediate: payload?.immediate === true })
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.ui.hide, handleHide))
+    this.transportDisposers.push(transport.on(CoreBoxRetainedEvents.legacy.hide, handleHide))
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.expand, (payload) => {

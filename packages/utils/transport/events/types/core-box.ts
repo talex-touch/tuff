@@ -81,6 +81,13 @@ export interface FocusWindowResponse {
   focused: boolean
 }
 
+export interface CoreBoxHideRequest {
+  /** Hide BrowserWindow synchronously instead of waiting for the normal delayed hide path. */
+  immediate?: boolean
+  /** Optional debug/telemetry reason for the hide request. */
+  reason?: 'execute' | 'shortcut' | 'manual' | string
+}
+
 export interface CoreBoxInputVisibilityResponse {
   hidden?: boolean
   shown?: boolean

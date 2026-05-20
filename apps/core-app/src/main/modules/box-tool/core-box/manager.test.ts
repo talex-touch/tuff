@@ -141,6 +141,14 @@ describe('CoreBoxManager polling pressure', () => {
     coreBoxManager.trigger(false)
 
     expect(mocks.clearGlobalPressure).toHaveBeenCalledWith('corebox-active')
-    expect(mocks.hide).toHaveBeenCalled()
+    expect(mocks.hide).toHaveBeenCalledWith({ immediate: false })
+  })
+
+  it('passes immediate hide option to WindowManager', async () => {
+    const { coreBoxManager } = await import('./manager')
+
+    coreBoxManager.trigger(false, { immediate: true })
+
+    expect(mocks.hide).toHaveBeenCalledWith({ immediate: true })
   })
 })

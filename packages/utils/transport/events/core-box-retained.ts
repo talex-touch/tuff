@@ -7,6 +7,7 @@ import type {
   CoreBoxInputVisibilityResponse,
   CoreBoxGetBoundsResponse,
   CoreBoxForwardKeyEvent,
+  CoreBoxHideRequest,
   CoreBoxSetHeightRequest,
   CoreBoxSetHeightResponse,
   CoreBoxSetPositionOffsetRequest,
@@ -161,7 +162,7 @@ export const CoreBoxRetainedEvents = {
     hide: defineEvent('core-box')
       .module('ui')
       .event('hide')
-      .define<void, void>(),
+      .define<CoreBoxHideRequest | void, void>(),
     expand: defineEvent('core-box')
       .module('ui')
       .event('expand')
@@ -300,7 +301,7 @@ export const CoreBoxRetainedEvents = {
       'meta-overlay:flow-transfer',
     ),
     show: defineRawEvent<void, void>('core-box:show'),
-    hide: defineRawEvent<void, void>('core-box:hide'),
+    hide: defineRawEvent<CoreBoxHideRequest | void, void>('core-box:hide'),
     expand: defineRawEvent<ExpandOptions | number, void>('core-box:expand'),
     focusWindow: defineRawEvent<void, FocusWindowResponse>('core-box:focus-window'),
     forwardKeyEvent: defineRawEvent<CoreBoxForwardKeyEvent, void>(

@@ -689,7 +689,7 @@ export class WindowManager {
     }, 100)
   }
 
-  public hide(): void {
+  public hide(options: { immediate?: boolean } = {}): void {
     const window = this.current
     if (!window) return
     if (window.window.isDestroyed()) return
@@ -700,6 +700,11 @@ export class WindowManager {
       show: false
     })
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_HIDDEN, new CoreBoxWindowHiddenEvent())
+
+    if (options.immediate === true) {
+      window.window.hide()
+      return
+    }
 
     if (process.platform !== 'darwin') {
       try {

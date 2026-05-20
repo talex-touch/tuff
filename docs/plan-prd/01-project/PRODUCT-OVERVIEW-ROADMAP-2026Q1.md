@@ -60,7 +60,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 插件 shell capability 诊断统一；`touch-snipaste` fail-closed diagnostics 与 `touch-window-presets` non-mutating permission check 是下一轮首切。
 - 动态执行边界治理：PreviewSDK 算式/单位换算已收口，widget runtime sandbox 继续进入审计/回归清单。
 - Transport Wave A retained alias/hard-cut 后续批次。
-- CoreApp 启动异步化真实设备 benchmark。
+- CoreApp 启动异步化真实设备 benchmark；CoreBox app launch handoff 已先补 immediate hide，避免慢启动期间 launcher 可见卡死。
 
 ### 2.5.0 - AI 桌面入口收口
 

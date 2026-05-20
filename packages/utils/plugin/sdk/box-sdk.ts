@@ -234,7 +234,7 @@ export function createBoxSDK(channel: PluginChannelClient): BoxSDK {
 
   return {
     hide(): void {
-      transport.send(CoreBoxEvents.ui.hide).catch((error: any) => {
+      transport.send(CoreBoxEvents.ui.hide, undefined).catch((error: any) => {
         console.error('[Box SDK] Failed to hide CoreBox:', error)
       })
     },
