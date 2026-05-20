@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-20
+> 更新时间：2026-05-21
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -16,9 +16,9 @@
 ## 当前状态快照
 
 - 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前 live tree 已进入 `2.4.11-beta.2`。
-- 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。CoreBox app launch handoff 已补 immediate hide，避免慢启动期间 launcher 可见卡死。
+- 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。CoreBox app launch handoff 已补 immediate hide，避免慢启动期间 launcher 可见卡死；AI compat 生产退役端点已钉住 HTTP `410` 与迁移目标，不再返回可消费占位 payload。
 - 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR；Workflow/Skills/Automation 保持 Beta。
-- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，但 `touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、secret backend、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因仓库 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
+- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，本轮已补 CoreBox app launch immediate-hide、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint 410 合同测试；2026-05-21 已继续推进 Assistant 截屏翻译 typed event、推荐上下文来源开关、可选 AI embedding/rerank fail-open 测试、壁纸个性化、设置页资产兼容提示、TuffEx 基础组件文档覆盖与 Nexus storage governance telemetry；`touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因仓库 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
 
 ## 高价值专题入口
 
@@ -46,7 +46,8 @@
 - 2.5.3 本地知识方向：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 作为增强项，不把向量数据库作为 MVP 第一优先级。
 - 2.5.5 本地模型方向：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录。
 - 2.5.8 ASR 方向：本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto`；TTS 不进入 Stable。
-- App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，后续继续补 Browser Data、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo 已完成首切，后续转为 per-SDK / per-component 深化；不包含更新系统 Nexus Hard-Cut。
+- Nexus 数据治理方向：共享 governance event/config foundation、`/api/dashboard/governance/analytics` 聚合 API、search/visit telemetry bridge 与后台 analytics cockpit 已覆盖脱敏插件下载/调用、搜索上下文、上传健康、图片/发布资产 storage read/write telemetry、存储渠道策略评估、通知渠道策略、Provider quota 与 provider token/request 消耗；后续继续补真实浏览器证据、通知投递 adapter、OSS/R2/S3/local 执行器、生产 D1 migration/backfill 和更完整运营大屏。
+- App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，后续继续补 Browser Data、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
 - 插件发布当前切片：`touch-intelligence` 已补齐 Nexus 发布资产并修复 1.0.0 运行时加载源码 TS 的问题；1.0.1 包使用 bundled prelude 与 `@talex-touch/tuff-intelligence/client` CJS 入口，可重新发布到 Nexus；公共 npm 子包补发仍等待具备 `@talex-touch` publish 权限的 `NPM_TOKEN`。
 
 ## 归档与降权
