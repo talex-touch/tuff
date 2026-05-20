@@ -117,6 +117,57 @@ export interface GovernanceAnalyticsOptions {
   topLimit?: number
 }
 
+export type StorageGovernanceAction = 'storage.write' | 'storage.read' | 'storage.delete'
+
+export interface RecordStorageChannelUsageInput {
+  action: StorageGovernanceAction
+  actorId?: unknown
+  channel: unknown
+  provider?: unknown
+  resourceType?: unknown
+  resourceId?: unknown
+  unit?: unknown
+  quantity?: unknown
+  metadata?: unknown
+  occurredAt?: unknown
+}
+
+export interface StoragePolicyEvaluationOptions {
+  days?: number
+  limit?: number
+}
+
+export interface StoragePolicyEvaluation {
+  policyId: string
+  name: string
+  channel: string
+  provider: string | null
+  enabled: boolean
+  days: number
+  status: 'ok' | 'warning' | 'blocked' | 'disabled'
+  reasons: string[]
+  usage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    writes: number
+    reads: number
+    deletes: number
+  }
+  limits: {
+    maxBytes: number | null
+    trafficBytes: number | null
+    maxOperations: number | null
+    alertBytes: number | null
+    warningThreshold: number | null
+  }
+  utilization: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+  }
+}
+
 interface GovernanceEventRow {
   id: string
   scope: string
@@ -1182,6 +1233,171 @@ function readLimitNumber(limits: Record<string, unknown> | null, keys: string[])
       return value
   }
   return null
+}
+
+function roundUsageRatio(used: number, limit: number | null): number | null {
+  if (limit == null || limit <= 0)
+    return null
+  return Math.round((used / limit) * 10000) / 100
+}
+
+function readStorageOperationLimit(limits: Record<string, unknown> | null, days: number): number | null {
+  const windowLimit = readLimitNumber(limits, ['maxOperations', 'operationLimit', 'maxOperationsPerWindow'])
+  if (windowLimit != null)
+    return windowLimit
+
+  const dailyLimit = readLimitNumber(limits, ['maxOperationsPerDay', 'dailyOperations'])
+  return dailyLimit == null ? null : dailyLimit * days
+}
+
+function resolvePolicyWarningPercent(policy: PlatformGovernanceConfig): number {
+  return policy.warningThreshold ?? readLimitNumber(policy.limits, ['warningThreshold', 'warningPercent']) ?? 80
+}
+
+export async function recordStorageChannelUsage(
+  event: H3Event | undefined,
+  input: RecordStorageChannelUsageInput,
+): Promise<PlatformGovernanceEvent> {
+  return await recordPlatformGovernanceEvent(event, {
+    scope: 'storage',
+    action: input.action,
+    actorId: input.actorId,
+    resourceType: input.resourceType ?? 'object',
+    resourceId: input.resourceId,
+    channel: input.channel,
+    unit: input.unit ?? 'byte',
+    quantity: input.quantity,
+    metadata: {
+      ...(isPlainObject(input.metadata) ? input.metadata : {}),
+      provider: normalizeString(input.provider, 120),
+    },
+    occurredAt: input.occurredAt,
+  })
+}
+
+export async function evaluateStorageChannelPolicy(
+  event: H3Event | undefined,
+  policy: PlatformGovernanceConfig,
+  options: StoragePolicyEvaluationOptions = {},
+): Promise<StoragePolicyEvaluation> {
+  const days = Number.isFinite(options.days) && options.days && options.days > 0
+    ? Math.min(Math.floor(options.days), 366)
+    : readLimitNumber(policy.limits, ['windowDays', 'periodDays']) ?? 1
+  const channel = policy.channel ?? 'unknown'
+  const maxBytes = readLimitNumber(policy.limits, ['maxBytes', 'maxStorageBytes', 'storageBytes'])
+  const trafficBytes = readLimitNumber(policy.limits, ['trafficBytes', 'maxTrafficBytes', 'bandwidthBytes'])
+  const maxOperations = readStorageOperationLimit(policy.limits, days)
+  const alertBytes = readLimitNumber(policy.limits, ['alertBytes', 'warningBytes'])
+  const warningThreshold = resolvePolicyWarningPercent(policy)
+
+  if (!policy.enabled) {
+    return {
+      policyId: policy.id,
+      name: policy.name,
+      channel,
+      provider: policy.provider,
+      enabled: false,
+      days,
+      status: 'disabled',
+      reasons: ['policy-disabled'],
+      usage: {
+        storedBytes: 0,
+        trafficBytes: 0,
+        operations: 0,
+        writes: 0,
+        reads: 0,
+        deletes: 0,
+      },
+      limits: {
+        maxBytes,
+        trafficBytes,
+        maxOperations,
+        alertBytes,
+        warningThreshold,
+      },
+      utilization: {
+        storedBytes: null,
+        trafficBytes: null,
+        operations: null,
+      },
+    }
+  }
+
+  const events = (await listPlatformGovernanceEvents(event, {
+    scope: 'storage',
+    channel,
+    days,
+    limit: options.limit ?? 5000,
+  })).filter(item => !policy.provider || item.metadata?.provider === policy.provider)
+  const usage = {
+    storedBytes: 0,
+    trafficBytes: 0,
+    operations: 0,
+    writes: 0,
+    reads: 0,
+    deletes: 0,
+  }
+
+  for (const item of events) {
+    usage.operations += 1
+    if (item.action === 'storage.write') {
+      usage.writes += 1
+      if (item.unit === 'byte')
+        usage.storedBytes += item.quantity
+    }
+    else if (item.action === 'storage.read') {
+      usage.reads += 1
+      if (item.unit === 'byte')
+        usage.trafficBytes += item.quantity
+    }
+    else if (item.action === 'storage.delete') {
+      usage.deletes += 1
+    }
+  }
+
+  const utilization = {
+    storedBytes: roundUsageRatio(usage.storedBytes, maxBytes),
+    trafficBytes: roundUsageRatio(usage.trafficBytes, trafficBytes),
+    operations: roundUsageRatio(usage.operations, maxOperations),
+  }
+  const reasons: string[] = []
+
+  if (maxBytes != null && usage.storedBytes >= maxBytes)
+    reasons.push('max-bytes-exceeded')
+  if (trafficBytes != null && usage.trafficBytes >= trafficBytes)
+    reasons.push('traffic-bytes-exceeded')
+  if (maxOperations != null && usage.operations >= maxOperations)
+    reasons.push('operation-limit-exceeded')
+
+  const warningReasons: string[] = []
+  if (alertBytes != null && usage.storedBytes >= alertBytes)
+    warningReasons.push('alert-bytes-reached')
+  if (utilization.storedBytes != null && utilization.storedBytes >= warningThreshold)
+    warningReasons.push('max-bytes-warning')
+  if (utilization.trafficBytes != null && utilization.trafficBytes >= warningThreshold)
+    warningReasons.push('traffic-bytes-warning')
+  if (utilization.operations != null && utilization.operations >= warningThreshold)
+    warningReasons.push('operation-limit-warning')
+
+  return {
+    policyId: policy.id,
+    name: policy.name,
+    channel,
+    provider: policy.provider,
+    enabled: true,
+    days,
+    status: reasons.length ? 'blocked' : warningReasons.length ? 'warning' : 'ok',
+    reasons: reasons.length ? reasons : warningReasons,
+    usage,
+    limits: {
+      maxBytes,
+      trafficBytes,
+      maxOperations,
+      alertBytes,
+      warningThreshold,
+    },
+    utilization,
+  }
 }
 
 export async function assertIntelligenceProviderQuota(
