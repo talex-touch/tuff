@@ -12,6 +12,12 @@ const MAX_RESULTS = 30
 const MAX_PROFILES_PER_BROWSER = 8
 const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'arc']
 const PREFIXES = ['browser-data', 'browser', 'bookmarks', 'chrome', 'edge', 'brave', 'arc', '浏览器', '书签']
+const BROWSER_LABELS = {
+  chrome: 'Chrome',
+  edge: 'Edge',
+  brave: 'Brave',
+  arc: 'Arc',
+}
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -105,6 +111,39 @@ function browserDefinitions(platform = process.platform, homeDir = os.homedir(),
   }
 
   return []
+}
+
+function buildBrowserSourceDiagnostics(platform, definitions, browserFilter = '') {
+  const byId = new Map((Array.isArray(definitions) ? definitions : []).map(definition => [definition.id, definition]))
+  const ids = browserFilter ? [browserFilter] : SUPPORTED_BROWSERS
+  return ids.map((id) => {
+    const definition = byId.get(id)
+    if (definition) {
+      return {
+        browserId: definition.id,
+        browserName: definition.name,
+        root: definition.root,
+        status: 'supported',
+        profileCount: 0,
+        reason: '',
+        lastError: '',
+      }
+    }
+
+    return {
+      browserId: id,
+      browserName: BROWSER_LABELS[id] || id,
+      root: '',
+      status: 'unsupported',
+      profileCount: 0,
+      reason: `${BROWSER_LABELS[id] || id} bookmarks are unsupported on ${platform}`,
+      lastError: '',
+    }
+  })
+}
+
+function getAvailableBrowserNames(platform = process.platform) {
+  return browserDefinitions(platform).map(definition => definition.name)
 }
 
 function isProfileDirectoryName(name) {
@@ -217,17 +256,18 @@ function scanBrowserBookmarks(options = {}) {
   const definitions = (options.definitions || browserDefinitions(platform, homeDir, env))
     .filter(definition => !browserFilter || definition.id === browserFilter)
   const items = []
-  const diagnostics = []
+  const diagnostics = buildBrowserSourceDiagnostics(platform, definitions, browserFilter)
+  const diagnosticsById = new Map(diagnostics.map(item => [item.browserId, item]))
 
   for (const definition of definitions) {
     const files = discoverBookmarkFiles(definition, fsImpl)
-    diagnostics.push({
-      browserId: definition.id,
-      browserName: definition.name,
-      root: definition.root,
-      status: files.length ? 'available' : 'not-found',
-      profileCount: files.length,
-    })
+    const diagnostic = diagnosticsById.get(definition.id)
+    if (diagnostic) {
+      diagnostic.status = files.length ? 'available' : 'not-found'
+      diagnostic.profileCount = files.length
+      diagnostic.reason = files.length ? '' : 'Bookmarks file not found'
+      diagnostic.lastError = ''
+    }
 
     for (const file of files) {
       try {
@@ -235,13 +275,13 @@ function scanBrowserBookmarks(options = {}) {
         items.push(...parseChromiumBookmarks(payload, file))
       }
       catch (error) {
-        diagnostics.push({
-          browserId: definition.id,
-          browserName: definition.name,
-          status: 'read-failed',
-          profile: file.profile,
-          reason: error?.message || 'read-failed',
-        })
+        const message = error?.message || 'read-failed'
+        if (diagnostic) {
+          diagnostic.status = 'read-failed'
+          diagnostic.reason = message
+          diagnostic.lastError = message
+          diagnostic.failedProfile = file.profile
+        }
       }
     }
   }
@@ -345,9 +385,15 @@ function buildBookmarkItem(featureId, bookmark, index) {
 
 function buildDiagnosticsItem(featureId, diagnostics, itemCount) {
   const available = diagnostics.filter(item => item.status === 'available')
+  const failed = diagnostics.filter(item => item.status === 'read-failed')
+  const unsupported = diagnostics.filter(item => item.status === 'unsupported')
   const summary = available.length
     ? `${itemCount} 条书签 · ${available.map(item => `${item.browserName} ${item.profileCount}`).join(' / ')}`
-    : '未发现可读取的 Chrome / Edge / Brave / Arc 书签文件'
+    : [
+        failed.length ? `${failed.map(item => `${item.browserName} 读取失败`).join(' / ')}` : '',
+        unsupported.length ? `${unsupported.map(item => `${item.browserName} 不支持`).join(' / ')}` : '',
+        '未发现可读取的浏览器书签文件',
+      ].filter(Boolean).join(' · ')
   return buildInfoItem({
     id: `${featureId}-diagnostics`,
     featureId,
@@ -362,13 +408,19 @@ function buildResultItems(featureId, query, scanResult) {
   const diagnostics = Array.isArray(scanResult?.diagnostics) ? scanResult.diagnostics : []
   const matched = searchBookmarks(items, parsed.keyword)
   const resultItems = []
+  const availableBrowserNames = diagnostics
+    .filter(item => item.status !== 'unsupported')
+    .map(item => item.browserName)
+  const availabilityText = availableBrowserNames.length
+    ? `当前平台只读 ${availableBrowserNames.join(' / ')} 的 Bookmarks JSON`
+    : '当前平台暂无支持的浏览器书签源'
 
   if (!matched.length) {
     resultItems.push(buildInfoItem({
       id: `${featureId}-empty`,
       featureId,
       title: parsed.keyword ? '没有匹配的浏览器书签' : '未发现浏览器书签',
-      subtitle: parsed.keyword ? '尝试输入标题、URL、文件夹或浏览器名称' : '当前首版只读 Chrome / Edge / Brave / Arc 的 Bookmarks JSON',
+      subtitle: parsed.keyword ? '尝试输入标题、URL、文件夹或浏览器名称' : availabilityText,
     }))
   }
   else {
@@ -454,10 +506,12 @@ module.exports = {
   ...pluginLifecycle,
   __test: {
     browserDefinitions,
+    buildBrowserSourceDiagnostics,
     buildResultItems,
     collectBookmarkNodes,
     dedupeBookmarks,
     discoverBookmarkFiles,
+    getAvailableBrowserNames,
     parseChromiumBookmarks,
     parseQuery,
     scanBrowserBookmarks,

@@ -1,7 +1,7 @@
 # Widget 沙箱隔离与持久化收口计划 (v1.0)
 
-> 状态: 历史/待重写（部分能力已落地，当前不作为 2.4.9 主线）  
-> 更新时间: 2026-03-16  
+> 状态: 历史计划 + 当前 Runtime Safety 基线（2026-05-20 追加）
+> 更新时间: 2026-05-20
 > 适用范围: CoreBox widget（renderer）+ 插件运行时沙箱  
 > 替代入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`、`docs/plan-prd/01-project/CHANGES.md`
 
@@ -65,10 +65,25 @@ Widget 运行在渲染进程中，若直接暴露浏览器全局能力（localSt
 - [x] 基础隔离：localStorage/sessionStorage/cookie + secure storage 持久化。
 - [x] 命名空间隔离：BroadcastChannel / indexedDB / caches。
 - [x] 窗口逃逸拦截：window/self/top/parent/opener/document.defaultView。
+- [x] Runtime Safety 基线：`new Function` 仅允许存在于 widget runtime sandbox 边界，并通过受控 facade 注入可用全局。
 - [ ] 扩展拦截：navigator.clipboard/storage、history、location、postMessage。
 - [ ] Worker 相关隔离：serviceWorker/sharedWorker 注册入口拦截。
 - [ ] 调用限额与审计：为高风险调用追加频控/计数，并记录 audit 入口。
 - [ ] 回滚开关：增加统一的沙箱策略开关与临时白名单机制。
+
+## 6.1 Runtime Safety 基线（2026-05-20）
+
+当前 `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts` 会通过 `new Function` 执行编译后的 widget component code。该动态执行边界只允许保留在 widget runtime sandbox 内，不允许扩散到 PreviewSDK、普通 renderer helper 或插件业务代码。
+
+已明确的运行时边界：
+
+- Allowed globals：`require`、`module`、`exports`、sandbox `window`、sandbox `globalThis`、sandbox `localStorage`、sandbox `sessionStorage`、sandbox `document`、sandbox `indexedDB`、sandbox `BroadcastChannel`、sandbox `caches`、sandbox `self`。
+- Blocked APIs：不得传入真实 `window`、真实 `document`、真实 `top/parent/opener/defaultView`、未命名空间化 storage、未命名空间化 indexedDB/caches/BroadcastChannel。
+- Storage facade：local/session storage、cookie、indexedDB、caches、BroadcastChannel 必须按插件/widget 命名空间隔离；secure storage 不可用时必须暴露 degraded reason，不得假装持久化成功。
+- Runtime source cache：只用于 debug/错误定位；不得写入 token、secret、clipboard payload 或用户业务明文；错误输出需要走脱敏 logger。
+- Failure reason：sandbox 缺失、dependency 不在 allowlist、组件导出无法解析、执行异常都必须返回可诊断错误，不得吞掉后渲染空白成功。
+
+本基线不是 VM 级隔离替代方案，也不改变当前 widget 执行架构。后续若要替换执行模型，需要单独 PRD、迁移策略与插件兼容验证。
 
 ## 7. 风险与依赖
 

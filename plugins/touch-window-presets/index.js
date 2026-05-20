@@ -6,6 +6,7 @@ const PLUGIN_NAME = 'touch-window-presets'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'window-presets'
+const SHELL_PERMISSION_ID = 'system.shell'
 
 const GROUP_META = {
   presets: {
@@ -389,17 +390,45 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+async function getPermissionState(permissionId) {
+  if (!permission) {
+    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+  }
+
+  const granted = Boolean(await permission.check(permissionId))
+  return granted
+    ? { granted: true, status: 'available', reason: '' }
+    : { granted: false, status: 'permission-missing', reason: `${permissionId} permission is required` }
+}
+
+function buildCapabilityMeta({
+  status = 'available',
+  reason = '',
+  actionId = '',
+} = {}) {
+  return {
+    capability: {
+      id: 'window-presets.shell',
+      status,
+      permissionId: SHELL_PERMISSION_ID,
+      reason,
+      platform: process.platform,
+      actionId,
+    },
+  }
+}
+
+function buildInfoItem({ id, featureId, title, subtitle, meta }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(ICON)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .setMeta({ pluginName: PLUGIN_NAME, featureId, ...(meta || {}) })
     .build()
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -411,6 +440,11 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       defaultAction: ACTION_ID,
       actionId,
       payload,
+      ...buildCapabilityMeta({
+        status: capability?.status,
+        reason: capability?.reason,
+        actionId,
+      }),
     })
     .build()
 }
@@ -441,19 +475,7 @@ const pluginLifecycle = {
         return true
       }
 
-      const hasPermission = await ensurePermission('system.shell', '需要 system.shell 权限执行窗口预设')
-      if (!hasPermission) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-no-permission`,
-            featureId,
-            title: '缺少 system.shell 权限',
-            subtitle: '授权后可一键执行窗口布局预设',
-          }),
-        ])
-        return true
-      }
+      const permissionState = await getPermissionState(SHELL_PERMISSION_ID)
 
       const keyword = normalizeText(getQueryText(query))
       const presets = resolvePresets(process.platform)
@@ -462,22 +484,41 @@ const pluginLifecycle = {
 
       const items = []
 
-      try {
-        const windows = await listWindows()
+      if (!permissionState.granted) {
         items.push(buildInfoItem({
-          id: `${featureId}-window-count`,
+          id: `${featureId}-no-permission`,
           featureId,
-          title: '当前可见窗口',
-          subtitle: `${windows.length} 个`,
+          title: '缺少 system.shell 权限',
+          subtitle: '授权后可查看窗口数量并执行窗口布局预设',
+          meta: buildCapabilityMeta({
+            status: permissionState.status,
+            reason: permissionState.reason,
+          }),
         }))
       }
-      catch (error) {
-        items.push(buildInfoItem({
-          id: `${featureId}-window-error`,
-          featureId,
-          title: '窗口列表获取失败',
-          subtitle: truncateText(error?.message || '请检查系统权限', 96),
-        }))
+      else {
+        try {
+          const windows = await listWindows()
+          items.push(buildInfoItem({
+            id: `${featureId}-window-count`,
+            featureId,
+            title: '当前可见窗口',
+            subtitle: `${windows.length} 个`,
+            meta: buildCapabilityMeta(),
+          }))
+        }
+        catch (error) {
+          items.push(buildInfoItem({
+            id: `${featureId}-window-error`,
+            featureId,
+            title: '窗口列表获取失败',
+            subtitle: truncateText(error?.message || '请检查系统权限', 96),
+            meta: buildCapabilityMeta({
+              status: 'degraded',
+              reason: error?.message || 'window-list-failed',
+            }),
+          }))
+        }
       }
 
       order.forEach((groupId) => {
@@ -494,6 +535,7 @@ const pluginLifecycle = {
               payload: {
                 presetId: preset.id,
               },
+              capability: permissionState,
             }))
           })
       })
@@ -537,9 +579,16 @@ const pluginLifecycle = {
     if (!presetId)
       return
 
-    const hasPermission = await ensurePermission('system.shell', '需要 system.shell 权限执行窗口预设')
-    if (!hasPermission)
-      return
+    const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, '需要 system.shell 权限执行窗口预设')
+    if (!hasPermission) {
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'permission-missing',
+        message: '缺少 system.shell 权限',
+      }
+    }
 
     try {
       const presets = resolvePresets(process.platform)
@@ -559,6 +608,7 @@ const pluginLifecycle = {
       return {
         externalAction: true,
         success: false,
+        status: 'failed',
         message: error?.message || '预设执行失败',
       }
     }
@@ -570,6 +620,8 @@ module.exports = {
   __test: {
     buildWindowsScript,
     matchPresets,
+    buildCapabilityMeta,
+    getPermissionState,
     normalizeWindows,
     resolveGroupOrder,
     resolvePresets,
