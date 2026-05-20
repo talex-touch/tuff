@@ -149,6 +149,7 @@ export function buildRecommendationUsagePreferenceProfile(
   for (const entry of weightedCandidates) {
     const profile = buildCandidateSemanticProfile(entry.candidate)
     for (const token of profile.tokens) {
+      if (!isPreferenceToken(token)) continue
       tokenWeights.set(token, (tokenWeights.get(token) ?? 0) + entry.weight)
     }
   }
@@ -228,6 +229,27 @@ function normalizeToken(raw?: string): string | null {
   const token = raw.trim().toLowerCase()
   if (!token || STOP_TOKENS.has(token)) return null
   return token
+}
+
+function isPreferenceToken(token: string): boolean {
+  return (
+    token.includes(':') ||
+    [
+      'api',
+      'code',
+      'creative',
+      'developer-tool',
+      'docs',
+      'editor',
+      'entertainment',
+      'image',
+      'local-first',
+      'reader',
+      'research',
+      'shell',
+      'work'
+    ].includes(token)
+  )
 }
 
 function splitIdentifier(value?: string): string[] {
