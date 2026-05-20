@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assertIntelligenceProviderQuota,
+  evaluateStorageChannelPolicy,
   getPlatformGovernanceAnalytics,
   listPlatformGovernanceEvents,
   recordPlatformGovernanceEvent,
+  recordStorageChannelUsage,
   upsertPlatformGovernanceConfig,
 } from './platformGovernanceStore'
 
@@ -106,6 +108,71 @@ describe('platformGovernanceStore', () => {
     await expect(assertIntelligenceProviderQuota(h3Event, providerId)).rejects.toMatchObject({
       statusCode: 429,
     })
+  })
+
+  it('evaluates storage channel policy usage by channel and provider', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const policy = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'storage_channel',
+      name: 'R2 budget',
+      channel: `r2-${marker}`,
+      provider: 'cloudflare-r2',
+      limits: {
+        maxBytes: 1000,
+        trafficBytes: 400,
+        maxOperations: 4,
+        alertBytes: 700,
+      },
+      warningThreshold: 70,
+    }, 'admin')
+
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.write',
+      actorId: 'storage-user@example.com',
+      channel: `r2-${marker}`,
+      provider: 'cloudflare-r2',
+      resourceType: 'plugin-icon',
+      resourceId: `icon-${marker}`,
+      quantity: 750,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.read',
+      channel: `r2-${marker}`,
+      provider: 'cloudflare-r2',
+      resourceType: 'plugin-icon',
+      resourceId: `icon-${marker}`,
+      quantity: 120,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.write',
+      channel: `r2-${marker}`,
+      provider: 'memory',
+      resourceType: 'plugin-icon',
+      resourceId: `dev-icon-${marker}`,
+      quantity: 900,
+    })
+
+    const evaluation = await evaluateStorageChannelPolicy(h3Event, policy, { days: 30 })
+
+    expect(evaluation).toMatchObject({
+      status: 'warning',
+      reasons: expect.arrayContaining(['alert-bytes-reached', 'max-bytes-warning']),
+      usage: {
+        storedBytes: 750,
+        trafficBytes: 120,
+        operations: 2,
+        writes: 1,
+        reads: 1,
+        deletes: 0,
+      },
+      utilization: {
+        storedBytes: 75,
+        trafficBytes: 30,
+        operations: 50,
+      },
+    })
+    expect(JSON.stringify(evaluation)).not.toContain('storage-user@example.com')
   })
 
   it('builds anonymized cockpit analytics for search, plugin, upload, and provider usage', async () => {

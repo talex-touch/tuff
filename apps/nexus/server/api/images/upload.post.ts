@@ -24,6 +24,8 @@ export default defineEventHandler(async (event) => {
     result = await uploadImage(event, file, {
       allowedTypes: RESOURCE_ALLOWED_TYPES,
       allowedExtensions: RESOURCE_ALLOWED_EXTENSIONS,
+      actorId: userId,
+      resourceType: 'resource',
     })
   }
   catch (error) {

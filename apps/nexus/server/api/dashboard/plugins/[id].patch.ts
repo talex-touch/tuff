@@ -73,7 +73,10 @@ export default defineEventHandler(async (event) => {
 
   const iconFile = formData.get('icon')
   if (isFile(iconFile) && iconFile.size > 0) {
-    const iconResult = await uploadImage(event, iconFile)
+    const iconResult = await uploadImage(event, iconFile, {
+      actorId: userId,
+      resourceType: 'plugin-icon',
+    })
     updates.iconKey = iconResult.key
     updates.iconUrl = iconResult.url
   }
