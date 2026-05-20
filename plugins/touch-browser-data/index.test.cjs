@@ -49,8 +49,10 @@ globalThis.TuffItemBuilder = class {
 }
 
 const {
+  buildBrowserSourceDiagnostics,
   buildResultItems,
   discoverBookmarkFiles,
+  getAvailableBrowserNames,
   parseChromiumBookmarks,
   parseQuery,
   scanBrowserBookmarks,
@@ -147,6 +149,38 @@ test('scanBrowserBookmarks reads definitions and reports diagnostics', () => {
   fs.rmSync(root, { recursive: true, force: true })
 })
 
+test('buildBrowserSourceDiagnostics marks Linux Arc as unsupported', () => {
+  const diagnostics = buildBrowserSourceDiagnostics('linux', [
+    { id: 'chrome', name: 'Chrome', root: '/home/user/.config/google-chrome' },
+    { id: 'edge', name: 'Edge', root: '/home/user/.config/microsoft-edge' },
+    { id: 'brave', name: 'Brave', root: '/home/user/.config/BraveSoftware/Brave-Browser' },
+  ])
+
+  const arc = diagnostics.find(item => item.browserId === 'arc')
+  assert.equal(arc.status, 'unsupported')
+  assert.match(arc.reason, /unsupported on linux/)
+})
+
+test('scanBrowserBookmarks preserves read-failed reason', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-browser-data-'))
+  const profile = path.join(root, 'Default')
+  fs.mkdirSync(profile, { recursive: true })
+  fs.writeFileSync(path.join(profile, 'Bookmarks'), '{not-json')
+
+  const scan = scanBrowserBookmarks({
+    definitions: [{ id: 'chrome', name: 'Chrome', root }],
+    browserFilter: 'chrome',
+  })
+
+  assert.equal(scan.items.length, 0)
+  assert.equal(scan.diagnostics[0].status, 'read-failed')
+  assert.equal(scan.diagnostics[0].profileCount, 1)
+  assert.ok(scan.diagnostics[0].lastError)
+  assert.equal(scan.diagnostics[0].failedProfile, 'Default')
+
+  fs.rmSync(root, { recursive: true, force: true })
+})
+
 test('searchBookmarks ranks title prefix before URL matches', () => {
   const bookmarks = [
     { title: 'Other', url: 'https://example.com/tuff', folder: '', browserName: 'Chrome', profile: 'Default' },
@@ -178,4 +212,24 @@ test('buildResultItems creates open items with copy URL action', () => {
   assert.equal(items[0].meta.actionId, 'open-url')
   assert.equal(items[0].actions[0].payload, 'https://tuff.tagzxia.com/docs')
   assert.equal(items.at(-1).title, '扫描状态')
+})
+
+test('buildResultItems uses platform-aware source availability in empty state', () => {
+  const items = buildResultItems('browser-data', 'browser', {
+    items: [],
+    diagnostics: buildBrowserSourceDiagnostics('linux', [
+      { id: 'chrome', name: 'Chrome', root: '/home/user/.config/google-chrome' },
+      { id: 'edge', name: 'Edge', root: '/home/user/.config/microsoft-edge' },
+      { id: 'brave', name: 'Brave', root: '/home/user/.config/BraveSoftware/Brave-Browser' },
+    ]),
+  })
+
+  assert.equal(items[0].title, '未发现浏览器书签')
+  assert.match(items[0].subtitle, /Chrome \/ Edge \/ Brave/)
+  assert.doesNotMatch(items[0].subtitle, /Arc/)
+  assert.match(items.at(-1).subtitle, /Arc 不支持/)
+})
+
+test('getAvailableBrowserNames follows platform definitions', () => {
+  assert.deepEqual(getAvailableBrowserNames('linux'), ['Chrome', 'Edge', 'Brave'])
 })

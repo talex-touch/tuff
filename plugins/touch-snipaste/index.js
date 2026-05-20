@@ -1,4 +1,4 @@
-const { plugin, logger, TuffItemBuilder } = globalThis
+const { plugin, logger, TuffItemBuilder, permission } = globalThis
 const { spawn } = require('node:child_process')
 const path = require('node:path')
 
@@ -6,6 +6,8 @@ const PLUGIN_NAME = 'touch-snipaste'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const DEFAULT_ACTION = 'snipaste'
+const SHELL_PERMISSION_ID = 'system.shell'
+const INVALID_ARG_PATTERN = /[\0\r\n]/
 
 const INTERNAL_ACTIONS = [
   {
@@ -100,17 +102,59 @@ function matchesKeyword(action, keyword) {
     || action.subtitle.toLowerCase().includes(lower)
 }
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function buildCapabilityMeta({
+  actionId,
+  status = 'available',
+  reason = '',
+  commandSource = '',
+} = {}) {
+  return {
+    capability: {
+      id: 'snipaste.shell',
+      status,
+      permissionId: SHELL_PERMISSION_ID,
+      reason,
+      platform: process.platform,
+      commandSource,
+      actionId,
+    },
+  }
+}
+
+async function getShellPermissionState() {
+  if (!permission) {
+    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+  }
+
+  const granted = Boolean(await permission.check(SHELL_PERMISSION_ID))
+  return granted
+    ? { granted: true, status: 'available', reason: '' }
+    : { granted: false, status: 'permission-missing', reason: 'system.shell permission is required' }
+}
+
+async function requestShellPermission() {
+  if (!permission)
+    return true
+
+  const hasPermission = await permission.check(SHELL_PERMISSION_ID)
+  if (hasPermission)
+    return true
+
+  const granted = await permission.request(SHELL_PERMISSION_ID, '需要 system.shell 权限启动 Snipaste')
+  return Boolean(granted)
+}
+
+function buildInfoItem({ id, featureId, title, subtitle, meta }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(ICON)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .setMeta({ pluginName: PLUGIN_NAME, featureId, ...(meta || {}) })
     .build()
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -121,8 +165,35 @@ function buildActionItem({ id, featureId, title, subtitle, actionId }) {
       featureId,
       defaultAction: DEFAULT_ACTION,
       actionId,
+      ...buildCapabilityMeta({
+        actionId,
+        status: capability?.status,
+        reason: capability?.reason,
+        commandSource: actionId?.split(':')[0] || '',
+      }),
     })
     .build()
+}
+
+function normalizeArgs(args) {
+  if (!Array.isArray(args))
+    return { ok: false, reason: 'invalid-args' }
+
+  const normalized = []
+  for (const arg of args) {
+    if (typeof arg !== 'string')
+      return { ok: false, reason: 'invalid-arg-type' }
+
+    const value = arg.trim()
+    if (!value)
+      continue
+    if (INVALID_ARG_PATTERN.test(value))
+      return { ok: false, reason: 'invalid-arg-payload' }
+
+    normalized.push(value)
+  }
+
+  return { ok: true, args: normalized }
 }
 
 function normalizeAction(action, source) {
@@ -130,7 +201,8 @@ function normalizeAction(action, source) {
   if (!id)
     return null
 
-  const args = Array.isArray(action.args) ? action.args.filter((arg) => typeof arg === 'string' && arg.trim()) : []
+  const normalizedArgs = normalizeArgs(action.args)
+  const args = normalizedArgs.ok ? normalizedArgs.args : []
   const title = typeof action.title === 'string' && action.title.trim() ? action.title.trim() : id
   const subtitle = typeof action.subtitle === 'string' && action.subtitle.trim()
     ? action.subtitle.trim()
@@ -139,7 +211,7 @@ function normalizeAction(action, source) {
     ? action.keywords.filter((item) => typeof item === 'string' && item.trim())
     : []
 
-  if (source === 'custom' && args.length === 0)
+  if (source === 'custom' && args.length === 0 && normalizedArgs.ok)
     return null
 
   return {
@@ -151,6 +223,7 @@ function normalizeAction(action, source) {
     keywords,
     source,
     kind: action.kind || source,
+    invalidReason: normalizedArgs.ok ? '' : normalizedArgs.reason,
   }
 }
 
@@ -279,19 +352,45 @@ function spawnCommand(command, args) {
   })
 }
 
-async function runSnipaste(args) {
+async function runSnipaste(args, options = {}) {
+  if (options.checkPermission !== false) {
+    const granted = await requestShellPermission()
+    if (!granted) {
+      return {
+        status: 'blocked',
+        ok: false,
+        reason: 'permission-missing',
+      }
+    }
+  }
+
+  const normalizedArgs = normalizeArgs(args)
+  if (!normalizedArgs.ok) {
+    return {
+      status: 'blocked',
+      ok: false,
+      reason: normalizedArgs.reason,
+    }
+  }
+
   const candidates = await resolveCommandCandidates()
   let lastError = null
   for (const command of candidates) {
     try {
-      await spawnCommand(command, args)
-      return { ok: true, command }
+      await spawnCommand(command, normalizedArgs.args)
+      return { status: 'started', ok: true, command }
     }
     catch (error) {
       lastError = error
     }
   }
-  return { ok: false, error: lastError }
+  return {
+    status: 'failed',
+    ok: false,
+    reason: 'spawn-failed',
+    error: lastError,
+    errorMessage: lastError?.message || 'Snipaste 启动失败',
+  }
 }
 
 const pluginLifecycle = {
@@ -310,6 +409,7 @@ const pluginLifecycle = {
       const items = []
       const actions = await resolveActions()
       const settings = await readSettings()
+      const capability = await getShellPermissionState()
       const configReady = Boolean(settings)
       const customCount = Array.isArray(settings?.actions) ? settings.actions.length : 0
       const currentPath = settings?.snipastePath || '未配置'
@@ -319,6 +419,11 @@ const pluginLifecycle = {
         featureId,
         title: `配置状态：${configReady ? '已生成' : '未生成'}`,
         subtitle: `当前路径：${currentPath}`,
+        meta: buildCapabilityMeta({
+          status: capability.status,
+          reason: capability.reason,
+          commandSource: 'config',
+        }),
       }))
 
       items.push(buildInfoItem({
@@ -336,12 +441,16 @@ const pluginLifecycle = {
       }))
 
       actions.filter((action) => matchesKeyword(action, keyword)).forEach((action) => {
+        const itemCapability = action.invalidReason
+          ? { status: 'blocked', reason: action.invalidReason }
+          : capability
         items.push(buildActionItem({
           id: `${featureId}-${action.key}`,
           featureId,
           title: action.title,
           subtitle: action.subtitle,
           actionId: action.key,
+          capability: itemCapability,
         }))
       })
 
@@ -392,11 +501,42 @@ const pluginLifecycle = {
         return
       }
 
+      if (action.invalidReason) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: action.invalidReason,
+          message: 'Snipaste 参数包含不支持的内容',
+        }
+      }
+
       const result = await runSnipaste(action.args)
+      if (result.status === 'blocked') {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: result.reason,
+          message: result.reason === 'permission-missing' ? '缺少 system.shell 权限' : 'Snipaste 命令已阻止',
+        }
+      }
       if (!result.ok) {
         logger?.warn?.('[touch-snipaste] Failed to run Snipaste command', result.error)
+        return {
+          externalAction: true,
+          success: false,
+          status: 'failed',
+          reason: result.reason,
+          message: result.errorMessage || 'Snipaste 启动失败',
+        }
       }
-      return { externalAction: true }
+      return {
+        externalAction: true,
+        success: true,
+        status: 'started',
+        command: result.command,
+      }
     }
     catch (error) {
       logger?.error?.('[touch-snipaste] Action failed', error)
@@ -409,5 +549,8 @@ module.exports = {
   __test: {
     normalizeAction,
     matchesKeyword,
+    normalizeArgs,
+    runSnipaste,
+    buildCapabilityMeta,
   },
 }

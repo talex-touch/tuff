@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-19
+> 更新时间：2026-05-20
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,36 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-20
+
+### docs(plan): add automation compat audit
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added the automation-run audit for the current live tree, confirming no new P0 fixed fake-success while keeping Windows/macOS/Linux real-device evidence as a separate requirement.
+  - Reconfirmed the next architecture-hardening order: `touch-snipaste` fail-closed shell diagnostics, `touch-window-presets` non-mutating feature listing, Browser Data source-level diagnostics, widget runtime sandbox evidence, secret backend, raw console cleanup, and SRP small-slice refactors.
+  - Recorded that the latest local CoreBox Windows first-show/scrollbar stabilization does not change the compat/fake-success risk assessment.
+
+### fix(plugins): close shell diagnostics and browser data source health
+
+- `plugins/touch-snipaste/index.js`
+- `plugins/touch-snipaste/index.test.cjs`
+- `plugins/touch-window-presets/index.js`
+- `packages/test/src/plugins/window-presets.test.ts`
+- `plugins/touch-browser-data/index.js`
+- `plugins/touch-browser-data/index.test.cjs`
+- `docs/plan-prd/04-implementation/WidgetSandboxIsolation260221.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `touch-snipaste` now gates execution on `system.shell`, exposes CoreBox capability metadata, blocks invalid newline/null args, and returns `started` / `blocked` / `failed` instead of silently attempting spawn.
+  - `touch-window-presets` now lists presets with a non-mutating permission check and only requests `system.shell` when executing a preset.
+  - `touch-browser-data` now reports source-level diagnostics, preserves read-failed reason/profile count, and avoids implying Arc support on Linux.
+  - Widget sandbox documentation now records the current `new Function` runtime boundary, allowed globals, blocked APIs, storage facade requirements, runtime source cache constraints, and failure reason policy.
 
 ## 2026-05-19
 

@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-19
+> 更新时间：2026-05-20
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -18,7 +18,7 @@
 - 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前 live tree 已进入 `2.4.11-beta.2`。
 - 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。
 - 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR；Workflow/Skills/Automation 保持 Beta。
-- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；2026-05-19 增量审计未发现新的 P0 fixed fake-success，但 `touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox 与 SRP 大文件仍是 P1 治理重点；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因仓库 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
+- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），CoreApp `typecheck:node` 已通过；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，但 `touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、secret backend、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因仓库 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
 
 ## 高价值专题入口
 
@@ -37,6 +37,7 @@
 - `docs/plan-prd/report/cross-platform-compat-placeholder-summary-2026-05-15.md` - 跨平台兼容、占位实现与治理口径总结。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-deep-audit-2026-05-16.md` - 跨平台兼容、占位实现与架构健壮性深度审计。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-incremental-audit-2026-05-19.md` - 跨平台兼容、占位实现与架构健壮性增量审计。
+- `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md` - 跨平台兼容、占位实现与架构健壮性自动化审计。
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析。
 - `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案。
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - Release assets 核对入口。
