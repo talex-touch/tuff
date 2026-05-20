@@ -650,6 +650,65 @@ describe('RecommendationEngine', () => {
     expect(ids.indexOf('com.apple.Terminal')).toBeLessThan(ids.indexOf('discord'))
   })
 
+  it('uses historical cancellation vectors to suppress semantically avoided tools', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:avoidance-vector`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: true,
+        aiRerankEnabled: false,
+        aiEmbeddingEnabled: false
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', {
+              executeCount: 0,
+              cancelCount: 20,
+              lastExecuted: null,
+              lastCancelled: new Date('2026-05-04T08:55:00.000Z')
+            })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'telegram',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('telegram', { executeCount: 4 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 2 })
+          }
+        ],
+        perf: candidatePerf(3, 3)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+    const ids = result.items.map((item) => item.id)
+
+    expect(ids.indexOf('com.apple.Terminal')).toBeLessThan(ids.indexOf('telegram'))
+  })
+
   it('uses optional AI embedding scores to improve semantic ranking', async () => {
     vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
     intelligenceSdkMock.embeddingGenerate.mockImplementation(async ({ text }: { text: string }) => {

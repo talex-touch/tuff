@@ -158,6 +158,34 @@ export function buildRecommendationUsagePreferenceProfile(
   return createWeightedProfile(tokenWeights)
 }
 
+export function buildRecommendationUsageAvoidanceProfile(
+  candidates: RecommendationSemanticPreferenceInput[],
+  now = Date.now()
+): RecommendationSemanticProfile | null {
+  const weightedCandidates = candidates
+    .map((candidate) => ({
+      candidate,
+      weight: calculateUsageAvoidanceWeight(candidate, now)
+    }))
+    .filter((entry) => entry.weight > 0)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, USAGE_PREFERENCE_PROFILE_LIMIT)
+
+  if (weightedCandidates.length === 0) return null
+
+  const tokenWeights = new Map<string, number>()
+  for (const entry of weightedCandidates) {
+    const profile = buildCandidateSemanticProfile(entry.candidate)
+    for (const token of profile.tokens) {
+      if (!isPreferenceToken(token)) continue
+      tokenWeights.set(token, (tokenWeights.get(token) ?? 0) + entry.weight)
+    }
+  }
+
+  if (tokenWeights.size === 0) return null
+  return createWeightedProfile(tokenWeights)
+}
+
 export function buildCandidateSemanticProfile(
   candidate: RecommendationSemanticCandidateInput
 ): RecommendationSemanticProfile {
@@ -394,6 +422,30 @@ function calculateUsagePreferenceWeight(
   const recencyWeight = Math.exp(-0.08 * daysSince)
 
   return Math.log1p(interactionWeight) * (0.35 + recencyWeight * 0.65)
+}
+
+function calculateUsageAvoidanceWeight(
+  candidate: RecommendationSemanticPreferenceInput,
+  now: number
+): number {
+  const cancelCount = candidate.cancelCount ?? 0
+  if (cancelCount <= 0) return 0
+
+  const positiveInteractions =
+    (candidate.executeCount ?? 0) * 1 + (candidate.searchCount ?? 0) * 0.3
+  const avoidanceWeight = cancelCount * 1.2 - positiveInteractions * 0.6
+  if (avoidanceWeight <= 0) return 0
+
+  const lastInteraction = Math.max(
+    candidate.lastCancelled?.getTime() ?? 0,
+    candidate.lastSearched?.getTime() ?? 0,
+    candidate.lastExecuted?.getTime() ?? 0
+  )
+  const daysSince =
+    lastInteraction > 0 ? Math.max(0, (now - lastInteraction) / (24 * 60 * 60 * 1000)) : 30
+  const recencyWeight = Math.exp(-0.1 * daysSince)
+
+  return Math.log1p(avoidanceWeight) * (0.35 + recencyWeight * 0.65)
 }
 
 function hashToken(token: string): number {
