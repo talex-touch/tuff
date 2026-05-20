@@ -13,17 +13,11 @@ import type {
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { BrowserWindow } from 'electron'
-import type { TouchApp } from '../../../core/touch-app'
 import path from 'node:path'
 import process from 'node:process'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
+import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import {
-  ClipboardEvents,
-  CoreBoxEvents,
-  CoreBoxRetainedEvents
-} from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
@@ -37,16 +31,6 @@ const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime('core-box')
-const shellShowItemInFolderEvent = defineRawEvent<{ path: string }, void>(
-  'shell:show-item-in-folder'
-)
-
-const BUILTIN_ACTION_IDS = new Set([
-  'toggle-pin',
-  'copy-title',
-  'reveal-in-finder',
-  'flow-transfer'
-])
 
 /**
  * Manages the MetaOverlay WebContentsView in persistent mode.
@@ -441,7 +425,6 @@ export class MetaOverlayManager {
     // Find the action
     let action: MetaAction | undefined
     let pluginId: string | undefined
-    let handler: 'plugin' | 'builtin' | 'item' | undefined
 
     // Check plugin actions first
     for (const [pid, actions] of this.pluginActions.entries()) {
@@ -449,15 +432,12 @@ export class MetaOverlayManager {
       if (found) {
         action = found
         pluginId = pid
-        handler = 'plugin'
         break
       }
     }
 
-    // If not found in plugin actions, determine handler type
     if (!action) {
-      handler = BUILTIN_ACTION_IDS.has(actionId) ? 'builtin' : 'item'
-      metaOverlayLog.debug(`Executing ${handler} action ${actionId}`)
+      metaOverlayLog.debug(`Executing CoreBox renderer action ${actionId}`)
     }
 
     const targetItem = item ?? this.currentItem
@@ -477,7 +457,7 @@ export class MetaOverlayManager {
     const touchApp = runtime.app
 
     // Handle based on action type
-    if (handler === 'plugin' && pluginId) {
+    if (pluginId) {
       // Plugin action - notify the plugin
       const channel = touchApp.channel
       const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
@@ -499,11 +479,8 @@ export class MetaOverlayManager {
         .catch((error) => {
           metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
         })
-    } else if (handler === 'builtin') {
-      // Built-in action - handle in main process
-      await this.handleBuiltinAction(actionId, targetItem, touchApp)
-    } else if (handler === 'item') {
-      // Item action - broadcast to renderer to handle
+    } else {
+      // Built-in and item actions are handled by the CoreBox renderer action pipeline.
       const coreBoxWindow = getCoreBoxWindow()
       const coreBoxWebContents = useAliveWebContents(coreBoxWindow?.window ?? null)
       if (coreBoxWindow && coreBoxWebContents) {
@@ -526,72 +503,6 @@ export class MetaOverlayManager {
 
     // Hide MetaOverlay after execution
     this.hide()
-  }
-
-  /**
-   * Handles built-in actions.
-   *
-   * @param actionId - The built-in action ID
-   * @param item - The item context
-   * @param touchApp - The TouchApp instance
-   */
-  private async handleBuiltinAction(
-    actionId: string,
-    item: TuffItem,
-    touchApp: TouchApp
-  ): Promise<void> {
-    const coreBoxWindow = getCoreBoxWindow()
-    const coreBoxWebContents = useAliveWebContents(coreBoxWindow?.window ?? null)
-    if (!coreBoxWindow || !coreBoxWebContents) {
-      return
-    }
-
-    const channel = touchApp.channel
-    const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-
-    switch (actionId) {
-      case 'toggle-pin': {
-        void transport.sendTo(coreBoxWebContents, CoreBoxEvents.item.togglePin, {
-          sourceId: item.source.id,
-          itemId: item.id,
-          sourceType: item.source.type
-        })
-        break
-      }
-      case 'copy-title': {
-        const title = item.render?.basic?.title
-        if (title) {
-          void transport.sendTo(coreBoxWebContents, ClipboardEvents.write, {
-            text: title
-          })
-        }
-        break
-      }
-      case 'reveal-in-finder': {
-        const filePath = item.meta?.app?.path ?? item.meta?.file?.path
-        if (filePath) {
-          void transport.sendTo(coreBoxWebContents, shellShowItemInFolderEvent, {
-            path: filePath
-          })
-        }
-        break
-      }
-      case 'flow-transfer': {
-        void transport.sendTo(coreBoxWebContents, CoreBoxEvents.metaOverlay.flowTransfer, {
-          item
-        })
-        void transport.sendTo(
-          coreBoxWebContents,
-          CoreBoxRetainedEvents.legacy.metaOverlayFlowTransfer,
-          {
-            item
-          }
-        )
-        break
-      }
-      default:
-        metaOverlayLog.warn(`Unknown built-in action: ${actionId}`)
-    }
   }
 
   /**

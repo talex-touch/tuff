@@ -3,6 +3,7 @@ import type { IBoxOptions } from '..'
 import type { IClipboardOptions } from './types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { useDocumentVisibility } from '@vueuse/core'
 import { nextTick, ref, watch } from 'vue'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -88,6 +89,7 @@ export function useVisibility(options: UseVisibilityOptions) {
       clipboardOptions.pendingAutoFillItem = null
       clipboardOptions.detectedAt = null
       clipboardOptions.lastClearedTimestamp = null
+      void transport.send(MetaOverlayEvents.ui.hide).catch(() => {})
       deactivateAllProviders().catch(() => {})
     }
   }

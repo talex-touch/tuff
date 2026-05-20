@@ -1,5 +1,6 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardItem, IClipboardOptions } from './types'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { BoxMode } from '..'
@@ -7,6 +8,7 @@ import { useVisibility } from './useVisibility'
 
 const state = vi.hoisted(() => ({
   listeners: new Map<string, (payload?: unknown) => void>(),
+  send: vi.fn(async () => undefined),
   appSetting: {
     tools: {
       autoClear: 300,
@@ -26,7 +28,8 @@ vi.mock('@talex-touch/utils/transport', () => ({
       return () => {
         state.listeners.delete(key)
       }
-    }
+    },
+    send: state.send
   })
 }))
 
@@ -100,6 +103,7 @@ describe('useVisibility auto clear session reset', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.listeners.clear()
+    state.send.mockResolvedValue(undefined)
     state.appSetting.tools.autoClear = 300
   })
 
@@ -116,6 +120,7 @@ describe('useVisibility auto clear session reset', () => {
       expect(boxOptions.file?.paths).toEqual(['/tmp/a.txt'])
       expect(clipboardOptions.last?.content).toBe('hello')
       expect(deactivateAllProviders).not.toHaveBeenCalled()
+      expect(state.send).not.toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
       hook.cleanup()
     }
   })
@@ -132,6 +137,7 @@ describe('useVisibility auto clear session reset', () => {
     expect(searchVal.value).toBe('clipboard query')
     expect(boxOptions.mode).toBe(BoxMode.FEATURE)
     expect(deactivateAllProviders).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
     hook.cleanup()
   })
 
@@ -151,6 +157,7 @@ describe('useVisibility auto clear session reset', () => {
     expect(clipboardOptions.pendingAutoFillItem).toBeNull()
     expect(clipboardOptions.detectedAt).toBeNull()
     expect(clipboardOptions.lastClearedTimestamp).toBeNull()
+    expect(state.send).toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
     expect(deactivateAllProviders).toHaveBeenCalledTimes(1)
     hook.cleanup()
   })

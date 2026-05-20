@@ -202,6 +202,9 @@ const secureStorageDescription = computed(() => {
   if (!health.available || appSetting.auth?.secureStorageUnavailable === true) {
     return '本地安全上下文不可用，登录凭证仅在本次运行内保持。'
   }
+  if (health.backend === 'safe-storage') {
+    return '系统安全存储已启用：凭证由操作系统安全后端保护，重启后仍可保持登录状态。'
+  }
   if (health.backend === 'local-secret') {
     return '本地加密保护已启用：凭证由本机 root 密钥加密保存，重启后仍可保持登录状态。'
   }
