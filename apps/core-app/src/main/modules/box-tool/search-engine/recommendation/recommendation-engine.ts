@@ -25,6 +25,7 @@ import {
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
+  buildRecommendationUsageAvoidanceProfile,
   buildRecommendationUsagePreferenceProfile,
   calculateLocalSemanticScore,
   type RecommendationSemanticCandidateInput,
@@ -44,6 +45,7 @@ const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 const SEMANTIC_LOCAL_WEIGHT = 6e5
 const SEMANTIC_USAGE_PREFERENCE_WEIGHT = 3.5e5
+const SEMANTIC_USAGE_AVOIDANCE_WEIGHT = 5e5
 const SEMANTIC_AI_EMBEDDING_WEIGHT = 4e5
 const SEMANTIC_AI_RERANK_WEIGHT = 3e5
 const SEMANTIC_AI_RERANK_ORDER_WEIGHT = 1e4
@@ -1301,18 +1303,22 @@ export class RecommendationEngine {
       semanticSettings.aiRerankEnabled
         ? buildRecommendationSemanticProfile(context)
         : null
+    const usageSemanticInputs = semanticSettings.localVectorEnabled
+      ? candidates.map((candidate) => ({
+          ...this.toSemanticCandidateInput(candidate),
+          searchCount: candidate.usageStats.searchCount,
+          executeCount: candidate.usageStats.executeCount,
+          cancelCount: candidate.usageStats.cancelCount,
+          lastSearched: candidate.usageStats.lastSearched,
+          lastExecuted: candidate.usageStats.lastExecuted,
+          lastCancelled: candidate.usageStats.lastCancelled
+        }))
+      : []
     const usagePreferenceProfile = semanticSettings.localVectorEnabled
-      ? buildRecommendationUsagePreferenceProfile(
-          candidates.map((candidate) => ({
-            ...this.toSemanticCandidateInput(candidate),
-            searchCount: candidate.usageStats.searchCount,
-            executeCount: candidate.usageStats.executeCount,
-            cancelCount: candidate.usageStats.cancelCount,
-            lastSearched: candidate.usageStats.lastSearched,
-            lastExecuted: candidate.usageStats.lastExecuted,
-            lastCancelled: candidate.usageStats.lastCancelled
-          }))
-        )
+      ? buildRecommendationUsagePreferenceProfile(usageSemanticInputs)
+      : null
+    const usageAvoidanceProfile = semanticSettings.localVectorEnabled
+      ? buildRecommendationUsageAvoidanceProfile(usageSemanticInputs)
       : null
 
     for (const candidate of candidates) {
@@ -1321,7 +1327,8 @@ export class RecommendationEngine {
         context,
         semanticSettings,
         semanticProfile,
-        usagePreferenceProfile
+        usagePreferenceProfile,
+        usageAvoidanceProfile
       )
       scored.push({ ...candidate, score })
     }
@@ -1343,7 +1350,8 @@ export class RecommendationEngine {
     context: ContextSignal,
     semanticSettings: RecommendationSemanticSettings,
     semanticProfile: RecommendationSemanticProfile | null,
-    usagePreferenceProfile: RecommendationSemanticProfile | null
+    usagePreferenceProfile: RecommendationSemanticProfile | null,
+    usageAvoidanceProfile: RecommendationSemanticProfile | null
   ): Promise<number> {
     // Plugin candidates: use priority directly, skip usageStats-based calculation
     if (candidate.source === 'plugin' && candidate.pluginCandidate) {
@@ -1386,6 +1394,12 @@ export class RecommendationEngine {
         score +=
           calculateLocalSemanticScore(usagePreferenceProfile, candidateProfile) *
           SEMANTIC_USAGE_PREFERENCE_WEIGHT
+      }
+
+      if (usageAvoidanceProfile && !this.isExternalPriorityCandidate(candidate)) {
+        score -=
+          calculateLocalSemanticScore(usageAvoidanceProfile, candidateProfile) *
+          SEMANTIC_USAGE_AVOIDANCE_WEIGHT
       }
     }
 
