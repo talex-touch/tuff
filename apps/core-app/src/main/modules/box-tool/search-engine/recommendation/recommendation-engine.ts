@@ -1,8 +1,10 @@
 import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
 import type { PluginRecommendCandidate, RecommendProvider } from '@talex-touch/utils/core-box'
+import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
+import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
@@ -20,6 +22,13 @@ import {
   toDayBucket,
   toErrorMeta
 } from './recommendation-utils'
+import {
+  buildCandidateSemanticProfile,
+  buildRecommendationSemanticProfile,
+  calculateLocalSemanticScore,
+  type RecommendationSemanticCandidateInput,
+  type RecommendationSemanticProfile
+} from './semantic-profile'
 
 export { calculateTimeContextBoost, calculateTimeRelevanceScore } from './recommendation-utils'
 
@@ -32,6 +41,18 @@ const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
+const SEMANTIC_LOCAL_WEIGHT = 6e5
+const SEMANTIC_AI_EMBEDDING_WEIGHT = 4e5
+const SEMANTIC_AI_RERANK_WEIGHT = 3e5
+const SEMANTIC_AI_RERANK_ORDER_WEIGHT = 1e4
+const SEMANTIC_AI_TIMEOUT_MS = 800
+const AI_EMBEDDING_CANDIDATE_LIMIT = 8
+const AI_RERANK_CANDIDATE_LIMIT = 12
+const DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS: RecommendationSemanticSettings = {
+  localVectorEnabled: true,
+  aiRerankEnabled: false,
+  aiEmbeddingEnabled: false
+}
 const recommendationLog = createLogger('RecommendationEngine')
 
 export class RecommendationEngine {
@@ -510,7 +531,8 @@ export class RecommendationEngine {
 
     const contextStartedAt = performance.now()
     const context = await this.contextProvider.getCurrentContext()
-    const contextCacheKey = this.contextProvider.generateCacheKey(context)
+    const semanticSettings = await this.getRecommendationSemanticSettings()
+    const contextCacheKey = this.buildRecommendationCacheKey(context, semanticSettings)
     const contextDuration = performance.now() - contextStartedAt
 
     if (!options.forceRefresh && this.recommendationCache) {
@@ -541,7 +563,7 @@ export class RecommendationEngine {
       }
     }
 
-    const cached = await this.getCachedRecommendations(context)
+    const cached = await this.getCachedRecommendations(context, semanticSettings)
     if (cached && !options.forceRefresh) {
       this.recordRecommendationPerf('recommendation.total', {
         cacheLayer: 'db',
@@ -620,7 +642,7 @@ export class RecommendationEngine {
       }
     }
 
-    const scored = await this.scoreAndRank(candidates, context)
+    const scored = await this.scoreAndRank(candidates, context, semanticSettings)
     const limit = options.limit || 10
     const diversified = this.applyDiversityFilter(scored, limit)
     const items = await this.itemRebuilder.rebuildItems(diversified)
@@ -688,7 +710,7 @@ export class RecommendationEngine {
 
     const combinedItems = this.dedupeItems([...filteredItems, ...pinnedTuffItems]).slice(0, limit)
 
-    await this.cacheRecommendations(context, combinedItems)
+    await this.cacheRecommendations(context, semanticSettings, combinedItems)
     const duration = performance.now() - startTime
     recommendationLog.debug('Generated recommendations', {
       meta: { durationMs: Math.round(duration), itemCount: combinedItems.length }
@@ -1267,16 +1289,34 @@ export class RecommendationEngine {
    */
   private async scoreAndRank(
     candidates: CandidateItem[],
-    context: ContextSignal
+    context: ContextSignal,
+    semanticSettings: RecommendationSemanticSettings
   ): Promise<ScoredItem[]> {
     const scored: ScoredItem[] = []
+    const semanticProfile =
+      semanticSettings.localVectorEnabled ||
+      semanticSettings.aiEmbeddingEnabled ||
+      semanticSettings.aiRerankEnabled
+        ? buildRecommendationSemanticProfile(context)
+        : null
 
     for (const candidate of candidates) {
-      const score = await this.calculateRecommendationScore(candidate, context)
+      const score = await this.calculateRecommendationScore(
+        candidate,
+        context,
+        semanticSettings,
+        semanticProfile
+      )
       scored.push({ ...candidate, score })
     }
 
-    return scored.sort((a, b) => b.score - a.score)
+    const locallySorted = scored.sort((a, b) => b.score - a.score)
+    const embedded = await this.applyAiEmbeddingScores(
+      locallySorted,
+      semanticProfile,
+      semanticSettings
+    )
+    return this.applyAiRerank(embedded, semanticProfile, semanticSettings)
   }
 
   /**
@@ -1284,7 +1324,9 @@ export class RecommendationEngine {
    */
   private async calculateRecommendationScore(
     candidate: CandidateItem,
-    context: ContextSignal
+    context: ContextSignal,
+    semanticSettings: RecommendationSemanticSettings,
+    semanticProfile: RecommendationSemanticProfile | null
   ): Promise<number> {
     // Plugin candidates: use priority directly, skip usageStats-based calculation
     if (candidate.source === 'plugin' && candidate.pluginCandidate) {
@@ -1316,7 +1358,231 @@ export class RecommendationEngine {
     const recencyBoost = this.calculateRecencyBoost(candidate.usageStats.lastExecuted)
     score += recencyBoost * 1e3
 
+    if (semanticSettings.localVectorEnabled && semanticProfile) {
+      const candidateProfile = buildCandidateSemanticProfile(
+        this.toSemanticCandidateInput(candidate)
+      )
+      score +=
+        calculateLocalSemanticScore(semanticProfile, candidateProfile) * SEMANTIC_LOCAL_WEIGHT
+    }
+
     return score
+  }
+
+  private async applyAiEmbeddingScores(
+    scored: ScoredItem[],
+    semanticProfile: RecommendationSemanticProfile | null,
+    semanticSettings: RecommendationSemanticSettings
+  ): Promise<ScoredItem[]> {
+    if (!semanticSettings.aiEmbeddingEnabled || !semanticProfile || scored.length === 0) {
+      return scored
+    }
+
+    const targets = scored
+      .filter((item) => !this.isExternalPriorityCandidate(item))
+      .slice(0, AI_EMBEDDING_CANDIDATE_LIMIT)
+    if (targets.length === 0 || !semanticProfile.text) return scored
+
+    try {
+      const { tuffIntelligence } = await import('../../../ai/intelligence-sdk')
+      const contextEmbedding = await withTimeout(
+        tuffIntelligence.embedding.generate(
+          { text: semanticProfile.text },
+          {
+            timeout: SEMANTIC_AI_TIMEOUT_MS,
+            metadata: { caller: 'core.recommendation.semantic-embedding' }
+          }
+        ),
+        SEMANTIC_AI_TIMEOUT_MS
+      )
+
+      const embeddings = await Promise.all(
+        targets.map(async (item) => {
+          const candidateProfile = buildCandidateSemanticProfile(
+            this.toSemanticCandidateInput(item)
+          )
+          if (!candidateProfile.text) return null
+          const result = await withTimeout(
+            tuffIntelligence.embedding.generate(
+              { text: candidateProfile.text },
+              {
+                timeout: SEMANTIC_AI_TIMEOUT_MS,
+                metadata: { caller: 'core.recommendation.semantic-embedding' }
+              }
+            ),
+            SEMANTIC_AI_TIMEOUT_MS
+          )
+          return {
+            key: this.getCandidateKey(item),
+            score: this.calculateVectorCosine(contextEmbedding.result, result.result)
+          }
+        })
+      )
+
+      const scoreMap = new Map<string, number>()
+      for (const embedding of embeddings) {
+        if (!embedding) continue
+        scoreMap.set(embedding.key, embedding.score)
+      }
+
+      if (scoreMap.size === 0) return scored
+      return scored
+        .map((item) => ({
+          ...item,
+          score:
+            item.score +
+            (scoreMap.get(this.getCandidateKey(item)) ?? 0) * SEMANTIC_AI_EMBEDDING_WEIGHT
+        }))
+        .sort((a, b) => b.score - a.score)
+    } catch (error) {
+      recommendationLog.debug('AI embedding recommendation score skipped', {
+        meta: toErrorMeta(error)
+      })
+      return scored
+    }
+  }
+
+  private async applyAiRerank(
+    scored: ScoredItem[],
+    semanticProfile: RecommendationSemanticProfile | null,
+    semanticSettings: RecommendationSemanticSettings
+  ): Promise<ScoredItem[]> {
+    if (!semanticSettings.aiRerankEnabled || !semanticProfile || scored.length === 0) {
+      return scored
+    }
+
+    const targets = scored.slice(0, AI_RERANK_CANDIDATE_LIMIT)
+    if (targets.length === 0 || !semanticProfile.text) return scored
+
+    try {
+      const { tuffIntelligence } = await import('../../../ai/intelligence-sdk')
+      const result = await withTimeout(
+        tuffIntelligence.rag.rerank(
+          {
+            query: semanticProfile.text,
+            documents: targets.map((item) => {
+              const candidateProfile = buildCandidateSemanticProfile(
+                this.toSemanticCandidateInput(item)
+              )
+              return {
+                id: this.getCandidateKey(item),
+                content: candidateProfile.text || item.itemId,
+                metadata: {
+                  source: item.source,
+                  sourceId: item.sourceId,
+                  sourceType: item.sourceType
+                }
+              }
+            }),
+            topK: targets.length
+          },
+          {
+            timeout: SEMANTIC_AI_TIMEOUT_MS,
+            metadata: { caller: 'core.recommendation.semantic-rerank' }
+          }
+        ),
+        SEMANTIC_AI_TIMEOUT_MS
+      )
+
+      const scoreMap = new Map<string, number>()
+      const orderMap = new Map<string, number>()
+      result.result.results.forEach((item, index) => {
+        scoreMap.set(item.id, item.score)
+        orderMap.set(item.id, targets.length - index)
+      })
+
+      if (scoreMap.size === 0) return scored
+      return scored
+        .map((item) => {
+          const key = this.getCandidateKey(item)
+          const rerankScore = scoreMap.get(key) ?? 0
+          const orderScore = orderMap.get(key) ?? 0
+          return {
+            ...item,
+            score:
+              item.score +
+              rerankScore * SEMANTIC_AI_RERANK_WEIGHT +
+              orderScore * SEMANTIC_AI_RERANK_ORDER_WEIGHT
+          }
+        })
+        .sort((a, b) => b.score - a.score)
+    } catch (error) {
+      recommendationLog.debug('AI recommendation rerank skipped', {
+        meta: toErrorMeta(error)
+      })
+      return scored
+    }
+  }
+
+  private toSemanticCandidateInput(candidate: CandidateItem): RecommendationSemanticCandidateInput {
+    return {
+      sourceId: candidate.sourceId,
+      itemId: candidate.itemId,
+      sourceType: candidate.sourceType,
+      source: candidate.source,
+      title: candidate.pluginCandidate?.title,
+      subtitle: candidate.pluginCandidate?.subtitle
+    }
+  }
+
+  private isExternalPriorityCandidate(candidate: CandidateItem): boolean {
+    return candidate.source === 'plugin' || candidate.sourceId === '__builtin_clipboard_url__'
+  }
+
+  private getCandidateKey(candidate: CandidateItem): string {
+    return `${candidate.sourceId}:${candidate.itemId}`
+  }
+
+  private calculateVectorCosine(left: number[], right: number[]): number {
+    const length = Math.min(left.length, right.length)
+    if (length === 0) return 0
+
+    let dot = 0
+    let leftNorm = 0
+    let rightNorm = 0
+    for (let i = 0; i < length; i += 1) {
+      dot += left[i] * right[i]
+      leftNorm += left[i] * left[i]
+      rightNorm += right[i] * right[i]
+    }
+
+    if (leftNorm === 0 || rightNorm === 0) return 0
+    const score = dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm))
+    return Math.max(0, Math.min(1, score))
+  }
+
+  private async getRecommendationSemanticSettings(): Promise<RecommendationSemanticSettings> {
+    try {
+      const { getMainConfig, isMainStorageReady } = await import('../../../storage')
+      if (!isMainStorageReady()) {
+        return DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS
+      }
+
+      const settings = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
+      return normalizeRecommendationSemanticSettings(settings?.recommendation?.semantic)
+    } catch (error) {
+      recommendationLog.debug('Failed to load recommendation semantic settings', {
+        meta: toErrorMeta(error)
+      })
+      return DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS
+    }
+  }
+
+  private buildRecommendationCacheKey(
+    context: ContextSignal,
+    semanticSettings: RecommendationSemanticSettings
+  ): string {
+    const baseKey = this.contextProvider.generateCacheKey(context)
+    if (isDefaultRecommendationSemanticSettings(semanticSettings)) {
+      return baseKey
+    }
+
+    return [
+      baseKey,
+      `sem:local${semanticSettings.localVectorEnabled ? 1 : 0}`,
+      `aiEmb${semanticSettings.aiEmbeddingEnabled ? 1 : 0}`,
+      `aiRank${semanticSettings.aiRerankEnabled ? 1 : 0}`
+    ].join('|')
   }
 
   /**
@@ -1333,6 +1599,10 @@ export class RecommendationEngine {
     // 前台应用关联匹配
     if (context.foregroundApp) {
       score += this.matchForegroundApp(candidate, context.foregroundApp)
+    }
+
+    if (context.systemState) {
+      score += this.matchSystemState(candidate, context.systemState)
     }
 
     return score
@@ -1465,6 +1735,45 @@ export class RecommendationEngine {
     return 0
   }
 
+  private matchSystemState(
+    candidate: CandidateItem,
+    systemState: NonNullable<ContextSignal['systemState']>
+  ): number {
+    const { sourceType, itemId } = candidate
+    if (sourceType !== 'app') return 0
+
+    let score = 0
+    const isBatteryConstrained =
+      systemState.powerMode === 'battery' &&
+      (typeof systemState.batteryLevel !== 'number' || systemState.batteryLevel <= 25)
+
+    if (systemState.isOnline === false) {
+      if (this.isBrowserApp(itemId) || itemId.includes('download') || itemId.includes('aria')) {
+        score -= 25
+      }
+    }
+
+    if (isBatteryConstrained) {
+      if (this.isImageApp(itemId) || this.isIDE(itemId)) {
+        score -= 16
+      }
+      if (this.isTextEditor(itemId) || this.isTerminalApp(itemId)) {
+        score += 8
+      }
+    }
+
+    if (systemState.focusMode === 'active' || systemState.isDNDEnabled) {
+      if (this.isIDE(itemId) || this.isTerminalApp(itemId) || this.isTextEditor(itemId)) {
+        score += 12
+      }
+      if (this.isEntertainmentOrSocialApp(itemId)) {
+        score -= 20
+      }
+    }
+
+    return score
+  }
+
   /**
    * 判断是否为浏览器应用
    */
@@ -1478,6 +1787,25 @@ export class RecommendationEngine {
       'com.operasoftware.Opera'
     ]
     return browsers.some((browser) => identifier.includes(browser))
+  }
+
+  private isEntertainmentOrSocialApp(identifier: string): boolean {
+    const lowered = identifier.toLowerCase()
+    const apps = [
+      'spotify',
+      'music',
+      'netease',
+      'qqmusic',
+      'youtube',
+      'netflix',
+      'discord',
+      'telegram',
+      'wechat',
+      'slack',
+      'twitter',
+      'x.com'
+    ]
+    return apps.some((app) => lowered.includes(app))
   }
 
   /**
@@ -1735,9 +2063,10 @@ export class RecommendationEngine {
    * 获取缓存的推荐
    */
   private async getCachedRecommendations(
-    context: ContextSignal
+    context: ContextSignal,
+    semanticSettings: RecommendationSemanticSettings
   ): Promise<{ items: TuffItem[] } | null> {
-    const cacheKey = this.contextProvider.generateCacheKey(context)
+    const cacheKey = this.buildRecommendationCacheKey(context, semanticSettings)
     const cached = await this.dbUtils.getRecommendationCache(cacheKey)
 
     if (!cached) return null
@@ -1757,8 +2086,12 @@ export class RecommendationEngine {
   /**
    * 缓存推荐结果
    */
-  private async cacheRecommendations(context: ContextSignal, items: TuffItem[]): Promise<void> {
-    const cacheKey = this.contextProvider.generateCacheKey(context)
+  private async cacheRecommendations(
+    context: ContextSignal,
+    semanticSettings: RecommendationSemanticSettings,
+    items: TuffItem[]
+  ): Promise<void> {
+    const cacheKey = this.buildRecommendationCacheKey(context, semanticSettings)
     const expiresAt = new Date(Date.now() + this.CACHE_DURATION_MS)
 
     void this.dbUtils.setRecommendationCache(cacheKey, items, expiresAt).catch((error) => {
@@ -1850,6 +2183,59 @@ interface CandidateItem extends ItemCandidate {
  */
 export interface ScoredItem extends CandidateItem {
   score: number
+}
+
+interface RecommendationSemanticSettings {
+  localVectorEnabled: boolean
+  aiRerankEnabled: boolean
+  aiEmbeddingEnabled: boolean
+}
+
+function normalizeRecommendationSemanticSettings(value: unknown): RecommendationSemanticSettings {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  return {
+    localVectorEnabled:
+      typeof raw.localVectorEnabled === 'boolean'
+        ? raw.localVectorEnabled
+        : DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS.localVectorEnabled,
+    aiRerankEnabled:
+      typeof raw.aiRerankEnabled === 'boolean'
+        ? raw.aiRerankEnabled
+        : DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS.aiRerankEnabled,
+    aiEmbeddingEnabled:
+      typeof raw.aiEmbeddingEnabled === 'boolean'
+        ? raw.aiEmbeddingEnabled
+        : DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS.aiEmbeddingEnabled
+  }
+}
+
+function isDefaultRecommendationSemanticSettings(
+  settings: RecommendationSemanticSettings
+): boolean {
+  return (
+    settings.localVectorEnabled === DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS.localVectorEnabled &&
+    settings.aiRerankEnabled === DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS.aiRerankEnabled &&
+    settings.aiEmbeddingEnabled === DEFAULT_RECOMMENDATION_SEMANTIC_SETTINGS.aiEmbeddingEnabled
+  )
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error(`Recommendation semantic AI timeout after ${timeoutMs}ms`))
+        }, timeoutMs)
+      })
+    ])
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  }
 }
 
 /** Empty usage stats placeholder for plugin/builtin candidates that have no usage history */
