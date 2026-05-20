@@ -46,6 +46,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { StorageList, isLocalhostUrl } from '@talex-touch/utils'
+import { isSupportedWallpaperImagePath } from '@talex-touch/utils/common/wallpaper'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -113,7 +114,6 @@ import { tempFileService } from '../service/temp-file.service'
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
 const execFileAsync = promisify(execFile)
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
 const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
@@ -309,8 +309,7 @@ function resolveTfilePath(urlOrPath: string): string {
 }
 
 function isImagePath(filePath: string): boolean {
-  const ext = path.extname(filePath).toLowerCase()
-  return IMAGE_EXTENSIONS.has(ext)
+  return isSupportedWallpaperImagePath(filePath)
 }
 
 async function listWallpaperImages(folderPath: string, recursive = false): Promise<string[]> {

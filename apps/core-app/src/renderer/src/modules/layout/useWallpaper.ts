@@ -5,14 +5,18 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import {
+  hasConfiguredWallpaperSource,
+  normalizeWallpaperBackground,
+  resolveCustomWallpaperPath,
+  resolveFolderWallpaperPath
+} from './wallpaper-state'
 import { appSetting } from '~/modules/storage/app-storage'
 import { normalizeWindowPreference, themeStyle } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
 const wallpaperLog = createRendererLogger('Wallpaper')
-
-type WallpaperSource = 'none' | 'bing' | 'custom' | 'folder' | 'desktop'
 
 const listImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
@@ -23,7 +27,6 @@ const getDesktopEvent = defineRawEvent<void, { path: string | null; error?: stri
 )
 
 const FOLDER_ROTATION_TASK = 'wallpaper.folder.rotate'
-const DEFAULT_FILTER = { brightness: 100, contrast: 100, saturate: 100 }
 
 function resolveWallpaperUrl(pathOrUrl: string): string {
   if (!pathOrUrl) return ''
@@ -52,50 +55,17 @@ export function useWallpaper() {
   const lastFolderEmptyToast = ref('')
 
   const background = computed(() => {
-    const raw = appSetting.background ?? {}
-    return {
-      source: (raw.source ?? 'none') as WallpaperSource,
-      customPath: raw.customPath ?? '',
-      folderPath: raw.folderPath ?? '',
-      folderIntervalMinutes:
-        typeof raw.folderIntervalMinutes === 'number' ? raw.folderIntervalMinutes : 30,
-      folderRandom: raw.folderRandom !== false,
-      blur: typeof raw.blur === 'number' ? raw.blur : 0,
-      opacity: typeof raw.opacity === 'number' ? raw.opacity : 100,
-      filter: {
-        brightness: raw.filter?.brightness ?? DEFAULT_FILTER.brightness,
-        contrast: raw.filter?.contrast ?? DEFAULT_FILTER.contrast,
-        saturate: raw.filter?.saturate ?? DEFAULT_FILTER.saturate
-      },
-      desktopPath: raw.desktopPath ?? '',
-      library: {
-        enabled: raw.library?.enabled ?? false,
-        fileStoredPath: raw.library?.fileStoredPath ?? '',
-        folderStoredPath: raw.library?.folderStoredPath ?? ''
-      }
-    }
+    return normalizeWallpaperBackground(appSetting.background)
   })
 
   const wallpaperActive = computed(() => {
-    if (background.value.source === 'none') return false
-    if (background.value.source === 'custom') {
-      return Boolean(
-        background.value.library.enabled
-          ? background.value.library.fileStoredPath || background.value.customPath
-          : background.value.customPath
-      )
-    }
-    if (background.value.source === 'folder') {
-      return Boolean(
-        background.value.library.enabled
-          ? background.value.library.folderStoredPath || background.value.folderPath
-          : background.value.folderPath
-      )
+    if (background.value.source === 'auto' || background.value.source === 'bing') {
+      return Boolean(activeImagePath.value)
     }
     if (background.value.source === 'desktop') {
-      return Boolean(desktopPath.value || background.value.desktopPath)
+      return Boolean(activeImagePath.value || desktopPath.value || background.value.desktopPath)
     }
-    return true
+    return hasConfiguredWallpaperSource(background.value)
   })
 
   const wallpaperStyle = computed(() => {
@@ -113,10 +83,10 @@ export function useWallpaper() {
     }
   })
 
-  async function ensureBingWallpaper(): Promise<void> {
+  async function ensureBingWallpaper(): Promise<boolean> {
     const now = Date.now()
     if (bingUrl.value && lastBingFetch.value && now - lastBingFetch.value < 12 * 60 * 60 * 1000) {
-      return
+      return true
     }
     try {
       const response = await networkSdk.request<{ images?: Array<{ url?: string }> }>({
@@ -128,18 +98,20 @@ export function useWallpaper() {
       if (typeof url === 'string') {
         bingUrl.value = `https://www.bing.com${url}`
         lastBingFetch.value = now
+        return true
       }
     } catch {
       wallpaperLog.warn('Failed to fetch Bing wallpaper.')
     }
+    return false
   }
 
-  async function refreshDesktopWallpaper(): Promise<void> {
+  async function refreshDesktopWallpaper(options?: { silentError?: boolean }): Promise<boolean> {
     try {
       const result = await transport.send(getDesktopEvent)
       if (result?.error) {
         wallpaperLog.warn('Failed to refresh desktop wallpaper:', result.error)
-        if (lastDesktopErrorToast.value !== result.error) {
+        if (!options?.silentError && lastDesktopErrorToast.value !== result.error) {
           toast.error(result.error)
           lastDesktopErrorToast.value = result.error
         }
@@ -152,13 +124,15 @@ export function useWallpaper() {
       if (path) {
         lastDesktopErrorToast.value = ''
       }
+      return Boolean(path)
     } catch (error) {
       const message = toErrorMessage(error)
       wallpaperLog.warn('Failed to refresh desktop wallpaper:', message)
-      if (lastDesktopErrorToast.value !== message) {
+      if (!options?.silentError && lastDesktopErrorToast.value !== message) {
         toast.error(message)
         lastDesktopErrorToast.value = message
       }
+      return false
     }
   }
 
@@ -211,6 +185,30 @@ export function useWallpaper() {
     pollingService.start()
   }
 
+  async function applyBingWallpaper(): Promise<void> {
+    await ensureBingWallpaper()
+    activeImagePath.value = bingUrl.value
+  }
+
+  async function applyDesktopWallpaper(options?: { silentError?: boolean }): Promise<boolean> {
+    if (!desktopPath.value && background.value.desktopPath) {
+      desktopPath.value = background.value.desktopPath
+    }
+    if (!desktopPath.value) {
+      await refreshDesktopWallpaper({ silentError: options?.silentError })
+    }
+    activeImagePath.value = desktopPath.value || background.value.desktopPath
+    return Boolean(activeImagePath.value)
+  }
+
+  async function applyAutoWallpaper(): Promise<void> {
+    const hasDesktop = await applyDesktopWallpaper({ silentError: true })
+    if (hasDesktop) {
+      return
+    }
+    await applyBingWallpaper()
+  }
+
   watch(
     () => [
       background.value.source,
@@ -232,34 +230,28 @@ export function useWallpaper() {
         return
       }
 
+      if (background.value.source === 'auto') {
+        await applyAutoWallpaper()
+        return
+      }
+
       if (background.value.source === 'bing') {
-        await ensureBingWallpaper()
-        activeImagePath.value = bingUrl.value
+        await applyBingWallpaper()
         return
       }
 
       if (background.value.source === 'desktop') {
-        if (!desktopPath.value && background.value.desktopPath) {
-          desktopPath.value = background.value.desktopPath
-        }
-        if (!desktopPath.value) {
-          await refreshDesktopWallpaper()
-        }
-        activeImagePath.value = desktopPath.value || background.value.desktopPath
+        await applyDesktopWallpaper()
         return
       }
 
       if (background.value.source === 'custom') {
-        activeImagePath.value = background.value.library.enabled
-          ? background.value.library.fileStoredPath || background.value.customPath
-          : background.value.customPath
+        activeImagePath.value = resolveCustomWallpaperPath(background.value)
         return
       }
 
       if (background.value.source === 'folder') {
-        const folderPath = background.value.library.enabled
-          ? background.value.library.folderStoredPath || background.value.folderPath
-          : background.value.folderPath
+        const folderPath = resolveFolderWallpaperPath(background.value)
         await loadFolderImages(folderPath)
         if (folderImages.value.length === 0) {
           wallpaperLog.warn('No images found for folder wallpaper source.', {
