@@ -195,3 +195,9 @@
   color: var(--tx-text-color-placeholder);
   white-space: nowrap;
 }
+
+.app-index-manager-dialog {
+  max-height: 70vh;
+  overflow: auto;
+  padding-right: 4px;
+}

@@ -12,6 +12,7 @@ import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -122,6 +123,7 @@ const deviceIdleForm = ref<DeviceIdleForm>({
 
 const appIndexSettings = ref<AppIndexSettings | null>(null)
 const appIndexSaving = ref(false)
+const appIndexManagerVisible = ref(false)
 const appIndexForm = ref<AppIndexForm>({
   hideNoisySystemApps: DEFAULT_APP_INDEX_SETTINGS.hideNoisySystemApps,
   startupBackfillEnabled: DEFAULT_APP_INDEX_SETTINGS.startupBackfillEnabled,
@@ -138,6 +140,10 @@ const appIndexForm = ref<AppIndexForm>({
     DEFAULT_APP_INDEX_SETTINGS.fullSyncCheckIntervalMs / 60000
   )
 })
+
+function openAppIndexManager() {
+  appIndexManagerVisible.value = true
+}
 
 async function checkStatus() {
   try {
@@ -1096,10 +1102,29 @@ async function triggerRebuild() {
       </template>
     </TuffBlockInput>
 
-    <SettingFileIndexAppIndexManager />
+    <TuffBlockSlot
+      :title="t('settings.settingFileIndex.appIndexManagerDialogTitle')"
+      :description="t('settings.settingFileIndex.appIndexManagerDialogDesc')"
+      default-icon="i-carbon-app"
+      active-icon="i-carbon-app"
+    >
+      <TxButton variant="flat" type="primary" @click="openAppIndexManager">
+        {{ t('settings.settingFileIndex.appIndexManagerOpen') }}
+      </TxButton>
+    </TuffBlockSlot>
 
     <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>
+
+  <TModal
+    v-model="appIndexManagerVisible"
+    :title="t('settings.settingFileIndex.appIndexManagerDialogTitle')"
+    width="960px"
+  >
+    <div class="app-index-manager-dialog">
+      <SettingFileIndexAppIndexManager />
+    </div>
+  </TModal>
 </template>
 
 <style scoped src="./SettingFileIndex.css"></style>
