@@ -25,12 +25,21 @@ function stripDataUrlPrefix(value: string): string {
   return commaIndex >= 0 ? value.slice(commaIndex + 1) : value
 }
 
+export function normalizeImageBase64Payload(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const payload = trimmed.startsWith('data:image/') ? stripDataUrlPrefix(trimmed) : trimmed
+  const normalized = payload.trim()
+  return normalized || null
+}
+
 async function readImageBase64FromSource(source: string): Promise<string | null> {
   const trimmed = source.trim()
   if (!trimmed) return null
 
   if (trimmed.startsWith('data:image/')) {
-    return stripDataUrlPrefix(trimmed)
+    return normalizeImageBase64Payload(trimmed)
   }
 
   const localPath = resolveLocalFilePath(trimmed)
@@ -64,9 +73,26 @@ export async function translateCoreBoxImageItem(
     }
   }
 
+  return await translateImageBase64(imageBase64, targetLang, options)
+}
+
+export async function translateImageBase64(
+  imageBase64: string,
+  targetLang = 'zh',
+  options: { openPinWindow?: boolean } = {}
+): Promise<CoreBoxImageTranslateResponse> {
+  const normalizedImageBase64 = normalizeImageBase64Payload(imageBase64)
+  if (!normalizedImageBase64) {
+    return {
+      success: false,
+      code: 'IMAGE_UNAVAILABLE',
+      error: 'Image source is unavailable.'
+    }
+  }
+
   const run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
     input: {
-      imageBase64,
+      imageBase64: normalizedImageBase64,
       targetLang
     },
     capability: options.openPinWindow ? undefined : 'image.translate.e2e'
