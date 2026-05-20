@@ -302,8 +302,8 @@ const _appSettingOriginData = {
     hotCacheDurationMs: 120000,
   },
   background: {
-    /** 背景图来源: 'none' | 'bing' | 'custom' | 'folder' | 'desktop' */
-    source: 'none' as 'none' | 'bing' | 'custom' | 'folder' | 'desktop',
+    /** 背景图来源: 'auto' | 'none' | 'bing' | 'custom' | 'folder' | 'desktop' */
+    source: 'auto' as 'auto' | 'none' | 'bing' | 'custom' | 'folder' | 'desktop',
     /** 自定义背景图路径 */
     customPath: '',
     /** 文件夹路径 */

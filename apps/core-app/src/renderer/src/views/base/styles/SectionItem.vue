@@ -1,5 +1,6 @@
 <script lang="ts" name="SectionItem" setup>
 import { useRouter } from 'vue-router'
+import { createThemeDetailRoute } from './section-route'
 
 const props = defineProps<{
   title: string
@@ -21,12 +22,7 @@ function handleClick() {
 function goRouter() {
   if (props.disabled) return
 
-  router.push({
-    name: 'Theme',
-    query: {
-      theme: props.title
-    }
-  })
+  router.push(createThemeDetailRoute(props.title))
 }
 </script>
 

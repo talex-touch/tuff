@@ -9,3 +9,4 @@ export type { LogEntry, LoggerInfo, LoggingConfig, ModuleConfig, ModuleLoggerOpt
 export * from './search'
 export * from './storage/index'
 export * from './utils'
+export * from './wallpaper'
