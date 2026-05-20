@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
+  buildRecommendationUsagePreferenceProfile,
   calculateLocalSemanticScore
 } from './semantic-profile'
 
@@ -45,9 +46,9 @@ const devFocusContext: ContextSignal = {
 describe('recommendation semantic profile', () => {
   it('scores developer tools above social apps in a focused code context', () => {
     const contextProfile = buildRecommendationSemanticProfile(devFocusContext)
-    const terminalProfile = buildCandidateSemanticProfile({
+    const vscodeProfile = buildCandidateSemanticProfile({
       sourceId: 'app-provider',
-      itemId: 'com.apple.Terminal',
+      itemId: 'com.microsoft.VSCode',
       sourceType: 'app'
     })
     const discordProfile = buildCandidateSemanticProfile({
@@ -56,7 +57,7 @@ describe('recommendation semantic profile', () => {
       sourceType: 'app'
     })
 
-    expect(calculateLocalSemanticScore(contextProfile, terminalProfile)).toBeGreaterThan(
+    expect(calculateLocalSemanticScore(contextProfile, vscodeProfile)).toBeGreaterThan(
       calculateLocalSemanticScore(contextProfile, discordProfile)
     )
   })
@@ -68,5 +69,45 @@ describe('recommendation semantic profile', () => {
     expect(contextProfile.text).not.toContain('net_private')
     expect(contextProfile.text).not.toContain('loc_private')
     expect(contextProfile.text).not.toContain('Asia/Shanghai')
+  })
+
+  it('builds a local usage preference vector from historical app behavior', () => {
+    const now = new Date('2026-05-04T09:00:00.000Z').getTime()
+    const preferenceProfile = buildRecommendationUsagePreferenceProfile(
+      [
+        {
+          sourceId: 'app-provider',
+          itemId: 'com.microsoft.VSCode',
+          sourceType: 'app',
+          executeCount: 40,
+          searchCount: 8,
+          lastExecuted: new Date('2026-05-04T08:55:00.000Z')
+        },
+        {
+          sourceId: 'app-provider',
+          itemId: 'discord',
+          sourceType: 'app',
+          executeCount: 2,
+          lastExecuted: new Date('2026-05-04T08:55:00.000Z')
+        }
+      ],
+      now
+    )
+    const vscodeProfile = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: 'com.microsoft.VSCode',
+      sourceType: 'app'
+    })
+    const discordProfile = buildCandidateSemanticProfile({
+      sourceId: 'app-provider',
+      itemId: 'discord',
+      sourceType: 'app'
+    })
+
+    expect(preferenceProfile?.text).toContain('app:ide')
+    expect(preferenceProfile).not.toBeNull()
+    expect(calculateLocalSemanticScore(preferenceProfile!, vscodeProfile)).toBeGreaterThan(
+      calculateLocalSemanticScore(preferenceProfile!, discordProfile)
+    )
   })
 })
