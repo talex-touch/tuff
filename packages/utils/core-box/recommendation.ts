@@ -39,8 +39,19 @@ export interface ContextSignal {
   }
   systemState?: {
     isOnline: boolean
-    batteryLevel: number
+    networkType?: 'offline' | 'wired' | 'wifi' | 'cellular' | 'unknown'
+    networkIdHash?: string
+    bluetoothAvailable?: boolean
+    bluetoothConnectedCount?: number
+    batteryLevel?: number
+    isCharging?: boolean
+    isOnBattery?: boolean
     isDNDEnabled: boolean
+    focusMode?: 'active' | 'inactive' | 'unknown'
+    powerMode?: 'charging' | 'battery' | 'unknown'
+    locationBucket?: string
+    timezone?: string
+    unavailableSignals?: string[]
   }
 }
 

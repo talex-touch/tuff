@@ -200,6 +200,40 @@ describe('RecommendationEngine', () => {
     expect(provider.generateCacheKey(tuesdayMorningContext)).toBe('morning|2')
   })
 
+  it('includes privacy-safe system state buckets in the recommendation cache key', () => {
+    const provider = new ContextProvider()
+    const context: ContextSignal = {
+      ...morningContext,
+      systemState: {
+        isOnline: true,
+        networkType: 'wifi',
+        networkIdHash: 'net_9f02',
+        batteryLevel: 83,
+        isCharging: false,
+        isOnBattery: true,
+        powerMode: 'battery',
+        isDNDEnabled: true,
+        focusMode: 'active',
+        bluetoothAvailable: false,
+        bluetoothConnectedCount: 0,
+        locationBucket: 'loc_12ab',
+        timezone: 'Asia/Shanghai',
+        unavailableSignals: ['bluetooth']
+      }
+    }
+
+    const key = provider.generateCacheKey(context)
+
+    expect(key).toContain('nt:wifi')
+    expect(key).toContain('nid:net_9f02')
+    expect(key).toContain('bat:80')
+    expect(key).toContain('pow:battery')
+    expect(key).toContain('dnd:1')
+    expect(key).toContain('bt:na')
+    expect(key).toContain('loc:loc_12ab')
+    expect(key).not.toContain('Asia/Shanghai')
+  })
+
   it('does not reuse memory cache when the time context changes', async () => {
     const dbUtils = createDbUtils()
     const engine = new RecommendationEngine(dbUtils as never)
@@ -343,6 +377,68 @@ describe('RecommendationEngine', () => {
     })
 
     expect(calculateTimeRelevanceScore(slotOnlyStats, morningContext.time)).toBeGreaterThan(0)
+  })
+
+  it('uses focus system state to prefer work apps over social apps', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+    const focusContext: ContextSignal = {
+      ...morningContext,
+      systemState: {
+        isOnline: true,
+        networkType: 'wifi',
+        networkIdHash: 'net_focus',
+        batteryLevel: 70,
+        isCharging: true,
+        isOnBattery: false,
+        powerMode: 'charging',
+        isDNDEnabled: true,
+        focusMode: 'active',
+        bluetoothAvailable: false,
+        bluetoothConnectedCount: 0,
+        locationBucket: 'loc_focus',
+        timezone: 'Asia/Shanghai',
+        unavailableSignals: []
+      }
+    }
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => focusContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:focus`
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 10 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 10 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 2 })
+    const ids = result.items.map((item) => item.id)
+    const socialRank = ids.indexOf('discord')
+
+    expect(ids[0]).toBe('com.apple.Terminal')
+    expect(socialRank === -1 || socialRank > 0).toBe(true)
   })
 
   it('keeps time stats when duplicate frequent candidates are also time-based', async () => {

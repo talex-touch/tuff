@@ -52,6 +52,81 @@ const CLIPBOARD_POLLING_INTERVAL_OPTIONS = [1, 3, 5, 10, 15, -1] as const
 const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
 const OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS = [300, 450, 600, 800, 1000, 1200, 1500] as const
 const DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS = 600
+const DEFAULT_RECOMMENDATION_CONTEXT_SOURCES = {
+  time: true,
+  foregroundApp: true,
+  clipboard: true,
+  network: true,
+  bluetooth: true,
+  focus: true,
+  power: true,
+  location: true
+} as const
+type RecommendationContextSourceKey = keyof typeof DEFAULT_RECOMMENDATION_CONTEXT_SOURCES
+const recommendationContextSourceItems: Array<{
+  key: RecommendationContextSourceKey
+  titleKey: string
+  descriptionKey: string
+  defaultIcon: string
+  activeIcon: string
+}> = [
+  {
+    key: 'time',
+    titleKey: 'settingTools.recommendationContextTime',
+    descriptionKey: 'settingTools.recommendationContextTimeDesc',
+    defaultIcon: 'i-carbon-time',
+    activeIcon: 'i-carbon-time'
+  },
+  {
+    key: 'foregroundApp',
+    titleKey: 'settingTools.recommendationContextForegroundApp',
+    descriptionKey: 'settingTools.recommendationContextForegroundAppDesc',
+    defaultIcon: 'i-carbon-application',
+    activeIcon: 'i-carbon-application'
+  },
+  {
+    key: 'clipboard',
+    titleKey: 'settingTools.recommendationContextClipboard',
+    descriptionKey: 'settingTools.recommendationContextClipboardDesc',
+    defaultIcon: 'i-carbon-clipboard',
+    activeIcon: 'i-carbon-clipboard'
+  },
+  {
+    key: 'network',
+    titleKey: 'settingTools.recommendationContextNetwork',
+    descriptionKey: 'settingTools.recommendationContextNetworkDesc',
+    defaultIcon: 'i-carbon-wifi',
+    activeIcon: 'i-carbon-wifi'
+  },
+  {
+    key: 'bluetooth',
+    titleKey: 'settingTools.recommendationContextBluetooth',
+    descriptionKey: 'settingTools.recommendationContextBluetoothDesc',
+    defaultIcon: 'i-carbon-bluetooth',
+    activeIcon: 'i-carbon-bluetooth'
+  },
+  {
+    key: 'focus',
+    titleKey: 'settingTools.recommendationContextFocus',
+    descriptionKey: 'settingTools.recommendationContextFocusDesc',
+    defaultIcon: 'i-carbon-notification-off',
+    activeIcon: 'i-carbon-notification-off-filled'
+  },
+  {
+    key: 'power',
+    titleKey: 'settingTools.recommendationContextPower',
+    descriptionKey: 'settingTools.recommendationContextPowerDesc',
+    defaultIcon: 'i-carbon-battery-charging',
+    activeIcon: 'i-carbon-battery-charging'
+  },
+  {
+    key: 'location',
+    titleKey: 'settingTools.recommendationContextLocation',
+    descriptionKey: 'settingTools.recommendationContextLocationDesc',
+    defaultIcon: 'i-carbon-location',
+    activeIcon: 'i-carbon-location-filled'
+  }
+]
 
 type SystemPermissionStatus =
   | 'granted'
@@ -218,6 +293,44 @@ function ensureOmniPanelSettings(): void {
   }
 }
 
+function ensureRecommendationContextSettings(): void {
+  if (!appSetting.recommendation || typeof appSetting.recommendation !== 'object') {
+    appSetting.recommendation = {
+      enabled: true,
+      maxItems: 10,
+      showReason: true,
+      contextSources: { ...DEFAULT_RECOMMENDATION_CONTEXT_SOURCES }
+    }
+    return
+  }
+
+  const recommendation = appSetting.recommendation as typeof appSetting.recommendation & {
+    contextSources?: Partial<Record<RecommendationContextSourceKey, boolean>> | null
+  }
+
+  if (typeof recommendation.enabled !== 'boolean') {
+    recommendation.enabled = true
+  }
+  if (typeof recommendation.maxItems !== 'number' || !Number.isFinite(recommendation.maxItems)) {
+    recommendation.maxItems = 10
+  }
+  if (typeof recommendation.showReason !== 'boolean') {
+    recommendation.showReason = true
+  }
+  if (!recommendation.contextSources || typeof recommendation.contextSources !== 'object') {
+    recommendation.contextSources = { ...DEFAULT_RECOMMENDATION_CONTEXT_SOURCES }
+    return
+  }
+
+  for (const key of Object.keys(
+    DEFAULT_RECOMMENDATION_CONTEXT_SOURCES
+  ) as RecommendationContextSourceKey[]) {
+    if (typeof recommendation.contextSources[key] !== 'boolean') {
+      recommendation.contextSources[key] = DEFAULT_RECOMMENDATION_CONTEXT_SOURCES[key]
+    }
+  }
+}
+
 async function refreshOmniPanelAccessibilityStatus(): Promise<void> {
   if (!isMac.value) {
     omniPanelAccessibilityGranted.value = true
@@ -251,6 +364,7 @@ async function refreshShortcuts(): Promise<void> {
 onMounted(async () => {
   ensureClipboardPollingSettings()
   ensureOmniPanelSettings()
+  ensureRecommendationContextSettings()
   await Promise.all([refreshShortcuts(), refreshOmniPanelAccessibilityStatus()])
 })
 
@@ -266,6 +380,14 @@ watch(
   () => appSetting.omniPanel,
   () => {
     ensureOmniPanelSettings()
+  },
+  { deep: false, immediate: true }
+)
+
+watch(
+  () => appSetting.recommendation,
+  () => {
+    ensureRecommendationContextSettings()
   },
   { deep: false, immediate: true }
 )
@@ -774,6 +896,18 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="15"> 15 </TxSelectItem>
       <TxSelectItem :value="20"> 20 </TxSelectItem>
     </TuffBlockSelect>
+
+    <template v-if="showAdvancedSettings">
+      <TuffBlockSwitch
+        v-for="source in recommendationContextSourceItems"
+        :key="source.key"
+        v-model="appSetting.recommendation.contextSources[source.key]"
+        :title="t(source.titleKey)"
+        :description="t(source.descriptionKey)"
+        :default-icon="source.defaultIcon"
+        :active-icon="source.activeIcon"
+      />
+    </template>
   </TuffGroupBlock>
 
   <ShortcutDialog
