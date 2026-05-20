@@ -25,6 +25,7 @@ import {
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
+  buildRecommendationUsagePreferenceProfile,
   calculateLocalSemanticScore,
   type RecommendationSemanticCandidateInput,
   type RecommendationSemanticProfile
@@ -42,6 +43,7 @@ const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 const SEMANTIC_LOCAL_WEIGHT = 6e5
+const SEMANTIC_USAGE_PREFERENCE_WEIGHT = 3.5e5
 const SEMANTIC_AI_EMBEDDING_WEIGHT = 4e5
 const SEMANTIC_AI_RERANK_WEIGHT = 3e5
 const SEMANTIC_AI_RERANK_ORDER_WEIGHT = 1e4
@@ -1299,13 +1301,27 @@ export class RecommendationEngine {
       semanticSettings.aiRerankEnabled
         ? buildRecommendationSemanticProfile(context)
         : null
+    const usagePreferenceProfile = semanticSettings.localVectorEnabled
+      ? buildRecommendationUsagePreferenceProfile(
+          candidates.map((candidate) => ({
+            ...this.toSemanticCandidateInput(candidate),
+            searchCount: candidate.usageStats.searchCount,
+            executeCount: candidate.usageStats.executeCount,
+            cancelCount: candidate.usageStats.cancelCount,
+            lastSearched: candidate.usageStats.lastSearched,
+            lastExecuted: candidate.usageStats.lastExecuted,
+            lastCancelled: candidate.usageStats.lastCancelled
+          }))
+        )
+      : null
 
     for (const candidate of candidates) {
       const score = await this.calculateRecommendationScore(
         candidate,
         context,
         semanticSettings,
-        semanticProfile
+        semanticProfile,
+        usagePreferenceProfile
       )
       scored.push({ ...candidate, score })
     }
@@ -1326,7 +1342,8 @@ export class RecommendationEngine {
     candidate: CandidateItem,
     context: ContextSignal,
     semanticSettings: RecommendationSemanticSettings,
-    semanticProfile: RecommendationSemanticProfile | null
+    semanticProfile: RecommendationSemanticProfile | null,
+    usagePreferenceProfile: RecommendationSemanticProfile | null
   ): Promise<number> {
     // Plugin candidates: use priority directly, skip usageStats-based calculation
     if (candidate.source === 'plugin' && candidate.pluginCandidate) {
@@ -1364,6 +1381,12 @@ export class RecommendationEngine {
       )
       score +=
         calculateLocalSemanticScore(semanticProfile, candidateProfile) * SEMANTIC_LOCAL_WEIGHT
+
+      if (usagePreferenceProfile && !this.isExternalPriorityCandidate(candidate)) {
+        score +=
+          calculateLocalSemanticScore(usagePreferenceProfile, candidateProfile) *
+          SEMANTIC_USAGE_PREFERENCE_WEIGHT
+      }
     }
 
     return score
