@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CoreBoxEvents, CoreBoxRetainedEvents, DivisionBoxEvents } from '../transport/events'
+import { CoreBoxEvents, CoreBoxRetainedEvents, DivisionBoxEvents, FlowEvents } from '../transport/events'
 import { createDivisionBoxSDK } from '../plugin/sdk/division-box'
 import { createFeatureSDK } from '../plugin/sdk/feature-sdk'
 import { createMetaSDK } from '../plugin/sdk/meta-sdk'
@@ -255,5 +255,147 @@ describe('plugin sdk lifecycle', () => {
       },
     })
     expect(onExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('quick actions sdk exposes native share targets through FlowBus', async () => {
+    const { channel } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+
+    channel.send.mockImplementation(async (eventName: string) => {
+      if (eventName === FlowEvents.getTargets.toEventName()) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'airdrop',
+              fullId: 'native.airdrop',
+              pluginId: 'native',
+              name: 'AirDrop',
+              supportedTypes: ['files'],
+              isEnabled: true,
+              hasFlowHandler: true,
+              isNativeShare: true,
+            },
+            {
+              id: 'notes',
+              fullId: 'notes.capture',
+              pluginId: 'notes',
+              name: 'Notes',
+              supportedTypes: ['text'],
+              isEnabled: true,
+              hasFlowHandler: true,
+            },
+          ],
+        }
+      }
+      return undefined
+    })
+
+    await expect(sdk.getNativeShareTargets('files')).resolves.toMatchObject([
+      {
+        id: 'airdrop',
+        fullId: 'native.airdrop',
+        isNativeShare: true,
+      },
+    ])
+    expect(channel.send).toHaveBeenCalledWith(
+      FlowEvents.getTargets.toEventName(),
+      expect.objectContaining({ payloadType: 'files' }),
+    )
+  })
+
+  it('quick actions sdk shares Flow payloads through native share transport', async () => {
+    const { channel } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+
+    channel.send.mockImplementation(async (eventName: string) => {
+      if (eventName === FlowEvents.nativeShare.toEventName()) {
+        return { success: true, target: 'airdrop', requiresUserAction: true }
+      }
+      return undefined
+    })
+
+    const result = await sdk.nativeShare(
+      {
+        type: 'text',
+        data: 'Hello',
+        context: {
+          sourcePluginId: 'external-plugin',
+          metadata: { title: 'Greeting' },
+        },
+      },
+      { target: 'airdrop' },
+    )
+
+    expect(result).toEqual({ success: true, target: 'airdrop', requiresUserAction: true })
+    expect(channel.send).toHaveBeenCalledWith(
+      FlowEvents.nativeShare.toEventName(),
+      expect.objectContaining({
+        target: 'airdrop',
+        payload: expect.objectContaining({
+          type: 'text',
+          data: 'Hello',
+          context: expect.objectContaining({
+            sourcePluginId: 'external-plugin',
+          }),
+        }),
+      }),
+    )
+  })
+
+  it('quick actions sdk builds native share payloads from CoreBox items', () => {
+    const { channel } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+
+    expect(
+      sdk.createSharePayloadFromItem({
+        id: 'file-1',
+        source: { type: 'plugin', id: 'quick-plugin' },
+        kind: 'file',
+        render: {
+          mode: 'default',
+          basic: { title: 'Report.pdf', subtitle: 'Quarterly report' },
+        },
+        meta: {
+          file: { path: '/tmp/Report.pdf' },
+        },
+      }),
+    ).toMatchObject({
+      type: 'files',
+      data: ['/tmp/Report.pdf'],
+      context: {
+        sourcePluginId: 'quick-plugin',
+        metadata: {
+          title: 'Report.pdf',
+          itemId: 'file-1',
+          itemKind: 'file',
+        },
+      },
+    })
+
+    expect(
+      sdk.createSharePayloadFromItem({
+        id: 'link-1',
+        source: { type: 'plugin', id: 'quick-plugin' },
+        kind: 'url',
+        render: {
+          mode: 'default',
+          basic: { title: 'Tuff Docs', subtitle: 'Developer docs' },
+        },
+        meta: {
+          web: { url: 'https://example.com/docs' },
+        },
+      }),
+    ).toMatchObject({
+      type: 'text',
+      data: 'Tuff Docs\nDeveloper docs\nhttps://example.com/docs',
+      context: {
+        sourcePluginId: 'quick-plugin',
+        metadata: {
+          title: 'Tuff Docs',
+          url: 'https://example.com/docs',
+        },
+      },
+    })
   })
 })
