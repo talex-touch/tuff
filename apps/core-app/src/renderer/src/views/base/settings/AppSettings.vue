@@ -5,6 +5,7 @@ import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import SettingHeader from './SettingHeader.vue'
+import SettingAssistant from './SettingAssistant.vue'
 import SettingLanguage from './SettingLanguage.vue'
 import SettingSetup from './SettingSetup.vue'
 import SettingTools from './SettingTools.vue'
@@ -53,6 +54,8 @@ watch(
       <SettingSetup />
 
       <SettingTools />
+
+      <SettingAssistant />
 
       <div data-settings-section="file-index">
         <SettingFileIndex
