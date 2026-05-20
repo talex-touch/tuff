@@ -187,13 +187,6 @@ const modulesToLoad = [
 ]
 const optionalModulesToLoad = new Set([trayManagerModule])
 
-function shouldLoadAssistantModule(): boolean {
-  const value = process.env.TUFF_ENABLE_ASSISTANT_EXPERIMENT
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-}
-
 // Record when Electron becomes ready
 let electronReadyTime: number
 
@@ -227,13 +220,6 @@ app.whenReady().then(async () => {
         return await touchApp.moduleManager.loadModule(moduleCtor)
       },
       optionalModules: optionalModulesToLoad,
-      shouldSkip: (moduleCtor) => {
-        if (moduleCtor === assistantModule && !shouldLoadAssistantModule()) {
-          mainLog.info('Skip Assistant module: TUFF_ENABLE_ASSISTANT_EXPERIMENT disabled')
-          return true
-        }
-        return false
-      },
       onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
         mainLog.warn('Optional module failed to load, continue startup', {
           meta: { module: metric.name }

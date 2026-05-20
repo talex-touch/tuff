@@ -46,9 +46,30 @@ describe('CoreApp visible experience evidence', () => {
         'Visible experience item is not passed: startup-packaged-hot',
         'Visible experience item has no artifact path: startup-packaged-hot',
         'Visible experience item has no screenshot or recording artifact: startup-first-screen',
+        'Visible experience item has no screenshot or recording artifact: assistant-floating-ball-entry',
+        'Visible experience item has no screenshot or recording artifact: assistant-screenshot-translate',
         'Visible experience item is missing required evidence check: startup-packaged-hot -> Current package version is used by the packaged artifact'
       ])
     })
+  })
+
+  it('includes Assistant floating ball and screenshot translation as visible evidence surfaces', () => {
+    const assistantSurfaces = COREAPP_VISIBLE_EXPERIENCE_SURFACES.filter(
+      (surface) => surface.group === 'assistant'
+    )
+
+    expect(assistantSurfaces.map((surface) => surface.id)).toEqual([
+      'assistant-floating-ball-entry',
+      'assistant-screenshot-translate'
+    ])
+    expect(assistantSurfaces.every((surface) => surface.required)).toBe(true)
+    expect(assistantSurfaces.every((surface) => surface.requiresVisualArtifact)).toBe(true)
+    expect(assistantSurfaces[0]?.requiredEvidence).toContain(
+      'Dragged floating ball position persists after reopening the Assistant surface'
+    )
+    expect(assistantSurfaces[1]?.requiredEvidence).toContain(
+      'Screen permission denial and provider fallback remain visible and recoverable'
+    )
   })
 
   it('passes when all required items have matching artifacts', () => {
@@ -95,15 +116,30 @@ describe('CoreApp visible experience evidence', () => {
       '- Use real CoreApp UI on the target device; do not substitute mock screenshots.'
     )
     expect(template).toContain('### CoreBox search states')
+    expect(template).toContain('### Assistant floating ball entry')
+    expect(template).toContain('### Assistant screenshot translation')
     expect(template).toContain('- Collection steps:')
     expect(template).toContain(
       '- Run a query that returns no results and capture the retry/settings actions.'
     )
+    expect(template).toContain(
+      '- Click the floating ball and capture the Voice Panel opened next to the ball.'
+    )
+    expect(template).toContain(
+      '- Repeat with macOS Screen Recording permission denied or unavailable and capture the recovery state.'
+    )
     expect(template).toContain('- [ ] No-result state shows retry and File Index settings actions')
+    expect(template).toContain(
+      '- [ ] Clicking the floating ball opens the Voice Panel beside the ball'
+    )
     expect(template).toContain('- Recommended artifacts:')
     expect(template).toContain('evidence/coreapp-visible/corebox-no-result.png')
+    expect(template).toContain('evidence/coreapp-visible/assistant-screenshot-translate-result.png')
     expect(template).toContain('- Block instead of pass when:')
     expect(template).toContain('Reason/status text overlaps row content or is clipped.')
+    expect(template).toContain(
+      'The Assistant floating ball or Voice Panel appears inside the captured screenshot.'
+    )
   })
 
   it('renders checked evidence when the manifest records a completed checklist item', () => {
