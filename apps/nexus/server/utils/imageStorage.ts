@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { recordStorageChannelUsage } from './platformGovernanceStore'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
 const ALLOWED_TYPES = [
@@ -93,6 +94,84 @@ const memoryStorage = new Map<string, { data: Buffer, contentType: string }>()
 interface UploadResult {
   url: string
   key: string
+}
+
+interface UploadOptions {
+  allowedTypes?: string[]
+  allowedExtensions?: string[]
+  actorId?: unknown
+  resourceType?: string
+}
+
+function resolveStorageChannel(bucket: R2Bucket | null) {
+  return {
+    channel: bucket ? 'r2' : 'memory',
+    provider: bucket ? 'cloudflare-r2' : 'memory',
+  }
+}
+
+async function recordImageStorageWrite(
+  event: H3Event,
+  bucket: R2Bucket | null,
+  key: string,
+  size: number,
+  contentType: string,
+  actorId: unknown,
+  resourceType = 'image',
+): Promise<void> {
+  const storage = resolveStorageChannel(bucket)
+  await recordStorageChannelUsage(event, {
+    action: 'storage.write',
+    actorId,
+    channel: storage.channel,
+    provider: storage.provider,
+    resourceType,
+    resourceId: key,
+    unit: 'byte',
+    quantity: size,
+    metadata: {
+      contentType: contentType || 'application/octet-stream',
+    },
+  }).catch(() => {})
+}
+
+async function recordImageStorageRead(
+  event: H3Event,
+  bucket: R2Bucket | null,
+  key: string,
+  size: number,
+  contentType: string,
+): Promise<void> {
+  const storage = resolveStorageChannel(bucket)
+  await recordStorageChannelUsage(event, {
+    action: 'storage.read',
+    channel: storage.channel,
+    provider: storage.provider,
+    resourceType: 'image',
+    resourceId: key,
+    unit: 'byte',
+    quantity: size,
+    metadata: {
+      contentType: contentType || 'application/octet-stream',
+    },
+  }).catch(() => {})
+}
+
+async function recordImageStorageDelete(
+  event: H3Event,
+  bucket: R2Bucket | null,
+  key: string,
+): Promise<void> {
+  const storage = resolveStorageChannel(bucket)
+  await recordStorageChannelUsage(event, {
+    action: 'storage.delete',
+    channel: storage.channel,
+    provider: storage.provider,
+    resourceType: 'image',
+    resourceId: key,
+    unit: 'operation',
+    quantity: 1,
+  }).catch(() => {})
 }
 
 /**
@@ -277,7 +356,7 @@ function deleteFromMemory(key: string): void {
 export async function uploadImage(
   event: H3Event,
   file: File,
-  options: { allowedTypes?: string[], allowedExtensions?: string[] } = {},
+  options: UploadOptions = {},
 ): Promise<UploadResult> {
   const allowedTypes = options.allowedTypes ?? ALLOWED_TYPES
   const allowedExtensions = options.allowedExtensions ?? IMAGE_ALLOWED_EXTENSIONS
@@ -292,6 +371,7 @@ export async function uploadImage(
   if (bucket) {
     // 生产环境：使用 R2
     await uploadToR2(bucket, file, key)
+    await recordImageStorageWrite(event, bucket, key, file.size, file.type, options.actorId, options.resourceType)
     return {
       url: `/api/images/${key}`,
       key,
@@ -300,6 +380,7 @@ export async function uploadImage(
   else {
     // 开发环境：使用内存存储
     await uploadToMemory(file, key)
+    await recordImageStorageWrite(event, bucket, key, file.size, file.type, options.actorId, options.resourceType)
     return {
       url: `/api/images/${key}`,
       key,
@@ -319,18 +400,23 @@ export async function getImage(
   if (bucket) {
     // 生产环境：从 R2 获取
     const result = await getFromR2(bucket, key)
-    return result
-      ? {
-          data: typeof Buffer !== 'undefined' && result.data instanceof ArrayBuffer
-            ? Buffer.from(result.data)
-            : result.data,
-          contentType: result.contentType,
-        }
-      : null
+    if (!result)
+      return null
+    const data = typeof Buffer !== 'undefined' && result.data instanceof ArrayBuffer
+      ? Buffer.from(result.data)
+      : result.data
+    await recordImageStorageRead(event, bucket, key, data.byteLength, result.contentType)
+    return {
+      data,
+      contentType: result.contentType,
+    }
   }
   else {
     // 开发环境：从内存获取
-    return getFromMemory(key)
+    const result = getFromMemory(key)
+    if (result)
+      await recordImageStorageRead(event, bucket, key, result.data.byteLength, result.contentType)
+    return result
   }
 }
 
@@ -343,10 +429,12 @@ export async function deleteImage(event: H3Event, key: string): Promise<void> {
   if (bucket) {
     // 生产环境：从 R2 删除
     await deleteFromR2(bucket, key)
+    await recordImageStorageDelete(event, bucket, key)
   }
   else {
     // 开发环境：从内存删除
     deleteFromMemory(key)
+    await recordImageStorageDelete(event, bucket, key)
   }
 }
 
@@ -375,6 +463,7 @@ export async function uploadImageFromBuffer(
   buffer: Buffer,
   fileName: string,
   mimeType: string,
+  options: Pick<UploadOptions, 'actorId' | 'resourceType'> = {},
 ): Promise<UploadResult> {
   // Get extension from filename
   const ext = fileName.split('.').pop()?.toLowerCase() ?? 'svg'
@@ -405,6 +494,7 @@ export async function uploadImageFromBuffer(
     await bucket.put(key, uint8Array, {
       httpMetadata: { contentType: mimeType },
     })
+    await recordImageStorageWrite(event, bucket, key, buffer.length, mimeType, options.actorId, options.resourceType)
     return {
       url: `/api/images/${key}`,
       key,
@@ -413,6 +503,7 @@ export async function uploadImageFromBuffer(
   else {
     // Development: use memory storage
     memoryStorage.set(key, { data: buffer, contentType: mimeType })
+    await recordImageStorageWrite(event, bucket, key, buffer.length, mimeType, options.actorId, options.resourceType)
     return {
       url: `/api/images/${key}`,
       key,
