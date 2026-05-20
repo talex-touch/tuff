@@ -10,6 +10,10 @@ const language = ref<'en' | 'zh'>('en')
 const autoUpdate = ref(true)
 const loading = ref(true)
 const dummy = ref(false)
+
+function handleClick() {
+  dummy.value = !dummy.value
+}
 </script>
 
 ## 基础用法
@@ -375,7 +379,7 @@ const dummy = ref(false)
     description="管理您的隐私选项"
     default-icon="i-ri-shield-keyhole-line"
     guidance
-    @click="() => {}"
+    @click="handleClick"
   />
 </div>
 </template>

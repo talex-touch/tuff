@@ -8,6 +8,22 @@ Use alerts sparingly. Reserve them for messages that the user truly needs to see
 import { ref } from 'vue'
 
 const visible = ref(true)
+
+const alertProps = [
+  { name: 'type', description: 'The semantic type that determines color and icon.', type: '"info" | "success" | "warning" | "error"', default: '"info"' },
+  { name: 'title', description: 'Bold headline text.', type: 'string' },
+  { name: 'message', description: 'Descriptive body text.', type: 'string' },
+  { name: 'closable', description: 'Whether the alert can be dismissed by the user.', type: 'boolean', default: 'true' },
+  { name: 'showIcon', description: 'Whether to display the type icon.', type: 'boolean', default: 'true' },
+]
+
+const alertEvents = [
+  { name: 'close', description: 'Fires when the user dismisses the alert.' },
+]
+
+const alertSlots = [
+  { name: 'default', description: 'Custom message content. Replaces the message prop.' },
+]
 </script>
 
 ## Basic Usage
@@ -95,22 +111,12 @@ Set `show-icon` to `false` to render a text-only alert.
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'type', description: 'The semantic type that determines color and icon.', type: '\"info\" | \"success\" | \"warning\" | \"error\"', default: '\"info\"' },
-  { name: 'title', description: 'Bold headline text.', type: 'string' },
-  { name: 'message', description: 'Descriptive body text.', type: 'string' },
-  { name: 'closable', description: 'Whether the alert can be dismissed by the user.', type: 'boolean', default: 'true' },
-  { name: 'showIcon', description: 'Whether to display the type icon.', type: 'boolean', default: 'true' },
-]" />
+<ApiSpecTable :rows="alertProps" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'close', description: 'Fires when the user dismisses the alert.' },
-]" />
+<ApiSpecTable title="Events" :rows="alertEvents" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'Custom message content. Replaces the message prop.' },
-]" />
+<ApiSpecTable title="Slots" :rows="alertSlots" />

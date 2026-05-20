@@ -3,6 +3,24 @@
 A vertical or horizontal sequence of events displayed in chronological order. Each item in the timeline marks a distinct point in time — a step completed, an event occurred, or a status changed.
 
 <script setup lang="ts">
+const timelineApiRows1 = [
+  { name: 'layout', description: 'The orientation of the timeline.', type: '\"vertical\" | \"horizontal\"', default: '\"vertical\"' },
+
+]
+
+const timelineApiRows2 = [
+  { name: 'title', description: 'The event title.', type: 'string' },
+  { name: 'time', description: 'Timestamp or date label.', type: 'string' },
+  { name: 'icon', description: 'Custom icon class for the timeline dot.', type: 'string' },
+  { name: 'color', description: 'Semantic color for the dot and line.', type: '\"default\" | \"primary\" | \"success\" | \"warning\" | \"error\"', default: '\"default\"' },
+  { name: 'active', description: 'Highlights this item as the current step.', type: 'boolean', default: 'false' },
+
+]
+
+const timelineApiRows3 = [
+  { name: 'default', description: 'The event description content.' },
+
+]
 </script>
 
 ## Basic Usage
@@ -59,22 +77,12 @@ Place `TxTimelineItem` components inside a `TxTimeline` container. Each item can
 
 ### TxTimeline Props
 
-<ApiSpecTable :rows="[
-  { name: 'layout', description: 'The orientation of the timeline.', type: '\"vertical\" | \"horizontal\"', default: '\"vertical\"' },
-]" />
+<ApiSpecTable :rows="timelineApiRows1" />
 
 ### TxTimelineItem Props
 
-<ApiSpecTable :rows="[
-  { name: 'title', description: 'The event title.', type: 'string' },
-  { name: 'time', description: 'Timestamp or date label.', type: 'string' },
-  { name: 'icon', description: 'Custom icon class for the timeline dot.', type: 'string' },
-  { name: 'color', description: 'Semantic color for the dot and line.', type: '\"default\" | \"primary\" | \"success\" | \"warning\" | \"error\"', default: '\"default\"' },
-  { name: 'active', description: 'Highlights this item as the current step.', type: 'boolean', default: 'false' },
-]" />
+<ApiSpecTable :rows="timelineApiRows2" />
 
 ### TxTimelineItem Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'The event description content.' },
-]" />
+<ApiSpecTable title="Slots" :rows="timelineApiRows3" />

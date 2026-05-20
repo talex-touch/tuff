@@ -1,5 +1,21 @@
 # TouchX UI 更新日志
 
+## [Unreleased] - 2026-05-21
+
+### 📚 文档站修复
+
+- 修复组件文档中 `ApiSpecTable` 内联对象数组导致的 VitePress 构建失败，改为在 `<script setup>` 中声明数据后引用。
+- 补齐文档主题缺失的 TuffEx 组件注册和旧标签兼容映射，确保 103 个组件页面均可正常渲染。
+- 修复 `FlipOverlay`、`GroupBlock`、`Slider`、`Icon`、`Input`、`AvatarVariants` 等文档示例的运行时 warning/error。
+- 新增文档站 `logo.svg`，并修正 favicon 路径。
+- 补齐 `FlatRadio`、`FlatSelect`、`Transfer` 文档页，并把已有未入口化组件纳入侧边栏导航。
+
+### 🧩 组件导出
+
+- 为 `FlatInput` 增加 `TxFlatInput` 注册名和命名导出，避免文档页组件名与示例标签递归冲突。
+- 新增 `TxTextarea`、`TxNumberInput`、`TxDivider`、`TxKbd`、`TxCopyButton` 五个基础补齐组件，并同步导出、文档和最小测试。
+- 为文档站注册 `TxFlatRadio`、`TxFlatSelect`、`TxTransfer` 及其子项组件，保证新增页面可以直接渲染。
+
 ## [0.3.4] - 2026-03-08
 
 ### 📚 文档优化

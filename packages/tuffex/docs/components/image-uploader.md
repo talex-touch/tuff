@@ -6,6 +6,21 @@ An image picker with inline previews and remove controls. ImageUploader manages 
 import { ref } from 'vue'
 
 const files = ref([])
+const imageUploaderApiRows1 = [
+  { name: 'modelValue / v-model', description: 'Array of selected image file objects.', type: 'ImageUploaderFile[]' },
+  { name: 'multiple', description: 'Allow selecting multiple files at once.', type: 'boolean', default: 'true' },
+  { name: 'accept', description: 'Accepted file types (HTML accept attribute).', type: 'string', default: '\"image/*\"' },
+  { name: 'disabled', description: 'Disables file selection and remove controls.', type: 'boolean', default: 'false' },
+  { name: 'max', description: 'Maximum number of files allowed.', type: 'number' },
+
+]
+
+const imageUploaderApiRows2 = [
+  { name: 'update:modelValue', description: 'Fires for v-model image list updates.', type: '(files: ImageUploaderFile[]) => void' },
+  { name: 'change', description: 'Fires when the file list changes.', type: '(files: ImageUploaderFile[]) => void' },
+  { name: 'remove', description: 'Fires when a file is removed.', type: '(payload: { id: string, value: ImageUploaderFile[] }) => void' },
+
+]
 </script>
 
 ## Basic Usage
@@ -49,18 +64,8 @@ const files = ref([])
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'Array of selected image file objects.', type: 'ImageUploaderFile[]' },
-  { name: 'multiple', description: 'Allow selecting multiple files at once.', type: 'boolean', default: 'true' },
-  { name: 'accept', description: 'Accepted file types (HTML accept attribute).', type: 'string', default: '\"image/*\"' },
-  { name: 'disabled', description: 'Disables file selection and remove controls.', type: 'boolean', default: 'false' },
-  { name: 'max', description: 'Maximum number of files allowed.', type: 'number' },
-]" />
+<ApiSpecTable :rows="imageUploaderApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'update:modelValue', description: 'Fires for v-model image list updates.', type: '(files: ImageUploaderFile[]) => void' },
-  { name: 'change', description: 'Fires when the file list changes.', type: '(files: ImageUploaderFile[]) => void' },
-  { name: 'remove', description: 'Fires when a file is removed.', type: '(payload: { id: string, value: ImageUploaderFile[] }) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="imageUploaderApiRows2" />

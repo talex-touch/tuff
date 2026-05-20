@@ -1,4 +1,4 @@
-#图标 Icon
+# 图标 Icon
 
 TuffEx 使用 UnoCSS preset-icons 方案，提供丰富的图标支持。
 
@@ -114,7 +114,7 @@ import { TuffIcons } from '@talex-touch/utils'
   <!-- 颜色 -->
   <i class="i-ri-star-line text-yellow-500" />
   <i class="i-ri-heart-fill text-red-500" />
-  <i class="i-ri-check-circle-fill text-green-500" />
+  <i class="i-ri-checkbox-circle-fill text-green-500" />
   
   <!-- 动画 -->
   <i class="i-ri-loader-4-line animate-spin" />
@@ -160,9 +160,9 @@ TuffEx 内置了以下图标集：
 
 | 图标集 | 前缀 | 描述 |
 |--------|------|------|
-| Remix Icon | `i-ri-` | 通用 UI 图标，线条/填充风格 |
-| Carbon | `i-carbon-` | IBM 设计系统图标 |
-| Simple Icons | `i-simple-icons-` | 品牌/Logo 图标 |
+| Remix Icon | `i-ri-<name>` | 通用 UI 图标，线条/填充风格 |
+| Carbon | `i-carbon-<name>` | IBM 设计系统图标 |
+| Simple Icons | `i-simple-icons-<name>` | 品牌/Logo 图标 |
 
 ## 图标搜索
 

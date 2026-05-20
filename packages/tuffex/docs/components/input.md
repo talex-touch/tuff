@@ -96,13 +96,13 @@ const withSuffix = ref('')
   <div class="demo-container__row">
     <TuffInput v-model="withPrefix" placeholder="Search">
       <template #prefix>
-        <TxIcon icon="i-carbon-search" />
+        <TxIcon name="i-carbon-search" />
       </template>
     </TuffInput>
 
     <TuffInput v-model="withSuffix" placeholder="User">
       <template #suffix>
-        <TxIcon icon="i-carbon-user" />
+        <TxIcon name="i-carbon-user" />
       </template>
     </TuffInput>
   </div>
@@ -113,13 +113,13 @@ const withSuffix = ref('')
 <template>
   <TuffInput v-model="withPrefix" placeholder="Search">
     <template #prefix>
-      <TxIcon icon="i-carbon-search" />
+      <TxIcon name="i-carbon-search" />
     </template>
   </TuffInput>
 
   <TuffInput v-model="withSuffix" placeholder="User">
     <template #suffix>
-      <TxIcon icon="i-carbon-user" />
+      <TxIcon name="i-carbon-user" />
     </template>
   </TuffInput>
 </template>

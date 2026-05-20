@@ -1,5 +1,15 @@
 # GridLayout
 
+<script setup lang="ts">
+const gridLayoutApiRows1 = [
+  { name: 'minItemWidth', description: 'Minimum width per grid item (CSS value).', type: 'string', default: '\"300px\"' },
+  { name: 'gap', description: 'Gap between grid items (CSS value).', type: 'string', default: '\"1.5rem\"' },
+  { name: 'maxColumns', description: 'Maximum column count at ≥1400px viewport.', type: 'number', default: '4' },
+  { name: 'interactive', description: 'Enable hover spotlight effect on items.', type: 'boolean', default: 'true' },
+
+]
+</script>
+
 A responsive auto-fit grid with an optional interactive hover spotlight effect. GridLayout uses CSS Grid to automatically distribute items into columns based on available width.
 
 ## Basic Usage
@@ -41,9 +51,4 @@ Place items directly inside `TxGridLayout`. Each item should have the `tx-grid-l
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'minItemWidth', description: 'Minimum width per grid item (CSS value).', type: 'string', default: '\"300px\"' },
-  { name: 'gap', description: 'Gap between grid items (CSS value).', type: 'string', default: '\"1.5rem\"' },
-  { name: 'maxColumns', description: 'Maximum column count at ≥1400px viewport.', type: 'number', default: '4' },
-  { name: 'interactive', description: 'Enable hover spotlight effect on items.', type: 'boolean', default: 'true' },
-]" />
+<ApiSpecTable :rows="gridLayoutApiRows1" />

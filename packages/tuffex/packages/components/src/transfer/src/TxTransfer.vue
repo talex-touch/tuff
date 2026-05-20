@@ -277,4 +277,20 @@ function handleRemove() {
   font-size: 12px;
   color: var(--tx-text-color-secondary, #909399);
 }
+
+@media (max-width: 640px) {
+  .tx-transfer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tx-transfer__actions {
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .tx-transfer__actions :deep(.tx-button) {
+    transform: rotate(90deg);
+  }
+}
 </style>

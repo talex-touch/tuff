@@ -13,6 +13,18 @@ const disabledOff = ref(false)
 const small = ref(true)
 const medium = ref(true)
 const large = ref(true)
+const switchApiRows1 = [
+  { name: 'modelValue / v-model', description: 'The bound boolean state of the switch.', type: 'boolean', default: 'false' },
+  { name: 'disabled', description: 'When true, the switch cannot be toggled and appears visually muted.', type: 'boolean', default: 'false' },
+  { name: 'size', description: 'Controls the physical dimensions of the switch.', type: '\"small\" | \"default\" | \"large\"', default: '\"default\"' },
+
+]
+
+const switchApiRows2 = [
+  { name: 'change', description: 'Fires after the switch state changes. Useful for side effects like API calls.', type: '(value: boolean) => void' },
+  { name: 'update:modelValue', description: 'Fires when the internal value updates. Used by v-model.', type: '(value: boolean) => void' },
+
+]
 </script>
 
 ## Basic Usage
@@ -103,15 +115,8 @@ Three sizes are available to fit different contexts: `small` for compact layouts
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'The bound boolean state of the switch.', type: 'boolean', default: 'false' },
-  { name: 'disabled', description: 'When true, the switch cannot be toggled and appears visually muted.', type: 'boolean', default: 'false' },
-  { name: 'size', description: 'Controls the physical dimensions of the switch.', type: '\"small\" | \"default\" | \"large\"', default: '\"default\"' },
-]" />
+<ApiSpecTable :rows="switchApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'change', description: 'Fires after the switch state changes. Useful for side effects like API calls.', type: '(value: boolean) => void' },
-  { name: 'update:modelValue', description: 'Fires when the internal value updates. Used by v-model.', type: '(value: boolean) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="switchApiRows2" />
