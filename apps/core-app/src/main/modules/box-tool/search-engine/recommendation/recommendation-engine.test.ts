@@ -1,6 +1,11 @@
 import { ContextProvider, type ContextSignal } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const intelligenceSdkMock = vi.hoisted(() => ({
+  embeddingGenerate: vi.fn(),
+  ragRerank: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
     getInstance: () => ({
@@ -53,6 +58,17 @@ vi.mock('../../../../utils/logger', () => ({
     error: vi.fn(),
     info: vi.fn()
   })
+}))
+
+vi.mock('../../../ai/intelligence-sdk', () => ({
+  tuffIntelligence: {
+    embedding: {
+      generate: intelligenceSdkMock.embeddingGenerate
+    },
+    rag: {
+      rerank: intelligenceSdkMock.ragRerank
+    }
+  }
 }))
 
 vi.mock('./item-rebuilder', () => ({
@@ -217,6 +233,7 @@ function candidatePerf(totalCandidates: number, filteredCount = totalCandidates)
 describe('RecommendationEngine', () => {
   afterEach(() => {
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
   it('includes time slot and weekday in the production recommendation cache key', () => {
@@ -631,6 +648,228 @@ describe('RecommendationEngine', () => {
     const ids = result.items.map((item) => item.id)
 
     expect(ids.indexOf('com.apple.Terminal')).toBeLessThan(ids.indexOf('discord'))
+  })
+
+  it('uses optional AI embedding scores to improve semantic ranking', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+    intelligenceSdkMock.embeddingGenerate.mockImplementation(async ({ text }: { text: string }) => {
+      const normalizedText = text.toLowerCase()
+      if (normalizedText.includes('typescript') || normalizedText.includes('visual studio code')) {
+        return { result: [1, 0] }
+      }
+      if (normalizedText.includes('terminal')) {
+        return { result: [0.96, 0.28] }
+      }
+      return { result: [0, 1] }
+    })
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:ai-embedding`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: false,
+        aiRerankEnabled: false,
+        aiEmbeddingEnabled: true
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 8 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['com.apple.Terminal', 'discord'])
+    expect(intelligenceSdkMock.embeddingGenerate).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps local ranking when optional AI embedding scoring fails', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+    intelligenceSdkMock.embeddingGenerate.mockRejectedValue(new Error('embedding unavailable'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:ai-embedding-fail`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: false,
+        aiRerankEnabled: false,
+        aiEmbeddingEnabled: true
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 8 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['discord', 'com.apple.Terminal'])
+    expect(intelligenceSdkMock.embeddingGenerate).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses optional AI rerank scores to improve semantic ranking', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+    intelligenceSdkMock.ragRerank.mockResolvedValue({
+      result: {
+        results: [
+          {
+            id: 'app-provider:com.apple.Terminal',
+            content: 'terminal developer shell',
+            score: 1,
+            originalRank: 1
+          },
+          {
+            id: 'app-provider:discord',
+            content: 'chat social community',
+            score: 0,
+            originalRank: 0
+          }
+        ]
+      }
+    })
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:ai-rerank`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: false,
+        aiRerankEnabled: true,
+        aiEmbeddingEnabled: false
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 8 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['com.apple.Terminal', 'discord'])
+    expect(intelligenceSdkMock.ragRerank).toHaveBeenCalledTimes(1)
+    expect(intelligenceSdkMock.ragRerank.mock.calls[0]?.[0]).toMatchObject({
+      topK: 2,
+      documents: [{ id: 'app-provider:discord' }, { id: 'app-provider:com.apple.Terminal' }]
+    })
+  })
+
+  it('keeps local ranking when optional AI rerank fails', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+    intelligenceSdkMock.ragRerank.mockRejectedValue(new Error('rerank unavailable'))
+
+    const dbUtils = createDbUtils()
+    const engine = new RecommendationEngine(dbUtils as never)
+
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:ai-rerank-fail`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: false,
+        aiRerankEnabled: true,
+        aiEmbeddingEnabled: false
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 8 })
+          },
+          {
+            sourceId: 'app-provider',
+            itemId: 'com.apple.Terminal',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 })
+          }
+        ],
+        perf: candidatePerf(2, 2)
+      }))
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    expect(result.items.map((item) => item.id)).toEqual(['discord', 'com.apple.Terminal'])
+    expect(intelligenceSdkMock.ragRerank).toHaveBeenCalledTimes(1)
   })
 
   it('keeps time stats when duplicate frequent candidates are also time-based', async () => {
