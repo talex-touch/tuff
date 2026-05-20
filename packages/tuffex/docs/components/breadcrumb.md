@@ -1,5 +1,18 @@
 # Breadcrumb
 
+<script setup lang="ts">
+const breadcrumbApiRows1 = [
+  { name: 'items', description: 'Array of breadcrumb items.', type: 'Array<{ label: string, icon?: string, href?: string, disabled?: boolean }>' },
+  { name: 'separatorIcon', description: 'Icon class for the separator between items.', type: 'string', default: '\"chevron-right\"' },
+
+]
+
+const breadcrumbApiRows2 = [
+  { name: 'click', description: 'Fires when a non-current, non-disabled item without href is clicked.', type: '(item: BreadcrumbItem, index: number) => void' },
+
+]
+</script>
+
 A navigation aid that shows the user's current location within a hierarchy. Breadcrumbs reduce the number of actions needed to return to a higher-level page.
 
 ## Basic Usage
@@ -41,13 +54,8 @@ Pass an `items` array where each item has a `label` and an optional `href` for n
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'items', description: 'Array of breadcrumb items.', type: 'Array<{ label: string, icon?: string, href?: string, disabled?: boolean }>' },
-  { name: 'separatorIcon', description: 'Icon class for the separator between items.', type: 'string', default: '\"chevron-right\"' },
-]" />
+<ApiSpecTable :rows="breadcrumbApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'click', description: 'Fires when a non-current, non-disabled item without href is clicked.', type: '(item: BreadcrumbItem, index: number) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="breadcrumbApiRows2" />

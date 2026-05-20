@@ -3,7 +3,6 @@ import DefaultTheme from 'vitepress/theme'
 import Layout from './Layout.vue'
 // 导入 TuffEx 组件
 import {
-  TouchScroll,
   TuffCheckbox,
   TuffFlatButton,
   TuffInput,
@@ -18,6 +17,8 @@ import {
   TxAvatar,
   TxAvatarGroup,
   TxBadge,
+  TxBaseAnchor,
+  TxBaseSurface,
   TxBlankSlate,
   TxBlockLine,
   TxBlockSlot,
@@ -43,16 +44,24 @@ import {
   TxContextMenu,
   TxContextMenuItem,
   TxCornerOverlay,
+  TxCopyButton,
   TxDataTable,
   TxDatePicker,
+  TxDivider,
   TxDrawer,
   TxEdgeFadeMask,
   TxDropdownItem,
   TxDropdownMenu,
   TxEmpty,
   TxEmptyState,
+  TxErrorState,
   TxFileUploader,
   TxFlex,
+  TxFlatInput,
+  TxFlatRadio,
+  TxFlatRadioItem,
+  TxFlatSelect,
+  TxFlatSelectItem,
   TxFlipOverlay,
   TxForm,
   TxFormItem,
@@ -65,9 +74,12 @@ import {
   TxGridItem,
   TxGridLayout,
   TxGroupBlock,
+  TxGuideState,
   TxIcon,
   TxImageGallery,
   TxImageUploader,
+  TxKbd,
+  TxKeyframeStrokeText,
   TxLayoutSkeleton,
   TxListItemSkeleton,
   TxLoadingOverlay,
@@ -77,6 +89,7 @@ import {
   TxNavBar,
   TxNoData,
   TxNoSelection,
+  TxNumberInput,
   TxOfflineState,
   TxOutlineBorder,
   TxPagination,
@@ -103,20 +116,24 @@ import {
   TxStagger,
   TxStatCard,
   TxStatusBadge,
+  TxStatusIcon,
   TxStep,
   TxSteps,
+  TxSplitButton,
   TxTabBar,
   TxTabHeader,
   TxTabItem,
   TxTabs,
   TxTag,
   TxTagInput,
+  TxTextarea,
   TxTextTransformer,
   TxTimeline,
   TxTimelineItem,
   TxToastHost,
   TxTooltip,
   TxTouchTip,
+  TxTransfer,
   TxTransition,
   TxTransitionFade,
   TxTransitionRebound,
@@ -124,6 +141,7 @@ import {
   TxTransitionSmoothSize,
   TxTree,
   TxTreeSelect,
+  TxTuffLogoStroke,
   TxTypingIndicator,
   TxVirtualList,
 } from '../../../packages/components/src'
@@ -167,8 +185,10 @@ export default {
     }
     // 注册 TuffEx 组件 —— 基础
     app.component('TxButton', TxButton)
+    app.component('TxSplitButton', TxSplitButton)
     app.component('TxIcon', TxIcon)
     app.component('TuffIcon', TxIcon)
+    app.component('TxStatusIcon', TxStatusIcon)
     app.component('TxTag', TxTag)
     app.component('TxStatusBadge', TxStatusBadge)
     app.component('TxAvatar', TxAvatar)
@@ -178,12 +198,17 @@ export default {
     app.component('TxBadge', TxBadge)
     app.component('TxAlert', TxAlert)
     app.component('TxBreadcrumb', TxBreadcrumb)
+    app.component('TxDivider', TxDivider)
+    app.component('TxKbd', TxKbd)
+    app.component('TxCopyButton', TxCopyButton)
 
     // 表单
     app.component('TxSwitch', TuffSwitch)
     app.component('TuffSwitch', TuffSwitch)
     app.component('TxInput', TuffInput)
     app.component('TuffInput', TuffInput)
+    app.component('TxTextarea', TxTextarea)
+    app.component('TxNumberInput', TxNumberInput)
     app.component('TxCheckbox', TuffCheckbox)
     app.component('TuffCheckbox', TuffCheckbox)
     app.component('TxSelect', TuffSelect)
@@ -206,6 +231,13 @@ export default {
     app.component('TxForm', TxForm)
     app.component('TxFormItem', TxFormItem)
     app.component('TxFlatButton', TuffFlatButton)
+    app.component('TuffFlatButton', TuffFlatButton)
+    app.component('TxFlatInput', TxFlatInput)
+    app.component('TxFlatRadio', TxFlatRadio)
+    app.component('TxFlatRadioItem', TxFlatRadioItem)
+    app.component('TxFlatSelect', TxFlatSelect)
+    app.component('TxFlatSelectItem', TxFlatSelectItem)
+    app.component('TxTransfer', TxTransfer)
 
     // 数据展示
     app.component('TxCard', TxCard)
@@ -214,6 +246,8 @@ export default {
     app.component('TxStatCard', TxStatCard)
     app.component('TxEmpty', TxEmpty)
     app.component('TxEmptyState', TxEmptyState)
+    app.component('TxErrorState', TxErrorState)
+    app.component('TxGuideState', TxGuideState)
     app.component('TxBlankSlate', TxBlankSlate)
     app.component('TxLoadingState', TxLoadingState)
     app.component('TxNoSelection', TxNoSelection)
@@ -223,6 +257,7 @@ export default {
     app.component('TxPermissionState', TxPermissionState)
     app.component('TxMarkdownView', TxMarkdownView)
     app.component('TxProgress', TuffProgress)
+    app.component('TuffProgress', TuffProgress)
     app.component('TxProgressBar', TxProgressBar)
     app.component('TxTimeline', TxTimeline)
     app.component('TxTimelineItem', TxTimelineItem)
@@ -256,7 +291,7 @@ export default {
     app.component('TxStack', TxStack)
     app.component('TxFlex', TxFlex)
     app.component('TxScroll', TxScroll)
-    app.component('TouchScroll', TouchScroll)
+    app.component('TouchScroll', TxScroll)
     app.component('TxVirtualList', TxVirtualList)
     app.component('TxLayoutSkeleton', TxLayoutSkeleton)
     app.component('TxAgentsList', TxAgentsList)
@@ -283,6 +318,7 @@ export default {
     app.component('TxModal', TxModal)
     app.component('TxCommandPalette', TxCommandPalette)
     app.component('TxFlipOverlay', TxFlipOverlay)
+    app.component('TxBaseAnchor', TxBaseAnchor)
 
     // 动效
     app.component('TxAutoSizer', TxAutoSizer)
@@ -313,6 +349,9 @@ export default {
     app.component('TxGradualBlur', TxGradualBlur)
     app.component('TxGradientBorder', TxGradientBorder)
     app.component('TxGlowText', TxGlowText)
+    app.component('TxBaseSurface', TxBaseSurface)
+    app.component('TxKeyframeStrokeText', TxKeyframeStrokeText)
+    app.component('TxTuffLogoStroke', TxTuffLogoStroke)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)

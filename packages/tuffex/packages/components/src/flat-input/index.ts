@@ -3,7 +3,9 @@ import FlatInput from './src/FlatInput.vue'
 
 FlatInput.install = (app: App) => {
   app.component(FlatInput.name || 'FlatInput', FlatInput)
+  app.component('TxFlatInput', FlatInput)
 }
 
 export { FlatInput }
+export { FlatInput as TxFlatInput }
 export default FlatInput

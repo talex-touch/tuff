@@ -9,6 +9,17 @@ const items = [
   { id: 'c', url: 'https://picsum.photos/seed/c/640/420', name: 'Coastal Sunset' },
   { id: 'd', url: 'https://picsum.photos/seed/d/640/420', name: 'City Lights' },
 ]
+const imageGalleryApiRows1 = [
+  { name: 'items', description: 'Array of image objects to display.', type: 'Array<{ id: string, url: string, name?: string }>' },
+  { name: 'startIndex', description: 'Current preview index. Values outside the list bounds are clamped.', type: 'number', default: '0' },
+
+]
+
+const imageGalleryApiRows2 = [
+  { name: 'open', description: 'Fires after a thumbnail opens the lightbox.', type: '(payload: { index: number, item: ImageGalleryItem }) => void' },
+  { name: 'close', description: 'Fires when the lightbox closes.', type: '() => void' },
+
+]
 </script>
 
 ## Basic Usage
@@ -54,14 +65,8 @@ const items = [
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'items', description: 'Array of image objects to display.', type: 'Array<{ id: string, url: string, name?: string }>' },
-  { name: 'startIndex', description: 'Current preview index. Values outside the list bounds are clamped.', type: 'number', default: '0' },
-]" />
+<ApiSpecTable :rows="imageGalleryApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'open', description: 'Fires after a thumbnail opens the lightbox.', type: '(payload: { index: number, item: ImageGalleryItem }) => void' },
-  { name: 'close', description: 'Fires when the lightbox closes.', type: '() => void' },
-]" />
+<ApiSpecTable title="Events" :rows="imageGalleryApiRows2" />

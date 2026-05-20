@@ -7,9 +7,9 @@
 <DemoBlock title="FlatInput">
 <template #preview>
 <div style="display: grid; gap: 12px; width: 320px;">
-  <FlatInput placeholder="请输入内容" icon="i-ri-search-line" />
-  <FlatInput placeholder="密码" password />
-  <FlatInput placeholder="多行内容" area />
+  <TxFlatInput placeholder="请输入内容" icon="i-ri-search-line" />
+  <TxFlatInput placeholder="密码" password />
+  <TxFlatInput placeholder="多行内容" area />
 </div>
 </template>
 
@@ -17,9 +17,9 @@
 
 ```vue
 <template>
-  <FlatInput v-model="text" placeholder="请输入内容" icon="i-ri-search-line" />
-  <FlatInput v-model="secret" placeholder="密码" password />
-  <FlatInput v-model="body" placeholder="多行内容" area />
+  <TxFlatInput v-model="text" placeholder="请输入内容" icon="i-ri-search-line" />
+  <TxFlatInput v-model="secret" placeholder="密码" password />
+  <TxFlatInput v-model="body" placeholder="多行内容" area />
 </template>
 ```
 

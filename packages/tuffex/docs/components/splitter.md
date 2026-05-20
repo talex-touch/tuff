@@ -8,6 +8,29 @@ import SplitterBasicDemo from '../.vitepress/theme/components/demos/SplitterBasi
 import SplitterBasicDemoSource from '../.vitepress/theme/components/demos/SplitterBasicDemo.vue?raw'
 
 const ratio = ref(0.4)
+const splitterApiRows1 = [
+  { name: 'modelValue / v-model', description: 'Split ratio between 0 and 1.', type: 'number', default: '0.5' },
+  { name: 'direction', description: 'Orientation of the split.', type: '\"horizontal\" | \"vertical\"', default: '\"horizontal\"' },
+  { name: 'min', description: 'Minimum ratio for the first panel.', type: 'number', default: '0.1' },
+  { name: 'max', description: 'Maximum ratio for the first panel.', type: 'number', default: '0.9' },
+  { name: 'disabled', description: 'Prevents dragging the divider.', type: 'boolean', default: 'false' },
+  { name: 'barSize', description: 'Width/height of the divider bar in pixels.', type: 'number', default: '10' },
+  { name: 'snap', description: 'Snap step for the ratio. 0 disables snapping.', type: 'number', default: '0' },
+
+]
+
+const splitterApiRows2 = [
+  { name: 'change', description: 'Fires when the ratio changes.', type: '(ratio: number) => void' },
+  { name: 'drag-start', description: 'Fires when the user begins dragging the divider.' },
+  { name: 'drag-end', description: 'Fires when the user stops dragging.' },
+
+]
+
+const splitterApiRows3 = [
+  { name: 'a', description: 'Content for the first panel (left or top).' },
+  { name: 'b', description: 'Content for the second panel (right or bottom).' },
+
+]
 </script>
 
 ## Basic Usage
@@ -63,27 +86,12 @@ Set `direction="vertical"` for a top/bottom layout.
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'Split ratio between 0 and 1.', type: 'number', default: '0.5' },
-  { name: 'direction', description: 'Orientation of the split.', type: '\"horizontal\" | \"vertical\"', default: '\"horizontal\"' },
-  { name: 'min', description: 'Minimum ratio for the first panel.', type: 'number', default: '0.1' },
-  { name: 'max', description: 'Maximum ratio for the first panel.', type: 'number', default: '0.9' },
-  { name: 'disabled', description: 'Prevents dragging the divider.', type: 'boolean', default: 'false' },
-  { name: 'barSize', description: 'Width/height of the divider bar in pixels.', type: 'number', default: '10' },
-  { name: 'snap', description: 'Snap step for the ratio. 0 disables snapping.', type: 'number', default: '0' },
-]" />
+<ApiSpecTable :rows="splitterApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'change', description: 'Fires when the ratio changes.', type: '(ratio: number) => void' },
-  { name: 'drag-start', description: 'Fires when the user begins dragging the divider.' },
-  { name: 'drag-end', description: 'Fires when the user stops dragging.' },
-]" />
+<ApiSpecTable title="Events" :rows="splitterApiRows2" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'a', description: 'Content for the first panel (left or top).' },
-  { name: 'b', description: 'Content for the second panel (right or bottom).' },
-]" />
+<ApiSpecTable title="Slots" :rows="splitterApiRows3" />

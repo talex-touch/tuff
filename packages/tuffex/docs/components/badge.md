@@ -10,6 +10,18 @@ Set `value` to display a count or label. The default slot replaces the pill text
 import { ref } from 'vue'
 
 const count = ref(5)
+const badgeApiRows1 = [
+  { name: 'variant', description: 'Color variant.', type: '\"default\" | \"primary\" | \"success\" | \"warning\" | \"error\"', default: '\"default\"' },
+  { name: 'value', description: 'The value to display.', type: 'string | number', default: '0' },
+  { name: 'dot', description: 'When true, shows a small dot instead of a count.', type: 'boolean', default: 'false' },
+  { name: 'color', description: 'Custom badge color. Overrides variant color.', type: 'string' },
+
+]
+
+const badgeApiRows2 = [
+  { name: 'default', description: 'Custom pill content. Replaces the value prop.' },
+
+]
 </script>
 
 <DemoBlock title="Badge Variants">
@@ -45,15 +57,8 @@ const count = ref(5)
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'variant', description: 'Color variant.', type: '\"default\" | \"primary\" | \"success\" | \"warning\" | \"error\"', default: '\"default\"' },
-  { name: 'value', description: 'The value to display.', type: 'string | number', default: '0' },
-  { name: 'dot', description: 'When true, shows a small dot instead of a count.', type: 'boolean', default: 'false' },
-  { name: 'color', description: 'Custom badge color. Overrides variant color.', type: 'string' },
-]" />
+<ApiSpecTable :rows="badgeApiRows1" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'default', description: 'Custom pill content. Replaces the value prop.' },
-]" />
+<ApiSpecTable title="Slots" :rows="badgeApiRows2" />

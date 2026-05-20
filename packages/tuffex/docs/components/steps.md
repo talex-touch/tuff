@@ -6,6 +6,25 @@ A step indicator for multi-step processes. Steps provides a clear visual represe
 import { ref } from 'vue'
 
 const active = ref(1)
+const stepsApiRows1 = [
+  { name: 'active', description: 'The current step index (0-based).', type: 'number | string', default: '0' },
+  { name: 'direction', description: 'Layout orientation of the steps.', type: '\"horizontal\" | \"vertical\"', default: '\"horizontal\"' },
+  { name: 'size', description: 'Step indicator size.', type: '\"small\" | \"medium\" | \"large\"', default: '\"medium\"' },
+
+]
+
+const stepsApiRows2 = [
+  { name: 'title', description: 'Step title text.', type: 'string' },
+  { name: 'description', description: 'Step description or subtitle.', type: 'string' },
+  { name: 'icon', description: 'Custom icon class for the step circle.', type: 'string' },
+  { name: 'status', description: 'Override the automatic status.', type: '\"wait\" | \"active\" | \"completed\" | \"error\"', default: '\"wait\"' },
+  { name: 'step', description: 'Step identifier. Defaults to the child order index when omitted.', type: 'number | string' },
+  { name: 'clickable', description: 'Whether the step can be clicked to navigate.', type: 'boolean', default: 'true' },
+  { name: 'disabled', description: 'Prevents interaction with this step.', type: 'boolean', default: 'false' },
+  { name: 'showLine', description: 'Whether to render the connector line after this step. The last step never renders a line.', type: 'boolean', default: 'true' },
+  { name: 'completedIcon', description: 'Icon name used for completed steps.', type: 'string', default: 'check' },
+
+]
 </script>
 
 ## Basic Usage
@@ -60,22 +79,8 @@ const active = ref(1)
 
 ### TxSteps Props
 
-<ApiSpecTable :rows="[
-  { name: 'active', description: 'The current step index (0-based).', type: 'number | string', default: '0' },
-  { name: 'direction', description: 'Layout orientation of the steps.', type: '\"horizontal\" | \"vertical\"', default: '\"horizontal\"' },
-  { name: 'size', description: 'Step indicator size.', type: '\"small\" | \"medium\" | \"large\"', default: '\"medium\"' },
-]" />
+<ApiSpecTable :rows="stepsApiRows1" />
 
 ### TxStep Props
 
-<ApiSpecTable :rows="[
-  { name: 'title', description: 'Step title text.', type: 'string' },
-  { name: 'description', description: 'Step description or subtitle.', type: 'string' },
-  { name: 'icon', description: 'Custom icon class for the step circle.', type: 'string' },
-  { name: 'status', description: 'Override the automatic status.', type: '\"wait\" | \"active\" | \"completed\" | \"error\"', default: '\"wait\"' },
-  { name: 'step', description: 'Step identifier. Defaults to the child order index when omitted.', type: 'number | string' },
-  { name: 'clickable', description: 'Whether the step can be clicked to navigate.', type: 'boolean', default: 'true' },
-  { name: 'disabled', description: 'Prevents interaction with this step.', type: 'boolean', default: 'false' },
-  { name: 'showLine', description: 'Whether to render the connector line after this step. The last step never renders a line.', type: 'boolean', default: 'true' },
-  { name: 'completedIcon', description: 'Icon name used for completed steps.', type: 'string', default: 'check' },
-]" />
+<ApiSpecTable :rows="stepsApiRows2" />

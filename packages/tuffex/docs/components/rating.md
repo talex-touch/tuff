@@ -7,6 +7,25 @@ import { ref } from 'vue'
 
 const score = ref(3)
 const half = ref(3.5)
+const ratingApiRows1 = [
+  { name: 'modelValue / v-model', description: 'The current rating value.', type: 'number', default: '0' },
+  { name: 'maxStars', description: 'Maximum number of stars.', type: 'number', default: '5' },
+  { name: 'precision', description: 'Rating step size. Use 0.5 for half-star precision.', type: 'number', default: '1' },
+  { name: 'disabled', description: 'Fully disabled, no interaction.', type: 'boolean', default: 'false' },
+  { name: 'readonly', description: 'Display-only mode. Stars are not interactive.', type: 'boolean', default: 'false' },
+  { name: 'showText', description: 'Whether to show the numeric value alongside stars.', type: 'boolean', default: 'false' },
+
+]
+
+const ratingApiRows2 = [
+  { name: 'change', description: 'Fires when the rating value changes.', type: '(value: number) => void' },
+
+]
+
+const ratingApiRows3 = [
+  { name: 'text', description: 'Custom text display next to the stars.', type: '{ value: number, max: number }' },
+
+]
 </script>
 
 ## Basic Usage
@@ -68,23 +87,12 @@ Set `readonly` to display a rating without interaction — useful for showing av
 
 ### Props
 
-<ApiSpecTable :rows="[
-  { name: 'modelValue / v-model', description: 'The current rating value.', type: 'number', default: '0' },
-  { name: 'maxStars', description: 'Maximum number of stars.', type: 'number', default: '5' },
-  { name: 'precision', description: 'Rating step size. Use 0.5 for half-star precision.', type: 'number', default: '1' },
-  { name: 'disabled', description: 'Fully disabled, no interaction.', type: 'boolean', default: 'false' },
-  { name: 'readonly', description: 'Display-only mode. Stars are not interactive.', type: 'boolean', default: 'false' },
-  { name: 'showText', description: 'Whether to show the numeric value alongside stars.', type: 'boolean', default: 'false' },
-]" />
+<ApiSpecTable :rows="ratingApiRows1" />
 
 ### Events
 
-<ApiSpecTable title="Events" :rows="[
-  { name: 'change', description: 'Fires when the rating value changes.', type: '(value: number) => void' },
-]" />
+<ApiSpecTable title="Events" :rows="ratingApiRows2" />
 
 ### Slots
 
-<ApiSpecTable title="Slots" :rows="[
-  { name: 'text', description: 'Custom text display next to the stars.', type: '{ value: number, max: number }' },
-]" />
+<ApiSpecTable title="Slots" :rows="ratingApiRows3" />
