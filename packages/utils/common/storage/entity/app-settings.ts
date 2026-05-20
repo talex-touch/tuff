@@ -272,6 +272,21 @@ const _appSettingOriginData = {
     enabled: true,
     maxItems: 10,
     showReason: true,
+    semantic: {
+      localVectorEnabled: true,
+      aiRerankEnabled: false,
+      aiEmbeddingEnabled: false,
+    },
+    contextSources: {
+      time: true,
+      foregroundApp: true,
+      clipboard: true,
+      network: true,
+      bluetooth: true,
+      focus: true,
+      power: true,
+      location: true,
+    },
   },
   downloadCenter: {
     viewMode: 'detailed' as 'detailed' | 'compact',
