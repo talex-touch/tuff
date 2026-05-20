@@ -1,6 +1,7 @@
 import type { ContextSignal } from '@talex-touch/utils/core-box'
 
 const VECTOR_DIMENSIONS = 64
+const USAGE_PREFERENCE_PROFILE_LIMIT = 24
 
 const STOP_TOKENS = new Set([
   'app',
@@ -30,6 +31,15 @@ export interface RecommendationSemanticCandidateInput {
   source?: string
   title?: string
   subtitle?: string
+}
+
+export interface RecommendationSemanticPreferenceInput extends RecommendationSemanticCandidateInput {
+  searchCount?: number
+  executeCount?: number
+  cancelCount?: number
+  lastSearched?: Date | null
+  lastExecuted?: Date | null
+  lastCancelled?: Date | null
 }
 
 export function buildRecommendationSemanticProfile(
@@ -120,6 +130,33 @@ export function buildRecommendationSemanticProfile(
   return createProfile(tokens)
 }
 
+export function buildRecommendationUsagePreferenceProfile(
+  candidates: RecommendationSemanticPreferenceInput[],
+  now = Date.now()
+): RecommendationSemanticProfile | null {
+  const weightedCandidates = candidates
+    .map((candidate) => ({
+      candidate,
+      weight: calculateUsagePreferenceWeight(candidate, now)
+    }))
+    .filter((entry) => entry.weight > 0)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, USAGE_PREFERENCE_PROFILE_LIMIT)
+
+  if (weightedCandidates.length === 0) return null
+
+  const tokenWeights = new Map<string, number>()
+  for (const entry of weightedCandidates) {
+    const profile = buildCandidateSemanticProfile(entry.candidate)
+    for (const token of profile.tokens) {
+      tokenWeights.set(token, (tokenWeights.get(token) ?? 0) + entry.weight)
+    }
+  }
+
+  if (tokenWeights.size === 0) return null
+  return createWeightedProfile(tokenWeights)
+}
+
 export function buildCandidateSemanticProfile(
   candidate: RecommendationSemanticCandidateInput
 ): RecommendationSemanticProfile {
@@ -159,19 +196,38 @@ function createProfile(tokens: string[]): RecommendationSemanticProfile {
   }
 }
 
+function createWeightedProfile(tokenWeights: Map<string, number>): RecommendationSemanticProfile {
+  const entries = Array.from(tokenWeights.entries())
+    .filter(([, weight]) => weight > 0)
+    .sort((a, b) => b[1] - a[1])
+  const tokens = entries.map(([token]) => token)
+
+  return {
+    tokens,
+    text: tokens.join(' '),
+    vector: vectorizeWeightedTokens(entries)
+  }
+}
+
 function normalizeTokens(tokens: Array<string | undefined>): string[] {
   const result: string[] = []
   const seen = new Set<string>()
 
   for (const raw of tokens) {
-    if (!raw) continue
-    const token = raw.trim().toLowerCase()
-    if (!token || STOP_TOKENS.has(token) || seen.has(token)) continue
+    const token = normalizeToken(raw)
+    if (!token || seen.has(token)) continue
     seen.add(token)
     result.push(token)
   }
 
   return result
+}
+
+function normalizeToken(raw?: string): string | null {
+  if (!raw) return null
+  const token = raw.trim().toLowerCase()
+  if (!token || STOP_TOKENS.has(token)) return null
+  return token
 }
 
 function splitIdentifier(value?: string): string[] {
@@ -283,6 +339,39 @@ function vectorizeTokens(tokens: string[]): number[] {
   const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0))
   if (magnitude === 0) return vector
   return vector.map((value) => value / magnitude)
+}
+
+function vectorizeWeightedTokens(entries: Array<[string, number]>): number[] {
+  const vector = Array.from({ length: VECTOR_DIMENSIONS }, () => 0)
+  for (const [token, weight] of entries) {
+    vector[hashToken(token) % VECTOR_DIMENSIONS] += weight
+  }
+
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0))
+  if (magnitude === 0) return vector
+  return vector.map((value) => value / magnitude)
+}
+
+function calculateUsagePreferenceWeight(
+  candidate: RecommendationSemanticPreferenceInput,
+  now: number
+): number {
+  const positiveInteractions =
+    (candidate.executeCount ?? 0) * 1 + (candidate.searchCount ?? 0) * 0.3
+  const penalty = (candidate.cancelCount ?? 0) * 0.8
+  const interactionWeight = Math.max(0, positiveInteractions - penalty)
+  if (interactionWeight <= 0) return 0
+
+  const lastInteraction = Math.max(
+    candidate.lastExecuted?.getTime() ?? 0,
+    candidate.lastSearched?.getTime() ?? 0,
+    candidate.lastCancelled?.getTime() ?? 0
+  )
+  const daysSince =
+    lastInteraction > 0 ? Math.max(0, (now - lastInteraction) / (24 * 60 * 60 * 1000)) : 30
+  const recencyWeight = Math.exp(-0.08 * daysSince)
+
+  return Math.log1p(interactionWeight) * (0.35 + recencyWeight * 0.65)
 }
 
 function hashToken(token: string): number {
