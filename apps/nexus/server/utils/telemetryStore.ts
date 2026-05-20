@@ -3,6 +3,7 @@ import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
+import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { resolveRequestGeo } from './requestGeo'
 import {
   MAX_PROVIDER_DURATION_MS,
@@ -225,6 +226,7 @@ export async function recordTelemetryEvent(
   const countryCode = geo.countryCode || normalized.telemetry.region || null
   const region = countryCode
   const sanitized = normalized.telemetry
+  const actorId = sanitized.userId || sanitized.clientId || sanitized.deviceFingerprint
 
   // Insert telemetry event
   await db.prepare(`
@@ -267,6 +269,55 @@ export async function recordTelemetryEvent(
 
   // Update daily stats
   await incrementDailyStat(db, today, 'total_events', '', 1)
+
+  if (sanitized.eventType === 'visit') {
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'app',
+      action: 'visit',
+      actorId,
+      resourceType: 'platform',
+      resourceId: sanitized.platform || 'unknown',
+      channel: sanitized.version || 'unknown',
+      unit: 'visit',
+      quantity: 1,
+      metadata: {
+        platform: sanitized.platform ?? null,
+        version: sanitized.version ?? null,
+        countryCode,
+        regionCode: geo.regionCode,
+        timezone: geo.timezone,
+      },
+    }).catch(() => {})
+  }
+
+  if (sanitized.eventType === 'search') {
+    const meta = sanitized.metadata && typeof sanitized.metadata === 'object'
+      ? sanitized.metadata as Record<string, unknown>
+      : {}
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'app',
+      action: 'search',
+      actorId,
+      resourceType: 'search',
+      resourceId: normalizeString(meta.searchScene, 48) || normalizeString(meta.queryType, 32) || 'corebox',
+      channel: normalizeString(meta.providerFilter, 64) || 'all',
+      unit: 'search',
+      quantity: 1,
+      metadata: {
+        queryType: normalizeString(meta.queryType, 32) ?? null,
+        searchScene: normalizeString(meta.searchScene, 48) ?? null,
+        providerFilter: normalizeString(meta.providerFilter, 64) ?? null,
+        queryLength: normalizeNumber(meta.queryLength, { min: 0, max: 2048 }) ?? null,
+        firstResultMs: normalizeNumber(meta.firstResultMs, { min: 0, max: MAX_SEARCH_DURATION_MS }) ?? null,
+        searchDurationMs: sanitized.searchDurationMs ?? null,
+        searchResultCount: sanitized.searchResultCount ?? null,
+        inputTypes: sanitized.inputTypes ?? [],
+        providerTimings: sanitized.providerTimings ?? {},
+        countryCode,
+        regionCode: geo.regionCode,
+      },
+    }).catch(() => {})
+  }
 
   if (sanitized.eventType === 'search' || sanitized.eventType === 'visit') {
     const hour = new Date(now).getUTCHours().toString().padStart(2, '0')
@@ -426,6 +477,27 @@ export async function recordTelemetryEvent(
       }
       if (typeof meta.pluginName === 'string') {
         await incrementDailyStat(db, today, 'feature_use_plugin', meta.pluginName, 1)
+      }
+      const pluginId = normalizeString(meta.pluginId, 128)
+      const pluginName = normalizeString(meta.pluginName, 128)
+      if (pluginId || pluginName) {
+        await recordPlatformGovernanceEvent(event, {
+          scope: 'plugin',
+          action: 'invoke',
+          actorId: sanitized.userId || sanitized.clientId || sanitized.deviceFingerprint,
+          resourceType: 'plugin',
+          resourceId: pluginId || pluginName,
+          channel: normalizeString(meta.featureId, 128) || normalizeString(meta.sourceType, 64) || 'feature_use',
+          unit: 'call',
+          quantity: 1,
+          metadata: {
+            pluginName: pluginName ?? null,
+            featureId: normalizeString(meta.featureId, 128) ?? null,
+            itemKind: normalizeString(meta.itemKind, 64) ?? null,
+            sourceType: normalizeString(meta.sourceType, 64) ?? null,
+            countryCode,
+          },
+        }).catch(() => {})
       }
       if (meta.sourceType === 'update') {
         const updateAction = normalizeString(meta.action, 64)

@@ -1,6 +1,7 @@
 import { createError, readBody } from 'h3'
 import { requireAuth } from '../../../../../utils/auth'
 import { getUserById } from '../../../../../utils/authStore'
+import { recordPlatformGovernanceEvent } from '../../../../../utils/platformGovernanceStore'
 import { getPluginById, setPluginVersionStatus } from '../../../../../utils/pluginsStore'
 
 const ALLOWED_VERSION_STATUSES = ['pending', 'approved', 'rejected'] as const
@@ -36,6 +37,22 @@ export default defineEventHandler(async (event) => {
     actorRole: 'admin',
     reason: status === 'rejected' ? (reason || null) : null,
   })
+
+  await recordPlatformGovernanceEvent(event, {
+    scope: 'notification',
+    action: status === 'approved' ? 'plugin.version.approved' : status === 'rejected' ? 'plugin.version.rejected' : 'plugin.version.pending',
+    actorId: userId,
+    resourceType: 'plugin',
+    resourceId: id,
+    channel: 'plugin-review',
+    unit: 'event',
+    quantity: 1,
+    metadata: {
+      versionId,
+      version: version.version,
+      status,
+    },
+  }).catch(() => {})
 
   return {
     version,
