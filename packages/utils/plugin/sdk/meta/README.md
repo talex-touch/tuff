@@ -1,16 +1,16 @@
-# MetaSDK 使用文档
+# MetaSDK / QuickActions SDK 使用文档
 
-MetaSDK 允许插件在 MetaOverlay 中注册全局操作，这些操作会出现在所有 item 的操作面板中。
+MetaSDK 允许插件在 MetaOverlay（MetaK / Quick Actions）中注册全局操作，这些操作会出现在所有 item 的操作面板中。`context.utils.meta` 是兼容别名，新增代码优先使用 `context.utils.quickActions`。
 
 ## 快速开始
 
 ```typescript
 export default {
   onInit(context) {
-    const { meta } = context.utils
+    const { quickActions } = context.utils
 
     // 注册一个全局操作
-    const unregister = meta.registerAction({
+    const unregister = quickActions.registerAction({
       id: 'my-plugin-action',
       render: {
         basic: {
@@ -25,7 +25,7 @@ export default {
     })
 
     // 监听操作执行
-    meta.onActionExecute((data) => {
+    quickActions.onActionExecute((data) => {
       if (data.actionId === 'my-plugin-action') {
         console.log('操作被执行，item:', data.item.id)
         // 处理操作
@@ -35,7 +35,7 @@ export default {
     // 插件卸载时清理
     return () => {
       unregister()
-      meta.unregisterAll()
+      quickActions.unregisterAll()
     }
   }
 }
@@ -94,6 +94,84 @@ const unsubscribe = plugin.meta.onActionExecute((data) => {
   console.log(`操作 ${data.actionId} 被执行`)
   console.log('目标 item:', data.item.id)
 })
+```
+
+### `getNativeShareTargets(payloadType?: FlowPayloadType): Promise<FlowTargetInfo[]>`
+
+查询当前平台真实暴露的原生分享目标。该方法复用 FlowBus 的 native share registry，只返回 `isNativeShare === true` 的目标。
+
+**平台边界**:
+- macOS: `system-share`、`airdrop`、`mail`、`messages`
+- Windows / Linux: 当前仅暴露明确的 `mail` fallback，不伪装系统分享面板
+
+**示例**:
+```typescript
+const targets = await plugin.quickActions.getNativeShareTargets('files')
+const canAirDrop = targets.some((target) => target.id === 'airdrop')
+```
+
+### `nativeShare(payload: FlowPayload, options?: { target?: string }): Promise<NativeShareResult>`
+
+通过平台原生分享桥发送结构化 payload。底层使用现有 `flow:native:share` 通道，因此权限、平台降级和错误语义与 Flow Transfer 保持一致。
+
+**示例**:
+```typescript
+await plugin.quickActions.nativeShare(
+  {
+    type: 'text',
+    data: 'Hello from Tuff',
+    context: {
+      sourcePluginId: 'my-plugin',
+      metadata: { title: 'Share text' }
+    }
+  },
+  { target: 'mail' }
+)
+```
+
+### `createSharePayloadFromItem(item: TuffItem, options?: QuickActionItemSharePayloadOptions): FlowPayload`
+
+把当前 CoreBox item 转成原生分享可消费的 Flow payload：
+- 文件 item 优先输出 `{ type: 'files', data: [path] }`
+- 链接 / 普通 item 输出 `{ type: 'text', data: title + subtitle + url }`
+- `metadata` 会保留 `itemId`、`itemKind`、`sourceId` 和 `sourceType`
+
+**示例：在 MetaK 动作里使用 AirDrop 或系统分享**
+```typescript
+export default {
+  onInit(context) {
+    const { quickActions } = context.utils
+
+    quickActions.registerAction({
+      id: 'share-current-item',
+      render: {
+        basic: {
+          title: 'Share with native target',
+          subtitle: 'Use AirDrop, Mail, Messages, or the current platform fallback',
+          icon: { type: 'class', value: 'i-ri-share-line' }
+        },
+        shortcut: '⌘⇧S',
+        group: 'Share'
+      },
+      priority: 120
+    })
+
+    quickActions.onActionExecute(async ({ actionId, item }) => {
+      if (actionId !== 'share-current-item') return
+
+      const payload = quickActions.createSharePayloadFromItem(item)
+      const targets = await quickActions.getNativeShareTargets(payload.type)
+      const target = targets.some((candidate) => candidate.id === 'airdrop')
+        ? 'airdrop'
+        : 'system-share'
+
+      const result = await quickActions.nativeShare(payload, { target })
+      if (!result.success) {
+        console.warn('Native share failed:', result.error)
+      }
+    })
+  }
+}
 ```
 
 ## MetaAction 类型
@@ -176,4 +254,13 @@ export default {
 2. **唯一性**: 操作 ID 必须在插件内唯一
 3. **清理**: 插件卸载时应该调用 `unregisterAll()` 清理所有操作
 4. **快捷键**: 快捷键仅在 MetaOverlay 打开时有效
+5. **平台分享**: 不要自行猜测 AirDrop 或系统分享是否可用，先调用 `getNativeShareTargets()`；不可用时回退到 `mail`、复制或插件自定义流程
 
+## 后续可开放能力
+
+- **动作可见性配置**: 基于 item kind、source、permission、platform 的显示/禁用规则。
+- **动作分组排序配置**: 允许插件声明 group order、默认展开状态和常用动作 pin 策略。
+- **原生分享目标偏好**: 允许用户按插件或 item kind 记住首选目标，例如文件默认 AirDrop、文本默认 Mail。
+- **动作确认与危险操作审计**: 对删除、外发、自动化类动作提供统一确认与审计字段。
+- **批量 item 操作**: 支持多选 item 的 MetaK 动作和原生分享文件集合。
+- **平台能力诊断**: 在 SDK 返回值中暴露 unsupported/degraded reason，方便插件显示精确 fallback。
