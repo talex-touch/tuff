@@ -373,6 +373,8 @@ describe('platformGovernanceStore', () => {
         extension: `startedonly-${marker}`,
         contentType: 'application/octet-stream',
         resourceType: 'resource',
+        attemptId: `stuck-attempt-${marker}`,
+        surface: 'dashboard-resource',
         size: 999999,
       },
     })
@@ -389,8 +391,11 @@ describe('platformGovernanceStore', () => {
         extension: 'png',
         contentType: 'image/png',
         resourceType: 'resource',
+        attemptId: `completed-attempt-${marker}`,
         storageChannel: 'memory',
         storageProvider: 'memory',
+        durationMs: 120,
+        surface: 'dashboard-resource',
         size: 2048,
       },
     })
@@ -407,7 +412,10 @@ describe('platformGovernanceStore', () => {
         extension: 'zip',
         contentType: 'application/zip',
         resourceType: 'resource',
+        attemptId: `failed-attempt-${marker}`,
         reason: 'r2-timeout',
+        statusCode: 504,
+        surface: 'dashboard-resource',
         size: 4096,
       },
     })
@@ -523,6 +531,9 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.started).toBeGreaterThanOrEqual(1)
     expect(analytics.uploads.completed).toBeGreaterThanOrEqual(1)
     expect(analytics.uploads.failed).toBeGreaterThanOrEqual(1)
+    expect(analytics.uploads.attempts).toBeGreaterThanOrEqual(3)
+    expect(analytics.uploads.stuckAttempts).toBeGreaterThanOrEqual(1)
+    expect(analytics.uploads.stuckRate).toBeGreaterThan(0)
     expect(analytics.uploads.failureRate).toBe(50)
     expect(analytics.uploads.bytes).toBeGreaterThanOrEqual(2048)
     expect(analytics.uploads.byExtension).toEqual(expect.arrayContaining([
@@ -541,10 +552,20 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.byStorageChannel).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'memory', quantity: 2048 }),
     ]))
+    expect(analytics.uploads.byStorageProvider).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'memory', quantity: 2048 }),
+    ]))
     expect(analytics.uploads.byFailureReason).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'r2-timeout', events: 1 }),
     ]))
+    expect(analytics.uploads.byStatusCode).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '504', events: 1 }),
+    ]))
+    expect(analytics.uploads.bySurface).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'dashboard-resource', events: 3 }),
+    ]))
     expect(analytics.uploads.uploadSize.average).toBe(3072)
+    expect(analytics.uploads.uploadDurationMs.average).toBe(120)
     expect(analytics.providers.leaderboard).toEqual(expect.arrayContaining([
       expect.objectContaining({
         providerId,
