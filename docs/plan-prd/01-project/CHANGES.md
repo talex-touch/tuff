@@ -13,6 +13,16 @@
 
 ## 2026-05-21
 
+### feat(nexus): surface provider quota utilization in governance analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Data Governance analytics now derives Intelligence provider quota usage from saved `intelligence_provider_quota` policies and provider request/token governance events.
+  - The provider cockpit shows request/token usage, configured limits, utilization ratios, window days, and `ok`/`warning`/`blocked`/`disabled` status for quota policies.
+  - Focused coverage verifies quota utilization aggregation and UI contract exposure without changing the existing dispatch-time quota enforcement path.
+
 ### feat(nexus): enrich search context governance analytics
 
 - `apps/nexus/server/utils/telemetrySanitizer.ts`
@@ -128,6 +138,7 @@
   - User signup governance now records hashed signup events with source/geo/timezone metadata and the Data Governance cockpit surfaces signup growth/trend without storing raw emails.
   - Plugin download handling now emits a separate install governance event, so global and per-plugin analytics can distinguish download volume from install trend while preserving geo/channel/version/artifact/package-size breakdowns.
   - Provider usage governance now carries safe model and provider-type metadata from Scene execution and Nexus Intelligence invokes; the cockpit surfaces token distribution by model/provider type and per-provider top models without recording prompts, inputs, or outputs.
+  - Data Governance provider analytics now joins saved `intelligence_provider_quota` configs with provider request/token usage and surfaces request/token utilization plus `ok` / `warning` / `blocked` quota status in the provider cockpit.
   - Direct `/api/v1/intelligence/invoke` / Lab model calls now enforce `intelligence_provider_quota` before model dispatch and record `provider.request`, provider usage ledger, and governance usage with the stable Provider Registry governance id (`metadata.providerRegistryId ?? provider.id`) while keeping the public result provider id compatible.
   - Provider Registry Admin provider cards now show per-provider quota status plus request/token/window summaries and expose an inline quota editor backed by the existing provider quota GET/POST API, so admins can configure provider-scoped limits without manually entering provider ids in the generic Data Governance form.
   - Provider Registry API tests now cover provider-id scoped quota create/update behavior, and the Mock D1 helper supports `platform_governance_configs` rows used by the quota endpoint.

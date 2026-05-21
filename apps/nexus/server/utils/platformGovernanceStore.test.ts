@@ -492,6 +492,18 @@ describe('platformGovernanceStore', () => {
       unit: 'operation',
       quantity: 1,
     })
+    await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'intelligence_provider_quota',
+      name: 'Analytics provider quota',
+      targetId: providerId,
+      channel: 'chat.completion',
+      limits: {
+        maxRequests: 2,
+        maxTokens: 600,
+        windowDays: 30,
+      },
+      warningThreshold: 80,
+    }, 'admin')
     await recordPlatformGovernanceEvent(h3Event, {
       scope: 'intelligence',
       action: 'provider.request',
@@ -698,6 +710,26 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.providers.byProviderType).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: providerType, quantity: 512 }),
+    ]))
+    expect(analytics.providers.quotas).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        providerId,
+        channel: 'chat.completion',
+        status: 'warning',
+        usage: {
+          requests: 1,
+          tokens: 512,
+        },
+        limits: expect.objectContaining({
+          maxRequests: 2,
+          maxTokens: 600,
+          warningThreshold: 80,
+        }),
+        utilization: {
+          requests: 50,
+          tokens: 85.33,
+        },
+      }),
     ]))
 
     const pluginAnalytics = await getPluginGovernanceAnalytics(h3Event, pluginId, { days: 30, limit: 5000, topLimit: 50 })
