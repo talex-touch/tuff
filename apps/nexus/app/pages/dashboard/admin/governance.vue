@@ -197,6 +197,7 @@ interface GovernanceAnalytics {
     failed: number
     attempts: number
     stuckAttempts: number
+    stuckAttemptAgeMs: number
     bytes: number
     failureRate: number
     stuckRate: number
@@ -572,6 +573,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         failed: 0,
         attempts: 0,
         stuckAttempts: 0,
+        stuckAttemptAgeMs: 0,
         bytes: 0,
         failureRate: 0,
         stuckRate: 0,
@@ -881,6 +883,16 @@ function formatBytes(value: number): string {
   const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)))
   const amount = value / 1024 ** index
   return `${amount >= 10 ? amount.toFixed(0) : amount.toFixed(1)} ${units[index]}`
+}
+
+function formatDurationMs(value: number): string {
+  if (!Number.isFinite(value) || value <= 0)
+    return '0 ms'
+  if (value < 1000)
+    return `${formatNumber(value)} ms`
+  if (value < 60_000)
+    return `${Math.round(value / 100) / 10} s`
+  return `${Math.round(value / 6000) / 10} min`
 }
 
 function formatPercent(value: number): string {
@@ -1208,12 +1220,12 @@ function formatRatio(value: number | null): string {
               <span class="font-medium text-black dark:text-white">{{ formatBytes(analyticsData.uploads.uploadSize.average) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadStuckAttempts', 'Stuck attempts') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadStuckAttempts', 'Stuck attempts') }} · {{ formatDurationMs(analyticsData.uploads.stuckAttemptAgeMs) }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.stuckAttempts) }} · {{ formatPercent(analyticsData.uploads.stuckRate) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
               <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadAvgDuration', 'Avg duration') }}</span>
-              <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.uploadDurationMs.average) }} ms</span>
+              <span class="font-medium text-black dark:text-white">{{ formatDurationMs(analyticsData.uploads.uploadDurationMs.average) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.byExtension.slice(0, 5)" :key="`ext:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>

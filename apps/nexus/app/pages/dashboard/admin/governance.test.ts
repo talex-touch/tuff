@@ -30,8 +30,10 @@ describe('dashboard data governance UI contract', () => {
     const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
 
     expect(page).toContain('analyticsData.uploads.stuckAttempts')
+    expect(page).toContain('analyticsData.uploads.stuckAttemptAgeMs')
     expect(page).toContain('analyticsData.uploads.stuckRate')
     expect(page).toContain('analyticsData.uploads.uploadDurationMs.average')
+    expect(page).toContain('formatDurationMs(analyticsData.uploads.uploadDurationMs.average)')
     expect(page).toContain('analyticsData.uploads.byStatusCode')
     expect(page).toContain('analyticsData.uploads.bySurface')
     expect(page).toContain('analyticsData.uploads.byStorageProvider')

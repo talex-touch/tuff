@@ -243,6 +243,7 @@ describe('platformGovernanceStore', () => {
     const signupSource = `auth-register-${marker}`
     const providerModel = `gpt-4o-mini-${marker}`
     const providerType = `openai-${marker}`
+    const staleUploadStartedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString()
 
     await recordPlatformGovernanceEvent(h3Event, {
       scope: 'app',
@@ -369,6 +370,7 @@ describe('platformGovernanceStore', () => {
       channel: 'application/octet-stream',
       unit: 'file',
       quantity: 1,
+      occurredAt: staleUploadStartedAt,
       metadata: {
         extension: `startedonly-${marker}`,
         contentType: 'application/octet-stream',
@@ -376,6 +378,24 @@ describe('platformGovernanceStore', () => {
         attemptId: `stuck-attempt-${marker}`,
         surface: 'dashboard-resource',
         size: 999999,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'upload',
+      action: 'resource.started',
+      actorId: 'admin@example.com',
+      resourceType: 'resource',
+      resourceId: `asset_fresh_started_${marker}`,
+      channel: 'application/octet-stream',
+      unit: 'file',
+      quantity: 1,
+      metadata: {
+        extension: `freshstarted-${marker}`,
+        contentType: 'application/octet-stream',
+        resourceType: 'resource',
+        attemptId: `fresh-attempt-${marker}`,
+        surface: 'dashboard-resource',
+        size: 4096,
       },
     })
     await recordPlatformGovernanceEvent(h3Event, {
@@ -532,8 +552,9 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.completed).toBeGreaterThanOrEqual(1)
     expect(analytics.uploads.failed).toBeGreaterThanOrEqual(1)
     expect(analytics.uploads.attempts).toBeGreaterThanOrEqual(3)
-    expect(analytics.uploads.stuckAttempts).toBeGreaterThanOrEqual(1)
-    expect(analytics.uploads.stuckRate).toBeGreaterThan(0)
+    expect(analytics.uploads.stuckAttempts).toBe(1)
+    expect(analytics.uploads.stuckAttemptAgeMs).toBe(15 * 60 * 1000)
+    expect(analytics.uploads.stuckRate).toBe(25)
     expect(analytics.uploads.failureRate).toBe(50)
     expect(analytics.uploads.bytes).toBeGreaterThanOrEqual(2048)
     expect(analytics.uploads.byExtension).toEqual(expect.arrayContaining([
@@ -541,6 +562,9 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.byExtension).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ key: `startedonly-${marker}` }),
+    ]))
+    expect(analytics.uploads.byExtension).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: `freshstarted-${marker}` }),
     ]))
     expect(analytics.uploads.byResourceType).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'resource', events: 2 }),
@@ -562,7 +586,7 @@ describe('platformGovernanceStore', () => {
       expect.objectContaining({ key: '504', events: 1 }),
     ]))
     expect(analytics.uploads.bySurface).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'dashboard-resource', events: 3 }),
+      expect.objectContaining({ key: 'dashboard-resource', events: 4 }),
     ]))
     expect(analytics.uploads.uploadSize.average).toBe(3072)
     expect(analytics.uploads.uploadDurationMs.average).toBe(120)
