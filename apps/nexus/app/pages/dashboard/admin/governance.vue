@@ -800,6 +800,8 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
 
   notificationTestError.value = ''
   notificationTestResult.value = null
+  saveError.value = ''
+  saveMessage.value = ''
   notificationTesting.value = true
 
   try {
@@ -821,6 +823,7 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
   }
   catch (error) {
     notificationTestError.value = error instanceof Error ? error.message : t('dashboard.governance.notificationTest.failed', 'Notification channel test failed.')
+    saveMessage.value = ''
   }
   finally {
     notificationTesting.value = false
