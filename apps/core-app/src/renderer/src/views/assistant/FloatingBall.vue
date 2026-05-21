@@ -2,6 +2,7 @@
 import type { AssistantRuntimeConfig } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { useI18n } from 'vue-i18n'
 
 type SpeechRecognitionLike = {
   lang: string
@@ -23,6 +24,7 @@ type SpeechRecognitionLike = {
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 
 const transport = useTuffTransport()
+const { t } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
   language: 'zh-CN',
@@ -52,9 +54,13 @@ let lastMoveAt = 0
 
 const statusText = computed(() => {
   if (errorMessage.value) return errorMessage.value
-  if (!runtimeConfig.value.enabled) return '语音唤醒已关闭'
-  if (listening.value) return `监听中：${runtimeConfig.value.wakeWords.join(' / ')}`
-  return '点击唤起语音助手'
+  if (!runtimeConfig.value.enabled) return t('assistant.floatingBall.voiceWakeOff')
+  if (listening.value) {
+    return t('assistant.floatingBall.listening', {
+      wakeWords: runtimeConfig.value.wakeWords.join(' / ')
+    })
+  }
+  return t('assistant.floatingBall.clickToOpen')
 })
 
 const showWakeBadge = computed(() => runtimeConfig.value.enabled && listening.value)
@@ -121,7 +127,7 @@ function startWakeListening(): void {
 
   const SpeechRecognitionCtor = resolveSpeechRecognitionCtor()
   if (!SpeechRecognitionCtor) {
-    errorMessage.value = '当前环境不支持语音识别'
+    errorMessage.value = t('assistant.floatingBall.unsupported')
     listening.value = false
     return
   }
@@ -138,11 +144,11 @@ function startWakeListening(): void {
   instance.onerror = (event) => {
     const errorType = String(event?.error || 'unknown')
     if (errorType === 'not-allowed' || errorType === 'service-not-allowed') {
-      errorMessage.value = '麦克风权限未授权'
+      errorMessage.value = t('assistant.floatingBall.permissionDenied')
       stopWakeListening()
       return
     }
-    errorMessage.value = `语音识别异常: ${errorType}`
+    errorMessage.value = t('assistant.floatingBall.recognitionError', { error: errorType })
   }
   instance.onresult = (event) => {
     const fragments: string[] = []

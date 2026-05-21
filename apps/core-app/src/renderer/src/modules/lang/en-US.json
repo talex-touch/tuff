@@ -529,6 +529,8 @@
     "homepageWallpaper": "Homepage Wallpaper",
     "homepageWallpaperDesc": "Choose the homepage wallpaper source. Auto uses the desktop wallpaper first, then falls back to Bing.",
     "autoWallpaper": "Auto",
+    "autoWallpaperDesktopReady": "Auto mode has loaded the desktop wallpaper.",
+    "autoWallpaperBingFallback": "Auto mode tries the desktop wallpaper first and falls back to Bing if unavailable.",
     "noBackground": "None",
     "bing": "Bing",
     "customImage": "Custom Image",
@@ -543,9 +545,14 @@
     "selectBackgroundFolder": "Select Background Folder",
     "desktopWallpaper": "Desktop Wallpaper",
     "refreshDesktopWallpaper": "Refresh Desktop Wallpaper",
+    "desktopWallpaperReady": "Current desktop wallpaper has been loaded.",
+    "desktopWallpaperPending": "Desktop wallpaper has not been loaded yet. Refresh manually if needed.",
     "desktopWallpaperUnavailable": "Desktop wallpaper is unavailable on this system.",
     "desktopWallpaperRefreshFailed": "Failed to refresh desktop wallpaper.",
     "rotationInterval": "Rotation Interval",
+    "rotationMode": "Rotation Mode",
+    "randomRotation": "Random",
+    "sequentialRotation": "Sequential",
     "minutes": "min",
     "blur": "Blur",
     "opacity": "Opacity",
@@ -563,6 +570,9 @@
     "syncToCloudDesc": "Keeps local sync status only; cloud upload is not available yet.",
     "syncRequiresLibrary": "Enable copy to library before syncing.",
     "folderRandomHint": "Folder rotation is random by default.",
+    "folderRotationHint": "Random mode picks images from the folder. Sequential mode rotates by filename.",
+    "folderRandomMode": "Folder wallpaper will rotate randomly.",
+    "folderSequentialMode": "Folder wallpaper will rotate by filename.",
     "emphasis": "Emphasis",
     "emphasisDesc": "Different emphasis for different people. Avoid using clear colors randomly.",
     "coloring": "Coloring",
@@ -3138,6 +3148,14 @@
     "syncDeviceUnknown": "Unknown device"
   },
   "assistant": {
+    "floatingBall": {
+      "voiceWakeOff": "Voice wake is off",
+      "listening": "Listening: {wakeWords}",
+      "clickToOpen": "Click to open Assistant",
+      "unsupported": "Speech recognition is not supported in this environment",
+      "permissionDenied": "Microphone permission was not granted",
+      "recognitionError": "Speech recognition error: {error}"
+    },
     "voicePanel": {
       "unsupported": "Speech recognition is not supported in this environment",
       "permissionDenied": "Microphone permission was not granted",
