@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   assertStorageChannelPolicy,
   assertIntelligenceProviderQuota,
+  buildStoragePolicyAlerts,
   evaluateStorageChannelPolicy,
   getPluginGovernanceAnalytics,
   getPlatformGovernanceAnalytics,
@@ -195,6 +196,30 @@ describe('platformGovernanceStore', () => {
       },
     })
     expect(JSON.stringify(evaluation)).not.toContain('storage-user@example.com')
+
+    const alerts = buildStoragePolicyAlerts([evaluation])
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        metric: 'storedBytes',
+        limitKey: 'maxBytes',
+        usage: 750,
+        limit: 1000,
+        utilization: 75,
+        reasons: ['max-bytes-warning'],
+      }),
+      expect.objectContaining({
+        metric: 'storedBytes',
+        limitKey: 'alertBytes',
+        usage: 750,
+        limit: 700,
+        reasons: ['alert-bytes-reached'],
+      }),
+    ]))
+    expect(alerts).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ metric: 'trafficBytes' }),
+      expect.objectContaining({ metric: 'operations' }),
+    ]))
+    expect(JSON.stringify(alerts)).not.toContain('storage-user@example.com')
 
     const packagePolicy = await upsertPlatformGovernanceConfig(h3Event, {
       configType: 'storage_channel',

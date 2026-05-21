@@ -181,6 +181,23 @@ export interface StoragePolicyEvaluation {
   }
 }
 
+export type StoragePolicyAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
+export type StoragePolicyAlertLimitKey = 'maxBytes' | 'trafficBytes' | 'maxOperations' | 'alertBytes'
+
+export interface StoragePolicyAlert {
+  policyId: string
+  name: string
+  channel: string
+  provider: string | null
+  status: 'warning' | 'blocked'
+  metric: StoragePolicyAlertMetric
+  limitKey: StoragePolicyAlertLimitKey
+  usage: number
+  limit: number | null
+  utilization: number | null
+  reasons: string[]
+}
+
 interface GovernanceEventRow {
   id: string
   scope: string
@@ -2088,6 +2105,83 @@ export async function evaluateStorageChannelPolicy(
     },
     utilization,
   }
+}
+
+export function buildStoragePolicyAlerts(evaluations: StoragePolicyEvaluation[]): StoragePolicyAlert[] {
+  const alerts: StoragePolicyAlert[] = []
+
+  for (const evaluation of evaluations) {
+    if (evaluation.status !== 'warning' && evaluation.status !== 'blocked')
+      continue
+
+    const specs: Array<{
+      metric: StoragePolicyAlertMetric
+      limitKey: StoragePolicyAlertLimitKey
+      usage: number
+      limit: number | null
+      utilization: number | null
+      reasonCodes: string[]
+    }> = [
+      {
+        metric: 'storedBytes',
+        limitKey: 'maxBytes',
+        usage: evaluation.usage.storedBytes,
+        limit: evaluation.limits.maxBytes,
+        utilization: evaluation.utilization.storedBytes,
+        reasonCodes: ['max-bytes-exceeded', 'max-bytes-warning'],
+      },
+      {
+        metric: 'trafficBytes',
+        limitKey: 'trafficBytes',
+        usage: evaluation.usage.trafficBytes,
+        limit: evaluation.limits.trafficBytes,
+        utilization: evaluation.utilization.trafficBytes,
+        reasonCodes: ['traffic-bytes-exceeded', 'traffic-bytes-warning'],
+      },
+      {
+        metric: 'operations',
+        limitKey: 'maxOperations',
+        usage: evaluation.usage.operations,
+        limit: evaluation.limits.maxOperations,
+        utilization: evaluation.utilization.operations,
+        reasonCodes: ['operation-limit-exceeded', 'operation-limit-warning'],
+      },
+      {
+        metric: 'storedBytes',
+        limitKey: 'alertBytes',
+        usage: evaluation.usage.storedBytes,
+        limit: evaluation.limits.alertBytes,
+        utilization: roundUsageRatio(evaluation.usage.storedBytes, evaluation.limits.alertBytes),
+        reasonCodes: ['alert-bytes-reached'],
+      },
+    ]
+
+    for (const spec of specs) {
+      const reasons = evaluation.reasons.filter(reason => spec.reasonCodes.includes(reason))
+      if (!reasons.length)
+        continue
+
+      alerts.push({
+        policyId: evaluation.policyId,
+        name: evaluation.name,
+        channel: evaluation.channel,
+        provider: evaluation.provider,
+        status: evaluation.status,
+        metric: spec.metric,
+        limitKey: spec.limitKey,
+        usage: spec.usage,
+        limit: spec.limit,
+        utilization: spec.utilization,
+        reasons,
+      })
+    }
+  }
+
+  return alerts.sort((left, right) => {
+    if (left.status !== right.status)
+      return left.status === 'blocked' ? -1 : 1
+    return (right.utilization ?? 0) - (left.utilization ?? 0)
+  })
 }
 
 export async function assertIntelligenceProviderQuota(
