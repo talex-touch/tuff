@@ -41,6 +41,7 @@ interface OpenAiChatCompletionResponse {
 
 export interface IntelligenceVisionOcrProviderResult {
   output: IntelligenceVisionOcrResult
+  model: string
   providerRequestId?: string
   latencyMs: number
   usage: {
@@ -486,6 +487,7 @@ export async function invokeIntelligenceVisionOcr(
 
   return {
     output: normalizeOcrOutput(rawContent),
+    model,
     providerRequestId: buildProviderRequestId(data, response.headers),
     latencyMs,
     usage: {

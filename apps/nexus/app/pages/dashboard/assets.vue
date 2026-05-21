@@ -4,7 +4,14 @@ import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import PluginMetadataOverlay from '~/components/dashboard/PluginMetadataOverlay.vue'
 import type { ReviewItem } from '~/components/dashboard/ReviewModalOverlay.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
-import type { DashboardPlugin, DashboardPluginTimelineEvent, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
+import type {
+  DashboardPlugin,
+  DashboardPluginAnalytics,
+  DashboardPluginAnalyticsResponse,
+  DashboardPluginTimelineEvent,
+  DashboardPluginVersion,
+  PluginChannel,
+} from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import { computed, ref } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
@@ -310,6 +317,9 @@ const detailOverlaySource = ref<HTMLElement | null>(null)
 const pluginTimeline = ref<DashboardPluginTimelineEvent[]>([])
 const pluginTimelineLoading = ref(false)
 const pluginTimelineError = ref<string | null>(null)
+const pluginAnalytics = ref<DashboardPluginAnalytics | null>(null)
+const pluginAnalyticsLoading = ref(false)
+const pluginAnalyticsError = ref<string | null>(null)
 const showReviewModal = ref(false)
 const reviewItem = ref<ReviewItem | null>(null)
 const reviewOverlaySource = ref<HTMLElement | null>(null)
@@ -401,11 +411,16 @@ function openPluginDetail(plugin: DashboardPlugin, event?: MouseEvent) {
   selectedPlugin.value = plugin
   pluginTimeline.value = []
   pluginTimelineError.value = null
+  pluginAnalytics.value = null
+  pluginAnalyticsError.value = null
   detailOverlaySource.value = event?.currentTarget instanceof HTMLElement
     ? event.currentTarget
     : null
   showDetailDrawer.value = true
-  void loadPluginTimeline(plugin.id)
+  if (canViewPluginPrivateData(plugin)) {
+    void loadPluginTimeline(plugin.id)
+    void loadPluginAnalytics(plugin.id)
+  }
 }
 
 function handlePluginRowClick(payload: { row: DashboardPlugin }, event?: MouseEvent) {
@@ -418,6 +433,9 @@ function closePluginDetail() {
   pluginTimeline.value = []
   pluginTimelineLoading.value = false
   pluginTimelineError.value = null
+  pluginAnalytics.value = null
+  pluginAnalyticsLoading.value = false
+  pluginAnalyticsError.value = null
   detailOverlaySource.value = null
 }
 
@@ -436,6 +454,30 @@ async function loadPluginTimeline(pluginId: string) {
   finally {
     if (selectedPlugin.value?.id === pluginId)
       pluginTimelineLoading.value = false
+  }
+}
+
+async function loadPluginAnalytics(pluginId: string) {
+  pluginAnalyticsLoading.value = true
+  pluginAnalyticsError.value = null
+  try {
+    const result = await requestJson<DashboardPluginAnalyticsResponse>(`/api/dashboard/plugins/${pluginId}/analytics`, {
+      query: {
+        days: 30,
+        limit: 5000,
+        topLimit: 12,
+      },
+    })
+    if (selectedPlugin.value?.id === pluginId)
+      pluginAnalytics.value = result.analytics ?? null
+  }
+  catch (error: unknown) {
+    if (selectedPlugin.value?.id === pluginId)
+      pluginAnalyticsError.value = error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
+  }
+  finally {
+    if (selectedPlugin.value?.id === pluginId)
+      pluginAnalyticsLoading.value = false
   }
 }
 
@@ -655,6 +697,10 @@ function isPluginOwner(plugin: DashboardPlugin) {
 }
 
 function canEditPlugin(plugin: DashboardPlugin) {
+  return isAdmin.value || isPluginOwner(plugin)
+}
+
+function canViewPluginPrivateData(plugin: DashboardPlugin) {
   return isAdmin.value || isPluginOwner(plugin)
 }
 
@@ -1374,6 +1420,9 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       :timeline="pluginTimeline"
       :timeline-loading="pluginTimelineLoading"
       :timeline-error="pluginTimelineError"
+      :analytics="pluginAnalytics"
+      :analytics-loading="pluginAnalyticsLoading"
+      :analytics-error="pluginAnalyticsError"
       :loading="pluginStatusUpdating !== null"
       @close="closePluginDetail"
       @edit="handleDetailEdit"

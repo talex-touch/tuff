@@ -76,6 +76,14 @@ export default defineEventHandler(async (event) => {
     const iconResult = await uploadImage(event, iconFile, {
       actorId: userId,
       resourceType: 'plugin-icon',
+      uploadLifecycle: {
+        surface: 'plugin-icon-upload',
+        resourceId: `plugin:${id}:icon`,
+        metadata: {
+          pluginId: id,
+          source: 'dashboard-plugin-edit',
+        },
+      },
     })
     updates.iconKey = iconResult.key
     updates.iconUrl = iconResult.url

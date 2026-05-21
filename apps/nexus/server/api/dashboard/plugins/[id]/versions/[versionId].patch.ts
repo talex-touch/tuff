@@ -63,6 +63,7 @@ export default defineEventHandler(async (event) => {
     metadata: {
       pluginId: id,
       pluginSlug: plugin.slug,
+      userId: plugin.userId,
       versionId,
       version: version.version,
       status,

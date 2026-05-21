@@ -1,5 +1,9 @@
 import type { IntelligenceProviderRecord } from './intelligenceStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  listPlatformGovernanceEvents,
+  upsertPlatformGovernanceConfig,
+} from './platformGovernanceStore'
 import { invokeIntelligenceCapability } from './tuffIntelligenceLabService'
 
 const storeMocks = vi.hoisted(() => ({
@@ -50,6 +54,20 @@ vi.mock('@langchain/openai', () => ({
     }
   },
 }))
+
+function h3Event(path = '/test/intelligence-invoke') {
+  return {
+    node: {
+      req: {
+        headers: {
+          'user-agent': 'vitest',
+        },
+      },
+    },
+    context: {},
+    path,
+  } as any
+}
 
 function provider(overrides: Partial<IntelligenceProviderRecord> = {}): IntelligenceProviderRecord {
   return {
@@ -110,7 +128,7 @@ describe('invokeIntelligenceCapability', () => {
   })
 
   it('通过 Nexus provider registry 配置调用文本能力并记录脱敏审计', async () => {
-    const result = await invokeIntelligenceCapability({} as any, 'user_1', {
+    const result = await invokeIntelligenceCapability(h3Event(), 'user_1', {
       capabilityId: 'text.translate',
       payload: {
         text: 'hello',
@@ -259,7 +277,7 @@ describe('invokeIntelligenceCapability', () => {
       },
     })
 
-    await invokeIntelligenceCapability({} as any, 'user_1', {
+    await invokeIntelligenceCapability(h3Event(), 'user_1', {
       capabilityId: 'text.chat',
       payload: {
         messages: [{ role: 'user', content: 'hello' }],
@@ -283,7 +301,7 @@ describe('invokeIntelligenceCapability', () => {
   it('provider 调用失败时不扣 credits', async () => {
     langchainMocks.invoke.mockRejectedValue(new Error('provider failed'))
 
-    await expect(invokeIntelligenceCapability({} as any, 'user_1', {
+    await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
       capabilityId: 'text.chat',
       payload: {
         messages: [{ role: 'user', content: 'hello' }],
@@ -293,10 +311,63 @@ describe('invokeIntelligenceCapability', () => {
     expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
   })
 
+  it('direct invoke 在进入模型前按 Provider Registry governance id 拦截 provider request quota', async () => {
+    const registryProviderId = `registry_provider_${crypto.randomUUID()}`
+    const event = h3Event(`/test/${registryProviderId}`)
+    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValueOnce([
+      provider({
+        metadata: {
+          providerRegistryId: registryProviderId,
+        },
+      }),
+    ])
+    await upsertPlatformGovernanceConfig(event, {
+      configType: 'intelligence_provider_quota',
+      name: 'Blocked direct invoke quota',
+      targetId: registryProviderId,
+      limits: {
+        maxRequests: 0,
+        windowDays: 30,
+      },
+    }, 'admin')
+
+    await expect(invokeIntelligenceCapability(event, 'user_1', {
+      capabilityId: 'text.chat',
+      payload: {
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+    })).rejects.toMatchObject({
+      statusCode: 429,
+      data: {
+        code: 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
+        providerId: registryProviderId,
+      },
+    })
+
+    expect(langchainMocks.invoke).not.toHaveBeenCalled()
+    expect(creditStoreMocks.consumeCredits).not.toHaveBeenCalled()
+    expect(usageLedgerMocks.recordProviderUsageLedger).not.toHaveBeenCalled()
+    expect(storeMocks.createAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      status: 429,
+      success: false,
+      metadata: expect.objectContaining({
+        retryable: false,
+        willRetry: false,
+      }),
+    }))
+    await expect(listPlatformGovernanceEvents(event, {
+      scope: 'intelligence',
+      action: 'provider.request',
+      resourceType: 'provider',
+      resourceId: registryProviderId,
+      limit: 10,
+    })).resolves.toHaveLength(0)
+  })
+
   it('credits 不足时返回明确的 402 错误', async () => {
     creditStoreMocks.consumeCredits.mockRejectedValueOnce(new Error('User credits exceeded.'))
 
-    await expect(invokeIntelligenceCapability({} as any, 'user_1', {
+    await expect(invokeIntelligenceCapability(h3Event(), 'user_1', {
       capabilityId: 'text.chat',
       payload: {
         messages: [{ role: 'user', content: 'hello' }],

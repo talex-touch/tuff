@@ -3,6 +3,8 @@ import { useRuntimeConfig } from '#imports'
 import { createUser, createVerificationToken, getUserByEmail, setUserPassword } from '../../utils/authStore'
 import { ensurePersonalTeam } from '../../utils/creditsStore'
 import { sendEmail } from '../../utils/email'
+import { recordPlatformGovernanceEvent } from '../../utils/platformGovernanceStore'
+import { resolveRequestGeo } from '../../utils/requestGeo'
 import { verifyTurnstileToken } from '../../utils/turnstile'
 
 export default defineEventHandler(async (event) => {
@@ -32,6 +34,24 @@ export default defineEventHandler(async (event) => {
   const user = await createUser(event, { email, name, emailState: 'unverified' })
   await setUserPassword(event, user.id, password)
   await ensurePersonalTeam(event, user.id)
+  const geo = resolveRequestGeo(event)
+  recordPlatformGovernanceEvent(event, {
+    scope: 'user',
+    action: 'signup',
+    actorId: user.id,
+    resourceType: 'user',
+    resourceId: user.id,
+    channel: 'email',
+    unit: 'user',
+    quantity: 1,
+    metadata: {
+      source: 'auth-register',
+      emailState: user.emailState,
+      countryCode: geo.countryCode,
+      regionCode: geo.regionCode,
+      timezone: geo.timezone,
+    },
+  }).catch(() => {})
 
   const token = await createVerificationToken(event, email, 1000 * 60 * 60 * 24)
   const origin = useRuntimeConfig().auth?.origin as string | undefined

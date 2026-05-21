@@ -30,7 +30,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const signatureKey = `${asset.fileKey}.sig`
-  const result = await requireReleaseAsset(event, signatureKey)
+  const result = await requireReleaseAsset(event, signatureKey, {
+    governanceResourceId: `release:${tag}:${platform}:${arch}:signature`,
+    resourceType: 'release-signature',
+  })
   const buffer = Buffer.isBuffer(result.data) ? result.data : Buffer.from(result.data)
 
   setResponseHeader(event, 'Content-Type', result.contentType || 'application/octet-stream')

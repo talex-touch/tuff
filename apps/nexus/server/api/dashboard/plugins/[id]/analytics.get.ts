@@ -1,7 +1,7 @@
 import { createError, getQuery } from 'h3'
 import { requireAuthOrApiKey } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
-import { getPlatformGovernanceSummary } from '../../../../utils/platformGovernanceStore'
+import { getPluginGovernanceAnalytics } from '../../../../utils/platformGovernanceStore'
 import { getPluginById } from '../../../../utils/pluginsStore'
 
 function readPositiveInt(value: unknown, fallback: number): number {
@@ -30,32 +30,20 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const days = readPositiveInt(query.days, 30)
+  const limit = readPositiveInt(query.limit, 5000)
+  const topLimit = readPositiveInt(query.topLimit, 12)
 
-  const [downloads, invocations] = await Promise.all([
-    getPlatformGovernanceSummary(event, {
-      scope: 'plugin',
-      action: 'download',
-      resourceType: 'plugin',
-      resourceId: id,
-      days,
-      limit: 5000,
-    }),
-    getPlatformGovernanceSummary(event, {
-      scope: 'plugin',
-      action: 'invoke',
-      resourceType: 'plugin',
-      resourceId: id,
-      days,
-      limit: 5000,
-    }),
-  ])
+  const analytics = await getPluginGovernanceAnalytics(event, id, {
+    days,
+    limit,
+    topLimit,
+  })
 
   return {
     pluginId: id,
     slug: plugin.slug,
-    days,
-    downloads,
-    invocations,
+    days: analytics.days,
+    analytics,
     generatedAt: new Date().toISOString(),
   }
 })
