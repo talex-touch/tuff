@@ -13,6 +13,19 @@
 
 ## 2026-05-21
 
+### feat(nexus): add plugin review analytics to asset details
+
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/analytics.get.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+- `apps/nexus/server/utils/pluginReviewStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+  - Added owner/admin-only review analytics to the private plugin analytics payload, including total/approved/pending/rejected counts, approved average rating, rating distribution, and latest review update time.
+  - Dashboard plugin detail now shows review count and a compact review quality panel alongside download/install/invocation metrics.
+  - Approved reviews are the only source for average rating and distribution; pending/rejected reviews remain visible as moderation counts without affecting quality score.
+
 ### fix(nexus): handle reused web device ids across accounts
 
 - `apps/nexus/server/utils/authStore.ts`
