@@ -37,6 +37,7 @@ interface FileStatus {
   lastModified: number | null
   path: string
   size: number | null
+  source?: string
 }
 
 interface FileStatusMap {
@@ -181,6 +182,32 @@ export class DevServerHealthMonitor {
     })
   }
 
+  private isFileStatusMap(value: unknown): value is FileStatusMap {
+    if (!value || typeof value !== 'object') return false
+
+    return Object.values(value as Record<string, unknown>).every((item) => {
+      if (!item || typeof item !== 'object') return false
+      const status = item as Record<string, unknown>
+      return (
+        typeof status.exist === 'boolean' &&
+        typeof status.changed === 'boolean' &&
+        (typeof status.lastModified === 'number' || status.lastModified === null) &&
+        typeof status.path === 'string' &&
+        (typeof status.size === 'number' || status.size === null)
+      )
+    })
+  }
+
+  private shouldReloadPrelude(pluginName: string, status: FileStatusMap): boolean {
+    const previous = this.lastFileStatus.get(pluginName)
+    this.lastFileStatus.set(pluginName, status)
+
+    if (!previous) return false
+
+    const indexStatus = status['index.js']
+    return Boolean(indexStatus?.exist && indexStatus.changed)
+  }
+
   /**
    * 执行健康检查
    */
@@ -218,11 +245,11 @@ export class DevServerHealthMonitor {
     for (const endpoint of endpoints) {
       const healthUrl = new URL(endpoint, address).toString()
       try {
-        await getNetworkService().request({
+        const response = await getNetworkService().request<unknown>({
           method: 'GET',
           url: healthUrl,
           timeoutMs: this.TIMEOUT,
-          responseType: 'text',
+          responseType: endpoint.endsWith('/update') ? 'json' : 'text',
           validateStatus: HEALTH_ACCEPTED_STATUSES,
           retryPolicy: { maxRetries: this.MAX_RETRIES },
           cooldownPolicy: {
@@ -234,8 +261,9 @@ export class DevServerHealthMonitor {
         })
         return {
           healthy: true,
+          files: this.isFileStatusMap(response.data) ? response.data : undefined,
           timestamp: Date.now()
-        }
+        } as DevServerHealthCheckResult & { files?: FileStatusMap }
       } catch (error: unknown) {
         lastError = error
       }
@@ -253,10 +281,16 @@ export class DevServerHealthMonitor {
    */
   private async handleHealthyResponse(
     plugin: ITouchPlugin,
-    _result: DevServerHealthCheckResult
+    result: DevServerHealthCheckResult & { files?: FileStatusMap }
   ): Promise<void> {
     // 重置失败计数
     this.failureCount.delete(plugin.name)
+
+    if (result.files && this.shouldReloadPrelude(plugin.name, result.files)) {
+      monitorLog.info(`Dev Prelude changed, reloading plugin ${plugin.name}`)
+      await this.manager.reloadPlugin(plugin.name)
+      return
+    }
 
     // If previously disconnected, now restored
     if (plugin.status === PluginStatus.DEV_DISCONNECTED) {
