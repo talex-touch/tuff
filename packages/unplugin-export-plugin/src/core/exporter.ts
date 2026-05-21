@@ -7,6 +7,14 @@ import fs from 'fs-extra'
 import { globSync } from 'glob'
 import path from 'pathe'
 import { CompressLimit, TalexCompress } from './compress-util'
+import {
+  DEFAULT_PRELUDE_EXTERNAL,
+  PRELUDE_OUTPUT_FILE,
+  createPreludeAlias,
+  resolvePreludeBundleConfig,
+  toProjectRelative,
+  type PreludeBuildConfig,
+} from './prelude'
 import { generateFilesSha256, generateSignature } from './security-util'
 
 // Default configuration
@@ -20,67 +28,10 @@ const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manife
   indexDir: 'index',
   sourcemap: false,
   minify: true,
-  external: ['electron'],
+  external: DEFAULT_PRELUDE_EXTERNAL,
   maxSizeMB: 10,
   assets: undefined,
   versionSync: undefined,
-}
-
-interface IndexBuildConfig {
-  entry: string
-  format?: 'cjs' | 'esm'
-  target?: string
-  external?: string[]
-  minify?: boolean
-  sourcemap?: boolean
-}
-
-type IndexConfigOverride = Partial<IndexBuildConfig>
-
-function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
-  if (!source || typeof source !== 'object')
-    return null
-
-  const config = source as Record<string, unknown>
-  const result: IndexConfigOverride = {}
-
-  if ('entry' in config) {
-    if (typeof config.entry !== 'string')
-      throw new Error(`${label}.entry must be a string`)
-    result.entry = config.entry
-  }
-
-  if ('format' in config) {
-    if (config.format !== 'cjs' && config.format !== 'esm')
-      throw new Error(`${label}.format must be 'cjs' or 'esm'`)
-    result.format = config.format
-  }
-
-  if ('target' in config) {
-    if (typeof config.target !== 'string')
-      throw new Error(`${label}.target must be a string`)
-    result.target = config.target
-  }
-
-  if ('external' in config) {
-    if (!Array.isArray(config.external) || config.external.some(item => typeof item !== 'string'))
-      throw new Error(`${label}.external must be a string array`)
-    result.external = config.external as string[]
-  }
-
-  if ('minify' in config) {
-    if (typeof config.minify !== 'boolean')
-      throw new Error(`${label}.minify must be a boolean`)
-    result.minify = config.minify
-  }
-
-  if ('sourcemap' in config) {
-    if (typeof config.sourcemap !== 'boolean')
-      throw new Error(`${label}.sourcemap must be a boolean`)
-    result.sourcemap = config.sourcemap
-  }
-
-  return result
 }
 
 /**
@@ -220,83 +171,22 @@ function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void 
 }
 
 /**
- * Detect index/ folder and find entry point
+ * Bundle Prelude source into a single index.js using esbuild
  */
-function findIndexEntry(indexDirPath: string): string | null {
-  if (!fs.existsSync(indexDirPath)) {
-    return null
-  }
-
-  const entryFiles = ['main.ts', 'main.js', 'index.ts', 'index.js']
-  for (const file of entryFiles) {
-    const entryPath = path.join(indexDirPath, file)
-    if (fs.existsSync(entryPath)) {
-      return entryPath
-    }
-  }
-
-  return null
-}
-
-function resolveIndexBundleConfig(
-  opts: ReturnType<typeof resolveOptions>,
-  manifestIndexConfig: IndexConfigOverride | null,
-): IndexBuildConfig | null {
-  const rootIndexPath = path.resolve(opts.root, 'index.js')
-  const indexDirPath = path.resolve(opts.root, opts.indexDir)
-
-  if (manifestIndexConfig) {
-    const entryPath = manifestIndexConfig.entry
-      ? path.resolve(opts.root, manifestIndexConfig.entry)
-      : findIndexEntry(indexDirPath)
-
-    if (!entryPath || !fs.existsSync(entryPath)) {
-      const displayPath = manifestIndexConfig.entry || `${opts.indexDir}/(main|index).[jt]s`
-      throw new Error(`manifest.build.index.entry not found: ${displayPath}`)
-    }
-
-    return {
-      entry: entryPath,
-      format: manifestIndexConfig.format ?? 'cjs',
-      target: manifestIndexConfig.target ?? 'node18',
-      external: manifestIndexConfig.external ?? opts.external,
-      minify: manifestIndexConfig.minify ?? opts.minify,
-      sourcemap: manifestIndexConfig.sourcemap ?? opts.sourcemap,
-    }
-  }
-
-  if (fs.existsSync(rootIndexPath)) {
-    return null
-  }
-
-  const entryPath = findIndexEntry(indexDirPath)
-  if (!entryPath) {
-    return null
-  }
-
-  return {
-    entry: entryPath,
-    format: 'cjs',
-    target: 'node18',
-    external: opts.external,
-    minify: opts.minify,
-    sourcemap: opts.sourcemap,
-  }
-}
-
-/**
- * Bundle index/ folder into a single index.js using esbuild
- */
-async function bundleIndexFolder(
-  config: IndexBuildConfig,
+async function bundlePrelude(
+  config: PreludeBuildConfig,
   buildDir: string,
   manifest: { name: string, version: string },
+  root: string,
   chalk: any,
 ): Promise<boolean> {
   try {
     const esbuild = await import('esbuild')
 
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Bundling index/ folder with esbuild...'))
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.blueBright(` Bundling ${toProjectRelative(root, config.entry)} to index.js...`),
+    )
 
     const startTime = Date.now()
     const result = await esbuild.build({
@@ -305,18 +195,18 @@ async function bundleIndexFolder(
       format: config.format || 'cjs',
       target: config.target || 'node18',
       platform: 'node',
-      outfile: path.join(buildDir, 'index.js'),
-      external: config.external || ['electron'],
+      outfile: path.join(buildDir, PRELUDE_OUTPUT_FILE),
+      external: config.external || DEFAULT_PRELUDE_EXTERNAL,
       minify: config.minify ?? true,
       sourcemap: config.sourcemap ?? false,
+      banner: {
+        js: `/* Tuff Prelude bundle: ${config.source} -> index.js */`,
+      },
       define: {
         __PLUGIN_NAME__: JSON.stringify(manifest.name),
         __PLUGIN_VERSION__: JSON.stringify(manifest.version),
       },
-      alias: {
-        '@': path.resolve('index'),
-        '~': path.resolve('index'),
-      },
+      alias: createPreludeAlias(config.entry),
       logLevel: 'warning',
     })
 
@@ -328,19 +218,19 @@ async function bundleIndexFolder(
       return false
     }
 
-    const outputPath = path.join(buildDir, 'index.js')
+    const outputPath = path.join(buildDir, PRELUDE_OUTPUT_FILE)
     const stats = fs.statSync(outputPath)
     const sizeKb = (stats.size / 1024).toFixed(1)
 
     console.info(
       chalk.bgBlack.white(' Talex-Touch ')
-      + chalk.greenBright(` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`),
+      + chalk.greenBright(` Prelude bundled successfully (${sizeKb}kb) in ${duration}ms`),
     )
 
     return true
   }
   catch (error: any) {
-    console.error(chalk.bgRed.white(' ERROR ') + chalk.red(` Failed to bundle index folder: ${error.message}`))
+    console.error(chalk.bgRed.white(' ERROR ') + chalk.red(` Failed to bundle Prelude: ${error.message}`))
     return false
   }
 }
@@ -432,16 +322,15 @@ export async function build(userOptions?: Options) {
   const manifestData: IManifest | null = fs.existsSync(manifestPath)
     ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
     : null
-  const manifestIndexConfig = normalizeIndexConfig(manifestData?.build?.index, 'manifest.build.index')
-  const indexConfig = resolveIndexBundleConfig(opts, manifestIndexConfig)
+  const preludeConfig = resolvePreludeBundleConfig(opts, manifestData)
 
-  if (indexConfig) {
+  if (preludeConfig) {
     if (!manifestData)
-      throw new Error('manifest.json not found for index/ bundling')
+      throw new Error('manifest.json not found for Prelude bundling')
 
-    const bundleSuccess = await bundleIndexFolder(indexConfig, buildDir, manifestData, chalk)
+    const bundleSuccess = await bundlePrelude(preludeConfig, buildDir, manifestData, opts.root, chalk)
     if (!bundleSuccess) {
-      throw new Error('Failed to bundle index/ folder')
+      throw new Error('Failed to bundle Prelude')
     }
   }
   else {
@@ -493,6 +382,14 @@ interface IManifest {
   }
   build?: {
     files: string[]
+    prelude?: {
+      entry?: string
+      format?: 'cjs' | 'esm'
+      target?: string
+      external?: string[]
+      minify?: boolean
+      sourcemap?: boolean
+    }
     index?: {
       entry?: string
       format?: 'cjs' | 'esm'
