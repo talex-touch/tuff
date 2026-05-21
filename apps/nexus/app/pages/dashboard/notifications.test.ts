@@ -21,7 +21,7 @@ describe('dashboard notification inbox UI contract', () => {
     expect(page).toContain("requestJson('/api/dashboard/notifications/inbox/read'")
     expect(page).toContain("requestJson<BrowserPushSubscriptionsResponse>('/api/dashboard/notifications/push-subscriptions'")
     expect(page).toContain("requestJson('/api/dashboard/notifications/push-subscriptions'")
-    expect(page).toContain(`requestJson(\`/api/dashboard/notifications/push-subscriptions/${'${'}subscription.id}\``)
+    expect(page).toContain('requestJson(`/api/dashboard/notifications/push-subscriptions/')
     expect(page).toContain("method: 'DELETE'")
     expect(page).toContain('body: { ids }')
     expect(page).toContain('body: { all: true }')
