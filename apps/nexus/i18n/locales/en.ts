@@ -1199,6 +1199,16 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             installs: 'Installs',
             invocations: 'Invocations',
             uniqueActors: 'Active users',
+            reviews: 'Reviews',
+          },
+          reviews: {
+            title: 'Review quality',
+            averageMeta: 'Across {count} approved ratings',
+            latest: 'Latest update {date}',
+            approved: 'Approved',
+            pending: 'Pending',
+            rejected: 'Rejected',
+            noRatings: 'No approved ratings yet.',
           },
           breakdowns: {
             actions: 'Action mix',

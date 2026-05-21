@@ -14,6 +14,7 @@ This folder stores manual visual evidence for Assistant surfaces that cannot be 
 - `assistant-floating-ball-cdp.png`: CDP capture of the Assistant floating ball entry.
 - `assistant-floating-ball-before-drag-desktop-2026-05-21.png`: desktop capture before dragging the floating ball.
 - `assistant-floating-ball-after-drag-desktop-2026-05-21.png`: desktop capture after dragging the floating ball, used to verify drag visibility and position persistence evidence.
+- `assistant-floating-ball-single-renderer-desktop-2026-05-21.png`: desktop capture after the single-flight window guard rebuild, used as follow-up evidence that only one floating ball renderer is visible.
 
 ## Verified evidence
 
@@ -21,6 +22,7 @@ This folder stores manual visual evidence for Assistant surfaces that cannot be 
 - Real desktop drag was performed through macOS CGEvent mouse events, not only CDP synthetic events.
 - Floating ball persisted position from `{ "x": 480, "y": 410 }` to `{ "x": 574, "y": 384 }` in the isolated app setting snapshot.
 - Screenshot translation permission-denied recovery was observed in the VoicePanel as the localized screen-recording permission hint.
+- The post-fix desktop capture shows a single visible floating ball after the single-flight window guard rebuild.
 
 ## Remaining gaps
 
