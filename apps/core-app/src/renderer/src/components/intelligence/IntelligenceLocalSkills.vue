@@ -1,5 +1,9 @@
 <script setup name="IntelligenceLocalSkills" lang="ts">
-import type { IntelligenceLocalEnvironmentSummary } from '@talex-touch/tuff-intelligence'
+import type {
+  IntelligenceLocalEnvironmentSummary,
+  IntelligenceLocalSkillGateStatus,
+  IntelligenceLocalSkillProviderSummary
+} from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -26,8 +30,30 @@ const enabledSkills = computed(() => installedSkills.value.filter((skill) => ski
 const gatedSkills = computed(
   () => environment.value?.skillProviders.filter((skill) => skill.mode === 'gated') ?? []
 )
+const readySkills = computed(() =>
+  installedSkills.value.filter((skill) => skill.gate.status === 'ready')
+)
+const approvalRequiredSkills = computed(() =>
+  installedSkills.value.filter((skill) => skill.gate.approvalRequired)
+)
+const unavailableSkills = computed(
+  () =>
+    environment.value?.skillProviders.filter((skill) => skill.gate.status === 'unavailable') ?? []
+)
 const configFileCount = computed(
   () => environment.value?.configFiles.filter((file) => file.exists).length ?? 0
+)
+const sceneHintCount = computed(() => {
+  const sceneIds = new Set<string>()
+  for (const skill of installedSkills.value) {
+    for (const sceneId of skill.gate.sceneIds) {
+      sceneIds.add(sceneId)
+    }
+  }
+  return sceneIds.size
+})
+const visibleSkillChips = computed(
+  () => environment.value?.skillProviders.filter((item) => item.installed).slice(0, 8) ?? []
 )
 
 function formatToolNames(): string {
@@ -39,10 +65,11 @@ function formatToolNames(): string {
 function formatSkillNames(): string {
   if (!environment.value) return t('settings.intelligence.localSkills.loading')
   if (installedSkills.value.length === 0) return t('settings.intelligence.localSkills.noSkills')
-  return enabledSkills.value
+  const names = enabledSkills.value
     .slice(0, 4)
     .map((skill) => skill.name)
     .join(' / ')
+  return names || t('settings.intelligence.localSkills.noReadySkills')
 }
 
 function formatConfigSummary(): string {
@@ -50,6 +77,27 @@ function formatConfigSummary(): string {
   return t('settings.intelligence.localSkills.configSummary', {
     count: configFileCount.value
   })
+}
+
+function formatGateSummary(): string {
+  if (!environment.value) return t('settings.intelligence.localSkills.loading')
+  return t('settings.intelligence.localSkills.gateSummary', {
+    ready: readySkills.value.length,
+    approval: approvalRequiredSkills.value.length,
+    unavailable: unavailableSkills.value.length,
+    scenes: sceneHintCount.value
+  })
+}
+
+function gateStatusLabel(status: IntelligenceLocalSkillGateStatus): string {
+  return t(`settings.intelligence.localSkills.gateStatus.${status}`)
+}
+
+function skillChipTitle(skill: IntelligenceLocalSkillProviderSummary): string {
+  if (skill.gate.sceneIds.length === 0) {
+    return gateStatusLabel(skill.gate.status)
+  }
+  return `${gateStatusLabel(skill.gate.status)} / ${skill.gate.sceneIds.join(' / ')}`
 }
 
 async function refreshEnvironment(): Promise<void> {
@@ -102,6 +150,17 @@ onMounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      :title="t('settings.intelligence.localSkills.gateTitle')"
+      :description="formatGateSummary()"
+      default-icon="i-carbon-rule"
+      active-icon="i-carbon-rule"
+    >
+      <span class="local-skills__stat">
+        {{ readySkills.length }}/{{ installedSkills.length }}
+      </span>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
       :title="t('settings.intelligence.localSkills.configTitle')"
       :description="error || formatConfigSummary()"
       default-icon="i-carbon-document-configuration"
@@ -115,12 +174,16 @@ onMounted(() => {
 
     <div v-if="environment" class="local-skills__chips">
       <span
-        v-for="skill in environment.skillProviders.filter((item) => item.installed).slice(0, 8)"
+        v-for="skill in visibleSkillChips"
         :key="skill.id"
         class="local-skills__chip"
-        :class="{ 'is-gated': skill.mode === 'gated' }"
+        :class="`is-${skill.gate.status}`"
+        :title="skillChipTitle(skill)"
       >
-        {{ skill.name }}
+        <span>{{ skill.name }}</span>
+        <span class="local-skills__chip-status">
+          {{ gateStatusLabel(skill.gate.status) }}
+        </span>
       </span>
       <span v-if="gatedSkills.length" class="local-skills__hint">
         {{ t('settings.intelligence.localSkills.gatedHint', { count: gatedSkills.length }) }}
@@ -149,6 +212,7 @@ onMounted(() => {
 .local-skills__hint {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 24px;
   padding: 0 8px;
   border-radius: 8px;
@@ -157,8 +221,16 @@ onMounted(() => {
   background: var(--tx-fill-color-light);
 }
 
-.local-skills__chip.is-gated {
+.local-skills__chip-status {
+  color: var(--tx-text-color-placeholder);
+}
+
+.local-skills__chip.is-approval_required {
   color: var(--tx-color-warning);
+}
+
+.local-skills__chip.is-unavailable {
+  color: var(--tx-text-color-placeholder);
 }
 
 .local-skills__hint {

@@ -70,12 +70,18 @@ describe('getIntelligenceLocalEnvironment', () => {
       installed: true,
       enabled: true,
       mode: 'core',
-      riskLevel: 'low'
+      riskLevel: 'low',
+      gate: {
+        status: 'ready',
+        reason: 'trusted_core',
+        approvalRequired: false,
+        sceneIds: ['docs.openai.answer']
+      }
     })
     expect(skill?.capabilities).toContain('docs.openai.search')
   })
 
-  it('keeps missing gated skills visible but disabled', async () => {
+  it('keeps missing gated skills visible but unavailable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'tuff-ai-env-'))
     const codexHome = join(root, '.codex')
     await mkdir(codexHome, { recursive: true })
@@ -93,7 +99,70 @@ describe('getIntelligenceLocalEnvironment', () => {
       installed: false,
       enabled: false,
       mode: 'gated',
-      riskLevel: 'high'
+      riskLevel: 'high',
+      gate: {
+        status: 'unavailable',
+        reason: 'not_installed',
+        approvalRequired: false,
+        sceneIds: []
+      }
+    })
+  })
+
+  it('marks installed gated and external skills as approval-only', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tuff-ai-env-'))
+    const codexHome = join(root, '.codex')
+    const skillsRoot = join(codexHome, 'skills')
+    const sentryRoot = join(skillsRoot, 'sentry')
+    const customRoot = join(skillsRoot, 'custom-review')
+
+    await mkdir(sentryRoot, { recursive: true })
+    await mkdir(customRoot, { recursive: true })
+    await writeFile(
+      join(sentryRoot, 'SKILL.md'),
+      ['---', 'name: Sentry', 'description: Inspect Sentry issues.', '---', '# Sentry'].join('\n')
+    )
+    await writeFile(
+      join(customRoot, 'SKILL.md'),
+      [
+        '---',
+        'name: Custom Review',
+        'description: Local unreviewed skill.',
+        '---',
+        '# Custom Review'
+      ].join('\n')
+    )
+
+    process.env.CODEX_HOME = codexHome
+    process.env.PATH = ''
+
+    const summary = await getIntelligenceLocalEnvironment(root)
+    const sentry = summary.skillProviders.find((item) => item.id === 'sentry')
+    const custom = summary.skillProviders.find((item) => item.id === 'custom-review')
+
+    expect(sentry).toMatchObject({
+      installed: true,
+      enabled: false,
+      mode: 'gated',
+      riskLevel: 'high',
+      gate: {
+        status: 'approval_required',
+        reason: 'high_risk',
+        approvalRequired: true,
+        sceneIds: ['observability.sentry.review']
+      }
+    })
+    expect(custom).toMatchObject({
+      installed: true,
+      enabled: false,
+      mode: 'external',
+      riskLevel: 'low',
+      gate: {
+        status: 'approval_required',
+        reason: 'external_unreviewed',
+        approvalRequired: true,
+        sceneIds: []
+      }
     })
   })
 })
