@@ -217,12 +217,18 @@ interface GovernanceAnalytics {
       downloads: number
       installs: number
       invocations: number
+      hotScore: number
+      growth: {
+        previousScore: number
+        currentScore: number
+        growthRate: number
+      }
       events: number
       uniqueActors: number
       topCountries: Array<{ countryCode: string, events: number }>
       topRegions: Array<{ regionCode: string, events: number }>
       topChannels: Array<{ channel: string, events: number }>
-      byAction: Array<{ action: string, events: number }>
+      byAction: Array<{ action: string, events: number, quantity: number }>
     }>
   }
   uploads: GovernanceScopedAnalytics & {
@@ -1406,10 +1412,13 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.plugins.leaderboard.slice(0, 6)" :key="item.pluginId" class="rounded-lg bg-black/[0.02] p-3 text-sm dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate font-medium text-black dark:text-white">{{ item.pluginId }}</span>
-                <span class="text-xs text-black/50 dark:text-white/50">{{ formatNumber(item.uniqueActors) }} actors</span>
+                <span class="text-xs text-black/50 dark:text-white/50">{{ formatNumber(item.hotScore) }} hot · {{ formatDelta(item.growth.growthRate) }}</span>
               </div>
               <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-                {{ formatNumber(item.downloads) }} downloads · {{ formatNumber(item.installs) }} installs · {{ formatNumber(item.invocations) }} invokes
+                {{ formatNumber(item.downloads) }} downloads · {{ formatNumber(item.installs) }} installs · {{ formatNumber(item.invocations) }} invokes · {{ formatNumber(item.uniqueActors) }} actors
+              </p>
+              <p class="mt-1 truncate text-xs text-black/40 dark:text-white/40">
+                {{ item.byAction.slice(0, 3).map(action => `${action.action}:${formatNumber(action.quantity)}`).join(' · ') || 'no actions' }}
               </p>
               <p class="mt-1 truncate text-xs text-black/40 dark:text-white/40">
                 {{ item.topCountries[0]?.countryCode || 'unknown' }} · {{ item.topRegions[0]?.regionCode || 'unknown' }} · {{ item.topChannels[0]?.channel || 'unknown' }}
