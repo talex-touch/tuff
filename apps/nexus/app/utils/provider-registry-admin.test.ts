@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createProviderQuotaPanel,
   filterProvidersByObservability,
   filterScenesByObservability,
   filterHealthCheckEntries,
@@ -16,7 +17,9 @@ import {
   resolveUsageLedgerActionHint,
   resolveUsageLedgerEmptyState,
   resolveUsageLedgerReference,
+  summarizeProviderQuota,
   type ProviderHealthCheckEntry,
+  type ProviderQuotaRecord,
   type ProviderRegistryRecord,
   type SceneRegistryRecord,
   type ProviderUsageLedgerEntry,
@@ -89,6 +92,82 @@ function providerRecord(overrides: Partial<ProviderRegistryRecord>): ProviderReg
     ...overrides,
   }
 }
+
+function quotaRecord(overrides: Partial<ProviderQuotaRecord>): ProviderQuotaRecord {
+  return {
+    id: 'quota-1',
+    configType: 'intelligence_provider_quota',
+    name: 'Provider A quota',
+    targetId: 'provider-a',
+    provider: 'openai',
+    channel: null,
+    enabled: true,
+    limits: {
+      windowDays: 14,
+      maxRequests: 100,
+      maxTokens: 100000,
+    },
+    warningThreshold: 75,
+    config: null,
+    createdBy: 'admin',
+    createdAt: '2026-05-17T01:00:00.000Z',
+    updatedAt: '2026-05-17T01:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('provider registry quota helpers', () => {
+  it('creates default quota panel state for unconfigured providers', () => {
+    expect(createProviderQuotaPanel(providerRecord({ displayName: 'OpenAI Main' }), null)).toMatchObject({
+      expanded: true,
+      saving: false,
+      name: 'OpenAI Main quota',
+      enabled: 'enabled',
+      windowDays: '30',
+      maxRequests: '',
+      maxTokens: '',
+      warningThreshold: '80',
+      error: null,
+    })
+  })
+
+  it('summarizes configured provider quotas without leaking config payloads', () => {
+    const quota = quotaRecord({
+      enabled: false,
+      limits: {
+        windowDays: 7,
+        maxRequests: 250,
+        maxTokens: 500000,
+      },
+      warningThreshold: 65,
+    })
+
+    expect(createProviderQuotaPanel(providerRecord({}), quota)).toMatchObject({
+      name: 'Provider A quota',
+      enabled: 'disabled',
+      windowDays: '7',
+      maxRequests: '250',
+      maxTokens: '500000',
+      warningThreshold: '65',
+    })
+    expect(summarizeProviderQuota(quota)).toEqual({
+      configured: true,
+      enabled: false,
+      windowDays: '7',
+      maxRequests: '250',
+      maxTokens: '500000',
+      warningThreshold: '65',
+    })
+    expect(summarizeProviderQuota(null)).toEqual({
+      configured: false,
+      enabled: false,
+      windowDays: '30',
+      maxRequests: '-',
+      maxTokens: '-',
+      warningThreshold: '-',
+    })
+  })
+})
 
 function sceneRecord(overrides: Partial<SceneRegistryRecord>): SceneRegistryRecord {
   return {

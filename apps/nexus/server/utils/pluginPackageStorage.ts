@@ -1,20 +1,33 @@
 import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { Buffer } from 'node:buffer'
+import type { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import {
+  deleteStorageObject,
+  getStorageObject,
+  putStorageObject,
+  type StorageObjectMemory,
+} from './storageObjectStore'
 
 const MAX_PACKAGE_SIZE = 30 * 1024 * 1024 // 30MB
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
 
-const memoryStorage = new Map<string, { data: Buffer, contentType: string }>()
+const memoryStorage: StorageObjectMemory = new Map()
 
 interface UploadResult {
   key: string
   url: string
   size: number
   contentType: string
+  storageChannel: string
+  storageProvider: string
+}
+
+interface PluginPackageStorageOptions {
+  actorId?: unknown
+  governanceResourceId?: string | null
 }
 
 function getPackageBucket(event?: H3Event | null): R2Bucket | null {
@@ -53,6 +66,7 @@ export async function uploadPluginPackage(
   event: H3Event,
   file: File,
   arrayBuffer?: ArrayBuffer,
+  options: PluginPackageStorageOptions = {},
 ): Promise<UploadResult> {
   ensureTpexFile(file)
 
@@ -61,61 +75,62 @@ export async function uploadPluginPackage(
   const contentType = file.type || DEFAULT_CONTENT_TYPE
   const key = `${randomUUID()}.tpex`
   const bucket = getPackageBucket(event)
-
-  if (bucket) {
-    await bucket.put(key, pkgBytes, {
-      httpMetadata: {
-        contentType,
-      },
-    })
-  }
-  else {
-    memoryStorage.set(key, {
-      data: Buffer.from(pkgBytes),
-      contentType,
-    })
-  }
+  const result = await putStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    data: pkgBytes,
+    contentType,
+    actorId: options.actorId,
+    governanceResourceId: options.governanceResourceId,
+    resourceType: 'plugin-package',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
 
   return {
     key,
     url: `/api/plugins/assets/${key}`,
-    size: pkgBytes.byteLength,
-    contentType,
+    size: result.size,
+    contentType: result.contentType,
+    storageChannel: result.storageChannel,
+    storageProvider: result.storageProvider,
   }
 }
 
 export async function getPluginPackage(
   event: H3Event,
   key: string,
+  options: Pick<PluginPackageStorageOptions, 'governanceResourceId'> = {},
 ): Promise<{ data: Buffer | ArrayBuffer, contentType: string } | null> {
   const bucket = getPackageBucket(event)
-
-  if (bucket) {
-    const object = await bucket.get(key)
-    if (!object)
-      return null
-
-    return {
-      data: await object.arrayBuffer(),
-      contentType: object.httpMetadata?.contentType || DEFAULT_CONTENT_TYPE,
-    }
-  }
-
-  const stored = memoryStorage.get(key)
-  if (!stored)
-    return null
-
-  return {
-    data: stored.data,
-    contentType: stored.contentType || DEFAULT_CONTENT_TYPE,
-  }
+  const object = await getStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    governanceResourceId: options.governanceResourceId,
+    resourceType: 'plugin-package',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
+  return object
+    ? { data: object.data, contentType: object.contentType }
+    : null
 }
 
-export async function deletePluginPackage(event: H3Event, key: string): Promise<void> {
+export async function deletePluginPackage(
+  event: H3Event,
+  key: string,
+  options: Pick<PluginPackageStorageOptions, 'governanceResourceId'> = {},
+): Promise<void> {
   const bucket = getPackageBucket(event)
-
-  if (bucket)
-    await bucket.delete(key)
-  else
-    memoryStorage.delete(key)
+  await deleteStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    governanceResourceId: options.governanceResourceId,
+    resourceType: 'plugin-package',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
 }

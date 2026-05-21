@@ -1,7 +1,7 @@
 import { createError, readFormData } from 'h3'
 import { requireAdmin } from '../../utils/auth'
 import { RESOURCE_ALLOWED_EXTENSIONS, RESOURCE_ALLOWED_TYPES, uploadImage } from '../../utils/imageStorage'
-import { recordPlatformGovernanceEvent } from '../../utils/platformGovernanceStore'
+import { completeUploadGovernance, failUploadGovernance, startUploadGovernance } from '../../utils/uploadGovernance'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
@@ -19,6 +19,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const uploadAttempt = await startUploadGovernance(event, {
+    actorId: userId,
+    resourceType: 'resource',
+    file,
+    metadata: {
+      surface: 'dashboard-resource',
+    },
+  })
+
   let result: Awaited<ReturnType<typeof uploadImage>>
   try {
     result = await uploadImage(event, file, {
@@ -29,36 +38,24 @@ export default defineEventHandler(async (event) => {
     })
   }
   catch (error) {
-    await recordPlatformGovernanceEvent(event, {
-      scope: 'upload',
-      action: 'resource.failed',
-      actorId: userId,
-      resourceType: 'resource',
-      channel: file.type || 'unknown',
-      unit: 'file',
-      quantity: 1,
+    await failUploadGovernance(event, uploadAttempt, error, {
       metadata: {
-        size: file.size,
-        extension: file.name.split('.').pop()?.toLowerCase() ?? null,
-        reason: error instanceof Error ? error.message : 'upload_failed',
+        surface: 'dashboard-resource',
       },
-    }).catch(() => {})
+    })
     throw error
   }
 
-  await recordPlatformGovernanceEvent(event, {
-    scope: 'upload',
-    action: 'resource.completed',
-    actorId: userId,
-    resourceType: 'resource',
+  await completeUploadGovernance(event, uploadAttempt, {
     resourceId: result.key,
-    channel: file.type || 'unknown',
-    unit: 'byte',
-    quantity: file.size,
+    contentType: file.type,
+    size: file.size,
+    storageChannel: result.storageChannel,
+    storageProvider: result.storageProvider,
     metadata: {
-      extension: result.key.split('.').pop()?.toLowerCase() ?? null,
+      surface: 'dashboard-resource',
     },
-  }).catch(() => {})
+  })
 
   return {
     success: true,

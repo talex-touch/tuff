@@ -69,6 +69,8 @@ let checkProviderHandler: (event: any) => Promise<any>
 let listProvidersHandler: (event: any) => Promise<any>
 let patchProviderHandler: (event: any) => Promise<any>
 let deleteProviderHandler: (event: any) => Promise<any>
+let getProviderQuotaHandler: (event: any) => Promise<any>
+let postProviderQuotaHandler: (event: any) => Promise<any>
 let listCapabilitiesHandler: (event: any) => Promise<any>
 let createCapabilityHandler: (event: any) => Promise<any>
 let patchCapabilityHandler: (event: any) => Promise<any>
@@ -83,6 +85,8 @@ beforeAll(async () => {
   listProvidersHandler = (await import('../../../../server/api/dashboard/provider-registry/providers.get')).default as (event: any) => Promise<any>
   patchProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id].patch')).default as (event: any) => Promise<any>
   deleteProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id].delete')).default as (event: any) => Promise<any>
+  getProviderQuotaHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/quota.get')).default as (event: any) => Promise<any>
+  postProviderQuotaHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/quota.post')).default as (event: any) => Promise<any>
   listCapabilitiesHandler = (await import('../../../../server/api/dashboard/provider-registry/capabilities.get')).default as (event: any) => Promise<any>
   createCapabilityHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/capabilities.post')).default as (event: any) => Promise<any>
   patchCapabilityHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/capabilities/[capabilityId].patch')).default as (event: any) => Promise<any>
@@ -321,6 +325,93 @@ describe('/api/dashboard/provider-registry', () => {
       'image.translate.e2e',
       'text.translate',
     ])
+  })
+
+  it('Provider quota API 按 provider id 保存并返回 request/token 限制', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'Tencent MT quota',
+      enabled: true,
+      limits: {
+        windowDays: 14,
+        maxRequests: 250,
+        maxTokens: 500000,
+      },
+      warningThreshold: 70,
+      config: {
+        source: 'provider-registry-panel',
+      },
+    })
+
+    const saved = await postProviderQuotaHandler(makeEvent())
+    const listed = await getProviderQuotaHandler(makeEvent())
+
+    expect(saved.quota).toMatchObject({
+      configType: 'intelligence_provider_quota',
+      name: 'Tencent MT quota',
+      targetId: created.provider.id,
+      provider: 'tencent-cloud',
+      enabled: true,
+      limits: {
+        windowDays: 14,
+        maxRequests: 250,
+        maxTokens: 500000,
+      },
+      warningThreshold: 70,
+      config: {
+        source: 'provider-registry-panel',
+      },
+    })
+    expect(listed.quota).toMatchObject({
+      id: saved.quota.id,
+      targetId: created.provider.id,
+      provider: 'tencent-cloud',
+      limits: {
+        windowDays: 14,
+        maxRequests: 250,
+        maxTokens: 500000,
+      },
+    })
+    expect(state.db?.governanceConfigs.size).toBe(1)
+  })
+
+  it('Provider quota API 更新同一 provider 配额而不是重复创建', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'Initial provider quota',
+      limits: {
+        windowDays: 30,
+        maxRequests: 100,
+      },
+    })
+    const initial = await postProviderQuotaHandler(makeEvent())
+
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'Updated provider quota',
+      enabled: false,
+      limits: {
+        windowDays: 7,
+        maxTokens: 9000,
+      },
+    })
+    const updated = await postProviderQuotaHandler(makeEvent())
+
+    expect(updated.quota).toMatchObject({
+      id: initial.quota.id,
+      name: 'Updated provider quota',
+      enabled: false,
+      limits: {
+        windowDays: 7,
+        maxTokens: 9000,
+      },
+    })
+    expect(state.db?.governanceConfigs.size).toBe(1)
   })
 
   it('可以更新 status 与 capabilities', async () => {

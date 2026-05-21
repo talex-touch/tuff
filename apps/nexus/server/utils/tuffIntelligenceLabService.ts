@@ -14,6 +14,11 @@ import {
   getIntelligenceProviderApiKeyWithRegistryFallback,
   listIntelligenceProvidersWithRegistryMirrors,
 } from './intelligenceProviderRegistryBridge'
+import {
+  assertIntelligenceProviderQuota,
+  recordIntelligenceProviderRequest,
+  recordPlatformGovernanceEvent,
+} from './platformGovernanceStore'
 import { recordProviderUsageLedger } from './providerUsageLedgerStore'
 import type { SceneRunFallbackTrailItem, SceneRunResult, SceneRunTraceStep } from './sceneOrchestrator'
 import {
@@ -286,6 +291,10 @@ const RETRYABLE_ERROR_PATTERNS = [
   /connection\s*reset/i,
   /network\s*error/i,
 ]
+const PROVIDER_QUOTA_ERROR_CODES = new Set([
+  'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
+  'INTELLIGENCE_PROVIDER_TOKEN_QUOTA_EXCEEDED',
+])
 
 function now(): number {
   return Date.now()
@@ -432,6 +441,28 @@ function numberFrom(...candidates: unknown[]): number {
   return 0
 }
 
+function resolveGovernanceProviderId(provider: IntelligenceProviderRecord): string {
+  return readOptionalString(provider.metadata?.providerRegistryId) ?? provider.id
+}
+
+function getErrorCode(error: Error): string | null {
+  const detail = error as unknown as Record<string, unknown>
+  const data = asRecord(detail.data)
+  const cause = asRecord(detail.cause)
+  const code = detail.code ?? data.code ?? cause.code
+  return typeof code === 'string' && code.trim() ? code.trim() : null
+}
+
+function resolveInvokeGovernanceChannel(stage?: string): string {
+  const normalized = readOptionalString(stage)
+  if (!normalized)
+    return 'invoke'
+  const capabilityPrefix = 'capability:'
+  return normalized.startsWith(capabilityPrefix)
+    ? normalized.slice(capabilityPrefix.length) || 'capability'
+    : normalized
+}
+
 function extractUsageInfo(rawMessage: Record<string, unknown>): IntelligenceUsageInfo {
   const usageMetadata = asRecord(rawMessage.usage_metadata)
   const responseMetadata = asRecord(rawMessage.response_metadata)
@@ -553,6 +584,9 @@ function tryResolveHttpStatus(error: Error): number | null {
 }
 
 export function isRetryableInvokeError(error: Error): boolean {
+  if (isProviderQuotaError(error))
+    return false
+
   const status = tryResolveHttpStatus(error)
   if (status !== null && RETRYABLE_HTTP_STATUS_CODES.has(status)) {
     return true
@@ -567,6 +601,11 @@ export function isRetryableInvokeError(error: Error): boolean {
 
   const message = String(error.message || '')
   return RETRYABLE_ERROR_PATTERNS.some(pattern => pattern.test(message))
+}
+
+function isProviderQuotaError(error: Error): boolean {
+  const code = getErrorCode(error)
+  return Boolean(code && PROVIDER_QUOTA_ERROR_CODES.has(code))
 }
 
 function extractStatusBlockLines(raw: string): string[] {
@@ -942,10 +981,14 @@ async function invokeModel(
     attemptedProviders.push(context.provider.id)
     let providerLastError: Error | null = null
     const maxAttempts = DEFAULT_PROVIDER_RETRY_COUNT + 1
+    const governanceProviderId = resolveGovernanceProviderId(context.provider)
+    const governanceChannel = resolveInvokeGovernanceChannel(payload.stage)
 
     for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex++) {
       const providerAttempt = attemptIndex + 1
       try {
+        await assertIntelligenceProviderQuota(event, governanceProviderId)
+        await recordIntelligenceProviderRequest(event, governanceProviderId, governanceChannel)
         const result = await invokeWithResolvedContext(context, payload.messages)
         if (settings.enableAudit) {
           await createAudit(event, {
@@ -983,6 +1026,7 @@ async function invokeModel(
         const retryable = isRetryableInvokeError(normalizedError)
         const hasRetryBudget = attemptIndex < maxAttempts - 1
         const willRetry = retryable && hasRetryBudget
+        const status = tryResolveHttpStatus(normalizedError) ?? (isProviderQuotaError(normalizedError) ? 429 : 500)
 
         detail.attempt = index + 1
         detail.providerAttempt = providerAttempt
@@ -1000,7 +1044,7 @@ async function invokeModel(
             providerType: context.provider.type,
             model: context.model,
             endpoint: null,
-            status: 500,
+            status,
             latency: context.timeoutMs,
             success: false,
             errorMessage: normalizedError.message,
@@ -1351,6 +1395,7 @@ function buildInvokeCreditMetadata(
   return {
     capabilityId: invocation.capabilityId,
     providerId: invocation.provider,
+    providerGovernanceId: invocation.metadata.providerGovernanceId,
     providerName: invocation.metadata.providerName,
     providerType: invocation.metadata.providerType,
     model: invocation.model,
@@ -1366,6 +1411,10 @@ function buildInvokeCreditMetadata(
     workflowRunId: audit.workflowRunId,
     workflowStepId: audit.workflowStepId,
   }
+}
+
+function resolveInvocationGovernanceProviderId(invocation: NexusIntelligenceInvokeResult): string {
+  return invocation.metadata.providerGovernanceId ?? invocation.provider
 }
 
 function buildInvokeTrace(
@@ -1398,6 +1447,7 @@ function buildInvokeTrace(
       metadata: {
         capabilityId: invocation.capabilityId,
         providerId: invocation.provider,
+        providerGovernanceId: invocation.metadata.providerGovernanceId ?? invocation.provider,
         model: invocation.model,
         traceId: invocation.traceId,
         totalTokens: invocation.usage.totalTokens,
@@ -1414,6 +1464,7 @@ async function recordIntelligenceInvokeUsageLedger(
 ): Promise<string[]> {
   const usage = normalizeUsage(invocation.usage)
   const createdAt = new Date().toISOString()
+  const governanceProviderId = resolveInvocationGovernanceProviderId(invocation)
   const fallbackTrail: SceneRunFallbackTrailItem[] = invocation.metadata.attemptedProviders.map(providerId => ({
     providerId,
     capability: invocation.capabilityId,
@@ -1428,13 +1479,13 @@ async function recordIntelligenceInvokeUsageLedger(
     requestedCapabilities: [invocation.capabilityId],
     selected: [
       {
-        providerId: invocation.provider,
+        providerId: governanceProviderId,
         providerName: invocation.metadata.providerName || invocation.provider,
         vendor: invocation.metadata.providerType || 'unknown',
         capability: invocation.capabilityId,
         priority: 0,
         weight: null,
-        bindingId: `intelligence:${invocation.provider}`,
+        bindingId: `intelligence:${governanceProviderId}`,
         authRef: null,
         endpoint: null,
         region: null,
@@ -1448,8 +1499,10 @@ async function recordIntelligenceInvokeUsageLedger(
         unit: 'token',
         quantity: usage.totalTokens,
         billable: usage.totalTokens > 0,
-        providerId: invocation.provider,
+        providerId: governanceProviderId,
         capability: invocation.capabilityId,
+        model: invocation.model,
+        providerType: invocation.metadata.providerType,
         estimated: false,
         providerUsageRef: invocation.traceId,
       },
@@ -1457,14 +1510,38 @@ async function recordIntelligenceInvokeUsageLedger(
     output: null,
   }
 
+  let entries: Awaited<ReturnType<typeof recordProviderUsageLedger>> = []
   try {
-    const entries = await recordProviderUsageLedger(event, run)
-    return entries.map(entry => entry.id)
+    entries = await recordProviderUsageLedger(event, run)
   }
   catch (error) {
     console.warn('[tuffIntelligenceLabService] Failed to record intelligence invoke usage ledger', error)
-    return []
   }
+
+  try {
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'intelligence',
+      action: 'provider.usage',
+      contextId: invocation.traceId,
+      resourceType: 'provider',
+      resourceId: governanceProviderId,
+      channel: invocation.capabilityId,
+      unit: 'token',
+      quantity: usage.totalTokens,
+      metadata: {
+        billable: usage.totalTokens > 0,
+        estimated: false,
+        model: invocation.model,
+        providerType: invocation.metadata.providerType ?? null,
+        providerUsageRef: invocation.traceId,
+        source: audit.source,
+      },
+    })
+  }
+  catch (error) {
+    console.warn('[tuffIntelligenceLabService] Failed to record intelligence invoke governance usage', error)
+  }
+  return entries.map(entry => entry.id)
 }
 
 function isCreditsExceededError(error: unknown): error is Error {
@@ -1584,6 +1661,7 @@ export interface NexusIntelligenceInvokeResult {
     workflowName?: string
     workflowRunId?: string
     workflowStepId?: string
+    providerGovernanceId?: string
     billing?: {
       ledgerId?: string
       chargedCredits: number
@@ -1613,6 +1691,9 @@ export async function invokeIntelligenceCapability(
 
   if (capabilityId === 'vision.ocr') {
     const provider = await resolveVisionOcrProvider(event, userId, providerId)
+    const governanceProviderId = provider.id
+    await assertIntelligenceProviderQuota(event, governanceProviderId)
+    await recordIntelligenceProviderRequest(event, governanceProviderId, capabilityId)
     const startedAt = now()
     const ocr = await invokeIntelligenceVisionOcr(event, provider, request.payload)
     const result: NexusIntelligenceInvokeResult = {
@@ -1637,6 +1718,7 @@ export async function invokeIntelligenceCapability(
         workflowName: audit.workflowName,
         workflowRunId: audit.workflowRunId,
         workflowStepId: audit.workflowStepId,
+        providerGovernanceId: governanceProviderId,
       },
     }
     result.metadata.billing = await consumeIntelligenceInvokeCredits(event, userId, result, audit)
@@ -1681,6 +1763,7 @@ export async function invokeIntelligenceCapability(
       workflowName: audit.workflowName,
       workflowRunId: audit.workflowRunId,
       workflowStepId: audit.workflowStepId,
+      providerGovernanceId: resolveGovernanceProviderId(invocation.context.provider),
     },
   }
   result.metadata.billing = await consumeIntelligenceInvokeCredits(event, userId, result, audit)

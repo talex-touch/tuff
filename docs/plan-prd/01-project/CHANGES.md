@@ -16,22 +16,74 @@
 ### feat(nexus): add data governance analytics foundation
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts`
 - `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/utils/imageStorage.ts`
+- `apps/nexus/server/utils/imageStorage.test.ts`
+- `apps/nexus/server/utils/pluginPackageStorage.ts`
+- `apps/nexus/server/utils/releaseAssetStorage.ts`
+- `apps/nexus/server/utils/storageChannelCatalog.ts`
+- `apps/nexus/server/utils/storageObjectStore.ts`
+- `apps/nexus/server/utils/storageCredentialStore.ts`
+- `apps/nexus/server/utils/uploadGovernance.ts`
+- `apps/nexus/server/utils/pluginsStore.ts`
 - `apps/nexus/server/api/dashboard/governance/*`
 - `apps/nexus/server/api/dashboard/plugins/[id]/analytics.get.ts`
+- `apps/nexus/server/api/images/upload.post.ts`
+- `apps/nexus/server/api/plugins/assets/[key].get.ts`
+- `apps/nexus/server/api/releases/[tag]/assets.post.ts`
+- `apps/nexus/server/api/releases/[tag]/download/[platform]/[arch].get.ts`
+- `apps/nexus/server/api/releases/[tag]/signature/[platform]/[arch].get.ts`
 - `apps/nexus/server/api/dashboard/{storage/policies,notifications/channels}.*.ts`
+- `apps/nexus/server/api/dashboard/storage/credentials.*.ts`
 - `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.*.ts`
 - `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/utils/browserNotificationInboxStore.ts`
+- `apps/nexus/server/utils/notificationCredentialStore.ts`
+- `apps/nexus/server/api/dashboard/notifications/credentials.*.ts`
+- `apps/nexus/server/api/dashboard/notifications/inbox/*`
 - `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
 - `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.test.ts`
 - `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/test/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `apps/nexus/test/api/dashboard/storage/credentials.api.test.ts`
+- `apps/nexus/test/helpers/provider-registry-test-utils.ts`
   - Added `/api/dashboard/governance/analytics` for anonymized cockpit aggregates across visits, searches, plugin downloads/invocations, upload health, storage/notification events, and provider request/token usage.
+  - Search governance analytics now includes sanitized trend/heatmap, filter usage, provider latency/results/status, result categories, geo/timezone, first-result latency, total duration, and result-count stats without storing raw query text.
+  - Plugin governance analytics now enriches leaderboard entries with region/action breakdowns and exposes per-plugin downloads, invocations, unique actors, trend, heatmap, geo/channel/action/version/artifact/package-size breakdowns.
+  - Upload governance analytics now records sanitized `started` / `completed` / `failed` lifecycle events with attemptId, duration, statusCode, storage channel/provider, stable plugin/version governance resource ids, and extension-only file metadata for resource, image, plugin icon manual/package-extracted assets, release asset, release signature, and plugin package publish/re-edit uploads; `started` events contribute to lifecycle volume but are excluded from terminal failure-rate and upload-size breakdowns.
+  - Upload lifecycle governance writes are now best-effort with timeout protection, so a slow or stuck governance/D1 write cannot block the real upload path while normal started/completed/failed telemetry remains recorded.
+  - Plugin package storage now writes storage governance usage for package upload, download, and delete operations under stable `plugin:{id}:version:{channel}:{version}` resource ids, so storage policy evaluation covers plugin package traffic without grouping analytics by random `.tpex` object keys.
+  - Storage channel policies now enforce operation-time limits scoped by channel, provider, and `targetId` resource type: `maxBytes` blocks writes, `trafficBytes` blocks reads, and operation limits block writes, reads, and deletes before storage side effects.
+  - Storage policy configuration now uses a shared local/R2/S3/OSS channel catalog, validates supported channel/provider pairs, required config fields, secure `secure://storage/*` credential references, and supported limit keys before saving governance configs; the Data Governance form exposes the catalog, default limits/config, and encrypted storage credential binding for local/R2/S3/OSS profiles.
+  - Image/resource uploads, release assets, and plugin packages now share one object storage executor for memory/R2/S3-compatible/OSS put/get/delete/list, policy enforcement, storage channel resolution, and governance usage recording; S3/OSS credentials are resolved through the encrypted `secure://storage/*` store, and release asset/signature plus plugin package storage usage separates real object keys from sanitized governance resource ids so raw uploaded file names and random package keys are not used for analytics grouping.
+  - Plugin icon manual uploads and package-extracted icons now feed upload lifecycle started/completed/failed events under stable `plugin:{id}:icon` governance resource ids without storing raw actor ids or raw upload filenames.
   - Nexus now has a shared governance event/config layer for hashed analytics events, plugin download/invoke metrics, upload success/failure health, storage channel policies, notification channel policies, and Intelligence provider quota policies.
-  - Plugin downloads, plugin invocation telemetry, search/visit telemetry, resource uploads, image/release-asset storage read/write usage, plugin review status changes, and provider scene execution now feed the governance layer without storing raw actor identifiers, raw search queries, or plaintext secrets.
+  - Plugin downloads, plugin invocation telemetry, search/visit telemetry, resource uploads, plugin package upload lifecycle events, image/release-asset/plugin-package storage usage, plugin review status changes, and provider scene execution now feed the governance layer without storing raw actor identifiers, raw search queries, raw package filenames, or plaintext secrets.
   - Dashboard admins can open Data Governance to inspect the analytics cockpit, storage policy health evaluation, and configure analytics, storage, notification, and provider quota policies; plugin owners/admins can query per-plugin analytics.
-  - Storage channel policy evaluation now reports stored bytes, traffic bytes, operation counts, utilization, and `ok` / `warning` / `blocked` status for configured storage channels.
-  - Plugin version moderation now plans notification delivery for configured browser/email/Feishu/Lark/webhook channels and records `planned` / `skipped` / `failed` delivery audit events without sending external requests or persisting raw recipients/secrets.
-  - Validation: focused `platformGovernanceStore.test.ts`, `telemetryStore.test.ts`, and `notificationDispatcher.test.ts` Vitest, affected-file ESLint, and `git diff --check` passed.
+  - Dashboard assets plugin details now load owner/admin-only private analytics and show downloads, installs, invocations, active users, latest/peak trend days, geo/channel/version/action/artifact breakdowns, and package-size summary in the plugin detail drawer.
+  - Storage channel policy evaluation now reports stored bytes, traffic bytes, operation counts, utilization, and `ok` / `warning` / `blocked` status for configured storage channels, with `targetId` resource-type filtering aligned with operation enforcement.
+  - Plugin version moderation now plans notification delivery for configured browser/email/Feishu/Lark/webhook channels and records `planned` / `sent` / `skipped` / `failed` delivery audit events without persisting raw recipients/secrets.
+  - Notification channel configs now separate the provider instance name from the adapter type: `provider` can identify entries such as `resend-primary` or `smtp-ops`, while `config.providerType` / `config.adapter` selects `resend`, `smtp`, `feishu`, `lark`, `browser`, or `webhook`.
+  - Notification credentials now use a dedicated `secure://notifications/*` D1 encrypted store and Dashboard binding API; notification delivery planning marks credentialed channels as `credential-missing` when the referenced secure credential is absent.
+  - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, webhook, Feishu, and Lark adapters when secure credentials exist and recipients are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. SMTP, Web Push / OS Notification permission, and browser visible evidence remain follow-ups.
+  - Added `/api/dashboard/notifications/inbox` and `/api/dashboard/notifications/inbox/read` so signed-in users can list their browser notification inbox, see unread counts, and mark selected or all notifications as read.
+  - Data Governance now surfaces notification delivery health with planned/sent/skipped/failed counts, sentRate, provider instance, adapter, notification action, and delivery reason breakdowns.
+  - User signup governance now records hashed signup events with source/geo/timezone metadata and the Data Governance cockpit surfaces signup growth/trend without storing raw emails.
+  - Plugin download handling now emits a separate install governance event, so global and per-plugin analytics can distinguish download volume from install trend while preserving geo/channel/version/artifact/package-size breakdowns.
+  - Provider usage governance now carries safe model and provider-type metadata from Scene execution and Nexus Intelligence invokes; the cockpit surfaces token distribution by model/provider type and per-provider top models without recording prompts, inputs, or outputs.
+  - Direct `/api/v1/intelligence/invoke` / Lab model calls now enforce `intelligence_provider_quota` before model dispatch and record `provider.request`, provider usage ledger, and governance usage with the stable Provider Registry governance id (`metadata.providerRegistryId ?? provider.id`) while keeping the public result provider id compatible.
+  - Provider Registry Admin provider cards now show per-provider quota status plus request/token/window summaries and expose an inline quota editor backed by the existing provider quota GET/POST API, so admins can configure provider-scoped limits without manually entering provider ids in the generic Data Governance form.
+  - Provider Registry API tests now cover provider-id scoped quota create/update behavior, and the Mock D1 helper supports `platform_governance_configs` rows used by the quota endpoint.
+  - Validation: focused `platformGovernanceStore.test.ts`, `imageStorage.test.ts`, `uploadGovernance.test.ts`, `storageObjectStore.test.ts`, `storageChannelCatalog.test.ts`, `telemetryStore.test.ts`, `notificationDispatcher.test.ts`, `notifications/inbox.api.test.ts`, `credentials.api.test.ts`, `storage/credentials.api.test.ts`, `intelligenceVisionOcrProvider.test.ts`, `tuffIntelligenceLabService.invoke.test.ts`, `provider-registry-admin.test.ts`, and `provider-registry.api.test.ts` Vitest passed; affected-file ESLint and `git diff --check` also passed, including plugin package upload lifecycle, plugin icon asset lifecycle, stuck governance-write timeout protection, stable governance-id storage grouping, S3-compatible/OSS executor routing, encrypted storage credential binding, browser notification inbox delivery, user signup analytics, plugin install trend, provider model/provider-type distribution cases, direct Intelligence invoke quota enforcement, Provider Registry quota UI/API coverage, and the Dashboard plugin detail analytics UI slice.
 
 ### feat(sdk): expose native share helpers from MetaK quick actions
 
@@ -43,6 +95,7 @@
   - MetaK / QuickActions SDK now exposes native share helpers for plugins: native target discovery, item-to-share payload building, and FlowBus-backed native share execution.
   - Deprecated `MetaSDK` remains a compatibility alias while forwarding the same SDK options and native share surface.
   - Platform docs now spell out macOS AirDrop / Mail / Messages support and Windows/Linux mail-only fallback semantics.
+  - Follow-up: QuickActions SDK now resolves native share targets by configurable preference order and exposes `shareItem()` so MetaK actions can use AirDrop-first sharing without duplicating fallback logic.
   - Validation: focused SDK lifecycle tests and file-scoped ESLint cover the new FlowBus event mapping and item payload builder.
 
 ### feat(core-app): expand smart context settings and update package diagnostics

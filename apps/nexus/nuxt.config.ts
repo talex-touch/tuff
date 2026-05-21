@@ -179,6 +179,12 @@ export default defineNuxtConfig({
     providerRegistry: {
       secureStoreKey: process.env.PROVIDER_REGISTRY_SECURE_STORE_KEY,
     },
+    notificationCredentials: {
+      secureStoreKey: process.env.NOTIFICATION_SECURE_STORE_KEY,
+    },
+    storageCredentials: {
+      secureStoreKey: process.env.STORAGE_SECURE_STORE_KEY,
+    },
     releaseDownload: {
       secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || authSecret,
       signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),

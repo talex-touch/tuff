@@ -3,7 +3,7 @@ import { createError, send, setResponseHeader } from 'h3'
 import { getOptionalAuth } from '../../../utils/auth'
 import { getPluginPackage } from '../../../utils/pluginPackageStorage'
 import { getUserById } from '../../../utils/authStore'
-import { findVersionByPackageKey } from '../../../utils/pluginsStore'
+import { buildPluginPackageGovernanceResourceId, findVersionByPackageKey } from '../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const key = event.context.params?.key
@@ -43,7 +43,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'You are not allowed to download this package.' })
   }
 
-  const packageResult = await getPluginPackage(event, key)
+  const packageResult = await getPluginPackage(event, key, {
+    governanceResourceId: buildPluginPackageGovernanceResourceId(version),
+  })
 
   if (!packageResult)
     throw createError({ statusCode: 404, statusMessage: 'Package not found.' })

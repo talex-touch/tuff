@@ -10,6 +10,11 @@ import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
 import { extractTpexMetadata } from './tpex'
+import {
+  completeUploadGovernance,
+  failUploadGovernance,
+  startUploadGovernance,
+} from './uploadGovernance'
 
 const PLUGINS_KEY = 'dashboard:plugins'
 const PLUGIN_VERSIONS_KEY = 'dashboard:pluginVersions'
@@ -25,6 +30,36 @@ let schemaInitialized = false
 let hasLoggedPluginsDb = false
 let hasLoggedPluginsFallback = false
 let hasLoggedShaFallback = false
+
+export function buildPluginPackageGovernanceResourceId(input: {
+  pluginId: string
+  channel: PluginChannel
+  version: string
+}) {
+  return `plugin:${input.pluginId}:version:${input.channel.toLowerCase()}:${input.version}`
+}
+
+function classifyPluginPackageUploadFailure(error: unknown): string {
+  const statusCode = error && typeof error === 'object'
+    ? (error as { statusCode?: unknown }).statusCode
+    : null
+  const message = error && typeof error === 'object'
+    ? String((error as { statusMessage?: unknown, message?: unknown }).statusMessage ?? (error as { message?: unknown }).message ?? '')
+    : ''
+  const normalized = message.toLowerCase()
+
+  if (statusCode === 429)
+    return 'storage-policy-blocked'
+  if (normalized.includes('integrity'))
+    return 'plugin-package-integrity-invalid'
+  if (normalized.includes('icon'))
+    return 'plugin-package-icon-invalid'
+  if (normalized.includes('package size'))
+    return 'plugin-package-size-exceeded'
+  if (normalized.includes('package type') || normalized.includes('.tpex'))
+    return 'plugin-package-type-invalid'
+  return 'plugin-package-upload-failed'
+}
 
 // region debug [DBG-nexus-coreapp-planprd-2026-01-12]
 const DBG_SID = 'DBG-nexus-coreapp-planprd-2026-01-12'
@@ -1469,7 +1504,9 @@ export async function deletePlugin(event: H3Event, id: string) {
     const versions = (versionRows.results ?? []).map(mapPluginVersionRow)
 
     for (const version of versions) {
-      await deletePluginPackage(event, version.packageKey)
+      await deletePluginPackage(event, version.packageKey, {
+        governanceResourceId: buildPluginPackageGovernanceResourceId(version),
+      })
       await deleteImage(event, version.iconKey)
     }
 
@@ -1496,7 +1533,9 @@ export async function deletePlugin(event: H3Event, id: string) {
 
     const orphaned = versions.filter(version => version.pluginId === id)
     for (const version of orphaned) {
-      await deletePluginPackage(event, version.packageKey)
+      await deletePluginPackage(event, version.packageKey, {
+        governanceResourceId: buildPluginPackageGovernanceResourceId(version),
+      })
       await deleteImage(event, version.iconKey)
     }
 
@@ -1763,56 +1802,125 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
 
   await ensureSubmissionCooldown(event, input.createdBy)
 
-  const packageArrayBuffer = await input.packageFile.arrayBuffer()
-  const packageBuffer = Buffer.from(packageArrayBuffer)
-  const signature = await sha256Hex(packageBuffer)
+  const packageGovernanceResourceId = buildPluginPackageGovernanceResourceId({
+    pluginId: plugin.id,
+    channel: input.channel,
+    version: input.version,
+  })
+  const packageAttempt = await startUploadGovernance(event, {
+    actorId: input.createdBy,
+    resourceType: 'plugin-package',
+    resourceId: packageGovernanceResourceId,
+    file: input.packageFile,
+    metadata: {
+      pluginId: plugin.id,
+      channel: input.channel,
+      version: input.version,
+      surface: 'plugin-version-publish',
+    },
+  })
+  const {
+    signature,
+    metadata,
+    iconKey,
+    iconUrl,
+    packageResult,
+  } = await (async () => {
+    try {
+      const packageArrayBuffer = await input.packageFile.arrayBuffer()
+      const packageBuffer = Buffer.from(packageArrayBuffer)
+      const signature = await sha256Hex(packageBuffer)
 
-  const metadata = await extractTpexMetadata(packageBuffer)
-  if (!metadata.integrity.valid) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
-    })
-  }
-
-  // Auto-extract and upload icon from package if plugin doesn't have one
-  let iconKey = plugin.iconKey ?? null
-  let iconUrl = plugin.iconUrl ?? null
-
-  if (!iconKey || !iconUrl) {
-    // Try to extract icon from package
-    if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
-      try {
-        const iconResult = await uploadImageFromBuffer(
-          event,
-          metadata.iconBuffer,
-          metadata.iconFileName,
-          metadata.iconMimeType,
-        )
-        iconKey = iconResult.key
-        iconUrl = iconResult.url
-
-        // Update plugin with the new icon
-        await updatePluginIcon(event, plugin.id, iconKey, iconUrl)
-      }
-      catch (err) {
-        console.error('[publishPluginVersion] Failed to upload extracted icon:', err)
+      const metadata = await extractTpexMetadata(packageBuffer)
+      if (!metadata.integrity.valid) {
         throw createError({
           statusCode: 400,
-          statusMessage: 'Failed to extract icon from package. Please ensure your package includes a valid icon file (SVG recommended).',
+          statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
         })
       }
-    }
-    else {
-      // No icon in package and plugin has no icon - reject
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Plugin icon is required. Please include an icon file (icon.svg or logo.svg recommended) in your package, or set the "icon" field in manifest.json.',
-      })
-    }
-  }
 
-  const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer)
+      let iconKey = plugin.iconKey ?? null
+      let iconUrl = plugin.iconUrl ?? null
+
+      if (!iconKey || !iconUrl) {
+        if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
+          try {
+            const iconResult = await uploadImageFromBuffer(
+              event,
+              metadata.iconBuffer,
+              metadata.iconFileName,
+              metadata.iconMimeType,
+              {
+                actorId: input.createdBy,
+                resourceType: 'plugin-icon',
+                uploadLifecycle: {
+                  surface: 'plugin-icon-extract',
+                  resourceId: `plugin:${plugin.id}:icon`,
+                  metadata: {
+                    pluginId: plugin.id,
+                    channel: input.channel,
+                    version: input.version,
+                    source: 'plugin-version-publish',
+                  },
+                },
+              },
+            )
+            iconKey = iconResult.key
+            iconUrl = iconResult.url
+
+            await updatePluginIcon(event, plugin.id, iconKey, iconUrl)
+          }
+          catch (err) {
+            console.error('[publishPluginVersion] Failed to upload extracted icon:', err)
+            throw createError({
+              statusCode: 400,
+              statusMessage: 'Failed to extract icon from package. Please ensure your package includes a valid icon file (SVG recommended).',
+            })
+          }
+        }
+        else {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Plugin icon is required. Please include an icon file (icon.svg or logo.svg recommended) in your package, or set the "icon" field in manifest.json.',
+          })
+        }
+      }
+
+      const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer, {
+        actorId: input.createdBy,
+        governanceResourceId: packageGovernanceResourceId,
+      })
+
+      await completeUploadGovernance(event, packageAttempt, {
+        resourceId: packageGovernanceResourceId,
+        contentType: packageResult.contentType,
+        size: packageResult.size,
+        storageChannel: packageResult.storageChannel,
+        storageProvider: packageResult.storageProvider,
+        metadata: {
+          pluginId: plugin.id,
+          channel: input.channel,
+          version: input.version,
+          surface: 'plugin-version-publish',
+        },
+      })
+
+      return { signature, metadata, iconKey, iconUrl, packageResult }
+    }
+    catch (error) {
+      await failUploadGovernance(event, packageAttempt, error, {
+        resourceId: packageGovernanceResourceId,
+        reason: classifyPluginPackageUploadFailure(error),
+        metadata: {
+          pluginId: plugin.id,
+          channel: input.channel,
+          version: input.version,
+          surface: 'plugin-version-publish',
+        },
+      })
+      throw error
+    }
+  })()
 
   const now = new Date().toISOString()
   const status: PluginVersionStatus = 'pending'
@@ -2006,41 +2114,114 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
   if (!nextChangelog)
     throw createError({ statusCode: 400, statusMessage: 'Changelog is required.' })
 
-  const packageArrayBuffer = await input.packageFile.arrayBuffer()
-  const packageBuffer = Buffer.from(packageArrayBuffer)
-  const signature = await sha256Hex(packageBuffer)
-  const metadata = await extractTpexMetadata(packageBuffer)
-  if (!metadata.integrity.valid) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
-    })
-  }
+  const packageGovernanceResourceId = buildPluginPackageGovernanceResourceId({
+    pluginId: plugin.id,
+    channel: targetVersion.channel,
+    version: targetVersion.version,
+  })
+  const packageAttempt = await startUploadGovernance(event, {
+    actorId: input.updatedBy,
+    resourceType: 'plugin-package',
+    resourceId: packageGovernanceResourceId,
+    file: input.packageFile,
+    metadata: {
+      pluginId: plugin.id,
+      channel: targetVersion.channel,
+      version: targetVersion.version,
+      surface: 'plugin-version-reedit',
+    },
+  })
+  const {
+    signature,
+    metadata,
+    iconKey,
+    iconUrl,
+    packageResult,
+  } = await (async () => {
+    try {
+      const packageArrayBuffer = await input.packageFile.arrayBuffer()
+      const packageBuffer = Buffer.from(packageArrayBuffer)
+      const signature = await sha256Hex(packageBuffer)
+      const metadata = await extractTpexMetadata(packageBuffer)
+      if (!metadata.integrity.valid) {
+        throw createError({
+          statusCode: 400,
+          statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
+        })
+      }
 
-  let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
-  let iconUrl = targetVersion.iconUrl ?? plugin.iconUrl ?? null
+      let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
+      let iconUrl = targetVersion.iconUrl ?? plugin.iconUrl ?? null
 
-  if (!iconKey || !iconUrl) {
-    if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
-      const iconResult = await uploadImageFromBuffer(
-        event,
-        metadata.iconBuffer,
-        metadata.iconFileName,
-        metadata.iconMimeType,
-      )
-      iconKey = iconResult.key
-      iconUrl = iconResult.url
-      await updatePluginIcon(event, plugin.id, iconKey, iconUrl)
-    }
-    else {
-      throw createError({
-        statusCode: 400,
-        statusMessage: 'Plugin icon is required. Please include an icon file in your package.',
+      if (!iconKey || !iconUrl) {
+        if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
+          const iconResult = await uploadImageFromBuffer(
+            event,
+            metadata.iconBuffer,
+            metadata.iconFileName,
+            metadata.iconMimeType,
+            {
+              actorId: input.updatedBy,
+              resourceType: 'plugin-icon',
+              uploadLifecycle: {
+                surface: 'plugin-icon-extract',
+                resourceId: `plugin:${plugin.id}:icon`,
+                metadata: {
+                  pluginId: plugin.id,
+                  channel: targetVersion.channel,
+                  version: targetVersion.version,
+                  source: 'plugin-version-reedit',
+                },
+              },
+            },
+          )
+          iconKey = iconResult.key
+          iconUrl = iconResult.url
+          await updatePluginIcon(event, plugin.id, iconKey, iconUrl)
+        }
+        else {
+          throw createError({
+            statusCode: 400,
+            statusMessage: 'Plugin icon is required. Please include an icon file in your package.',
+          })
+        }
+      }
+
+      const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer, {
+        actorId: input.updatedBy,
+        governanceResourceId: packageGovernanceResourceId,
       })
-    }
-  }
 
-  const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer)
+      await completeUploadGovernance(event, packageAttempt, {
+        resourceId: packageGovernanceResourceId,
+        contentType: packageResult.contentType,
+        size: packageResult.size,
+        storageChannel: packageResult.storageChannel,
+        storageProvider: packageResult.storageProvider,
+        metadata: {
+          pluginId: plugin.id,
+          channel: targetVersion.channel,
+          version: targetVersion.version,
+          surface: 'plugin-version-reedit',
+        },
+      })
+
+      return { signature, metadata, iconKey, iconUrl, packageResult }
+    }
+    catch (error) {
+      await failUploadGovernance(event, packageAttempt, error, {
+        resourceId: packageGovernanceResourceId,
+        reason: classifyPluginPackageUploadFailure(error),
+        metadata: {
+          pluginId: plugin.id,
+          channel: targetVersion.channel,
+          version: targetVersion.version,
+          surface: 'plugin-version-reedit',
+        },
+      })
+      throw error
+    }
+  })()
   const now = new Date().toISOString()
 
   const updatedVersion: DashboardPluginVersion = sanitizeVersion({
@@ -2144,7 +2325,9 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     }
   }
 
-  await deletePluginPackage(event, targetVersion.packageKey)
+  await deletePluginPackage(event, targetVersion.packageKey, {
+    governanceResourceId: buildPluginPackageGovernanceResourceId(targetVersion),
+  })
   if (targetVersion.iconKey && targetVersion.iconKey !== updatedVersion.iconKey && targetVersion.iconKey !== plugin.iconKey)
     await deleteImage(event, targetVersion.iconKey)
 
@@ -2225,7 +2408,9 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
       WHERE id = ?1;
     `).bind(version.id).run()
 
-    await deletePluginPackage(event, version.packageKey)
+    await deletePluginPackage(event, version.packageKey, {
+      governanceResourceId: buildPluginPackageGovernanceResourceId(version),
+    })
     await deleteImage(event, version.iconKey)
 
     const latest = selectLatestVisibleVersion(
@@ -2249,7 +2434,9 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
     const remaining = versions.filter(item => item.id !== version.id)
     await writeStoredPluginVersions(remaining)
 
-    await deletePluginPackage(event, version.packageKey)
+    await deletePluginPackage(event, version.packageKey, {
+      governanceResourceId: buildPluginPackageGovernanceResourceId(version),
+    })
     await deleteImage(event, version.iconKey)
 
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)

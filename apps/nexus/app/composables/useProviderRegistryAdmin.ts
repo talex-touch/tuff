@@ -5,6 +5,7 @@ import {
   authTypeOptions,
   bindingStatusOptions,
   createProviderEditPanel,
+  createProviderQuotaPanel,
   createSceneEditPanel,
   createSceneRunPanel,
   ensureUniqueCapabilities,
@@ -28,6 +29,7 @@ import {
   resolveProviderObservability,
   resolveProviderObservabilityActionHint,
   resolveProviderObservabilityEmptyState,
+  summarizeProviderQuota,
   resolveHealthCheckActionHint,
   resolveHealthCheckEmptyState,
   resolveHealthCheckReason,
@@ -55,6 +57,8 @@ import {
   type ProviderHealthCheckEntry,
   type ProviderObservabilityFilter,
   type ProviderObservabilitySummary,
+  type ProviderQuotaPanelState,
+  type ProviderQuotaRecord,
   type ProviderRegistryRecord,
   type ProviderStatus,
   type ProviderUsageLedgerEntry,
@@ -109,7 +113,9 @@ export function useProviderRegistryAdmin() {
   const healthCheckFilter = ref<HealthCheckFilter>('all')
   const sceneRunPanels = reactive<Record<string, SceneRunPanelState>>({})
   const providerEditPanels = reactive<Record<string, ProviderEditPanelState>>({})
+  const providerQuotaPanels = reactive<Record<string, ProviderQuotaPanelState>>({})
   const sceneEditPanels = reactive<Record<string, SceneEditPanelState>>({})
+  const providerQuotas = ref<Record<string, ProviderQuotaRecord | null>>({})
   const error = ref<string | null>(null)
 
   const providerForm = reactive({
@@ -266,6 +272,15 @@ export function useProviderRegistryAdmin() {
     return panel
   }
 
+  function getProviderQuotaPanel(provider: ProviderRegistryRecord): ProviderQuotaPanelState {
+    let panel = providerQuotaPanels[provider.id]
+    if (!panel) {
+      panel = createProviderQuotaPanel(provider, providerQuotas.value[provider.id])
+      providerQuotaPanels[provider.id] = panel
+    }
+    return panel
+  }
+
   function getSceneEditPanel(scene: SceneRegistryRecord): SceneEditPanelState {
     let panel = sceneEditPanels[scene.id]
     if (!panel) {
@@ -372,6 +387,15 @@ export function useProviderRegistryAdmin() {
     providerEditPanels[provider.id] = createProviderEditPanel(provider)
   }
 
+  function toggleProviderQuota(provider: ProviderRegistryRecord) {
+    const current = providerQuotaPanels[provider.id]
+    if (current?.expanded) {
+      current.expanded = false
+      return
+    }
+    providerQuotaPanels[provider.id] = createProviderQuotaPanel(provider, providerQuotas.value[provider.id])
+  }
+
   function toggleSceneEdit(scene: SceneRegistryRecord) {
     const current = sceneEditPanels[scene.id]
     if (current?.expanded) {
@@ -412,6 +436,22 @@ export function useProviderRegistryAdmin() {
 
   function getProviderObservabilityActionHint(providerId: string) {
     return resolveProviderObservabilityActionHint(getProviderObservability(providerId))
+  }
+
+  function getProviderQuotaSummary(providerId: string) {
+    return summarizeProviderQuota(providerQuotas.value[providerId])
+  }
+
+  function parseQuotaNumber(value: string, field: string, min = 0, max?: number): number | undefined {
+    const trimmed = value.trim()
+    if (!trimmed)
+      return undefined
+    const parsed = Number(trimmed)
+    if (!Number.isFinite(parsed) || parsed < min || (max !== undefined && parsed > max)) {
+      const range = max === undefined ? `greater than or equal to ${min}` : `between ${min} and ${max}`
+      throw new Error(`${field} must be a number ${range}.`)
+    }
+    return parsed
   }
 
   function getUsageLedgerActionHint(entry: ProviderUsageLedgerEntry) {
@@ -459,6 +499,11 @@ export function useProviderRegistryAdmin() {
       scenes.value = sceneResult.scenes ?? []
       usageEntries.value = usageResult.entries ?? []
       healthEntries.value = healthResult.entries ?? []
+      const quotaEntries = await Promise.all(providers.value.map(async provider => {
+        const result = await rawFetch<{ quota: ProviderQuotaRecord | null }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/quota`)
+        return [provider.id, result.quota] as const
+      }))
+      providerQuotas.value = Object.fromEntries(quotaEntries)
 
       const firstBinding = bindingRows.value[0]
       const firstProvider = providers.value[0]
@@ -638,6 +683,51 @@ export function useProviderRegistryAdmin() {
     }
     catch (err: any) {
       const message = normalizeError(err, t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
+      panel.error = message
+      error.value = message
+      toast.warning(message)
+    }
+    finally {
+      panel.saving = false
+    }
+  }
+
+  async function saveProviderQuota(provider: ProviderRegistryRecord) {
+    const panel = getProviderQuotaPanel(provider)
+    panel.saving = true
+    panel.error = null
+    error.value = null
+    try {
+      const windowDays = parseQuotaNumber(panel.windowDays, 'windowDays', 1) ?? 30
+      const maxRequests = parseQuotaNumber(panel.maxRequests, 'maxRequests')
+      const maxTokens = parseQuotaNumber(panel.maxTokens, 'maxTokens')
+      const warningThreshold = parseQuotaNumber(panel.warningThreshold, 'warningThreshold', 0, 100)
+      const limits: Record<string, number> = { windowDays }
+      if (maxRequests !== undefined)
+        limits.maxRequests = maxRequests
+      if (maxTokens !== undefined)
+        limits.maxTokens = maxTokens
+
+      const result = await rawFetch<{ quota: ProviderQuotaRecord }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/quota`, {
+        method: 'POST',
+        body: {
+          name: panel.name.trim() || `${provider.displayName} quota`,
+          enabled: panel.enabled === 'enabled',
+          limits,
+          warningThreshold,
+          config: {
+            source: 'provider-registry-panel',
+          },
+        },
+      })
+      providerQuotas.value = {
+        ...providerQuotas.value,
+        [provider.id]: result.quota,
+      }
+      toast.success(t('dashboard.providerRegistry.quota.saved', 'Provider quota saved.'))
+    }
+    catch (err: any) {
+      const message = normalizeError(err, t('dashboard.providerRegistry.errors.saveQuotaFailed', 'Failed to save provider quota.'))
       panel.error = message
       error.value = message
       toast.warning(message)
@@ -871,6 +961,8 @@ export function useProviderRegistryAdmin() {
     formatRunJson,
     getProviderCheckResult,
     getProviderEditPanel,
+    getProviderQuotaPanel,
+    getProviderQuotaSummary,
     getHealthCheckActionHint,
     getHealthCheckReason,
     getProviderObservability,
@@ -896,6 +988,8 @@ export function useProviderRegistryAdmin() {
     providerOptions,
     providerStatusOptions,
     providers,
+    providerQuotaPanels,
+    providerQuotas,
     providerVendorOptions,
     removeBindingRow,
     removeCapabilityRow,
@@ -903,6 +997,7 @@ export function useProviderRegistryAdmin() {
     removeSceneBindingEditRow,
     runScene,
     saveProviderEdit,
+    saveProviderQuota,
     saveSceneEdit,
     sceneCapabilities,
     sceneCount,
@@ -920,6 +1015,7 @@ export function useProviderRegistryAdmin() {
     statusTone,
     strategyOptions,
     toggleProviderEdit,
+    toggleProviderQuota,
     toggleSceneEdit,
     unhealthyCount,
     updateProviderStatus,

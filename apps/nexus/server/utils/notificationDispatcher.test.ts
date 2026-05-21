@@ -1,9 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { listBrowserNotificationInbox } from './browserNotificationInboxStore'
 import { dispatchNotificationEvent } from './notificationDispatcher'
 import { listPlatformGovernanceEvents, upsertPlatformGovernanceConfig } from './platformGovernanceStore'
 
+const credentialMocks = vi.hoisted(() => ({
+  getNotificationCredential: vi.fn(),
+  notificationCredentialExists: vi.fn(),
+}))
+
+const networkMocks = vi.hoisted(() => ({
+  request: vi.fn(),
+}))
+
 vi.mock('./cloudflare', () => ({
   readCloudflareBindings: () => undefined,
+}))
+
+vi.mock('./notificationCredentialStore', () => credentialMocks)
+vi.mock('@talex-touch/utils/network', () => ({
+  networkClient: {
+    request: networkMocks.request,
+  },
 }))
 
 function event(marker: string) {
@@ -23,6 +40,16 @@ function event(marker: string) {
 describe('notificationDispatcher', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    credentialMocks.getNotificationCredential.mockResolvedValue(null)
+    credentialMocks.notificationCredentialExists.mockResolvedValue(null)
+    networkMocks.request.mockResolvedValue({
+      status: 202,
+      statusText: 'Accepted',
+      ok: true,
+      url: 'https://api.resend.com/emails',
+      headers: {},
+      data: { id: 'email_1' },
+    })
   })
 
   it('plans plugin review deliveries for enabled secure notification channels', async () => {
@@ -76,6 +103,78 @@ describe('notificationDispatcher', () => {
     expect(serialized).not.toContain('reviewer@example.com')
     expect(serialized).not.toContain('developer@example.com')
     expect(serialized).not.toContain(`secure://notifications/resend-${marker}`)
+  })
+
+  it('supports multiple provider instances with explicit adapter types', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const resend = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Resend primary ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `resend-primary-${marker}`,
+      config: {
+        providerType: 'resend',
+        credentialRef: `secure://notifications/resend-primary-${marker}`,
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+    const smtp = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `SMTP ops ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `smtp-ops-${marker}`,
+      config: {
+        providerType: 'smtp',
+        credentialRef: `secure://notifications/smtp-ops-${marker}`,
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+
+    const allDeliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+    })
+
+    expect(allDeliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: resend.id,
+        provider: `resend-primary-${marker}`,
+        providerType: 'resend',
+        adapter: 'email/resend',
+        status: 'planned',
+      }),
+      expect.objectContaining({
+        configId: smtp.id,
+        provider: `smtp-ops-${marker}`,
+        providerType: 'smtp',
+        adapter: 'email/smtp',
+        status: 'planned',
+      }),
+    ]))
+
+    const filteredDeliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      deliveryProviders: [`smtp-ops-${marker}`],
+    })
+
+    expect(filteredDeliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: resend.id,
+        status: 'skipped',
+        reason: 'provider-filter-mismatch',
+      }),
+      expect.objectContaining({
+        configId: smtp.id,
+        status: 'planned',
+        adapter: 'email/smtp',
+      }),
+    ]))
   })
 
   it('skips channels when the configured event list does not match', async () => {
@@ -165,5 +264,187 @@ describe('notificationDispatcher', () => {
     const serialized = JSON.stringify(events)
     expect(serialized).toContain('credential-ref-required')
     expect(serialized).not.toContain('developer@example.com')
+  })
+
+  it('fails credentialed adapters when the referenced secure credential is missing', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const authRef = `secure://notifications/resend-missing-${marker}`
+    const channel = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Resend missing credential ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `resend-primary-${marker}`,
+      config: {
+        providerType: 'resend',
+        credentialRef: authRef,
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+    credentialMocks.notificationCredentialExists.mockResolvedValueOnce(false)
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+    })
+
+    expect(credentialMocks.notificationCredentialExists).toHaveBeenCalledWith(h3Event, authRef)
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: channel.id,
+        status: 'failed',
+        reason: 'credential-missing',
+        credentialRequired: true,
+        hasCredentialRef: true,
+      }),
+    ]))
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.failed',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(serialized).toContain('credential-missing')
+    expect(serialized).not.toContain(authRef)
+  })
+
+  it('sends Resend notifications only when send mode, runtime recipients, and secure credentials are present', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const authRef = `secure://notifications/resend-send-${marker}`
+    const channel = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Resend send ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `resend-primary-${marker}`,
+      config: {
+        mode: 'send',
+        providerType: 'resend',
+        credentialRef: authRef,
+        from: 'Tuff <noreply@example.com>',
+        subject: 'Plugin approved',
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+    credentialMocks.notificationCredentialExists.mockResolvedValueOnce(true)
+    credentialMocks.getNotificationCredential.mockResolvedValueOnce({ apiKey: 're-unit-test-secret' })
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      actorId: 'reviewer@example.com',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      metadata: {
+        pluginId: `plugin-${marker}`,
+        to: 'developer@example.com',
+      },
+    })
+
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: channel.id,
+        status: 'sent',
+        reason: 'delivery-sent',
+        adapter: 'email/resend',
+      }),
+    ]))
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.resend.com/emails',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer re-unit-test-secret',
+      }),
+      body: expect.objectContaining({
+        from: 'Tuff <noreply@example.com>',
+        to: ['developer@example.com'],
+        subject: 'Plugin approved',
+      }),
+    }))
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.sent',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(serialized).toContain('delivery-sent')
+    expect(serialized).not.toContain('developer@example.com')
+    expect(serialized).not.toContain('reviewer@example.com')
+    expect(serialized).not.toContain('re-unit-test-secret')
+  })
+
+  it('stores browser send-mode notifications in the user inbox without raw recipients', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const targetUserId = `developer-${marker}`
+    const channel = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Browser inbox ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'browser',
+      provider: 'browser',
+      config: {
+        mode: 'send',
+        title: 'Plugin approved',
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      actorId: 'reviewer@example.com',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      metadata: {
+        pluginId: `plugin-${marker}`,
+        pluginSlug: `plugin-${marker}`,
+        userId: targetUserId,
+        to: 'developer@example.com',
+        credentialRef: `secure://notifications/browser-${marker}`,
+      },
+    })
+
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: channel.id,
+        status: 'sent',
+        reason: 'delivery-sent',
+        adapter: 'browser',
+        credentialRequired: false,
+      }),
+    ]))
+
+    const inboxItems = await listBrowserNotificationInbox(h3Event, {
+      userId: targetUserId,
+      status: 'unread',
+      limit: 10,
+    })
+    expect(inboxItems).toEqual([
+      expect.objectContaining({
+        userId: targetUserId,
+        action: 'plugin.version.approved',
+        title: 'Plugin approved',
+        resourceType: 'plugin',
+        resourceId: `plugin-${marker}`,
+        status: 'unread',
+        metadata: expect.objectContaining({
+          pluginId: `plugin-${marker}`,
+          pluginSlug: `plugin-${marker}`,
+        }),
+      }),
+    ])
+
+    const serializedInbox = JSON.stringify(inboxItems)
+    expect(serializedInbox).not.toContain('developer@example.com')
+    expect(serializedInbox).not.toContain('reviewer@example.com')
+    expect(serializedInbox).not.toContain(`secure://notifications/browser-${marker}`)
   })
 })

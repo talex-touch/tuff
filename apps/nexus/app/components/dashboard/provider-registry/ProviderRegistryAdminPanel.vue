@@ -33,6 +33,8 @@ const {
   formatRunJson,
   getProviderCheckResult,
   getProviderEditPanel,
+  getProviderQuotaPanel,
+  getProviderQuotaSummary,
   getHealthCheckActionHint,
   getHealthCheckReason,
   getProviderObservability,
@@ -51,6 +53,7 @@ const {
   loading,
   ownerScopeOptions,
   providerEditPanels,
+  providerQuotaPanels,
   providerFilterOptions,
   providerForm,
   providerObservabilityFilter,
@@ -65,6 +68,7 @@ const {
   removeSceneBindingEditRow,
   runScene,
   saveProviderEdit,
+  saveProviderQuota,
   saveSceneEdit,
   sceneCapabilities,
   sceneCount,
@@ -82,6 +86,7 @@ const {
   statusTone,
   strategyOptions,
   toggleProviderEdit,
+  toggleProviderQuota,
   toggleSceneEdit,
   unhealthyCount,
   updateProviderStatus,
@@ -351,6 +356,9 @@ const {
                       <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="toggleProviderEdit(provider)">
                         {{ providerEditPanels[provider.id]?.expanded ? t('dashboard.providerRegistry.actions.hideEdit', 'Hide edit') : t('dashboard.providerRegistry.actions.edit', 'Edit') }}
                       </TxButton>
+                      <TxButton variant="secondary" size="mini" :disabled="actionPending !== null" @click="toggleProviderQuota(provider)">
+                        {{ providerQuotaPanels[provider.id]?.expanded ? t('dashboard.providerRegistry.actions.hideQuota', 'Hide quota') : t('dashboard.providerRegistry.actions.quota', 'Quota') }}
+                      </TxButton>
                       <TxButton variant="secondary" size="mini" :disabled="actionPending !== null || provider.status === 'enabled'" @click="updateProviderStatus(provider, 'enabled')">
                         {{ t('dashboard.providerRegistry.actions.enable', 'Enable') }}
                       </TxButton>
@@ -371,7 +379,7 @@ const {
                       {{ capability.capability }}
                     </span>
                   </div>
-                  <div class="mt-3 grid gap-2 text-xs md:grid-cols-2">
+                  <div class="mt-3 grid gap-2 text-xs lg:grid-cols-3">
                     <div class="rounded-xl bg-black/[0.02] px-3 py-2 dark:bg-white/[0.04]">
                       <div class="mb-1 flex flex-wrap items-center gap-2">
                         <span class="text-black/45 dark:text-white/45">
@@ -404,6 +412,23 @@ const {
                         {{ getProviderObservability(provider.id).latestUsage?.sceneId || '-' }}
                         · {{ getProviderObservability(provider.id).latestUsage?.capability || '-' }}
                         · {{ getProviderObservability(provider.id).latestUsage?.errorCode || getProviderObservability(provider.id).latestUsage?.providerUsageRef || '-' }}
+                      </p>
+                    </div>
+                    <div class="rounded-xl bg-black/[0.02] px-3 py-2 dark:bg-white/[0.04]">
+                      <div class="mb-1 flex flex-wrap items-center gap-2">
+                        <span class="text-black/45 dark:text-white/45">
+                          {{ t('dashboard.providerRegistry.quota.title', 'Provider quota') }}
+                        </span>
+                        <TxStatusBadge
+                          :text="getProviderQuotaSummary(provider.id).configured ? (getProviderQuotaSummary(provider.id).enabled ? t('dashboard.providerRegistry.quota.enabled', 'enabled') : t('dashboard.providerRegistry.quota.disabled', 'disabled')) : t('dashboard.providerRegistry.quota.notConfigured', 'not configured')"
+                          :status="getProviderQuotaSummary(provider.id).configured ? (getProviderQuotaSummary(provider.id).enabled ? 'success' : 'warning') : 'muted'"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="text-black/55 dark:text-white/55">
+                        {{ t('dashboard.providerRegistry.quota.requests', 'requests') }} {{ getProviderQuotaSummary(provider.id).maxRequests }}
+                        · {{ t('dashboard.providerRegistry.quota.tokens', 'tokens') }} {{ getProviderQuotaSummary(provider.id).maxTokens }}
+                        · {{ getProviderQuotaSummary(provider.id).windowDays }}d
                       </p>
                     </div>
                   </div>
@@ -444,6 +469,62 @@ const {
                     <p class="mt-1 text-black/45 dark:text-white/45">
                       {{ getProviderCheckResult(provider.id)?.capability }} · {{ getProviderCheckResult(provider.id)?.latency }}ms · {{ getProviderCheckResult(provider.id)?.requestId || getProviderCheckResult(provider.id)?.error?.code || '-' }}
                     </p>
+                  </div>
+                  <div
+                    v-if="providerQuotaPanels[provider.id]?.expanded"
+                    class="mt-4 space-y-3 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h4 class="text-sm font-semibold text-black dark:text-white">
+                          {{ t('dashboard.providerRegistry.quota.editTitle', 'Provider quota') }}
+                        </h4>
+                        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                          {{ t('dashboard.providerRegistry.quota.editHint', 'Limit direct Intelligence invokes and scene runs before provider dispatch.') }}
+                        </p>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <TxButton variant="secondary" size="mini" :disabled="getProviderQuotaPanel(provider).saving" @click="toggleProviderQuota(provider)">
+                          {{ t('common.cancel', 'Cancel') }}
+                        </TxButton>
+                        <TxButton variant="primary" size="mini" :disabled="getProviderQuotaPanel(provider).saving" @click="saveProviderQuota(provider)">
+                          <TxSpinner v-if="getProviderQuotaPanel(provider).saving" :size="12" />
+                          <span :class="getProviderQuotaPanel(provider).saving ? 'ml-1' : ''">{{ t('common.save', 'Save') }}</span>
+                        </TxButton>
+                      </div>
+                    </div>
+                    <div v-if="getProviderQuotaPanel(provider).error" class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200">
+                      {{ getProviderQuotaPanel(provider).error }}
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                      <div class="xl:col-span-2">
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.quota.name', 'Quota name') }}</label>
+                        <TuffInput v-model="getProviderQuotaPanel(provider).name" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.status', 'Status') }}</label>
+                        <TuffSelect v-model="getProviderQuotaPanel(provider).enabled" class="w-full">
+                          <TuffSelectItem value="enabled" :label="t('dashboard.providerRegistry.quota.enabled', 'enabled')" />
+                          <TuffSelectItem value="disabled" :label="t('dashboard.providerRegistry.quota.disabled', 'disabled')" />
+                        </TuffSelect>
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.quota.windowDays', 'Window days') }}</label>
+                        <TuffInput v-model="getProviderQuotaPanel(provider).windowDays" type="number" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.quota.maxRequests', 'Max requests') }}</label>
+                        <TuffInput v-model="getProviderQuotaPanel(provider).maxRequests" type="number" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.quota.maxTokens', 'Max tokens') }}</label>
+                        <TuffInput v-model="getProviderQuotaPanel(provider).maxTokens" type="number" class="w-full" />
+                      </div>
+                      <div>
+                        <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.quota.warningThreshold', 'Warning %') }}</label>
+                        <TuffInput v-model="getProviderQuotaPanel(provider).warningThreshold" type="number" class="w-full" />
+                      </div>
+                    </div>
                   </div>
                   <div
                     v-if="getProviderEditPanel(provider).expanded"

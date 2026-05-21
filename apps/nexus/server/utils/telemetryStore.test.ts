@@ -297,13 +297,23 @@ describe('telemetryStore search provider metrics', () => {
       inputTypes: ['text'],
       metadata: {
         queryLength: 12,
+        hasFilters: true,
         firstResultMs: 180,
+        totalDurationMs: 950,
         firstResultCount: 3,
+        providerErrorCount: 0,
+        providerTimeoutCount: 1,
+        filterKinds: ['plugin'],
+        filterSources: ['corebox'],
         sortingDuration: 15,
         searchScene: 'text',
         providerResults: {
           'app-provider': 3,
           'everything-provider': 2,
+        },
+        resultCategories: {
+          plugin: 4,
+          command: 1,
         },
         providerStatus: {
           'app-provider': 'success',
@@ -362,11 +372,35 @@ describe('telemetryStore search provider metrics', () => {
     expect(JSON.stringify(governanceRows[0])).not.toContain('private query')
     expect(governanceRows[0]?.metadata).toMatchObject({
       queryLength: 12,
+      hasFilters: true,
+      firstResultMs: 180,
+      totalDurationMs: 950,
+      searchResultCount: 5,
+      firstResultCount: 3,
+      providerErrorCount: 0,
+      providerTimeoutCount: 1,
+      filterKinds: ['plugin'],
+      filterSources: ['corebox'],
       inputTypes: ['text'],
       providerTimings: {
         'app-provider': 120,
         'everything-provider': 900,
       },
+      providerResults: {
+        'app-provider': 3,
+        'everything-provider': 2,
+      },
+      resultCategories: {
+        plugin: 4,
+        command: 1,
+      },
+      providerStatus: {
+        'app-provider': 'success',
+        'everything-provider': 'timeout',
+      },
+      countryCode: 'US',
+      regionCode: 'CA',
+      timezone: 'America/Los_Angeles',
     })
   })
 })
