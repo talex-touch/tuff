@@ -93,6 +93,8 @@ export class AssistantModule extends BaseModule {
   private floatingBallWindowPending: Promise<TouchWindow> | null = null
   private voicePanelWindow: TouchWindow | null = null
   private voicePanelWindowPending: Promise<TouchWindow> | null = null
+  private voicePanelAutoHideSuppressionDepth = 0
+  private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
   private pendingPosition: FloatingBallPosition | null = null
   private positionSaveTimer: NodeJS.Timeout | null = null
 
@@ -116,8 +118,13 @@ export class AssistantModule extends BaseModule {
       clearTimeout(this.positionSaveTimer)
       this.positionSaveTimer = null
     }
+    if (this.voicePanelAutoHideResumeTimer) {
+      clearTimeout(this.voicePanelAutoHideResumeTimer)
+      this.voicePanelAutoHideResumeTimer = null
+    }
 
     this.pendingPosition = null
+    this.voicePanelAutoHideSuppressionDepth = 0
     this.unsubscribeAppSetting?.()
     this.unsubscribeAppSetting = null
 
@@ -493,6 +500,9 @@ export class AssistantModule extends BaseModule {
     touchWindow.window.setSkipTaskbar(true)
 
     touchWindow.window.on('blur', () => {
+      if (this.voicePanelAutoHideSuppressionDepth > 0) {
+        return
+      }
       if (!touchWindow.window.isDestroyed() && touchWindow.window.isVisible()) {
         this.hideVoicePanel()
       }
@@ -649,6 +659,31 @@ export class AssistantModule extends BaseModule {
     this.floatingBallWindow.window.hide()
   }
 
+  private beginVoicePanelAutoHideSuppression(): void {
+    if (this.voicePanelAutoHideResumeTimer) {
+      clearTimeout(this.voicePanelAutoHideResumeTimer)
+      this.voicePanelAutoHideResumeTimer = null
+    }
+    this.voicePanelAutoHideSuppressionDepth += 1
+  }
+
+  private releaseVoicePanelAutoHideSuppression(): void {
+    this.voicePanelAutoHideSuppressionDepth = Math.max(
+      0,
+      this.voicePanelAutoHideSuppressionDepth - 1
+    )
+    if (this.voicePanelAutoHideSuppressionDepth > 0) {
+      return
+    }
+    if (this.voicePanelAutoHideResumeTimer) {
+      clearTimeout(this.voicePanelAutoHideResumeTimer)
+    }
+    this.voicePanelAutoHideResumeTimer = setTimeout(() => {
+      this.voicePanelAutoHideResumeTimer = null
+      this.voicePanelAutoHideSuppressionDepth = 0
+    }, 600)
+  }
+
   private restoreAssistantWindows(voiceWasVisible: boolean, floatingWasVisible: boolean): void {
     if (
       floatingWasVisible &&
@@ -727,56 +762,61 @@ export class AssistantModule extends BaseModule {
       !this.floatingBallWindow!.window.isDestroyed() &&
       this.floatingBallWindow!.window.isVisible()
 
-    this.hideVoicePanel()
-    this.hideFloatingBall()
-    await waitForAssistantWindowHidden()
-
-    let imageBase64: string | null = null
+    this.beginVoicePanelAutoHideSuppression()
     try {
-      const screenshot = await getNativeScreenshotService().capture({
-        target: 'cursor-display',
-        output: 'data-url',
-        writeClipboard: false
-      })
-      imageBase64 =
-        typeof screenshot.dataUrl === 'string'
-          ? normalizeImageBase64Payload(screenshot.dataUrl)
-          : null
-    } catch (error) {
-      assistantLog.warn('Assistant screenshot capture failed', { error })
+      this.hideVoicePanel()
+      this.hideFloatingBall()
+      await waitForAssistantWindowHidden()
+
+      let imageBase64: string | null = null
+      try {
+        const screenshot = await getNativeScreenshotService().capture({
+          target: 'cursor-display',
+          output: 'data-url',
+          writeClipboard: false
+        })
+        imageBase64 =
+          typeof screenshot.dataUrl === 'string'
+            ? normalizeImageBase64Payload(screenshot.dataUrl)
+            : null
+      } catch (error) {
+        assistantLog.warn('Assistant screenshot capture failed', { error })
+        this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: error instanceof Error ? error.message : 'Screenshot capture failed.'
+        }
+      }
+
       this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
-      return {
-        success: false,
-        code: 'SCREENSHOT_UNAVAILABLE',
-        error: error instanceof Error ? error.message : 'Screenshot capture failed.'
+      if (!imageBase64) {
+        return {
+          success: false,
+          code: 'IMAGE_UNAVAILABLE',
+          error: 'Screenshot image payload is unavailable.'
+        }
       }
-    }
 
-    this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
-    if (!imageBase64) {
-      return {
-        success: false,
-        code: 'IMAGE_UNAVAILABLE',
-        error: 'Screenshot image payload is unavailable.'
+      const result = await translateImageBase64(imageBase64, targetLang || 'zh', {
+        openPinWindow: true
+      })
+      if (!result.success) {
+        return {
+          success: false,
+          code: result.code === 'SCENE_UNAVAILABLE' ? 'SCENE_UNAVAILABLE' : 'IMAGE_UNAVAILABLE',
+          error: result.error
+        }
       }
-    }
 
-    const result = await translateImageBase64(imageBase64, targetLang || 'zh', {
-      openPinWindow: true
-    })
-    if (!result.success) {
       return {
-        success: false,
-        code: result.code === 'SCENE_UNAVAILABLE' ? 'SCENE_UNAVAILABLE' : 'IMAGE_UNAVAILABLE',
-        error: result.error
+        success: true,
+        translatedImageBase64: result.translatedImageBase64,
+        sourceText: result.sourceText,
+        targetText: result.targetText
       }
-    }
-
-    return {
-      success: true,
-      translatedImageBase64: result.translatedImageBase64,
-      sourceText: result.sourceText,
-      targetText: result.targetText
+    } finally {
+      this.releaseVoicePanelAutoHideSuppression()
     }
   }
 
