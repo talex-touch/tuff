@@ -143,7 +143,8 @@
   - The action uses typed `assistant:voice-panel:translate-screenshot`, temporarily hides Assistant windows, captures the cursor display through native screenshot as a data URL, and reuses the existing `corebox.screenshot.translate` / `image.translate.e2e` path through `translateImageBase64`.
   - Translated screenshots open in the existing image translation pin window instead of introducing a second result surface.
   - CoreApp visible experience evidence now tracks Assistant floating ball entry and Assistant screenshot translation as required visual surfaces, including drag persistence, VoicePanel opening, permission denial, and provider fallback evidence.
-  - Validation: focused Assistant contract, CoreBox image translate helper, transport event, and visible experience evidence tests cover the new typed event, scene reuse path, and manual evidence gate; packaged Electron permission and provider fallback artifacts remain follow-up.
+  - Assistant floating ball and VoicePanel window creation now use single-flight pending guards, so concurrent settings snapshots or click handoffs reuse the in-flight renderer load instead of spawning duplicate floating windows.
+  - Validation: focused Assistant contract, CoreBox image translate helper, transport event, and visible experience evidence tests cover the new typed event, scene reuse path, duplicate-window guard, and manual evidence gate; packaged Electron permission and provider fallback artifacts remain follow-up.
 
 ### feat(core-app): make style personalization wallpaper controls usable
 
