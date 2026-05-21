@@ -108,6 +108,22 @@ export interface DashboardPluginAnalyticsNumberStat {
   max: number
 }
 
+export interface DashboardPluginReviewRatingBucket {
+  rating: number
+  count: number
+}
+
+export interface DashboardPluginReviewAnalytics {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageRating: number
+  ratingCount: number
+  ratingDistribution: DashboardPluginReviewRatingBucket[]
+  latestAt: string | null
+}
+
 export interface DashboardPluginAnalytics {
   days: number
   pluginId: string
@@ -125,6 +141,7 @@ export interface DashboardPluginAnalytics {
   byVersion: DashboardPluginAnalyticsMetric[]
   byArtifactType: DashboardPluginAnalyticsMetric[]
   packageSize: DashboardPluginAnalyticsNumberStat
+  reviews?: DashboardPluginReviewAnalytics
 }
 
 export interface DashboardPluginAnalyticsResponse {

@@ -3,6 +3,7 @@ import { requireAuthOrApiKey } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
 import { getPluginGovernanceAnalytics } from '../../../../utils/platformGovernanceStore'
 import { getPluginById } from '../../../../utils/pluginsStore'
+import { getPluginReviewAnalytics } from '../../../../utils/pluginReviewStore'
 
 function readPositiveInt(value: unknown, fallback: number): number {
   if (typeof value !== 'string')
@@ -33,17 +34,23 @@ export default defineEventHandler(async (event) => {
   const limit = readPositiveInt(query.limit, 5000)
   const topLimit = readPositiveInt(query.topLimit, 12)
 
-  const analytics = await getPluginGovernanceAnalytics(event, id, {
-    days,
-    limit,
-    topLimit,
-  })
+  const [analytics, reviews] = await Promise.all([
+    getPluginGovernanceAnalytics(event, id, {
+      days,
+      limit,
+      topLimit,
+    }),
+    getPluginReviewAnalytics(event, id),
+  ])
 
   return {
     pluginId: id,
     slug: plugin.slug,
     days: analytics.days,
-    analytics,
+    analytics: {
+      ...analytics,
+      reviews,
+    },
     generatedAt: new Date().toISOString(),
   }
 })
