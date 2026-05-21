@@ -40,6 +40,25 @@ export interface QuickActionNativeShareOptions {
   target?: QuickActionNativeShareTarget
 }
 
+export interface QuickActionNativeShareTargetOptions {
+  /**
+   * Payload type used to query compatible targets.
+   */
+  payloadType?: FlowPayloadType
+
+  /**
+   * Preferred target order. Defaults prefer AirDrop for files/images and system share for text-like payloads.
+   */
+  preferredTargets?: QuickActionNativeShareTarget[]
+
+  /**
+   * Whether to fall back to the first compatible native target when none of the preferred targets exist.
+   *
+   * Defaults to true.
+   */
+  allowFallback?: boolean
+}
+
 export interface QuickActionItemSharePayloadOptions {
   /**
    * Override the share title. Defaults to the item title.
@@ -65,6 +84,25 @@ export interface QuickActionItemSharePayloadOptions {
    * Extra metadata attached to the Flow payload.
    */
   metadata?: Record<string, any>
+}
+
+export interface QuickActionShareItemOptions extends QuickActionItemSharePayloadOptions {
+  /**
+   * Explicit native target. When set, target discovery is skipped.
+   */
+  target?: QuickActionNativeShareTarget
+
+  /**
+   * Preferred target order used when target is not explicit.
+   */
+  preferredTargets?: QuickActionNativeShareTarget[]
+
+  /**
+   * Whether to fall back to the first compatible native target when none of the preferred targets exist.
+   *
+   * Defaults to true.
+   */
+  allowFallback?: boolean
 }
 
 export interface QuickActionsSDKOptions {
@@ -102,6 +140,13 @@ export interface QuickActionsSDK {
   getNativeShareTargets: (payloadType?: FlowPayloadType) => Promise<FlowTargetInfo[]>
 
   /**
+   * Resolves the best available native share target for a payload type.
+   */
+  resolveNativeShareTarget: (
+    options?: QuickActionNativeShareTargetOptions
+  ) => Promise<FlowTargetInfo | undefined>
+
+  /**
    * Shares a Flow payload through the platform native share bridge.
    */
   nativeShare: (
@@ -116,6 +161,11 @@ export interface QuickActionsSDK {
     item: TuffItem,
     options?: QuickActionItemSharePayloadOptions
   ) => FlowPayload
+
+  /**
+   * Builds and shares a native-share-ready Flow payload from a CoreBox item.
+   */
+  shareItem: (item: TuffItem, options?: QuickActionShareItemOptions) => Promise<NativeShareResult>
 
   /**
    * Release internal listeners
@@ -137,7 +187,29 @@ function normalizeFiles(files?: string[]): string[] {
   if (!Array.isArray(files)) {
     return []
   }
-  return files.filter((file): file is string => typeof file === 'string' && file.trim().length > 0)
+  return files
+    .filter((file): file is string => typeof file === 'string' && file.trim().length > 0)
+    .map((file) => file.trim())
+}
+
+function defaultNativeShareTargetOrder(payloadType?: FlowPayloadType): QuickActionNativeShareTarget[] {
+  if (payloadType === 'files' || payloadType === 'image') {
+    return ['airdrop', 'system-share', 'mail']
+  }
+
+  return ['system-share', 'mail', 'messages']
+}
+
+function normalizeTargetId(target: string): string {
+  return target === 'system' ? 'system-share' : target
+}
+
+function targetMatchesPreference(
+  target: FlowTargetInfo,
+  preference: QuickActionNativeShareTarget
+): boolean {
+  const preferredId = normalizeTargetId(String(preference))
+  return target.id === preferredId || target.fullId === preferredId || target.fullId === `native.${preferredId}`
 }
 
 /**
@@ -228,16 +300,19 @@ export function createQuickActionsSDK(
     const files = normalizeFiles(options.files)
     const filePath = item.meta?.file?.path
 
-    if (files.length === 0 && typeof filePath === 'string' && filePath.trim().length > 0) {
-      files.push(filePath)
+    if (files.length === 0 && typeof filePath === 'string') {
+      const normalizedFilePath = filePath.trim()
+      if (normalizedFilePath.length > 0) {
+        files.push(normalizedFilePath)
+      }
     }
 
     const metadata = {
       title,
       itemId: item.id,
       itemKind: item.kind,
-      sourceId: item.source.id,
-      sourceType: item.source.type,
+      sourceId: item.source?.id ?? pluginId,
+      sourceType: item.source?.type ?? 'plugin',
       ...(url ? { url } : {}),
       ...options.metadata,
     }
@@ -286,6 +361,27 @@ export function createQuickActionsSDK(
     return response || { success: false, error: 'Native share failed' }
   }
 
+  const resolveNativeShareTarget = async (
+    options: QuickActionNativeShareTargetOptions = {}
+  ): Promise<FlowTargetInfo | undefined> => {
+    ensureActive('resolveNativeShareTarget')
+    const targets = (await api.getNativeShareTargets(options.payloadType)).filter(
+      (target) => target.isEnabled !== false
+    )
+    const preferredTargets = options.preferredTargets?.length
+      ? options.preferredTargets
+      : defaultNativeShareTargetOrder(options.payloadType)
+
+    for (const preference of preferredTargets) {
+      const matched = targets.find((target) => targetMatchesPreference(target, preference))
+      if (matched) {
+        return matched
+      }
+    }
+
+    return options.allowFallback === false ? undefined : targets[0]
+  }
+
   disposables.add(
     transport.on(CoreBoxEvents.metaOverlay.actionExecuted, (payload) => {
       emitActionExecute(payload)
@@ -303,7 +399,7 @@ export function createQuickActionsSDK(
     disposables.add(() => window.removeEventListener('beforeunload', onBeforeUnload))
   }
 
-  return {
+  const api: QuickActionsSDK = {
     registerAction(action: TuffQuickAction): () => void {
       ensureActive('registerAction')
       registeredActionIds.add(action.id)
@@ -367,6 +463,8 @@ export function createQuickActionsSDK(
       return (response.data || []).filter((target) => target.isNativeShare === true)
     },
 
+    resolveNativeShareTarget,
+
     nativeShare,
 
     createSharePayloadFromItem(
@@ -377,6 +475,29 @@ export function createQuickActionsSDK(
       return createSharePayloadFromItem(item, options)
     },
 
+    async shareItem(
+      item: TuffItem,
+      options: QuickActionShareItemOptions = {}
+    ): Promise<NativeShareResult> {
+      ensureActive('shareItem')
+      const payload = createSharePayloadFromItem(item, options)
+      const resolvedTarget = options.target
+        ? options.target
+        : (await resolveNativeShareTarget({
+          payloadType: payload.type,
+          preferredTargets: options.preferredTargets,
+          allowFallback: options.allowFallback,
+        }))?.id
+
+      if (!resolvedTarget) {
+        return { success: false, error: 'No native share target available' }
+      }
+
+      return await nativeShare(payload, { target: resolvedTarget })
+    },
+
     dispose
   }
+
+  return api
 }
