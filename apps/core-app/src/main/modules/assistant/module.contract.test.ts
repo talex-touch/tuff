@@ -103,6 +103,8 @@ describe('Assistant module startup contract', () => {
       'setSkipTaskbar(true)',
       'showInactive()',
       'applyFloatingBallBounds',
+      'this.beginVoicePanelAutoHideSuppression()',
+      'this.releaseVoicePanelAutoHideSuppression()',
       'floatingBallWindowPending',
       'createFloatingBallWindow',
       'voicePanelWindowPending',
@@ -126,6 +128,22 @@ describe('Assistant module startup contract', () => {
     ]) {
       expect(floatingBallSource).toContain(expected)
     }
+  })
+
+  it('keeps VoicePanel opening protected from blur auto-hide until the UI handoff finishes', () => {
+    const openVoicePanelBlock = moduleSource.match(
+      /private async showVoicePanel\(source: string\): Promise<void> \{[\s\S]*?\n {2}private hideVoicePanel\(\): void \{/
+    )?.[0]
+
+    expect(openVoicePanelBlock).toBeTruthy()
+    expect(openVoicePanelBlock).toContain('this.beginVoicePanelAutoHideSuppression()')
+    expect(openVoicePanelBlock).toContain('try {')
+    expect(openVoicePanelBlock).toContain('voiceWindow.window.setBounds')
+    expect(openVoicePanelBlock).toContain('voiceWindow.window.show()')
+    expect(openVoicePanelBlock).toContain('voiceWindow.window.focus()')
+    expect(openVoicePanelBlock).toContain('AssistantEvents.voice.panelOpened')
+    expect(openVoicePanelBlock).toContain('} finally {')
+    expect(openVoicePanelBlock).toContain('this.releaseVoicePanelAutoHideSuppression()')
   })
 
   it('keeps floating ball runtime status localized', () => {
