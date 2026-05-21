@@ -84,6 +84,22 @@ export interface PluginReviewUpsertInput {
   status?: PluginReviewStatus
 }
 
+export interface PluginReviewRatingBucket {
+  rating: number
+  count: number
+}
+
+export interface PluginReviewAnalytics {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageRating: number
+  ratingCount: number
+  ratingDistribution: PluginReviewRatingBucket[]
+  latestAt: string | null
+}
+
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
@@ -188,6 +204,33 @@ async function writeStoredReviews(items: StoredPluginReview[]): Promise<void> {
 
 function resolveStatuses(options: PluginReviewListOptions): PluginReviewStatus[] {
   return options.statuses && options.statuses.length ? options.statuses : ['approved']
+}
+
+function normalizeRating(value: unknown): number | null {
+  const rating = Math.round(Number(value))
+  return Number.isFinite(rating) && rating >= 1 && rating <= 5 ? rating : null
+}
+
+function createRatingDistribution(reviews: Array<{ rating: unknown }>): PluginReviewRatingBucket[] {
+  const counts = new Map<number, number>()
+  for (const review of reviews) {
+    const rating = normalizeRating(review.rating)
+    if (!rating)
+      continue
+    counts.set(rating, (counts.get(rating) ?? 0) + 1)
+  }
+
+  return [5, 4, 3, 2, 1].map(rating => ({
+    rating,
+    count: counts.get(rating) ?? 0,
+  }))
+}
+
+function normalizeAverageRating(total: number, average: unknown): number {
+  if (total <= 0)
+    return 0
+  const value = Number(average ?? 0) || 0
+  return Number.isFinite(value) ? Math.round(value * 10) / 10 : 0
 }
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
@@ -538,6 +581,99 @@ export async function upsertPluginReview(
   await writeStoredReviews(items)
 
   return mapStoredReview(updated)
+}
+
+export async function getPluginReviewAnalytics(
+  event: H3Event,
+  pluginId: string,
+): Promise<PluginReviewAnalytics> {
+  const db = getD1Database(event)
+
+  if (db) {
+    await ensurePluginReviewSchema(db)
+    const statusRow = await db.prepare(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
+        MAX(updated_at) as latestAt
+      FROM ${PLUGIN_REVIEWS_TABLE}
+      WHERE plugin_id = ?1;
+    `).bind(pluginId).first<{
+      total: number
+      approved: number | null
+      pending: number | null
+      rejected: number | null
+      latestAt: string | null
+    }>()
+
+    const ratingRow = await db.prepare(`
+      SELECT
+        COUNT(*) as count,
+        AVG(rating) as average
+      FROM ${PLUGIN_REVIEWS_TABLE}
+      WHERE plugin_id = ?1
+        AND status = 'approved'
+        AND rating BETWEEN 1 AND 5;
+    `).bind(pluginId).first<{ count: number, average: number | null }>()
+
+    const distributionRows = await db.prepare(`
+      SELECT
+        rating,
+        COUNT(*) as count
+      FROM ${PLUGIN_REVIEWS_TABLE}
+      WHERE plugin_id = ?1
+        AND status = 'approved'
+        AND rating BETWEEN 1 AND 5
+      GROUP BY rating;
+    `).bind(pluginId).all<{ rating: number, count: number }>()
+
+    const distributionCounts = new Map(
+      (distributionRows.results ?? []).map(row => [Number(row.rating), Number(row.count) || 0]),
+    )
+    const ratingDistribution = [5, 4, 3, 2, 1].map(rating => ({
+      rating,
+      count: distributionCounts.get(rating) ?? 0,
+    }))
+    const ratingCount = Number(ratingRow?.count ?? 0) || 0
+
+    return {
+      total: Number(statusRow?.total ?? 0) || 0,
+      approved: Number(statusRow?.approved ?? 0) || 0,
+      pending: Number(statusRow?.pending ?? 0) || 0,
+      rejected: Number(statusRow?.rejected ?? 0) || 0,
+      averageRating: normalizeAverageRating(ratingCount, ratingRow?.average),
+      ratingCount,
+      ratingDistribution,
+      latestAt: statusRow?.latestAt ?? null,
+    }
+  }
+
+  const items = await readStoredReviews()
+  const reviews = items.filter(item => item.pluginId === pluginId)
+  const approvedReviews = reviews.filter(item => item.status === 'approved' && normalizeRating(item.rating))
+  const ratingCount = approvedReviews.length
+  const average = ratingCount
+    ? approvedReviews.reduce((sum, item) => sum + (normalizeRating(item.rating) ?? 0), 0) / ratingCount
+    : 0
+  const latestAt = reviews.reduce<string | null>((latest, item) => {
+    const value = item.updatedAt || item.createdAt
+    if (!value)
+      return latest
+    return !latest || value.localeCompare(latest) > 0 ? value : latest
+  }, null)
+
+  return {
+    total: reviews.length,
+    approved: reviews.filter(item => item.status === 'approved').length,
+    pending: reviews.filter(item => item.status === 'pending').length,
+    rejected: reviews.filter(item => item.status === 'rejected').length,
+    averageRating: normalizeAverageRating(ratingCount, average),
+    ratingCount,
+    ratingDistribution: createRatingDistribution(approvedReviews),
+    latestAt,
+  }
 }
 
 export async function setPluginReviewStatus(

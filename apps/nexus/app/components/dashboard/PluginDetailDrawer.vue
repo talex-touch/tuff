@@ -122,6 +122,7 @@ const analyticsHasData = computed(() => {
     || analytics.installs > 0
     || analytics.invocations > 0
     || analytics.uniqueActors > 0
+    || (analytics.reviews?.total ?? 0) > 0
 })
 
 const latestTrendPoint = computed(() => {
@@ -173,6 +174,34 @@ const analyticsStats = computed(() => {
       icon: 'i-carbon-user-multiple',
       label: t('dashboard.sections.plugins.analytics.stats.uniqueActors'),
       value: formatMetricValue(analytics?.uniqueActors),
+    },
+    {
+      key: 'reviews',
+      icon: 'i-carbon-star',
+      label: t('dashboard.sections.plugins.analytics.stats.reviews'),
+      value: formatMetricValue(analytics?.reviews?.total),
+    },
+  ]
+})
+
+const reviewAnalytics = computed(() => props.analytics?.reviews ?? null)
+const reviewStatusItems = computed(() => {
+  const reviews = reviewAnalytics.value
+  return [
+    {
+      key: 'approved',
+      label: t('dashboard.sections.plugins.analytics.reviews.approved'),
+      value: reviews?.approved ?? 0,
+    },
+    {
+      key: 'pending',
+      label: t('dashboard.sections.plugins.analytics.reviews.pending'),
+      value: reviews?.pending ?? 0,
+    },
+    {
+      key: 'rejected',
+      label: t('dashboard.sections.plugins.analytics.reviews.rejected'),
+      value: reviews?.rejected ?? 0,
     },
   ]
 })
@@ -277,6 +306,19 @@ function isTrendPointActive(point: DashboardPluginAnalyticsTrendPoint) {
 
 function formatMetricValue(value?: number | null) {
   return formatNumber(value ?? 0)
+}
+
+function formatRating(value?: number | null) {
+  if (!value)
+    return '—'
+  return value.toFixed(1)
+}
+
+function formatRatingShare(count: number) {
+  const ratingCount = reviewAnalytics.value?.ratingCount ?? 0
+  if (ratingCount <= 0)
+    return '0%'
+  return `${Math.round((count / ratingCount) * 100)}%`
 }
 
 function formatMetricKey(key: string) {
@@ -385,7 +427,7 @@ function formatTrendMeta(point: DashboardPluginAnalyticsTrendPoint) {
                 {{ t('dashboard.sections.plugins.analytics.empty') }}
               </p>
               <div v-else class="space-y-4">
-                <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
                   <div
                     v-for="item in analyticsStats"
                     :key="item.key"
@@ -399,6 +441,62 @@ function formatTrendMeta(point: DashboardPluginAnalyticsTrendPoint) {
                       {{ item.value }}
                     </p>
                   </div>
+                </div>
+
+                <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.title') }}
+                      </p>
+                      <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                        {{ formatRating(reviewAnalytics?.averageRating) }}
+                      </p>
+                      <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.averageMeta', { count: formatMetricValue(reviewAnalytics?.ratingCount) }) }}
+                      </p>
+                    </div>
+                    <p v-if="reviewAnalytics?.latestAt" class="text-xs text-black/45 dark:text-white/45">
+                      {{ t('dashboard.sections.plugins.analytics.reviews.latest', { date: formatDate(reviewAnalytics.latestAt) }) }}
+                    </p>
+                  </div>
+                  <div class="mt-4 grid grid-cols-3 gap-2">
+                    <div
+                      v-for="item in reviewStatusItems"
+                      :key="item.key"
+                      class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                    >
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ item.label }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ formatMetricValue(item.value) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div v-if="reviewAnalytics?.ratingCount" class="mt-4 space-y-2">
+                    <div
+                      v-for="bucket in reviewAnalytics.ratingDistribution"
+                      :key="bucket.rating"
+                      class="grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-2 text-xs"
+                    >
+                      <span class="text-black/55 dark:text-white/55">
+                        {{ bucket.rating }}★
+                      </span>
+                      <span class="h-1.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                        <span
+                          class="block h-full rounded-full bg-amber-400"
+                          :style="{ width: formatRatingShare(bucket.count) }"
+                        />
+                      </span>
+                      <span class="text-right text-black/45 dark:text-white/45">
+                        {{ formatMetricValue(bucket.count) }}
+                      </span>
+                    </div>
+                  </div>
+                  <p v-else class="mt-4 text-xs text-black/40 dark:text-white/40">
+                    {{ t('dashboard.sections.plugins.analytics.reviews.noRatings') }}
+                  </p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
