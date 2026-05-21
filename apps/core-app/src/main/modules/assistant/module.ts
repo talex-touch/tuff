@@ -622,26 +622,31 @@ export class AssistantModule extends BaseModule {
       workArea.y + workArea.height - VOICE_PANEL_HEIGHT
     )
 
-    voiceWindow.window.setBounds({
-      x,
-      y,
-      width: VOICE_PANEL_WIDTH,
-      height: VOICE_PANEL_HEIGHT
-    })
+    this.beginVoicePanelAutoHideSuppression()
+    try {
+      voiceWindow.window.setBounds({
+        x,
+        y,
+        width: VOICE_PANEL_WIDTH,
+        height: VOICE_PANEL_HEIGHT
+      })
 
-    if (!voiceWindow.window.isVisible()) {
-      voiceWindow.window.show()
-    }
-    voiceWindow.window.focus()
+      if (!voiceWindow.window.isVisible()) {
+        voiceWindow.window.show()
+      }
+      voiceWindow.window.focus()
 
-    if (this.transport) {
-      await this.transport.sendTo(
-        voiceWindow.window.webContents,
-        AssistantEvents.voice.panelOpened,
-        {
-          source
-        }
-      )
+      if (this.transport) {
+        await this.transport.sendTo(
+          voiceWindow.window.webContents,
+          AssistantEvents.voice.panelOpened,
+          {
+            source
+          }
+        )
+      }
+    } finally {
+      this.releaseVoicePanelAutoHideSuppression()
     }
   }
 
