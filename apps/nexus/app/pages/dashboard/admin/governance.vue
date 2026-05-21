@@ -30,6 +30,8 @@ type GovernanceConfigType =
   | 'intelligence_provider_quota'
 type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
 type StoragePolicyEvaluationStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
+type StorageAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
+type StorageAlertLimitKey = 'maxBytes' | 'trafficBytes' | 'maxOperations' | 'alertBytes'
 
 interface GovernanceSummary {
   totalEvents: number
@@ -110,6 +112,14 @@ interface NotificationDeliveryAnalytics {
   byAdapter: GovernanceMetric[]
   byReason: GovernanceMetric[]
   byNotificationAction: GovernanceMetric[]
+  browserPushSubscriptions: {
+    total: number
+    registered: number
+    deleted: number
+    byAction: GovernanceMetric[]
+    byEndpointHost: GovernanceMetric[]
+    trend: GovernanceTrendPoint[]
+  }
 }
 
 interface GovernanceAnalytics {
@@ -301,8 +311,23 @@ interface StorageChannelProfile {
 interface StoragePoliciesResponse {
   policies: GovernanceConfig[]
   evaluations: StoragePolicyEvaluation[]
+  alerts: StoragePolicyAlert[]
   profiles: StorageChannelProfile[]
   generatedAt: string
+}
+
+interface StoragePolicyAlert {
+  policyId: string
+  name: string
+  channel: string
+  provider: string | null
+  status: 'warning' | 'blocked'
+  metric: StorageAlertMetric
+  limitKey: StorageAlertLimitKey
+  usage: number
+  limit: number | null
+  utilization: number | null
+  reasons: string[]
 }
 
 interface StorageCredentialRecord {
@@ -367,6 +392,17 @@ interface NotificationChannelTestResponse {
   generatedAt: string
 }
 
+interface StorageAlertNotifyResponse {
+  mode: 'plan' | 'send'
+  days: number
+  alerts: StoragePolicyAlert[]
+  dispatches: Array<{
+    alert: StoragePolicyAlert
+    deliveries: NotificationDeliveryRecord[]
+  }>
+  generatedAt: string
+}
+
 const summaryDays = ref(30)
 const saveError = ref('')
 const saveMessage = ref('')
@@ -374,6 +410,9 @@ const saving = ref(false)
 const notificationTesting = ref(false)
 const notificationTestError = ref('')
 const notificationTestResult = ref<NotificationChannelTestResponse | null>(null)
+const storageAlertNotifying = ref(false)
+const storageAlertNotifyError = ref('')
+const storageAlertNotifyResult = ref<StorageAlertNotifyResponse | null>(null)
 
 const analyticsForm = reactive({
   name: 'Default analytics collection',
@@ -605,6 +644,14 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byAdapter: [],
         byReason: [],
         byNotificationAction: [],
+        browserPushSubscriptions: {
+          total: 0,
+          registered: 0,
+          deleted: 0,
+          byAction: [],
+          byEndpointHost: [],
+          trend: [],
+        },
       },
       storage: emptyScopedAnalytics(),
       providers: {
@@ -631,6 +678,7 @@ const { data: storagePoliciesData, pending: storagePoliciesPending, error: stora
     default: () => ({
       policies: [],
       evaluations: [],
+      alerts: [],
       profiles: [],
       generatedAt: '',
     }),
@@ -664,6 +712,77 @@ const { data: notificationCredentialsData, pending: notificationCredentialsPendi
 
 const configs = computed(() => configsData.value?.configs ?? [])
 const storageEvaluations = computed(() => storagePoliciesData.value?.evaluations ?? [])
+const derivedStoragePolicyAlerts = computed<StoragePolicyAlert[]>(() => {
+  const alerts: StoragePolicyAlert[] = []
+  const specs: Array<{
+    metric: StorageAlertMetric
+    limitKey: StorageAlertLimitKey
+    usageKey: keyof StoragePolicyEvaluation['usage']
+    utilizationKey: keyof StoragePolicyEvaluation['utilization']
+    reasonCodes: string[]
+  }> = [
+    {
+      metric: 'storedBytes',
+      limitKey: 'maxBytes',
+      usageKey: 'storedBytes',
+      utilizationKey: 'storedBytes',
+      reasonCodes: ['max-bytes-exceeded', 'max-bytes-warning'],
+    },
+    {
+      metric: 'trafficBytes',
+      limitKey: 'trafficBytes',
+      usageKey: 'trafficBytes',
+      utilizationKey: 'trafficBytes',
+      reasonCodes: ['traffic-bytes-exceeded', 'traffic-bytes-warning'],
+    },
+    {
+      metric: 'operations',
+      limitKey: 'maxOperations',
+      usageKey: 'operations',
+      utilizationKey: 'operations',
+      reasonCodes: ['operation-limit-exceeded', 'operation-limit-warning'],
+    },
+    {
+      metric: 'storedBytes',
+      limitKey: 'alertBytes',
+      usageKey: 'storedBytes',
+      utilizationKey: 'storedBytes',
+      reasonCodes: ['alert-bytes-reached'],
+    },
+  ]
+
+  for (const item of storageEvaluations.value) {
+    if (item.status !== 'warning' && item.status !== 'blocked')
+      continue
+
+    for (const spec of specs) {
+      const reasons = item.reasons.filter(reason => spec.reasonCodes.includes(reason))
+      if (!reasons.length)
+        continue
+
+      alerts.push({
+        policyId: item.policyId,
+        name: item.name,
+        channel: item.channel,
+        provider: item.provider,
+        status: item.status,
+        metric: spec.metric,
+        limitKey: spec.limitKey,
+        usage: Number(item.usage[spec.usageKey] ?? 0),
+        limit: item.limits[spec.limitKey],
+        utilization: spec.limitKey === 'alertBytes' ? null : item.utilization[spec.utilizationKey],
+        reasons,
+      })
+    }
+  }
+
+  return alerts.sort((left, right) => {
+    if (left.status !== right.status)
+      return left.status === 'blocked' ? -1 : 1
+    return (right.utilization ?? 0) - (left.utilization ?? 0)
+  })
+})
+const storagePolicyAlerts = computed(() => storagePoliciesData.value?.alerts ?? derivedStoragePolicyAlerts.value)
 const storageProfiles = computed(() => storagePoliciesData.value?.profiles ?? [])
 const selectedStorageProfile = computed(() => storageProfiles.value.find(profile => profile.id === storageForm.profileId) ?? null)
 const storageCredentials = computed(() => storageCredentialsData.value?.credentials ?? [])
@@ -868,6 +987,40 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
   }
 }
 
+async function notifyStorageAlerts(mode: 'plan' | 'send'): Promise<void> {
+  if (storageAlertNotifying.value || storagePolicyAlerts.value.length === 0) {
+    return
+  }
+
+  storageAlertNotifyError.value = ''
+  storageAlertNotifyResult.value = null
+  saveError.value = ''
+  saveMessage.value = ''
+  storageAlertNotifying.value = true
+
+  try {
+    const result = await requestJson<StorageAlertNotifyResponse>('/api/dashboard/storage/alerts/notify', {
+      method: 'POST',
+      body: {
+        mode,
+        days: summaryDays.value,
+      },
+    })
+    storageAlertNotifyResult.value = result
+    saveMessage.value = mode === 'send'
+      ? t('dashboard.governance.storageAlerts.sent', 'Storage alert notifications sent.')
+      : t('dashboard.governance.storageAlerts.planned', 'Storage alert notification dry-run recorded.')
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshStoragePolicies()])
+  }
+  catch (error) {
+    storageAlertNotifyError.value = error instanceof Error ? error.message : t('dashboard.governance.storageAlerts.failed', 'Storage alert notification failed.')
+    saveMessage.value = ''
+  }
+  finally {
+    storageAlertNotifying.value = false
+  }
+}
+
 async function refreshAll(): Promise<void> {
   await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageCredentials(), refreshNotificationCredentials()])
 }
@@ -941,6 +1094,20 @@ function storageEvaluationLabel(status: StoragePolicyEvaluationStatus): string {
   return t('dashboard.governance.storagePolicy.disabled', 'Disabled')
 }
 
+function storageAlertMetricLabel(metric: StorageAlertMetric): string {
+  if (metric === 'storedBytes')
+    return t('dashboard.governance.storageAlerts.storedBytes', 'Stored bytes')
+  if (metric === 'trafficBytes')
+    return t('dashboard.governance.storageAlerts.trafficBytes', 'Traffic bytes')
+  return t('dashboard.governance.storageAlerts.operations', 'Operations')
+}
+
+function formatStorageAlertValue(alert: StoragePolicyAlert, value: number | null): string {
+  if (value == null)
+    return '-'
+  return alert.metric === 'operations' ? formatNumber(value) : formatBytes(value)
+}
+
 function notificationDeliveryTone(status: NotificationDeliveryStatus): StatusTone {
   if (status === 'sent')
     return 'success'
@@ -978,7 +1145,7 @@ function formatRatio(value: number | null): string {
     </div>
 
     <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || storageCredentialsError || notificationCredentialsError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-      {{ saveError || notificationTestError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message }}
+      {{ saveError || notificationTestError || storageAlertNotifyError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message }}
     </div>
 
     <div v-if="saveMessage" class="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
@@ -1292,6 +1459,51 @@ function formatRatio(value: number | null): string {
             </div>
             <p v-if="analyticsData.notifications.byReason.length === 0" class="text-sm text-black/45 dark:text-white/45">
               {{ t('dashboard.governance.analytics.notificationReasonEmpty', 'No delivery reason data yet.') }}
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+          <h3 class="text-sm font-semibold text-black dark:text-white">
+            {{ t('dashboard.governance.analytics.browserPushSubscriptions', 'Browser push subscriptions') }}
+          </h3>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
+            <div>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.pushTotal', 'Total') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.notifications.browserPushSubscriptions.total) }}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.pushRegistered', 'Registered') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.notifications.browserPushSubscriptions.registered) }}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.pushDeleted', 'Removed') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.notifications.browserPushSubscriptions.deleted) }}
+              </p>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-2 text-sm">
+            <div v-for="item in analyticsData.notifications.browserPushSubscriptions.byEndpointHost.slice(0, 4)" :key="`push-host:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.notifications.browserPushSubscriptions.byAction.slice(0, 3)" :key="`push-action:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <p v-if="analyticsData.notifications.browserPushSubscriptions.total === 0" class="text-sm text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.analytics.browserPushEmpty', 'No browser push subscription activity yet.') }}
             </p>
           </div>
         </div>
@@ -1648,6 +1860,55 @@ function formatRatio(value: number | null): string {
                 {{ item.resourceType }} · {{ formatNumber(item.events) }} events · {{ formatNumber(item.uniqueActors) }} actors
               </p>
             </div>
+          </div>
+        </section>
+
+        <section class="apple-card-lg p-5">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-base font-semibold text-black dark:text-white">
+              {{ t('dashboard.governance.storageAlerts.title', 'Storage alerts') }}
+            </h2>
+            <div class="flex items-center gap-2">
+              <TxButton size="small" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('plan')">
+                {{ t('dashboard.governance.storageAlerts.dryRun', 'Dry run') }}
+              </TxButton>
+              <TxButton size="small" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('send')">
+                {{ t('dashboard.governance.storageAlerts.send', 'Send') }}
+              </TxButton>
+              <TxStatusBadge
+                size="sm"
+                :text="formatNumber(storagePolicyAlerts.length)"
+                :status="storagePolicyAlerts.some(item => item.status === 'blocked') ? 'danger' : storagePolicyAlerts.length ? 'warning' : 'success'"
+              />
+            </div>
+          </div>
+          <p v-if="storageAlertNotifyResult" class="mt-2 text-xs text-black/50 dark:text-white/50">
+            {{ t('dashboard.governance.storageAlerts.dispatched', 'Dispatches') }}:
+            {{ formatNumber(storageAlertNotifyResult.dispatches.reduce((sum, item) => sum + item.deliveries.length, 0)) }}
+            · {{ storageAlertNotifyResult.mode }}
+          </p>
+          <div class="mt-4 space-y-3">
+            <div v-for="alert in storagePolicyAlerts.slice(0, 6)" :key="`${alert.policyId}:${alert.metric}:${alert.limit ?? 'alert'}`" class="rounded-xl border border-black/[0.06] p-3 text-sm dark:border-white/[0.08]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">{{ alert.name }}</span>
+                <TxStatusBadge :text="storageEvaluationLabel(alert.status)" size="sm" :status="storageEvaluationTone(alert.status)" />
+              </div>
+              <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                {{ alert.channel }} · {{ alert.provider || 'unknown' }} · {{ storageAlertMetricLabel(alert.metric) }}
+              </p>
+              <div class="mt-3 flex items-center justify-between gap-3 text-xs">
+                <span class="text-black/55 dark:text-white/55">
+                  {{ formatStorageAlertValue(alert, alert.usage) }} / {{ formatStorageAlertValue(alert, alert.limit) }}
+                </span>
+                <span class="font-medium text-black dark:text-white">{{ formatRatio(alert.utilization) }}</span>
+              </div>
+              <p v-if="alert.reasons.length" class="mt-2 truncate text-xs text-amber-600 dark:text-amber-200">
+                {{ alert.reasons.join(', ') }}
+              </p>
+            </div>
+            <p v-if="storagePolicyAlerts.length === 0" class="text-sm text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.storageAlerts.empty', 'No storage alerts right now.') }}
+            </p>
           </div>
         </section>
 
