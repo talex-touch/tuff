@@ -986,4 +986,68 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.notifications.byNotificationAction.find(item => item.key === 'plugin.version.approved')?.events).toBeGreaterThanOrEqual(4)
   })
+
+  it('builds browser push subscription analytics without leaking endpoints or keys', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const subscriptionId = `push-sub-${marker}`
+
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'notification',
+      action: 'browser_push.subscription.upserted',
+      actorId: 'developer@example.com',
+      resourceType: 'browser_push_subscription',
+      resourceId: subscriptionId,
+      channel: 'browser_push',
+      unit: 'subscription',
+      quantity: 1,
+      metadata: {
+        id: subscriptionId,
+        endpointHost: 'push.example.test',
+        hasKeys: true,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'notification',
+      action: 'browser_push.subscription.deleted',
+      actorId: 'developer@example.com',
+      resourceType: 'browser_push_subscription',
+      resourceId: subscriptionId,
+      channel: 'browser_push',
+      unit: 'subscription',
+      quantity: 1,
+      metadata: {
+        id: subscriptionId,
+        endpointHost: 'push.example.test',
+      },
+    })
+
+    const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
+    const serialized = JSON.stringify(analytics)
+
+    expect(analytics.notifications.browserPushSubscriptions).toMatchObject({
+      total: 2,
+      registered: 1,
+      deleted: 1,
+    })
+    expect(analytics.notifications.browserPushSubscriptions.byAction).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'upserted', events: 1 }),
+      expect.objectContaining({ key: 'deleted', events: 1 }),
+    ]))
+    expect(analytics.notifications.browserPushSubscriptions.byEndpointHost).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'push.example.test', events: 2 }),
+    ]))
+    expect(serialized).not.toContain('developer@example.com')
+    await expect(recordPlatformGovernanceEvent(h3Event, {
+      scope: 'notification',
+      action: 'browser_push.subscription.upserted',
+      resourceType: 'browser_push_subscription',
+      resourceId: `unsafe-${subscriptionId}`,
+      metadata: {
+        p256dh: 'p256dh-unit-test-key',
+      },
+    })).rejects.toMatchObject({
+      statusCode: 400,
+    })
+  })
 })

@@ -245,8 +245,14 @@ const SENSITIVE_KEYS = new Set([
   'password',
   'credential',
   'credentials',
+  'auth',
   'privatekey',
+  'p256dh',
   'webhookurl',
+  'webpushsubscription',
+  'webpushsubscriptions',
+  'pushsubscription',
+  'pushsubscriptions',
 ])
 
 const NOTIFICATION_RECIPIENT_CONFIG_KEYS = new Set([
@@ -904,16 +910,21 @@ function createScopedAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
 
 function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
   const deliveryEvents = events.filter(event => event.action.startsWith('notification.delivery.'))
+  const pushSubscriptionEvents = events.filter(event => event.action.startsWith('browser_push.subscription.'))
   const byDeliveryStatus = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byProvider = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byAdapter = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byReason = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byNotificationAction = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byPushSubscriptionAction = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byPushEndpointHost = new Map<string, ReturnType<typeof createMetricBucket>>()
 
   let planned = 0
   let sent = 0
   let skipped = 0
   let failed = 0
+  let pushRegistered = 0
+  let pushDeleted = 0
 
   for (const event of deliveryEvents) {
     const status = event.action.slice('notification.delivery.'.length) || 'unknown'
@@ -931,6 +942,15 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     addMetricBucket(byAdapter, readEventMetadataString(event, 'adapter'), event, 1)
     addMetricBucket(byReason, readEventMetadataString(event, 'reason'), event, 1)
     addMetricBucket(byNotificationAction, readEventMetadataString(event, 'notificationAction'), event, 1)
+  }
+  for (const event of pushSubscriptionEvents) {
+    const action = event.action.slice('browser_push.subscription.'.length) || 'unknown'
+    if (action === 'upserted')
+      pushRegistered += 1
+    else if (action === 'deleted')
+      pushDeleted += 1
+    addMetricBucket(byPushSubscriptionAction, action, event, 1)
+    addMetricBucket(byPushEndpointHost, readEventMetadataString(event, 'endpointHost'), event, 1)
   }
 
   const total = deliveryEvents.length
@@ -952,6 +972,14 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     byAdapter: mapMetricBuckets(byAdapter, topLimit),
     byReason: mapMetricBuckets(byReason, topLimit),
     byNotificationAction: mapMetricBuckets(byNotificationAction, topLimit),
+    browserPushSubscriptions: {
+      total: pushSubscriptionEvents.length,
+      registered: pushRegistered,
+      deleted: pushDeleted,
+      byAction: mapMetricBuckets(byPushSubscriptionAction, topLimit),
+      byEndpointHost: mapMetricBuckets(byPushEndpointHost, topLimit),
+      trend: createDailyTrend(pushSubscriptionEvents),
+    },
   }
 }
 

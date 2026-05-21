@@ -182,6 +182,9 @@ export default defineNuxtConfig({
     notificationCredentials: {
       secureStoreKey: process.env.NOTIFICATION_SECURE_STORE_KEY,
     },
+    notificationWebPush: {
+      publicKey: process.env.NOTIFICATION_WEB_PUSH_PUBLIC_KEY,
+    },
     storageCredentials: {
       secureStoreKey: process.env.STORAGE_SECURE_STORE_KEY,
     },
@@ -217,6 +220,9 @@ export default defineNuxtConfig({
       },
       riskControl: {
         enabled: riskControlFeatureEnabled,
+      },
+      notificationWebPush: {
+        publicKey: process.env.NOTIFICATION_WEB_PUSH_PUBLIC_KEY,
       },
     },
   },

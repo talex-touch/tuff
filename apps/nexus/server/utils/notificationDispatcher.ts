@@ -4,6 +4,7 @@ import type { NotificationCredentialPayload } from './notificationCredentialStor
 import { createHmac } from 'node:crypto'
 import { networkClient } from '@talex-touch/utils/network'
 import { storeBrowserNotification } from './browserNotificationInboxStore'
+import { listBrowserPushSubscriptionsForDelivery } from './browserPushSubscriptionStore'
 import { getNotificationCredential, notificationCredentialExists } from './notificationCredentialStore'
 import { listPlatformGovernanceConfigs, recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { isPlainObject, normalizeString } from './telemetrySanitizer'
@@ -52,6 +53,7 @@ const SUPPORTED_ADAPTERS = new Set([
   'feishu',
   'lark',
   'webhook',
+  'webpush',
 ])
 
 const CREDENTIAL_REQUIRED_ADAPTERS = new Set([
@@ -61,6 +63,7 @@ const CREDENTIAL_REQUIRED_ADAPTERS = new Set([
   'feishu',
   'lark',
   'webhook',
+  'webpush',
 ])
 
 const SENDABLE_HTTP_ADAPTERS = new Set([
@@ -70,6 +73,7 @@ const SENDABLE_HTTP_ADAPTERS = new Set([
   'feishu',
   'lark',
   'webhook',
+  'webpush',
 ])
 
 const SENDABLE_LOCAL_ADAPTERS = new Set([
@@ -84,6 +88,7 @@ const LEGACY_PROVIDER_ADAPTERS = new Set([
   'feishu',
   'lark',
   'webhook',
+  'webpush',
 ])
 
 const SENSITIVE_METADATA_KEYS = new Set([
@@ -94,6 +99,7 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'credentialref',
   'email',
   'from',
+  'p256dh',
   'password',
   'recipient',
   'recipients',
@@ -103,6 +109,10 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'to',
   'userid',
   'webhookurl',
+  'webpushsubscription',
+  'webpushsubscriptions',
+  'pushsubscription',
+  'pushsubscriptions',
 ])
 
 function normalizeToken(value: unknown, maxLength = 120): string | null {
@@ -294,6 +304,78 @@ function readRecipients(input: DispatchNotificationInput): string[] {
   return raw
     .map(item => normalizeString(item, 320))
     .filter((item): item is string => Boolean(item))
+    .slice(0, 20)
+}
+
+function normalizeWebPushSubscription(value: unknown): Record<string, unknown> | null {
+  if (!isPlainObject(value))
+    return null
+
+  const endpoint = normalizeString(value.endpoint, 2048)
+  if (!endpoint)
+    return null
+
+  try {
+    const url = new URL(endpoint)
+    if (url.protocol !== 'https:')
+      return null
+  }
+  catch {
+    return null
+  }
+
+  const keys = isPlainObject(value.keys)
+    ? {
+        p256dh: normalizeString(value.keys.p256dh, 512),
+        auth: normalizeString(value.keys.auth, 512),
+      }
+    : null
+
+  return {
+    endpoint,
+    expirationTime: typeof value.expirationTime === 'number' && Number.isFinite(value.expirationTime)
+      ? Math.max(0, Math.round(value.expirationTime))
+      : null,
+    keys: keys?.p256dh && keys.auth ? keys : null,
+  }
+}
+
+function readRuntimeWebPushSubscriptions(input: DispatchNotificationInput): Array<Record<string, unknown>> {
+  const raw = input.metadata?.webPushSubscriptions
+    ?? input.metadata?.webPushSubscription
+    ?? input.metadata?.pushSubscriptions
+    ?? input.metadata?.pushSubscription
+  const values = Array.isArray(raw) ? raw : [raw]
+  return values
+    .map(item => normalizeWebPushSubscription(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .slice(0, 20)
+}
+
+async function readWebPushSubscriptions(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+): Promise<Array<Record<string, unknown>>> {
+  const subscriptions = readRuntimeWebPushSubscriptions(input)
+  const userId = resolveBrowserNotificationUserId(delivery, input)
+  if (event && userId && subscriptions.length < 20) {
+    const stored = await listBrowserPushSubscriptionsForDelivery(event, {
+      userId,
+      limit: 20 - subscriptions.length,
+    })
+    subscriptions.push(...stored.map(item => item.payload))
+  }
+
+  const seenEndpoints = new Set<string>()
+  return subscriptions
+    .filter((subscription) => {
+      const endpoint = typeof subscription.endpoint === 'string' ? subscription.endpoint : ''
+      if (!endpoint || seenEndpoints.has(endpoint))
+        return false
+      seenEndpoints.add(endpoint)
+      return true
+    })
     .slice(0, 20)
 }
 
@@ -520,6 +602,53 @@ async function sendSmtpRelayNotification(
   return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
 }
 
+async function sendWebPushRelayNotification(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+  credential: NotificationCredentialPayload,
+): Promise<'sent' | 'credential-type-mismatch' | 'subscription-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+  if (!hasWebhookCredential(credential))
+    return 'credential-type-mismatch'
+
+  const subscriptions = await readWebPushSubscriptions(event, delivery, input)
+  if (subscriptions.length === 0)
+    return 'subscription-missing'
+
+  const body = JSON.stringify({
+    action: input.action,
+    subscriptions,
+    notification: {
+      title: createNotificationTitle(delivery, input),
+      body: readConfigString(delivery.config, 'body', 4000)
+        ?? readConfigString(delivery.config, 'text', 4000)
+        ?? createNotificationText(delivery, input),
+      tag: readConfigString(delivery.config, 'tag', 180) ?? input.action,
+      url: readConfigString(delivery.config, 'url', 2048),
+    },
+    resourceType: input.resourceType ?? null,
+    resourceId: input.resourceId ?? null,
+    metadata: sanitizeDispatchMetadata(input.metadata),
+    occurredAt: input.occurredAt ?? new Date().toISOString(),
+  })
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (credential.signingSecret)
+    headers['X-Tuff-Signature'] = signBody(body, credential.signingSecret)
+
+  const response = await networkClient.request({
+    method: 'POST',
+    url: credential.url,
+    timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+    headers,
+    body,
+  })
+
+  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+}
+
 async function sendBotWebhookNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
@@ -549,6 +678,7 @@ async function sendBotWebhookNotification(
 }
 
 async function sendNotification(
+  event: H3Event | undefined,
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
@@ -562,6 +692,8 @@ async function sendNotification(
       return await sendGenericEmailNotification(delivery, input, credential)
     if (delivery.adapter === 'webhook')
       return await sendWebhookNotification(delivery, input, credential)
+    if (delivery.adapter === 'webpush')
+      return await sendWebPushRelayNotification(event, delivery, input, credential)
     if (delivery.adapter === 'feishu' || delivery.adapter === 'lark')
       return await sendBotWebhookNotification(delivery, input, credential)
     return 'send-adapter-unsupported'
@@ -771,7 +903,7 @@ async function executeDelivery(
     }
   }
 
-  const result = await sendNotification(delivery, input, credential)
+  const result = await sendNotification(event, delivery, input, credential)
   if (result === 'sent') {
     return {
       ...delivery,
