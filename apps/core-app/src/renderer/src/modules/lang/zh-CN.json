@@ -529,6 +529,8 @@
     "homepageWallpaper": "主页壁纸",
     "homepageWallpaperDesc": "选择主页背景壁纸来源。自动模式会优先使用桌面壁纸，无法读取时使用必应壁纸。",
     "autoWallpaper": "自动",
+    "autoWallpaperDesktopReady": "自动模式已读取桌面壁纸。",
+    "autoWallpaperBingFallback": "自动模式会优先读取桌面壁纸，读取失败时使用必应壁纸。",
     "noBackground": "无",
     "bing": "必应",
     "customImage": "自定义图片",
@@ -543,9 +545,14 @@
     "selectBackgroundFolder": "选择背景文件夹",
     "desktopWallpaper": "桌面壁纸",
     "refreshDesktopWallpaper": "刷新桌面壁纸",
+    "desktopWallpaperReady": "已读取当前桌面壁纸。",
+    "desktopWallpaperPending": "尚未读取到桌面壁纸，可手动刷新。",
     "desktopWallpaperUnavailable": "当前系统无法获取桌面壁纸。",
     "desktopWallpaperRefreshFailed": "刷新桌面壁纸失败。",
     "rotationInterval": "轮播间隔",
+    "rotationMode": "轮播模式",
+    "randomRotation": "随机",
+    "sequentialRotation": "顺序",
     "minutes": "分钟",
     "blur": "模糊",
     "opacity": "透明度",
@@ -563,6 +570,9 @@
     "syncToCloudDesc": "当前只记录本地同步状态，不会上传到云端。",
     "syncRequiresLibrary": "同步前请先复制到壁纸库。",
     "folderRandomHint": "文件夹轮播默认随机。",
+    "folderRotationHint": "随机模式会从文件夹中抽取图片，顺序模式会按文件名轮换。",
+    "folderRandomMode": "文件夹壁纸将随机轮播。",
+    "folderSequentialMode": "文件夹壁纸将按文件名顺序轮播。",
     "emphasis": "强调",
     "emphasisDesc": "不同的人有不同的强调。避免随意使用清晰的颜色。",
     "coloring": "着色",
@@ -3130,6 +3140,14 @@
     "syncDeviceUnknown": "未知设备"
   },
   "assistant": {
+    "floatingBall": {
+      "voiceWakeOff": "语音唤醒已关闭",
+      "listening": "监听中：{wakeWords}",
+      "clickToOpen": "点击打开 Assistant",
+      "unsupported": "当前环境不支持语音识别",
+      "permissionDenied": "麦克风权限未授权",
+      "recognitionError": "语音识别异常：{error}"
+    },
     "voicePanel": {
       "unsupported": "当前环境不支持语音识别",
       "permissionDenied": "麦克风权限未授权",
