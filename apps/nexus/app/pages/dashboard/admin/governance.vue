@@ -267,6 +267,22 @@ interface GovernanceAnalytics {
     bySurface: GovernanceMetric[]
     uploadSize: GovernanceNumberStat
     uploadDurationMs: GovernanceNumberStat
+    problemAttempts: Array<{
+      attemptHash: string
+      resourceHash: string
+      status: 'failed' | 'stuck'
+      resourceType: string
+      surface: string | null
+      storageChannel: string | null
+      storageProvider: string | null
+      contentType: string | null
+      reason: string | null
+      statusCode: number | null
+      durationMs: number | null
+      size: number | null
+      latestAt: string
+      ageMs: number | null
+    }>
   }
   notifications: GovernanceScopedAnalytics & NotificationDeliveryAnalytics
   storage: GovernanceScopedAnalytics & {
@@ -724,6 +740,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         bySurface: [],
         uploadSize: emptyNumberStat(),
         uploadDurationMs: emptyNumberStat(),
+        problemAttempts: [],
       },
       notifications: {
         ...emptyScopedAnalytics(),
@@ -1534,6 +1551,28 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.uploads.byFailureReason.slice(0, 4)" :key="`upload-failure:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-red-500/80 dark:text-red-200/80">{{ item.key }}</span>
               <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+              <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
+                {{ t('dashboard.governance.analytics.uploadProblemAttempts', 'Problem attempts') }}
+              </h4>
+              <div class="mt-2 grid gap-2">
+                <div v-for="attempt in (analyticsData.uploads.problemAttempts ?? []).slice(0, 5)" :key="attempt.attemptHash" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate font-medium text-black/70 dark:text-white/70">{{ attempt.status }} · {{ attempt.attemptHash }}</span>
+                    <span class="text-black/45 dark:text-white/45">{{ attempt.statusCode == null ? '-' : attempt.statusCode }}</span>
+                  </div>
+                  <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                    {{ attempt.resourceType }} · {{ attempt.surface || 'unknown' }} · {{ attempt.storageProvider || attempt.storageChannel || 'unknown' }}
+                  </p>
+                  <p class="mt-1 truncate text-red-600 dark:text-red-100">
+                    {{ attempt.reason || attempt.contentType || 'pending' }} · {{ attempt.durationMs == null ? formatDurationMs(attempt.ageMs ?? 0) : formatDurationMs(attempt.durationMs) }}
+                  </p>
+                </div>
+                <p v-if="(analyticsData.uploads.problemAttempts ?? []).length === 0" class="text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadProblemAttemptsEmpty', 'No failed or stuck upload attempts yet.') }}
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -48,7 +48,11 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('analyticsData.uploads.byStatusCode')
     expect(page).toContain('analyticsData.uploads.bySurface')
     expect(page).toContain('analyticsData.uploads.byStorageProvider')
+    expect(page).toContain('analyticsData.uploads.problemAttempts')
+    expect(page).toContain('attempt.attemptHash')
+    expect(page).toContain('attempt.resourceType')
     expect(page).toContain('dashboard.governance.analytics.uploadStuckAttempts')
+    expect(page).toContain('dashboard.governance.analytics.uploadProblemAttempts')
   })
 
   it('exposes browser push subscription analytics in the notification cockpit', () => {

@@ -533,6 +533,9 @@ describe('platformGovernanceStore', () => {
     expect(serializedAnalytics).not.toContain('searcher@example.com')
     expect(serializedAnalytics).not.toContain('new-user@example.com')
     expect(serializedAnalytics).not.toContain('plugin-user@example.com')
+    expect(serializedAnalytics).not.toContain(`stuck-attempt-${marker}`)
+    expect(serializedAnalytics).not.toContain(`failed-attempt-${marker}`)
+    expect(serializedAnalytics).not.toContain(`asset_failed_${marker}`)
     expect(analytics.users.signups).toBeGreaterThanOrEqual(1)
     expect(analytics.users.signupTrend.length).toBeGreaterThan(0)
     expect(analytics.users.bySource).toEqual(expect.arrayContaining([
@@ -660,6 +663,25 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.uploadSize.average).toBe(3072)
     expect(analytics.uploads.uploadDurationMs.average).toBe(120)
+    expect(analytics.uploads.problemAttempts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        status: 'failed',
+        resourceType: 'resource',
+        surface: 'dashboard-resource',
+        reason: 'r2-timeout',
+        statusCode: 504,
+        durationMs: null,
+      }),
+      expect.objectContaining({
+        status: 'stuck',
+        resourceType: 'resource',
+        surface: 'dashboard-resource',
+        reason: null,
+        statusCode: null,
+      }),
+    ]))
+    expect(analytics.uploads.problemAttempts.every(item => /^[a-f0-9]{16}$/.test(item.attemptHash))).toBe(true)
+    expect(analytics.uploads.problemAttempts.every(item => /^[a-f0-9]{16}$/.test(item.resourceHash))).toBe(true)
     expect(analytics.storage.storedBytes).toBeGreaterThanOrEqual(2048)
     expect(analytics.storage.trafficBytes).toBeGreaterThanOrEqual(512)
     expect(analytics.storage.operations).toBeGreaterThanOrEqual(3)
