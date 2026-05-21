@@ -1120,6 +1120,7 @@ async function triggerRebuild() {
     v-model="appIndexManagerVisible"
     :title="t('settings.settingFileIndex.appIndexManagerDialogTitle')"
     width="960px"
+    height="min(760px, 82vh)"
   >
     <div class="app-index-manager-dialog">
       <SettingFileIndexAppIndexManager />

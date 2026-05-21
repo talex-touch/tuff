@@ -7,10 +7,14 @@ const props = withDefaults(
     modelValue: boolean
     title?: string
     width?: string
+    height?: string
+    maxHeight?: string
   }>(),
   {
     title: '',
-    width: '480px'
+    width: '480px',
+    height: undefined,
+    maxHeight: 'calc(100vh - 40px)'
   }
 )
 
@@ -31,7 +35,7 @@ function close() {
   <Teleport to="body">
     <transition name="modal-fade">
       <div v-if="visible" class="TModal-Overlay" @click.self="close">
-        <div class="TModal-Content" :style="{ width }">
+        <div class="TModal-Content" :style="{ width, height, maxHeight }">
           <header v-if="title || $slots.header" class="TModal-Header">
             <slot name="header">
               <h3>{{ title }}</h3>
@@ -74,6 +78,9 @@ function close() {
     0 24px 80px rgba(0, 0, 0, 0.18),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   width: min(90vw, 560px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .TModal-Header {
@@ -117,9 +124,12 @@ function close() {
 }
 
 .TModal-Body {
+  min-height: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow: auto;
 }
 
 .TModal-Footer {
