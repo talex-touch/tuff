@@ -124,6 +124,43 @@ describe('Assistant module startup contract', () => {
     }
   })
 
+  it('keeps floating ball runtime status localized', () => {
+    expect(floatingBallSource).toContain('useI18n')
+
+    for (const expected of [
+      'assistant.floatingBall.voiceWakeOff',
+      'assistant.floatingBall.listening',
+      'assistant.floatingBall.clickToOpen',
+      'assistant.floatingBall.unsupported',
+      'assistant.floatingBall.permissionDenied',
+      'assistant.floatingBall.recognitionError'
+    ]) {
+      expect(floatingBallSource).toContain(expected)
+    }
+
+    for (const expected of [
+      'voiceWakeOff',
+      'listening',
+      'clickToOpen',
+      'unsupported',
+      'permissionDenied',
+      'recognitionError'
+    ]) {
+      expect(zhLocaleSource).toContain(expected)
+      expect(enLocaleSource).toContain(expected)
+    }
+
+    for (const hardcodedText of [
+      '语音唤醒已关闭',
+      '点击唤起语音助手',
+      '当前环境不支持语音识别',
+      '麦克风权限未授权',
+      '语音识别异常'
+    ]) {
+      expect(floatingBallSource).not.toContain(hardcodedText)
+    }
+  })
+
   it('routes screenshot translation through typed assistant transport events', () => {
     expect(assistantEventsSource).toContain('translateScreenshot')
     expect(assistantEventsSource).toContain("event('translate-screenshot')")
