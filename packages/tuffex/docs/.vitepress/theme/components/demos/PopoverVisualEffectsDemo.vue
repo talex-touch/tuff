@@ -7,6 +7,7 @@ const trigger = ref<'click' | 'hover'>('click')
 const placement = ref<'bottom-start' | 'bottom' | 'top' | 'right'>('bottom-start')
 const showArrow = ref(true)
 const keepAliveContent = ref(true)
+const disabled = ref(false)
 
 const localCount = ref(0)
 const localText = ref('')
@@ -18,6 +19,7 @@ function resetDemo() {
   placement.value = 'bottom-start'
   showArrow.value = true
   keepAliveContent.value = true
+  disabled.value = false
   localCount.value = 0
   localText.value = ''
 }
@@ -66,6 +68,11 @@ function resetDemo() {
           <TxSwitch v-model="keepAliveContent" />
         </label>
 
+        <label class="tx-demo__row" style="gap: 8px;">
+          <span class="tx-demo__label">disabled / 禁用</span>
+          <TxSwitch v-model="disabled" />
+        </label>
+
         <TxButton size="small" @click="resetDemo">
           Reset
         </TxButton>
@@ -79,6 +86,7 @@ function resetDemo() {
         :placement="placement"
         :show-arrow="showArrow"
         :keep-alive-content="keepAliveContent"
+        :disabled="disabled"
         :panel-background="background"
         panel-shadow="soft"
         :panel-padding="12"

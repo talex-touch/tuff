@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import NumberFlow from '@number-flow/vue'
 import { ref } from 'vue'
 
 const value = ref(2847)
@@ -98,7 +97,7 @@ function bump() {
       >
         <template #value>
           <div style="display: flex; align-items: baseline; gap: 6px;">
-            <NumberFlow :value="resourceLoad" />
+            <span>{{ resourceLoad }}</span>
             <span style="font-size: 16px;">%</span>
           </div>
         </template>

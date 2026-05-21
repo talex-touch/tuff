@@ -6,6 +6,9 @@
 
 <script setup lang="ts">
 import { toast } from '@tuffex/packages/utils'
+
+import ToastVariantsDemo from '../.vitepress/theme/components/demos/ToastVariantsDemo.vue'
+import ToastVariantsDemoSource from '../.vitepress/theme/components/demos/ToastVariantsDemo.vue?raw'
 </script>
 
 ## 基础用法
@@ -35,6 +38,17 @@ import { toast } from '@tuffex/packages/utils'
   </TxButton>
 </template>
 ```
+</template>
+</DemoBlock>
+
+## Variants / duration / dismissToast / replace
+
+展示 `success` / `warning` / `danger` 变体、`duration: 0` 持久提示、`dismissToast(id)` 显式关闭，以及相同 `id` 的替换逻辑。
+`duration > 0` 会自动关闭；每条 toast 的关闭按钮名称是 `Dismiss notification`。
+
+<DemoBlock title="Toast variants and persistent notifications" :code="ToastVariantsDemoSource">
+<template #preview>
+<ToastVariantsDemo />
 </template>
 </DemoBlock>
 

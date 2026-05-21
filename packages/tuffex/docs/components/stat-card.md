@@ -48,7 +48,7 @@ Pass `value` and `label` to display a metric. Optionally add an `iconClass` for 
 
 ## Design Notes
 
-- Values are rendered with `NumberFlow` for smooth animated transitions when data updates.
+- Values are rendered as stable locale-formatted text so dashboard metrics remain visible during SSR hydration.
 - Use `clickable` to turn the card into an interactive element — it gains hover and press states.
 - Use the `#value` slot when you need custom formatting (e.g., currency symbols, units, or sparklines).
 - Provide an `insight` object to display a change indicator; the label moves to the top and the insight line appears at the bottom.

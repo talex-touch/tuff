@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StatCardProps } from './types.ts'
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxStatCard',
@@ -11,9 +11,6 @@ const props = withDefaults(defineProps<StatCardProps>(), {
   clickable: false,
   variant: 'default',
 })
-const NumberFlowComponent = typeof window !== 'undefined'
-  ? defineAsyncComponent(() => import('@number-flow/vue'))
-  : null
 
 const isProgressVariant = computed(() => {
   if (props.variant === 'progress')
@@ -31,14 +28,9 @@ const numericValue = computed(() => {
   return null
 })
 
-const displayNumber = ref(0)
-let mountTimer: number | null = null
-
-const displayString = ref<string | null>(null)
 const cardRef = ref<HTMLElement | null>(null)
 const iconRef = ref<HTMLElement | null>(null)
 const glowReady = ref(false)
-const insightDisplayNumber = ref(0)
 
 const hasInsight = computed(() => {
   if (isProgressVariant.value)
@@ -162,58 +154,26 @@ const triggerGlow = () => {
   })
 }
 
+const formatNumber = (value: number) => {
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 20,
+  }).format(value)
+}
+
 const displayText = computed(() => {
-  return typeof props.value === 'number' ? props.value.toLocaleString() : String(props.value)
+  return typeof props.value === 'number' ? formatNumber(props.value) : String(props.value)
+})
+
+const insightDisplayText = computed(() => {
+  if (insightValue.value == null)
+    return ''
+  return formatNumber(insightValue.value)
 })
 
 onMounted(() => {
-  const delay = Math.floor(Math.random() * 500 + 100)
-  mountTimer = setTimeout(() => {
-    if (numericValue.value != null)
-      displayNumber.value = numericValue.value as number
-    else
-      displayString.value = displayText.value
-    if (insightValue.value != null)
-      insightDisplayNumber.value = insightValue.value
-    mountTimer = null
-  }, delay) as unknown as number
-
   updateGlowVars()
   triggerGlow()
 })
-
-onBeforeUnmount(() => {
-  if (mountTimer != null)
-    clearTimeout(mountTimer)
-  mountTimer = null
-})
-
-watch(numericValue, (v) => {
-  if (v == null)
-    return
-  displayNumber.value = v
-})
-
-watch(insightValue, (v) => {
-  if (v == null) {
-    insightDisplayNumber.value = 0
-    return
-  }
-  if (mountTimer != null)
-    return
-  insightDisplayNumber.value = v
-})
-
-watch(
-  () => props.value,
-  (v) => {
-    if (numericValue.value != null) {
-      displayString.value = null
-      return
-    }
-    displayString.value = String(v)
-  },
-)
 
 watch(
   () => props.iconClass,
@@ -279,8 +239,7 @@ watch(
 
       <div class="tx-stat-card__value">
         <slot name="value">
-          <component :is="NumberFlowComponent" v-if="numericValue != null && NumberFlowComponent" :value="displayNumber" />
-          <span v-else>{{ displayString ?? displayText }}</span>
+          <span>{{ displayText }}</span>
         </slot>
       </div>
 
@@ -293,8 +252,7 @@ watch(
       <div v-else-if="hasInsight" class="tx-stat-card__insight" :style="{ color: insightColor || undefined }">
         <i class="tx-stat-card__insight-icon" :class="insightIconClass" aria-hidden="true" />
         <span v-if="insightPrefix" class="tx-stat-card__insight-prefix">{{ insightPrefix }}</span>
-        <component :is="NumberFlowComponent" v-if="insightValue != null && NumberFlowComponent" :value="insightDisplayNumber" />
-        <span v-else-if="insightValue != null">{{ insightDisplayNumber }}</span>
+        <span v-if="insightValue != null" class="tx-stat-card__insight-value">{{ insightDisplayText }}</span>
         <span v-if="insightSuffix" class="tx-stat-card__insight-suffix">{{ insightSuffix }}</span>
       </div>
       <div v-else-if="isProgressVariant && ($slots.meta || meta)" class="tx-stat-card__meta">

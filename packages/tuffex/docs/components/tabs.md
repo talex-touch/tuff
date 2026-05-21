@@ -20,6 +20,9 @@ import TabsIndicatorShowcaseDemoSource from '../.vitepress/theme/components/demo
 
 import TabsDisableAnimDemo from '../.vitepress/theme/components/demos/TabsDisableAnimDemo.vue'
 import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/TabsDisableAnimDemo.vue?raw'
+
+import TabsDisabledDemo from '../.vitepress/theme/components/demos/TabsDisabledDemo.vue'
+import TabsDisabledDemoSource from '../.vitepress/theme/components/demos/TabsDisabledDemo.vue?raw'
 </script>
 
 ## 基础用法
@@ -67,6 +70,14 @@ import TabsDisableAnimDemoSource from '../.vitepress/theme/components/demos/Tabs
 <DemoBlock title="Disable Animations" :code="TabsDisableAnimDemoSource">
   <template #preview>
     <TabsDisableAnimDemo />
+  </template>
+</DemoBlock>
+
+## 禁用项（disabled）
+
+<DemoBlock title="Disabled tab item" :code="TabsDisabledDemoSource">
+  <template #preview>
+    <TabsDisabledDemo />
   </template>
 </DemoBlock>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import TxMarkdownView from '../../markdown-view/src/TxMarkdownView.vue'
 
 defineOptions({
@@ -27,15 +27,23 @@ const emit = defineEmits<{
   (e: 'imageClick', payload: { url: string, name?: string, messageId: string }): void
 }>()
 
+const isMounted = ref(false)
+
 const roleClass = computed(() => {
   return `tx-chat-message--${props.message.role}`
 })
 
 const createdText = computed(() => {
+  if (!isMounted.value)
+    return ''
   if (!props.message.createdAt)
     return ''
   const d = new Date(props.message.createdAt)
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+})
+
+onMounted(() => {
+  isMounted.value = true
 })
 
 function onImageClick(url: string, name?: string): void {
