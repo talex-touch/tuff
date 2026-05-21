@@ -31,6 +31,7 @@ code: |
 | [**Account SDK**](./account.zh.md) | `accountSDK` | **用户信息、订阅、配额** |
 | [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
 | [Feature SDK](./feature.zh.md) | `useFeature()` | 搜索结果管理 |
+| [QuickActions SDK](./quick-actions.zh.md) | `quickActions` / `plugin.quickActions` | MetaK 全局动作与原生分享 |
 | [DivisionBox SDK](./division-box.zh.md) | `useDivisionBox()` | 独立窗口管理 |
 | [Flow SDK](./flow-transfer.zh.md) | `createFlowSDK()` | 插件间数据流转 |
 | [Intelligence SDK](./intelligence.zh.md) | `useIntelligence()` | AI 能力调用 |

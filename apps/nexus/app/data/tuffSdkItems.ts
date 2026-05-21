@@ -122,9 +122,9 @@ export const tuffSdkItems: TuffSdkItem[] = [
   },
   {
     id: 'meta-sdk',
-    title: 'Meta SDK',
-    description: 'MetaOverlay global actions.',
-    tag: 'useMetaSDK()',
+    title: 'QuickActions SDK',
+    description: 'MetaK actions & native share.',
+    tag: 'quickActions',
     color: '#818cf8',
     icon: 'i-carbon-idea',
   },

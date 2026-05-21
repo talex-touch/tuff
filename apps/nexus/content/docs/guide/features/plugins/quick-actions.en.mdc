@@ -11,6 +11,16 @@
 - System quick actions: lock screen, mute, and common settings.
 - Supported platforms: `win32, darwin`
 
+## Developer SDK
+To make your own plugin actions appear in the MetaK / Quick Actions panel, use the developer [QuickActions SDK](/docs/dev/api/quick-actions). It supports:
+
+- Global action registration: `quickActions.registerAction()`
+- Action execution listeners: `quickActions.onActionExecute()`
+- Sharing the current item from an action: `quickActions.shareItem()`
+- Native share target discovery and resolution: `getNativeShareTargets()` / `resolveNativeShareTarget()`
+
+`meta` remains as a compatibility alias. New plugins should prefer `quickActions`.
+
 ## Config & Data
 - Config/data files: None (no manual config file needed for MVP)
 - Plugin directory: `plugins/touch-quick-actions`

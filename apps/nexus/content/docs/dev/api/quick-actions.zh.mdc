@@ -1,0 +1,211 @@
+# QuickActions SDK
+
+## 概述
+
+QuickActions SDK 让插件在 MetaK / Quick Actions 面板中注册全局动作，并复用 Flow Transfer 的原生分享能力。`meta` / `plugin.meta` 是历史兼容别名，新代码优先使用 `quickActions` / `plugin.quickActions`。
+
+## 快速开始
+
+插件 `index.js` 中可以直接使用 `globalThis.quickActions`，也可以通过 `plugin.quickActions` 使用同一个 SDK 实例。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  quickActions.registerAction({
+    id: 'share-current-item',
+    render: {
+      basic: {
+        title: '分享当前项目',
+        subtitle: '使用系统分享、AirDrop 或邮件',
+        icon: { type: 'class', value: 'i-ri-share-line' }
+      },
+      shortcut: '⌘⇧S',
+      group: '分享'
+    },
+    priority: 120
+  })
+
+  quickActions.onActionExecute(async ({ actionId, item }) => {
+    if (actionId !== 'share-current-item') return
+
+    const result = await quickActions.shareItem(item, {
+      preferredTargets: ['airdrop', 'system-share', 'mail']
+    })
+
+    if (!result.success) {
+      logger.warn('Native share failed', result.error)
+    }
+  })
+---
+:::
+
+## API 参考
+
+### `registerAction(action)`
+
+注册一个会出现在 MetaK / Quick Actions 面板中的全局动作。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unregister = quickActions.registerAction({
+    id: 'copy-title',
+    render: {
+      basic: {
+        title: '复制标题',
+        subtitle: '复制当前 item 的标题',
+        icon: { type: 'class', value: 'i-ri-file-copy-line' }
+      },
+      group: '文本'
+    }
+  })
+
+  // 后续取消注册
+  unregister()
+---
+:::
+
+### `unregisterAll()`
+
+取消当前插件注册的所有 Quick Actions。
+
+### `onActionExecute(handler)`
+
+监听当前插件注册动作的执行事件。回调只会收到本插件注册过的 `actionId`。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const dispose = quickActions.onActionExecute(({ actionId, item }) => {
+    logger.info('quick action executed', { actionId, itemId: item.id })
+  })
+
+  dispose()
+---
+:::
+
+### `getNativeShareTargets(payloadType?)`
+
+查询当前平台真实可用的原生分享目标。返回值来自 Flow Transfer target registry，并只包含 `isNativeShare === true` 的目标。
+
+| 平台 | 目标 |
+| --- | --- |
+| macOS | `system-share`, `airdrop`, `mail`, `messages` |
+| Windows | `mail` |
+| Linux | `mail` |
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const targets = await quickActions.getNativeShareTargets('files')
+  const canAirDrop = targets.some(target => target.id === 'airdrop')
+---
+:::
+
+### `resolveNativeShareTarget(options?)`
+
+按 payload 类型和插件偏好解析一个可用的原生分享目标，避免每个插件重复手写平台 fallback。
+
+默认策略：
+
+| Payload 类型 | 默认偏好顺序 |
+| --- | --- |
+| `files` / `image` | `airdrop` -> `system-share` -> `mail` |
+| `text` / `html` / `json` / `custom` | `system-share` -> `mail` -> `messages` |
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const target = await quickActions.resolveNativeShareTarget({
+    payloadType: 'files',
+    preferredTargets: ['airdrop', 'mail'],
+    allowFallback: false
+  })
+
+  if (!target) {
+    logger.info('No preferred native share target available')
+  }
+---
+:::
+
+`allowFallback` 默认为 `true`。设置为 `false` 时，偏好目标都不可用会返回 `undefined`，不会自动选择其他目标。
+
+### `nativeShare(payload, options?)`
+
+通过 Flow Transfer 的 `flow:native:share` 通道执行原生分享。权限、错误语义和平台降级与 Flow Transfer 保持一致。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await quickActions.nativeShare(
+    {
+      type: 'text',
+      data: 'Hello from Tuff',
+      context: {
+        sourcePluginId: plugin.getInfo().name,
+        metadata: { title: 'Share text' }
+      }
+    },
+    { target: 'mail' }
+  )
+---
+:::
+
+### `createSharePayloadFromItem(item, options?)`
+
+把当前 CoreBox item 转成可分享的 Flow payload。
+
+- 文件 item 优先生成 `{ type: 'files', data: [path] }`
+- 链接或普通 item 生成 `{ type: 'text', data: title + subtitle + url }`
+- `metadata` 会保留 `itemId`、`itemKind`、`sourceId`、`sourceType`
+
+### `shareItem(item, options?)`
+
+封装 `item -> Flow payload -> target 解析 -> native share` 的常用路径。适合 MetaK 全局分享动作。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await quickActions.shareItem(item, {
+    preferredTargets: ['airdrop', 'system-share', 'mail']
+  })
+
+  if (!result.success) {
+    logger.warn('Share failed', result.error)
+  }
+---
+:::
+
+如果插件需要完全控制 payload 或目标，使用 `createSharePayloadFromItem()` + `resolveNativeShareTarget()` + `nativeShare()`。
+
+## 类型速览
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface QuickActionsSDK {
+    registerAction(action: TuffQuickAction): () => void
+    unregisterAll(): void
+    onActionExecute(handler: QuickActionExecuteHandler): () => void
+    getNativeShareTargets(payloadType?: FlowPayloadType): Promise<FlowTargetInfo[]>
+    resolveNativeShareTarget(options?: QuickActionNativeShareTargetOptions): Promise<FlowTargetInfo | undefined>
+    nativeShare(payload: FlowPayload, options?: { target?: string }): Promise<NativeShareResult>
+    createSharePayloadFromItem(item: TuffItem, options?: QuickActionItemSharePayloadOptions): FlowPayload
+    shareItem(item: TuffItem, options?: QuickActionShareItemOptions): Promise<NativeShareResult>
+  }
+---
+:::
+
+## 最佳实践
+
+1. 新代码使用 `quickActions`，只在兼容旧插件时使用 `meta`。
+2. 分享前优先调用 `getNativeShareTargets()` 或 `resolveNativeShareTarget()`，不要根据平台字符串猜测目标是否可用。
+3. 文件和图片分享优先 `airdrop`，文本类 payload 优先 `system-share`。
+4. Windows / Linux 当前只暴露明确的 `mail` fallback，不伪装系统分享面板。
+5. 动作处理器里要处理 `result.success === false`，给出复制、邮件或插件自定义兜底。
+
+## 相关文档
+
+- [Plugin Context](./plugin-context.zh.md)
+- [Flow Transfer API](./flow-transfer.zh.md)
+- [Platform Capabilities SDK](./platform-capabilities.zh.md)

@@ -103,6 +103,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/api/plugin-context',
     '/docs/dev/api/box',
     '/docs/dev/api/feature',
+    '/docs/dev/api/quick-actions',
     '/docs/dev/api/search',
     '/docs/dev/api/clipboard',
     '/docs/dev/api/storage',
