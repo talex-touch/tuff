@@ -668,19 +668,15 @@ export class AssistantModule extends BaseModule {
   }
 
   private releaseVoicePanelAutoHideSuppression(): void {
-    this.voicePanelAutoHideSuppressionDepth = Math.max(
-      0,
-      this.voicePanelAutoHideSuppressionDepth - 1
-    )
-    if (this.voicePanelAutoHideSuppressionDepth > 0) {
-      return
-    }
     if (this.voicePanelAutoHideResumeTimer) {
       clearTimeout(this.voicePanelAutoHideResumeTimer)
     }
     this.voicePanelAutoHideResumeTimer = setTimeout(() => {
       this.voicePanelAutoHideResumeTimer = null
-      this.voicePanelAutoHideSuppressionDepth = 0
+      this.voicePanelAutoHideSuppressionDepth = Math.max(
+        0,
+        this.voicePanelAutoHideSuppressionDepth - 1
+      )
     }, 600)
   }
 
