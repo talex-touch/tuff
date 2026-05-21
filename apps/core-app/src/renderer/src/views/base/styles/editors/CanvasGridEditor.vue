@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CanvasAreaOption, CanvasConfig, CanvasItem } from './canvas-types'
-import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton, TxSlider, TxStatusBadge } from '@talex-touch/tuffex'
 import { useFlip } from '@talex-touch/tuffex'
 import { computed, ref, watch, type Ref } from 'vue'
 import { moveItem, normalizeCanvasConfig } from './canvas-types'
@@ -230,36 +230,34 @@ function setItemVisibility(itemId: string, visible: boolean): void {
           </label>
           <label>
             <span>Columns</span>
-            <input
-              type="range"
-              min="4"
-              max="24"
-              :value="localConfig.columns"
-              @input="updateConfig({ columns: Number(($event.target as HTMLInputElement).value) })"
+            <TxSlider
+              :model-value="localConfig.columns"
+              :min="4"
+              :max="24"
+              :step="1"
+              @update:model-value="updateConfig({ columns: $event })"
             />
             <em>{{ localConfig.columns }}</em>
           </label>
           <label>
             <span>Row Height</span>
-            <input
-              type="range"
-              min="12"
-              max="64"
-              :value="localConfig.rowHeight"
-              @input="
-                updateConfig({ rowHeight: Number(($event.target as HTMLInputElement).value) })
-              "
+            <TxSlider
+              :model-value="localConfig.rowHeight"
+              :min="12"
+              :max="64"
+              :step="1"
+              @update:model-value="updateConfig({ rowHeight: $event })"
             />
             <em>{{ localConfig.rowHeight }}</em>
           </label>
           <label>
             <span>Gap</span>
-            <input
-              type="range"
-              min="0"
-              max="24"
-              :value="localConfig.gap"
-              @input="updateConfig({ gap: Number(($event.target as HTMLInputElement).value) })"
+            <TxSlider
+              :model-value="localConfig.gap"
+              :min="0"
+              :max="24"
+              :step="1"
+              @update:model-value="updateConfig({ gap: $event })"
             />
             <em>{{ localConfig.gap }}</em>
           </label>
@@ -280,53 +278,45 @@ function setItemVisibility(itemId: string, visible: boolean): void {
           </label>
           <label>
             <span>X</span>
-            <input
-              type="range"
-              min="0"
+            <TxSlider
+              :model-value="selectedItem.x"
+              :min="0"
               :max="Math.max(0, columns - selectedItem.w)"
-              :value="selectedItem.x"
-              @input="
-                handleSelectedNumberChange('x', Number(($event.target as HTMLInputElement).value))
-              "
+              :step="1"
+              @update:model-value="handleSelectedNumberChange('x', $event)"
             />
             <em>{{ selectedItem.x }}</em>
           </label>
           <label>
             <span>Y</span>
-            <input
-              type="range"
-              min="0"
-              max="24"
-              :value="selectedItem.y"
-              @input="
-                handleSelectedNumberChange('y', Number(($event.target as HTMLInputElement).value))
-              "
+            <TxSlider
+              :model-value="selectedItem.y"
+              :min="0"
+              :max="24"
+              :step="1"
+              @update:model-value="handleSelectedNumberChange('y', $event)"
             />
             <em>{{ selectedItem.y }}</em>
           </label>
           <label>
             <span>W</span>
-            <input
-              type="range"
+            <TxSlider
+              :model-value="selectedItem.w"
               :min="selectedItem.minW ?? 1"
               :max="selectedItem.maxW ?? columns"
-              :value="selectedItem.w"
-              @input="
-                handleSelectedNumberChange('w', Number(($event.target as HTMLInputElement).value))
-              "
+              :step="1"
+              @update:model-value="handleSelectedNumberChange('w', $event)"
             />
             <em>{{ selectedItem.w }}</em>
           </label>
           <label>
             <span>H</span>
-            <input
-              type="range"
+            <TxSlider
+              :model-value="selectedItem.h"
               :min="selectedItem.minH ?? 1"
               :max="selectedItem.maxH ?? 16"
-              :value="selectedItem.h"
-              @input="
-                handleSelectedNumberChange('h', Number(($event.target as HTMLInputElement).value))
-              "
+              :step="1"
+              @update:model-value="handleSelectedNumberChange('h', $event)"
             />
             <em>{{ selectedItem.h }}</em>
           </label>
