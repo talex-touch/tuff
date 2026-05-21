@@ -37,13 +37,40 @@ interface InboxResponse {
   generatedAt: string
 }
 
+interface BrowserPushSubscriptionSummary {
+  id: string
+  userId: string
+  endpointOrigin: string
+  endpointHost: string
+  expirationTime: number | null
+  hasKeys: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+interface BrowserPushSubscriptionsResponse {
+  subscriptions: BrowserPushSubscriptionSummary[]
+  generatedAt: string
+}
+
+interface RuntimeConfigWithWebPush {
+  public?: {
+    notificationWebPush?: {
+      publicKey?: string
+    }
+  }
+}
+
+const runtimeConfig = useRuntimeConfig() as RuntimeConfigWithWebPush
 const filter = ref<NotificationFilter>('unread')
 const notifications = ref<BrowserNotificationItem[]>([])
+const browserPushSubscriptions = ref<BrowserPushSubscriptionSummary[]>([])
 const unreadCount = ref(0)
 const generatedAt = ref('')
 const loading = ref(false)
 const actionLoading = ref(false)
 const browserNotificationBusy = ref(false)
+const browserPushBusy = ref(false)
 const browserNotificationPermission = ref<BrowserNotificationPermissionState>('unsupported')
 const browserNotificationError = ref<string | null>(null)
 const error = ref<string | null>(null)
@@ -62,6 +89,15 @@ const filterOptions = computed(() => [
 const visibleNotifications = computed(() => notifications.value)
 const hasUnread = computed(() => unreadCount.value > 0)
 const generatedAtLabel = computed(() => generatedAt.value ? formatDateTime(generatedAt.value) : '-')
+const browserPushSubscription = computed(() => browserPushSubscriptions.value[0] ?? null)
+const browserPushPublicKey = computed(() => runtimeConfig.public?.notificationWebPush?.publicKey ?? '')
+const browserPushStatusLabel = computed(() => {
+  if (!browserPushPublicKey.value)
+    return t('dashboard.notifications.browser.errors.vapidMissing', 'Web Push 公钥未配置。')
+  return browserPushSubscription.value
+    ? t('dashboard.notifications.browser.webPushEnabled', 'Web Push 已注册')
+    : t('dashboard.notifications.browser.webPushDisabled', 'Web Push 未注册')
+})
 const browserNotificationPermissionLabel = computed(() => {
   if (browserNotificationPermission.value === 'granted')
     return t('dashboard.notifications.browser.permissionGranted', '已允许')
@@ -82,6 +118,9 @@ const browserNotificationActionLabel = computed(() => {
 })
 const browserNotificationActionDisabled = computed(() => {
   return browserNotificationBusy.value || browserNotificationPermission.value === 'denied' || browserNotificationPermission.value === 'unsupported'
+})
+const browserPushActionDisabled = computed(() => {
+  return browserPushBusy.value || browserNotificationPermission.value !== 'granted' || !browserPushPublicKey.value
 })
 
 function readErrorMessage(errorValue: unknown): string {
@@ -163,6 +202,92 @@ function sendBrowserTestNotification() {
   notification.onclick = () => window.focus()
 }
 
+function urlBase64ToUint8Array(value: string): Uint8Array {
+  const padding = '='.repeat((4 - value.length % 4) % 4)
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = window.atob(base64)
+  return Uint8Array.from([...raw].map(char => char.charCodeAt(0)))
+}
+
+async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  if (!import.meta.client || !hasWindow() || !('serviceWorker' in navigator))
+    throw new Error(t('dashboard.notifications.browser.errors.serviceWorkerUnsupported', '当前浏览器不支持 Service Worker。'))
+  if (!('PushManager' in window))
+    throw new Error(t('dashboard.notifications.browser.errors.pushUnsupported', '当前浏览器不支持 Web Push。'))
+  return await navigator.serviceWorker.register('/notification-sw.js')
+}
+
+async function loadBrowserPushSubscriptions() {
+  try {
+    const data = await requestJson<BrowserPushSubscriptionsResponse>('/api/dashboard/notifications/push-subscriptions')
+    browserPushSubscriptions.value = data.subscriptions
+  }
+  catch {
+    browserPushSubscriptions.value = []
+  }
+}
+
+async function handleBrowserPushSubscribe() {
+  browserPushBusy.value = true
+  browserNotificationError.value = null
+  try {
+    if (!browserPushPublicKey.value)
+      throw new Error(t('dashboard.notifications.browser.errors.vapidMissing', 'Web Push 公钥未配置。'))
+    if (browserNotificationPermission.value !== 'granted')
+      throw new Error(t('dashboard.notifications.browser.errors.permissionRequired', '请先允许浏览器通知权限。'))
+
+    const registration = await getServiceWorkerRegistration()
+    const existing = await registration.pushManager.getSubscription()
+    const subscription = existing ?? await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(browserPushPublicKey.value),
+    })
+    await requestJson('/api/dashboard/notifications/push-subscriptions', {
+      method: 'POST',
+      body: {
+        subscription: subscription.toJSON(),
+      },
+    })
+    await loadBrowserPushSubscriptions()
+    toast.success(t('dashboard.notifications.browser.webPushSubscribed', 'Web Push 订阅已注册'))
+  }
+  catch (caught) {
+    browserNotificationError.value = readErrorMessage(caught)
+    toast.error(t('dashboard.notifications.browser.webPushSubscribeFailed', 'Web Push 注册失败'), browserNotificationError.value)
+  }
+  finally {
+    browserPushBusy.value = false
+  }
+}
+
+async function handleBrowserPushUnsubscribe() {
+  const subscription = browserPushSubscription.value
+  if (!subscription)
+    return
+
+  browserPushBusy.value = true
+  browserNotificationError.value = null
+  try {
+    if (import.meta.client && hasWindow() && 'serviceWorker' in navigator) {
+      const registration = await navigator.serviceWorker.ready
+      const activeSubscription = await registration?.pushManager.getSubscription()
+      await activeSubscription?.unsubscribe()
+    }
+    await requestJson(`/api/dashboard/notifications/push-subscriptions/${subscription.id}`, {
+      method: 'DELETE',
+    })
+    await loadBrowserPushSubscriptions()
+    toast.success(t('dashboard.notifications.browser.webPushUnsubscribed', 'Web Push 订阅已注销'))
+  }
+  catch (caught) {
+    browserNotificationError.value = readErrorMessage(caught)
+    toast.error(t('dashboard.notifications.browser.webPushUnsubscribeFailed', 'Web Push 注销失败'), browserNotificationError.value)
+  }
+  finally {
+    browserPushBusy.value = false
+  }
+}
+
 async function handleBrowserNotificationAction() {
   if (!import.meta.client || !hasWindow() || !('Notification' in window)) {
     browserNotificationError.value = t('dashboard.notifications.browser.errors.unsupported', '当前浏览器不支持系统通知。')
@@ -185,6 +310,7 @@ async function handleBrowserNotificationAction() {
     }
 
     sendBrowserTestNotification()
+    await loadBrowserPushSubscriptions()
     toast.success(t('dashboard.notifications.browser.testSent', '浏览器测试通知已发送'))
   }
   catch (caught) {
@@ -265,6 +391,7 @@ watch(filter, () => {
 onMounted(() => {
   syncBrowserNotificationPermission()
   void loadNotifications()
+  void loadBrowserPushSubscriptions()
 })
 </script>
 
@@ -283,6 +410,28 @@ onMounted(() => {
       <div class="flex flex-wrap items-center gap-2">
         <TxButton size="small" variant="secondary" :disabled="browserNotificationActionDisabled" :loading="browserNotificationBusy" icon="i-carbon-notification" @click="handleBrowserNotificationAction">
           {{ browserNotificationActionLabel }}
+        </TxButton>
+        <TxButton
+          v-if="!browserPushSubscription"
+          size="small"
+          variant="secondary"
+          :disabled="browserPushActionDisabled"
+          :loading="browserPushBusy"
+          icon="i-carbon-send-alt"
+          @click="handleBrowserPushSubscribe"
+        >
+          {{ t('dashboard.notifications.browser.webPushSubscribe', '注册 Web Push') }}
+        </TxButton>
+        <TxButton
+          v-else
+          size="small"
+          variant="secondary"
+          :disabled="browserPushBusy"
+          :loading="browserPushBusy"
+          icon="i-carbon-notification-off"
+          @click="handleBrowserPushUnsubscribe"
+        >
+          {{ t('dashboard.notifications.browser.webPushUnsubscribe', '注销 Web Push') }}
         </TxButton>
         <TxButton size="small" variant="secondary" :loading="loading" icon="i-carbon-renew" @click="loadNotifications">
           {{ t('dashboard.notifications.refresh', '刷新') }}
@@ -324,6 +473,12 @@ onMounted(() => {
         </p>
         <p class="mt-3 text-sm text-black font-medium dark:text-white">
           {{ browserNotificationPermissionLabel }}
+        </p>
+        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+          {{ browserPushStatusLabel }}
+          <span v-if="browserPushSubscription">
+            · {{ browserPushSubscription.endpointHost }}
+          </span>
         </p>
         <p v-if="browserNotificationError" class="mt-2 text-xs text-red-600 dark:text-red-300">
           {{ browserNotificationError }}
