@@ -20,9 +20,10 @@
 
 - macOS：`system-share`、`airdrop`、`mail`、`messages` 是真实 native share targets；AirDrop 仅对文件 / 图片类 payload 有意义。
 - Windows / Linux：当前只暴露明确 `mail` fallback，不把 mailto 或外部协议伪装为系统分享面板。
-- 插件侧入口：`context.utils.quickActions.getNativeShareTargets(payloadType)`、`createSharePayloadFromItem(item)`、`nativeShare(payload, { target })`。
+- 插件侧入口：`context.utils.quickActions.getNativeShareTargets(payloadType)`、`resolveNativeShareTarget({ payloadType, preferredTargets })`、`createSharePayloadFromItem(item)`、`nativeShare(payload, { target })`、`shareItem(item, { preferredTargets })`。
+- 目标选择配置：SDK 默认文件 / 图片优先 `airdrop -> system-share -> mail`，文本类优先 `system-share -> mail -> messages`；插件可传 `preferredTargets` 和 `allowFallback` 覆盖。
 - 权限与降级：继续复用 FlowBus / permission guard 口径；能力不可用时返回失败或 fallback，不返回 fake success。
-- 后续配置：按插件和 item kind 记住默认分享目标，暴露 unsupported/degraded reason，并允许批量文件分享。
+- 后续配置：由 CoreApp 按插件和 item kind 持久化默认分享目标，暴露 unsupported/degraded reason，并允许批量文件分享。
 
 ## 未闭环
 
