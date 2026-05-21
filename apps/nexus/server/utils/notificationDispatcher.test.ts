@@ -381,6 +381,89 @@ describe('notificationDispatcher', () => {
     expect(serialized).not.toContain('re-unit-test-secret')
   })
 
+  it('sends generic HTTP email notifications with secure webhook credentials', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const authRef = `secure://notifications/generic-email-${marker}`
+    const channel = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Generic email ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `mail-relay-${marker}`,
+      config: {
+        mode: 'send',
+        providerType: 'generic',
+        credentialRef: authRef,
+        from: 'Tuff <noreply@example.com>',
+        subject: 'Plugin approved',
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+    credentialMocks.notificationCredentialExists.mockResolvedValueOnce(true)
+    credentialMocks.getNotificationCredential.mockResolvedValueOnce({
+      url: 'https://mail.example.test/send',
+      signingSecret: 'generic-mail-signing-secret',
+    })
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      actorId: 'reviewer@example.com',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      metadata: {
+        pluginId: `plugin-${marker}`,
+        to: ['developer@example.com'],
+        credentialRef: authRef,
+      },
+    })
+
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: channel.id,
+        provider: `mail-relay-${marker}`,
+        providerType: 'generic',
+        adapter: 'email/generic',
+        status: 'sent',
+        reason: 'delivery-sent',
+      }),
+    ]))
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'https://mail.example.test/send',
+      headers: expect.objectContaining({
+        'Content-Type': 'application/json',
+        'X-Tuff-Signature': expect.any(String),
+      }),
+    }))
+
+    const request = networkMocks.request.mock.calls[0]?.[0]
+    const body = JSON.parse(String(request.body))
+    expect(body).toMatchObject({
+      action: 'plugin.version.approved',
+      from: 'Tuff <noreply@example.com>',
+      to: ['developer@example.com'],
+      subject: 'Plugin approved',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+    })
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.sent',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(serialized).toContain('delivery-sent')
+    expect(serialized).toContain('mail-relay')
+    expect(serialized).not.toContain('developer@example.com')
+    expect(serialized).not.toContain('reviewer@example.com')
+    expect(serialized).not.toContain(authRef)
+    expect(serialized).not.toContain('generic-mail-signing-secret')
+  })
+
   it('stores browser send-mode notifications in the user inbox without raw recipients', async () => {
     const marker = crypto.randomUUID()
     const h3Event = event(marker)

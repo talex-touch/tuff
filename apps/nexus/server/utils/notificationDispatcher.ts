@@ -63,6 +63,7 @@ const CREDENTIAL_REQUIRED_ADAPTERS = new Set([
 
 const SENDABLE_HTTP_ADAPTERS = new Set([
   'email/resend',
+  'email/generic',
   'feishu',
   'lark',
   'webhook',
@@ -377,6 +378,51 @@ async function sendWebhookNotification(
   return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
 }
 
+async function sendGenericEmailNotification(
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+  credential: NotificationCredentialPayload,
+): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+  if (!hasWebhookCredential(credential))
+    return 'credential-type-mismatch'
+
+  const recipients = readRecipients(input)
+  if (recipients.length === 0)
+    return 'recipient-missing'
+
+  const from = readConfigString(delivery.config, 'from', 320)
+  if (!from)
+    return 'sender-missing'
+
+  const body = JSON.stringify({
+    action: input.action,
+    from,
+    to: recipients,
+    subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
+    text: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+    resourceType: input.resourceType ?? null,
+    resourceId: input.resourceId ?? null,
+    metadata: sanitizeDispatchMetadata(input.metadata),
+    occurredAt: input.occurredAt ?? new Date().toISOString(),
+  })
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (credential.signingSecret)
+    headers['X-Tuff-Signature'] = signBody(body, credential.signingSecret)
+
+  const response = await networkClient.request({
+    method: 'POST',
+    url: credential.url,
+    timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+    headers,
+    body,
+  })
+
+  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+}
+
 async function sendBotWebhookNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
@@ -413,6 +459,8 @@ async function sendNotification(
   try {
     if (delivery.adapter === 'email/resend')
       return await sendResendNotification(delivery, input, credential)
+    if (delivery.adapter === 'email/generic')
+      return await sendGenericEmailNotification(delivery, input, credential)
     if (delivery.adapter === 'webhook')
       return await sendWebhookNotification(delivery, input, credential)
     if (delivery.adapter === 'feishu' || delivery.adapter === 'lark')
