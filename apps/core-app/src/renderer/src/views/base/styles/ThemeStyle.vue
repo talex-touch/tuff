@@ -484,7 +484,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
 
 <template>
   <div class="ThemeStyle-Page">
-    <ViewTemplate :name="t('themeStyle.styles')">
+    <ViewTemplate :title="t('themeStyle.styles')">
       <WindowSectionVue>
         <SectionItem v-model="windowPreference" title="pure" :label="t('themeStyle.windowPure')" />
         <SectionItem

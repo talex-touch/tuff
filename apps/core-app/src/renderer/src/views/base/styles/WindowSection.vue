@@ -12,16 +12,7 @@ const { t } = useI18n()
     :description="t('windowSection.description')"
     class="WindowSection-Wrapper"
   >
-    <div
-      gap-4
-      box-border
-      relative
-      w-full
-      flex
-      items-center
-      justify-center
-      class="WindowsSection-Container p-2"
-    >
+    <div box-border relative w-full class="WindowsSection-Container p-2">
       <slot />
     </div>
   </TuffGroupBlock>
@@ -29,6 +20,9 @@ const { t } = useI18n()
 
 <style lang="scss" scoped>
 .WindowsSection-Container {
-  height: 12rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  min-height: 12rem;
 }
 </style>
