@@ -88,6 +88,7 @@ const sectionPaths: Record<string, string> = {
   account: '/dashboard/account',
   devices: '/dashboard/devices',
   storage: '/dashboard/storage',
+  notifications: '/dashboard/notifications',
 }
 
 function mapItems(items: Array<{ id: string, label: string, icon: string }>) {
@@ -141,6 +142,11 @@ const accountMenuItems = computed(() => {
       id: 'storage',
       label: t('dashboard.sections.menu.storage', 'Storage & Sync'),
       icon: 'i-carbon-data-base-alt',
+    },
+    {
+      id: 'notifications',
+      label: t('dashboard.sections.menu.notifications', 'Notifications'),
+      icon: 'i-carbon-notification',
     },
     {
       id: 'privacy',
@@ -263,6 +269,8 @@ const activeSection = computed(() => {
     return 'devices'
   if (route.path.startsWith('/dashboard/storage'))
     return 'storage'
+  if (route.path.startsWith('/dashboard/notifications'))
+    return 'notifications'
   if (route.path.startsWith('/dashboard/assets') || route.path.startsWith('/dashboard/plugins'))
     return 'assets'
   const segments = route.path.split('/').filter(Boolean)

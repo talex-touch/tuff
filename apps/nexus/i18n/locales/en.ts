@@ -796,6 +796,7 @@ export default {
         account: 'Account & Security',
         devices: 'Devices',
         storage: 'Storage & Sync',
+        notifications: 'Notifications',
         privacy: 'Privacy',
       },
       apiKeys: {
