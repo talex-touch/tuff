@@ -15,8 +15,10 @@ export interface DispatchNotificationInput {
   actorId?: string | null
   resourceType?: string | null
   resourceId?: string | null
+  deliveryConfigIds?: string[]
   deliveryChannels?: string[]
   deliveryProviders?: string[]
+  executionMode?: 'config' | 'plan'
   metadata?: Record<string, unknown> | null
   occurredAt?: string
 }
@@ -120,6 +122,15 @@ function normalizeOptionalList(value: string[] | undefined): string[] {
   return value
     .map(item => normalizeToken(item))
     .filter((item): item is string => Boolean(item))
+}
+
+function normalizeConfigIdFilter(value: string[] | undefined): Set<string> | null {
+  if (!Array.isArray(value))
+    return null
+  const ids = value
+    .map(item => normalizeString(item, 180))
+    .filter((item): item is string => Boolean(item))
+  return ids.length ? new Set(ids) : null
 }
 
 function normalizeMetadataKey(key: string): string {
@@ -228,6 +239,9 @@ function resolveAdapterProfile(config: PlatformGovernanceConfig): { adapter: str
 }
 
 function configMatchesTarget(config: PlatformGovernanceConfig, input: DispatchNotificationInput): boolean {
+  const configIdFilter = normalizeConfigIdFilter(input.deliveryConfigIds)
+  if (configIdFilter?.has(config.id))
+    return true
   if (!config.targetId)
     return true
   if (input.resourceId === config.targetId)
@@ -630,6 +644,8 @@ async function executeDelivery(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
 ): Promise<EvaluatedNotificationDelivery> {
+  if (input.executionMode === 'plan')
+    return delivery
   if (delivery.status !== 'planned' || !isSendMode(delivery.config))
     return delivery
   if (SENDABLE_LOCAL_ADAPTERS.has(delivery.adapter)) {
@@ -703,9 +719,10 @@ export async function dispatchNotificationEvent(
     ...input,
     action,
   }
-  const configs = await listPlatformGovernanceConfigs(event, {
+  const configIdFilter = normalizeConfigIdFilter(normalizedInput.deliveryConfigIds)
+  const configs = (await listPlatformGovernanceConfigs(event, {
     configType: 'notification_channel',
-  })
+  })).filter(config => !configIdFilter || configIdFilter.has(config.id))
   const deliveries = await Promise.all(configs
     .map(config => evaluateDelivery(config, normalizedInput))
     .map(delivery => verifyCredentialRef(event, delivery)))
