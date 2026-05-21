@@ -217,6 +217,26 @@ describe('translateCoreBoxImageItem', () => {
     expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
   })
 
+  it('returns SCENE_UNAVAILABLE when Nexus screenshot scene request fails', async () => {
+    sceneMocks.runNexusScene.mockRejectedValue(new Error('provider unavailable'))
+
+    const result = await translateImageBase64(
+      Buffer.from('source-image').toString('base64'),
+      'zh',
+      {
+        openPinWindow: true
+      }
+    )
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'SCENE_UNAVAILABLE',
+      error: 'provider unavailable'
+    })
+    expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
+    expect(electronMocks.writeImage).not.toHaveBeenCalled()
+  })
+
   it('translates a raw image base64 payload through the screenshot scene and opens pin window', async () => {
     sceneMocks.runNexusScene.mockResolvedValue({
       status: 'completed',
