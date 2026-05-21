@@ -109,14 +109,14 @@ Thanks to [@antfu](https://github.com/antfu)'s [template](https://github.com/ant
 
 You could contact us through `TalexDreamSoul@Gmail.com`
 
-## Index Folder Splitting (Prelude/Surface Separation)
+## Prelude Engineering (Prelude/Surface Separation)
 
-支持将 `index.js` 拆分为 `index/` 文件夹，实现 **Prelude（先导脚本）** 的模块化开发：
+支持将 `index.js` 拆分为 `src/prelude/` 源码目录，实现 **Prelude（先导脚本）** 的模块化开发。运行时和最终 `.tpex` 成品仍只暴露单个 `index.js`。
 
 ### 使用方式
 
-1. 创建 `index/` 文件夹（与 `manifest.json` 同级）
-2. 在 `index/` 中创建入口文件：`main.ts`、`main.js`、`index.ts` 或 `index.js`
+1. 创建 `src/prelude/` 文件夹
+2. 在 `src/prelude/` 中创建入口文件：`main.ts`、`main.js`、`index.ts` 或 `index.js`
 3. 在入口文件中导入其他模块并导出插件生命周期
 
 ### 示例结构
@@ -124,35 +124,53 @@ You could contact us through `TalexDreamSoul@Gmail.com`
 ```
 my-plugin/
 ├── manifest.json
-├── index/                    # Prelude 脚本文件夹
-│   ├── main.ts              # 入口文件（优先级：main.ts > main.js > index.ts > index.js）
-│   ├── utils.ts             # 工具函数
-│   ├── providers/           # 提供者模块
-│   │   ├── google.ts
-│   │   └── deepl.ts
-│   └── types.ts             # 类型定义
-├── src/                      # Surface UI 源码（Vue/React）
-│   └── ...
+├── src/
+│   ├── prelude/             # Prelude 源码目录
+│   │   ├── main.ts          # 入口文件（优先级：main.ts > main.js > index.ts > index.js）
+│   │   ├── utils.ts
+│   │   ├── providers/
+│   │   │   ├── google.ts
+│   │   │   └── deepl.ts
+│   │   └── types.ts
+│   └── ...                  # Surface UI 源码（Vue/React）
 └── package.json
 ```
 
+### 可选配置
+
+```json
+{
+  "build": {
+    "prelude": {
+      "entry": "src/prelude/main.ts",
+      "target": "node18",
+      "external": ["electron", "node:*"],
+      "minify": true,
+      "sourcemap": false
+    }
+  }
+}
+```
+
+历史插件的 `manifest.build.index` 与 `index/` 目录继续兼容。默认优先级为：显式 `build.prelude` / `build.index` 配置 > 根 `index.js` > `src/prelude` > 旧 `index/`。
+
 ### 构建行为
 
-- **开发模式**：`index/` 文件夹实时编译为 `index.js`，支持热重载
-- **生产构建**：使用 esbuild 将 `index/` 打包为单个 `index.js` 文件
-- **别名支持**：`@` 和 `~` 指向 `index/` 目录
-- **外部依赖**：`electron` 自动标记为 external
+- **开发模式**：`src/prelude/` 实时编译为虚拟 `index.js`，Dev Server 的 `/_tuff_devkit/update` 会暴露 `index.js` 变化状态，core-app 可自动 reload 插件生命周期
+- **生产构建**：使用 esbuild 将 `src/prelude/` 打包为 `dist/build/index.js`
+- **别名支持**：`@` 和 `~` 指向 Prelude 入口所在目录
+- **依赖策略**：默认 bundle 第三方依赖；`electron` 与 Node 内置模块保持 external
 
 ### 优势
 
 - ✅ **模块化开发**：将复杂的 Prelude 脚本拆分为多个文件
 - ✅ **TypeScript 支持**：原生支持 `.ts` 文件
-- ✅ **热重载**：开发时修改 `index/` 内文件自动重新编译
+- ✅ **热重载体感**：开发时修改 `src/prelude/` 内文件自动重新编译并触发插件 reload
 - ✅ **零配置**：无需额外配置，自动检测并编译
 
 ### 注意事项
 
-- `index/` 文件夹与根目录的 `index.js` 互斥，优先使用 `index/` 文件夹
+- 根目录 `index.js` 仍是传统模式；存在根 `index.js` 且没有显式配置时，不会自动使用 `src/prelude/`
 - 编译后的 `index.js` 为 CommonJS 格式（`format: 'cjs'`）
 - 目标环境：Node.js 18+（`target: 'node18'`）
 
