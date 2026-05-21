@@ -1697,6 +1697,73 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
   }
 }
 
+function createProviderQuotaAnalytics(
+  providerEvents: PlatformGovernanceEvent[],
+  quotas: PlatformGovernanceConfig[],
+  topLimit: number,
+) {
+  return quotas
+    .map((quota) => {
+      const providerId = quota.targetId ?? quota.provider ?? 'unknown'
+      const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
+      const maxRequests = readLimitNumber(quota.limits, ['maxRequests', 'requestLimit'])
+      const maxTokens = readLimitNumber(quota.limits, ['maxTokens', 'tokenLimit'])
+      const warningThreshold = resolvePolicyWarningPercent(quota)
+      const start = Date.now() - windowDays * 24 * 60 * 60 * 1000
+      let requests = 0
+      let tokens = 0
+
+      for (const event of providerEvents) {
+        if (event.resourceId !== providerId)
+          continue
+        const occurredAt = Date.parse(event.occurredAt)
+        if (Number.isFinite(occurredAt) && occurredAt < start)
+          continue
+        if (event.action === 'provider.request')
+          requests += event.quantity
+        else if (event.action === 'provider.usage' && event.unit === 'token')
+          tokens += event.quantity
+      }
+
+      const requestUtilization = roundUsageRatio(requests, maxRequests)
+      const tokenUtilization = roundUsageRatio(tokens, maxTokens)
+      const blocked = (maxRequests != null && requests >= maxRequests) || (maxTokens != null && tokens >= maxTokens)
+      const warning = (requestUtilization != null && requestUtilization >= warningThreshold)
+        || (tokenUtilization != null && tokenUtilization >= warningThreshold)
+
+      return {
+        configId: quota.id,
+        providerId,
+        name: quota.name,
+        channel: quota.channel,
+        provider: quota.provider,
+        enabled: quota.enabled,
+        windowDays,
+        status: !quota.enabled ? 'disabled' : blocked ? 'blocked' : warning ? 'warning' : 'ok',
+        usage: {
+          requests,
+          tokens,
+        },
+        limits: {
+          maxRequests,
+          maxTokens,
+          warningThreshold,
+        },
+        utilization: {
+          requests: requestUtilization,
+          tokens: tokenUtilization,
+        },
+      }
+    })
+    .sort((left, right) => {
+      const statusRank = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
+      const leftUtilization = Math.max(left.utilization.requests ?? 0, left.utilization.tokens ?? 0)
+      const rightUtilization = Math.max(right.utilization.requests ?? 0, right.utilization.tokens ?? 0)
+      return statusRank[right.status] - statusRank[left.status] || rightUtilization - leftUtilization
+    })
+    .slice(0, topLimit)
+}
+
 function normalizeLimit(limit?: number): number {
   return Number.isFinite(limit) && limit && limit > 0 ? Math.min(Math.floor(limit), 5000) : 100
 }
@@ -1842,6 +1909,11 @@ export async function getPlatformGovernanceAnalytics(
   })
   const visitEvents = events.filter(item => item.scope === 'app' && item.action === 'visit')
   const notificationEvents = events.filter(item => item.scope === 'notification')
+  const providerEvents = events.filter(item => item.scope === 'intelligence' && item.resourceType === 'provider')
+  const providerQuotas = await listPlatformGovernanceConfigs(event, {
+    configType: 'intelligence_provider_quota',
+  })
+  const providers = createProviderAnalytics(events, days, topLimit)
 
   return {
     days,
@@ -1860,7 +1932,10 @@ export async function getPlatformGovernanceAnalytics(
     uploads: createUploadAnalytics(events, topLimit),
     notifications: createNotificationAnalytics(notificationEvents, topLimit),
     storage: createStorageAnalytics(events, topLimit),
-    providers: createProviderAnalytics(events, days, topLimit),
+    providers: {
+      ...providers,
+      quotas: createProviderQuotaAnalytics(providerEvents, providerQuotas, topLimit),
+    },
   }
 }
 

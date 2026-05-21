@@ -106,4 +106,16 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('dashboard.governance.analytics.storageProvider')
     expect(page).toContain('dashboard.governance.analytics.storageAction')
   })
+
+  it('exposes provider quota utilization and risk status in the provider cockpit', () => {
+    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
+
+    expect(page).toContain('type ProviderQuotaStatus')
+    expect(page).toContain('analyticsData.providers.quotas')
+    expect(page).toContain('providerQuotaLabel(quota.status)')
+    expect(page).toContain('providerQuotaTone(quota.status)')
+    expect(page).toContain('formatRatio(quota.utilization.requests)')
+    expect(page).toContain('formatRatio(quota.utilization.tokens)')
+    expect(page).toContain('dashboard.governance.analytics.providerQuotaUtilization')
+  })
 })
