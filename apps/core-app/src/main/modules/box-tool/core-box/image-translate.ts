@@ -90,13 +90,22 @@ export async function translateImageBase64(
     }
   }
 
-  const run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
-    input: {
-      imageBase64: normalizedImageBase64,
-      targetLang
-    },
-    capability: options.openPinWindow ? undefined : 'image.translate.e2e'
-  })
+  let run: Awaited<ReturnType<typeof runNexusScene>>
+  try {
+    run = await runNexusScene(COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID, {
+      input: {
+        imageBase64: normalizedImageBase64,
+        targetLang
+      },
+      capability: options.openPinWindow ? undefined : 'image.translate.e2e'
+    })
+  } catch (error) {
+    return {
+      success: false,
+      code: 'SCENE_UNAVAILABLE',
+      error: error instanceof Error ? error.message : 'Nexus image translate scene is unavailable.'
+    }
+  }
   const translated = extractTranslatedImageFromSceneRun(run)
   if (!translated) {
     return {
