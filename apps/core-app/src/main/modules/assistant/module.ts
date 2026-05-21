@@ -90,7 +90,9 @@ export class AssistantModule extends BaseModule {
   private transportDisposers: Array<() => void> = []
   private unsubscribeAppSetting: (() => void) | null = null
   private floatingBallWindow: TouchWindow | null = null
+  private floatingBallWindowPending: Promise<TouchWindow> | null = null
   private voicePanelWindow: TouchWindow | null = null
+  private voicePanelWindowPending: Promise<TouchWindow> | null = null
   private pendingPosition: FloatingBallPosition | null = null
   private positionSaveTimer: NodeJS.Timeout | null = null
 
@@ -416,7 +418,22 @@ export class AssistantModule extends BaseModule {
     if (this.floatingBallWindow && !this.floatingBallWindow.window.isDestroyed()) {
       return this.floatingBallWindow
     }
+    if (this.floatingBallWindowPending) {
+      return await this.floatingBallWindowPending
+    }
 
+    const pending = this.createFloatingBallWindow(setting)
+    this.floatingBallWindowPending = pending
+    try {
+      return await pending
+    } finally {
+      if (this.floatingBallWindowPending === pending) {
+        this.floatingBallWindowPending = null
+      }
+    }
+  }
+
+  private async createFloatingBallWindow(setting: FloatingBallSetting): Promise<TouchWindow> {
     const touchWindow = new TouchWindow({
       ...AssistantFloatingBallWindowOption,
       width: setting.size,
@@ -433,7 +450,9 @@ export class AssistantModule extends BaseModule {
     touchWindow.window.setSkipTaskbar(true)
 
     touchWindow.window.on('closed', () => {
-      this.floatingBallWindow = null
+      if (this.floatingBallWindow === touchWindow) {
+        this.floatingBallWindow = null
+      }
       this.hideVoicePanel()
     })
 
@@ -446,7 +465,22 @@ export class AssistantModule extends BaseModule {
     if (this.voicePanelWindow && !this.voicePanelWindow.window.isDestroyed()) {
       return this.voicePanelWindow
     }
+    if (this.voicePanelWindowPending) {
+      return await this.voicePanelWindowPending
+    }
 
+    const pending = this.createVoicePanelWindow()
+    this.voicePanelWindowPending = pending
+    try {
+      return await pending
+    } finally {
+      if (this.voicePanelWindowPending === pending) {
+        this.voicePanelWindowPending = null
+      }
+    }
+  }
+
+  private async createVoicePanelWindow(): Promise<TouchWindow> {
     const touchWindow = new TouchWindow({
       ...AssistantVoicePanelWindowOption,
       width: VOICE_PANEL_WIDTH,
@@ -465,7 +499,9 @@ export class AssistantModule extends BaseModule {
     })
 
     touchWindow.window.on('closed', () => {
-      this.voicePanelWindow = null
+      if (this.voicePanelWindow === touchWindow) {
+        this.voicePanelWindow = null
+      }
     })
 
     await this.loadAssistantRenderer(touchWindow)

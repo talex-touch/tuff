@@ -24,7 +24,7 @@ This folder stores manual visual evidence for Assistant surfaces that cannot be 
 
 ## Remaining gaps
 
-- Need a clean VoicePanel-open capture beside the floating ball after duplicate-window risk is ruled out.
+- Need a clean VoicePanel-open capture beside the floating ball after rebuilding and rerunning with the single-flight floating ball and VoicePanel window fix.
 - Need a successful provider-backed screenshot translation capture showing the image translation pin window.
 - Need a Nexus/provider unavailable or logged-out capture showing the localized provider fallback.
 - Need packaged Electron evidence; current captures are from the dev Electron run only.
@@ -33,4 +33,5 @@ This folder stores manual visual evidence for Assistant surfaces that cannot be 
 
 - One desktop capture showed two visible Assistant floating-ball-like targets. Treat this as unresolved until the next pass confirms whether it was a stale dev window, duplicate renderer target, or window lifecycle issue.
 - CDP target listing during this pass showed multiple `http://127.0.0.1:5606/#/setting` page targets on the same dev session, so duplicate-window analysis should start from stale dev windows before changing Assistant lifecycle code.
+- Process inspection on the next run confirmed two `--touch-type=assistant --assistant-type=floating-ball` renderer processes under the same isolated dev app. The likely code path is concurrent `ensureFloatingBallWindow()` calls before `loadAssistantRenderer()` resolves; the follow-up patch adds a single-flight pending window guard for the floating ball and VoicePanel creation paths.
 - Computer Use could inspect the default Electron window but did not enumerate the floating ball window. Desktop screenshot plus persisted config is stronger evidence for drag persistence than DOM-only inspection.
