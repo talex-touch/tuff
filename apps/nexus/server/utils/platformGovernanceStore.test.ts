@@ -280,6 +280,17 @@ describe('platformGovernanceStore', () => {
         providerStatus: {
           [providerId]: 'success',
         },
+        contextAppCategory: 'developer_tools',
+        contextSource: 'active-app',
+        entryPoint: 'global-shortcut',
+        triggerType: 'keyboard',
+        userPreferenceMode: 'recent-first',
+        sessionBucket: 'workday-morning',
+        pluginIds: [pluginId],
+        pluginCategories: ['productivity'],
+        contextTags: ['editor'],
+        localHour: 9,
+        localDayOfWeek: 2,
         countryCode: 'US',
         regionCode: 'CA',
         timezone: 'America/Los_Angeles',
@@ -459,6 +470,24 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.searches.byFilterKind).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'plugin', events: 1 }),
+    ]))
+    expect(analytics.searches.byContextAppCategory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'developer_tools', events: 1 }),
+    ]))
+    expect(analytics.searches.byTriggerType).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'keyboard', events: 1 }),
+    ]))
+    expect(analytics.searches.byUserPreferenceMode).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'recent-first', events: 1 }),
+    ]))
+    expect(analytics.searches.byPluginId).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: pluginId, events: 1 }),
+    ]))
+    expect(analytics.searches.byPluginCategory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'productivity', events: 1 }),
+    ]))
+    expect(analytics.searches.byLocalHour).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '09', events: 1 }),
     ]))
     expect(analytics.searches.filterUsage.filterRate).toBeGreaterThan(0)
     expect(analytics.searches.latency.firstResultMs.average).toBe(180)

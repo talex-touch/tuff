@@ -142,6 +142,17 @@ interface GovernanceAnalytics {
     byProviderStatus: GovernanceMetric[]
     byFilterKind: GovernanceMetric[]
     byFilterSource: GovernanceMetric[]
+    byContextAppCategory: GovernanceMetric[]
+    byContextSource: GovernanceMetric[]
+    byEntryPoint: GovernanceMetric[]
+    byTriggerType: GovernanceMetric[]
+    byUserPreferenceMode: GovernanceMetric[]
+    bySessionBucket: GovernanceMetric[]
+    byPluginId: GovernanceMetric[]
+    byPluginCategory: GovernanceMetric[]
+    byContextTag: GovernanceMetric[]
+    byLocalHour: GovernanceMetric[]
+    byLocalDayOfWeek: GovernanceMetric[]
     byCountry: GovernanceMetric[]
     byRegion: GovernanceMetric[]
     byTimezone: GovernanceMetric[]
@@ -508,6 +519,17 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byProviderStatus: [],
         byFilterKind: [],
         byFilterSource: [],
+        byContextAppCategory: [],
+        byContextSource: [],
+        byEntryPoint: [],
+        byTriggerType: [],
+        byUserPreferenceMode: [],
+        bySessionBucket: [],
+        byPluginId: [],
+        byPluginCategory: [],
+        byContextTag: [],
+        byLocalHour: [],
+        byLocalDayOfWeek: [],
         byCountry: [],
         byRegion: [],
         byTimezone: [],
@@ -1083,6 +1105,30 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.searches.byHour.slice(0, 6)" :key="`hour:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="text-black/60 dark:text-white/60">{{ item.key }}:00 UTC</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byLocalHour.slice(0, 6)" :key="`local-hour:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalHour', 'Local') }} {{ item.key }}:00</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byContextAppCategory.slice(0, 4)" :key="`context-app:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchContextApp', 'Context app') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byTriggerType.slice(0, 4)" :key="`trigger:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTrigger', 'Trigger') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byUserPreferenceMode.slice(0, 4)" :key="`preference:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byPluginId.slice(0, 4)" :key="`search-plugin:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchPlugins', 'Plugin') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byPluginCategory.slice(0, 4)" :key="`search-plugin-category:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchPluginCategories', 'Plugin category') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byProvider.slice(0, 6)" :key="`provider:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
