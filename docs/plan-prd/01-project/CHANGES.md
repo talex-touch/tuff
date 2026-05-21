@@ -13,6 +13,16 @@
 
 ## 2026-05-21
 
+### feat(nexus): expose anonymized upload problem attempts
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Upload analytics now returns a bounded `problemAttempts` list for failed or stale stuck upload attempts.
+  - Each problem attempt exposes hashed attempt/resource identifiers, status, resource type, surface, storage channel/provider, content type, status code, reason, duration, and age without leaking raw `attemptId` or `resourceId`.
+  - Data Governance upload health now surfaces those problem attempts to make intermittent upload failures diagnosable from the dashboard.
+
 ### docs(plan-prd): compress data governance status entries
 
 - `docs/INDEX.md`

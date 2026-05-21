@@ -614,6 +614,8 @@ function uniqueActorCount(events: PlatformGovernanceEvent[]): number {
 function readAnalyticsResourceKey(event: PlatformGovernanceEvent): string | null {
   if (event.scope === 'storage')
     return event.resourceType ?? event.channel ?? null
+  if (event.scope === 'upload')
+    return readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? event.channel ?? null
   return event.resourceId
 }
 
@@ -1463,7 +1465,23 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   const completed = uploadEvents.filter(event => event.action === 'resource.completed')
   const failed = uploadEvents.filter(event => event.action === 'resource.failed')
   const terminalEvents = [...completed, ...failed]
-  const attempts = new Map<string, { started: boolean, completed: boolean, failed: boolean, resourceType: string, resourceId: string, latestAt: string }>()
+  const attempts = new Map<string, {
+    attemptId: string
+    started: boolean
+    completed: boolean
+    failed: boolean
+    resourceType: string
+    resourceId: string
+    latestAt: string
+    surface: string | null
+    storageChannel: string | null
+    storageProvider: string | null
+    contentType: string | null
+    reason: string | null
+    statusCode: number | null
+    durationMs: number | null
+    size: number | null
+  }>()
   const byExtension = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byResourceType = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byContentType = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -1479,16 +1497,35 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     const attemptId = readEventMetadataString(event, 'attemptId')
     if (attemptId) {
       const item = attempts.get(attemptId) ?? {
+        attemptId,
         started: false,
         completed: false,
         failed: false,
         resourceType: readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? 'unknown',
         resourceId: event.resourceId ?? 'unknown',
         latestAt: event.occurredAt,
+        surface: null,
+        storageChannel: null,
+        storageProvider: null,
+        contentType: null,
+        reason: null,
+        statusCode: null,
+        durationMs: null,
+        size: null,
       }
       item.started = item.started || event.action === 'resource.started'
       item.completed = item.completed || event.action === 'resource.completed'
       item.failed = item.failed || event.action === 'resource.failed'
+      item.surface ??= readEventMetadataString(event, 'surface')
+      item.storageChannel ??= readEventMetadataString(event, 'storageChannel')
+      item.storageProvider ??= readEventMetadataString(event, 'storageProvider')
+      item.contentType ??= readEventMetadataString(event, 'contentType') ?? event.channel
+      item.reason ??= readEventMetadataString(event, 'reason')
+      item.statusCode ??= readEventMetadataNumber(event, 'statusCode')
+      item.durationMs ??= readEventMetadataNumber(event, 'durationMs')
+      item.size ??= readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null)
+      item.resourceType = readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? item.resourceType
+      item.resourceId = event.resourceId ?? item.resourceId
       item.latestAt = event.occurredAt.localeCompare(item.latestAt) > 0 ? event.occurredAt : item.latestAt
       attempts.set(attemptId, item)
     }
@@ -1519,6 +1556,34 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       const latestAt = Date.parse(item.latestAt)
       return Number.isFinite(latestAt) && latestAt <= stuckBefore
     })
+  const stuckAttemptIds = new Set(stuckAttempts.map(item => item.attemptId))
+  const problemAttempts = Array.from(attempts.values())
+    .filter(item => item.failed || stuckAttemptIds.has(item.attemptId))
+    .map((item) => {
+      const latestAt = Date.parse(item.latestAt)
+      return {
+        attemptHash: hashIdentifier(item.attemptId)?.slice(0, 16) ?? 'unknown',
+        resourceHash: hashIdentifier(item.resourceId)?.slice(0, 16) ?? 'unknown',
+        status: item.failed ? 'failed' : 'stuck',
+        resourceType: item.resourceType,
+        surface: item.surface,
+        storageChannel: item.storageChannel,
+        storageProvider: item.storageProvider,
+        contentType: item.contentType,
+        reason: item.reason,
+        statusCode: item.statusCode,
+        durationMs: item.durationMs,
+        size: item.size,
+        latestAt: item.latestAt,
+        ageMs: Number.isFinite(latestAt) ? Math.max(0, Date.now() - latestAt) : null,
+      }
+    })
+    .sort((left, right) => {
+      if (left.status !== right.status)
+        return left.status === 'failed' ? -1 : 1
+      return (right.ageMs ?? 0) - (left.ageMs ?? 0)
+    })
+    .slice(0, topLimit)
 
   return {
     ...createScopedAnalytics(uploadEvents, topLimit),
@@ -1541,6 +1606,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     bySurface: mapMetricBuckets(bySurface, topLimit),
     uploadSize: mapNumberStat(uploadSize),
     uploadDurationMs: mapNumberStat(uploadDurationMs),
+    problemAttempts,
   }
 }
 
