@@ -1293,36 +1293,77 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   const completed = uploadEvents.filter(event => event.action === 'resource.completed')
   const failed = uploadEvents.filter(event => event.action === 'resource.failed')
   const terminalEvents = [...completed, ...failed]
+  const attempts = new Map<string, { started: boolean, completed: boolean, failed: boolean, resourceType: string, resourceId: string, latestAt: string }>()
   const byExtension = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byResourceType = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byContentType = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byStorageChannel = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byStorageProvider = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byFailureReason = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byStatusCode = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySurface = new Map<string, ReturnType<typeof createMetricBucket>>()
   const uploadSize = createNumberStats()
+  const uploadDurationMs = createNumberStats()
+
+  for (const event of uploadEvents) {
+    const attemptId = readEventMetadataString(event, 'attemptId')
+    if (attemptId) {
+      const item = attempts.get(attemptId) ?? {
+        started: false,
+        completed: false,
+        failed: false,
+        resourceType: readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? 'unknown',
+        resourceId: event.resourceId ?? 'unknown',
+        latestAt: event.occurredAt,
+      }
+      item.started = item.started || event.action === 'resource.started'
+      item.completed = item.completed || event.action === 'resource.completed'
+      item.failed = item.failed || event.action === 'resource.failed'
+      item.latestAt = event.occurredAt.localeCompare(item.latestAt) > 0 ? event.occurredAt : item.latestAt
+      attempts.set(attemptId, item)
+    }
+    addMetricBucket(bySurface, readEventMetadataString(event, 'surface'), event)
+  }
 
   for (const event of terminalEvents) {
     addMetricBucket(byExtension, readEventMetadataString(event, 'extension'), event)
     addMetricBucket(byResourceType, readEventMetadataString(event, 'resourceType') ?? event.resourceType, event)
     addMetricBucket(byContentType, readEventMetadataString(event, 'contentType') ?? event.channel, event)
     addMetricBucket(byStorageChannel, readEventMetadataString(event, 'storageChannel'), event)
-    if (event.action === 'resource.failed')
+    addMetricBucket(byStorageProvider, readEventMetadataString(event, 'storageProvider'), event)
+    addNumberStat(uploadDurationMs, readEventMetadataNumber(event, 'durationMs'))
+    if (event.action === 'resource.failed') {
       addMetricBucket(byFailureReason, readEventMetadataString(event, 'reason'), event, 1)
+      const statusCode = readEventMetadataNumber(event, 'statusCode')
+      if (typeof statusCode === 'number')
+        addMetricBucket(byStatusCode, String(Math.round(statusCode)), event, 1)
+    }
     addNumberStat(uploadSize, readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null))
   }
+
+  const stuckAttempts = Array.from(attempts.values())
+    .filter(item => item.started && !item.completed && !item.failed)
 
   return {
     ...createScopedAnalytics(uploadEvents, topLimit),
     started: started.length,
     completed: completed.length,
     failed: failed.length,
+    attempts: attempts.size,
+    stuckAttempts: stuckAttempts.length,
     bytes: completed.reduce((sum, event) => event.unit === 'byte' ? sum + event.quantity : sum, 0),
     failureRate: terminalEvents.length ? Math.round((failed.length / terminalEvents.length) * 10000) / 100 : 0,
+    stuckRate: attempts.size ? Math.round((stuckAttempts.length / attempts.size) * 10000) / 100 : 0,
     byExtension: mapMetricBuckets(byExtension, topLimit),
     byResourceType: mapMetricBuckets(byResourceType, topLimit),
     byContentType: mapMetricBuckets(byContentType, topLimit),
     byStorageChannel: mapMetricBuckets(byStorageChannel, topLimit),
+    byStorageProvider: mapMetricBuckets(byStorageProvider, topLimit),
     byFailureReason: mapMetricBuckets(byFailureReason, topLimit),
+    byStatusCode: mapMetricBuckets(byStatusCode, topLimit),
+    bySurface: mapMetricBuckets(bySurface, topLimit),
     uploadSize: mapNumberStat(uploadSize),
+    uploadDurationMs: mapNumberStat(uploadDurationMs),
   }
 }
 
