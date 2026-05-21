@@ -195,14 +195,21 @@ interface GovernanceAnalytics {
     started: number
     completed: number
     failed: number
+    attempts: number
+    stuckAttempts: number
     bytes: number
     failureRate: number
+    stuckRate: number
     byExtension: GovernanceMetric[]
     byResourceType: GovernanceMetric[]
     byContentType: GovernanceMetric[]
     byStorageChannel: GovernanceMetric[]
+    byStorageProvider: GovernanceMetric[]
     byFailureReason: GovernanceMetric[]
+    byStatusCode: GovernanceMetric[]
+    bySurface: GovernanceMetric[]
     uploadSize: GovernanceNumberStat
+    uploadDurationMs: GovernanceNumberStat
   }
   notifications: GovernanceScopedAnalytics & NotificationDeliveryAnalytics
   storage: GovernanceScopedAnalytics
@@ -563,14 +570,21 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         started: 0,
         completed: 0,
         failed: 0,
+        attempts: 0,
+        stuckAttempts: 0,
         bytes: 0,
         failureRate: 0,
+        stuckRate: 0,
         byExtension: [],
         byResourceType: [],
         byContentType: [],
         byStorageChannel: [],
+        byStorageProvider: [],
         byFailureReason: [],
+        byStatusCode: [],
+        bySurface: [],
         uploadSize: emptyNumberStat(),
+        uploadDurationMs: emptyNumberStat(),
       },
       notifications: {
         ...emptyScopedAnalytics(),
@@ -1193,6 +1207,14 @@ function formatRatio(value: number | null): string {
               <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadAvgSize', 'Avg size') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatBytes(analyticsData.uploads.uploadSize.average) }}</span>
             </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadStuckAttempts', 'Stuck attempts') }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.stuckAttempts) }} · {{ formatPercent(analyticsData.uploads.stuckRate) }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadAvgDuration', 'Avg duration') }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.uploadDurationMs.average) }} ms</span>
+            </div>
             <div v-for="item in analyticsData.uploads.byExtension.slice(0, 5)" :key="`ext:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
@@ -1200,6 +1222,18 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.uploads.byStorageChannel.slice(0, 4)" :key="`upload-storage:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.quantity) }}</span>
+            </div>
+            <div v-for="item in analyticsData.uploads.byStorageProvider.slice(0, 4)" :key="`upload-storage-provider:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadStorageProvider', 'Provider') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.quantity) }}</span>
+            </div>
+            <div v-for="item in analyticsData.uploads.bySurface.slice(0, 4)" :key="`upload-surface:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadSurface', 'Surface') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.uploads.byStatusCode.slice(0, 4)" :key="`upload-status:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-red-500/80 dark:text-red-200/80">{{ t('dashboard.governance.analytics.uploadStatusCode', 'Status') }} · {{ item.key }}</span>
+              <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.byFailureReason.slice(0, 4)" :key="`upload-failure:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-red-500/80 dark:text-red-200/80">{{ item.key }}</span>
