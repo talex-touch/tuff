@@ -905,6 +905,52 @@ function createPluginDailyTrend(events: PlatformGovernanceEvent[]) {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+function createPluginGrowth(events: PlatformGovernanceEvent[], days: number) {
+  const now = Date.now()
+  const windowMs = days * 24 * 60 * 60 * 1000
+  const midpoint = now - windowMs / 2
+  const previous = {
+    downloads: 0,
+    installs: 0,
+    invocations: 0,
+    events: 0,
+  }
+  const current = {
+    downloads: 0,
+    installs: 0,
+    invocations: 0,
+    events: 0,
+  }
+
+  for (const event of events) {
+    const occurredAt = Date.parse(event.occurredAt)
+    if (!Number.isFinite(occurredAt))
+      continue
+    const bucket = occurredAt >= midpoint ? current : previous
+    bucket.events += 1
+    if (event.action === 'download')
+      bucket.downloads += event.quantity
+    if (event.action === 'install')
+      bucket.installs += event.quantity
+    if (event.action === 'invoke')
+      bucket.invocations += event.quantity
+  }
+
+  const previousScore = previous.downloads + previous.installs * 2 + previous.invocations * 3
+  const currentScore = current.downloads + current.installs * 2 + current.invocations * 3
+  const growthRate = previousScore > 0
+    ? ((currentScore - previousScore) / previousScore) * 100
+    : currentScore > 0 ? 100 : 0
+
+  return {
+    previousScore,
+    currentScore,
+    growthRate: Math.round(growthRate * 100) / 100,
+    previous,
+    current,
+  }
+}
+
 function createScopedAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
   const byHour = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byChannel = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -1207,7 +1253,8 @@ function createPluginAnalytics(events: PlatformGovernanceEvent[], days: number, 
     countries: Map<string, number>
     regions: Map<string, number>
     channels: Map<string, number>
-    actions: Map<string, number>
+    actions: Map<string, { events: number, quantity: number }>
+    eventRows: PlatformGovernanceEvent[]
   }>()
 
   for (const event of pluginEvents) {
@@ -1222,7 +1269,8 @@ function createPluginAnalytics(events: PlatformGovernanceEvent[], days: number, 
       countries: new Map<string, number>(),
       regions: new Map<string, number>(),
       channels: new Map<string, number>(),
-      actions: new Map<string, number>(),
+      actions: new Map<string, { events: number, quantity: number }>(),
+      eventRows: [],
     }
     item.events += 1
     if (event.action === 'download')
@@ -1242,35 +1290,44 @@ function createPluginAnalytics(events: PlatformGovernanceEvent[], days: number, 
       item.regions.set(region, (item.regions.get(region) ?? 0) + 1)
     if (event.channel)
       item.channels.set(event.channel, (item.channels.get(event.channel) ?? 0) + 1)
-    item.actions.set(event.action, (item.actions.get(event.action) ?? 0) + 1)
+    const action = item.actions.get(event.action) ?? { events: 0, quantity: 0 }
+    action.events += 1
+    action.quantity += event.quantity
+    item.actions.set(event.action, action)
+    item.eventRows.push(event)
     plugins.set(pluginId, item)
   }
 
   const leaderboard = Array.from(plugins.values())
-    .map(item => ({
-      pluginId: item.pluginId,
-      downloads: item.downloads,
-      installs: item.installs,
-      invocations: item.invocations,
-      events: item.events,
-      uniqueActors: item.actors.size,
-      topCountries: Array.from(item.countries.entries())
-        .map(([countryCode, events]) => ({ countryCode, events }))
-        .sort((a, b) => b.events - a.events)
-        .slice(0, 5),
-      topRegions: Array.from(item.regions.entries())
-        .map(([regionCode, events]) => ({ regionCode, events }))
-        .sort((a, b) => b.events - a.events)
-        .slice(0, 5),
-      topChannels: Array.from(item.channels.entries())
-        .map(([channel, events]) => ({ channel, events }))
-        .sort((a, b) => b.events - a.events)
-        .slice(0, 5),
-      byAction: Array.from(item.actions.entries())
-        .map(([action, events]) => ({ action, events }))
-        .sort((a, b) => b.events - a.events),
-    }))
-    .sort((a, b) => (b.downloads + b.installs + b.invocations) - (a.downloads + a.installs + a.invocations) || b.events - a.events)
+    .map((item) => {
+      const hotScore = item.downloads + item.installs * 2 + item.invocations * 3 + item.actors.size * 2
+      return {
+        pluginId: item.pluginId,
+        downloads: item.downloads,
+        installs: item.installs,
+        invocations: item.invocations,
+        hotScore,
+        growth: createPluginGrowth(item.eventRows, days),
+        events: item.events,
+        uniqueActors: item.actors.size,
+        topCountries: Array.from(item.countries.entries())
+          .map(([countryCode, events]) => ({ countryCode, events }))
+          .sort((a, b) => b.events - a.events)
+          .slice(0, 5),
+        topRegions: Array.from(item.regions.entries())
+          .map(([regionCode, events]) => ({ regionCode, events }))
+          .sort((a, b) => b.events - a.events)
+          .slice(0, 5),
+        topChannels: Array.from(item.channels.entries())
+          .map(([channel, events]) => ({ channel, events }))
+          .sort((a, b) => b.events - a.events)
+          .slice(0, 5),
+        byAction: Array.from(item.actions.entries())
+          .map(([action, value]) => ({ action, events: value.events, quantity: value.quantity }))
+          .sort((a, b) => b.quantity - a.quantity || b.events - a.events),
+      }
+    })
+    .sort((a, b) => b.hotScore - a.hotScore || b.growth.currentScore - a.growth.currentScore || b.events - a.events)
     .slice(0, topLimit)
 
   return {

@@ -585,14 +585,19 @@ describe('platformGovernanceStore', () => {
         downloads: 2,
         installs: 4,
         invocations: 3,
+        hotScore: 21,
+        growth: expect.objectContaining({
+          currentScore: 19,
+          growthRate: 100,
+        }),
         uniqueActors: 1,
         topRegions: expect.arrayContaining([
           expect.objectContaining({ regionCode: 'CA' }),
         ]),
         byAction: expect.arrayContaining([
-          expect.objectContaining({ action: 'download', events: 1 }),
-          expect.objectContaining({ action: 'install', events: 1 }),
-          expect.objectContaining({ action: 'invoke', events: 1 }),
+          expect.objectContaining({ action: 'download', events: 1, quantity: 2 }),
+          expect.objectContaining({ action: 'install', events: 1, quantity: 4 }),
+          expect.objectContaining({ action: 'invoke', events: 1, quantity: 3 }),
         ]),
       }),
     ]))
