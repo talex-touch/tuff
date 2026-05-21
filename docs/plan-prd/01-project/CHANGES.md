@@ -171,6 +171,7 @@
   - CoreApp visible experience evidence now tracks Assistant floating ball entry and Assistant screenshot translation as required visual surfaces, including drag persistence, VoicePanel opening, permission denial, and provider fallback evidence.
   - Assistant floating ball and VoicePanel window creation now use single-flight pending guards, so concurrent settings snapshots or click handoffs reuse the in-flight renderer load instead of spawning duplicate floating windows.
   - Screenshot translation now suppresses VoicePanel blur auto-hide while native capture hides and restores Assistant windows, with a counted delayed resume so permission prompts or provider fallback recovery do not close the panel unexpectedly.
+  - VoicePanel opening from the floating ball now also holds the same blur auto-hide suppression until bounds, show/focus, and typed `panelOpened` handoff complete, avoiding an immediate hide race while the panel is being positioned.
   - Validation: focused Assistant contract, CoreBox image translate helper, transport event, and visible experience evidence tests cover the new typed event, scene reuse path, duplicate-window guard, and manual evidence gate; packaged Electron permission and provider fallback artifacts remain follow-up.
 
 ### feat(core-app): make style personalization wallpaper controls usable
