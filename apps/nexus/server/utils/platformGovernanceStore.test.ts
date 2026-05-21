@@ -1196,6 +1196,29 @@ describe('platformGovernanceStore', () => {
       expect.objectContaining({ key: 'credential-ref-required', events: 1 }),
     ]))
     expect(analytics.notifications.byNotificationAction.find(item => item.key === 'plugin.version.approved')?.events).toBeGreaterThanOrEqual(4)
+    expect(analytics.notifications.providerHealth).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        provider: `resend-primary-${marker}`,
+        providerType: 'resend',
+        adapter: 'email/resend',
+        total: 2,
+        planned: 1,
+        sent: 1,
+        failed: 0,
+        sentRate: 50,
+        failureRate: 0,
+      }),
+      expect.objectContaining({
+        provider: `smtp-ops-${marker}`,
+        providerType: 'smtp',
+        adapter: 'email/smtp',
+        failed: 1,
+        sentRate: 0,
+        failureRate: 100,
+        latestFailureReason: 'credential-ref-required',
+        latestFailureAt: expect.any(String),
+      }),
+    ]))
   })
 
   it('builds browser push subscription analytics without leaking endpoints or keys', async () => {

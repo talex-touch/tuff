@@ -63,6 +63,17 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('dashboard.governance.analytics.browserPushSubscriptions')
   })
 
+  it('exposes per-provider notification delivery health and latest failure reason', () => {
+    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
+
+    expect(page).toContain('providerHealth: Array<{')
+    expect(page).toContain('analyticsData.notifications.providerHealth')
+    expect(page).toContain('dashboard.governance.analytics.notificationProviderHealth')
+    expect(page).toContain('formatPercent(item.sentRate)')
+    expect(page).toContain('formatPercent(item.failureRate)')
+    expect(page).toContain('item.latestFailureReason')
+  })
+
   it('exposes storage policy alerts for storage limit and traffic risk', () => {
     const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
 
