@@ -80,6 +80,30 @@ interface GovernanceNumberStat {
   max: number
 }
 
+interface StorageUsageBreakdown {
+  key: string
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+}
+
+interface StorageUsageTrendPoint {
+  date: string
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+}
+
 interface GovernanceScopedAnalytics {
   totalEvents: number
   totalQuantity: number
@@ -223,7 +247,19 @@ interface GovernanceAnalytics {
     uploadDurationMs: GovernanceNumberStat
   }
   notifications: GovernanceScopedAnalytics & NotificationDeliveryAnalytics
-  storage: GovernanceScopedAnalytics
+  storage: GovernanceScopedAnalytics & {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    writes: number
+    reads: number
+    deletes: number
+    byChannelUsage: StorageUsageBreakdown[]
+    byProviderUsage: StorageUsageBreakdown[]
+    byResourceTypeUsage: StorageUsageBreakdown[]
+    byActionUsage: StorageUsageBreakdown[]
+    trend: StorageUsageTrendPoint[]
+  }
   providers: GovernanceScopedAnalytics & {
     growth: GovernanceGrowth
     byModel: GovernanceMetric[]
@@ -524,6 +560,23 @@ function emptyNumberStat(): GovernanceNumberStat {
   }
 }
 
+function emptyStorageAnalytics(): GovernanceAnalytics['storage'] {
+  return {
+    ...emptyScopedAnalytics(),
+    storedBytes: 0,
+    trafficBytes: 0,
+    operations: 0,
+    writes: 0,
+    reads: 0,
+    deletes: 0,
+    byChannelUsage: [],
+    byProviderUsage: [],
+    byResourceTypeUsage: [],
+    byActionUsage: [],
+    trend: [],
+  }
+}
+
 const { data: analyticsData, pending: analyticsPending, error: analyticsError, refresh: refreshAnalytics } = await useAsyncData<GovernanceAnalytics>(
   'dashboard-governance-analytics',
   async () => await requestJson<GovernanceAnalytics>('/api/dashboard/governance/analytics', {
@@ -653,7 +706,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           trend: [],
         },
       },
-      storage: emptyScopedAnalytics(),
+      storage: emptyStorageAnalytics(),
       providers: {
         ...emptyScopedAnalytics(),
         growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
@@ -1418,6 +1471,71 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-red-500/80 dark:text-red-200/80">{{ item.key }}</span>
               <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
             </div>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+          <h3 class="text-sm font-semibold text-black dark:text-white">
+            {{ t('dashboard.governance.analytics.storageUsage', 'Storage usage') }}
+          </h3>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
+            <div>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageStored', 'Stored') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatBytes(analyticsData.storage.storedBytes) }}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageTraffic', 'Traffic') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatBytes(analyticsData.storage.trafficBytes) }}
+              </p>
+            </div>
+            <div>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageOperations', 'Ops') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.storage.operations) }}
+              </p>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-black/45 dark:text-white/45">
+            {{ formatNumber(analyticsData.storage.writes) }} writes · {{ formatNumber(analyticsData.storage.reads) }} reads · {{ formatNumber(analyticsData.storage.deletes) }} deletes
+          </p>
+          <div class="mt-4 grid gap-2 text-sm">
+            <div v-for="item in analyticsData.storage.byChannelUsage.slice(0, 5)" :key="`storage-channel:${item.key}`" class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">{{ item.key }}</span>
+                <span class="text-xs text-black/45 dark:text-white/45">{{ formatNumber(item.operations) }} ops</span>
+              </div>
+              <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                {{ formatBytes(item.storedBytes) }} stored · {{ formatBytes(item.trafficBytes) }} traffic · {{ formatNumber(item.uniqueActors) }} actors
+              </p>
+            </div>
+            <div v-for="item in analyticsData.storage.byProviderUsage.slice(0, 4)" :key="`storage-provider:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.storageProvider', 'Provider') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatBytes(item.storedBytes + item.trafficBytes) }}</span>
+            </div>
+            <div v-for="item in analyticsData.storage.byResourceTypeUsage.slice(0, 4)" :key="`storage-resource:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.storageResourceType', 'Resource') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.operations) }}</span>
+            </div>
+            <div v-for="item in analyticsData.storage.byActionUsage.slice(0, 3)" :key="`storage-action:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.storageAction', 'Action') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.operations) }}</span>
+            </div>
+            <div v-for="item in analyticsData.storage.trend.slice(-3)" :key="`storage-trend:${item.date}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatBytes(item.storedBytes + item.trafficBytes) }} · {{ formatNumber(item.operations) }} ops</span>
+            </div>
+            <p v-if="analyticsData.storage.totalEvents === 0" class="text-sm text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.analytics.storageEmpty', 'No storage usage yet.') }}
+            </p>
           </div>
         </div>
 
