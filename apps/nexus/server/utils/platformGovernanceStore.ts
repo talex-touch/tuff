@@ -1828,7 +1828,7 @@ function createProviderQuotaAnalytics(
   quotas: PlatformGovernanceConfig[],
   topLimit: number,
 ) {
-  return quotas
+  const items = quotas
     .map((quota) => {
       const providerId = quota.targetId ?? quota.provider ?? 'unknown'
       const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
@@ -1887,7 +1887,37 @@ function createProviderQuotaAnalytics(
       const rightUtilization = Math.max(right.utilization.requests ?? 0, right.utilization.tokens ?? 0)
       return statusRank[right.status] - statusRank[left.status] || rightUtilization - leftUtilization
     })
-    .slice(0, topLimit)
+
+  const summary = items.reduce((result, item) => {
+    result.total += 1
+    result.highestRequestUtilization = Math.max(result.highestRequestUtilization, item.utilization.requests ?? 0)
+    result.highestTokenUtilization = Math.max(result.highestTokenUtilization, item.utilization.tokens ?? 0)
+
+    if (item.status === 'disabled')
+      result.disabled += 1
+    else
+      result.active += 1
+
+    if (item.status === 'blocked')
+      result.blocked += 1
+    if (item.status === 'warning')
+      result.warning += 1
+
+    return result
+  }, {
+    total: 0,
+    active: 0,
+    blocked: 0,
+    warning: 0,
+    disabled: 0,
+    highestRequestUtilization: 0,
+    highestTokenUtilization: 0,
+  })
+
+  return {
+    summary,
+    items: items.slice(0, topLimit),
+  }
 }
 
 function normalizeLimit(limit?: number): number {
@@ -2040,6 +2070,7 @@ export async function getPlatformGovernanceAnalytics(
     configType: 'intelligence_provider_quota',
   })
   const providers = createProviderAnalytics(events, days, topLimit)
+  const providerQuotaAnalytics = createProviderQuotaAnalytics(providerEvents, providerQuotas, topLimit)
 
   return {
     days,
@@ -2060,7 +2091,8 @@ export async function getPlatformGovernanceAnalytics(
     storage: createStorageAnalytics(events, topLimit),
     providers: {
       ...providers,
-      quotas: createProviderQuotaAnalytics(providerEvents, providerQuotas, topLimit),
+      quotaSummary: providerQuotaAnalytics.summary,
+      quotas: providerQuotaAnalytics.items,
     },
   }
 }
