@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   createStylesRouteRecord,
   STYLES_ROUTE_PATH,
@@ -17,12 +17,16 @@ describe('style section route', () => {
   })
 
   it('registers the material detail route as a styles child route', () => {
-    const loader = vi.fn(<T>(_label: string, loadComponent: () => Promise<T>) => loadComponent)
+    const calls: string[] = []
+    function loader<T>(label: string, loadComponent: () => Promise<T>): () => Promise<T> {
+      calls.push(label)
+      return loadComponent
+    }
+
     const route = createStylesRouteRecord(loader)
 
     expect(route.path).toBe(STYLES_ROUTE_PATH)
     expect(route.children?.[0]?.path).toBe('theme')
-    expect(loader).toHaveBeenCalledWith(STYLES_ROUTE_PATH, expect.any(Function))
-    expect(loader).toHaveBeenCalledWith(STYLE_THEME_ROUTE_PATH, expect.any(Function))
+    expect(calls).toEqual([STYLES_ROUTE_PATH, STYLE_THEME_ROUTE_PATH])
   })
 })
