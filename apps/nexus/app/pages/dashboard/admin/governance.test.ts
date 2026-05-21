@@ -26,6 +26,17 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('dashboard.governance.analytics.searchPreference')
   })
 
+  it('exposes hot plugin leaderboard score and action mix', () => {
+    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
+
+    expect(page).toContain('hotScore: number')
+    expect(page).toContain('growthRate: number')
+    expect(page).toContain('formatNumber(item.hotScore)')
+    expect(page).toContain('formatDelta(item.growth.growthRate)')
+    expect(page).toContain('item.byAction.slice(0, 3)')
+    expect(page).toContain('formatNumber(action.quantity)')
+  })
+
   it('exposes upload reliability diagnostics for stuck attempts and failures', () => {
     const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
 
