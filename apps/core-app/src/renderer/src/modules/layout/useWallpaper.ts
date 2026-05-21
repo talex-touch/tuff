@@ -27,6 +27,7 @@ const getDesktopEvent = defineRawEvent<void, { path: string | null; error?: stri
 )
 
 const FOLDER_ROTATION_TASK = 'wallpaper.folder.rotate'
+const DESKTOP_WALLPAPER_REFRESH_TASK = 'wallpaper.desktop.refresh'
 
 function resolveWallpaperUrl(pathOrUrl: string): string {
   if (!pathOrUrl) return ''
@@ -158,6 +159,12 @@ export function useWallpaper() {
     }
   }
 
+  function stopDesktopWallpaperRefresh(): void {
+    if (pollingService.isRegistered(DESKTOP_WALLPAPER_REFRESH_TASK)) {
+      pollingService.unregister(DESKTOP_WALLPAPER_REFRESH_TASK)
+    }
+  }
+
   function pickNextFolderImage(): void {
     if (folderImages.value.length === 0) {
       activeImagePath.value = ''
@@ -185,16 +192,38 @@ export function useWallpaper() {
     pollingService.start()
   }
 
+  function startDesktopWallpaperRefresh(): void {
+    stopDesktopWallpaperRefresh()
+    pollingService.register(
+      DESKTOP_WALLPAPER_REFRESH_TASK,
+      async () => {
+        await refreshDesktopWallpaper({ silentError: true })
+      },
+      {
+        interval: 5,
+        unit: 'minutes',
+        initialDelayMs: 5 * 60 * 1000,
+        lane: 'maintenance',
+        backpressure: 'coalesce',
+        timeoutMs: 5000
+      }
+    )
+    pollingService.start()
+  }
+
   async function applyBingWallpaper(): Promise<void> {
     await ensureBingWallpaper()
     activeImagePath.value = bingUrl.value
   }
 
-  async function applyDesktopWallpaper(options?: { silentError?: boolean }): Promise<boolean> {
+  async function applyDesktopWallpaper(options?: {
+    silentError?: boolean
+    forceRefresh?: boolean
+  }): Promise<boolean> {
     if (!desktopPath.value && background.value.desktopPath) {
       desktopPath.value = background.value.desktopPath
     }
-    if (!desktopPath.value) {
+    if (options?.forceRefresh || !desktopPath.value) {
       await refreshDesktopWallpaper({ silentError: options?.silentError })
     }
     activeImagePath.value = desktopPath.value || background.value.desktopPath
@@ -202,7 +231,7 @@ export function useWallpaper() {
   }
 
   async function applyAutoWallpaper(): Promise<void> {
-    const hasDesktop = await applyDesktopWallpaper({ silentError: true })
+    const hasDesktop = await applyDesktopWallpaper({ silentError: true, forceRefresh: true })
     if (hasDesktop) {
       return
     }
@@ -223,6 +252,7 @@ export function useWallpaper() {
     ],
     async () => {
       stopFolderRotation()
+      stopDesktopWallpaperRefresh()
       activeImagePath.value = ''
       folderIndex.value = -1
 
@@ -231,6 +261,7 @@ export function useWallpaper() {
       }
 
       if (background.value.source === 'auto') {
+        startDesktopWallpaperRefresh()
         await applyAutoWallpaper()
         return
       }
@@ -241,7 +272,8 @@ export function useWallpaper() {
       }
 
       if (background.value.source === 'desktop') {
-        await applyDesktopWallpaper()
+        startDesktopWallpaperRefresh()
+        await applyDesktopWallpaper({ forceRefresh: true })
         return
       }
 
@@ -275,6 +307,7 @@ export function useWallpaper() {
 
   onBeforeUnmount(() => {
     stopFolderRotation()
+    stopDesktopWallpaperRefresh()
   })
 
   return {

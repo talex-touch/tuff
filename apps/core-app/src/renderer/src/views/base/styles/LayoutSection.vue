@@ -8,14 +8,11 @@ import LayoutPreviewFrame from '~/components/layout/LayoutPreviewFrame.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useDynamicTuffLayout, usePresetExport } from '~/modules/layout'
-import { appSetting } from '~/modules/storage/app-storage'
-import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import CoreBoxEditorOverlay from './editors/CoreBoxEditorOverlay.vue'
 import MainLayoutEditorOverlay from './editors/MainLayoutEditorOverlay.vue'
 import RemotePresetOverlay from './editors/RemotePresetOverlay.vue'
 
 const { t } = useI18n()
-const { startupInfo } = useStartupInfo()
 
 const { currentLayoutName, availableLayouts, switchLayout } = useDynamicTuffLayout()
 const { exportPreset, importPreset, isExporting, isImporting } = usePresetExport()
@@ -62,9 +59,6 @@ watch(
 const displayLayouts = computed(() => {
   return Object.entries(availableLayouts.value).filter(([key]) => key !== 'custom')
 })
-const showPresetEditors = computed(
-  () => startupInfo.value?.isDev === true && Boolean(appSetting?.dev?.advancedSettings)
-)
 
 function getLayoutLabel(layoutKey: string, fallbackName?: string): string {
   return t(`layoutSection.layouts.${layoutKey}`, fallbackName || layoutKey)
@@ -121,7 +115,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
           variant="solid"
           background="mask"
           shadow="none"
-          :radius="18"
+          :radius="8"
           :padding="0"
           clickable
           class="LayoutSection-Item"
@@ -163,7 +157,6 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     </TxScroll>
 
     <TuffBlockSlot
-      v-if="showPresetEditors"
       :title="t('layoutSection.customizeMain', 'Customize Main Layout')"
       :description="t('layoutSection.customizeMainDesc', 'Adjust header, sidebar, view styles')"
       default-icon="i-ri-layout-line"
@@ -200,7 +193,6 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="showPresetEditors"
       :title="t('layoutSection.customizeCoreBox', 'Customize CoreBox')"
       :description="t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style')"
       default-icon="i-ri-search-line"
@@ -232,7 +224,6 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      v-if="showPresetEditors"
       :title="t('preset.cloudPublish', 'Nexus Presets')"
       :description="
         t('preset.cloudPublishDesc', 'Download beta presets from Nexus and apply with rollback')

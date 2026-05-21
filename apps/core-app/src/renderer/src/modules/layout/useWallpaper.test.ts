@@ -180,6 +180,7 @@ describe('useWallpaper', () => {
     const { api, appSetting, stop } = await createHarness({ source: 'auto' })
 
     expect(sentEventNames()).toContain('wallpaper:get-desktop')
+    expect(state.pollingTasks.has('wallpaper.desktop.refresh')).toBe(true)
     expect(state.networkRequest).not.toHaveBeenCalled()
     expect(api.activeImagePath.value).toBe('/Users/me/Desktop/current.jpg')
     expect(appSetting.background.desktopPath).toBe('/Users/me/Desktop/current.jpg')
@@ -219,10 +220,38 @@ describe('useWallpaper', () => {
     appSetting.background.source = 'auto'
     await flushAsync()
 
+    expect(state.pollingTasks.has('wallpaper.desktop.refresh')).toBe(true)
     expect(api.activeImagePath.value).toBe('/Users/me/Desktop/reactive.jpg')
     expect(api.wallpaperStyle.value).toMatchObject({
       backgroundImage: 'url("tfile:///Users/me/Desktop/reactive.jpg")'
     })
+
+    stop()
+  })
+
+  it('keeps desktop wallpaper refreshed while auto or desktop source is active', async () => {
+    state.desktopResult = { path: '/Users/me/Desktop/initial.jpg', error: undefined }
+    const { api, appSetting, stop } = await createHarness({ source: 'auto' })
+
+    const task = state.pollingTasks.get('wallpaper.desktop.refresh')
+    expect(task?.options).toMatchObject({
+      interval: 5,
+      unit: 'minutes',
+      lane: 'maintenance',
+      backpressure: 'coalesce'
+    })
+
+    state.desktopResult = { path: '/Users/me/Desktop/updated.jpg', error: undefined }
+    await task?.callback()
+    await flushAsync()
+
+    expect(api.activeImagePath.value).toBe('/Users/me/Desktop/updated.jpg')
+    expect(appSetting.background.desktopPath).toBe('/Users/me/Desktop/updated.jpg')
+
+    appSetting.background.source = 'none'
+    await flushAsync()
+
+    expect(state.pollingTasks.has('wallpaper.desktop.refresh')).toBe(false)
 
     stop()
   })

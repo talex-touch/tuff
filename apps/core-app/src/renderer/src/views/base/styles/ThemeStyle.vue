@@ -1,6 +1,8 @@
 <script name="ThemeStyle" lang="ts" setup>
 import {
   TxButton,
+  TxRadio,
+  TxRadioGroup,
   TxSelectItem,
   TxSlider,
   TxSpinner,
@@ -39,6 +41,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
+import { getWallpaperSourceHintKey } from './wallpaper-display-state'
 
 import ThemePreviewIcon from './sub/ThemePreviewIcon.vue'
 import WindowSectionVue from './WindowSection.vue'
@@ -196,6 +199,15 @@ const currentWallpaperSource = computed(() => WALLPAPER_SOURCES[bgSourceValue.va
 const isCustomSource = computed(() => currentWallpaperSource.value === 'custom')
 const isFolderSource = computed(() => currentWallpaperSource.value === 'folder')
 const isDesktopSource = computed(() => currentWallpaperSource.value === 'desktop')
+const wallpaperSourceHint = computed(() => {
+  const key = getWallpaperSourceHintKey({
+    source: currentWallpaperSource.value,
+    desktopPath: desktopBgPath.value,
+    folderPath: folderBgPath.value,
+    folderRandom: appSetting.background?.folderRandom
+  })
+  return key ? t(key) : ''
+})
 const wallpaperLibrarySupported = computed(
   () => currentWallpaperSource.value === 'custom' || currentWallpaperSource.value === 'folder'
 )
@@ -212,6 +224,14 @@ const libraryEnabled = computed({
     }
     if (val) {
       void syncWallpaperLibrary()
+    }
+  }
+})
+const folderRotationMode = computed({
+  get: () => (appSetting.background?.folderRandom === false ? 'sequential' : 'random'),
+  set: (val: string | number) => {
+    if (appSetting.background) {
+      appSetting.background.folderRandom = val !== 'sequential'
     }
   }
 })
@@ -537,6 +557,10 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
             {{ t('themeStyle.desktopWallpaper') }}
           </TxSelectItem>
         </TuffBlockSelect>
+        <div v-if="wallpaperSourceHint" class="theme-style-wallpaper-status">
+          <span class="i-ri-information-line" />
+          <span>{{ wallpaperSourceHint }}</span>
+        </div>
 
         <div v-if="isCustomSource" class="theme-style-wallpaper-panel">
           <div class="flex items-center justify-between gap-4">
@@ -615,6 +639,15 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           </div>
 
           <div v-if="folderBgPath" class="mt-4 space-y-2">
+            <div class="theme-style-wallpaper-mode-row">
+              <span class="text-xs text-black/60 dark:text-white/60">
+                {{ t('themeStyle.rotationMode') }}
+              </span>
+              <TxRadioGroup v-model="folderRotationMode" glass>
+                <TxRadio value="random" :label="t('themeStyle.randomRotation')" />
+                <TxRadio value="sequential" :label="t('themeStyle.sequentialRotation')" />
+              </TxRadioGroup>
+            </div>
             <div class="flex items-center justify-between text-xs">
               <span class="text-black/60 dark:text-white/60">{{
                 t('themeStyle.rotationInterval')
@@ -625,7 +658,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
             </div>
             <TxSlider v-model="folderIntervalMinutes" :min="5" :max="240" :step="5" />
             <p class="text-xs text-black/40 dark:text-white/40">
-              {{ t('themeStyle.folderRandomHint') }}
+              {{ t('themeStyle.folderRotationHint') }}
             </p>
           </div>
         </div>
@@ -902,6 +935,26 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
   border: 1px solid var(--tx-border-color);
   border-radius: 8px;
   background: color-mix(in srgb, var(--tx-fill-color) 82%, transparent);
+}
+
+.theme-style-wallpaper-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 8px;
+  color: var(--tx-text-color-secondary);
+  background: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
+  font-size: 12px;
+}
+
+.theme-style-wallpaper-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .theme-style-wallpaper-preview {
