@@ -464,6 +464,34 @@ describe('platformGovernanceStore', () => {
         size: 4096,
       },
     })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.write',
+      actorId: 'storage-user@example.com',
+      channel: 'r2',
+      provider: `cloudflare-r2-${marker}`,
+      resourceType: `storage-package-${marker}`,
+      resourceId: `pkg:${marker}`,
+      quantity: 2048,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.read',
+      actorId: 'storage-user@example.com',
+      channel: 'r2',
+      provider: `cloudflare-r2-${marker}`,
+      resourceType: `storage-package-${marker}`,
+      resourceId: `pkg:${marker}`,
+      quantity: 512,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.delete',
+      actorId: 'storage-user@example.com',
+      channel: 'r2',
+      provider: `cloudflare-r2-${marker}`,
+      resourceType: `storage-package-${marker}`,
+      resourceId: `pkg:${marker}`,
+      unit: 'operation',
+      quantity: 1,
+    })
     await recordPlatformGovernanceEvent(h3Event, {
       scope: 'intelligence',
       action: 'provider.request',
@@ -615,6 +643,41 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.uploadSize.average).toBe(3072)
     expect(analytics.uploads.uploadDurationMs.average).toBe(120)
+    expect(analytics.storage.storedBytes).toBeGreaterThanOrEqual(2048)
+    expect(analytics.storage.trafficBytes).toBeGreaterThanOrEqual(512)
+    expect(analytics.storage.operations).toBeGreaterThanOrEqual(3)
+    expect(analytics.storage.byProviderUsage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: `cloudflare-r2-${marker}`,
+        events: 3,
+        storedBytes: 2048,
+        trafficBytes: 512,
+        operations: 3,
+        writes: 1,
+        reads: 1,
+        deletes: 1,
+        uniqueActors: 1,
+      }),
+    ]))
+    expect(analytics.storage.byResourceTypeUsage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: `storage-package-${marker}`,
+        events: 3,
+        storedBytes: 2048,
+        trafficBytes: 512,
+        operations: 3,
+      }),
+    ]))
+    expect(analytics.storage.byActionUsage.find(item => item.key === 'storage.write')?.storedBytes).toBeGreaterThanOrEqual(2048)
+    expect(analytics.storage.byActionUsage.find(item => item.key === 'storage.read')?.trafficBytes).toBeGreaterThanOrEqual(512)
+    expect(analytics.storage.byActionUsage.find(item => item.key === 'storage.delete')?.deletes).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.trend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        storedBytes: expect.any(Number),
+        trafficBytes: expect.any(Number),
+        operations: expect.any(Number),
+      }),
+    ]))
     expect(analytics.providers.leaderboard).toEqual(expect.arrayContaining([
       expect.objectContaining({
         providerId,
@@ -904,6 +967,92 @@ describe('platformGovernanceStore', () => {
         statusMessage: expect.stringContaining('operation-limit-exceeded'),
       })
     }
+  })
+
+  it('builds storage channel usage analytics for capacity and traffic planning', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const resourceType = `plugin-package-${marker}`
+    const resourceId = `raw/storage/object/${marker}.tpex`
+
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.write',
+      actorId: 'storage-user@example.com',
+      channel: 'r2',
+      provider: 'cloudflare-r2',
+      resourceType,
+      resourceId,
+      quantity: 900,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.read',
+      actorId: 'storage-user@example.com',
+      channel: 'r2',
+      provider: 'cloudflare-r2',
+      resourceType,
+      resourceId,
+      quantity: 300,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.delete',
+      actorId: 'storage-user@example.com',
+      channel: 'r2',
+      provider: 'cloudflare-r2',
+      resourceType,
+      resourceId,
+      quantity: 1,
+    })
+
+    const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
+    const serialized = JSON.stringify(analytics)
+
+    expect(analytics.storage.storedBytes).toBeGreaterThanOrEqual(900)
+    expect(analytics.storage.trafficBytes).toBeGreaterThanOrEqual(300)
+    expect(analytics.storage.operations).toBeGreaterThanOrEqual(3)
+    expect(analytics.storage.writes).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.reads).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.deletes).toBeGreaterThanOrEqual(1)
+    const channelBucket = analytics.storage.byChannelUsage.find(item => item.key === 'r2')
+    expect(channelBucket?.storedBytes).toBeGreaterThanOrEqual(900)
+    expect(channelBucket?.trafficBytes).toBeGreaterThanOrEqual(300)
+    expect(channelBucket?.operations).toBeGreaterThanOrEqual(3)
+    expect(channelBucket?.writes).toBeGreaterThanOrEqual(1)
+    expect(channelBucket?.reads).toBeGreaterThanOrEqual(1)
+    expect(channelBucket?.deletes).toBeGreaterThanOrEqual(1)
+    expect(channelBucket?.uniqueActors).toBeGreaterThanOrEqual(1)
+
+    const providerBucket = analytics.storage.byProviderUsage.find(item => item.key === 'cloudflare-r2')
+    expect(providerBucket?.storedBytes).toBeGreaterThanOrEqual(900)
+    expect(providerBucket?.trafficBytes).toBeGreaterThanOrEqual(300)
+    expect(analytics.storage.byResourceTypeUsage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: resourceType,
+        storedBytes: 900,
+        trafficBytes: 300,
+        operations: 3,
+        writes: 1,
+        reads: 1,
+        deletes: 1,
+        uniqueActors: 1,
+      }),
+    ]))
+
+    const writeBucket = analytics.storage.byActionUsage.find(item => item.key === 'storage.write')
+    const readBucket = analytics.storage.byActionUsage.find(item => item.key === 'storage.read')
+    const deleteBucket = analytics.storage.byActionUsage.find(item => item.key === 'storage.delete')
+    expect(writeBucket?.storedBytes).toBeGreaterThanOrEqual(900)
+    expect(writeBucket?.operations).toBeGreaterThanOrEqual(1)
+    expect(readBucket?.trafficBytes).toBeGreaterThanOrEqual(300)
+    expect(readBucket?.operations).toBeGreaterThanOrEqual(1)
+    expect(deleteBucket?.deletes).toBeGreaterThanOrEqual(1)
+    expect(deleteBucket?.operations).toBeGreaterThanOrEqual(1)
+
+    const trendBucket = analytics.storage.trend.at(-1)
+    expect(trendBucket?.storedBytes).toBeGreaterThanOrEqual(900)
+    expect(trendBucket?.trafficBytes).toBeGreaterThanOrEqual(300)
+    expect(trendBucket?.operations).toBeGreaterThanOrEqual(3)
+    expect(serialized).not.toContain('storage-user@example.com')
+    expect(serialized).not.toContain(resourceId)
   })
 
   it('builds notification delivery health analytics without leaking recipients or credential refs', async () => {

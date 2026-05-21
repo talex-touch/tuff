@@ -611,6 +611,12 @@ function uniqueActorCount(events: PlatformGovernanceEvent[]): number {
   return actors.size
 }
 
+function readAnalyticsResourceKey(event: PlatformGovernanceEvent): string | null {
+  if (event.scope === 'storage')
+    return event.resourceType ?? event.channel ?? null
+  return event.resourceId
+}
+
 function summarizeEvents(events: PlatformGovernanceEvent[], topLimit = 12) {
   const byAction = new Map<string, { events: number, quantity: number, actors: Set<string> }>()
   const byChannel = new Map<string, { events: number, quantity: number }>()
@@ -641,11 +647,12 @@ function summarizeEvents(events: PlatformGovernanceEvent[], topLimit = 12) {
     day.quantity += event.quantity
     timeline.set(date, day)
 
-    if (event.resourceType && event.resourceId) {
-      const key = `${event.resourceType}:${event.resourceId}:${event.action}`
+    const resourceId = readAnalyticsResourceKey(event)
+    if (event.resourceType && resourceId) {
+      const key = `${event.resourceType}:${resourceId}:${event.action}`
       const resource = resources.get(key) ?? {
         resourceType: event.resourceType,
-        resourceId: event.resourceId,
+        resourceId,
         action: event.action,
         events: 0,
         quantity: 0,
@@ -911,7 +918,7 @@ function createScopedAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     const hour = new Date(event.occurredAt).getUTCHours().toString().padStart(2, '0')
     addMetricBucket(byHour, hour, event)
     addMetricBucket(byChannel, event.channel, event)
-    addMetricBucket(byResource, event.resourceId, event)
+    addMetricBucket(byResource, readAnalyticsResourceKey(event), event)
   }
 
   return {
@@ -1420,6 +1427,140 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   }
 }
 
+function createStorageUsageBucket() {
+  return {
+    events: 0,
+    storedBytes: 0,
+    trafficBytes: 0,
+    operations: 0,
+    writes: 0,
+    reads: 0,
+    deletes: 0,
+    actors: new Set<string>(),
+  }
+}
+
+function addStorageUsageBucket(
+  buckets: Map<string, ReturnType<typeof createStorageUsageBucket>>,
+  key: string | null | undefined,
+  event: PlatformGovernanceEvent,
+): void {
+  const bucketKey = key && key.trim() ? key.trim() : 'unknown'
+  const bucket = buckets.get(bucketKey) ?? createStorageUsageBucket()
+  bucket.events += 1
+  bucket.operations += 1
+  if (event.action === 'storage.write') {
+    bucket.writes += 1
+    if (event.unit === 'byte')
+      bucket.storedBytes += event.quantity
+  }
+  else if (event.action === 'storage.read') {
+    bucket.reads += 1
+    if (event.unit === 'byte')
+      bucket.trafficBytes += event.quantity
+  }
+  else if (event.action === 'storage.delete') {
+    bucket.deletes += 1
+  }
+  const actor = readEventActor(event)
+  if (actor)
+    bucket.actors.add(actor)
+  buckets.set(bucketKey, bucket)
+}
+
+function mapStorageUsageBuckets(buckets: Map<string, ReturnType<typeof createStorageUsageBucket>>, limit: number) {
+  return Array.from(buckets.entries())
+    .map(([key, item]) => ({
+      key,
+      events: item.events,
+      storedBytes: item.storedBytes,
+      trafficBytes: item.trafficBytes,
+      operations: item.operations,
+      writes: item.writes,
+      reads: item.reads,
+      deletes: item.deletes,
+      uniqueActors: item.actors.size,
+    }))
+    .sort((a, b) => (b.storedBytes + b.trafficBytes) - (a.storedBytes + a.trafficBytes) || b.operations - a.operations || b.events - a.events)
+    .slice(0, limit)
+}
+
+function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
+  const storageEvents = events.filter(event => event.scope === 'storage')
+  const byChannelUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
+  const byProviderUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
+  const byResourceTypeUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
+  const byActionUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
+  const trend = new Map<string, ReturnType<typeof createStorageUsageBucket> & { date: string }>()
+
+  for (const event of storageEvents) {
+    addStorageUsageBucket(byChannelUsage, event.channel, event)
+    addStorageUsageBucket(byProviderUsage, readEventMetadataString(event, 'provider'), event)
+    addStorageUsageBucket(byResourceTypeUsage, event.resourceType, event)
+    addStorageUsageBucket(byActionUsage, event.action, event)
+
+    const date = event.occurredAt.slice(0, 10)
+    const item = trend.get(date) ?? { ...createStorageUsageBucket(), date }
+    item.events += 1
+    item.operations += 1
+    if (event.action === 'storage.write') {
+      item.writes += 1
+      if (event.unit === 'byte')
+        item.storedBytes += event.quantity
+    }
+    else if (event.action === 'storage.read') {
+      item.reads += 1
+      if (event.unit === 'byte')
+        item.trafficBytes += event.quantity
+    }
+    else if (event.action === 'storage.delete') {
+      item.deletes += 1
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    trend.set(date, item)
+  }
+
+  const totals = Array.from(byActionUsage.values()).reduce((sum, item) => ({
+    storedBytes: sum.storedBytes + item.storedBytes,
+    trafficBytes: sum.trafficBytes + item.trafficBytes,
+    operations: sum.operations + item.operations,
+    writes: sum.writes + item.writes,
+    reads: sum.reads + item.reads,
+    deletes: sum.deletes + item.deletes,
+  }), {
+    storedBytes: 0,
+    trafficBytes: 0,
+    operations: 0,
+    writes: 0,
+    reads: 0,
+    deletes: 0,
+  })
+
+  return {
+    ...createScopedAnalytics(storageEvents, topLimit),
+    ...totals,
+    byChannelUsage: mapStorageUsageBuckets(byChannelUsage, topLimit),
+    byProviderUsage: mapStorageUsageBuckets(byProviderUsage, topLimit),
+    byResourceTypeUsage: mapStorageUsageBuckets(byResourceTypeUsage, topLimit),
+    byActionUsage: mapStorageUsageBuckets(byActionUsage, topLimit),
+    trend: Array.from(trend.values())
+      .map(item => ({
+        date: item.date,
+        events: item.events,
+        storedBytes: item.storedBytes,
+        trafficBytes: item.trafficBytes,
+        operations: item.operations,
+        writes: item.writes,
+        reads: item.reads,
+        deletes: item.deletes,
+        uniqueActors: item.actors.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  }
+}
+
 function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number, topLimit: number) {
   const providerEvents = events.filter(event => event.scope === 'intelligence' && event.resourceType === 'provider')
   const providers = new Map<string, {
@@ -1644,7 +1785,6 @@ export async function getPlatformGovernanceAnalytics(
   })
   const visitEvents = events.filter(item => item.scope === 'app' && item.action === 'visit')
   const notificationEvents = events.filter(item => item.scope === 'notification')
-  const storageEvents = events.filter(item => item.scope === 'storage')
 
   return {
     days,
@@ -1662,7 +1802,7 @@ export async function getPlatformGovernanceAnalytics(
     plugins: createPluginAnalytics(events, days, topLimit),
     uploads: createUploadAnalytics(events, topLimit),
     notifications: createNotificationAnalytics(notificationEvents, topLimit),
-    storage: createScopedAnalytics(storageEvents, topLimit),
+    storage: createStorageAnalytics(events, topLimit),
     providers: createProviderAnalytics(events, days, topLimit),
   }
 }
