@@ -53,6 +53,7 @@
 - `apps/nexus/server/utils/browserNotificationInboxStore.ts`
 - `apps/nexus/server/utils/notificationCredentialStore.ts`
 - `apps/nexus/server/api/dashboard/notifications/channels/test.post.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
 - `apps/nexus/server/api/dashboard/notifications/credentials.*.ts`
 - `apps/nexus/server/api/dashboard/notifications/inbox/*`
 - `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
@@ -88,6 +89,7 @@
   - Notification credentials now use a dedicated `secure://notifications/*` D1 encrypted store and Dashboard binding API; notification delivery planning marks credentialed channels as `credential-missing` when the referenced secure credential is absent.
   - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, webhook, Feishu, and Lark adapters when secure credentials exist and recipients are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. SMTP, Web Push delivery, and cross-browser visible evidence remain follow-ups.
   - Added `/api/dashboard/notifications/channels/test` so admins can dry-run a single saved notification channel, or allow send execution according to the channel's existing `config.mode`, while recording only sanitized delivery audit metadata for the selected `configId`.
+  - Data Governance now exposes a notification channel test panel that selects a saved channel, edits action/resource metadata, triggers dry-run or config-backed send, and displays per-delivery status/credential diagnostics.
   - Added `/dashboard/notifications`, `/api/dashboard/notifications/inbox`, and `/api/dashboard/notifications/inbox/read` so signed-in users can open the notification center, manage browser Notification permission, send a local browser test notification, list unread counts, and mark selected or all notifications as read.
   - Data Governance now surfaces notification delivery health with planned/sent/skipped/failed counts, sentRate, provider instance, adapter, notification action, and delivery reason breakdowns.
   - User signup governance now records hashed signup events with source/geo/timezone metadata and the Data Governance cockpit surfaces signup growth/trend without storing raw emails.
