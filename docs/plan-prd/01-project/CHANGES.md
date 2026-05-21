@@ -13,6 +13,16 @@
 
 ## 2026-05-21
 
+### feat(nexus): summarize provider quota risk in governance analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Provider quota analytics now includes summary counts for total/active/blocked/warning/disabled policies and peak request/token utilization.
+  - Data Governance provider quota panel surfaces active, blocked, warning, and peak utilization counts before the per-provider quota list.
+  - Focused coverage verifies the quota risk summary contract without changing existing dispatch-time quota enforcement.
+
 ### feat(nexus): expose anonymized upload problem attempts
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`

@@ -126,6 +126,11 @@ describe('dashboard data governance UI contract', () => {
     const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
 
     expect(page).toContain('type ProviderQuotaStatus')
+    expect(page).toContain('quotaSummary: {')
+    expect(page).toContain('analyticsData.providers.quotaSummary.active')
+    expect(page).toContain('analyticsData.providers.quotaSummary.blocked')
+    expect(page).toContain('analyticsData.providers.quotaSummary.warning')
+    expect(page).toContain('providerQuotaPeakUtilization')
     expect(page).toContain('analyticsData.providers.quotas')
     expect(page).toContain('providerQuotaLabel(quota.status)')
     expect(page).toContain('providerQuotaTone(quota.status)')
