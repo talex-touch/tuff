@@ -2720,7 +2720,15 @@
         "loading": "Scanning local environment...",
         "noTools": "No Codex or Claude CLI detected",
         "noSkills": "No usable skills detected",
+        "noReadySkills": "Installed skills require approval before use",
         "configSummary": "{count} config or instruction entries detected. Sensitive fields keep key names only.",
+        "gateTitle": "Permission Gates",
+        "gateSummary": "{ready} ready, {approval} require approval, {unavailable} unavailable, {scenes} scene hints linked.",
+        "gateStatus": {
+          "ready": "Ready",
+          "approval_required": "Approval",
+          "unavailable": "Missing"
+        },
         "gatedHint": "{count} high-risk providers are visible only and require approval before execution.",
         "refreshFailed": "Failed to refresh local AI environment"
       },
