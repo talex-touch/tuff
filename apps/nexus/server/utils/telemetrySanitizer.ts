@@ -389,6 +389,12 @@ function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Rec
     ['queryType', 32],
     ['searchScene', 48],
     ['providerFilter', 64],
+    ['contextAppCategory', 48],
+    ['contextSource', 48],
+    ['entryPoint', 48],
+    ['triggerType', 48],
+    ['userPreferenceMode', 48],
+    ['sessionBucket', 64],
   ]
 
   for (const [field, maxLength] of stringFields) {
@@ -437,6 +443,22 @@ function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Rec
   const filterSources = sanitizeStringArray(value.filterSources, 20)
   if (filterSources)
     metadata.filterSources = filterSources
+  const pluginIds = sanitizeStringArray(value.pluginIds, 20)
+  if (pluginIds)
+    metadata.pluginIds = pluginIds
+  const pluginCategories = sanitizeStringArray(value.pluginCategories, 20)
+  if (pluginCategories)
+    metadata.pluginCategories = pluginCategories
+  const contextTags = sanitizeStringArray(value.contextTags, 20)
+  if (contextTags)
+    metadata.contextTags = contextTags
+
+  const localHour = normalizeNumber(value.localHour, { min: 0, max: 23 })
+  if (typeof localHour === 'number')
+    metadata.localHour = Math.round(localHour)
+  const localDayOfWeek = normalizeNumber(value.localDayOfWeek, { min: 0, max: 6 })
+  if (typeof localDayOfWeek === 'number')
+    metadata.localDayOfWeek = Math.round(localDayOfWeek)
 
   const providerResults = sanitizeProviderNumberMap(value.providerResults)
   if (providerResults)
