@@ -743,6 +743,26 @@ export default {
         approvalRejected: 'Approval rejected: {toolId}',
       },
     },
+    notifications: {
+      browser: {
+        permissionGranted: 'Allowed',
+        permissionDenied: 'Blocked',
+        permissionPrompt: 'Needs permission',
+        permissionUnsupported: 'Unsupported',
+        test: 'Test browser notification',
+        enable: 'Enable browser notifications',
+        blocked: 'Blocked by browser',
+        unsupported: 'Browser unsupported',
+        testTitle: 'Tuff notification test',
+        testBody: 'Browser notifications are available.',
+        testSent: 'Browser test notification sent',
+        testFailed: 'Browser notification test failed',
+        errors: {
+          unsupported: 'This browser does not support system notifications.',
+          permissionRequired: 'Allow browser notification permission first.',
+        },
+      },
+    },
     sections: {
       overview: {
         title: 'Quick overview',

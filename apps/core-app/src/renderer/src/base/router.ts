@@ -24,6 +24,7 @@ import {
 } from 'vue-router'
 import { appSetting } from '~/modules/storage/app-storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
+import { createStylesRouteRecord } from './style-routes'
 
 const ROUTE_NAVIGATE_WARN_MS = 200
 const ROUTE_RENDER_WARN_MS = 350
@@ -161,30 +162,7 @@ const routes: RouteRecordRaw[] = [
       requiresDashboard: true
     }
   },
-  {
-    path: '/styles',
-    name: '$I18n:router.styles',
-    component: withRouteComponentPerf(
-      '/styles',
-      () => import('../views/base/styles/ThemeStyle.vue')
-    ),
-    meta: {
-      index: 5,
-      keepAlive: true
-    }
-  },
-  {
-    path: '/styles/theme',
-    name: '$I18n:router.theme',
-    component: withRouteComponentPerf(
-      '/styles/theme',
-      () => import('../views/base/styles/sub/ThemePreference.vue')
-    ),
-    meta: {
-      index: 5,
-      keepAlive: true
-    }
-  },
+  createStylesRouteRecord(withRouteComponentPerf),
   {
     path: '/application',
     name: '$I18n:router.application',

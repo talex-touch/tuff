@@ -13,6 +13,17 @@
 
 ## 2026-05-21
 
+### fix(nexus): handle reused web device ids across accounts
+
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/{user/auth}/me.get.ts`
+- `apps/nexus/nuxt.config.ts`
+  - Fixed `/api/user/me` failures when a browser-local `x-device-id` is reused after switching accounts by moving the global device record to the active user instead of attempting a duplicate insert into `auth_devices.id`.
+  - Cross-account device moves now clear trusted/revoked state and rotate the device token version to avoid inheriting authorization state from the previous account.
+  - Removed duplicate session device upsert from `GET /api/user/me`; app-token `/api/auth/me` still refreshes device presence.
+  - Added Vite dev `optimizeDeps.include` entries for Mermaid, GSAP plugins, theme colors, simplex-noise, and `path-browserify` to avoid dependency pre-bundle reloads.
+  - Validation: focused `authStore-device-reactivation.test.ts` Vitest passed.
+
 ### feat(nexus): add data governance analytics foundation
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
@@ -74,8 +85,8 @@
   - Plugin version moderation now plans notification delivery for configured browser/email/Feishu/Lark/webhook channels and records `planned` / `sent` / `skipped` / `failed` delivery audit events without persisting raw recipients/secrets.
   - Notification channel configs now separate the provider instance name from the adapter type: `provider` can identify entries such as `resend-primary` or `smtp-ops`, while `config.providerType` / `config.adapter` selects `resend`, `smtp`, `feishu`, `lark`, `browser`, or `webhook`.
   - Notification credentials now use a dedicated `secure://notifications/*` D1 encrypted store and Dashboard binding API; notification delivery planning marks credentialed channels as `credential-missing` when the referenced secure credential is absent.
-  - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, webhook, Feishu, and Lark adapters when secure credentials exist and recipients are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. SMTP, Web Push / OS Notification permission, and browser visible evidence remain follow-ups.
-  - Added `/api/dashboard/notifications/inbox` and `/api/dashboard/notifications/inbox/read` so signed-in users can list their browser notification inbox, see unread counts, and mark selected or all notifications as read.
+  - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, webhook, Feishu, and Lark adapters when secure credentials exist and recipients are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. SMTP, Web Push delivery, and cross-browser visible evidence remain follow-ups.
+  - Added `/dashboard/notifications`, `/api/dashboard/notifications/inbox`, and `/api/dashboard/notifications/inbox/read` so signed-in users can open the notification center, manage browser Notification permission, send a local browser test notification, list unread counts, and mark selected or all notifications as read.
   - Data Governance now surfaces notification delivery health with planned/sent/skipped/failed counts, sentRate, provider instance, adapter, notification action, and delivery reason breakdowns.
   - User signup governance now records hashed signup events with source/geo/timezone metadata and the Data Governance cockpit surfaces signup growth/trend without storing raw emails.
   - Plugin download handling now emits a separate install governance event, so global and per-plugin analytics can distinguish download volume from install trend while preserving geo/channel/version/artifact/package-size breakdowns.
@@ -83,7 +94,7 @@
   - Direct `/api/v1/intelligence/invoke` / Lab model calls now enforce `intelligence_provider_quota` before model dispatch and record `provider.request`, provider usage ledger, and governance usage with the stable Provider Registry governance id (`metadata.providerRegistryId ?? provider.id`) while keeping the public result provider id compatible.
   - Provider Registry Admin provider cards now show per-provider quota status plus request/token/window summaries and expose an inline quota editor backed by the existing provider quota GET/POST API, so admins can configure provider-scoped limits without manually entering provider ids in the generic Data Governance form.
   - Provider Registry API tests now cover provider-id scoped quota create/update behavior, and the Mock D1 helper supports `platform_governance_configs` rows used by the quota endpoint.
-  - Validation: focused `platformGovernanceStore.test.ts`, `imageStorage.test.ts`, `uploadGovernance.test.ts`, `storageObjectStore.test.ts`, `storageChannelCatalog.test.ts`, `telemetryStore.test.ts`, `notificationDispatcher.test.ts`, `notifications/inbox.api.test.ts`, `credentials.api.test.ts`, `storage/credentials.api.test.ts`, `intelligenceVisionOcrProvider.test.ts`, `tuffIntelligenceLabService.invoke.test.ts`, `provider-registry-admin.test.ts`, and `provider-registry.api.test.ts` Vitest passed; affected-file ESLint and `git diff --check` also passed, including plugin package upload lifecycle, plugin icon asset lifecycle, stuck governance-write timeout protection, stable governance-id storage grouping, S3-compatible/OSS executor routing, encrypted storage credential binding, browser notification inbox delivery, user signup analytics, plugin install trend, provider model/provider-type distribution cases, direct Intelligence invoke quota enforcement, Provider Registry quota UI/API coverage, and the Dashboard plugin detail analytics UI slice.
+  - Validation: focused `platformGovernanceStore.test.ts`, `imageStorage.test.ts`, `uploadGovernance.test.ts`, `storageObjectStore.test.ts`, `storageChannelCatalog.test.ts`, `telemetryStore.test.ts`, `notificationDispatcher.test.ts`, `notifications/inbox.api.test.ts`, `notifications.test.ts`, `credentials.api.test.ts`, `storage/credentials.api.test.ts`, `intelligenceVisionOcrProvider.test.ts`, `tuffIntelligenceLabService.invoke.test.ts`, `provider-registry-admin.test.ts`, and `provider-registry.api.test.ts` Vitest passed; affected-file ESLint and `git diff --check` also passed, including plugin package upload lifecycle, plugin icon asset lifecycle, stuck governance-write timeout protection, stable governance-id storage grouping, S3-compatible/OSS executor routing, encrypted storage credential binding, browser notification inbox delivery, user signup analytics, plugin install trend, provider model/provider-type distribution cases, direct Intelligence invoke quota enforcement, Provider Registry quota UI/API coverage, and the Dashboard plugin detail analytics UI slice.
 
 ### feat(sdk): expose native share helpers from MetaK quick actions
 
@@ -133,6 +144,8 @@
 ### feat(core-app): make style personalization wallpaper controls usable
 
 - `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/base/{router,style-routes}.ts`
+- `apps/core-app/src/renderer/src/views/base/styles/{SectionItem,WindowSection}.vue`
 - `apps/core-app/src/renderer/src/views/base/styles/sub/{ThemePreference,theme-preference-state}.ts`
 - `apps/core-app/src/renderer/src/modules/layout/{useWallpaper,wallpaper-state}.ts`
 - `apps/core-app/src/main/channel/common.ts`
@@ -144,10 +157,11 @@
   - Custom and folder wallpaper paths now share normalized state handling, with local library path preference when copied.
   - Wallpaper folder scanning and image picking now share one supported-image source of truth and support `.bmp` / `.avif` in addition to the existing formats.
   - Wallpaper adjustment sliders now use TuffEx `TxSlider` instead of raw range inputs.
-  - Fixed the window material detail entry to route to `/styles/theme` instead of the stale named route.
+  - Fixed the window material detail entry to route to `/styles/theme` as a registered `/styles` child route instead of the stale named route.
+  - Window preference cards now use a stable responsive grid, compact 8px card radius, and stopped bar click propagation so style card clicks do not fight the parent selector.
   - The window material detail page now acts as a usable selector with active state, recommended material, apply action, and a return path to the full style settings page.
   - Cloud sync remains intentionally hidden from the public style page until the Nexus upload path exists.
-  - Validation: focused wallpaper state, wallpaper runtime, section route, material detail state, and shared wallpaper helper tests cover default `auto`, desktop-first loading, Bing fallback, folder empty state, library path preference, route generation, material option normalization, and supported image formats.
+  - Validation: focused wallpaper state, wallpaper runtime, section route, material detail state, and shared wallpaper helper tests cover default `auto`, desktop-first loading, Bing fallback, folder empty state, library path preference, registered child route resolution, route generation, material option normalization, and supported image formats.
 
 ### test(core-app): cover optional recommendation AI scoring fallback
 

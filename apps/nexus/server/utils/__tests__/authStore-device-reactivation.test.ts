@@ -23,7 +23,7 @@ class MockStatement {
 
   constructor(
     private readonly db: MockD1Database,
-    private readonly sql: string
+    private readonly sql: string,
   ) {}
 
   bind(...args: any[]) {
@@ -78,6 +78,32 @@ class MockD1Database {
       return { meta: { changes: row ? 1 : 0 } }
     }
 
+    if (sql.includes('UPDATE auth_devices') && sql.includes('SET user_id = ?')) {
+      const [userId, deviceName, platform, clientType, userAgent, lastSeenAt, createdAt, deviceId] = args
+      const previousEntry = [...this.devices.entries()].find(([, row]) => row.id === deviceId)
+      const previousKey = previousEntry?.[0]
+      const previous = previousEntry?.[1]
+      if (!previous)
+        return { meta: { changes: 0 } }
+
+      if (previousKey)
+        this.devices.delete(previousKey)
+      this.devices.set(`${userId}:${deviceId}`, {
+        ...previous,
+        user_id: userId,
+        device_name: deviceName,
+        platform,
+        client_type: clientType,
+        trusted_at: null,
+        user_agent: userAgent,
+        last_seen_at: lastSeenAt,
+        created_at: createdAt,
+        revoked_at: null,
+        token_version: previous.token_version + 1,
+      })
+      return { meta: { changes: 1 } }
+    }
+
     if (sql.includes('INSERT INTO auth_devices')) {
       const [deviceId, userId, deviceName, platform, clientType, userAgent, lastSeenAt, createdAt] = args
       this.devices.set(`${userId}:${deviceId}`, {
@@ -102,6 +128,10 @@ class MockD1Database {
     if (sql.includes('SELECT * FROM auth_devices WHERE id = ? AND user_id = ?')) {
       const [deviceId, userId] = args
       return this.devices.get(`${userId}:${deviceId}`) ?? null
+    }
+    if (sql.includes('SELECT * FROM auth_devices WHERE id = ?')) {
+      const [deviceId] = args
+      return [...this.devices.values()].find(row => row.id === deviceId) ?? null
     }
     return null
   }
@@ -208,5 +238,36 @@ describe('auth device reactivation', () => {
     expect(device.revokedAt).toBeNull()
     expect(device.tokenVersion).toBe(3)
     expect(device.deviceName).toBe('New CLI')
+  })
+
+  it('moves a reused global device id to the current user without inheriting trust or revoked state', async () => {
+    const db = new MockD1Database()
+    db.devices.set('user-1:device-1', {
+      id: 'device-1',
+      user_id: 'user-1',
+      device_name: 'Old Browser',
+      platform: 'MacIntel',
+      client_type: 'app',
+      trusted_at: '2026-05-18T01:00:00.000Z',
+      user_agent: 'old',
+      last_seen_at: '2026-05-18T00:00:00.000Z',
+      created_at: '2026-05-18T00:00:00.000Z',
+      revoked_at: '2026-05-18T02:00:00.000Z',
+      token_version: 4,
+    })
+
+    const { upsertDevice } = await import('../authStore')
+    const device = await upsertDevice(createEvent(db), 'user-2', 'device-1', {
+      deviceName: 'New Browser',
+      platform: 'MacIntel',
+      clientType: 'app',
+    })
+
+    expect(db.devices.has('user-1:device-1')).toBe(false)
+    expect(device.userId).toBe('user-2')
+    expect(device.deviceName).toBe('New Browser')
+    expect(device.trustedAt).toBeNull()
+    expect(device.revokedAt).toBeNull()
+    expect(device.tokenVersion).toBe(5)
   })
 })

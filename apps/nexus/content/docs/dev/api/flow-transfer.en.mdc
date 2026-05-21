@@ -140,6 +140,8 @@ code: |
 
 **Native share**
 
+Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.md) `shareItem()` so target resolution and platform fallback stay centralized.
+
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
@@ -150,15 +152,30 @@ code: |
 ---
 :::
 
+**Native targets**
+
+| Platform | Target | Notes |
+| --- | --- | --- |
+| macOS | `system` / `system-share` | Native share chooser |
+| macOS | `airdrop` | AirDrop |
+| macOS | `mail` | Mail |
+| macOS | `messages` | iMessage |
+| Windows | `mail` | Default mail client |
+| Linux | `mail` | Default mail client |
+
+Flow target lists expose the system chooser as `system-share`; `flow.nativeShare()` also accepts `system` as a compatibility alias. Windows and Linux currently expose only the explicit `mail` fallback, not a fake system share panel.
+
 ## Best Practices
 - Register `onFlowTransfer` to avoid being marked “not supported”.
 - Provide clear `supportedTypes` and `description` for better target ranking.
 - Use `requireAck` for critical workflows and handle fallback actions.
+- Use QuickActions `shareItem()` for MetaK item sharing.
 
 ## Technical Notes
 - Target list is maintained by the main process and merged with native share targets.
 - Plugins are registered via `flow:register-targets`; missing registration means targets won’t appear.
 
 ## Related Docs
+- [QuickActions SDK](./quick-actions.en.md)
 - [DivisionBox API](./division-box.en.md)
 - [Plugin Manifest](../reference/manifest.en.md)

@@ -23,4 +23,18 @@ describe('dashboard notification inbox UI contract', () => {
     expect(page).toContain('body: { all: true }')
     expect(page).toContain("status: filter.value")
   })
+
+  it('exposes a client-only browser notification permission and test flow', () => {
+    const page = readFileSync(new URL('./notifications.vue', import.meta.url), 'utf8')
+
+    expect(page).toContain("import { hasWindow } from '@talex-touch/utils/env'")
+    expect(page).toContain("'Notification' in window")
+    expect(page).toContain('window.Notification.permission')
+    expect(page).toContain('window.Notification.requestPermission()')
+    expect(page).toContain('new window.Notification')
+    expect(page).toContain("tag: 'tuff-dashboard-notification-test'")
+    expect(page).toContain('browserNotificationActionDisabled')
+    expect(page).toContain('browserNotificationPermissionLabel')
+    expect(page).toContain('dashboard.notifications.browser.testSent')
+  })
 })

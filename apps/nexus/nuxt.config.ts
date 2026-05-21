@@ -291,6 +291,17 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    optimizeDeps: {
+      include: [
+        'mermaid',
+        'gsap',
+        'gsap/ScrollTrigger',
+        'gsap/ScrollToPlugin',
+        'theme-colors',
+        'simplex-noise',
+        'path-browserify',
+      ],
+    },
     resolve: {
       alias: [
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
