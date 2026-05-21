@@ -11,6 +11,7 @@ const EVENTS_TABLE = 'platform_governance_events'
 const CONFIGS_TABLE = 'platform_governance_configs'
 const JSON_LIMIT_BYTES = 64 * 1024
 const MAX_MEMORY_EVENTS = 5000
+const UPLOAD_STUCK_ATTEMPT_AGE_MS = 15 * 60 * 1000
 
 const initializedSchemas = new WeakSet<D1Database>()
 
@@ -1341,8 +1342,14 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     addNumberStat(uploadSize, readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null))
   }
 
+  const stuckBefore = Date.now() - UPLOAD_STUCK_ATTEMPT_AGE_MS
   const stuckAttempts = Array.from(attempts.values())
-    .filter(item => item.started && !item.completed && !item.failed)
+    .filter((item) => {
+      if (!item.started || item.completed || item.failed)
+        return false
+      const latestAt = Date.parse(item.latestAt)
+      return Number.isFinite(latestAt) && latestAt <= stuckBefore
+    })
 
   return {
     ...createScopedAnalytics(uploadEvents, topLimit),
@@ -1351,6 +1358,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     failed: failed.length,
     attempts: attempts.size,
     stuckAttempts: stuckAttempts.length,
+    stuckAttemptAgeMs: UPLOAD_STUCK_ATTEMPT_AGE_MS,
     bytes: completed.reduce((sum, event) => event.unit === 'byte' ? sum + event.quantity : sum, 0),
     failureRate: terminalEvents.length ? Math.round((failed.length / terminalEvents.length) * 10000) / 100 : 0,
     stuckRate: attempts.size ? Math.round((stuckAttempts.length / attempts.size) * 10000) / 100 : 0,
