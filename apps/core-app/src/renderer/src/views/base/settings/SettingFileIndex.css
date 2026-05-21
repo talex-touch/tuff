@@ -197,7 +197,10 @@
 }
 
 .app-index-manager-dialog {
-  max-height: 70vh;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
   padding-right: 4px;
 }

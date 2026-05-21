@@ -11,7 +11,6 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   type AppIndexEntryDiagnosticFilter,
@@ -301,13 +300,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <TuffBlockSlot
-    :title="t('settings.settingFileIndex.appIndexManagerTitle')"
-    :description="t('settings.settingFileIndex.appIndexManagerDesc')"
-    default-icon="i-carbon-app"
-    active-icon="i-carbon-app"
-  >
-    <div class="app-index-manager">
+  <section class="app-index-manager">
+    <div class="app-index-manager-heading">
+      <div>
+        <h4>{{ t('settings.settingFileIndex.appIndexManagerTitle') }}</h4>
+        <p>{{ t('settings.settingFileIndex.appIndexManagerDesc') }}</p>
+      </div>
       <div class="app-index-manager-actions">
         <TxButton variant="flat" size="sm" :disabled="adding" @click="selectAppFile">
           <div class="i-carbon-document-add text-12px" />
@@ -318,233 +316,250 @@ onMounted(() => {
           <span>{{ t('common.refresh') }}</span>
         </TxButton>
       </div>
+    </div>
 
-      <div class="app-index-manager-add-row">
-        <TxInput
-          :model-value="pathInput"
-          :placeholder="t('settings.settingFileIndex.appIndexManagerPathPlaceholder')"
-          class="app-index-manager-input"
-          @update:model-value="pathInput = String($event ?? '')"
-          @keyup.enter="addPath(normalizeInput())"
-        />
-        <TxButton
-          variant="flat"
-          size="sm"
-          :disabled="adding || !normalizeInput()"
-          @click="addPath(normalizeInput())"
+    <div class="app-index-manager-add-row">
+      <TxInput
+        :model-value="pathInput"
+        :placeholder="t('settings.settingFileIndex.appIndexManagerPathPlaceholder')"
+        class="app-index-manager-input"
+        @update:model-value="pathInput = String($event ?? '')"
+        @keyup.enter="addPath(normalizeInput())"
+      />
+      <TxButton
+        variant="flat"
+        size="sm"
+        :disabled="adding || !normalizeInput()"
+        @click="addPath(normalizeInput())"
+      >
+        <div class="i-carbon-add text-12px" />
+        <span>{{ t('settings.settingFileIndex.appIndexManagerAddPath') }}</span>
+      </TxButton>
+    </div>
+
+    <div class="app-index-manager-summary">
+      <div class="app-index-manager-summary-item">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryTotal') }}</span>
+        <strong>{{ managerSummary.total }}</strong>
+      </div>
+      <div class="app-index-manager-summary-item is-attention">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryAttention') }}</span>
+        <strong>{{ managerSummary.attention }}</strong>
+      </div>
+      <div class="app-index-manager-summary-item is-found">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticFound') }}</span>
+        <strong>{{ managerSummary.found }}</strong>
+      </div>
+      <div class="app-index-manager-summary-item">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticNotRun') }}</span>
+        <strong>{{ managerSummary.notRun }}</strong>
+      </div>
+      <div class="app-index-manager-summary-item">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}</span>
+        <strong>{{ managerSummary.disabled }}</strong>
+      </div>
+    </div>
+
+    <div class="app-index-manager-filters">
+      <div class="app-index-manager-filter-group">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerFilterSource') }}</span>
+        <button
+          v-for="option in sourceFilterOptions"
+          :key="option.value"
+          type="button"
+          :class="['app-index-manager-filter-chip', { 'is-active': sourceFilter === option.value }]"
+          @click="sourceFilter = option.value"
         >
-          <div class="i-carbon-add text-12px" />
-          <span>{{ t('settings.settingFileIndex.appIndexManagerAddPath') }}</span>
-        </TxButton>
+          {{ option.label }}
+        </button>
       </div>
-
-      <div class="app-index-manager-summary">
-        <div class="app-index-manager-summary-item">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryTotal') }}</span>
-          <strong>{{ managerSummary.total }}</strong>
-        </div>
-        <div class="app-index-manager-summary-item is-attention">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerSummaryAttention') }}</span>
-          <strong>{{ managerSummary.attention }}</strong>
-        </div>
-        <div class="app-index-manager-summary-item is-found">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticFound') }}</span>
-          <strong>{{ managerSummary.found }}</strong>
-        </div>
-        <div class="app-index-manager-summary-item">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerDiagnosticNotRun') }}</span>
-          <strong>{{ managerSummary.notRun }}</strong>
-        </div>
-        <div class="app-index-manager-summary-item">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}</span>
-          <strong>{{ managerSummary.disabled }}</strong>
-        </div>
+      <div class="app-index-manager-filter-group">
+        <span>{{ t('settings.settingFileIndex.appIndexManagerFilterDiagnostic') }}</span>
+        <button
+          v-for="option in diagnosticFilterOptions"
+          :key="option.value"
+          type="button"
+          :class="[
+            'app-index-manager-filter-chip',
+            { 'is-active': diagnosticFilter === option.value }
+          ]"
+          @click="diagnosticFilter = option.value"
+        >
+          {{ option.label }}
+        </button>
       </div>
+    </div>
 
-      <div class="app-index-manager-filters">
-        <div class="app-index-manager-filter-group">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerFilterSource') }}</span>
-          <button
-            v-for="option in sourceFilterOptions"
-            :key="option.value"
-            type="button"
-            :class="[
-              'app-index-manager-filter-chip',
-              { 'is-active': sourceFilter === option.value }
-            ]"
-            @click="sourceFilter = option.value"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <div class="app-index-manager-filter-group">
-          <span>{{ t('settings.settingFileIndex.appIndexManagerFilterDiagnostic') }}</span>
-          <button
-            v-for="option in diagnosticFilterOptions"
-            :key="option.value"
-            type="button"
-            :class="[
-              'app-index-manager-filter-chip',
-              { 'is-active': diagnosticFilter === option.value }
-            ]"
-            @click="diagnosticFilter = option.value"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-      </div>
-
-      <div
-        v-if="!hasEntries"
-        :class="['app-index-manager-empty', `is-${emptyState?.tone || 'neutral'}`]"
-      >
-        <template v-if="loading">
-          {{ t('common.loading') }}
-        </template>
-        <template v-else-if="emptyState">
-          <strong>{{ emptyState.title }}</strong>
-          <span>{{ emptyState.detail }}</span>
-          <TxButton
-            v-if="emptyState.actionKind === 'add-entry'"
-            variant="flat"
-            size="sm"
-            :disabled="adding"
-            @click="selectAppFile"
-          >
-            {{ emptyState.actionLabel }}
-          </TxButton>
-        </template>
-      </div>
-
-      <div
-        v-else-if="!hasVisibleEntries && emptyState"
-        :class="['app-index-manager-empty', `is-${emptyState.tone}`]"
-      >
+    <div
+      v-if="!hasEntries"
+      :class="['app-index-manager-empty', `is-${emptyState?.tone || 'neutral'}`]"
+    >
+      <template v-if="loading">
+        {{ t('common.loading') }}
+      </template>
+      <template v-else-if="emptyState">
         <strong>{{ emptyState.title }}</strong>
         <span>{{ emptyState.detail }}</span>
         <TxButton
-          v-if="emptyState.actionKind === 'clear-filters'"
+          v-if="emptyState.actionKind === 'add-entry'"
           variant="flat"
           size="sm"
-          @click="clearFilters"
+          :disabled="adding"
+          @click="selectAppFile"
         >
           {{ emptyState.actionLabel }}
         </TxButton>
-      </div>
+      </template>
+    </div>
 
-      <div v-else class="app-index-manager-list">
-        <div v-for="entry in visibleEntries" :key="entry.path" class="app-index-entry">
-          <div class="app-index-entry-main">
-            <div class="app-index-entry-title-row">
-              <strong>{{ getEntryTitle(entry) }}</strong>
-              <span
-                :class="['app-index-entry-status', entry.enabled ? 'is-enabled' : 'is-disabled']"
-              >
-                {{
-                  entry.enabled
-                    ? t('settings.settingFileIndex.appIndexManagerEntryEnabled')
-                    : t('settings.settingFileIndex.appIndexManagerEntryDisabled')
-                }}
-              </span>
-              <span :class="['app-index-entry-source', `is-${getEntrySource(entry).tone}`]">
-                {{ getEntrySource(entry).label }}
-              </span>
-              <span
-                :class="[
-                  'app-index-entry-origin',
-                  entry.source === 'scanned' ? 'is-scanned' : 'is-manual'
-                ]"
-              >
-                {{ getEntryOriginLabel(entry) }}
-              </span>
-            </div>
-            <div class="app-index-entry-path">{{ entry.path }}</div>
-            <div
-              :class="[
-                'app-index-entry-diagnostic-summary',
-                `is-${getEntryDiagnosticSummary(entry).tone}`
-              ]"
-            >
-              <strong>{{ getEntryDiagnosticSummary(entry).label }}</strong>
-              <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
-            </div>
-            <div class="app-index-entry-grid">
-              <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
-              <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
-              <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
-              <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
-              <span>launchKind</span><strong>{{ entry.launchKind }}</strong>
-              <span>launchTarget</span><strong>{{ formatOptional(entry.launchTarget) }}</strong>
-              <span>launchArgs</span><strong>{{ formatOptional(entry.launchArgs) }}</strong>
-              <span>workingDirectory</span
-              ><strong>{{ formatOptional(entry.workingDirectory) }}</strong> <span>displayPath</span
-              ><strong>{{ formatOptional(entry.displayPath) }}</strong>
-            </div>
-            <pre v-if="diagnosticMap[entry.path]" class="app-index-entry-diagnostic">{{
-              JSON.stringify(diagnosticMap[entry.path], null, 2)
-            }}</pre>
-          </div>
+    <div
+      v-else-if="!hasVisibleEntries && emptyState"
+      :class="['app-index-manager-empty', `is-${emptyState.tone}`]"
+    >
+      <strong>{{ emptyState.title }}</strong>
+      <span>{{ emptyState.detail }}</span>
+      <TxButton
+        v-if="emptyState.actionKind === 'clear-filters'"
+        variant="flat"
+        size="sm"
+        @click="clearFilters"
+      >
+        {{ emptyState.actionLabel }}
+      </TxButton>
+    </div>
 
-          <div class="app-index-entry-actions">
-            <TxButton
-              variant="flat"
-              size="sm"
-              :disabled="busyPath === entry.path"
-              @click="setEnabled(entry, !entry.enabled)"
-            >
+    <div v-else class="app-index-manager-list">
+      <div v-for="entry in visibleEntries" :key="entry.path" class="app-index-entry">
+        <div class="app-index-entry-main">
+          <div class="app-index-entry-title-row">
+            <strong>{{ getEntryTitle(entry) }}</strong>
+            <span :class="['app-index-entry-status', entry.enabled ? 'is-enabled' : 'is-disabled']">
               {{
                 entry.enabled
-                  ? t('settings.settingFileIndex.appIndexManagerDisable')
-                  : t('settings.settingFileIndex.appIndexManagerEnable')
+                  ? t('settings.settingFileIndex.appIndexManagerEntryEnabled')
+                  : t('settings.settingFileIndex.appIndexManagerEntryDisabled')
               }}
-            </TxButton>
-            <TxButton
-              variant="flat"
-              size="sm"
-              :disabled="busyPath === entry.path"
-              @click="reindexPath(entry.path, 'scan')"
+            </span>
+            <span :class="['app-index-entry-source', `is-${getEntrySource(entry).tone}`]">
+              {{ getEntrySource(entry).label }}
+            </span>
+            <span
+              :class="[
+                'app-index-entry-origin',
+                entry.source === 'scanned' ? 'is-scanned' : 'is-manual'
+              ]"
             >
-              {{ t('settings.settingFileIndex.appIndexManagerRescan') }}
-            </TxButton>
-            <TxButton
-              variant="flat"
-              size="sm"
-              :disabled="busyPath === entry.path"
-              @click="diagnosePath(entry.path)"
-            >
-              {{ t('settings.settingFileIndex.appIndexManagerDiagnose') }}
-            </TxButton>
-            <TxButton
-              variant="flat"
-              size="sm"
-              :disabled="!diagnosticMap[entry.path]"
-              @click="copyDiagnostic(entry)"
-            >
-              {{ t('settings.settingFileIndex.appIndexManagerCopyJson') }}
-            </TxButton>
-            <TxButton
-              v-if="entry.removable !== false"
-              variant="flat"
-              size="sm"
-              type="danger"
-              :disabled="busyPath === entry.path"
-              @click="removeEntry(entry)"
-            >
-              {{ t('common.remove') }}
-            </TxButton>
+              {{ getEntryOriginLabel(entry) }}
+            </span>
           </div>
+          <div class="app-index-entry-path">{{ entry.path }}</div>
+          <div
+            :class="[
+              'app-index-entry-diagnostic-summary',
+              `is-${getEntryDiagnosticSummary(entry).tone}`
+            ]"
+          >
+            <strong>{{ getEntryDiagnosticSummary(entry).label }}</strong>
+            <span>{{ getEntryDiagnosticSummary(entry).detail }}</span>
+          </div>
+          <div class="app-index-entry-grid">
+            <span>displayName</span><strong>{{ formatOptional(entry.displayName) }}</strong>
+            <span>source</span><strong>{{ getEntryOriginLabel(entry) }}</strong>
+            <span>bundleId</span><strong>{{ formatOptional(entry.bundleId) }}</strong>
+            <span>identityKind</span><strong>{{ formatOptional(entry.identityKind) }}</strong>
+            <span>launchKind</span><strong>{{ entry.launchKind }}</strong> <span>launchTarget</span
+            ><strong>{{ formatOptional(entry.launchTarget) }}</strong> <span>launchArgs</span
+            ><strong>{{ formatOptional(entry.launchArgs) }}</strong> <span>workingDirectory</span
+            ><strong>{{ formatOptional(entry.workingDirectory) }}</strong> <span>displayPath</span
+            ><strong>{{ formatOptional(entry.displayPath) }}</strong>
+          </div>
+          <pre v-if="diagnosticMap[entry.path]" class="app-index-entry-diagnostic">{{
+            JSON.stringify(diagnosticMap[entry.path], null, 2)
+          }}</pre>
+        </div>
+
+        <div class="app-index-entry-actions">
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="busyPath === entry.path"
+            @click="setEnabled(entry, !entry.enabled)"
+          >
+            {{
+              entry.enabled
+                ? t('settings.settingFileIndex.appIndexManagerDisable')
+                : t('settings.settingFileIndex.appIndexManagerEnable')
+            }}
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="busyPath === entry.path"
+            @click="reindexPath(entry.path, 'scan')"
+          >
+            {{ t('settings.settingFileIndex.appIndexManagerRescan') }}
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="busyPath === entry.path"
+            @click="diagnosePath(entry.path)"
+          >
+            {{ t('settings.settingFileIndex.appIndexManagerDiagnose') }}
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            :disabled="!diagnosticMap[entry.path]"
+            @click="copyDiagnostic(entry)"
+          >
+            {{ t('settings.settingFileIndex.appIndexManagerCopyJson') }}
+          </TxButton>
+          <TxButton
+            v-if="entry.removable !== false"
+            variant="flat"
+            size="sm"
+            type="danger"
+            :disabled="busyPath === entry.path"
+            @click="removeEntry(entry)"
+          >
+            {{ t('common.remove') }}
+          </TxButton>
         </div>
       </div>
     </div>
-  </TuffBlockSlot>
+  </section>
 </template>
 
 <style scoped>
 .app-index-manager {
-  width: min(760px, 100%);
+  width: 100%;
+  min-height: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.app-index-manager-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-index-manager-heading h4 {
+  margin: 0;
+  color: var(--tx-text-color-primary);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.app-index-manager-heading p {
+  margin: 4px 0 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .app-index-manager-actions,
@@ -675,7 +690,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: min(52vh, 520px);
+  min-height: 0;
+  max-height: none;
+  flex: 1;
   overflow: auto;
   padding-right: 2px;
 }
@@ -828,6 +845,10 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
+  .app-index-manager-heading {
+    flex-direction: column;
+  }
+
   .app-index-manager-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
