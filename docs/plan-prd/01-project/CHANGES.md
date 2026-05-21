@@ -144,6 +144,8 @@
 ### feat(core-app): make style personalization wallpaper controls usable
 
 - `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/base/{router,style-routes}.ts`
+- `apps/core-app/src/renderer/src/views/base/styles/{SectionItem,WindowSection}.vue`
 - `apps/core-app/src/renderer/src/views/base/styles/sub/{ThemePreference,theme-preference-state}.ts`
 - `apps/core-app/src/renderer/src/modules/layout/{useWallpaper,wallpaper-state}.ts`
 - `apps/core-app/src/main/channel/common.ts`
@@ -155,10 +157,11 @@
   - Custom and folder wallpaper paths now share normalized state handling, with local library path preference when copied.
   - Wallpaper folder scanning and image picking now share one supported-image source of truth and support `.bmp` / `.avif` in addition to the existing formats.
   - Wallpaper adjustment sliders now use TuffEx `TxSlider` instead of raw range inputs.
-  - Fixed the window material detail entry to route to `/styles/theme` instead of the stale named route.
+  - Fixed the window material detail entry to route to `/styles/theme` as a registered `/styles` child route instead of the stale named route.
+  - Window preference cards now use a stable responsive grid, compact 8px card radius, and stopped bar click propagation so style card clicks do not fight the parent selector.
   - The window material detail page now acts as a usable selector with active state, recommended material, apply action, and a return path to the full style settings page.
   - Cloud sync remains intentionally hidden from the public style page until the Nexus upload path exists.
-  - Validation: focused wallpaper state, wallpaper runtime, section route, material detail state, and shared wallpaper helper tests cover default `auto`, desktop-first loading, Bing fallback, folder empty state, library path preference, route generation, material option normalization, and supported image formats.
+  - Validation: focused wallpaper state, wallpaper runtime, section route, material detail state, and shared wallpaper helper tests cover default `auto`, desktop-first loading, Bing fallback, folder empty state, library path preference, registered child route resolution, route generation, material option normalization, and supported image formats.
 
 ### test(core-app): cover optional recommendation AI scoring fallback
 

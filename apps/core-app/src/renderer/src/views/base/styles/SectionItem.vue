@@ -41,7 +41,7 @@ function goRouter() {
     <div class="SectionItem-Display fake-background" :class="title">
       <div v-shared-element:[`theme-preference-${title}-img`] />
     </div>
-    <div class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2" @click="goRouter">
+    <div class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2" @click.stop="goRouter">
       <div w-3 h-3 rounded-full class="bg-[var(--section-active-color)]" />
       <span v-shared-element:[`theme-preference-${title}`]>
         {{ label ?? title }}
@@ -100,7 +100,7 @@ function goRouter() {
 
   overflow: hidden;
   user-select: none;
-  border-radius: 18px;
+  border-radius: 8px;
   border: 2px solid var(--tx-border-color);
   --section-active-color: var(--tx-color-info);
 }
