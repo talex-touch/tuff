@@ -1,0 +1,311 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { TxButton, TxSpinner, TxTag } from '@talex-touch/tuffex'
+import { requestJson } from '~/utils/request'
+
+definePageMeta({
+  layout: 'dashboard',
+})
+defineI18nRoute(false)
+
+const { t } = useI18n()
+const toast = useToast()
+
+type NotificationStatus = 'unread' | 'read'
+type NotificationFilter = NotificationStatus | 'all'
+
+interface BrowserNotificationItem {
+  id: string
+  userId: string
+  action: string
+  title: string
+  body: string
+  resourceType: string | null
+  resourceId: string | null
+  status: NotificationStatus
+  metadata: Record<string, unknown> | null
+  occurredAt: string
+  createdAt: string
+  readAt: string | null
+}
+
+interface InboxResponse {
+  notifications: BrowserNotificationItem[]
+  unreadCount: number
+  generatedAt: string
+}
+
+const filter = ref<NotificationFilter>('unread')
+const notifications = ref<BrowserNotificationItem[]>([])
+const unreadCount = ref(0)
+const generatedAt = ref('')
+const loading = ref(false)
+const actionLoading = ref(false)
+const error = ref<string | null>(null)
+
+const filterOptions = computed(() => [
+  {
+    value: 'unread' as const,
+    label: t('dashboard.notifications.filters.unread', '未读'),
+  },
+  {
+    value: 'all' as const,
+    label: t('dashboard.notifications.filters.all', '全部'),
+  },
+])
+
+const visibleNotifications = computed(() => notifications.value)
+const hasUnread = computed(() => unreadCount.value > 0)
+const generatedAtLabel = computed(() => generatedAt.value ? formatDateTime(generatedAt.value) : '-')
+
+function readErrorMessage(errorValue: unknown): string {
+  const candidate = errorValue as { data?: { statusMessage?: unknown, message?: unknown }, message?: unknown } | null
+  const statusMessage = candidate?.data?.statusMessage
+  if (typeof statusMessage === 'string' && statusMessage)
+    return statusMessage
+  const dataMessage = candidate?.data?.message
+  if (typeof dataMessage === 'string' && dataMessage)
+    return dataMessage
+  const message = candidate?.message
+  return typeof message === 'string' && message ? message : t('dashboard.notifications.errors.unknown', '通知加载失败')
+}
+
+function formatDateTime(value: string | null): string {
+  if (!value)
+    return '-'
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp))
+    return value
+  return new Date(timestamp).toLocaleString()
+}
+
+function formatRelativeTime(value: string): string {
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp))
+    return formatDateTime(value)
+
+  const diffMs = Date.now() - timestamp
+  const absMs = Math.abs(diffMs)
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+  if (absMs < minute)
+    return t('dashboard.notifications.justNow', '刚刚')
+  if (absMs < hour)
+    return `${Math.round(absMs / minute)}${t('dashboard.notifications.minutesAgo', ' 分钟前')}`
+  if (absMs < day)
+    return `${Math.round(absMs / hour)}${t('dashboard.notifications.hoursAgo', ' 小时前')}`
+  return `${Math.round(absMs / day)}${t('dashboard.notifications.daysAgo', ' 天前')}`
+}
+
+function actionLabel(action: string): string {
+  if (action === 'plugin.version.approved')
+    return t('dashboard.notifications.actions.pluginApproved', '插件审核通过')
+  if (action === 'plugin.version.rejected')
+    return t('dashboard.notifications.actions.pluginRejected', '插件审核未通过')
+  if (action === 'plugin.version.pending')
+    return t('dashboard.notifications.actions.pluginPending', '插件审核待处理')
+  return action
+}
+
+function resourceLabel(item: BrowserNotificationItem): string {
+  if (!item.resourceType && !item.resourceId)
+    return t('dashboard.notifications.resourceSystem', 'System')
+  return [item.resourceType, item.resourceId].filter(Boolean).join(' / ')
+}
+
+async function loadNotifications() {
+  loading.value = true
+  error.value = null
+  try {
+    const data = await requestJson<InboxResponse>('/api/dashboard/notifications/inbox', {
+      query: {
+        status: filter.value,
+        limit: 100,
+      },
+    })
+    notifications.value = data.notifications
+    unreadCount.value = data.unreadCount
+    generatedAt.value = data.generatedAt
+  }
+  catch (caught) {
+    error.value = readErrorMessage(caught)
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+async function markRead(ids: string[]) {
+  if (!ids.length)
+    return
+  actionLoading.value = true
+  try {
+    await requestJson('/api/dashboard/notifications/inbox/read', {
+      method: 'POST',
+      body: { ids },
+    })
+    toast.success(t('dashboard.notifications.markedRead', '通知已标记为已读'))
+    await loadNotifications()
+  }
+  catch (caught) {
+    toast.error(t('dashboard.notifications.markReadFailed', '标记已读失败'), readErrorMessage(caught))
+  }
+  finally {
+    actionLoading.value = false
+  }
+}
+
+async function markAllRead() {
+  if (!hasUnread.value)
+    return
+  actionLoading.value = true
+  try {
+    await requestJson('/api/dashboard/notifications/inbox/read', {
+      method: 'POST',
+      body: { all: true },
+    })
+    toast.success(t('dashboard.notifications.allMarkedRead', '所有通知已标记为已读'))
+    await loadNotifications()
+  }
+  catch (caught) {
+    toast.error(t('dashboard.notifications.markReadFailed', '标记已读失败'), readErrorMessage(caught))
+  }
+  finally {
+    actionLoading.value = false
+  }
+}
+
+watch(filter, () => {
+  void loadNotifications()
+})
+
+onMounted(() => {
+  void loadNotifications()
+})
+</script>
+
+<template>
+  <div class="mx-auto max-w-5xl space-y-6">
+    <header class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="apple-heading-md">
+          {{ t('dashboard.notifications.title', '通知中心') }}
+        </h1>
+        <p class="mt-2 text-sm text-black/50 dark:text-white/50">
+          {{ t('dashboard.notifications.description', '查看浏览器通知与平台投递记录。') }}
+        </p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <TxButton size="small" variant="secondary" :loading="loading" icon="i-carbon-renew" @click="loadNotifications">
+          {{ t('dashboard.notifications.refresh', '刷新') }}
+        </TxButton>
+        <TxButton size="small" variant="primary" :disabled="!hasUnread || actionLoading" :loading="actionLoading" icon="i-carbon-checkmark" @click="markAllRead">
+          {{ t('dashboard.notifications.markAllRead', '全部已读') }}
+        </TxButton>
+      </div>
+    </header>
+
+    <section class="grid gap-4 md:grid-cols-3">
+      <div class="apple-card-lg p-5">
+        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
+          {{ t('dashboard.notifications.metrics.unread', 'Unread') }}
+        </p>
+        <p class="mt-3 text-3xl text-black font-semibold dark:text-white">
+          {{ unreadCount }}
+        </p>
+      </div>
+      <div class="apple-card-lg p-5">
+        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
+          {{ t('dashboard.notifications.metrics.loaded', 'Loaded') }}
+        </p>
+        <p class="mt-3 text-3xl text-black font-semibold dark:text-white">
+          {{ notifications.length }}
+        </p>
+      </div>
+      <div class="apple-card-lg p-5">
+        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
+          {{ t('dashboard.notifications.metrics.generatedAt', 'Updated') }}
+        </p>
+        <p class="mt-3 text-sm text-black font-medium dark:text-white">
+          {{ generatedAtLabel }}
+        </p>
+      </div>
+    </section>
+
+    <section class="apple-card-lg p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="inline-flex rounded-2xl bg-black/[0.04] p-1 dark:bg-white/[0.06]">
+          <button
+            v-for="option in filterOptions"
+            :key="option.value"
+            type="button"
+            class="rounded-xl px-3 py-1.5 text-sm transition"
+            :class="filter === option.value ? 'bg-white text-black shadow-sm dark:bg-white/12 dark:text-white' : 'text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white'"
+            @click="filter = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <p class="text-xs text-black/45 dark:text-white/45">
+          {{ t('dashboard.notifications.scopeHint', '仅显示当前登录用户的通知。') }}
+        </p>
+      </div>
+
+      <div v-if="loading" class="flex items-center justify-center py-12">
+        <TxSpinner :size="22" />
+      </div>
+
+      <div v-else-if="error" class="mt-5 rounded-2xl bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-300">
+        {{ error }}
+      </div>
+
+      <div
+        v-else-if="!visibleNotifications.length"
+        class="mt-5 rounded-2xl border border-dashed border-black/[0.08] py-10 text-center text-sm text-black/45 dark:border-white/[0.08] dark:text-white/45"
+      >
+        {{ filter === 'unread' ? t('dashboard.notifications.emptyUnread', '暂无未读通知') : t('dashboard.notifications.emptyAll', '暂无通知') }}
+      </div>
+
+      <div v-else class="mt-5 divide-y divide-black/[0.06] dark:divide-white/[0.08]">
+        <article
+          v-for="item in visibleNotifications"
+          :key="item.id"
+          class="flex gap-4 py-4"
+        >
+          <div class="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl" :class="item.status === 'unread' ? 'bg-sky-500/12 text-sky-600 dark:text-sky-300' : 'bg-black/[0.04] text-black/45 dark:bg-white/[0.06] dark:text-white/45'">
+            <span class="i-carbon-notification text-lg" aria-hidden="true" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h2 class="truncate text-sm text-black font-semibold dark:text-white">
+                    {{ item.title }}
+                  </h2>
+                  <TxTag v-if="item.status === 'unread'" size="sm" :label="t('dashboard.notifications.unread', '未读')" color="var(--tx-color-primary)" />
+                </div>
+                <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                  {{ actionLabel(item.action) }} · {{ resourceLabel(item) }} · {{ formatRelativeTime(item.createdAt) }}
+                </p>
+              </div>
+              <TxButton
+                v-if="item.status === 'unread'"
+                size="small"
+                variant="secondary"
+                :disabled="actionLoading"
+                @click="markRead([item.id])"
+              >
+                {{ t('dashboard.notifications.markRead', '标记已读') }}
+              </TxButton>
+            </div>
+            <p class="mt-3 whitespace-pre-wrap text-sm text-black/70 leading-6 dark:text-white/70">
+              {{ item.body }}
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</template>
