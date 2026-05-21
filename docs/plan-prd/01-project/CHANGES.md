@@ -13,6 +13,15 @@
 
 ## 2026-05-21
 
+### docs(plan-prd): compress data governance status entries
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Compressed repeated Data Governance status paragraphs in active entry docs into current-state summaries.
+  - Kept detailed Data Governance history in this changelog and retained explicit live-evidence gaps in the active TODO/README/INDEX entries.
+
 ### feat(nexus): add notification provider health analytics
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
