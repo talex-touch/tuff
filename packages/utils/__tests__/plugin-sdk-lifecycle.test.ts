@@ -398,4 +398,151 @@ describe('plugin sdk lifecycle', () => {
       },
     })
   })
+
+  it('quick actions sdk resolves native share targets by payload-aware preferences', async () => {
+    const { channel } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+
+    channel.send.mockImplementation(async (eventName: string) => {
+      if (eventName === FlowEvents.getTargets.toEventName()) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'mail',
+              fullId: 'native.mail',
+              pluginId: 'native',
+              name: 'Mail',
+              supportedTypes: ['files'],
+              isEnabled: true,
+              hasFlowHandler: true,
+              isNativeShare: true,
+            },
+            {
+              id: 'airdrop',
+              fullId: 'native.airdrop',
+              pluginId: 'native',
+              name: 'AirDrop',
+              supportedTypes: ['files'],
+              isEnabled: true,
+              hasFlowHandler: true,
+              isNativeShare: true,
+            },
+          ],
+        }
+      }
+      return undefined
+    })
+
+    await expect(sdk.resolveNativeShareTarget({ payloadType: 'files' })).resolves.toMatchObject({
+      id: 'airdrop',
+    })
+    await expect(
+      sdk.resolveNativeShareTarget({
+        payloadType: 'files',
+        preferredTargets: ['messages'],
+      }),
+    ).resolves.toMatchObject({ id: 'mail' })
+    await expect(
+      sdk.resolveNativeShareTarget({
+        payloadType: 'files',
+        preferredTargets: ['messages'],
+        allowFallback: false,
+      }),
+    ).resolves.toBeUndefined()
+  })
+
+  it('quick actions sdk shares items with resolved native targets', async () => {
+    const { channel } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+
+    channel.send.mockImplementation(async (eventName: string) => {
+      if (eventName === FlowEvents.getTargets.toEventName()) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'airdrop',
+              fullId: 'native.airdrop',
+              pluginId: 'native',
+              name: 'AirDrop',
+              supportedTypes: ['files'],
+              isEnabled: true,
+              hasFlowHandler: true,
+              isNativeShare: true,
+            },
+          ],
+        }
+      }
+      if (eventName === FlowEvents.nativeShare.toEventName()) {
+        return { success: true, target: 'airdrop' }
+      }
+      return undefined
+    })
+
+    await expect(
+      sdk.shareItem({
+        id: 'file-2',
+        source: { type: 'plugin', id: 'quick-plugin' },
+        kind: 'file',
+        render: {
+          mode: 'default',
+          basic: { title: 'Design.png' },
+        },
+        meta: {
+          file: { path: ' /tmp/Design.png ' },
+        },
+      }),
+    ).resolves.toEqual({ success: true, target: 'airdrop' })
+
+    expect(channel.send).toHaveBeenCalledWith(
+      FlowEvents.nativeShare.toEventName(),
+      expect.objectContaining({
+        target: 'airdrop',
+        payload: expect.objectContaining({
+          type: 'files',
+          data: ['/tmp/Design.png'],
+        }),
+      }),
+    )
+  })
+
+  it('quick actions sdk shares items with explicit native targets without target discovery', async () => {
+    const { channel } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+
+    channel.send.mockImplementation(async (eventName: string) => {
+      if (eventName === FlowEvents.nativeShare.toEventName()) {
+        return { success: true, target: 'mail' }
+      }
+      return undefined
+    })
+
+    await expect(
+      sdk.shareItem(
+        {
+          id: 'link-2',
+          source: { type: 'plugin', id: 'quick-plugin' },
+          kind: 'url',
+          render: {
+            mode: 'default',
+            basic: { title: 'Release notes' },
+          },
+          meta: {
+            web: { url: 'https://example.com/release' },
+          },
+        },
+        { target: 'mail' },
+      ),
+    ).resolves.toEqual({ success: true, target: 'mail' })
+
+    expect(channel.send).not.toHaveBeenCalledWith(
+      FlowEvents.getTargets.toEventName(),
+      expect.anything(),
+    )
+    expect(channel.send).toHaveBeenCalledWith(
+      FlowEvents.nativeShare.toEventName(),
+      expect.objectContaining({ target: 'mail' }),
+    )
+  })
 })

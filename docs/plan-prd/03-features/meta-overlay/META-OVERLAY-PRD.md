@@ -73,8 +73,10 @@ MetaSDK 是历史兼容名，当前 SDK 面统一为 `context.utils.quickActions
 - `registerAction(action)`：注册 MetaK 全局动作。
 - `onActionExecute(handler)`：监听本插件动作执行，支持 async handler。
 - `getNativeShareTargets(payloadType?)`：查询当前平台真实可用的 native share targets，只返回 `isNativeShare === true` 的 Flow target。
+- `resolveNativeShareTarget(options?)`：按 payload 类型和偏好顺序解析可用目标，默认文件/图片优先 AirDrop，文本类优先系统分享。
 - `createSharePayloadFromItem(item, options?)`：把当前 CoreBox item 转成 Flow share payload，文件 item 优先转为 `files`，链接/普通 item 转为 `text`。
 - `nativeShare(payload, { target })`：复用 FlowBus `flow:native:share` 执行原生分享。
+- `shareItem(item, options?)`：封装 item payload 构造、目标解析和原生分享执行，支持 `preferredTargets` 与 `allowFallback`。
 
 平台边界保持 fail-honest：macOS 暴露 `system-share` / `airdrop` / `mail` / `messages`；Windows/Linux 只暴露明确的 `mail` fallback，不把 mailto 伪装成系统分享面板。
 
@@ -163,10 +165,9 @@ Item 可以通过 `meta.actions` 定义自定义操作。
 context.utils.quickActions.onActionExecute(async ({ actionId, item }) => {
   if (actionId !== 'share-current-item') return
 
-  const payload = context.utils.quickActions.createSharePayloadFromItem(item)
-  const targets = await context.utils.quickActions.getNativeShareTargets(payload.type)
-  const target = targets.some((item) => item.id === 'airdrop') ? 'airdrop' : 'system-share'
-  await context.utils.quickActions.nativeShare(payload, { target })
+  await context.utils.quickActions.shareItem(item, {
+    preferredTargets: ['airdrop', 'system-share', 'mail'],
+  })
 })
 ```
 
@@ -183,11 +184,12 @@ context.utils.quickActions.onActionExecute(async ({ actionId, item }) => {
 7. 样式与设计图一致
 8. 插件可通过 QuickActions SDK 查询 native share targets，并从 MetaK 动作触发系统分享 / AirDrop
 9. Windows/Linux 原生分享不可用时只暴露明确 fallback，不出现伪成功
+10. 插件可通过 `preferredTargets` / `allowFallback` 配置分享目标选择策略，SDK 默认文件/图片优先 AirDrop
 
 ## 后续开放能力
 
 - **可见性条件**: 基于 item kind、source、platform、permission、capability status 决定动作显示或禁用。
-- **动作偏好配置**: 允许用户按插件或 item kind 记住默认目标，例如文件优先 AirDrop、文本优先 Mail。
+- **动作偏好持久化**: SDK 已支持调用时目标偏好；CoreApp 后续可按插件或 item kind 记住默认目标，例如文件优先 AirDrop、文本优先 Mail。
 - **分组与排序配置**: 允许插件声明 group order、默认展开状态、常用动作 pin 权重。
 - **批量动作**: 支持多选 item 的 MetaK 动作和一次性原生分享多个文件。
 - **确认与审计**: 对外发、删除、自动化类动作统一确认弹窗、审计字段与 risk 标记。
