@@ -795,6 +795,7 @@ export default {
         account: '账号与安全',
         devices: '设备管理',
         storage: '存储与同步',
+        notifications: '通知中心',
         privacy: '隐私设置',
       },
       apiKeys: {
