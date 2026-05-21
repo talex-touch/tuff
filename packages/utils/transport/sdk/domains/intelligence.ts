@@ -264,6 +264,21 @@ export interface IntelligenceLocalConfigFileSummary {
   updatedAt?: number
 }
 
+export type IntelligenceLocalSkillGateStatus = 'ready' | 'approval_required' | 'unavailable'
+
+export type IntelligenceLocalSkillGateReason
+  = 'trusted_core'
+    | 'high_risk'
+    | 'external_unreviewed'
+    | 'not_installed'
+
+export interface IntelligenceLocalSkillGateSummary {
+  status: IntelligenceLocalSkillGateStatus
+  reason: IntelligenceLocalSkillGateReason
+  approvalRequired: boolean
+  sceneIds: string[]
+}
+
 export interface IntelligenceLocalSkillProviderSummary {
   id: string
   name: string
@@ -274,6 +289,7 @@ export interface IntelligenceLocalSkillProviderSummary {
   mode: 'core' | 'gated' | 'external'
   riskLevel: 'low' | 'medium' | 'high' | 'critical'
   capabilities: string[]
+  gate: IntelligenceLocalSkillGateSummary
   path?: string
   manifestPath?: string
   updatedAt?: number
