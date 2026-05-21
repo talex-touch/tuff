@@ -77,10 +77,13 @@
 - `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.*.ts`
 - `apps/nexus/server/utils/notificationDispatcher.ts`
 - `apps/nexus/server/utils/browserNotificationInboxStore.ts`
+- `apps/nexus/server/utils/browserPushSubscriptionStore.ts`
 - `apps/nexus/server/utils/notificationCredentialStore.ts`
 - `apps/nexus/server/api/dashboard/notifications/channels/test.post.ts`
 - `apps/nexus/server/api/dashboard/notifications/credentials.*.ts`
 - `apps/nexus/server/api/dashboard/notifications/inbox/*`
+- `apps/nexus/server/api/dashboard/notifications/push-subscriptions/*`
+- `apps/nexus/public/notification-sw.js`
 - `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
 - `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
 - `apps/nexus/app/pages/dashboard/admin/governance.vue`
@@ -110,14 +113,17 @@
   - Dashboard admins can open Data Governance to inspect the analytics cockpit, storage policy health evaluation, and configure analytics, storage, notification, and provider quota policies; plugin owners/admins can query per-plugin analytics.
   - Dashboard assets plugin details now load owner/admin-only private analytics and show downloads, installs, invocations, active users, latest/peak trend days, geo/channel/version/action/artifact breakdowns, and package-size summary in the plugin detail drawer.
   - Storage channel policy evaluation now reports stored bytes, traffic bytes, operation counts, utilization, and `ok` / `warning` / `blocked` status for configured storage channels, with `targetId` resource-type filtering aligned with operation enforcement.
+  - `/api/dashboard/storage/policies` now returns a reusable storage alert queue derived from policy evaluations, and Data Governance surfaces blocked/warning storage, traffic, and operation limits with usage, configured limit, utilization, and sanitized reasons.
+  - Added `/api/dashboard/storage/alerts/notify` and Data Governance controls so admins can dry-run or send current storage alerts through configured notification channels while recording only sanitized policy/channel/metric metadata.
   - Plugin version moderation now plans notification delivery for configured browser/email/Feishu/Lark/webhook channels and records `planned` / `sent` / `skipped` / `failed` delivery audit events without persisting raw recipients/secrets.
   - Notification channel configs now separate the provider instance name from the adapter type: `provider` can identify entries such as `resend-primary` or `smtp-ops`, while `config.providerType` / `config.adapter` selects `resend`, `smtp`, `feishu`, `lark`, `browser`, or `webhook`.
   - Notification credentials now use a dedicated `secure://notifications/*` D1 encrypted store and Dashboard binding API; notification delivery planning marks credentialed channels as `credential-missing` when the referenced secure credential is absent.
-  - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, SMTP relay, webhook, Feishu, and Lark adapters when secure credentials exist and recipients are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. Direct SMTP socket delivery, Web Push delivery, and cross-browser visible evidence remain follow-ups.
+  - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, SMTP relay, webhook, Feishu, Lark, and Web Push relay adapters when secure credentials exist and recipients or registered push subscriptions are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. Direct SMTP socket delivery, production VAPID/relay evidence, and cross-browser visible evidence remain follow-ups.
   - Added `/api/dashboard/notifications/channels/test` so admins can dry-run a single saved notification channel, or allow send execution according to the channel's existing `config.mode`, while recording only sanitized delivery audit metadata for the selected `configId`.
   - Data Governance now exposes a notification channel test panel with saved-channel selection, action/resource/metadata inputs, dry-run and send buttons, and delivery status/reason/provider/adapter/credentialRef feedback for the selected channel.
   - Added `/dashboard/notifications`, `/api/dashboard/notifications/inbox`, and `/api/dashboard/notifications/inbox/read` so signed-in users can open the notification center, manage browser Notification permission, send a local browser test notification, list unread counts, and mark selected or all notifications as read.
-  - Data Governance now surfaces notification delivery health with planned/sent/skipped/failed counts, sentRate, provider instance, adapter, notification action, and delivery reason breakdowns.
+  - Added `/api/dashboard/notifications/push-subscriptions`, notification-center Web Push register/remove controls, and a minimal service worker so signed-in users can persist HTTPS push subscriptions without exposing endpoints or `p256dh`/`auth` keys through public API summaries or governance audit.
+  - Data Governance now surfaces notification delivery health with planned/sent/skipped/failed counts, sentRate, provider instance, adapter, notification action, delivery reason breakdowns, and browser push subscription register/delete analytics by sanitized endpoint host.
   - User signup governance now records hashed signup events with source/geo/timezone metadata and the Data Governance cockpit surfaces signup growth/trend without storing raw emails.
   - Plugin download handling now emits a separate install governance event, so global and per-plugin analytics can distinguish download volume from install trend while preserving geo/channel/version/artifact/package-size breakdowns.
   - Provider usage governance now carries safe model and provider-type metadata from Scene execution and Nexus Intelligence invokes; the cockpit surfaces token distribution by model/provider type and per-provider top models without recording prompts, inputs, or outputs.
