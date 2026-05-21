@@ -76,6 +76,7 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'credentialref',
   'email',
   'from',
+  'p256dh',
   'password',
   'recipient',
   'recipients',
@@ -85,6 +86,10 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'to',
   'userid',
   'webhookurl',
+  'webpushsubscription',
+  'webpushsubscriptions',
+  'pushsubscription',
+  'pushsubscriptions',
 ])
 
 function getD1Database(event?: H3Event | null): D1Database | null {
