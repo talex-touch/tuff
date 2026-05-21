@@ -316,10 +316,45 @@ interface NotificationCredentialsResponse {
   generatedAt: string
 }
 
+type NotificationDeliveryStatus = 'planned' | 'sent' | 'skipped' | 'failed'
+
+interface NotificationDeliveryRecord {
+  configId: string
+  configName: string
+  action: string
+  channel: string
+  provider: string | null
+  providerType: string | null
+  adapter: string
+  status: NotificationDeliveryStatus
+  reason: string
+  credentialRequired: boolean
+  hasCredentialRef: boolean
+  resourceType: string | null
+  resourceId: string | null
+}
+
+interface NotificationChannelTestResponse {
+  channel: {
+    id: string
+    name: string
+    channel: string | null
+    provider: string | null
+    enabled: boolean
+  }
+  action: string
+  mode: 'plan' | 'send'
+  deliveries: NotificationDeliveryRecord[]
+  generatedAt: string
+}
+
 const summaryDays = ref(30)
 const saveError = ref('')
 const saveMessage = ref('')
 const saving = ref(false)
+const notificationTesting = ref(false)
+const notificationTestError = ref('')
+const notificationTestResult = ref<NotificationChannelTestResponse | null>(null)
 
 const analyticsForm = reactive({
   name: 'Default analytics collection',
@@ -352,6 +387,13 @@ const notificationCredentialForm = reactive({
   authRef: 'secure://notifications/resend-primary',
   credentialType: 'api_key',
   credentialsJson: '',
+})
+
+const notificationTestForm = reactive({
+  configId: '',
+  action: 'system.notification.test',
+  resourceId: '',
+  metadataJson: '{\n  "source": "dashboard-governance"\n}',
 })
 
 const storageCredentialForm = reactive({
@@ -594,6 +636,16 @@ const groupedConfigs = computed(() => ({
   notifications: configs.value.filter(item => item.configType === 'notification_channel'),
   providerQuotas: configs.value.filter(item => item.configType === 'intelligence_provider_quota'),
 }))
+const notificationConfigs = computed(() => groupedConfigs.value.notifications)
+
+watch(notificationConfigs, (items) => {
+  if (!items.length) {
+    notificationTestForm.configId = ''
+    return
+  }
+  if (!notificationTestForm.configId || !items.some(item => item.id === notificationTestForm.configId))
+    notificationTestForm.configId = items[0]?.id ?? ''
+}, { immediate: true })
 
 function parseJsonObject(value: string, label: string): Record<string, unknown> | null {
   const trimmed = value.trim()
@@ -741,6 +793,40 @@ async function saveNotificationCredential(): Promise<void> {
   }
 }
 
+async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
+  if (notificationTesting.value || !notificationTestForm.configId) {
+    return
+  }
+
+  notificationTestError.value = ''
+  notificationTestResult.value = null
+  notificationTesting.value = true
+
+  try {
+    const result = await requestJson<NotificationChannelTestResponse>('/api/dashboard/notifications/channels/test', {
+      method: 'POST',
+      body: {
+        configId: notificationTestForm.configId,
+        action: notificationTestForm.action,
+        mode,
+        resourceId: notificationTestForm.resourceId || undefined,
+        metadata: parseJsonObject(notificationTestForm.metadataJson, 'metadata'),
+      },
+    })
+    notificationTestResult.value = result
+    saveMessage.value = mode === 'send'
+      ? t('dashboard.governance.notificationTest.sent', 'Notification channel test sent.')
+      : t('dashboard.governance.notificationTest.planned', 'Notification channel dry-run recorded.')
+    await Promise.all([refreshSummary(), refreshAnalytics()])
+  }
+  catch (error) {
+    notificationTestError.value = error instanceof Error ? error.message : t('dashboard.governance.notificationTest.failed', 'Notification channel test failed.')
+  }
+  finally {
+    notificationTesting.value = false
+  }
+}
+
 async function refreshAll(): Promise<void> {
   await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageCredentials(), refreshNotificationCredentials()])
 }
@@ -804,6 +890,16 @@ function storageEvaluationLabel(status: StoragePolicyEvaluationStatus): string {
   return t('dashboard.governance.storagePolicy.disabled', 'Disabled')
 }
 
+function notificationDeliveryTone(status: NotificationDeliveryStatus): StatusTone {
+  if (status === 'sent')
+    return 'success'
+  if (status === 'failed')
+    return 'danger'
+  if (status === 'skipped')
+    return 'warning'
+  return 'info'
+}
+
 function formatRatio(value: number | null): string {
   return value == null ? '-' : formatPercent(value)
 }
@@ -830,8 +926,8 @@ function formatRatio(value: number | null): string {
       {{ t('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
     </div>
 
-    <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || storageCredentialsError || notificationCredentialsError || saveError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-      {{ saveError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message }}
+    <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || storageCredentialsError || notificationCredentialsError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+      {{ saveError || notificationTestError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message }}
     </div>
 
     <div v-if="saveMessage" class="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
@@ -1178,6 +1274,75 @@ function formatRatio(value: number | null): string {
           <div class="mt-3 grid gap-3 md:grid-cols-2">
             <textarea v-model="analyticsForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
             <textarea v-model="analyticsForm.configJson" class="GovernanceTextarea" spellcheck="false" />
+          </div>
+        </section>
+
+        <section class="apple-card-lg p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-black dark:text-white">
+                {{ t('dashboard.governance.notificationTest.title', 'Notification channel test') }}
+              </h2>
+              <p class="text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.governance.notificationTest.hint', 'Dry-run records sanitized delivery audit; send follows the selected channel config and runtime metadata.') }}
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <TxButton variant="secondary" size="small" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('plan')">
+                <TxSpinner v-if="notificationTesting" :size="14" />
+                <span :class="notificationTesting ? 'ml-2' : ''">{{ t('dashboard.governance.notificationTest.dryRun', 'Dry run') }}</span>
+              </TxButton>
+              <TxButton size="small" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('send')">
+                {{ t('dashboard.governance.notificationTest.send', 'Send using config') }}
+              </TxButton>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 md:grid-cols-[1.5fr_1fr_1fr]">
+            <TuffSelect v-model="notificationTestForm.configId" class="w-full">
+              <TuffSelectItem
+                v-for="channel in notificationConfigs"
+                :key="channel.id"
+                :value="channel.id"
+                :label="`${channel.name} · ${channel.channel || 'unknown'} / ${channel.provider || 'default'}`"
+              />
+            </TuffSelect>
+            <TuffInput v-model="notificationTestForm.action" class="w-full" />
+            <TuffInput v-model="notificationTestForm.resourceId" class="w-full" placeholder="optional resource id" />
+          </div>
+          <textarea v-model="notificationTestForm.metadataJson" class="GovernanceTextarea mt-3" spellcheck="false" />
+          <div v-if="notificationTestResult" class="mt-4 rounded-xl border border-black/[0.06] p-3 text-sm dark:border-white/[0.08]">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate font-medium text-black dark:text-white">
+                  {{ notificationTestResult.channel.name }}
+                </p>
+                <p class="text-xs text-black/45 dark:text-white/45">
+                  {{ notificationTestResult.action }} · {{ notificationTestResult.mode }} · {{ formatDate(notificationTestResult.generatedAt) }}
+                </p>
+              </div>
+              <TxStatusBadge
+                :text="notificationTestResult.channel.enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')"
+                size="sm"
+                :status="notificationTestResult.channel.enabled ? 'success' : 'warning'"
+              />
+            </div>
+            <div class="mt-3 grid gap-2">
+              <div v-for="delivery in notificationTestResult.deliveries" :key="`${delivery.configId}:${delivery.adapter}:${delivery.status}`" class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black dark:text-white">{{ delivery.configName }}</span>
+                  <TxStatusBadge :text="delivery.status" size="sm" :status="notificationDeliveryTone(delivery.status)" />
+                </div>
+                <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                  {{ delivery.channel }} · {{ delivery.provider || 'default' }} · {{ delivery.providerType || delivery.adapter }} · {{ delivery.reason }}
+                </p>
+                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ delivery.credentialRequired ? t('dashboard.governance.notificationTest.credentialRequired', 'Credential required') : t('dashboard.governance.notificationTest.credentialOptional', 'No credential required') }} · {{ delivery.hasCredentialRef ? t('dashboard.governance.notificationTest.credentialRefBound', 'credentialRef bound') : t('dashboard.governance.notificationTest.credentialRefMissing', 'credentialRef missing') }}
+                </p>
+              </div>
+              <p v-if="notificationTestResult.deliveries.length === 0" class="text-sm text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.notificationTest.empty', 'No delivery matched the selected channel.') }}
+              </p>
+            </div>
           </div>
         </section>
 
