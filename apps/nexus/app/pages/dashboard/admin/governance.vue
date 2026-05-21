@@ -302,6 +302,15 @@ interface GovernanceAnalytics {
     growth: GovernanceGrowth
     byModel: GovernanceMetric[]
     byProviderType: GovernanceMetric[]
+    quotaSummary: {
+      total: number
+      active: number
+      blocked: number
+      warning: number
+      disabled: number
+      highestRequestUtilization: number
+      highestTokenUtilization: number
+    }
     quotas: Array<{
       configId: string
       providerId: string
@@ -775,6 +784,15 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
         byModel: [],
         byProviderType: [],
+        quotaSummary: {
+          total: 0,
+          active: 0,
+          blocked: 0,
+          warning: 0,
+          disabled: 0,
+          highestRequestUtilization: 0,
+          highestTokenUtilization: 0,
+        },
         quotas: [],
         leaderboard: [],
       },
@@ -904,6 +922,10 @@ const storageProfiles = computed(() => storagePoliciesData.value?.profiles ?? []
 const selectedStorageProfile = computed(() => storageProfiles.value.find(profile => profile.id === storageForm.profileId) ?? null)
 const storageCredentials = computed(() => storageCredentialsData.value?.credentials ?? [])
 const notificationCredentials = computed(() => notificationCredentialsData.value?.credentials ?? [])
+const providerQuotaPeakUtilization = computed(() => Math.max(
+  analyticsData.value.providers.quotaSummary.highestRequestUtilization,
+  analyticsData.value.providers.quotaSummary.highestTokenUtilization,
+))
 const groupedConfigs = computed(() => ({
   analytics: configs.value.filter(item => item.configType === 'analytics_collection'),
   storage: configs.value.filter(item => item.configType === 'storage_channel'),
@@ -1780,6 +1802,40 @@ function formatRatio(value: number | null): string {
               <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
                 {{ t('dashboard.governance.analytics.providerQuotaUtilization', 'Quota utilization') }}
               </h4>
+              <div class="mt-3 grid gap-2 sm:grid-cols-4">
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaActive', 'Active') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                    {{ formatNumber(analyticsData.providers.quotaSummary.active) }}
+                  </p>
+                </div>
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaBlocked', 'Blocked') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-red-600 dark:text-red-100">
+                    {{ formatNumber(analyticsData.providers.quotaSummary.blocked) }}
+                  </p>
+                </div>
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaWarning', 'Warning') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-100">
+                    {{ formatNumber(analyticsData.providers.quotaSummary.warning) }}
+                  </p>
+                </div>
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaPeak', 'Peak') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                    {{ formatRatio(providerQuotaPeakUtilization) }}
+                  </p>
+                </div>
+              </div>
               <div class="mt-2 grid gap-2">
                 <div v-for="quota in analyticsData.providers.quotas.slice(0, 6)" :key="quota.configId" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
                   <div class="flex items-center justify-between gap-3">

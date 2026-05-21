@@ -733,6 +733,15 @@ describe('platformGovernanceStore', () => {
     expect(analytics.providers.byProviderType).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: providerType, quantity: 512 }),
     ]))
+    expect(analytics.providers.quotaSummary).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      active: expect.any(Number),
+      blocked: expect.any(Number),
+      warning: expect.any(Number),
+      disabled: expect.any(Number),
+      highestRequestUtilization: 100,
+      highestTokenUtilization: 85.33,
+    }))
     expect(analytics.providers.quotas).toEqual(expect.arrayContaining([
       expect.objectContaining({
         providerId,
