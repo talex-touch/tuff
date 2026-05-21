@@ -137,6 +137,21 @@ interface NotificationDeliveryAnalytics {
   byAdapter: GovernanceMetric[]
   byReason: GovernanceMetric[]
   byNotificationAction: GovernanceMetric[]
+  providerHealth: Array<{
+    provider: string
+    providerType: string | null
+    adapter: string | null
+    channel: string | null
+    total: number
+    planned: number
+    sent: number
+    skipped: number
+    failed: number
+    sentRate: number
+    failureRate: number
+    latestFailureReason: string | null
+    latestFailureAt: string | null
+  }>
   browserPushSubscriptions: {
     total: number
     registered: number
@@ -727,6 +742,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byAdapter: [],
         byReason: [],
         byNotificationAction: [],
+        providerHealth: [],
         browserPushSubscriptions: {
           total: 0,
           registered: 0,
@@ -1625,6 +1641,39 @@ function formatRatio(value: number | null): string {
             </div>
             <p v-if="analyticsData.notifications.byReason.length === 0" class="text-sm text-black/45 dark:text-white/45">
               {{ t('dashboard.governance.analytics.notificationReasonEmpty', 'No delivery reason data yet.') }}
+            </p>
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+          <h3 class="text-sm font-semibold text-black dark:text-white">
+            {{ t('dashboard.governance.analytics.notificationProviderHealth', 'Notification provider health') }}
+          </h3>
+          <div class="mt-3 grid gap-2">
+            <div v-for="item in analyticsData.notifications.providerHealth.slice(0, 6)" :key="`notification-health:${item.provider}`" class="rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">{{ item.provider }}</span>
+                <TxStatusBadge
+                  :text="item.failed ? t('dashboard.governance.analytics.notificationProviderFailed', 'Failed') : item.sent ? t('dashboard.governance.analytics.notificationProviderSent', 'Sent') : t('dashboard.governance.analytics.notificationProviderPlanned', 'Planned')"
+                  size="sm"
+                  :status="item.failed ? 'danger' : item.sent ? 'success' : 'info'"
+                />
+              </div>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ item.channel || 'unknown' }} · {{ item.providerType || item.adapter || 'generic' }}
+              </p>
+              <div class="mt-2 grid grid-cols-2 gap-2 text-black/60 dark:text-white/60">
+                <span>{{ t('dashboard.governance.analytics.notificationProviderSentRate', 'Sent rate') }}: {{ formatPercent(item.sentRate) }}</span>
+                <span>{{ t('dashboard.governance.analytics.notificationProviderFailureRate', 'Failure rate') }}: {{ formatPercent(item.failureRate) }}</span>
+                <span>{{ formatNumber(item.sent) }} sent / {{ formatNumber(item.failed) }} failed</span>
+                <span>{{ formatNumber(item.skipped) }} skipped / {{ formatNumber(item.planned) }} planned</span>
+              </div>
+              <p v-if="item.latestFailureReason" class="mt-2 truncate text-red-600 dark:text-red-100">
+                {{ item.latestFailureReason }} · {{ item.latestFailureAt ? formatDate(item.latestFailureAt) : '-' }}
+              </p>
+            </div>
+            <p v-if="analyticsData.notifications.providerHealth.length === 0" class="text-sm text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.analytics.notificationProviderHealthEmpty', 'No provider delivery health yet.') }}
             </p>
           </div>
         </div>

@@ -988,6 +988,19 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
   const byNotificationAction = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byPushSubscriptionAction = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byPushEndpointHost = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const providerHealth = new Map<string, {
+    provider: string
+    providerType: string | null
+    adapter: string | null
+    channel: string | null
+    total: number
+    planned: number
+    sent: number
+    skipped: number
+    failed: number
+    latestFailureReason: string | null
+    latestFailureAt: string | null
+  }>()
 
   let planned = 0
   let sent = 0
@@ -998,19 +1011,58 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
 
   for (const event of deliveryEvents) {
     const status = event.action.slice('notification.delivery.'.length) || 'unknown'
+    const provider = readEventMetadataString(event, 'provider') ?? event.channel ?? 'unknown'
+    const providerType = readEventMetadataString(event, 'providerType')
+    const adapter = readEventMetadataString(event, 'adapter')
+    const reason = readEventMetadataString(event, 'reason')
+    const providerItem = providerHealth.get(provider) ?? {
+      provider,
+      providerType,
+      adapter,
+      channel: event.channel,
+      total: 0,
+      planned: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      latestFailureReason: null,
+      latestFailureAt: null,
+    }
+    providerItem.providerType ||= providerType
+    providerItem.adapter ||= adapter
+    providerItem.channel ||= event.channel
+    providerItem.total += 1
+
     if (status === 'planned')
       planned += 1
-    else if (status === 'sent')
+    else if (status === 'sent') {
       sent += 1
-    else if (status === 'skipped')
+    }
+    else if (status === 'skipped') {
       skipped += 1
-    else if (status === 'failed')
+    }
+    else if (status === 'failed') {
       failed += 1
+      if (!providerItem.latestFailureAt || event.occurredAt.localeCompare(providerItem.latestFailureAt) > 0) {
+        providerItem.latestFailureAt = event.occurredAt
+        providerItem.latestFailureReason = reason
+      }
+    }
+
+    if (status === 'planned')
+      providerItem.planned += 1
+    else if (status === 'sent')
+      providerItem.sent += 1
+    else if (status === 'skipped')
+      providerItem.skipped += 1
+    else if (status === 'failed')
+      providerItem.failed += 1
+    providerHealth.set(provider, providerItem)
 
     addMetricBucket(byDeliveryStatus, status, event, 1)
-    addMetricBucket(byProvider, readEventMetadataString(event, 'provider') ?? event.channel, event, 1)
-    addMetricBucket(byAdapter, readEventMetadataString(event, 'adapter'), event, 1)
-    addMetricBucket(byReason, readEventMetadataString(event, 'reason'), event, 1)
+    addMetricBucket(byProvider, provider, event, 1)
+    addMetricBucket(byAdapter, adapter, event, 1)
+    addMetricBucket(byReason, reason, event, 1)
     addMetricBucket(byNotificationAction, readEventMetadataString(event, 'notificationAction'), event, 1)
   }
   for (const event of pushSubscriptionEvents) {
@@ -1042,6 +1094,14 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     byAdapter: mapMetricBuckets(byAdapter, topLimit),
     byReason: mapMetricBuckets(byReason, topLimit),
     byNotificationAction: mapMetricBuckets(byNotificationAction, topLimit),
+    providerHealth: Array.from(providerHealth.values())
+      .map(item => ({
+        ...item,
+        sentRate: item.total ? Math.round((item.sent / item.total) * 10000) / 100 : 0,
+        failureRate: item.total ? Math.round((item.failed / item.total) * 10000) / 100 : 0,
+      }))
+      .sort((a, b) => b.failed - a.failed || b.failureRate - a.failureRate || b.total - a.total)
+      .slice(0, topLimit),
     browserPushSubscriptions: {
       total: pushSubscriptionEvents.length,
       registered: pushRegistered,
