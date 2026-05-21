@@ -39,6 +39,7 @@ const SDK_DOCS_MAP: Record<string, string> = {
   'divisionbox-sdk': 'division-box',
   'flow-sdk': 'flow-transfer',
   'intelligence-sdk': 'intelligence',
+  'meta-sdk': 'quick-actions',
 }
 
 const heroHighlightItems: FeatureSearchItem[] = heroHighlights

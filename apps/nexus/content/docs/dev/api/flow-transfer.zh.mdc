@@ -330,7 +330,7 @@ code: |
 
 ## 原生系统分享
 
-Flow Transfer 集成了系统原生分享功能，可以将数据分享到 AirDrop、邮件、信息等系统应用。
+Flow Transfer 集成了系统原生分享功能，可以将数据分享到 AirDrop、邮件、信息等系统应用。插件如果是在 MetaK / Quick Actions 动作中分享当前 item，优先使用 [QuickActions SDK](./quick-actions.zh.md) 的 `shareItem()`，避免重复实现目标解析与平台 fallback。
 
 **使用原生分享**
 
@@ -363,12 +363,14 @@ code: |
 
 | 平台 | 目标 | 说明 |
 |------|------|------|
-| macOS | `system` | 系统分享面板 |
+| macOS | `system` / `system-share` | 系统分享面板 |
 | macOS | `airdrop` | AirDrop |
 | macOS | `mail` | 邮件 |
 | macOS | `messages` | 信息 (iMessage) |
-| Windows | `system` | Windows 分享 |
 | Windows | `mail` | 邮件 |
+| Linux | `mail` | 邮件 |
+
+> 说明：Flow target 列表中的系统分享目标 ID 是 `system-share`；`flow.nativeShare()` 仍接受 `system` 作为兼容别名。Windows / Linux 当前只暴露明确的 `mail` fallback，不伪装系统分享面板。
 
 ---
 

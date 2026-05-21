@@ -1,0 +1,211 @@
+# QuickActions SDK
+
+## Overview
+
+QuickActions SDK lets plugins register global actions in the MetaK / Quick Actions panel and reuse Flow Transfer native sharing. `meta` / `plugin.meta` remains as a compatibility alias. New code should prefer `quickActions` / `plugin.quickActions`.
+
+## Quick Start
+
+Plugin `index.js` can use `globalThis.quickActions` directly. `plugin.quickActions` points to the same SDK instance.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  quickActions.registerAction({
+    id: 'share-current-item',
+    render: {
+      basic: {
+        title: 'Share current item',
+        subtitle: 'Use system share, AirDrop, or mail',
+        icon: { type: 'class', value: 'i-ri-share-line' }
+      },
+      shortcut: '⌘⇧S',
+      group: 'Share'
+    },
+    priority: 120
+  })
+
+  quickActions.onActionExecute(async ({ actionId, item }) => {
+    if (actionId !== 'share-current-item') return
+
+    const result = await quickActions.shareItem(item, {
+      preferredTargets: ['airdrop', 'system-share', 'mail']
+    })
+
+    if (!result.success) {
+      logger.warn('Native share failed', result.error)
+    }
+  })
+---
+:::
+
+## API Reference
+
+### `registerAction(action)`
+
+Register a global action shown in the MetaK / Quick Actions panel.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unregister = quickActions.registerAction({
+    id: 'copy-title',
+    render: {
+      basic: {
+        title: 'Copy title',
+        subtitle: 'Copy the current item title',
+        icon: { type: 'class', value: 'i-ri-file-copy-line' }
+      },
+      group: 'Text'
+    }
+  })
+
+  // Later
+  unregister()
+---
+:::
+
+### `unregisterAll()`
+
+Unregister all Quick Actions created by the current plugin.
+
+### `onActionExecute(handler)`
+
+Listen for actions registered by the current plugin. The callback only receives `actionId` values owned by this plugin.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const dispose = quickActions.onActionExecute(({ actionId, item }) => {
+    logger.info('quick action executed', { actionId, itemId: item.id })
+  })
+
+  dispose()
+---
+:::
+
+### `getNativeShareTargets(payloadType?)`
+
+Read native share targets that are actually available on the current platform. The result comes from the Flow Transfer target registry and only includes targets where `isNativeShare === true`.
+
+| Platform | Targets |
+| --- | --- |
+| macOS | `system-share`, `airdrop`, `mail`, `messages` |
+| Windows | `mail` |
+| Linux | `mail` |
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const targets = await quickActions.getNativeShareTargets('files')
+  const canAirDrop = targets.some(target => target.id === 'airdrop')
+---
+:::
+
+### `resolveNativeShareTarget(options?)`
+
+Resolve one available native share target from the payload type and plugin preferences, so plugins do not duplicate platform fallback logic.
+
+Default strategy:
+
+| Payload type | Default order |
+| --- | --- |
+| `files` / `image` | `airdrop` -> `system-share` -> `mail` |
+| `text` / `html` / `json` / `custom` | `system-share` -> `mail` -> `messages` |
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const target = await quickActions.resolveNativeShareTarget({
+    payloadType: 'files',
+    preferredTargets: ['airdrop', 'mail'],
+    allowFallback: false
+  })
+
+  if (!target) {
+    logger.info('No preferred native share target available')
+  }
+---
+:::
+
+`allowFallback` defaults to `true`. When set to `false`, unavailable preferred targets return `undefined` instead of silently selecting another target.
+
+### `nativeShare(payload, options?)`
+
+Share a Flow payload through Flow Transfer's `flow:native:share` channel. Permission, error, and platform fallback semantics stay aligned with Flow Transfer.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await quickActions.nativeShare(
+    {
+      type: 'text',
+      data: 'Hello from Tuff',
+      context: {
+        sourcePluginId: plugin.getInfo().name,
+        metadata: { title: 'Share text' }
+      }
+    },
+    { target: 'mail' }
+  )
+---
+:::
+
+### `createSharePayloadFromItem(item, options?)`
+
+Convert the current CoreBox item into a shareable Flow payload.
+
+- File items prefer `{ type: 'files', data: [path] }`
+- Link or generic items use `{ type: 'text', data: title + subtitle + url }`
+- `metadata` preserves `itemId`, `itemKind`, `sourceId`, and `sourceType`
+
+### `shareItem(item, options?)`
+
+Wrap the common `item -> Flow payload -> target resolution -> native share` path. This is the preferred helper for MetaK global share actions.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await quickActions.shareItem(item, {
+    preferredTargets: ['airdrop', 'system-share', 'mail']
+  })
+
+  if (!result.success) {
+    logger.warn('Share failed', result.error)
+  }
+---
+:::
+
+If your plugin needs full control over payload or target selection, use `createSharePayloadFromItem()` + `resolveNativeShareTarget()` + `nativeShare()`.
+
+## Type Summary
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface QuickActionsSDK {
+    registerAction(action: TuffQuickAction): () => void
+    unregisterAll(): void
+    onActionExecute(handler: QuickActionExecuteHandler): () => void
+    getNativeShareTargets(payloadType?: FlowPayloadType): Promise<FlowTargetInfo[]>
+    resolveNativeShareTarget(options?: QuickActionNativeShareTargetOptions): Promise<FlowTargetInfo | undefined>
+    nativeShare(payload: FlowPayload, options?: { target?: string }): Promise<NativeShareResult>
+    createSharePayloadFromItem(item: TuffItem, options?: QuickActionItemSharePayloadOptions): FlowPayload
+    shareItem(item: TuffItem, options?: QuickActionShareItemOptions): Promise<NativeShareResult>
+  }
+---
+:::
+
+## Best Practices
+
+1. Use `quickActions` for new code, and keep `meta` only for old plugin compatibility.
+2. Before sharing, call `getNativeShareTargets()` or `resolveNativeShareTarget()` instead of guessing availability from `process.platform`.
+3. Prefer `airdrop` for files and images; prefer `system-share` for text-like payloads.
+4. Windows and Linux currently expose only the explicit `mail` fallback, not a fake system share panel.
+5. Handle `result.success === false` and provide copy, mail, or plugin-specific fallback behavior.
+
+## Related Docs
+
+- [Plugin Context](./plugin-context.en.md)
+- [Flow Transfer API](./flow-transfer.en.md)
+- [Platform Capabilities SDK](./platform-capabilities.en.md)

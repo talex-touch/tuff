@@ -742,6 +742,26 @@ export default {
         approvalRejected: '审批拒绝：{toolId}',
       },
     },
+    notifications: {
+      browser: {
+        permissionGranted: '已允许',
+        permissionDenied: '已阻止',
+        permissionPrompt: '待授权',
+        permissionUnsupported: '不支持',
+        test: '测试浏览器通知',
+        enable: '开启浏览器通知',
+        blocked: '已被浏览器阻止',
+        unsupported: '浏览器不支持',
+        testTitle: 'Tuff 通知测试',
+        testBody: '浏览器通知已可用。',
+        testSent: '浏览器测试通知已发送',
+        testFailed: '浏览器通知测试失败',
+        errors: {
+          unsupported: '当前浏览器不支持系统通知。',
+          permissionRequired: '请先允许浏览器通知权限。',
+        },
+      },
+    },
     sections: {
       overview: {
         title: '快速概览',

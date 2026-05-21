@@ -2146,8 +2146,8 @@ export async function upsertDevice(
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
-  const existing = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ? AND user_id = ?`).bind(deviceId, userId).first()
-  if (existing) {
+  const existing = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE id = ?`).bind(deviceId).first<Record<string, any>>()
+  if (existing?.user_id === userId) {
     await db.prepare(`
       UPDATE ${DEVICES_TABLE}
       SET device_name = COALESCE(?, device_name),
@@ -2168,6 +2168,31 @@ export async function upsertDevice(
       data?.reactivateRevoked ? 1 : 0,
       deviceId,
       userId
+    ).run()
+  }
+  else if (existing) {
+    await db.prepare(`
+      UPDATE ${DEVICES_TABLE}
+      SET user_id = ?,
+          device_name = ?,
+          platform = ?,
+          client_type = ?,
+          user_agent = ?,
+          trusted_at = NULL,
+          last_seen_at = ?,
+          created_at = ?,
+          revoked_at = NULL,
+          token_version = token_version + 1
+      WHERE id = ?
+    `).bind(
+      userId,
+      data?.deviceName ?? null,
+      data?.platform ?? null,
+      data?.clientType ?? null,
+      getUserAgent(event),
+      now,
+      now,
+      deviceId
     ).run()
   }
   else {

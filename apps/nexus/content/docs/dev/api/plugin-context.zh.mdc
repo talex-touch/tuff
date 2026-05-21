@@ -40,6 +40,8 @@ code: |
     // UI
     dialog,           // 系统对话框
     divisionBox,      // DivisionBox SDK
+    quickActions,     // QuickActions SDK（MetaK 全局动作与原生分享）
+    meta,             // MetaSDK 兼容别名（新代码优先 quickActions）
     
     // 工具
     TuffItemBuilder,  // 搜索结果构建器
@@ -283,6 +285,55 @@ code: |
   const items = boxItems.getItems()
 ---
 :::
+
+---
+
+## quickActions / meta
+
+QuickActions SDK 用于注册 MetaK / Quick Actions 全局动作，也可以从动作中调用原生分享。`meta` 是历史兼容别名，和 `quickActions` 指向同一个 SDK 实例；新插件请优先使用 `quickActions`。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  quickActions.registerAction({
+    id: 'share-current-item',
+    render: {
+      basic: {
+        title: '分享当前项目',
+        subtitle: '使用当前平台可用的原生分享目标',
+        icon: { type: 'class', value: 'i-ri-share-line' }
+      },
+      group: '分享'
+    }
+  })
+
+  quickActions.onActionExecute(async ({ actionId, item }) => {
+    if (actionId !== 'share-current-item') return
+
+    const result = await quickActions.shareItem(item, {
+      preferredTargets: ['airdrop', 'system-share', 'mail']
+    })
+
+    if (!result.success) {
+      logger.warn('原生分享失败', result.error)
+    }
+  })
+---
+:::
+
+常用方法：
+
+| 方法 | 说明 |
+| --- | --- |
+| `registerAction(action)` | 注册一个 MetaK / Quick Actions 全局动作 |
+| `onActionExecute(handler)` | 监听当前插件注册动作的执行事件 |
+| `getNativeShareTargets(payloadType?)` | 查询当前平台真实可用的原生分享目标 |
+| `resolveNativeShareTarget(options?)` | 按 payload 类型和偏好顺序解析分享目标 |
+| `nativeShare(payload, options?)` | 复用 Flow Transfer 执行原生分享 |
+| `createSharePayloadFromItem(item, options?)` | 将 CoreBox item 转成 Flow payload |
+| `shareItem(item, options?)` | 一步完成 item payload 构造、目标解析和分享 |
+
+> 详见 [QuickActions SDK](./quick-actions.zh.md)
 
 ---
 
@@ -594,6 +645,7 @@ code: |
 
 - [Feature SDK](./feature-sdk.zh.md) - Feature 详细 API
 - [DivisionBox API](./division-box.zh.md) - 独立窗口系统
+- [QuickActions SDK](./quick-actions.zh.md) - MetaK 全局动作与原生分享
 - [PowerSDK](./power.zh.md) - 低电量适配能力
 - [RecommendSDK](./recommend.zh.md) - 自定义推荐提供者
 - [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转

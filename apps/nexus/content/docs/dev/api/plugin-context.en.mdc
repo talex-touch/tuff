@@ -40,6 +40,8 @@ code: |
     // UI
     dialog,           // System dialogs
     divisionBox,      // DivisionBox SDK
+    quickActions,     // QuickActions SDK (MetaK global actions and native share)
+    meta,             // MetaSDK compatibility alias (prefer quickActions)
     
     // Utilities
     TuffItemBuilder,  // Search result builder
@@ -283,6 +285,55 @@ code: |
   const items = boxItems.getItems()
 ---
 :::
+
+---
+
+## quickActions / meta
+
+QuickActions SDK registers MetaK / Quick Actions global actions and can call native share from those actions. `meta` is a compatibility alias that points to the same SDK instance. New plugins should prefer `quickActions`.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  quickActions.registerAction({
+    id: 'share-current-item',
+    render: {
+      basic: {
+        title: 'Share current item',
+        subtitle: 'Use the current platform native share target',
+        icon: { type: 'class', value: 'i-ri-share-line' }
+      },
+      group: 'Share'
+    }
+  })
+
+  quickActions.onActionExecute(async ({ actionId, item }) => {
+    if (actionId !== 'share-current-item') return
+
+    const result = await quickActions.shareItem(item, {
+      preferredTargets: ['airdrop', 'system-share', 'mail']
+    })
+
+    if (!result.success) {
+      logger.warn('Native share failed', result.error)
+    }
+  })
+---
+:::
+
+Common methods:
+
+| Method | Description |
+| --- | --- |
+| `registerAction(action)` | Register a MetaK / Quick Actions global action |
+| `onActionExecute(handler)` | Listen for actions registered by this plugin |
+| `getNativeShareTargets(payloadType?)` | Read native share targets available on this platform |
+| `resolveNativeShareTarget(options?)` | Resolve a target by payload type and preference order |
+| `nativeShare(payload, options?)` | Run native share through Flow Transfer |
+| `createSharePayloadFromItem(item, options?)` | Convert a CoreBox item into a Flow payload |
+| `shareItem(item, options?)` | Build item payload, resolve target, and share in one call |
+
+> See [QuickActions SDK](./quick-actions.en.md) for full documentation.
 
 ---
 
@@ -594,6 +645,7 @@ code: |
 
 - [Feature SDK](./feature-sdk.en.md) - Feature detailed API
 - [DivisionBox API](./division-box.en.md) - Independent window system
+- [QuickActions SDK](./quick-actions.en.md) - MetaK global actions and native share
 - [PowerSDK](./power.en.md) - Low-power adaptation
 - [RecommendSDK](./recommend.en.md) - Custom recommendation providers
 - [Flow Transfer API](./flow-transfer.en.md) - Plugin data transfer
