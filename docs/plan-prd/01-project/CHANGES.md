@@ -13,6 +13,16 @@
 
 ## 2026-05-21
 
+### feat(nexus): add notification provider health analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Data Governance notification analytics now groups delivery audit by provider instance, including planned/sent/skipped/failed counts, sent rate, failure rate, and latest failure reason/time.
+  - The notification cockpit surfaces provider health so admins can distinguish a failing SMTP/Resend/Feishu/Web Push instance without exposing recipients, endpoints, or credential refs.
+  - Focused coverage verifies provider health aggregation and UI exposure while preserving the existing sanitized delivery audit model.
+
 ### feat(nexus): surface provider quota utilization in governance analytics
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
@@ -132,6 +142,7 @@
   - Notification delivery remains plan-only by default; explicit `config.mode: "send"` can perform HTTP sending for Resend, SMTP relay, webhook, Feishu, Lark, and Web Push relay adapters when secure credentials exist and recipients or registered push subscriptions are supplied at dispatch time, while browser adapter now writes durable per-user inbox notifications without storing raw recipients or credential refs. Direct SMTP socket delivery, production VAPID/relay evidence, and cross-browser visible evidence remain follow-ups.
   - Added `/api/dashboard/notifications/channels/test` so admins can dry-run a single saved notification channel, or allow send execution according to the channel's existing `config.mode`, while recording only sanitized delivery audit metadata for the selected `configId`.
   - Data Governance now exposes a notification channel test panel with saved-channel selection, action/resource/metadata inputs, dry-run and send buttons, and delivery status/reason/provider/adapter/credentialRef feedback for the selected channel.
+  - Data Governance notification analytics now aggregates per-provider delivery health with planned/sent/skipped/failed counts, sent and failure rates, and latest sanitized failure reason without exposing recipients or credential refs.
   - Added `/dashboard/notifications`, `/api/dashboard/notifications/inbox`, and `/api/dashboard/notifications/inbox/read` so signed-in users can open the notification center, manage browser Notification permission, send a local browser test notification, list unread counts, and mark selected or all notifications as read.
   - Added `/api/dashboard/notifications/push-subscriptions`, notification-center Web Push register/remove controls, and a minimal service worker so signed-in users can persist HTTPS push subscriptions without exposing endpoints or `p256dh`/`auth` keys through public API summaries or governance audit.
   - Data Governance now surfaces notification delivery health with planned/sent/skipped/failed counts, sentRate, provider instance, adapter, notification action, delivery reason breakdowns, and browser push subscription register/delete analytics by sanitized endpoint host.
