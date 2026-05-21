@@ -11,6 +11,16 @@
 - 系统快捷动作：锁屏、静音与常用设置入口
 - 支持平台：`win32, darwin`
 
+## 开发者 SDK
+如果你要让自己的插件动作出现在 MetaK / Quick Actions 面板中，使用开发者 API 中的 [QuickActions SDK](/docs/dev/api/quick-actions)。它支持：
+
+- 注册全局动作：`quickActions.registerAction()`
+- 监听动作执行：`quickActions.onActionExecute()`
+- 从动作中分享当前 item：`quickActions.shareItem()`
+- 查询并解析平台原生分享目标：`getNativeShareTargets()` / `resolveNativeShareTarget()`
+
+`meta` 仍是兼容别名，新插件优先使用 `quickActions`。
+
 ## 配置与数据
 - 配置/数据文件：无（运行态数据无需手动维护）
 - 插件目录：`plugins/touch-quick-actions`
