@@ -13,6 +13,17 @@
 
 ## 2026-05-21
 
+### fix(plugin): harden quick actions shell capability
+
+- `plugins/touch-quick-actions/index.js`
+- `plugins/touch-quick-actions/index.test.cjs`
+- `docs/plan-prd/TODO.md`
+  - Quick Actions no longer falls back to raw `exec` when `safe-shell` is unavailable; shell-backed actions now fail closed with `safe-shell-unavailable`.
+  - Feature rendering uses non-mutating `system.shell` permission diagnostics only, so listing quick actions does not request shell permission before execution.
+  - Quick action items and dynamic feature metadata expose shell capability status, reason, platform, permission, confirmation/admin flags, and audit fields.
+  - Action execution now blocks unsafe empty/newline/null command payloads before permission prompts and returns explicit `started`, `blocked`, `failed`, or `cancelled` action status.
+  - Validation: `node --test "plugins/touch-quick-actions/index.test.cjs"` passed.
+
 ### feat(nexus): summarize provider quota risk in governance analytics
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`

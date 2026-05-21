@@ -1,7 +1,6 @@
 const { plugin, logger, TuffItemBuilder, permission, dialog, features } = globalThis
-const { exec } = require('node:child_process')
 const process = require('node:process')
-const { promisify } = require('node:util')
+
 let spawnShellCommand
 try {
   ;({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
@@ -10,7 +9,6 @@ catch {
   spawnShellCommand = null
 }
 
-const execAsync = promisify(exec)
 const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 
 const PLUGIN_NAME = 'touch-quick-actions'
@@ -21,6 +19,11 @@ const DYNAMIC_FEATURE_PREFIX = 'quick-action-'
 const SHELL_PERMISSION_ID = 'system.shell'
 const PERMISSION_REASON = '需要 system.shell 权限执行系统快捷动作'
 const COMMON_ACTION_IDS = ['restart', 'shutdown', 'lock-screen', 'mute-toggle', 'focus-settings']
+const SHELL_STATUS_LABELS = {
+  'available': '可用',
+  'permission-missing': '缺少权限',
+  'unsupported': '不可用',
+}
 let dynamicFeaturesInitialized = false
 
 const GROUP_META = {
@@ -75,7 +78,7 @@ function resolveShellStatus(platform = process.platform) {
 
   if (!spawnShellCommand) {
     return {
-      status: 'degraded',
+      status: 'unsupported',
       reason: 'safe-shell-unavailable',
     }
   }
@@ -90,6 +93,48 @@ function resolveActionCommandKind(action) {
   if (command.includes('powershell'))
     return 'powershell'
   return 'fixed-shell'
+}
+
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check) {
+    return {
+      granted: true,
+    }
+  }
+
+  try {
+    return {
+      granted: Boolean(await permission.check(permissionId)),
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-quick-actions] Failed to check permission', error)
+    return {
+      granted: false,
+      reason: 'permission-check-failed',
+    }
+  }
+}
+
+async function resolveShellCapabilityState(platform = process.platform) {
+  const shellStatus = resolveShellStatus(platform)
+  if (shellStatus.status !== 'available')
+    return shellStatus
+
+  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
+  if (!permissionStatus.granted) {
+    return {
+      status: 'permission-missing',
+      reason: permissionStatus.reason || 'system-shell-permission-required',
+    }
+  }
+
+  return shellStatus
+}
+
+function formatShellStatusSubtitle(state) {
+  const label = SHELL_STATUS_LABELS[state.status] || state.status
+  return state.reason ? `${label} · ${state.reason}` : label
 }
 
 function buildShellCapability({
@@ -125,8 +170,9 @@ function buildShellCapability({
   return capability
 }
 
-function buildActionCapability(featureId, action, platform = process.platform) {
+function buildActionCapability(featureId, action, platform = process.platform, capabilityState) {
   const confirmLevel = Number(action?.confirmLevel || 0)
+  const resolvedState = capabilityState || resolveShellStatus(platform)
   return buildShellCapability({
     featureId,
     actionId: action?.id,
@@ -134,6 +180,8 @@ function buildActionCapability(featureId, action, platform = process.platform) {
     requiresConfirmation: confirmLevel > 0,
     requiresAdmin: confirmLevel >= 2,
     platform,
+    status: resolvedState.status,
+    reason: resolvedState.reason,
   })
 }
 
@@ -144,6 +192,9 @@ async function ensurePermission(permissionId, reason) {
   const hasPermission = await permission.check(permissionId)
   if (hasPermission)
     return true
+
+  if (typeof permission.request !== 'function')
+    return false
 
   const granted = await permission.request(permissionId, reason)
   return Boolean(granted)
@@ -184,7 +235,7 @@ function resolveActions(platform = process.platform) {
         description: '切换系统静音状态',
         group: 'instant',
         keywords: ['mute', '静音', '声音'],
-        command: "osascript -e 'set volume output muted not (output muted of (get volume settings))'",
+        command: 'osascript -e \'set volume output muted not (output muted of (get volume settings))\'',
       },
       {
         id: 'focus-settings',
@@ -296,16 +347,19 @@ function resolveActions(platform = process.platform) {
 }
 
 async function runShellCommand(command) {
-  if (SHELL_UNSAFE_PATTERN.test(command)) {
-    throw new Error('unsafe command payload')
+  const normalizedCommand = normalizeText(command)
+  if (!normalizedCommand) {
+    throw new Error('empty-command')
+  }
+  if (SHELL_UNSAFE_PATTERN.test(String(command ?? ''))) {
+    throw new Error('unsafe-command-payload')
   }
   if (!spawnShellCommand) {
-    await execAsync(command)
-    return
+    throw new Error('safe-shell-unavailable')
   }
 
   await new Promise((resolve, reject) => {
-    const child = spawnShellCommand(command, { windowsHide: true })
+    const child = spawnShellCommand(normalizedCommand, { windowsHide: true })
     child.on('error', reject)
     child.on('close', (code) => {
       if (code && code !== 0)
@@ -487,15 +541,43 @@ async function executeAction(action) {
 async function runActionWithGuards(action) {
   if (!action || typeof action.command !== 'string') {
     return {
-      ok: false,
+      status: 'blocked',
+      reason: 'invalid-action',
       message: '无效动作',
+    }
+  }
+
+  const normalizedCommand = normalizeText(action.command)
+  if (!normalizedCommand) {
+    return {
+      status: 'blocked',
+      reason: 'empty-command',
+      message: '命令为空',
+    }
+  }
+
+  if (SHELL_UNSAFE_PATTERN.test(action.command)) {
+    return {
+      status: 'blocked',
+      reason: 'unsafe-command-payload',
+      message: '命令载荷不安全',
+    }
+  }
+
+  const shellStatus = resolveShellStatus(process.platform)
+  if (shellStatus.status !== 'available') {
+    return {
+      status: 'blocked',
+      reason: shellStatus.reason || shellStatus.status,
+      message: '系统快捷动作不可用',
     }
   }
 
   const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, PERMISSION_REASON)
   if (!hasPermission) {
     return {
-      ok: false,
+      status: 'blocked',
+      reason: 'permission-denied',
       message: '缺少 system.shell 权限',
     }
   }
@@ -503,8 +585,8 @@ async function runActionWithGuards(action) {
   const confirmed = await confirmDangerAction(action)
   if (!confirmed) {
     return {
-      ok: false,
-      canceled: true,
+      status: 'cancelled',
+      reason: 'user-cancelled',
       message: '操作已取消',
     }
   }
@@ -512,13 +594,14 @@ async function runActionWithGuards(action) {
   try {
     await executeAction(action)
     return {
-      ok: true,
+      status: 'started',
     }
   }
   catch (error) {
     logger?.error?.('[touch-quick-actions] Action failed', error)
     return {
-      ok: false,
+      status: 'failed',
+      reason: error?.message || 'execution-failed',
       message: error?.message || '执行失败',
     }
   }
@@ -563,47 +646,36 @@ const pluginLifecycle = {
     const actions = resolveActions(process.platform)
     const dynamicAction = resolveActionFromFeatureId(featureId, actions)
     if (dynamicAction) {
-      await runActionWithGuards(dynamicAction)
-      return false
+      const result = await runActionWithGuards(dynamicAction)
+      return {
+        externalAction: true,
+        status: result.status,
+        reason: result.reason,
+        success: result.status === 'started',
+        message: result.message,
+      }
     }
 
     if (featureId !== ACTION_ID)
       return false
 
     try {
-      if (!isShellPlatformSupported(process.platform)) {
+      const shellCapabilityState = await resolveShellCapabilityState(process.platform)
+      if (shellCapabilityState.status !== 'available') {
+        const isPermissionMissing = shellCapabilityState.status === 'permission-missing'
         plugin.feature.clearItems()
         plugin.feature.pushItems([
           buildInfoItem({
-            id: `${featureId}-unsupported`,
+            id: isPermissionMissing ? `${featureId}-no-permission` : `${featureId}-unsupported`,
             featureId,
-            title: '当前平台暂不支持系统快捷动作',
-            subtitle: `platform:${process.platform}`,
+            title: isPermissionMissing ? `缺少 ${SHELL_PERMISSION_ID} 权限` : '当前平台暂不支持系统快捷动作',
+            subtitle: isPermissionMissing ? '授权后可执行锁屏、静音与系统设置动作' : formatShellStatusSubtitle(shellCapabilityState),
             capability: buildShellCapability({
               featureId,
               actionId: 'list-actions',
-              status: 'unsupported',
-              reason: `platform:${process.platform}`,
-            }),
-          }),
-        ])
-        return true
-      }
-
-      const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, PERMISSION_REASON)
-      if (!hasPermission) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-no-permission`,
-            featureId,
-            title: `缺少 ${SHELL_PERMISSION_ID} 权限`,
-            subtitle: '授权后可执行锁屏、静音与系统设置动作',
-            capability: buildShellCapability({
-              featureId,
-              actionId: 'list-actions',
-              status: 'permission-missing',
-              reason: SHELL_PERMISSION_ID,
+              platform: process.platform,
+              status: shellCapabilityState.status,
+              reason: shellCapabilityState.reason,
             }),
           }),
         ])
@@ -624,7 +696,7 @@ const pluginLifecycle = {
             payload: {
               action,
             },
-            capability: buildActionCapability(featureId, action),
+            capability: buildActionCapability(featureId, action, process.platform, shellCapabilityState),
           }))
         })
       }
@@ -645,7 +717,7 @@ const pluginLifecycle = {
                 payload: {
                   action,
                 },
-                capability: buildActionCapability(featureId, action),
+                capability: buildActionCapability(featureId, action, process.platform, shellCapabilityState),
               }))
             })
         })
@@ -688,18 +760,14 @@ const pluginLifecycle = {
       return
 
     const action = item.meta?.payload?.action
-    if (!action || typeof action.command !== 'string')
-      return
-
     const result = await runActionWithGuards(action)
-    if (result.ok) {
-      return { externalAction: true }
-    }
 
     return {
       externalAction: true,
-      success: false,
-      message: result.message || '执行失败',
+      status: result.status,
+      reason: result.reason,
+      success: result.status === 'started',
+      message: result.message,
     }
   },
 }
@@ -707,15 +775,24 @@ const pluginLifecycle = {
 module.exports = {
   ...pluginLifecycle,
   __test: {
+    buildActionCapability,
     buildDynamicFeatures,
     buildShellCapability,
+    checkPermissionStatus,
     confirmDangerAction,
+    formatShellStatusSubtitle,
     isShellPlatformSupported,
     matchActions,
     resolveActionFromFeatureId,
     resolveCommonActions,
     resolveActions,
     resolveGroupOrder,
+    resolveShellCapabilityState,
+    resolveShellStatus,
     runActionWithGuards,
+    runShellCommand,
+    setSpawnShellCommandForTest(runner) {
+      spawnShellCommand = runner
+    },
   },
 }
