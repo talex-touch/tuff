@@ -1,12 +1,25 @@
 import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { Buffer } from 'node:buffer'
+import type { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
-import { recordStorageChannelUsage } from './platformGovernanceStore'
+import {
+  deleteStorageObject,
+  getStorageObject,
+  listStorageObjectKeys,
+  putStorageObject,
+  type StorageObjectMemory,
+} from './storageObjectStore'
+import {
+  completeUploadGovernance,
+  failUploadGovernance,
+  startUploadGovernance,
+  type UploadGovernanceContext,
+} from './uploadGovernance'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
 const ALLOWED_TYPES = [
   'image/*',
 ]
@@ -89,11 +102,13 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
 let hasLoggedImageStorageBinding = false
 
 // 内存存储（用于开发环境）
-const memoryStorage = new Map<string, { data: Buffer, contentType: string }>()
+const memoryStorage: StorageObjectMemory = new Map()
 
 interface UploadResult {
   url: string
   key: string
+  storageChannel: string
+  storageProvider: string
 }
 
 interface UploadOptions {
@@ -101,77 +116,11 @@ interface UploadOptions {
   allowedExtensions?: string[]
   actorId?: unknown
   resourceType?: string
-}
-
-function resolveStorageChannel(bucket: R2Bucket | null) {
-  return {
-    channel: bucket ? 'r2' : 'memory',
-    provider: bucket ? 'cloudflare-r2' : 'memory',
+  uploadLifecycle?: {
+    surface: string
+    resourceId?: string | null
+    metadata?: Record<string, unknown>
   }
-}
-
-async function recordImageStorageWrite(
-  event: H3Event,
-  bucket: R2Bucket | null,
-  key: string,
-  size: number,
-  contentType: string,
-  actorId: unknown,
-  resourceType = 'image',
-): Promise<void> {
-  const storage = resolveStorageChannel(bucket)
-  await recordStorageChannelUsage(event, {
-    action: 'storage.write',
-    actorId,
-    channel: storage.channel,
-    provider: storage.provider,
-    resourceType,
-    resourceId: key,
-    unit: 'byte',
-    quantity: size,
-    metadata: {
-      contentType: contentType || 'application/octet-stream',
-    },
-  }).catch(() => {})
-}
-
-async function recordImageStorageRead(
-  event: H3Event,
-  bucket: R2Bucket | null,
-  key: string,
-  size: number,
-  contentType: string,
-): Promise<void> {
-  const storage = resolveStorageChannel(bucket)
-  await recordStorageChannelUsage(event, {
-    action: 'storage.read',
-    channel: storage.channel,
-    provider: storage.provider,
-    resourceType: 'image',
-    resourceId: key,
-    unit: 'byte',
-    quantity: size,
-    metadata: {
-      contentType: contentType || 'application/octet-stream',
-    },
-  }).catch(() => {})
-}
-
-async function recordImageStorageDelete(
-  event: H3Event,
-  bucket: R2Bucket | null,
-  key: string,
-): Promise<void> {
-  const storage = resolveStorageChannel(bucket)
-  await recordStorageChannelUsage(event, {
-    action: 'storage.delete',
-    channel: storage.channel,
-    provider: storage.provider,
-    resourceType: 'image',
-    resourceId: key,
-    unit: 'operation',
-    quantity: 1,
-  }).catch(() => {})
 }
 
 /**
@@ -280,74 +229,61 @@ function getFileExtension(file: File): string {
   return 'bin'
 }
 
-/**
- * 上传图片到 R2（生产环境）
- */
-async function uploadToR2(
-  bucket: R2Bucket,
-  file: File,
-  key: string,
-): Promise<void> {
-  const arrayBuffer = await file.arrayBuffer()
-  await bucket.put(key, arrayBuffer, {
-    httpMetadata: {
-      contentType: file.type,
-    },
-  })
-}
-
-/**
- * 从 R2 获取图片
- */
-async function getFromR2(
-  bucket: R2Bucket,
-  key: string,
-): Promise<{ data: ArrayBuffer | Buffer, contentType: string } | null> {
-  const object = await bucket.get(key)
-  if (!object)
-    return null
-
-  const arrayBuffer = await object.arrayBuffer()
-  const data = typeof Buffer !== 'undefined'
-    ? Buffer.from(arrayBuffer)
-    : arrayBuffer
-
+function getUploadLifecycleMetadata(options: UploadOptions): Record<string, unknown> {
   return {
-    data,
-    contentType: object.httpMetadata?.contentType || 'image/jpeg',
+    ...options.uploadLifecycle?.metadata,
+    surface: options.uploadLifecycle?.surface,
   }
 }
 
-/**
- * 从 R2 删除图片
- */
-async function deleteFromR2(bucket: R2Bucket, key: string): Promise<void> {
-  await bucket.delete(key)
-}
+async function startImageUploadLifecycle(
+  event: H3Event,
+  file: { name?: string | null, size?: number | null, type?: string | null },
+  options: UploadOptions,
+): Promise<UploadGovernanceContext | null> {
+  if (!options.uploadLifecycle)
+    return null
 
-/**
- * 上传图片到内存存储（开发环境）
- */
-async function uploadToMemory(file: File, key: string): Promise<void> {
-  const arrayBuffer = await file.arrayBuffer()
-  memoryStorage.set(key, {
-    data: Buffer.from(arrayBuffer),
-    contentType: file.type,
+  return startUploadGovernance(event, {
+    actorId: options.actorId,
+    resourceType: options.resourceType ?? 'image',
+    resourceId: options.uploadLifecycle.resourceId ?? null,
+    file,
+    metadata: getUploadLifecycleMetadata(options),
   })
 }
 
-/**
- * 从内存获取图片
- */
-function getFromMemory(key: string): { data: Buffer, contentType: string } | null {
-  return memoryStorage.get(key) || null
+async function failImageUploadLifecycle(
+  event: H3Event,
+  context: UploadGovernanceContext | null,
+  error: unknown,
+  options: UploadOptions,
+): Promise<void> {
+  if (!context)
+    return
+
+  await failUploadGovernance(event, context, error, {
+    metadata: getUploadLifecycleMetadata(options),
+  })
 }
 
-/**
- * 从内存删除图片
- */
-function deleteFromMemory(key: string): void {
-  memoryStorage.delete(key)
+async function completeImageUploadLifecycle(
+  event: H3Event,
+  context: UploadGovernanceContext | null,
+  result: Omit<UploadResult, 'url'> & { size: number, contentType: string },
+  options: UploadOptions,
+): Promise<void> {
+  if (!context)
+    return
+
+  await completeUploadGovernance(event, context, {
+    resourceId: options.uploadLifecycle?.resourceId ?? result.key,
+    contentType: result.contentType,
+    size: result.size,
+    storageChannel: result.storageChannel,
+    storageProvider: result.storageProvider,
+    metadata: getUploadLifecycleMetadata(options),
+  })
 }
 
 /**
@@ -360,31 +296,38 @@ export async function uploadImage(
 ): Promise<UploadResult> {
   const allowedTypes = options.allowedTypes ?? ALLOWED_TYPES
   const allowedExtensions = options.allowedExtensions ?? IMAGE_ALLOWED_EXTENSIONS
+  const uploadAttempt = await startImageUploadLifecycle(event, file, options)
 
-  validateFile(file, allowedTypes, allowedExtensions)
+  try {
+    validateFile(file, allowedTypes, allowedExtensions)
 
-  const ext = getFileExtension(file)
-  const key = `${randomUUID()}.${ext}`
+    const ext = getFileExtension(file)
+    const key = `${randomUUID()}.${ext}`
+    const bucket = getR2Bucket(event)
+    const result = await putStorageObject({
+      event,
+      bucket,
+      memoryStorage,
+      key,
+      data: await file.arrayBuffer(),
+      contentType: file.type,
+      actorId: options.actorId,
+      resourceType: options.resourceType ?? 'image',
+      defaultContentType: DEFAULT_CONTENT_TYPE,
+    })
 
-  const bucket = getR2Bucket(event)
+    await completeImageUploadLifecycle(event, uploadAttempt, result, options)
 
-  if (bucket) {
-    // 生产环境：使用 R2
-    await uploadToR2(bucket, file, key)
-    await recordImageStorageWrite(event, bucket, key, file.size, file.type, options.actorId, options.resourceType)
     return {
       url: `/api/images/${key}`,
       key,
+      storageChannel: result.storageChannel,
+      storageProvider: result.storageProvider,
     }
   }
-  else {
-    // 开发环境：使用内存存储
-    await uploadToMemory(file, key)
-    await recordImageStorageWrite(event, bucket, key, file.size, file.type, options.actorId, options.resourceType)
-    return {
-      url: `/api/images/${key}`,
-      key,
-    }
+  catch (error) {
+    await failImageUploadLifecycle(event, uploadAttempt, error, options)
+    throw error
   }
 }
 
@@ -396,28 +339,17 @@ export async function getImage(
   key: string,
 ): Promise<{ data: Buffer | ArrayBuffer, contentType: string } | null> {
   const bucket = getR2Bucket(event)
-
-  if (bucket) {
-    // 生产环境：从 R2 获取
-    const result = await getFromR2(bucket, key)
-    if (!result)
-      return null
-    const data = typeof Buffer !== 'undefined' && result.data instanceof ArrayBuffer
-      ? Buffer.from(result.data)
-      : result.data
-    await recordImageStorageRead(event, bucket, key, data.byteLength, result.contentType)
-    return {
-      data,
-      contentType: result.contentType,
-    }
-  }
-  else {
-    // 开发环境：从内存获取
-    const result = getFromMemory(key)
-    if (result)
-      await recordImageStorageRead(event, bucket, key, result.data.byteLength, result.contentType)
-    return result
-  }
+  const object = await getStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    resourceType: 'image',
+    defaultContentType: 'image/jpeg',
+  })
+  return object
+    ? { data: object.data, contentType: object.contentType }
+    : null
 }
 
 /**
@@ -425,17 +357,14 @@ export async function getImage(
  */
 export async function deleteImage(event: H3Event, key: string): Promise<void> {
   const bucket = getR2Bucket(event)
-
-  if (bucket) {
-    // 生产环境：从 R2 删除
-    await deleteFromR2(bucket, key)
-    await recordImageStorageDelete(event, bucket, key)
-  }
-  else {
-    // 开发环境：从内存删除
-    deleteFromMemory(key)
-    await recordImageStorageDelete(event, bucket, key)
-  }
+  await deleteStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    resourceType: 'image',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
 }
 
 /**
@@ -443,16 +372,7 @@ export async function deleteImage(event: H3Event, key: string): Promise<void> {
  */
 export async function listImages(event: H3Event): Promise<string[]> {
   const bucket = getR2Bucket(event)
-
-  if (bucket) {
-    // 生产环境：列出 R2 中的所有对象
-    const list = await bucket.list()
-    return list.objects.map(obj => obj.key)
-  }
-  else {
-    // 开发环境：列出内存中的所有键
-    return Array.from(memoryStorage.keys())
-  }
+  return listStorageObjectKeys(bucket, memoryStorage)
 }
 
 /**
@@ -463,50 +383,59 @@ export async function uploadImageFromBuffer(
   buffer: Buffer,
   fileName: string,
   mimeType: string,
-  options: Pick<UploadOptions, 'actorId' | 'resourceType'> = {},
+  options: Pick<UploadOptions, 'actorId' | 'resourceType' | 'uploadLifecycle'> = {},
 ): Promise<UploadResult> {
-  // Get extension from filename
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? 'svg'
+  const uploadAttempt = await startImageUploadLifecycle(event, {
+    name: fileName,
+    size: buffer.length,
+    type: mimeType,
+  }, options)
 
-  // Validate extension
-  if (!IMAGE_ALLOWED_EXTENSIONS.includes(ext)) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Invalid image extension: ${ext}. Allowed: ${IMAGE_ALLOWED_EXTENSIONS.join(', ')}`,
+  try {
+    // Get extension from filename
+    const ext = fileName.split('.').pop()?.toLowerCase() ?? 'svg'
+
+    // Validate extension
+    if (!IMAGE_ALLOWED_EXTENSIONS.includes(ext)) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `Invalid image extension: ${ext}. Allowed: ${IMAGE_ALLOWED_EXTENSIONS.join(', ')}`,
+      })
+    }
+
+    // Validate size
+    if (buffer.length > MAX_FILE_SIZE) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+      })
+    }
+
+    const key = `${randomUUID()}.${ext}`
+    const bucket = getR2Bucket(event)
+    const result = await putStorageObject({
+      event,
+      bucket,
+      memoryStorage,
+      key,
+      data: buffer,
+      contentType: mimeType,
+      actorId: options.actorId,
+      resourceType: options.resourceType ?? 'image',
+      defaultContentType: DEFAULT_CONTENT_TYPE,
     })
-  }
 
-  // Validate size
-  if (buffer.length > MAX_FILE_SIZE) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
-    })
-  }
+    await completeImageUploadLifecycle(event, uploadAttempt, result, options)
 
-  const key = `${randomUUID()}.${ext}`
-  const bucket = getR2Bucket(event)
-
-  if (bucket) {
-    // Production: upload to R2
-    // Convert Node.js Buffer to Uint8Array for R2 compatibility
-    const uint8Array = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-    await bucket.put(key, uint8Array, {
-      httpMetadata: { contentType: mimeType },
-    })
-    await recordImageStorageWrite(event, bucket, key, buffer.length, mimeType, options.actorId, options.resourceType)
     return {
       url: `/api/images/${key}`,
       key,
+      storageChannel: result.storageChannel,
+      storageProvider: result.storageProvider,
     }
   }
-  else {
-    // Development: use memory storage
-    memoryStorage.set(key, { data: buffer, contentType: mimeType })
-    await recordImageStorageWrite(event, bucket, key, buffer.length, mimeType, options.actorId, options.resourceType)
-    return {
-      url: `/api/images/${key}`,
-      key,
-    }
+  catch (error) {
+    await failImageUploadLifecycle(event, uploadAttempt, error, options)
+    throw error
   }
 }

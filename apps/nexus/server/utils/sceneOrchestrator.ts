@@ -29,6 +29,8 @@ export interface SceneRunUsage {
   billable: boolean
   providerId?: string
   capability?: string
+  model?: string
+  providerType?: string
   estimated?: boolean
   pricingRef?: string
   providerUsageRef?: string
@@ -168,6 +170,8 @@ const tencentTextTranslateAdapter: SceneCapabilityAdapter = async ({ event, prov
         ...result.usage,
         providerId: provider.id,
         capability: 'text.translate',
+        model: 'tencent-text-translate',
+        providerType: provider.vendor,
       },
     ],
   }
@@ -193,6 +197,8 @@ const tencentImageTranslateAdapter: SceneCapabilityAdapter = async ({ event, pro
         ...result.usage,
         providerId: provider.id,
         capability: imageCapability,
+        model: 'tencent-image-translate',
+        providerType: provider.vendor,
       },
     ],
   }
@@ -209,6 +215,8 @@ const intelligenceVisionOcrAdapter: SceneCapabilityAdapter = async ({ event, pro
         ...result.usage,
         providerId: provider.id,
         capability,
+        model: result.model,
+        providerType: readOptionalString(provider.metadata?.intelligenceType) ?? provider.vendor,
       },
     ],
   }
@@ -314,6 +322,8 @@ const fxRateLatestAdapter: SceneCapabilityAdapter = async ({ event, provider, ca
         billable: true,
         providerId: provider.id,
         capability,
+        model: 'exchange-rate-latest',
+        providerType: provider.vendor,
         estimated: source === 'cache',
       },
     ],
@@ -359,6 +369,8 @@ const fxConvertAdapter: SceneCapabilityAdapter = async ({ event, provider, input
         billable: true,
         providerId: provider.id,
         capability,
+        model: 'exchange-rate-convert',
+        providerType: provider.vendor,
         estimated: result.source === 'cache',
       },
     ],
@@ -478,6 +490,8 @@ const localOverlayRenderAdapter: SceneCapabilityAdapter = async ({ input, origin
         billable: false,
         providerId: provider.id,
         capability,
+        model: 'local-overlay-render',
+        providerType: provider.vendor,
         estimated: true,
       },
     ],
@@ -884,6 +898,8 @@ async function recordPlatformGovernanceUsage(
     metadata: {
       billable: usage.billable,
       estimated: usage.estimated === true,
+      model: usage.model ?? null,
+      providerType: usage.providerType ?? null,
       pricingRef: usage.pricingRef ?? null,
       providerUsageRef: usage.providerUsageRef ?? null,
     },

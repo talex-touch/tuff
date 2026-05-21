@@ -4,7 +4,7 @@ import { createError, send, sendRedirect, setResponseHeader } from 'h3'
 import {
   isUnsignedFallbackAllowed,
   parseReleaseDownloadQuerySignature,
-  verifyReleaseDownloadSignature
+  verifyReleaseDownloadSignature,
 } from '../../../../../utils/releaseDownloadSignature'
 import { requireReleaseAsset } from '../../../../../utils/releaseAssetStorage'
 import { getReleaseByTag, incrementDownloadCount } from '../../../../../utils/releasesStore'
@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
       tag,
       platform,
       arch,
-      signature: signedQuery
+      signature: signedQuery,
     })
     if (!verification.valid && !allowUnsignedFallback) {
       throw createError({ statusCode: 403, statusMessage: 'Download signature is invalid or expired.' })
@@ -56,7 +56,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Asset file is not available.' })
   }
 
-  const result = await requireReleaseAsset(event, asset.fileKey)
+  const result = await requireReleaseAsset(event, asset.fileKey, {
+    governanceResourceId: `release:${tag}:${platform}:${arch}`,
+    resourceType: 'release-asset',
+  })
   const buffer = Buffer.isBuffer(result.data) ? result.data : Buffer.from(result.data)
 
   setResponseHeader(event, 'Content-Type', asset.contentType || result.contentType)

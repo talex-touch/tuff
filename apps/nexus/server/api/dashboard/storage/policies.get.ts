@@ -1,6 +1,7 @@
 import { getQuery } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { evaluateStorageChannelPolicy, listPlatformGovernanceConfigs } from '../../../utils/platformGovernanceStore'
+import { listStorageChannelProfiles } from '../../../utils/storageChannelCatalog'
 
 function readPositiveInt(value: unknown, fallback: number): number {
   if (typeof value !== 'string')
@@ -25,6 +26,7 @@ export default defineEventHandler(async (event) => {
   return {
     policies,
     evaluations,
+    profiles: listStorageChannelProfiles(),
     generatedAt: new Date().toISOString(),
   }
 })

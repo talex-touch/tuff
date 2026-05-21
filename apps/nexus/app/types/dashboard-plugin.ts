@@ -84,3 +84,53 @@ export interface DashboardPluginResponse {
   featured: DashboardPlugin[]
   total: number
 }
+
+export interface DashboardPluginAnalyticsMetric {
+  key: string
+  events: number
+  quantity: number
+  uniqueActors: number
+}
+
+export interface DashboardPluginAnalyticsTrendPoint {
+  date: string
+  events: number
+  downloads: number
+  installs: number
+  invocations: number
+  quantity: number
+  uniqueActors: number
+}
+
+export interface DashboardPluginAnalyticsNumberStat {
+  count: number
+  average: number
+  max: number
+}
+
+export interface DashboardPluginAnalytics {
+  days: number
+  pluginId: string
+  downloads: number
+  installs: number
+  invocations: number
+  events: number
+  uniqueActors: number
+  trend: DashboardPluginAnalyticsTrendPoint[]
+  installTrend: DashboardPluginAnalyticsTrendPoint[]
+  byAction: DashboardPluginAnalyticsMetric[]
+  byChannel: DashboardPluginAnalyticsMetric[]
+  byCountry: DashboardPluginAnalyticsMetric[]
+  byRegion: DashboardPluginAnalyticsMetric[]
+  byVersion: DashboardPluginAnalyticsMetric[]
+  byArtifactType: DashboardPluginAnalyticsMetric[]
+  packageSize: DashboardPluginAnalyticsNumberStat
+}
+
+export interface DashboardPluginAnalyticsResponse {
+  pluginId: string
+  slug: string
+  days: number
+  analytics: DashboardPluginAnalytics
+  generatedAt: string
+}

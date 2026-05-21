@@ -5,6 +5,12 @@ import { createError, readFormData } from 'h3'
 import { requireAdminOrApiKey } from '../../../utils/auth'
 import { uploadReleaseAsset } from '../../../utils/releaseAssetStorage'
 import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
+import {
+  completeUploadGovernance,
+  failUploadGovernance,
+  startUploadGovernance,
+  type UploadGovernanceContext,
+} from '../../../utils/uploadGovernance'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
@@ -34,32 +40,85 @@ export default defineEventHandler(async (event) => {
   if (!isFile(file) || file.size === 0)
     throw createError({ statusCode: 400, statusMessage: 'File is required.' })
 
-  // Calculate SHA256
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const sha256 = createHash('sha256').update(buffer).digest('hex')
-
   const fileKey = `releases/${tag}/${platform}-${arch}/${file.name}`
+  const uploadResourceId = `release:${tag}:${platform}:${arch}`
   const downloadUrl = `/api/releases/${tag}/download/${platform}/${arch}`
-
-  await uploadReleaseAsset(event, fileKey, buffer, file.type, {
+  const uploadAttempt = await startUploadGovernance(event, {
     actorId: userId,
     resourceType: 'release-asset',
+    resourceId: uploadResourceId,
+    file,
+    metadata: {
+      tag,
+      platform,
+      arch,
+      surface: 'release-assets',
+    },
   })
-
   let signatureKey: string | null = null
+  let sha256 = ''
+
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer())
+    sha256 = createHash('sha256').update(buffer).digest('hex')
+    const uploadResult = await uploadReleaseAsset(event, fileKey, buffer, file.type, {
+      actorId: userId,
+      governanceResourceId: uploadResourceId,
+      resourceType: 'release-asset',
+    })
+    await completeUploadGovernance(event, uploadAttempt, {
+      resourceId: uploadResourceId,
+      contentType: uploadResult.contentType,
+      size: uploadResult.size,
+      storageChannel: uploadResult.storageChannel,
+      storageProvider: uploadResult.storageProvider,
+    })
+  }
+  catch (error) {
+    await failUploadGovernance(event, uploadAttempt, error)
+    throw error
+  }
+
   if (isFile(signatureFile) && signatureFile.size > 0) {
-    const signatureBuffer = Buffer.from(await signatureFile.arrayBuffer())
     signatureKey = `${fileKey}.sig`
-    await uploadReleaseAsset(
-      event,
-      signatureKey,
-      signatureBuffer,
-      signatureFile.type || 'application/octet-stream',
-      {
-        actorId: userId,
-        resourceType: 'release-signature',
+    const signatureResourceId = `${uploadResourceId}:signature`
+    const signatureAttempt: UploadGovernanceContext = await startUploadGovernance(event, {
+      actorId: userId,
+      resourceType: 'release-signature',
+      resourceId: signatureResourceId,
+      file: signatureFile,
+      metadata: {
+        tag,
+        platform,
+        arch,
+        surface: 'release-assets',
       },
-    )
+    })
+    try {
+      const signatureBuffer = Buffer.from(await signatureFile.arrayBuffer())
+      const signatureUploadResult = await uploadReleaseAsset(
+        event,
+        signatureKey,
+        signatureBuffer,
+        signatureFile.type || 'application/octet-stream',
+        {
+          actorId: userId,
+          governanceResourceId: signatureResourceId,
+          resourceType: 'release-signature',
+        },
+      )
+      await completeUploadGovernance(event, signatureAttempt, {
+        resourceId: signatureResourceId,
+        contentType: signatureUploadResult.contentType,
+        size: signatureUploadResult.size,
+        storageChannel: signatureUploadResult.storageChannel,
+        storageProvider: signatureUploadResult.storageProvider,
+      })
+    }
+    catch (error) {
+      await failUploadGovernance(event, signatureAttempt, error)
+      throw error
+    }
   }
 
   const asset = await createReleaseAsset(event, {

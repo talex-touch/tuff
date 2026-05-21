@@ -113,6 +113,43 @@ export interface ProviderEditPanelState {
   error: string | null
 }
 
+export interface ProviderQuotaRecord {
+  id: string
+  configType: 'intelligence_provider_quota'
+  name: string
+  targetId: string | null
+  provider: string | null
+  channel: string | null
+  enabled: boolean
+  limits: Record<string, unknown> | null
+  warningThreshold: number | null
+  config: Record<string, unknown> | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProviderQuotaPanelState {
+  expanded: boolean
+  saving: boolean
+  name: string
+  enabled: 'enabled' | 'disabled'
+  windowDays: string
+  maxRequests: string
+  maxTokens: string
+  warningThreshold: string
+  error: string | null
+}
+
+export interface ProviderQuotaSummary {
+  configured: boolean
+  enabled: boolean
+  windowDays: string
+  maxRequests: string
+  maxTokens: string
+  warningThreshold: string
+}
+
 export interface BindingEditRow {
   providerId: string
   capability: string
@@ -935,6 +972,40 @@ export function createProviderEditPanel(provider: ProviderRegistryRecord): Provi
     })),
     removedCapabilityIds: [],
     error: null,
+  }
+}
+
+function readLimitText(quota: ProviderQuotaRecord | null | undefined, key: string) {
+  const value = quota?.limits?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
+}
+
+export function createProviderQuotaPanel(
+  provider: ProviderRegistryRecord,
+  quota: ProviderQuotaRecord | null | undefined,
+): ProviderQuotaPanelState {
+  return {
+    expanded: true,
+    saving: false,
+    name: quota?.name ?? `${provider.displayName} quota`,
+    enabled: quota?.enabled === false ? 'disabled' : 'enabled',
+    windowDays: readLimitText(quota, 'windowDays') || '30',
+    maxRequests: readLimitText(quota, 'maxRequests'),
+    maxTokens: readLimitText(quota, 'maxTokens'),
+    warningThreshold: quota?.warningThreshold == null ? '80' : String(quota.warningThreshold),
+    error: null,
+  }
+}
+
+export function summarizeProviderQuota(quota: ProviderQuotaRecord | null | undefined): ProviderQuotaSummary {
+  const configured = Boolean(quota)
+  return {
+    configured,
+    enabled: quota?.enabled ?? false,
+    windowDays: readLimitText(quota, 'windowDays') || '30',
+    maxRequests: readLimitText(quota, 'maxRequests') || '-',
+    maxTokens: readLimitText(quota, 'maxTokens') || '-',
+    warningThreshold: quota?.warningThreshold == null ? '-' : String(quota.warningThreshold),
   }
 }
 

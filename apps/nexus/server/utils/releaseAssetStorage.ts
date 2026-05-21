@@ -1,24 +1,25 @@
 import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { Buffer } from 'node:buffer'
+import type { Buffer } from 'node:buffer'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
-import { recordStorageChannelUsage } from './platformGovernanceStore'
+import {
+  getStorageObject,
+  putStorageObject,
+  type StorageObjectResult,
+  type StorageObjectMemory,
+} from './storageObjectStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
-const memoryStorage = new Map<string, { data: Buffer, contentType: string }>()
+const memoryStorage: StorageObjectMemory = new Map()
 
 interface ReleaseAssetStorageOptions {
   actorId?: unknown
+  governanceResourceId?: string | null
   resourceType?: string
 }
 
-function resolveAssetStorageChannel(bucket: R2Bucket | null) {
-  return {
-    channel: bucket ? 'r2' : 'memory',
-    provider: bucket ? 'cloudflare-r2' : 'memory',
-  }
-}
+type ReleaseAssetUploadResult = Omit<StorageObjectResult, 'data'>
 
 function getAssetBucket(event?: H3Event | null): R2Bucket | null {
   if (!event)
@@ -34,107 +35,48 @@ export async function uploadReleaseAsset(
   data: Buffer,
   contentType?: string | null,
   options: ReleaseAssetStorageOptions = {},
-): Promise<void> {
+): Promise<ReleaseAssetUploadResult> {
   const bucket = getAssetBucket(event)
-  const resolvedContentType = contentType || DEFAULT_CONTENT_TYPE
-  const storage = resolveAssetStorageChannel(bucket)
-
-  if (bucket) {
-    const uint8Array = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-    await bucket.put(key, uint8Array, {
-      httpMetadata: {
-        contentType: resolvedContentType,
-      },
-    })
-    await recordStorageChannelUsage(event, {
-      action: 'storage.write',
-      actorId: options.actorId,
-      channel: storage.channel,
-      provider: storage.provider,
-      resourceType: options.resourceType ?? 'release-asset',
-      resourceId: key,
-      unit: 'byte',
-      quantity: data.byteLength,
-      metadata: {
-        contentType: resolvedContentType,
-      },
-    }).catch(() => {})
-    return
-  }
-
-  memoryStorage.set(key, {
+  return await putStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
     data,
-    contentType: resolvedContentType,
-  })
-  await recordStorageChannelUsage(event, {
-    action: 'storage.write',
+    contentType,
     actorId: options.actorId,
-    channel: storage.channel,
-    provider: storage.provider,
+    governanceResourceId: options.governanceResourceId,
     resourceType: options.resourceType ?? 'release-asset',
-    resourceId: key,
-    unit: 'byte',
-    quantity: data.byteLength,
-    metadata: {
-      contentType: resolvedContentType,
-    },
-  }).catch(() => {})
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
 }
 
 export async function getReleaseAsset(
   event: H3Event,
   key: string,
+  options: Pick<ReleaseAssetStorageOptions, 'governanceResourceId' | 'resourceType'> = {},
 ): Promise<{ data: Buffer, contentType: string } | null> {
   const bucket = getAssetBucket(event)
-  const storage = resolveAssetStorageChannel(bucket)
-
-  if (bucket) {
-    const object = await bucket.get(key)
-    if (!object)
-      return null
-
-    const arrayBuffer = await object.arrayBuffer()
-    await recordStorageChannelUsage(event, {
-      action: 'storage.read',
-      channel: storage.channel,
-      provider: storage.provider,
-      resourceType: 'release-asset',
-      resourceId: key,
-      unit: 'byte',
-      quantity: arrayBuffer.byteLength,
-      metadata: {
-        contentType: object.httpMetadata?.contentType || DEFAULT_CONTENT_TYPE,
-      },
-    }).catch(() => {})
-    return {
-      data: Buffer.from(arrayBuffer),
-      contentType: object.httpMetadata?.contentType || DEFAULT_CONTENT_TYPE,
-    }
-  }
-
-  const asset = memoryStorage.get(key) ?? null
-  if (asset) {
-    await recordStorageChannelUsage(event, {
-      action: 'storage.read',
-      channel: storage.channel,
-      provider: storage.provider,
-      resourceType: 'release-asset',
-      resourceId: key,
-      unit: 'byte',
-      quantity: asset.data.byteLength,
-      metadata: {
-        contentType: asset.contentType,
-      },
-    }).catch(() => {})
-  }
-  return asset
+  const object = await getStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    key,
+    governanceResourceId: options.governanceResourceId,
+    resourceType: options.resourceType ?? 'release-asset',
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
+  return object
+    ? { data: object.data, contentType: object.contentType }
+    : null
 }
 
 export async function requireReleaseAsset(
   event: H3Event,
   key: string,
+  options: Pick<ReleaseAssetStorageOptions, 'governanceResourceId' | 'resourceType'> = {},
 ): Promise<{ data: Buffer, contentType: string }> {
-  const result = await getReleaseAsset(event, key)
+  const result = await getReleaseAsset(event, key, options)
   if (!result) {
     throw createError({ statusCode: 404, statusMessage: 'Asset not found.' })
   }
