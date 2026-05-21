@@ -23,6 +23,7 @@
 - `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
   - Extended sanitized search telemetry with local hour/day, context app/source, entry point, trigger type, preference mode, session bucket, plugin ids/categories, and bounded context tags without storing raw query text.
   - Data Governance search analytics now aggregates those dimensions alongside existing provider latency/result/status, filter usage, geo/timezone, trend, and heatmap metrics.
+  - Upload analytics now also reports attempt count, stuck attempts/rate, duration, storage provider, status code, and upload surface while keeping started-only uploads out of terminal size and failure-rate metrics.
   - Admin Data Governance UI now surfaces local search time, context app, trigger, preference mode, and plugin/plugin-category search usage in the search context panel.
 
 ### feat(nexus): add plugin review analytics to asset details
