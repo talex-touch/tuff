@@ -63,6 +63,14 @@ export default defineEventHandler(async (event) => {
       const iconResult = await uploadImage(event, iconFile, {
         actorId: userId,
         resourceType: 'plugin-icon',
+        uploadLifecycle: {
+          surface: 'plugin-icon-upload',
+          resourceId: `plugin:${slug}:icon`,
+          metadata: {
+            pluginSlug: slug,
+            source: 'dashboard-plugin-create',
+          },
+        },
       })
       iconKey = iconResult.key
       iconUrl = iconResult.url
@@ -88,6 +96,14 @@ export default defineEventHandler(async (event) => {
           {
             actorId: userId,
             resourceType: 'plugin-icon',
+            uploadLifecycle: {
+              surface: 'plugin-icon-extract',
+              resourceId: `plugin:${slug}:icon`,
+              metadata: {
+                pluginSlug: slug,
+                source: 'dashboard-plugin-create',
+              },
+            },
           },
         )
         iconKey = iconResult.key

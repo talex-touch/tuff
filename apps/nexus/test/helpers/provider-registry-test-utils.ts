@@ -38,6 +38,24 @@ export interface CredentialRow {
   updated_at: string
 }
 
+export interface GovernanceConfigRow {
+  id: string
+  config_type: string
+  name: string
+  owner_scope: string
+  owner_id: string
+  target_id: string
+  channel: string
+  provider: string
+  enabled: number
+  limits_json: string
+  warning_threshold: number | null
+  config_json: string
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
 export interface IntelligenceProviderRow {
   id: string
   user_id: string
@@ -88,6 +106,7 @@ export class MockD1Database {
   providers = new Map<string, ProviderRow>()
   capabilities = new Map<string, CapabilityRow>()
   credentials = new Map<string, CredentialRow>()
+  governanceConfigs = new Map<string, GovernanceConfigRow>()
   intelligenceProviders = new Map<string, IntelligenceProviderRow>()
 
   prepare(sql: string) {
@@ -173,6 +192,61 @@ export class MockD1Database {
         encrypted_value: String(encryptedValue),
         created_by: String(createdBy),
         created_at: String(createdAt),
+        updated_at: String(updatedAt),
+      })
+      return { meta: { changes: 1 } }
+    }
+
+    if (sql.includes('INSERT INTO platform_governance_configs')) {
+      const [
+        id,
+        configType,
+        name,
+        ownerScope,
+        ownerId,
+        targetId,
+        channel,
+        provider,
+        enabled,
+        limitsJson,
+        warningThreshold,
+        configJson,
+        createdBy,
+        createdAt,
+        updatedAt,
+      ] = args
+      this.governanceConfigs.set(String(id), {
+        id: String(id),
+        config_type: String(configType),
+        name: String(name),
+        owner_scope: String(ownerScope),
+        owner_id: ownerId == null ? '' : String(ownerId),
+        target_id: targetId == null ? '' : String(targetId),
+        channel: channel == null ? '' : String(channel),
+        provider: provider == null ? '' : String(provider),
+        enabled: Number(enabled),
+        limits_json: String(limitsJson),
+        warning_threshold: warningThreshold == null ? null : Number(warningThreshold),
+        config_json: String(configJson),
+        created_by: String(createdBy),
+        created_at: String(createdAt),
+        updated_at: String(updatedAt),
+      })
+      return { meta: { changes: 1 } }
+    }
+
+    if (sql.includes('UPDATE platform_governance_configs')) {
+      const [name, enabled, limitsJson, warningThreshold, configJson, updatedAt, id] = args
+      const existing = this.governanceConfigs.get(String(id))
+      if (!existing)
+        return { meta: { changes: 0 } }
+      this.governanceConfigs.set(String(id), {
+        ...existing,
+        name: String(name),
+        enabled: Number(enabled),
+        limits_json: String(limitsJson),
+        warning_threshold: warningThreshold == null ? null : Number(warningThreshold),
+        config_json: String(configJson),
         updated_at: String(updatedAt),
       })
       return { meta: { changes: 1 } }
@@ -282,6 +356,9 @@ export class MockD1Database {
   }
 
   first(sql: string, args: any[]) {
+    if (sql.includes('FROM platform_governance_configs')) {
+      return this.filterGovernanceConfigs(sql, args)[0] ?? null
+    }
     if (sql.includes('FROM provider_registry') && sql.includes('WHERE id = ?')) {
       return this.providers.get(String(args[0])) ?? null
     }
@@ -308,6 +385,10 @@ export class MockD1Database {
   }
 
   all(sql: string, args: any[]) {
+    if (sql.includes('FROM platform_governance_configs')) {
+      return this.filterGovernanceConfigs(sql, args)
+    }
+
     if (sql.includes('FROM provider_registry')) {
       return this.filterProviders(sql, args)
     }
@@ -367,6 +448,40 @@ export class MockD1Database {
     }
 
     return rows.sort((a, b) => a.capability.localeCompare(b.capability))
+  }
+
+  private filterGovernanceConfigs(sql: string, args: any[]) {
+    let rows = [...this.governanceConfigs.values()]
+
+    if (sql.includes('WHERE config_type = ?1')) {
+      const [configType, ownerScope, ownerId, targetId, channel, provider] = args.map(value => value == null ? '' : String(value))
+      rows = rows.filter(row =>
+        row.config_type === configType
+        && row.owner_scope === ownerScope
+        && row.owner_id === ownerId
+        && row.target_id === targetId
+        && row.channel === channel
+        && row.provider === provider,
+      )
+      return rows.slice(0, 1)
+    }
+
+    const filterCandidates: Array<[string, keyof GovernanceConfigRow, (value: any) => string | number]> = [
+      ['config_type = ?', 'config_type', String],
+      ['owner_scope = ?', 'owner_scope', String],
+      ['owner_id = ?', 'owner_id', String],
+      ['target_id = ?', 'target_id', String],
+      ['channel = ?', 'channel', String],
+      ['provider = ?', 'provider', String],
+      ['enabled = ?', 'enabled', Number],
+    ]
+    const filters = filterCandidates.filter(([fragment]) => sql.includes(fragment))
+
+    rows = rows.filter(row => filters.every(([, column, normalize], index) => {
+      return (row as any)[column] === normalize(args[index])
+    }))
+
+    return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   }
 }
 

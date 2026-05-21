@@ -76,6 +76,7 @@ export default defineEventHandler(async (event) => {
 
   // Track install count (fire and forget to avoid blocking redirect)
   incrementPluginInstalls(event, plugin.id).catch(() => {})
+  const geo = resolveRequestGeo(event)
   recordPlatformGovernanceEvent(event, {
     scope: 'plugin',
     action: 'download',
@@ -89,7 +90,27 @@ export default defineEventHandler(async (event) => {
       version: targetVersion.version,
       artifactType: plugin.artifactType,
       packageSize: targetVersion.packageSize,
-      countryCode: resolveRequestGeo(event).countryCode,
+      countryCode: geo.countryCode,
+      regionCode: geo.regionCode,
+      timezone: geo.timezone,
+    },
+  }).catch(() => {})
+  recordPlatformGovernanceEvent(event, {
+    scope: 'plugin',
+    action: 'install',
+    resourceType: 'plugin',
+    resourceId: plugin.id,
+    channel: targetVersion.channel,
+    unit: 'install',
+    quantity: 1,
+    metadata: {
+      slug: plugin.slug,
+      version: targetVersion.version,
+      artifactType: plugin.artifactType,
+      packageSize: targetVersion.packageSize,
+      countryCode: geo.countryCode,
+      regionCode: geo.regionCode,
+      timezone: geo.timezone,
     },
   }).catch(() => {})
 

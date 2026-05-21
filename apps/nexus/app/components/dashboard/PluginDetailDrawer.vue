@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type {
   DashboardPlugin as Plugin,
+  DashboardPluginAnalytics,
+  DashboardPluginAnalyticsMetric,
+  DashboardPluginAnalyticsTrendPoint,
   DashboardPluginTimelineEvent,
   PluginChannel,
   DashboardPluginVersion as PluginVersion,
@@ -20,6 +23,9 @@ interface Props {
   timeline?: DashboardPluginTimelineEvent[]
   timelineLoading?: boolean
   timelineError?: string | null
+  analytics?: DashboardPluginAnalytics | null
+  analyticsLoading?: boolean
+  analyticsError?: string | null
   loading?: boolean
 }
 
@@ -105,6 +111,107 @@ const canPublishVersion = computed(() => {
 const canEdit = computed(() => props.isOwner || props.isAdmin)
 const canDelete = computed(() => props.isOwner || props.isAdmin)
 const canViewTimeline = computed(() => props.isOwner || props.isAdmin)
+const canViewAnalytics = computed(() => props.isOwner || props.isAdmin)
+
+const analyticsHasData = computed(() => {
+  const analytics = props.analytics
+  if (!analytics)
+    return false
+  return analytics.events > 0
+    || analytics.downloads > 0
+    || analytics.installs > 0
+    || analytics.invocations > 0
+    || analytics.uniqueActors > 0
+})
+
+const latestTrendPoint = computed(() => {
+  const trend = props.analytics?.trend ?? []
+  for (let index = trend.length - 1; index >= 0; index -= 1) {
+    const point = trend[index]
+    if (!point)
+      continue
+    if (isTrendPointActive(point))
+      return point
+  }
+  return trend.at(-1) ?? null
+})
+
+const peakTrendPoint = computed(() => {
+  const trend = props.analytics?.trend ?? []
+  return trend.reduce<DashboardPluginAnalyticsTrendPoint | null>((current, point) => {
+    if (!current)
+      return point
+    return point.quantity > current.quantity || (point.quantity === current.quantity && point.events > current.events)
+      ? point
+      : current
+  }, null)
+})
+
+const analyticsStats = computed(() => {
+  const analytics = props.analytics
+  return [
+    {
+      key: 'downloads',
+      icon: 'i-carbon-download',
+      label: t('dashboard.sections.plugins.analytics.stats.downloads'),
+      value: formatMetricValue(analytics?.downloads),
+    },
+    {
+      key: 'installs',
+      icon: 'i-carbon-package',
+      label: t('dashboard.sections.plugins.analytics.stats.installs'),
+      value: formatMetricValue(analytics?.installs),
+    },
+    {
+      key: 'invocations',
+      icon: 'i-carbon-function',
+      label: t('dashboard.sections.plugins.analytics.stats.invocations'),
+      value: formatMetricValue(analytics?.invocations),
+    },
+    {
+      key: 'uniqueActors',
+      icon: 'i-carbon-user-multiple',
+      label: t('dashboard.sections.plugins.analytics.stats.uniqueActors'),
+      value: formatMetricValue(analytics?.uniqueActors),
+    },
+  ]
+})
+
+const analyticsBreakdowns = computed(() => {
+  const analytics = props.analytics
+  return [
+    {
+      key: 'actions',
+      title: t('dashboard.sections.plugins.analytics.breakdowns.actions'),
+      items: analytics?.byAction ?? [],
+    },
+    {
+      key: 'countries',
+      title: t('dashboard.sections.plugins.analytics.breakdowns.countries'),
+      items: analytics?.byCountry ?? [],
+    },
+    {
+      key: 'regions',
+      title: t('dashboard.sections.plugins.analytics.breakdowns.regions'),
+      items: analytics?.byRegion ?? [],
+    },
+    {
+      key: 'channels',
+      title: t('dashboard.sections.plugins.analytics.breakdowns.channels'),
+      items: analytics?.byChannel ?? [],
+    },
+    {
+      key: 'versions',
+      title: t('dashboard.sections.plugins.analytics.breakdowns.versions'),
+      items: analytics?.byVersion ?? [],
+    },
+    {
+      key: 'artifactTypes',
+      title: t('dashboard.sections.plugins.analytics.breakdowns.artifactTypes'),
+      items: analytics?.byArtifactType ?? [],
+    },
+  ]
+})
 
 const visibleModel = computed({
   get: () => props.isOpen,
@@ -158,6 +265,41 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
     default:
       return event.eventType
   }
+}
+
+function isTrendPointActive(point: DashboardPluginAnalyticsTrendPoint) {
+  return point.events > 0
+    || point.downloads > 0
+    || point.installs > 0
+    || point.invocations > 0
+    || point.uniqueActors > 0
+}
+
+function formatMetricValue(value?: number | null) {
+  return formatNumber(value ?? 0)
+}
+
+function formatMetricKey(key: string) {
+  return key === 'unknown'
+    ? t('dashboard.sections.plugins.analytics.unknown')
+    : key
+}
+
+function formatMetricMeta(metric: DashboardPluginAnalyticsMetric) {
+  return t('dashboard.sections.plugins.analytics.metricMeta', {
+    quantity: formatMetricValue(metric.quantity),
+    actors: formatMetricValue(metric.uniqueActors),
+    events: formatMetricValue(metric.events),
+  })
+}
+
+function formatTrendMeta(point: DashboardPluginAnalyticsTrendPoint) {
+  return t('dashboard.sections.plugins.analytics.trendMeta', {
+    downloads: formatMetricValue(point.downloads),
+    installs: formatMetricValue(point.installs),
+    invocations: formatMetricValue(point.invocations),
+    actors: formatMetricValue(point.uniqueActors),
+  })
 }
 </script>
 
@@ -213,6 +355,115 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
                 <p class="mt-2 text-lg font-semibold text-black dark:text-white">
                   {{ formatDate(plugin.createdAt) }}
                 </p>
+              </div>
+            </div>
+
+            <!-- Analytics -->
+            <div v-if="canViewAnalytics" class="border-b border-black/[0.04] py-5 dark:border-white/[0.06]">
+              <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
+                    {{ t('dashboard.sections.plugins.analytics.title') }}
+                  </p>
+                  <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.sections.plugins.analytics.period', { days: analytics?.days ?? 30 }) }}
+                  </p>
+                </div>
+                <p v-if="analytics?.packageSize.count" class="text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.sections.plugins.analytics.averagePackageSize', { size: formatSize(analytics.packageSize.average) }) }}
+                </p>
+              </div>
+
+              <div v-if="analyticsLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                <span class="i-carbon-circle-dash animate-spin" />
+                {{ t('dashboard.sections.plugins.analytics.loading') }}
+              </div>
+              <p v-else-if="analyticsError" class="text-xs text-rose-600 dark:text-rose-300">
+                {{ analyticsError }}
+              </p>
+              <p v-else-if="!analyticsHasData" class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.plugins.analytics.empty') }}
+              </p>
+              <div v-else class="space-y-4">
+                <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <div
+                    v-for="item in analyticsStats"
+                    :key="item.key"
+                    class="rounded-xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
+                  >
+                    <div class="flex items-center gap-2 text-xs text-black/45 dark:text-white/45">
+                      <span :class="item.icon" />
+                      <span>{{ item.label }}</span>
+                    </div>
+                    <p class="mt-2 text-xl font-semibold text-black dark:text-white">
+                      {{ item.value }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.latestDay') }}
+                    </p>
+                    <template v-if="latestTrendPoint">
+                      <p class="mt-2 text-sm font-semibold text-black dark:text-white">
+                        {{ formatDate(latestTrendPoint.date) }}
+                      </p>
+                      <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                        {{ formatTrendMeta(latestTrendPoint) }}
+                      </p>
+                    </template>
+                    <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
+                  <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.peakDay') }}
+                    </p>
+                    <template v-if="peakTrendPoint">
+                      <p class="mt-2 text-sm font-semibold text-black dark:text-white">
+                        {{ formatDate(peakTrendPoint.date) }}
+                      </p>
+                      <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                        {{ formatTrendMeta(peakTrendPoint) }}
+                      </p>
+                    </template>
+                    <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div
+                    v-for="group in analyticsBreakdowns"
+                    :key="group.key"
+                    class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]"
+                  >
+                    <p class="apple-section-title">
+                      {{ group.title }}
+                    </p>
+                    <div v-if="group.items.length" class="mt-3 space-y-2">
+                      <div
+                        v-for="metric in group.items.slice(0, 4)"
+                        :key="`${group.key}-${metric.key}`"
+                        class="flex items-center justify-between gap-3 text-xs"
+                      >
+                        <span class="min-w-0 truncate text-black/70 dark:text-white/70">
+                          {{ formatMetricKey(metric.key) }}
+                        </span>
+                        <span class="shrink-0 text-right text-black/45 dark:text-white/45">
+                          {{ formatMetricMeta(metric) }}
+                        </span>
+                      </div>
+                    </div>
+                    <p v-else class="mt-3 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noBreakdown') }}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 

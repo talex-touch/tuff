@@ -7,7 +7,7 @@ let hasLoggedBindings = false
  * Safely read Cloudflare bindings when running inside a Worker/Pages function.
  */
 export function readCloudflareBindings(event: H3Event) {
-  const bindings = event.context.cloudflare?.env as TuffCloudflareBindings | undefined
+  const bindings = event.context?.cloudflare?.env as TuffCloudflareBindings | undefined
 
   if (!hasLoggedBindings) {
     hasLoggedBindings = true
