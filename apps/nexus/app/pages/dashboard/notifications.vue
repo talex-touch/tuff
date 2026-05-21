@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { TxButton, TxSpinner, TxTag } from '@talex-touch/tuffex'
+import { hasWindow } from '@talex-touch/utils/env'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -13,6 +14,7 @@ const toast = useToast()
 
 type NotificationStatus = 'unread' | 'read'
 type NotificationFilter = NotificationStatus | 'all'
+type BrowserNotificationPermissionState = 'default' | 'denied' | 'granted' | 'unsupported'
 
 interface BrowserNotificationItem {
   id: string
@@ -41,6 +43,9 @@ const unreadCount = ref(0)
 const generatedAt = ref('')
 const loading = ref(false)
 const actionLoading = ref(false)
+const browserNotificationBusy = ref(false)
+const browserNotificationPermission = ref<BrowserNotificationPermissionState>('unsupported')
+const browserNotificationError = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 const filterOptions = computed(() => [
@@ -57,6 +62,27 @@ const filterOptions = computed(() => [
 const visibleNotifications = computed(() => notifications.value)
 const hasUnread = computed(() => unreadCount.value > 0)
 const generatedAtLabel = computed(() => generatedAt.value ? formatDateTime(generatedAt.value) : '-')
+const browserNotificationPermissionLabel = computed(() => {
+  if (browserNotificationPermission.value === 'granted')
+    return t('dashboard.notifications.browser.permissionGranted', '已允许')
+  if (browserNotificationPermission.value === 'denied')
+    return t('dashboard.notifications.browser.permissionDenied', '已阻止')
+  if (browserNotificationPermission.value === 'default')
+    return t('dashboard.notifications.browser.permissionPrompt', '待授权')
+  return t('dashboard.notifications.browser.permissionUnsupported', '不支持')
+})
+const browserNotificationActionLabel = computed(() => {
+  if (browserNotificationPermission.value === 'granted')
+    return t('dashboard.notifications.browser.test', '测试浏览器通知')
+  if (browserNotificationPermission.value === 'default')
+    return t('dashboard.notifications.browser.enable', '开启浏览器通知')
+  if (browserNotificationPermission.value === 'denied')
+    return t('dashboard.notifications.browser.blocked', '已被浏览器阻止')
+  return t('dashboard.notifications.browser.unsupported', '浏览器不支持')
+})
+const browserNotificationActionDisabled = computed(() => {
+  return browserNotificationBusy.value || browserNotificationPermission.value === 'denied' || browserNotificationPermission.value === 'unsupported'
+})
 
 function readErrorMessage(errorValue: unknown): string {
   const candidate = errorValue as { data?: { statusMessage?: unknown, message?: unknown }, message?: unknown } | null
@@ -112,6 +138,62 @@ function resourceLabel(item: BrowserNotificationItem): string {
   if (!item.resourceType && !item.resourceId)
     return t('dashboard.notifications.resourceSystem', 'System')
   return [item.resourceType, item.resourceId].filter(Boolean).join(' / ')
+}
+
+function readBrowserNotificationPermission(): BrowserNotificationPermissionState {
+  if (!import.meta.client || !hasWindow() || !('Notification' in window))
+    return 'unsupported'
+  return window.Notification.permission
+}
+
+function syncBrowserNotificationPermission() {
+  browserNotificationPermission.value = readBrowserNotificationPermission()
+}
+
+function sendBrowserTestNotification() {
+  if (!import.meta.client || !hasWindow() || !('Notification' in window))
+    throw new Error(t('dashboard.notifications.browser.errors.unsupported', '当前浏览器不支持系统通知。'))
+  if (window.Notification.permission !== 'granted')
+    throw new Error(t('dashboard.notifications.browser.errors.permissionRequired', '请先允许浏览器通知权限。'))
+
+  const notification = new window.Notification(t('dashboard.notifications.browser.testTitle', 'Tuff 通知测试'), {
+    body: t('dashboard.notifications.browser.testBody', '浏览器通知已可用。'),
+    tag: 'tuff-dashboard-notification-test',
+  })
+  notification.onclick = () => window.focus()
+}
+
+async function handleBrowserNotificationAction() {
+  if (!import.meta.client || !hasWindow() || !('Notification' in window)) {
+    browserNotificationError.value = t('dashboard.notifications.browser.errors.unsupported', '当前浏览器不支持系统通知。')
+    return
+  }
+
+  browserNotificationBusy.value = true
+  browserNotificationError.value = null
+  try {
+    if (window.Notification.permission === 'default') {
+      browserNotificationPermission.value = await window.Notification.requestPermission()
+    }
+    else {
+      syncBrowserNotificationPermission()
+    }
+
+    if (browserNotificationPermission.value !== 'granted') {
+      browserNotificationError.value = t('dashboard.notifications.browser.errors.permissionRequired', '请先允许浏览器通知权限。')
+      return
+    }
+
+    sendBrowserTestNotification()
+    toast.success(t('dashboard.notifications.browser.testSent', '浏览器测试通知已发送'))
+  }
+  catch (caught) {
+    browserNotificationError.value = readErrorMessage(caught)
+    toast.error(t('dashboard.notifications.browser.testFailed', '浏览器通知测试失败'), browserNotificationError.value)
+  }
+  finally {
+    browserNotificationBusy.value = false
+  }
 }
 
 async function loadNotifications() {
@@ -181,6 +263,7 @@ watch(filter, () => {
 })
 
 onMounted(() => {
+  syncBrowserNotificationPermission()
   void loadNotifications()
 })
 </script>
@@ -198,6 +281,9 @@ onMounted(() => {
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        <TxButton size="small" variant="secondary" :disabled="browserNotificationActionDisabled" :loading="browserNotificationBusy" icon="i-carbon-notification" @click="handleBrowserNotificationAction">
+          {{ browserNotificationActionLabel }}
+        </TxButton>
         <TxButton size="small" variant="secondary" :loading="loading" icon="i-carbon-renew" @click="loadNotifications">
           {{ t('dashboard.notifications.refresh', '刷新') }}
         </TxButton>
@@ -207,7 +293,7 @@ onMounted(() => {
       </div>
     </header>
 
-    <section class="grid gap-4 md:grid-cols-3">
+    <section class="grid gap-4 md:grid-cols-4">
       <div class="apple-card-lg p-5">
         <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
           {{ t('dashboard.notifications.metrics.unread', 'Unread') }}
@@ -230,6 +316,17 @@ onMounted(() => {
         </p>
         <p class="mt-3 text-sm text-black font-medium dark:text-white">
           {{ generatedAtLabel }}
+        </p>
+      </div>
+      <div class="apple-card-lg p-5">
+        <p class="text-xs text-black/50 uppercase tracking-[0.12em] dark:text-white/50">
+          {{ t('dashboard.notifications.metrics.browser', 'Browser') }}
+        </p>
+        <p class="mt-3 text-sm text-black font-medium dark:text-white">
+          {{ browserNotificationPermissionLabel }}
+        </p>
+        <p v-if="browserNotificationError" class="mt-2 text-xs text-red-600 dark:text-red-300">
+          {{ browserNotificationError }}
         </p>
       </div>
     </section>
