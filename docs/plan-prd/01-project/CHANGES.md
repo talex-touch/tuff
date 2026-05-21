@@ -13,6 +13,18 @@
 
 ## 2026-05-21
 
+### feat(nexus): enrich search context governance analytics
+
+- `apps/nexus/server/utils/telemetrySanitizer.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/{telemetryStore,platformGovernanceStore}.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Extended sanitized search telemetry with local hour/day, context app/source, entry point, trigger type, preference mode, session bucket, plugin ids/categories, and bounded context tags without storing raw query text.
+  - Data Governance search analytics now aggregates those dimensions alongside existing provider latency/result/status, filter usage, geo/timezone, trend, and heatmap metrics.
+  - Admin Data Governance UI now surfaces local search time, context app, trigger, preference mode, and plugin/plugin-category search usage in the search context panel.
+
 ### feat(nexus): add plugin review analytics to asset details
 
 - `apps/nexus/server/utils/pluginReviewStore.ts`

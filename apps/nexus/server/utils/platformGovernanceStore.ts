@@ -1023,6 +1023,17 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
   const byProviderStatus = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byFilterKind = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byFilterSource = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byContextAppCategory = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byContextSource = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byEntryPoint = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byTriggerType = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byUserPreferenceMode = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySessionBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byPluginId = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byPluginCategory = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byContextTag = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalHour = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalDayOfWeek = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byCountry = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byRegion = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byTimezone = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -1042,9 +1053,24 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     addMetricBucket(byCountry, readEventMetadataString(event, 'countryCode'), event)
     addMetricBucket(byRegion, readEventMetadataString(event, 'regionCode'), event)
     addMetricBucket(byTimezone, readEventMetadataString(event, 'timezone'), event)
+    addMetricBucket(byContextAppCategory, readEventMetadataString(event, 'contextAppCategory'), event)
+    addMetricBucket(byContextSource, readEventMetadataString(event, 'contextSource'), event)
+    addMetricBucket(byEntryPoint, readEventMetadataString(event, 'entryPoint'), event)
+    addMetricBucket(byTriggerType, readEventMetadataString(event, 'triggerType'), event)
+    addMetricBucket(byUserPreferenceMode, readEventMetadataString(event, 'userPreferenceMode'), event)
+    addMetricBucket(bySessionBucket, readEventMetadataString(event, 'sessionBucket'), event)
     addStringArrayBuckets(byInputType, event.metadata?.inputTypes, event)
     addStringArrayBuckets(byFilterKind, event.metadata?.filterKinds, event)
     addStringArrayBuckets(byFilterSource, event.metadata?.filterSources, event)
+    addStringArrayBuckets(byPluginId, event.metadata?.pluginIds, event)
+    addStringArrayBuckets(byPluginCategory, event.metadata?.pluginCategories, event)
+    addStringArrayBuckets(byContextTag, event.metadata?.contextTags, event)
+    const localHour = readEventMetadataNumber(event, 'localHour')
+    if (typeof localHour === 'number')
+      addMetricBucket(byLocalHour, String(Math.round(localHour)).padStart(2, '0'), event)
+    const localDayOfWeek = readEventMetadataNumber(event, 'localDayOfWeek')
+    if (typeof localDayOfWeek === 'number')
+      addMetricBucket(byLocalDayOfWeek, String(Math.round(localDayOfWeek)), event)
     const providerTimings = event.metadata?.providerTimings
     if (providerTimings && typeof providerTimings === 'object' && !Array.isArray(providerTimings)) {
       for (const providerId of Object.keys(providerTimings))
@@ -1083,6 +1109,17 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     byProviderStatus: mapMetricBuckets(byProviderStatus, topLimit),
     byFilterKind: mapMetricBuckets(byFilterKind, topLimit),
     byFilterSource: mapMetricBuckets(byFilterSource, topLimit),
+    byContextAppCategory: mapMetricBuckets(byContextAppCategory, topLimit),
+    byContextSource: mapMetricBuckets(byContextSource, topLimit),
+    byEntryPoint: mapMetricBuckets(byEntryPoint, topLimit),
+    byTriggerType: mapMetricBuckets(byTriggerType, topLimit),
+    byUserPreferenceMode: mapMetricBuckets(byUserPreferenceMode, topLimit),
+    bySessionBucket: mapMetricBuckets(bySessionBucket, topLimit),
+    byPluginId: mapMetricBuckets(byPluginId, topLimit),
+    byPluginCategory: mapMetricBuckets(byPluginCategory, topLimit),
+    byContextTag: mapMetricBuckets(byContextTag, topLimit),
+    byLocalHour: mapMetricBuckets(byLocalHour, 24),
+    byLocalDayOfWeek: mapMetricBuckets(byLocalDayOfWeek, 7),
     byCountry: mapMetricBuckets(byCountry, topLimit),
     byRegion: mapMetricBuckets(byRegion, topLimit),
     byTimezone: mapMetricBuckets(byTimezone, topLimit),

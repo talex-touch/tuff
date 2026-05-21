@@ -13,4 +13,16 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('dashboard.governance.notificationTest.dryRun')
     expect(page).toContain('dashboard.governance.notificationTest.send')
   })
+
+  it('exposes granular anonymized search context analytics', () => {
+    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
+
+    expect(page).toContain('analyticsData.searches.byLocalHour')
+    expect(page).toContain('analyticsData.searches.byContextAppCategory')
+    expect(page).toContain('analyticsData.searches.byTriggerType')
+    expect(page).toContain('analyticsData.searches.byUserPreferenceMode')
+    expect(page).toContain('analyticsData.searches.byPluginId')
+    expect(page).toContain('analyticsData.searches.byPluginCategory')
+    expect(page).toContain('dashboard.governance.analytics.searchPreference')
+  })
 })
