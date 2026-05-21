@@ -65,6 +65,7 @@ const CREDENTIAL_REQUIRED_ADAPTERS = new Set([
 
 const SENDABLE_HTTP_ADAPTERS = new Set([
   'email/resend',
+  'email/smtp',
   'email/generic',
   'feishu',
   'lark',
@@ -304,8 +305,38 @@ function hasWebhookCredential(credential: NotificationCredentialPayload): creden
   return 'url' in credential && typeof credential.url === 'string' && credential.url.length > 0
 }
 
+function hasSmtpCredential(credential: NotificationCredentialPayload): credential is { host: string, port?: number, username?: string, password: string, secure?: boolean, from?: string } {
+  return 'host' in credential
+    && typeof credential.host === 'string'
+    && credential.host.length > 0
+    && 'password' in credential
+    && typeof credential.password === 'string'
+    && credential.password.length > 0
+}
+
 function hasBotTokenCredential(credential: NotificationCredentialPayload): credential is { token: string } {
   return 'token' in credential && typeof credential.token === 'string' && credential.token.length > 0
+}
+
+function readHttpsRelayEndpoint(config: PlatformGovernanceConfig): string | null {
+  const endpoint = readConfigString(config, 'endpoint', 2048)
+    ?? readConfigString(config, 'relayUrl', 2048)
+    ?? readConfigString(config, 'url', 2048)
+  if (!endpoint)
+    return null
+
+  try {
+    const url = new URL(endpoint)
+    if (url.protocol === 'https:')
+      return url.toString()
+    if (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1'))
+      return url.toString()
+  }
+  catch {
+    return null
+  }
+
+  return null
 }
 
 function resolveBotWebhookUrl(adapter: string, credential: NotificationCredentialPayload): string | null {
@@ -437,6 +468,58 @@ async function sendGenericEmailNotification(
   return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
 }
 
+async function sendSmtpRelayNotification(
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+  credential: NotificationCredentialPayload,
+): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'relay-endpoint-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+  if (!hasSmtpCredential(credential))
+    return 'credential-type-mismatch'
+
+  const endpoint = readHttpsRelayEndpoint(delivery.config)
+  if (!endpoint)
+    return 'relay-endpoint-missing'
+
+  const recipients = readRecipients(input)
+  if (recipients.length === 0)
+    return 'recipient-missing'
+
+  const from = readConfigString(delivery.config, 'from', 320) ?? credential.from
+  if (!from)
+    return 'sender-missing'
+
+  const response = await networkClient.request({
+    method: 'POST',
+    url: endpoint,
+    timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 15000, 1000, 30000),
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: {
+      adapter: 'smtp',
+      action: input.action,
+      smtp: {
+        host: credential.host,
+        port: credential.port ?? (credential.secure ? 465 : 587),
+        username: credential.username ?? null,
+        password: credential.password,
+        secure: Boolean(credential.secure),
+      },
+      from,
+      to: recipients,
+      subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
+      text: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+      resourceType: input.resourceType ?? null,
+      resourceId: input.resourceId ?? null,
+      metadata: sanitizeDispatchMetadata(input.metadata),
+      occurredAt: input.occurredAt ?? new Date().toISOString(),
+    },
+  })
+
+  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+}
+
 async function sendBotWebhookNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
@@ -473,6 +556,8 @@ async function sendNotification(
   try {
     if (delivery.adapter === 'email/resend')
       return await sendResendNotification(delivery, input, credential)
+    if (delivery.adapter === 'email/smtp')
+      return await sendSmtpRelayNotification(delivery, input, credential)
     if (delivery.adapter === 'email/generic')
       return await sendGenericEmailNotification(delivery, input, credential)
     if (delivery.adapter === 'webhook')
