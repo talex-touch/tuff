@@ -1,8 +1,8 @@
+import type { H3Event } from 'h3'
+import { useRuntimeConfig } from '#imports'
 import { requireAuth } from '../../utils/auth'
 import { ensureDeviceForRequest, getAdminBootstrapState, getUserById, listPasskeys } from '../../utils/authStore'
 import { normalizeLocaleCode } from '../../utils/locale'
-import { useRuntimeConfig } from '#imports'
-import type { H3Event } from 'h3'
 
 function hasBootstrapSecret(event: H3Event) {
   const config = useRuntimeConfig(event)
@@ -13,14 +13,16 @@ function hasBootstrapSecret(event: H3Event) {
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
-  await ensureDeviceForRequest(event, userId)
-  const user = await getUserById(event, userId)
+  const auth = await requireAuth(event)
+  if (auth.authSource !== 'session')
+    await ensureDeviceForRequest(event, auth.userId)
+
+  const user = await getUserById(event, auth.userId)
   if (!user)
     return null
 
-  const passkeys = await listPasskeys(event, userId)
-  const bootstrap = await getAdminBootstrapState(event, userId)
+  const passkeys = await listPasskeys(event, auth.userId)
+  const bootstrap = await getAdminBootstrapState(event, auth.userId)
   const bootstrapEnabled = hasBootstrapSecret(event)
 
   return {

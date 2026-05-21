@@ -13,6 +13,17 @@
 
 ## 2026-05-21
 
+### fix(nexus): handle reused web device ids across accounts
+
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/{user/auth}/me.get.ts`
+- `apps/nexus/nuxt.config.ts`
+  - Fixed `/api/user/me` failures when a browser-local `x-device-id` is reused after switching accounts by moving the global device record to the active user instead of attempting a duplicate insert into `auth_devices.id`.
+  - Cross-account device moves now clear trusted/revoked state and rotate the device token version to avoid inheriting authorization state from the previous account.
+  - Removed duplicate session device upsert from `GET /api/user/me`; app-token `/api/auth/me` still refreshes device presence.
+  - Added Vite dev `optimizeDeps.include` entries for Mermaid, GSAP plugins, theme colors, simplex-noise, and `path-browserify` to avoid dependency pre-bundle reloads.
+  - Validation: focused `authStore-device-reactivation.test.ts` Vitest passed.
+
 ### feat(nexus): add data governance analytics foundation
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
