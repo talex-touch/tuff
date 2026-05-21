@@ -30,7 +30,7 @@ export default defineComponent({
   },
   emits: ['update:modelValue', 'change'],
   setup(props, { slots, emit, expose }) {
-    const activeNode = ref<any>()
+    const activeName = ref('')
     const slotWrapper = ref<any>()
     const autoSizerRef = ref<any>()
 
@@ -66,9 +66,10 @@ export default defineComponent({
     }
 
     function setActive(vnode: any) {
-      activeNode.value = vnode
-      emit('update:modelValue', getNodeName(vnode))
-      emit('change', getNodeName(vnode))
+      const name = getNodeName(vnode)
+      activeName.value = name
+      emit('update:modelValue', name)
+      emit('change', name)
     }
 
     const animationSize = computed(() => {
@@ -349,9 +350,10 @@ export default defineComponent({
     }
 
     function createTab(vnode: any): any {
+      const name = getNodeName(vnode)
       const tab = h(TxTabItem, {
         ...vnode.props,
-        active: activeNode.value?.props?.name === vnode.props?.name,
+        active: activeName.value === name,
         onClick: () => {
           if (vnode.props?.disabled)
             return
@@ -369,12 +371,6 @@ export default defineComponent({
           }
         },
       })
-
-      const isDefault = !!vnode.props?.activation
-      if (!activeNode.value && isDefault && !props.modelValue && !props.defaultValue) {
-        setActive(vnode)
-        nextTick(() => applyPointerFor(tab))
-      }
 
       return tab
     }
@@ -403,14 +399,20 @@ export default defineComponent({
 
       tabNodeCache.value = collectTabNodes()
 
+      const currentActiveNode = activeName.value ? findByName(activeName.value) : null
       const modelNode = props.modelValue ? findByName(props.modelValue) : null
-      if (modelNode && activeNode.value?.props?.name !== props.modelValue) {
-        activeNode.value = modelNode
+      if (modelNode) {
+        activeName.value = props.modelValue ?? ''
       }
-      else if (!props.modelValue && props.defaultValue && !activeNode.value) {
+      else if (!props.modelValue && props.defaultValue && !currentActiveNode) {
         const defaultNode = findByName(props.defaultValue)
         if (defaultNode)
           setActive(defaultNode)
+      }
+      else if (!props.modelValue && !props.defaultValue && !currentActiveNode) {
+        const activationNode = tabNodeCache.value.find(node => node?.props?.activation)
+        if (activationNode)
+          setActive(activationNode)
       }
 
       const filtered = nodes
@@ -438,23 +440,24 @@ export default defineComponent({
         })
         .filter(Boolean)
 
-      return [filtered, tabHeader]
+      return [filtered, tabHeader, findByName(activeName.value)]
     }
 
-    function renderContent(tabHeader: any) {
-      if (!activeNode.value) {
+    function renderContent(tabHeader: any, activeNode: any) {
+      if (!activeNode) {
         return h('div', { class: 'tx-tabs__empty' }, 'No tab selected')
       }
 
-      const contentWrapper = h('div', { class: 'tx-tabs__content-wrapper' }, activeNode.value.children?.default?.())
+      const name = getNodeName(activeNode)
+      const contentWrapper = h('div', { key: name, class: 'tx-tabs__content-wrapper' }, activeNode.children?.default?.())
       const content = contentScrollable.value
-        ? h('div', { class: 'tx-tabs__content-scroll' }, [contentWrapper])
+        ? h('div', { key: `scroll-${name}`, class: 'tx-tabs__content-scroll' }, [contentWrapper])
         : contentWrapper
 
       if (tabHeader) {
         const headerVNode = h(
           TxTabHeader,
-          { ...tabHeader.props, node: activeNode.value },
+          { ...tabHeader.props, node: activeNode },
           tabHeader.children,
         )
         return [headerVNode, content]
@@ -468,10 +471,9 @@ export default defineComponent({
       (val) => {
         if (!val)
           return
-        const node = findByName(val)
-        if (node) {
+        if (activeName.value !== val) {
           void runAutoHeight(() => {
-            activeNode.value = node
+            activeName.value = val
           }).then(() => {
             nextTick(() => {
               const el = navInnerElRef.value?.querySelector('.tx-tab-item.is-active')
@@ -486,7 +488,7 @@ export default defineComponent({
     watch(
       () => props.defaultValue,
       (val) => {
-        if (!val || props.modelValue)
+        if (!val || props.modelValue || activeName.value)
           return
         const node = findByName(val)
         if (node) {
@@ -502,7 +504,7 @@ export default defineComponent({
     )
 
     return () => {
-      const [tabs, tabHeader] = renderTabs()
+      const [tabs, tabHeader, activeNode] = renderTabs()
 
       const navRightSlot = slots['nav-right']?.()
 
@@ -524,9 +526,10 @@ export default defineComponent({
         'div',
         {
           ref: (el: any) => (contentRootElRef.value = el),
+          key: activeName.value,
           class: ['tx-tabs__select-slot', { 'tx-tabs-zoom': animationContent.value.enabled }],
         },
-        renderContent(tabHeader),
+        renderContent(tabHeader, activeNode),
       )
       slotWrapper.value = selectSlot
 

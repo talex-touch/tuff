@@ -182,6 +182,7 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   width: 100%;
+  min-width: 0;
   height: 32px;
   padding: 0 0.5rem;
   border-radius: 12px;
@@ -218,6 +219,7 @@ defineExpose({
 
   &__inner {
     flex: 1;
+    min-width: 0;
     width: 100%;
     height: 100%;
     padding: 0;

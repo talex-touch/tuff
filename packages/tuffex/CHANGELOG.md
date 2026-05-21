@@ -9,12 +9,30 @@
 - 修复 `FlipOverlay`、`GroupBlock`、`Slider`、`Icon`、`Input`、`AvatarVariants` 等文档示例的运行时 warning/error。
 - 新增文档站 `logo.svg`，并修正 favicon 路径。
 - 补齐 `FlatRadio`、`FlatSelect`、`Transfer` 文档页，并把已有未入口化组件纳入侧边栏导航。
+- 补齐 `docs/components/index.md` 中缺失的 `Alert`、`Badge`、`Breadcrumb`、`Card`、`Collapse`、`FlipOverlay`、`Modal`、`Pagination`、`Radio`、`Rating`、`SegmentedSlider`、`Steps`、`TextTransformer`、`Timeline` 入口，组件索引与 sidebar 保持一致。
+- 将 `GlassSurface` 基础示例改为独立 Vue demo，修复真实浏览器预览中泄漏 Markdown / HTML 源码文本的问题。
+- 将 `Input` 前后缀插槽示例改为独立 Vue demo，修复移动端真实预览中 raw slot markup 撑宽页面的问题。
+
+### 🐛 组件修复
+
+- 修复 `TxInput` 在 flex 容器中的收缩与横向溢出问题。
+- 修复 `TxChatMessage`、`TxScroll`、`TxStagger` 在 VitePress SSR / hydration 场景下的客户端结构不一致问题。
+- 修复 `TxStatCard` 默认数值与 insight 在文档站中可能被 `NumberFlow` 渲染为空的问题，改为稳定可见的文本基线。
+- 修复 `TxTabs` 点击切换后 active nav 与内容不同步、并触发 Vue `setElementText(null)` 控制台错误的问题。
 
 ### 🧩 组件导出
 
 - 为 `FlatInput` 增加 `TxFlatInput` 注册名和命名导出，避免文档页组件名与示例标签递归冲突。
 - 新增 `TxTextarea`、`TxNumberInput`、`TxDivider`、`TxKbd`、`TxCopyButton` 五个基础补齐组件，并同步导出、文档和最小测试。
 - 为文档站注册 `TxFlatRadio`、`TxFlatSelect`、`TxTransfer` 及其子项组件，保证新增页面可以直接渲染。
+
+### ✅ 验证
+
+- 完成组件源码目录、`components.ts` 导出、`docs/components` 页面、VitePress sidebar 与组件索引页对账。
+- 真实浏览器桌面静态截图巡检 `111/111 PASS`，移动重点页截图巡检 `37/37 PASS`，明暗主题截图巡检 `222/222 PASS`，交互烟测 `26/26 PASS`。
+- 新增 `scripts/audit-docs-inventory.mjs`、`scripts/audit-docs-coverage.mjs`、`scripts/audit-docs-pages.mjs`、`scripts/audit-docs-interactions.mjs` 和 `docs/quality/component-audit-2026-05-21.md`，沉淀可复跑的源码/导出/文档对账、覆盖矩阵、静态、主题、移动与交互 smoke 审计证据。
+- 新增 `docs/quality/component-page-matrix-2026-05-21.md`，逐页记录源码、导出、文档、sidebar、索引、桌面截图、主题截图、移动重点页和交互 smoke 覆盖状态。
+- `pnpm -C "packages/tuffex" run lint`、`pnpm -C "packages/tuffex" exec vitest run`、`pnpm -C "packages/tuffex" run docs:build`、`pnpm -C "packages/tuffex" run build` 与 `git diff --check -- "packages/tuffex"` 均通过。
 
 ## [0.3.4] - 2026-03-08
 

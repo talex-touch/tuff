@@ -74,9 +74,12 @@ const wrapperRef = ref<HTMLElement | null>(null)
 const contentRef = ref<HTMLElement | null>(null)
 const nativeScrollRef = ref<HTMLElement | null>(null)
 
+const isRuntimeReady = ref(false)
 const canScrollY = ref(false)
 const canScrollX = ref(false)
 const shouldAutoFallbackToNative = computed(() => {
+  if (!isRuntimeReady.value)
+    return false
   if (props.unified)
     return false
   if (isMacOSSafari())
@@ -730,6 +733,7 @@ defineExpose({
 })
 
 onMounted(async () => {
+  isRuntimeReady.value = true
   await nextTick()
 
   if (!isNativeMode.value) {

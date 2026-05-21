@@ -10,13 +10,13 @@ const messages = ref([
     id: 'm1',
     role: 'system',
     content: 'System message',
-    createdAt: Date.now() - 60_000,
+    createdAt: 1_735_689_540_000,
   },
   {
     id: 'm2',
     role: 'user',
     content: 'Show me **markdown** and an image.',
-    createdAt: Date.now() - 30_000,
+    createdAt: 1_735_689_570_000,
     attachments: [
       { type: 'image', url: 'https://picsum.photos/seed/tuffex/420/280', name: 'demo' },
     ],
@@ -25,7 +25,7 @@ const messages = ref([
     id: 'm3',
     role: 'assistant',
     content: 'Here is some code:\n\n```ts\nexport const hello = 1\n```',
-    createdAt: Date.now() - 10_000,
+    createdAt: 1_735_689_590_000,
   },
 ])
 </script>

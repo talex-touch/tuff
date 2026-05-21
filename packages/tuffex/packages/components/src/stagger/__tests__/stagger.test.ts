@@ -40,7 +40,7 @@ describe('txStagger', () => {
     expect(style).toContain('--tx-stagger-easing: linear')
   })
 
-  it('passes transition name and appear props to transition group', () => {
+  it('does not leak transition props to the root element', () => {
     const wrapper = mount(TxStagger, {
       props: {
         name: 'fade-list',
@@ -51,8 +51,8 @@ describe('txStagger', () => {
       },
     })
 
-    expect(wrapper.attributes('name')).toBe('fade-list')
-    expect(wrapper.attributes('appear')).toBe('false')
+    expect(wrapper.attributes('name')).toBeUndefined()
+    expect(wrapper.attributes('appear')).toBeUndefined()
   })
 
   it('sets a stagger index on each rendered child and ignores comment nodes', () => {

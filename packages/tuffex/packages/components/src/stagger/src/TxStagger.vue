@@ -1,52 +1,67 @@
-<script setup lang="ts">
+<script lang="ts">
 import type { StaggerProps } from './types'
-import type { Slots, VNode } from 'vue'
-import { Comment, computed, useSlots } from 'vue'
+import type { CSSProperties, VNode } from 'vue'
+import { Comment, TransitionGroup, cloneVNode, computed, defineComponent, h, onMounted, ref } from 'vue'
 
-defineOptions({
+export default defineComponent({
   name: 'TxStagger',
-})
+  props: {
+    tag: { type: String, default: 'div' },
+    appear: { type: Boolean, default: true },
+    name: { type: String, default: 'tx-stagger' },
+    duration: { type: Number, default: 180 },
+    delayStep: { type: Number, default: 24 },
+    delayBase: { type: Number, default: 0 },
+    easing: { type: String, default: 'ease-out' },
+  },
+  setup(props: StaggerProps, { slots }) {
+    const isMounted = ref(false)
 
-const props = withDefaults(defineProps<StaggerProps>(), {
-  tag: 'div',
-  appear: true,
-  name: 'tx-stagger',
-  duration: 180,
-  delayStep: 24,
-  delayBase: 0,
-  easing: 'ease-out',
-})
+    const rootStyle = computed(() => {
+      return {
+        '--tx-stagger-duration': `${props.duration}ms`,
+        '--tx-stagger-delay-step': `${props.delayStep}ms`,
+        '--tx-stagger-delay-base': `${props.delayBase}ms`,
+        '--tx-stagger-easing': props.easing,
+      } as CSSProperties
+    })
 
-const slots: Slots = useSlots()
+    const normalizedChildren = computed<VNode[]>(() => {
+      const vnodes = slots.default?.({}) ?? []
+      return vnodes.filter((vnode: VNode) => vnode.type !== Comment)
+    })
 
-const rootStyle = computed(() => {
-  return {
-    '--tx-stagger-duration': `${props.duration}ms`,
-    '--tx-stagger-delay-step': `${props.delayStep}ms`,
-    '--tx-stagger-delay-base': `${props.delayBase}ms`,
-    '--tx-stagger-easing': props.easing,
-  } as Record<string, string>
-})
+    onMounted(() => {
+      isMounted.value = true
+    })
 
-const normalizedChildren = computed<VNode[]>(() => {
-  const vnodes = slots.default?.({}) ?? []
-  return vnodes.filter((v: VNode) => v.type !== Comment)
+    return () => {
+      const children = normalizedChildren.value.map((child, index) => {
+        return cloneVNode(child, {
+          style: [
+            child.props?.style,
+            { '--tx-stagger-index': index },
+          ],
+        })
+      })
+
+      return h(
+        TransitionGroup,
+        {
+          name: isMounted.value ? props.name : undefined,
+          tag: props.tag,
+          appear: isMounted.value ? props.appear : undefined,
+          class: 'tx-stagger',
+          style: rootStyle.value,
+        },
+        {
+          default: () => children,
+        },
+      )
+    }
+  },
 })
 </script>
-
-<template>
-  <TransitionGroup
-    :name="name"
-    :tag="tag"
-    :appear="appear"
-    class="tx-stagger"
-    :style="rootStyle"
-  >
-    <template v-for="(child, index) in normalizedChildren" :key="(child.key ?? index) as any">
-      <component :is="child" :style="{ '--tx-stagger-index': index }" />
-    </template>
-  </TransitionGroup>
-</template>
 
 <style lang="scss">
 .tx-stagger {

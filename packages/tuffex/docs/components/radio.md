@@ -20,6 +20,9 @@ import RadioGroupPlaygroundDemoSource from '../.vitepress/theme/components/demos
 
 import RadioDisabledDemo from '../.vitepress/theme/components/demos/RadioDisabledDemo.vue'
 import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioDisabledDemo.vue?raw'
+
+import RadioKeyboardDemo from '../.vitepress/theme/components/demos/RadioKeyboardDemo.vue'
+import RadioKeyboardDemoSource from '../.vitepress/theme/components/demos/RadioKeyboardDemo.vue?raw'
 </script>
 
 ## 标准单选形式
@@ -67,6 +70,16 @@ import RadioDisabledDemoSource from '../.vitepress/theme/components/demos/RadioD
 <DemoBlock title="Radio (disabled)" :code="RadioDisabledDemoSource">
   <template #preview>
     <RadioDisabledDemo />
+  </template>
+</DemoBlock>
+
+## Keyboard
+
+键盘可在 `radiogroup` 内使用 ArrowRight / ArrowDown、ArrowLeft / ArrowUp、Home / End 切换可用项。
+
+<DemoBlock title="Radio keyboard navigation" :code="RadioKeyboardDemoSource">
+  <template #preview>
+    <RadioKeyboardDemo />
   </template>
 </DemoBlock>
 

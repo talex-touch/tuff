@@ -113,6 +113,21 @@
   - Polished StatusBadge platform icons, responsive Transfer layout, docs logo, and per-component examples for existing TuffEx docs.
   - Validation: focused TuffEx component Vitest, affected-file ESLint, `pnpm -C "packages/tuffex" docs:build`, and `git diff --check` passed; docs build still reports the existing large-chunk warning.
 
+### fix(tuffex): stabilize docs runtime and component interactions
+
+- `packages/tuffex/packages/components/src/{input,chat,scroll,stagger,stat-card,tabs}`
+- `packages/tuffex/docs/components/*`
+- `packages/tuffex/docs/quality/component-audit-2026-05-21.md`
+- `packages/tuffex/scripts/audit-{cdp-client,docs-inventory,docs-coverage,docs-pages,docs-interactions}.mjs`
+- `packages/tuffex/CHANGELOG.md`
+  - Fixed TuffEx docs hydration stability for ChatMessage, Scroll, and Stagger demos, including stable chat timestamps and client-ready rendering gates.
+  - Fixed Input flex shrink behavior, StatCard stable visible value/insight rendering, and Tabs active content synchronization after nav clicks.
+  - Fixed the GlassSurface basic docs demo by moving it to an isolated Vue demo, preventing rendered preview leakage of Markdown / HTML source text.
+  - Fixed the Input affix-slot docs demo by moving it to an isolated Vue demo, preventing raw slot markup from widening the mobile docs page.
+  - Completed source/export/docs/sidebar/index reconciliation and added missing component links for Alert, Badge, Breadcrumb, Card, Collapse, FlipOverlay, Modal, Pagination, Radio, Rating, SegmentedSlider, Steps, TextTransformer, and Timeline.
+  - Added a package-local component audit report, generated coverage/page matrices, and reusable Chrome CDP inventory/coverage/page/theme/interaction smoke scripts; current browser evidence is inventory reconciliation `PASS`, focused coverage `12/12 PASS`, desktop static `111/111 PASS`, mobile focused `37/37 PASS`, light/dark theme `222/222 PASS`, and interaction smoke `26/26 PASS`.
+  - Validation: TuffEx Vitest, lint, docs build, package build, `git diff --check`, inventory reconciliation, desktop docs screenshot audit, mobile focused screenshot audit, light/dark theme screenshot audit, and interaction smoke checks passed.
+
 ## 2026-05-20
 
 ### feat(core-app): enable Assistant floating ball settings entry

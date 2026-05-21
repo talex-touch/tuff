@@ -5,6 +5,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
+import DialogButtonStatesDemo from '../.vitepress/theme/components/demos/DialogButtonStatesDemo.vue'
+import DialogButtonStatesDemoSource from '../.vitepress/theme/components/demos/DialogButtonStatesDemo.vue?raw'
+
 const bottomOpen = ref(false)
 const blowOpen = ref(false)
 const popperOpen = ref(false)
@@ -52,16 +55,13 @@ const tipOpen = ref(false)
 </template>
 </DemoBlock>
 
-### 按钮类型
+### 按钮类型 / 加载状态 / Accessibility
 
-```ts
-const btns = [
-  { content: '信息', type: 'info', onClick: () => true },
-  { content: '警告', type: 'warning', onClick: () => true },
-  { content: '错误', type: 'error', onClick: () => true },
-  { content: '成功', type: 'success', onClick: () => true },
-]
-```
+<DemoBlock title="Dialog button types and loading" :code="DialogButtonStatesDemoSource">
+<template #preview>
+<DialogButtonStatesDemo />
+</template>
+</DemoBlock>
 
 ### 自动点击计时器
 
@@ -78,22 +78,8 @@ const btns = [
 ]
 ```
 
-### 加载状态
-
-处理异步操作时显示加载状态。
-
-```ts
-const btns = [
-  {
-    content: '提交',
-    type: 'success',
-    onClick: async () => {
-      await saveData()
-      return true
-    },
-  },
-]
-```
+处理异步操作时，按钮会进入 loading 状态；对话框容器暴露 `role="dialog"` 与 `aria-modal="true"`。
+按下 ESC 键会触发关闭流程，键盘用户不需要依赖鼠标关闭对话框。
 
 ---
 
