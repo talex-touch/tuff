@@ -30,6 +30,7 @@ type GovernanceConfigType =
   | 'intelligence_provider_quota'
 type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
 type StoragePolicyEvaluationStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
+type ProviderQuotaStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
 type StorageAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
 type StorageAlertLimitKey = 'maxBytes' | 'trafficBytes' | 'maxOperations' | 'alertBytes'
 
@@ -270,6 +271,29 @@ interface GovernanceAnalytics {
     growth: GovernanceGrowth
     byModel: GovernanceMetric[]
     byProviderType: GovernanceMetric[]
+    quotas: Array<{
+      configId: string
+      providerId: string
+      name: string
+      channel: string | null
+      provider: string | null
+      enabled: boolean
+      windowDays: number
+      status: ProviderQuotaStatus
+      usage: {
+        requests: number
+        tokens: number
+      }
+      limits: {
+        maxRequests: number | null
+        maxTokens: number | null
+        warningThreshold: number | null
+      }
+      utilization: {
+        requests: number | null
+        tokens: number | null
+      }
+    }>
     leaderboard: Array<{
       providerId: string
       requests: number
@@ -718,6 +742,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
         byModel: [],
         byProviderType: [],
+        quotas: [],
         leaderboard: [],
       },
     }),
@@ -1151,6 +1176,20 @@ function storageEvaluationLabel(status: StoragePolicyEvaluationStatus): string {
   if (status === 'blocked')
     return t('dashboard.governance.storagePolicy.blocked', 'Blocked')
   return t('dashboard.governance.storagePolicy.disabled', 'Disabled')
+}
+
+function providerQuotaTone(status: ProviderQuotaStatus): StatusTone {
+  return storageEvaluationTone(status)
+}
+
+function providerQuotaLabel(status: ProviderQuotaStatus): string {
+  if (status === 'ok')
+    return t('dashboard.governance.providerQuota.ok', 'OK')
+  if (status === 'warning')
+    return t('dashboard.governance.providerQuota.warning', 'Warning')
+  if (status === 'blocked')
+    return t('dashboard.governance.providerQuota.blocked', 'Blocked')
+  return t('dashboard.governance.providerQuota.disabled', 'Disabled')
 }
 
 function storageAlertMetricLabel(metric: StorageAlertMetric): string {
@@ -1648,6 +1687,35 @@ function formatRatio(value: number | null): string {
               <p class="mt-1 text-xs text-black/50 dark:text-white/50">
                 {{ formatNumber(item.tokens) }} tokens · {{ item.byChannel[0]?.channel || 'unknown' }} · {{ item.byModel[0]?.model || 'unknown' }}
               </p>
+            </div>
+            <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+              <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
+                {{ t('dashboard.governance.analytics.providerQuotaUtilization', 'Quota utilization') }}
+              </h4>
+              <div class="mt-2 grid gap-2">
+                <div v-for="quota in analyticsData.providers.quotas.slice(0, 6)" :key="quota.configId" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate font-medium text-black/70 dark:text-white/70">{{ quota.providerId }}</span>
+                    <TxStatusBadge :text="providerQuotaLabel(quota.status)" size="sm" :status="providerQuotaTone(quota.status)" />
+                  </div>
+                  <p class="mt-1 text-black/45 dark:text-white/45">
+                    {{ quota.channel || quota.provider || 'global' }} · {{ quota.windowDays }}d
+                  </p>
+                  <div class="mt-2 grid gap-1 text-black/60 dark:text-white/60">
+                    <div class="flex items-center justify-between gap-3">
+                      <span>{{ t('dashboard.governance.analytics.providerQuotaRequests', 'Requests') }}</span>
+                      <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.usage.requests) }} / {{ quota.limits.maxRequests == null ? '-' : formatNumber(quota.limits.maxRequests) }} · {{ formatRatio(quota.utilization.requests) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                      <span>{{ t('dashboard.governance.analytics.providerQuotaTokens', 'Tokens') }}</span>
+                      <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.usage.tokens) }} / {{ quota.limits.maxTokens == null ? '-' : formatNumber(quota.limits.maxTokens) }} · {{ formatRatio(quota.utilization.tokens) }}</span>
+                    </div>
+                  </div>
+                </div>
+                <p v-if="analyticsData.providers.quotas.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.providerQuotaEmpty', 'No provider quota policy yet.') }}
+                </p>
+              </div>
             </div>
             <div class="mt-4 grid gap-3 md:grid-cols-2">
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
