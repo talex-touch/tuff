@@ -78,4 +78,21 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('dashboard.governance.storageAlerts.dryRun')
     expect(page).toContain('dashboard.governance.storageAlerts.send')
   })
+
+  it('exposes storage channel usage analytics for traffic and capacity planning', () => {
+    const page = readFileSync(new URL('./governance.vue', import.meta.url), 'utf8')
+
+    expect(page).toContain('interface StorageUsageBreakdown')
+    expect(page).toContain('analyticsData.storage.storedBytes')
+    expect(page).toContain('analyticsData.storage.trafficBytes')
+    expect(page).toContain('analyticsData.storage.operations')
+    expect(page).toContain('analyticsData.storage.byChannelUsage')
+    expect(page).toContain('analyticsData.storage.byProviderUsage')
+    expect(page).toContain('analyticsData.storage.byResourceTypeUsage')
+    expect(page).toContain('analyticsData.storage.byActionUsage')
+    expect(page).toContain('analyticsData.storage.trend')
+    expect(page).toContain('dashboard.governance.analytics.storageUsage')
+    expect(page).toContain('dashboard.governance.analytics.storageProvider')
+    expect(page).toContain('dashboard.governance.analytics.storageAction')
+  })
 })
