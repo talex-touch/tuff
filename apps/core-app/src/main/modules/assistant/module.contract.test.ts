@@ -179,6 +179,8 @@ describe('Assistant module startup contract', () => {
     expect(moduleSource).toContain('voicePanelAutoHideSuppressionDepth')
     expect(moduleSource).toContain('beginVoicePanelAutoHideSuppression')
     expect(moduleSource).toContain('releaseVoicePanelAutoHideSuppression')
+    expect(moduleSource).toContain('setTimeout(() => {')
+    expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
     expect(voicePanelSource).toContain('AssistantEvents.voice.translateScreenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
   })
