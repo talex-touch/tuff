@@ -16,6 +16,26 @@ vi.mock('./cloudflare', () => ({
   readCloudflareBindings: () => undefined,
 }))
 
+vi.mock('./authStore', () => ({
+  getUserById: vi.fn(async (_event, userId: string) => ({
+    id: userId,
+    email: `${userId}@example.com`,
+    name: userId,
+    image: null,
+    emailVerified: null,
+    emailState: 'verified',
+    role: 'user',
+    locale: null,
+    status: 'active',
+    mergedToUserId: null,
+    mergedAt: null,
+    mergedByUserId: null,
+    disabledAt: null,
+    allowCliIpMismatch: false,
+    createdAt: new Date(0).toISOString(),
+  })),
+}))
+
 vi.mock('./notificationCredentialStore', () => credentialMocks)
 vi.mock('@talex-touch/utils/network', () => ({
   networkClient: {
@@ -381,6 +401,67 @@ describe('notificationDispatcher', () => {
     expect(serialized).not.toContain('re-unit-test-secret')
   })
 
+  it('sends plugin review email notifications to plugin owner recipients without runtime emails', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const authRef = `secure://notifications/resend-owner-${marker}`
+    const developerId = `developer-${marker}`
+    const channel = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Resend owner ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `resend-owner-${marker}`,
+      config: {
+        mode: 'send',
+        providerType: 'resend',
+        credentialRef: authRef,
+        from: 'Tuff <noreply@example.com>',
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+    credentialMocks.notificationCredentialExists.mockResolvedValueOnce(true)
+    credentialMocks.getNotificationCredential.mockResolvedValueOnce({ apiKey: 're-owner-unit-test-secret' })
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      actorId: 'reviewer@example.com',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      metadata: {
+        pluginId: `plugin-${marker}`,
+        developerId,
+      },
+    })
+
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: channel.id,
+        status: 'sent',
+        reason: 'delivery-sent',
+        adapter: 'email/resend',
+      }),
+    ]))
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.objectContaining({
+        to: [`${developerId}@example.com`],
+      }),
+    }))
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.sent',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(serialized).toContain('delivery-sent')
+    expect(serialized).not.toContain(`${developerId}@example.com`)
+    expect(serialized).not.toContain('reviewer@example.com')
+    expect(serialized).not.toContain('re-owner-unit-test-secret')
+  })
+
   it('sends generic HTTP email notifications with secure webhook credentials', async () => {
     const marker = crypto.randomUUID()
     const h3Event = event(marker)
@@ -462,6 +543,182 @@ describe('notificationDispatcher', () => {
     expect(serialized).not.toContain('reviewer@example.com')
     expect(serialized).not.toContain(authRef)
     expect(serialized).not.toContain('generic-mail-signing-secret')
+  })
+
+  it('sends SendGrid, Mailgun, and Postmark notifications as independent secure email adapters', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const providers = [
+      {
+        provider: `sendgrid-${marker}`,
+        providerType: 'sendgrid',
+        credentialRef: `secure://notifications/sendgrid-${marker}`,
+        credential: { apiKey: 'sg-unit-test-secret' },
+      },
+      {
+        provider: `mailgun-${marker}`,
+        providerType: 'mailgun',
+        credentialRef: `secure://notifications/mailgun-${marker}`,
+        credential: { apiKey: 'mg-unit-test-secret' },
+        extraConfig: {
+          domain: 'mg.example.test',
+          region: 'eu',
+        },
+      },
+      {
+        provider: `postmark-${marker}`,
+        providerType: 'postmark',
+        credentialRef: `secure://notifications/postmark-${marker}`,
+        credential: { apiKey: 'pm-unit-test-secret' },
+        extraConfig: {
+          messageStream: 'outbound',
+        },
+      },
+    ]
+
+    const configs = []
+    for (const item of providers) {
+      configs.push(await upsertPlatformGovernanceConfig(h3Event, {
+        configType: 'notification_channel',
+        name: `${item.providerType} email ${marker}`,
+        targetId: `plugin-${marker}`,
+        channel: 'email',
+        provider: item.provider,
+        config: {
+          mode: 'send',
+          providerType: item.providerType,
+          credentialRef: item.credentialRef,
+          from: 'Tuff <noreply@example.com>',
+          subject: 'Plugin approved',
+          events: ['plugin.version.approved'],
+          ...item.extraConfig,
+        },
+      }, 'admin'))
+    }
+
+    credentialMocks.notificationCredentialExists.mockResolvedValue(true)
+    credentialMocks.getNotificationCredential.mockImplementation(async (_event, authRef: string) => {
+      return providers.find(item => item.credentialRef === authRef)?.credential ?? null
+    })
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      actorId: 'reviewer@example.com',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      metadata: {
+        pluginId: `plugin-${marker}`,
+        to: ['developer@example.com'],
+      },
+    })
+
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: configs[0].id,
+        provider: `sendgrid-${marker}`,
+        providerType: 'sendgrid',
+        adapter: 'email/sendgrid',
+        status: 'sent',
+      }),
+      expect.objectContaining({
+        configId: configs[1].id,
+        provider: `mailgun-${marker}`,
+        providerType: 'mailgun',
+        adapter: 'email/mailgun',
+        status: 'sent',
+      }),
+      expect.objectContaining({
+        configId: configs[2].id,
+        provider: `postmark-${marker}`,
+        providerType: 'postmark',
+        adapter: 'email/postmark',
+        status: 'sent',
+      }),
+    ]))
+    expect(networkMocks.request).toHaveBeenCalledTimes(3)
+
+    const [sendgridRequest, mailgunRequest, postmarkRequest] = networkMocks.request.mock.calls.map(call => call[0])
+    expect(sendgridRequest).toEqual(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.sendgrid.com/v3/mail/send',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer sg-unit-test-secret',
+      }),
+      body: expect.objectContaining({
+        personalizations: [
+          {
+            to: [{ email: 'developer@example.com' }],
+          },
+        ],
+        from: { email: 'Tuff <noreply@example.com>' },
+        subject: 'Plugin approved',
+      }),
+    }))
+    expect(mailgunRequest).toEqual(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.eu.mailgun.net/v3/mg.example.test/messages',
+      headers: expect.objectContaining({
+        Authorization: expect.stringMatching(/^Basic /),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      }),
+      body: expect.stringContaining('to=developer%40example.com'),
+    }))
+    expect(postmarkRequest).toEqual(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.postmarkapp.com/email',
+      headers: expect.objectContaining({
+        'X-Postmark-Server-Token': 'pm-unit-test-secret',
+      }),
+      body: expect.objectContaining({
+        From: 'Tuff <noreply@example.com>',
+        To: 'developer@example.com',
+        Subject: 'Plugin approved',
+        MessageStream: 'outbound',
+      }),
+    }))
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.sent',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(serialized).toContain(`sendgrid-${marker}`)
+    expect(serialized).toContain(`mailgun-${marker}`)
+    expect(serialized).toContain(`postmark-${marker}`)
+    expect(serialized).toContain('email/sendgrid')
+    expect(serialized).toContain('email/mailgun')
+    expect(serialized).toContain('email/postmark')
+    expect(serialized).not.toContain('developer@example.com')
+    expect(serialized).not.toContain('reviewer@example.com')
+    expect(serialized).not.toContain('sg-unit-test-secret')
+    expect(serialized).not.toContain('mg-unit-test-secret')
+    expect(serialized).not.toContain('pm-unit-test-secret')
+    for (const item of providers)
+      expect(serialized).not.toContain(item.credentialRef)
+
+    networkMocks.request.mockClear()
+    const filteredDeliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      deliveryProviders: ['mailgun'],
+      metadata: {
+        to: ['developer@example.com'],
+      },
+    })
+
+    expect(filteredDeliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ configId: configs[0].id, status: 'skipped', reason: 'provider-filter-mismatch' }),
+      expect.objectContaining({ configId: configs[1].id, status: 'sent', adapter: 'email/mailgun' }),
+      expect.objectContaining({ configId: configs[2].id, status: 'skipped', reason: 'provider-filter-mismatch' }),
+    ]))
+    expect(networkMocks.request).toHaveBeenCalledTimes(1)
+    expect(networkMocks.request.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      url: 'https://api.eu.mailgun.net/v3/mg.example.test/messages',
+    }))
   })
 
   it('sends SMTP notifications through an HTTPS relay with secure SMTP credentials', async () => {
