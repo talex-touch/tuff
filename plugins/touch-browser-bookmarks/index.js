@@ -149,9 +149,8 @@ function normalizeBookmarkRecord(raw, now = Date.now()) {
 }
 
 function mergeBookmarkRecord(current, incoming) {
-  const useIncoming =
-    (!current.pinned && incoming.pinned) ||
-    (incoming.pinned === current.pinned && incoming.updatedAt >= current.updatedAt)
+  const useIncoming = (!current.pinned && incoming.pinned)
+    || (incoming.pinned === current.pinned && incoming.updatedAt >= current.updatedAt)
 
   const base = useIncoming ? incoming : current
   const extra = useIncoming ? current : incoming
