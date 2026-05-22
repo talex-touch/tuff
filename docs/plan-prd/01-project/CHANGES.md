@@ -23,6 +23,12 @@
   - Added the 100-round cross-review ledger and 70 micro-round files so follow-up App Data / Everything / CoreBox search work can trace the audit evidence instead of relying on a summary only.
   - Synced README, INDEX, and TODO planning entries while keeping implementation work as follow-up slices.
 
+### fix(core-app): stabilize style window grid
+
+- `apps/core-app/src/renderer/src/views/base/styles/SectionItem.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/WindowSection.vue`
+  - Window preference cards now use a fixed grid layout, compact 8px card radius, and stopped title-bar click propagation to keep the style surface stable across desktop widths.
+
 ## 2026-05-21
 
 ### fix(core-app): harden Assistant clipboard image translation

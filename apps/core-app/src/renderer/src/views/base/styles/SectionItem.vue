@@ -93,10 +93,9 @@ function goRouter() {
     border: 2px solid var(--tx-color-danger-light-3);
   }
 
-  flex: 1;
-
   width: 100%;
-  height: 100%;
+  min-width: 0;
+  height: 11rem;
 
   overflow: hidden;
   user-select: none;
