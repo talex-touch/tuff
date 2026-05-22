@@ -15,6 +15,7 @@ const SettingAbout = defineAsyncComponent(() => import('./SettingAbout.vue'))
 const SettingDownload = defineAsyncComponent(() => import('./SettingDownload.vue'))
 const SettingEverything = defineAsyncComponent(() => import('./SettingEverything.vue'))
 const SettingFileIndex = defineAsyncComponent(() => import('./SettingFileIndex.vue'))
+const SettingNetwork = defineAsyncComponent(() => import('./SettingNetwork.vue'))
 const SettingSentry = defineAsyncComponent(() => import('./SettingSentry.vue'))
 const SettingStorage = defineAsyncComponent(() => import('./SettingStorage.vue'))
 const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
@@ -69,6 +70,8 @@ watch(
       </div>
 
       <SettingDownload v-if="showAdvancedSettings" />
+
+      <SettingNetwork v-if="showAdvancedSettings" />
 
       <SettingUpdate />
 

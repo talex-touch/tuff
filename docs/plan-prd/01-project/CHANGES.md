@@ -13,6 +13,19 @@
 
 ## 2026-05-22
 
+### feat(core-app): expose shared network proxy settings
+
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingNetwork.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/setting-network-form.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - CoreApp advanced settings now expose shared Network SDK proxy mode, custom HTTP/HTTPS/SOCKS/PAC proxy values, bypass rules, timeout, retry, and cooldown policy.
+  - The renderer uses the existing typed `useNetworkSdk().getConfig/updateConfig()` path instead of raw event strings, keeping the network service as the single writer for `appSetting.network`.
+  - Proxy credential state remains a secure-store reference summary only; the settings UI does not add plaintext username/password fields.
+
 ### docs(plan-prd): record current quality pr pass
 
 - `docs/INDEX.md`
