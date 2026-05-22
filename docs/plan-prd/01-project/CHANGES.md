@@ -13,6 +13,15 @@
 
 ## 2026-05-21
 
+### feat(nexus): retry transient object upload writes
+
+- `apps/nexus/server/utils/storageObjectStore.ts`
+- `apps/nexus/server/utils/uploadGovernance.ts`
+- `apps/nexus/server/utils/storageObjectStore.test.ts`
+  - External S3/OSS and R2 object writes now use bounded retry/backoff for retryable transient failures before surfacing upload failure to callers.
+  - Final upload failures carry sanitized retry metadata (`retryable`, `retryCount`, `maxRetries`, `nextRetryDelayMs`, storage channel/provider/status) into upload governance, feeding existing retry diagnostics without exposing raw object keys, file names, or actors.
+  - Focused coverage verifies transient 503 recovery and exhausted retry metadata propagation through upload governance.
+
 ### fix(plugin): harden quick actions shell capability
 
 - `plugins/touch-quick-actions/index.js`
