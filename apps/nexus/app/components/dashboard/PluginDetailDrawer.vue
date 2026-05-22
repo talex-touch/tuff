@@ -2,7 +2,9 @@
 import type {
   DashboardPlugin as Plugin,
   DashboardPluginAnalytics,
+  DashboardPluginAnalyticsConversionTrendPoint,
   DashboardPluginAnalyticsMetric,
+  DashboardPluginReviewStatusTrendPoint,
   DashboardPluginAnalyticsTrendPoint,
   DashboardPluginTimelineEvent,
   PluginChannel,
@@ -185,6 +187,10 @@ const analyticsStats = computed(() => {
 })
 
 const reviewAnalytics = computed(() => props.analytics?.reviews ?? null)
+const latestReviewTrendPoint = computed(() => {
+  const trend = reviewAnalytics.value?.statusTrend ?? []
+  return trend.at(-1) ?? null
+})
 const reviewStatusItems = computed(() => {
   const reviews = reviewAnalytics.value
   return [
@@ -204,6 +210,39 @@ const reviewStatusItems = computed(() => {
       value: reviews?.rejected ?? 0,
     },
   ]
+})
+
+const analyticsConversionItems = computed(() => {
+  const conversion = props.analytics?.conversion
+  return [
+    {
+      key: 'installRate',
+      label: t('dashboard.sections.plugins.analytics.conversion.installRate'),
+      value: formatPercent(conversion?.installRate),
+    },
+    {
+      key: 'invocationRate',
+      label: t('dashboard.sections.plugins.analytics.conversion.invocationRate'),
+      value: formatPercent(conversion?.invocationRate),
+    },
+    {
+      key: 'invocationsPerActor',
+      label: t('dashboard.sections.plugins.analytics.conversion.invocationsPerActor'),
+      value: formatMetricValue(conversion?.invocationsPerActor),
+    },
+  ]
+})
+
+const latestConversionTrendPoint = computed(() => {
+  const trend = props.analytics?.conversionTrend ?? []
+  for (let index = trend.length - 1; index >= 0; index -= 1) {
+    const point = trend[index]
+    if (!point)
+      continue
+    if (isConversionTrendPointActive(point))
+      return point
+  }
+  return trend.at(-1) ?? null
 })
 
 const analyticsBreakdowns = computed(() => {
@@ -304,6 +343,13 @@ function isTrendPointActive(point: DashboardPluginAnalyticsTrendPoint) {
     || point.uniqueActors > 0
 }
 
+function isConversionTrendPointActive(point: DashboardPluginAnalyticsConversionTrendPoint) {
+  return point.downloads > 0
+    || point.installs > 0
+    || point.invocations > 0
+    || point.uniqueActors > 0
+}
+
 function formatMetricValue(value?: number | null) {
   return formatNumber(value ?? 0)
 }
@@ -319,6 +365,10 @@ function formatRatingShare(count: number) {
   if (ratingCount <= 0)
     return '0%'
   return `${Math.round((count / ratingCount) * 100)}%`
+}
+
+function formatPercent(value?: number | null) {
+  return `${Math.round((value ?? 0) * 100) / 100}%`
 }
 
 function formatMetricKey(key: string) {
@@ -341,6 +391,24 @@ function formatTrendMeta(point: DashboardPluginAnalyticsTrendPoint) {
     installs: formatMetricValue(point.installs),
     invocations: formatMetricValue(point.invocations),
     actors: formatMetricValue(point.uniqueActors),
+  })
+}
+
+function formatConversionTrendMeta(point: DashboardPluginAnalyticsConversionTrendPoint) {
+  return t('dashboard.sections.plugins.analytics.conversion.trendMeta', {
+    date: formatDate(point.date),
+    installRate: formatPercent(point.installRate),
+    invocationRate: formatPercent(point.invocationRate),
+    invocationsPerActor: formatMetricValue(point.invocationsPerActor),
+  })
+}
+
+function formatReviewTrendMeta(point: DashboardPluginReviewStatusTrendPoint) {
+  return t('dashboard.sections.plugins.analytics.reviews.trendMeta', {
+    date: formatDate(point.date),
+    approved: formatMetricValue(point.approved),
+    pending: formatMetricValue(point.pending),
+    rejected: formatMetricValue(point.rejected),
   })
 }
 </script>
@@ -497,6 +565,9 @@ function formatTrendMeta(point: DashboardPluginAnalyticsTrendPoint) {
                   <p v-else class="mt-4 text-xs text-black/40 dark:text-white/40">
                     {{ t('dashboard.sections.plugins.analytics.reviews.noRatings') }}
                   </p>
+                  <p v-if="latestReviewTrendPoint" class="mt-4 text-xs text-black/45 dark:text-white/45">
+                    {{ formatReviewTrendMeta(latestReviewTrendPoint) }}
+                  </p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -532,6 +603,29 @@ function formatTrendMeta(point: DashboardPluginAnalyticsTrendPoint) {
                       {{ t('dashboard.sections.plugins.analytics.noTrend') }}
                     </p>
                   </div>
+                </div>
+
+                <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <p class="apple-section-title">
+                    {{ t('dashboard.sections.plugins.analytics.conversion.title') }}
+                  </p>
+                  <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div
+                      v-for="item in analyticsConversionItems"
+                      :key="item.key"
+                      class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                    >
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ item.label }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ item.value }}
+                      </p>
+                    </div>
+                  </div>
+                  <p v-if="latestConversionTrendPoint" class="mt-3 text-xs text-black/45 dark:text-white/45">
+                    {{ formatConversionTrendMeta(latestConversionTrendPoint) }}
+                  </p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

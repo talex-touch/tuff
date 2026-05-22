@@ -102,6 +102,17 @@ export interface DashboardPluginAnalyticsTrendPoint {
   uniqueActors: number
 }
 
+export interface DashboardPluginAnalyticsConversionTrendPoint {
+  date: string
+  downloads: number
+  installs: number
+  invocations: number
+  uniqueActors: number
+  installRate: number
+  invocationRate: number
+  invocationsPerActor: number
+}
+
 export interface DashboardPluginAnalyticsNumberStat {
   count: number
   average: number
@@ -113,6 +124,14 @@ export interface DashboardPluginReviewRatingBucket {
   count: number
 }
 
+export interface DashboardPluginReviewStatusTrendPoint {
+  date: string
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+}
+
 export interface DashboardPluginReviewAnalytics {
   total: number
   approved: number
@@ -121,6 +140,7 @@ export interface DashboardPluginReviewAnalytics {
   averageRating: number
   ratingCount: number
   ratingDistribution: DashboardPluginReviewRatingBucket[]
+  statusTrend: DashboardPluginReviewStatusTrendPoint[]
   latestAt: string | null
 }
 
@@ -132,6 +152,12 @@ export interface DashboardPluginAnalytics {
   invocations: number
   events: number
   uniqueActors: number
+  conversion: {
+    installRate: number
+    invocationRate: number
+    invocationsPerActor: number
+  }
+  conversionTrend: DashboardPluginAnalyticsConversionTrendPoint[]
   trend: DashboardPluginAnalyticsTrendPoint[]
   installTrend: DashboardPluginAnalyticsTrendPoint[]
   byAction: DashboardPluginAnalyticsMetric[]

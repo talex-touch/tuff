@@ -162,7 +162,7 @@ function hashEndpoint(userId: string, endpoint: string): string {
   return createHash('sha256').update(`${userId}:${endpoint}`).digest('hex')
 }
 
-function createSummary(record: BrowserPushSubscriptionRecord): BrowserPushSubscriptionSummary {
+function createSummary(record: BrowserPushSubscriptionDeliveryRecord): BrowserPushSubscriptionSummary {
   return {
     id: record.id,
     userId: record.userId,
