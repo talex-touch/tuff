@@ -470,6 +470,13 @@ function resolveActionFromFeatureId(featureId, actions) {
   return list.find(action => action.id === actionId) || null
 }
 
+function resolveActionForExecution(payloadAction, platform = process.platform) {
+  const actionId = normalizeText(payloadAction?.id)
+  if (!actionId)
+    return null
+  return resolveActions(platform).find(action => action.id === actionId) || null
+}
+
 function registerDynamicFeatures(actions, platform = process.platform) {
   if (dynamicFeaturesInitialized)
     return 0
@@ -759,7 +766,7 @@ const pluginLifecycle = {
     if (actionId !== 'run-action')
       return
 
-    const action = item.meta?.payload?.action
+    const action = resolveActionForExecution(item.meta?.payload?.action)
     const result = await runActionWithGuards(action)
 
     return {
@@ -784,6 +791,7 @@ module.exports = {
     isShellPlatformSupported,
     matchActions,
     resolveActionFromFeatureId,
+    resolveActionForExecution,
     resolveCommonActions,
     resolveActions,
     resolveGroupOrder,
