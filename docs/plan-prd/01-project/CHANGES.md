@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-21
+> 更新时间：2026-05-22
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,18 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-22
+
+### docs(search): add competitive analysis roadmap
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/03-features/search/competitive-analysis-2026-05-22/`
+  - Added Raycast / Alfred / uTools competitive analysis docs for capability alignment, smooth interaction expectations, workflow modeling, plugin cross-platform strategy, search ranking, parameter filling, translation/OCR/AI commands, plugin store/SDK ecosystem, cross-platform local data, and execution synthesis.
+  - Added the 100-round cross-review ledger and 70 micro-round files so follow-up App Data / Everything / CoreBox search work can trace the audit evidence instead of relying on a summary only.
+  - Synced README, INDEX, and TODO planning entries while keeping implementation work as follow-up slices.
 
 ## 2026-05-21
 
