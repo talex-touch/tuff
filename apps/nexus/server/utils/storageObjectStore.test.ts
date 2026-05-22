@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 import { listPlatformGovernanceEvents, upsertPlatformGovernanceConfig } from './platformGovernanceStore'
+import { failUploadGovernance, startUploadGovernance } from './uploadGovernance'
 import {
   deleteStorageObject,
   getStorageObject,
@@ -375,6 +376,122 @@ describe('storageObjectStore', () => {
       expect.objectContaining({ action: 'storage.read', channel: 's3', unit: 'byte', quantity: 11 }),
       expect.objectContaining({ action: 'storage.delete', channel: 's3', unit: 'operation', quantity: 1 }),
     ]))
+  })
+
+  it('retries transient external object writes before recording success usage', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const memoryStorage = createMemory()
+    const resourceType = `object-s3-retry-${marker}`
+    const key = `${marker}.json`
+    let attempts = 0
+    const fetchImpl = (async () => {
+      attempts += 1
+      return new Response(null, { status: attempts < 3 ? 503 : 200 })
+    }) as typeof fetch
+    const external = createExternalStorage('s3', fetchImpl)
+
+    const stored = await putStorageObject({
+      event: h3Event,
+      bucket: null,
+      memoryStorage,
+      externalStorage: external,
+      key,
+      data: Buffer.from('{"retry":true}'),
+      contentType: 'application/json',
+      resourceType,
+      retryPolicy: {
+        maxRetries: 2,
+        delaysMs: [0, 0],
+      },
+    })
+
+    expect(attempts).toBe(3)
+    expect(stored).toMatchObject({
+      key,
+      storageChannel: 's3',
+      storageProvider: 'aws-s3',
+    })
+
+    const rows = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'storage',
+      resourceType,
+      resourceId: key,
+      days: 30,
+      limit: 10,
+    })
+    expect(rows).toEqual([
+      expect.objectContaining({ action: 'storage.write', channel: 's3', quantity: 14 }),
+    ])
+  })
+
+  it('attaches bounded retry metadata to failed external writes for upload governance', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const memoryStorage = createMemory()
+    const resourceType = `object-s3-failed-retry-${marker}`
+    const key = `${marker}.zip`
+    const uploadAttempt = await startUploadGovernance(h3Event, {
+      actorId: 'publisher@example.com',
+      resourceType,
+      resourceId: `resource:${marker}`,
+      file: {
+        name: 'private customer build.zip',
+        size: 4,
+        type: 'application/zip',
+      },
+    })
+    let attempts = 0
+    const fetchImpl = (async () => {
+      attempts += 1
+      return new Response(null, { status: 503 })
+    }) as typeof fetch
+    const external = createExternalStorage('s3', fetchImpl)
+
+    try {
+      await putStorageObject({
+        event: h3Event,
+        bucket: null,
+        memoryStorage,
+        externalStorage: external,
+        key,
+        data: Buffer.from([1, 2, 3, 4]),
+        contentType: 'application/zip',
+        resourceType,
+        retryPolicy: {
+          maxRetries: 2,
+          delaysMs: [0, 0],
+        },
+      })
+    }
+    catch (error) {
+      await failUploadGovernance(h3Event, uploadAttempt, error)
+    }
+
+    expect(attempts).toBe(3)
+    const rows = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'upload',
+      resourceType,
+      resourceId: `resource:${marker}`,
+      days: 30,
+      limit: 10,
+    })
+    const failed = rows.find(row => row.action === 'resource.failed')
+
+    expect(JSON.stringify(rows)).not.toContain('publisher@example.com')
+    expect(JSON.stringify(rows)).not.toContain('private customer build.zip')
+    expect(failed).toMatchObject({
+      metadata: expect.objectContaining({
+        retryable: true,
+        retryCount: 2,
+        maxRetries: 2,
+        nextRetryDelayMs: 0,
+        storageChannel: 's3',
+        storageProvider: 'aws-s3',
+        storageOperation: 'storage.write',
+        storageStatusCode: 503,
+      }),
+    })
   })
 
   it('selects an OSS executor from enabled storage channel policy and secure credentials', async () => {
