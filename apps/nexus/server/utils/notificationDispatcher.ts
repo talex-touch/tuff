@@ -1,10 +1,13 @@
 import type { H3Event } from 'h3'
 import type { PlatformGovernanceConfig } from './platformGovernanceStore'
 import type { NotificationCredentialPayload } from './notificationCredentialStore'
+import { Buffer } from 'node:buffer'
 import { createHmac } from 'node:crypto'
 import { networkClient } from '@talex-touch/utils/network'
+import { getUserById } from './authStore'
 import { storeBrowserNotification } from './browserNotificationInboxStore'
 import { listBrowserPushSubscriptionsForDelivery } from './browserPushSubscriptionStore'
+import { resolveNotificationChannelProfile } from './notificationChannelCatalog'
 import { getNotificationCredential, notificationCredentialExists } from './notificationCredentialStore'
 import { listPlatformGovernanceConfigs, recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { isPlainObject, normalizeString } from './telemetrySanitizer'
@@ -45,29 +48,11 @@ interface EvaluatedNotificationDelivery extends NotificationDeliveryRecord {
   config: PlatformGovernanceConfig
 }
 
-const SUPPORTED_ADAPTERS = new Set([
-  'browser',
-  'email/resend',
-  'email/smtp',
-  'email/generic',
-  'feishu',
-  'lark',
-  'webhook',
-  'webpush',
-])
-
-const CREDENTIAL_REQUIRED_ADAPTERS = new Set([
-  'email/resend',
-  'email/smtp',
-  'email/generic',
-  'feishu',
-  'lark',
-  'webhook',
-  'webpush',
-])
-
 const SENDABLE_HTTP_ADAPTERS = new Set([
   'email/resend',
+  'email/sendgrid',
+  'email/mailgun',
+  'email/postmark',
   'email/smtp',
   'email/generic',
   'feishu',
@@ -78,17 +63,6 @@ const SENDABLE_HTTP_ADAPTERS = new Set([
 
 const SENDABLE_LOCAL_ADAPTERS = new Set([
   'browser',
-])
-
-const LEGACY_PROVIDER_ADAPTERS = new Set([
-  'browser',
-  'resend',
-  'smtp',
-  'generic',
-  'feishu',
-  'lark',
-  'webhook',
-  'webpush',
 ])
 
 const SENSITIVE_METADATA_KEYS = new Set([
@@ -189,12 +163,6 @@ function sanitizeDispatchMetadata(value: unknown): Record<string, unknown> | nul
   return entries.length ? Object.fromEntries(entries) : null
 }
 
-function resolveCredentialRef(config: PlatformGovernanceConfig): string | null {
-  const value = config.config?.credentialRef ?? config.config?.authRef
-  const normalized = normalizeString(value, 255)
-  return normalized && normalized.startsWith('secure://') ? normalized : null
-}
-
 function readConfigString(config: PlatformGovernanceConfig, key: string, maxLength = 512): string | null {
   return normalizeString(config.config?.[key], maxLength) ?? null
 }
@@ -206,47 +174,12 @@ function readConfigNumber(config: PlatformGovernanceConfig, key: string, fallbac
   return Math.min(max, Math.max(min, Math.round(value)))
 }
 
+function readProviderRegion(config: PlatformGovernanceConfig): string | null {
+  return normalizeToken(config.config?.region, 64)
+}
+
 function isSendMode(config: PlatformGovernanceConfig): boolean {
   return normalizeToken(config.config?.mode) === 'send'
-}
-
-function normalizeAdapter(channel: string, value: string): string {
-  if (value.includes('/'))
-    return value
-  if (channel === 'email')
-    return `email/${value}`
-  if (value === 'resend' || value === 'smtp' || value === 'generic')
-    return `email/${value}`
-  return value
-}
-
-function resolveAdapterProfile(config: PlatformGovernanceConfig): { adapter: string, providerType: string | null } {
-  const channel = normalizeToken(config.channel) ?? 'browser'
-  const provider = normalizeToken(config.provider)
-  const configuredType = normalizeToken(config.config?.providerType)
-    ?? normalizeToken(config.config?.adapter)
-    ?? normalizeToken(config.config?.driver)
-  const legacyProviderType = provider && LEGACY_PROVIDER_ADAPTERS.has(provider) ? provider : null
-  const providerType = configuredType ?? legacyProviderType
-
-  if (providerType) {
-    return {
-      adapter: normalizeAdapter(channel, providerType),
-      providerType,
-    }
-  }
-
-  if (channel === 'email') {
-    return {
-      adapter: 'email/generic',
-      providerType: 'generic',
-    }
-  }
-
-  return {
-    adapter: normalizeAdapter(channel, channel),
-    providerType: channel,
-  }
 }
 
 function configMatchesTarget(config: PlatformGovernanceConfig, input: DispatchNotificationInput): boolean {
@@ -277,7 +210,7 @@ function createNotificationTitle(delivery: EvaluatedNotificationDelivery, input:
     ?? `[Tuff] ${input.action}`
 }
 
-function resolveBrowserNotificationUserId(
+function resolveNotificationOwnerId(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
 ): string | null {
@@ -288,6 +221,13 @@ function resolveBrowserNotificationUserId(
   if (delivery.config.ownerScope === 'user' && delivery.config.ownerId)
     return delivery.config.ownerId
   return normalizeString(input.metadata?.userId ?? input.metadata?.ownerId ?? input.metadata?.developerId, 180) ?? null
+}
+
+function resolveBrowserNotificationUserId(
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+): string | null {
+  return resolveNotificationOwnerId(delivery, input)
 }
 
 function readRecipients(input: DispatchNotificationInput): string[] {
@@ -304,6 +244,34 @@ function readRecipients(input: DispatchNotificationInput): string[] {
   return raw
     .map(item => normalizeString(item, 320))
     .filter((item): item is string => Boolean(item))
+    .slice(0, 20)
+}
+
+async function resolveEmailRecipients(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+): Promise<string[]> {
+  const recipients = readRecipients(input)
+  const ownerId = resolveNotificationOwnerId(delivery, input)
+  if (event && ownerId) {
+    try {
+      const owner = await getUserById(event, ownerId)
+      if (owner?.email)
+        recipients.push(owner.email)
+    }
+    catch {}
+  }
+
+  const seen = new Set<string>()
+  return recipients
+    .filter((recipient) => {
+      const key = recipient.toLowerCase()
+      if (!key || seen.has(key))
+        return false
+      seen.add(key)
+      return true
+    })
     .slice(0, 20)
 }
 
@@ -352,6 +320,17 @@ function readRuntimeWebPushSubscriptions(input: DispatchNotificationInput): Arra
     .slice(0, 20)
 }
 
+function toWebPushSubscriptionRecord(payload: { endpoint: string, expirationTime: number | null, keys: { p256dh: string, auth: string } }): Record<string, unknown> {
+  return {
+    endpoint: payload.endpoint,
+    expirationTime: payload.expirationTime,
+    keys: {
+      p256dh: payload.keys.p256dh,
+      auth: payload.keys.auth,
+    },
+  }
+}
+
 async function readWebPushSubscriptions(
   event: H3Event | undefined,
   delivery: EvaluatedNotificationDelivery,
@@ -364,7 +343,7 @@ async function readWebPushSubscriptions(
       userId,
       limit: 20 - subscriptions.length,
     })
-    subscriptions.push(...stored.map(item => item.payload))
+    subscriptions.push(...stored.map(item => toWebPushSubscriptionRecord(item.payload)))
   }
 
   const seenEndpoints = new Set<string>()
@@ -435,6 +414,7 @@ function signBody(body: string, secret: string): string {
 }
 
 async function sendResendNotification(
+  event: H3Event | undefined,
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
@@ -442,7 +422,7 @@ async function sendResendNotification(
   if (!hasApiKeyCredential(credential))
     return 'credential-type-mismatch'
 
-  const recipients = readRecipients(input)
+  const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
     return 'recipient-missing'
 
@@ -466,6 +446,138 @@ async function sendResendNotification(
       to: recipients,
       subject,
       text,
+    },
+  })
+
+  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+}
+
+async function sendSendgridNotification(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+  credential: NotificationCredentialPayload,
+): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+  if (!hasApiKeyCredential(credential))
+    return 'credential-type-mismatch'
+
+  const recipients = await resolveEmailRecipients(event, delivery, input)
+  if (recipients.length === 0)
+    return 'recipient-missing'
+
+  const from = readConfigString(delivery.config, 'from', 320)
+  if (!from)
+    return 'sender-missing'
+
+  const response = await networkClient.request({
+    method: 'POST',
+    url: readHttpsRelayEndpoint(delivery.config) ?? 'https://api.sendgrid.com/v3/mail/send',
+    timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+    headers: {
+      Authorization: `Bearer ${credential.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      personalizations: [
+        {
+          to: recipients.map(email => ({ email })),
+        },
+      ],
+      from: { email: from },
+      subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
+      content: [
+        {
+          type: 'text/plain',
+          value: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+        },
+      ],
+    },
+  })
+
+  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+}
+
+async function sendMailgunNotification(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+  credential: NotificationCredentialPayload,
+): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'domain-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+  if (!hasApiKeyCredential(credential))
+    return 'credential-type-mismatch'
+
+  const recipients = await resolveEmailRecipients(event, delivery, input)
+  if (recipients.length === 0)
+    return 'recipient-missing'
+
+  const from = readConfigString(delivery.config, 'from', 320)
+  if (!from)
+    return 'sender-missing'
+
+  const domain = readConfigString(delivery.config, 'domain', 255)
+  if (!domain)
+    return 'domain-missing'
+
+  const baseUrl = readProviderRegion(delivery.config) === 'eu'
+    ? 'https://api.eu.mailgun.net'
+    : 'https://api.mailgun.net'
+  const endpoint = readHttpsRelayEndpoint(delivery.config)
+    ?? `${baseUrl}/v3/${encodeURIComponent(domain)}/messages`
+  const body = new URLSearchParams()
+  body.set('from', from)
+  for (const recipient of recipients)
+    body.append('to', recipient)
+  body.set('subject', readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`)
+  body.set('text', readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input))
+
+  const response = await networkClient.request({
+    method: 'POST',
+    url: endpoint,
+    timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+    headers: {
+      Authorization: `Basic ${Buffer.from(`api:${credential.apiKey}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+  })
+
+  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+}
+
+async function sendPostmarkNotification(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+  credential: NotificationCredentialPayload,
+): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+  if (!hasApiKeyCredential(credential))
+    return 'credential-type-mismatch'
+
+  const recipients = await resolveEmailRecipients(event, delivery, input)
+  if (recipients.length === 0)
+    return 'recipient-missing'
+
+  const from = readConfigString(delivery.config, 'from', 320)
+  if (!from)
+    return 'sender-missing'
+
+  const response = await networkClient.request({
+    method: 'POST',
+    url: readHttpsRelayEndpoint(delivery.config) ?? 'https://api.postmarkapp.com/email',
+    timeoutMs: readConfigNumber(delivery.config, 'timeoutMs', 10000, 1000, 30000),
+    validateStatus: Array.from({ length: 500 }, (_, index) => index + 100),
+    headers: {
+      'X-Postmark-Server-Token': credential.apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      From: from,
+      To: recipients.join(','),
+      Subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
+      TextBody: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+      MessageStream: readConfigString(delivery.config, 'messageStream', 120) ?? undefined,
     },
   })
 
@@ -506,6 +618,7 @@ async function sendWebhookNotification(
 }
 
 async function sendGenericEmailNotification(
+  event: H3Event | undefined,
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
@@ -513,7 +626,7 @@ async function sendGenericEmailNotification(
   if (!hasWebhookCredential(credential))
     return 'credential-type-mismatch'
 
-  const recipients = readRecipients(input)
+  const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
     return 'recipient-missing'
 
@@ -551,6 +664,7 @@ async function sendGenericEmailNotification(
 }
 
 async function sendSmtpRelayNotification(
+  event: H3Event | undefined,
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
@@ -562,7 +676,7 @@ async function sendSmtpRelayNotification(
   if (!endpoint)
     return 'relay-endpoint-missing'
 
-  const recipients = readRecipients(input)
+  const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
     return 'recipient-missing'
 
@@ -685,11 +799,17 @@ async function sendNotification(
 ): Promise<string> {
   try {
     if (delivery.adapter === 'email/resend')
-      return await sendResendNotification(delivery, input, credential)
+      return await sendResendNotification(event, delivery, input, credential)
+    if (delivery.adapter === 'email/sendgrid')
+      return await sendSendgridNotification(event, delivery, input, credential)
+    if (delivery.adapter === 'email/mailgun')
+      return await sendMailgunNotification(event, delivery, input, credential)
+    if (delivery.adapter === 'email/postmark')
+      return await sendPostmarkNotification(event, delivery, input, credential)
     if (delivery.adapter === 'email/smtp')
-      return await sendSmtpRelayNotification(delivery, input, credential)
+      return await sendSmtpRelayNotification(event, delivery, input, credential)
     if (delivery.adapter === 'email/generic')
-      return await sendGenericEmailNotification(delivery, input, credential)
+      return await sendGenericEmailNotification(event, delivery, input, credential)
     if (delivery.adapter === 'webhook')
       return await sendWebhookNotification(delivery, input, credential)
     if (delivery.adapter === 'webpush')
@@ -736,11 +856,8 @@ function evaluateDelivery(
   config: PlatformGovernanceConfig,
   input: DispatchNotificationInput,
 ): EvaluatedNotificationDelivery {
-  const { adapter, providerType } = resolveAdapterProfile(config)
-  const channel = normalizeToken(config.channel) ?? 'browser'
-  const provider = normalizeToken(config.provider)
-  const credentialRef = resolveCredentialRef(config)
-  const credentialRequired = CREDENTIAL_REQUIRED_ADAPTERS.has(adapter)
+  const profile = resolveNotificationChannelProfile(config)
+  const { adapter, channel, credentialRef, credentialRequired, provider, providerType } = profile
   const channelFilter = normalizeOptionalList(input.deliveryChannels)
   const providerFilter = normalizeOptionalList(input.deliveryProviders)
   const configuredEvents = normalizeStringList(config.config?.events)
@@ -767,7 +884,7 @@ function evaluateDelivery(
     status = 'skipped'
     reason = 'target-mismatch'
   }
-  else if (!SUPPORTED_ADAPTERS.has(adapter)) {
+  else if (!profile.supported) {
     status = 'failed'
     reason = 'unsupported-adapter'
   }

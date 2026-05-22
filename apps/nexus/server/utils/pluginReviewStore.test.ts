@@ -100,5 +100,14 @@ describe('pluginReviewStore analytics', () => {
     })
     expect(analytics.latestAt).toEqual(expect.any(String))
     expect(JSON.stringify(analytics)).not.toContain('example.com')
+    expect(JSON.stringify(analytics)).not.toContain('Approved Five')
+    expect(JSON.stringify(analytics)).not.toContain('Useful plugin.')
+    expect(analytics.statusTrend).toHaveLength(1)
+    expect(analytics.statusTrend[0]).toMatchObject({
+      total: 4,
+      approved: 2,
+      pending: 1,
+      rejected: 1,
+    })
   })
 })
