@@ -13,10 +13,11 @@
   "main": "index.js",
   "permissions": {
     "required": [],
-    "optional": ["clipboard.write"]
+    "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
-    "clipboard.write": "复制网址到剪贴板"
+    "clipboard.write": "复制网址到剪贴板",
+    "network.internet": "使用默认浏览器打开收藏或最近访问网址"
   },
   "features": [
     {
