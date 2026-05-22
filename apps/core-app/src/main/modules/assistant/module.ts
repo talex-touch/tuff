@@ -9,8 +9,8 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type {
-  AssistantRuntimeConfig,
-  AssistantScreenshotTranslateResponse
+  AssistantClipboardImageTranslateResponse,
+  AssistantRuntimeConfig
 } from '@talex-touch/utils/transport/events/assistant'
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -26,12 +26,8 @@ import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'
-import {
-  normalizeImageBase64Payload,
-  translateImageBase64
-} from '../box-tool/core-box/image-translate'
+import { translateClipboardImage } from '../box-tool/core-box/image-translate'
 import { windowManager } from '../box-tool/core-box/window'
-import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 interface FloatingBallPosition {
@@ -76,10 +72,6 @@ function clamp(value: number, min: number, max: number): number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function waitForAssistantWindowHidden(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 160))
 }
 
 export class AssistantModule extends BaseModule {
@@ -189,8 +181,8 @@ export class AssistantModule extends BaseModule {
     )
 
     this.transportDisposers.push(
-      this.transport.on(AssistantEvents.voice.translateScreenshot, async (payload) => {
-        return await this.handleScreenshotTranslate(payload?.targetLang)
+      this.transport.on(AssistantEvents.voice.translateClipboardImage, async (payload) => {
+        return await this.handleClipboardImageTranslate(payload?.targetLang)
       })
     )
   }
@@ -657,13 +649,6 @@ export class AssistantModule extends BaseModule {
     this.voicePanelWindow.window.hide()
   }
 
-  private hideFloatingBall(): void {
-    if (!this.floatingBallWindow || this.floatingBallWindow.window.isDestroyed()) {
-      return
-    }
-    this.floatingBallWindow.window.hide()
-  }
-
   private beginVoicePanelAutoHideSuppression(): void {
     if (this.voicePanelAutoHideResumeTimer) {
       clearTimeout(this.voicePanelAutoHideResumeTimer)
@@ -683,27 +668,6 @@ export class AssistantModule extends BaseModule {
         this.voicePanelAutoHideSuppressionDepth - 1
       )
     }, 600)
-  }
-
-  private restoreAssistantWindows(voiceWasVisible: boolean, floatingWasVisible: boolean): void {
-    if (
-      floatingWasVisible &&
-      this.floatingBallWindow &&
-      !this.floatingBallWindow.window.isDestroyed() &&
-      !this.floatingBallWindow.window.isVisible()
-    ) {
-      this.floatingBallWindow.window.showInactive()
-    }
-
-    if (
-      voiceWasVisible &&
-      this.voicePanelWindow &&
-      !this.voicePanelWindow.window.isDestroyed() &&
-      !this.voicePanelWindow.window.isVisible()
-    ) {
-      this.voicePanelWindow.window.show()
-      this.voicePanelWindow.window.focus()
-    }
   }
 
   private async handleVoiceSubmit(rawText?: string): Promise<{ accepted: boolean }> {
@@ -742,9 +706,9 @@ export class AssistantModule extends BaseModule {
     return { accepted: true }
   }
 
-  private async handleScreenshotTranslate(
+  private async handleClipboardImageTranslate(
     targetLang?: string
-  ): Promise<AssistantScreenshotTranslateResponse> {
+  ): Promise<AssistantClipboardImageTranslateResponse> {
     const setting = this.readAppSetting()
     if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
       return {
@@ -754,52 +718,9 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    const voiceWasVisible =
-      Boolean(this.voicePanelWindow) &&
-      !this.voicePanelWindow!.window.isDestroyed() &&
-      this.voicePanelWindow!.window.isVisible()
-    const floatingWasVisible =
-      Boolean(this.floatingBallWindow) &&
-      !this.floatingBallWindow!.window.isDestroyed() &&
-      this.floatingBallWindow!.window.isVisible()
-
     this.beginVoicePanelAutoHideSuppression()
     try {
-      this.hideVoicePanel()
-      this.hideFloatingBall()
-      await waitForAssistantWindowHidden()
-
-      let imageBase64: string | null = null
-      try {
-        const screenshot = await getNativeScreenshotService().capture({
-          target: 'cursor-display',
-          output: 'data-url',
-          writeClipboard: false
-        })
-        imageBase64 =
-          typeof screenshot.dataUrl === 'string'
-            ? normalizeImageBase64Payload(screenshot.dataUrl)
-            : null
-      } catch (error) {
-        assistantLog.warn('Assistant screenshot capture failed', { error })
-        this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
-        return {
-          success: false,
-          code: 'SCREENSHOT_UNAVAILABLE',
-          error: error instanceof Error ? error.message : 'Screenshot capture failed.'
-        }
-      }
-
-      this.restoreAssistantWindows(voiceWasVisible, floatingWasVisible)
-      if (!imageBase64) {
-        return {
-          success: false,
-          code: 'IMAGE_UNAVAILABLE',
-          error: 'Screenshot image payload is unavailable.'
-        }
-      }
-
-      const result = await translateImageBase64(imageBase64, targetLang || 'zh', {
+      const result = await translateClipboardImage(targetLang || 'zh', {
         openPinWindow: true
       })
       if (!result.success) {

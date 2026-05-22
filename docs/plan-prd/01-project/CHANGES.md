@@ -13,6 +13,19 @@
 
 ## 2026-05-21
 
+### fix(core-app): harden Assistant clipboard image translation
+
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate.ts`
+- `apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue`
+- `packages/utils/transport/events/assistant.ts`
+- `apps/core-app/scripts/assistant-floating-ball-smoke.ts`
+- `apps/core-app/package.json`
+  - Assistant VoicePanel image translation now reads the current clipboard image through the shared CoreBox image translation helper instead of triggering screen capture from the Assistant surface.
+  - The typed assistant transport keeps the legacy `translate-screenshot` wire event compatible while exposing the clipboard-image API and localized recovery hints for empty clipboard images.
+  - Added `smoke:assistant` CDP smoke coverage for an already running Electron instance to verify the floating ball, VoicePanel, and clipboard image translation action without reading the clipboard image by default.
+  - Focused coverage verifies the clipboard image helper, typed transport contract, visible evidence checklist, and fail-closed empty-clipboard smoke preflight.
+
 ### feat(nexus): expand provider governance controls
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`

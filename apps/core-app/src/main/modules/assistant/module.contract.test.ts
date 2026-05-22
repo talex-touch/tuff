@@ -183,42 +183,47 @@ describe('Assistant module startup contract', () => {
     }
   })
 
-  it('routes screenshot translation through typed assistant transport events', () => {
+  it('routes clipboard image translation through typed assistant transport events', () => {
+    expect(assistantEventsSource).toContain('AssistantClipboardImageTranslateResponse')
+    expect(assistantEventsSource).toContain('translateClipboardImage')
     expect(assistantEventsSource).toContain('translateScreenshot')
     expect(assistantEventsSource).toContain("event('translate-screenshot')")
-    expect(moduleSource).toContain('AssistantEvents.voice.translateScreenshot')
-    expect(moduleSource).toContain('handleScreenshotTranslate')
-    expect(moduleSource).toContain('getNativeScreenshotService().capture')
-    expect(moduleSource).toContain("target: 'cursor-display'")
-    expect(moduleSource).toContain("output: 'data-url'")
-    expect(moduleSource).toContain('writeClipboard: false')
-    expect(moduleSource).toContain('translateImageBase64')
+    expect(assistantEventsSource).toContain('SCREENSHOT_UNAVAILABLE')
+    expect(moduleSource).toContain('AssistantEvents.voice.translateClipboardImage')
+    expect(moduleSource).toContain('handleClipboardImageTranslate')
+    expect(moduleSource).toContain('translateClipboardImage')
+    expect(moduleSource).not.toContain('SCREENSHOT_UNAVAILABLE')
+    expect(moduleSource).not.toContain('getNativeScreenshotService')
+    expect(moduleSource).not.toContain("target: 'cursor-display'")
+    expect(moduleSource).not.toContain("output: 'data-url'")
+    expect(moduleSource).not.toContain('writeClipboard: false')
+    expect(moduleSource).not.toContain('translateImageBase64')
     expect(moduleSource).toContain('openPinWindow: true')
     expect(moduleSource).toContain('voicePanelAutoHideSuppressionDepth')
     expect(moduleSource).toContain('beginVoicePanelAutoHideSuppression')
     expect(moduleSource).toContain('releaseVoicePanelAutoHideSuppression')
     expect(moduleSource).toContain('setTimeout(() => {')
     expect(moduleSource).toContain('this.voicePanelAutoHideSuppressionDepth - 1')
-    expect(voicePanelSource).toContain('AssistantEvents.voice.translateScreenshot')
+    expect(voicePanelSource).toContain('AssistantEvents.voice.translateClipboardImage')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:translate-screenshot')
   })
 
-  it('maps screenshot translation failures to localized recovery hints', () => {
+  it('maps clipboard image translation failures to localized recovery hints', () => {
     for (const expected of [
-      'AssistantScreenshotTranslateErrorCode',
-      'SCREENSHOT_TRANSLATE_ERROR_KEYS',
+      'AssistantClipboardImageTranslateErrorCode',
+      'CLIPBOARD_IMAGE_TRANSLATE_ERROR_KEYS',
       'ASSISTANT_DISABLED',
-      'SCREENSHOT_UNAVAILABLE',
       'IMAGE_UNAVAILABLE',
       'SCENE_UNAVAILABLE',
-      'formatScreenshotTranslateError(response?.code, response?.error)'
+      'formatClipboardImageTranslateError(response?.code, response?.error)'
     ]) {
       expect(voicePanelSource).toContain(expected)
     }
 
+    expect(voicePanelSource).not.toContain('SCREENSHOT_UNAVAILABLE')
+
     for (const expected of [
       'screenshotTranslateAssistantDisabled',
-      'screenshotTranslatePermissionDenied',
       'screenshotTranslateImageUnavailable',
       'screenshotTranslateProviderUnavailable'
     ]) {
@@ -226,5 +231,9 @@ describe('Assistant module startup contract', () => {
       expect(zhLocaleSource).toContain(expected)
       expect(enLocaleSource).toContain(expected)
     }
+
+    expect(voicePanelSource).not.toContain('screenshotTranslatePermissionDenied')
+    expect(zhLocaleSource).toContain('screenshotTranslatePermissionDenied')
+    expect(enLocaleSource).toContain('screenshotTranslatePermissionDenied')
   })
 })
