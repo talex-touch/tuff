@@ -4,6 +4,7 @@ const PLUGIN_NAME = 'touch-browser-bookmarks'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'browser-bookmarks'
+const NETWORK_PERMISSION_ID = 'network.internet'
 
 const BOOKMARKS_FILE = 'bookmarks.json'
 const RECENT_FILE = 'recent-urls.json'
@@ -330,6 +331,26 @@ async function ensurePermission(permissionId, reason) {
   return Boolean(granted)
 }
 
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check)
+    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+
+  try {
+    const granted = Boolean(await permission.check(permissionId))
+    return granted
+      ? { granted: true, status: 'available', reason: '' }
+      : { granted: false, status: 'permission-missing', reason: `${permissionId.replace('.', '-')}-permission-required` }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-browser-bookmarks] Failed to check permission', error)
+    return { granted: false, status: 'permission-missing', reason: 'permission-check-failed' }
+  }
+}
+
+async function resolveNetworkOpenCapabilityState() {
+  return checkPermissionStatus(NETWORK_PERMISSION_ID)
+}
+
 async function ensureDataFiles() {
   try {
     const bookmarks = await plugin.storage.getFile(BOOKMARKS_FILE)
@@ -400,7 +421,42 @@ function buildSectionHeader(featureId, sectionId, title, subtitle) {
   })
 }
 
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) {
+function extractUrlHost(url) {
+  try {
+    return new URL(url).host
+  }
+  catch {
+    return ''
+  }
+}
+
+function buildNetworkOpenCapability({ featureId, source, url, status = 'available', reason = '' }) {
+  return {
+    id: NETWORK_PERMISSION_ID,
+    type: 'network',
+    permission: NETWORK_PERMISSION_ID,
+    status,
+    ...(reason ? { reason } : {}),
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId: 'open-url',
+      operation: 'open-external-url',
+      source,
+      urlHost: extractUrlHost(url),
+    },
+  }
+}
+
+function formatNetworkCapabilitySuffix(capabilityState) {
+  if (!capabilityState || capabilityState.status === 'available')
+    return ''
+  if (capabilityState.status === 'permission-missing')
+    return ' · 缺少 network.internet 权限'
+  return capabilityState.reason ? ` · ${capabilityState.reason}` : ''
+}
+
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, capability }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
@@ -412,37 +468,52 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       defaultAction: ACTION_ID,
       actionId,
       payload,
+      ...(capability ? { capability } : {}),
     })
     .build()
 }
 
-function buildBookmarkItems(featureId, bookmarks) {
+function buildBookmarkItems(featureId, bookmarks, networkCapabilityState) {
   return bookmarks.slice(0, SHOW_BOOKMARKS).map((item, index) => buildActionItem({
     id: `${featureId}-bookmark-${index}`,
     featureId,
     title: `打开 · ${item.title}`,
-    subtitle: `${truncateText(item.url)}${item.pinned ? ' · PINNED' : ''}`,
+    subtitle: `${truncateText(item.url)}${item.pinned ? ' · PINNED' : ''}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
     actionId: 'open-url',
     payload: {
       url: item.url,
       title: item.title,
       source: 'bookmark',
     },
+    capability: buildNetworkOpenCapability({
+      featureId,
+      source: 'bookmark',
+      url: item.url,
+      status: networkCapabilityState?.status,
+      reason: networkCapabilityState?.reason,
+    }),
   }))
 }
 
-function buildRecentItems(featureId, recentItems) {
+function buildRecentItems(featureId, recentItems, networkCapabilityState) {
   return recentItems.map((item, index) => buildActionItem({
     id: `${featureId}-recent-${index}`,
     featureId,
     title: `最近 · ${item.title}`,
-    subtitle: truncateText(item.url),
+    subtitle: `${truncateText(item.url)}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
     actionId: 'open-url',
     payload: {
       url: item.url,
       title: item.title,
       source: 'recent',
     },
+    capability: buildNetworkOpenCapability({
+      featureId,
+      source: 'recent',
+      url: item.url,
+      status: networkCapabilityState?.status,
+      reason: networkCapabilityState?.reason,
+    }),
   }))
 }
 
@@ -486,6 +557,7 @@ const pluginLifecycle = {
 
       const bookmarks = await loadBookmarks()
       const recent = await loadRecent()
+      const networkCapabilityState = await resolveNetworkOpenCapabilityState()
 
       const filteredBookmarks = inputUrl
         ? bookmarks.filter(item => item.url === inputUrl)
@@ -503,9 +575,16 @@ const pluginLifecycle = {
           id: `${featureId}-quick-open`,
           featureId,
           title: '默认浏览器打开',
-          subtitle: truncateText(inputUrl),
+          subtitle: `${truncateText(inputUrl)}${formatNetworkCapabilitySuffix(networkCapabilityState)}`,
           actionId: 'open-url',
           payload: { url: inputUrl, title: guessTitleFromUrl(inputUrl), source: 'quick' },
+          capability: buildNetworkOpenCapability({
+            featureId,
+            source: 'quick',
+            url: inputUrl,
+            status: networkCapabilityState.status,
+            reason: networkCapabilityState.reason,
+          }),
         }))
         quick.push(buildActionItem({
           id: `${featureId}-quick-add`,
@@ -541,8 +620,8 @@ const pluginLifecycle = {
         actionId: 'config-open',
       }))
 
-      const bookmarkItems = buildBookmarkItems(featureId, filteredBookmarks)
-      const recentItems = buildRecentItems(featureId, recentDisplay)
+      const bookmarkItems = buildBookmarkItems(featureId, filteredBookmarks, networkCapabilityState)
+      const recentItems = buildRecentItems(featureId, recentDisplay, networkCapabilityState)
 
       const tips = []
       if (!bookmarkItems.length) {
@@ -665,21 +744,34 @@ const pluginLifecycle = {
         if (!url)
           return
 
+        const canOpen = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开网址')
+        if (!canOpen) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'permission-denied',
+            message: '缺少 network.internet 权限',
+          }
+        }
+
         if (typeof openUrl !== 'function') {
           return {
             externalAction: true,
             success: false,
+            status: 'blocked',
+            reason: 'open-url-unavailable',
             message: '当前环境不支持打开外链',
           }
         }
 
-        openUrl(url)
+        await openUrl(url)
 
         const recent = await loadRecent()
         const nextRecent = touchRecentUrl(recent, url, payload.title)
         await saveRecent(nextRecent)
 
-        return { externalAction: true }
+        return { externalAction: true, status: 'started' }
       }
     }
     catch (error) {
@@ -699,6 +791,8 @@ module.exports = {
     cleanupBookmarks,
     cleanupRecent,
     filterBookmarks,
+    buildNetworkOpenCapability,
+    resolveNetworkOpenCapabilityState,
     mergeRecentForDisplay,
     normalizeUrlInput,
     parseBookmarks,

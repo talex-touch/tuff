@@ -37,7 +37,7 @@
 - Linux best-effort smoke 与限制说明。
 - AI 兼容占位成功响应退场：当前 live tree 已无历史 `retired-ai-app` 路径；Nexus `intelligence-lab/*` 与旧 orchestrator 入口返回 `410` 与迁移目标，仍按 TODO 继续防止新增生产 fake-success。
 - CLI token 与插件 provider secret storage 收口：文件权限缓解与 `usePluginSecret()` 迁移已推进；CoreApp secure-store 已优先 Electron `safeStorage`，Credential Locker/libsecret 与遗留 secret evidence 仍待闭环。
-- 插件 shell capability 诊断统一。
+- 插件 shell/OS/network capability 诊断统一。
 - Transport Wave A retained alias/hard-cut 继续推进。
 - CoreApp 启动异步化真机 benchmark 与长尾补证。
 - 公共 npm 子包补发：`@talex-touch/utils@1.0.50`、`@talex-touch/tuffex@0.3.5`、`@talex-touch/unplugin-export-plugin@1.2.16`、`@talex-touch/tuff-cli@0.0.3`、`@talex-touch/tuff-core@0.0.1`、`@talex-touch/tuff-intelligence@0.0.2` 仍需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。

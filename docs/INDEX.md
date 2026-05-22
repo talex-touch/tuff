@@ -51,6 +51,7 @@
 - Nexus 数据治理方向：Data Governance 已覆盖治理事件/config、dashboard analytics、访问/搜索/signup/plugin analytics、上传 retry/problem attempts、通知健康、存储策略/告警、Provider usage/quota、operations summary、secure credential reference 与 object storage executor；direct invoke quota 与 Provider Registry quota admin 已并入同一治理口径，详细历史以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 - Nexus 数据治理当前缺口：真实浏览器证据、真实凭据/live send、SMTP socket 或托管 relay、Web Push 生产 VAPID/relay、S3/OSS live storage、生产 D1 migration/backfill 与更深运营大屏。
 - App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，后续继续补 Browser Data、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
+- 插件 capability 诊断方向：shell/OS/network 类外部动作继续补展示期 non-mutating capability metadata、执行期 request/block 状态与 focused tests；`touch-browser-bookmarks` 外链打开已纳入 `network.internet` 口径。
 - 插件发布当前切片：`touch-intelligence` 已补齐 Nexus 发布资产并修复 1.0.0 运行时加载源码 TS 的问题；1.0.1 包使用 bundled prelude 与 `@talex-touch/tuff-intelligence/client` CJS 入口，可重新发布到 Nexus；公共 npm 子包补发仍等待具备 `@talex-touch` publish 权限的 `NPM_TOKEN`。
 
 ## 归档与降权
