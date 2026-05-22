@@ -7,6 +7,8 @@ import { assertStorageChannelPolicy, listPlatformGovernanceConfigs, recordStorag
 import { getStorageCredential, type StorageAccessKeyCredential } from './storageCredentialStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
+export const STORAGE_OBJECT_WRITE_MAX_RETRIES = 2
+export const STORAGE_OBJECT_WRITE_RETRY_DELAYS_MS = [250, 1000] as const
 
 export interface StorageObjectRecord {
   data: Buffer
@@ -51,6 +53,7 @@ interface PutStorageObjectInput extends StorageObjectContext {
   data: Buffer | ArrayBuffer | Uint8Array
   contentType?: string | null
   actorId?: unknown
+  retryPolicy?: Partial<StorageObjectWriteRetryPolicy>
 }
 
 interface DeleteStorageObjectInput extends StorageObjectContext {
@@ -62,6 +65,22 @@ interface ResolvedObjectStorageBackend {
   provider: string
   bucket: R2Bucket | null
   externalStorage: StorageObjectExternalConfig | null
+}
+
+interface StorageObjectWriteRetryPolicy {
+  maxRetries: number
+  delaysMs: readonly number[]
+}
+
+interface StorageUploadRetryMetadata {
+  retryable: boolean
+  retryCount: number
+  maxRetries: number
+  nextRetryDelayMs: number
+  storageChannel: string
+  storageProvider: string
+  storageOperation: 'storage.write'
+  storageStatusCode: number | null
 }
 
 export function resolveObjectStorageChannel(
@@ -393,12 +412,15 @@ async function putExternalObject(storage: StorageObjectExternalConfig, key: stri
   const response = await (storage.fetch ?? fetch)(url, {
     method: 'PUT',
     headers,
-    body: data,
+    body: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer,
   })
   if (!response.ok) {
     throw createError({
       statusCode: 502,
       statusMessage: `External storage PUT failed with HTTP ${response.status}.`,
+      data: {
+        storageStatusCode: response.status,
+      },
     })
   }
 }
@@ -533,6 +555,114 @@ async function recordObjectStorageUsage(
   }).catch(() => {})
 }
 
+function normalizeWriteRetryPolicy(policy?: Partial<StorageObjectWriteRetryPolicy>): StorageObjectWriteRetryPolicy {
+  const maxRetries = typeof policy?.maxRetries === 'number' && Number.isFinite(policy.maxRetries)
+    ? Math.max(0, Math.min(5, Math.floor(policy.maxRetries)))
+    : STORAGE_OBJECT_WRITE_MAX_RETRIES
+  const delaysMs = policy?.delaysMs?.length
+    ? policy.delaysMs.map(delay => Math.max(0, Math.round(delay)))
+    : STORAGE_OBJECT_WRITE_RETRY_DELAYS_MS
+
+  return {
+    maxRetries,
+    delaysMs,
+  }
+}
+
+function readErrorData(error: unknown): Record<string, unknown> | null {
+  const data = error && typeof error === 'object'
+    ? (error as { data?: unknown }).data
+    : null
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : null
+}
+
+function readStorageStatusCode(error: unknown): number | null {
+  const data = readErrorData(error)
+  const storageStatusCode = data?.storageStatusCode
+  if (typeof storageStatusCode === 'number' && Number.isFinite(storageStatusCode))
+    return Math.round(storageStatusCode)
+
+  if (error && typeof error === 'object') {
+    const statusCode = (error as { statusCode?: unknown }).statusCode
+    if (typeof statusCode === 'number' && Number.isFinite(statusCode))
+      return Math.round(statusCode)
+  }
+
+  return null
+}
+
+function isRetryableStorageWriteError(error: unknown): boolean {
+  const statusCode = readStorageStatusCode(error)
+  if (statusCode === null)
+    return true
+  return statusCode === 408
+    || statusCode === 425
+    || statusCode === 429
+    || statusCode === 500
+    || statusCode === 502
+    || statusCode === 503
+    || statusCode === 504
+}
+
+function retryDelayForAttempt(policy: StorageObjectWriteRetryPolicy, retryCount: number): number {
+  return policy.delaysMs[retryCount] ?? policy.delaysMs.at(-1) ?? 0
+}
+
+async function waitForRetry(delayMs: number): Promise<void> {
+  if (delayMs <= 0)
+    return
+  await new Promise(resolve => setTimeout(resolve, delayMs))
+}
+
+function attachUploadRetryMetadata(error: unknown, metadata: StorageUploadRetryMetadata): void {
+  if (!error || typeof error !== 'object')
+    return
+  const existingData = readErrorData(error) ?? {}
+  ;(error as { data?: Record<string, unknown> }).data = {
+    ...existingData,
+    uploadRetry: metadata,
+  }
+}
+
+async function runStorageWriteWithRetry(
+  backend: Pick<ResolvedObjectStorageBackend, 'channel' | 'provider'>,
+  policyInput: Partial<StorageObjectWriteRetryPolicy> | undefined,
+  operation: () => Promise<void>,
+): Promise<void> {
+  const policy = normalizeWriteRetryPolicy(policyInput)
+  let retryCount = 0
+
+  while (true) {
+    try {
+      await operation()
+      return
+    }
+    catch (error) {
+      const retryable = isRetryableStorageWriteError(error)
+      const willRetry = retryable && retryCount < policy.maxRetries
+      const nextRetryDelayMs = willRetry ? retryDelayForAttempt(policy, retryCount) : 0
+      attachUploadRetryMetadata(error, {
+        retryable,
+        retryCount,
+        maxRetries: policy.maxRetries,
+        nextRetryDelayMs,
+        storageChannel: backend.channel,
+        storageProvider: backend.provider,
+        storageOperation: 'storage.write',
+        storageStatusCode: readStorageStatusCode(error),
+      })
+
+      if (!willRetry)
+        throw error
+
+      await waitForRetry(nextRetryDelayMs)
+      retryCount += 1
+    }
+  }
+}
+
 export async function putStorageObject(input: PutStorageObjectInput): Promise<Omit<StorageObjectResult, 'data'>> {
   const backend = await resolveObjectStorageBackend(input)
   const contentType = normalizeContentType(input.contentType, input.defaultContentType)
@@ -547,14 +677,18 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     quantity: data.size,
   })
 
-  if (backend.externalStorage) {
-    await putExternalObject(backend.externalStorage, input.key, data.buffer, contentType)
-  }
-  else if (backend.bucket) {
-    await backend.bucket.put(input.key, data.bytes, {
-      httpMetadata: {
-        contentType,
-      },
+  if (backend.externalStorage || backend.bucket) {
+    await runStorageWriteWithRetry(backend, input.retryPolicy, async () => {
+      if (backend.externalStorage) {
+        await putExternalObject(backend.externalStorage, input.key, data.buffer, contentType)
+        return
+      }
+
+      await backend.bucket!.put(input.key, data.bytes, {
+        httpMetadata: {
+          contentType,
+        },
+      })
     })
   }
   else {
