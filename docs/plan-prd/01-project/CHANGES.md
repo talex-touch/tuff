@@ -13,6 +13,18 @@
 
 ## 2026-05-22
 
+### fix(plugin): gate browser bookmarks external URLs
+
+- `plugins/touch-browser-bookmarks/index.js`
+- `plugins/touch-browser-bookmarks/manifest.json`
+- `packages/test/src/plugins/browser-bookmarks.test.ts`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Browser Bookmarks now declares `network.internet` for default-browser URL opening instead of relying on an undeclared `openUrl` side effect.
+  - URL open items expose non-mutating `network.internet` capability/audit metadata with host, source, and permission state; denied permission is visible before execution without prompting.
+  - Executing an external URL requests `network.internet` and returns a blocked status when denied; successful opens now await `openUrl` and return `started`.
+
 ### feat(core-app): expose shared network proxy settings
 
 - `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
