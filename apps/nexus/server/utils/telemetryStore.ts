@@ -271,18 +271,31 @@ export async function recordTelemetryEvent(
   await incrementDailyStat(db, today, 'total_events', '', 1)
 
   if (sanitized.eventType === 'visit') {
+    const meta = sanitized.metadata && typeof sanitized.metadata === 'object'
+      ? sanitized.metadata as Record<string, unknown>
+      : {}
+    const visitRoute = normalizeString(meta.route, 180)
+    const visitSurface = normalizeString(meta.surface, 80)
     await recordPlatformGovernanceEvent(event, {
       scope: 'app',
       action: 'visit',
       actorId,
-      resourceType: 'platform',
-      resourceId: sanitized.platform || 'unknown',
-      channel: sanitized.version || 'unknown',
+      resourceType: visitRoute ? 'route' : 'platform',
+      resourceId: visitRoute || sanitized.platform || 'unknown',
+      channel: visitSurface || sanitized.version || 'unknown',
       unit: 'visit',
       quantity: 1,
       metadata: {
         platform: sanitized.platform ?? null,
         version: sanitized.version ?? null,
+        route: visitRoute ?? null,
+        page: normalizeString(meta.page, 120) ?? null,
+        screen: normalizeString(meta.screen, 120) ?? null,
+        surface: visitSurface ?? null,
+        referrer: normalizeString(meta.referrer, 180) ?? null,
+        source: normalizeString(meta.source, 120) ?? null,
+        localHour: normalizeNumber(meta.localHour, { min: 0, max: 23 }) ?? null,
+        localDayOfWeek: normalizeNumber(meta.localDayOfWeek, { min: 0, max: 6 }) ?? null,
         countryCode,
         regionCode: geo.regionCode,
         timezone: geo.timezone,
@@ -324,6 +337,11 @@ export async function recordTelemetryEvent(
         firstResultCount: normalizeNumber(meta.firstResultCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT }) ?? null,
         providerErrorCount: normalizeNumber(meta.providerErrorCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT }) ?? null,
         providerTimeoutCount: normalizeNumber(meta.providerTimeoutCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT }) ?? null,
+        selected: typeof meta.selected === 'boolean' ? meta.selected : null,
+        selectedProvider: normalizeString(meta.selectedProvider, 128) ?? null,
+        selectedCategory: normalizeString(meta.selectedCategory, 64) ?? null,
+        selectedPluginId: normalizeString(meta.selectedPluginId, 128) ?? null,
+        selectedRank: normalizeNumber(meta.selectedRank, { min: 0, max: MAX_SEARCH_RESULT_COUNT }) ?? null,
         filterKinds: Array.isArray(meta.filterKinds) ? meta.filterKinds : [],
         filterSources: Array.isArray(meta.filterSources) ? meta.filterSources : [],
         pluginIds: Array.isArray(meta.pluginIds) ? meta.pluginIds : [],

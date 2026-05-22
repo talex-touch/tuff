@@ -15,6 +15,15 @@ export interface ProviderCapabilityRecord {
   metering: Record<string, unknown> | null
   constraints: Record<string, unknown> | null
   metadata: Record<string, unknown> | null
+  adapter?: {
+    providerId: string
+    vendor: string
+    capability: string
+    ready: boolean
+    matchedKey: string | null
+    fallbackKey: string | null
+    reason: 'adapter-ready' | 'provider-capability-missing' | 'adapter-missing'
+  }
   createdAt: string
   updatedAt: string
 }

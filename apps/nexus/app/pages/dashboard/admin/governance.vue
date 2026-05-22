@@ -67,6 +67,11 @@ interface GovernanceTrendPoint {
   uniqueActors: number
 }
 
+interface GovernanceGrowthTrendPoint extends GovernanceTrendPoint {
+  cumulative: number
+  growthRate: number
+}
+
 interface GovernanceHeatmapPoint {
   dayOfWeek: number
   hour: string
@@ -121,7 +126,30 @@ interface GovernanceGrowth {
   eventGrowthRate: number
 }
 
+type NotificationChannelRiskStatus = 'ok' | 'warning' | 'disabled'
+
 interface NotificationDeliveryAnalytics {
+  channelSummary: {
+    total: number
+    enabled: number
+    disabled: number
+    unsupported: number
+    credentialMissing: number
+    credentialed: number
+  }
+  channelRisks: Array<{
+    configId: string
+    name: string
+    channel: string
+    provider: string | null
+    providerType: string | null
+    adapter: string
+    enabled: boolean
+    status: NotificationChannelRiskStatus
+    reasons: string[]
+    credentialRequired: boolean
+    hasCredentialRef: boolean
+  }>
   deliveries: {
     total: number
     planned: number
@@ -137,6 +165,12 @@ interface NotificationDeliveryAnalytics {
   byAdapter: GovernanceMetric[]
   byReason: GovernanceMetric[]
   byNotificationAction: GovernanceMetric[]
+  deliveryTrend: Array<GovernanceTrendPoint & {
+    planned: number
+    sent: number
+    skipped: number
+    failed: number
+  }>
   providerHealth: Array<{
     provider: string
     providerType: string | null
@@ -162,15 +196,129 @@ interface NotificationDeliveryAnalytics {
   }
 }
 
+interface PluginLeaderboardItem {
+  pluginId: string
+  downloads: number
+  installs: number
+  invocations: number
+  hotScore: number
+  growth: {
+    previousScore: number
+    currentScore: number
+    growthRate: number
+  }
+  events: number
+  uniqueActors: number
+  topCountries: Array<{ countryCode: string, events: number }>
+  topRegions: Array<{ regionCode: string, events: number }>
+  topChannels: Array<{ channel: string, events: number }>
+  byAction: Array<{ action: string, events: number, quantity: number }>
+}
+
+interface ProviderModelDistributionItem {
+  model: string
+  requests: number
+  tokens: number
+  quantity: number
+  uniqueActors: number
+  byProvider: Array<{ providerId: string, quantity: number }>
+  byChannel: Array<{ channel: string, quantity: number }>
+  byProviderType: Array<{ providerType: string, quantity: number }>
+}
+
+interface ProviderLeaderboardItem {
+  providerId: string
+  requests: number
+  tokens: number
+  quantity: number
+  uniqueActors: number
+  byUnit: Array<{ unit: string, quantity: number }>
+  byChannel: Array<{ channel: string, quantity: number }>
+  byModel: Array<{ model: string, tokens: number }>
+}
+
 interface GovernanceAnalytics {
   days: number
   generatedAt: string
-  visits: GovernanceScopedAnalytics & { growth: GovernanceGrowth }
+  dashboard: {
+    growth: {
+      userSignups: {
+        total: number
+        latestDate: string | null
+        latestQuantity: number
+        cumulative: number
+        growthRate: number
+      }
+      searches: {
+        total: number
+        latestDate: string | null
+        latestQuantity: number
+        growthRate: number
+        zeroResultRate: number
+        problemRate: number
+        selectionRate: number
+      }
+      pluginInstalls: {
+        total: number
+        latestDate: string | null
+        latestQuantity: number
+        growthRate: number
+      }
+      providerUsage: {
+        requests: number
+        tokens: number
+        latestDate: string | null
+        latestRequests: number
+        latestTokens: number
+      }
+      uploads: {
+        latestDate: string | null
+        latestStarted: number
+        latestCompleted: number
+        latestFailed: number
+        failureRate: number
+        stuckRate: number
+      }
+    }
+    leaderboards: {
+      hotPlugins: PluginLeaderboardItem[]
+      topModels: ProviderModelDistributionItem[]
+      topProviders: ProviderLeaderboardItem[]
+    }
+    riskSummary: {
+      uploadProblems: number
+      storageAlerts: number
+      storageBlockedPolicies: number
+      notificationRisks: number
+      notificationFailedDeliveries: number
+      providerQuotaBlocked: number
+      providerQuotaWarning: number
+    }
+    trends: {
+      userGrowth: GovernanceGrowthTrendPoint[]
+      searches: GovernanceTrendPoint[]
+      pluginInstalls: Array<GovernanceTrendPoint & { downloads: number, installs: number, invocations: number }>
+      providerUsage: Array<GovernanceTrendPoint & { requests: number, tokens: number }>
+      uploadStatus: Array<GovernanceTrendPoint & { started: number, completed: number, failed: number, bytes: number }>
+    }
+  }
+  visits: GovernanceScopedAnalytics & {
+    growth: GovernanceGrowth
+    trend: GovernanceTrendPoint[]
+    heatmap: GovernanceHeatmapPoint[]
+    byRoute: GovernanceMetric[]
+    byPage: GovernanceMetric[]
+    bySurface: GovernanceMetric[]
+    byReferrer: GovernanceMetric[]
+    byLocalHour: GovernanceMetric[]
+    byLocalTimeSlot: GovernanceMetric[]
+  }
   users: GovernanceScopedAnalytics & {
     growth: GovernanceGrowth
     signups: number
     signupGrowth: GovernanceGrowth
     signupTrend: GovernanceTrendPoint[]
+    signupGrowthTrend: GovernanceGrowthTrendPoint[]
     heatmap: GovernanceHeatmapPoint[]
     byAction: GovernanceMetric[]
     bySource: GovernanceMetric[]
@@ -203,6 +351,14 @@ interface GovernanceAnalytics {
     byContextTag: GovernanceMetric[]
     byLocalHour: GovernanceMetric[]
     byLocalDayOfWeek: GovernanceMetric[]
+    byLocalTimeSlot: GovernanceMetric[]
+    bySelectedProvider: GovernanceMetric[]
+    bySelectedCategory: GovernanceMetric[]
+    bySelectedPluginId: GovernanceMetric[]
+    bySelectedRankBucket: GovernanceMetric[]
+    byResultCountBucket: GovernanceMetric[]
+    byFirstResultLatencyBucket: GovernanceMetric[]
+    byTotalDurationBucket: GovernanceMetric[]
     byCountry: GovernanceMetric[]
     byRegion: GovernanceMetric[]
     byTimezone: GovernanceMetric[]
@@ -211,6 +367,25 @@ interface GovernanceAnalytics {
       withoutFilters: number
       filterRate: number
     }
+    selectionSummary: {
+      selected: number
+      selectionRate: number
+    }
+    reliabilitySummary: {
+      total: number
+      zeroResult: number
+      providerErrors: number
+      providerTimeouts: number
+      problemSearches: number
+      zeroResultRate: number
+      problemRate: number
+    }
+    reliabilityTrend: Array<GovernanceTrendPoint & {
+      zeroResult: number
+      providerErrors: number
+      providerTimeouts: number
+      problemSearches: number
+    }>
     latency: {
       firstResultMs: GovernanceNumberStat
       totalDurationMs: GovernanceNumberStat
@@ -228,24 +403,7 @@ interface GovernanceAnalytics {
     trend: Array<GovernanceTrendPoint & { downloads: number, installs: number, invocations: number }>
     installTrend: Array<GovernanceTrendPoint & { downloads: number, installs: number, invocations: number }>
     heatmap: GovernanceHeatmapPoint[]
-    leaderboard: Array<{
-      pluginId: string
-      downloads: number
-      installs: number
-      invocations: number
-      hotScore: number
-      growth: {
-        previousScore: number
-        currentScore: number
-        growthRate: number
-      }
-      events: number
-      uniqueActors: number
-      topCountries: Array<{ countryCode: string, events: number }>
-      topRegions: Array<{ regionCode: string, events: number }>
-      topChannels: Array<{ channel: string, events: number }>
-      byAction: Array<{ action: string, events: number, quantity: number }>
-    }>
+    leaderboard: PluginLeaderboardItem[]
   }
   uploads: GovernanceScopedAnalytics & {
     started: number
@@ -265,6 +423,27 @@ interface GovernanceAnalytics {
     byFailureReason: GovernanceMetric[]
     byStatusCode: GovernanceMetric[]
     bySurface: GovernanceMetric[]
+    retrySummary: {
+      retryableFailures: number
+      nonRetryableFailures: number
+      scheduledRetries: number
+      exhaustedFailures: number
+      retryCount: GovernanceNumberStat
+      nextRetryDelayMs: GovernanceNumberStat
+    }
+    byRetryDisposition: GovernanceMetric[]
+    statusTrend: Array<GovernanceTrendPoint & {
+      started: number
+      completed: number
+      failed: number
+      bytes: number
+    }>
+    retryTrend: Array<GovernanceTrendPoint & {
+      failed: number
+      retryable: number
+      scheduled: number
+      exhausted: number
+    }>
     uploadSize: GovernanceNumberStat
     uploadDurationMs: GovernanceNumberStat
     problemAttempts: Array<{
@@ -280,6 +459,10 @@ interface GovernanceAnalytics {
       statusCode: number | null
       durationMs: number | null
       size: number | null
+      retryable: boolean | null
+      retryCount: number | null
+      maxRetries: number | null
+      nextRetryDelayMs: number | null
       latestAt: string
       ageMs: number | null
     }>
@@ -297,11 +480,34 @@ interface GovernanceAnalytics {
     byResourceTypeUsage: StorageUsageBreakdown[]
     byActionUsage: StorageUsageBreakdown[]
     trend: StorageUsageTrendPoint[]
+    policySummary: {
+      total: number
+      active: number
+      ok: number
+      warning: number
+      blocked: number
+      disabled: number
+      alerts: number
+      highestStoredUtilization: number
+      highestTrafficUtilization: number
+      highestOperationUtilization: number
+    }
+    policyRisks: StoragePolicyEvaluation[]
   }
   providers: GovernanceScopedAnalytics & {
     growth: GovernanceGrowth
+    usageSummary: {
+      events: number
+      requests: number
+      tokens: number
+    }
+    trend: Array<GovernanceTrendPoint & {
+      requests: number
+      tokens: number
+    }>
     byModel: GovernanceMetric[]
     byProviderType: GovernanceMetric[]
+    modelDistribution: ProviderModelDistributionItem[]
     quotaSummary: {
       total: number
       active: number
@@ -333,17 +539,16 @@ interface GovernanceAnalytics {
         requests: number | null
         tokens: number | null
       }
+      remaining: {
+        requests: number | null
+        tokens: number | null
+      }
+      overage: {
+        requests: number
+        tokens: number
+      }
     }>
-    leaderboard: Array<{
-      providerId: string
-      requests: number
-      tokens: number
-      quantity: number
-      uniqueActors: number
-      byUnit: Array<{ unit: string, quantity: number }>
-      byChannel: Array<{ channel: string, quantity: number }>
-      byModel: Array<{ model: string, tokens: number }>
-    }>
+    leaderboard: ProviderLeaderboardItem[]
   }
 }
 
@@ -396,6 +601,18 @@ interface StoragePolicyEvaluation {
     storedBytes: number | null
     trafficBytes: number | null
     operations: number | null
+  }
+  remaining: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  overage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    alertBytes: number
   }
 }
 
@@ -644,6 +861,19 @@ function emptyStorageAnalytics(): GovernanceAnalytics['storage'] {
     byResourceTypeUsage: [],
     byActionUsage: [],
     trend: [],
+    policySummary: {
+      total: 0,
+      active: 0,
+      ok: 0,
+      warning: 0,
+      blocked: 0,
+      disabled: 0,
+      alerts: 0,
+      highestStoredUtilization: 0,
+      highestTrafficUtilization: 0,
+      highestOperationUtilization: 0,
+    },
+    policyRisks: [],
   }
 }
 
@@ -660,13 +890,87 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
     default: () => ({
       days: summaryDays.value,
       generatedAt: '',
-      visits: { ...emptyScopedAnalytics(), growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 } },
+      dashboard: {
+        growth: {
+          userSignups: {
+            total: 0,
+            latestDate: null,
+            latestQuantity: 0,
+            cumulative: 0,
+            growthRate: 0,
+          },
+          searches: {
+            total: 0,
+            latestDate: null,
+            latestQuantity: 0,
+            growthRate: 0,
+            zeroResultRate: 0,
+            problemRate: 0,
+            selectionRate: 0,
+          },
+          pluginInstalls: {
+            total: 0,
+            latestDate: null,
+            latestQuantity: 0,
+            growthRate: 0,
+          },
+          providerUsage: {
+            requests: 0,
+            tokens: 0,
+            latestDate: null,
+            latestRequests: 0,
+            latestTokens: 0,
+          },
+          uploads: {
+            latestDate: null,
+            latestStarted: 0,
+            latestCompleted: 0,
+            latestFailed: 0,
+            failureRate: 0,
+            stuckRate: 0,
+          },
+        },
+        leaderboards: {
+          hotPlugins: [],
+          topModels: [],
+          topProviders: [],
+        },
+        riskSummary: {
+          uploadProblems: 0,
+          storageAlerts: 0,
+          storageBlockedPolicies: 0,
+          notificationRisks: 0,
+          notificationFailedDeliveries: 0,
+          providerQuotaBlocked: 0,
+          providerQuotaWarning: 0,
+        },
+        trends: {
+          userGrowth: [],
+          searches: [],
+          pluginInstalls: [],
+          providerUsage: [],
+          uploadStatus: [],
+        },
+      },
+      visits: {
+        ...emptyScopedAnalytics(),
+        growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
+        trend: [],
+        heatmap: [],
+        byRoute: [],
+        byPage: [],
+        bySurface: [],
+        byReferrer: [],
+        byLocalHour: [],
+        byLocalTimeSlot: [],
+      },
       users: {
         ...emptyScopedAnalytics(),
         growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
         signups: 0,
         signupGrowth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
         signupTrend: [],
+        signupGrowthTrend: [],
         heatmap: [],
         byAction: [],
         bySource: [],
@@ -700,6 +1004,14 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byContextTag: [],
         byLocalHour: [],
         byLocalDayOfWeek: [],
+        byLocalTimeSlot: [],
+        bySelectedProvider: [],
+        bySelectedCategory: [],
+        bySelectedPluginId: [],
+        bySelectedRankBucket: [],
+        byResultCountBucket: [],
+        byFirstResultLatencyBucket: [],
+        byTotalDurationBucket: [],
         byCountry: [],
         byRegion: [],
         byTimezone: [],
@@ -708,6 +1020,20 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           withoutFilters: 0,
           filterRate: 0,
         },
+        selectionSummary: {
+          selected: 0,
+          selectionRate: 0,
+        },
+        reliabilitySummary: {
+          total: 0,
+          zeroResult: 0,
+          providerErrors: 0,
+          providerTimeouts: 0,
+          problemSearches: 0,
+          zeroResultRate: 0,
+          problemRate: 0,
+        },
+        reliabilityTrend: [],
         latency: {
           firstResultMs: emptyNumberStat(),
           totalDurationMs: emptyNumberStat(),
@@ -747,12 +1073,32 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byFailureReason: [],
         byStatusCode: [],
         bySurface: [],
+        retrySummary: {
+          retryableFailures: 0,
+          nonRetryableFailures: 0,
+          scheduledRetries: 0,
+          exhaustedFailures: 0,
+          retryCount: emptyNumberStat(),
+          nextRetryDelayMs: emptyNumberStat(),
+        },
+        byRetryDisposition: [],
+        statusTrend: [],
+        retryTrend: [],
         uploadSize: emptyNumberStat(),
         uploadDurationMs: emptyNumberStat(),
         problemAttempts: [],
       },
       notifications: {
         ...emptyScopedAnalytics(),
+        channelSummary: {
+          total: 0,
+          enabled: 0,
+          disabled: 0,
+          unsupported: 0,
+          credentialMissing: 0,
+          credentialed: 0,
+        },
+        channelRisks: [],
         deliveries: {
           total: 0,
           planned: 0,
@@ -768,6 +1114,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byAdapter: [],
         byReason: [],
         byNotificationAction: [],
+        deliveryTrend: [],
         providerHealth: [],
         browserPushSubscriptions: {
           total: 0,
@@ -782,8 +1129,15 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
       providers: {
         ...emptyScopedAnalytics(),
         growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
+        usageSummary: {
+          events: 0,
+          requests: 0,
+          tokens: 0,
+        },
+        trend: [],
         byModel: [],
         byProviderType: [],
+        modelDistribution: [],
         quotaSummary: {
           total: 0,
           active: 0,
@@ -922,10 +1276,25 @@ const storageProfiles = computed(() => storagePoliciesData.value?.profiles ?? []
 const selectedStorageProfile = computed(() => storageProfiles.value.find(profile => profile.id === storageForm.profileId) ?? null)
 const storageCredentials = computed(() => storageCredentialsData.value?.credentials ?? [])
 const notificationCredentials = computed(() => notificationCredentialsData.value?.credentials ?? [])
+const storagePolicyPeakUtilization = computed(() => Math.max(
+  analyticsData.value.storage.policySummary.highestStoredUtilization,
+  analyticsData.value.storage.policySummary.highestTrafficUtilization,
+  analyticsData.value.storage.policySummary.highestOperationUtilization,
+))
 const providerQuotaPeakUtilization = computed(() => Math.max(
   analyticsData.value.providers.quotaSummary.highestRequestUtilization,
   analyticsData.value.providers.quotaSummary.highestTokenUtilization,
 ))
+const dashboardRiskTotal = computed(() => {
+  const risk = analyticsData.value.dashboard.riskSummary
+  return risk.uploadProblems
+    + risk.storageAlerts
+    + risk.storageBlockedPolicies
+    + risk.notificationRisks
+    + risk.notificationFailedDeliveries
+    + risk.providerQuotaBlocked
+    + risk.providerQuotaWarning
+})
 const groupedConfigs = computed(() => ({
   analytics: configs.value.filter(item => item.configType === 'analytics_collection'),
   storage: configs.value.filter(item => item.configType === 'storage_channel'),
@@ -1203,6 +1572,13 @@ function formatDate(value: string): string {
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : value
 }
 
+function formatShortDate(value: string): string {
+  if (!value)
+    return '-'
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleDateString() : value
+}
+
 function configTypeLabel(type: GovernanceConfigType): string {
   if (type === 'analytics_collection')
     return t('dashboard.governance.types.analytics', 'Analytics')
@@ -1261,6 +1637,12 @@ function formatStorageAlertValue(alert: StoragePolicyAlert, value: number | null
   return alert.metric === 'operations' ? formatNumber(value) : formatBytes(value)
 }
 
+function formatStorageBudgetValue(value: number | null, unit: 'bytes' | 'operations'): string {
+  if (value == null)
+    return '-'
+  return unit === 'operations' ? formatNumber(value) : formatBytes(value)
+}
+
 function notificationDeliveryTone(status: NotificationDeliveryStatus): StatusTone {
   if (status === 'sent')
     return 'success'
@@ -1269,6 +1651,30 @@ function notificationDeliveryTone(status: NotificationDeliveryStatus): StatusTon
   if (status === 'skipped')
     return 'warning'
   return 'info'
+}
+
+function notificationChannelTone(status: NotificationChannelRiskStatus): StatusTone {
+  if (status === 'warning')
+    return 'warning'
+  if (status === 'disabled')
+    return 'muted'
+  return 'success'
+}
+
+function notificationChannelLabel(status: NotificationChannelRiskStatus): string {
+  if (status === 'warning')
+    return t('dashboard.governance.analytics.notificationChannelWarning', 'Warning')
+  if (status === 'disabled')
+    return t('dashboard.governance.analytics.notificationChannelDisabled', 'Disabled')
+  return t('dashboard.governance.analytics.notificationChannelOk', 'OK')
+}
+
+function notificationChannelCredentialLabel(channel: { credentialRequired: boolean, hasCredentialRef: boolean }): string {
+  if (!channel.credentialRequired)
+    return t('dashboard.governance.analytics.notificationChannelCredentialNotRequired', 'no credential required')
+  return channel.hasCredentialRef
+    ? t('dashboard.governance.analytics.notificationChannelCredentialBound', 'credentialRef bound')
+    : t('dashboard.governance.analytics.notificationChannelCredentialMissing', 'credentialRef missing')
 }
 
 function formatRatio(value: number | null): string {
@@ -1355,6 +1761,132 @@ function formatRatio(value: number | null): string {
         </span>
       </div>
 
+      <div class="mt-5 rounded-xl border border-black/[0.06] bg-black/[0.015] p-4 dark:border-white/[0.08] dark:bg-white/[0.025]">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-semibold text-black dark:text-white">
+              {{ t('dashboard.governance.analytics.operationsDashboard', 'Operations dashboard') }}
+            </h3>
+            <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.analytics.operationsDashboardHint', 'Growth, leaderboard, risk, token, and model distribution signals for daily review.') }}
+            </p>
+          </div>
+          <TxStatusBadge
+            :text="dashboardRiskTotal ? t('dashboard.governance.analytics.dashboardRiskWatch', 'Risk watch') : t('dashboard.governance.analytics.dashboardRiskClear', 'Clear')"
+            size="sm"
+            :status="dashboardRiskTotal ? 'warning' : 'success'"
+          />
+        </div>
+
+        <div class="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardUserGrowth', 'User growth') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                +{{ formatNumber(analyticsData.dashboard.growth.userSignups.latestQuantity) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.dashboard.growth.userSignups.cumulative) }} total · {{ formatDelta(analyticsData.dashboard.growth.userSignups.growthRate) }} · {{ formatShortDate(analyticsData.dashboard.growth.userSignups.latestDate || '') }}
+              </p>
+            </div>
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardSearchTrend', 'Search trend') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.dashboard.growth.searches.latestQuantity) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ formatPercent(analyticsData.dashboard.growth.searches.selectionRate) }} selected · {{ formatPercent(analyticsData.dashboard.growth.searches.problemRate) }} problem
+              </p>
+            </div>
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardPluginInstalls', 'Plugin installs') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.dashboard.growth.pluginInstalls.latestQuantity) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.dashboard.growth.pluginInstalls.total) }} total · {{ formatDelta(analyticsData.dashboard.growth.pluginInstalls.growthRate) }}
+              </p>
+            </div>
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardTokens', 'Tokens') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.dashboard.growth.providerUsage.tokens) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.dashboard.growth.providerUsage.requests) }} req · {{ formatNumber(analyticsData.dashboard.growth.providerUsage.latestTokens) }} latest
+              </p>
+            </div>
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardUploadStatus', 'Upload status') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(analyticsData.dashboard.growth.uploads.latestCompleted) }}/{{ formatNumber(analyticsData.dashboard.growth.uploads.latestStarted) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ formatPercent(analyticsData.dashboard.growth.uploads.failureRate) }} failed · {{ formatPercent(analyticsData.dashboard.growth.uploads.stuckRate) }} stuck
+              </p>
+            </div>
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardRiskTotal', 'Risk total') }}
+              </p>
+              <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+                {{ formatNumber(dashboardRiskTotal) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.dashboard.riskSummary.storageAlerts) }} storage · {{ formatNumber(analyticsData.dashboard.riskSummary.providerQuotaWarning + analyticsData.dashboard.riskSummary.providerQuotaBlocked) }} quota
+              </p>
+            </div>
+          </div>
+
+          <div class="grid gap-3">
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <p class="font-semibold text-black dark:text-white">
+                  {{ t('dashboard.governance.analytics.dashboardHotPlugins', 'Hot dashboard') }}
+                </p>
+                <span class="text-black/40 dark:text-white/40">{{ formatNumber(analyticsData.dashboard.leaderboards.hotPlugins.length) }}</span>
+              </div>
+              <div class="mt-2 grid gap-2">
+                <div v-for="item in analyticsData.dashboard.leaderboards.hotPlugins.slice(0, 3)" :key="`dashboard-plugin:${item.pluginId}`" class="flex items-center justify-between gap-3">
+                  <span class="truncate text-black/60 dark:text-white/60">{{ item.pluginId }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatNumber(item.hotScore) }} hot</span>
+                </div>
+                <p v-if="analyticsData.dashboard.leaderboards.hotPlugins.length === 0" class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.dashboardHotPluginsEmpty', 'No plugin leaderboard yet.') }}
+                </p>
+              </div>
+            </div>
+            <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <p class="font-semibold text-black dark:text-white">
+                  {{ t('dashboard.governance.analytics.dashboardModelDistribution', 'Model distribution') }}
+                </p>
+                <span class="text-black/40 dark:text-white/40">{{ formatNumber(analyticsData.dashboard.leaderboards.topModels.length) }}</span>
+              </div>
+              <div class="mt-2 grid gap-2">
+                <div v-for="item in analyticsData.dashboard.leaderboards.topModels.slice(0, 3)" :key="`dashboard-model:${item.model}`" class="flex items-center justify-between gap-3">
+                  <span class="truncate text-black/60 dark:text-white/60">{{ item.model }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatNumber(item.tokens) }} tok</span>
+                </div>
+                <p v-if="analyticsData.dashboard.leaderboards.topModels.length === 0" class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.dashboardModelDistributionEmpty', 'No model usage yet.') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
@@ -1376,6 +1908,26 @@ function formatRatio(value: number | null): string {
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             {{ formatDelta(analyticsData.users.signupGrowth.eventGrowthRate) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+          <p class="apple-section-title">
+            {{ t('dashboard.governance.analytics.userGrowthTrend', 'User growth trend') }}
+          </p>
+          <div v-if="analyticsData.users.signupGrowthTrend.length" class="mt-3 space-y-2">
+            <div
+              v-for="item in analyticsData.users.signupGrowthTrend.slice(-3)"
+              :key="`user-growth:${item.date}`"
+              class="flex items-center justify-between gap-3 text-xs"
+            >
+              <span class="text-black/45 dark:text-white/45">{{ formatShortDate(item.date) }}</span>
+              <span class="font-medium text-black dark:text-white">
+                +{{ formatNumber(item.quantity) }} · {{ t('dashboard.governance.analytics.userGrowthTotal', 'total') }} {{ formatNumber(item.cumulative) }} · {{ formatDelta(item.growthRate) }}
+              </span>
+            </div>
+          </div>
+          <p v-else class="mt-3 text-xs text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.analytics.userGrowthEmpty', 'No signup growth trend yet.') }}
           </p>
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
@@ -1416,15 +1968,53 @@ function formatRatio(value: number | null): string {
             {{ t('dashboard.governance.analytics.providerTokens', 'Provider tokens') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-            {{ formatNumber(analyticsData.providers.leaderboard.reduce((sum, item) => sum + item.tokens, 0)) }}
+            {{ formatNumber(analyticsData.providers.usageSummary.tokens) }}
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-            {{ formatDelta(analyticsData.providers.growth.eventGrowthRate) }}
+            {{ formatNumber(analyticsData.providers.usageSummary.requests) }} req · {{ formatDelta(analyticsData.providers.growth.eventGrowthRate) }}
           </p>
         </div>
       </div>
 
       <div class="mt-5 grid gap-4 lg:grid-cols-2">
+        <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
+          <h3 class="text-sm font-semibold text-black dark:text-white">
+            {{ t('dashboard.governance.analytics.visitHotspot', 'Visit hotspot') }}
+          </h3>
+          <div class="mt-3 grid gap-2 text-sm">
+            <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitTotal', 'Visits') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.visits.totalEvents) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitActors', 'Actors') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.visits.uniqueActors) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitGrowth', 'Growth') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatDelta(analyticsData.visits.growth.eventGrowthRate) }}</span>
+              </div>
+            </div>
+            <div v-for="item in analyticsData.visits.byRoute.slice(0, 5)" :key="`visit-route:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitRoute', 'Route') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.visits.bySurface.slice(0, 4)" :key="`visit-surface:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitSurface', 'Surface') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.visits.byLocalTimeSlot.slice(0, 4)" :key="`visit-slot:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitLocalTimeSlot', 'Local time') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.visits.trend.slice(-3)" :key="`visit-trend:${item.date}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ formatShortDate(item.date) }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }} visits · {{ formatNumber(item.uniqueActors) }} actors</span>
+            </div>
+          </div>
+        </div>
+
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
             {{ t('dashboard.governance.analytics.searchBreakdown', 'Search context') }}
@@ -1447,6 +2037,26 @@ function formatRatio(value: number | null): string {
                 <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchResults', 'Avg results') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.resultStats.resultCount.average) }}</span>
               </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchZeroResultRate', 'Zero-result rate') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.reliabilitySummary.zeroResultRate) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchProblemRate', 'Problem rate') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.reliabilitySummary.problemRate) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchSelectionRate', 'Selection rate') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.selectionSummary.selectionRate) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchProviderProblems', 'Provider problems') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.reliabilitySummary.providerErrors) }} err · {{ formatNumber(analyticsData.searches.reliabilitySummary.providerTimeouts) }} timeout</span>
+              </div>
+            </div>
+            <div v-for="item in analyticsData.searches.reliabilityTrend.slice(-3)" :key="`search-reliability:${item.date}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.zeroResult) }} zero · {{ formatNumber(item.providerErrors + item.providerTimeouts) }} provider</span>
             </div>
             <div v-for="item in analyticsData.searches.byHour.slice(0, 6)" :key="`hour:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="text-black/60 dark:text-white/60">{{ item.key }}:00 UTC</span>
@@ -1454,6 +2064,14 @@ function formatRatio(value: number | null): string {
             </div>
             <div v-for="item in analyticsData.searches.byLocalHour.slice(0, 6)" :key="`local-hour:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalHour', 'Local') }} {{ item.key }}:00</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byLocalTimeSlot.slice(0, 4)" :key="`local-slot:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalTimeSlot', 'Local time slot') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byLocalDayOfWeek.slice(0, 7)" :key="`local-weekday:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalWeekday', 'Local weekday') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byContextAppCategory.slice(0, 4)" :key="`context-app:${item.key}`" class="flex items-center justify-between gap-3">
@@ -1467,6 +2085,34 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.searches.byUserPreferenceMode.slice(0, 4)" :key="`preference:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.bySelectedRankBucket.slice(0, 4)" :key="`selected-rank:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchSelectedRank', 'Selected rank') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byResultCountBucket.slice(0, 4)" :key="`result-count-bucket:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchResultBuckets', 'Result count') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byFirstResultLatencyBucket.slice(0, 4)" :key="`first-result-latency:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchFirstResultLatency', 'First result') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.byTotalDurationBucket.slice(0, 4)" :key="`total-duration:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTotalDuration', 'Total duration') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.bySelectedProvider.slice(0, 4)" :key="`selected-provider:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchSelectedProvider', 'Selected provider') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.bySelectedCategory.slice(0, 4)" :key="`selected-category:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchSelectedCategory', 'Selected category') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.searches.bySelectedPluginId.slice(0, 4)" :key="`selected-plugin:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchSelectedPlugin', 'Selected plugin') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byPluginId.slice(0, 4)" :key="`search-plugin:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchPlugins', 'Plugin') }} · {{ item.key }}</span>
@@ -1550,6 +2196,24 @@ function formatRatio(value: number | null): string {
               <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadAvgDuration', 'Avg duration') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatDurationMs(analyticsData.uploads.uploadDurationMs.average) }}</span>
             </div>
+            <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRetryableFailures', 'Retryable failures') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.retryableFailures) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadScheduledRetries', 'Scheduled retries') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.scheduledRetries) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRetryExhausted', 'Retry exhausted') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.exhaustedFailures) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadNextRetryDelay', 'Avg next retry') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatDurationMs(analyticsData.uploads.retrySummary.nextRetryDelayMs.average) }}</span>
+              </div>
+            </div>
             <div v-for="item in analyticsData.uploads.byExtension.slice(0, 5)" :key="`ext:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
@@ -1574,6 +2238,18 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-red-500/80 dark:text-red-200/80">{{ item.key }}</span>
               <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
             </div>
+            <div v-for="item in analyticsData.uploads.byRetryDisposition.slice(0, 4)" :key="`upload-retry:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadRetryDisposition', 'Retry') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.uploads.statusTrend.slice(-3)" :key="`upload-trend:${item.date}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.completed) }}/{{ formatNumber(item.started) }} ok · {{ formatNumber(item.failed) }} failed · {{ formatBytes(item.bytes) }}</span>
+            </div>
+            <div v-for="item in analyticsData.uploads.retryTrend.slice(-3)" :key="`upload-retry-trend:${item.date}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted · {{ formatNumber(item.retryable) }} retryable</span>
+            </div>
             <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
               <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
                 {{ t('dashboard.governance.analytics.uploadProblemAttempts', 'Problem attempts') }}
@@ -1589,6 +2265,9 @@ function formatRatio(value: number | null): string {
                   </p>
                   <p class="mt-1 truncate text-red-600 dark:text-red-100">
                     {{ attempt.reason || attempt.contentType || 'pending' }} · {{ attempt.durationMs == null ? formatDurationMs(attempt.ageMs ?? 0) : formatDurationMs(attempt.durationMs) }}
+                  </p>
+                  <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.uploadRetryState', 'Retry state') }} · {{ attempt.retryable === null ? 'unknown' : attempt.retryable ? 'retryable' : 'not-retryable' }} · {{ attempt.retryCount ?? '-' }}/{{ attempt.maxRetries ?? '-' }} · {{ attempt.nextRetryDelayMs == null ? '-' : formatDurationMs(attempt.nextRetryDelayMs) }}
                   </p>
                 </div>
                 <p v-if="(analyticsData.uploads.problemAttempts ?? []).length === 0" class="text-xs text-black/45 dark:text-white/45">
@@ -1632,6 +2311,48 @@ function formatRatio(value: number | null): string {
           <p class="mt-3 text-xs text-black/45 dark:text-white/45">
             {{ formatNumber(analyticsData.storage.writes) }} writes · {{ formatNumber(analyticsData.storage.reads) }} reads · {{ formatNumber(analyticsData.storage.deletes) }} deletes
           </p>
+          <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storagePolicyUtilization', 'Policy utilization') }}
+              </p>
+              <span class="text-xs font-medium text-black/70 dark:text-white/70">{{ formatRatio(storagePolicyPeakUtilization) }}</span>
+            </div>
+            <div class="mt-3 grid grid-cols-4 gap-2 text-xs">
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storagePolicyActive', 'Active') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatNumber(analyticsData.storage.policySummary.active) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storagePolicyBlocked', 'Blocked') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatNumber(analyticsData.storage.policySummary.blocked) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storagePolicyWarning', 'Warning') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatNumber(analyticsData.storage.policySummary.warning) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storagePolicyAlerts', 'Alerts') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatNumber(analyticsData.storage.policySummary.alerts) }}
+                </p>
+              </div>
+            </div>
+          </div>
           <div class="mt-4 grid gap-2 text-sm">
             <div v-for="item in analyticsData.storage.byChannelUsage.slice(0, 5)" :key="`storage-channel:${item.key}`" class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
@@ -1658,6 +2379,25 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatBytes(item.storedBytes + item.trafficBytes) }} · {{ formatNumber(item.operations) }} ops</span>
             </div>
+            <div v-for="policy in analyticsData.storage.policyRisks.slice(0, 4)" :key="`storage-policy-risk:${policy.policyId}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+              <div class="flex items-center justify-between gap-2">
+                <span class="truncate font-medium text-black/70 dark:text-white/70">{{ policy.name }}</span>
+                <TxStatusBadge :text="storageEvaluationLabel(policy.status)" size="sm" :status="storageEvaluationTone(policy.status)" />
+              </div>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ policy.channel }} · {{ policy.provider || 'unknown' }} · {{ policy.reasons.join(', ') || '-' }}
+              </p>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
+                <span>{{ t('dashboard.governance.analytics.storagePolicyStored', 'Stored') }}: {{ formatRatio(policy.utilization.storedBytes) }}</span>
+                <span>{{ t('dashboard.governance.analytics.storagePolicyTraffic', 'Traffic') }}: {{ formatRatio(policy.utilization.trafficBytes) }}</span>
+                <span>{{ t('dashboard.governance.analytics.storagePolicyOps', 'Ops') }}: {{ formatRatio(policy.utilization.operations) }}</span>
+              </div>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
+                <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingStored', 'Remaining stored') }}: {{ formatStorageBudgetValue(policy.remaining.storedBytes, 'bytes') }}</span>
+                <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingTraffic', 'Remaining traffic') }}: {{ formatStorageBudgetValue(policy.remaining.trafficBytes, 'bytes') }}</span>
+                <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingOps', 'Remaining ops') }}: {{ formatStorageBudgetValue(policy.remaining.operations, 'operations') }}</span>
+              </div>
+            </div>
             <p v-if="analyticsData.storage.totalEvents === 0" class="text-sm text-black/45 dark:text-white/45">
               {{ t('dashboard.governance.analytics.storageEmpty', 'No storage usage yet.') }}
             </p>
@@ -1669,6 +2409,20 @@ function formatRatio(value: number | null): string {
             {{ t('dashboard.governance.analytics.notificationDelivery', 'Notification delivery') }}
           </h3>
           <div class="mt-3 grid gap-2 text-sm">
+            <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsEnabled', 'Enabled channels') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.enabled) }} / {{ formatNumber(analyticsData.notifications.channelSummary.total) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsCredentialMissing', 'Missing credential refs') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.credentialMissing) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsUnsupported', 'Unsupported adapters') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.unsupported) }}</span>
+              </div>
+            </div>
             <div v-for="item in analyticsData.notifications.byDeliveryStatus.slice(0, 3)" :key="`delivery:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
@@ -1680,6 +2434,22 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.notifications.byAdapter.slice(0, 4)" :key="`notification-adapter:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.notifications.deliveryTrend.slice(-3)" :key="`notification-trend:${item.date}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped</span>
+            </div>
+            <div v-for="channel in analyticsData.notifications.channelRisks.slice(0, 4)" :key="`notification-channel-risk:${channel.configId}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+              <div class="flex items-center justify-between gap-2">
+                <span class="truncate font-medium text-black/70 dark:text-white/70">{{ channel.name }}</span>
+                <TxStatusBadge :text="notificationChannelLabel(channel.status)" size="sm" :status="notificationChannelTone(channel.status)" />
+              </div>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ channel.channel }} · {{ channel.provider || 'default' }} · {{ channel.providerType || channel.adapter }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ channel.reasons.join(', ') || '-' }} · {{ notificationChannelCredentialLabel(channel) }}
+              </p>
             </div>
             <p v-if="analyticsData.notifications.deliveries.total === 0" class="text-sm text-black/45 dark:text-white/45">
               {{ t('dashboard.governance.analytics.notificationEmpty', 'No notification delivery audit yet.') }}
@@ -1851,8 +2621,16 @@ function formatRatio(value: number | null): string {
                       <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.usage.requests) }} / {{ quota.limits.maxRequests == null ? '-' : formatNumber(quota.limits.maxRequests) }} · {{ formatRatio(quota.utilization.requests) }}</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
+                      <span>{{ t('dashboard.governance.analytics.providerQuotaRemainingRequests', 'Remaining requests') }}</span>
+                      <span class="font-medium text-black dark:text-white">{{ quota.remaining.requests == null ? '-' : formatNumber(quota.remaining.requests) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
                       <span>{{ t('dashboard.governance.analytics.providerQuotaTokens', 'Tokens') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.usage.tokens) }} / {{ quota.limits.maxTokens == null ? '-' : formatNumber(quota.limits.maxTokens) }} · {{ formatRatio(quota.utilization.tokens) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                      <span>{{ t('dashboard.governance.analytics.providerQuotaRemainingTokens', 'Remaining tokens') }}</span>
+                      <span class="font-medium text-black dark:text-white">{{ quota.remaining.tokens == null ? '-' : formatNumber(quota.remaining.tokens) }}</span>
                     </div>
                   </div>
                 </div>
@@ -1862,6 +2640,20 @@ function formatRatio(value: number | null): string {
               </div>
             </div>
             <div class="mt-4 grid gap-3 md:grid-cols-2">
+              <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+                <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
+                  {{ t('dashboard.governance.analytics.providerTrend', 'Provider trend') }}
+                </h4>
+                <div class="mt-2 grid gap-2">
+                  <div v-for="item in analyticsData.providers.trend.slice(-3)" :key="`provider-trend:${item.date}`" class="flex items-center justify-between gap-3 text-xs">
+                    <span class="truncate text-black/55 dark:text-white/55">{{ item.date }}</span>
+                    <span class="font-medium text-black dark:text-white">{{ formatNumber(item.requests) }} req · {{ formatNumber(item.tokens) }} tok</span>
+                  </div>
+                  <p v-if="analyticsData.providers.trend.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerTrendEmpty', 'No provider usage trend yet.') }}
+                  </p>
+                </div>
+              </div>
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
                   {{ t('dashboard.governance.analytics.providerModels', 'Model distribution') }}
@@ -1876,7 +2668,33 @@ function formatRatio(value: number | null): string {
                   </p>
                 </div>
               </div>
-              <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+              <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
+                <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
+                  {{ t('dashboard.governance.analytics.providerModelBreakdown', 'Model usage breakdown') }}
+                </h4>
+                <div class="mt-2 grid gap-2">
+                  <div
+                    v-for="item in analyticsData.providers.modelDistribution.slice(0, 5)"
+                    :key="`provider-model-breakdown:${item.model}`"
+                    class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="truncate font-medium text-black dark:text-white">{{ item.model }}</span>
+                      <span class="shrink-0 text-black/55 dark:text-white/55">{{ formatNumber(item.tokens) }} tok · {{ formatNumber(item.requests) }} req</span>
+                    </div>
+                    <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                      {{ t('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byProvider[0]?.providerId || 'unknown' }} · {{ item.byChannel[0]?.channel || 'unknown' }}
+                    </p>
+                    <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                      {{ item.byProviderType.slice(0, 2).map(provider => `${provider.providerType}:${formatNumber(provider.quantity)}`).join(' · ') || 'unknown' }}
+                    </p>
+                  </div>
+                  <p v-if="analyticsData.providers.modelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerModelBreakdownEmpty', 'No model usage breakdown yet.') }}
+                  </p>
+                </div>
+              </div>
+              <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
                   {{ t('dashboard.governance.analytics.providerTypes', 'Provider types') }}
                 </h4>
@@ -2088,7 +2906,7 @@ function formatRatio(value: number | null): string {
                 {{ t('dashboard.governance.forms.notificationTitle', 'Notification channel') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.forms.notificationHint', 'Use provider for the channel instance and config.providerType for browser, Feishu, Resend, SMTP, or webhook adapters. Credentialed adapters use credentialRef only.') }}
+                {{ t('dashboard.governance.forms.notificationHint', 'Use provider for the channel instance and config.providerType for browser, Feishu/Lark, Resend, SendGrid, Mailgun, Postmark, SMTP relay, webhook, or Web Push adapters. Credentialed adapters use credentialRef only.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveConfig('notification_channel', notificationForm)">
@@ -2276,15 +3094,19 @@ function formatRatio(value: number | null): string {
               <div class="mt-3 grid gap-2 text-xs text-black/55 dark:text-white/55">
                 <div class="flex items-center justify-between gap-3">
                   <span>{{ t('dashboard.governance.storagePolicy.stored', 'Stored') }}</span>
-                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.storedBytes) }} · {{ formatRatio(item.utilization.storedBytes) }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.storedBytes) }} · {{ formatRatio(item.utilization.storedBytes) }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <span>{{ t('dashboard.governance.storagePolicy.traffic', 'Traffic') }}</span>
-                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.trafficBytes) }} · {{ formatRatio(item.utilization.trafficBytes) }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.trafficBytes) }} · {{ formatRatio(item.utilization.trafficBytes) }} · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
                   <span>{{ t('dashboard.governance.storagePolicy.operations', 'Operations') }}</span>
-                  <span class="font-medium text-black dark:text-white">{{ formatNumber(item.usage.operations) }} · {{ formatRatio(item.utilization.operations) }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatNumber(item.usage.operations) }} · {{ formatRatio(item.utilization.operations) }} · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }}</span>
+                </div>
+                <div v-if="item.overage.alertBytes > 0" class="flex items-center justify-between gap-3 text-amber-600 dark:text-amber-200">
+                  <span>{{ t('dashboard.governance.storagePolicy.alertOverage', 'Alert overage') }}</span>
+                  <span class="font-medium">{{ formatBytes(item.overage.alertBytes) }}</span>
                 </div>
               </div>
               <p v-if="item.reasons.length" class="mt-2 truncate text-xs text-amber-600 dark:text-amber-200">

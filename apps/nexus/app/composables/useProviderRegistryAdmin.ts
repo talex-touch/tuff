@@ -281,6 +281,21 @@ export function useProviderRegistryAdmin() {
     return panel
   }
 
+  function getProviderAdapterSummary(provider: ProviderRegistryRecord) {
+    const total = provider.capabilities.length
+    const ready = provider.capabilities.filter(item => item.adapter?.ready).length
+    const missingCapabilities = provider.capabilities
+      .filter(item => item.adapter && !item.adapter.ready)
+      .map(item => `${item.capability}:${item.adapter?.reason ?? 'adapter-missing'}`)
+
+    return {
+      total,
+      ready,
+      missing: Math.max(0, total - ready),
+      missingCapabilities,
+    }
+  }
+
   function getSceneEditPanel(scene: SceneRegistryRecord): SceneEditPanelState {
     let panel = sceneEditPanels[scene.id]
     if (!panel) {
@@ -962,6 +977,7 @@ export function useProviderRegistryAdmin() {
     getProviderCheckResult,
     getProviderEditPanel,
     getProviderQuotaPanel,
+    getProviderAdapterSummary,
     getProviderQuotaSummary,
     getHealthCheckActionHint,
     getHealthCheckReason,
