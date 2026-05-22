@@ -13,11 +13,12 @@
   "main": "index.js",
   "permissions": {
     "required": ["fs.read"],
-    "optional": ["clipboard.write"]
+    "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
     "fs.read": "只读扫描本机浏览器 Bookmarks JSON 文件用于搜索书签",
-    "clipboard.write": "复制书签 URL 到剪贴板"
+    "clipboard.write": "复制书签 URL 到剪贴板",
+    "network.internet": "使用默认浏览器打开本地浏览器书签 URL"
   },
   "features": [
     {

@@ -1,7 +1,7 @@
 # 04-implementation 状态索引
 
-> 更新时间: 2026-05-14  
-> 状态: 目录清点完成 / 持续维护  
+> 更新时间: 2026-05-23
+> 状态: 目录清点完成 / 持续维护
 > 用途: 只做实施文档的入口与有效状态判定；当前发布 gate 仍以 `../TODO.md`、`../01-project/CHANGES.md` 与对应专题 PRD 为准。
 
 ## 判定原则
@@ -15,6 +15,7 @@
 
 | 文件 | 有效状态 | 当前边界 / 下一动作 |
 | --- | --- | --- |
+| `ActiveGoalClosure-2026-05-23.md` | 当前参考 | 本轮 2.4.11 稳定化、插件 capability、open PR 与后续 Intelligence 小切片的执行顺序；每个点位仍需按分支/worktree、related-only commit、验证后合并。 |
 | `AssistantExperiment-VoiceFloatingBall-260223.md` | 历史参考 / 待重写 | 实验能力默认关闭；继续推进前需重写为当前 Assistant / OmniPanel 能力边界。 |
 | `CoreAppRefactor260111.md` | 历史参考 / 待重写 | 早期 CoreApp/Tuffex/utils 改造草案；当前实现以代码现状与 TODO 分波次债务为准。 |
 | `FileWorkerIdlePlan260111.md` | 历史参考 | Worker + Idle 设计已部分被启动异步化、FileProvider 后台 ready 与搜索性能治理吸收；剩余动作进入 Wave C / 搜索性能验收。 |

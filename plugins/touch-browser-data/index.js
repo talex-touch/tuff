@@ -8,6 +8,7 @@ const PLUGIN_NAME = 'touch-browser-data'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'emoji', value: '🌐' }
 const ACTION_ID = 'browser-data'
+const NETWORK_PERMISSION_ID = 'network.internet'
 const MAX_RESULTS = 30
 const MAX_PROFILES_PER_BROWSER = 8
 const SUPPORTED_BROWSERS = ['chrome', 'edge', 'brave', 'arc']
@@ -344,13 +345,33 @@ function searchBookmarks(bookmarks, keyword, limit = MAX_RESULTS) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
+  if (!permission?.check || !permission?.request)
     return true
   const hasPermission = await permission.check(permissionId)
   if (hasPermission)
     return true
   const granted = await permission.request(permissionId, reason)
   return Boolean(granted)
+}
+
+async function checkPermissionStatus(permissionId) {
+  if (!permission?.check)
+    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+
+  try {
+    const granted = Boolean(await permission.check(permissionId))
+    return granted
+      ? { granted: true, status: 'available', reason: '' }
+      : { granted: false, status: 'permission-missing', reason: `${permissionId.replace('.', '-')}-permission-required` }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-browser-data] Failed to check permission', error)
+    return { granted: false, status: 'permission-missing', reason: 'permission-check-failed' }
+  }
+}
+
+async function resolveNetworkOpenCapabilityState() {
+  return checkPermissionStatus(NETWORK_PERMISSION_ID)
 }
 
 function buildInfoItem({ id, featureId, title, subtitle }) {
@@ -363,11 +384,49 @@ function buildInfoItem({ id, featureId, title, subtitle }) {
     .build()
 }
 
-function buildBookmarkItem(featureId, bookmark, index) {
+function extractUrlHost(url) {
+  try {
+    return new URL(url).host
+  }
+  catch {
+    return ''
+  }
+}
+
+function buildNetworkOpenCapability({ featureId, bookmark, status = 'available', reason = '' }) {
+  return {
+    id: NETWORK_PERMISSION_ID,
+    type: 'network',
+    permission: NETWORK_PERMISSION_ID,
+    status,
+    ...(reason ? { reason } : {}),
+    audit: {
+      pluginName: PLUGIN_NAME,
+      featureId,
+      actionId: 'open-url',
+      operation: 'open-external-url',
+      source: 'bookmarks-json',
+      browserId: bookmark.browserId,
+      browserName: bookmark.browserName,
+      profile: bookmark.profile,
+      urlHost: extractUrlHost(bookmark.url),
+    },
+  }
+}
+
+function formatNetworkCapabilitySuffix(capabilityState) {
+  if (!capabilityState || capabilityState.status === 'available')
+    return ''
+  if (capabilityState.status === 'permission-missing')
+    return ' · 缺少 network.internet 权限'
+  return capabilityState.reason ? ` · ${capabilityState.reason}` : ''
+}
+
+function buildBookmarkItem(featureId, bookmark, index, networkCapabilityState = { status: 'available', reason: '' }) {
   return new TuffItemBuilder(`${featureId}-bookmark-${index}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(`${bookmark.browserName} · ${bookmark.title}`)
-    .setSubtitle(`${truncateText(bookmark.url, 72)} · ${bookmark.profile}${bookmark.folder ? ` · ${bookmark.folder}` : ''}`)
+    .setSubtitle(`${truncateText(bookmark.url, 72)} · ${bookmark.profile}${bookmark.folder ? ` · ${bookmark.folder}` : ''}${formatNetworkCapabilitySuffix(networkCapabilityState)}`)
     .setIcon(ICON)
     .setMeta({
       pluginName: PLUGIN_NAME,
@@ -378,6 +437,12 @@ function buildBookmarkItem(featureId, bookmark, index) {
         url: bookmark.url,
         title: bookmark.title,
       },
+      capability: buildNetworkOpenCapability({
+        featureId,
+        bookmark,
+        status: networkCapabilityState.status,
+        reason: networkCapabilityState.reason,
+      }),
     })
     .createAndAddAction('copy-url', 'copy', '复制 URL', bookmark.url)
     .build()
@@ -402,7 +467,7 @@ function buildDiagnosticsItem(featureId, diagnostics, itemCount) {
   })
 }
 
-function buildResultItems(featureId, query, scanResult) {
+function buildResultItems(featureId, query, scanResult, networkCapabilityState = { status: 'available', reason: '' }) {
   const parsed = parseQuery(query)
   const items = Array.isArray(scanResult?.items) ? scanResult.items : []
   const diagnostics = Array.isArray(scanResult?.diagnostics) ? scanResult.diagnostics : []
@@ -424,7 +489,7 @@ function buildResultItems(featureId, query, scanResult) {
     }))
   }
   else {
-    matched.forEach((bookmark, index) => resultItems.push(buildBookmarkItem(featureId, bookmark, index)))
+    matched.forEach((bookmark, index) => resultItems.push(buildBookmarkItem(featureId, bookmark, index, networkCapabilityState)))
   }
 
   resultItems.push(buildDiagnosticsItem(featureId, diagnostics, items.length))
@@ -450,8 +515,9 @@ const pluginLifecycle = {
 
       const parsed = parseQuery(query)
       const scanResult = scanBrowserBookmarks({ browserFilter: parsed.browser })
+      const networkCapabilityState = await resolveNetworkOpenCapabilityState()
       plugin.feature.clearItems()
-      plugin.feature.pushItems(buildResultItems(featureId, query, scanResult))
+      plugin.feature.pushItems(buildResultItems(featureId, query, scanResult, networkCapabilityState))
       return true
     }
     catch (error) {
@@ -480,15 +546,28 @@ const pluginLifecycle = {
 
     try {
       if (item.meta?.actionId === 'open-url') {
+        const canOpen = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开浏览器书签')
+        if (!canOpen) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'permission-denied',
+            message: '缺少 network.internet 权限',
+          }
+        }
+
         if (typeof openUrl !== 'function') {
           return {
             externalAction: true,
             success: false,
+            status: 'blocked',
+            reason: 'open-url-unavailable',
             message: '当前环境不支持打开外链',
           }
         }
-        openUrl(url)
-        return { externalAction: true }
+        await openUrl(url)
+        return { externalAction: true, status: 'started' }
       }
     }
     catch (error) {
@@ -507,6 +586,7 @@ module.exports = {
   __test: {
     browserDefinitions,
     buildBrowserSourceDiagnostics,
+    buildNetworkOpenCapability,
     buildResultItems,
     collectBookmarkNodes,
     dedupeBookmarks,
@@ -514,6 +594,7 @@ module.exports = {
     getAvailableBrowserNames,
     parseChromiumBookmarks,
     parseQuery,
+    resolveNetworkOpenCapabilityState,
     scanBrowserBookmarks,
     searchBookmarks,
   },
