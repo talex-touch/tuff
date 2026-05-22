@@ -33,6 +33,15 @@
   - Action execution now blocks unsafe empty/newline/null command payloads before permission prompts and returns explicit `started`, `blocked`, `failed`, or `cancelled` action status.
   - Validation: `node --test "plugins/touch-quick-actions/index.test.cjs"` passed.
 
+### fix(plugin): canonicalize quick actions execution payloads
+
+- `plugins/touch-quick-actions/index.js`
+- `plugins/touch-quick-actions/index.test.cjs`
+- `docs/plan-prd/TODO.md`
+  - Quick Actions item execution now resolves the requested action by id from the platform allowlist instead of trusting the item payload command.
+  - Injected or stale item payload commands are ignored before shell execution, keeping the previously added `safe-shell` and `system.shell` gates tied to canonical plugin actions.
+  - Validation: `node --test "plugins/touch-quick-actions/index.test.cjs"` passed.
+
 ### feat(nexus): summarize provider quota risk in governance analytics
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
