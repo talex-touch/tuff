@@ -35,6 +35,7 @@ const {
   getProviderEditPanel,
   getProviderQuotaPanel,
   getProviderQuotaSummary,
+  getProviderAdapterSummary,
   getHealthCheckActionHint,
   getHealthCheckReason,
   getProviderObservability,
@@ -374,9 +375,12 @@ const {
                     <span
                       v-for="capability in provider.capabilities"
                       :key="capability.id"
-                      class="rounded-full bg-black/[0.04] px-2 py-1 text-[11px] text-black/60 dark:bg-white/[0.08] dark:text-white/60"
+                      class="rounded-full px-2 py-1 text-[11px]"
+                      :class="capability.adapter?.ready
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+                        : 'bg-amber-500/10 text-amber-700 dark:text-amber-200'"
                     >
-                      {{ capability.capability }}
+                      {{ capability.capability }} · {{ capability.adapter?.ready ? t('dashboard.providerRegistry.adapter.ready', 'adapter ready') : t('dashboard.providerRegistry.adapter.missing', 'adapter missing') }}
                     </span>
                   </div>
                   <div class="mt-3 grid gap-2 text-xs lg:grid-cols-3">
@@ -431,6 +435,28 @@ const {
                         · {{ getProviderQuotaSummary(provider.id).windowDays }}d
                       </p>
                     </div>
+                  </div>
+                  <div
+                    v-if="getProviderAdapterSummary(provider).missing > 0"
+                    class="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-200"
+                  >
+                    <div class="flex flex-wrap items-center gap-2">
+                      <TxStatusBadge
+                        :text="t('dashboard.providerRegistry.adapter.missing', 'adapter missing')"
+                        status="warning"
+                        size="sm"
+                      />
+                      <span>
+                        {{ t('dashboard.providerRegistry.adapter.summary', {
+                          ready: getProviderAdapterSummary(provider).ready,
+                          total: getProviderAdapterSummary(provider).total,
+                          missing: getProviderAdapterSummary(provider).missing,
+                        }, `${getProviderAdapterSummary(provider).ready}/${getProviderAdapterSummary(provider).total} adapter-ready, ${getProviderAdapterSummary(provider).missing} missing`) }}
+                      </span>
+                    </div>
+                    <p class="mt-1 text-amber-700/80 dark:text-amber-100/80">
+                      {{ getProviderAdapterSummary(provider).missingCapabilities.join(', ') }}
+                    </p>
                   </div>
                   <div
                     class="mt-3 rounded-xl px-3 py-2 text-xs"

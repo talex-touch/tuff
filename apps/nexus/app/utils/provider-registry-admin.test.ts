@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createProviderQuotaPanel,
+  createProviderEditPanel,
   filterProvidersByObservability,
   filterScenesByObservability,
   filterHealthCheckEntries,
@@ -115,6 +116,45 @@ function quotaRecord(overrides: Partial<ProviderQuotaRecord>): ProviderQuotaReco
     ...overrides,
   }
 }
+
+describe('provider registry adapter readiness helpers', () => {
+  it('preserves capability adapter readiness metadata for provider edit panels', () => {
+    const provider = providerRecord({
+      capabilities: [
+        {
+          id: 'cap-text',
+          providerId: 'provider-a',
+          capability: 'text.translate',
+          schemaRef: 'nexus://schemas/provider/text-translate.v1',
+          metering: { unit: 'character' },
+          constraints: null,
+          metadata: null,
+          adapter: {
+            providerId: 'provider-a',
+            vendor: 'openai',
+            capability: 'text.translate',
+            ready: false,
+            matchedKey: null,
+            fallbackKey: 'openai:text.translate',
+            reason: 'adapter-missing',
+          },
+          createdAt: '2026-05-17T01:00:00.000Z',
+          updatedAt: '2026-05-17T01:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(provider.capabilities[0]?.adapter).toMatchObject({
+      ready: false,
+      reason: 'adapter-missing',
+      fallbackKey: 'openai:text.translate',
+    })
+    expect(createProviderEditPanel(provider).capabilities[0]).toMatchObject({
+      capability: 'text.translate',
+      meteringText: '{\n  "unit": "character"\n}',
+    })
+  })
+})
 
 describe('provider registry quota helpers', () => {
   it('creates default quota panel state for unconfigured providers', () => {

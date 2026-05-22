@@ -2,6 +2,7 @@ import type { ProviderRegistryOwnerScope, ProviderRegistryStatus, ProviderRegist
 import { getQuery } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { listProviderRegistryEntries } from '../../../utils/providerRegistryStore'
+import { resolveSceneCapabilityAdapterReadiness } from '../../../utils/sceneCapabilityAdapterRegistry'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -13,5 +14,13 @@ export default defineEventHandler(async (event) => {
     ownerScope: typeof query.ownerScope === 'string' ? query.ownerScope as ProviderRegistryOwnerScope : undefined,
   })
 
-  return { providers }
+  const providersWithAdapterReadiness = providers.map(provider => ({
+    ...provider,
+    capabilities: provider.capabilities.map(capability => ({
+      ...capability,
+      adapter: resolveSceneCapabilityAdapterReadiness(provider, capability.capability),
+    })),
+  }))
+
+  return { providers: providersWithAdapterReadiness }
 })

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearSceneCapabilityAdaptersForTest,
   registerSceneCapabilityAdapter,
+  resolveSceneCapabilityAdapterReadiness,
   resetSceneCapabilityAdaptersForTest,
   runSceneOrchestrator,
 } from './sceneOrchestrator'
@@ -188,6 +189,49 @@ describe('runSceneOrchestrator', () => {
     storeMocks.getProviderRegistryEntry.mockResolvedValue(provider())
     ledgerMocks.recordProviderUsageLedger.mockResolvedValue([])
     healthMocks.getLatestProviderHealthChecks.mockResolvedValue(new Map())
+  })
+
+  it('exposes provider capability adapter readiness for registry convergence', () => {
+    const exactProvider = provider()
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', async () => ({ output: null }))
+
+    expect(resolveSceneCapabilityAdapterReadiness(exactProvider, 'text.translate')).toEqual({
+      providerId: exactProvider.id,
+      vendor: 'tencent-cloud',
+      capability: 'text.translate',
+      ready: true,
+      matchedKey: 'tencent-cloud:text.translate',
+      fallbackKey: null,
+      reason: 'adapter-ready',
+    })
+
+    clearSceneCapabilityAdaptersForTest()
+    registerSceneCapabilityAdapter('*:text.translate', async () => ({ output: null }))
+
+    expect(resolveSceneCapabilityAdapterReadiness(exactProvider, 'text.translate')).toEqual({
+      providerId: exactProvider.id,
+      vendor: 'tencent-cloud',
+      capability: 'text.translate',
+      ready: true,
+      matchedKey: '*:text.translate',
+      fallbackKey: 'tencent-cloud:text.translate',
+      reason: 'adapter-ready',
+    })
+
+    clearSceneCapabilityAdaptersForTest()
+
+    expect(resolveSceneCapabilityAdapterReadiness(exactProvider, 'text.translate')).toMatchObject({
+      ready: false,
+      matchedKey: null,
+      fallbackKey: 'tencent-cloud:text.translate',
+      reason: 'adapter-missing',
+    })
+    expect(resolveSceneCapabilityAdapterReadiness(exactProvider, 'image.translate')).toMatchObject({
+      ready: false,
+      matchedKey: null,
+      fallbackKey: null,
+      reason: 'provider-capability-missing',
+    })
   })
 
   it('dry run 只解析 scene、provider 与 strategy，不调用 adapter', async () => {

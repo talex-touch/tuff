@@ -13,6 +13,18 @@
 
 ## 2026-05-21
 
+### feat(nexus): expand provider governance controls
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/sceneCapabilityAdapterRegistry.ts`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/server/api/dashboard/provider-registry/providers.get.ts`
+  - Data Governance now exposes operations dashboard summaries, search reliability/selection buckets, notification channel risks, storage policy remaining/overage budgets, provider usage trends, model distribution, and quota remaining/overage budgets.
+  - Provider Registry admin now surfaces capability adapter readiness and inline provider quota controls without loading execution adapters in the provider listing path.
+  - Scene capability adapter matching is centralized in a small registry so readiness reporting and execution share the same provider/capability resolution rules.
+  - Focused coverage verifies governance analytics contracts, provider quota UI helpers/API shape, telemetry sanitization, and Scene adapter readiness.
+
 ### feat(nexus): retry transient object upload writes
 
 - `apps/nexus/server/utils/storageObjectStore.ts`
