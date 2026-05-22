@@ -136,6 +136,30 @@ function readStatusCode(error: unknown, fallback?: number | null): number | null
   return null
 }
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function readUploadRetryMetadata(error: unknown): Record<string, unknown> {
+  const data = readRecord(readRecord(error)?.data)
+  const retry = readRecord(data?.uploadRetry)
+  if (!retry)
+    return {}
+
+  return {
+    retryable: typeof retry.retryable === 'boolean' ? retry.retryable : undefined,
+    retryCount: typeof retry.retryCount === 'number' && Number.isFinite(retry.retryCount) ? retry.retryCount : undefined,
+    maxRetries: typeof retry.maxRetries === 'number' && Number.isFinite(retry.maxRetries) ? retry.maxRetries : undefined,
+    nextRetryDelayMs: typeof retry.nextRetryDelayMs === 'number' && Number.isFinite(retry.nextRetryDelayMs) ? retry.nextRetryDelayMs : undefined,
+    storageChannel: typeof retry.storageChannel === 'string' ? retry.storageChannel : undefined,
+    storageProvider: typeof retry.storageProvider === 'string' ? retry.storageProvider : undefined,
+    storageOperation: typeof retry.storageOperation === 'string' ? retry.storageOperation : undefined,
+    storageStatusCode: typeof retry.storageStatusCode === 'number' && Number.isFinite(retry.storageStatusCode) ? retry.storageStatusCode : undefined,
+  }
+}
+
 function buildMetadata(
   context: UploadGovernanceContext,
   overrides: Record<string, unknown> = {},
@@ -252,6 +276,7 @@ export async function failUploadGovernance(
     unit: 'file',
     quantity: 1,
     metadata: buildMetadata(context, {
+      ...readUploadRetryMetadata(error),
       ...input.metadata,
       reason: sanitizeReason(error, input.reason),
       statusCode,
