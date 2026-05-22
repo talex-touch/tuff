@@ -87,6 +87,7 @@ const {
   buildShellCapability,
   formatShellStatusSubtitle,
   resolveActions,
+  resolveActionForExecution,
   resolveShellCapabilityState,
   runActionWithGuards,
   runShellCommand,
@@ -200,6 +201,17 @@ test('runActionWithGuards starts a safe-shell action', async () => {
   assert.equal(calls[0].options.windowsHide, true)
 })
 
+test('resolveActionForExecution returns canonical action command from the platform allowlist', () => {
+  const action = resolveActionForExecution({
+    id: 'lock-screen',
+    name: '篡改动作',
+    command: 'echo injected',
+  }, 'darwin')
+
+  assert.equal(action.id, 'lock-screen')
+  assert.equal(action.command, 'pmset displaysleepnow')
+})
+
 test('runShellCommand reports non-zero exit as execution failure', async () => {
   setSpawnShellCommandForTest(() => createChild({ code: 2 }))
 
@@ -236,4 +248,32 @@ test('onItemAction returns explicit blocked result for invalid action payload', 
   assert.equal(result.status, 'blocked')
   assert.equal(result.reason, 'invalid-action')
   assert.equal(result.success, false)
+})
+
+test('onItemAction ignores injected shell command and executes the canonical action', async () => {
+  const calls = []
+  setSpawnShellCommandForTest((command, options) => {
+    calls.push({ command, options })
+    return createChild()
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'quick-actions',
+      actionId: 'run-action',
+      payload: {
+        action: {
+          id: 'lock-screen',
+          name: '锁定屏幕',
+          command: 'echo injected',
+        },
+      },
+    },
+  })
+
+  assert.equal(result.externalAction, true)
+  assert.equal(result.status, 'started')
+  assert.equal(result.success, true)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].command, 'pmset displaysleepnow')
 })
