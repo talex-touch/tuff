@@ -66,6 +66,7 @@ const filter = ref<NotificationFilter>('unread')
 const notifications = ref<BrowserNotificationItem[]>([])
 const browserPushSubscriptions = ref<BrowserPushSubscriptionSummary[]>([])
 const unreadCount = ref(0)
+const navigationUnreadCount = useState<number>('dashboard-notification-unread-count', () => 0)
 const generatedAt = ref('')
 const loading = ref(false)
 const actionLoading = ref(false)
@@ -334,6 +335,7 @@ async function loadNotifications() {
     })
     notifications.value = data.notifications
     unreadCount.value = data.unreadCount
+    navigationUnreadCount.value = data.unreadCount
     generatedAt.value = data.generatedAt
   }
   catch (caught) {

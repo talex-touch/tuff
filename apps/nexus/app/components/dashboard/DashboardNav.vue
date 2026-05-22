@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
-import { useTypedFetch } from '~/utils/request'
+import { requestJson, useTypedFetch } from '~/utils/request'
 
 const { t } = useI18n()
 const route = useRoute()
 const { user, refresh, isAuthenticated } = useAuthUser()
 const runtimeConfig = useRuntimeConfig()
+const notificationUnreadCount = useState<number>('dashboard-notification-unread-count', () => 0)
 const { data: teamData, refresh: refreshTeamData } = useTypedFetch<{
   team?: {
     type?: string
@@ -28,9 +29,37 @@ const revalidateTeam = () => {
   void refreshTeamData()
 }
 
+function setNotificationUnreadCount(value: unknown) {
+  const count = Number(value)
+  notificationUnreadCount.value = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
+}
+
+async function refreshNotificationUnreadCount() {
+  if (!import.meta.client)
+    return
+  if (!isAuthenticated.value) {
+    setNotificationUnreadCount(0)
+    return
+  }
+
+  try {
+    const data = await requestJson<{ unreadCount?: unknown }>('/api/dashboard/notifications/inbox', {
+      query: {
+        status: 'unread',
+        limit: 1,
+      },
+    })
+    setNotificationUnreadCount(data.unreadCount)
+  }
+  catch {
+    // The notifications page surfaces full inbox errors.
+  }
+}
+
 onMounted(() => {
   revalidateUser()
   revalidateTeam()
+  void refreshNotificationUnreadCount()
 })
 
 watch(
@@ -40,6 +69,8 @@ watch(
       revalidateUser()
     if (path.startsWith('/dashboard/team') || path.startsWith('/dashboard/oauth'))
       revalidateTeam()
+    if (path.startsWith('/dashboard'))
+      void refreshNotificationUnreadCount()
   },
 )
 
@@ -48,6 +79,10 @@ watch(
   (authed) => {
     if (authed) {
       revalidateTeam()
+      void refreshNotificationUnreadCount()
+    }
+    else {
+      setNotificationUnreadCount(0)
     }
   },
   { immediate: true },
@@ -61,6 +96,10 @@ const isTeamAdmin = computed(() => {
 })
 const canManageOauthApps = computed(() => isAdmin.value || isTeamAdmin.value)
 const riskControlEnabled = computed(() => runtimeConfig.public?.riskControl?.enabled === true)
+const notificationUnreadBadgeText = computed(() => notificationUnreadCount.value > 99 ? '99+' : String(notificationUnreadCount.value))
+const notificationUnreadBadgeLabel = computed(() => t('dashboard.notifications.unreadBadgeLabel', {
+  count: notificationUnreadCount.value,
+}))
 
 const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
@@ -291,14 +330,14 @@ const activeSection = computed(() => {
         <li v-for="item in workspaceMenuItems" :key="item.id">
           <NuxtLink
             :to="item.to"
-            class="dashboard-nav-link group w-full flex items-center rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
+            class="dashboard-nav-link group w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
             :class="activeSection === item.id ? 'dashboard-nav-link--active' : ''"
             role="option"
             :aria-selected="activeSection === item.id"
           >
-            <span class="flex items-center gap-3">
+            <span class="min-w-0 flex items-center gap-3">
               <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span>{{ item.label }}</span>
+              <span class="truncate">{{ item.label }}</span>
             </span>
           </NuxtLink>
         </li>
@@ -315,14 +354,21 @@ const activeSection = computed(() => {
         <li v-for="item in accountMenuItems" :key="item.id">
           <NuxtLink
             :to="item.to"
-            class="dashboard-nav-link group w-full flex items-center rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
+            class="dashboard-nav-link group w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
             :class="activeSection === item.id ? 'dashboard-nav-link--active' : ''"
             role="option"
             :aria-selected="activeSection === item.id"
           >
-            <span class="flex items-center gap-3">
+            <span class="min-w-0 flex items-center gap-3">
               <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span>{{ item.label }}</span>
+              <span class="truncate">{{ item.label }}</span>
+            </span>
+            <span
+              v-if="item.id === 'notifications' && notificationUnreadCount > 0"
+              class="dashboard-nav-unread-badge"
+              :aria-label="notificationUnreadBadgeLabel"
+            >
+              {{ notificationUnreadBadgeText }}
             </span>
           </NuxtLink>
         </li>
@@ -339,14 +385,14 @@ const activeSection = computed(() => {
         <li v-for="item in adminMenuItems" :key="item.id">
           <NuxtLink
             :to="item.to"
-            class="dashboard-nav-link group w-full flex items-center rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
+            class="dashboard-nav-link group w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
             :class="activeSection === item.id ? 'dashboard-nav-link--active' : ''"
             role="option"
             :aria-selected="activeSection === item.id"
           >
-            <span class="flex items-center gap-3">
+            <span class="min-w-0 flex items-center gap-3">
               <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-              <span>{{ item.label }}</span>
+              <span class="truncate">{{ item.label }}</span>
             </span>
           </NuxtLink>
         </li>
@@ -391,5 +437,21 @@ const activeSection = computed(() => {
 
 .dashboard-nav-link--active .dashboard-nav-icon {
   color: var(--tx-color-primary, #1BB5F4);
+}
+
+.dashboard-nav-unread-badge {
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--tx-color-primary, #1BB5F4);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1;
 }
 </style>
