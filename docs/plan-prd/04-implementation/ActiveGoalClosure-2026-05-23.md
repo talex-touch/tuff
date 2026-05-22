@@ -1,7 +1,7 @@
 # 2.4.11 Active Goal Closure - 2026-05-23
 
-> 状态：当前参考  
-> 范围：记录本轮“按点开分支、分批提交、最终压缩文档”的持续收口目标与下一步执行顺序。  
+> 状态：当前参考
+> 范围：记录本轮“按点开分支、分批提交、最终压缩文档”的持续收口目标与下一步执行顺序。
 > 当前事实仍以 `../TODO.md` 与 `../01-project/CHANGES.md` 为准。
 
 ## Goal
@@ -46,4 +46,3 @@ git diff --check
 3. P0 继续 Transport retained aliases 与 CoreBox retained hide 相关验证，只在当前代码证据不足时补 focused tests。
 4. P0 继续剩余 shell/OS/network capability surface、secret backend、Windows/macOS 真机 evidence 与公共 npm 子包发布权限问题。
 5. P1 再推进插件与 Intelligence 增强：skills repository、Provider/Scene 能力、可配置本地工具入口（Codex / ClaudeCode / Gemini 等）必须走 typed SDK / capability gate，不抢占 `2.4.11` 稳定化资源。
-
