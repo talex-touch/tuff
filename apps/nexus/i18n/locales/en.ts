@@ -744,6 +744,7 @@ export default {
       },
     },
     notifications: {
+      unreadBadgeLabel: '{count} unread notifications',
       browser: {
         permissionGranted: 'Allowed',
         permissionDenied: 'Blocked',

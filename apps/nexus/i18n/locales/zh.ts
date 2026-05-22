@@ -743,6 +743,7 @@ export default {
       },
     },
     notifications: {
+      unreadBadgeLabel: '{count} 条未读通知',
       browser: {
         permissionGranted: '已允许',
         permissionDenied: '已阻止',
