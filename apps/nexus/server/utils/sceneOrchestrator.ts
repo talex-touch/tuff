@@ -11,6 +11,14 @@ import { getSceneRegistryEntry } from './sceneRegistryStore'
 import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
 import { convertUsd, getUsdRates } from './exchangeRateService'
+import {
+  clearSceneCapabilityAdapterRegistryForTest,
+  registerSceneCapabilityAdapterRegistryEntry,
+  resolveSceneCapabilityAdapterEntry,
+} from './sceneCapabilityAdapterRegistry'
+
+export type { SceneCapabilityAdapterRegistryReadiness as SceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
+export { resolveSceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
 
 export type SceneRunStatus = 'planned' | 'completed' | 'failed'
 export type SceneRunMode = 'dry_run' | 'execute'
@@ -129,8 +137,6 @@ interface SceneRunFailure {
   code: SceneRunErrorCode
   message: string
 }
-
-const sceneCapabilityAdapters = new Map<string, SceneCapabilityAdapter>()
 
 function normalizeTencentTranslateInput(input: unknown) {
   const record = input && typeof input === 'object' && !Array.isArray(input)
@@ -513,20 +519,15 @@ function registerDefaultSceneCapabilityAdapters() {
 registerDefaultSceneCapabilityAdapters()
 
 export function registerSceneCapabilityAdapter(key: string, adapter: SceneCapabilityAdapter): () => void {
-  const normalizedKey = normalizeAdapterKey(key)
-  sceneCapabilityAdapters.set(normalizedKey, adapter)
-  return () => {
-    if (sceneCapabilityAdapters.get(normalizedKey) === adapter)
-      sceneCapabilityAdapters.delete(normalizedKey)
-  }
+  return registerSceneCapabilityAdapterRegistryEntry(key, adapter)
 }
 
 export function clearSceneCapabilityAdaptersForTest() {
-  sceneCapabilityAdapters.clear()
+  clearSceneCapabilityAdapterRegistryForTest()
 }
 
 export function resetSceneCapabilityAdaptersForTest() {
-  sceneCapabilityAdapters.clear()
+  clearSceneCapabilityAdapterRegistryForTest()
   registerDefaultSceneCapabilityAdapters()
 }
 
@@ -550,24 +551,8 @@ function addTrace(
   })
 }
 
-function normalizeAdapterKey(key: string) {
-  return key.trim().toLowerCase()
-}
-
 function resolveAdapter(provider: ProviderRegistryRecord, capability: string): SceneCapabilityAdapter | null {
-  const keys = [
-    `${provider.vendor}:${capability}`,
-    `${provider.vendor}:*`,
-    `*:${capability}`,
-  ].map(normalizeAdapterKey)
-
-  for (const key of keys) {
-    const adapter = sceneCapabilityAdapters.get(key)
-    if (adapter)
-      return adapter
-  }
-
-  return null
+  return resolveSceneCapabilityAdapterEntry<SceneCapabilityAdapter>(provider, capability)?.adapter ?? null
 }
 
 function readOptionalString(value: unknown, maxLength = 160): string | null {

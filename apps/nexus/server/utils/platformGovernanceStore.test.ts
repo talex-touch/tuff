@@ -102,6 +102,74 @@ describe('platformGovernanceStore', () => {
     })
   })
 
+  it('summarizes notification channel config health without leaking credential refs', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Resend healthy ${marker}`,
+      channel: 'email',
+      provider: `resend-primary-${marker}`,
+      config: {
+        providerType: 'resend',
+        credentialRef: `secure://notifications/resend-${marker}`,
+        from: 'Tuff <noreply@example.com>',
+      },
+    }, 'admin')
+    const smtp = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `SMTP missing ref ${marker}`,
+      channel: 'email',
+      provider: `smtp-${marker}`,
+      config: {
+        providerType: 'smtp',
+      },
+    }, 'admin')
+    const browser = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Browser disabled ${marker}`,
+      channel: 'browser',
+      provider: 'browser',
+      enabled: false,
+      config: {
+        providerType: 'browser',
+      },
+    }, 'admin')
+
+    const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
+    const serialized = JSON.stringify(analytics.notifications)
+
+    expect(serialized).not.toContain('secure://notifications')
+    expect(analytics.notifications.channelSummary).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      enabled: expect.any(Number),
+      disabled: expect.any(Number),
+      credentialed: expect.any(Number),
+      credentialMissing: expect.any(Number),
+    }))
+    expect(analytics.notifications.channelSummary.total).toBeGreaterThanOrEqual(3)
+    expect(analytics.notifications.channelSummary.enabled).toBeGreaterThanOrEqual(2)
+    expect(analytics.notifications.channelSummary.disabled).toBeGreaterThanOrEqual(1)
+    expect(analytics.notifications.channelSummary.credentialed).toBeGreaterThanOrEqual(2)
+    expect(analytics.notifications.channelSummary.credentialMissing).toBeGreaterThanOrEqual(1)
+    expect(analytics.notifications.channelRisks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: smtp.id,
+        adapter: 'email/smtp',
+        status: 'warning',
+        reasons: ['credential-ref-required'],
+        credentialRequired: true,
+        hasCredentialRef: false,
+      }),
+      expect.objectContaining({
+        configId: browser.id,
+        adapter: 'browser',
+        status: 'disabled',
+        reasons: ['channel-disabled'],
+      }),
+    ]))
+  })
+
   it('enforces intelligence provider request quotas before dispatch', async () => {
     const providerId = `provider_${crypto.randomUUID()}`
     const h3Event = event(providerId)
@@ -194,6 +262,18 @@ describe('platformGovernanceStore', () => {
         trafficBytes: 30,
         operations: 50,
       },
+      remaining: {
+        storedBytes: 250,
+        trafficBytes: 280,
+        operations: 2,
+        alertBytes: 0,
+      },
+      overage: {
+        storedBytes: 0,
+        trafficBytes: 0,
+        operations: 0,
+        alertBytes: 50,
+      },
     })
     expect(JSON.stringify(evaluation)).not.toContain('storage-user@example.com')
 
@@ -220,6 +300,31 @@ describe('platformGovernanceStore', () => {
       expect.objectContaining({ metric: 'operations' }),
     ]))
     expect(JSON.stringify(alerts)).not.toContain('storage-user@example.com')
+
+    const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
+    expect(analytics.storage.policySummary).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      active: expect.any(Number),
+      warning: expect.any(Number),
+      alerts: expect.any(Number),
+      highestStoredUtilization: expect.any(Number),
+    }))
+    expect(analytics.storage.policySummary.total).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.policySummary.active).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.policySummary.warning).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.policySummary.alerts).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.policySummary.highestStoredUtilization).toBeGreaterThanOrEqual(75)
+    expect(analytics.storage.policyRisks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        policyId: policy.id,
+        status: 'warning',
+        reasons: expect.arrayContaining(['alert-bytes-reached', 'max-bytes-warning']),
+        utilization: expect.objectContaining({
+          storedBytes: 75,
+        }),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.storage.policyRisks)).not.toContain('storage-user@example.com')
 
     const packagePolicy = await upsertPlatformGovernanceConfig(h3Event, {
       configType: 'storage_channel',
@@ -272,6 +377,23 @@ describe('platformGovernanceStore', () => {
 
     await recordPlatformGovernanceEvent(h3Event, {
       scope: 'app',
+      action: 'visit',
+      actorId: 'visitor@example.com',
+      resourceType: 'route',
+      resourceId: `/dashboard/${marker}`,
+      channel: 'dashboard',
+      unit: 'visit',
+      quantity: 1,
+      metadata: {
+        route: `/dashboard/${marker}`,
+        page: 'Governance',
+        surface: 'dashboard-admin',
+        referrer: 'core-app',
+        localHour: 21,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'app',
       action: 'search',
       actorId: 'searcher@example.com',
       resourceType: 'search',
@@ -306,6 +428,11 @@ describe('platformGovernanceStore', () => {
         providerStatus: {
           [providerId]: 'success',
         },
+        selected: true,
+        selectedProvider: providerId,
+        selectedCategory: 'plugin',
+        selectedPluginId: pluginId,
+        selectedRank: 2,
         contextAppCategory: 'developer_tools',
         contextSource: 'active-app',
         entryPoint: 'global-shortcut',
@@ -320,6 +447,31 @@ describe('platformGovernanceStore', () => {
         countryCode: 'US',
         regionCode: 'CA',
         timezone: 'America/Los_Angeles',
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'app',
+      action: 'search',
+      actorId: 'searcher@example.com',
+      resourceType: 'search',
+      resourceId: 'corebox',
+      channel: 'all',
+      unit: 'search',
+      quantity: 1,
+      metadata: {
+        queryType: 'text',
+        searchScene: 'corebox',
+        hasFilters: false,
+        queryLength: 9,
+        firstResultMs: 0,
+        totalDurationMs: 420,
+        searchResultCount: 0,
+        firstResultCount: 0,
+        providerErrorCount: 1,
+        providerTimeoutCount: 2,
+        providerStatus: {
+          [providerId]: 'timeout',
+        },
       },
     })
     await recordPlatformGovernanceEvent(h3Event, {
@@ -462,6 +614,34 @@ describe('platformGovernanceStore', () => {
         statusCode: 504,
         surface: 'dashboard-resource',
         size: 4096,
+        retryable: true,
+        retryCount: 1,
+        maxRetries: 3,
+        nextRetryDelayMs: 5000,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'upload',
+      action: 'resource.failed',
+      actorId: 'admin@example.com',
+      resourceType: 'resource',
+      resourceId: `asset_failed_exhausted_${marker}`,
+      channel: 'application/zip',
+      unit: 'file',
+      quantity: 1,
+      metadata: {
+        extension: 'zip',
+        contentType: 'application/zip',
+        resourceType: 'resource',
+        attemptId: `exhausted-attempt-${marker}`,
+        reason: 'oss-rate-limited',
+        statusCode: 429,
+        surface: 'dashboard-resource',
+        size: 8192,
+        retryable: true,
+        retryCount: 3,
+        maxRetries: 3,
+        retryAfterMs: 0,
       },
     })
     await recordStorageChannelUsage(h3Event, {
@@ -512,6 +692,9 @@ describe('platformGovernanceStore', () => {
       channel: 'chat.completion',
       unit: 'request',
       quantity: 1,
+      metadata: {
+        model: providerModel,
+      },
     })
     await recordPlatformGovernanceEvent(h3Event, {
       scope: 'intelligence',
@@ -531,21 +714,70 @@ describe('platformGovernanceStore', () => {
     const serializedAnalytics = JSON.stringify(analytics)
 
     expect(serializedAnalytics).not.toContain('searcher@example.com')
+    expect(serializedAnalytics).not.toContain('visitor@example.com')
     expect(serializedAnalytics).not.toContain('new-user@example.com')
     expect(serializedAnalytics).not.toContain('plugin-user@example.com')
     expect(serializedAnalytics).not.toContain(`stuck-attempt-${marker}`)
     expect(serializedAnalytics).not.toContain(`failed-attempt-${marker}`)
+    expect(serializedAnalytics).not.toContain(`exhausted-attempt-${marker}`)
     expect(serializedAnalytics).not.toContain(`asset_failed_${marker}`)
+    expect(serializedAnalytics).not.toContain(`asset_failed_exhausted_${marker}`)
     expect(analytics.users.signups).toBeGreaterThanOrEqual(1)
     expect(analytics.users.signupTrend.length).toBeGreaterThan(0)
+    expect(analytics.users.signupGrowthTrend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        quantity: 1,
+        cumulative: expect.any(Number),
+        growthRate: 100,
+      }),
+    ]))
     expect(analytics.users.bySource).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: signupSource, events: 1 }),
     ]))
     expect(analytics.users.byCountry).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'US' }),
     ]))
+    expect(analytics.dashboard.growth.userSignups).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      latestQuantity: expect.any(Number),
+      cumulative: expect.any(Number),
+      growthRate: expect.any(Number),
+    }))
+    expect(analytics.dashboard.growth.searches).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      latestQuantity: expect.any(Number),
+      zeroResultRate: 50,
+      problemRate: 100,
+      selectionRate: 50,
+    }))
+    expect(analytics.visits.byRoute).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: `/dashboard/${marker}`, events: 1 }),
+    ]))
+    expect(analytics.visits.byPage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'Governance', events: 1 }),
+    ]))
+    expect(analytics.visits.bySurface).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'dashboard-admin', events: 1 }),
+    ]))
+    expect(analytics.visits.byReferrer).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'core-app', events: 1 }),
+    ]))
+    expect(analytics.visits.byLocalHour).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '21', events: 1 }),
+    ]))
+    expect(analytics.visits.byLocalTimeSlot).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'evening', events: 1 }),
+    ]))
+    expect(analytics.visits.trend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        events: 1,
+        quantity: 1,
+        uniqueActors: 1,
+      }),
+    ]))
+    expect(analytics.visits.heatmap.length).toBeGreaterThan(0)
     expect(analytics.searches.byQueryType).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'text', events: 1 }),
+      expect.objectContaining({ key: 'text', events: 2 }),
     ]))
     expect(analytics.searches.byProvider).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: providerId, events: 1 }),
@@ -563,6 +795,34 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.searches.byProviderStatus).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: `${providerId}:success`, events: 1 }),
+      expect.objectContaining({ key: `${providerId}:timeout`, events: 1 }),
+    ]))
+    expect(analytics.searches.selectionSummary).toEqual({
+      selected: 1,
+      selectionRate: 50,
+    })
+    expect(analytics.searches.bySelectedProvider).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: providerId, events: 1 }),
+    ]))
+    expect(analytics.searches.bySelectedCategory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'plugin', events: 1 }),
+    ]))
+    expect(analytics.searches.bySelectedPluginId).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: pluginId, events: 1 }),
+    ]))
+    expect(analytics.searches.bySelectedRankBucket).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '2-3', events: 1 }),
+    ]))
+    expect(analytics.searches.byResultCountBucket).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '4-10', events: 1 }),
+      expect.objectContaining({ key: '0', events: 1 }),
+    ]))
+    expect(analytics.searches.byFirstResultLatencyBucket).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '101-300ms', events: 1 }),
+      expect.objectContaining({ key: '<=100ms', events: 1 }),
+    ]))
+    expect(analytics.searches.byTotalDurationBucket).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '301-1000ms', events: 2 }),
     ]))
     expect(analytics.searches.byFilterKind).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'plugin', events: 1 }),
@@ -585,9 +845,33 @@ describe('platformGovernanceStore', () => {
     expect(analytics.searches.byLocalHour).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: '09', events: 1 }),
     ]))
-    expect(analytics.searches.filterUsage.filterRate).toBeGreaterThan(0)
-    expect(analytics.searches.latency.firstResultMs.average).toBe(180)
-    expect(analytics.searches.resultStats.resultCount.average).toBe(5)
+    expect(analytics.searches.byLocalDayOfWeek).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '2', events: 1 }),
+    ]))
+    expect(analytics.searches.byLocalTimeSlot).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'morning', events: 1 }),
+    ]))
+    expect(analytics.searches.filterUsage.filterRate).toBe(50)
+    expect(analytics.searches.reliabilitySummary).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      zeroResult: 1,
+      providerErrors: 1,
+      providerTimeouts: 3,
+      problemSearches: 2,
+      zeroResultRate: 50,
+      problemRate: 100,
+    }))
+    expect(analytics.searches.reliabilityTrend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        zeroResult: 1,
+        providerErrors: 1,
+        providerTimeouts: 3,
+        problemSearches: 2,
+        uniqueActors: 1,
+      }),
+    ]))
+    expect(analytics.searches.latency.firstResultMs.average).toBe(90)
+    expect(analytics.searches.resultStats.resultCount.average).toBe(2.5)
     expect(analytics.searches.byCountry).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'US', events: 1 }),
     ]))
@@ -616,6 +900,14 @@ describe('platformGovernanceStore', () => {
         ]),
       }),
     ]))
+    expect(analytics.dashboard.growth.pluginInstalls).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      latestQuantity: expect.any(Number),
+      growthRate: expect.any(Number),
+    }))
+    expect(analytics.dashboard.leaderboards.hotPlugins).toEqual(expect.arrayContaining([
+      expect.objectContaining({ pluginId, hotScore: 21 }),
+    ]))
     expect(analytics.plugins.trend.length).toBeGreaterThan(0)
     expect(analytics.plugins.installTrend).toEqual(expect.arrayContaining([
       expect.objectContaining({ installs: 4, quantity: 4 }),
@@ -627,8 +919,8 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.attempts).toBeGreaterThanOrEqual(3)
     expect(analytics.uploads.stuckAttempts).toBe(1)
     expect(analytics.uploads.stuckAttemptAgeMs).toBe(15 * 60 * 1000)
-    expect(analytics.uploads.stuckRate).toBe(25)
-    expect(analytics.uploads.failureRate).toBe(50)
+    expect(analytics.uploads.stuckRate).toBe(20)
+    expect(analytics.uploads.failureRate).toBeCloseTo(66.67, 2)
     expect(analytics.uploads.bytes).toBeGreaterThanOrEqual(2048)
     expect(analytics.uploads.byExtension).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'png', quantity: 2048 }),
@@ -640,11 +932,11 @@ describe('platformGovernanceStore', () => {
       expect.objectContaining({ key: `freshstarted-${marker}` }),
     ]))
     expect(analytics.uploads.byResourceType).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'resource', events: 2 }),
+      expect.objectContaining({ key: 'resource', events: 3 }),
     ]))
     expect(analytics.uploads.byContentType).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'image/png', quantity: 2048 }),
-      expect.objectContaining({ key: 'application/zip', quantity: 1 }),
+      expect.objectContaining({ key: 'application/zip', quantity: 2 }),
     ]))
     expect(analytics.uploads.byStorageChannel).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'memory', quantity: 2048 }),
@@ -654,14 +946,46 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.byFailureReason).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'r2-timeout', events: 1 }),
+      expect.objectContaining({ key: 'oss-rate-limited', events: 1 }),
     ]))
     expect(analytics.uploads.byStatusCode).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: '504', events: 1 }),
+      expect.objectContaining({ key: '429', events: 1 }),
     ]))
     expect(analytics.uploads.bySurface).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'dashboard-resource', events: 4 }),
+      expect.objectContaining({ key: 'dashboard-resource', events: 5 }),
     ]))
-    expect(analytics.uploads.uploadSize.average).toBe(3072)
+    expect(analytics.uploads.statusTrend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        started: expect.any(Number),
+        completed: expect.any(Number),
+        failed: expect.any(Number),
+        bytes: expect.any(Number),
+        uniqueActors: expect.any(Number),
+      }),
+    ]))
+    expect(analytics.uploads.retrySummary).toMatchObject({
+      retryableFailures: 2,
+      nonRetryableFailures: 0,
+      scheduledRetries: 1,
+      exhaustedFailures: 1,
+    })
+    expect(analytics.uploads.retrySummary.retryCount.average).toBe(2)
+    expect(analytics.uploads.retrySummary.nextRetryDelayMs.average).toBe(2500)
+    expect(analytics.uploads.byRetryDisposition).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'retry-scheduled', events: 1 }),
+      expect.objectContaining({ key: 'retry-exhausted', events: 1 }),
+    ]))
+    expect(analytics.uploads.retryTrend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        failed: expect.any(Number),
+        retryable: 2,
+        scheduled: 1,
+        exhausted: 1,
+        uniqueActors: expect.any(Number),
+      }),
+    ]))
+    expect(analytics.uploads.uploadSize.average).toBeCloseTo(4778.67, 2)
     expect(analytics.uploads.uploadDurationMs.average).toBe(120)
     expect(analytics.uploads.problemAttempts).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -671,6 +995,20 @@ describe('platformGovernanceStore', () => {
         reason: 'r2-timeout',
         statusCode: 504,
         durationMs: null,
+        retryable: true,
+        retryCount: 1,
+        maxRetries: 3,
+        nextRetryDelayMs: 5000,
+      }),
+      expect.objectContaining({
+        status: 'failed',
+        resourceType: 'resource',
+        surface: 'dashboard-resource',
+        reason: 'oss-rate-limited',
+        statusCode: 429,
+        retryable: true,
+        retryCount: 3,
+        maxRetries: 3,
       }),
       expect.objectContaining({
         status: 'stuck',
@@ -682,6 +1020,13 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.problemAttempts.every(item => /^[a-f0-9]{16}$/.test(item.attemptHash))).toBe(true)
     expect(analytics.uploads.problemAttempts.every(item => /^[a-f0-9]{16}$/.test(item.resourceHash))).toBe(true)
+    expect(analytics.dashboard.growth.uploads).toEqual(expect.objectContaining({
+      latestStarted: expect.any(Number),
+      latestCompleted: expect.any(Number),
+      latestFailed: expect.any(Number),
+      failureRate: expect.any(Number),
+      stuckRate: expect.any(Number),
+    }))
     expect(analytics.storage.storedBytes).toBeGreaterThanOrEqual(2048)
     expect(analytics.storage.trafficBytes).toBeGreaterThanOrEqual(512)
     expect(analytics.storage.operations).toBeGreaterThanOrEqual(3)
@@ -727,11 +1072,53 @@ describe('platformGovernanceStore', () => {
         ]),
       }),
     ]))
+    expect(analytics.providers.usageSummary).toEqual(expect.objectContaining({
+      events: expect.any(Number),
+      requests: expect.any(Number),
+      tokens: expect.any(Number),
+    }))
+    expect(analytics.providers.usageSummary.requests).toBeGreaterThanOrEqual(1)
+    expect(analytics.providers.usageSummary.tokens).toBeGreaterThanOrEqual(512)
+    expect(analytics.providers.trend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        requests: expect.any(Number),
+        tokens: expect.any(Number),
+        quantity: expect.any(Number),
+        uniqueActors: expect.any(Number),
+      }),
+    ]))
     expect(analytics.providers.byModel).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: providerModel, quantity: 512 }),
     ]))
     expect(analytics.providers.byProviderType).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: providerType, quantity: 512 }),
+    ]))
+    expect(analytics.providers.modelDistribution).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        model: providerModel,
+        quantity: 513,
+        requests: 1,
+        tokens: 512,
+        uniqueActors: 1,
+        byProvider: expect.arrayContaining([
+          expect.objectContaining({ providerId, quantity: 513 }),
+        ]),
+        byChannel: expect.arrayContaining([
+          expect.objectContaining({ channel: 'chat.completion', quantity: 513 }),
+        ]),
+        byProviderType: expect.arrayContaining([
+          expect.objectContaining({ providerType, quantity: 512 }),
+        ]),
+      }),
+    ]))
+    expect(analytics.dashboard.growth.providerUsage).toEqual(expect.objectContaining({
+      requests: expect.any(Number),
+      tokens: expect.any(Number),
+      latestRequests: expect.any(Number),
+      latestTokens: expect.any(Number),
+    }))
+    expect(analytics.dashboard.leaderboards.topModels).toEqual(expect.arrayContaining([
+      expect.objectContaining({ model: providerModel, tokens: 512 }),
     ]))
     expect(analytics.providers.quotaSummary).toEqual(expect.objectContaining({
       total: expect.any(Number),
@@ -760,14 +1147,52 @@ describe('platformGovernanceStore', () => {
           requests: 50,
           tokens: 85.33,
         },
+        remaining: {
+          requests: 1,
+          tokens: 88,
+        },
+        overage: {
+          requests: 0,
+          tokens: 0,
+        },
       }),
     ]))
+    expect(analytics.dashboard.riskSummary).toEqual(expect.objectContaining({
+      uploadProblems: expect.any(Number),
+      storageAlerts: expect.any(Number),
+      notificationRisks: expect.any(Number),
+      providerQuotaWarning: expect.any(Number),
+    }))
+    expect(analytics.dashboard.trends).toEqual(expect.objectContaining({
+      userGrowth: expect.any(Array),
+      searches: expect.any(Array),
+      pluginInstalls: expect.any(Array),
+      providerUsage: expect.any(Array),
+      uploadStatus: expect.any(Array),
+    }))
+    expect(serializedAnalytics).not.toContain('secure://')
 
     const pluginAnalytics = await getPluginGovernanceAnalytics(h3Event, pluginId, { days: 30, limit: 5000, topLimit: 50 })
     expect(pluginAnalytics.downloads).toBe(2)
     expect(pluginAnalytics.installs).toBe(4)
     expect(pluginAnalytics.invocations).toBe(3)
     expect(pluginAnalytics.uniqueActors).toBe(1)
+    expect(pluginAnalytics.conversion).toEqual({
+      installRate: 200,
+      invocationRate: 75,
+      invocationsPerActor: 3,
+    })
+    expect(pluginAnalytics.conversionTrend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        downloads: 2,
+        installs: 4,
+        invocations: 3,
+        uniqueActors: 1,
+        installRate: 200,
+        invocationRate: 75,
+        invocationsPerActor: 3,
+      }),
+    ]))
     expect(pluginAnalytics.trend.length).toBeGreaterThan(0)
     expect(pluginAnalytics.installTrend).toEqual(expect.arrayContaining([
       expect.objectContaining({ installs: 4, quantity: 4 }),
@@ -1227,6 +1652,15 @@ describe('platformGovernanceStore', () => {
       expect.objectContaining({ key: 'credential-ref-required', events: 1 }),
     ]))
     expect(analytics.notifications.byNotificationAction.find(item => item.key === 'plugin.version.approved')?.events).toBeGreaterThanOrEqual(4)
+    expect(analytics.notifications.deliveryTrend).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        planned: expect.any(Number),
+        sent: expect.any(Number),
+        skipped: expect.any(Number),
+        failed: expect.any(Number),
+        uniqueActors: expect.any(Number),
+      }),
+    ]))
     expect(analytics.notifications.providerHealth).toEqual(expect.arrayContaining([
       expect.objectContaining({
         provider: `resend-primary-${marker}`,

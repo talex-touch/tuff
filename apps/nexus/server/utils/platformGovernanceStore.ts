@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createError, getHeader } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
+import { resolveNotificationChannelProfile } from './notificationChannelCatalog'
 import { assertStorageChannelPolicyConfig } from './storageChannelCatalog'
 import { isPlainObject, normalizeNumber, normalizeString } from './telemetrySanitizer'
 
@@ -179,6 +180,18 @@ export interface StoragePolicyEvaluation {
     trafficBytes: number | null
     operations: number | null
   }
+  remaining: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  overage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    alertBytes: number
+  }
 }
 
 export type StoragePolicyAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
@@ -196,6 +209,52 @@ export interface StoragePolicyAlert {
   limit: number | null
   utilization: number | null
   reasons: string[]
+}
+
+type StoragePolicyEvaluationStatus = StoragePolicyEvaluation['status']
+
+interface StoragePolicyAnalyticsSummary {
+  total: number
+  active: number
+  ok: number
+  warning: number
+  blocked: number
+  disabled: number
+  alerts: number
+  highestStoredUtilization: number
+  highestTrafficUtilization: number
+  highestOperationUtilization: number
+}
+
+interface StoragePolicyAnalytics {
+  policySummary: StoragePolicyAnalyticsSummary
+  policyRisks: StoragePolicyEvaluation[]
+}
+
+type NotificationChannelRiskStatus = 'ok' | 'warning' | 'disabled'
+
+interface NotificationChannelAnalytics {
+  channelSummary: {
+    total: number
+    enabled: number
+    disabled: number
+    unsupported: number
+    credentialMissing: number
+    credentialed: number
+  }
+  channelRisks: Array<{
+    configId: string
+    name: string
+    channel: string
+    provider: string | null
+    providerType: string | null
+    adapter: string
+    enabled: boolean
+    status: NotificationChannelRiskStatus
+    reasons: string[]
+    credentialRequired: boolean
+    hasCredentialRef: boolean
+  }>
 }
 
 interface GovernanceEventRow {
@@ -715,6 +774,15 @@ function readEventMetadataBoolean(event: PlatformGovernanceEvent, key: string): 
   return typeof value === 'boolean' ? value : null
 }
 
+function readEventMetadataNumberAny(event: PlatformGovernanceEvent, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = readEventMetadataNumber(event, key)
+    if (typeof value === 'number')
+      return value
+  }
+  return null
+}
+
 function createMetricBucket() {
   return {
     events: 0,
@@ -762,6 +830,57 @@ function addStringArrayBuckets(
     if (typeof item === 'string')
       addMetricBucket(buckets, item, event)
   }
+}
+
+function normalizeLocalHour(value: number): number | null {
+  if (!Number.isFinite(value))
+    return null
+  const hour = Math.floor(value)
+  return hour >= 0 && hour <= 23 ? hour : null
+}
+
+function numericBucket(value: number | null, ranges: Array<{ max: number, label: string }>, overflowLabel: string): string | null {
+  if (value == null || value < 0)
+    return null
+  for (const range of ranges) {
+    if (value <= range.max)
+      return range.label
+  }
+  return overflowLabel
+}
+
+function resultCountBucket(value: number | null): string | null {
+  return numericBucket(value, [
+    { max: 0, label: '0' },
+    { max: 3, label: '1-3' },
+    { max: 10, label: '4-10' },
+  ], '11+')
+}
+
+function latencyBucket(value: number | null): string | null {
+  return numericBucket(value, [
+    { max: 100, label: '<=100ms' },
+    { max: 300, label: '101-300ms' },
+    { max: 1000, label: '301-1000ms' },
+  ], '1000ms+')
+}
+
+function rankBucket(value: number | null): string | null {
+  return numericBucket(value, [
+    { max: 1, label: '1' },
+    { max: 3, label: '2-3' },
+    { max: 10, label: '4-10' },
+  ], '11+')
+}
+
+function localTimeSlotFromHour(hour: number): string {
+  if (hour >= 5 && hour < 12)
+    return 'morning'
+  if (hour >= 12 && hour < 18)
+    return 'afternoon'
+  if (hour >= 18 && hour < 22)
+    return 'evening'
+  return 'night'
 }
 
 function addNumberMapBuckets(
@@ -836,6 +955,25 @@ function createDailyTrend(events: PlatformGovernanceEvent[]) {
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+function createDailyGrowthTrend(events: PlatformGovernanceEvent[]) {
+  let cumulative = 0
+  let previousQuantity = 0
+
+  return createDailyTrend(events).map((item) => {
+    cumulative += item.quantity
+    const growthRate = previousQuantity > 0
+      ? ((item.quantity - previousQuantity) / previousQuantity) * 100
+      : item.quantity > 0 ? 100 : 0
+    previousQuantity = item.quantity
+
+    return {
+      ...item,
+      cumulative,
+      growthRate: Math.round(growthRate * 100) / 100,
+    }
+  })
+}
+
 function createTimeHeatmap(events: PlatformGovernanceEvent[]) {
   const buckets = new Map<string, ReturnType<typeof createMetricBucket>>()
   for (const event of events) {
@@ -905,6 +1043,20 @@ function createPluginDailyTrend(events: PlatformGovernanceEvent[]) {
       uniqueActors: item.actors.size,
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function createPluginConversionTrend(events: PlatformGovernanceEvent[]) {
+  return createPluginDailyTrend(events)
+    .map(item => ({
+      date: item.date,
+      downloads: item.downloads,
+      installs: item.installs,
+      invocations: item.invocations,
+      uniqueActors: item.uniqueActors,
+      installRate: item.downloads > 0 ? Math.round((item.installs / item.downloads) * 10000) / 100 : 0,
+      invocationRate: item.installs > 0 ? Math.round((item.invocations / item.installs) * 10000) / 100 : 0,
+      invocationsPerActor: item.uniqueActors > 0 ? Math.round((item.invocations / item.uniqueActors) * 100) / 100 : 0,
+    }))
 }
 
 function createPluginGrowth(events: PlatformGovernanceEvent[], days: number) {
@@ -980,7 +1132,74 @@ function createScopedAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   }
 }
 
-function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
+function notificationChannelStatusRank(status: NotificationChannelRiskStatus): number {
+  if (status === 'warning')
+    return 3
+  if (status === 'disabled')
+    return 2
+  return 1
+}
+
+function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[], topLimit: number): NotificationChannelAnalytics {
+  const risks = configs.map((config) => {
+    const profile = resolveNotificationChannelProfile(config)
+    const reasons: string[] = []
+    if (!config.enabled)
+      reasons.push('channel-disabled')
+    if (!profile.supported)
+      reasons.push('unsupported-adapter')
+    if (profile.credentialRequired && !profile.credentialRef)
+      reasons.push('credential-ref-required')
+    const status: NotificationChannelRiskStatus = !config.enabled
+      ? 'disabled'
+      : reasons.length ? 'warning' : 'ok'
+
+    return {
+      configId: config.id,
+      name: config.name,
+      channel: profile.channel,
+      provider: profile.provider,
+      providerType: profile.providerType,
+      adapter: profile.adapter,
+      enabled: config.enabled,
+      status,
+      reasons,
+      credentialRequired: profile.credentialRequired,
+      hasCredentialRef: Boolean(profile.credentialRef),
+    }
+  })
+  const summary = risks.reduce((result, item) => {
+    result.total += 1
+    if (item.enabled)
+      result.enabled += 1
+    else
+      result.disabled += 1
+    if (item.reasons.includes('unsupported-adapter'))
+      result.unsupported += 1
+    if (item.reasons.includes('credential-ref-required'))
+      result.credentialMissing += 1
+    if (item.credentialRequired)
+      result.credentialed += 1
+    return result
+  }, {
+    total: 0,
+    enabled: 0,
+    disabled: 0,
+    unsupported: 0,
+    credentialMissing: 0,
+    credentialed: 0,
+  })
+
+  return {
+    channelSummary: summary,
+    channelRisks: risks
+      .filter(item => item.status !== 'ok')
+      .sort((left, right) => notificationChannelStatusRank(right.status) - notificationChannelStatusRank(left.status) || right.reasons.length - left.reasons.length)
+      .slice(0, topLimit),
+  }
+}
+
+function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit: number, configs: PlatformGovernanceConfig[] = []) {
   const deliveryEvents = events.filter(event => event.action.startsWith('notification.delivery.'))
   const pushSubscriptionEvents = events.filter(event => event.action.startsWith('browser_push.subscription.'))
   const byDeliveryStatus = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -990,6 +1209,16 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
   const byNotificationAction = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byPushSubscriptionAction = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byPushEndpointHost = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const deliveryTrend = new Map<string, {
+    date: string
+    events: number
+    planned: number
+    sent: number
+    skipped: number
+    failed: number
+    quantity: number
+    actors: Set<string>
+  }>()
   const providerHealth = new Map<string, {
     provider: string
     providerType: string | null
@@ -1017,6 +1246,17 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     const providerType = readEventMetadataString(event, 'providerType')
     const adapter = readEventMetadataString(event, 'adapter')
     const reason = readEventMetadataString(event, 'reason')
+    const date = event.occurredAt.slice(0, 10)
+    const trendItem = deliveryTrend.get(date) ?? {
+      date,
+      events: 0,
+      planned: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      quantity: 0,
+      actors: new Set<string>(),
+    }
     const providerItem = providerHealth.get(provider) ?? {
       provider,
       providerType,
@@ -1035,16 +1275,27 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     providerItem.channel ||= event.channel
     providerItem.total += 1
 
-    if (status === 'planned')
+    trendItem.events += 1
+    trendItem.quantity += event.quantity
+    const actor = readEventActor(event)
+    if (actor)
+      trendItem.actors.add(actor)
+
+    if (status === 'planned') {
       planned += 1
+      trendItem.planned += 1
+    }
     else if (status === 'sent') {
       sent += 1
+      trendItem.sent += 1
     }
     else if (status === 'skipped') {
       skipped += 1
+      trendItem.skipped += 1
     }
     else if (status === 'failed') {
       failed += 1
+      trendItem.failed += 1
       if (!providerItem.latestFailureAt || event.occurredAt.localeCompare(providerItem.latestFailureAt) > 0) {
         providerItem.latestFailureAt = event.occurredAt
         providerItem.latestFailureReason = reason
@@ -1060,6 +1311,7 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     else if (status === 'failed')
       providerItem.failed += 1
     providerHealth.set(provider, providerItem)
+    deliveryTrend.set(date, trendItem)
 
     addMetricBucket(byDeliveryStatus, status, event, 1)
     addMetricBucket(byProvider, provider, event, 1)
@@ -1081,6 +1333,7 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
 
   return {
     ...createScopedAnalytics(events, topLimit),
+    ...createNotificationChannelAnalytics(configs, topLimit),
     deliveries: {
       total,
       planned,
@@ -1096,6 +1349,18 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     byAdapter: mapMetricBuckets(byAdapter, topLimit),
     byReason: mapMetricBuckets(byReason, topLimit),
     byNotificationAction: mapMetricBuckets(byNotificationAction, topLimit),
+    deliveryTrend: Array.from(deliveryTrend.values())
+      .map(item => ({
+        date: item.date,
+        events: item.events,
+        planned: item.planned,
+        sent: item.sent,
+        skipped: item.skipped,
+        failed: item.failed,
+        quantity: item.quantity,
+        uniqueActors: item.actors.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
     providerHealth: Array.from(providerHealth.values())
       .map(item => ({
         ...item,
@@ -1163,12 +1428,50 @@ function createUserAnalytics(events: PlatformGovernanceEvent[], days: number, to
     signups: signupEvents.reduce((sum, event) => sum + event.quantity, 0),
     signupGrowth: createGrowth(signupEvents, days),
     signupTrend: createDailyTrend(signupEvents),
+    signupGrowthTrend: createDailyGrowthTrend(signupEvents),
     heatmap: createTimeHeatmap(userEvents),
     byAction: mapMetricBuckets(byAction, topLimit),
     bySource: mapMetricBuckets(bySource, topLimit),
     byCountry: mapMetricBuckets(byCountry, topLimit),
     byRegion: mapMetricBuckets(byRegion, topLimit),
     byTimezone: mapMetricBuckets(byTimezone, topLimit),
+  }
+}
+
+function createVisitAnalytics(events: PlatformGovernanceEvent[], days: number, topLimit: number) {
+  const visitEvents = events.filter(item => item.scope === 'app' && item.action === 'visit')
+  const byRoute = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byPage = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySurface = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byReferrer = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalHour = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalTimeSlot = new Map<string, ReturnType<typeof createMetricBucket>>()
+
+  for (const event of visitEvents) {
+    addMetricBucket(byRoute, readEventMetadataString(event, 'route') ?? event.resourceId, event)
+    addMetricBucket(byPage, readEventMetadataString(event, 'page') ?? readEventMetadataString(event, 'screen'), event)
+    addMetricBucket(bySurface, readEventMetadataString(event, 'surface') ?? event.channel, event)
+    addMetricBucket(byReferrer, readEventMetadataString(event, 'referrer') ?? readEventMetadataString(event, 'source'), event)
+
+    const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
+    if (localHour != null) {
+      const hourKey = localHour.toString().padStart(2, '0')
+      addMetricBucket(byLocalHour, hourKey, event)
+      addMetricBucket(byLocalTimeSlot, localTimeSlotFromHour(localHour), event)
+    }
+  }
+
+  return {
+    ...createScopedAnalytics(visitEvents, topLimit),
+    growth: createGrowth(visitEvents, days),
+    trend: createDailyTrend(visitEvents),
+    heatmap: createTimeHeatmap(visitEvents),
+    byRoute: mapMetricBuckets(byRoute, topLimit),
+    byPage: mapMetricBuckets(byPage, topLimit),
+    bySurface: mapMetricBuckets(bySurface, topLimit),
+    byReferrer: mapMetricBuckets(byReferrer, topLimit),
+    byLocalHour: mapMetricBuckets(byLocalHour, 24),
+    byLocalTimeSlot: mapMetricBuckets(byLocalTimeSlot, 4),
   }
 }
 
@@ -1195,6 +1498,14 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
   const byContextTag = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byLocalHour = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byLocalDayOfWeek = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalTimeSlot = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySelectedProvider = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySelectedCategory = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySelectedPluginId = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySelectedRankBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byResultCountBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byFirstResultLatencyBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byTotalDurationBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byCountry = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byRegion = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byTimezone = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -1205,8 +1516,22 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
   const firstResultCount = createNumberStats()
   const providerErrorCount = createNumberStats()
   const providerTimeoutCount = createNumberStats()
+  const reliabilityTrend = new Map<string, {
+    date: string
+    events: number
+    zeroResult: number
+    providerErrors: number
+    providerTimeouts: number
+    problemSearches: number
+    actors: Set<string>
+  }>()
   let withFilters = 0
   let withoutFilters = 0
+  let zeroResult = 0
+  let providerErrors = 0
+  let providerTimeouts = 0
+  let problemSearches = 0
+  let selectedSearches = 0
 
   for (const event of searchEvents) {
     addMetricBucket(byQueryType, readEventMetadataString(event, 'queryType'), event)
@@ -1226,9 +1551,23 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     addStringArrayBuckets(byPluginId, event.metadata?.pluginIds, event)
     addStringArrayBuckets(byPluginCategory, event.metadata?.pluginCategories, event)
     addStringArrayBuckets(byContextTag, event.metadata?.contextTags, event)
-    const localHour = readEventMetadataNumber(event, 'localHour')
-    if (typeof localHour === 'number')
-      addMetricBucket(byLocalHour, String(Math.round(localHour)).padStart(2, '0'), event)
+    const selectedProvider = readEventMetadataString(event, 'selectedProvider')
+    const selectedCategory = readEventMetadataString(event, 'selectedCategory')
+    const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
+    const selectedRank = readEventMetadataNumber(event, 'selectedRank')
+    if (selectedProvider)
+      addMetricBucket(bySelectedProvider, selectedProvider, event)
+    if (selectedCategory)
+      addMetricBucket(bySelectedCategory, selectedCategory, event)
+    if (selectedPluginId)
+      addMetricBucket(bySelectedPluginId, selectedPluginId, event)
+    if (selectedRank != null)
+      addMetricBucket(bySelectedRankBucket, rankBucket(selectedRank), event)
+    const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
+    if (typeof localHour === 'number') {
+      addMetricBucket(byLocalHour, String(localHour).padStart(2, '0'), event)
+      addMetricBucket(byLocalTimeSlot, localTimeSlotFromHour(localHour), event)
+    }
     const localDayOfWeek = readEventMetadataNumber(event, 'localDayOfWeek')
     if (typeof localDayOfWeek === 'number')
       addMetricBucket(byLocalDayOfWeek, String(Math.round(localDayOfWeek)), event)
@@ -1241,13 +1580,55 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     addNumberMapBuckets(byProviderResults, event.metadata?.providerResults, event)
     addNumberMapBuckets(byResultCategory, event.metadata?.resultCategories, event)
     addStatusMapBuckets(byProviderStatus, event.metadata?.providerStatus, event)
+    const firstResultMsValue = readEventMetadataNumber(event, 'firstResultMs')
+    const totalDurationMsValue = readEventMetadataNumber(event, 'totalDurationMs') ?? readEventMetadataNumber(event, 'searchDurationMs')
     addNumberStat(queryLength, readEventMetadataNumber(event, 'queryLength'))
-    addNumberStat(firstResultMs, readEventMetadataNumber(event, 'firstResultMs'))
-    addNumberStat(totalDurationMs, readEventMetadataNumber(event, 'totalDurationMs') ?? readEventMetadataNumber(event, 'searchDurationMs'))
-    addNumberStat(resultCount, readEventMetadataNumber(event, 'searchResultCount'))
+    addNumberStat(firstResultMs, firstResultMsValue)
+    addNumberStat(totalDurationMs, totalDurationMsValue)
+    const resultCountValue = readEventMetadataNumber(event, 'searchResultCount')
+    const providerErrorCountValue = readEventMetadataNumber(event, 'providerErrorCount') ?? 0
+    const providerTimeoutCountValue = readEventMetadataNumber(event, 'providerTimeoutCount') ?? 0
+    const isZeroResult = resultCountValue === 0
+    const hasProviderProblem = providerErrorCountValue > 0 || providerTimeoutCountValue > 0
+    const date = event.occurredAt.slice(0, 10)
+    const trendItem = reliabilityTrend.get(date) ?? {
+      date,
+      events: 0,
+      zeroResult: 0,
+      providerErrors: 0,
+      providerTimeouts: 0,
+      problemSearches: 0,
+      actors: new Set<string>(),
+    }
+
+    trendItem.events += 1
+    trendItem.providerErrors += providerErrorCountValue
+    trendItem.providerTimeouts += providerTimeoutCountValue
+    if (isZeroResult)
+      trendItem.zeroResult += 1
+    if (isZeroResult || hasProviderProblem)
+      trendItem.problemSearches += 1
+    const actor = readEventActor(event)
+    if (actor)
+      trendItem.actors.add(actor)
+    reliabilityTrend.set(date, trendItem)
+
+    if (isZeroResult)
+      zeroResult += 1
+    providerErrors += providerErrorCountValue
+    providerTimeouts += providerTimeoutCountValue
+    if (isZeroResult || hasProviderProblem)
+      problemSearches += 1
+
+    addMetricBucket(byResultCountBucket, resultCountBucket(resultCountValue), event)
+    addMetricBucket(byFirstResultLatencyBucket, latencyBucket(firstResultMsValue), event)
+    addMetricBucket(byTotalDurationBucket, latencyBucket(totalDurationMsValue), event)
+    addNumberStat(resultCount, resultCountValue)
     addNumberStat(firstResultCount, readEventMetadataNumber(event, 'firstResultCount'))
-    addNumberStat(providerErrorCount, readEventMetadataNumber(event, 'providerErrorCount'))
-    addNumberStat(providerTimeoutCount, readEventMetadataNumber(event, 'providerTimeoutCount'))
+    addNumberStat(providerErrorCount, providerErrorCountValue)
+    addNumberStat(providerTimeoutCount, providerTimeoutCountValue)
+    if (readEventMetadataBoolean(event, 'selected') === true || selectedRank != null || selectedPluginId || selectedProvider)
+      selectedSearches += 1
     const hasFilters = readEventMetadataBoolean(event, 'hasFilters')
     if (hasFilters === true)
       withFilters += 1
@@ -1281,6 +1662,14 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     byContextTag: mapMetricBuckets(byContextTag, topLimit),
     byLocalHour: mapMetricBuckets(byLocalHour, 24),
     byLocalDayOfWeek: mapMetricBuckets(byLocalDayOfWeek, 7),
+    byLocalTimeSlot: mapMetricBuckets(byLocalTimeSlot, 4),
+    bySelectedProvider: mapMetricBuckets(bySelectedProvider, topLimit),
+    bySelectedCategory: mapMetricBuckets(bySelectedCategory, topLimit),
+    bySelectedPluginId: mapMetricBuckets(bySelectedPluginId, topLimit),
+    bySelectedRankBucket: mapMetricBuckets(bySelectedRankBucket, 4),
+    byResultCountBucket: mapMetricBuckets(byResultCountBucket, 4),
+    byFirstResultLatencyBucket: mapMetricBuckets(byFirstResultLatencyBucket, 4),
+    byTotalDurationBucket: mapMetricBuckets(byTotalDurationBucket, 4),
     byCountry: mapMetricBuckets(byCountry, topLimit),
     byRegion: mapMetricBuckets(byRegion, topLimit),
     byTimezone: mapMetricBuckets(byTimezone, topLimit),
@@ -1289,6 +1678,30 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
       withoutFilters,
       filterRate: searchEvents.length ? Math.round((withFilters / searchEvents.length) * 10000) / 100 : 0,
     },
+    selectionSummary: {
+      selected: selectedSearches,
+      selectionRate: searchEvents.length ? Math.round((selectedSearches / searchEvents.length) * 10000) / 100 : 0,
+    },
+    reliabilitySummary: {
+      total: searchEvents.length,
+      zeroResult,
+      providerErrors,
+      providerTimeouts,
+      problemSearches,
+      zeroResultRate: searchEvents.length ? Math.round((zeroResult / searchEvents.length) * 10000) / 100 : 0,
+      problemRate: searchEvents.length ? Math.round((problemSearches / searchEvents.length) * 10000) / 100 : 0,
+    },
+    reliabilityTrend: Array.from(reliabilityTrend.values())
+      .map(item => ({
+        date: item.date,
+        events: item.events,
+        zeroResult: item.zeroResult,
+        providerErrors: item.providerErrors,
+        providerTimeouts: item.providerTimeouts,
+        problemSearches: item.problemSearches,
+        uniqueActors: item.actors.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
     latency: {
       firstResultMs: mapNumberStat(firstResultMs),
       totalDurationMs: mapNumberStat(totalDurationMs),
@@ -1445,6 +1858,12 @@ function createSinglePluginAnalytics(pluginId: string, pluginEvents: PlatformGov
     invocations,
     events: scoped.length,
     uniqueActors: actors.size,
+    conversion: {
+      installRate: downloads > 0 ? Math.round((installs / downloads) * 10000) / 100 : 0,
+      invocationRate: installs > 0 ? Math.round((invocations / installs) * 10000) / 100 : 0,
+      invocationsPerActor: actors.size > 0 ? Math.round((invocations / actors.size) * 100) / 100 : 0,
+    },
+    conversionTrend: createPluginConversionTrend(scoped),
     growth: createGrowth(scoped, days),
     trend: createPluginDailyTrend(scoped),
     installTrend: createPluginDailyTrend(scoped.filter(event => event.action === 'install')),
@@ -1481,6 +1900,10 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     statusCode: number | null
     durationMs: number | null
     size: number | null
+    retryable: boolean | null
+    retryCount: number | null
+    maxRetries: number | null
+    nextRetryDelayMs: number | null
   }>()
   const byExtension = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byResourceType = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -1490,10 +1913,63 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   const byFailureReason = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byStatusCode = new Map<string, ReturnType<typeof createMetricBucket>>()
   const bySurface = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byRetryDisposition = new Map<string, ReturnType<typeof createMetricBucket>>()
   const uploadSize = createNumberStats()
   const uploadDurationMs = createNumberStats()
+  const retryCountStats = createNumberStats()
+  const nextRetryDelayMsStats = createNumberStats()
+  const statusTrend = new Map<string, {
+    date: string
+    events: number
+    started: number
+    completed: number
+    failed: number
+    bytes: number
+    actors: Set<string>
+  }>()
+  const retryTrend = new Map<string, {
+    date: string
+    events: number
+    failed: number
+    retryable: number
+    scheduled: number
+    exhausted: number
+    quantity: number
+    actors: Set<string>
+  }>()
+
+  let retryableFailures = 0
+  let nonRetryableFailures = 0
+  let scheduledRetries = 0
+  let exhaustedFailures = 0
 
   for (const event of uploadEvents) {
+    const date = event.occurredAt.slice(0, 10)
+    const trendItem = statusTrend.get(date) ?? {
+      date,
+      events: 0,
+      started: 0,
+      completed: 0,
+      failed: 0,
+      bytes: 0,
+      actors: new Set<string>(),
+    }
+    trendItem.events += 1
+    if (event.action === 'resource.started')
+      trendItem.started += 1
+    else if (event.action === 'resource.completed') {
+      trendItem.completed += 1
+      if (event.unit === 'byte')
+        trendItem.bytes += event.quantity
+    }
+    else if (event.action === 'resource.failed') {
+      trendItem.failed += 1
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      trendItem.actors.add(actor)
+    statusTrend.set(date, trendItem)
+
     const attemptId = readEventMetadataString(event, 'attemptId')
     if (attemptId) {
       const item = attempts.get(attemptId) ?? {
@@ -1512,6 +1988,10 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
         statusCode: null,
         durationMs: null,
         size: null,
+        retryable: null,
+        retryCount: null,
+        maxRetries: null,
+        nextRetryDelayMs: null,
       }
       item.started = item.started || event.action === 'resource.started'
       item.completed = item.completed || event.action === 'resource.completed'
@@ -1524,6 +2004,10 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       item.statusCode ??= readEventMetadataNumber(event, 'statusCode')
       item.durationMs ??= readEventMetadataNumber(event, 'durationMs')
       item.size ??= readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null)
+      item.retryable ??= readEventMetadataBoolean(event, 'retryable')
+      item.retryCount ??= readEventMetadataNumber(event, 'retryCount')
+      item.maxRetries ??= readEventMetadataNumber(event, 'maxRetries')
+      item.nextRetryDelayMs ??= readEventMetadataNumberAny(event, ['nextRetryDelayMs', 'retryAfterMs', 'backoffMs'])
       item.resourceType = readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? item.resourceType
       item.resourceId = event.resourceId ?? item.resourceId
       item.latestAt = event.occurredAt.localeCompare(item.latestAt) > 0 ? event.occurredAt : item.latestAt
@@ -1544,6 +2028,63 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       const statusCode = readEventMetadataNumber(event, 'statusCode')
       if (typeof statusCode === 'number')
         addMetricBucket(byStatusCode, String(Math.round(statusCode)), event, 1)
+
+      const retryable = readEventMetadataBoolean(event, 'retryable')
+      const retryCount = readEventMetadataNumber(event, 'retryCount')
+      const maxRetries = readEventMetadataNumber(event, 'maxRetries')
+      const nextRetryDelayMs = readEventMetadataNumberAny(event, ['nextRetryDelayMs', 'retryAfterMs', 'backoffMs'])
+      const exhausted = retryable === true
+        && typeof retryCount === 'number'
+        && typeof maxRetries === 'number'
+        && retryCount >= maxRetries
+      const scheduled = retryable === true && typeof nextRetryDelayMs === 'number' && nextRetryDelayMs > 0 && !exhausted
+      const disposition = scheduled
+        ? 'retry-scheduled'
+        : exhausted
+          ? 'retry-exhausted'
+          : retryable === true
+            ? 'retryable'
+            : retryable === false
+              ? 'not-retryable'
+              : 'unknown'
+
+      if (retryable === true)
+        retryableFailures += 1
+      else if (retryable === false)
+        nonRetryableFailures += 1
+      if (scheduled)
+        scheduledRetries += 1
+      if (exhausted)
+        exhaustedFailures += 1
+
+      addMetricBucket(byRetryDisposition, disposition, event, 1)
+      addNumberStat(retryCountStats, retryCount)
+      addNumberStat(nextRetryDelayMsStats, nextRetryDelayMs)
+
+      const date = event.occurredAt.slice(0, 10)
+      const retryItem = retryTrend.get(date) ?? {
+        date,
+        events: 0,
+        failed: 0,
+        retryable: 0,
+        scheduled: 0,
+        exhausted: 0,
+        quantity: 0,
+        actors: new Set<string>(),
+      }
+      retryItem.events += 1
+      retryItem.failed += 1
+      retryItem.quantity += event.quantity
+      if (retryable === true)
+        retryItem.retryable += 1
+      if (scheduled)
+        retryItem.scheduled += 1
+      if (exhausted)
+        retryItem.exhausted += 1
+      const actor = readEventActor(event)
+      if (actor)
+        retryItem.actors.add(actor)
+      retryTrend.set(date, retryItem)
     }
     addNumberStat(uploadSize, readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null))
   }
@@ -1574,6 +2115,10 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
         statusCode: item.statusCode,
         durationMs: item.durationMs,
         size: item.size,
+        retryable: item.retryable,
+        retryCount: item.retryCount,
+        maxRetries: item.maxRetries,
+        nextRetryDelayMs: item.nextRetryDelayMs,
         latestAt: item.latestAt,
         ageMs: Number.isFinite(latestAt) ? Math.max(0, Date.now() - latestAt) : null,
       }
@@ -1604,6 +2149,38 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     byFailureReason: mapMetricBuckets(byFailureReason, topLimit),
     byStatusCode: mapMetricBuckets(byStatusCode, topLimit),
     bySurface: mapMetricBuckets(bySurface, topLimit),
+    retrySummary: {
+      retryableFailures,
+      nonRetryableFailures,
+      scheduledRetries,
+      exhaustedFailures,
+      retryCount: mapNumberStat(retryCountStats),
+      nextRetryDelayMs: mapNumberStat(nextRetryDelayMsStats),
+    },
+    byRetryDisposition: mapMetricBuckets(byRetryDisposition, topLimit),
+    statusTrend: Array.from(statusTrend.values())
+      .map(item => ({
+        date: item.date,
+        events: item.events,
+        started: item.started,
+        completed: item.completed,
+        failed: item.failed,
+        bytes: item.bytes,
+        uniqueActors: item.actors.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    retryTrend: Array.from(retryTrend.values())
+      .map(item => ({
+        date: item.date,
+        events: item.events,
+        failed: item.failed,
+        retryable: item.retryable,
+        scheduled: item.scheduled,
+        exhausted: item.exhausted,
+        quantity: item.quantity,
+        uniqueActors: item.actors.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
     uploadSize: mapNumberStat(uploadSize),
     uploadDurationMs: mapNumberStat(uploadDurationMs),
     problemAttempts,
@@ -1668,7 +2245,55 @@ function mapStorageUsageBuckets(buckets: Map<string, ReturnType<typeof createSto
     .slice(0, limit)
 }
 
-function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
+function storagePolicyStatusRank(status: StoragePolicyEvaluationStatus): number {
+  if (status === 'blocked')
+    return 4
+  if (status === 'warning')
+    return 3
+  if (status === 'disabled')
+    return 2
+  return 1
+}
+
+function maxNullableRatio(...values: Array<number | null>): number {
+  return values.reduce<number>((max, value) => value == null ? max : Math.max(max, value), 0)
+}
+
+function createStoragePolicyAnalytics(evaluations: StoragePolicyEvaluation[], topLimit: number): StoragePolicyAnalytics {
+  const summary: StoragePolicyAnalyticsSummary = {
+    total: evaluations.length,
+    active: evaluations.filter(item => item.enabled).length,
+    ok: evaluations.filter(item => item.status === 'ok').length,
+    warning: evaluations.filter(item => item.status === 'warning').length,
+    blocked: evaluations.filter(item => item.status === 'blocked').length,
+    disabled: evaluations.filter(item => item.status === 'disabled').length,
+    alerts: buildStoragePolicyAlerts(evaluations).length,
+    highestStoredUtilization: 0,
+    highestTrafficUtilization: 0,
+    highestOperationUtilization: 0,
+  }
+
+  for (const evaluation of evaluations) {
+    summary.highestStoredUtilization = Math.max(summary.highestStoredUtilization, evaluation.utilization.storedBytes ?? 0)
+    summary.highestTrafficUtilization = Math.max(summary.highestTrafficUtilization, evaluation.utilization.trafficBytes ?? 0)
+    summary.highestOperationUtilization = Math.max(summary.highestOperationUtilization, evaluation.utilization.operations ?? 0)
+  }
+
+  return {
+    policySummary: summary,
+    policyRisks: [...evaluations]
+      .filter(item => item.status !== 'ok')
+      .sort((left, right) => {
+        return storagePolicyStatusRank(right.status) - storagePolicyStatusRank(left.status)
+          || maxNullableRatio(right.utilization.storedBytes, right.utilization.trafficBytes, right.utilization.operations)
+            - maxNullableRatio(left.utilization.storedBytes, left.utilization.trafficBytes, left.utilization.operations)
+          || right.usage.operations - left.usage.operations
+      })
+      .slice(0, topLimit),
+  }
+}
+
+function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: number, policyEvaluations: StoragePolicyEvaluation[] = []) {
   const storageEvents = events.filter(event => event.scope === 'storage')
   const byChannelUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
   const byProviderUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
@@ -1724,6 +2349,7 @@ function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: num
   return {
     ...createScopedAnalytics(storageEvents, topLimit),
     ...totals,
+    ...createStoragePolicyAnalytics(policyEvaluations, topLimit),
     byChannelUsage: mapStorageUsageBuckets(byChannelUsage, topLimit),
     byProviderUsage: mapStorageUsageBuckets(byProviderUsage, topLimit),
     byResourceTypeUsage: mapStorageUsageBuckets(byResourceTypeUsage, topLimit),
@@ -1756,13 +2382,37 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
     channels: Map<string, number>
     models: Map<string, number>
   }>()
+  const models = new Map<string, {
+    model: string
+    requests: number
+    tokens: number
+    quantity: number
+    actors: Set<string>
+    providers: Map<string, number>
+    channels: Map<string, number>
+    providerTypes: Map<string, number>
+  }>()
   const byModel = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byProviderType = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const trend = new Map<string, {
+    date: string
+    events: number
+    requests: number
+    tokens: number
+    quantity: number
+    actors: Set<string>
+  }>()
+  const usageSummary = {
+    events: providerEvents.length,
+    requests: 0,
+    tokens: 0,
+  }
 
   for (const event of providerEvents) {
     const providerId = event.resourceId ?? 'unknown'
-    const model = readEventMetadataString(event, 'model')
+    const model = readEventMetadataString(event, 'model') ?? 'unknown'
     const providerType = readEventMetadataString(event, 'providerType')
+    const date = event.occurredAt.slice(0, 10)
     const item = providers.get(providerId) ?? {
       providerId,
       requests: 0,
@@ -1773,32 +2423,104 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       channels: new Map<string, number>(),
       models: new Map<string, number>(),
     }
-    if (event.action === 'provider.request')
+    const trendItem = trend.get(date) ?? {
+      date,
+      events: 0,
+      requests: 0,
+      tokens: 0,
+      quantity: 0,
+      actors: new Set<string>(),
+    }
+    const modelItem = models.get(model) ?? {
+      model,
+      requests: 0,
+      tokens: 0,
+      quantity: 0,
+      actors: new Set<string>(),
+      providers: new Map<string, number>(),
+      channels: new Map<string, number>(),
+      providerTypes: new Map<string, number>(),
+    }
+    if (event.action === 'provider.request') {
       item.requests += event.quantity
-    if (event.action === 'provider.usage' && event.unit === 'token')
+      trendItem.requests += event.quantity
+      usageSummary.requests += event.quantity
+      modelItem.requests += event.quantity
+    }
+    if (event.action === 'provider.usage' && event.unit === 'token') {
       item.tokens += event.quantity
+      trendItem.tokens += event.quantity
+      usageSummary.tokens += event.quantity
+      modelItem.tokens += event.quantity
+    }
     item.quantity += event.quantity
+    modelItem.quantity += event.quantity
+    trendItem.events += 1
+    trendItem.quantity += event.quantity
     const actor = readEventActor(event)
-    if (actor)
+    if (actor) {
       item.actors.add(actor)
+      modelItem.actors.add(actor)
+      trendItem.actors.add(actor)
+    }
     item.units.set(event.unit, (item.units.get(event.unit) ?? 0) + event.quantity)
-    if (event.channel)
+    modelItem.providers.set(providerId, (modelItem.providers.get(providerId) ?? 0) + event.quantity)
+    if (event.channel) {
       item.channels.set(event.channel, (item.channels.get(event.channel) ?? 0) + event.quantity)
+      modelItem.channels.set(event.channel, (modelItem.channels.get(event.channel) ?? 0) + event.quantity)
+    }
     if (event.action === 'provider.usage' && event.unit === 'token') {
       addMetricBucket(byModel, model, event)
       if (model)
         item.models.set(model, (item.models.get(model) ?? 0) + event.quantity)
     }
-    if (providerType)
+    if (providerType) {
       addMetricBucket(byProviderType, providerType, event)
+      modelItem.providerTypes.set(providerType, (modelItem.providerTypes.get(providerType) ?? 0) + event.quantity)
+    }
     providers.set(providerId, item)
+    models.set(model, modelItem)
+    trend.set(date, trendItem)
   }
 
   return {
     ...createScopedAnalytics(providerEvents, topLimit),
     growth: createGrowth(providerEvents, days),
+    usageSummary,
+    trend: Array.from(trend.values())
+      .map(item => ({
+        date: item.date,
+        events: item.events,
+        requests: item.requests,
+        tokens: item.tokens,
+        quantity: item.quantity,
+        uniqueActors: item.actors.size,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
     byModel: mapMetricBuckets(byModel, topLimit),
     byProviderType: mapMetricBuckets(byProviderType, topLimit),
+    modelDistribution: Array.from(models.values())
+      .map(item => ({
+        model: item.model,
+        requests: item.requests,
+        tokens: item.tokens,
+        quantity: item.quantity,
+        uniqueActors: item.actors.size,
+        byProvider: Array.from(item.providers.entries())
+          .map(([providerId, quantity]) => ({ providerId, quantity }))
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5),
+        byChannel: Array.from(item.channels.entries())
+          .map(([channel, quantity]) => ({ channel, quantity }))
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5),
+        byProviderType: Array.from(item.providerTypes.entries())
+          .map(([providerType, quantity]) => ({ providerType, quantity }))
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5),
+      }))
+      .sort((a, b) => b.tokens - a.tokens || b.requests - a.requests || b.quantity - a.quantity)
+      .slice(0, topLimit),
     leaderboard: Array.from(providers.values())
       .map(item => ({
         providerId: item.providerId,
@@ -1828,6 +2550,8 @@ function createProviderQuotaAnalytics(
   quotas: PlatformGovernanceConfig[],
   topLimit: number,
 ) {
+  type ProviderQuotaStatus = 'blocked' | 'warning' | 'ok' | 'disabled'
+  const statusRank: Record<ProviderQuotaStatus, number> = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
   const items = quotas
     .map((quota) => {
       const providerId = quota.targetId ?? quota.provider ?? 'unknown'
@@ -1853,9 +2577,13 @@ function createProviderQuotaAnalytics(
 
       const requestUtilization = roundUsageRatio(requests, maxRequests)
       const tokenUtilization = roundUsageRatio(tokens, maxTokens)
+      const remainingRequests = calculateRemainingBudget(requests, maxRequests)
+      const remainingTokens = calculateRemainingBudget(tokens, maxTokens)
       const blocked = (maxRequests != null && requests >= maxRequests) || (maxTokens != null && tokens >= maxTokens)
       const warning = (requestUtilization != null && requestUtilization >= warningThreshold)
         || (tokenUtilization != null && tokenUtilization >= warningThreshold)
+
+      const status: ProviderQuotaStatus = !quota.enabled ? 'disabled' : blocked ? 'blocked' : warning ? 'warning' : 'ok'
 
       return {
         configId: quota.id,
@@ -1865,7 +2593,7 @@ function createProviderQuotaAnalytics(
         provider: quota.provider,
         enabled: quota.enabled,
         windowDays,
-        status: !quota.enabled ? 'disabled' : blocked ? 'blocked' : warning ? 'warning' : 'ok',
+        status,
         usage: {
           requests,
           tokens,
@@ -1879,10 +2607,17 @@ function createProviderQuotaAnalytics(
           requests: requestUtilization,
           tokens: tokenUtilization,
         },
+        remaining: {
+          requests: remainingRequests,
+          tokens: remainingTokens,
+        },
+        overage: {
+          requests: calculateOverageBudget(requests, maxRequests),
+          tokens: calculateOverageBudget(tokens, maxTokens),
+        },
       }
     })
     .sort((left, right) => {
-      const statusRank = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
       const leftUtilization = Math.max(left.utilization.requests ?? 0, left.utilization.tokens ?? 0)
       const rightUtilization = Math.max(right.utilization.requests ?? 0, right.utilization.tokens ?? 0)
       return statusRank[right.status] - statusRank[left.status] || rightUtilization - leftUtilization
@@ -1917,6 +2652,92 @@ function createProviderQuotaAnalytics(
   return {
     summary,
     items: items.slice(0, topLimit),
+  }
+}
+
+function latestTrendPoint<T extends { date: string }>(items: T[]): T | null {
+  return items.at(-1) ?? null
+}
+
+function createOperationsDashboardSummary(input: {
+  users: ReturnType<typeof createUserAnalytics>
+  searches: ReturnType<typeof createSearchAnalytics>
+  plugins: ReturnType<typeof createPluginAnalytics>
+  uploads: ReturnType<typeof createUploadAnalytics>
+  notifications: ReturnType<typeof createNotificationAnalytics>
+  storage: ReturnType<typeof createStorageAnalytics>
+  providers: ReturnType<typeof createProviderAnalytics> & {
+    quotaSummary: ReturnType<typeof createProviderQuotaAnalytics>['summary']
+    quotas: ReturnType<typeof createProviderQuotaAnalytics>['items']
+  }
+}, topLimit: number) {
+  const searchLatest = latestTrendPoint(input.searches.trend)
+  const signupLatest = latestTrendPoint(input.users.signupGrowthTrend)
+  const pluginInstallLatest = latestTrendPoint(input.plugins.installTrend)
+  const providerLatest = latestTrendPoint(input.providers.trend)
+  const uploadLatest = latestTrendPoint(input.uploads.statusTrend)
+
+  return {
+    growth: {
+      userSignups: {
+        total: input.users.signups,
+        latestDate: signupLatest?.date ?? null,
+        latestQuantity: signupLatest?.quantity ?? 0,
+        cumulative: signupLatest?.cumulative ?? input.users.signups,
+        growthRate: input.users.signupGrowth.eventGrowthRate,
+      },
+      searches: {
+        total: input.searches.totalEvents,
+        latestDate: searchLatest?.date ?? null,
+        latestQuantity: searchLatest?.quantity ?? 0,
+        growthRate: input.searches.growth.eventGrowthRate,
+        zeroResultRate: input.searches.reliabilitySummary.zeroResultRate,
+        problemRate: input.searches.reliabilitySummary.problemRate,
+        selectionRate: input.searches.selectionSummary.selectionRate,
+      },
+      pluginInstalls: {
+        total: input.plugins.leaderboard.reduce((sum, item) => sum + item.installs, 0),
+        latestDate: pluginInstallLatest?.date ?? null,
+        latestQuantity: pluginInstallLatest?.installs ?? 0,
+        growthRate: input.plugins.growth.eventGrowthRate,
+      },
+      providerUsage: {
+        requests: input.providers.usageSummary.requests,
+        tokens: input.providers.usageSummary.tokens,
+        latestDate: providerLatest?.date ?? null,
+        latestRequests: providerLatest?.requests ?? 0,
+        latestTokens: providerLatest?.tokens ?? 0,
+      },
+      uploads: {
+        latestDate: uploadLatest?.date ?? null,
+        latestStarted: uploadLatest?.started ?? 0,
+        latestCompleted: uploadLatest?.completed ?? 0,
+        latestFailed: uploadLatest?.failed ?? 0,
+        failureRate: input.uploads.failureRate,
+        stuckRate: input.uploads.stuckRate,
+      },
+    },
+    leaderboards: {
+      hotPlugins: input.plugins.leaderboard.slice(0, topLimit),
+      topModels: input.providers.modelDistribution.slice(0, topLimit),
+      topProviders: input.providers.leaderboard.slice(0, topLimit),
+    },
+    riskSummary: {
+      uploadProblems: input.uploads.problemAttempts.length,
+      storageAlerts: input.storage.policySummary.alerts,
+      storageBlockedPolicies: input.storage.policySummary.blocked,
+      notificationRisks: input.notifications.channelRisks.length,
+      notificationFailedDeliveries: input.notifications.deliveries.failed,
+      providerQuotaBlocked: input.providers.quotaSummary.blocked,
+      providerQuotaWarning: input.providers.quotaSummary.warning,
+    },
+    trends: {
+      userGrowth: input.users.signupGrowthTrend.slice(-topLimit),
+      searches: input.searches.trend.slice(-topLimit),
+      pluginInstalls: input.plugins.installTrend.slice(-topLimit),
+      providerUsage: input.providers.trend.slice(-topLimit),
+      uploadStatus: input.uploads.statusTrend.slice(-topLimit),
+    },
   }
 }
 
@@ -2063,14 +2884,34 @@ export async function getPlatformGovernanceAnalytics(
     days,
     limit: options.limit ?? 5000,
   })
-  const visitEvents = events.filter(item => item.scope === 'app' && item.action === 'visit')
   const notificationEvents = events.filter(item => item.scope === 'notification')
   const providerEvents = events.filter(item => item.scope === 'intelligence' && item.resourceType === 'provider')
+  const notificationChannels = await listPlatformGovernanceConfigs(event, {
+    configType: 'notification_channel',
+  })
   const providerQuotas = await listPlatformGovernanceConfigs(event, {
     configType: 'intelligence_provider_quota',
   })
+  const storagePolicies = await listPlatformGovernanceConfigs(event, {
+    configType: 'storage_channel',
+  })
+  const storagePolicyEvaluations = await Promise.all(
+    storagePolicies.map(policy => evaluateStorageChannelPolicy(event, policy, { days, limit: options.limit ?? 5000 })),
+  )
+  const visits = createVisitAnalytics(events, days, topLimit)
+  const searches = createSearchAnalytics(events, days, topLimit)
+  const users = createUserAnalytics(events, days, topLimit)
+  const plugins = createPluginAnalytics(events, days, topLimit)
+  const uploads = createUploadAnalytics(events, topLimit)
+  const notifications = createNotificationAnalytics(notificationEvents, topLimit, notificationChannels)
+  const storage = createStorageAnalytics(events, topLimit, storagePolicyEvaluations)
   const providers = createProviderAnalytics(events, days, topLimit)
   const providerQuotaAnalytics = createProviderQuotaAnalytics(providerEvents, providerQuotas, topLimit)
+  const providerDashboard = {
+    ...providers,
+    quotaSummary: providerQuotaAnalytics.summary,
+    quotas: providerQuotaAnalytics.items,
+  }
 
   return {
     days,
@@ -2079,21 +2920,23 @@ export async function getPlatformGovernanceAnalytics(
       ...summarizeEvents(events, topLimit),
       growth: createGrowth(events, days),
     },
-    visits: {
-      ...createScopedAnalytics(visitEvents, topLimit),
-      growth: createGrowth(visitEvents, days),
-    },
-    searches: createSearchAnalytics(events, days, topLimit),
-    users: createUserAnalytics(events, days, topLimit),
-    plugins: createPluginAnalytics(events, days, topLimit),
-    uploads: createUploadAnalytics(events, topLimit),
-    notifications: createNotificationAnalytics(notificationEvents, topLimit),
-    storage: createStorageAnalytics(events, topLimit),
-    providers: {
-      ...providers,
-      quotaSummary: providerQuotaAnalytics.summary,
-      quotas: providerQuotaAnalytics.items,
-    },
+    dashboard: createOperationsDashboardSummary({
+      users,
+      searches,
+      plugins,
+      uploads,
+      notifications,
+      storage,
+      providers: providerDashboard,
+    }, topLimit),
+    visits,
+    searches,
+    users,
+    plugins,
+    uploads,
+    notifications,
+    storage,
+    providers: providerDashboard,
   }
 }
 
@@ -2303,6 +3146,14 @@ function roundUsageRatio(used: number, limit: number | null): number | null {
   return Math.round((used / limit) * 10000) / 100
 }
 
+function calculateRemainingBudget(used: number, limit: number | null): number | null {
+  return limit == null ? null : Math.max(limit - used, 0)
+}
+
+function calculateOverageBudget(used: number, limit: number | null): number {
+  return limit == null ? 0 : Math.max(used - limit, 0)
+}
+
 function readStorageOperationLimit(limits: Record<string, unknown> | null, days: number): number | null {
   const windowLimit = readLimitNumber(limits, ['maxOperations', 'operationLimit', 'maxOperationsPerWindow'])
   if (windowLimit != null)
@@ -2422,6 +3273,14 @@ export async function evaluateStorageChannelPolicy(
   const maxOperations = readStorageOperationLimit(policy.limits, days)
   const alertBytes = readLimitNumber(policy.limits, ['alertBytes', 'warningBytes'])
   const warningThreshold = resolvePolicyWarningPercent(policy)
+  const emptyUsage = {
+    storedBytes: 0,
+    trafficBytes: 0,
+    operations: 0,
+    writes: 0,
+    reads: 0,
+    deletes: 0,
+  }
 
   if (!policy.enabled) {
     return {
@@ -2433,14 +3292,7 @@ export async function evaluateStorageChannelPolicy(
       days,
       status: 'disabled',
       reasons: ['policy-disabled'],
-      usage: {
-        storedBytes: 0,
-        trafficBytes: 0,
-        operations: 0,
-        writes: 0,
-        reads: 0,
-        deletes: 0,
-      },
+      usage: emptyUsage,
       limits: {
         maxBytes,
         trafficBytes,
@@ -2452,6 +3304,18 @@ export async function evaluateStorageChannelPolicy(
         storedBytes: null,
         trafficBytes: null,
         operations: null,
+      },
+      remaining: {
+        storedBytes: calculateRemainingBudget(emptyUsage.storedBytes, maxBytes),
+        trafficBytes: calculateRemainingBudget(emptyUsage.trafficBytes, trafficBytes),
+        operations: calculateRemainingBudget(emptyUsage.operations, maxOperations),
+        alertBytes: calculateRemainingBudget(emptyUsage.storedBytes, alertBytes),
+      },
+      overage: {
+        storedBytes: calculateOverageBudget(emptyUsage.storedBytes, maxBytes),
+        trafficBytes: calculateOverageBudget(emptyUsage.trafficBytes, trafficBytes),
+        operations: calculateOverageBudget(emptyUsage.operations, maxOperations),
+        alertBytes: calculateOverageBudget(emptyUsage.storedBytes, alertBytes),
       },
     }
   }
@@ -2497,6 +3361,18 @@ export async function evaluateStorageChannelPolicy(
     trafficBytes: roundUsageRatio(usage.trafficBytes, trafficBytes),
     operations: roundUsageRatio(usage.operations, maxOperations),
   }
+  const remaining = {
+    storedBytes: calculateRemainingBudget(usage.storedBytes, maxBytes),
+    trafficBytes: calculateRemainingBudget(usage.trafficBytes, trafficBytes),
+    operations: calculateRemainingBudget(usage.operations, maxOperations),
+    alertBytes: calculateRemainingBudget(usage.storedBytes, alertBytes),
+  }
+  const overage = {
+    storedBytes: calculateOverageBudget(usage.storedBytes, maxBytes),
+    trafficBytes: calculateOverageBudget(usage.trafficBytes, trafficBytes),
+    operations: calculateOverageBudget(usage.operations, maxOperations),
+    alertBytes: calculateOverageBudget(usage.storedBytes, alertBytes),
+  }
   const reasons: string[] = []
 
   if (maxBytes != null && usage.storedBytes >= maxBytes)
@@ -2534,6 +3410,8 @@ export async function evaluateStorageChannelPolicy(
       warningThreshold,
     },
     utilization,
+    remaining,
+    overage,
   }
 }
 

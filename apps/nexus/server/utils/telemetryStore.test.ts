@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listPlatformGovernanceEvents } from './platformGovernanceStore'
+import { getPlatformGovernanceAnalytics, listPlatformGovernanceEvents } from './platformGovernanceStore'
 import { getAnalyticsSummary, recordTelemetryEvent } from './telemetryStore'
 
 interface TelemetryRow {
@@ -330,6 +330,11 @@ describe('telemetryStore search provider metrics', () => {
         contextTags: ['editor'],
         localHour: 9,
         localDayOfWeek: 2,
+        selected: true,
+        selectedProvider: 'everything-provider',
+        selectedCategory: 'plugin',
+        selectedPluginId: 'touch-snippets',
+        selectedRank: 2,
         query: 'must not be stored',
       },
       isAnonymous: true,
@@ -421,10 +426,107 @@ describe('telemetryStore search provider metrics', () => {
       contextTags: ['editor'],
       localHour: 9,
       localDayOfWeek: 2,
+      selected: true,
+      selectedProvider: 'everything-provider',
+      selectedCategory: 'plugin',
+      selectedPluginId: 'touch-snippets',
+      selectedRank: 2,
       countryCode: 'US',
       regionCode: 'CA',
       timezone: 'America/Los_Angeles',
     })
     expect(JSON.stringify(governanceRows[0])).not.toContain('must not be stored')
+
+    const analytics = await getPlatformGovernanceAnalytics(makeEvent(), { days: 7, limit: 100, topLimit: 20 })
+    expect(analytics.searches.selectionSummary).toEqual({
+      selected: 1,
+      selectionRate: 100,
+    })
+    expect(analytics.searches.bySelectedProvider).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'everything-provider', events: 1 }),
+    ]))
+    expect(analytics.searches.bySelectedCategory).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'plugin', events: 1 }),
+    ]))
+    expect(analytics.searches.bySelectedPluginId).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'touch-snippets', events: 1 }),
+    ]))
+    expect(analytics.searches.bySelectedRankBucket).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '2-3', events: 1 }),
+    ]))
+  })
+
+  it('records visit governance hotspot metadata from sanitized telemetry', async () => {
+    await recordTelemetryEvent(makeEvent(), {
+      eventType: 'visit',
+      clientId: 'visitor-client',
+      platform: 'darwin',
+      version: '2.4.10',
+      metadata: {
+        route: '/dashboard/admin/governance?token=secret#details',
+        page: 'Data Governance',
+        surface: 'dashboard-admin',
+        referrer: '/dashboard/plugins?query=private',
+        source: 'core-app?query=private',
+        localHour: 21,
+        localDayOfWeek: 5,
+        query: 'must not be stored',
+      },
+    })
+
+    const governanceRows = await listPlatformGovernanceEvents(makeEvent(), {
+      scope: 'app',
+      action: 'visit',
+      limit: 10,
+    })
+    expect(governanceRows).toHaveLength(1)
+    expect(governanceRows[0]).toMatchObject({
+      scope: 'app',
+      action: 'visit',
+      resourceType: 'route',
+      resourceId: '/dashboard/admin/governance',
+      channel: 'dashboard-admin',
+      unit: 'visit',
+      quantity: 1,
+    })
+    expect(governanceRows[0]?.actorHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(governanceRows[0]?.actorHash).not.toBe('visitor-client')
+    expect(governanceRows[0]?.metadata).toMatchObject({
+      route: '/dashboard/admin/governance',
+      page: 'Data Governance',
+      surface: 'dashboard-admin',
+      referrer: '/dashboard/plugins',
+      source: 'core-app',
+      localHour: 21,
+      localDayOfWeek: 5,
+      countryCode: 'US',
+      regionCode: 'CA',
+      timezone: 'America/Los_Angeles',
+    })
+    const serializedRows = JSON.stringify(governanceRows)
+    expect(serializedRows).not.toContain('visitor-client')
+    expect(serializedRows).not.toContain('secret')
+    expect(serializedRows).not.toContain('private')
+    expect(serializedRows).not.toContain('must not be stored')
+
+    const analytics = await getPlatformGovernanceAnalytics(makeEvent(), { days: 7, limit: 100, topLimit: 20 })
+    expect(analytics.visits.byRoute).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '/dashboard/admin/governance', events: 1 }),
+    ]))
+    expect(analytics.visits.byPage).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'Data Governance', events: 1 }),
+    ]))
+    expect(analytics.visits.bySurface).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'dashboard-admin', events: 1 }),
+    ]))
+    expect(analytics.visits.byReferrer).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '/dashboard/plugins', events: 1 }),
+    ]))
+    expect(analytics.visits.byLocalHour).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '21', events: 1 }),
+    ]))
+    expect(analytics.visits.byLocalTimeSlot).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'evening', events: 1 }),
+    ]))
   })
 })
