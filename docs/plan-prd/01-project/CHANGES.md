@@ -143,7 +143,7 @@
 - `docs/plan-prd/README.md`
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/CHANGES.md`
-  - Compressed repeated Data Governance status paragraphs in active entry docs into current-state summaries.
+  - Compressed repeated Data Governance status paragraphs in active entry docs into current-state summaries, including upload retry diagnostics, storage alerts, direct invoke quota, and Provider Registry quota admin follow-ups.
   - Kept detailed Data Governance history in this changelog and retained explicit live-evidence gaps in the active TODO/README/INDEX entries.
 
 ### feat(nexus): add notification provider health analytics
