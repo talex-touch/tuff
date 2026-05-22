@@ -13,6 +13,16 @@
 
 ## 2026-05-22
 
+### feat(nexus): show notification unread badges
+
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/pages/dashboard/notifications.vue`
+- `apps/nexus/app/pages/dashboard/notifications.test.ts`
+- `apps/nexus/i18n/locales/{en,zh}.ts`
+  - Dashboard account navigation now fetches the unread notification count and shows a bounded unread badge for the notification center.
+  - The notification center updates the shared unread-count state after loading inbox data, so sidebar badges stay aligned with read actions.
+  - Focused UI contract coverage verifies unread-count fetch, badge rendering, shared state, and localized aria labels.
+
 ### docs(search): add competitive analysis roadmap
 
 - `docs/INDEX.md`
