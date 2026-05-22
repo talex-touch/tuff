@@ -13,6 +13,15 @@
 
 ## 2026-05-22
 
+### docs(plan-prd): record current quality pr pass
+
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+  - Synced the active quality status after `pnpm quality:pr` passed on the current temporary master in a clean dependency worktree.
+  - Clarified that `quality:pr` now covers changed-file lint, `test:targeted`, and CoreApp node/web typecheck, while `quality:release` remains the broader full-repo release gate.
+  - Kept the temporary symlink-based typecheck duplicate-declaration failure out of the product status because it was a validation-environment artifact, not a source regression.
+
 ### feat(nexus): show notification unread badges
 
 - `apps/nexus/app/components/dashboard/DashboardNav.vue`
