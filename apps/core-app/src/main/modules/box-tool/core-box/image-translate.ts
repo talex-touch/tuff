@@ -76,6 +76,22 @@ export async function translateCoreBoxImageItem(
   return await translateImageBase64(imageBase64, targetLang, options)
 }
 
+export async function translateClipboardImage(
+  targetLang = 'zh',
+  options: { openPinWindow?: boolean } = {}
+): Promise<CoreBoxImageTranslateResponse> {
+  const image = clipboard.readImage()
+  if (image.isEmpty()) {
+    return {
+      success: false,
+      code: 'IMAGE_UNAVAILABLE',
+      error: 'Clipboard image is unavailable.'
+    }
+  }
+
+  return await translateImageBase64(image.toPNG().toString('base64'), targetLang, options)
+}
+
 export async function translateImageBase64(
   imageBase64: string,
   targetLang = 'zh',

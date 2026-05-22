@@ -6,6 +6,7 @@ const sceneMocks = vi.hoisted(() => ({
 }))
 
 const electronMocks = vi.hoisted(() => ({
+  readImage: vi.fn(),
   writeImage: vi.fn(),
   createFromBuffer: vi.fn(() => ({
     isEmpty: () => false
@@ -18,6 +19,7 @@ const pinWindowMocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   clipboard: {
+    readImage: electronMocks.readImage,
     writeImage: electronMocks.writeImage
   },
   nativeImage: {
@@ -35,6 +37,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import {
   normalizeImageBase64Payload,
+  translateClipboardImage,
   translateCoreBoxImageItem,
   translateImageBase64
 } from './image-translate'
@@ -55,7 +58,7 @@ describe('translateCoreBoxImageItem', () => {
     vi.clearAllMocks()
   })
 
-  it('runs screenshot translate scene for clipboard image item and writes translated image', async () => {
+  it('runs image translate scene for clipboard image item and writes translated image', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'corebox-image-translate-'))
     const imagePath = path.join(tempDir, 'source.png')
     await writeFile(imagePath, Buffer.from('source-image'))
@@ -215,6 +218,69 @@ describe('translateCoreBoxImageItem', () => {
     expect(sceneMocks.runNexusScene).not.toHaveBeenCalled()
     expect(electronMocks.writeImage).not.toHaveBeenCalled()
     expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
+  })
+
+  it('runs image translate scene for current clipboard image and opens pin window', async () => {
+    const sourceBase64 = Buffer.from('clipboard-image').toString('base64')
+    const translatedBase64 = Buffer.from('translated-image').toString('base64')
+
+    electronMocks.readImage.mockReturnValue({
+      isEmpty: () => false,
+      toPNG: () => Buffer.from('clipboard-image')
+    })
+    sceneMocks.runNexusScene.mockResolvedValue({
+      status: 'completed',
+      output: {
+        translatedImageBase64: translatedBase64
+      }
+    })
+    sceneMocks.extractTranslatedImageFromSceneRun.mockReturnValue({
+      translatedImageBase64: translatedBase64,
+      imageMimeType: 'image/png',
+      sourceText: 'hello',
+      targetText: '你好',
+      overlay: { mode: 'client-render' }
+    })
+
+    const result = await translateClipboardImage('zh', { openPinWindow: true })
+
+    expect(result).toMatchObject({
+      success: true,
+      sourceText: 'hello',
+      targetText: '你好'
+    })
+    expect(sceneMocks.runNexusScene).toHaveBeenCalledWith('corebox.screenshot.translate', {
+      input: {
+        imageBase64: sourceBase64,
+        targetLang: 'zh'
+      },
+      capability: undefined
+    })
+    expect(pinWindowMocks.openImageTranslatePinWindow).toHaveBeenCalledWith({
+      translatedImageBase64: translatedBase64,
+      imageMimeType: 'image/png',
+      sourceText: 'hello',
+      targetText: '你好',
+      overlay: { mode: 'client-render' }
+    })
+    expect(electronMocks.writeImage).not.toHaveBeenCalled()
+  })
+
+  it('returns IMAGE_UNAVAILABLE when current clipboard image is empty', async () => {
+    electronMocks.readImage.mockReturnValue({
+      isEmpty: () => true,
+      toPNG: () => Buffer.from('unused')
+    })
+
+    const result = await translateClipboardImage('zh', { openPinWindow: true })
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'IMAGE_UNAVAILABLE'
+    })
+    expect(sceneMocks.runNexusScene).not.toHaveBeenCalled()
+    expect(pinWindowMocks.openImageTranslatePinWindow).not.toHaveBeenCalled()
+    expect(electronMocks.writeImage).not.toHaveBeenCalled()
   })
 
   it('returns SCENE_UNAVAILABLE when Nexus screenshot scene request fails', async () => {
