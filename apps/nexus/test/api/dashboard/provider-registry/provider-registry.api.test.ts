@@ -307,10 +307,46 @@ describe('/api/dashboard/provider-registry', () => {
     expect(result.providers[0]).toMatchObject({
       vendor: 'tencent-cloud',
       capabilities: expect.arrayContaining([
-        expect.objectContaining({ capability: 'text.translate' }),
+        expect.objectContaining({
+          capability: 'text.translate',
+          adapter: expect.objectContaining({
+            ready: true,
+            matchedKey: 'tencent-cloud:text.translate',
+            reason: 'adapter-ready',
+          }),
+        }),
         expect.objectContaining({ capability: 'image.translate' }),
       ]),
     })
+  })
+
+  it('列表接口标出 capability 缺少 scene adapter 的配置风险', async () => {
+    h3Mocks.readBody.mockResolvedValue({
+      ...tencentTranslateProviderBody(),
+      capabilities: [
+        {
+          capability: 'speech.transcribe',
+          schemaRef: 'nexus://schemas/provider/speech-transcribe.v1',
+          metering: { unit: 'audio_second' },
+        },
+      ],
+    })
+    await createProviderHandler(makeEvent())
+
+    h3Mocks.getQuery.mockReturnValue({ vendor: 'tencent-cloud' })
+    const result = await listProvidersHandler(makeEvent())
+
+    expect(result.providers[0].capabilities).toEqual([
+      expect.objectContaining({
+        capability: 'speech.transcribe',
+        adapter: expect.objectContaining({
+          ready: false,
+          matchedKey: null,
+          fallbackKey: 'tencent-cloud:speech.transcribe',
+          reason: 'adapter-missing',
+        }),
+      }),
+    ])
   })
 
   it('capabilities 接口支持按 vendor 查询', async () => {

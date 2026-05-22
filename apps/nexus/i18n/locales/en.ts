@@ -1220,6 +1220,14 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             pending: 'Pending',
             rejected: 'Rejected',
             noRatings: 'No approved ratings yet.',
+            trendMeta: '{date}: approved {approved} · pending {pending} · rejected {rejected}',
+          },
+          conversion: {
+            title: 'Conversion efficiency',
+            installRate: 'Download to install',
+            invocationRate: 'Install to invoke',
+            invocationsPerActor: 'Invokes per user',
+            trendMeta: '{date}: install {installRate} · invoke {invocationRate} · per user {invocationsPerActor}',
           },
           breakdowns: {
             actions: 'Action mix',

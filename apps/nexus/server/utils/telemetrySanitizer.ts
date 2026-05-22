@@ -378,6 +378,68 @@ function sanitizeFeatureUseMetadata(value: Record<string, unknown> | undefined):
   return Object.keys(metadata).length ? metadata : undefined
 }
 
+function sanitizeLocationString(value: unknown, maxLength = MAX_METADATA_STRING_LENGTH): string | undefined {
+  const normalized = normalizeString(value, maxLength)
+  if (!normalized)
+    return undefined
+  return normalized.split('#')[0]?.split('?')[0]?.trim() || undefined
+}
+
+function sanitizeVisitMetadata(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!value)
+    return undefined
+
+  const metadata: Record<string, unknown> = {}
+
+  const stringFields: Array<[key: string, maxLength?: number, locationLike?: boolean]> = [
+    ['kind', 32],
+    ['route', 180, true],
+    ['page', 120],
+    ['screen', 120],
+    ['surface', 80],
+    ['referrer', 180, true],
+    ['source', 120, true],
+  ]
+
+  for (const [field, maxLength, locationLike] of stringFields) {
+    const normalized = locationLike
+      ? sanitizeLocationString(value[field], maxLength)
+      : normalizeString(value[field], maxLength)
+    if (normalized)
+      metadata[field] = normalized
+  }
+
+  const localHour = normalizeNumber(value.localHour, { min: 0, max: 23 })
+  if (typeof localHour === 'number')
+    metadata.localHour = Math.round(localHour)
+
+  const localDayOfWeek = normalizeNumber(value.localDayOfWeek, { min: 0, max: 6 })
+  if (typeof localDayOfWeek === 'number')
+    metadata.localDayOfWeek = Math.round(localDayOfWeek)
+
+  if (metadata.kind === 'startup' && isPlainObject(value.mainProcess)) {
+    const moduleDetails = Array.isArray(value.mainProcess.moduleDetails)
+      ? value.mainProcess.moduleDetails
+        .map((item) => {
+          if (!isPlainObject(item))
+            return undefined
+          const name = normalizeString(item.name, 96)
+          const loadTime = normalizeNumber(item.loadTime, { min: 0, max: MAX_SEARCH_DURATION_MS })
+          if (!name || typeof loadTime !== 'number')
+            return undefined
+          return { name, loadTime: Math.round(loadTime) }
+        })
+        .filter((item): item is { name: string, loadTime: number } => Boolean(item))
+        .slice(0, MAX_METADATA_KEYS)
+      : []
+
+    if (moduleDetails.length)
+      metadata.mainProcess = { moduleDetails }
+  }
+
+  return Object.keys(metadata).length ? metadata : undefined
+}
+
 function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
   if (!value)
     return undefined
@@ -395,6 +457,9 @@ function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Rec
     ['triggerType', 48],
     ['userPreferenceMode', 48],
     ['sessionBucket', 64],
+    ['selectedProvider', 128],
+    ['selectedCategory', 64],
+    ['selectedPluginId', 128],
   ]
 
   for (const [field, maxLength] of stringFields) {
@@ -403,7 +468,7 @@ function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Rec
       metadata[field] = normalized
   }
 
-  const booleanFields = ['hasFilters']
+  const booleanFields = ['hasFilters', 'selected']
   for (const field of booleanFields) {
     if (typeof value[field] === 'boolean')
       metadata[field] = value[field]
@@ -430,6 +495,7 @@ function sanitizeSearchMetadata(value: Record<string, unknown> | undefined): Rec
     'queryLength',
     'providerErrorCount',
     'providerTimeoutCount',
+    'selectedRank',
   ]
   for (const field of countFields) {
     const normalized = normalizeNumber(value[field], { min: 0, max: MAX_SEARCH_RESULT_COUNT })
@@ -486,7 +552,9 @@ export function normalizeTelemetryInput(input: TelemetryEventInput): NormalizedT
     ? sanitizeFeatureUseMetadata(metadata)
     : input.eventType === 'search'
       ? sanitizeSearchMetadata(metadata)
-      : metadata
+      : input.eventType === 'visit'
+        ? sanitizeVisitMetadata(metadata)
+        : metadata
 
   return {
     telemetry: {
