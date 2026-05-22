@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-22
+> 更新时间：2026-05-23
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -18,7 +18,7 @@
 - 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前 live tree 已进入 `2.4.11-beta.2`。
 - 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。CoreBox app launch handoff 已补 immediate hide，避免慢启动期间 launcher 可见卡死；AI compat 生产退役端点已钉住 HTTP `410` 与迁移目标，不再返回可消费占位 payload。
 - 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR；Workflow/Skills/Automation 保持 Beta。
-- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），当前临时 master 已在干净依赖 worktree 通过 `pnpm quality:pr`（changed-file lint、`test:targeted`、CoreApp node/web typecheck）；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，本轮已补 CoreBox app launch immediate-hide、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint 410 合同测试；2026-05-22 已继续推进 Assistant 剪贴板图片翻译 typed event、`smoke:assistant` 悬浮球/VoicePanel 可见入口 smoke、推荐上下文来源开关、可选 AI embedding/rerank fail-open 测试、壁纸个性化、设置页资产兼容提示、统一网络/代理高级设置入口、TuffEx 基础组件文档覆盖与 Nexus storage/upload lifecycle governance telemetry 与 telemetry-to-governance analytics 写入链路；`touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍按全仓 lint/build 另行收口，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因仓库 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
+- 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），当前临时 master 已在干净依赖 worktree 通过 `pnpm quality:pr`（changed-file lint、`test:targeted`、CoreApp node/web typecheck）；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，本轮已补 CoreBox app launch immediate-hide、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint 410 合同测试；2026-05-22 已继续推进 Assistant 剪贴板图片翻译 typed event、`smoke:assistant` 悬浮球/VoicePanel 可见入口 smoke、推荐上下文来源开关、可选 AI embedding/rerank fail-open 测试、壁纸个性化、设置页资产兼容提示、统一网络/代理高级设置入口、TuffEx 基础组件文档覆盖与 Nexus storage/upload lifecycle governance telemetry 与 telemetry-to-governance analytics 写入链路；`touch-browser-bookmarks` 与 `touch-browser-data` 外链打开已纳入 `network.internet` capability 口径，展示期只做 non-mutating permission check，执行期 request/block；`touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍按全仓 lint/build 另行收口，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因仓库 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
 
 ## 高价值专题入口
 
@@ -40,6 +40,7 @@
 - `docs/plan-prd/report/cross-platform-compat-placeholder-incremental-audit-2026-05-19.md` - 跨平台兼容、占位实现与架构健壮性增量审计。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md` - 跨平台兼容、占位实现与架构健壮性自动化审计。
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析。
+- `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md` - 当前 2.4.11 稳定化、插件 capability 与后续 Intelligence 小切片执行顺序。
 - `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案。
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - Release assets 核对入口。
 - `retired-ai-app/deploy/README.zh-CN.md` - AI 1Panel 部署手册。
@@ -50,8 +51,8 @@
 - Nexus Provider Registry / Scene 编排：Provider 列表已暴露 capability adapter readiness，能在运行前标出声明能力缺少可执行 Scene adapter 的配置风险；真实 adapter 执行仍由 Scene Orchestrator 负责。
 - Nexus 数据治理方向：Data Governance 已覆盖治理事件/config、dashboard analytics、访问/搜索/signup/plugin analytics、上传 retry/problem attempts、通知健康、存储策略/告警、Provider usage/quota、operations summary、secure credential reference 与 object storage executor；direct invoke quota 与 Provider Registry quota admin 已并入同一治理口径，详细历史以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 - Nexus 数据治理当前缺口：真实浏览器证据、真实凭据/live send、SMTP socket 或托管 relay、Web Push 生产 VAPID/relay、S3/OSS live storage、生产 D1 migration/backfill 与更深运营大屏。
-- App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，后续继续补 Browser Data、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
-- 插件 capability 诊断方向：shell/OS/network 类外部动作继续补展示期 non-mutating capability metadata、执行期 request/block 状态与 focused tests；`touch-browser-bookmarks` 外链打开已纳入 `network.internet` 口径。
+- App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，Browser Data 已有 source-level diagnostics 与书签 URL 打开 `network.internet` gate，后续继续补历史扫描、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
+- 插件 capability 诊断方向：shell/OS/network 类外部动作继续补展示期 non-mutating capability metadata、执行期 request/block 状态与 focused tests；`touch-browser-bookmarks` 与 `touch-browser-data` 外链打开已纳入 `network.internet` 口径。
 - 插件发布当前切片：`touch-intelligence` 已补齐 Nexus 发布资产并修复 1.0.0 运行时加载源码 TS 的问题；1.0.1 包使用 bundled prelude 与 `@talex-touch/tuff-intelligence/client` CJS 入口，可重新发布到 Nexus；公共 npm 子包补发仍等待具备 `@talex-touch` publish 权限的 `NPM_TOKEN`。
 
 ## 归档与降权

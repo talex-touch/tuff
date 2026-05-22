@@ -51,6 +51,7 @@ globalThis.TuffItemBuilder = class {
 const {
   buildBrowserSourceDiagnostics,
   buildResultItems,
+  resolveNetworkOpenCapabilityState,
   discoverBookmarkFiles,
   getAvailableBrowserNames,
   parseChromiumBookmarks,
@@ -58,6 +59,14 @@ const {
   scanBrowserBookmarks,
   searchBookmarks,
 } = require('./index.js').__test
+
+function loadFreshPluginModule(globals = {}) {
+  Object.assign(globalThis, globals)
+  delete require.cache[require.resolve('./index.js')]
+  const pluginModule = require('./index.js')
+  delete require.cache[require.resolve('./index.js')]
+  return pluginModule
+}
 
 function createChromiumBookmarksPayload() {
   return {
@@ -210,8 +219,130 @@ test('buildResultItems creates open items with copy URL action', () => {
   assert.equal(items[0].title, 'Chrome · Tuff Docs')
   assert.equal(items[0].meta.pluginName, 'touch-browser-data')
   assert.equal(items[0].meta.actionId, 'open-url')
+  assert.deepEqual(items[0].meta.capability, {
+    id: 'network.internet',
+    type: 'network',
+    permission: 'network.internet',
+    status: 'available',
+    audit: {
+      pluginName: 'touch-browser-data',
+      featureId: 'browser-data',
+      actionId: 'open-url',
+      operation: 'open-external-url',
+      source: 'bookmarks-json',
+      browserId: undefined,
+      browserName: 'Chrome',
+      profile: 'Default',
+      urlHost: 'tuff.tagzxia.com',
+    },
+  })
   assert.equal(items[0].actions[0].payload, 'https://tuff.tagzxia.com/docs')
   assert.equal(items.at(-1).title, '扫描状态')
+})
+
+test('manifest declares network permission for external bookmark opening', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, 'manifest.json'), 'utf8'))
+
+  assert.ok(manifest.permissions.optional.includes('network.internet'))
+  assert.match(manifest.permissionReasons['network.internet'], /默认浏览器打开/)
+})
+
+test('buildResultItems shows network permission diagnostics without prompting', async () => {
+  let requested = false
+  Object.assign(globalThis.permission, {
+    async check(permissionId) {
+      return permissionId !== 'network.internet'
+    },
+    async request() {
+      requested = true
+      return false
+    },
+  })
+
+  const capabilityState = await resolveNetworkOpenCapabilityState()
+  const items = buildResultItems('browser-data', 'browser tuff', {
+    items: [
+      {
+        browserId: 'chrome',
+        title: 'Tuff Docs',
+        url: 'https://tuff.tagzxia.com/docs',
+        folder: 'Bookmarks Bar',
+        browserName: 'Chrome',
+        profile: 'Default',
+      },
+    ],
+    diagnostics: [{ browserName: 'Chrome', status: 'available', profileCount: 1 }],
+  }, capabilityState)
+
+  assert.equal(capabilityState.status, 'permission-missing')
+  assert.equal(requested, false)
+  assert.match(items[0].subtitle, /缺少 network\.internet 权限/)
+  assert.equal(items[0].meta.capability.status, 'permission-missing')
+  assert.equal(items[0].meta.capability.reason, 'network-internet-permission-required')
+  assert.equal(items[0].meta.capability.audit.browserId, 'chrome')
+  assert.equal(items[0].meta.capability.audit.urlHost, 'tuff.tagzxia.com')
+})
+
+test('onItemAction blocks external URL opening when network permission is denied', async () => {
+  let opened = false
+  const pluginModule = loadFreshPluginModule({
+    openUrl: async () => {
+      opened = true
+    },
+    permission: {
+      async check() {
+        return false
+      },
+      async request() {
+        return false
+      },
+    },
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'open-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs', title: 'Tuff Docs' },
+    },
+  })
+
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-denied',
+    message: '缺少 network.internet 权限',
+  })
+  assert.equal(opened, false)
+})
+
+test('onItemAction opens external URL after network permission is granted', async () => {
+  const opened = []
+  const pluginModule = loadFreshPluginModule({
+    openUrl: async (url) => {
+      opened.push(url)
+    },
+    permission: {
+      async check() {
+        return true
+      },
+      async request() {
+        return true
+      },
+    },
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'open-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs', title: 'Tuff Docs' },
+    },
+  })
+
+  assert.deepEqual(result, { externalAction: true, status: 'started' })
+  assert.deepEqual(opened, ['https://tuff.tagzxia.com/docs'])
 })
 
 test('buildResultItems uses platform-aware source availability in empty state', () => {

@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-22
+> 更新时间：2026-05-23
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -11,7 +11,34 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-23
+
+### docs(plan-prd): record active goal closure order
+
+- `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md`
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added the current active goal closure record for 2.4.11 stabilization, branch/worktree discipline, related-only commits, and follow-up plugin/Intelligence slices.
+  - Registered the document in the implementation index and high-value documentation entrances so future work can continue from the same execution order.
+  - Kept the priority order explicit: quality gates and open PR cleanup first, then retained transport/CoreBox validation, remaining capability surfaces, secret backend, platform evidence, and later Intelligence/plugin enhancements.
+
 ## 2026-05-22
+
+### fix(plugin): gate browser data external URLs
+
+- `plugins/touch-browser-data/index.js`
+- `plugins/touch-browser-data/manifest.json`
+- `plugins/touch-browser-data/index.test.cjs`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Data now declares optional `network.internet` for opening local browser bookmark URLs in the default browser.
+  - Bookmark result items expose non-mutating `network.internet` capability/audit metadata with browser/profile/host context; denied permission is visible before execution without prompting.
+  - Executing a bookmark URL now requests `network.internet`, returns `blocked` when denied, awaits `openUrl` when granted, and returns `started` on successful handoff.
 
 ### fix(plugin): gate browser bookmarks external URLs
 
