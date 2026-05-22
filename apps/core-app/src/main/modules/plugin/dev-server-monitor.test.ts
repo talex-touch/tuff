@@ -38,7 +38,7 @@ vi.mock('../../utils/logger', () => ({
 
 import { DevServerHealthMonitor } from './dev-server-monitor'
 
-type MonitorWithPrivateCheck = DevServerHealthMonitor & {
+type MonitorWithPrivateCheck = {
   checkHealth(plugin: ITouchPlugin): Promise<void>
 }
 
@@ -76,7 +76,7 @@ describe('DevServerHealthMonitor', () => {
   it('reloads a dev plugin when virtual index.js changes after the baseline check', async () => {
     const plugin = createPlugin()
     const manager = createManager(plugin)
-    const monitor = new DevServerHealthMonitor(manager) as MonitorWithPrivateCheck
+    const monitor = new DevServerHealthMonitor(manager) as unknown as MonitorWithPrivateCheck
 
     requestMock
       .mockResolvedValueOnce({

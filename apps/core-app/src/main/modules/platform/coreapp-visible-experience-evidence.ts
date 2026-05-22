@@ -334,29 +334,29 @@ export const COREAPP_VISIBLE_EXPERIENCE_SURFACES: readonly CoreAppVisibleExperie
   {
     id: 'assistant-screenshot-translate',
     group: 'assistant',
-    title: 'Assistant screenshot translation',
+    title: 'Assistant clipboard image translation',
     required: true,
     requiresVisualArtifact: true,
     collectionSteps: [
-      'Open the Assistant Voice Panel from the floating ball and trigger screenshot translation.',
-      'Capture the translated image pin window or detached DivisionBox result.',
-      'Repeat with macOS Screen Recording permission denied or unavailable and capture the recovery state.',
+      'Open the Assistant Voice Panel from the floating ball and trigger clipboard image translation.',
+      'Capture the translated image pin window or detached DivisionBox result for a copied image.',
+      'Repeat with an empty clipboard image state and capture the recovery hint.',
       'Repeat with Nexus/provider unavailable or logged out and capture the fallback or recovery hint.'
     ],
     requiredEvidence: [
-      'Screenshot translation starts from the Assistant Voice Panel',
-      'Assistant windows hide before capture and return after capture',
-      'Translated screenshot result appears in the image translation pin window or detached widget',
-      'Screen permission denial and provider fallback remain visible and recoverable'
+      'Clipboard image translation starts from the Assistant Voice Panel',
+      'The Assistant action reads the current clipboard image instead of initiating screen capture',
+      'Translated clipboard image result appears in the image translation pin window or detached widget',
+      'Empty clipboard image and provider fallback remain visible and recoverable'
     ],
     recommendedArtifacts: [
-      'evidence/coreapp-visible/assistant-screenshot-translate-start.png',
-      'evidence/coreapp-visible/assistant-screenshot-translate-result.png',
-      'evidence/coreapp-visible/assistant-screenshot-permission-denied.png',
-      'evidence/coreapp-visible/assistant-screenshot-provider-fallback.png'
+      'evidence/coreapp-visible/assistant-clipboard-image-translate-start.png',
+      'evidence/coreapp-visible/assistant-clipboard-image-translate-result.png',
+      'evidence/coreapp-visible/assistant-clipboard-image-empty.png',
+      'evidence/coreapp-visible/assistant-clipboard-image-provider-fallback.png'
     ],
     blockedWhen: [
-      'The Assistant floating ball or Voice Panel appears inside the captured screenshot.',
+      'The Assistant path captures the screen instead of consuming the current clipboard image.',
       'The action writes only to clipboard and does not show a visible translation result.',
       'Permission/provider failures collapse into a generic error without a recovery hint.'
     ]
