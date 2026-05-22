@@ -89,6 +89,14 @@ export interface PluginReviewRatingBucket {
   count: number
 }
 
+export interface PluginReviewStatusTrendPoint {
+  date: string
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+}
+
 export interface PluginReviewAnalytics {
   total: number
   approved: number
@@ -97,6 +105,7 @@ export interface PluginReviewAnalytics {
   averageRating: number
   ratingCount: number
   ratingDistribution: PluginReviewRatingBucket[]
+  statusTrend: PluginReviewStatusTrendPoint[]
   latestAt: string | null
 }
 
@@ -231,6 +240,31 @@ function normalizeAverageRating(total: number, average: unknown): number {
     return 0
   const value = Number(average ?? 0) || 0
   return Number.isFinite(value) ? Math.round(value * 10) / 10 : 0
+}
+
+function createReviewStatusTrend(
+  reviews: Array<{ status: PluginReviewStatus, createdAt?: string | null, updatedAt?: string | null }>,
+): PluginReviewStatusTrendPoint[] {
+  const trend = new Map<string, PluginReviewStatusTrendPoint>()
+
+  for (const review of reviews) {
+    const date = (review.updatedAt || review.createdAt || '').slice(0, 10)
+    if (!date)
+      continue
+
+    const point = trend.get(date) ?? {
+      date,
+      total: 0,
+      approved: 0,
+      pending: 0,
+      rejected: 0,
+    }
+    point.total += 1
+    point[review.status] += 1
+    trend.set(date, point)
+  }
+
+  return Array.from(trend.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
@@ -629,6 +663,25 @@ export async function getPluginReviewAnalytics(
       GROUP BY rating;
     `).bind(pluginId).all<{ rating: number, count: number }>()
 
+    const statusTrendRows = await db.prepare(`
+      SELECT
+        substr(COALESCE(NULLIF(updated_at, ''), created_at), 1, 10) as date,
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected
+      FROM ${PLUGIN_REVIEWS_TABLE}
+      WHERE plugin_id = ?1
+      GROUP BY substr(COALESCE(NULLIF(updated_at, ''), created_at), 1, 10)
+      ORDER BY date ASC;
+    `).bind(pluginId).all<{
+      date: string | null
+      total: number
+      approved: number | null
+      pending: number | null
+      rejected: number | null
+    }>()
+
     const distributionCounts = new Map(
       (distributionRows.results ?? []).map(row => [Number(row.rating), Number(row.count) || 0]),
     )
@@ -636,6 +689,15 @@ export async function getPluginReviewAnalytics(
       rating,
       count: distributionCounts.get(rating) ?? 0,
     }))
+    const statusTrend = (statusTrendRows.results ?? [])
+      .filter(row => Boolean(row.date))
+      .map(row => ({
+        date: row.date ?? '',
+        total: Number(row.total ?? 0) || 0,
+        approved: Number(row.approved ?? 0) || 0,
+        pending: Number(row.pending ?? 0) || 0,
+        rejected: Number(row.rejected ?? 0) || 0,
+      }))
     const ratingCount = Number(ratingRow?.count ?? 0) || 0
 
     return {
@@ -646,6 +708,7 @@ export async function getPluginReviewAnalytics(
       averageRating: normalizeAverageRating(ratingCount, ratingRow?.average),
       ratingCount,
       ratingDistribution,
+      statusTrend,
       latestAt: statusRow?.latestAt ?? null,
     }
   }
@@ -672,6 +735,7 @@ export async function getPluginReviewAnalytics(
     averageRating: normalizeAverageRating(ratingCount, average),
     ratingCount,
     ratingDistribution: createRatingDistribution(approvedReviews),
+    statusTrend: createReviewStatusTrend(reviews),
     latestAt,
   }
 }

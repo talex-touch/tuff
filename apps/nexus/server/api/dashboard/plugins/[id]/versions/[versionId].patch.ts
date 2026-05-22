@@ -64,6 +64,7 @@ export default defineEventHandler(async (event) => {
       pluginId: id,
       pluginSlug: plugin.slug,
       userId: plugin.userId,
+      developerId: plugin.userId,
       versionId,
       version: version.version,
       status,
