@@ -3,7 +3,7 @@ import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, createHmac } from 'node:crypto'
 import { createError } from 'h3'
-import { assertStorageChannelPolicy, listPlatformGovernanceConfigs, recordStorageChannelUsage } from './platformGovernanceStore'
+import { assertStorageChannelPolicy, listPlatformGovernanceConfigs, recordStorageChannelUsage, type PlatformGovernanceConfig } from './platformGovernanceStore'
 import { getStorageCredential, type StorageAccessKeyCredential } from './storageCredentialStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
@@ -360,7 +360,13 @@ async function resolveConfiguredExternalStorage(
     const rightScore = right.targetId === resourceType ? 0 : 1
     return leftScore - rightScore || right.updatedAt.localeCompare(left.updatedAt)
   })
-  const policy = candidates[0]
+  return resolveStorageObjectExternalConfigForPolicy(event, candidates[0] ?? null)
+}
+
+export async function resolveStorageObjectExternalConfigForPolicy(
+  event: H3Event,
+  policy: PlatformGovernanceConfig | null | undefined,
+): Promise<StorageObjectExternalConfig | null> {
   if (!policy?.config || (policy.channel !== 's3' && policy.channel !== 'oss'))
     return null
 

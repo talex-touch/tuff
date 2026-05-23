@@ -7,6 +7,7 @@ import {
   getStorageObject,
   listStorageObjectKeys,
   putStorageObject,
+  resolveStorageObjectExternalConfigForPolicy,
   type StorageObjectExternalConfig,
   type StorageObjectMemory,
 } from './storageObjectStore'
@@ -567,6 +568,44 @@ describe('storageObjectStore', () => {
     expect(loaded?.data.toString()).toBe('hello oss')
     expect(requests[0]?.authorization).toContain('OSS4-HMAC-SHA256')
     expect(JSON.stringify(requests)).not.toContain('oss-secret-key')
+  })
+
+  it('resolves external storage config for explicit storage channel smoke policies', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    storageCredentialMocks.getStorageCredential.mockResolvedValue({
+      accessKeyId: 's3-access-key',
+      secretAccessKey: 's3-secret-key',
+    })
+
+    const policy = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'storage_channel',
+      name: `S3 smoke ${marker}`,
+      channel: 's3',
+      provider: 'aws-s3',
+      targetId: `object-s3-smoke-${marker}`,
+      limits: {
+        maxBytes: 1000,
+        windowDays: 30,
+      },
+      config: {
+        credentialRef: `secure://storage/s3-${marker}`,
+        bucket: 'nexus-test',
+        region: 'us-east-1',
+        prefix: 'tenant-c',
+      },
+    }, 'admin')
+
+    await expect(resolveStorageObjectExternalConfigForPolicy(h3Event, policy)).resolves.toMatchObject({
+      channel: 's3',
+      provider: 'aws-s3',
+      bucket: 'nexus-test',
+      region: 'us-east-1',
+      prefix: 'tenant-c',
+      credentials: {
+        accessKeyId: 's3-access-key',
+      },
+    })
   })
 
   it('blocks writes before object storage and success usage are recorded', async () => {

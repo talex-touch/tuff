@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-23
+> 更新时间：2026-05-24
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,17 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-24
+
+### fix(nexus): restore storage smoke policy resolver for Pages build
+
+- `apps/nexus/server/utils/storageObjectStore.ts`
+- `apps/nexus/server/utils/storageObjectStore.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Restored the exported `resolveStorageObjectExternalConfigForPolicy` resolver used by `storageChannelSmoke.ts`, keeping explicit storage-channel smoke checks on the same credential, bucket, region, and prefix resolution path as normal object storage writes.
+  - Added focused coverage for resolving S3 external storage config from an explicit governance storage policy so Nitro/Rollup static imports cannot regress silently.
+  - Reproduced the Cloudflare Pages `tuff` production build failure locally with `pnpm nexus:build`, then verified the same command completes successfully after the fix.
 
 ## 2026-05-23
 
