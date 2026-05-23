@@ -295,6 +295,19 @@
 
 ## 2026-05-22
 
+### fix(plugin): gate browser data external URLs
+
+- `plugins/touch-browser-data/index.js`
+- `plugins/touch-browser-data/manifest.json`
+- `plugins/touch-browser-data/index.test.cjs`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Browser Data now declares optional `network.internet` for opening local browser bookmark URLs in the default browser.
+  - Bookmark result items expose non-mutating `network.internet` capability/audit metadata with browser/profile/host context; denied permission is visible before execution without prompting.
+  - Executing a bookmark URL now requests `network.internet`, returns `blocked` when denied, awaits `openUrl` when granted, and returns `started` on successful handoff.
+
 ### feat(nexus): add Tuffex docs hero background
 
 - `apps/nexus/app/layouts/docs.vue`
