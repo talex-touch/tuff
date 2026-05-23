@@ -13,18 +13,6 @@
 
 ## 2026-05-23
 
-### feat(nexus): expand data governance controls
-
-- `apps/nexus/server/utils/platformGovernanceStore.ts`
-- `apps/nexus/app/pages/dashboard/admin/governance.vue`
-- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
-- `apps/nexus/server/api/v1/sync/blobs/upload.post.ts`
-- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
-- `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md`
-  - Expanded Nexus Data Governance across upload retries/failure matrix, storage policy pressure, notification readiness, provider quota risk, plugin analytics, and D1 readiness diagnostics.
-  - Added a progress snapshot that marks the 8 governance areas as in progress and keeps browser/live provider/storage/D1 production evidence as explicit remaining gates.
-  - Added the active branch cleanup record so the screenshot branch merge/delete work remains traceable after local and remote branch cleanup.
-
 ### docs(plan-prd): record active goal closure order
 
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md`
@@ -37,107 +25,675 @@
   - Registered the document in the implementation index and high-value documentation entrances so future work can continue from the same execution order.
   - Kept the priority order explicit: quality gates and open PR cleanup first, then retained transport/CoreBox validation, remaining capability surfaces, secret backend, platform evidence, and later Intelligence/plugin enhancements.
 
+### feat(nexus): add horizontal update news rail and all-updates page
+
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/app/pages/updates/all.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+  - Changed the public updates/news block from a vertical stack into a horizontal card rail using Tuffex `TxEdgeFadeMask` for scroll-edge shadow/fade behavior.
+  - Added a `View all` entry point that opens `/updates/all` with the existing vertical item presentation.
+  - Added all-updates search plus type and time filters for announcements, releases, news, config, and data updates.
+
+### docs(repo): record active goal and branch cleanup plan
+
+- `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md`
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+  - Added a branch cleanup snapshot for the screenshot-identified branch set, including current dirty worktree status, branches already merged into `master`, branches that still need merge/review, worktree locks, remote deletion candidates, and the required execution order.
+  - Kept the record separate from execution: no commit, merge, push, branch deletion, remote deletion, worktree removal, or artifact deletion is authorized by the document alone.
+  - Linked the snapshot from implementation, roadmap, and docs index so cleanup can continue from current evidence instead of the screenshot alone.
+
+### feat(nexus): add plugin review rating trend analytics
+
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/server/utils/pluginReviewStore.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+  - Plugin owner/private review analytics now includes an aggregate `ratingTrend` with per-day approved rating count, average rating, low-rating count, and low-rating rate.
+  - The plugin detail drawer surfaces the latest rating trend and low-rating rate inside the Review quality block, helping plugin owners spot quality regressions without reading raw review content.
+  - The payload stays aggregate-only and does not expose reviewer user ids, author names, comment bodies, or raw review rows.
+
+### docs(nexus): add data governance progress snapshot
+
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added an eight-item Nexus Data Governance progress matrix covering anonymized app data, plugin analytics, upload reliability, Intelligence/adapt asset upload config, storage governance, notification governance, operations dashboards, and provider token/quota limits.
+  - Split current implementation evidence from missing proof so code-backed aggregates are not treated as full production completion without browser, live-send, live storage, D1 migration/backfill, and provider-call evidence.
+  - Added a current verdict, local-evidence roll-up, production evidence blockers, and next execution order so branch cleanup can distinguish finished documentation from unfinished governance/runtime proof.
+  - Linked the snapshot from the active roadmap, TODO, and docs index.
+
+### feat(nexus): add search journey funnel analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search governance analytics now returns an aggregate-only journey funnel with filter, with-results, selected, zero-result, provider-problem, provider error, provider timeout, and rate summaries.
+  - Journey segments combine anonymized context app category, context source, local time slot, session bucket, preference mode, entry point, and trigger type, plus aggregate scene/provider/plugin/selected-plugin buckets.
+  - Data Governance now shows the funnel and top journey segments without exposing raw query text, actor identifiers, emails, context ids, attempt ids, or raw resource ids.
+
+### feat(nexus): add provider quota risk drill-down
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Provider governance analytics now returns quota risk drill-down items for blocked/warning provider policies, including highest utilization, risk reason, remaining request/token budget, overage, and projected exhaustion.
+  - Data Governance now shows lowest remaining quota, total overage, nearest exhaustion, and the top risky provider/channel quota rows beside the existing provider usage and model dashboard.
+  - Risk drill-down remains aggregate-only and does not expose provider secrets, credential refs, raw actors, or raw account identifiers.
+
+### feat(nexus): add private plugin usage timing analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+  - Plugin owner/private analytics now includes anonymized usage timing buckets across downloads, installs, and invocations: local hour, local weekday, local time slot, and recent timing trend.
+  - Plugin detail analytics renders the timing panel between retention and invocation health so plugin owners can see when users tend to download, install, and invoke their plugin.
+  - Timing analytics is aggregate-only and keeps raw actor identifiers, raw user emails, URLs, secret-like region values, and request-specific markers out of the API/UI payload.
+
+### feat(nexus): add storage object content fingerprints
+
+- `apps/nexus/server/utils/storageObjectStore.ts`
+- `apps/nexus/server/utils/sceneAssetStorage.ts`
+- `apps/nexus/server/api/v1/scenes/assets/[key].get.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/syncStoreV1.ts`
+- `apps/nexus/server/utils/storageObjectStore.test.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/test/api/v1/scenes/assets.get.test.ts`
+  - Shared object storage writes and reads now return a SHA-256 content fingerprint for memory, R2, S3-compatible, and OSS-backed objects.
+  - Scene adapter asset references and private scene asset downloads expose the fingerprint through response metadata/header so upload issues can be correlated without leaking raw payloads, object keys, actors, filenames, or credential data.
+  - Sync blob upload persistence now reuses the shared storage fingerprint instead of computing a separate hash path, keeping encrypted blob upload integrity evidence aligned with the storage executor.
+
+### feat(nexus): expose provider quota evaluations
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.get.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.post.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/test/api/dashboard/provider-registry/provider-registry.api.test.ts`
+  - Extracted reusable Intelligence provider quota evaluation for request and token budgets, including status, utilization, remaining budget, overage, burn rate, and projected exhaustion.
+  - Provider Registry quota GET/POST now return the current quota evaluation alongside the saved policy so admin clients can show whether direct invokes and scene runs are `ok`, `warning`, `blocked`, or `disabled` before dispatch.
+  - Existing dispatch-time enforcement remains fail-closed through `assertIntelligenceProviderQuota`; the evaluation response is aggregate policy state and does not expose provider secrets or raw actor identifiers.
+
+### feat(nexus): add notification channel profile templates
+
+- `apps/nexus/server/utils/notificationChannelCatalog.ts`
+- `apps/nexus/server/api/dashboard/notifications/channels.get.ts`
+- `apps/nexus/server/api/dashboard/notifications/channels.post.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/test/api/dashboard/notifications/channels.api.test.ts`
+- `apps/nexus/test/api/dashboard/notifications/channels-test.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+  - Added admin notification channel profile templates for browser inbox, Resend, SendGrid, Mailgun, Postmark, SMTP relay, generic HTTP email relay, Feishu bot, Lark bot, generic webhook, and Web Push relay.
+  - Data Governance can now fetch the profile catalog and apply provider defaults to the notification channel form, including config JSON, limits, provider/channel identifiers, and credential reference prefixes.
+  - Applying a notification profile also seeds the encrypted credential form with the matching API key, SMTP, webhook, or bot-token JSON shape so admins do not have to infer provider credential schemas from backend validation errors.
+  - Notification channel config saves now reject unsupported adapters and credential references outside `secure://notifications/*`, while preserving dispatch-time recipient injection and existing no-plaintext-secret safeguards.
+  - The notification channel list/save APIs now return resolved adapter profile and readiness summaries alongside saved configs so admin clients can surface unsupported/missing-runtime states immediately without exposing credential material.
+  - Data Governance now shows the selected notification channel's adapter, credential requirement, and readiness reason next to the dry-run/send controls.
+  - Credentialed notification providers continue to use `secure://notifications/*` references only; the profile API exposes setup metadata without API keys, SMTP passwords, signing secrets, endpoints with secrets, recipients, or credential material.
+
+### feat(nexus): add grain gradient updates hero
+
+- `apps/nexus/app/components/ui/GrainGradientHeroSection.vue`
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/i18n/locales/{en,zh}.ts`
+  - Added a reusable Vue/Nuxt grain-gradient hero for the public updates and downloads page, matching the requested 21st.dev component shape without introducing React/shadcn dependencies.
+  - The hero CTA scrolls to the existing release channel, news, and download content while preserving the current release data and platform-specific download logic.
+  - Replaced the manually styled release channel tabs with Tuffex `TxRadioGroup` and `TxRadio` button radios for consistent semantics and styling.
+
+### fix(nexus): stabilize component docs sync dashboard
+
+- `apps/nexus/content/docs/dev/components/index.{en,zh}.mdc`
+- `apps/nexus/server/api/docs/component-sync.get.ts`
+  - Changed the Tuffex component index sync dashboard to use explicit MDC block syntax so following sections remain sibling content instead of being parsed as component children.
+  - Component sync status now reads frontmatter stored under Nuxt Content `meta`, so migrated/verified component docs render the correct dashboard status.
+
+### feat(nexus): add storage channel drill-down analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/api/dashboard/storage/channels/analytics.get.ts`
+- `apps/nexus/test/api/dashboard/storage/channels-analytics.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+  - Added an admin-only storage channel analytics API for channel/provider drill-down usage, action/resource buckets, latest trend, channel pressure, matched policy evaluations, and alert summaries.
+  - Data Governance now shows compact selected-channel storage usage next to the storage policy editor so admins can inspect the current profile's capacity, traffic, operations, action mix, trend, and policy state.
+  - The drill-down response stays aggregate-only and excludes raw actor identifiers, object resource ids, credential refs, and storage config payloads.
+
+### fix(nexus): surface recovered upload storage retries
+
+- `apps/nexus/server/utils/storageObjectStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/api/releases/[tag]/assets.post.ts`
+- `apps/nexus/server/api/v1/sync/blobs/upload.post.ts`
+- `apps/nexus/server/utils/syncStoreV1.ts`
+- `apps/nexus/server/utils/updateAssetStorage.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/storageObjectStore.test.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/test/api/releases/assets.post.test.ts`
+- `apps/nexus/test/api/v1/sync/blobs-upload.api.test.ts`
+- `apps/nexus/server/utils/__tests__/syncStoreV1.test.ts`
+- `apps/nexus/server/utils/updateAssetStorage.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - External object uploads now keep bounded retry metadata when transient storage writes recover before the final success.
+  - Release asset and sync blob upload governance record recovered retry metadata on completed upload lifecycle events, not only on exhausted failures.
+  - Sync blob writes now use the shared object storage layer instead of direct R2 `bucket.put`, so transient R2 failures reuse retry policy, storage usage governance, and bounded retry metadata.
+  - Updates payload storage now also uses the shared object storage layer, adding transient R2 write retry and storage usage governance while exposing only a hashed update-payload governance resource id.
+  - Data Governance now aggregates and renders recovered upload counts, retry counts, recovered rate, average recovered attempts, and retry-trend recovered buckets.
+
+### feat(nexus): add private plugin retention analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+  - Plugin owner/private analytics now includes anonymized retention and return-usage metrics: active actors, new actors, returning actors, repeat callers, invocation actors, return rate, repeat invoke rate, average active days, average invokes per actor, active-day buckets, and daily return trend.
+  - Plugin detail analytics renders the retention summary between conversion and invocation health so owners can see whether downloads/installations convert into repeated usage.
+  - Retention analytics is aggregate-only: actor hashes remain internal to set counting and are not returned in API payloads, UI buckets, or trends.
+
+### feat(nexus): enrich anonymized app and search telemetry buckets
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/server/utils/telemetryStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - App visit governance analytics now exposes local weekday, country, region, and timezone hotspot buckets from already-sanitized telemetry/governance metadata.
+  - Search governance analytics now exposes query-length buckets beside result-count and latency buckets, allowing admins to compare search frequency and query-shape trends without storing raw query text.
+  - Data Governance now renders the additional visit hotspot and query-length dimensions, and focused coverage verifies the telemetry-to-governance path still excludes raw query, actor, URL query, and secret-like values.
+
+### feat(nexus): add private plugin invocation health analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+  - Plugin owner/private analytics now includes aggregate invocation health: total calls, unique callers, successful/failed/skipped/unknown counts, success/failure rates, duration stats, daily trend, failure reason buckets, invocation surface buckets, country/region buckets, channel/version buckets, and local-time-slot buckets.
+  - Invocation status is derived only from explicit sanitized metadata (`status`/`result`/`outcome`/`success`/`skipped`); missing evidence remains `unknown` rather than being treated as success.
+  - Failure reasons, surfaces, country/region, channel/version, and local-time-slot dimensions are bounded normalized buckets, with URL/path/email/token/secret-like values redacted before reaching owner analytics.
+
+### feat(nexus): add contextual search plugin preference analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search governance analytics now returns `pluginPreferenceByContext`, grouped by sanitized context app category, context source, and local time slot.
+  - Data Governance can compare which plugins were seen and selected in each context/time bucket without storing raw query text, raw actor identifiers, or raw app/window context.
+  - The cockpit now surfaces context plugin preference beside the existing time-slot preference and context-selection matrix.
+
+### feat(nexus): add notification delivery timing and status diagnostics
+
+- `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/{notificationDispatcher,platformGovernanceStore}.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Notification dispatch now records sanitized per-delivery `durationMs` and HTTP `statusCode` in delivery audit events and returns them from channel test/alert dispatch responses.
+  - Data Governance notification analytics now aggregates average/max delivery duration and status-code buckets globally and per provider health row, without storing recipients, credential refs, endpoints, response bodies, or payload bodies.
+  - The notification cockpit and saved-channel test panel surface delivery duration and adapter status code alongside existing sent/failed/skipped health and provider failure diagnostics.
+
+### feat(nexus): add anonymized plugin review comment analytics
+
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/server/utils/pluginReviewStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+  - Plugin owner/private analytics now includes anonymized review comment quality metrics: title coverage, comment content coverage, average content length, status buckets, and daily trend.
+  - Plugin detail analytics renders the comment coverage summary inside the existing Review quality card, keeping the UI compact while exposing stronger comment/review evidence for plugin owners.
+  - Focused coverage verifies that the analytics payload stays aggregate-only and does not expose reviewer email, author name, or raw review content.
+
+### feat(nexus): add upload failure sample calibration
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Upload failure matrix rows now include calibration status, sample source, sample count, and latest sampled timestamp so real/live/manual samples can be distinguished from uncalibrated failure buckets.
+  - Data Governance upload reliability now shows failure calibration coverage and live/manual sample counts beside retry diagnostics.
+  - The default remains fail-closed for evidence quality: failure buckets without live/manual/synthetic sample metadata stay `needs-calibration` rather than being treated as verified.
+
+### feat(nexus): merge scene adapter upload config
+
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/server/utils/sceneAssetStorage.ts`
+- `apps/nexus/server/api/v1/scenes/assets/[key].get.ts`
+  - Scene adapter dispatch now receives merged `adapter` / `upload` / `assets` / `constraints` config from provider metadata, provider capability metadata, scene metadata, binding metadata, capability constraints, and binding constraints.
+  - Later, more specific sources override earlier defaults, allowing Intelligence provider routes to share base config while scenes and bindings tune asset-backed upload routing.
+  - Adapter dispatch trace now exposes only sanitized key summaries plus storage channel/provider, asset kind, and source list; credential-like config keys and values stay out of trace metadata.
+  - Scene adapters can now explicitly return asset upload descriptors; the orchestrator stores those assets through the shared storage object layer, records upload/storage governance events, and replaces raw base64 output fields with private scene asset references.
+  - Scene adapter R2 asset uploads preserve recovered retry metadata on completed upload governance events, so transient asset storage failures are visible in recovered upload retry analytics.
+  - Scene adapter asset preflight failures now start and fail an upload governance attempt before payload decoding/size validation errors escape, producing live sampled `payload-validation` failure matrix rows for invalid base64, missing payloads, and size-limit rejections without exposing raw payloads or object keys.
+  - Scene asset downloads require Nexus auth or API key access, reject path-like/unsupported object keys before storage reads, and record private storage reads against a hashed scene-asset resource id so raw object keys and binary payloads stay out of analytics.
+
 ## 2026-05-22
 
-### fix(plugin): gate browser data external URLs
+### feat(nexus): add Tuffex docs hero background
 
-- `plugins/touch-browser-data/index.js`
-- `plugins/touch-browser-data/manifest.json`
-- `plugins/touch-browser-data/index.test.cjs`
-- `docs/INDEX.md`
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/components/docs/TuffexDocsHeroBackground.vue`
+  - Added a Vue/CSS implementation of the geometric landing hero background for Tuffex documentation routes.
+  - The docs layout now switches the ambient background on `/docs/dev/components/*` and `/docs/dev/tools/tuffex`, including locale-prefixed routes, while preserving the existing docs chrome for non-Tuffex pages.
+  - The background is decorative only, pointer-events disabled, dark-mode aware, and respects reduced-motion preferences.
+
+### feat(nexus): add storage policy burn-rate forecast
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Storage policy evaluations now return per-day burn rates and projected exhaustion days for stored bytes, traffic bytes, operations, and alert bytes.
+  - Storage channel pressure rows reuse the matched policy evaluation so each local/OSS/S3/R2 channel can show remaining budget, burn/day, and projected exhaustion without exposing object keys, actors, credential refs, or filenames.
+  - Focused coverage verifies forecast math for storage policy evaluation and channel pressure while keeping existing storage policy enforcement semantics unchanged.
+
+### feat(nexus): add upload pipeline summary
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Upload analytics now returns `pipelineSummary` grouped by resource type, surface, storage channel, and storage provider.
+  - Data Governance upload health now shows started/completed/failed/stuck/pending attempt funnels, completion/failure/stuck rates, average duration, and average size before drilling into failure matrix rows.
+  - The pipeline summary is derived from sanitized upload attempt metadata and does not expose raw attempt ids, resource ids, actors, object keys, or filenames.
+
+### feat(nexus): enforce provider quota by channel
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.invoke.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Intelligence provider quota enforcement now evaluates provider-level quotas and provider/channel quotas before dispatch, so a `chat.completion` quota only counts `chat.completion` requests/tokens while global provider quotas still cover every channel.
+  - Provider governance analytics now returns `channelDistribution` with provider id, channel, requests, tokens, actors, model mix, and provider type mix.
+  - Data Governance now shows provider channel usage beside model distribution, keeping prompt/output payloads, raw actors, API keys, and provider secrets out of analytics.
+
+### feat(nexus): add search context selection matrix
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search governance analytics now returns a bounded `contextSelectionMatrix` that groups anonymized search events by context app category, context source, local time slot, and selected result category.
+  - Data Governance now shows context selection rows with selection rate, aggregate event/actor counts, and seen/selected plugin buckets without exposing raw query, actor, context, or resource identifiers.
+  - Focused coverage verifies the matrix from existing sanitized search metadata and the admin UI contract.
+
+### fix(nexus): harden email auth magic-link flow
+
+- `apps/nexus/server/utils/email.ts`
+- `apps/nexus/server/utils/email.test.ts`
+- `apps/nexus/server/api/auth/register.post.ts`
+- `apps/nexus/server/api/auth/email-capability.get.ts`
+- `apps/nexus/server/api/admin/users/[id]/magic-link.post.ts`
+- `apps/nexus/app/composables/useSignIn.ts`
+- `apps/nexus/app/pages/sign-in/index.vue`
+- `apps/nexus/app/pages/sign-in/components/SignInLoginStep.vue`
+- `apps/nexus/app/pages/dashboard/admin/users.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+  - Nexus auth email delivery now resolves production-ready Resend notification channels before legacy env config, and exposes a capability endpoint for the sign-in UI.
+  - Email registration treats verification email delivery as required and compensates created user/team/token rows on failure, preventing half-created accounts that later report “email already registered”. Existing active unverified accounts can retry signup with the same password to resend verification mail.
+  - Sign-in hides Magic Link when no Resend/email delivery is configured, while admin user management can generate short-lived magic login links or password reset links for active users; the governance Resend template now defaults to send mode so it is immediately eligible for auth email delivery after binding credentials.
+
+### docs(plan): add 2026-05-22 compat audit
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-22.md`
 - `docs/plan-prd/README.md`
 - `docs/plan-prd/TODO.md`
-- `docs/plan-prd/01-project/CHANGES.md`
-  - Browser Data now declares optional `network.internet` for opening local browser bookmark URLs in the default browser.
-  - Bookmark result items expose non-mutating `network.internet` capability/audit metadata with browser/profile/host context; denied permission is visible before execution without prompting.
-  - Executing a bookmark URL now requests `network.internet`, returns `blocked` when denied, awaits `openUrl` when granted, and returns `started` on successful handoff.
-
-### fix(plugin): gate browser bookmarks external URLs
-
-- `plugins/touch-browser-bookmarks/index.js`
-- `plugins/touch-browser-bookmarks/manifest.json`
-- `packages/test/src/plugins/browser-bookmarks.test.ts`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
 - `docs/INDEX.md`
-- `docs/plan-prd/README.md`
+  - Added the 2026-05-22 live-tree compatibility / placeholder / architecture hardening audit.
+  - Reconfirmed that current production runtime paths do not show new P0 fixed fake-success or platform capability masquerading as full support.
+  - Updated active planning docs to stop treating `touch-snipaste`, `touch-window-presets`, Browser Data source diagnostics, and `touch-quick-actions` shell diagnostics as unstarted work.
+  - Re-scoped the next architecture hardening order to Credential Locker/libsecret, real platform evidence, widget runtime sandbox regression, raw console cleanup, example-plugin debug noise, and SRP small-slice refactors.
+
+### docs(core-app): refresh Assistant progress snapshot
+
+- `docs/plan-prd/04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`
+- `docs/engineering/reports/coreapp-visible-assistant-2026-05-22/completion-audit.md`
+- `docs/engineering/reports/coreapp-visible-assistant-2026-05-22/README.md`
 - `docs/plan-prd/TODO.md`
-  - Browser Bookmarks now declares `network.internet` for default-browser URL opening instead of relying on an undeclared `openUrl` side effect.
-  - URL open items expose non-mutating `network.internet` capability/audit metadata with host, source, and permission state; denied permission is visible before execution without prompting.
-  - Executing an external URL requests `network.internet` and returns a blocked status when denied; successful opens now await `openUrl` and return `started`.
-
-### feat(core-app): expose shared network proxy settings
-
-- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
-- `apps/core-app/src/renderer/src/views/base/settings/SettingNetwork.vue`
-- `apps/core-app/src/renderer/src/views/base/settings/setting-network-form.ts`
-- `apps/core-app/src/renderer/src/modules/lang/{en-US,zh-CN}.json`
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/README.md`
 - `docs/INDEX.md`
-- `docs/plan-prd/README.md`
-- `docs/plan-prd/TODO.md`
-  - CoreApp advanced settings now expose shared Network SDK proxy mode, custom HTTP/HTTPS/SOCKS/PAC proxy values, bypass rules, timeout, retry, and cooldown policy.
-  - The renderer uses the existing typed `useNetworkSdk().getConfig/updateConfig()` path instead of raw event strings, keeping the network service as the single writer for `appSetting.network`.
-  - Proxy credential state remains a secure-store reference summary only; the settings UI does not add plaintext username/password fields.
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Rewrote the old Assistant experiment note into the current progress snapshot for Assistant floating ball, VoicePanel, clipboard image translation, visible evidence, open gaps, and next-step evidence plan.
+  - Added a completion audit that maps each Assistant requirement to current evidence, explicitly marking provider-backed pin window, provider fallback, release-signed packaged evidence, and platform manual regression as missing.
+  - Marked the implementation note as current Beta reference while keeping Stable scope limited to text + OCR and clarifying that clipboard image translation reads the current clipboard image instead of initiating native screenshot capture.
+  - Added the current Intelligence boundary: Assistant is the visible desktop entry, while image translation continues to reuse the CoreBox helper and Provider / Scene path; provider selection, health, usage ledger, and fallback evidence stay owned by the Intelligence layer.
+  - Added visible experience verifier filtering by Assistant group or individual surface, plus `coreapp-visible-experience-manifest.json` in the Assistant evidence folder.
+  - The Assistant manifest now lets `assistant-floating-ball-entry` pass strict artifact/evidence checks independently, while `assistant-screenshot-translate` remains failed until provider-backed pin-window and provider fallback evidence exist.
+  - Synchronized Roadmap and PRD Quality Baseline so Assistant floating ball / clipboard image entry is no longer described as purely future Experimental work, while voice wake remains outside Stable.
+  - Added navigation entries so future Assistant work can start from the progress snapshot instead of the obsolete 2026-03 environment-gated experiment note.
 
-### docs(plan-prd): record current quality pr pass
+### feat(nexus): add plugin channel and version trends
 
-- `docs/INDEX.md`
-- `docs/plan-prd/README.md`
-- `docs/plan-prd/TODO.md`
-  - Synced the active quality status after `pnpm quality:pr` passed on the current temporary master in a clean dependency worktree.
-  - Clarified that `quality:pr` now covers changed-file lint, `test:targeted`, and CoreApp node/web typecheck, while `quality:release` remains the broader full-repo release gate.
-  - Kept the temporary symlink-based typecheck duplicate-declaration failure out of the product status because it was a validation-environment artifact, not a source regression.
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+  - Private plugin analytics now returns daily channel and version trend buckets beside conversion, action, location, install, and overall activity trends.
+  - Plugin detail analytics now shows recent channel and version trend cards so owners can see which release channel or version drives downloads, installs, and invocations.
+  - Focused coverage verifies channel/version trend aggregation while keeping analytics grouped and free of raw actor identifiers.
 
-### feat(nexus): show notification unread badges
+### feat(nexus): add provider quota burn-rate forecast
 
-- `apps/nexus/app/components/dashboard/DashboardNav.vue`
-- `apps/nexus/app/pages/dashboard/notifications.vue`
-- `apps/nexus/app/pages/dashboard/notifications.test.ts`
-- `apps/nexus/i18n/locales/{en,zh}.ts`
-  - Dashboard account navigation now fetches the unread notification count and shows a bounded unread badge for the notification center.
-  - The notification center updates the shared unread-count state after loading inbox data, so sidebar badges stay aligned with read actions.
-  - Focused UI contract coverage verifies unread-count fetch, badge rendering, shared state, and localized aria labels.
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Provider quota analytics now returns per-policy request/token burn rate per day and projected exhaustion days based on the configured quota window.
+  - Data Governance provider quota cards now show burn/day and projected exhaustion beside usage, limits, utilization, remaining budget, and status.
+  - Focused coverage verifies forecast math for request and token quotas without changing provider dispatch enforcement or claiming pricing/billing completion.
 
-### docs(search): add competitive analysis roadmap
+### feat(nexus): add upload failure matrix analytics
 
-- `docs/INDEX.md`
-- `docs/plan-prd/README.md`
-- `docs/plan-prd/TODO.md`
-- `docs/plan-prd/03-features/search/competitive-analysis-2026-05-22/`
-  - Added Raycast / Alfred / uTools competitive analysis docs for capability alignment, smooth interaction expectations, workflow modeling, plugin cross-platform strategy, search ranking, parameter filling, translation/OCR/AI commands, plugin store/SDK ecosystem, cross-platform local data, and execution synthesis.
-  - Added the 100-round cross-review ledger and 70 micro-round files so follow-up App Data / Everything / CoreBox search work can trace the audit evidence instead of relying on a summary only.
-  - Synced README, INDEX, and TODO planning entries while keeping implementation work as follow-up slices.
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Upload analytics now returns a bounded `failureMatrix` grouped by resource type, surface, storage channel/provider, reason, retry disposition, and status code.
+  - Data Governance upload health now shows failure matrix rows with retry scheduled/exhausted counts and a suggested remediation category such as retry monitoring, storage provider checks, quota/policy checks, payload validation, or manual investigation.
+  - Focused coverage verifies retry-scheduled and retry-exhausted failure grouping while keeping raw attempt ids, resource ids, actors, and object keys out of the dashboard payload.
 
-### fix(core-app): stabilize style window grid
+### feat(nexus): summarize notification provider mix readiness
 
-- `apps/core-app/src/renderer/src/views/base/styles/SectionItem.vue`
-- `apps/core-app/src/renderer/src/views/base/styles/WindowSection.vue`
-  - Window preference cards now use a fixed grid layout, compact 8px card radius, and stopped title-bar click propagation to keep the style surface stable across desktop widths.
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Notification analytics now returns a bounded provider mix summary by channel, provider type, and adapter, covering enabled, production-ready, warning, disabled, credential-missing, send-mode, relay, and runtime gaps.
+  - Data Governance notification delivery now shows provider mix rows so admins can compare Resend, SendGrid, Mailgun, Postmark, SMTP relay, webhook, Web Push, Feishu, and Lark readiness without opening every channel risk card.
+  - Focused coverage verifies the multi-email-provider readiness aggregation while keeping credential refs and secrets out of the analytics payload.
 
-## 2026-05-21
+### feat(nexus): add storage channel pressure analytics
 
-### fix(core-app): harden Assistant clipboard image translation
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Storage analytics now derives `channelPressure` from sanitized storage governance events, grouping channel/provider stored bytes, traffic bytes, operations, writes/reads/deletes, unique actor counts, and recent per-channel trend.
+  - Configured storage policies with no current usage now still appear in `channelPressure` with zero traffic, remaining budgets, policy status, and alert state, so admins can see idle local/R2/S3/OSS channels before first upload/read traffic lands.
+  - Data Governance storage usage now shows channel pressure status, matched policy, peak utilization, alert count, remaining budget, and latest trend so admins can inspect capacity and traffic pressure without drilling into raw object keys.
+  - The aggregation reuses existing storage policy evaluations and only exposes hashed/count-level governance data; raw actor ids, object keys, credential refs, and storage metadata remain out of the dashboard payload.
+
+### feat(nexus): add provider usage billing evidence summary
+
+- `apps/nexus/server/utils/providerUsageLedgerStore.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/usage.get.ts`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/server/utils/providerUsageLedgerStore.test.ts`
+- `apps/nexus/test/api/dashboard/provider-registry/usage.api.test.ts`
+- `apps/nexus/app/utils/provider-registry-admin.test.ts`
+  - Provider usage ledger now returns an admin summary with total rows, completed/planned/failed counts, token totals, billable quantity, estimated rows, pricingRef / providerUsageRef coverage, provider/capability/unit breakdown, and recent usage trend.
+  - Provider Registry Admin Usage tab now shows token and billing-evidence readiness from the ledger without inventing cost totals when no pricing amount exists.
+  - Focused coverage verifies summary aggregation, API contract, and billing readiness copy while keeping prompt, output, raw request payload, and credential data out of the dashboard payload.
+
+### feat(nexus): add search plugin preference by time slot
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search analytics now derives `pluginPreferenceByTimeSlot` from anonymized governance metadata, grouping seen plugin ids and selected plugin ids by local time slot.
+  - Data Governance search context now shows time-slot plugin preference rows so admins can inspect which plugins are surfaced and chosen during morning/afternoon/evening/night usage windows.
+  - The aggregation uses coarse time slots plus plugin ids/categories from telemetry metadata and keeps raw queries, actor ids, and request identifiers out of the dashboard payload.
+
+### feat(nexus): add per-plugin action and location trends
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+  - Private plugin analytics now include per-day action trend buckets and per-day country/region trend buckets in addition to totals, conversion, channel, version, and artifact breakdowns.
+  - Plugin detail drawer now surfaces recent action mix and location mix so plugin owners can inspect download/install/invoke movement and geographic concentration from the private analytics view.
+  - The new analytics remain derived from hashed governance actors plus coarse country/region metadata; raw users, search queries, and request identifiers are not exposed.
+
+### feat(nexus): classify image and plugin icon upload failures
+
+- `apps/nexus/server/utils/imageStorage.ts`
+- `apps/nexus/server/utils/imageStorage.test.ts`
+  - Shared image/resource/plugin-icon upload lifecycle failures now use stable reason buckets for invalid asset type, size limit, storage policy blocks, storage write failures, and exhausted retry attempts.
+  - Plugin icon extraction and manual asset uploads keep retry metadata from the shared object storage executor while preserving actor and raw filename redaction.
+  - Focused coverage verifies invalid icon extension classification and S3 retry-exhausted metadata propagation.
+
+### feat(nexus): add sync blob upload governance diagnostics
+
+- `apps/nexus/server/api/v1/sync/blobs/upload.post.ts`
+- `apps/nexus/test/api/v1/sync/blobs-upload.api.test.ts`
+  - Sync blob uploads now emit sanitized upload lifecycle events for started, completed, quota-failed, and storage-failed attempts.
+  - Data Governance upload health can now see sync blob upload failures under stable `sync-blob:*` governance resource ids while keeping raw user ids, device ids, object keys, and local filenames out of analytics.
+  - Focused API coverage verifies completed uploads, quota failures, and missing R2/storage failures.
+
+### feat(nexus): classify release upload storage failures
+
+- `apps/nexus/server/api/releases/[tag]/assets.post.ts`
+- `apps/nexus/test/api/releases/assets.post.test.ts`
+  - Release asset and release signature upload governance failures now use stable reason buckets for storage policy blocks, storage write failures, and exhausted retry attempts.
+  - Failure metadata keeps the existing release tag/platform/arch/surface context while preserving the raw actor and filename redaction guarantees.
+  - Focused API coverage verifies release asset retry exhaustion and signature policy-blocked events without exposing private release file names.
+
+### feat(nexus): add Data Governance D1 readiness diagnostics
+
+- `apps/nexus/server/utils/platformGovernanceD1Readiness.ts`
+- `apps/nexus/server/api/dashboard/governance/d1-readiness.get.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceD1Readiness.test.ts`
+- `apps/nexus/test/api/dashboard/governance/d1-readiness.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Added an admin-only read-only D1 readiness endpoint for Data Governance schema, index, policy seed, credential backfill, browser push, inbox, upload, storage smoke, and notification delivery evidence gaps.
+  - Data Governance now surfaces D1 migration readiness with missing table/index counts and per-check seed/backfill reasons without running migrations or exposing `secure://*` references.
+  - Focused coverage verifies missing DB binding fail-closed behavior, missing index/seed diagnostics, admin API gating, and UI contract exposure.
+
+### feat(nexus): surface notification production readiness gaps
+
+- `apps/nexus/server/utils/notificationChannelCatalog.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Notification channel analytics now include production-readiness diagnostics for send mode, Web Push public runtime key, and HTTPS SMTP relay endpoint prerequisites.
+  - Data Governance now summarizes production-ready notification channels and runtime/relay/send-mode gaps beside existing delivery health and credential risk.
+  - Focused coverage verifies Web Push VAPID readiness gaps without exposing `secure://notifications/*`, push endpoints, or subscription keys in analytics.
+
+### feat(nexus): add storage channel smoke diagnostics
+
+- `apps/nexus/server/utils/storageChannelSmoke.ts`
+- `apps/nexus/server/utils/storageObjectStore.ts`
+- `apps/nexus/server/api/dashboard/storage/channels/smoke.post.ts`
+- `apps/nexus/test/api/dashboard/storage/channels-smoke.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Added an admin-only storage channel smoke endpoint with `dry-run` readiness mode and explicit `write` mode for short-lived write/read/delete verification through the shared object storage executor.
+  - Data Governance storage policy rows now expose dry-run and write smoke actions so admins can produce storage live-evidence against local, R2, S3-compatible, or OSS policies.
+  - Smoke audit events use the storage policy id as the governance resource and keep `secure://storage/*` refs, raw temporary object keys, and access-key secrets out of responses and governance metadata.
+
+### test(core-app): add Assistant floating ball smoke probe
+
+- `apps/core-app/scripts/assistant-floating-ball-smoke.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+  - Added `pnpm -C "apps/core-app" run smoke:assistant -- --remoteDebuggingUrl <json-list>` as a reusable CDP smoke for an already running Electron instance.
+  - The smoke verifies the Assistant floating ball DOM, clicks it, and verifies VoicePanel plus the clipboard image translation action without reading or translating the current clipboard image.
+  - Added opt-in `--clickTranslateExpectEmpty` coverage for controlled empty-clipboard runs; it clicks clipboard image translation and expects the localized empty-image recovery hint instead of treating a missing image as success.
+  - The opt-in empty-clipboard probe now fail-closes with a read-only macOS `NSPasteboard.general.types` preflight: if the system clipboard currently contains an image type, it refuses to click the translate action and records `clipboardImagePreflight`.
+  - Added opt-in `--dragFloatingBallExpectPersist` coverage for isolated runtime evidence; it drags the floating ball through CDP, waits for the debounced storage write, and verifies the same coordinates in `app-setting.ini`.
+  - Added `--screenshotDir` support so the same smoke can save CDP PNG evidence for the Assistant floating ball and VoicePanel targets; the 2026-05-22 report now includes dev and local packaged-unpacked screenshots for both surfaces.
+  - The smoke now accepts packaged `file://` renderer targets in addition to dev `http` targets, so local unpacked app evidence can exercise the same CDP probe.
+  - Added opt-in `--clickTranslateExpectPinWindow` and `--clickTranslateExpectProviderUnavailable` modes for controlled clipboard-image success and provider fallback evidence; both modes require a read-only macOS clipboard image type preflight and fail closed before clicking when no image is present.
+  - Packaged readiness preflight is recorded in the same evidence folder; after rebuilding local `dist/mac-arm64/tuff.app`, the artifact matches `2.4.11-beta.2` and remote debugging is available, but the unpacked artifact is not release-signed because local builder signing identity is `null`.
+  - Runtime evidence: `docs/engineering/reports/coreapp-visible-assistant-2026-05-22/README.md` records isolated Electron dev and local packaged-unpacked runs where the floating ball opened VoicePanel, exposed the `剪贴板图片翻译` action, persisted a dragged floating ball position, and showed the localized empty-image recovery hint with a text-only clipboard preflight.
+  - Visible experience evidence now keeps the compatible `assistant-screenshot-translate` id but relabels the surface and checklist to Assistant clipboard image translation, including empty clipboard image and provider fallback recovery.
+
+### fix(core-app): translate Assistant clipboard images
 
 - `apps/core-app/src/main/modules/assistant/module.ts`
 - `apps/core-app/src/main/modules/box-tool/core-box/image-translate.ts`
 - `apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue`
-- `packages/utils/transport/events/assistant.ts`
-- `apps/core-app/scripts/assistant-floating-ball-smoke.ts`
-- `apps/core-app/package.json`
-  - Assistant VoicePanel image translation now reads the current clipboard image through the shared CoreBox image translation helper instead of triggering screen capture from the Assistant surface.
-  - The typed assistant transport keeps the legacy `translate-screenshot` wire event compatible while exposing the clipboard-image API and localized recovery hints for empty clipboard images.
-  - Added `smoke:assistant` CDP smoke coverage for an already running Electron instance to verify the floating ball, VoicePanel, and clipboard image translation action without reading the clipboard image by default.
-  - Focused coverage verifies the clipboard image helper, typed transport contract, visible evidence checklist, and fail-closed empty-clipboard smoke preflight.
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `apps/core-app/src/main/modules/assistant/module.contract.test.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/image-translate.test.ts`
+  - Assistant VoicePanel now uses the canonical typed `assistant:voice-panel:translate-clipboard-image` / `translateClipboardImage` transport event; legacy `assistant:voice-panel:translate-screenshot` remains registered only as a compatibility alias, and the runtime reads the current clipboard image instead of initiating native screen capture.
+  - Clipboard image translation reuses `corebox.screenshot.translate` / `image.translate.e2e` and opens the existing image translation pin window.
+  - VoicePanel copy now labels the action as clipboard image translation and maps missing image input to clipboard-image recovery guidance instead of Screen Recording permission guidance.
+  - Validation: focused Assistant contract and CoreBox image translation tests cover the clipboard image path, empty clipboard image fallback, and native screenshot regression guard.
 
-### feat(nexus): expand provider governance controls
+### feat(nexus): add operations dashboard summary
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`
 - `apps/nexus/app/pages/dashboard/admin/governance.vue`
-- `apps/nexus/server/utils/sceneCapabilityAdapterRegistry.ts`
-- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
-- `apps/nexus/server/api/dashboard/provider-registry/providers.get.ts`
-  - Data Governance now exposes operations dashboard summaries, search reliability/selection buckets, notification channel risks, storage policy remaining/overage budgets, provider usage trends, model distribution, and quota remaining/overage budgets.
-  - Provider Registry admin now surfaces capability adapter readiness and inline provider quota controls without loading execution adapters in the provider listing path.
-  - Scene capability adapter matching is centralized in a small registry so readiness reporting and execution share the same provider/capability resolution rules.
-  - Focused coverage verifies governance analytics contracts, provider quota UI helpers/API shape, telemetry sanitization, and Scene adapter readiness.
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Governance analytics now returns a derived `dashboard` summary for user growth, search trend quality, plugin installs, provider requests/tokens, upload status, risk totals, hot plugins, top models, top providers, and recent trend slices.
+  - Data Governance now surfaces an Operations dashboard block above the detailed cockpit so admins can scan growth, risk, hot leaderboard, token, and model-distribution signals without digging through every domain panel.
+  - Focused coverage verifies dashboard summary fields and keeps raw actor ids, raw attempt ids, raw resource ids, and credential refs out of the analytics payload.
+
+### feat(nexus): route plugin moderation notifications to developers
+
+- `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
+- `apps/nexus/server/utils/notificationDispatcher.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/version-notification.api.test.ts`
+  - Plugin version approval/rejection notifications now pass the plugin developer id into the notification dispatch context so browser inbox, Web Push, and email adapters can target the developer account.
+  - Email delivery can derive plugin owner recipients from the account store when runtime recipients are not supplied, while governance configs still reject persisted `to` / `recipients` fields.
+  - Focused coverage verifies plugin-owner email routing and the version moderation handler contract without storing raw recipient emails, reviewer emails, credential refs, or API keys in audit events.
+
+### feat(nexus): add additional email notification adapters
+
+- `apps/nexus/server/utils/notificationChannelCatalog.ts`
+- `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/utils/notificationDispatcher.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+  - Notification channels now support `config.providerType` values for SendGrid, Mailgun, and Postmark in addition to Resend, SMTP relay, generic HTTP email, Feishu/Lark, webhook, browser inbox, and Web Push relay.
+  - Each email provider remains a separate `provider` instance for filtering and health analytics, while credentials stay behind `secure://notifications/*` references.
+  - Focused coverage verifies provider-specific HTTP payloads, provider filtering, and delivery audit sanitization without storing recipient emails, reviewer emails, credential refs, or provider API keys.
+
+### feat(nexus): add search selection quality analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search analytics now aggregates anonymized selection signals: selected provider/category/plugin, selected-rank buckets, result-count buckets, first-result latency buckets, total-duration buckets, and selection rate.
+  - Data Governance search behavior now surfaces selection rate plus result quality and selection distribution rows beside local time, context, preference, plugin, and reliability analytics.
+  - Focused coverage verifies the new search quality contract without storing raw query text or raw actor identifiers.
+
+### fix(nexus): feed telemetry metadata into governance analytics
+
+- `apps/nexus/server/utils/telemetrySanitizer.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/utils/telemetryStore.test.ts`
+  - Search telemetry now preserves sanitized selection metadata (`selected`, selected provider/category/plugin/rank) and forwards it into app search governance events, so the existing selection quality cockpit reflects real telemetry ingestion instead of only manually recorded governance events.
+  - Visit telemetry now preserves sanitized route/page/surface/referrer/source and local-time metadata, strips query/hash fragments from location-like fields, and writes route-scoped visit governance events for the existing visit hotspot analytics.
+  - Focused coverage verifies telemetry-to-governance search selection and visit hotspot aggregation while keeping raw search text, query parameters, client ids, and actor identifiers out of stored telemetry/governance payloads.
+
+## 2026-05-21
+
+### feat(nexus): surface storage policy remaining budgets
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Storage policy evaluations now return remaining and overage budgets for stored bytes, traffic bytes, operations, and alert bytes.
+  - Data Governance storage policy cards now show remaining stored/traffic/operation budgets and alert threshold overage beside usage, limits, utilization, status, and reasons.
+  - Focused coverage verifies storage policy remaining/overage budget math and UI contract exposure.
+
+### feat(nexus): surface provider quota remaining budgets
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Provider quota analytics now returns remaining request/token budgets and overage counts for each configured Intelligence provider quota.
+  - Data Governance provider quota cards now show remaining requests and remaining tokens beside usage, limits, utilization, and status.
+  - Focused coverage verifies remaining budget math for provider request/token quota enforcement dashboards.
+
+### feat(nexus): add Intelligence model usage breakdown
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Provider analytics now includes per-model usage breakdown with tokens, requests, unique actors, provider, channel, and provider-type distribution.
+  - Data Governance provider cockpit now surfaces model usage breakdown beside provider trend, quota utilization, and provider-type distribution.
+  - Focused coverage verifies model distribution details for token/reporting dashboards without exposing raw actor identifiers.
+
+### feat(nexus): add anonymized app visit hotspot analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Visit analytics now aggregates app route/page/surface/referrer, local-hour, local time-slot, trend, and heatmap data from hashed app visit governance events.
+  - Data Governance cockpit now surfaces visit hotspot rows beside search, plugin, upload, storage, notification, and provider panels.
+  - Focused coverage verifies visit hotspot aggregation and confirms raw visitor identifiers stay out of analytics payloads.
+
+### feat(nexus): add user signup growth trend analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - User analytics now derives daily signup growth trend with per-day growth amount, cumulative signups, and growth-rate delta from existing hashed governance events.
+  - Data Governance overview now surfaces the latest user growth trend rows beside total signups, keeping raw user identifiers out of the report.
+  - Focused coverage verifies the growth trend contract and UI exposure for growth dashboard requirements.
+
+### feat(nexus): add plugin review status trend analytics
+
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/server/utils/pluginReviewStore.test.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+  - Private plugin review analytics now returns daily approved/pending/rejected status trend points for plugin owners/admins.
+  - Plugin detail analytics now shows the latest review moderation trend summary beside rating and status totals.
+  - Focused coverage verifies aggregated trend output and confirms analytics payloads do not expose reviewer emails, author names, or review content.
+
+### feat(nexus): surface local search preference buckets
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search governance analytics now derives local time-slot buckets from sanitized `localHour` metadata and exposes local weekday counts beside local-hour search preference.
+  - Data Governance search context now shows local time slot and local weekday preference rows, improving "when users search" analysis without storing query text or raw actor identifiers.
+  - Focused coverage verifies local hour, weekday, and time-slot aggregation plus the UI contract.
 
 ### feat(nexus): retry transient object upload writes
 
@@ -145,8 +701,86 @@
 - `apps/nexus/server/utils/uploadGovernance.ts`
 - `apps/nexus/server/utils/storageObjectStore.test.ts`
   - External S3/OSS and R2 object writes now use bounded retry/backoff for retryable transient failures before surfacing upload failure to callers.
-  - Final upload failures carry sanitized retry metadata (`retryable`, `retryCount`, `maxRetries`, `nextRetryDelayMs`, storage channel/provider/status) into upload governance, feeding existing retry diagnostics without exposing raw object keys, file names, or actors.
+  - Final upload failures carry sanitized retry metadata (`retryable`, `retryCount`, `maxRetries`, `nextRetryDelayMs`, storage channel/provider/status) into upload governance, feeding the existing retry analytics without exposing raw object keys, file names, or actors.
   - Focused coverage verifies transient 503 recovery and exhausted retry metadata propagation through upload governance.
+
+### feat(nexus): surface provider adapter readiness
+
+- `apps/nexus/server/utils/sceneCapabilityAdapterRegistry.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers.get.ts`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/test/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `apps/nexus/app/utils/provider-registry-admin.test.ts`
+  - Provider Registry list responses now attach capability adapter readiness so declared capabilities without executable Scene adapters are visible before runtime dispatch.
+  - Scene adapter key/readiness resolution now lives in a lightweight registry module, avoiding Provider Registry list API imports of heavy runtime adapters and Nitro storage-backed dependencies.
+  - Provider Registry Admin capability chips and summaries now distinguish adapter-ready and adapter-missing states while preserving Scene Orchestrator's runtime adapter execution path.
+
+### feat(nexus): add upload retry reliability analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Upload analytics now summarizes retryable, scheduled, exhausted, and non-retryable failed uploads from sanitized upload metadata.
+  - Data Governance upload health now shows retry disposition, retry trend, average next retry delay, and problem-attempt retry state without exposing raw attempt ids or resource ids.
+  - Focused coverage verifies retry/backoff aggregation and UI contract exposure while leaving the actual upload execution/retry policy unchanged.
+
+### feat(nexus): summarize storage policy risk in governance analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Storage analytics now includes `policySummary` counts for active/blocked/warning/disabled policies, alert count, and peak stored/traffic/operation utilization.
+  - Data Governance storage usage now surfaces policy utilization and a bounded risk list, reusing existing storage policy evaluation status/reason semantics.
+  - Focused coverage verifies policy summary/risk aggregation and UI contract exposure without changing storage policy enforcement.
+
+### feat(nexus): add plugin conversion trend analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+  - Private plugin analytics now returns daily conversion trend points using the same install/download, invocation/install, and invocation-per-actor formulas as the aggregate conversion summary.
+  - Plugin detail analytics now shows the latest active conversion trend point in the conversion efficiency panel.
+  - Focused coverage verifies the conversion trend payload and UI contract for plugin owners/admins.
+
+### feat(nexus): add search reliability analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Search governance analytics now returns reliability summary and daily trend for zero-result searches, provider errors, provider timeouts, and problem-search rate from existing sanitized metadata.
+  - Data Governance search context now surfaces zero-result rate, provider problem counts, and recent reliability trend without storing query text.
+  - Focused coverage verifies aggregation and UI exposure while keeping raw actor/query data out of the analytics payload.
+
+### feat(nexus): summarize notification channel config health
+
+- `apps/nexus/server/utils/notificationChannelCatalog.ts`
+- `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/{platformGovernanceStore,notificationDispatcher}.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Notification adapter/profile resolution is now shared between dispatcher and governance analytics for browser, Resend, SMTP relay, Feishu/Lark, webhook, and webpush channels.
+  - Governance analytics now returns notification channel health summary and risk list for disabled channels, unsupported adapters, and missing credential refs without exposing secure credential references.
+  - Data Governance notification delivery panel now surfaces enabled/missing-credential/unsupported counts and risky channel configs next to delivery audit health.
+
+### feat(nexus): surface plugin conversion analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+  - Private plugin analytics now returns download-to-install rate, install-to-invoke rate, and invocations per actor for plugin owners/admins.
+  - Plugin detail analytics now includes a compact conversion efficiency panel beside trend, review, and distribution analytics.
+  - Focused coverage verifies conversion aggregation and UI contract exposure without adding raw actor or event identifiers.
 
 ### fix(plugin): harden quick actions shell capability
 
@@ -159,14 +793,35 @@
   - Action execution now blocks unsafe empty/newline/null command payloads before permission prompts and returns explicit `started`, `blocked`, `failed`, or `cancelled` action status.
   - Validation: `node --test "plugins/touch-quick-actions/index.test.cjs"` passed.
 
-### fix(plugin): canonicalize quick actions execution payloads
+### feat(nexus): add notification delivery trend analytics
 
-- `plugins/touch-quick-actions/index.js`
-- `plugins/touch-quick-actions/index.test.cjs`
-- `docs/plan-prd/TODO.md`
-  - Quick Actions item execution now resolves the requested action by id from the platform allowlist instead of trusting the item payload command.
-  - Injected or stale item payload commands are ignored before shell execution, keeping the previously added `safe-shell` and `system.shell` gates tied to canonical plugin actions.
-  - Validation: `node --test "plugins/touch-quick-actions/index.test.cjs"` passed.
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Notification analytics now returns daily planned/sent/skipped/failed delivery counts and unique actor counts.
+  - Data Governance notification delivery panel now surfaces recent delivery trend beside provider/adapter/status breakdowns.
+  - Focused coverage verifies notification delivery trend aggregation and UI contract exposure without sending live notifications.
+
+### feat(nexus): add upload status trend analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Upload analytics now returns daily started/completed/failed counts, completed bytes, and unique actors for upload status trend inspection.
+  - Data Governance upload breakdown now surfaces recent upload status trend next to failure/status-code/problem-attempt diagnostics.
+  - Focused coverage verifies upload status trend aggregation and UI contract exposure.
+
+### feat(nexus): add provider usage totals and trend analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+  - Provider analytics now returns total provider request/token usage separately from the top-N provider leaderboard.
+  - Data Governance provider cockpit now shows recent provider request/token trend and the overview token card uses the total provider usage summary instead of summing visible leaderboard rows.
+  - Focused coverage verifies provider usage summary/trend aggregation and UI contract exposure.
 
 ### feat(nexus): summarize provider quota risk in governance analytics
 
@@ -194,7 +849,7 @@
 - `docs/plan-prd/README.md`
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/CHANGES.md`
-  - Compressed repeated Data Governance status paragraphs in active entry docs into current-state summaries, including upload retry diagnostics, storage alerts, direct invoke quota, and Provider Registry quota admin follow-ups.
+  - Compressed repeated Data Governance status paragraphs in active entry docs into current-state summaries.
   - Kept detailed Data Governance history in this changelog and retained explicit live-evidence gaps in the active TODO/README/INDEX entries.
 
 ### feat(nexus): add notification provider health analytics
@@ -366,7 +1021,7 @@
   - 更新下载包弹窗改为展示当前 release 的全部下载包；当前设备无匹配包时明确提示，并为每个包标注平台/架构/链接/校验信息状态。
   - 验证：focused recommendation/context/semantic Vitest 覆盖上下文开关、系统信号失败降级、cache key 隐私边界、本地语义排序、历史偏好向量、重复取消负反馈向量、语义关闭回退、AI embedding/rerank 成功排序与失败 fail-open、隐私安全 profile；affected-file ESLint、node typecheck 和 `git diff --check` passed。
 
-### feat(core-app): wire Assistant screenshot translate action
+### feat(core-app): wire Assistant clipboard image translate action
 
 - `apps/core-app/src/main/modules/assistant/module.ts`
 - `apps/core-app/src/main/modules/assistant/module.contract.test.ts`
@@ -378,12 +1033,12 @@
 - `packages/utils/__tests__/transport-domain-sdks.test.ts`
 - `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
 - `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
-  - Assistant VoicePanel now exposes a screenshot translate action next to text handoff.
-  - The action uses typed `assistant:voice-panel:translate-screenshot`, temporarily hides Assistant windows, captures the cursor display through native screenshot as a data URL, and reuses the existing `corebox.screenshot.translate` / `image.translate.e2e` path through `translateImageBase64`.
-  - Translated screenshots open in the existing image translation pin window instead of introducing a second result surface.
-  - CoreApp visible experience evidence now tracks Assistant floating ball entry and Assistant screenshot translation as required visual surfaces, including drag persistence, VoicePanel opening, permission denial, and provider fallback evidence.
+  - Assistant VoicePanel now exposes a clipboard image translation action next to text handoff.
+  - The action now uses the canonical typed `assistant:voice-panel:translate-clipboard-image` wire event while keeping legacy `assistant:voice-panel:translate-screenshot` as a compatibility alias; the runtime reads the current clipboard image instead of initiating native screen capture.
+  - Translated clipboard images open in the existing image translation pin window instead of introducing a second result surface.
+  - CoreApp visible experience evidence now tracks Assistant floating ball entry and Assistant clipboard image translation as required visual surfaces, including drag persistence, VoicePanel opening, empty clipboard image recovery, and provider fallback evidence.
   - Assistant floating ball and VoicePanel window creation now use single-flight pending guards, so concurrent settings snapshots or click handoffs reuse the in-flight renderer load instead of spawning duplicate floating windows.
-  - Screenshot translation now suppresses VoicePanel blur auto-hide while native capture hides and restores Assistant windows, with a counted delayed resume so permission prompts or provider fallback recovery do not close the panel unexpectedly.
+  - Clipboard image translation now suppresses VoicePanel blur auto-hide while the existing image translation flow opens the pin window, with a counted delayed resume so provider fallback recovery does not close the panel unexpectedly.
   - VoicePanel opening from the floating ball now also holds the same blur auto-hide suppression until bounds, show/focus, and typed `panelOpened` handoff complete, avoiding an immediate hide race while the panel is being positioned.
   - Validation: focused Assistant contract, CoreBox image translate helper, transport event, and visible experience evidence tests cover the new typed event, scene reuse path, duplicate-window guard, and manual evidence gate; packaged Electron permission and provider fallback artifacts remain follow-up.
 
@@ -728,18 +1383,6 @@
 
 ## 2026-05-18
 
-### feat(intelligence): expose local skills gate summary
-
-- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
-- `packages/utils/transport/sdk/domains/intelligence.ts`
-- `apps/core-app/src/main/modules/ai/intelligence-local-environment.ts`
-- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
-- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
-- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
-  - Local AI environment scan now returns a read-only `gate` summary for each Codex skill provider: ready core skills, approval-required high-risk/external skills, and unavailable not-installed skills.
-  - Gate summaries expose deterministic scene hint ids without claiming scene registration or execution readiness, keeping execution policy out of this slice.
-  - Intelligence settings now shows permission gate counts and per-skill gate labels using localized copy.
-
 ### fix(nexus): reactivate CLI devices during browser auth
 
 - `.github/workflows/package-tuff-cli-publish.yml`
@@ -803,6 +1446,18 @@
   - Scoped the plugin line to Browser Data, Obsidian, VSCode, macOS App Data, and Epic clarification, with a shared source health/index diagnostics baseline.
   - Scoped Everything follow-up to SDK-vs-CLI decision, packaging/CLI guidance, path authorization filtering, diagnostic evidence, performance baseline, and Windows real-device regression.
   - Explicitly excluded update-system Nexus Hard-Cut from this roadmap.
+
+### feat(intelligence): expose local skills gate summary
+
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-local-environment.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - Local AI environment scan now returns a read-only `gate` summary for each Codex skill provider: ready core skills, approval-required high-risk/external skills, and unavailable not-installed skills.
+  - Gate summaries expose deterministic scene hint ids without claiming scene registration or execution readiness, keeping execution policy out of this slice.
+  - Intelligence settings now shows permission gate counts and per-skill gate labels using localized copy.
 
 ### docs: move active roadmap to 2.4.11 stabilization
 

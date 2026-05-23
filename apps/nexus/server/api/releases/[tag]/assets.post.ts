@@ -14,6 +14,33 @@ import {
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function classifyReleaseAssetUploadFailure(error: unknown): string {
+  const record = readRecord(error)
+  const statusCode = record?.statusCode
+  const data = readRecord(record?.data)
+  const uploadRetry = readRecord(data?.uploadRetry)
+  const message = String(record?.statusMessage ?? record?.message ?? '').toLowerCase()
+
+  if (statusCode === 429 || message.includes('policy exceeded') || message.includes('policy block'))
+    return 'storage-policy-blocked'
+  if (uploadRetry) {
+    const retryCount = uploadRetry.retryCount
+    const maxRetries = uploadRetry.maxRetries
+    if (typeof retryCount === 'number' && typeof maxRetries === 'number' && retryCount >= maxRetries)
+      return 'storage-write-retry-exhausted'
+    return 'storage-write-retry-failed'
+  }
+  if (message.includes('storage') || message.includes('r2') || message.includes('s3') || message.includes('oss'))
+    return 'storage-write-failed'
+  return 'release-asset-upload-failed'
+}
+
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdminOrApiKey(event, ['release:assets'])
 
@@ -76,7 +103,9 @@ export default defineEventHandler(async (event) => {
     })
   }
   catch (error) {
-    await failUploadGovernance(event, uploadAttempt, error)
+    await failUploadGovernance(event, uploadAttempt, error, {
+      reason: classifyReleaseAssetUploadFailure(error),
+    })
     throw error
   }
 
@@ -118,7 +147,9 @@ export default defineEventHandler(async (event) => {
       })
     }
     catch (error) {
-      await failUploadGovernance(event, signatureAttempt, error)
+      await failUploadGovernance(event, signatureAttempt, error, {
+        reason: classifyReleaseAssetUploadFailure(error),
+      })
       throw error
     }
   }
