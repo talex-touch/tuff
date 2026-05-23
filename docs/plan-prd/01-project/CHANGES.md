@@ -13,6 +13,18 @@
 
 ## 2026-05-24
 
+### feat(nexus): add governance operations daily timeline
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `dashboard.trends.operationsTimeline` as an aggregate-only daily timeline that merges existing anonymized user signup, search quality, plugin, provider, upload, and storage trend signals.
+  - Rendered the latest daily operations rows inside the governance operations dashboard for compact operator review, including daily risk score, search selection/problem rate, provider tokens, upload failure rate, and storage operations.
+  - Kept the Nexus Data Governance status as in-progress rather than production-complete; live browser, live send, live storage, production D1, and real quota fail-closed evidence remain open validation gaps.
+
 ### fix(nexus): restore storage smoke policy resolver for Pages build
 
 - `apps/nexus/server/utils/storageObjectStore.ts`

@@ -440,6 +440,32 @@ interface ProviderChannelDistributionItem {
   byProviderType: Array<{ providerType: string, quantity: number }>
 }
 
+interface GovernanceOperationsTimelinePoint {
+  date: string
+  userSignups: number
+  userSignupGrowthRate: number
+  userCumulative: number
+  searches: number
+  searchSelected: number
+  searchSelectionRate: number
+  searchProblems: number
+  searchProblemRate: number
+  searchZeroResultRate: number
+  pluginDownloads: number
+  pluginInstalls: number
+  pluginInvocations: number
+  providerRequests: number
+  providerTokens: number
+  uploadStarted: number
+  uploadCompleted: number
+  uploadFailed: number
+  uploadFailureRate: number
+  uploadBytes: number
+  storageOperations: number
+  storageBytes: number
+  riskScore: number
+}
+
 interface GovernanceAnalytics {
   days: number
   generatedAt: string
@@ -503,6 +529,7 @@ interface GovernanceAnalytics {
       pluginInstalls: Array<GovernanceTrendPoint & { downloads: number, installs: number, invocations: number }>
       providerUsage: Array<GovernanceTrendPoint & { requests: number, tokens: number }>
       uploadStatus: Array<GovernanceTrendPoint & { started: number, completed: number, failed: number, bytes: number }>
+      operationsTimeline: GovernanceOperationsTimelinePoint[]
     }
   }
   visits: GovernanceScopedAnalytics & {
@@ -593,6 +620,8 @@ interface GovernanceAnalytics {
       problemRate: number
     }
     reliabilityTrend: Array<GovernanceTrendPoint & {
+      selected: number
+      selectionRate: number
       zeroResult: number
       providerErrors: number
       providerTimeouts: number
@@ -1413,6 +1442,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           pluginInstalls: [],
           providerUsage: [],
           uploadStatus: [],
+          operationsTimeline: [],
         },
       },
       visits: {
@@ -2668,6 +2698,71 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div class="mt-3 rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="font-semibold text-black dark:text-white">
+                {{ t('dashboard.governance.analytics.dashboardOperationsTimeline', 'Daily operations timeline') }}
+              </p>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardOperationsTimelineHint', 'Daily aggregate of growth, search, plugin, provider, upload, and storage signals.') }}
+              </p>
+            </div>
+            <span class="text-black/40 dark:text-white/40">
+              {{ formatNumber(analyticsData.dashboard.trends.operationsTimeline.length) }}
+            </span>
+          </div>
+
+          <div class="mt-3 grid gap-2">
+            <div
+              v-for="item in analyticsData.dashboard.trends.operationsTimeline.slice(-6)"
+              :key="`dashboard-operations-timeline:${item.date}`"
+              class="rounded-lg border border-black/[0.05] p-3 dark:border-white/[0.06]"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="font-semibold text-black dark:text-white">
+                  {{ formatShortDate(item.date) }}
+                </p>
+                <span
+                  class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  :class="item.riskScore ? 'bg-amber-500/10 text-amber-700 dark:text-amber-200' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'"
+                >
+                  {{ item.riskScore ? `${formatNumber(item.riskScore)} risk` : t('dashboard.governance.analytics.dashboardOperationsTimelineClear', 'clear') }}
+                </span>
+              </div>
+              <div class="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <p class="truncate text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineGrowth', 'Growth') }}:
+                  <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.userSignups) }} users · {{ formatDelta(item.userSignupGrowthRate) }}</span>
+                </p>
+                <p class="truncate text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineSearch', 'Search') }}:
+                  <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.searches) }} · {{ formatPercent(item.searchSelectionRate) }} selected · {{ formatPercent(item.searchProblemRate) }} problem</span>
+                </p>
+                <p class="truncate text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelinePlugins', 'Plugins') }}:
+                  <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.pluginInstalls) }} installs · {{ formatNumber(item.pluginInvocations) }} calls</span>
+                </p>
+                <p class="truncate text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineProvider', 'Provider') }}:
+                  <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.providerRequests) }} req · {{ formatNumber(item.providerTokens) }} tok</span>
+                </p>
+                <p class="truncate text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineUpload', 'Upload') }}:
+                  <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.uploadCompleted) }}/{{ formatNumber(item.uploadStarted) }} ok · {{ formatNumber(item.uploadFailed) }} failed · {{ formatPercent(item.uploadFailureRate) }} · {{ formatBytes(item.uploadBytes) }}</span>
+                </p>
+                <p class="truncate text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineStorage', 'Storage') }}:
+                  <span class="font-medium text-black/75 dark:text-white/75">{{ formatBytes(item.storageBytes) }} · {{ formatNumber(item.storageOperations) }} ops</span>
+                </p>
+              </div>
+            </div>
+            <p v-if="analyticsData.dashboard.trends.operationsTimeline.length === 0" class="text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.analytics.dashboardOperationsTimelineEmpty', 'No daily operations samples yet.') }}
+            </p>
           </div>
         </div>
       </div>

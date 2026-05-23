@@ -2351,6 +2351,7 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
   const reliabilityTrend = new Map<string, {
     date: string
     events: number
+    selected: number
     zeroResult: number
     providerErrors: number
     providerTimeouts: number
@@ -2444,6 +2445,7 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     const trendItem = reliabilityTrend.get(date) ?? {
       date,
       events: 0,
+      selected: 0,
       zeroResult: 0,
       providerErrors: 0,
       providerTimeouts: 0,
@@ -2458,6 +2460,8 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
       trendItem.zeroResult += 1
     if (isZeroResult || hasProviderProblem)
       trendItem.problemSearches += 1
+    if (isSearchSelected(event))
+      trendItem.selected += 1
     const actor = readEventActor(event)
     if (actor)
       trendItem.actors.add(actor)
@@ -2556,6 +2560,8 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
       .map(item => ({
         date: item.date,
         events: item.events,
+        selected: item.selected,
+        selectionRate: item.events ? Math.round((item.selected / item.events) * 10000) / 100 : 0,
         zeroResult: item.zeroResult,
         providerErrors: item.providerErrors,
         providerTimeouts: item.providerTimeouts,
@@ -4498,6 +4504,122 @@ function latestTrendPoint<T extends { date: string }>(items: T[]): T | null {
   return items.at(-1) ?? null
 }
 
+function createOperationsTimeline(input: {
+  users: ReturnType<typeof createUserAnalytics>
+  searches: ReturnType<typeof createSearchAnalytics>
+  plugins: ReturnType<typeof createPluginAnalytics>
+  uploads: ReturnType<typeof createUploadAnalytics>
+  storage: ReturnType<typeof createStorageAnalytics>
+  providers: ReturnType<typeof createProviderAnalytics>
+}, topLimit: number) {
+  const timeline = new Map<string, {
+    date: string
+    userSignups: number
+    userSignupGrowthRate: number
+    userCumulative: number
+    searches: number
+    searchSelected: number
+    searchSelectionRate: number
+    searchProblems: number
+    searchProblemRate: number
+    searchZeroResultRate: number
+    pluginDownloads: number
+    pluginInstalls: number
+    pluginInvocations: number
+    providerRequests: number
+    providerTokens: number
+    uploadStarted: number
+    uploadCompleted: number
+    uploadFailed: number
+    uploadFailureRate: number
+    uploadBytes: number
+    storageOperations: number
+    storageBytes: number
+    riskScore: number
+  }>()
+
+  const getItem = (date: string) => {
+    const item = timeline.get(date) ?? {
+      date,
+      userSignups: 0,
+      userSignupGrowthRate: 0,
+      userCumulative: 0,
+      searches: 0,
+      searchSelected: 0,
+      searchSelectionRate: 0,
+      searchProblems: 0,
+      searchProblemRate: 0,
+      searchZeroResultRate: 0,
+      pluginDownloads: 0,
+      pluginInstalls: 0,
+      pluginInvocations: 0,
+      providerRequests: 0,
+      providerTokens: 0,
+      uploadStarted: 0,
+      uploadCompleted: 0,
+      uploadFailed: 0,
+      uploadFailureRate: 0,
+      uploadBytes: 0,
+      storageOperations: 0,
+      storageBytes: 0,
+      riskScore: 0,
+    }
+    timeline.set(date, item)
+    return item
+  }
+
+  for (const item of input.users.signupGrowthTrend) {
+    const entry = getItem(item.date)
+    entry.userSignups = item.quantity
+    entry.userSignupGrowthRate = item.growthRate
+    entry.userCumulative = item.cumulative
+  }
+  for (const item of input.searches.trend) {
+    const entry = getItem(item.date)
+    entry.searches = item.quantity
+  }
+  for (const item of input.searches.reliabilityTrend) {
+    const entry = getItem(item.date)
+    entry.searchSelected = item.selected
+    entry.searchSelectionRate = item.selectionRate
+    entry.searchProblems = item.problemSearches
+    entry.searchProblemRate = percentage(item.problemSearches, item.events)
+    entry.searchZeroResultRate = percentage(item.zeroResult, item.events)
+  }
+  for (const item of input.plugins.installTrend) {
+    const entry = getItem(item.date)
+    entry.pluginDownloads = item.downloads
+    entry.pluginInstalls = item.installs
+    entry.pluginInvocations = item.invocations
+  }
+  for (const item of input.providers.trend) {
+    const entry = getItem(item.date)
+    entry.providerRequests = item.requests
+    entry.providerTokens = item.tokens
+  }
+  for (const item of input.uploads.statusTrend) {
+    const entry = getItem(item.date)
+    entry.uploadStarted = item.started
+    entry.uploadCompleted = item.completed
+    entry.uploadFailed = item.failed
+    entry.uploadFailureRate = percentage(item.failed, Math.max(item.started, item.completed + item.failed))
+    entry.uploadBytes = item.bytes
+  }
+  for (const item of input.storage.trend) {
+    const entry = getItem(item.date)
+    entry.storageOperations = item.operations
+    entry.storageBytes = item.storedBytes + item.trafficBytes
+  }
+
+  return Array.from(timeline.values())
+    .map(item => ({
+      ...item,
+      riskScore: item.searchProblems + item.uploadFailed,
+    }))
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(-topLimit)
+}
+
 function createOperationsDashboardSummary(input: {
   users: ReturnType<typeof createUserAnalytics>
   searches: ReturnType<typeof createSearchAnalytics>
@@ -4576,6 +4698,7 @@ function createOperationsDashboardSummary(input: {
       pluginInstalls: input.plugins.installTrend.slice(-topLimit),
       providerUsage: input.providers.trend.slice(-topLimit),
       uploadStatus: input.uploads.statusTrend.slice(-topLimit),
+      operationsTimeline: createOperationsTimeline(input, topLimit),
     },
   }
 }

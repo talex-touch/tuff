@@ -1653,7 +1653,32 @@ describe('platformGovernanceStore', () => {
       pluginInstalls: expect.any(Array),
       providerUsage: expect.any(Array),
       uploadStatus: expect.any(Array),
+      operationsTimeline: expect.any(Array),
     }))
+    expect(analytics.dashboard.trends.operationsTimeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        date: expect.any(String),
+        userSignups: expect.any(Number),
+        searches: expect.any(Number),
+        searchSelected: expect.any(Number),
+        searchSelectionRate: expect.any(Number),
+        searchProblems: expect.any(Number),
+        pluginInstalls: expect.any(Number),
+        pluginInvocations: expect.any(Number),
+        providerRequests: expect.any(Number),
+        providerTokens: expect.any(Number),
+        uploadStarted: expect.any(Number),
+        uploadCompleted: expect.any(Number),
+        uploadFailed: expect.any(Number),
+        uploadFailureRate: expect.any(Number),
+        uploadBytes: expect.any(Number),
+        storageOperations: expect.any(Number),
+        storageBytes: expect.any(Number),
+        riskScore: expect.any(Number),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.dashboard.trends.operationsTimeline)).not.toContain('admin@example.com')
+    expect(JSON.stringify(analytics.dashboard.trends.operationsTimeline)).not.toContain(`failed-attempt-${marker}`)
     expect(serializedAnalytics).not.toContain('secure://')
 
     const pluginAnalytics = await getPluginGovernanceAnalytics(h3Event, pluginId, { days: 30, limit: 5000, topLimit: 50 })

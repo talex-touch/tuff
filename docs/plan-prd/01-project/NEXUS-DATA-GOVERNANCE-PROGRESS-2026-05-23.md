@@ -5,12 +5,12 @@
 
 ## Executive Status
 
-Current verdict: **in progress, not production-complete**. The local implementation has a broad code-backed baseline for the eight Nexus Data Governance areas, and the most recent focused validation covers the newly added search journey funnel and plugin review rating trend slices. The remaining blockers are evidence blockers rather than architecture unknowns: real browser screenshots/interactions, live notification sends, live local/S3/OSS storage traces, production D1 migration/backfill, and real provider quota fail-closed calls.
+Current verdict: **in progress, not production-complete**. The local implementation has a broad code-backed baseline for the eight Nexus Data Governance areas, and the most recent focused validation covers the newly added search journey funnel, plugin review rating trend, and operations daily timeline slices. The remaining blockers are evidence blockers rather than architecture unknowns: real browser screenshots/interactions, live notification sends, live local/S3/OSS storage traces, production D1 migration/backfill, and real provider quota fail-closed calls.
 
 | Roll-up | Current state |
 | --- | --- |
 | Scope breadth | 8/8 target areas have code or admin/API surface in the current worktree. |
-| Local evidence | Search journey, provider quota drill-down, plugin review trend, upload retry/reason buckets, storage pressure, notification profiles, and operations summary all have focused test or contract-test coverage recorded in this snapshot. |
+| Local evidence | Search journey, provider quota drill-down, plugin review trend, upload retry/reason buckets, storage pressure, notification profiles, operations summary, and operations daily timeline all have focused test or contract-test coverage recorded in this snapshot. |
 | Production evidence | Not complete. No live browser pass, live send pass, live object-storage pass, production D1 backfill, or real provider quota call evidence has been attached yet. |
 | Release readiness | Not ready for completion sign-off. It can continue as a development/governance branch, but should not be reported as production closed. |
 
@@ -22,7 +22,7 @@ Current verdict: **in progress, not production-complete**. The local implementat
 | 4. Intelligence/adapt config merge and asset uploads | In progress | Scene Orchestrator merges adapter/upload/assets/constraints config from provider, capability, scene, and binding metadata; scene adapter assets go through shared storage object writes and private scene asset refs. | Real adapter execution evidence for merged config precedence and asset-backed outputs; old provider table retirement evidence. |
 | 5. Storage management, channels, limits, traffic analytics | In progress | Storage policies support local/R2/S3-compatible/OSS style channels through governance configs, secure credential refs, per-channel pressure/trend, remaining/overage budgets, burn-rate forecast, alert queue, dry-run/write smoke, and notify endpoint. | Live local/S3/OSS smoke artifacts, production D1 migration/backfill, and operator docs for channel sizing and alert response. |
 | 6. Notification management | In progress | Browser inbox, Resend, SendGrid, Mailgun, Postmark, SMTP relay, HTTP email relay, Feishu/Lark bots, generic webhook, and Web Push relay profiles; delivery trend, provider health, readiness/risk diagnostics, test panel, plugin moderation notification routing. | Real credentials/live send evidence, direct SMTP socket or hosted relay proof, Web Push VAPID/relay production send evidence. |
-| 7. Reports, analytics, operations dashboard | In progress | Operations dashboard summary covers user growth, search trend quality, plugin installs, upload risk, storage/notification/provider risk, hot plugin leaderboard, top models/providers, provider token/model/channel distribution. | Deeper executive large-screen layout, real browser visual evidence, and longer production trend samples. |
+| 7. Reports, analytics, operations dashboard | In progress | Operations dashboard summary covers user growth, search trend quality, plugin installs, upload risk, storage/notification/provider risk, hot plugin leaderboard, top models/providers, provider token/model/channel distribution, and an aggregate daily operations timeline across growth/search/plugin/provider/upload/storage signals. | Deeper executive large-screen layout, real browser visual evidence, and longer production trend samples. |
 | 8. Intelligence provider token/quota limits | In progress | `intelligence_provider_quota` configs enforce request/token budgets before direct invoke, Lab model, and Scene Orchestrator dispatch; Provider Registry quota GET/POST exposes evaluations; governance analytics shows quota risk, remaining budget, burn rate, overage, and nearest exhaustion. | Live provider-call evidence with real quota policies and production registry-primary migration/backfill evidence. |
 
 ## Current Implementation Evidence
@@ -51,6 +51,10 @@ Current verdict: **in progress, not production-complete**. The local implementat
 
 ## 2026-05-23 Delta
 
+- Operations daily timeline was added to governance analytics and admin UI:
+  - `dashboard.trends.operationsTimeline` merges existing anonymized daily aggregates for user signups, search selection/problem rate, plugin installs/invocations, provider requests/tokens, upload status/bytes, storage operations/bytes, and risk score.
+  - The admin operations dashboard now renders the latest timeline rows as a compact review strip for daily operations scanning.
+  - The timeline remains aggregate-only and does not expose raw queries, actor ids, resource ids, credential refs, attempt ids, or email identifiers.
 - Current progress was written into the canonical docs:
   - This file now separates implementation coverage from production evidence blockers.
   - `docs/plan-prd/README.md`, `docs/plan-prd/TODO.md`, and `docs/INDEX.md` point to this snapshot as the current eight-area Data Governance status source.
