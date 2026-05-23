@@ -1,24 +1,42 @@
 <script setup lang="ts">
 import { TxGradualBlur } from '@talex-touch/tuffex'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import TuffexDocsHeroBackground from '~/components/docs/TuffexDocsHeroBackground.vue'
 import BackToTop from '~/components/ui/BackToTop.vue'
 import Drawer from '~/components/ui/Drawer.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
+
+const normalizedDocsPath = computed(() => {
+  const path = route.path || '/'
+  const trimmed = path.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  return trimmed || '/'
+})
+
+const isTuffexDocs = computed(() => {
+  const path = normalizedDocsPath.value
+  return path.startsWith('/docs/dev/components') || path.startsWith('/docs/dev/tools/tuffex')
+})
 </script>
 
 <template>
-  <div class="relative min-h-screen flex flex-col bg-white text-black dark:bg-dark dark:text-light">
-    <div>
-      <div class="pointer-events-none absolute inset-0 overflow-hidden -z-10">
-        <div class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
+  <div class="docs-layout-root relative min-h-screen flex flex-col bg-white text-black dark:bg-dark dark:text-light">
+    <div class="docs-layout-stage relative flex-1">
+      <div class="docs-layout-background pointer-events-none absolute inset-0 overflow-hidden">
+        <Transition name="tuffex-docs-hero-bg-fade">
+          <div v-if="isTuffexDocs" class="docs-tuffex-hero-bg-frame">
+            <TuffexDocsHeroBackground />
+          </div>
+          <div v-else class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
+        </Transition>
       </div>
       <TxGradualBlur exponential :div-count="10" position="top" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TxGradualBlur exponential :div-count="10" position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TheHeader title="Tuff Docs" class="z-30" />
-      <div class="relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
+      <div class="docs-layout-foreground relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="max-w-[88rem] w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[230px] shrink-0 xl:block">
             <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
@@ -54,7 +72,7 @@ const outlineVisible = ref(false)
         </div>
       </div>
     </div>
-    <TuffFooter />
+    <TuffFooter class="docs-layout-footer" />
     <BackToTop />
     <ClientOnly>
       <Drawer
@@ -84,6 +102,51 @@ const outlineVisible = ref(false)
 </template>
 
 <style scoped>
+.docs-layout-root {
+  isolation: isolate;
+}
+
+.docs-layout-stage {
+  isolation: isolate;
+}
+
+.docs-layout-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+.docs-layout-foreground {
+  z-index: 2;
+}
+
+.docs-layout-footer {
+  z-index: 3;
+}
+
+.docs-tuffex-hero-bg-frame {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 100vh;
+  min-height: 520px;
+  overflow: hidden;
+  opacity: 0.42;
+}
+
+.tuffex-docs-hero-bg-fade-enter-active,
+.tuffex-docs-hero-bg-fade-leave-active {
+  transition: opacity 320ms ease, filter 320ms ease;
+}
+
+.tuffex-docs-hero-bg-fade-enter-from,
+.tuffex-docs-hero-bg-fade-leave-to {
+  opacity: 0;
+  filter: blur(12px);
+}
+
 .docs-sidebar::-webkit-scrollbar {
   width: 4px;
 }
@@ -113,5 +176,13 @@ const outlineVisible = ref(false)
 }
 .docs-outline-panel:hover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 18%, transparent);
+}
+</style>
+
+<style>
+.dark .docs-tuffex-hero-bg-frame,
+[data-theme='dark'] .docs-tuffex-hero-bg-frame {
+  --tuffex-docs-hero-tone: 2.1;
+  opacity: 0.46;
 }
 </style>

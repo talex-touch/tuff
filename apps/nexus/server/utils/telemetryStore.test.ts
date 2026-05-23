@@ -454,6 +454,9 @@ describe('telemetryStore search provider metrics', () => {
     expect(analytics.searches.bySelectedRankBucket).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: '2-3', events: 1 }),
     ]))
+    expect(analytics.searches.byQueryLengthBucket).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '11-30', events: 1 }),
+    ]))
   })
 
   it('records visit governance hotspot metadata from sanitized telemetry', async () => {
@@ -527,6 +530,18 @@ describe('telemetryStore search provider metrics', () => {
     ]))
     expect(analytics.visits.byLocalTimeSlot).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'evening', events: 1 }),
+    ]))
+    expect(analytics.visits.byLocalDayOfWeek).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: '5', events: 1 }),
+    ]))
+    expect(analytics.visits.byCountry).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'US', events: 1 }),
+    ]))
+    expect(analytics.visits.byRegion).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'CA', events: 1 }),
+    ]))
+    expect(analytics.visits.byTimezone).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'America/Los_Angeles', events: 1 }),
     ]))
   })
 })

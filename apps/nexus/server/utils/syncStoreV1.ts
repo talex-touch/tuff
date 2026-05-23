@@ -1,11 +1,13 @@
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
+import { Buffer } from 'node:buffer'
 import { readCloudflareBindings } from './cloudflare'
 import { countActiveDevices, getDevice, readDeviceId, upsertDevice, readDeviceMetadata } from './authStore'
 import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
 import { createSyncError } from './syncErrors'
 import type { SubscriptionPlan } from './subscriptionStore'
 import { getUserSubscription } from './subscriptionStore'
+import { putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
 const SYNC_ITEMS_TABLE = 'sync_items_v1'
 const SYNC_OPLOG_TABLE = 'sync_oplog_v1'
@@ -40,6 +42,7 @@ function resolveQuotaLimits(plan: SubscriptionPlan) {
 }
 
 const SYNC_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7
+const syncBlobMemoryStorage: StorageObjectMemory = new Map()
 
 let syncSchemaInitialized = false
 
@@ -765,15 +768,20 @@ export async function uploadSyncBlob(event: H3Event, userId: string, file: File)
 
   const arrayBuffer = await file.arrayBuffer()
   const sizeBytes = Number(file.size || arrayBuffer.byteLength)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
-  const sha256 = Array.from(new Uint8Array(hashBuffer)).map(byte => byte.toString(16).padStart(2, '0')).join('')
 
   const blobId = crypto.randomUUID()
   const objectKey = `${userId}/${blobId}`
-  await bucket.put(objectKey, new Uint8Array(arrayBuffer), {
-    httpMetadata: {
-      contentType: file.type || 'application/octet-stream',
-    },
+  const stored = await putStorageObject({
+    event,
+    bucket,
+    memoryStorage: syncBlobMemoryStorage,
+    externalStorage: null,
+    key: objectKey,
+    data: Buffer.from(arrayBuffer),
+    contentType: file.type || 'application/octet-stream',
+    resourceType: 'sync-blob',
+    governanceResourceId: `sync-blob:${blobId}`,
+    actorId: userId,
   })
 
   await db.prepare(`
@@ -783,14 +791,22 @@ export async function uploadSyncBlob(event: H3Event, userId: string, file: File)
     userId,
     blobId,
     objectKey,
-    sha256,
+    stored.sha256,
     sizeBytes,
     file.type || 'application/octet-stream',
     new Date().toISOString(),
     'ready',
   ).run()
 
-  return { blobId, objectKey, sha256, sizeBytes }
+  return {
+    blobId,
+    objectKey,
+    sha256: stored.sha256,
+    sizeBytes,
+    storageChannel: stored.storageChannel,
+    storageProvider: stored.storageProvider,
+    uploadRetry: stored.uploadRetry,
+  }
 }
 
 export async function getSyncBlob(event: H3Event, userId: string, blobId: string): Promise<{

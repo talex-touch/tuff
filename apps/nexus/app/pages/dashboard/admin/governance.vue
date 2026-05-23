@@ -30,9 +30,12 @@ type GovernanceConfigType =
   | 'intelligence_provider_quota'
 type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
 type StoragePolicyEvaluationStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
+type StorageChannelPressureStatus = StoragePolicyEvaluationStatus | 'unmanaged'
 type ProviderQuotaStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
+type ProviderQuotaRiskReason = 'blocked' | 'warning-threshold' | 'overage' | 'low-remaining' | 'projected-exhaustion'
 type StorageAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
 type StorageAlertLimitKey = 'maxBytes' | 'trafficBytes' | 'maxOperations' | 'alertBytes'
+type PlatformGovernanceD1ReadinessStatus = 'ready' | 'warning' | 'blocked'
 
 interface GovernanceSummary {
   totalEvents: number
@@ -58,6 +61,85 @@ interface GovernanceMetric {
   events: number
   quantity: number
   uniqueActors: number
+}
+
+interface GovernanceSearchPluginPreferenceByTimeSlot {
+  slot: string
+  plugins: GovernanceMetric[]
+  selectedPlugins: GovernanceMetric[]
+}
+
+interface GovernanceSearchPluginPreferenceByContext {
+  key: string
+  contextAppCategory: string
+  contextSource: string
+  localTimeSlot: string
+  events: number
+  selected: number
+  selectionRate: number
+  uniqueActors: number
+  plugins: GovernanceMetric[]
+  selectedPlugins: GovernanceMetric[]
+}
+
+interface GovernanceSearchContextSelectionMatrixItem {
+  key: string
+  contextAppCategory: string
+  contextSource: string
+  localTimeSlot: string
+  selectedCategory: string
+  events: number
+  selected: number
+  selectionRate: number
+  uniqueActors: number
+  plugins: GovernanceMetric[]
+  selectedPlugins: GovernanceMetric[]
+}
+
+interface GovernanceSearchJourneySegment {
+  key: string
+  contextAppCategory: string
+  contextSource: string
+  localTimeSlot: string
+  sessionBucket: string
+  userPreferenceMode: string
+  entryPoint: string
+  triggerType: string
+  events: number
+  withFilters: number
+  withResults: number
+  selected: number
+  zeroResult: number
+  providerProblem: number
+  providerErrors: number
+  providerTimeouts: number
+  filterRate: number
+  withResultsRate: number
+  selectionRate: number
+  zeroResultRate: number
+  problemRate: number
+  uniqueActors: number
+  scenes: GovernanceMetric[]
+  providers: GovernanceMetric[]
+  plugins: GovernanceMetric[]
+  selectedPlugins: GovernanceMetric[]
+}
+
+interface GovernanceSearchJourney {
+  total: number
+  withFilters: number
+  withResults: number
+  selected: number
+  zeroResult: number
+  providerProblem: number
+  providerErrors: number
+  providerTimeouts: number
+  filterRate: number
+  withResultsRate: number
+  selectionRate: number
+  zeroResultRate: number
+  problemRate: number
+  segments: GovernanceSearchJourneySegment[]
 }
 
 interface GovernanceTrendPoint {
@@ -110,6 +192,81 @@ interface StorageUsageTrendPoint {
   uniqueActors: number
 }
 
+interface StorageChannelPressure {
+  channel: string
+  provider: string | null
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+  pressureStatus: StorageChannelPressureStatus
+  policyId: string | null
+  policyName: string | null
+  matchedPolicies: number
+  policyAlerts: number
+  policyReasons: string[]
+  highestUtilization: number
+  remaining: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  overage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    alertBytes: number
+  }
+  burnRate: {
+    storedBytesPerDay: number
+    trafficBytesPerDay: number
+    operationsPerDay: number
+  }
+  projectedExhaustionDays: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  trend: StorageUsageTrendPoint[]
+}
+
+interface ProviderQuotaRiskItem {
+  configId: string
+  providerId: string
+  name: string
+  channel: string | null
+  provider: string | null
+  status: ProviderQuotaStatus
+  highestUtilization: number
+  riskReason: ProviderQuotaRiskReason
+  usage: {
+    requests: number
+    tokens: number
+  }
+  limits: {
+    maxRequests: number | null
+    maxTokens: number | null
+  }
+  remaining: {
+    requests: number | null
+    tokens: number | null
+  }
+  overage: {
+    requests: number
+    tokens: number
+  }
+  projectedExhaustionDays: {
+    requests: number | null
+    tokens: number | null
+  }
+}
+
 interface GovernanceScopedAnalytics {
   totalEvents: number
   totalQuantity: number
@@ -127,6 +284,8 @@ interface GovernanceGrowth {
 }
 
 type NotificationChannelRiskStatus = 'ok' | 'warning' | 'disabled'
+type NotificationChannelReadinessStatus = 'ready' | 'warning' | 'disabled'
+type NotificationChannelDisplayStatus = NotificationChannelRiskStatus | NotificationChannelReadinessStatus
 
 interface NotificationDeliveryAnalytics {
   channelSummary: {
@@ -136,7 +295,26 @@ interface NotificationDeliveryAnalytics {
     unsupported: number
     credentialMissing: number
     credentialed: number
+    productionReady: number
+    runtimeMissing: number
+    relayMissing: number
+    sendModeMissing: number
   }
+  providerMix: Array<{
+    key: string
+    channel: string
+    providerType: string | null
+    adapter: string
+    total: number
+    enabled: number
+    productionReady: number
+    warning: number
+    disabled: number
+    credentialMissing: number
+    sendModeMissing: number
+    relayMissing: number
+    runtimeMissing: number
+  }>
   channelRisks: Array<{
     configId: string
     name: string
@@ -149,6 +327,16 @@ interface NotificationDeliveryAnalytics {
     reasons: string[]
     credentialRequired: boolean
     hasCredentialRef: boolean
+    readiness: {
+      status: NotificationChannelReadinessStatus
+      productionReady: boolean
+      reasons: string[]
+      sendMode: boolean
+      requiresPublicRuntime: boolean
+      hasPublicRuntime: boolean
+      requiresRelayEndpoint: boolean
+      hasRelayEndpoint: boolean
+    }
   }>
   deliveries: {
     total: number
@@ -159,11 +347,13 @@ interface NotificationDeliveryAnalytics {
     plannedRate: number
     sentRate: number
     failureRate: number
+    durationMs: GovernanceNumberStat
   }
   byDeliveryStatus: GovernanceMetric[]
   byProvider: GovernanceMetric[]
   byAdapter: GovernanceMetric[]
   byReason: GovernanceMetric[]
+  byStatusCode: GovernanceMetric[]
   byNotificationAction: GovernanceMetric[]
   deliveryTrend: Array<GovernanceTrendPoint & {
     planned: number
@@ -183,7 +373,9 @@ interface NotificationDeliveryAnalytics {
     failed: number
     sentRate: number
     failureRate: number
+    durationMs: GovernanceNumberStat
     latestFailureReason: string | null
+    latestFailureStatusCode: number | null
     latestFailureAt: string | null
   }>
   browserPushSubscriptions: {
@@ -235,6 +427,17 @@ interface ProviderLeaderboardItem {
   byUnit: Array<{ unit: string, quantity: number }>
   byChannel: Array<{ channel: string, quantity: number }>
   byModel: Array<{ model: string, tokens: number }>
+}
+
+interface ProviderChannelDistributionItem {
+  providerId: string
+  channel: string
+  requests: number
+  tokens: number
+  quantity: number
+  uniqueActors: number
+  byModel: Array<{ model: string, tokens: number }>
+  byProviderType: Array<{ providerType: string, quantity: number }>
 }
 
 interface GovernanceAnalytics {
@@ -312,6 +515,10 @@ interface GovernanceAnalytics {
     byReferrer: GovernanceMetric[]
     byLocalHour: GovernanceMetric[]
     byLocalTimeSlot: GovernanceMetric[]
+    byLocalDayOfWeek: GovernanceMetric[]
+    byCountry: GovernanceMetric[]
+    byRegion: GovernanceMetric[]
+    byTimezone: GovernanceMetric[]
   }
   users: GovernanceScopedAnalytics & {
     growth: GovernanceGrowth
@@ -356,12 +563,17 @@ interface GovernanceAnalytics {
     bySelectedCategory: GovernanceMetric[]
     bySelectedPluginId: GovernanceMetric[]
     bySelectedRankBucket: GovernanceMetric[]
+    byQueryLengthBucket: GovernanceMetric[]
     byResultCountBucket: GovernanceMetric[]
     byFirstResultLatencyBucket: GovernanceMetric[]
     byTotalDurationBucket: GovernanceMetric[]
     byCountry: GovernanceMetric[]
     byRegion: GovernanceMetric[]
     byTimezone: GovernanceMetric[]
+    pluginPreferenceByTimeSlot: GovernanceSearchPluginPreferenceByTimeSlot[]
+    pluginPreferenceByContext: GovernanceSearchPluginPreferenceByContext[]
+    contextSelectionMatrix: GovernanceSearchContextSelectionMatrixItem[]
+    journey: GovernanceSearchJourney
     filterUsage: {
       withFilters: number
       withoutFilters: number
@@ -423,13 +635,65 @@ interface GovernanceAnalytics {
     byFailureReason: GovernanceMetric[]
     byStatusCode: GovernanceMetric[]
     bySurface: GovernanceMetric[]
+    pipelineSummary: Array<{
+      key: string
+      resourceType: string
+      surface: string | null
+      storageChannel: string | null
+      storageProvider: string | null
+      attempts: number
+      started: number
+      completed: number
+      failed: number
+      stuck: number
+      pending: number
+      completionRate: number
+      failureRate: number
+      stuckRate: number
+      avgDurationMs: number
+      avgSize: number
+      latestAt: string
+    }>
+    failureMatrix: Array<{
+      key: string
+      resourceType: string
+      surface: string | null
+      storageChannel: string | null
+      storageProvider: string | null
+      reason: string
+      disposition: 'retry-scheduled' | 'retry-exhausted' | 'retryable' | 'not-retryable' | 'unknown'
+      statusCode: number | null
+      events: number
+      quantity: number
+      uniqueActors: number
+      latestAt: string
+      retryable: number
+      scheduled: number
+      exhausted: number
+      totalRetryCount: number
+      nextRetryDelayMs: number | null
+      calibrationStatus: 'verified' | 'sampled' | 'needs-calibration'
+      sampleSource: 'live' | 'manual' | 'synthetic' | 'unknown'
+      sampleCount: number
+      latestSampleAt: string | null
+      suggestedAction: 'retry-monitor' | 'storage-provider-check' | 'quota-policy-check' | 'payload-validation' | 'manual-investigation'
+    }>
     retrySummary: {
       retryableFailures: number
       nonRetryableFailures: number
       scheduledRetries: number
       exhaustedFailures: number
+      recoveredUploads: number
+      recoveredRetryCount: number
+      recoveredRetryRate: number
+      calibratedFailureSamples: number
+      verifiedFailureSamples: number
+      liveFailureSamples: number
+      manualFailureSamples: number
+      calibrationCoverageRate: number
       retryCount: GovernanceNumberStat
       nextRetryDelayMs: GovernanceNumberStat
+      recoveredAttempts: GovernanceNumberStat
     }
     byRetryDisposition: GovernanceMetric[]
     statusTrend: Array<GovernanceTrendPoint & {
@@ -443,6 +707,7 @@ interface GovernanceAnalytics {
       retryable: number
       scheduled: number
       exhausted: number
+      recovered: number
     }>
     uploadSize: GovernanceNumberStat
     uploadDurationMs: GovernanceNumberStat
@@ -479,6 +744,7 @@ interface GovernanceAnalytics {
     byProviderUsage: StorageUsageBreakdown[]
     byResourceTypeUsage: StorageUsageBreakdown[]
     byActionUsage: StorageUsageBreakdown[]
+    channelPressure: StorageChannelPressure[]
     trend: StorageUsageTrendPoint[]
     policySummary: {
       total: number
@@ -507,6 +773,7 @@ interface GovernanceAnalytics {
     }>
     byModel: GovernanceMetric[]
     byProviderType: GovernanceMetric[]
+    channelDistribution: ProviderChannelDistributionItem[]
     modelDistribution: ProviderModelDistributionItem[]
     quotaSummary: {
       total: number
@@ -516,7 +783,14 @@ interface GovernanceAnalytics {
       disabled: number
       highestRequestUtilization: number
       highestTokenUtilization: number
+      requestOverage: number
+      tokenOverage: number
+      lowestRemainingRequests: number | null
+      lowestRemainingTokens: number | null
+      nearestRequestExhaustionDays: number | null
+      nearestTokenExhaustionDays: number | null
     }
+    quotaRiskItems: ProviderQuotaRiskItem[]
     quotas: Array<{
       configId: string
       providerId: string
@@ -547,6 +821,14 @@ interface GovernanceAnalytics {
         requests: number
         tokens: number
       }
+      burnRate: {
+        requestsPerDay: number
+        tokensPerDay: number
+      }
+      projectedExhaustionDays: {
+        requests: number | null
+        tokens: number | null
+      }
     }>
     leaderboard: ProviderLeaderboardItem[]
   }
@@ -565,11 +847,46 @@ interface GovernanceConfig {
   limits: Record<string, unknown> | null
   warningThreshold: number | null
   config: Record<string, unknown> | null
+  createdBy?: string
+  createdAt?: string
   updatedAt: string
 }
 
 interface ConfigListResponse {
   configs: GovernanceConfig[]
+  generatedAt: string
+}
+
+interface PlatformGovernanceD1ReadinessCheck {
+  id: string
+  label: string
+  status: PlatformGovernanceD1ReadinessStatus
+  required: boolean
+  reasons: string[]
+  tables: string[]
+  indexes: string[]
+  missingTables: string[]
+  missingIndexes: string[]
+  observedCount: number | null
+  minimumCount: number | null
+}
+
+interface PlatformGovernanceD1Readiness {
+  status: PlatformGovernanceD1ReadinessStatus
+  database: {
+    present: boolean
+    binding: 'DB' | null
+  }
+  summary: {
+    total: number
+    ready: number
+    warning: number
+    blocked: number
+    missingTables: number
+    missingIndexes: number
+    backfillRequired: number
+  }
+  checks: PlatformGovernanceD1ReadinessCheck[]
   generatedAt: string
 }
 
@@ -614,6 +931,17 @@ interface StoragePolicyEvaluation {
     operations: number
     alertBytes: number
   }
+  burnRate: {
+    storedBytesPerDay: number
+    trafficBytesPerDay: number
+    operationsPerDay: number
+  }
+  projectedExhaustionDays: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
 }
 
 interface StorageChannelProfile {
@@ -636,6 +964,18 @@ interface StoragePoliciesResponse {
   evaluations: StoragePolicyEvaluation[]
   alerts: StoragePolicyAlert[]
   profiles: StorageChannelProfile[]
+  generatedAt: string
+}
+
+type StorageChannelPolicySummary = Omit<GovernanceConfig, 'config' | 'createdBy' | 'ownerId'>
+
+type StorageChannelAnalyticsResponse = GovernanceAnalytics['storage'] & {
+  days: number
+  channel: string | null
+  provider: string | null
+  policies: StorageChannelPolicySummary[]
+  evaluations: StoragePolicyEvaluation[]
+  alerts: StoragePolicyAlert[]
   generatedAt: string
 }
 
@@ -668,6 +1008,27 @@ interface StorageCredentialsResponse {
   generatedAt: string
 }
 
+type StorageChannelSmokeMode = 'dry-run' | 'write'
+type StorageChannelSmokeStatus = 'ready' | 'sent' | 'failed'
+
+interface StorageChannelSmokeResponse {
+  policyId: string
+  policyName: string
+  mode: StorageChannelSmokeMode
+  status: StorageChannelSmokeStatus
+  reason: string
+  channel: string
+  provider: string | null
+  resourceType: string
+  operations: Array<'resolve' | 'write' | 'read' | 'delete'>
+  bytesWritten: number
+  bytesRead: number
+  credentialRequired: boolean
+  hasCredentialRef: boolean
+  hasCredential: boolean | null
+  generatedAt: string
+}
+
 interface NotificationCredentialRecord {
   authRef: string
   credentialType: 'api_key' | 'smtp' | 'webhook' | 'bot_token'
@@ -680,6 +1041,58 @@ interface NotificationCredentialRecord {
 
 interface NotificationCredentialsResponse {
   credentials: NotificationCredentialRecord[]
+  generatedAt: string
+}
+
+type NotificationCredentialType = 'api_key' | 'smtp' | 'webhook' | 'bot_token'
+
+interface NotificationChannelResolvedProfile {
+  channel: string
+  provider: string | null
+  providerType: string | null
+  adapter: string
+  credentialRef: string | null
+  credentialRequired: boolean
+  supported: boolean
+}
+
+interface NotificationChannelReadiness {
+  status: NotificationChannelReadinessStatus
+  productionReady: boolean
+  reasons: string[]
+  sendMode: boolean
+  requiresPublicRuntime: boolean
+  hasPublicRuntime: boolean
+  requiresRelayEndpoint: boolean
+  hasRelayEndpoint: boolean
+}
+
+interface NotificationChannelProfileTemplate {
+  id: string
+  channel: string
+  provider: string
+  providerType: string
+  adapter: string
+  label: string
+  description: string
+  credentialType: NotificationCredentialType | null
+  credentialRefPrefix: string | null
+  requiredConfigKeys: string[]
+  optionalConfigKeys: string[]
+  defaultConfig: Record<string, unknown>
+  defaultLimits: Record<string, unknown>
+}
+
+interface NotificationChannelEvaluation {
+  configId: string
+  profile: NotificationChannelResolvedProfile
+  readiness: NotificationChannelReadiness
+}
+
+interface NotificationChannelsResponse {
+  channels: GovernanceConfig[]
+  evaluations: NotificationChannelEvaluation[]
+  profiles: NotificationChannelProfileTemplate[]
   generatedAt: string
 }
 
@@ -699,6 +1112,8 @@ interface NotificationDeliveryRecord {
   hasCredentialRef: boolean
   resourceType: string | null
   resourceId: string | null
+  durationMs: number
+  statusCode: number | null
 }
 
 interface NotificationChannelTestResponse {
@@ -736,6 +1151,9 @@ const notificationTestResult = ref<NotificationChannelTestResponse | null>(null)
 const storageAlertNotifying = ref(false)
 const storageAlertNotifyError = ref('')
 const storageAlertNotifyResult = ref<StorageAlertNotifyResponse | null>(null)
+const storageSmokeRunning = ref(false)
+const storageSmokeError = ref('')
+const storageSmokeResult = ref<StorageChannelSmokeResponse | null>(null)
 
 const analyticsForm = reactive({
   name: 'Default analytics collection',
@@ -756,12 +1174,13 @@ const storageForm = reactive({
 })
 
 const notificationForm = reactive({
+  profileId: 'resend-email',
   name: 'Plugin review email',
   channel: 'email',
   provider: 'resend-primary',
   warningThreshold: '85',
   limitsJson: '{\n  "maxMessagesPerDay": 5000,\n  "maxFailuresPerHour": 50\n}',
-  configJson: '{\n  "providerType": "resend",\n  "credentialRef": "secure://notifications/resend-primary",\n  "from": "Tuff <noreply@example.com>",\n  "events": ["plugin.version.approved", "plugin.version.rejected"]\n}',
+  configJson: '{\n  "mode": "send",\n  "providerType": "resend",\n  "credentialRef": "secure://notifications/resend-primary",\n  "from": "Tuff <noreply@example.com>",\n  "events": ["plugin.version.approved", "plugin.version.rejected"]\n}',
 })
 
 const notificationCredentialForm = reactive({
@@ -793,6 +1212,27 @@ const providerQuotaForm = reactive({
   configJson: '{\n  "mode": "hard-limit"\n}',
 })
 
+function emptyD1Readiness(): PlatformGovernanceD1Readiness {
+  return {
+    status: 'blocked',
+    database: {
+      present: false,
+      binding: null,
+    },
+    summary: {
+      total: 0,
+      ready: 0,
+      warning: 0,
+      blocked: 0,
+      missingTables: 0,
+      missingIndexes: 0,
+      backfillRequired: 0,
+    },
+    checks: [],
+    generatedAt: '',
+  }
+}
+
 const { data: summaryData, pending: summaryPending, error: summaryError, refresh: refreshSummary } = await useAsyncData<GovernanceSummary>(
   'dashboard-governance-summary',
   async () => await requestJson<GovernanceSummary>('/api/dashboard/governance/summary', {
@@ -823,6 +1263,15 @@ const { data: configsData, pending: configsPending, error: configsError, refresh
   async () => await requestJson<ConfigListResponse>('/api/dashboard/governance/configs'),
   {
     default: () => ({ configs: [], generatedAt: '' }),
+    server: false,
+  },
+)
+
+const { data: d1ReadinessData, pending: d1ReadinessPending, error: d1ReadinessError, refresh: refreshD1Readiness } = await useAsyncData<PlatformGovernanceD1Readiness>(
+  'dashboard-governance-d1-readiness',
+  async () => await requestJson<PlatformGovernanceD1Readiness>('/api/dashboard/governance/d1-readiness'),
+  {
+    default: emptyD1Readiness,
     server: false,
   },
 )
@@ -860,6 +1309,7 @@ function emptyStorageAnalytics(): GovernanceAnalytics['storage'] {
     byProviderUsage: [],
     byResourceTypeUsage: [],
     byActionUsage: [],
+    channelPressure: [],
     trend: [],
     policySummary: {
       total: 0,
@@ -874,6 +1324,19 @@ function emptyStorageAnalytics(): GovernanceAnalytics['storage'] {
       highestOperationUtilization: 0,
     },
     policyRisks: [],
+  }
+}
+
+function emptyStorageChannelAnalytics(): StorageChannelAnalyticsResponse {
+  return {
+    days: summaryDays.value,
+    channel: null,
+    provider: null,
+    generatedAt: '',
+    ...emptyStorageAnalytics(),
+    policies: [],
+    evaluations: [],
+    alerts: [],
   }
 }
 
@@ -963,6 +1426,10 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byReferrer: [],
         byLocalHour: [],
         byLocalTimeSlot: [],
+        byLocalDayOfWeek: [],
+        byCountry: [],
+        byRegion: [],
+        byTimezone: [],
       },
       users: {
         ...emptyScopedAnalytics(),
@@ -1009,12 +1476,32 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         bySelectedCategory: [],
         bySelectedPluginId: [],
         bySelectedRankBucket: [],
+        byQueryLengthBucket: [],
         byResultCountBucket: [],
         byFirstResultLatencyBucket: [],
         byTotalDurationBucket: [],
         byCountry: [],
         byRegion: [],
         byTimezone: [],
+        pluginPreferenceByTimeSlot: [],
+        pluginPreferenceByContext: [],
+        contextSelectionMatrix: [],
+        journey: {
+          total: 0,
+          withFilters: 0,
+          withResults: 0,
+          selected: 0,
+          zeroResult: 0,
+          providerProblem: 0,
+          providerErrors: 0,
+          providerTimeouts: 0,
+          filterRate: 0,
+          withResultsRate: 0,
+          selectionRate: 0,
+          zeroResultRate: 0,
+          problemRate: 0,
+          segments: [],
+        },
         filterUsage: {
           withFilters: 0,
           withoutFilters: 0,
@@ -1073,13 +1560,24 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byFailureReason: [],
         byStatusCode: [],
         bySurface: [],
+        pipelineSummary: [],
+        failureMatrix: [],
         retrySummary: {
           retryableFailures: 0,
           nonRetryableFailures: 0,
           scheduledRetries: 0,
           exhaustedFailures: 0,
+          recoveredUploads: 0,
+          recoveredRetryCount: 0,
+          recoveredRetryRate: 0,
+          calibratedFailureSamples: 0,
+          verifiedFailureSamples: 0,
+          liveFailureSamples: 0,
+          manualFailureSamples: 0,
+          calibrationCoverageRate: 0,
           retryCount: emptyNumberStat(),
           nextRetryDelayMs: emptyNumberStat(),
+          recoveredAttempts: emptyNumberStat(),
         },
         byRetryDisposition: [],
         statusTrend: [],
@@ -1097,7 +1595,12 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           unsupported: 0,
           credentialMissing: 0,
           credentialed: 0,
+          productionReady: 0,
+          runtimeMissing: 0,
+          relayMissing: 0,
+          sendModeMissing: 0,
         },
+        providerMix: [],
         channelRisks: [],
         deliveries: {
           total: 0,
@@ -1108,11 +1611,13 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           plannedRate: 0,
           sentRate: 0,
           failureRate: 0,
+          durationMs: emptyNumberStat(),
         },
         byDeliveryStatus: [],
         byProvider: [],
         byAdapter: [],
         byReason: [],
+        byStatusCode: [],
         byNotificationAction: [],
         deliveryTrend: [],
         providerHealth: [],
@@ -1137,6 +1642,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         trend: [],
         byModel: [],
         byProviderType: [],
+        channelDistribution: [],
         modelDistribution: [],
         quotaSummary: {
           total: 0,
@@ -1146,7 +1652,14 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           disabled: 0,
           highestRequestUtilization: 0,
           highestTokenUtilization: 0,
+          requestOverage: 0,
+          tokenOverage: 0,
+          lowestRemainingRequests: null,
+          lowestRemainingTokens: null,
+          nearestRequestExhaustionDays: null,
+          nearestTokenExhaustionDays: null,
         },
+        quotaRiskItems: [],
         quotas: [],
         leaderboard: [],
       },
@@ -1193,6 +1706,20 @@ const { data: notificationCredentialsData, pending: notificationCredentialsPendi
   {
     default: () => ({
       credentials: [],
+      generatedAt: '',
+    }),
+    server: false,
+  },
+)
+
+const { data: notificationChannelsData, pending: notificationChannelsPending, error: notificationChannelsError, refresh: refreshNotificationChannels } = await useAsyncData<NotificationChannelsResponse>(
+  'dashboard-governance-notification-channels',
+  async () => await requestJson<NotificationChannelsResponse>('/api/dashboard/notifications/channels'),
+  {
+    default: () => ({
+      channels: [],
+      evaluations: [],
+      profiles: [],
       generatedAt: '',
     }),
     server: false,
@@ -1274,8 +1801,30 @@ const derivedStoragePolicyAlerts = computed<StoragePolicyAlert[]>(() => {
 const storagePolicyAlerts = computed(() => storagePoliciesData.value?.alerts ?? derivedStoragePolicyAlerts.value)
 const storageProfiles = computed(() => storagePoliciesData.value?.profiles ?? [])
 const selectedStorageProfile = computed(() => storageProfiles.value.find(profile => profile.id === storageForm.profileId) ?? null)
+const storageChannelAnalyticsQuery = computed(() => ({
+  days: summaryDays.value,
+  limit: 5000,
+  topLimit: 8,
+  channel: selectedStorageProfile.value?.channel || storageForm.channel || undefined,
+  provider: selectedStorageProfile.value?.provider || storageForm.provider || undefined,
+}))
+const { data: storageChannelAnalyticsData, pending: storageChannelAnalyticsPending, error: storageChannelAnalyticsError, refresh: refreshStorageChannelAnalytics } = await useAsyncData<StorageChannelAnalyticsResponse>(
+  'dashboard-governance-storage-channel-analytics',
+  async () => await requestJson<StorageChannelAnalyticsResponse>('/api/dashboard/storage/channels/analytics', {
+    query: storageChannelAnalyticsQuery.value,
+  }),
+  {
+    watch: [storageChannelAnalyticsQuery],
+    default: emptyStorageChannelAnalytics,
+    server: false,
+  },
+)
+const selectedStorageChannelAnalytics = computed(() => storageChannelAnalyticsData.value ?? emptyStorageChannelAnalytics())
 const storageCredentials = computed(() => storageCredentialsData.value?.credentials ?? [])
+const storagePolicies = computed(() => storagePoliciesData.value?.policies ?? [])
 const notificationCredentials = computed(() => notificationCredentialsData.value?.credentials ?? [])
+const d1Readiness = computed(() => d1ReadinessData.value ?? emptyD1Readiness())
+const d1ReadinessGaps = computed(() => d1Readiness.value.checks.filter(item => item.status !== 'ready'))
 const storagePolicyPeakUtilization = computed(() => Math.max(
   analyticsData.value.storage.policySummary.highestStoredUtilization,
   analyticsData.value.storage.policySummary.highestTrafficUtilization,
@@ -1285,6 +1834,13 @@ const providerQuotaPeakUtilization = computed(() => Math.max(
   analyticsData.value.providers.quotaSummary.highestRequestUtilization,
   analyticsData.value.providers.quotaSummary.highestTokenUtilization,
 ))
+const providerQuotaNearestExhaustionDays = computed(() => {
+  const values = [
+    analyticsData.value.providers.quotaSummary.nearestRequestExhaustionDays,
+    analyticsData.value.providers.quotaSummary.nearestTokenExhaustionDays,
+  ].filter((value): value is number => value != null)
+  return values.length ? Math.min(...values) : null
+})
 const dashboardRiskTotal = computed(() => {
   const risk = analyticsData.value.dashboard.riskSummary
   return risk.uploadProblems
@@ -1301,7 +1857,11 @@ const groupedConfigs = computed(() => ({
   notifications: configs.value.filter(item => item.configType === 'notification_channel'),
   providerQuotas: configs.value.filter(item => item.configType === 'intelligence_provider_quota'),
 }))
-const notificationConfigs = computed(() => groupedConfigs.value.notifications)
+const notificationProfiles = computed(() => notificationChannelsData.value?.profiles ?? [])
+const selectedNotificationProfile = computed(() => notificationProfiles.value.find(profile => profile.id === notificationForm.profileId) ?? null)
+const notificationChannelEvaluations = computed(() => notificationChannelsData.value?.evaluations ?? [])
+const selectedNotificationChannelEvaluation = computed(() => notificationChannelEvaluations.value.find(item => item.configId === notificationTestForm.configId) ?? null)
+const notificationConfigs = computed(() => notificationChannelsData.value?.channels?.length ? notificationChannelsData.value.channels : groupedConfigs.value.notifications)
 
 watch(notificationConfigs, (items) => {
   if (!items.length) {
@@ -1352,6 +1912,55 @@ function applyStorageProfile(profileId: string | number): void {
   storageForm.configJson = stringifyJsonObject(profile.defaultConfig)
 }
 
+function createNotificationCredentialTemplate(profile: NotificationChannelProfileTemplate): Record<string, unknown> | null {
+  if (profile.credentialType === 'api_key') {
+    return {
+      apiKey: '<api-key>',
+    }
+  }
+  if (profile.credentialType === 'smtp') {
+    return {
+      host: 'smtp.example.com',
+      port: 587,
+      username: 'user@example.com',
+      password: '<smtp-password>',
+      secure: false,
+      from: 'Tuff <noreply@example.com>',
+    }
+  }
+  if (profile.credentialType === 'webhook') {
+    return {
+      url: 'https://example.com/webhook',
+      signingSecret: '<optional-signing-secret>',
+    }
+  }
+  if (profile.credentialType === 'bot_token') {
+    return {
+      token: '<bot-token>',
+    }
+  }
+  return null
+}
+
+function applyNotificationProfile(profileId: string | number): void {
+  const profile = notificationProfiles.value.find(item => item.id === String(profileId))
+  if (!profile) {
+    return
+  }
+
+  notificationForm.profileId = profile.id
+  notificationForm.name = `${profile.label} notification`
+  notificationForm.channel = profile.channel
+  notificationForm.provider = profile.provider
+  notificationForm.limitsJson = stringifyJsonObject(profile.defaultLimits)
+  notificationForm.configJson = stringifyJsonObject(profile.defaultConfig)
+  if (profile.credentialType)
+    notificationCredentialForm.credentialType = profile.credentialType
+  if (profile.credentialRefPrefix)
+    notificationCredentialForm.authRef = `${profile.credentialRefPrefix}${profile.provider}`
+  notificationCredentialForm.credentialsJson = stringifyJsonObject(createNotificationCredentialTemplate(profile) ?? {})
+}
+
 async function saveConfig(
   configType: GovernanceConfigType,
   form: {
@@ -1388,7 +1997,7 @@ async function saveConfig(
       },
     })
     saveMessage.value = t('dashboard.governance.saved', 'Saved.')
-    await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageCredentials(), refreshNotificationCredentials()])
+    await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
   }
   catch (error) {
     saveError.value = error instanceof Error ? error.message : t('dashboard.governance.saveFailed', 'Save failed.')
@@ -1484,7 +2093,7 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
     saveMessage.value = mode === 'send'
       ? t('dashboard.governance.notificationTest.sent', 'Notification channel test sent.')
       : t('dashboard.governance.notificationTest.planned', 'Notification channel dry-run recorded.')
-    await Promise.all([refreshSummary(), refreshAnalytics()])
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshD1Readiness()])
   }
   catch (error) {
     notificationTestError.value = error instanceof Error ? error.message : t('dashboard.governance.notificationTest.failed', 'Notification channel test failed.')
@@ -1518,7 +2127,7 @@ async function notifyStorageAlerts(mode: 'plan' | 'send'): Promise<void> {
     saveMessage.value = mode === 'send'
       ? t('dashboard.governance.storageAlerts.sent', 'Storage alert notifications sent.')
       : t('dashboard.governance.storageAlerts.planned', 'Storage alert notification dry-run recorded.')
-    await Promise.all([refreshSummary(), refreshAnalytics(), refreshStoragePolicies()])
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
   }
   catch (error) {
     storageAlertNotifyError.value = error instanceof Error ? error.message : t('dashboard.governance.storageAlerts.failed', 'Storage alert notification failed.')
@@ -1529,8 +2138,44 @@ async function notifyStorageAlerts(mode: 'plan' | 'send'): Promise<void> {
   }
 }
 
+async function smokeStoragePolicy(policyId: string, mode: StorageChannelSmokeMode): Promise<void> {
+  if (storageSmokeRunning.value) {
+    return
+  }
+
+  storageSmokeError.value = ''
+  storageSmokeResult.value = null
+  saveError.value = ''
+  saveMessage.value = ''
+  storageSmokeRunning.value = true
+
+  try {
+    const result = await requestJson<StorageChannelSmokeResponse>('/api/dashboard/storage/channels/smoke', {
+      method: 'POST',
+      body: {
+        policyId,
+        mode,
+      },
+    })
+    storageSmokeResult.value = result
+    saveMessage.value = result.status === 'failed'
+      ? t('dashboard.governance.storageSmoke.failed', 'Storage smoke failed.')
+      : mode === 'write'
+        ? t('dashboard.governance.storageSmoke.sent', 'Storage write/read/delete smoke completed.')
+        : t('dashboard.governance.storageSmoke.ready', 'Storage channel dry-run completed.')
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
+  }
+  catch (error) {
+    storageSmokeError.value = error instanceof Error ? error.message : t('dashboard.governance.storageSmoke.error', 'Storage smoke failed.')
+    saveMessage.value = ''
+  }
+  finally {
+    storageSmokeRunning.value = false
+  }
+}
+
 async function refreshAll(): Promise<void> {
-  await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageCredentials(), refreshNotificationCredentials()])
+  await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
 }
 
 function formatNumber(value: number): string {
@@ -1609,6 +2254,16 @@ function storageEvaluationLabel(status: StoragePolicyEvaluationStatus): string {
   return t('dashboard.governance.storagePolicy.disabled', 'Disabled')
 }
 
+function storageChannelPressureTone(status: StorageChannelPressureStatus): StatusTone {
+  return status === 'unmanaged' ? 'info' : storageEvaluationTone(status)
+}
+
+function storageChannelPressureLabel(status: StorageChannelPressureStatus): string {
+  if (status === 'unmanaged')
+    return t('dashboard.governance.analytics.storageChannelUnmanaged', 'Unmanaged')
+  return storageEvaluationLabel(status)
+}
+
 function providerQuotaTone(status: ProviderQuotaStatus): StatusTone {
   return storageEvaluationTone(status)
 }
@@ -1621,6 +2276,18 @@ function providerQuotaLabel(status: ProviderQuotaStatus): string {
   if (status === 'blocked')
     return t('dashboard.governance.providerQuota.blocked', 'Blocked')
   return t('dashboard.governance.providerQuota.disabled', 'Disabled')
+}
+
+function providerQuotaRiskReasonLabel(reason: ProviderQuotaRiskReason): string {
+  if (reason === 'overage')
+    return t('dashboard.governance.analytics.providerQuotaRiskOverage', 'Over limit')
+  if (reason === 'low-remaining')
+    return t('dashboard.governance.analytics.providerQuotaRiskLowRemaining', 'Low remaining')
+  if (reason === 'projected-exhaustion')
+    return t('dashboard.governance.analytics.providerQuotaRiskProjected', 'Projected exhaustion')
+  if (reason === 'blocked')
+    return t('dashboard.governance.analytics.providerQuotaRiskBlocked', 'Blocked')
+  return t('dashboard.governance.analytics.providerQuotaRiskWarning', 'Warning threshold')
 }
 
 function storageAlertMetricLabel(metric: StorageAlertMetric): string {
@@ -1643,6 +2310,10 @@ function formatStorageBudgetValue(value: number | null, unit: 'bytes' | 'operati
   return unit === 'operations' ? formatNumber(value) : formatBytes(value)
 }
 
+function formatProjectedDays(value: number | null): string {
+  return value == null ? '-' : `${formatNumber(value)}d`
+}
+
 function notificationDeliveryTone(status: NotificationDeliveryStatus): StatusTone {
   if (status === 'sent')
     return 'success'
@@ -1653,7 +2324,7 @@ function notificationDeliveryTone(status: NotificationDeliveryStatus): StatusTon
   return 'info'
 }
 
-function notificationChannelTone(status: NotificationChannelRiskStatus): StatusTone {
+function notificationChannelTone(status: NotificationChannelDisplayStatus): StatusTone {
   if (status === 'warning')
     return 'warning'
   if (status === 'disabled')
@@ -1661,7 +2332,7 @@ function notificationChannelTone(status: NotificationChannelRiskStatus): StatusT
   return 'success'
 }
 
-function notificationChannelLabel(status: NotificationChannelRiskStatus): string {
+function notificationChannelLabel(status: NotificationChannelDisplayStatus): string {
   if (status === 'warning')
     return t('dashboard.governance.analytics.notificationChannelWarning', 'Warning')
   if (status === 'disabled')
@@ -1669,16 +2340,42 @@ function notificationChannelLabel(status: NotificationChannelRiskStatus): string
   return t('dashboard.governance.analytics.notificationChannelOk', 'OK')
 }
 
-function notificationChannelCredentialLabel(channel: { credentialRequired: boolean, hasCredentialRef: boolean }): string {
+function notificationChannelCredentialLabel(channel: { credentialRequired: boolean, hasCredentialRef?: boolean, credentialRef?: string | null }): string {
   if (!channel.credentialRequired)
     return t('dashboard.governance.analytics.notificationChannelCredentialNotRequired', 'no credential required')
-  return channel.hasCredentialRef
+  return (channel.hasCredentialRef ?? Boolean(channel.credentialRef))
     ? t('dashboard.governance.analytics.notificationChannelCredentialBound', 'credentialRef bound')
     : t('dashboard.governance.analytics.notificationChannelCredentialMissing', 'credentialRef missing')
 }
 
+function notificationChannelReadinessLabel(channel: { readiness: { productionReady: boolean, reasons: string[] } }): string {
+  if (channel.readiness.productionReady)
+    return t('dashboard.governance.analytics.notificationChannelProductionReady', 'production ready')
+  return channel.readiness.reasons.join(', ') || t('dashboard.governance.analytics.notificationChannelReadinessPending', 'readiness pending')
+}
+
 function formatRatio(value: number | null): string {
   return value == null ? '-' : formatPercent(value)
+}
+
+function d1ReadinessTone(status: PlatformGovernanceD1ReadinessStatus): StatusTone {
+  if (status === 'ready')
+    return 'success'
+  if (status === 'warning')
+    return 'warning'
+  return 'danger'
+}
+
+function d1ReadinessLabel(status: PlatformGovernanceD1ReadinessStatus): string {
+  if (status === 'ready')
+    return t('dashboard.governance.d1Readiness.ready', 'Ready')
+  if (status === 'warning')
+    return t('dashboard.governance.d1Readiness.warning', 'Needs backfill')
+  return t('dashboard.governance.d1Readiness.blocked', 'Blocked')
+}
+
+function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): string {
+  return [...check.missingTables, ...check.missingIndexes].join(', ')
 }
 </script>
 
@@ -1693,9 +2390,9 @@ function formatRatio(value: number | null): string {
           {{ t('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
         </p>
       </div>
-      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageCredentialsPending || notificationCredentialsPending" @click="refreshAll">
-        <TxSpinner v-if="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageCredentialsPending || notificationCredentialsPending" :size="14" />
-        <span :class="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageCredentialsPending || notificationCredentialsPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
+      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" @click="refreshAll">
+        <TxSpinner v-if="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" :size="14" />
+        <span :class="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
     </header>
 
@@ -1703,8 +2400,8 @@ function formatRatio(value: number | null): string {
       {{ t('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
     </div>
 
-    <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || storageCredentialsError || notificationCredentialsError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-      {{ saveError || notificationTestError || storageAlertNotifyError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message }}
+    <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || storageChannelAnalyticsError || storageCredentialsError || notificationCredentialsError || notificationChannelsError || d1ReadinessError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+      {{ saveError || notificationTestError || storageAlertNotifyError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageChannelAnalyticsError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message || (notificationChannelsError as any)?.message || (d1ReadinessError as any)?.message }}
     </div>
 
     <div v-if="saveMessage" class="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
@@ -1744,6 +2441,94 @@ function formatRatio(value: number | null): string {
           {{ formatNumber(configs.length) }}
         </p>
       </div>
+    </section>
+
+    <section class="apple-card-lg p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-base font-semibold text-black dark:text-white">
+            {{ t('dashboard.governance.d1Readiness.title', 'D1 migration readiness') }}
+          </h2>
+          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+            {{ t('dashboard.governance.d1Readiness.subtitle', 'Read-only production schema, index, seed, and backfill checks for Data Governance.') }}
+          </p>
+        </div>
+        <TxStatusBadge
+          :text="d1ReadinessLabel(d1Readiness.status)"
+          size="sm"
+          :status="d1ReadinessTone(d1Readiness.status)"
+        />
+      </div>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
+          <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+            {{ t('dashboard.governance.d1Readiness.database', 'Database') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+            {{ d1Readiness.database.present ? (d1Readiness.database.binding || 'DB') : t('dashboard.governance.d1Readiness.missing', 'Missing') }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
+          <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+            {{ t('dashboard.governance.d1Readiness.checks', 'Checks') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+            {{ formatNumber(d1Readiness.summary.ready) }} / {{ formatNumber(d1Readiness.summary.total) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
+          <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+            {{ t('dashboard.governance.d1Readiness.tables', 'Missing tables') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+            {{ formatNumber(d1Readiness.summary.missingTables) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
+          <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+            {{ t('dashboard.governance.d1Readiness.indexes', 'Missing indexes') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+            {{ formatNumber(d1Readiness.summary.missingIndexes) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
+          <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
+            {{ t('dashboard.governance.d1Readiness.backfill', 'Backfill') }}
+          </p>
+          <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+            {{ formatNumber(d1Readiness.summary.backfillRequired) }}
+          </p>
+        </div>
+      </div>
+
+      <div v-if="d1ReadinessGaps.length" class="mt-4 space-y-2">
+        <div v-for="check in d1ReadinessGaps.slice(0, 8)" :key="check.id" class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="text-sm font-medium text-black dark:text-white">
+                {{ check.label }}
+              </p>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                {{ check.reasons.join(', ') || '-' }}
+              </p>
+            </div>
+            <TxStatusBadge :text="d1ReadinessLabel(check.status)" size="sm" :status="d1ReadinessTone(check.status)" />
+          </div>
+          <p v-if="check.missingTables.length || check.missingIndexes.length" class="mt-2 text-xs text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.d1Readiness.missingObjects', 'Missing') }}:
+            {{ formatD1MissingObjects(check) }}
+          </p>
+          <p v-if="check.minimumCount !== null" class="mt-1 text-xs text-black/40 dark:text-white/40">
+            {{ t('dashboard.governance.d1Readiness.observed', 'Observed') }}:
+            {{ formatNumber(check.observedCount ?? 0) }} / {{ formatNumber(check.minimumCount) }}
+          </p>
+        </div>
+      </div>
+      <p v-else class="mt-4 text-xs text-black/45 dark:text-white/45">
+        {{ t('dashboard.governance.d1Readiness.empty', 'All required D1 checks are ready.') }}
+      </p>
     </section>
 
     <section class="apple-card-lg p-5">
@@ -1962,6 +2747,9 @@ function formatRatio(value: number | null): string {
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             {{ formatNumber(analyticsData.notifications.deliveries.sent) }} sent · {{ formatNumber(analyticsData.notifications.deliveries.failed) }} failed · {{ formatNumber(analyticsData.notifications.deliveries.skipped) }} skipped
           </p>
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.analytics.notificationAvgDuration', 'Avg duration') }} · {{ formatDurationMs(analyticsData.notifications.deliveries.durationMs.average) }}
+          </p>
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
@@ -2008,6 +2796,17 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitLocalTimeSlot', 'Local time') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
+            <div v-for="item in analyticsData.visits.byLocalDayOfWeek.slice(0, 7)" :key="`visit-weekday:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitLocalWeekday', 'Local weekday') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.visits.byCountry.slice(0, 4)" :key="`visit-country:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitCountry', 'Country') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <p class="truncate text-xs text-black/45 dark:text-white/45">
+              {{ t('dashboard.governance.analytics.visitRegionTimezone', 'Region / timezone') }} · {{ analyticsData.visits.byRegion[0]?.key || 'unknown' }} · {{ analyticsData.visits.byTimezone[0]?.key || 'unknown' }}
+            </p>
             <div v-for="item in analyticsData.visits.trend.slice(-3)" :key="`visit-trend:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ formatShortDate(item.date) }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }} visits · {{ formatNumber(item.uniqueActors) }} actors</span>
@@ -2054,6 +2853,67 @@ function formatRatio(value: number | null): string {
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.reliabilitySummary.providerErrors) }} err · {{ formatNumber(analyticsData.searches.reliabilitySummary.providerTimeouts) }} timeout</span>
               </div>
             </div>
+            <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchJourneyFunnel', 'Search journey funnel') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.journey.total) }}</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
+                  <p class="text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.searchJourneyWithResults', 'With results') }}
+                  </p>
+                  <p class="mt-1 font-medium text-black dark:text-white">
+                    {{ formatPercent(analyticsData.searches.journey.withResultsRate) }}
+                  </p>
+                </div>
+                <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
+                  <p class="text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.searchJourneySelected', 'Selected') }}
+                  </p>
+                  <p class="mt-1 font-medium text-black dark:text-white">
+                    {{ formatPercent(analyticsData.searches.journey.selectionRate) }}
+                  </p>
+                </div>
+                <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
+                  <p class="text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.searchJourneyZeroResult', 'Zero result') }}
+                  </p>
+                  <p class="mt-1 font-medium text-black dark:text-white">
+                    {{ formatPercent(analyticsData.searches.journey.zeroResultRate) }}
+                  </p>
+                </div>
+                <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
+                  <p class="text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.searchJourneyProviderProblem', 'Provider problem') }}
+                  </p>
+                  <p class="mt-1 font-medium text-black dark:text-white">
+                    {{ formatPercent(analyticsData.searches.journey.problemRate) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div
+              v-for="item in analyticsData.searches.journey.segments.slice(0, 4)"
+              :key="`search-journey:${item.key}`"
+              class="grid gap-1 rounded-lg bg-black/[0.02] p-2 text-xs dark:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-black/60 dark:text-white/60">
+                  {{ t('dashboard.governance.analytics.searchJourneySegment', 'Journey segment') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
+                </span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(item.selectionRate) }}</span>
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ item.contextSource }} · {{ item.entryPoint }} · {{ item.triggerType }} · {{ item.userPreferenceMode }}
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ formatNumber(item.withResults) }} results · {{ formatNumber(item.selected) }} selected · {{ formatNumber(item.zeroResult) }} zero · {{ formatNumber(item.providerProblem) }} provider
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+            </div>
             <div v-for="item in analyticsData.searches.reliabilityTrend.slice(-3)" :key="`search-reliability:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.zeroResult) }} zero · {{ formatNumber(item.providerErrors + item.providerTimeouts) }} provider</span>
@@ -2090,6 +2950,10 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchSelectedRank', 'Selected rank') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
+            <div v-for="item in analyticsData.searches.byQueryLengthBucket.slice(0, 5)" :key="`query-length-bucket:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchQueryLengthBuckets', 'Query length') }} · {{ item.key }}</span>
+              <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
             <div v-for="item in analyticsData.searches.byResultCountBucket.slice(0, 4)" :key="`result-count-bucket:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchResultBuckets', 'Result count') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
@@ -2121,6 +2985,64 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.searches.byPluginCategory.slice(0, 4)" :key="`search-plugin-category:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchPluginCategories', 'Plugin category') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div
+              v-for="item in analyticsData.searches.pluginPreferenceByTimeSlot.slice(0, 4)"
+              :key="`search-plugin-slot:${item.slot}`"
+              class="grid gap-1 rounded-lg bg-black/[0.02] p-2 text-xs dark:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchPluginTimeSlot', 'Plugin preference') }} · {{ item.slot }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(item.plugins[0]?.events ?? 0) }}</span>
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+            </div>
+            <div
+              v-for="item in analyticsData.searches.pluginPreferenceByContext.slice(0, 4)"
+              :key="`search-plugin-context:${item.key}`"
+              class="grid gap-1 rounded-lg bg-black/[0.02] p-2 text-xs dark:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-black/60 dark:text-white/60">
+                  {{ t('dashboard.governance.analytics.searchPluginContext', 'Context plugin preference') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
+                </span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(item.selectionRate) }}</span>
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ item.contextSource }} · {{ formatNumber(item.events) }} events · {{ formatNumber(item.uniqueActors) }} actors
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+            </div>
+            <div
+              v-for="item in analyticsData.searches.contextSelectionMatrix.slice(0, 4)"
+              :key="`search-context-selection:${item.key}`"
+              class="grid gap-1 rounded-lg bg-black/[0.02] p-2 text-xs dark:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-black/60 dark:text-white/60">
+                  {{ t('dashboard.governance.analytics.searchContextSelectionMatrix', 'Context selection') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
+                </span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(item.selectionRate) }}</span>
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ item.contextSource }} · {{ item.selectedCategory }} · {{ formatNumber(item.events) }} events · {{ formatNumber(item.uniqueActors) }} actors
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
             </div>
             <div v-for="item in analyticsData.searches.byProvider.slice(0, 6)" :key="`provider:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
@@ -2210,8 +3132,58 @@ function formatRatio(value: number | null): string {
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.exhaustedFailures) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredRetries', 'Recovered retries') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.recoveredUploads) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredRetryCount', 'Recovered retry count') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.recoveredRetryCount) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredRetryRate', 'Recovered retry rate') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.uploads.retrySummary.recoveredRetryRate) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredAttempts', 'Avg recovered attempts') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.recoveredAttempts.average) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
                 <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadNextRetryDelay', 'Avg next retry') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatDurationMs(analyticsData.uploads.retrySummary.nextRetryDelayMs.average) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.uploads.retrySummary.calibrationCoverageRate) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadFailureSamples', 'Failure samples') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.liveFailureSamples) }} live · {{ formatNumber(analyticsData.uploads.retrySummary.manualFailureSamples) }} manual</span>
+              </div>
+            </div>
+            <div v-if="analyticsData.uploads.pipelineSummary.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadPipelineSummary', 'Upload pipeline') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.uploads.pipelineSummary.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.uploads.pipelineSummary.slice(0, 5)" :key="`upload-pipeline:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black/70 dark:text-white/70">
+                    {{ item.resourceType }} · {{ item.surface || 'unknown' }}
+                  </span>
+                  <span class="text-black/45 dark:text-white/45">
+                    {{ formatPercent(item.completionRate) }} ok
+                  </span>
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.storageProvider || item.storageChannel || 'unknown' }} · {{ formatNumber(item.started) }} started · {{ formatNumber(item.completed) }} completed · {{ formatNumber(item.failed) }} failed
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ formatNumber(item.stuck) }} stuck · {{ formatNumber(item.pending) }} pending · {{ formatPercent(item.failureRate) }} failed · {{ formatDurationMs(item.avgDurationMs) }} avg
+                </p>
               </div>
             </div>
             <div v-for="item in analyticsData.uploads.byExtension.slice(0, 5)" :key="`ext:${item.key}`" class="flex items-center justify-between gap-3">
@@ -2242,13 +3214,42 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadRetryDisposition', 'Retry') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
+            <div v-if="analyticsData.uploads.failureMatrix.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadFailureMatrix', 'Failure matrix') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.uploads.failureMatrix.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.uploads.failureMatrix.slice(0, 5)" :key="`upload-failure-matrix:${item.key}`" class="rounded-lg border border-red-500/10 p-2 dark:border-red-200/10">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-red-600 dark:text-red-100">
+                    {{ item.reason }} · {{ item.disposition }}
+                  </span>
+                  <span class="text-red-500/80 dark:text-red-200/80">
+                    {{ formatNumber(item.events) }} events
+                  </span>
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.resourceType }} · {{ item.surface || 'unknown' }} · {{ item.storageProvider || item.storageChannel || 'unknown' }} · {{ item.statusCode ?? '-' }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadSuggestedAction', 'Action') }} · {{ item.suggestedAction }} · {{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }} · {{ item.calibrationStatus }} · {{ item.sampleSource }} · {{ formatNumber(item.sampleCount) }} samples
+                </p>
+              </div>
+            </div>
             <div v-for="item in analyticsData.uploads.statusTrend.slice(-3)" :key="`upload-trend:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.completed) }}/{{ formatNumber(item.started) }} ok · {{ formatNumber(item.failed) }} failed · {{ formatBytes(item.bytes) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.retryTrend.slice(-3)" :key="`upload-retry-trend:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
-              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted · {{ formatNumber(item.retryable) }} retryable</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted · {{ formatNumber(item.retryable) }} retryable · {{ formatNumber(item.recovered) }} recovered</span>
             </div>
             <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
               <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
@@ -2311,6 +3312,44 @@ function formatRatio(value: number | null): string {
           <p class="mt-3 text-xs text-black/45 dark:text-white/45">
             {{ formatNumber(analyticsData.storage.writes) }} writes · {{ formatNumber(analyticsData.storage.reads) }} reads · {{ formatNumber(analyticsData.storage.deletes) }} deletes
           </p>
+          <div v-if="analyticsData.storage.channelPressure.length" class="mt-4 grid gap-2 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageChannelPressure', 'Channel pressure') }}
+              </p>
+              <span class="text-xs text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.storage.channelPressure.length) }} channels
+              </span>
+            </div>
+            <div v-for="item in analyticsData.storage.channelPressure.slice(0, 4)" :key="`storage-pressure:${item.channel}:${item.provider || 'default'}`" class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">
+                  {{ item.channel }} · {{ item.provider || 'default' }}
+                </span>
+                <TxStatusBadge :text="storageChannelPressureLabel(item.pressureStatus)" size="sm" :status="storageChannelPressureTone(item.pressureStatus)" />
+              </div>
+              <p class="mt-1 truncate text-xs text-black/45 dark:text-white/45">
+                {{ item.policyName || t('dashboard.governance.analytics.storageChannelNoPolicy', 'No matched policy') }} · {{ formatRatio(item.highestUtilization) }} · {{ formatNumber(item.policyAlerts) }} alerts
+              </p>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-xs text-black/50 dark:text-white/50">
+                <span>{{ formatBytes(item.storedBytes) }} stored</span>
+                <span>{{ formatBytes(item.trafficBytes) }} traffic</span>
+                <span>{{ formatNumber(item.operations) }} ops</span>
+              </div>
+              <p class="mt-2 truncate text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageChannelRemaining', 'Remaining') }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }} ops
+              </p>
+              <p class="mt-1 truncate text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageChannelBurnRate', 'Burn/day') }} · {{ formatBytes(item.burnRate.storedBytesPerDay) }} stored · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} traffic · {{ formatNumber(item.burnRate.operationsPerDay) }} ops
+              </p>
+              <p class="mt-1 truncate text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.governance.analytics.storageChannelProjectedExhaustion', 'Projected exhaustion') }} · {{ formatProjectedDays(item.projectedExhaustionDays.storedBytes) }} stored · {{ formatProjectedDays(item.projectedExhaustionDays.trafficBytes) }} traffic · {{ formatProjectedDays(item.projectedExhaustionDays.operations) }} ops
+              </p>
+              <p v-if="item.trend.length" class="mt-1 truncate text-xs text-black/40 dark:text-white/40">
+                {{ item.trend.at(-1)?.date }} · {{ formatBytes((item.trend.at(-1)?.storedBytes ?? 0) + (item.trend.at(-1)?.trafficBytes ?? 0)) }} · {{ formatNumber(item.trend.at(-1)?.operations ?? 0) }} ops
+              </p>
+            </div>
+          </div>
           <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
             <div class="flex items-center justify-between gap-3">
               <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
@@ -2397,6 +3436,11 @@ function formatRatio(value: number | null): string {
                 <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingTraffic', 'Remaining traffic') }}: {{ formatStorageBudgetValue(policy.remaining.trafficBytes, 'bytes') }}</span>
                 <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingOps', 'Remaining ops') }}: {{ formatStorageBudgetValue(policy.remaining.operations, 'operations') }}</span>
               </div>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
+                <span>{{ t('dashboard.governance.analytics.storagePolicyBurnStored', 'Burn stored/day') }}: {{ formatBytes(policy.burnRate.storedBytesPerDay) }}</span>
+                <span>{{ t('dashboard.governance.analytics.storagePolicyBurnTraffic', 'Burn traffic/day') }}: {{ formatBytes(policy.burnRate.trafficBytesPerDay) }}</span>
+                <span>{{ t('dashboard.governance.analytics.storagePolicyProjectedOps', 'Ops exhaustion') }}: {{ formatProjectedDays(policy.projectedExhaustionDays.operations) }}</span>
+              </div>
             </div>
             <p v-if="analyticsData.storage.totalEvents === 0" class="text-sm text-black/45 dark:text-white/45">
               {{ t('dashboard.governance.analytics.storageEmpty', 'No storage usage yet.') }}
@@ -2422,6 +3466,14 @@ function formatRatio(value: number | null): string {
                 <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsUnsupported', 'Unsupported adapters') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.unsupported) }}</span>
               </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsProductionReady', 'Production-ready channels') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.productionReady) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsRuntimeMissing', 'Runtime config gaps') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.runtimeMissing + analyticsData.notifications.channelSummary.relayMissing + analyticsData.notifications.channelSummary.sendModeMissing) }}</span>
+              </div>
             </div>
             <div v-for="item in analyticsData.notifications.byDeliveryStatus.slice(0, 3)" :key="`delivery:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
@@ -2439,6 +3491,24 @@ function formatRatio(value: number | null): string {
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped</span>
             </div>
+            <div v-if="analyticsData.notifications.providerMix.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.notificationProviderMix', 'Provider mix') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.notifications.providerMix.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.notifications.providerMix.slice(0, 5)" :key="`notification-provider-mix:${item.key}`" class="flex items-center justify-between gap-3">
+                <span class="truncate text-black/60 dark:text-white/60">
+                  {{ item.providerType || item.channel }} · {{ item.adapter }}
+                </span>
+                <span class="font-medium text-black dark:text-white">
+                  {{ formatNumber(item.productionReady) }} ready · {{ formatNumber(item.warning) }} warning · {{ formatNumber(item.disabled) }} disabled
+                </span>
+              </div>
+            </div>
             <div v-for="channel in analyticsData.notifications.channelRisks.slice(0, 4)" :key="`notification-channel-risk:${channel.configId}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
               <div class="flex items-center justify-between gap-2">
                 <span class="truncate font-medium text-black/70 dark:text-white/70">{{ channel.name }}</span>
@@ -2449,6 +3519,9 @@ function formatRatio(value: number | null): string {
               </p>
               <p class="mt-1 truncate text-black/45 dark:text-white/45">
                 {{ channel.reasons.join(', ') || '-' }} · {{ notificationChannelCredentialLabel(channel) }}
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ notificationChannelReadinessLabel(channel) }}
               </p>
             </div>
             <p v-if="analyticsData.notifications.deliveries.total === 0" class="text-sm text-black/45 dark:text-white/45">
@@ -2465,6 +3538,10 @@ function formatRatio(value: number | null): string {
             <div v-for="item in analyticsData.notifications.byReason.slice(0, 6)" :key="`notification-reason:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/60 dark:text-white/60">{{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-for="item in analyticsData.notifications.byStatusCode.slice(0, 4)" :key="`notification-status-code:${item.key}`" class="flex items-center justify-between gap-3">
+              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.notificationStatusCode', 'Status code') }} · {{ item.key }}</span>
+              <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.notifications.byNotificationAction.slice(0, 4)" :key="`notification-action:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.key }}</span>
@@ -2498,9 +3575,11 @@ function formatRatio(value: number | null): string {
                 <span>{{ t('dashboard.governance.analytics.notificationProviderFailureRate', 'Failure rate') }}: {{ formatPercent(item.failureRate) }}</span>
                 <span>{{ formatNumber(item.sent) }} sent / {{ formatNumber(item.failed) }} failed</span>
                 <span>{{ formatNumber(item.skipped) }} skipped / {{ formatNumber(item.planned) }} planned</span>
+                <span>{{ t('dashboard.governance.analytics.notificationAvgDuration', 'Avg duration') }}: {{ formatDurationMs(item.durationMs.average) }}</span>
+                <span>{{ t('dashboard.governance.analytics.notificationMaxDuration', 'Max duration') }}: {{ formatDurationMs(item.durationMs.max) }}</span>
               </div>
               <p v-if="item.latestFailureReason" class="mt-2 truncate text-red-600 dark:text-red-100">
-                {{ item.latestFailureReason }} · {{ item.latestFailureAt ? formatDate(item.latestFailureAt) : '-' }}
+                {{ item.latestFailureReason }} · {{ item.latestFailureStatusCode ?? '-' }} · {{ item.latestFailureAt ? formatDate(item.latestFailureAt) : '-' }}
               </p>
             </div>
             <p v-if="analyticsData.notifications.providerHealth.length === 0" class="text-sm text-black/45 dark:text-white/45">
@@ -2606,6 +3685,59 @@ function formatRatio(value: number | null): string {
                   </p>
                 </div>
               </div>
+              <div class="mt-3 grid gap-2 sm:grid-cols-3">
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaLowestRemaining', 'Lowest remaining') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                    {{ analyticsData.providers.quotaSummary.lowestRemainingRequests == null ? '-' : `${formatNumber(analyticsData.providers.quotaSummary.lowestRemainingRequests)} req` }}
+                    ·
+                    {{ analyticsData.providers.quotaSummary.lowestRemainingTokens == null ? '-' : `${formatNumber(analyticsData.providers.quotaSummary.lowestRemainingTokens)} tok` }}
+                  </p>
+                </div>
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaOverage', 'Overage') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-red-600 dark:text-red-100">
+                    {{ formatNumber(analyticsData.providers.quotaSummary.requestOverage) }} req · {{ formatNumber(analyticsData.providers.quotaSummary.tokenOverage) }} tok
+                  </p>
+                </div>
+                <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                  <p class="text-[11px] text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaNearestExhaustion', 'Nearest exhaustion') }}
+                  </p>
+                  <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                    {{ formatProjectedDays(providerQuotaNearestExhaustionDays) }}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-3 grid gap-2">
+                <div v-for="item in analyticsData.providers.quotaRiskItems.slice(0, 4)" :key="`provider-quota-risk:${item.configId}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate font-medium text-black/70 dark:text-white/70">{{ item.name || item.providerId }}</span>
+                    <TxStatusBadge :text="providerQuotaRiskReasonLabel(item.riskReason)" size="sm" :status="providerQuotaTone(item.status)" />
+                  </div>
+                  <p class="mt-1 text-black/45 dark:text-white/45">
+                    {{ item.providerId }} · {{ item.channel || item.provider || 'global' }} · {{ formatRatio(item.highestUtilization) }}
+                  </p>
+                  <p class="mt-1 text-black/55 dark:text-white/55">
+                    {{ t('dashboard.governance.analytics.providerQuotaRiskBudget', 'Remaining') }}:
+                    {{ item.remaining.requests == null ? '-' : `${formatNumber(item.remaining.requests)} req` }}
+                    ·
+                    {{ item.remaining.tokens == null ? '-' : `${formatNumber(item.remaining.tokens)} tok` }}
+                    ·
+                    {{ t('dashboard.governance.analytics.providerQuotaRiskExhaustion', 'Exhaustion') }}:
+                    {{ formatProjectedDays(item.projectedExhaustionDays.requests) }}
+                    /
+                    {{ formatProjectedDays(item.projectedExhaustionDays.tokens) }}
+                  </p>
+                </div>
+                <p v-if="analyticsData.providers.quotaRiskItems.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.providerQuotaRiskEmpty', 'No quota risk right now.') }}
+                </p>
+              </div>
               <div class="mt-2 grid gap-2">
                 <div v-for="quota in analyticsData.providers.quotas.slice(0, 6)" :key="quota.configId" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
                   <div class="flex items-center justify-between gap-3">
@@ -2631,6 +3763,14 @@ function formatRatio(value: number | null): string {
                     <div class="flex items-center justify-between gap-3">
                       <span>{{ t('dashboard.governance.analytics.providerQuotaRemainingTokens', 'Remaining tokens') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ quota.remaining.tokens == null ? '-' : formatNumber(quota.remaining.tokens) }}</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                      <span>{{ t('dashboard.governance.analytics.providerQuotaBurnRate', 'Burn / day') }}</span>
+                      <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.burnRate.requestsPerDay) }} req · {{ formatNumber(quota.burnRate.tokensPerDay) }} tok</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                      <span>{{ t('dashboard.governance.analytics.providerQuotaProjectedExhaustion', 'Projected exhaustion') }}</span>
+                      <span class="font-medium text-black dark:text-white">{{ quota.projectedExhaustionDays.requests == null ? '-' : `${formatNumber(quota.projectedExhaustionDays.requests)}d` }} · {{ quota.projectedExhaustionDays.tokens == null ? '-' : `${formatNumber(quota.projectedExhaustionDays.tokens)}d` }}</span>
                     </div>
                   </div>
                 </div>
@@ -2665,6 +3805,32 @@ function formatRatio(value: number | null): string {
                   </div>
                   <p v-if="analyticsData.providers.byModel.length === 0" class="text-xs text-black/45 dark:text-white/45">
                     {{ t('dashboard.governance.analytics.providerModelsEmpty', 'No model usage yet.') }}
+                  </p>
+                </div>
+              </div>
+              <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
+                <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
+                  {{ t('dashboard.governance.analytics.providerChannelBreakdown', 'Provider channel usage') }}
+                </h4>
+                <div class="mt-2 grid gap-2">
+                  <div
+                    v-for="item in analyticsData.providers.channelDistribution.slice(0, 6)"
+                    :key="`provider-channel:${item.providerId}:${item.channel}`"
+                    class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="truncate font-medium text-black dark:text-white">{{ item.providerId }} · {{ item.channel }}</span>
+                      <span class="shrink-0 text-black/55 dark:text-white/55">{{ formatNumber(item.tokens) }} tok · {{ formatNumber(item.requests) }} req</span>
+                    </div>
+                    <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                      {{ t('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byModel[0]?.model || 'unknown' }}
+                    </p>
+                    <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                      {{ item.byProviderType.slice(0, 2).map(provider => `${provider.providerType}:${formatNumber(provider.quantity)}`).join(' · ') || 'unknown' }}
+                    </p>
+                  </div>
+                  <p v-if="analyticsData.providers.channelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerChannelBreakdownEmpty', 'No provider channel usage yet.') }}
                   </p>
                 </div>
               </div>
@@ -2773,6 +3939,21 @@ function formatRatio(value: number | null): string {
             <TuffInput v-model="notificationTestForm.action" class="w-full" />
             <TuffInput v-model="notificationTestForm.resourceId" class="w-full" placeholder="optional resource id" />
           </div>
+          <div v-if="selectedNotificationChannelEvaluation" class="mt-3 rounded-xl border border-black/[0.06] bg-black/[0.02] p-3 text-xs text-black/55 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/55">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="truncate font-medium text-black/70 dark:text-white/70">
+                {{ selectedNotificationChannelEvaluation.profile.adapter }} · {{ notificationChannelCredentialLabel(selectedNotificationChannelEvaluation.profile) }}
+              </span>
+              <TxStatusBadge
+                :text="notificationChannelLabel(selectedNotificationChannelEvaluation.readiness.status)"
+                size="sm"
+                :status="notificationChannelTone(selectedNotificationChannelEvaluation.readiness.status)"
+              />
+            </div>
+            <p class="mt-2 truncate">
+              {{ notificationChannelReadinessLabel(selectedNotificationChannelEvaluation) }}
+            </p>
+          </div>
           <textarea v-model="notificationTestForm.metadataJson" class="GovernanceTextarea mt-3" spellcheck="false" />
           <div v-if="notificationTestResult" class="mt-4 rounded-xl border border-black/[0.06] p-3 text-sm dark:border-white/[0.08]">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -2798,6 +3979,12 @@ function formatRatio(value: number | null): string {
                 </div>
                 <p class="mt-1 text-xs text-black/45 dark:text-white/45">
                   {{ delivery.channel }} · {{ delivery.provider || 'default' }} · {{ delivery.providerType || delivery.adapter }} · {{ delivery.reason }}
+                </p>
+                <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.notificationAvgDuration', 'Duration') }} · {{ formatDurationMs(delivery.durationMs) }}
+                </p>
+                <p v-if="delivery.statusCode != null" class="mt-1 text-xs text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.notificationStatusCode', 'Status code') }} · {{ delivery.statusCode }}
                 </p>
                 <p class="mt-1 text-xs text-black/40 dark:text-white/40">
                   {{ delivery.credentialRequired ? t('dashboard.governance.notificationTest.credentialRequired', 'Credential required') : t('dashboard.governance.notificationTest.credentialOptional', 'No credential required') }} · {{ delivery.hasCredentialRef ? t('dashboard.governance.notificationTest.credentialRefBound', 'credentialRef bound') : t('dashboard.governance.notificationTest.credentialRefMissing', 'credentialRef missing') }}
@@ -2856,6 +4043,98 @@ function formatRatio(value: number | null): string {
               {{ selectedStorageProfile.limitKeys.slice(0, 8).join(', ') }}
             </p>
           </div>
+          <div class="mt-3 rounded-xl border border-black/[0.06] bg-black/[0.02] p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="truncate text-xs font-semibold uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storageChannelDetail', 'Selected channel') }}
+                </p>
+                <p class="mt-1 truncate text-sm font-medium text-black dark:text-white">
+                  {{ selectedStorageChannelAnalytics.channel || storageForm.channel || 'unknown' }} · {{ selectedStorageChannelAnalytics.provider || storageForm.provider || 'default' }}
+                </p>
+              </div>
+              <TxStatusBadge
+                size="sm"
+                :text="storageChannelAnalyticsPending ? t('common.loading', 'Loading') : storageChannelPressureLabel(selectedStorageChannelAnalytics.channelPressure[0]?.pressureStatus ?? 'unmanaged')"
+                :status="storageChannelAnalyticsPending ? 'muted' : storageChannelPressureTone(selectedStorageChannelAnalytics.channelPressure[0]?.pressureStatus ?? 'unmanaged')"
+              />
+            </div>
+            <div class="mt-3 grid gap-2 text-xs md:grid-cols-4">
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storageStored', 'Stored') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatBytes(selectedStorageChannelAnalytics.storedBytes) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storageTraffic', 'Traffic') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatBytes(selectedStorageChannelAnalytics.trafficBytes) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storageOperations', 'Ops') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatNumber(selectedStorageChannelAnalytics.operations) }}
+                </p>
+              </div>
+              <div>
+                <p class="text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.storagePolicyAlerts', 'Alerts') }}
+                </p>
+                <p class="mt-1 font-semibold text-black dark:text-white">
+                  {{ formatNumber(selectedStorageChannelAnalytics.alerts.length) }}
+                </p>
+              </div>
+            </div>
+            <p class="mt-3 text-xs text-black/45 dark:text-white/45">
+              {{ formatNumber(selectedStorageChannelAnalytics.writes) }} writes · {{ formatNumber(selectedStorageChannelAnalytics.reads) }} reads · {{ formatNumber(selectedStorageChannelAnalytics.deletes) }} deletes
+            </p>
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+              <div>
+                <p class="text-xs font-medium text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.storageResourceType', 'Resource') }}
+                </p>
+                <div class="mt-2 grid gap-1">
+                  <div v-for="item in storageChannelAnalyticsData.byResourceTypeUsage.slice(0, 3)" :key="`selected-storage-resource:${item.key}`" class="flex items-center justify-between gap-3 text-xs">
+                    <span class="truncate text-black/50 dark:text-white/50">{{ item.key }}</span>
+                    <span class="shrink-0 font-medium text-black dark:text-white">{{ formatBytes(item.storedBytes + item.trafficBytes) }}</span>
+                  </div>
+                  <p v-if="storageChannelAnalyticsData.byResourceTypeUsage.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.storageChannelDetailEmpty', 'No usage yet.') }}
+                  </p>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-black/55 dark:text-white/55">
+                  {{ t('dashboard.governance.analytics.storageAction', 'Action') }}
+                </p>
+                <div class="mt-2 grid gap-1">
+                  <div v-for="item in storageChannelAnalyticsData.byActionUsage.slice(0, 3)" :key="`selected-storage-action:${item.key}`" class="flex items-center justify-between gap-3 text-xs">
+                    <span class="truncate text-black/50 dark:text-white/50">{{ item.key }}</span>
+                    <span class="shrink-0 font-medium text-black dark:text-white">{{ formatNumber(item.operations) }} ops</span>
+                  </div>
+                  <p v-if="storageChannelAnalyticsData.byActionUsage.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.storageChannelDetailEmpty', 'No usage yet.') }}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div v-if="selectedStorageChannelAnalytics.trend.at(-1) || selectedStorageChannelAnalytics.evaluations[0]" class="mt-3 grid gap-2 text-xs md:grid-cols-2">
+              <p v-if="selectedStorageChannelAnalytics.trend.at(-1)" class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageChannelLatestTrend', 'Latest trend') }} · {{ selectedStorageChannelAnalytics.trend.at(-1)?.date }} · {{ formatBytes((selectedStorageChannelAnalytics.trend.at(-1)?.storedBytes ?? 0) + (selectedStorageChannelAnalytics.trend.at(-1)?.trafficBytes ?? 0)) }} · {{ formatNumber(selectedStorageChannelAnalytics.trend.at(-1)?.operations ?? 0) }} ops
+              </p>
+              <p v-if="selectedStorageChannelAnalytics.evaluations[0]" class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageChannelPolicyState', 'Policy state') }} · {{ selectedStorageChannelAnalytics.evaluations[0].name }} · {{ storageEvaluationLabel(selectedStorageChannelAnalytics.evaluations[0].status) }} · {{ selectedStorageChannelAnalytics.evaluations[0].reasons.join(', ') || '-' }}
+              </p>
+            </div>
+          </div>
           <div class="mt-3 grid gap-3 md:grid-cols-2">
             <textarea v-model="storageForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
             <textarea v-model="storageForm.configJson" class="GovernanceTextarea" spellcheck="false" />
@@ -2913,11 +4192,38 @@ function formatRatio(value: number | null): string {
               {{ t('common.save', 'Save') }}
             </TxButton>
           </div>
-          <div class="mt-4 grid gap-3 md:grid-cols-4">
+          <div class="mt-4 grid gap-3 md:grid-cols-5">
+            <TuffSelect v-model="notificationForm.profileId" class="w-full" @change="applyNotificationProfile">
+              <TuffSelectItem
+                v-for="profile in notificationProfiles"
+                :key="profile.id"
+                :value="profile.id"
+                :label="profile.label"
+              />
+            </TuffSelect>
             <TuffInput v-model="notificationForm.name" class="w-full" />
             <TuffInput v-model="notificationForm.channel" class="w-full" />
             <TuffInput v-model="notificationForm.provider" class="w-full" />
             <TuffInput v-model="notificationForm.warningThreshold" class="w-full" />
+          </div>
+          <div v-if="selectedNotificationProfile" class="mt-3 rounded-xl border border-black/[0.06] bg-black/[0.02] p-3 text-xs text-black/55 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/55">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="font-medium text-black/70 dark:text-white/70">{{ selectedNotificationProfile.description }}</span>
+              <TxStatusBadge
+                size="sm"
+                :text="selectedNotificationProfile.adapter"
+                :status="selectedNotificationProfile.credentialType ? 'info' : 'success'"
+              />
+            </div>
+            <p class="mt-2">
+              {{ t('dashboard.governance.notificationProfiles.credential', 'Credential') }}:
+              {{ selectedNotificationProfile.credentialType || t('dashboard.governance.notificationProfiles.none', 'None') }}
+              · {{ selectedNotificationProfile.credentialRefPrefix || '-' }}
+            </p>
+            <p class="mt-1">
+              {{ t('dashboard.governance.notificationProfiles.configKeys', 'Config keys') }}:
+              {{ [...selectedNotificationProfile.requiredConfigKeys, ...selectedNotificationProfile.optionalConfigKeys].join(', ') || '-' }}
+            </p>
           </div>
           <div class="mt-3 grid gap-3 md:grid-cols-2">
             <textarea v-model="notificationForm.limitsJson" class="GovernanceTextarea" spellcheck="false" />
@@ -3078,15 +4384,30 @@ function formatRatio(value: number | null): string {
               {{ formatDate(storagePoliciesData.generatedAt) }}
             </span>
           </div>
+          <p v-if="storageSmokeError" class="mt-2 text-xs text-red-600 dark:text-red-200">
+            {{ storageSmokeError }}
+          </p>
+          <p v-if="storageSmokeResult" class="mt-2 text-xs text-black/50 dark:text-white/50">
+            {{ t('dashboard.governance.storageSmoke.result', 'Storage smoke') }}:
+            {{ storageSmokeResult.policyName }} · {{ storageSmokeResult.mode }} · {{ storageSmokeResult.status }} · {{ storageSmokeResult.reason }}
+          </p>
           <div class="mt-4 space-y-3">
             <div v-for="item in storageEvaluations.slice(0, 6)" :key="item.policyId" class="rounded-xl border border-black/[0.06] p-3 text-sm dark:border-white/[0.08]">
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate font-medium text-black dark:text-white">{{ item.name }}</span>
-                <TxStatusBadge
-                  :text="storageEvaluationLabel(item.status)"
-                  size="sm"
-                  :status="storageEvaluationTone(item.status)"
-                />
+                <div class="flex shrink-0 items-center gap-2">
+                  <TxButton size="small" variant="secondary" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'dry-run')">
+                    {{ t('dashboard.governance.storageSmoke.dryRun', 'Smoke') }}
+                  </TxButton>
+                  <TxButton size="small" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'write')">
+                    {{ t('dashboard.governance.storageSmoke.write', 'Write smoke') }}
+                  </TxButton>
+                  <TxStatusBadge
+                    :text="storageEvaluationLabel(item.status)"
+                    size="sm"
+                    :status="storageEvaluationTone(item.status)"
+                  />
+                </div>
               </div>
               <p class="mt-1 text-xs text-black/50 dark:text-white/50">
                 {{ item.channel }} · {{ item.provider || 'unknown' }} · {{ item.days }}d
@@ -3103,6 +4424,14 @@ function formatRatio(value: number | null): string {
                 <div class="flex items-center justify-between gap-3">
                   <span>{{ t('dashboard.governance.storagePolicy.operations', 'Operations') }}</span>
                   <span class="font-medium text-black dark:text-white">{{ formatNumber(item.usage.operations) }} · {{ formatRatio(item.utilization.operations) }} · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>{{ t('dashboard.governance.storagePolicy.burnRate', 'Burn/day') }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatBytes(item.burnRate.storedBytesPerDay) }} · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} · {{ formatNumber(item.burnRate.operationsPerDay) }} ops</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>{{ t('dashboard.governance.storagePolicy.projectedExhaustion', 'Projected exhaustion') }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatProjectedDays(item.projectedExhaustionDays.storedBytes) }} · {{ formatProjectedDays(item.projectedExhaustionDays.trafficBytes) }} · {{ formatProjectedDays(item.projectedExhaustionDays.operations) }}</span>
                 </div>
                 <div v-if="item.overage.alertBytes > 0" class="flex items-center justify-between gap-3 text-amber-600 dark:text-amber-200">
                   <span>{{ t('dashboard.governance.storagePolicy.alertOverage', 'Alert overage') }}</span>

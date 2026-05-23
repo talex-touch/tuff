@@ -21,9 +21,11 @@ export interface StorageObjectResult {
   key: string
   data: Buffer
   size: number
+  sha256: string
   contentType: string
   storageChannel: string
   storageProvider: string
+  uploadRetry?: StorageUploadRetryMetadata
 }
 
 export interface StorageObjectExternalConfig {
@@ -72,7 +74,7 @@ interface StorageObjectWriteRetryPolicy {
   delaysMs: readonly number[]
 }
 
-interface StorageUploadRetryMetadata {
+export interface StorageUploadRetryMetadata {
   retryable: boolean
   retryCount: number
   maxRetries: number
@@ -81,6 +83,8 @@ interface StorageUploadRetryMetadata {
   storageProvider: string
   storageOperation: 'storage.write'
   storageStatusCode: number | null
+  recovered?: boolean
+  attempts?: number
 }
 
 export function resolveObjectStorageChannel(
@@ -630,20 +634,31 @@ async function runStorageWriteWithRetry(
   backend: Pick<ResolvedObjectStorageBackend, 'channel' | 'provider'>,
   policyInput: Partial<StorageObjectWriteRetryPolicy> | undefined,
   operation: () => Promise<void>,
-): Promise<void> {
+): Promise<StorageUploadRetryMetadata | undefined> {
   const policy = normalizeWriteRetryPolicy(policyInput)
   let retryCount = 0
+  let lastRetry: StorageUploadRetryMetadata | undefined
 
   while (true) {
     try {
       await operation()
-      return
+      if (retryCount <= 0 || !lastRetry)
+        return undefined
+
+      return {
+        ...lastRetry,
+        retryable: true,
+        recovered: true,
+        retryCount,
+        nextRetryDelayMs: 0,
+        attempts: retryCount + 1,
+      }
     }
     catch (error) {
       const retryable = isRetryableStorageWriteError(error)
       const willRetry = retryable && retryCount < policy.maxRetries
       const nextRetryDelayMs = willRetry ? retryDelayForAttempt(policy, retryCount) : 0
-      attachUploadRetryMetadata(error, {
+      const metadata: StorageUploadRetryMetadata = {
         retryable,
         retryCount,
         maxRetries: policy.maxRetries,
@@ -652,11 +667,13 @@ async function runStorageWriteWithRetry(
         storageProvider: backend.provider,
         storageOperation: 'storage.write',
         storageStatusCode: readStorageStatusCode(error),
-      })
+      }
+      attachUploadRetryMetadata(error, metadata)
 
       if (!willRetry)
         throw error
 
+      lastRetry = metadata
       await waitForRetry(nextRetryDelayMs)
       retryCount += 1
     }
@@ -667,6 +684,7 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
   const backend = await resolveObjectStorageBackend(input)
   const contentType = normalizeContentType(input.contentType, input.defaultContentType)
   const data = normalizeObjectData(input.data)
+  const sha256 = sha256Hex(data.buffer)
 
   await assertObjectStoragePolicy({
     event: input.event,
@@ -677,8 +695,8 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
     quantity: data.size,
   })
 
-  if (backend.externalStorage || backend.bucket) {
-    await runStorageWriteWithRetry(backend, input.retryPolicy, async () => {
+  const uploadRetry = backend.externalStorage || backend.bucket
+    ? await runStorageWriteWithRetry(backend, input.retryPolicy, async () => {
       if (backend.externalStorage) {
         await putExternalObject(backend.externalStorage, input.key, data.buffer, contentType)
         return
@@ -690,8 +708,9 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
         },
       })
     })
-  }
-  else {
+    : undefined
+
+  if (!backend.externalStorage && !backend.bucket) {
     input.memoryStorage.set(input.key, {
       data: data.buffer,
       contentType,
@@ -714,9 +733,11 @@ export async function putStorageObject(input: PutStorageObjectInput): Promise<Om
   return {
     key: input.key,
     size: data.size,
+    sha256,
     contentType,
     storageChannel: backend.channel,
     storageProvider: backend.provider,
+    uploadRetry,
   }
 }
 
@@ -753,6 +774,7 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       key: input.key,
       data: object.data,
       size: object.data.byteLength,
+      sha256: sha256Hex(object.data),
       contentType: object.contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
@@ -792,6 +814,7 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
       key: input.key,
       data,
       size: data.byteLength,
+      sha256: sha256Hex(data),
       contentType,
       storageChannel: backend.channel,
       storageProvider: backend.provider,
@@ -827,6 +850,7 @@ export async function getStorageObject(input: StorageObjectContext): Promise<Sto
     key: input.key,
     data: object.data,
     size: object.data.byteLength,
+    sha256: sha256Hex(object.data),
     contentType,
     storageChannel: backend.channel,
     storageProvider: backend.provider,

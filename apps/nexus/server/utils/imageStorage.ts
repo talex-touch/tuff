@@ -10,6 +10,7 @@ import {
   listStorageObjectKeys,
   putStorageObject,
   type StorageObjectMemory,
+  type StorageUploadRetryMetadata,
 } from './storageObjectStore'
 import {
   completeUploadGovernance,
@@ -270,7 +271,7 @@ async function failImageUploadLifecycle(
 async function completeImageUploadLifecycle(
   event: H3Event,
   context: UploadGovernanceContext | null,
-  result: Omit<UploadResult, 'url'> & { size: number, contentType: string },
+  result: Omit<UploadResult, 'url'> & { size: number, contentType: string, uploadRetry?: StorageUploadRetryMetadata },
   options: UploadOptions,
 ): Promise<void> {
   if (!context)
@@ -282,7 +283,10 @@ async function completeImageUploadLifecycle(
     size: result.size,
     storageChannel: result.storageChannel,
     storageProvider: result.storageProvider,
-    metadata: getUploadLifecycleMetadata(options),
+    metadata: {
+      ...getUploadLifecycleMetadata(options),
+      ...(result.uploadRetry ?? {}),
+    },
   })
 }
 

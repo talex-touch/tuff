@@ -13,6 +13,18 @@
 
 ## 2026-05-23
 
+### feat(nexus): expand data governance controls
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/server/api/v1/sync/blobs/upload.post.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md`
+  - Expanded Nexus Data Governance across upload retries/failure matrix, storage policy pressure, notification readiness, provider quota risk, plugin analytics, and D1 readiness diagnostics.
+  - Added a progress snapshot that marks the 8 governance areas as in progress and keeps browser/live provider/storage/D1 production evidence as explicit remaining gates.
+  - Added the active branch cleanup record so the screenshot branch merge/delete work remains traceable after local and remote branch cleanup.
+
 ### docs(plan-prd): record active goal closure order
 
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md`

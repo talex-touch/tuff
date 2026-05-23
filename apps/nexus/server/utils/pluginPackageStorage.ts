@@ -8,6 +8,7 @@ import {
   deleteStorageObject,
   getStorageObject,
   putStorageObject,
+  type StorageUploadRetryMetadata,
   type StorageObjectMemory,
 } from './storageObjectStore'
 
@@ -23,6 +24,7 @@ interface UploadResult {
   contentType: string
   storageChannel: string
   storageProvider: string
+  uploadRetry?: StorageUploadRetryMetadata
 }
 
 interface PluginPackageStorageOptions {
@@ -95,6 +97,7 @@ export async function uploadPluginPackage(
     contentType: result.contentType,
     storageChannel: result.storageChannel,
     storageProvider: result.storageProvider,
+    uploadRetry: result.uploadRetry,
   }
 }
 

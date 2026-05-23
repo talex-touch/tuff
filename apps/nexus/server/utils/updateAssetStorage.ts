@@ -1,11 +1,18 @@
-import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { Buffer } from 'node:buffer'
+import type { R2Bucket } from '@cloudflare/workers-types'
+import type { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { getStorageObject, putStorageObject, type StorageObjectMemory } from './storageObjectStore'
 
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
-const memoryStorage = new Map<string, { data: Buffer, contentType: string }>()
+const UPDATE_PAYLOAD_RESOURCE_TYPE = 'update-payload'
+const memoryStorage: StorageObjectMemory = new Map()
+
+function getUpdatePayloadGovernanceId(key: string): string {
+  return `${UPDATE_PAYLOAD_RESOURCE_TYPE}:${createHash('sha256').update(key).digest('hex').slice(0, 16)}`
+}
 
 function getAssetBucket(event?: H3Event | null): R2Bucket | null {
   if (!event)
@@ -24,19 +31,16 @@ export async function saveUpdateAsset(
   const bucket = getAssetBucket(event)
   const resolvedContentType = contentType || DEFAULT_CONTENT_TYPE
 
-  if (bucket) {
-    const uint8Array = new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
-    await bucket.put(key, uint8Array, {
-      httpMetadata: {
-        contentType: resolvedContentType,
-      },
-    })
-    return
-  }
-
-  memoryStorage.set(key, {
+  await putStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    externalStorage: null,
+    key,
     data,
     contentType: resolvedContentType,
+    resourceType: UPDATE_PAYLOAD_RESOURCE_TYPE,
+    governanceResourceId: getUpdatePayloadGovernanceId(key),
   })
 }
 
@@ -45,20 +49,16 @@ export async function getUpdateAsset(
   key: string,
 ): Promise<{ data: Buffer, contentType: string } | null> {
   const bucket = getAssetBucket(event)
-
-  if (bucket) {
-    const object = await bucket.get(key)
-    if (!object)
-      return null
-
-    const arrayBuffer = await object.arrayBuffer()
-    return {
-      data: Buffer.from(arrayBuffer),
-      contentType: object.httpMetadata?.contentType || DEFAULT_CONTENT_TYPE,
-    }
-  }
-
-  return memoryStorage.get(key) ?? null
+  return await getStorageObject({
+    event,
+    bucket,
+    memoryStorage,
+    externalStorage: null,
+    key,
+    resourceType: UPDATE_PAYLOAD_RESOURCE_TYPE,
+    governanceResourceId: getUpdatePayloadGovernanceId(key),
+    defaultContentType: DEFAULT_CONTENT_TYPE,
+  })
 }
 
 export async function requireUpdateAsset(
