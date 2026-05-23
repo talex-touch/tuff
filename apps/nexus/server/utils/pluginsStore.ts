@@ -1902,6 +1902,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
           channel: input.channel,
           version: input.version,
           surface: 'plugin-version-publish',
+          ...(packageResult.uploadRetry ?? {}),
         },
       })
 
@@ -2203,6 +2204,7 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
           channel: targetVersion.channel,
           version: targetVersion.version,
           surface: 'plugin-version-reedit',
+          ...(packageResult.uploadRetry ?? {}),
         },
       })
 

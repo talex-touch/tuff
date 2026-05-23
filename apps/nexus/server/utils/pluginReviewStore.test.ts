@@ -99,6 +99,58 @@ describe('pluginReviewStore analytics', () => {
       ],
     })
     expect(analytics.latestAt).toEqual(expect.any(String))
+    expect(analytics.ratingTrend).toHaveLength(1)
+    expect(analytics.ratingTrend[0]).toMatchObject({
+      ratingCount: 2,
+      averageRating: 4,
+      lowRatingCount: 0,
+      lowRatingRate: 0,
+    })
+    expect(analytics.comments).toMatchObject({
+      withTitle: 4,
+      withContent: 4,
+      titleCoverageRate: 100,
+      contentCoverageRate: 100,
+      averageContentLength: 17.75,
+      byStatus: [
+        {
+          status: 'approved',
+          total: 2,
+          withTitle: 2,
+          withContent: 2,
+          titleCoverageRate: 100,
+          contentCoverageRate: 100,
+          averageContentLength: 12.5,
+        },
+        {
+          status: 'pending',
+          total: 1,
+          withTitle: 1,
+          withContent: 1,
+          titleCoverageRate: 100,
+          contentCoverageRate: 100,
+          averageContentLength: 23,
+        },
+        {
+          status: 'rejected',
+          total: 1,
+          withTitle: 1,
+          withContent: 1,
+          titleCoverageRate: 100,
+          contentCoverageRate: 100,
+          averageContentLength: 23,
+        },
+      ],
+    })
+    expect(analytics.comments.trend).toHaveLength(1)
+    expect(analytics.comments.trend[0]).toMatchObject({
+      total: 4,
+      withTitle: 4,
+      withContent: 4,
+      titleCoverageRate: 100,
+      contentCoverageRate: 100,
+      averageContentLength: 17.75,
+    })
     expect(JSON.stringify(analytics)).not.toContain('example.com')
     expect(JSON.stringify(analytics)).not.toContain('Approved Five')
     expect(JSON.stringify(analytics)).not.toContain('Useful plugin.')

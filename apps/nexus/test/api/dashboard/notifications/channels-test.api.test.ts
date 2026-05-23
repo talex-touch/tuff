@@ -76,7 +76,19 @@ describe('/api/dashboard/notifications/channels/test', () => {
         events: ['system.notification.test'],
       },
     })
-    const selected = (await upsertChannelHandler(event)).channel
+    const selectedResult = await upsertChannelHandler(event)
+    const selected = selectedResult.channel
+    expect(selectedResult).toEqual(expect.objectContaining({
+      profile: expect.objectContaining({
+        adapter: 'browser',
+        supported: true,
+        credentialRequired: false,
+      }),
+      readiness: expect.objectContaining({
+        status: 'ready',
+        productionReady: true,
+      }),
+    }))
 
     h3Mocks.readBody.mockResolvedValueOnce({
       name: `Other browser ${marker}`,
@@ -158,6 +170,40 @@ describe('/api/dashboard/notifications/channels/test', () => {
     await expect(testChannelHandler(event)).rejects.toMatchObject({
       statusCode: 400,
       statusMessage: 'mode must be plan or send.',
+    })
+  })
+
+  it('rejects unsupported notification adapters and non-notification credential refs', async () => {
+    const event = makeEvent(crypto.randomUUID())
+
+    h3Mocks.readBody.mockResolvedValueOnce({
+      name: 'Unsupported notification adapter',
+      channel: 'email',
+      provider: 'unsupported-mailer',
+      config: {
+        mode: 'send',
+        providerType: 'unsupported-mailer',
+      },
+    })
+    await expect(upsertChannelHandler(event)).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: 'Unsupported notification adapter: email/unsupported-mailer.',
+    })
+
+    h3Mocks.readBody.mockResolvedValueOnce({
+      name: 'Wrong credential namespace',
+      channel: 'email',
+      provider: 'resend-primary',
+      config: {
+        mode: 'send',
+        providerType: 'resend',
+        credentialRef: 'secure://storage/resend-primary',
+        from: 'Tuff <noreply@example.com>',
+      },
+    })
+    await expect(upsertChannelHandler(event)).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: 'config.credentialRef must use secure://notifications/ for notification channels.',
     })
   })
 })

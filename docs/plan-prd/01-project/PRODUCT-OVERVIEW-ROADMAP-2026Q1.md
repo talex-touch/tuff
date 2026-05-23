@@ -21,7 +21,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 目标 | 说明 | 当前口径 |
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
-| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-20 自动化审计未发现新的 P0 fixed fake-success；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
+| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-22 增量兼容审计未发现新的 P0 fixed fake-success，并确认 shell/source diagnostics 首批 hardening 已在 live tree 推进；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
 | 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`v2.4.10` GitHub Release 与 Nexus release metadata sync 已成功，公共 npm 子包补发仍受 `NPM_TOKEN` scope publish 权限阻塞 |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
 | AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR；2.5.3 / 2.5.5 / 2.5.8 拆分本地知识检索、本地模型运行时与 ASR |
@@ -57,7 +57,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - AI 兼容占位成功响应退场。
 - CLI token OS 级 credential backend 收口；当前仅完成 POSIX `0700/0600` 权限缓解与 Windows ACL warning。
 - 插件 provider secret storage 收口；`touch-translation` 已迁入 `usePluginSecret()`，仍需 secure-store 系统 backend 与 degraded health evidence。
-- 插件 shell capability 诊断统一；`touch-snipaste` fail-closed diagnostics 与 `touch-window-presets` non-mutating permission check 是下一轮首切。
+- 插件 shell capability 诊断统一；`touch-snipaste`、`touch-window-presets`、`touch-browser-data`、`touch-quick-actions` 已有首批 fail-closed/source diagnostics 证据，下一步改为复核剩余 shell/OS capability surface。
 - 动态执行边界治理：PreviewSDK 算式/单位换算已收口，widget runtime sandbox 继续进入审计/回归清单。
 - Transport Wave A retained alias/hard-cut 后续批次。
 - CoreApp 启动异步化真实设备 benchmark；CoreBox app launch handoff 已先补 immediate hide，避免慢启动期间 launcher 可见卡死。
@@ -158,7 +158,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 当前基线：`2.4.10`。
 - `2.4.10` 已作为当前稳定基线；GitHub Release 与 Nexus release metadata sync 已成功；公共 npm 子包缺失版本仍需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发；`2.4.11-beta.1` 保留为已验证 beta pre-release 记录，后续 `2.4.11` 继续收口 legacy/compat/size 债务。
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
-- 2026-05-20 兼容性/占位实现自动化审计未发现新的 P0 假成功；`2.4.11` 首切继续聚焦 `touch-snipaste` shell capability、`touch-window-presets` non-mutating listing、Browser Data diagnostics、widget runtime sandbox、secret backend、裸 console 与 SRP 小切片。
+- 2026-05-22 兼容性/占位实现增量审计未发现新的 P0 假成功；`touch-snipaste`、`touch-window-presets`、Browser Data source diagnostics 与 `touch-quick-actions` 已有 live-tree hardening 证据，`2.4.11` 后续聚焦 Credential Locker/libsecret、真实平台 evidence、widget runtime sandbox regression、裸 console、示例插件调试噪声与 SRP 小切片。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
 - App Data Plugins 与 Everything 已新增专题 Roadmap，近期不进入更新系统 Nexus Hard-Cut 范围；Browser Data、Obsidian、VSCode、macOS App Data、Epic 与 Everything 生产化收口按插件/搜索主线推进。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。

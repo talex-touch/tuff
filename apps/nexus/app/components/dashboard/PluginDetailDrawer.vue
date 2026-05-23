@@ -4,8 +4,11 @@ import type {
   DashboardPluginAnalytics,
   DashboardPluginAnalyticsConversionTrendPoint,
   DashboardPluginAnalyticsMetric,
+  DashboardPluginReviewRatingTrendPoint,
   DashboardPluginReviewStatusTrendPoint,
   DashboardPluginAnalyticsTrendPoint,
+  DashboardPluginInvocationHealthTrendPoint,
+  DashboardPluginRetentionTrendPoint,
   DashboardPluginTimelineEvent,
   PluginChannel,
   DashboardPluginVersion as PluginVersion,
@@ -191,6 +194,10 @@ const latestReviewTrendPoint = computed(() => {
   const trend = reviewAnalytics.value?.statusTrend ?? []
   return trend.at(-1) ?? null
 })
+const latestReviewRatingTrendPoint = computed(() => {
+  const trend = reviewAnalytics.value?.ratingTrend ?? []
+  return trend.at(-1) ?? null
+})
 const reviewStatusItems = computed(() => {
   const reviews = reviewAnalytics.value
   return [
@@ -210,6 +217,39 @@ const reviewStatusItems = computed(() => {
       value: reviews?.rejected ?? 0,
     },
   ]
+})
+const reviewCommentItems = computed(() => {
+  const comments = reviewAnalytics.value?.comments
+  return [
+    {
+      key: 'titleCoverage',
+      label: t('dashboard.sections.plugins.analytics.reviews.titleCoverage'),
+      value: formatPercent(comments?.titleCoverageRate),
+    },
+    {
+      key: 'contentCoverage',
+      label: t('dashboard.sections.plugins.analytics.reviews.contentCoverage'),
+      value: formatPercent(comments?.contentCoverageRate),
+    },
+    {
+      key: 'averageLength',
+      label: t('dashboard.sections.plugins.analytics.reviews.averageLength'),
+      value: t('dashboard.sections.plugins.analytics.reviews.averageLengthValue', {
+        count: formatMetricValue(comments?.averageContentLength),
+      }),
+    },
+  ]
+})
+const latestReviewCommentTrendPoint = computed(() => reviewAnalytics.value?.comments?.trend.at(-1) ?? null)
+const reviewCommentTrendMeta = computed(() => {
+  const point = latestReviewCommentTrendPoint.value
+  if (!point)
+    return null
+  return t('dashboard.sections.plugins.analytics.reviews.commentTrendMeta', {
+    date: formatDate(point.date),
+    contentCoverage: formatPercent(point.contentCoverageRate),
+    averageLength: formatMetricValue(point.averageContentLength),
+  })
 })
 
 const analyticsConversionItems = computed(() => {
@@ -244,6 +284,157 @@ const latestConversionTrendPoint = computed(() => {
   }
   return trend.at(-1) ?? null
 })
+
+const retentionAnalytics = computed(() => props.analytics?.retention ?? null)
+const usageTiming = computed(() => props.analytics?.usageTiming ?? null)
+const retentionItems = computed(() => {
+  const retention = retentionAnalytics.value
+  return [
+    {
+      key: 'retentionRate',
+      label: t('dashboard.sections.plugins.analytics.retention.retentionRate'),
+      value: formatPercent(retention?.retentionRate),
+    },
+    {
+      key: 'returningActors',
+      label: t('dashboard.sections.plugins.analytics.retention.returningActors'),
+      value: formatMetricValue(retention?.returningActors),
+    },
+    {
+      key: 'repeatRate',
+      label: t('dashboard.sections.plugins.analytics.retention.repeatRate'),
+      value: formatPercent(retention?.repeatRate),
+    },
+    {
+      key: 'averageActiveDays',
+      label: t('dashboard.sections.plugins.analytics.retention.averageActiveDays'),
+      value: formatMetricValue(retention?.averageActiveDays),
+    },
+    {
+      key: 'averageInvocationsPerActor',
+      label: t('dashboard.sections.plugins.analytics.retention.averageInvocationsPerActor'),
+      value: formatMetricValue(retention?.averageInvocationsPerActor),
+    },
+  ]
+})
+const latestRetentionTrendPoint = computed(() => {
+  const trend = retentionAnalytics.value?.trend ?? []
+  for (let index = trend.length - 1; index >= 0; index -= 1) {
+    const point = trend[index]
+    if (point?.activeActors || point?.invocations)
+      return point
+  }
+  return trend.at(-1) ?? null
+})
+
+const invocationHealth = computed(() => props.analytics?.invocationHealth ?? null)
+const latestInvocationTrendPoint = computed(() => {
+  const trend = invocationHealth.value?.trend ?? []
+  for (let index = trend.length - 1; index >= 0; index -= 1) {
+    const point = trend[index]
+    if (point?.total)
+      return point
+  }
+  return trend.at(-1) ?? null
+})
+const invocationHealthItems = computed(() => {
+  const health = invocationHealth.value
+  return [
+    {
+      key: 'total',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.total'),
+      value: formatMetricValue(health?.total),
+    },
+    {
+      key: 'uniqueActors',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.uniqueActors'),
+      value: formatMetricValue(health?.uniqueActors),
+    },
+    {
+      key: 'successRate',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.successRate'),
+      value: formatPercent(health?.successRate),
+    },
+    {
+      key: 'failureRate',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.failureRate'),
+      value: formatPercent(health?.failureRate),
+    },
+    {
+      key: 'averageDuration',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.averageDuration'),
+      value: formatDurationMs(health?.durationMs.average),
+    },
+  ]
+})
+
+const invocationContextBreakdowns = computed(() => {
+  const health = invocationHealth.value
+  return [
+    {
+      key: 'surfaces',
+      title: t('dashboard.sections.plugins.analytics.invocationHealth.surfaces'),
+      items: health?.bySurface ?? [],
+    },
+    {
+      key: 'countries',
+      title: t('dashboard.sections.plugins.analytics.invocationHealth.countries'),
+      items: health?.byCountry ?? [],
+    },
+    {
+      key: 'regions',
+      title: t('dashboard.sections.plugins.analytics.invocationHealth.regions'),
+      items: health?.byRegion ?? [],
+    },
+    {
+      key: 'channels',
+      title: t('dashboard.sections.plugins.analytics.invocationHealth.channels'),
+      items: health?.byChannel ?? [],
+    },
+    {
+      key: 'versions',
+      title: t('dashboard.sections.plugins.analytics.invocationHealth.versions'),
+      items: health?.byVersion ?? [],
+    },
+    {
+      key: 'localTimeSlots',
+      title: t('dashboard.sections.plugins.analytics.invocationHealth.localTimeSlots'),
+      items: health?.byLocalTimeSlot ?? [],
+    },
+  ]
+})
+const invocationStatusItems = computed(() => {
+  const health = invocationHealth.value
+  return [
+    {
+      key: 'successful',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.successful'),
+      value: health?.successful ?? 0,
+    },
+    {
+      key: 'failed',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.failed'),
+      value: health?.failed ?? 0,
+    },
+    {
+      key: 'skipped',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.skipped'),
+      value: health?.skipped ?? 0,
+    },
+    {
+      key: 'unknown',
+      label: t('dashboard.sections.plugins.analytics.invocationHealth.unknown'),
+      value: health?.unknown ?? 0,
+    },
+  ]
+})
+
+const recentActionTrend = computed(() => (props.analytics?.actionTrend ?? []).slice(-5).reverse())
+const recentRetentionTrend = computed(() => (retentionAnalytics.value?.trend ?? []).slice(-5).reverse())
+const recentUsageTimingTrend = computed(() => (usageTiming.value?.trend ?? []).slice(-5).reverse())
+const recentLocationTrend = computed(() => (props.analytics?.locationTrend ?? []).slice(-5).reverse())
+const recentChannelTrend = computed(() => (props.analytics?.channelTrend ?? []).slice(-5).reverse())
+const recentVersionTrend = computed(() => (props.analytics?.versionTrend ?? []).slice(-5).reverse())
 
 const analyticsBreakdowns = computed(() => {
   const analytics = props.analytics
@@ -280,6 +471,24 @@ const analyticsBreakdowns = computed(() => {
     },
   ]
 })
+
+const usageTimingBreakdowns = computed(() => [
+  {
+    key: 'hours',
+    title: t('dashboard.sections.plugins.analytics.usageTiming.hours'),
+    items: usageTiming.value?.byHour ?? [],
+  },
+  {
+    key: 'weekdays',
+    title: t('dashboard.sections.plugins.analytics.usageTiming.weekdays'),
+    items: usageTiming.value?.byWeekday ?? [],
+  },
+  {
+    key: 'timeSlots',
+    title: t('dashboard.sections.plugins.analytics.usageTiming.timeSlots'),
+    items: usageTiming.value?.byTimeSlot ?? [],
+  },
+])
 
 const visibleModel = computed({
   get: () => props.isOpen,
@@ -371,10 +580,39 @@ function formatPercent(value?: number | null) {
   return `${Math.round((value ?? 0) * 100) / 100}%`
 }
 
+function formatDurationMs(value?: number | null) {
+  return t('dashboard.sections.plugins.analytics.invocationHealth.durationValue', {
+    duration: formatMetricValue(value),
+  })
+}
+
 function formatMetricKey(key: string) {
   return key === 'unknown'
     ? t('dashboard.sections.plugins.analytics.unknown')
     : key
+}
+
+function formatHourKey(key: string) {
+  if (key === 'unknown')
+    return t('dashboard.sections.plugins.analytics.unknown')
+  return t('dashboard.sections.plugins.analytics.usageTiming.hourValue', { hour: key })
+}
+
+function formatWeekdayKey(key: string) {
+  if (key === 'unknown')
+    return t('dashboard.sections.plugins.analytics.unknown')
+  const day = Number(key)
+  if (!Number.isFinite(day) || day < 0 || day > 6)
+    return key
+  return t(`dashboard.sections.plugins.analytics.usageTiming.weekdaysMap.${day}`)
+}
+
+function formatUsageTimingKey(group: string, key: string) {
+  if (group === 'hours')
+    return formatHourKey(key)
+  if (group === 'weekdays')
+    return formatWeekdayKey(key)
+  return formatMetricKey(key)
 }
 
 function formatMetricMeta(metric: DashboardPluginAnalyticsMetric) {
@@ -382,6 +620,23 @@ function formatMetricMeta(metric: DashboardPluginAnalyticsMetric) {
     quantity: formatMetricValue(metric.quantity),
     actors: formatMetricValue(metric.uniqueActors),
     events: formatMetricValue(metric.events),
+  })
+}
+
+function formatTrendMetricList(items: DashboardPluginAnalyticsMetric[]) {
+  if (!items.length)
+    return '—'
+  return items
+    .slice(0, 3)
+    .map(item => `${formatMetricKey(item.key)} ${formatMetricValue(item.quantity)}`)
+    .join(' · ')
+}
+
+function formatUsageTimingTrend(point: { hours: DashboardPluginAnalyticsMetric[], weekdays: DashboardPluginAnalyticsMetric[], timeSlots: DashboardPluginAnalyticsMetric[] }) {
+  return t('dashboard.sections.plugins.analytics.usageTiming.trendMeta', {
+    hours: formatTrendMetricList(point.hours),
+    weekdays: point.weekdays.slice(0, 3).map(item => `${formatWeekdayKey(item.key)} ${formatMetricValue(item.quantity)}`).join(' · ') || '—',
+    timeSlots: formatTrendMetricList(point.timeSlots),
   })
 }
 
@@ -403,6 +658,17 @@ function formatConversionTrendMeta(point: DashboardPluginAnalyticsConversionTren
   })
 }
 
+function formatRetentionTrendMeta(point: DashboardPluginRetentionTrendPoint) {
+  return t('dashboard.sections.plugins.analytics.retention.trendMeta', {
+    date: formatDate(point.date),
+    activeActors: formatMetricValue(point.activeActors),
+    returningActors: formatMetricValue(point.returningActors),
+    invocationActors: formatMetricValue(point.invocationActors),
+    invocations: formatMetricValue(point.invocations),
+    retentionRate: formatPercent(point.retentionRate),
+  })
+}
+
 function formatReviewTrendMeta(point: DashboardPluginReviewStatusTrendPoint) {
   return t('dashboard.sections.plugins.analytics.reviews.trendMeta', {
     date: formatDate(point.date),
@@ -411,6 +677,27 @@ function formatReviewTrendMeta(point: DashboardPluginReviewStatusTrendPoint) {
     rejected: formatMetricValue(point.rejected),
   })
 }
+
+function formatReviewRatingTrendMeta(point: DashboardPluginReviewRatingTrendPoint) {
+  return t('dashboard.sections.plugins.analytics.reviews.ratingTrendMeta', {
+    date: formatDate(point.date),
+    averageRating: formatRating(point.averageRating),
+    ratingCount: formatMetricValue(point.ratingCount),
+    lowRatingRate: formatPercent(point.lowRatingRate),
+  })
+}
+
+function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPoint) {
+  return t('dashboard.sections.plugins.analytics.invocationHealth.trendMeta', {
+    date: formatDate(point.date),
+    total: formatMetricValue(point.total),
+    actors: formatMetricValue(point.uniqueActors),
+    successRate: formatPercent(point.successRate),
+    failureRate: formatPercent(point.failureRate),
+    averageDuration: formatDurationMs(point.durationMs.average),
+  })
+}
+
 </script>
 
 <template>
@@ -568,6 +855,52 @@ function formatReviewTrendMeta(point: DashboardPluginReviewStatusTrendPoint) {
                   <p v-if="latestReviewTrendPoint" class="mt-4 text-xs text-black/45 dark:text-white/45">
                     {{ formatReviewTrendMeta(latestReviewTrendPoint) }}
                   </p>
+                  <div v-if="latestReviewRatingTrendPoint" class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]">
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.ratingTrend') }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ formatRating(latestReviewRatingTrendPoint.averageRating) }}
+                      </p>
+                    </div>
+                    <div class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]">
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.lowRatingRate') }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ formatPercent(latestReviewRatingTrendPoint.lowRatingRate) }}
+                      </p>
+                    </div>
+                    <div class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]">
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.ratingTrendCount') }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ formatMetricValue(latestReviewRatingTrendPoint.ratingCount) }}
+                      </p>
+                    </div>
+                  </div>
+                  <p v-if="latestReviewRatingTrendPoint" class="mt-3 text-xs text-black/45 dark:text-white/45">
+                    {{ formatReviewRatingTrendMeta(latestReviewRatingTrendPoint) }}
+                  </p>
+                  <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div
+                      v-for="item in reviewCommentItems"
+                      :key="item.key"
+                      class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                    >
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ item.label }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ item.value }}
+                      </p>
+                    </div>
+                  </div>
+                  <p v-if="reviewCommentTrendMeta" class="mt-3 text-xs text-black/45 dark:text-white/45">
+                    {{ reviewCommentTrendMeta }}
+                  </p>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -626,6 +959,322 @@ function formatReviewTrendMeta(point: DashboardPluginReviewStatusTrendPoint) {
                   <p v-if="latestConversionTrendPoint" class="mt-3 text-xs text-black/45 dark:text-white/45">
                     {{ formatConversionTrendMeta(latestConversionTrendPoint) }}
                   </p>
+                </div>
+
+                <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.analytics.retention.title') }}
+                      </p>
+                      <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                        {{ t('dashboard.sections.plugins.analytics.retention.summary', {
+                          activeActors: formatMetricValue(retentionAnalytics?.activeActors),
+                          newActors: formatMetricValue(retentionAnalytics?.newActors),
+                        }) }}
+                      </p>
+                    </div>
+                    <p v-if="latestRetentionTrendPoint" class="text-xs text-black/45 dark:text-white/45">
+                      {{ formatRetentionTrendMeta(latestRetentionTrendPoint) }}
+                    </p>
+                  </div>
+                  <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <div
+                      v-for="item in retentionItems"
+                      :key="item.key"
+                      class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                    >
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ item.label }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ item.value }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
+                        {{ t('dashboard.sections.plugins.analytics.retention.activeDays') }}
+                      </p>
+                      <div v-if="retentionAnalytics?.byActiveDays.length" class="mt-2 space-y-2">
+                        <div
+                          v-for="metric in retentionAnalytics.byActiveDays.slice(0, 4)"
+                          :key="`retention-active-days-${metric.key}`"
+                          class="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span class="min-w-0 truncate text-black/70 dark:text-white/70">
+                            {{ t('dashboard.sections.plugins.analytics.retention.activeDaysBucket', { bucket: formatMetricKey(metric.key) }) }}
+                          </span>
+                          <span class="shrink-0 text-right text-black/45 dark:text-white/45">
+                            {{ formatMetricMeta(metric) }}
+                          </span>
+                        </div>
+                      </div>
+                      <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                        {{ t('dashboard.sections.plugins.analytics.noBreakdown') }}
+                      </p>
+                    </div>
+                    <div>
+                      <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
+                        {{ t('dashboard.sections.plugins.analytics.retention.trend') }}
+                      </p>
+                      <div v-if="recentRetentionTrend.length" class="mt-2 space-y-2">
+                        <div
+                          v-for="point in recentRetentionTrend"
+                          :key="`retention-trend-${point.date}`"
+                          class="grid grid-cols-[92px_minmax(0,1fr)] gap-3 text-xs"
+                        >
+                          <span class="text-black/45 dark:text-white/45">{{ formatDate(point.date) }}</span>
+                          <span class="truncate text-black/70 dark:text-white/70">
+                            {{ t('dashboard.sections.plugins.analytics.retention.shortTrendMeta', {
+                              activeActors: formatMetricValue(point.activeActors),
+                              returningActors: formatMetricValue(point.returningActors),
+                              retentionRate: formatPercent(point.retentionRate),
+                            }) }}
+                          </span>
+                        </div>
+                      </div>
+                      <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                        {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.analytics.usageTiming.title') }}
+                      </p>
+                      <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                        {{ t('dashboard.sections.plugins.analytics.usageTiming.summary') }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div
+                      v-for="breakdown in usageTimingBreakdowns"
+                      :key="`usage-timing-${breakdown.key}`"
+                    >
+                      <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
+                        {{ breakdown.title }}
+                      </p>
+                      <div v-if="breakdown.items.length" class="mt-2 space-y-2">
+                        <div
+                          v-for="metric in breakdown.items.slice(0, 5)"
+                          :key="`usage-timing-${breakdown.key}-${metric.key}`"
+                          class="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span class="min-w-0 truncate text-black/70 dark:text-white/70">
+                            {{ formatUsageTimingKey(breakdown.key, metric.key) }}
+                          </span>
+                          <span class="shrink-0 text-right text-black/45 dark:text-white/45">
+                            {{ formatMetricMeta(metric) }}
+                          </span>
+                        </div>
+                      </div>
+                      <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                        {{ t('dashboard.sections.plugins.analytics.noBreakdown') }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4">
+                    <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
+                      {{ t('dashboard.sections.plugins.analytics.usageTiming.trend') }}
+                    </p>
+                    <div v-if="recentUsageTimingTrend.length" class="mt-2 space-y-2">
+                      <div
+                        v-for="point in recentUsageTimingTrend"
+                        :key="`usage-timing-trend-${point.date}`"
+                        class="grid grid-cols-[92px_minmax(0,1fr)] gap-3 text-xs"
+                      >
+                        <span class="text-black/45 dark:text-white/45">{{ formatDate(point.date) }}</span>
+                        <span class="truncate text-black/70 dark:text-white/70">
+                          {{ formatUsageTimingTrend(point) }}
+                        </span>
+                      </div>
+                    </div>
+                    <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.analytics.invocationHealth.title') }}
+                      </p>
+                      <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+                        {{ t('dashboard.sections.plugins.analytics.invocationHealth.durationMeta', {
+                          maxDuration: formatDurationMs(invocationHealth?.durationMs.max),
+                        }) }}
+                      </p>
+                    </div>
+                    <p v-if="latestInvocationTrendPoint" class="text-xs text-black/45 dark:text-white/45">
+                      {{ formatInvocationTrendMeta(latestInvocationTrendPoint) }}
+                    </p>
+                  </div>
+                  <div class="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    <div
+                      v-for="item in invocationHealthItems"
+                      :key="item.key"
+                      class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                    >
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ item.label }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ item.value }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div
+                      v-for="item in invocationStatusItems"
+                      :key="item.key"
+                      class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                    >
+                      <p class="text-[11px] text-black/45 dark:text-white/45">
+                        {{ item.label }}
+                      </p>
+                      <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                        {{ formatMetricValue(item.value) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <div>
+                      <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
+                        {{ t('dashboard.sections.plugins.analytics.invocationHealth.failureReasons') }}
+                      </p>
+                      <div v-if="invocationHealth?.byFailureReason.length" class="mt-2 space-y-2">
+                        <div
+                          v-for="metric in invocationHealth.byFailureReason.slice(0, 4)"
+                          :key="`failure-${metric.key}`"
+                          class="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span class="min-w-0 truncate text-black/70 dark:text-white/70">
+                            {{ formatMetricKey(metric.key) }}
+                          </span>
+                          <span class="shrink-0 text-right text-black/45 dark:text-white/45">
+                            {{ formatMetricMeta(metric) }}
+                          </span>
+                        </div>
+                      </div>
+                      <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                        {{ t('dashboard.sections.plugins.analytics.noBreakdown') }}
+                      </p>
+                    </div>
+                    <div
+                      v-for="breakdown in invocationContextBreakdowns"
+                      :key="breakdown.key"
+                    >
+                      <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
+                        {{ breakdown.title }}
+                      </p>
+                      <div v-if="breakdown.items.length" class="mt-2 space-y-2">
+                        <div
+                          v-for="metric in breakdown.items.slice(0, 4)"
+                          :key="`invocation-${breakdown.key}-${metric.key}`"
+                          class="flex items-center justify-between gap-3 text-xs"
+                        >
+                          <span class="min-w-0 truncate text-black/70 dark:text-white/70">
+                            {{ formatMetricKey(metric.key) }}
+                          </span>
+                          <span class="shrink-0 text-right text-black/45 dark:text-white/45">
+                            {{ formatMetricMeta(metric) }}
+                          </span>
+                        </div>
+                      </div>
+                      <p v-else class="mt-2 text-xs text-black/40 dark:text-white/40">
+                        {{ t('dashboard.sections.plugins.analytics.noBreakdown') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.actionTrend.title', 'Action trend') }}
+                    </p>
+                    <div v-if="recentActionTrend.length" class="mt-3 space-y-2">
+                      <div
+                        v-for="point in recentActionTrend"
+                        :key="`action-trend-${point.date}`"
+                        class="grid grid-cols-[92px_minmax(0,1fr)] gap-3 text-xs"
+                      >
+                        <span class="text-black/45 dark:text-white/45">{{ formatDate(point.date) }}</span>
+                        <span class="truncate text-black/70 dark:text-white/70">{{ formatTrendMetricList(point.actions) }}</span>
+                      </div>
+                    </div>
+                    <p v-else class="mt-3 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
+                  <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.locationTrend.title', 'Location trend') }}
+                    </p>
+                    <div v-if="recentLocationTrend.length" class="mt-3 space-y-2">
+                      <div
+                        v-for="point in recentLocationTrend"
+                        :key="`location-trend-${point.date}`"
+                        class="grid grid-cols-[92px_minmax(0,1fr)] gap-3 text-xs"
+                      >
+                        <span class="text-black/45 dark:text-white/45">{{ formatDate(point.date) }}</span>
+                        <span class="truncate text-black/70 dark:text-white/70">
+                          {{ formatTrendMetricList(point.countries) }} · {{ formatTrendMetricList(point.regions) }}
+                        </span>
+                      </div>
+                    </div>
+                    <p v-else class="mt-3 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.channelTrend.title', 'Channel trend') }}
+                    </p>
+                    <div v-if="recentChannelTrend.length" class="mt-3 space-y-2">
+                      <div
+                        v-for="point in recentChannelTrend"
+                        :key="`channel-trend-${point.date}`"
+                        class="grid grid-cols-[92px_minmax(0,1fr)] gap-3 text-xs"
+                      >
+                        <span class="text-black/45 dark:text-white/45">{{ formatDate(point.date) }}</span>
+                        <span class="truncate text-black/70 dark:text-white/70">{{ formatTrendMetricList(point.items) }}</span>
+                      </div>
+                    </div>
+                    <p v-else class="mt-3 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
+                  <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.versionTrend.title', 'Version trend') }}
+                    </p>
+                    <div v-if="recentVersionTrend.length" class="mt-3 space-y-2">
+                      <div
+                        v-for="point in recentVersionTrend"
+                        :key="`version-trend-${point.date}`"
+                        class="grid grid-cols-[92px_minmax(0,1fr)] gap-3 text-xs"
+                      >
+                        <span class="text-black/45 dark:text-white/45">{{ formatDate(point.date) }}</span>
+                        <span class="truncate text-black/70 dark:text-white/70">{{ formatTrendMetricList(point.items) }}</span>
+                      </div>
+                    </div>
+                    <p v-else class="mt-3 text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.noTrend') }}
+                    </p>
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">

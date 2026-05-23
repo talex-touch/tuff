@@ -178,11 +178,13 @@ describe('storageObjectStore', () => {
     expect(stored).toMatchObject({
       key,
       size: 4,
+      sha256: '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a',
       contentType: 'application/octet-stream',
       storageChannel: 'memory',
       storageProvider: 'memory',
     })
     expect(loaded?.data).toEqual(Buffer.from([1, 2, 3, 4]))
+    expect(loaded?.sha256).toBe(stored.sha256)
     expect(memoryStorage.has(key)).toBe(false)
 
     const rows = await listPlatformGovernanceEvents(h3Event, {
@@ -359,9 +361,11 @@ describe('storageObjectStore', () => {
     expect(stored).toMatchObject({
       storageChannel: 's3',
       storageProvider: 'aws-s3',
+      sha256: '637a96a0eb583d42aeca7760f2d7925f2617d218298fbcc549914d9a12ade6a4',
       contentType: 'application/json',
     })
     expect(loaded?.data.toString()).toBe('{"s3":true}')
+    expect(loaded?.sha256).toBe(stored.sha256)
     expect(keysBeforeDelete).toEqual([key])
 
     const rows = await listPlatformGovernanceEvents(h3Event, {
@@ -411,7 +415,21 @@ describe('storageObjectStore', () => {
       key,
       storageChannel: 's3',
       storageProvider: 'aws-s3',
+      uploadRetry: {
+        retryable: true,
+        recovered: true,
+        retryCount: 2,
+        maxRetries: 2,
+        attempts: 3,
+        nextRetryDelayMs: 0,
+        storageChannel: 's3',
+        storageProvider: 'aws-s3',
+        storageOperation: 'storage.write',
+        storageStatusCode: 503,
+      },
     })
+    expect(JSON.stringify(stored)).not.toContain('secret')
+    expect(JSON.stringify(stored)).not.toContain('accessKey')
 
     const rows = await listPlatformGovernanceEvents(h3Event, {
       scope: 'storage',

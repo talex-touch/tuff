@@ -113,10 +113,99 @@ export interface DashboardPluginAnalyticsConversionTrendPoint {
   invocationsPerActor: number
 }
 
+export interface DashboardPluginAnalyticsActionTrendPoint {
+  date: string
+  actions: DashboardPluginAnalyticsMetric[]
+}
+
+export interface DashboardPluginAnalyticsDimensionTrendPoint {
+  date: string
+  items: DashboardPluginAnalyticsMetric[]
+}
+
+export interface DashboardPluginAnalyticsLocationTrendPoint {
+  date: string
+  countries: DashboardPluginAnalyticsMetric[]
+  regions: DashboardPluginAnalyticsMetric[]
+}
+
 export interface DashboardPluginAnalyticsNumberStat {
   count: number
   average: number
   max: number
+}
+
+export interface DashboardPluginInvocationHealthTrendPoint {
+  date: string
+  total: number
+  successful: number
+  failed: number
+  skipped: number
+  unknown: number
+  uniqueActors: number
+  successRate: number
+  failureRate: number
+  durationMs: DashboardPluginAnalyticsNumberStat
+}
+
+export interface DashboardPluginInvocationHealth {
+  total: number
+  successful: number
+  failed: number
+  skipped: number
+  unknown: number
+  uniqueActors: number
+  successRate: number
+  failureRate: number
+  durationMs: DashboardPluginAnalyticsNumberStat
+  byStatus: DashboardPluginAnalyticsMetric[]
+  byFailureReason: DashboardPluginAnalyticsMetric[]
+  bySurface: DashboardPluginAnalyticsMetric[]
+  byCountry: DashboardPluginAnalyticsMetric[]
+  byRegion: DashboardPluginAnalyticsMetric[]
+  byChannel: DashboardPluginAnalyticsMetric[]
+  byVersion: DashboardPluginAnalyticsMetric[]
+  byLocalTimeSlot: DashboardPluginAnalyticsMetric[]
+  trend: DashboardPluginInvocationHealthTrendPoint[]
+}
+
+export interface DashboardPluginRetentionTrendPoint {
+  date: string
+  newActors: number
+  returningActors: number
+  activeActors: number
+  invocationActors: number
+  invocations: number
+  retentionRate: number
+}
+
+export interface DashboardPluginRetentionAnalytics {
+  activeActors: number
+  newActors: number
+  returningActors: number
+  repeatActors: number
+  invocationActors: number
+  retentionRate: number
+  repeatRate: number
+  averageActiveDays: number
+  averageInvocationsPerActor: number
+  averageInvocationsPerReturningActor: number
+  byActiveDays: DashboardPluginAnalyticsMetric[]
+  trend: DashboardPluginRetentionTrendPoint[]
+}
+
+export interface DashboardPluginUsageTimingTrendPoint {
+  date: string
+  hours: DashboardPluginAnalyticsMetric[]
+  weekdays: DashboardPluginAnalyticsMetric[]
+  timeSlots: DashboardPluginAnalyticsMetric[]
+}
+
+export interface DashboardPluginUsageTimingAnalytics {
+  byHour: DashboardPluginAnalyticsMetric[]
+  byWeekday: DashboardPluginAnalyticsMetric[]
+  byTimeSlot: DashboardPluginAnalyticsMetric[]
+  trend: DashboardPluginUsageTimingTrendPoint[]
 }
 
 export interface DashboardPluginReviewRatingBucket {
@@ -132,6 +221,44 @@ export interface DashboardPluginReviewStatusTrendPoint {
   rejected: number
 }
 
+export interface DashboardPluginReviewRatingTrendPoint {
+  date: string
+  ratingCount: number
+  averageRating: number
+  lowRatingCount: number
+  lowRatingRate: number
+}
+
+export interface DashboardPluginReviewCommentStatusBucket {
+  status: 'approved' | 'pending' | 'rejected'
+  total: number
+  withTitle: number
+  withContent: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+}
+
+export interface DashboardPluginReviewCommentTrendPoint {
+  date: string
+  total: number
+  withTitle: number
+  withContent: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+}
+
+export interface DashboardPluginReviewCommentAnalytics {
+  withTitle: number
+  withContent: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+  byStatus: DashboardPluginReviewCommentStatusBucket[]
+  trend: DashboardPluginReviewCommentTrendPoint[]
+}
+
 export interface DashboardPluginReviewAnalytics {
   total: number
   approved: number
@@ -140,7 +267,9 @@ export interface DashboardPluginReviewAnalytics {
   averageRating: number
   ratingCount: number
   ratingDistribution: DashboardPluginReviewRatingBucket[]
+  ratingTrend: DashboardPluginReviewRatingTrendPoint[]
   statusTrend: DashboardPluginReviewStatusTrendPoint[]
+  comments: DashboardPluginReviewCommentAnalytics
   latestAt: string | null
 }
 
@@ -158,6 +287,13 @@ export interface DashboardPluginAnalytics {
     invocationsPerActor: number
   }
   conversionTrend: DashboardPluginAnalyticsConversionTrendPoint[]
+  actionTrend: DashboardPluginAnalyticsActionTrendPoint[]
+  locationTrend: DashboardPluginAnalyticsLocationTrendPoint[]
+  channelTrend: DashboardPluginAnalyticsDimensionTrendPoint[]
+  versionTrend: DashboardPluginAnalyticsDimensionTrendPoint[]
+  invocationHealth: DashboardPluginInvocationHealth
+  retention: DashboardPluginRetentionAnalytics
+  usageTiming: DashboardPluginUsageTimingAnalytics
   trend: DashboardPluginAnalyticsTrendPoint[]
   installTrend: DashboardPluginAnalyticsTrendPoint[]
   byAction: DashboardPluginAnalyticsMetric[]

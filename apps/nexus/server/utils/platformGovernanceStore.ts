@@ -2,9 +2,10 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createHash, randomUUID } from 'node:crypto'
 import { createError, getHeader } from 'h3'
+import { useRuntimeConfig } from '#imports'
 import { readCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
-import { resolveNotificationChannelProfile } from './notificationChannelCatalog'
+import { assertNotificationChannelConfig, resolveNotificationChannelProfile, resolveNotificationChannelReadiness } from './notificationChannelCatalog'
 import { assertStorageChannelPolicyConfig } from './storageChannelCatalog'
 import { isPlainObject, normalizeNumber, normalizeString } from './telemetrySanitizer'
 
@@ -120,6 +121,11 @@ export interface GovernanceAnalyticsOptions {
   topLimit?: number
 }
 
+export interface StorageChannelAnalyticsOptions extends GovernanceAnalyticsOptions {
+  channel?: string | null
+  provider?: string | null
+}
+
 export type StorageGovernanceAction = 'storage.write' | 'storage.read' | 'storage.delete'
 
 export interface RecordStorageChannelUsageInput {
@@ -144,6 +150,79 @@ export interface AssertStorageChannelPolicyInput {
   quantity?: unknown
   days?: number
   limit?: number
+}
+
+export type IntelligenceProviderQuotaStatus = 'blocked' | 'warning' | 'ok' | 'disabled'
+
+export interface IntelligenceProviderQuotaEvaluation {
+  configId: string
+  providerId: string
+  name: string
+  channel: string | null
+  provider: string | null
+  enabled: boolean
+  windowDays: number
+  status: IntelligenceProviderQuotaStatus
+  usage: {
+    requests: number
+    tokens: number
+  }
+  limits: {
+    maxRequests: number | null
+    maxTokens: number | null
+    warningThreshold: number
+  }
+  utilization: {
+    requests: number | null
+    tokens: number | null
+  }
+  remaining: {
+    requests: number | null
+    tokens: number | null
+  }
+  overage: {
+    requests: number
+    tokens: number
+  }
+  burnRate: {
+    requestsPerDay: number
+    tokensPerDay: number
+  }
+  projectedExhaustionDays: {
+    requests: number | null
+    tokens: number | null
+  }
+}
+
+export interface IntelligenceProviderQuotaRiskItem {
+  configId: string
+  providerId: string
+  name: string
+  channel: string | null
+  provider: string | null
+  status: IntelligenceProviderQuotaStatus
+  highestUtilization: number
+  riskReason: 'blocked' | 'warning-threshold' | 'overage' | 'low-remaining' | 'projected-exhaustion'
+  usage: {
+    requests: number
+    tokens: number
+  }
+  limits: {
+    maxRequests: number | null
+    maxTokens: number | null
+  }
+  remaining: {
+    requests: number | null
+    tokens: number | null
+  }
+  overage: {
+    requests: number
+    tokens: number
+  }
+  projectedExhaustionDays: {
+    requests: number | null
+    tokens: number | null
+  }
 }
 
 export interface StoragePolicyEvaluationOptions {
@@ -192,6 +271,17 @@ export interface StoragePolicyEvaluation {
     operations: number
     alertBytes: number
   }
+  burnRate: {
+    storedBytesPerDay: number
+    trafficBytesPerDay: number
+    operationsPerDay: number
+  }
+  projectedExhaustionDays: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
 }
 
 export type StoragePolicyAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
@@ -231,7 +321,57 @@ interface StoragePolicyAnalytics {
   policyRisks: StoragePolicyEvaluation[]
 }
 
+type StorageChannelPressureStatus = StoragePolicyEvaluationStatus | 'unmanaged'
+
+interface StorageChannelPressureTrendPoint {
+  date: string
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+}
+
+interface StorageChannelPressure {
+  channel: string
+  provider: string | null
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+  pressureStatus: StorageChannelPressureStatus
+  policyId: string | null
+  policyName: string | null
+  matchedPolicies: number
+  policyAlerts: number
+  policyReasons: string[]
+  highestUtilization: number
+  remaining: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  overage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    alertBytes: number
+  }
+  burnRate: StoragePolicyEvaluation['burnRate']
+  projectedExhaustionDays: StoragePolicyEvaluation['projectedExhaustionDays']
+  trend: StorageChannelPressureTrendPoint[]
+}
+
 type NotificationChannelRiskStatus = 'ok' | 'warning' | 'disabled'
+type NotificationChannelReadinessStatus = 'ready' | 'warning' | 'disabled'
 
 interface NotificationChannelAnalytics {
   channelSummary: {
@@ -241,7 +381,26 @@ interface NotificationChannelAnalytics {
     unsupported: number
     credentialMissing: number
     credentialed: number
+    productionReady: number
+    runtimeMissing: number
+    relayMissing: number
+    sendModeMissing: number
   }
+  providerMix: Array<{
+    key: string
+    channel: string
+    providerType: string | null
+    adapter: string
+    total: number
+    enabled: number
+    productionReady: number
+    warning: number
+    disabled: number
+    credentialMissing: number
+    sendModeMissing: number
+    relayMissing: number
+    runtimeMissing: number
+  }>
   channelRisks: Array<{
     configId: string
     name: string
@@ -254,7 +413,70 @@ interface NotificationChannelAnalytics {
     reasons: string[]
     credentialRequired: boolean
     hasCredentialRef: boolean
+    readiness: {
+      status: NotificationChannelReadinessStatus
+      productionReady: boolean
+      reasons: string[]
+      sendMode: boolean
+      requiresPublicRuntime: boolean
+      hasPublicRuntime: boolean
+      requiresRelayEndpoint: boolean
+      hasRelayEndpoint: boolean
+    }
   }>
+}
+
+type UploadFailureDisposition = 'retry-scheduled' | 'retry-exhausted' | 'retryable' | 'not-retryable' | 'unknown'
+
+type UploadFailureCalibrationStatus = 'verified' | 'sampled' | 'needs-calibration'
+
+type UploadFailureSampleSource = 'live' | 'manual' | 'synthetic' | 'unknown'
+
+interface UploadFailureMatrixItem {
+  key: string
+  resourceType: string
+  surface: string | null
+  storageChannel: string | null
+  storageProvider: string | null
+  reason: string
+  disposition: UploadFailureDisposition
+  statusCode: number | null
+  events: number
+  quantity: number
+  uniqueActors: number
+  latestAt: string
+  retryable: number
+  scheduled: number
+  exhausted: number
+  totalRetryCount: number
+  nextRetryDelayMs: number | null
+  calibrationStatus: UploadFailureCalibrationStatus
+  sampleSource: UploadFailureSampleSource
+  sampleCount: number
+  latestSampleAt: string | null
+  suggestedAction: 'retry-monitor' | 'storage-provider-check' | 'quota-policy-check' | 'payload-validation' | 'manual-investigation'
+}
+
+interface UploadAttemptSummary {
+  attemptId: string
+  started: boolean
+  completed: boolean
+  failed: boolean
+  resourceType: string
+  resourceId: string
+  latestAt: string
+  surface: string | null
+  storageChannel: string | null
+  storageProvider: string | null
+  contentType: string | null
+  reason: string | null
+  statusCode: number | null
+  durationMs: number | null
+  size: number | null
+  retryable: boolean | null
+  retryCount: number | null
+  maxRetries: number | null
+  nextRetryDelayMs: number | null
 }
 
 interface GovernanceEventRow {
@@ -512,8 +734,14 @@ function normalizeConfigInput(input: UpsertPlatformGovernanceConfigInput): Norma
   const configType = assertEnum(input.configType, 'configType', GOVERNANCE_CONFIG_TYPES)
   const limits = normalizeJsonObject(input.limits, 'limits')
   const config = normalizeJsonObject(input.config, 'config')
-  if (configType === 'notification_channel')
+  if (configType === 'notification_channel') {
     assertNoPersistentNotificationRecipients(config.data, 'config')
+    assertNotificationChannelConfig({
+      channel: optionalString(input.channel, 'channel', 120),
+      provider: optionalString(input.provider, 'provider', 120),
+      config: config.data,
+    })
+  }
   if (configType === 'storage_channel') {
     assertStorageChannelPolicyConfig({
       channel: optionalString(input.channel, 'channel', 120),
@@ -764,6 +992,15 @@ function readEventMetadataString(event: PlatformGovernanceEvent, key: string): s
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
+function readEventMetadataStringAny(event: PlatformGovernanceEvent, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = readEventMetadataString(event, key)
+    if (value)
+      return value
+  }
+  return null
+}
+
 function readEventMetadataNumber(event: PlatformGovernanceEvent, key: string): number | null {
   const value = event.metadata?.[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -857,6 +1094,15 @@ function resultCountBucket(value: number | null): string | null {
   ], '11+')
 }
 
+function queryLengthBucket(value: number | null): string | null {
+  return numericBucket(value, [
+    { max: 0, label: '0' },
+    { max: 10, label: '1-10' },
+    { max: 30, label: '11-30' },
+    { max: 80, label: '31-80' },
+  ], '81+')
+}
+
 function latencyBucket(value: number | null): string | null {
   return numericBucket(value, [
     { max: 100, label: '<=100ms' },
@@ -931,6 +1177,10 @@ function mapNumberStat(stats: ReturnType<typeof createNumberStats>) {
     average: stats.count ? Math.round((stats.total / stats.count) * 100) / 100 : 0,
     max: stats.count ? stats.max : 0,
   }
+}
+
+function percentage(part: number, total: number): number {
+  return total > 0 ? Math.round((part / total) * 10000) / 100 : 0
 }
 
 function createDailyTrend(events: PlatformGovernanceEvent[]) {
@@ -1059,6 +1309,454 @@ function createPluginConversionTrend(events: PlatformGovernanceEvent[]) {
     }))
 }
 
+function createPluginActionTrend(events: PlatformGovernanceEvent[], topLimit: number) {
+  const timeline = new Map<string, {
+    date: string
+    actions: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+  for (const event of events) {
+    const date = event.occurredAt.slice(0, 10)
+    const item = timeline.get(date) ?? {
+      date,
+      actions: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+    addMetricBucket(item.actions, event.action, event)
+    timeline.set(date, item)
+  }
+  return Array.from(timeline.values())
+    .map(item => ({
+      date: item.date,
+      actions: mapMetricBuckets(item.actions, topLimit),
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function createPluginDimensionTrend(
+  events: PlatformGovernanceEvent[],
+  topLimit: number,
+  dimension: 'channel' | 'version',
+) {
+  const timeline = new Map<string, {
+    date: string
+    items: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+  for (const event of events) {
+    const date = event.occurredAt.slice(0, 10)
+    const item = timeline.get(date) ?? {
+      date,
+      items: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+    const key = dimension === 'channel' ? event.channel : readEventMetadataString(event, 'version')
+    addMetricBucket(item.items, key, event)
+    timeline.set(date, item)
+  }
+  return Array.from(timeline.values())
+    .map(item => ({
+      date: item.date,
+      items: mapMetricBuckets(item.items, topLimit),
+    }))
+    .filter(item => item.items.length)
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function createPluginLocationTrend(events: PlatformGovernanceEvent[], topLimit: number) {
+  const timeline = new Map<string, {
+    date: string
+    countries: Map<string, ReturnType<typeof createMetricBucket>>
+    regions: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+  for (const event of events) {
+    const date = event.occurredAt.slice(0, 10)
+    const item = timeline.get(date) ?? {
+      date,
+      countries: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      regions: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+    addMetricBucket(item.countries, readEventMetadataString(event, 'countryCode'), event)
+    addMetricBucket(item.regions, readEventMetadataString(event, 'regionCode'), event)
+    timeline.set(date, item)
+  }
+  return Array.from(timeline.values())
+    .map(item => ({
+      date: item.date,
+      countries: mapMetricBuckets(item.countries, topLimit),
+      regions: mapMetricBuckets(item.regions, topLimit),
+    }))
+    .filter(item => item.countries.length || item.regions.length)
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function activeDaysBucket(activeDays: number): string {
+  if (activeDays <= 1)
+    return '1'
+  if (activeDays <= 3)
+    return '2-3'
+  if (activeDays <= 7)
+    return '4-7'
+  if (activeDays <= 14)
+    return '8-14'
+  return '15+'
+}
+
+function createPluginRetentionAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
+  const actors = new Map<string, {
+    activeDates: Set<string>
+    invocationDates: Set<string>
+    invocations: number
+  }>()
+  const timeline = new Map<string, {
+    date: string
+    activeActors: Set<string>
+    invocationActors: Set<string>
+    invocations: number
+  }>()
+  const byActiveDays = new Map<string, ReturnType<typeof createMetricBucket>>()
+
+  for (const event of events) {
+    const actor = readEventActor(event)
+    if (!actor)
+      continue
+
+    const date = event.occurredAt.slice(0, 10)
+    const actorStats = actors.get(actor) ?? {
+      activeDates: new Set<string>(),
+      invocationDates: new Set<string>(),
+      invocations: 0,
+    }
+    actorStats.activeDates.add(date)
+
+    const timelineItem = timeline.get(date) ?? {
+      date,
+      activeActors: new Set<string>(),
+      invocationActors: new Set<string>(),
+      invocations: 0,
+    }
+    timelineItem.activeActors.add(actor)
+
+    if (event.action === 'invoke') {
+      actorStats.invocations += event.quantity
+      actorStats.invocationDates.add(date)
+      timelineItem.invocations += event.quantity
+      timelineItem.invocationActors.add(actor)
+    }
+
+    actors.set(actor, actorStats)
+    timeline.set(date, timelineItem)
+  }
+
+  let returningActors = 0
+  let repeatActors = 0
+  let invocationActors = 0
+  let totalActiveDays = 0
+  let totalInvocations = 0
+  let returningInvocations = 0
+
+  for (const [actor, actorStats] of actors.entries()) {
+    const activeDays = actorStats.activeDates.size
+    totalActiveDays += activeDays
+    totalInvocations += actorStats.invocations
+    if (activeDays > 1) {
+      returningActors += 1
+      returningInvocations += actorStats.invocations
+    }
+    if (actorStats.invocations > 1 || actorStats.invocationDates.size > 1)
+      repeatActors += 1
+    if (actorStats.invocations > 0)
+      invocationActors += 1
+
+    const bucket = byActiveDays.get(activeDaysBucket(activeDays)) ?? createMetricBucket()
+    bucket.events += 1
+    bucket.quantity += 1
+    bucket.actors.add(actor)
+    byActiveDays.set(activeDaysBucket(activeDays), bucket)
+  }
+
+  const activeActors = actors.size
+
+  return {
+    activeActors,
+    newActors: Math.max(activeActors - returningActors, 0),
+    returningActors,
+    repeatActors,
+    invocationActors,
+    retentionRate: percentage(returningActors, activeActors),
+    repeatRate: percentage(repeatActors, invocationActors),
+    averageActiveDays: activeActors > 0 ? Math.round((totalActiveDays / activeActors) * 100) / 100 : 0,
+    averageInvocationsPerActor: activeActors > 0 ? Math.round((totalInvocations / activeActors) * 100) / 100 : 0,
+    averageInvocationsPerReturningActor: returningActors > 0 ? Math.round((returningInvocations / returningActors) * 100) / 100 : 0,
+    byActiveDays: mapMetricBuckets(byActiveDays, topLimit),
+    trend: Array.from(timeline.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((item, index, sorted) => {
+        const previousActors = new Set<string>()
+        for (let previousIndex = 0; previousIndex < index; previousIndex += 1) {
+          for (const actor of sorted[previousIndex]?.activeActors ?? [])
+            previousActors.add(actor)
+        }
+
+        let returning = 0
+        for (const actor of item.activeActors) {
+          if (previousActors.has(actor))
+            returning += 1
+        }
+
+        const active = item.activeActors.size
+        return {
+          date: item.date,
+          newActors: Math.max(active - returning, 0),
+          returningActors: returning,
+          activeActors: active,
+          invocationActors: item.invocationActors.size,
+          invocations: item.invocations,
+          retentionRate: percentage(returning, active),
+        }
+      }),
+  }
+}
+
+type PluginInvocationStatus = 'successful' | 'failed' | 'skipped' | 'unknown'
+
+interface PluginUsageTimingTrendPoint {
+  date: string
+  hours: ReturnType<typeof mapMetricBuckets>
+  weekdays: ReturnType<typeof mapMetricBuckets>
+  timeSlots: ReturnType<typeof mapMetricBuckets>
+}
+
+interface PluginUsageTiming {
+  byHour: ReturnType<typeof mapMetricBuckets>
+  byWeekday: ReturnType<typeof mapMetricBuckets>
+  byTimeSlot: ReturnType<typeof mapMetricBuckets>
+  trend: PluginUsageTimingTrendPoint[]
+}
+
+function sanitizePluginInvocationDimension(value: string | null): string | null {
+  if (!value)
+    return null
+  const normalized = value.trim().toLowerCase().replace(/[\s_]+/g, '-')
+  if (!normalized)
+    return null
+  if (normalized.length > 64 || /[@/\\]|https?:|token|secret|password/.test(normalized))
+    return 'redacted'
+  return normalized
+}
+
+function resolvePluginInvocationStatus(event: PlatformGovernanceEvent): PluginInvocationStatus {
+  const explicitStatus = sanitizePluginInvocationDimension(readEventMetadataStringAny(event, ['status', 'result', 'outcome', 'state']))
+  if (explicitStatus) {
+    if (['success', 'successful', 'succeeded', 'ok', 'completed', 'complete', 'resolved'].includes(explicitStatus))
+      return 'successful'
+    if (['failed', 'failure', 'error', 'errored', 'exception', 'timeout', 'timed-out', 'crashed', 'rejected'].includes(explicitStatus))
+      return 'failed'
+    if (['skipped', 'skip', 'cancelled', 'canceled', 'ignored', 'blocked', 'noop', 'no-op'].includes(explicitStatus))
+      return 'skipped'
+  }
+
+  const success = readEventMetadataBoolean(event, 'success')
+  if (success === true)
+    return 'successful'
+  if (success === false)
+    return 'failed'
+
+  const skipped = readEventMetadataBoolean(event, 'skipped')
+  if (skipped === true)
+    return 'skipped'
+
+  return 'unknown'
+}
+
+function readPluginInvocationLocalTimeSlot(event: PlatformGovernanceEvent): string {
+  const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
+  return localHour == null
+    ? sanitizePluginInvocationDimension(readEventMetadataString(event, 'localTimeSlot')) ?? 'unknown'
+    : localTimeSlotFromHour(localHour)
+}
+
+function readPluginLocalHour(event: PlatformGovernanceEvent): number | null {
+  return normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
+}
+
+function readPluginLocalWeekday(event: PlatformGovernanceEvent): string | null {
+  const localDayOfWeek = readEventMetadataNumber(event, 'localDayOfWeek')
+  if (typeof localDayOfWeek === 'number' && localDayOfWeek >= 0 && localDayOfWeek <= 6)
+    return String(Math.floor(localDayOfWeek))
+
+  const localWeekday = readEventMetadataNumber(event, 'localWeekday')
+  if (typeof localWeekday === 'number' && localWeekday >= 0 && localWeekday <= 6)
+    return String(Math.floor(localWeekday))
+
+  return null
+}
+
+function createPluginUsageTiming(events: PlatformGovernanceEvent[], topLimit: number): PluginUsageTiming {
+  const byHour = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byWeekday = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byTimeSlot = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const trend = new Map<string, {
+    date: string
+    hours: Map<string, ReturnType<typeof createMetricBucket>>
+    weekdays: Map<string, ReturnType<typeof createMetricBucket>>
+    timeSlots: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+
+  for (const event of events) {
+    const localHour = readPluginLocalHour(event)
+    const hourKey = localHour == null ? null : localHour.toString().padStart(2, '0')
+    const weekdayKey = readPluginLocalWeekday(event)
+    const timeSlotKey = localHour == null
+      ? sanitizePluginInvocationDimension(readEventMetadataString(event, 'localTimeSlot'))
+      : localTimeSlotFromHour(localHour)
+    const date = event.occurredAt.slice(0, 10)
+    const trendItem = trend.get(date) ?? {
+      date,
+      hours: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      weekdays: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      timeSlots: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+
+    addMetricBucket(byHour, hourKey, event)
+    addMetricBucket(byWeekday, weekdayKey, event)
+    addMetricBucket(byTimeSlot, timeSlotKey, event)
+    addMetricBucket(trendItem.hours, hourKey, event)
+    addMetricBucket(trendItem.weekdays, weekdayKey, event)
+    addMetricBucket(trendItem.timeSlots, timeSlotKey, event)
+    trend.set(date, trendItem)
+  }
+
+  return {
+    byHour: mapMetricBuckets(byHour, 24),
+    byWeekday: mapMetricBuckets(byWeekday, 7),
+    byTimeSlot: mapMetricBuckets(byTimeSlot, topLimit),
+    trend: Array.from(trend.values())
+      .map(item => ({
+        date: item.date,
+        hours: mapMetricBuckets(item.hours, 24),
+        weekdays: mapMetricBuckets(item.weekdays, 7),
+        timeSlots: mapMetricBuckets(item.timeSlots, topLimit),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  }
+}
+
+function createPluginInvocationHealth(events: PlatformGovernanceEvent[], topLimit: number) {
+  const invocationEvents = events.filter(event => event.action === 'invoke')
+  const durationMs = createNumberStats()
+  const actors = new Set<string>()
+  const byStatus = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byFailureReason = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const bySurface = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byCountry = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byRegion = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byChannel = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byVersion = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalTimeSlot = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const trend = new Map<string, {
+    date: string
+    total: number
+    successful: number
+    failed: number
+    skipped: number
+    unknown: number
+    actors: Set<string>
+    durationMs: ReturnType<typeof createNumberStats>
+  }>()
+  let successful = 0
+  let failed = 0
+  let skipped = 0
+  let unknown = 0
+
+  for (const event of invocationEvents) {
+    const status = resolvePluginInvocationStatus(event)
+    const eventQuantity = event.quantity
+    const eventDurationMs = readEventMetadataNumberAny(event, ['durationMs', 'latencyMs', 'elapsedMs'])
+    const actor = readEventActor(event)
+    const date = event.occurredAt.slice(0, 10)
+    const trendItem = trend.get(date) ?? {
+      date,
+      total: 0,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+      unknown: 0,
+      actors: new Set<string>(),
+      durationMs: createNumberStats(),
+    }
+
+    if (actor) {
+      actors.add(actor)
+      trendItem.actors.add(actor)
+    }
+
+    if (status === 'successful')
+      successful += eventQuantity
+    else if (status === 'failed')
+      failed += eventQuantity
+    else if (status === 'skipped')
+      skipped += eventQuantity
+    else
+      unknown += eventQuantity
+
+    trendItem.total += eventQuantity
+    trendItem[status] += eventQuantity
+    addNumberStat(durationMs, eventDurationMs)
+    addNumberStat(trendItem.durationMs, eventDurationMs)
+    addMetricBucket(byStatus, status, event, eventQuantity)
+    addMetricBucket(bySurface, sanitizePluginInvocationDimension(readEventMetadataString(event, 'surface')), event, eventQuantity)
+    addMetricBucket(byCountry, sanitizePluginInvocationDimension(readEventMetadataString(event, 'countryCode')), event, eventQuantity)
+    addMetricBucket(byRegion, sanitizePluginInvocationDimension(readEventMetadataString(event, 'regionCode')), event, eventQuantity)
+    addMetricBucket(byChannel, sanitizePluginInvocationDimension(event.channel), event, eventQuantity)
+    addMetricBucket(byVersion, sanitizePluginInvocationDimension(readEventMetadataString(event, 'version')), event, eventQuantity)
+    addMetricBucket(byLocalTimeSlot, readPluginInvocationLocalTimeSlot(event), event, eventQuantity)
+
+    if (status === 'failed') {
+      addMetricBucket(
+        byFailureReason,
+        sanitizePluginInvocationDimension(readEventMetadataStringAny(event, ['reason', 'failureReason', 'errorCode', 'errorType'])),
+        event,
+        eventQuantity,
+      )
+    }
+
+    trend.set(date, trendItem)
+  }
+
+  const total = successful + failed + skipped + unknown
+
+  return {
+    total,
+    successful,
+    failed,
+    skipped,
+    unknown,
+    uniqueActors: actors.size,
+    successRate: percentage(successful, total),
+    failureRate: percentage(failed, total),
+    durationMs: mapNumberStat(durationMs),
+    byStatus: mapMetricBuckets(byStatus, topLimit),
+    byFailureReason: mapMetricBuckets(byFailureReason, topLimit),
+    bySurface: mapMetricBuckets(bySurface, topLimit),
+    byCountry: mapMetricBuckets(byCountry, topLimit),
+    byRegion: mapMetricBuckets(byRegion, topLimit),
+    byChannel: mapMetricBuckets(byChannel, topLimit),
+    byVersion: mapMetricBuckets(byVersion, topLimit),
+    byLocalTimeSlot: mapMetricBuckets(byLocalTimeSlot, topLimit),
+    trend: Array.from(trend.values())
+      .map(item => ({
+        date: item.date,
+        total: item.total,
+        successful: item.successful,
+        failed: item.failed,
+        skipped: item.skipped,
+        unknown: item.unknown,
+        uniqueActors: item.actors.size,
+        successRate: percentage(item.successful, item.total),
+        failureRate: percentage(item.failed, item.total),
+        durationMs: mapNumberStat(item.durationMs),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+  }
+}
+
 function createPluginGrowth(events: PlatformGovernanceEvent[], days: number) {
   const now = Date.now()
   const windowMs = days * 24 * 60 * 60 * 1000
@@ -1140,9 +1838,87 @@ function notificationChannelStatusRank(status: NotificationChannelRiskStatus): n
   return 1
 }
 
-function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[], topLimit: number): NotificationChannelAnalytics {
+function hasWebPushPublicKeyRuntime(event: H3Event | undefined): boolean {
+  const bindings = event ? readCloudflareBindings(event) : undefined
+  const runtimeConfig = event
+    ? useRuntimeConfig(event) as { notificationWebPush?: { publicKey?: string } }
+    : null
+  return Boolean(
+    normalizeString(bindings?.NOTIFICATION_WEB_PUSH_PUBLIC_KEY, 4096)
+    ?? normalizeString(runtimeConfig?.notificationWebPush?.publicKey, 4096)
+    ?? normalizeString(process.env.NOTIFICATION_WEB_PUSH_PUBLIC_KEY, 4096),
+  )
+}
+
+type NotificationChannelRisk = NotificationChannelAnalytics['channelRisks'][number]
+
+function notificationProviderMixKey(item: Pick<NotificationChannelRisk, 'channel' | 'providerType' | 'adapter'>): string {
+  return `${item.channel}:${item.providerType ?? 'default'}:${item.adapter}`
+}
+
+function createNotificationProviderMix(risks: NotificationChannelRisk[], topLimit: number): NotificationChannelAnalytics['providerMix'] {
+  const providers = new Map<string, NotificationChannelAnalytics['providerMix'][number]>()
+
+  for (const item of risks) {
+    const key = notificationProviderMixKey(item)
+    const bucket = providers.get(key) ?? {
+      key,
+      channel: item.channel,
+      providerType: item.providerType,
+      adapter: item.adapter,
+      total: 0,
+      enabled: 0,
+      productionReady: 0,
+      warning: 0,
+      disabled: 0,
+      credentialMissing: 0,
+      sendModeMissing: 0,
+      relayMissing: 0,
+      runtimeMissing: 0,
+    }
+
+    bucket.total += 1
+    if (item.enabled)
+      bucket.enabled += 1
+    if (item.readiness.productionReady)
+      bucket.productionReady += 1
+    if (item.status === 'warning')
+      bucket.warning += 1
+    if (item.status === 'disabled')
+      bucket.disabled += 1
+    if (item.reasons.includes('credential-ref-required'))
+      bucket.credentialMissing += 1
+    if (item.readiness.reasons.includes('send-mode-required'))
+      bucket.sendModeMissing += 1
+    if (item.readiness.reasons.includes('smtp-relay-endpoint-required'))
+      bucket.relayMissing += 1
+    if (item.readiness.reasons.includes('webpush-vapid-public-key-missing'))
+      bucket.runtimeMissing += 1
+
+    providers.set(key, bucket)
+  }
+
+  return Array.from(providers.values())
+    .sort((left, right) => {
+      return right.warning + right.disabled - (left.warning + left.disabled)
+        || right.productionReady - left.productionReady
+        || right.total - left.total
+        || left.key.localeCompare(right.key)
+    })
+    .slice(0, topLimit)
+}
+
+function createNotificationChannelAnalytics(
+  configs: PlatformGovernanceConfig[],
+  topLimit: number,
+  event?: H3Event,
+): NotificationChannelAnalytics {
+  const runtime = {
+    webPushPublicKeyConfigured: hasWebPushPublicKeyRuntime(event),
+  }
   const risks = configs.map((config) => {
     const profile = resolveNotificationChannelProfile(config)
+    const readiness = resolveNotificationChannelReadiness(config, runtime)
     const reasons: string[] = []
     if (!config.enabled)
       reasons.push('channel-disabled')
@@ -1150,9 +1926,10 @@ function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[],
       reasons.push('unsupported-adapter')
     if (profile.credentialRequired && !profile.credentialRef)
       reasons.push('credential-ref-required')
+    const allReasons = Array.from(new Set([...reasons, ...readiness.reasons]))
     const status: NotificationChannelRiskStatus = !config.enabled
       ? 'disabled'
-      : reasons.length ? 'warning' : 'ok'
+      : allReasons.length ? 'warning' : 'ok'
 
     return {
       configId: config.id,
@@ -1163,9 +1940,10 @@ function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[],
       adapter: profile.adapter,
       enabled: config.enabled,
       status,
-      reasons,
+      reasons: allReasons,
       credentialRequired: profile.credentialRequired,
       hasCredentialRef: Boolean(profile.credentialRef),
+      readiness,
     }
   })
   const summary = risks.reduce((result, item) => {
@@ -1180,6 +1958,14 @@ function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[],
       result.credentialMissing += 1
     if (item.credentialRequired)
       result.credentialed += 1
+    if (item.readiness.productionReady)
+      result.productionReady += 1
+    if (item.readiness.reasons.includes('webpush-vapid-public-key-missing'))
+      result.runtimeMissing += 1
+    if (item.readiness.reasons.includes('smtp-relay-endpoint-required'))
+      result.relayMissing += 1
+    if (item.readiness.reasons.includes('send-mode-required'))
+      result.sendModeMissing += 1
     return result
   }, {
     total: 0,
@@ -1188,10 +1974,15 @@ function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[],
     unsupported: 0,
     credentialMissing: 0,
     credentialed: 0,
+    productionReady: 0,
+    runtimeMissing: 0,
+    relayMissing: 0,
+    sendModeMissing: 0,
   })
 
   return {
     channelSummary: summary,
+    providerMix: createNotificationProviderMix(risks, topLimit),
     channelRisks: risks
       .filter(item => item.status !== 'ok')
       .sort((left, right) => notificationChannelStatusRank(right.status) - notificationChannelStatusRank(left.status) || right.reasons.length - left.reasons.length)
@@ -1199,16 +1990,23 @@ function createNotificationChannelAnalytics(configs: PlatformGovernanceConfig[],
   }
 }
 
-function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit: number, configs: PlatformGovernanceConfig[] = []) {
+function createNotificationAnalytics(
+  events: PlatformGovernanceEvent[],
+  topLimit: number,
+  configs: PlatformGovernanceConfig[] = [],
+  event?: H3Event,
+) {
   const deliveryEvents = events.filter(event => event.action.startsWith('notification.delivery.'))
   const pushSubscriptionEvents = events.filter(event => event.action.startsWith('browser_push.subscription.'))
   const byDeliveryStatus = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byProvider = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byAdapter = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byReason = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byStatusCode = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byNotificationAction = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byPushSubscriptionAction = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byPushEndpointHost = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const deliveryDurationMs = createNumberStats()
   const deliveryTrend = new Map<string, {
     date: string
     events: number
@@ -1230,7 +2028,9 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     skipped: number
     failed: number
     latestFailureReason: string | null
+    latestFailureStatusCode: number | null
     latestFailureAt: string | null
+    durationMs: ReturnType<typeof createNumberStats>
   }>()
 
   let planned = 0
@@ -1246,6 +2046,8 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     const providerType = readEventMetadataString(event, 'providerType')
     const adapter = readEventMetadataString(event, 'adapter')
     const reason = readEventMetadataString(event, 'reason')
+    const durationMs = readEventMetadataNumber(event, 'durationMs')
+    const statusCode = readEventMetadataNumber(event, 'statusCode')
     const date = event.occurredAt.slice(0, 10)
     const trendItem = deliveryTrend.get(date) ?? {
       date,
@@ -1268,12 +2070,16 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
       skipped: 0,
       failed: 0,
       latestFailureReason: null,
+      latestFailureStatusCode: null,
       latestFailureAt: null,
+      durationMs: createNumberStats(),
     }
     providerItem.providerType ||= providerType
     providerItem.adapter ||= adapter
     providerItem.channel ||= event.channel
     providerItem.total += 1
+    addNumberStat(providerItem.durationMs, durationMs)
+    addNumberStat(deliveryDurationMs, durationMs)
 
     trendItem.events += 1
     trendItem.quantity += event.quantity
@@ -1299,6 +2105,7 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
       if (!providerItem.latestFailureAt || event.occurredAt.localeCompare(providerItem.latestFailureAt) > 0) {
         providerItem.latestFailureAt = event.occurredAt
         providerItem.latestFailureReason = reason
+        providerItem.latestFailureStatusCode = statusCode
       }
     }
 
@@ -1317,6 +2124,8 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
     addMetricBucket(byProvider, provider, event, 1)
     addMetricBucket(byAdapter, adapter, event, 1)
     addMetricBucket(byReason, reason, event, 1)
+    if (typeof statusCode === 'number')
+      addMetricBucket(byStatusCode, String(Math.round(statusCode)), event, 1)
     addMetricBucket(byNotificationAction, readEventMetadataString(event, 'notificationAction'), event, 1)
   }
   for (const event of pushSubscriptionEvents) {
@@ -1333,7 +2142,7 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
 
   return {
     ...createScopedAnalytics(events, topLimit),
-    ...createNotificationChannelAnalytics(configs, topLimit),
+    ...createNotificationChannelAnalytics(configs, topLimit, event),
     deliveries: {
       total,
       planned,
@@ -1343,11 +2152,13 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
       plannedRate: total ? Math.round(((planned + sent) / total) * 10000) / 100 : 0,
       sentRate: total ? Math.round((sent / total) * 10000) / 100 : 0,
       failureRate: total ? Math.round((failed / total) * 10000) / 100 : 0,
+      durationMs: mapNumberStat(deliveryDurationMs),
     },
     byDeliveryStatus: mapMetricBuckets(byDeliveryStatus, topLimit),
     byProvider: mapMetricBuckets(byProvider, topLimit),
     byAdapter: mapMetricBuckets(byAdapter, topLimit),
     byReason: mapMetricBuckets(byReason, topLimit),
+    byStatusCode: mapMetricBuckets(byStatusCode, topLimit),
     byNotificationAction: mapMetricBuckets(byNotificationAction, topLimit),
     deliveryTrend: Array.from(deliveryTrend.values())
       .map(item => ({
@@ -1366,6 +2177,7 @@ function createNotificationAnalytics(events: PlatformGovernanceEvent[], topLimit
         ...item,
         sentRate: item.total ? Math.round((item.sent / item.total) * 10000) / 100 : 0,
         failureRate: item.total ? Math.round((item.failed / item.total) * 10000) / 100 : 0,
+        durationMs: mapNumberStat(item.durationMs),
       }))
       .sort((a, b) => b.failed - a.failed || b.failureRate - a.failureRate || b.total - a.total)
       .slice(0, topLimit),
@@ -1446,12 +2258,19 @@ function createVisitAnalytics(events: PlatformGovernanceEvent[], days: number, t
   const byReferrer = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byLocalHour = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byLocalTimeSlot = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byLocalDayOfWeek = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byCountry = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byRegion = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byTimezone = new Map<string, ReturnType<typeof createMetricBucket>>()
 
   for (const event of visitEvents) {
     addMetricBucket(byRoute, readEventMetadataString(event, 'route') ?? event.resourceId, event)
     addMetricBucket(byPage, readEventMetadataString(event, 'page') ?? readEventMetadataString(event, 'screen'), event)
     addMetricBucket(bySurface, readEventMetadataString(event, 'surface') ?? event.channel, event)
     addMetricBucket(byReferrer, readEventMetadataString(event, 'referrer') ?? readEventMetadataString(event, 'source'), event)
+    addMetricBucket(byCountry, readEventMetadataString(event, 'countryCode'), event)
+    addMetricBucket(byRegion, readEventMetadataString(event, 'regionCode'), event)
+    addMetricBucket(byTimezone, readEventMetadataString(event, 'timezone'), event)
 
     const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
     if (localHour != null) {
@@ -1459,6 +2278,9 @@ function createVisitAnalytics(events: PlatformGovernanceEvent[], days: number, t
       addMetricBucket(byLocalHour, hourKey, event)
       addMetricBucket(byLocalTimeSlot, localTimeSlotFromHour(localHour), event)
     }
+    const localDayOfWeek = readEventMetadataNumber(event, 'localDayOfWeek')
+    if (typeof localDayOfWeek === 'number')
+      addMetricBucket(byLocalDayOfWeek, String(Math.round(localDayOfWeek)), event)
   }
 
   return {
@@ -1472,6 +2294,10 @@ function createVisitAnalytics(events: PlatformGovernanceEvent[], days: number, t
     byReferrer: mapMetricBuckets(byReferrer, topLimit),
     byLocalHour: mapMetricBuckets(byLocalHour, 24),
     byLocalTimeSlot: mapMetricBuckets(byLocalTimeSlot, 4),
+    byLocalDayOfWeek: mapMetricBuckets(byLocalDayOfWeek, 7),
+    byCountry: mapMetricBuckets(byCountry, topLimit),
+    byRegion: mapMetricBuckets(byRegion, topLimit),
+    byTimezone: mapMetricBuckets(byTimezone, topLimit),
   }
 }
 
@@ -1503,12 +2329,18 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
   const bySelectedCategory = new Map<string, ReturnType<typeof createMetricBucket>>()
   const bySelectedPluginId = new Map<string, ReturnType<typeof createMetricBucket>>()
   const bySelectedRankBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const byQueryLengthBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byResultCountBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byFirstResultLatencyBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byTotalDurationBucket = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byCountry = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byRegion = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byTimezone = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const pluginPreferenceByTimeSlot = new Map<string, {
+    slot: string
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
   const queryLength = createNumberStats()
   const firstResultMs = createNumberStats()
   const totalDurationMs = createNumberStats()
@@ -1565,8 +2397,24 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
       addMetricBucket(bySelectedRankBucket, rankBucket(selectedRank), event)
     const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
     if (typeof localHour === 'number') {
+      const localTimeSlot = localTimeSlotFromHour(localHour)
       addMetricBucket(byLocalHour, String(localHour).padStart(2, '0'), event)
-      addMetricBucket(byLocalTimeSlot, localTimeSlotFromHour(localHour), event)
+      addMetricBucket(byLocalTimeSlot, localTimeSlot, event)
+      const preference = pluginPreferenceByTimeSlot.get(localTimeSlot) ?? {
+        slot: localTimeSlot,
+        plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+        selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      }
+      const pluginIds = event.metadata?.pluginIds
+      if (Array.isArray(pluginIds)) {
+        for (const pluginId of pluginIds) {
+          if (typeof pluginId === 'string')
+            addMetricBucket(preference.plugins, pluginId, event)
+        }
+      }
+      if (selectedPluginId)
+        addMetricBucket(preference.selectedPlugins, selectedPluginId, event)
+      pluginPreferenceByTimeSlot.set(localTimeSlot, preference)
     }
     const localDayOfWeek = readEventMetadataNumber(event, 'localDayOfWeek')
     if (typeof localDayOfWeek === 'number')
@@ -1582,7 +2430,9 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     addStatusMapBuckets(byProviderStatus, event.metadata?.providerStatus, event)
     const firstResultMsValue = readEventMetadataNumber(event, 'firstResultMs')
     const totalDurationMsValue = readEventMetadataNumber(event, 'totalDurationMs') ?? readEventMetadataNumber(event, 'searchDurationMs')
-    addNumberStat(queryLength, readEventMetadataNumber(event, 'queryLength'))
+    const queryLengthValue = readEventMetadataNumber(event, 'queryLength')
+    addMetricBucket(byQueryLengthBucket, queryLengthBucket(queryLengthValue), event)
+    addNumberStat(queryLength, queryLengthValue)
     addNumberStat(firstResultMs, firstResultMsValue)
     addNumberStat(totalDurationMs, totalDurationMsValue)
     const resultCountValue = readEventMetadataNumber(event, 'searchResultCount')
@@ -1627,7 +2477,7 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     addNumberStat(firstResultCount, readEventMetadataNumber(event, 'firstResultCount'))
     addNumberStat(providerErrorCount, providerErrorCountValue)
     addNumberStat(providerTimeoutCount, providerTimeoutCountValue)
-    if (readEventMetadataBoolean(event, 'selected') === true || selectedRank != null || selectedPluginId || selectedProvider)
+    if (isSearchSelected(event))
       selectedSearches += 1
     const hasFilters = readEventMetadataBoolean(event, 'hasFilters')
     if (hasFilters === true)
@@ -1667,12 +2517,23 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     bySelectedCategory: mapMetricBuckets(bySelectedCategory, topLimit),
     bySelectedPluginId: mapMetricBuckets(bySelectedPluginId, topLimit),
     bySelectedRankBucket: mapMetricBuckets(bySelectedRankBucket, 4),
+    byQueryLengthBucket: mapMetricBuckets(byQueryLengthBucket, 5),
     byResultCountBucket: mapMetricBuckets(byResultCountBucket, 4),
     byFirstResultLatencyBucket: mapMetricBuckets(byFirstResultLatencyBucket, 4),
     byTotalDurationBucket: mapMetricBuckets(byTotalDurationBucket, 4),
     byCountry: mapMetricBuckets(byCountry, topLimit),
     byRegion: mapMetricBuckets(byRegion, topLimit),
     byTimezone: mapMetricBuckets(byTimezone, topLimit),
+    pluginPreferenceByTimeSlot: Array.from(pluginPreferenceByTimeSlot.values())
+      .map(item => ({
+        slot: item.slot,
+        plugins: mapMetricBuckets(item.plugins, topLimit),
+        selectedPlugins: mapMetricBuckets(item.selectedPlugins, topLimit),
+      }))
+      .filter(item => item.plugins.length || item.selectedPlugins.length)
+      .sort((a, b) => a.slot.localeCompare(b.slot)),
+    pluginPreferenceByContext: createSearchPluginPreferenceByContext(searchEvents, topLimit),
+    journey: createSearchJourneyAnalytics(searchEvents, topLimit),
     filterUsage: {
       withFilters,
       withoutFilters,
@@ -1713,7 +2574,352 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
       providerErrorCount: mapNumberStat(providerErrorCount),
       providerTimeoutCount: mapNumberStat(providerTimeoutCount),
     },
+    contextSelectionMatrix: createSearchContextSelectionMatrix(searchEvents, topLimit),
   }
+}
+
+function readSearchLocalTimeSlot(event: PlatformGovernanceEvent): string {
+  const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
+  return localHour == null
+    ? readEventMetadataString(event, 'localTimeSlot') ?? 'unknown'
+    : localTimeSlotFromHour(localHour)
+}
+
+function isSearchSelected(event: PlatformGovernanceEvent): boolean {
+  return readEventMetadataBoolean(event, 'selected') === true
+    || readEventMetadataNumber(event, 'selectedRank') != null
+    || Boolean(readEventMetadataString(event, 'selectedPluginId') || readEventMetadataString(event, 'selectedProvider'))
+}
+
+function createSearchJourneyAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
+  interface SearchJourneySegmentBucket {
+    key: string
+    contextAppCategory: string
+    contextSource: string
+    localTimeSlot: string
+    sessionBucket: string
+    userPreferenceMode: string
+    entryPoint: string
+    triggerType: string
+    events: number
+    withFilters: number
+    withResults: number
+    selected: number
+    zeroResult: number
+    providerProblem: number
+    providerErrors: number
+    providerTimeouts: number
+    actors: Set<string>
+    scenes: Map<string, ReturnType<typeof createMetricBucket>>
+    providers: Map<string, ReturnType<typeof createMetricBucket>>
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }
+  const segments = new Map<string, SearchJourneySegmentBucket>()
+  const summary = {
+    total: 0,
+    withFilters: 0,
+    withResults: 0,
+    selected: 0,
+    zeroResult: 0,
+    providerProblem: 0,
+    providerErrors: 0,
+    providerTimeouts: 0,
+  }
+
+  for (const event of events) {
+    const contextAppCategory = readEventMetadataString(event, 'contextAppCategory') ?? 'unknown'
+    const contextSource = readEventMetadataString(event, 'contextSource') ?? 'unknown'
+    const localTimeSlot = readSearchLocalTimeSlot(event)
+    const sessionBucket = readEventMetadataString(event, 'sessionBucket') ?? 'unknown'
+    const userPreferenceMode = readEventMetadataString(event, 'userPreferenceMode') ?? 'unknown'
+    const entryPoint = readEventMetadataString(event, 'entryPoint') ?? 'unknown'
+    const triggerType = readEventMetadataString(event, 'triggerType') ?? 'unknown'
+    const key = [
+      contextAppCategory,
+      contextSource,
+      localTimeSlot,
+      sessionBucket,
+      userPreferenceMode,
+      entryPoint,
+      triggerType,
+    ].join(':')
+    const item = segments.get(key) ?? {
+      key,
+      contextAppCategory,
+      contextSource,
+      localTimeSlot,
+      sessionBucket,
+      userPreferenceMode,
+      entryPoint,
+      triggerType,
+      events: 0,
+      withFilters: 0,
+      withResults: 0,
+      selected: 0,
+      zeroResult: 0,
+      providerProblem: 0,
+      providerErrors: 0,
+      providerTimeouts: 0,
+      actors: new Set<string>(),
+      scenes: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      providers: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+
+    const resultCount = readEventMetadataNumber(event, 'searchResultCount')
+    const providerErrorCount = readEventMetadataNumber(event, 'providerErrorCount') ?? 0
+    const providerTimeoutCount = readEventMetadataNumber(event, 'providerTimeoutCount') ?? 0
+    const hasFilters = readEventMetadataBoolean(event, 'hasFilters') === true
+    const hasResults = typeof resultCount === 'number' && resultCount > 0
+    const isZeroResult = resultCount === 0
+    const hasProviderProblem = providerErrorCount > 0 || providerTimeoutCount > 0
+    const selected = isSearchSelected(event)
+
+    item.events += 1
+    summary.total += 1
+    if (hasFilters) {
+      item.withFilters += 1
+      summary.withFilters += 1
+    }
+    if (hasResults) {
+      item.withResults += 1
+      summary.withResults += 1
+    }
+    if (selected) {
+      item.selected += 1
+      summary.selected += 1
+    }
+    if (isZeroResult) {
+      item.zeroResult += 1
+      summary.zeroResult += 1
+    }
+    if (hasProviderProblem) {
+      item.providerProblem += 1
+      summary.providerProblem += 1
+    }
+    item.providerErrors += providerErrorCount
+    item.providerTimeouts += providerTimeoutCount
+    summary.providerErrors += providerErrorCount
+    summary.providerTimeouts += providerTimeoutCount
+
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    addMetricBucket(item.scenes, readEventMetadataString(event, 'searchScene') ?? event.resourceId, event)
+
+    const providerKeys = new Set<string>()
+    for (const rawProviders of [event.metadata?.providerTimings, event.metadata?.providerResults, event.metadata?.providerStatus]) {
+      if (isPlainObject(rawProviders)) {
+        for (const providerId of Object.keys(rawProviders)) {
+          if (providerId.trim())
+            providerKeys.add(providerId.trim())
+        }
+      }
+    }
+    const selectedProvider = readEventMetadataString(event, 'selectedProvider')
+    if (selectedProvider)
+      providerKeys.add(selectedProvider)
+    for (const providerId of providerKeys)
+      addMetricBucket(item.providers, providerId, event)
+
+    const pluginIds = event.metadata?.pluginIds
+    if (Array.isArray(pluginIds)) {
+      for (const pluginId of new Set(pluginIds.filter((value): value is string => typeof value === 'string' && value.trim())))
+        addMetricBucket(item.plugins, pluginId, event)
+    }
+    const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
+    if (selectedPluginId)
+      addMetricBucket(item.selectedPlugins, selectedPluginId, event)
+
+    segments.set(key, item)
+  }
+
+  const mapSegment = (item: SearchJourneySegmentBucket) => ({
+    key: item.key,
+    contextAppCategory: item.contextAppCategory,
+    contextSource: item.contextSource,
+    localTimeSlot: item.localTimeSlot,
+    sessionBucket: item.sessionBucket,
+    userPreferenceMode: item.userPreferenceMode,
+    entryPoint: item.entryPoint,
+    triggerType: item.triggerType,
+    events: item.events,
+    withFilters: item.withFilters,
+    withResults: item.withResults,
+    selected: item.selected,
+    zeroResult: item.zeroResult,
+    providerProblem: item.providerProblem,
+    providerErrors: item.providerErrors,
+    providerTimeouts: item.providerTimeouts,
+    filterRate: percentage(item.withFilters, item.events),
+    withResultsRate: percentage(item.withResults, item.events),
+    selectionRate: percentage(item.selected, item.events),
+    zeroResultRate: percentage(item.zeroResult, item.events),
+    problemRate: percentage(item.providerProblem, item.events),
+    uniqueActors: item.actors.size,
+    scenes: mapMetricBuckets(item.scenes, topLimit),
+    providers: mapMetricBuckets(item.providers, topLimit),
+    plugins: mapMetricBuckets(item.plugins, topLimit),
+    selectedPlugins: mapMetricBuckets(item.selectedPlugins, topLimit),
+  })
+
+  return {
+    ...summary,
+    filterRate: percentage(summary.withFilters, summary.total),
+    withResultsRate: percentage(summary.withResults, summary.total),
+    selectionRate: percentage(summary.selected, summary.total),
+    zeroResultRate: percentage(summary.zeroResult, summary.total),
+    problemRate: percentage(summary.providerProblem, summary.total),
+    segments: Array.from(segments.values())
+      .map(mapSegment)
+      .sort((left, right) => right.events - left.events || right.selected - left.selected || right.problemRate - left.problemRate || left.key.localeCompare(right.key))
+      .slice(0, topLimit),
+  }
+}
+
+function createSearchPluginPreferenceByContext(events: PlatformGovernanceEvent[], topLimit: number) {
+  const contexts = new Map<string, {
+    key: string
+    contextAppCategory: string
+    contextSource: string
+    localTimeSlot: string
+    events: number
+    selected: number
+    actors: Set<string>
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+
+  for (const event of events) {
+    const contextAppCategory = readEventMetadataString(event, 'contextAppCategory') ?? 'unknown'
+    const contextSource = readEventMetadataString(event, 'contextSource') ?? 'unknown'
+    const localTimeSlot = readSearchLocalTimeSlot(event)
+    const key = `${contextAppCategory}:${contextSource}:${localTimeSlot}`
+    const item = contexts.get(key) ?? {
+      key,
+      contextAppCategory,
+      contextSource,
+      localTimeSlot,
+      events: 0,
+      selected: 0,
+      actors: new Set<string>(),
+      plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+
+    item.events += 1
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+
+    const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
+    if (isSearchSelected(event))
+      item.selected += 1
+
+    const pluginIds = event.metadata?.pluginIds
+    if (Array.isArray(pluginIds)) {
+      for (const pluginId of pluginIds) {
+        if (typeof pluginId === 'string')
+          addMetricBucket(item.plugins, pluginId, event)
+      }
+    }
+    if (selectedPluginId)
+      addMetricBucket(item.selectedPlugins, selectedPluginId, event)
+
+    contexts.set(key, item)
+  }
+
+  return Array.from(contexts.values())
+    .map(item => ({
+      key: item.key,
+      contextAppCategory: item.contextAppCategory,
+      contextSource: item.contextSource,
+      localTimeSlot: item.localTimeSlot,
+      events: item.events,
+      selected: item.selected,
+      selectionRate: item.events > 0 ? Math.round((item.selected / item.events) * 10000) / 100 : 0,
+      uniqueActors: item.actors.size,
+      plugins: mapMetricBuckets(item.plugins, topLimit),
+      selectedPlugins: mapMetricBuckets(item.selectedPlugins, topLimit),
+    }))
+    .filter(item => item.plugins.length || item.selectedPlugins.length)
+    .sort((a, b) => b.events - a.events || b.selected - a.selected || a.key.localeCompare(b.key))
+    .slice(0, topLimit)
+}
+
+function createSearchContextSelectionMatrix(events: PlatformGovernanceEvent[], topLimit: number) {
+  const matrix = new Map<string, {
+    key: string
+    contextAppCategory: string
+    contextSource: string
+    localTimeSlot: string
+    selectedCategory: string
+    events: number
+    selected: number
+    actors: Set<string>
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+
+  for (const event of events) {
+    const contextAppCategory = readEventMetadataString(event, 'contextAppCategory') ?? 'unknown'
+    const contextSource = readEventMetadataString(event, 'contextSource') ?? 'unknown'
+    const selectedCategory = readEventMetadataString(event, 'selectedCategory') ?? 'unknown'
+    const localTimeSlot = readSearchLocalTimeSlot(event)
+    const key = `${contextAppCategory}:${contextSource}:${localTimeSlot}:${selectedCategory}`
+    const item = matrix.get(key) ?? {
+      key,
+      contextAppCategory,
+      contextSource,
+      localTimeSlot,
+      selectedCategory,
+      events: 0,
+      selected: 0,
+      actors: new Set<string>(),
+      plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+    item.events += 1
+
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+
+    const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
+    if (isSearchSelected(event))
+      item.selected += 1
+
+    const pluginIds = event.metadata?.pluginIds
+    if (Array.isArray(pluginIds)) {
+      for (const pluginId of pluginIds) {
+        if (typeof pluginId === 'string')
+          addMetricBucket(item.plugins, pluginId, event)
+      }
+    }
+    if (selectedPluginId)
+      addMetricBucket(item.selectedPlugins, selectedPluginId, event)
+
+    matrix.set(key, item)
+  }
+
+  return Array.from(matrix.values())
+    .map(item => ({
+      key: item.key,
+      contextAppCategory: item.contextAppCategory,
+      contextSource: item.contextSource,
+      localTimeSlot: item.localTimeSlot,
+      selectedCategory: item.selectedCategory,
+      events: item.events,
+      selected: item.selected,
+      selectionRate: item.events > 0 ? Math.round((item.selected / item.events) * 10000) / 100 : 0,
+      uniqueActors: item.actors.size,
+      plugins: mapMetricBuckets(item.plugins, topLimit),
+      selectedPlugins: mapMetricBuckets(item.selectedPlugins, topLimit),
+    }))
+    .sort((a, b) => b.events - a.events || b.selected - a.selected || a.key.localeCompare(b.key))
+    .slice(0, topLimit)
 }
 
 function createPluginAnalytics(events: PlatformGovernanceEvent[], days: number, topLimit: number) {
@@ -1864,6 +3070,13 @@ function createSinglePluginAnalytics(pluginId: string, pluginEvents: PlatformGov
       invocationsPerActor: actors.size > 0 ? Math.round((invocations / actors.size) * 100) / 100 : 0,
     },
     conversionTrend: createPluginConversionTrend(scoped),
+    actionTrend: createPluginActionTrend(scoped, topLimit),
+    locationTrend: createPluginLocationTrend(scoped, topLimit),
+    channelTrend: createPluginDimensionTrend(scoped, topLimit, 'channel'),
+    versionTrend: createPluginDimensionTrend(scoped, topLimit, 'version'),
+    invocationHealth: createPluginInvocationHealth(scoped, topLimit),
+    retention: createPluginRetentionAnalytics(scoped, topLimit),
+    usageTiming: createPluginUsageTiming(scoped, topLimit),
     growth: createGrowth(scoped, days),
     trend: createPluginDailyTrend(scoped),
     installTrend: createPluginDailyTrend(scoped.filter(event => event.action === 'install')),
@@ -1878,33 +3091,310 @@ function createSinglePluginAnalytics(pluginId: string, pluginEvents: PlatformGov
   }
 }
 
+function resolveUploadFailureDisposition(event: PlatformGovernanceEvent): UploadFailureDisposition {
+  const retryable = readEventMetadataBoolean(event, 'retryable')
+  const retryCount = readEventMetadataNumber(event, 'retryCount')
+  const maxRetries = readEventMetadataNumber(event, 'maxRetries')
+  const nextRetryDelayMs = readEventMetadataNumberAny(event, ['nextRetryDelayMs', 'retryAfterMs', 'backoffMs'])
+  const exhausted = retryable === true
+    && typeof retryCount === 'number'
+    && typeof maxRetries === 'number'
+    && retryCount >= maxRetries
+
+  if (retryable === true && typeof nextRetryDelayMs === 'number' && nextRetryDelayMs > 0 && !exhausted)
+    return 'retry-scheduled'
+  if (exhausted)
+    return 'retry-exhausted'
+  if (retryable === true)
+    return 'retryable'
+  if (retryable === false)
+    return 'not-retryable'
+  return 'unknown'
+}
+
+function resolveUploadFailureSuggestedAction(
+  reason: string,
+  disposition: UploadFailureDisposition,
+  statusCode: number | null,
+  failureCategory: string | null,
+  storageChannel: string | null,
+  storageProvider: string | null,
+): UploadFailureMatrixItem['suggestedAction'] {
+  const normalizedReason = reason.toLowerCase()
+  if (disposition === 'retry-scheduled')
+    return 'retry-monitor'
+  if (failureCategory === 'payload-validation')
+    return 'payload-validation'
+  if (normalizedReason.includes('quota') || normalizedReason.includes('limit') || statusCode === 429)
+    return 'quota-policy-check'
+  if (normalizedReason.includes('type') || normalizedReason.includes('size') || normalizedReason.includes('invalid'))
+    return 'payload-validation'
+  if (storageProvider || storageChannel || normalizedReason.includes('storage') || normalizedReason.includes('timeout') || normalizedReason.includes('retry-exhausted'))
+    return 'storage-provider-check'
+  return 'manual-investigation'
+}
+
+function resolveUploadFailureSampleSource(event: PlatformGovernanceEvent): UploadFailureSampleSource {
+  const source = readEventMetadataString(event, 'failureSampleSource') ?? readEventMetadataString(event, 'sampleSource')
+  if (source === 'live' || source === 'manual' || source === 'synthetic')
+    return source
+  if (readEventMetadataBoolean(event, 'liveFailureSample') === true)
+    return 'live'
+  if (readEventMetadataBoolean(event, 'manualFailureSample') === true)
+    return 'manual'
+  if (readEventMetadataBoolean(event, 'syntheticFailureSample') === true)
+    return 'synthetic'
+  return 'unknown'
+}
+
+function resolveUploadFailureCalibrationStatus(event: PlatformGovernanceEvent): UploadFailureCalibrationStatus {
+  const status = readEventMetadataString(event, 'failureCalibrationStatus') ?? readEventMetadataString(event, 'calibrationStatus')
+  if (status === 'verified' || status === 'sampled' || status === 'needs-calibration')
+    return status
+
+  const source = resolveUploadFailureSampleSource(event)
+  if (readEventMetadataBoolean(event, 'failureCalibrated') === true || source === 'manual')
+    return 'verified'
+  if (source === 'live')
+    return 'sampled'
+  return 'needs-calibration'
+}
+
+function rankUploadFailureCalibrationStatus(status: UploadFailureCalibrationStatus): number {
+  switch (status) {
+    case 'verified':
+      return 3
+    case 'sampled':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function rankUploadFailureSampleSource(source: UploadFailureSampleSource): number {
+  switch (source) {
+    case 'manual':
+      return 4
+    case 'live':
+      return 3
+    case 'synthetic':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function mergeUploadFailureCalibrationStatus(
+  current: UploadFailureCalibrationStatus,
+  next: UploadFailureCalibrationStatus,
+): UploadFailureCalibrationStatus {
+  return rankUploadFailureCalibrationStatus(next) > rankUploadFailureCalibrationStatus(current) ? next : current
+}
+
+function mergeUploadFailureSampleSource(
+  current: UploadFailureSampleSource,
+  next: UploadFailureSampleSource,
+): UploadFailureSampleSource {
+  return rankUploadFailureSampleSource(next) > rankUploadFailureSampleSource(current) ? next : current
+}
+
+function addUploadFailureMatrixItem(
+  matrix: Map<string, UploadFailureMatrixItem & { actors: Set<string> }>,
+  event: PlatformGovernanceEvent,
+): void {
+  const resourceType = readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? 'unknown'
+  const surface = readEventMetadataString(event, 'surface')
+  const storageChannel = readEventMetadataString(event, 'storageChannel')
+  const storageProvider = readEventMetadataString(event, 'storageProvider')
+  const reason = readEventMetadataString(event, 'reason') ?? 'unknown'
+  const statusCode = readEventMetadataNumber(event, 'statusCode')
+  const failureCategory = readEventMetadataString(event, 'failureCategory')
+  const disposition = resolveUploadFailureDisposition(event)
+  const calibrationStatus = resolveUploadFailureCalibrationStatus(event)
+  const sampleSource = resolveUploadFailureSampleSource(event)
+  const isSampled = sampleSource !== 'unknown' || calibrationStatus !== 'needs-calibration'
+  const key = [
+    resourceType,
+    surface ?? 'unknown',
+    storageChannel ?? 'unknown',
+    storageProvider ?? 'unknown',
+    reason,
+    disposition,
+    statusCode == null ? 'none' : String(Math.round(statusCode)),
+  ].join('|')
+  const item = matrix.get(key) ?? {
+    key,
+    resourceType,
+    surface,
+    storageChannel,
+    storageProvider,
+    reason,
+    disposition,
+    statusCode,
+    events: 0,
+    quantity: 0,
+    uniqueActors: 0,
+    latestAt: event.occurredAt,
+    retryable: 0,
+    scheduled: 0,
+    exhausted: 0,
+    totalRetryCount: 0,
+    nextRetryDelayMs: null,
+    calibrationStatus,
+    sampleSource,
+    sampleCount: 0,
+    latestSampleAt: null,
+    suggestedAction: resolveUploadFailureSuggestedAction(reason, disposition, statusCode, failureCategory, storageChannel, storageProvider),
+    actors: new Set<string>(),
+  }
+  item.events += 1
+  item.quantity += event.quantity
+  item.latestAt = event.occurredAt.localeCompare(item.latestAt) > 0 ? event.occurredAt : item.latestAt
+  if (readEventMetadataBoolean(event, 'retryable') === true)
+    item.retryable += 1
+  if (disposition === 'retry-scheduled')
+    item.scheduled += 1
+  if (disposition === 'retry-exhausted')
+    item.exhausted += 1
+  item.totalRetryCount += readEventMetadataNumber(event, 'retryCount') ?? 0
+  item.calibrationStatus = mergeUploadFailureCalibrationStatus(item.calibrationStatus, calibrationStatus)
+  item.sampleSource = mergeUploadFailureSampleSource(item.sampleSource, sampleSource)
+  if (isSampled) {
+    item.sampleCount += 1
+    item.latestSampleAt = item.latestSampleAt && item.latestSampleAt.localeCompare(event.occurredAt) > 0
+      ? item.latestSampleAt
+      : event.occurredAt
+  }
+  const nextRetryDelayMs = readEventMetadataNumberAny(event, ['nextRetryDelayMs', 'retryAfterMs', 'backoffMs'])
+  if (nextRetryDelayMs != null)
+    item.nextRetryDelayMs = Math.max(item.nextRetryDelayMs ?? 0, nextRetryDelayMs)
+  const actor = readEventActor(event)
+  if (actor)
+    item.actors.add(actor)
+  item.uniqueActors = item.actors.size
+  matrix.set(key, item)
+}
+
+function mapUploadFailureMatrix(
+  matrix: Map<string, UploadFailureMatrixItem & { actors: Set<string> }>,
+  topLimit: number,
+): UploadFailureMatrixItem[] {
+  return Array.from(matrix.values())
+    .map(({ actors: _actors, ...item }) => item)
+    .sort((left, right) => {
+      return right.events - left.events
+        || right.exhausted - left.exhausted
+        || right.scheduled - left.scheduled
+        || right.quantity - left.quantity
+        || right.latestAt.localeCompare(left.latestAt)
+    })
+    .slice(0, topLimit)
+}
+
+function uploadPipelineKey(item: UploadAttemptSummary): string {
+  return [
+    item.resourceType || 'unknown',
+    item.surface || 'unknown',
+    item.storageChannel || 'unknown',
+    item.storageProvider || 'unknown',
+  ].join(':')
+}
+
+function createUploadPipelineSummary(
+  attempts: Iterable<UploadAttemptSummary>,
+  stuckAttemptIds: Set<string>,
+  topLimit: number,
+) {
+  const buckets = new Map<string, {
+    key: string
+    resourceType: string
+    surface: string | null
+    storageChannel: string | null
+    storageProvider: string | null
+    attempts: number
+    started: number
+    completed: number
+    failed: number
+    stuck: number
+    pending: number
+    latestAt: string
+    durationMs: ReturnType<typeof createNumberStats>
+    size: ReturnType<typeof createNumberStats>
+  }>()
+
+  for (const attempt of attempts) {
+    const key = uploadPipelineKey(attempt)
+    const bucket = buckets.get(key) ?? {
+      key,
+      resourceType: attempt.resourceType,
+      surface: attempt.surface,
+      storageChannel: attempt.storageChannel,
+      storageProvider: attempt.storageProvider,
+      attempts: 0,
+      started: 0,
+      completed: 0,
+      failed: 0,
+      stuck: 0,
+      pending: 0,
+      latestAt: attempt.latestAt,
+      durationMs: createNumberStats(),
+      size: createNumberStats(),
+    }
+
+    bucket.attempts += 1
+    if (attempt.started)
+      bucket.started += 1
+    if (attempt.completed)
+      bucket.completed += 1
+    if (attempt.failed)
+      bucket.failed += 1
+    if (stuckAttemptIds.has(attempt.attemptId))
+      bucket.stuck += 1
+    else if (attempt.started && !attempt.completed && !attempt.failed)
+      bucket.pending += 1
+    addNumberStat(bucket.durationMs, attempt.durationMs)
+    addNumberStat(bucket.size, attempt.size)
+    if (attempt.latestAt.localeCompare(bucket.latestAt) > 0)
+      bucket.latestAt = attempt.latestAt
+
+    buckets.set(key, bucket)
+  }
+
+  return Array.from(buckets.values())
+    .map(item => ({
+      key: item.key,
+      resourceType: item.resourceType,
+      surface: item.surface,
+      storageChannel: item.storageChannel,
+      storageProvider: item.storageProvider,
+      attempts: item.attempts,
+      started: item.started,
+      completed: item.completed,
+      failed: item.failed,
+      stuck: item.stuck,
+      pending: item.pending,
+      completionRate: item.attempts ? Math.round((item.completed / item.attempts) * 10000) / 100 : 0,
+      failureRate: item.attempts ? Math.round((item.failed / item.attempts) * 10000) / 100 : 0,
+      stuckRate: item.attempts ? Math.round((item.stuck / item.attempts) * 10000) / 100 : 0,
+      avgDurationMs: mapNumberStat(item.durationMs).average,
+      avgSize: mapNumberStat(item.size).average,
+      latestAt: item.latestAt,
+    }))
+    .sort((left, right) => {
+      return (right.failed + right.stuck) - (left.failed + left.stuck)
+        || right.attempts - left.attempts
+        || right.latestAt.localeCompare(left.latestAt)
+    })
+    .slice(0, topLimit)
+}
+
 function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
   const uploadEvents = events.filter(event => event.scope === 'upload')
   const started = uploadEvents.filter(event => event.action === 'resource.started')
   const completed = uploadEvents.filter(event => event.action === 'resource.completed')
   const failed = uploadEvents.filter(event => event.action === 'resource.failed')
   const terminalEvents = [...completed, ...failed]
-  const attempts = new Map<string, {
-    attemptId: string
-    started: boolean
-    completed: boolean
-    failed: boolean
-    resourceType: string
-    resourceId: string
-    latestAt: string
-    surface: string | null
-    storageChannel: string | null
-    storageProvider: string | null
-    contentType: string | null
-    reason: string | null
-    statusCode: number | null
-    durationMs: number | null
-    size: number | null
-    retryable: boolean | null
-    retryCount: number | null
-    maxRetries: number | null
-    nextRetryDelayMs: number | null
-  }>()
+  const attempts = new Map<string, UploadAttemptSummary>()
   const byExtension = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byResourceType = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byContentType = new Map<string, ReturnType<typeof createMetricBucket>>()
@@ -1914,10 +3404,12 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   const byStatusCode = new Map<string, ReturnType<typeof createMetricBucket>>()
   const bySurface = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byRetryDisposition = new Map<string, ReturnType<typeof createMetricBucket>>()
+  const failureMatrix = new Map<string, UploadFailureMatrixItem & { actors: Set<string> }>()
   const uploadSize = createNumberStats()
   const uploadDurationMs = createNumberStats()
   const retryCountStats = createNumberStats()
   const nextRetryDelayMsStats = createNumberStats()
+  const recoveredAttemptsStats = createNumberStats()
   const statusTrend = new Map<string, {
     date: string
     events: number
@@ -1934,6 +3426,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     retryable: number
     scheduled: number
     exhausted: number
+    recovered: number
     quantity: number
     actors: Set<string>
   }>()
@@ -1942,6 +3435,12 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
   let nonRetryableFailures = 0
   let scheduledRetries = 0
   let exhaustedFailures = 0
+  let recoveredUploads = 0
+  let recoveredRetryCount = 0
+  let calibratedFailureSamples = 0
+  let verifiedFailureSamples = 0
+  let liveFailureSamples = 0
+  let manualFailureSamples = 0
 
   for (const event of uploadEvents) {
     const date = event.occurredAt.slice(0, 10)
@@ -2023,7 +3522,37 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     addMetricBucket(byStorageChannel, readEventMetadataString(event, 'storageChannel'), event)
     addMetricBucket(byStorageProvider, readEventMetadataString(event, 'storageProvider'), event)
     addNumberStat(uploadDurationMs, readEventMetadataNumber(event, 'durationMs'))
+    const recovered = event.action === 'resource.completed'
+      && (readEventMetadataBoolean(event, 'recovered') === true || readEventMetadataBoolean(event, 'recoveredRetry') === true)
+    if (recovered) {
+      const retryCount = readEventMetadataNumber(event, 'retryCount') ?? 0
+      recoveredUploads += 1
+      recoveredRetryCount += retryCount
+      addNumberStat(recoveredAttemptsStats, readEventMetadataNumberAny(event, ['attempts', 'storageAttempts']))
+      addMetricBucket(byRetryDisposition, 'retry-recovered', event, 1)
+
+      const date = event.occurredAt.slice(0, 10)
+      const retryItem = retryTrend.get(date) ?? {
+        date,
+        events: 0,
+        failed: 0,
+        retryable: 0,
+        scheduled: 0,
+        exhausted: 0,
+        recovered: 0,
+        quantity: 0,
+        actors: new Set<string>(),
+      }
+      retryItem.events += 1
+      retryItem.recovered += 1
+      retryItem.quantity += event.quantity
+      const actor = readEventActor(event)
+      if (actor)
+        retryItem.actors.add(actor)
+      retryTrend.set(date, retryItem)
+    }
     if (event.action === 'resource.failed') {
+      addUploadFailureMatrixItem(failureMatrix, event)
       addMetricBucket(byFailureReason, readEventMetadataString(event, 'reason'), event, 1)
       const statusCode = readEventMetadataNumber(event, 'statusCode')
       if (typeof statusCode === 'number')
@@ -2033,20 +3562,9 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       const retryCount = readEventMetadataNumber(event, 'retryCount')
       const maxRetries = readEventMetadataNumber(event, 'maxRetries')
       const nextRetryDelayMs = readEventMetadataNumberAny(event, ['nextRetryDelayMs', 'retryAfterMs', 'backoffMs'])
-      const exhausted = retryable === true
-        && typeof retryCount === 'number'
-        && typeof maxRetries === 'number'
-        && retryCount >= maxRetries
-      const scheduled = retryable === true && typeof nextRetryDelayMs === 'number' && nextRetryDelayMs > 0 && !exhausted
-      const disposition = scheduled
-        ? 'retry-scheduled'
-        : exhausted
-          ? 'retry-exhausted'
-          : retryable === true
-            ? 'retryable'
-            : retryable === false
-              ? 'not-retryable'
-              : 'unknown'
+      const disposition = resolveUploadFailureDisposition(event)
+      const scheduled = disposition === 'retry-scheduled'
+      const exhausted = disposition === 'retry-exhausted'
 
       if (retryable === true)
         retryableFailures += 1
@@ -2056,6 +3574,16 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
         scheduledRetries += 1
       if (exhausted)
         exhaustedFailures += 1
+      const calibrationStatus = resolveUploadFailureCalibrationStatus(event)
+      const sampleSource = resolveUploadFailureSampleSource(event)
+      if (calibrationStatus !== 'needs-calibration')
+        calibratedFailureSamples += 1
+      if (calibrationStatus === 'verified')
+        verifiedFailureSamples += 1
+      if (sampleSource === 'live')
+        liveFailureSamples += 1
+      if (sampleSource === 'manual')
+        manualFailureSamples += 1
 
       addMetricBucket(byRetryDisposition, disposition, event, 1)
       addNumberStat(retryCountStats, retryCount)
@@ -2069,6 +3597,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
         retryable: 0,
         scheduled: 0,
         exhausted: 0,
+        recovered: 0,
         quantity: 0,
         actors: new Set<string>(),
       }
@@ -2141,6 +3670,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     bytes: completed.reduce((sum, event) => event.unit === 'byte' ? sum + event.quantity : sum, 0),
     failureRate: terminalEvents.length ? Math.round((failed.length / terminalEvents.length) * 10000) / 100 : 0,
     stuckRate: attempts.size ? Math.round((stuckAttempts.length / attempts.size) * 10000) / 100 : 0,
+    pipelineSummary: createUploadPipelineSummary(attempts.values(), stuckAttemptIds, topLimit),
     byExtension: mapMetricBuckets(byExtension, topLimit),
     byResourceType: mapMetricBuckets(byResourceType, topLimit),
     byContentType: mapMetricBuckets(byContentType, topLimit),
@@ -2149,13 +3679,23 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     byFailureReason: mapMetricBuckets(byFailureReason, topLimit),
     byStatusCode: mapMetricBuckets(byStatusCode, topLimit),
     bySurface: mapMetricBuckets(bySurface, topLimit),
+    failureMatrix: mapUploadFailureMatrix(failureMatrix, topLimit),
     retrySummary: {
       retryableFailures,
       nonRetryableFailures,
       scheduledRetries,
       exhaustedFailures,
+      recoveredUploads,
+      recoveredRetryCount,
+      recoveredRetryRate: completed.length ? Math.round((recoveredUploads / completed.length) * 10000) / 100 : 0,
+      calibratedFailureSamples,
+      verifiedFailureSamples,
+      liveFailureSamples,
+      manualFailureSamples,
+      calibrationCoverageRate: failed.length ? Math.round((calibratedFailureSamples / failed.length) * 10000) / 100 : 0,
       retryCount: mapNumberStat(retryCountStats),
       nextRetryDelayMs: mapNumberStat(nextRetryDelayMsStats),
+      recoveredAttempts: mapNumberStat(recoveredAttemptsStats),
     },
     byRetryDisposition: mapMetricBuckets(byRetryDisposition, topLimit),
     statusTrend: Array.from(statusTrend.values())
@@ -2177,6 +3717,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
         retryable: item.retryable,
         scheduled: item.scheduled,
         exhausted: item.exhausted,
+        recovered: item.recovered,
         quantity: item.quantity,
         uniqueActors: item.actors.size,
       }))
@@ -2200,13 +3741,79 @@ function createStorageUsageBucket() {
   }
 }
 
+type StorageUsageBucket = ReturnType<typeof createStorageUsageBucket>
+
+interface ProviderChannelDistributionBucket {
+  providerId: string
+  channel: string
+  requests: number
+  tokens: number
+  quantity: number
+  actors: Set<string>
+  models: Map<string, number>
+  providerTypes: Map<string, number>
+}
+
 function addStorageUsageBucket(
-  buckets: Map<string, ReturnType<typeof createStorageUsageBucket>>,
+  buckets: Map<string, StorageUsageBucket>,
   key: string | null | undefined,
   event: PlatformGovernanceEvent,
 ): void {
   const bucketKey = key && key.trim() ? key.trim() : 'unknown'
   const bucket = buckets.get(bucketKey) ?? createStorageUsageBucket()
+  addStorageUsageBucketToItem(bucket, event)
+  buckets.set(bucketKey, bucket)
+}
+
+function mapStorageUsageBuckets(buckets: Map<string, StorageUsageBucket>, limit: number) {
+  return Array.from(buckets.entries())
+    .map(([key, item]) => ({
+      key,
+      events: item.events,
+      storedBytes: item.storedBytes,
+      trafficBytes: item.trafficBytes,
+      operations: item.operations,
+      writes: item.writes,
+      reads: item.reads,
+      deletes: item.deletes,
+      uniqueActors: item.actors.size,
+    }))
+    .sort((a, b) => (b.storedBytes + b.trafficBytes) - (a.storedBytes + a.trafficBytes) || b.operations - a.operations || b.events - a.events)
+    .slice(0, limit)
+}
+
+function createStorageChannelPressureBucket() {
+  return {
+    ...createStorageUsageBucket(),
+    daily: new Map<string, StorageUsageBucket & { date: string }>(),
+  }
+}
+
+type StorageChannelPressureBucket = ReturnType<typeof createStorageChannelPressureBucket>
+
+function storageChannelPressureKey(channel: string | null | undefined, provider: string | null | undefined): string {
+  const normalizedChannel = channel && channel.trim() ? channel.trim() : 'unknown'
+  const normalizedProvider = provider && provider.trim() ? provider.trim() : 'default'
+  return `${normalizedChannel}\u0000${normalizedProvider}`
+}
+
+function addStorageChannelPressureBucket(
+  buckets: Map<string, StorageChannelPressureBucket>,
+  event: PlatformGovernanceEvent,
+): void {
+  const provider = readEventMetadataString(event, 'provider')
+  const key = storageChannelPressureKey(event.channel, provider)
+  const bucket = buckets.get(key) ?? createStorageChannelPressureBucket()
+  addStorageUsageBucketToItem(bucket, event)
+
+  const date = event.occurredAt.slice(0, 10)
+  const trendItem = bucket.daily.get(date) ?? { ...createStorageUsageBucket(), date }
+  addStorageUsageBucketToItem(trendItem, event)
+  bucket.daily.set(date, trendItem)
+  buckets.set(key, bucket)
+}
+
+function addStorageUsageBucketToItem(bucket: StorageUsageBucket, event: PlatformGovernanceEvent): void {
   bucket.events += 1
   bucket.operations += 1
   if (event.action === 'storage.write') {
@@ -2225,24 +3832,131 @@ function addStorageUsageBucket(
   const actor = readEventActor(event)
   if (actor)
     bucket.actors.add(actor)
-  buckets.set(bucketKey, bucket)
 }
 
-function mapStorageUsageBuckets(buckets: Map<string, ReturnType<typeof createStorageUsageBucket>>, limit: number) {
-  return Array.from(buckets.entries())
-    .map(([key, item]) => ({
-      key,
-      events: item.events,
-      storedBytes: item.storedBytes,
-      trafficBytes: item.trafficBytes,
-      operations: item.operations,
-      writes: item.writes,
-      reads: item.reads,
-      deletes: item.deletes,
-      uniqueActors: item.actors.size,
-    }))
-    .sort((a, b) => (b.storedBytes + b.trafficBytes) - (a.storedBytes + a.trafficBytes) || b.operations - a.operations || b.events - a.events)
-    .slice(0, limit)
+function chooseStoragePolicyCandidate(left: StoragePolicyEvaluation, right: StoragePolicyEvaluation): StoragePolicyEvaluation {
+  const statusDiff = storagePolicyStatusRank(right.status) - storagePolicyStatusRank(left.status)
+  if (statusDiff > 0)
+    return right
+  if (statusDiff < 0)
+    return left
+
+  const rightUtilization = maxNullableRatio(right.utilization.storedBytes, right.utilization.trafficBytes, right.utilization.operations)
+  const leftUtilization = maxNullableRatio(left.utilization.storedBytes, left.utilization.trafficBytes, left.utilization.operations)
+  if (rightUtilization > leftUtilization)
+    return right
+  if (rightUtilization < leftUtilization)
+    return left
+
+  return right.usage.operations > left.usage.operations ? right : left
+}
+
+function findStorageChannelPolicies(
+  evaluations: StoragePolicyEvaluation[],
+  channel: string,
+  provider: string | null,
+): StoragePolicyEvaluation[] {
+  return evaluations.filter((item) => {
+    if (item.channel !== channel)
+      return false
+    if (!item.provider)
+      return true
+    return provider != null && item.provider === provider
+  })
+}
+
+function mapStorageChannelPressure(
+  buckets: Map<string, StorageChannelPressureBucket>,
+  policyEvaluations: StoragePolicyEvaluation[],
+  topLimit: number,
+): StorageChannelPressure[] {
+  const pressureBuckets = new Map(buckets)
+  for (const policy of policyEvaluations) {
+    const key = storageChannelPressureKey(policy.channel, policy.provider)
+    if (!pressureBuckets.has(key))
+      pressureBuckets.set(key, createStorageChannelPressureBucket())
+  }
+
+  return Array.from(pressureBuckets.entries())
+    .map(([key, item]) => {
+      const [channel, providerKey] = key.split('\u0000')
+      const safeChannel = channel ?? 'unknown'
+      const provider: string | null = !providerKey || providerKey === 'default' ? null : providerKey
+      const policies = findStorageChannelPolicies(policyEvaluations, safeChannel, provider)
+      const policy = policies.reduce<StoragePolicyEvaluation | null>((candidate, next) => {
+        return candidate ? chooseStoragePolicyCandidate(candidate, next) : next
+      }, null)
+      const policyAlerts = policies.filter(next => next.status === 'warning' || next.status === 'blocked')
+      const highestUtilization = policy
+        ? maxNullableRatio(policy.utilization.storedBytes, policy.utilization.trafficBytes, policy.utilization.operations)
+        : 0
+
+      return {
+        channel: safeChannel,
+        provider,
+        events: item.events,
+        storedBytes: item.storedBytes,
+        trafficBytes: item.trafficBytes,
+        operations: item.operations,
+        writes: item.writes,
+        reads: item.reads,
+        deletes: item.deletes,
+        uniqueActors: item.actors.size,
+        pressureStatus: (policy?.status ?? 'unmanaged') as StorageChannelPressureStatus,
+        policyId: policy?.policyId ?? null,
+        policyName: policy?.name ?? null,
+        matchedPolicies: policies.length,
+        policyAlerts: policyAlerts.length,
+        policyReasons: [...new Set(policyAlerts.flatMap(next => next.reasons))].slice(0, 6),
+        highestUtilization,
+        remaining: policy?.remaining ?? {
+          storedBytes: null,
+          trafficBytes: null,
+          operations: null,
+          alertBytes: null,
+        },
+        overage: policy?.overage ?? {
+          storedBytes: 0,
+          trafficBytes: 0,
+          operations: 0,
+          alertBytes: 0,
+        },
+        burnRate: policy?.burnRate ?? {
+          storedBytesPerDay: 0,
+          trafficBytesPerDay: 0,
+          operationsPerDay: 0,
+        },
+        projectedExhaustionDays: policy?.projectedExhaustionDays ?? {
+          storedBytes: null,
+          trafficBytes: null,
+          operations: null,
+          alertBytes: null,
+        },
+        trend: Array.from(item.daily.values())
+          .map(next => ({
+            date: next.date,
+            events: next.events,
+            storedBytes: next.storedBytes,
+            trafficBytes: next.trafficBytes,
+            operations: next.operations,
+            writes: next.writes,
+            reads: next.reads,
+            deletes: next.deletes,
+            uniqueActors: next.actors.size,
+          }))
+          .sort((a, b) => a.date.localeCompare(b.date)),
+      }
+    })
+    .sort((a, b) => {
+      const rightStatus: StoragePolicyEvaluationStatus = b.pressureStatus === 'unmanaged' ? 'ok' : b.pressureStatus
+      const leftStatus: StoragePolicyEvaluationStatus = a.pressureStatus === 'unmanaged' ? 'ok' : a.pressureStatus
+      return storagePolicyStatusRank(rightStatus)
+        - storagePolicyStatusRank(leftStatus)
+        || b.highestUtilization - a.highestUtilization
+        || (b.storedBytes + b.trafficBytes) - (a.storedBytes + a.trafficBytes)
+        || b.operations - a.operations
+    })
+    .slice(0, topLimit)
 }
 
 function storagePolicyStatusRank(status: StoragePolicyEvaluationStatus): number {
@@ -2295,38 +4009,23 @@ function createStoragePolicyAnalytics(evaluations: StoragePolicyEvaluation[], to
 
 function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: number, policyEvaluations: StoragePolicyEvaluation[] = []) {
   const storageEvents = events.filter(event => event.scope === 'storage')
-  const byChannelUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
-  const byProviderUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
-  const byResourceTypeUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
-  const byActionUsage = new Map<string, ReturnType<typeof createStorageUsageBucket>>()
-  const trend = new Map<string, ReturnType<typeof createStorageUsageBucket> & { date: string }>()
+  const byChannelUsage = new Map<string, StorageUsageBucket>()
+  const byProviderUsage = new Map<string, StorageUsageBucket>()
+  const byResourceTypeUsage = new Map<string, StorageUsageBucket>()
+  const byActionUsage = new Map<string, StorageUsageBucket>()
+  const trend = new Map<string, StorageUsageBucket & { date: string }>()
+  const channelPressure = new Map<string, StorageChannelPressureBucket>()
 
   for (const event of storageEvents) {
     addStorageUsageBucket(byChannelUsage, event.channel, event)
     addStorageUsageBucket(byProviderUsage, readEventMetadataString(event, 'provider'), event)
     addStorageUsageBucket(byResourceTypeUsage, event.resourceType, event)
     addStorageUsageBucket(byActionUsage, event.action, event)
+    addStorageChannelPressureBucket(channelPressure, event)
 
     const date = event.occurredAt.slice(0, 10)
     const item = trend.get(date) ?? { ...createStorageUsageBucket(), date }
-    item.events += 1
-    item.operations += 1
-    if (event.action === 'storage.write') {
-      item.writes += 1
-      if (event.unit === 'byte')
-        item.storedBytes += event.quantity
-    }
-    else if (event.action === 'storage.read') {
-      item.reads += 1
-      if (event.unit === 'byte')
-        item.trafficBytes += event.quantity
-    }
-    else if (event.action === 'storage.delete') {
-      item.deletes += 1
-    }
-    const actor = readEventActor(event)
-    if (actor)
-      item.actors.add(actor)
+    addStorageUsageBucketToItem(item, event)
     trend.set(date, item)
   }
 
@@ -2354,6 +4053,7 @@ function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: num
     byProviderUsage: mapStorageUsageBuckets(byProviderUsage, topLimit),
     byResourceTypeUsage: mapStorageUsageBuckets(byResourceTypeUsage, topLimit),
     byActionUsage: mapStorageUsageBuckets(byActionUsage, topLimit),
+    channelPressure: mapStorageChannelPressure(channelPressure, policyEvaluations, topLimit),
     trend: Array.from(trend.values())
       .map(item => ({
         date: item.date,
@@ -2392,6 +4092,7 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
     channels: Map<string, number>
     providerTypes: Map<string, number>
   }>()
+  const channelDistribution = new Map<string, ProviderChannelDistributionBucket>()
   const byModel = new Map<string, ReturnType<typeof createMetricBucket>>()
   const byProviderType = new Map<string, ReturnType<typeof createMetricBucket>>()
   const trend = new Map<string, {
@@ -2412,6 +4113,7 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
     const providerId = event.resourceId ?? 'unknown'
     const model = readEventMetadataString(event, 'model') ?? 'unknown'
     const providerType = readEventMetadataString(event, 'providerType')
+    const channel = event.channel ?? 'unknown'
     const date = event.occurredAt.slice(0, 10)
     const item = providers.get(providerId) ?? {
       providerId,
@@ -2441,26 +4143,41 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       channels: new Map<string, number>(),
       providerTypes: new Map<string, number>(),
     }
+    const channelKey = `${providerId}:${channel}`
+    const channelItem = channelDistribution.get(channelKey) ?? {
+      providerId,
+      channel,
+      requests: 0,
+      tokens: 0,
+      quantity: 0,
+      actors: new Set<string>(),
+      models: new Map<string, number>(),
+      providerTypes: new Map<string, number>(),
+    }
     if (event.action === 'provider.request') {
       item.requests += event.quantity
+      channelItem.requests += event.quantity
       trendItem.requests += event.quantity
       usageSummary.requests += event.quantity
       modelItem.requests += event.quantity
     }
     if (event.action === 'provider.usage' && event.unit === 'token') {
       item.tokens += event.quantity
+      channelItem.tokens += event.quantity
       trendItem.tokens += event.quantity
       usageSummary.tokens += event.quantity
       modelItem.tokens += event.quantity
     }
     item.quantity += event.quantity
     modelItem.quantity += event.quantity
+    channelItem.quantity += event.quantity
     trendItem.events += 1
     trendItem.quantity += event.quantity
     const actor = readEventActor(event)
     if (actor) {
       item.actors.add(actor)
       modelItem.actors.add(actor)
+      channelItem.actors.add(actor)
       trendItem.actors.add(actor)
     }
     item.units.set(event.unit, (item.units.get(event.unit) ?? 0) + event.quantity)
@@ -2471,15 +4188,17 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
     }
     if (event.action === 'provider.usage' && event.unit === 'token') {
       addMetricBucket(byModel, model, event)
-      if (model)
-        item.models.set(model, (item.models.get(model) ?? 0) + event.quantity)
+      item.models.set(model, (item.models.get(model) ?? 0) + event.quantity)
+      channelItem.models.set(model, (channelItem.models.get(model) ?? 0) + event.quantity)
     }
     if (providerType) {
       addMetricBucket(byProviderType, providerType, event)
       modelItem.providerTypes.set(providerType, (modelItem.providerTypes.get(providerType) ?? 0) + event.quantity)
+      channelItem.providerTypes.set(providerType, (channelItem.providerTypes.get(providerType) ?? 0) + event.quantity)
     }
     providers.set(providerId, item)
     models.set(model, modelItem)
+    channelDistribution.set(channelKey, channelItem)
     trend.set(date, trendItem)
   }
 
@@ -2499,6 +4218,25 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       .sort((a, b) => a.date.localeCompare(b.date)),
     byModel: mapMetricBuckets(byModel, topLimit),
     byProviderType: mapMetricBuckets(byProviderType, topLimit),
+    channelDistribution: Array.from(channelDistribution.values())
+      .map(item => ({
+        providerId: item.providerId,
+        channel: item.channel,
+        requests: item.requests,
+        tokens: item.tokens,
+        quantity: item.quantity,
+        uniqueActors: item.actors.size,
+        byModel: Array.from(item.models.entries())
+          .map(([model, tokens]) => ({ model, tokens }))
+          .sort((a, b) => b.tokens - a.tokens)
+          .slice(0, 5),
+        byProviderType: Array.from(item.providerTypes.entries())
+          .map(([providerType, quantity]) => ({ providerType, quantity }))
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5),
+      }))
+      .sort((a, b) => b.tokens - a.tokens || b.requests - a.requests || b.quantity - a.quantity)
+      .slice(0, topLimit),
     modelDistribution: Array.from(models.values())
       .map(item => ({
         model: item.model,
@@ -2550,9 +4288,132 @@ function createProviderQuotaAnalytics(
   quotas: PlatformGovernanceConfig[],
   topLimit: number,
 ) {
-  type ProviderQuotaStatus = 'blocked' | 'warning' | 'ok' | 'disabled'
-  const statusRank: Record<ProviderQuotaStatus, number> = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
-  const items = quotas
+  const items = evaluateIntelligenceProviderQuotaConfigs(providerEvents, quotas)
+  const riskItems = createProviderQuotaRiskItems(items, topLimit)
+
+  const summary = items.reduce((result, item) => {
+    result.total += 1
+    result.highestRequestUtilization = Math.max(result.highestRequestUtilization, item.utilization.requests ?? 0)
+    result.highestTokenUtilization = Math.max(result.highestTokenUtilization, item.utilization.tokens ?? 0)
+
+    if (item.status === 'disabled')
+      result.disabled += 1
+    else
+      result.active += 1
+
+    if (item.status === 'blocked')
+      result.blocked += 1
+    if (item.status === 'warning')
+      result.warning += 1
+    if (item.overage.requests > 0)
+      result.requestOverage += item.overage.requests
+    if (item.overage.tokens > 0)
+      result.tokenOverage += item.overage.tokens
+    if (item.remaining.requests != null)
+      result.lowestRemainingRequests = result.lowestRemainingRequests == null
+        ? item.remaining.requests
+        : Math.min(result.lowestRemainingRequests, item.remaining.requests)
+    if (item.remaining.tokens != null)
+      result.lowestRemainingTokens = result.lowestRemainingTokens == null
+        ? item.remaining.tokens
+        : Math.min(result.lowestRemainingTokens, item.remaining.tokens)
+    if (item.projectedExhaustionDays.requests != null)
+      result.nearestRequestExhaustionDays = result.nearestRequestExhaustionDays == null
+        ? item.projectedExhaustionDays.requests
+        : Math.min(result.nearestRequestExhaustionDays, item.projectedExhaustionDays.requests)
+    if (item.projectedExhaustionDays.tokens != null)
+      result.nearestTokenExhaustionDays = result.nearestTokenExhaustionDays == null
+        ? item.projectedExhaustionDays.tokens
+        : Math.min(result.nearestTokenExhaustionDays, item.projectedExhaustionDays.tokens)
+
+    return result
+  }, {
+    total: 0,
+    active: 0,
+    blocked: 0,
+    warning: 0,
+    disabled: 0,
+    highestRequestUtilization: 0,
+    highestTokenUtilization: 0,
+    requestOverage: 0,
+    tokenOverage: 0,
+    lowestRemainingRequests: null as number | null,
+    lowestRemainingTokens: null as number | null,
+    nearestRequestExhaustionDays: null as number | null,
+    nearestTokenExhaustionDays: null as number | null,
+  })
+
+  return {
+    summary,
+    riskItems,
+    items: items.slice(0, topLimit),
+  }
+}
+
+function createProviderQuotaRiskItems(
+  items: IntelligenceProviderQuotaEvaluation[],
+  topLimit: number,
+): IntelligenceProviderQuotaRiskItem[] {
+  return items
+    .map((item) => {
+      const highestUtilization = Math.max(item.utilization.requests ?? 0, item.utilization.tokens ?? 0)
+      const projectedDays = [item.projectedExhaustionDays.requests, item.projectedExhaustionDays.tokens]
+        .filter((value): value is number => value != null)
+      const nearestExhaustionDays = projectedDays.length ? Math.min(...projectedDays) : null
+      const hasOverage = item.overage.requests > 0 || item.overage.tokens > 0
+      const hasLowRemaining = item.remaining.requests === 0 || item.remaining.tokens === 0
+      const hasProjectedExhaustion = nearestExhaustionDays != null && nearestExhaustionDays <= Math.max(item.windowDays, 1)
+      const riskReason: IntelligenceProviderQuotaRiskItem['riskReason'] = hasOverage
+        ? 'overage'
+        : item.status === 'blocked'
+          ? 'blocked'
+          : hasLowRemaining
+            ? 'low-remaining'
+            : item.status === 'warning'
+              ? 'warning-threshold'
+              : hasProjectedExhaustion
+                ? 'projected-exhaustion'
+                : 'warning-threshold'
+
+      return {
+        configId: item.configId,
+        providerId: item.providerId,
+        name: item.name,
+        channel: item.channel,
+        provider: item.provider,
+        status: item.status,
+        highestUtilization,
+        riskReason,
+        usage: item.usage,
+        limits: {
+          maxRequests: item.limits.maxRequests,
+          maxTokens: item.limits.maxTokens,
+        },
+        remaining: item.remaining,
+        overage: item.overage,
+        projectedExhaustionDays: item.projectedExhaustionDays,
+      }
+    })
+    .filter(item => item.status === 'blocked' || item.status === 'warning' || item.overage.requests > 0 || item.overage.tokens > 0)
+    .sort((left, right) => {
+      const statusRank: Record<IntelligenceProviderQuotaStatus, number> = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
+      const leftProjected = Math.min(left.projectedExhaustionDays.requests ?? Number.POSITIVE_INFINITY, left.projectedExhaustionDays.tokens ?? Number.POSITIVE_INFINITY)
+      const rightProjected = Math.min(right.projectedExhaustionDays.requests ?? Number.POSITIVE_INFINITY, right.projectedExhaustionDays.tokens ?? Number.POSITIVE_INFINITY)
+      return statusRank[right.status] - statusRank[left.status]
+        || right.overage.tokens - left.overage.tokens
+        || right.overage.requests - left.overage.requests
+        || right.highestUtilization - left.highestUtilization
+        || leftProjected - rightProjected
+    })
+    .slice(0, topLimit)
+}
+
+function evaluateIntelligenceProviderQuotaConfigs(
+  providerEvents: PlatformGovernanceEvent[],
+  quotas: PlatformGovernanceConfig[],
+): IntelligenceProviderQuotaEvaluation[] {
+  const statusRank: Record<IntelligenceProviderQuotaStatus, number> = { blocked: 3, warning: 2, ok: 1, disabled: 0 }
+  return quotas
     .map((quota) => {
       const providerId = quota.targetId ?? quota.provider ?? 'unknown'
       const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
@@ -2565,6 +4426,8 @@ function createProviderQuotaAnalytics(
 
       for (const event of providerEvents) {
         if (event.resourceId !== providerId)
+          continue
+        if (quota.channel && event.channel !== quota.channel)
           continue
         const occurredAt = Date.parse(event.occurredAt)
         if (Number.isFinite(occurredAt) && occurredAt < start)
@@ -2582,8 +4445,7 @@ function createProviderQuotaAnalytics(
       const blocked = (maxRequests != null && requests >= maxRequests) || (maxTokens != null && tokens >= maxTokens)
       const warning = (requestUtilization != null && requestUtilization >= warningThreshold)
         || (tokenUtilization != null && tokenUtilization >= warningThreshold)
-
-      const status: ProviderQuotaStatus = !quota.enabled ? 'disabled' : blocked ? 'blocked' : warning ? 'warning' : 'ok'
+      const status: IntelligenceProviderQuotaStatus = !quota.enabled ? 'disabled' : blocked ? 'blocked' : warning ? 'warning' : 'ok'
 
       return {
         configId: quota.id,
@@ -2615,6 +4477,14 @@ function createProviderQuotaAnalytics(
           requests: calculateOverageBudget(requests, maxRequests),
           tokens: calculateOverageBudget(tokens, maxTokens),
         },
+        burnRate: {
+          requestsPerDay: roundRatePerDay(requests, windowDays),
+          tokensPerDay: roundRatePerDay(tokens, windowDays),
+        },
+        projectedExhaustionDays: {
+          requests: estimateBudgetExhaustionDays(requests, remainingRequests, windowDays),
+          tokens: estimateBudgetExhaustionDays(tokens, remainingTokens, windowDays),
+        },
       }
     })
     .sort((left, right) => {
@@ -2622,37 +4492,6 @@ function createProviderQuotaAnalytics(
       const rightUtilization = Math.max(right.utilization.requests ?? 0, right.utilization.tokens ?? 0)
       return statusRank[right.status] - statusRank[left.status] || rightUtilization - leftUtilization
     })
-
-  const summary = items.reduce((result, item) => {
-    result.total += 1
-    result.highestRequestUtilization = Math.max(result.highestRequestUtilization, item.utilization.requests ?? 0)
-    result.highestTokenUtilization = Math.max(result.highestTokenUtilization, item.utilization.tokens ?? 0)
-
-    if (item.status === 'disabled')
-      result.disabled += 1
-    else
-      result.active += 1
-
-    if (item.status === 'blocked')
-      result.blocked += 1
-    if (item.status === 'warning')
-      result.warning += 1
-
-    return result
-  }, {
-    total: 0,
-    active: 0,
-    blocked: 0,
-    warning: 0,
-    disabled: 0,
-    highestRequestUtilization: 0,
-    highestTokenUtilization: 0,
-  })
-
-  return {
-    summary,
-    items: items.slice(0, topLimit),
-  }
 }
 
 function latestTrendPoint<T extends { date: string }>(items: T[]): T | null {
@@ -2743,6 +4582,14 @@ function createOperationsDashboardSummary(input: {
 
 function normalizeLimit(limit?: number): number {
   return Number.isFinite(limit) && limit && limit > 0 ? Math.min(Math.floor(limit), 5000) : 100
+}
+
+function normalizeAnalyticsDays(days?: number): number {
+  return Number.isFinite(days) && days && days > 0 ? Math.min(Math.floor(days), 366) : 30
+}
+
+function normalizeAnalyticsTopLimit(topLimit?: number): number {
+  return Number.isFinite(topLimit) && topLimit && topLimit > 0 ? Math.min(Math.floor(topLimit), 50) : 12
 }
 
 export async function recordPlatformGovernanceEvent(
@@ -2853,12 +4700,8 @@ export async function getPluginGovernanceAnalytics(
   pluginId: string,
   options: GovernanceAnalyticsOptions = {},
 ) {
-  const days = Number.isFinite(options.days) && options.days && options.days > 0
-    ? Math.min(Math.floor(options.days), 366)
-    : 30
-  const topLimit = Number.isFinite(options.topLimit) && options.topLimit && options.topLimit > 0
-    ? Math.min(Math.floor(options.topLimit), 50)
-    : 12
+  const days = normalizeAnalyticsDays(options.days)
+  const topLimit = normalizeAnalyticsTopLimit(options.topLimit)
   const events = await listPlatformGovernanceEvents(event, {
     scope: 'plugin',
     resourceType: 'plugin',
@@ -2874,12 +4717,8 @@ export async function getPlatformGovernanceAnalytics(
   event: H3Event | undefined,
   options: GovernanceAnalyticsOptions = {},
 ) {
-  const days = Number.isFinite(options.days) && options.days && options.days > 0
-    ? Math.min(Math.floor(options.days), 366)
-    : 30
-  const topLimit = Number.isFinite(options.topLimit) && options.topLimit && options.topLimit > 0
-    ? Math.min(Math.floor(options.topLimit), 50)
-    : 12
+  const days = normalizeAnalyticsDays(options.days)
+  const topLimit = normalizeAnalyticsTopLimit(options.topLimit)
   const events = await listPlatformGovernanceEvents(event, {
     days,
     limit: options.limit ?? 5000,
@@ -2903,13 +4742,14 @@ export async function getPlatformGovernanceAnalytics(
   const users = createUserAnalytics(events, days, topLimit)
   const plugins = createPluginAnalytics(events, days, topLimit)
   const uploads = createUploadAnalytics(events, topLimit)
-  const notifications = createNotificationAnalytics(notificationEvents, topLimit, notificationChannels)
+  const notifications = createNotificationAnalytics(notificationEvents, topLimit, notificationChannels, event)
   const storage = createStorageAnalytics(events, topLimit, storagePolicyEvaluations)
   const providers = createProviderAnalytics(events, days, topLimit)
   const providerQuotaAnalytics = createProviderQuotaAnalytics(providerEvents, providerQuotas, topLimit)
   const providerDashboard = {
     ...providers,
     quotaSummary: providerQuotaAnalytics.summary,
+    quotaRiskItems: providerQuotaAnalytics.riskItems,
     quotas: providerQuotaAnalytics.items,
   }
 
@@ -2937,6 +4777,72 @@ export async function getPlatformGovernanceAnalytics(
     notifications,
     storage,
     providers: providerDashboard,
+  }
+}
+
+function matchesStorageProvider(event: PlatformGovernanceEvent, provider: string): boolean {
+  return readEventMetadataString(event, 'provider') === provider
+}
+
+function matchesStoragePolicyTarget(policy: PlatformGovernanceConfig, channel: string | null, provider: string | null): boolean {
+  if (channel && policy.channel !== channel)
+    return false
+  if (provider && policy.provider && policy.provider !== provider)
+    return false
+  if (provider && !policy.provider)
+    return true
+  return true
+}
+
+function sanitizeStorageChannelPolicies(policies: PlatformGovernanceConfig[]) {
+  return policies.map(policy => ({
+    id: policy.id,
+    name: policy.name,
+    ownerScope: policy.ownerScope,
+    targetId: policy.targetId,
+    channel: policy.channel,
+    provider: policy.provider,
+    enabled: policy.enabled,
+    limits: policy.limits,
+    warningThreshold: policy.warningThreshold,
+    createdAt: policy.createdAt,
+    updatedAt: policy.updatedAt,
+  }))
+}
+
+export async function getStorageChannelGovernanceAnalytics(
+  event: H3Event | undefined,
+  options: StorageChannelAnalyticsOptions = {},
+) {
+  const days = normalizeAnalyticsDays(options.days)
+  const topLimit = normalizeAnalyticsTopLimit(options.topLimit)
+  const limit = options.limit ?? 5000
+  const channel = normalizeString(options.channel, 120)
+  const provider = normalizeString(options.provider, 120)
+  const events = (await listPlatformGovernanceEvents(event, {
+    scope: 'storage',
+    channel: channel || undefined,
+    days,
+    limit,
+  })).filter(item => !provider || matchesStorageProvider(item, provider))
+  const policies = (await listPlatformGovernanceConfigs(event, {
+    configType: 'storage_channel',
+    channel: channel || undefined,
+  })).filter(policy => matchesStoragePolicyTarget(policy, channel ?? null, provider ?? null))
+  const evaluations = await Promise.all(
+    policies.map(policy => evaluateStorageChannelPolicy(event, policy, { days, limit })),
+  )
+  const storage = createStorageAnalytics(events, topLimit, evaluations)
+
+  return {
+    days,
+    channel: channel || null,
+    provider: provider || null,
+    generatedAt: new Date().toISOString(),
+    ...storage,
+    policies: sanitizeStorageChannelPolicies(policies),
+    evaluations,
+    alerts: buildStoragePolicyAlerts(evaluations),
   }
 }
 
@@ -3154,6 +5060,46 @@ function calculateOverageBudget(used: number, limit: number | null): number {
   return limit == null ? 0 : Math.max(used - limit, 0)
 }
 
+function roundRatePerDay(value: number, days: number): number {
+  if (!Number.isFinite(value) || !Number.isFinite(days) || days <= 0)
+    return 0
+  return Math.round((value / days) * 100) / 100
+}
+
+function estimateBudgetExhaustionDays(used: number, remaining: number | null, days: number): number | null {
+  if (remaining == null)
+    return null
+  if (remaining <= 0)
+    return 0
+  if (used <= 0 || days <= 0)
+    return null
+  return Math.round((remaining / (used / days)) * 100) / 100
+}
+
+function calculateStorageBurnRate(
+  usage: StoragePolicyEvaluation['usage'],
+  days: number,
+): StoragePolicyEvaluation['burnRate'] {
+  return {
+    storedBytesPerDay: roundRatePerDay(usage.storedBytes, days),
+    trafficBytesPerDay: roundRatePerDay(usage.trafficBytes, days),
+    operationsPerDay: roundRatePerDay(usage.operations, days),
+  }
+}
+
+function calculateStorageProjectedExhaustionDays(
+  usage: StoragePolicyEvaluation['usage'],
+  remaining: StoragePolicyEvaluation['remaining'],
+  days: number,
+): StoragePolicyEvaluation['projectedExhaustionDays'] {
+  return {
+    storedBytes: estimateBudgetExhaustionDays(usage.storedBytes, remaining.storedBytes, days),
+    trafficBytes: estimateBudgetExhaustionDays(usage.trafficBytes, remaining.trafficBytes, days),
+    operations: estimateBudgetExhaustionDays(usage.operations, remaining.operations, days),
+    alertBytes: estimateBudgetExhaustionDays(usage.storedBytes, remaining.alertBytes, days),
+  }
+}
+
 function readStorageOperationLimit(limits: Record<string, unknown> | null, days: number): number | null {
   const windowLimit = readLimitNumber(limits, ['maxOperations', 'operationLimit', 'maxOperationsPerWindow'])
   if (windowLimit != null)
@@ -3281,6 +5227,12 @@ export async function evaluateStorageChannelPolicy(
     reads: 0,
     deletes: 0,
   }
+  const emptyRemaining = {
+    storedBytes: calculateRemainingBudget(emptyUsage.storedBytes, maxBytes),
+    trafficBytes: calculateRemainingBudget(emptyUsage.trafficBytes, trafficBytes),
+    operations: calculateRemainingBudget(emptyUsage.operations, maxOperations),
+    alertBytes: calculateRemainingBudget(emptyUsage.storedBytes, alertBytes),
+  }
 
   if (!policy.enabled) {
     return {
@@ -3305,18 +5257,15 @@ export async function evaluateStorageChannelPolicy(
         trafficBytes: null,
         operations: null,
       },
-      remaining: {
-        storedBytes: calculateRemainingBudget(emptyUsage.storedBytes, maxBytes),
-        trafficBytes: calculateRemainingBudget(emptyUsage.trafficBytes, trafficBytes),
-        operations: calculateRemainingBudget(emptyUsage.operations, maxOperations),
-        alertBytes: calculateRemainingBudget(emptyUsage.storedBytes, alertBytes),
-      },
+      remaining: emptyRemaining,
       overage: {
         storedBytes: calculateOverageBudget(emptyUsage.storedBytes, maxBytes),
         trafficBytes: calculateOverageBudget(emptyUsage.trafficBytes, trafficBytes),
         operations: calculateOverageBudget(emptyUsage.operations, maxOperations),
         alertBytes: calculateOverageBudget(emptyUsage.storedBytes, alertBytes),
       },
+      burnRate: calculateStorageBurnRate(emptyUsage, days),
+      projectedExhaustionDays: calculateStorageProjectedExhaustionDays(emptyUsage, emptyRemaining, days),
     }
   }
 
@@ -3373,6 +5322,8 @@ export async function evaluateStorageChannelPolicy(
     operations: calculateOverageBudget(usage.operations, maxOperations),
     alertBytes: calculateOverageBudget(usage.storedBytes, alertBytes),
   }
+  const burnRate = calculateStorageBurnRate(usage, days)
+  const projectedExhaustionDays = calculateStorageProjectedExhaustionDays(usage, remaining, days)
   const reasons: string[] = []
 
   if (maxBytes != null && usage.storedBytes >= maxBytes)
@@ -3412,6 +5363,8 @@ export async function evaluateStorageChannelPolicy(
     utilization,
     remaining,
     overage,
+    burnRate,
+    projectedExhaustionDays,
   }
 }
 
@@ -3495,60 +5448,94 @@ export function buildStoragePolicyAlerts(evaluations: StoragePolicyEvaluation[])
 export async function assertIntelligenceProviderQuota(
   event: H3Event,
   providerId: string,
+  channel?: string,
 ): Promise<void> {
-  const [quota] = await listPlatformGovernanceConfigs(event, {
+  const quotas = await listPlatformGovernanceConfigs(event, {
     configType: 'intelligence_provider_quota',
     targetId: providerId,
     enabled: true,
   })
-  if (!quota)
+  const scopedQuotas = quotas
+    .filter(quota => !quota.channel || !channel || quota.channel === channel)
+    .sort((left, right) => Number(Boolean(right.channel)) - Number(Boolean(left.channel)))
+  if (!scopedQuotas.length)
     return
 
-  const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
-  const requestSummary = await getPlatformGovernanceSummary(event, {
-    scope: 'intelligence',
-    action: 'provider.request',
-    resourceType: 'provider',
-    resourceId: providerId,
-    days: windowDays,
-    limit: 5000,
-  })
-  const maxRequests = readLimitNumber(quota.limits, ['maxRequests', 'requestLimit'])
-  if (maxRequests != null && requestSummary.totalEvents >= maxRequests) {
-    throw createError({
-      statusCode: 429,
-      statusMessage: 'Intelligence provider request quota exceeded.',
-      data: {
-        code: 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
-        providerId,
-        windowDays,
-        limit: maxRequests,
-      },
+  for (const quota of scopedQuotas) {
+    const quotaChannel = quota.channel ?? undefined
+    const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
+    const summaryOptions = {
+      scope: 'intelligence' as const,
+      resourceType: 'provider',
+      resourceId: providerId,
+      days: windowDays,
+      limit: 5000,
+      channel: quotaChannel,
+    }
+    const requestSummary = await getPlatformGovernanceSummary(event, {
+      ...summaryOptions,
+      action: 'provider.request',
     })
-  }
+    const maxRequests = readLimitNumber(quota.limits, ['maxRequests', 'requestLimit'])
+    if (maxRequests != null && requestSummary.totalEvents >= maxRequests) {
+      throw createError({
+        statusCode: 429,
+        statusMessage: 'Intelligence provider request quota exceeded.',
+        data: {
+          code: 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED',
+          providerId,
+          channel: quotaChannel ?? null,
+          windowDays,
+          limit: maxRequests,
+        },
+      })
+    }
 
-  const usageSummary = await getPlatformGovernanceSummary(event, {
+    const usageSummary = await getPlatformGovernanceSummary(event, {
+      ...summaryOptions,
+      action: 'provider.usage',
+    })
+    const tokenUsage = usageSummary.byUnit.find(item => item.unit === 'token')?.quantity ?? 0
+    const maxTokens = readLimitNumber(quota.limits, ['maxTokens', 'tokenLimit'])
+    if (maxTokens != null && tokenUsage >= maxTokens) {
+      throw createError({
+        statusCode: 429,
+        statusMessage: 'Intelligence provider token quota exceeded.',
+        data: {
+          code: 'INTELLIGENCE_PROVIDER_TOKEN_QUOTA_EXCEEDED',
+          providerId,
+          channel: quotaChannel ?? null,
+          windowDays,
+          limit: maxTokens,
+        },
+      })
+    }
+  }
+}
+
+export async function evaluateIntelligenceProviderQuotas(
+  event: H3Event,
+  providerId: string,
+): Promise<IntelligenceProviderQuotaEvaluation[]> {
+  const quotas = await listPlatformGovernanceConfigs(event, {
+    configType: 'intelligence_provider_quota',
+    targetId: providerId,
+  })
+  if (!quotas.length)
+    return []
+
+  const maxWindowDays = quotas.reduce((maxDays, quota) => {
+    const windowDays = readLimitNumber(quota.limits, ['windowDays', 'periodDays']) ?? 30
+    return Math.max(maxDays, windowDays)
+  }, 30)
+  const providerEvents = await listPlatformGovernanceEvents(event, {
     scope: 'intelligence',
-    action: 'provider.usage',
     resourceType: 'provider',
     resourceId: providerId,
-    days: windowDays,
+    days: maxWindowDays,
     limit: 5000,
   })
-  const tokenUsage = usageSummary.byUnit.find(item => item.unit === 'token')?.quantity ?? 0
-  const maxTokens = readLimitNumber(quota.limits, ['maxTokens', 'tokenLimit'])
-  if (maxTokens != null && tokenUsage >= maxTokens) {
-    throw createError({
-      statusCode: 429,
-      statusMessage: 'Intelligence provider token quota exceeded.',
-      data: {
-        code: 'INTELLIGENCE_PROVIDER_TOKEN_QUOTA_EXCEEDED',
-        providerId,
-        windowDays,
-        limit: maxTokens,
-      },
-    })
-  }
+  return evaluateIntelligenceProviderQuotaConfigs(providerEvents, quotas)
 }
 
 export async function recordIntelligenceProviderRequest(

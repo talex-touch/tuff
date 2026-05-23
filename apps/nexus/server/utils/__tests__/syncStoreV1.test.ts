@@ -10,6 +10,15 @@ import {
   type SyncItemInput,
 } from '../syncStoreV1'
 
+vi.mock('../platformGovernanceStore', async () => {
+  const actual = await vi.importActual<typeof import('../platformGovernanceStore')>('../platformGovernanceStore')
+  return {
+    ...actual,
+    assertStorageChannelPolicy: vi.fn(async () => undefined),
+    recordStorageChannelUsage: vi.fn(async () => ({})),
+  }
+})
+
 interface OplogRow {
   cursor: number
   user_id: string
@@ -275,8 +284,16 @@ class MockD1Database {
 
 class MockR2Bucket {
   objects = new Map<string, Uint8Array>()
+  attempts = 0
+  failWrites = 0
 
   async put(key: string, value: Uint8Array) {
+    this.attempts += 1
+    if (this.attempts <= this.failWrites) {
+      throw Object.assign(new Error('Transient R2 write failure'), {
+        statusCode: 503,
+      })
+    }
     this.objects.set(key, value)
   }
 }
@@ -470,6 +487,38 @@ describe('syncStoreV1 flow', () => {
     const result = await uploadSyncBlob(event, 'user-1', file)
     expect(result.blobId).toBeTruthy()
     expect(bucket.objects.has(result.objectKey)).toBe(true)
+    expect(result.storageChannel).toBe('r2')
+    expect(result.storageProvider).toBe('cloudflare-r2')
+  })
+
+  it('retries transient R2 blob writes and returns recovered upload metadata', async () => {
+    const db = new MockD1Database()
+    const bucket = new MockR2Bucket()
+    bucket.failWrites = 2
+    const event = createEvent(db, bucket)
+    const data = new TextEncoder().encode('hello')
+    const file = {
+      size: data.length,
+      type: 'text/plain',
+      arrayBuffer: async () => data.buffer,
+    } as File
+
+    const result = await uploadSyncBlob(event, 'user-1', file)
+
+    expect(bucket.attempts).toBe(3)
+    expect(bucket.objects.has(result.objectKey)).toBe(true)
+    expect(result.uploadRetry).toMatchObject({
+      retryable: true,
+      recovered: true,
+      retryCount: 2,
+      maxRetries: 2,
+      attempts: 3,
+      nextRetryDelayMs: 0,
+      storageChannel: 'r2',
+      storageProvider: 'cloudflare-r2',
+      storageOperation: 'storage.write',
+      storageStatusCode: 503,
+    })
   })
 })
 

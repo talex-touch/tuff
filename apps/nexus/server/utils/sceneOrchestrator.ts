@@ -1,13 +1,16 @@
 import type { H3Event } from 'h3'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord, SceneStrategyBindingRecord } from './sceneRegistryStore'
+import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { getLatestProviderHealthChecks, type ProviderHealthCheckEntry } from './providerHealthStore'
+import { completeUploadGovernance, failUploadGovernance, startUploadGovernance } from './uploadGovernance'
 import { assertIntelligenceProviderQuota, recordIntelligenceProviderRequest, recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import { getProviderRegistryEntry } from './providerRegistryStore'
 import { recordProviderUsageLedger } from './providerUsageLedgerStore'
 import { getSceneRegistryEntry } from './sceneRegistryStore'
+import { buildSceneAssetGovernanceResourceId, uploadSceneAsset } from './sceneAssetStorage'
 import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
 import { convertUsd, getUsdRates } from './exchangeRateService'
@@ -42,6 +45,14 @@ export interface SceneRunUsage {
   estimated?: boolean
   pricingRef?: string
   providerUsageRef?: string
+}
+
+export interface SceneAdapterMergedConfig {
+  adapter: Record<string, unknown> | null
+  upload: Record<string, unknown> | null
+  assets: Record<string, unknown> | null
+  constraints: Record<string, unknown> | null
+  sources: string[]
 }
 
 export interface SceneRunTraceStep {
@@ -110,6 +121,21 @@ export interface SceneAdapterContext {
   input: unknown
   originalInput: unknown
   outputs: Readonly<Record<string, unknown>>
+  adapterConfig: SceneAdapterMergedConfig
+}
+
+export interface SceneAdapterAssetUpload {
+  id?: string
+  outputField?: string
+  data?: string | ArrayBuffer | Uint8Array | Buffer
+  base64?: string
+  dataUrl?: string
+  contentType?: string
+  fileName?: string
+  extension?: string
+  resourceType?: string
+  replaceOutput?: boolean
+  metadata?: Record<string, unknown>
 }
 
 export interface SceneAdapterResult {
@@ -117,6 +143,7 @@ export interface SceneAdapterResult {
   usage?: SceneRunUsage[]
   providerRequestId?: string
   latencyMs?: number
+  assets?: SceneAdapterAssetUpload[]
 }
 
 export type SceneCapabilityAdapter = (context: SceneAdapterContext) => Promise<SceneAdapterResult>
@@ -136,6 +163,42 @@ interface SceneRunFailure {
   statusCode: number
   code: SceneRunErrorCode
   message: string
+}
+
+const SENSITIVE_CONFIG_KEY_EXACT = new Set([
+  'apikey',
+  'authtoken',
+  'bearertoken',
+  'clientsecret',
+  'credential',
+  'credentials',
+  'password',
+  'privatekey',
+  'refreshtoken',
+  'secret',
+  'secretkey',
+  'sessiontoken',
+  'token',
+])
+
+const SENSITIVE_CONFIG_KEY_MARKERS = [
+  'key',
+  'secret',
+]
+
+const DEFAULT_SCENE_ASSET_CONTENT_TYPE = 'application/octet-stream'
+const DEFAULT_SCENE_ASSET_MAX_BYTES = 12 * 1024 * 1024
+
+const SCENE_ASSET_EXTENSION_BY_MIME: Record<string, string> = {
+  'application/json': 'json',
+  'application/octet-stream': 'bin',
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/svg+xml': 'svg',
+  'image/webp': 'webp',
+  'text/markdown': 'md',
+  'text/plain': 'txt',
 }
 
 function normalizeTencentTranslateInput(input: unknown) {
@@ -564,6 +627,12 @@ function readOptionalString(value: unknown, maxLength = 160): string | null {
   return trimmed
 }
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
 function readDryRun(value: unknown) {
   return value === true || value === 'true'
 }
@@ -581,6 +650,10 @@ function resolveRequestedCapabilities(scene: SceneRegistryRecord, request: Scene
 
 function providerHasCapability(provider: ProviderRegistryRecord, capability: string) {
   return provider.capabilities.some(item => item.capability === capability)
+}
+
+function resolveProviderCapability(provider: ProviderRegistryRecord, capability: string) {
+  return provider.capabilities.find(item => item.capability === capability) ?? null
 }
 
 function comparePriorityCandidates(a: SceneRunCandidate, b: SceneRunCandidate) {
@@ -618,8 +691,468 @@ function readNestedNumber(record: Record<string, unknown> | null | undefined, pa
   return null
 }
 
+function mergeConfigObjects(...records: Array<Record<string, unknown> | null | undefined>): Record<string, unknown> | null {
+  const merged: Record<string, unknown> = {}
+  for (const record of records) {
+    if (!record)
+      continue
+    for (const [key, value] of Object.entries(record))
+      merged[key] = value
+  }
+  return Object.keys(merged).length ? merged : null
+}
+
+function readConfigSection(record: Record<string, unknown> | null | undefined, key: string): Record<string, unknown> | null {
+  return readRecord(record?.[key])
+}
+
+function hasConfigSection(record: Record<string, unknown> | null | undefined, ...keys: string[]): boolean {
+  return Boolean(record && keys.some(key => readConfigSection(record, key)))
+}
+
+function resolveSceneAdapterMergedConfig(
+  scene: SceneRegistryRecord,
+  provider: ProviderRegistryRecord,
+  binding: SceneStrategyBindingRecord,
+  capabilityName: string,
+): SceneAdapterMergedConfig {
+  const capability = resolveProviderCapability(provider, capabilityName)
+  const adapter = mergeConfigObjects(
+    readConfigSection(provider.metadata, 'adapter'),
+    readConfigSection(capability?.metadata, 'adapter'),
+    readConfigSection(scene.metadata, 'adapter'),
+    readConfigSection(binding.metadata, 'adapter'),
+  )
+  const upload = mergeConfigObjects(
+    readConfigSection(provider.metadata, 'upload'),
+    readConfigSection(capability?.metadata, 'upload'),
+    readConfigSection(scene.metadata, 'upload'),
+    readConfigSection(binding.metadata, 'upload'),
+  )
+  const assets = mergeConfigObjects(
+    readConfigSection(provider.metadata, 'assets'),
+    readConfigSection(capability?.metadata, 'assets'),
+    readConfigSection(scene.metadata, 'assets'),
+    readConfigSection(binding.metadata, 'assets'),
+  )
+  const constraints = mergeConfigObjects(
+    capability?.constraints,
+    binding.constraints,
+  )
+  const sources = [
+    hasConfigSection(provider.metadata, 'adapter', 'upload', 'assets') ? 'provider.metadata' : null,
+    hasConfigSection(capability?.metadata, 'adapter', 'upload', 'assets') ? 'capability.metadata' : null,
+    capability?.constraints ? 'capability.constraints' : null,
+    hasConfigSection(scene.metadata, 'adapter', 'upload', 'assets') ? 'scene.metadata' : null,
+    hasConfigSection(binding.metadata, 'adapter', 'upload', 'assets') ? 'binding.metadata' : null,
+    binding.constraints ? 'binding.constraints' : null,
+  ].filter((source): source is string => Boolean(source))
+
+  return {
+    adapter,
+    upload,
+    assets,
+    constraints,
+    sources,
+  }
+}
+
+function toTraceValue(value: unknown): string | number | boolean | null {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    return value
+  return null
+}
+
+function normalizeConfigKey(value: string): string {
+  return value.replace(/[-_\s]/g, '').toLowerCase()
+}
+
+function isSensitiveConfigKey(key: string): boolean {
+  const normalized = normalizeConfigKey(key)
+  if (SENSITIVE_CONFIG_KEY_EXACT.has(normalized))
+    return true
+  if (normalized.includes('credential') || normalized.includes('password') || normalized.includes('secret'))
+    return true
+  if (normalized.endsWith('key')) {
+    return SENSITIVE_CONFIG_KEY_MARKERS.some(marker => normalized.includes(marker))
+      || normalized.includes('api')
+      || normalized.includes('auth')
+      || normalized.includes('private')
+  }
+  if (normalized.endsWith('token')) {
+    return normalized.startsWith('access')
+      || normalized.startsWith('auth')
+      || normalized.startsWith('bearer')
+      || normalized.startsWith('refresh')
+      || normalized.startsWith('session')
+  }
+  return false
+}
+
+function summarizeConfigKeys(record: Record<string, unknown> | null): string | null {
+  if (!record)
+    return null
+
+  const safeKeys = Object.keys(record)
+    .filter(key => !isSensitiveConfigKey(key))
+    .sort()
+
+  return safeKeys.length ? safeKeys.join(',') : null
+}
+
+function summarizeSceneAdapterConfig(config: SceneAdapterMergedConfig): SceneRunTraceStep['metadata'] {
+  return {
+    adapterKeys: summarizeConfigKeys(config.adapter),
+    uploadKeys: summarizeConfigKeys(config.upload),
+    assetKeys: summarizeConfigKeys(config.assets),
+    constraintKeys: summarizeConfigKeys(config.constraints),
+    storageChannel: toTraceValue(config.upload?.storageChannel),
+    storageProvider: toTraceValue(config.upload?.storageProvider),
+    assetKind: toTraceValue(config.assets?.kind),
+    sources: config.sources.join(',') || null,
+  }
+}
+
+function buildAdapterTraceMetadata(
+  providerId: string,
+  capability: string,
+  adapterConfig: SceneAdapterMergedConfig,
+  extra: SceneRunTraceStep['metadata'] = {},
+): SceneRunTraceStep['metadata'] {
+  return {
+    providerId,
+    capability,
+    ...summarizeSceneAdapterConfig(adapterConfig),
+    ...extra,
+  }
+}
+
+function readBooleanValue(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null
+}
+
+function sanitizeSceneAssetToken(value: unknown, fallback: string, maxLength = 64): string {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  const normalized = raw
+    .replace(/[^a-z0-9._-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, maxLength)
+  return normalized || fallback
+}
+
+function sanitizeSceneAssetExtension(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 16)
+  return normalized || null
+}
+
+function extensionFromFileName(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  return sanitizeSceneAssetExtension(value.match(/\.([a-z0-9]+)$/i)?.[1])
+}
+
+function normalizeSceneAssetContentType(...values: unknown[]): string {
+  for (const value of values) {
+    const contentType = readOptionalString(value, 120)?.toLowerCase()
+    if (contentType)
+      return contentType
+  }
+  return DEFAULT_SCENE_ASSET_CONTENT_TYPE
+}
+
+function normalizeSceneAssetExtension(input: {
+  extension?: unknown
+  fileName?: unknown
+  contentType: string
+}): string {
+  return sanitizeSceneAssetExtension(input.extension)
+    ?? extensionFromFileName(input.fileName)
+    ?? SCENE_ASSET_EXTENSION_BY_MIME[input.contentType]
+    ?? 'bin'
+}
+
+function readConfiguredSceneAssetMaxBytes(config: SceneAdapterMergedConfig): number {
+  const configured = readNumber(config.assets?.maxBytes) ?? readNumber(config.upload?.maxBytes)
+  if (!configured || configured <= 0)
+    return DEFAULT_SCENE_ASSET_MAX_BYTES
+  return Math.min(Math.round(configured), DEFAULT_SCENE_ASSET_MAX_BYTES)
+}
+
+function normalizeBase64Payload(value: string, field: string): Buffer {
+  const normalized = value.trim().replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/')
+  if (!normalized || normalized.length % 4 === 1 || !/^[a-z0-9+/]*={0,2}$/i.test(normalized)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Scene asset ${field} is not valid base64.`,
+    })
+  }
+  return Buffer.from(normalized, 'base64')
+}
+
+function resolveSceneAssetBuffer(asset: SceneAdapterAssetUpload): { data: Buffer, contentTypeFromDataUrl: string | null } {
+  const dataUrl = readOptionalString(asset.dataUrl, 16 * 1024 * 1024)
+  if (dataUrl) {
+    const parsed = stripDataUrlPrefix(dataUrl)
+    return {
+      data: normalizeBase64Payload(parsed.base64, asset.outputField ?? asset.id ?? 'dataUrl'),
+      contentTypeFromDataUrl: parsed.mimeType,
+    }
+  }
+
+  const base64 = readOptionalString(asset.base64, 16 * 1024 * 1024)
+  if (base64) {
+    const parsed = stripDataUrlPrefix(base64)
+    return {
+      data: normalizeBase64Payload(parsed.base64, asset.outputField ?? asset.id ?? 'base64'),
+      contentTypeFromDataUrl: parsed.mimeType,
+    }
+  }
+
+  if (Buffer.isBuffer(asset.data))
+    return { data: asset.data, contentTypeFromDataUrl: null }
+  if (asset.data instanceof ArrayBuffer)
+    return { data: Buffer.from(asset.data), contentTypeFromDataUrl: null }
+  if (asset.data instanceof Uint8Array)
+    return { data: Buffer.from(asset.data.buffer, asset.data.byteOffset, asset.data.byteLength), contentTypeFromDataUrl: null }
+  if (typeof asset.data === 'string') {
+    const parsed = asset.data.startsWith('data:')
+      ? stripDataUrlPrefix(asset.data)
+      : { base64: asset.data, mimeType: null }
+    return {
+      data: normalizeBase64Payload(parsed.base64, asset.outputField ?? asset.id ?? 'data'),
+      contentTypeFromDataUrl: parsed.mimeType,
+    }
+  }
+
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'Scene asset upload requires data, base64, or dataUrl.',
+  })
+}
+
+function resolveSceneAssetContentTypeHint(asset: SceneAdapterAssetUpload): string | null {
+  const candidates = [asset.dataUrl, asset.base64, asset.data]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string')
+      continue
+
+    const value = readOptionalString(candidate, 16 * 1024 * 1024)
+    if (!value?.startsWith('data:'))
+      continue
+
+    return stripDataUrlPrefix(value).mimeType
+  }
+
+  return null
+}
+
+function resolveSceneAssetUploadContext(input: {
+  runId: string
+  sceneId: string
+  providerId: string
+  capability: string
+  asset: SceneAdapterAssetUpload
+  adapterConfig: SceneAdapterMergedConfig
+  contentTypeHint?: string | null
+}): {
+  assetId: string
+  key: string
+  resourceType: string
+  governanceResourceId: string
+  contentType: string
+  extension: string
+  metadata: Record<string, unknown>
+} {
+  const asset = input.asset
+  const contentType = normalizeSceneAssetContentType(asset.contentType, input.contentTypeHint, input.adapterConfig.assets?.contentType)
+  const extension = normalizeSceneAssetExtension({
+    extension: asset.extension ?? input.adapterConfig.assets?.extension,
+    fileName: asset.fileName ?? input.adapterConfig.assets?.fileName,
+    contentType,
+  })
+  const assetId = sanitizeSceneAssetToken(asset.id ?? asset.outputField ?? input.adapterConfig.assets?.kind, 'asset')
+  const capabilityToken = sanitizeSceneAssetToken(input.capability, 'capability')
+  const key = `${input.runId}-${capabilityToken}-${assetId}-${randomUUID()}.${extension}`
+  const resourceType = readOptionalString(asset.resourceType, 80)
+    ?? readOptionalString(input.adapterConfig.assets?.resourceType, 80)
+    ?? 'scene-asset'
+  const governanceResourceId = buildSceneAssetGovernanceResourceId(key)
+  const metadata = {
+    surface: 'scene-adapter-upload',
+    sceneId: input.sceneId,
+    providerId: input.providerId,
+    capability: input.capability,
+    assetId,
+    assetKind: readOptionalString(input.adapterConfig.assets?.kind, 80) ?? assetId,
+  }
+
+  return {
+    assetId,
+    key,
+    resourceType,
+    governanceResourceId,
+    contentType,
+    extension,
+    metadata,
+  }
+}
+
+function resolveConfiguredSceneAssetUploads(output: unknown, config: SceneAdapterMergedConfig): SceneAdapterAssetUpload[] {
+  const outputField = readOptionalString(config.assets?.outputField, 120)
+  if (!outputField || !isRecord(output))
+    return []
+
+  const value = output[outputField]
+  if (typeof value !== 'string' || !value.trim())
+    return []
+
+  return [
+    {
+      id: readOptionalString(config.assets?.id, 80) ?? readOptionalString(config.assets?.kind, 80) ?? outputField,
+      outputField,
+      base64: value,
+      contentType: readOptionalString(config.assets?.contentType, 120) ?? undefined,
+      extension: readOptionalString(config.assets?.extension, 24) ?? undefined,
+      fileName: readOptionalString(config.assets?.fileName, 180) ?? undefined,
+      resourceType: readOptionalString(config.assets?.resourceType, 80) ?? undefined,
+      replaceOutput: readBooleanValue(config.assets?.replaceOutput) ?? true,
+    },
+  ]
+}
+
+function replaceSceneAssetOutput(
+  output: unknown,
+  reference: Record<string, unknown>,
+  asset: SceneAdapterAssetUpload,
+): unknown {
+  if (!isRecord(output)) {
+    return {
+      value: output,
+      sceneAssets: [reference],
+    }
+  }
+
+  const existingAssets = Array.isArray(output.sceneAssets) ? output.sceneAssets : []
+  const next: Record<string, unknown> = {
+    ...output,
+    sceneAssets: [...existingAssets, reference],
+  }
+  if (asset.outputField && asset.replaceOutput !== false)
+    next[asset.outputField] = reference
+  return next
+}
+
+async function uploadSceneAdapterAssets(input: {
+  event: H3Event
+  runId: string
+  sceneId: string
+  providerId: string
+  capability: string
+  output: unknown
+  resultAssets?: SceneAdapterAssetUpload[]
+  adapterConfig: SceneAdapterMergedConfig
+}): Promise<{ output: unknown, uploadedAssets: number }> {
+  const assets = [
+    ...(input.resultAssets ?? []),
+    ...resolveConfiguredSceneAssetUploads(input.output, input.adapterConfig),
+  ]
+  if (assets.length === 0)
+    return { output: input.output, uploadedAssets: 0 }
+
+  const maxBytes = readConfiguredSceneAssetMaxBytes(input.adapterConfig)
+  let output = input.output
+  let uploadedAssets = 0
+
+  for (const asset of assets) {
+    const assetContext = resolveSceneAssetUploadContext({
+      runId: input.runId,
+      sceneId: input.sceneId,
+      providerId: input.providerId,
+      capability: input.capability,
+      asset,
+      adapterConfig: input.adapterConfig,
+      contentTypeHint: resolveSceneAssetContentTypeHint(asset),
+    })
+    const uploadAttempt = await startUploadGovernance(input.event, {
+      resourceType: assetContext.resourceType,
+      resourceId: assetContext.governanceResourceId,
+      contentType: assetContext.contentType,
+      extension: assetContext.extension,
+      metadata: assetContext.metadata,
+    })
+
+    let failureReason: 'scene-asset-preflight-failed' | 'scene-asset-upload-failed' = 'scene-asset-preflight-failed'
+    let assetSize: number | null = null
+
+    try {
+      const { data, contentTypeFromDataUrl } = resolveSceneAssetBuffer(asset)
+      assetSize = data.byteLength
+      if (data.byteLength > maxBytes) {
+        throw createError({
+          statusCode: 413,
+          statusMessage: 'Scene asset exceeds configured upload limit.',
+        })
+      }
+
+      const contentType = normalizeSceneAssetContentType(asset.contentType, contentTypeFromDataUrl, input.adapterConfig.assets?.contentType)
+      failureReason = 'scene-asset-upload-failed'
+      const stored = await uploadSceneAsset(input.event, assetContext.key, data, contentType, {
+        governanceResourceId: assetContext.governanceResourceId,
+        resourceType: assetContext.resourceType,
+      })
+      await completeUploadGovernance(input.event, uploadAttempt, {
+        resourceId: assetContext.governanceResourceId,
+        contentType: stored.contentType,
+        extension: assetContext.extension,
+        size: stored.size,
+        storageChannel: stored.storageChannel,
+        storageProvider: stored.storageProvider,
+        metadata: {
+          ...assetContext.metadata,
+          ...(stored.uploadRetry ?? {}),
+        },
+      })
+
+      const reference = {
+        type: 'scene-asset',
+        id: assetContext.assetId,
+        key: stored.key,
+        url: `/api/v1/scenes/assets/${encodeURIComponent(stored.key)}`,
+        contentType: stored.contentType,
+        sha256: stored.sha256,
+        size: stored.size,
+        storageChannel: stored.storageChannel,
+        storageProvider: stored.storageProvider,
+        resourceType: assetContext.resourceType,
+      }
+      output = replaceSceneAssetOutput(output, reference, asset)
+      uploadedAssets += 1
+    }
+    catch (error) {
+      const preflightFailure = failureReason === 'scene-asset-preflight-failed'
+      await failUploadGovernance(input.event, uploadAttempt, error, {
+        reason: failureReason,
+        metadata: {
+          ...assetContext.metadata,
+          failureCategory: preflightFailure ? 'payload-validation' : 'storage-upload',
+          failureSampleSource: 'live',
+          failureCalibrationStatus: 'sampled',
+          liveFailureSample: true,
+          retryable: preflightFailure ? false : undefined,
+          size: assetSize ?? undefined,
+        },
+      })
+      throw error
+    }
+  }
+
+  return { output, uploadedAssets }
+}
+
 function resolveCandidateCost(candidate: ResolvedSceneCandidate): number | null {
-  const capability = candidate.provider.capabilities.find(item => item.capability === candidate.candidate.capability)
+  const capability = resolveProviderCapability(candidate.provider, candidate.candidate.capability)
   return readNestedNumber(candidate.binding.constraints, [
     ['cost'],
     ['estimatedCost'],
@@ -1011,6 +1544,8 @@ export async function runSceneOrchestrator(
         capability,
         status: 'selected',
       })
+      const adapterConfig = resolveSceneAdapterMergedConfig(scene, picked.provider, picked.binding, capability)
+      addTrace(trace, 'adapter.dispatch', 'skipped', `Dry run selected provider adapter config for ${capability}.`, buildAdapterTraceMetadata(picked.provider.id, capability, adapterConfig))
     }
     capabilityPlans.push({ capability, candidates: scopedCandidates })
   }
@@ -1040,9 +1575,10 @@ export async function runSceneOrchestrator(
       message: 'Selected provider path is incomplete.',
     }
 
-    for (const { candidate, provider } of plan.candidates) {
+    for (const { candidate, provider, binding } of plan.candidates) {
       const selection = toSelection(candidate, provider)
       const adapter = resolveAdapter(provider, plan.capability)
+      const adapterConfig = resolveSceneAdapterMergedConfig(scene, provider, binding, plan.capability)
       fallbackTrail.push({
         providerId: provider.id,
         capability: plan.capability,
@@ -1062,10 +1598,7 @@ export async function runSceneOrchestrator(
           status: 'failed',
           reason: 'provider_adapter_unavailable',
         })
-        addTrace(trace, 'adapter.dispatch', 'failed', message, {
-          providerId: provider.id,
-          capability: plan.capability,
-        })
+        addTrace(trace, 'adapter.dispatch', 'failed', message, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
         if (scene.fallback !== 'enabled')
           break
         continue
@@ -1084,15 +1617,25 @@ export async function runSceneOrchestrator(
           input: adapterInput,
           originalInput: request.input,
           outputs,
+          adapterConfig,
         })
-        outputs[plan.capability] = result.output
-        usage.push(...(result.usage ?? []))
-        addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${plan.capability}.`, {
+        const assetResult = await uploadSceneAdapterAssets({
+          event,
+          runId,
+          sceneId: scene.id,
           providerId: provider.id,
           capability: plan.capability,
+          output: result.output,
+          resultAssets: result.assets,
+          adapterConfig,
+        })
+        outputs[plan.capability] = assetResult.output
+        usage.push(...(result.usage ?? []))
+        addTrace(trace, 'adapter.dispatch', 'success', `Provider adapter completed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig, {
           providerRequestId: result.providerRequestId ?? null,
           latencyMs: result.latencyMs ?? null,
-        })
+          uploadedAssets: assetResult.uploadedAssets,
+        }))
         selectedPlan = selection
         completed = true
         break
@@ -1110,10 +1653,7 @@ export async function runSceneOrchestrator(
           status: 'failed',
           reason: message,
         })
-        addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, {
-          providerId: provider.id,
-          capability: plan.capability,
-        })
+        addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
         if (scene.fallback !== 'enabled')
           break
       }

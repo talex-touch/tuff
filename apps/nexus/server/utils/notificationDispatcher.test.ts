@@ -401,6 +401,81 @@ describe('notificationDispatcher', () => {
     expect(serialized).not.toContain('re-unit-test-secret')
   })
 
+  it('records sanitized HTTP status codes for failed notification adapter responses', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const authRef = `secure://notifications/resend-http-${marker}`
+    const channel = await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Resend http failure ${marker}`,
+      targetId: `plugin-${marker}`,
+      channel: 'email',
+      provider: `resend-http-${marker}`,
+      config: {
+        mode: 'send',
+        providerType: 'resend',
+        credentialRef: authRef,
+        from: 'Tuff <noreply@example.com>',
+        events: ['plugin.version.approved'],
+      },
+    }, 'admin')
+    credentialMocks.notificationCredentialExists.mockResolvedValueOnce(true)
+    credentialMocks.getNotificationCredential.mockResolvedValueOnce({ apiKey: 're-http-unit-test-secret' })
+    networkMocks.request.mockResolvedValueOnce({
+      status: 503,
+      statusText: 'Service Unavailable',
+      ok: false,
+      url: 'https://api.resend.com/emails',
+      headers: {},
+      data: { error: 'temporary unavailable' },
+    })
+
+    const deliveries = await dispatchNotificationEvent(h3Event, {
+      action: 'plugin.version.approved',
+      actorId: 'reviewer@example.com',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      metadata: {
+        pluginId: `plugin-${marker}`,
+        to: 'developer@example.com',
+      },
+    })
+
+    expect(deliveries).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        configId: channel.id,
+        status: 'failed',
+        reason: 'adapter-http-error',
+        adapter: 'email/resend',
+        statusCode: 503,
+        durationMs: expect.any(Number),
+      }),
+    ]))
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.failed',
+      resourceType: 'plugin',
+      resourceId: `plugin-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          reason: 'adapter-http-error',
+          statusCode: 503,
+          durationMs: expect.any(Number),
+        }),
+      }),
+    ]))
+    expect(serialized).not.toContain('developer@example.com')
+    expect(serialized).not.toContain('reviewer@example.com')
+    expect(serialized).not.toContain('re-http-unit-test-secret')
+    expect(serialized).not.toContain(authRef)
+    expect(serialized).not.toContain('temporary unavailable')
+  })
+
   it('sends plugin review email notifications to plugin owner recipients without runtime emails', async () => {
     const marker = crypto.randomUUID()
     const h3Event = event(marker)
@@ -637,7 +712,15 @@ describe('notificationDispatcher', () => {
     ]))
     expect(networkMocks.request).toHaveBeenCalledTimes(3)
 
-    const [sendgridRequest, mailgunRequest, postmarkRequest] = networkMocks.request.mock.calls.map(call => call[0])
+    const requests = networkMocks.request.mock.calls.map(call => call[0])
+    const findRequest = (url: string) => {
+      const request = requests.find(item => item.url === url)
+      expect(request).toBeDefined()
+      return request
+    }
+    const sendgridRequest = findRequest('https://api.sendgrid.com/v3/mail/send')
+    const mailgunRequest = findRequest('https://api.eu.mailgun.net/v3/mg.example.test/messages')
+    const postmarkRequest = findRequest('https://api.postmarkapp.com/email')
     expect(sendgridRequest).toEqual(expect.objectContaining({
       method: 'POST',
       url: 'https://api.sendgrid.com/v3/mail/send',

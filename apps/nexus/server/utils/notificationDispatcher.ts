@@ -41,11 +41,18 @@ export interface NotificationDeliveryRecord {
   hasCredentialRef: boolean
   resourceType: string | null
   resourceId: string | null
+  durationMs: number
+  statusCode: number | null
 }
 
 interface EvaluatedNotificationDelivery extends NotificationDeliveryRecord {
   credentialRef: string | null
   config: PlatformGovernanceConfig
+}
+
+interface NotificationSendResult {
+  reason: string
+  statusCode: number | null
 }
 
 const SENDABLE_HTTP_ADAPTERS = new Set([
@@ -413,22 +420,35 @@ function signBody(body: string, secret: string): string {
   return createHmac('sha256', secret).update(body).digest('hex')
 }
 
+function createSendResult(reason: string, statusCode: number | null = null): NotificationSendResult {
+  return {
+    reason,
+    statusCode: typeof statusCode === 'number' && Number.isFinite(statusCode)
+      ? Math.round(statusCode)
+      : null,
+  }
+}
+
+function createHttpSendResult(statusCode: number): NotificationSendResult {
+  return createSendResult(statusCode >= 200 && statusCode < 300 ? 'sent' : 'adapter-http-error', statusCode)
+}
+
 async function sendResendNotification(
   event: H3Event | undefined,
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasApiKeyCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
-    return 'recipient-missing'
+    return createSendResult('recipient-missing')
 
   const from = readConfigString(delivery.config, 'from', 320)
   if (!from)
-    return 'sender-missing'
+    return createSendResult('sender-missing')
 
   const subject = readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`
   const text = readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input)
@@ -449,7 +469,7 @@ async function sendResendNotification(
     },
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendSendgridNotification(
@@ -457,17 +477,17 @@ async function sendSendgridNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasApiKeyCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
-    return 'recipient-missing'
+    return createSendResult('recipient-missing')
 
   const from = readConfigString(delivery.config, 'from', 320)
   if (!from)
-    return 'sender-missing'
+    return createSendResult('sender-missing')
 
   const response = await networkClient.request({
     method: 'POST',
@@ -495,7 +515,7 @@ async function sendSendgridNotification(
     },
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendMailgunNotification(
@@ -503,21 +523,21 @@ async function sendMailgunNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'domain-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasApiKeyCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
-    return 'recipient-missing'
+    return createSendResult('recipient-missing')
 
   const from = readConfigString(delivery.config, 'from', 320)
   if (!from)
-    return 'sender-missing'
+    return createSendResult('sender-missing')
 
   const domain = readConfigString(delivery.config, 'domain', 255)
   if (!domain)
-    return 'domain-missing'
+    return createSendResult('domain-missing')
 
   const baseUrl = readProviderRegion(delivery.config) === 'eu'
     ? 'https://api.eu.mailgun.net'
@@ -543,7 +563,7 @@ async function sendMailgunNotification(
     body: body.toString(),
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendPostmarkNotification(
@@ -551,17 +571,17 @@ async function sendPostmarkNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasApiKeyCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
-    return 'recipient-missing'
+    return createSendResult('recipient-missing')
 
   const from = readConfigString(delivery.config, 'from', 320)
   if (!from)
-    return 'sender-missing'
+    return createSendResult('sender-missing')
 
   const response = await networkClient.request({
     method: 'POST',
@@ -581,16 +601,16 @@ async function sendPostmarkNotification(
     },
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendWebhookNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasWebhookCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const body = JSON.stringify({
     action: input.action,
@@ -614,7 +634,7 @@ async function sendWebhookNotification(
     body,
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendGenericEmailNotification(
@@ -622,17 +642,17 @@ async function sendGenericEmailNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasWebhookCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
-    return 'recipient-missing'
+    return createSendResult('recipient-missing')
 
   const from = readConfigString(delivery.config, 'from', 320)
   if (!from)
-    return 'sender-missing'
+    return createSendResult('sender-missing')
 
   const body = JSON.stringify({
     action: input.action,
@@ -660,7 +680,7 @@ async function sendGenericEmailNotification(
     body,
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendSmtpRelayNotification(
@@ -668,21 +688,21 @@ async function sendSmtpRelayNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'recipient-missing' | 'sender-missing' | 'relay-endpoint-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasSmtpCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const endpoint = readHttpsRelayEndpoint(delivery.config)
   if (!endpoint)
-    return 'relay-endpoint-missing'
+    return createSendResult('relay-endpoint-missing')
 
   const recipients = await resolveEmailRecipients(event, delivery, input)
   if (recipients.length === 0)
-    return 'recipient-missing'
+    return createSendResult('recipient-missing')
 
   const from = readConfigString(delivery.config, 'from', 320) ?? credential.from
   if (!from)
-    return 'sender-missing'
+    return createSendResult('sender-missing')
 
   const response = await networkClient.request({
     method: 'POST',
@@ -713,7 +733,7 @@ async function sendSmtpRelayNotification(
     },
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendWebPushRelayNotification(
@@ -721,13 +741,13 @@ async function sendWebPushRelayNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'subscription-missing' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   if (!hasWebhookCredential(credential))
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const subscriptions = await readWebPushSubscriptions(event, delivery, input)
   if (subscriptions.length === 0)
-    return 'subscription-missing'
+    return createSendResult('subscription-missing')
 
   const body = JSON.stringify({
     action: input.action,
@@ -760,17 +780,17 @@ async function sendWebPushRelayNotification(
     body,
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendBotWebhookNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<'sent' | 'credential-type-mismatch' | 'adapter-http-error' | 'adapter-request-failed'> {
+): Promise<NotificationSendResult> {
   const url = resolveBotWebhookUrl(delivery.adapter, credential)
   if (!url)
-    return 'credential-type-mismatch'
+    return createSendResult('credential-type-mismatch')
 
   const response = await networkClient.request({
     method: 'POST',
@@ -788,7 +808,7 @@ async function sendBotWebhookNotification(
     },
   })
 
-  return response.status >= 200 && response.status < 300 ? 'sent' : 'adapter-http-error'
+  return createHttpSendResult(response.status)
 }
 
 async function sendNotification(
@@ -796,7 +816,7 @@ async function sendNotification(
   delivery: EvaluatedNotificationDelivery,
   input: DispatchNotificationInput,
   credential: NotificationCredentialPayload,
-): Promise<string> {
+): Promise<NotificationSendResult> {
   try {
     if (delivery.adapter === 'email/resend')
       return await sendResendNotification(event, delivery, input, credential)
@@ -816,10 +836,10 @@ async function sendNotification(
       return await sendWebPushRelayNotification(event, delivery, input, credential)
     if (delivery.adapter === 'feishu' || delivery.adapter === 'lark')
       return await sendBotWebhookNotification(delivery, input, credential)
-    return 'send-adapter-unsupported'
+    return createSendResult('send-adapter-unsupported')
   }
   catch {
-    return 'adapter-request-failed'
+    return createSendResult('adapter-request-failed')
   }
 }
 
@@ -907,6 +927,8 @@ function evaluateDelivery(
     hasCredentialRef: Boolean(credentialRef),
     resourceType: input.resourceType ?? null,
     resourceId: input.resourceId ?? null,
+    durationMs: 0,
+    statusCode: null,
     credentialRef,
     config,
   }
@@ -938,6 +960,8 @@ async function recordDeliveryAudit(
       reason: delivery.reason,
       credentialRequired: delivery.credentialRequired,
       hasCredentialRef: delivery.hasCredentialRef,
+      durationMs: delivery.durationMs,
+      statusCode: delivery.statusCode,
       context,
     },
   })
@@ -1021,24 +1045,39 @@ async function executeDelivery(
   }
 
   const result = await sendNotification(event, delivery, input, credential)
-  if (result === 'sent') {
+  if (result.reason === 'sent') {
     return {
       ...delivery,
       status: 'sent',
       reason: 'delivery-sent',
+      statusCode: result.statusCode,
     }
   }
 
   return {
     ...delivery,
     status: 'failed',
-    reason: result,
+    reason: result.reason,
+    statusCode: result.statusCode,
   }
 }
 
 function toDeliveryRecord(delivery: EvaluatedNotificationDelivery): NotificationDeliveryRecord {
   const { config: _config, credentialRef: _credentialRef, ...record } = delivery
   return record
+}
+
+async function executeDeliveryWithTiming(
+  event: H3Event | undefined,
+  delivery: EvaluatedNotificationDelivery,
+  input: DispatchNotificationInput,
+): Promise<EvaluatedNotificationDelivery> {
+  const startedAt = Date.now()
+  const dispatched = await executeDelivery(event, delivery, input)
+  return {
+    ...dispatched,
+    durationMs: Math.max(0, Date.now() - startedAt),
+  }
 }
 
 export async function dispatchNotificationEvent(
@@ -1060,7 +1099,7 @@ export async function dispatchNotificationEvent(
   const deliveries = await Promise.all(configs
     .map(config => evaluateDelivery(config, normalizedInput))
     .map(delivery => verifyCredentialRef(event, delivery)))
-  const dispatchedDeliveries = await Promise.all(deliveries.map(delivery => executeDelivery(event, delivery, normalizedInput)))
+  const dispatchedDeliveries = await Promise.all(deliveries.map(delivery => executeDeliveryWithTiming(event, delivery, normalizedInput)))
 
   await Promise.all(dispatchedDeliveries.map(delivery => recordDeliveryAudit(event, delivery, normalizedInput)))
   return dispatchedDeliveries.map(toDeliveryRecord)

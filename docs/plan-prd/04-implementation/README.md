@@ -16,6 +16,7 @@
 | 文件 | 有效状态 | 当前边界 / 下一动作 |
 | --- | --- | --- |
 | `ActiveGoalClosure-2026-05-23.md` | 当前参考 | 本轮 2.4.11 稳定化、插件 capability、open PR 与后续 Intelligence 小切片的执行顺序；每个点位仍需按分支/worktree、related-only commit、验证后合并。 |
+| `ActiveGoalBranchCleanup-2026-05-23.md` | 当前参考 / 分支收口记录 | 记录 Nexus Data Governance 当前目标进度、脏工作树清理、截图分支合并/删除清单与执行顺序；分支删除完成后继续以该文档追溯。 |
 | `AssistantExperiment-VoiceFloatingBall-260223.md` | 历史参考 / 待重写 | 实验能力默认关闭；继续推进前需重写为当前 Assistant / OmniPanel 能力边界。 |
 | `CoreAppRefactor260111.md` | 历史参考 / 待重写 | 早期 CoreApp/Tuffex/utils 改造草案；当前实现以代码现状与 TODO 分波次债务为准。 |
 | `FileWorkerIdlePlan260111.md` | 历史参考 | Worker + Idle 设计已部分被启动异步化、FileProvider 后台 ready 与搜索性能治理吸收；剩余动作进入 Wave C / 搜索性能验收。 |

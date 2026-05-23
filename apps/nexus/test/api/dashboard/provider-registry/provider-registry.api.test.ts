@@ -411,6 +411,23 @@ describe('/api/dashboard/provider-registry', () => {
         maxTokens: 500000,
       },
     })
+    expect(saved.evaluations).toEqual([
+      expect.objectContaining({
+        configId: saved.quota.id,
+        providerId: created.provider.id,
+        provider: 'tencent-cloud',
+        status: 'ok',
+        usage: {
+          requests: 0,
+          tokens: 0,
+        },
+        remaining: {
+          requests: 250,
+          tokens: 500000,
+        },
+      }),
+    ])
+    expect(listed.evaluations).toEqual(saved.evaluations)
     expect(state.db?.governanceConfigs.size).toBe(1)
   })
 

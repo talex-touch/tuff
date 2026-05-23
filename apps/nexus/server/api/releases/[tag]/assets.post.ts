@@ -72,6 +72,7 @@ export default defineEventHandler(async (event) => {
       size: uploadResult.size,
       storageChannel: uploadResult.storageChannel,
       storageProvider: uploadResult.storageProvider,
+      metadata: uploadResult.uploadRetry ? { ...uploadResult.uploadRetry } : undefined,
     })
   }
   catch (error) {
@@ -113,6 +114,7 @@ export default defineEventHandler(async (event) => {
         size: signatureUploadResult.size,
         storageChannel: signatureUploadResult.storageChannel,
         storageProvider: signatureUploadResult.storageProvider,
+        metadata: signatureUploadResult.uploadRetry ? { ...signatureUploadResult.uploadRetry } : undefined,
       })
     }
     catch (error) {

@@ -1,6 +1,6 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { requireAdmin } from '../../../../../utils/auth'
-import { upsertPlatformGovernanceConfig } from '../../../../../utils/platformGovernanceStore'
+import { evaluateIntelligenceProviderQuotas, upsertPlatformGovernanceConfig } from '../../../../../utils/platformGovernanceStore'
 import { getProviderRegistryEntry } from '../../../../../utils/providerRegistryStore'
 
 export default defineEventHandler(async (event) => {
@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
     targetId: id,
     provider: provider.vendor,
   }, userId)
+  const evaluations = await evaluateIntelligenceProviderQuotas(event, id)
 
-  return { quota }
+  return { quota, evaluations }
 })

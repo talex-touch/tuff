@@ -33,6 +33,7 @@
 - `docs/plan-prd/03-features/search/competitive-analysis-2026-05-22/10-execution-roadmap-synthesis.md` - Raycast / Alfred / uTools 竞品分析执行路线与 100 轮审计入口。
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象。
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD。
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md` - Nexus Data Governance 当前 8 项进度快照。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md` - 跨平台兼容与占位实现深度复核报告。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-followup-2026-05-14.md` - 跨平台兼容与占位实现跟进报告。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-summary-2026-05-15.md` - 跨平台兼容、占位实现与治理口径总结。
@@ -41,6 +42,7 @@
 - `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md` - 跨平台兼容、占位实现与架构健壮性自动化审计。
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析。
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md` - 当前 2.4.11 稳定化、插件 capability 与后续 Intelligence 小切片执行顺序。
+- `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md` - 当前 goal 进度与截图分支清理记录。
 - `docs/plan-prd/04-implementation/NexusDeviceAuthRiskControl-260316.md` - Nexus 设备授权风控实施方案。
 - `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - Release assets 核对入口。
 - `retired-ai-app/deploy/README.zh-CN.md` - AI 1Panel 部署手册。

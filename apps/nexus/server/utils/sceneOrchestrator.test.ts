@@ -1,6 +1,9 @@
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord } from './sceneRegistryStore'
+import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getPlatformGovernanceAnalytics, listPlatformGovernanceEvents } from './platformGovernanceStore'
+import { buildSceneAssetGovernanceResourceId, requireSceneAsset } from './sceneAssetStorage'
 import {
   clearSceneCapabilityAdaptersForTest,
   registerSceneCapabilityAdapter,
@@ -181,6 +184,63 @@ function makeEvent() {
   } as any
 }
 
+function makeBucket(failWrites = 0) {
+  const objects = new Map<string, { data: Buffer, contentType: string }>()
+  let attempts = 0
+
+  return {
+    get attempts() {
+      return attempts
+    },
+    event() {
+      return {
+        path: '/api/dashboard/provider-registry/scenes/corebox.selection.translate/run',
+        node: { req: { url: '/api/dashboard/provider-registry/scenes/corebox.selection.translate/run' } },
+        context: {
+          params: {},
+          cloudflare: {
+            env: {
+              ASSETS: this,
+            },
+          },
+        },
+      } as any
+    },
+    put: async (key: string, data: Uint8Array, options?: { httpMetadata?: { contentType?: string } }) => {
+      attempts += 1
+      if (attempts <= failWrites) {
+        throw Object.assign(new Error('Transient scene asset write failure'), {
+          statusCode: 503,
+        })
+      }
+      objects.set(key, {
+        data: Buffer.from(data.buffer, data.byteOffset, data.byteLength),
+        contentType: options?.httpMetadata?.contentType || 'application/octet-stream',
+      })
+    },
+    get: async (key: string) => {
+      const object = objects.get(key)
+      if (!object)
+        return null
+      return {
+        httpMetadata: {
+          contentType: object.contentType,
+        },
+        arrayBuffer: async () => object.data.buffer.slice(
+          object.data.byteOffset,
+          object.data.byteOffset + object.data.byteLength,
+        ),
+      }
+    },
+    delete: async (key: string) => {
+      objects.delete(key)
+    },
+    list: async () => ({
+      objects: Array.from(objects.keys()).map(key => ({ key })),
+    }),
+  }
+}
+
 describe('runSceneOrchestrator', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -343,6 +403,549 @@ describe('runSceneOrchestrator', () => {
         expect.objectContaining({ unit: 'character', quantity: 5 }),
       ]),
     }))
+  })
+
+  it('合并 adapter/upload/assets/constraints 配置并只在 trace 暴露脱敏摘要', async () => {
+    const configuredProvider = provider({
+      metadata: {
+        adapter: {
+          mode: 'provider',
+          retainedProvider: true,
+          apiKey: 'provider-secret',
+        },
+        upload: {
+          storageProvider: 'r2',
+          storageChannel: 'provider-channel',
+          region: 'ap-shanghai',
+        },
+        assets: {
+          kind: 'provider-asset',
+          bucket: 'provider-bucket',
+        },
+      },
+      capabilities: [
+        {
+          ...textTranslateCapability('prv_tencent_cloud_mt'),
+          constraints: {
+            maxTokens: 1000,
+            timeoutMs: 5000,
+            secretKey: 'capability-secret',
+          },
+          metadata: {
+            adapter: {
+              mode: 'capability',
+              endpointGroup: 'fast',
+              authToken: 'capability-token',
+            },
+            upload: {
+              storageChannel: 'capability-channel',
+              retryBudget: 1,
+            },
+            assets: {
+              kind: 'capability-asset',
+              secretKey: 'asset-secret',
+            },
+          },
+        },
+      ],
+    })
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(configuredProvider)
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      metadata: {
+        adapter: {
+          mode: 'scene',
+          model: 'scene-model',
+          secretKey: 'scene-secret',
+        },
+        upload: {
+          storageProvider: 's3',
+        },
+        assets: {
+          kind: 'scene-asset',
+          cachePolicy: 'scene-cache',
+        },
+      },
+      bindings: [
+        {
+          id: 'binding_text_translate',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_tencent_cloud_mt',
+          capability: 'text.translate',
+          priority: 10,
+          weight: null,
+          status: 'enabled',
+          constraints: {
+            maxTokens: 800,
+            concurrency: 2,
+            region: 'cn',
+            secretKey: 'binding-secret',
+          },
+          metadata: {
+            adapter: {
+              mode: 'binding',
+              batchSize: 4,
+              apiKey: 'binding-secret',
+            },
+            upload: {
+              storageChannel: 'binding-channel',
+              signedUrlTtlSeconds: 60,
+            },
+            assets: {
+              kind: 'binding-asset',
+              cachePolicy: 'binding-cache',
+            },
+          },
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ],
+    }))
+
+    const adapter = vi.fn(async ({ adapterConfig }) => ({
+      output: { translatedText: 'configured' },
+      providerRequestId: 'req_configured',
+      latencyMs: 18,
+      usage: [{ unit: 'character', quantity: 5, billable: true }],
+      adapterConfig,
+    }))
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', adapter)
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })
+    const adapterConfig = adapter.mock.calls[0]?.[0].adapterConfig
+    const successTrace = run.trace.find(item =>
+      item.phase === 'adapter.dispatch'
+      && item.status === 'success'
+      && item.metadata?.providerRequestId === 'req_configured',
+    )
+
+    expect(adapterConfig).toEqual({
+      adapter: {
+        mode: 'binding',
+        retainedProvider: true,
+        apiKey: 'binding-secret',
+        endpointGroup: 'fast',
+        authToken: 'capability-token',
+        model: 'scene-model',
+        secretKey: 'scene-secret',
+        batchSize: 4,
+      },
+      upload: {
+        storageProvider: 's3',
+        storageChannel: 'binding-channel',
+        region: 'ap-shanghai',
+        retryBudget: 1,
+        signedUrlTtlSeconds: 60,
+      },
+      assets: {
+        kind: 'binding-asset',
+        bucket: 'provider-bucket',
+        secretKey: 'asset-secret',
+        cachePolicy: 'binding-cache',
+      },
+      constraints: {
+        maxTokens: 800,
+        timeoutMs: 5000,
+        secretKey: 'binding-secret',
+        concurrency: 2,
+        region: 'cn',
+      },
+      sources: [
+        'provider.metadata',
+        'capability.metadata',
+        'capability.constraints',
+        'scene.metadata',
+        'binding.metadata',
+        'binding.constraints',
+      ],
+    })
+    expect(successTrace?.metadata).toMatchObject({
+      providerId: 'prv_tencent_cloud_mt',
+      capability: 'text.translate',
+      adapterKeys: 'batchSize,endpointGroup,mode,model,retainedProvider',
+      uploadKeys: 'region,retryBudget,signedUrlTtlSeconds,storageChannel,storageProvider',
+      assetKeys: 'bucket,cachePolicy,kind',
+      constraintKeys: 'concurrency,maxTokens,region,timeoutMs',
+      storageChannel: 'binding-channel',
+      storageProvider: 's3',
+      assetKind: 'binding-asset',
+      sources: 'provider.metadata,capability.metadata,capability.constraints,scene.metadata,binding.metadata,binding.constraints',
+      providerRequestId: 'req_configured',
+      latencyMs: 18,
+    })
+    expect(JSON.stringify(successTrace?.metadata)).not.toContain('apiKey')
+    expect(JSON.stringify(successTrace?.metadata)).not.toContain('secretKey')
+    expect(JSON.stringify(successTrace?.metadata)).not.toContain('authToken')
+    expect(JSON.stringify(successTrace?.metadata)).not.toContain('binding-secret')
+    expect(JSON.stringify(successTrace?.metadata)).not.toContain('capability-token')
+  })
+
+  it('把显式 Scene adapter 资产写入 storage/upload governance 并替换输出中的原始载荷', async () => {
+    const sourceBase64 = Buffer.from('asset-bytes').toString('base64')
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      metadata: {
+        assets: {
+          kind: 'translated-image',
+          resourceType: 'scene-output-image',
+          maxBytes: 128,
+        },
+      },
+    }))
+
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', async () => ({
+      output: {
+        translatedImageBase64: sourceBase64,
+        sourceText: 'hello',
+      },
+      providerRequestId: 'req_asset_upload',
+      latencyMs: 24,
+      usage: [{ unit: 'image', quantity: 1, billable: true }],
+      assets: [
+        {
+          id: 'translated-image',
+          outputField: 'translatedImageBase64',
+          dataUrl: `data:image/png;base64,${sourceBase64}`,
+          fileName: 'translated.png',
+          resourceType: 'scene-output-image',
+        },
+      ],
+    }))
+
+    const run = await runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })
+    const output = run.output as any
+    const reference = output.translatedImageBase64
+    const governanceResourceId = buildSceneAssetGovernanceResourceId(reference.key)
+    const stored = await requireSceneAsset(makeEvent(), reference.key, {
+      governanceResourceId,
+      resourceType: 'scene-output-image',
+    })
+    const uploadRows = await listPlatformGovernanceEvents(makeEvent(), {
+      scope: 'upload',
+      resourceType: 'scene-output-image',
+      resourceId: governanceResourceId,
+      days: 30,
+      limit: 10,
+    })
+    const storageRows = await listPlatformGovernanceEvents(makeEvent(), {
+      scope: 'storage',
+      resourceType: 'scene-output-image',
+      resourceId: governanceResourceId,
+      days: 30,
+      limit: 10,
+    })
+    const successTrace = run.trace.find(item =>
+      item.phase === 'adapter.dispatch'
+      && item.status === 'success'
+      && item.metadata?.providerRequestId === 'req_asset_upload',
+    )
+
+    expect(output).toMatchObject({
+      sourceText: 'hello',
+      translatedImageBase64: {
+        type: 'scene-asset',
+        id: 'translated-image',
+        contentType: 'image/png',
+        sha256: 'c092df87ad240efa9f032f792b57f5d3812a833b47de33172f59cf70ee2f01c4',
+        size: 11,
+        storageChannel: 'memory',
+        storageProvider: 'memory',
+        resourceType: 'scene-output-image',
+      },
+      sceneAssets: [
+        expect.objectContaining({
+          type: 'scene-asset',
+          id: 'translated-image',
+          sha256: 'c092df87ad240efa9f032f792b57f5d3812a833b47de33172f59cf70ee2f01c4',
+          url: expect.stringContaining('/api/v1/scenes/assets/'),
+        }),
+      ],
+    })
+    expect(JSON.stringify(run.output)).not.toContain(sourceBase64)
+    expect(Buffer.from(stored.data).toString('utf8')).toBe('asset-bytes')
+    expect(stored.contentType).toBe('image/png')
+    expect(stored.sha256).toBe(reference.sha256)
+    expect(successTrace?.metadata).toMatchObject({ uploadedAssets: 1 })
+    expect(uploadRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: 'resource.started',
+        resourceId: governanceResourceId,
+        channel: 'image/png',
+        unit: 'file',
+        quantity: 1,
+      }),
+      expect.objectContaining({
+        action: 'resource.completed',
+        resourceId: governanceResourceId,
+        channel: 'image/png',
+        unit: 'byte',
+        quantity: 11,
+        metadata: expect.objectContaining({
+          storageChannel: 'memory',
+          storageProvider: 'memory',
+          surface: 'scene-adapter-upload',
+        }),
+      }),
+    ]))
+    expect(storageRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: 'storage.write',
+        resourceId: governanceResourceId,
+        channel: 'memory',
+        unit: 'byte',
+        quantity: 11,
+      }),
+      expect.objectContaining({
+        action: 'storage.read',
+        resourceId: governanceResourceId,
+        channel: 'memory',
+        unit: 'byte',
+        quantity: 11,
+      }),
+    ]))
+    expect(JSON.stringify(uploadRows)).not.toContain(sourceBase64)
+    expect(JSON.stringify(uploadRows)).not.toContain(reference.key)
+    expect(JSON.stringify(storageRows)).not.toContain(sourceBase64)
+    expect(JSON.stringify(storageRows)).not.toContain(reference.key)
+  })
+
+  it('把恢复后的 Scene adapter R2 资产重试写入完成态 upload governance', async () => {
+    const bucket = makeBucket(2)
+    const event = bucket.event()
+    const sourceBase64 = Buffer.from('asset-bytes').toString('base64')
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      metadata: {
+        assets: {
+          kind: 'translated-image',
+          resourceType: 'scene-output-image',
+          maxBytes: 128,
+        },
+      },
+    }))
+
+    registerSceneCapabilityAdapter('tencent-cloud:text.translate', async () => ({
+      output: {
+        translatedImageBase64: sourceBase64,
+      },
+      providerRequestId: 'req_asset_r2_recovered',
+      assets: [
+        {
+          id: 'translated-image',
+          outputField: 'translatedImageBase64',
+          dataUrl: `data:image/png;base64,${sourceBase64}`,
+          resourceType: 'scene-output-image',
+        },
+      ],
+    }))
+
+    const run = await runSceneOrchestrator(event, 'corebox.selection.translate', {
+      input: { text: 'hello' },
+    })
+    const reference = (run.output as any).translatedImageBase64
+    const governanceResourceId = buildSceneAssetGovernanceResourceId(reference.key)
+    const uploadRows = await listPlatformGovernanceEvents(event, {
+      scope: 'upload',
+      resourceType: 'scene-output-image',
+      resourceId: governanceResourceId,
+      days: 30,
+      limit: 10,
+    })
+    const completed = uploadRows.find(row => row.action === 'resource.completed')
+
+    expect(bucket.attempts).toBe(3)
+    expect(reference).toMatchObject({
+      storageChannel: 'r2',
+      storageProvider: 'cloudflare-r2',
+      resourceType: 'scene-output-image',
+      sha256: 'c092df87ad240efa9f032f792b57f5d3812a833b47de33172f59cf70ee2f01c4',
+    })
+    expect(completed).toMatchObject({
+      action: 'resource.completed',
+      resourceId: governanceResourceId,
+      channel: 'image/png',
+      unit: 'byte',
+      quantity: 11,
+      metadata: expect.objectContaining({
+        retryable: true,
+        recovered: true,
+        retryCount: 2,
+        maxRetries: 2,
+        attempts: 3,
+        nextRetryDelayMs: 0,
+        storageChannel: 'r2',
+        storageProvider: 'cloudflare-r2',
+        storageOperation: 'storage.write',
+        storageStatusCode: 503,
+        surface: 'scene-adapter-upload',
+      }),
+    })
+    expect(JSON.stringify(uploadRows)).not.toContain(reference.key)
+    expect(JSON.stringify(uploadRows)).not.toContain(sourceBase64)
+  })
+
+  it('把 Scene adapter 资产 preflight 失败写入 upload governance live sample', async () => {
+    const cases = [
+      {
+        assetId: 'translated-image-invalid-base64',
+        rawPayloadMarker: 'invalid-scene-asset-payload-marker!',
+        expectedStatusCode: 400,
+        asset: {
+          id: 'translated-image-invalid-base64',
+          outputField: 'translatedImageBase64',
+          dataUrl: 'data:image/png;base64,invalid-scene-asset-payload-marker!',
+          fileName: 'invalid-base64.png',
+          resourceType: 'scene-output-image',
+        },
+      },
+      {
+        assetId: 'translated-image-missing-payload',
+        rawPayloadMarker: null,
+        expectedStatusCode: 400,
+        asset: {
+          id: 'translated-image-missing-payload',
+          outputField: 'translatedImageBase64',
+          contentType: 'image/png',
+          fileName: 'missing-payload.png',
+          resourceType: 'scene-output-image',
+        },
+      },
+      {
+        assetId: 'translated-image-too-large',
+        rawPayloadMarker: 'oversized-scene-asset-payload',
+        expectedStatusCode: 413,
+        asset: {
+          id: 'translated-image-too-large',
+          outputField: 'translatedImageBase64',
+          data: Buffer.from('oversized-scene-asset-payload'),
+          contentType: 'image/png',
+          fileName: 'too-large.png',
+          resourceType: 'scene-output-image',
+        },
+      },
+    ]
+
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      fallback: 'disabled',
+      metadata: {
+        assets: {
+          kind: 'translated-image',
+          resourceType: 'scene-output-image',
+          maxBytes: 8,
+        },
+      },
+    }))
+
+    for (const testCase of cases) {
+      clearSceneCapabilityAdaptersForTest()
+      registerSceneCapabilityAdapter('tencent-cloud:text.translate', async () => ({
+        output: { sourceText: 'hello' },
+        providerRequestId: `req_asset_preflight_failure_${testCase.assetId}`,
+        latencyMs: 19,
+        assets: [testCase.asset],
+      }))
+
+      await expect(runSceneOrchestrator(makeEvent(), 'corebox.selection.translate', {
+        input: { text: 'hello' },
+      })).rejects.toMatchObject({
+        statusCode: 502,
+        data: {
+          code: 'PROVIDER_ADAPTER_FAILED',
+        },
+      })
+
+      const uploadRows = await listPlatformGovernanceEvents(makeEvent(), {
+        scope: 'upload',
+        resourceType: 'scene-output-image',
+        days: 30,
+        limit: 100,
+      })
+      const failedRow = uploadRows.find(row =>
+        row.action === 'resource.failed'
+        && row.metadata?.surface === 'scene-adapter-upload'
+        && row.metadata?.assetId === testCase.assetId,
+      )
+      expect(failedRow).toEqual(expect.objectContaining({
+        action: 'resource.failed',
+        resourceType: 'scene-output-image',
+        channel: 'image/png',
+        unit: 'file',
+        quantity: 1,
+        metadata: expect.objectContaining({
+          surface: 'scene-adapter-upload',
+          sceneId: 'corebox.selection.translate',
+          providerId: 'prv_tencent_cloud_mt',
+          capability: 'text.translate',
+          assetId: testCase.assetId,
+          assetKind: 'translated-image',
+          reason: 'scene-asset-preflight-failed',
+          statusCode: testCase.expectedStatusCode,
+          failureCategory: 'payload-validation',
+          failureSampleSource: 'live',
+          failureCalibrationStatus: 'sampled',
+          liveFailureSample: true,
+          retryable: false,
+        }),
+      }))
+
+      const startedRow = uploadRows.find(row =>
+        row.action === 'resource.started'
+        && row.resourceId === failedRow?.resourceId
+        && row.metadata?.attemptId === failedRow?.metadata?.attemptId,
+      )
+      expect(startedRow).toEqual(expect.objectContaining({
+        action: 'resource.started',
+        resourceType: 'scene-output-image',
+        channel: 'image/png',
+        unit: 'file',
+        quantity: 1,
+        metadata: expect.objectContaining({
+          surface: 'scene-adapter-upload',
+          assetId: testCase.assetId,
+        }),
+      }))
+
+      const serializedRows = JSON.stringify(uploadRows)
+      if (testCase.rawPayloadMarker)
+        expect(serializedRows).not.toContain(testCase.rawPayloadMarker)
+      expect(serializedRows).not.toContain(testCase.asset.fileName)
+      expect(serializedRows).not.toContain('/api/v1/scenes/assets/')
+    }
+
+    const analytics = await getPlatformGovernanceAnalytics(makeEvent(), { days: 30, limit: 100, topLimit: 20 })
+    const preflight400 = analytics.uploads.failureMatrix.find(item =>
+      item.resourceType === 'scene-output-image'
+      && item.surface === 'scene-adapter-upload'
+      && item.reason === 'scene-asset-preflight-failed'
+      && item.statusCode === 400,
+    )
+    const preflight413 = analytics.uploads.failureMatrix.find(item =>
+      item.resourceType === 'scene-output-image'
+      && item.surface === 'scene-adapter-upload'
+      && item.reason === 'scene-asset-preflight-failed'
+      && item.statusCode === 413,
+    )
+
+    expect(preflight400).toEqual(expect.objectContaining({
+      disposition: 'not-retryable',
+      calibrationStatus: 'sampled',
+      sampleSource: 'live',
+      suggestedAction: 'payload-validation',
+    }))
+    expect(preflight400?.events).toBeGreaterThanOrEqual(2)
+    expect(preflight400?.sampleCount).toBeGreaterThanOrEqual(2)
+    expect(preflight413).toEqual(expect.objectContaining({
+      disposition: 'not-retryable',
+      calibrationStatus: 'sampled',
+      sampleSource: 'live',
+      sampleCount: 1,
+      suggestedAction: 'payload-validation',
+    }))
+
+    const serializedMatrix = JSON.stringify(analytics.uploads.failureMatrix)
+    expect(serializedMatrix).not.toContain('invalid-scene-asset-payload-marker')
+    expect(serializedMatrix).not.toContain('oversized-scene-asset-payload')
   })
 
   it('adapter 失败且 fallback enabled 时继续尝试下一个候选 provider', async () => {
