@@ -1881,6 +1881,17 @@ const dashboardRiskTotal = computed(() => {
     + risk.providerQuotaBlocked
     + risk.providerQuotaWarning
 })
+const dashboardOperationsTimeline = computed(() => analyticsData.value.dashboard.trends.operationsTimeline)
+const dashboardOperationsLatest = computed(() => dashboardOperationsTimeline.value.at(-1) ?? null)
+const dashboardOperationsPeaks = computed(() => {
+  const timeline = dashboardOperationsTimeline.value
+  return {
+    searches: Math.max(1, ...timeline.map(item => item.searches)),
+    pluginInstalls: Math.max(1, ...timeline.map(item => item.pluginInstalls)),
+    providerTokens: Math.max(1, ...timeline.map(item => item.providerTokens)),
+    riskScore: Math.max(1, ...timeline.map(item => item.riskScore)),
+  }
+})
 const groupedConfigs = computed(() => ({
   analytics: configs.value.filter(item => item.configType === 'analytics_collection'),
   storage: configs.value.filter(item => item.configType === 'storage_channel'),
@@ -2239,6 +2250,12 @@ function formatDelta(value: number): string {
   return `${value >= 0 ? '+' : ''}${formatPercent(value)}`
 }
 
+function formatTrendWidth(value: number, peak: number): string {
+  if (!Number.isFinite(value) || !Number.isFinite(peak) || value <= 0 || peak <= 0)
+    return '0%'
+  return `${Math.min(100, Math.max(4, Math.round((value / peak) * 100)))}%`
+}
+
 function formatDate(value: string): string {
   if (!value) {
     return '-'
@@ -2593,6 +2610,102 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           />
         </div>
 
+        <div
+          v-if="dashboardOperationsLatest"
+          class="mt-4 rounded-lg bg-white/70 p-4 text-xs dark:bg-white/[0.03]"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="font-semibold text-black dark:text-white">
+                {{ t('dashboard.governance.analytics.dashboardOperationsCommandBoard', 'Operations command board') }}
+              </p>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardOperationsCommandBoardHint', 'Latest daily posture for growth, demand, model cost, and risk.') }}
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="text-black/40 dark:text-white/40">
+                {{ t('dashboard.governance.analytics.dashboardOperationsLatestSample', 'Latest sample') }}
+              </p>
+              <p class="mt-1 font-semibold text-black dark:text-white">
+                {{ formatShortDate(dashboardOperationsLatest.date) }}
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3 md:grid-cols-4">
+            <div>
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardOperationsLatestSearches', 'Searches') }}
+              </p>
+              <p class="mt-1 text-xl font-semibold text-black dark:text-white">
+                {{ formatNumber(dashboardOperationsLatest.searches) }}
+              </p>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ formatPercent(dashboardOperationsLatest.searchSelectionRate) }} selected
+              </p>
+            </div>
+            <div>
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardOperationsLatestPlugins', 'Plugin installs') }}
+              </p>
+              <p class="mt-1 text-xl font-semibold text-black dark:text-white">
+                {{ formatNumber(dashboardOperationsLatest.pluginInstalls) }}
+              </p>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ formatNumber(dashboardOperationsLatest.pluginInvocations) }} calls
+              </p>
+            </div>
+            <div>
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardOperationsLatestTokens', 'Provider tokens') }}
+              </p>
+              <p class="mt-1 text-xl font-semibold text-black dark:text-white">
+                {{ formatNumber(dashboardOperationsLatest.providerTokens) }}
+              </p>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ formatNumber(dashboardOperationsLatest.providerRequests) }} req
+              </p>
+            </div>
+            <div>
+              <p class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.dashboardOperationsLatestRisk', 'Risk score') }}
+              </p>
+              <p class="mt-1 text-xl font-semibold text-black dark:text-white">
+                {{ formatNumber(dashboardOperationsLatest.riskScore) }}
+              </p>
+              <p class="mt-1 text-black/45 dark:text-white/45">
+                {{ formatNumber(dashboardOperationsLatest.searchProblems) }} search · {{ formatNumber(dashboardOperationsLatest.uploadFailed) }} upload
+              </p>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3 lg:grid-cols-4">
+            <div
+              v-for="item in dashboardOperationsTimeline.slice(-8)"
+              :key="`dashboard-operations-command:${item.date}`"
+              class="grid gap-2 border-t border-black/[0.06] pt-3 dark:border-white/[0.08]"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-medium text-black/70 dark:text-white/70">{{ formatShortDate(item.date) }}</span>
+                <span class="text-black/40 dark:text-white/40">{{ formatNumber(item.riskScore) }} risk</span>
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                <div class="h-full rounded-full bg-emerald-500/70" :style="{ width: formatTrendWidth(item.searches, dashboardOperationsPeaks.searches) }" />
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                <div class="h-full rounded-full bg-sky-500/70" :style="{ width: formatTrendWidth(item.pluginInstalls, dashboardOperationsPeaks.pluginInstalls) }" />
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                <div class="h-full rounded-full bg-violet-500/70" :style="{ width: formatTrendWidth(item.providerTokens, dashboardOperationsPeaks.providerTokens) }" />
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                <div class="h-full rounded-full bg-amber-500/70" :style="{ width: formatTrendWidth(item.riskScore, dashboardOperationsPeaks.riskScore) }" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="mt-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr]">
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
@@ -2718,7 +2831,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
 
           <div class="mt-3 grid gap-2">
             <div
-              v-for="item in analyticsData.dashboard.trends.operationsTimeline.slice(-6)"
+              v-for="item in dashboardOperationsTimeline.slice(-6)"
               :key="`dashboard-operations-timeline:${item.date}`"
               class="rounded-lg border border-black/[0.05] p-3 dark:border-white/[0.06]"
             >
@@ -2760,7 +2873,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </p>
               </div>
             </div>
-            <p v-if="analyticsData.dashboard.trends.operationsTimeline.length === 0" class="text-black/45 dark:text-white/45">
+            <p v-if="dashboardOperationsTimeline.length === 0" class="text-black/45 dark:text-white/45">
               {{ t('dashboard.governance.analytics.dashboardOperationsTimelineEmpty', 'No daily operations samples yet.') }}
             </p>
           </div>

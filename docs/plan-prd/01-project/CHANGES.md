@@ -13,6 +13,16 @@
 
 ## 2026-05-24
 
+### feat(nexus): add governance operations command board
+
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added an operations command board to the governance cockpit, derived from `dashboard.trends.operationsTimeline`, showing latest daily searches, selection rate, plugin installs/calls, provider requests/tokens, search/upload risk, and compact trend bars.
+  - Kept the command board aggregate-only and front-end derived; no raw query, actor, resource, credential, attempt, or email identifiers are added to the report surface.
+  - Recorded the 2026-05-24 local browser evidence attempt as blocked by Nuxt watcher `EMFILE: too many open files, watch`, so it remains an open validation gap rather than completion evidence.
+
 ### feat(nexus): add governance operations daily timeline
 
 - `apps/nexus/server/utils/platformGovernanceStore.ts`

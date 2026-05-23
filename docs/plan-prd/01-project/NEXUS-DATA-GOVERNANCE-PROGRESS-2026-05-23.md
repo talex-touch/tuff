@@ -5,13 +5,13 @@
 
 ## Executive Status
 
-Current verdict: **in progress, not production-complete**. The local implementation has a broad code-backed baseline for the eight Nexus Data Governance areas, and the most recent focused validation covers the newly added search journey funnel, plugin review rating trend, and operations daily timeline slices. The remaining blockers are evidence blockers rather than architecture unknowns: real browser screenshots/interactions, live notification sends, live local/S3/OSS storage traces, production D1 migration/backfill, and real provider quota fail-closed calls.
+Current verdict: **in progress, not production-complete**. The local implementation has a broad code-backed baseline for the eight Nexus Data Governance areas, and the most recent focused validation covers the newly added search journey funnel, plugin review rating trend, operations daily timeline, and operations command board slices. The remaining blockers are evidence blockers rather than architecture unknowns: stable real browser screenshots/interactions, live notification sends, live local/S3/OSS storage traces, production D1 migration/backfill, and real provider quota fail-closed calls.
 
 | Roll-up | Current state |
 | --- | --- |
 | Scope breadth | 8/8 target areas have code or admin/API surface in the current worktree. |
-| Local evidence | Search journey, provider quota drill-down, plugin review trend, upload retry/reason buckets, storage pressure, notification profiles, operations summary, and operations daily timeline all have focused test or contract-test coverage recorded in this snapshot. |
-| Production evidence | Not complete. No live browser pass, live send pass, live object-storage pass, production D1 backfill, or real provider quota call evidence has been attached yet. |
+| Local evidence | Search journey, provider quota drill-down, plugin review trend, upload retry/reason buckets, storage pressure, notification profiles, operations summary, operations daily timeline, and operations command board all have focused test or contract-test coverage recorded in this snapshot. |
+| Production evidence | Not complete. No stable live browser pass, live send pass, live object-storage pass, production D1 backfill, or real provider quota call evidence has been attached yet. The 2026-05-24 local browser attempt was blocked by Nuxt watcher `EMFILE: too many open files, watch`, so it is recorded as a validation gap rather than completion evidence. |
 | Release readiness | Not ready for completion sign-off. It can continue as a development/governance branch, but should not be reported as production closed. |
 
 | Area | Status | Current proof | Remaining proof needed |
@@ -22,7 +22,7 @@ Current verdict: **in progress, not production-complete**. The local implementat
 | 4. Intelligence/adapt config merge and asset uploads | In progress | Scene Orchestrator merges adapter/upload/assets/constraints config from provider, capability, scene, and binding metadata; scene adapter assets go through shared storage object writes and private scene asset refs. | Real adapter execution evidence for merged config precedence and asset-backed outputs; old provider table retirement evidence. |
 | 5. Storage management, channels, limits, traffic analytics | In progress | Storage policies support local/R2/S3-compatible/OSS style channels through governance configs, secure credential refs, per-channel pressure/trend, remaining/overage budgets, burn-rate forecast, alert queue, dry-run/write smoke, and notify endpoint. | Live local/S3/OSS smoke artifacts, production D1 migration/backfill, and operator docs for channel sizing and alert response. |
 | 6. Notification management | In progress | Browser inbox, Resend, SendGrid, Mailgun, Postmark, SMTP relay, HTTP email relay, Feishu/Lark bots, generic webhook, and Web Push relay profiles; delivery trend, provider health, readiness/risk diagnostics, test panel, plugin moderation notification routing. | Real credentials/live send evidence, direct SMTP socket or hosted relay proof, Web Push VAPID/relay production send evidence. |
-| 7. Reports, analytics, operations dashboard | In progress | Operations dashboard summary covers user growth, search trend quality, plugin installs, upload risk, storage/notification/provider risk, hot plugin leaderboard, top models/providers, provider token/model/channel distribution, and an aggregate daily operations timeline across growth/search/plugin/provider/upload/storage signals. | Deeper executive large-screen layout, real browser visual evidence, and longer production trend samples. |
+| 7. Reports, analytics, operations dashboard | In progress | Operations dashboard summary covers user growth, search trend quality, plugin installs, upload risk, storage/notification/provider risk, hot plugin leaderboard, top models/providers, provider token/model/channel distribution, an aggregate daily operations timeline, and a compact command board for latest search/plugin/provider/risk posture. | Stable real browser visual evidence and longer production trend samples. |
 | 8. Intelligence provider token/quota limits | In progress | `intelligence_provider_quota` configs enforce request/token budgets before direct invoke, Lab model, and Scene Orchestrator dispatch; Provider Registry quota GET/POST exposes evaluations; governance analytics shows quota risk, remaining budget, burn rate, overage, and nearest exhaustion. | Live provider-call evidence with real quota policies and production registry-primary migration/backfill evidence. |
 
 ## Current Implementation Evidence
@@ -49,6 +49,17 @@ Current verdict: **in progress, not production-complete**. The local implementat
   - `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
   - Storage, notification, provider-registry, scene, sync, asset upload API tests under `apps/nexus/test` and `apps/nexus/server/utils`.
 
+## 2026-05-24 Delta
+
+- Operations command board was added to the governance admin cockpit:
+  - Reuses `dashboard.trends.operationsTimeline` to show the latest daily searches, selection rate, plugin installs/calls, provider requests/tokens, search/upload risk, and compact trend bars.
+  - Keeps the command board front-end derived from aggregate analytics only; it does not add raw data collection fields or expose raw actor/query/resource identifiers.
+  - Adds focused static UI-contract coverage for the command board, derived latest sample, peak normalization, and trend bar binding.
+- Browser evidence attempt:
+  - Tried to run `pnpm -C "apps/nexus" run dev:pure` and open `/dashboard/admin/governance`.
+  - Nuxt repeatedly restarted with `EMFILE: too many open files, watch`; the browser received `ERR_EMPTY_RESPONSE`.
+  - This confirms that local visual evidence is still blocked by the dev watcher/file-descriptor environment and must not be counted as completed cockpit evidence.
+
 ## 2026-05-23 Delta
 
 - Operations daily timeline was added to governance analytics and admin UI:
@@ -72,7 +83,7 @@ Current verdict: **in progress, not production-complete**. The local implementat
 
 ## Open Validation Gaps
 
-1. Real browser evidence for the Data Governance cockpit and plugin owner analytics drawer.
+1. Real browser evidence for the Data Governance cockpit and plugin owner analytics drawer; the 2026-05-24 local attempt hit Nuxt watcher `EMFILE: too many open files, watch` and did not produce a valid screenshot.
 2. Real live-send evidence for Resend/SMTP or hosted email relay, Feishu/Lark/webhook, and Web Push production configuration.
 3. Real S3/OSS/R2/local storage smoke artifacts with object write/read/delete traces and alert response.
 4. Production D1 migration/backfill execution evidence for `platform_governance_events/configs`.
@@ -81,7 +92,7 @@ Current verdict: **in progress, not production-complete**. The local implementat
 
 ## Next Execution Order
 
-1. Produce a browser-visible Data Governance screenshot pass once the admin page can run against representative seeded data.
+1. Resolve the local/CI browser evidence path for Nexus admin pages, including the Nuxt watcher `EMFILE` failure, then produce a browser-visible Data Governance screenshot pass against representative seeded data.
 2. Add live storage evidence for one local channel and one OSS/S3-compatible channel.
 3. Add notification live-send evidence for at least one email provider and one chat/webhook provider.
 4. Capture provider quota fail-closed evidence with a controlled low quota provider policy.
