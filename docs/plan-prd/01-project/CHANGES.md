@@ -29,10 +29,11 @@
 
 - `apps/nexus/app/pages/updates.vue`
 - `apps/nexus/app/pages/updates/all.vue`
+- `apps/nexus/app/components/updates/UpdatesAllView.vue`
 - `apps/nexus/i18n/locales/en.ts`
 - `apps/nexus/i18n/locales/zh.ts`
   - Changed the public updates/news block from a vertical stack into a horizontal card rail using Tuffex `TxEdgeFadeMask` for scroll-edge shadow/fade behavior.
-  - Added a `View all` entry point that opens `/updates/all` with the existing vertical item presentation.
+  - Added a `View all` entry point and shared all-updates view that works through both `/updates/all` and `/updates?view=all`, avoiding Nuxt dev-server page-route hot-reload gaps.
   - Added all-updates search plus type and time filters for announcements, releases, news, config, and data updates.
 
 ### docs(repo): record active goal and branch cleanup plan

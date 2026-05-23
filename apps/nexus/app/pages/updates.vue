@@ -3,6 +3,7 @@ import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
 import type { ReleaseChannelId } from '~/data/updates'
 import { computed, ref, watch } from 'vue'
 import GrainGradientHeroSection from '~/components/ui/GrainGradientHeroSection.vue'
+import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel, resolveReleaseNotesHtml } from '~/composables/useReleases'
 import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
 import { requestJson } from '~/utils/request'
@@ -159,6 +160,7 @@ const latestReleaseNotes = computed(() => {
 })
 
 const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
+const isAllUpdatesView = computed(() => route.path === '/updates/all' || route.query.view === 'all')
 const selectedNewsTab = ref<'release' | 'announcement'>('release')
 const featuredUpdateLimit = 6
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, featuredUpdateLimit))
@@ -185,10 +187,6 @@ function openUpdateLink(link?: string) {
     return
   }
   router.push(link)
-}
-
-function viewAllUpdates() {
-  router.push('/updates/all')
 }
 
 function scrollToDownloads() {
@@ -289,7 +287,9 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 </script>
 
 <template>
-  <main class="updates-page relative min-h-screen overflow-hidden bg-[#05050a]">
+  <UpdatesAllView v-if="isAllUpdatesView" :updates="updateItems" />
+
+  <main v-else class="updates-page relative min-h-screen overflow-hidden bg-[#05050a]">
     <GrainGradientHeroSection
       :eyebrow="t('updates.badge')"
       :title="t('updates.title')"
@@ -339,15 +339,13 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
               <span class="hidden text-xs text-gray-400 sm:inline dark:text-gray-500">
                 {{ t('updates.news.latestHint') }}
               </span>
-              <TxButton
-                variant="bare"
-                native-type="button"
+              <NuxtLink
+                to="/updates?view=all"
                 class="UpdateNewsViewAllBtn"
-                @click="viewAllUpdates"
               >
                 <span>{{ t('updates.news.viewAll') }}</span>
                 <span class="i-carbon-arrow-right text-sm" />
-              </TxButton>
+              </NuxtLink>
             </div>
           </div>
 
