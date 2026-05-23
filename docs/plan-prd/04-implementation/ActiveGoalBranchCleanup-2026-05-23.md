@@ -1,13 +1,21 @@
-# Active Goal Branch Cleanup Snapshot
+# Active Goal Branch Cleanup Result
 
 > Snapshot date: 2026-05-23
-> Scope: current Nexus Data Governance objective, dirty worktree cleanup, and screenshot-identified branch cleanup.
+> Scope: Nexus Data Governance progress, dirty worktree cleanup, screenshot-identified branch integration, and local/remote branch cleanup.
+> Final state: completed for Git branch/worktree cleanup; Nexus Data Governance still needs production/live evidence before product completion.
 
 ## Current Goal Progress
 
-Current goal remains **in progress**. The Nexus Data Governance implementation has broad local/API/UI coverage across the eight requested areas, but completion is not proven until live evidence is attached. The canonical progress matrix is `../01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`.
+Branch/worktree cleanup is complete:
 
-High-level state:
+- `master` is the only remaining local branch.
+- `master` tracks `origin/master`.
+- The main checkout is clean before this documentation result update.
+- Only the main worktree remains.
+- Screenshot-identified local branches have either been merged/covered on `master` or explicitly dropped as stale/polluted helper refs.
+- Remote Codex cleanup branches were deleted; `origin/gh-pages` and PR fetch refs were intentionally retained.
+
+The Nexus Data Governance objective is still not a full product-completion claim. The implementation has broad local/API/UI coverage across the eight requested areas, but production completion still requires live browser, credential, storage, migration/backfill, provider-call, and operations-dashboard evidence. The canonical progress matrix remains `../01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`.
 
 | Area | Current state |
 | --- | --- |
@@ -20,122 +28,158 @@ High-level state:
 | Reports/dashboard | Operations summary covers growth/search/install/upload/storage/notification/provider/token/model signals. Still needs large-screen/browser visual evidence and longer production samples. |
 | Provider token/quota limits | Provider quota evaluation and dispatch-time fail-closed gates exist. Still needs real provider-call evidence with controlled low quota policies. |
 
-## Dirty Worktree Snapshot
+## Master Integration Record
 
-Observed branch:
+The following related commits are now reachable from `master` and were pushed before branch cleanup:
 
+| Commit | Summary |
+| --- | --- |
+| `0996a21fa` | `feat(nexus): expand data governance controls` |
+| `3102cace7` | `feat(nexus): add all updates browser` |
+| `ee8d72a4` | `feat(nexus): reuse all updates view` |
+| `6e5b6f645` | `fix(core-app): stabilize style window grid` |
+| `9fafdb433` | `feat(intelligence): expose local skill gate summary` |
+| `9f3b5070c` | `fix(plugin): gate browser data external urls` |
+
+These commits cover the useful current work from the screenshot branch set without merging stale branch topology wholesale.
+
+## Stale / Covered Branch Decisions
+
+Some branches were intentionally not merged directly because their useful changes were already on `master`, or because their diffs were polluted by old history and would regress the tree.
+
+| Branch | Decision |
+| --- | --- |
+| `codex/docs-governance-style-sync` | Dropped as stale. Its docs snapshot predates the 2026-05-23 compressed progress records and would regress current status. |
+| `codex/nexus-notification-unread-badge` | Dropped as covered. Current `master` already contains unread badge behavior plus newer Web Push/browser notification work. |
+| `origin/codex/intelligence-local-skills-gates` | Dropped as covered/polluted. The useful local skill gate summary is represented by `9fafdb433`; the remote branch contained broad stale history. |
+| `origin/codex/widget-precompile-production` | Dropped as stale/polluted. The diff was broad old history and was not safe to merge into the current `master` baseline. |
+| PR/fix/merge helper branches for PR 268/269 | Dropped as stale/polluted helper refs. Current required plugin/browser-data coverage is represented on `master`; whole-branch merges would reintroduce old history. |
+
+## Deleted Local Branches
+
+Final cleanup round deleted:
+
+- `codex/browser-data-network-capability`
+- `codex/coreapp-style-grid-layout`
+- `codex/docs-governance-style-sync`
+- `codex/nexus-notification-unread-badge`
+- `codex/nexus-upload-governance-analytics`
 - `codex/nexus-upload-object-retry`
-- Tracks `origin/codex/nexus-upload-object-retry`
-- Relative to `master`: `33` behind, `10` ahead at the time of this snapshot.
-- Current worktree has many uncommitted Nexus/Data Governance files plus untracked tests/assets/docs. This must be handled before switching branches or merging.
+- `codex/nexus-webpush-governance-docs`
+- `fix/pr-269-ci`
+- `fix/pr-269-clean`
+- `fix/pr-269-merge`
+- `merge/pr-264-local`
+- `merge/pr-268-269-test`
+- `merge/pr-268-test`
+- `pr-268`
+- `tmp-remote-268`
+- `tmp-remote-269`
 
-Tracked/untracked themes currently present:
+Earlier cleanup in the same branch-cleanup objective had already removed the already-merged screenshot branches, including:
 
-| Theme | Examples | Cleanup requirement |
-| --- | --- | --- |
-| Nexus Data Governance / storage / notification / provider quota | `apps/nexus/server/utils/platformGovernanceStore.ts`, storage channel APIs/tests, notification APIs/tests, provider quota APIs/tests | Review, test, and commit or stash as a related slice before branch switching. |
-| Plugin private analytics | `PluginDetailDrawer.vue`, `pluginReviewStore.ts`, related tests/i18n/types | Keep with the Data Governance slice unless split into a separate analytics commit. |
-| Upload/object storage reliability | `storageObjectStore.ts`, `syncStoreV1.ts`, release/sync upload APIs/tests, `updateAssetStorage.ts` | Keep with upload reliability slice or split before merge. |
-| Public/docs UI polish | `GrainGradientHeroSection.vue`, `updates.vue`, `TuffexDocsHeroBackground.vue`, `layouts/docs.vue` | Confirm whether to keep in current merge batch or split from governance work. |
-| Documentation status | `docs/INDEX.md`, `docs/plan-prd/README.md`, `TODO.md`, `CHANGES.md`, quality baseline, progress snapshot | Keep as the branch record and current progress evidence. |
-| Local artifact candidate | `nexus-admin-bootstrap-blocker.png` | Needs explicit decision: keep as evidence, move under docs evidence, or delete. |
+- `codex/nexus-smtp-relay-notifications`
+- `codex/nexus-storage-alert-notify`
+- `codex/nexus-storage-governance-telemetry`
+- `codex/nexus-storage-policy-health-ui`
+- `codex/nexus-storage-usage-analytics`
+- `codex/nexus-upload-problem-attempts`
+- `codex/nexus-upload-stuck-docs`
+- `codex/nexus-upload-stuck-threshold`
+- `codex/nexus-webpush-relay-notifications`
+- `codex/p1-shell-capability-hardening`
+- `codex/plugin-prelude-engineering-refresh`
+- `codex/prod-feature-crash-containment`
+- `codex/quick-actions-native-share`
+- `codex/quick-actions-share-targets`
+- `codex/recommendation-ai-scoring-tests`
+- `codex/recommendation-context-controls`
+- `codex/recommendation-context-test-hardening`
+- `codex/recommendation-semantic-controls`
+- `codex/recommendation-semantic-tests`
+- `codex/recommendation-usage-avoidance`
+- `codex/recommendation-usage-preference-tests`
+- `codex/recommendation-usage-preferences`
+- `codex/search-competitive-analysis-roadmap`
+- `codex/settings-update-app-index-polish`
+- `codex/touch-quick-actions-payload-docs`
+- `codex/touch-quick-actions-payload-safety`
+- `codex/touch-quick-actions-shell-capability`
+- `codex/tuffex-docs-components-polish`
+- `codex/wallpaper-style-personalization`
+- `fix/pr-268-linear`
+- `fix/pr-269-linear`
 
-## Worktree Constraints
+## Deleted Remote Branches
 
-- `master` is currently checked out in `/private/tmp/talex-touch-quick-actions-payload-b12c7a4d8`, so the main checkout cannot safely switch to `master` until that worktree is removed, detached, or used as the integration worktree.
-- Several cleanup-target branches are checked out in other worktrees and cannot be deleted until those worktrees are removed or moved:
-  - `codex/plugin-prelude-engineering-refresh`
-  - `codex/search-competitive-analysis-roadmap`
-  - `fix/pr-268-linear`
-- Other temporary worktrees exist under `/private/tmp/talex-touch-*`; cleanup should avoid deleting them before confirming they are no longer needed.
+Deleted from `origin`:
 
-## Screenshot Branch Inventory
+- `codex/intelligence-local-skills-gates`
+- `codex/nexus-upload-governance-analytics`
+- `codex/nexus-upload-object-retry`
+- `codex/nexus-webpush-governance-docs`
+- `codex/widget-precompile-production`
 
-### Already merged into `master`
+Retained intentionally:
 
-These local branches show `ahead_master = 0`; they are cleanup candidates after the worktree lock is handled. Remote deletion is needed only where a remote branch still exists.
+- `origin/master`
+- `origin/gh-pages`
+- `pull/268/head`
+- `pull/268/merge`
+- `pull/269/head`
+- `pull/269/merge`
 
-| Branch | Remote branch | Worktree-bound | Action |
-| --- | --- | --- | --- |
-| `codex/nexus-smtp-relay-notifications` | no | no | Delete local branch. |
-| `codex/nexus-storage-alert-notify` | no | no | Delete local branch. |
-| `codex/nexus-storage-governance-telemetry` | no | no | Delete local branch. |
-| `codex/nexus-storage-policy-health-ui` | no | no | Delete local branch. |
-| `codex/nexus-storage-usage-analytics` | no | no | Delete local branch. |
-| `codex/nexus-upload-governance-analytics` | yes | no | Delete local branch and `origin/codex/nexus-upload-governance-analytics`. |
-| `codex/nexus-upload-problem-attempts` | no | no | Delete local branch. |
-| `codex/nexus-upload-stuck-docs` | no | no | Delete local branch. |
-| `codex/nexus-upload-stuck-threshold` | no | no | Delete local branch. |
-| `codex/nexus-webpush-governance-docs` | yes | no | Delete local branch and `origin/codex/nexus-webpush-governance-docs`. |
-| `codex/nexus-webpush-relay-notifications` | no | no | Delete local branch. |
-| `codex/p1-shell-capability-hardening` | no | no | Delete local branch. |
-| `codex/plugin-prelude-engineering-refresh` | no | yes | Remove/detach worktree first, then delete local branch. |
-| `codex/prod-feature-crash-containment` | no | no | Delete local branch. |
-| `codex/quick-actions-native-share` | no | no | Delete local branch. |
-| `codex/quick-actions-share-targets` | no | no | Delete local branch. |
-| `codex/recommendation-ai-scoring-tests` | no | no | Delete local branch. |
-| `codex/recommendation-context-controls` | no | no | Delete local branch. |
-| `codex/recommendation-context-test-hardening` | no | no | Delete local branch. |
-| `codex/recommendation-semantic-controls` | no | no | Delete local branch. |
-| `codex/recommendation-semantic-tests` | no | no | Delete local branch. |
-| `codex/recommendation-usage-avoidance` | no | no | Delete local branch. |
-| `codex/recommendation-usage-preference-tests` | no | no | Delete local branch. |
-| `codex/recommendation-usage-preferences` | no | no | Delete local branch. |
-| `codex/search-competitive-analysis-roadmap` | no | yes | Remove/detach worktree first, then delete local branch. |
-| `codex/settings-update-app-index-polish` | no | no | Delete local branch. |
-| `codex/touch-quick-actions-payload-docs` | no | no | Delete local branch. |
-| `codex/touch-quick-actions-payload-safety` | no | no | Delete local branch. |
-| `codex/touch-quick-actions-shell-capability` | no | no | Delete local branch. |
-| `codex/tuffex-docs-components-polish` | no | no | Delete local branch. |
-| `codex/wallpaper-style-personalization` | no | no | Delete local branch. |
-| `fix/pr-268-linear` | no | yes | Remove/detach worktree first, then delete local branch. |
-| `fix/pr-269-linear` | no | no | Delete local branch. |
+`gh-pages` is a site/deploy branch, not part of the screenshot cleanup set. `pull/*` refs are fetch-only PR refs, not normal remote branches to delete.
 
-### Needs merge or review before deletion
+## Verification Evidence
 
-These branches still have commits not reachable from `master`; they must be merged, cherry-picked, or explicitly dropped before deletion.
+Commands run during this cleanup:
 
-| Branch | Ahead of `master` | Remote branch | Notes |
-| --- | ---: | --- | --- |
-| `codex/nexus-upload-object-retry` | 10 | yes | Current dirty branch. Must clean/commit/stash worktree first, then merge into `master`, push, and delete `origin/codex/nexus-upload-object-retry`. |
-| `fix/pr-269-ci` | 1 | no | Contains `fix(plugin): satisfy touch-intelligence PR gates`. Needs merge or explicit drop. |
-| `fix/pr-269-clean` | 1 | no | Contains `fix(plugin): harden touch-intelligence runtime client`. Needs merge or explicit drop. |
-| `fix/pr-269-merge` | 1 | no | Contains another touch-intelligence runtime client hardening commit from `pull/269/head`. Needs de-duplication before merge. |
-| `merge/pr-264-local` | 1 | no | Merge commit from `dev/2.5.0`; likely high-risk because it can pull broad history. Needs manual review before merge. |
-| `merge/pr-268-269-test` | 4 | no | Contains PR 268 docs/model roadmap and PR 269 runtime client hardening. Needs de-duplication before merge. |
-| `merge/pr-268-test` | 3 | no | Contains PR 268 docs/model roadmap merge. Needs review before merge. |
+```text
+git status --short --branch
+git branch --format='%(refname:short) %(upstream:short)'
+git branch -r --format='%(refname:short)'
+git worktree list --porcelain
+git branch -D <final-local-cleanup-branches>
+git push origin --delete <remote-cleanup-branches>
+git fetch origin --prune
+```
 
-Adjacent local PR helper branches not in the screenshot but visible in the repo:
+Observed post-cleanup state before this documentation update:
 
-- `pr-268`: ahead of `master` with local AI roadmap docs commits.
-- `pr-269`: currently has no commits ahead of `master`.
-- `tmp-remote-268` and `tmp-remote-269`: helper refs matching fetched PR heads.
+```text
+## master...origin/master
+```
 
-## Proposed Execution Order
+```text
+master origin/master
+```
 
-1. Preserve the current dirty worktree by committing the related Nexus/Data Governance slice or stashing it under a named safety stash.
-2. Resolve the `master` worktree lock by either using `/private/tmp/talex-touch-quick-actions-payload-b12c7a4d8` as the integration worktree or removing/detaching it after confirmation.
-3. Merge `codex/nexus-upload-object-retry` into `master` after focused tests and `git diff --check`.
-4. Review the non-merged PR/fix branches for duplicate commits, then merge only the unique required commits into `master`.
-5. Push `master` after merge verification.
-6. Delete local branches that are already merged.
-7. Delete remote branches that still exist and are confirmed merged:
-   - `origin/codex/nexus-upload-governance-analytics`
-   - `origin/codex/nexus-webpush-governance-docs`
-   - `origin/codex/nexus-upload-object-retry` after its current branch is merged and pushed.
-8. Remove or detach worktrees that block branch deletion only after their status is clean or their untracked artifacts are confirmed disposable.
-9. Re-run `git fetch --all --prune`, `git branch --merged master`, `git branch --no-merged master`, and `git status --short --branch` to prove cleanup.
+```text
+origin
+origin/gh-pages
+origin/master
+pull/268/head
+pull/268/merge
+pull/269/head
+pull/269/merge
+```
 
-## Confirmation Required Before Execution
+```text
+worktree /Users/talexdreamsoul/Workspace/Projects/talex-touch
+HEAD 9f3b5070ce7b19ae36c74dff393ccf827440982e
+branch refs/heads/master
+```
 
-The following are intentionally not executed by this document update:
+Focused validation already completed before the final push and cleanup:
 
-- `git commit`
-- `git merge`
-- `git push`
-- local branch deletion
-- remote branch deletion
-- worktree removal
-- file/artifact deletion
+- Nexus governance/upload/update focused Vitest suite passed: 49 tests.
+- `node --test "plugins/touch-browser-data/index.test.cjs"` passed: 14 tests.
+- Touched-file ESLint for the Nexus update/governance work passed.
+- `git diff --check origin/master..HEAD` passed before the final code push.
 
-All of the above require explicit confirmation before running.
+## Next Work
+
+- Continue Nexus Data Governance evidence collection from `../01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`; do not treat branch cleanup as production evidence completion.
+- Keep future feature work branch-scoped and related-only so the local branch list does not accumulate stale PR helper refs again.
+- If PR 268/269 are still visible on GitHub, close or supersede them from GitHub UI/CLI according to project policy instead of preserving local helper branches.

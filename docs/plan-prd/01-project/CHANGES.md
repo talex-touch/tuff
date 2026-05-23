@@ -13,6 +13,15 @@
 
 ## 2026-05-23
 
+### docs(repo): record completed branch cleanup
+
+- `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md`
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Updated the branch cleanup snapshot from proposed execution order to completed result, including pushed `master` integration commits, stale/polluted branch decisions, deleted local branches, deleted remote branches, intentionally retained remote refs, and verification evidence.
+  - Confirmed the repository branch baseline is back to a single local `master` tracking `origin/master`, with only the main worktree remaining.
+  - Kept Nexus Data Governance product completion separate from branch cleanup: local/API/UI coverage exists, but production evidence remains tracked in `NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`.
+
 ### docs(plan-prd): record active goal closure order
 
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md`
