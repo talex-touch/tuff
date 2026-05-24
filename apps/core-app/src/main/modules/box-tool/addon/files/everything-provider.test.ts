@@ -131,6 +131,19 @@ interface MutableEverythingProvider {
     lastChecked: number | null
     reason: string | null
   }
+  installationStatus: {
+    supported: boolean
+    state: string
+    recommendation: string
+    everythingInstalled: boolean | null
+    everythingRunning: boolean | null
+    serviceRunning: boolean | null
+    cliFound: boolean
+    appPath: string | null
+    cliPath: string | null
+    checkedAt: number | null
+    reason: string | null
+  }
   diagnostics: { stages: Record<string, unknown>; lastUpdated: number | null }
   sdkAddon: unknown
   esPath: string | null
@@ -165,7 +178,9 @@ interface MutableEverythingProvider {
   runEverythingInstallJob: (job: unknown) => Promise<void>
   getStatusSnapshot: () => {
     pathFiltering: MutableEverythingProvider['pathFilteringStatus']
+    installation?: MutableEverythingProvider['installationStatus']
   }
+  refreshInstallationStatus: () => Promise<void>
   onSearch: (
     query: { text: string; inputs: unknown[] },
     signal: AbortSignal
@@ -248,6 +263,19 @@ afterEach(() => {
     lastFilteredResultCount: null,
     lastDroppedResultCount: null,
     lastChecked: null,
+    reason: null
+  }
+  provider.installationStatus = {
+    supported: true,
+    state: 'unknown',
+    recommendation: 'check-manually',
+    everythingInstalled: null,
+    everythingRunning: null,
+    serviceRunning: null,
+    cliFound: false,
+    appPath: null,
+    cliPath: null,
+    checkedAt: null,
     reason: null
   }
   provider.diagnostics = { stages: {}, lastUpdated: null }
@@ -1060,6 +1088,79 @@ describe('everything-provider fallback chain', () => {
         expect.arrayContaining(['es.exe', 'C:\\Tools\\Everything\\es.exe'])
       )
       expect(provider.esPath).toBe('C:\\Tools\\Everything\\es.exe')
+    })
+  })
+
+  it('summarizes missing Everything installation when app, service and CLI are absent', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.isEnabled = true
+      provider.isAvailable = false
+      provider.backend = 'unavailable'
+      provider.esPath = null
+
+      execFileMock.mockImplementation((file, _args, _options, callback) => {
+        const error = Object.assign(new Error(`${file} failed`), {
+          stdout:
+            file === 'sc.exe'
+              ? 'The specified service does not exist as an installed service.'
+              : '',
+          stderr: ''
+        })
+        callback(error)
+      })
+
+      await provider.refreshInstallationStatus()
+
+      expect(provider.installationStatus).toEqual(
+        expect.objectContaining({
+          supported: true,
+          state: 'missing-everything',
+          recommendation: 'install-everything',
+          everythingInstalled: false,
+          everythingRunning: false,
+          cliFound: false,
+          appPath: null,
+          cliPath: null,
+          checkedAt: expect.any(Number)
+        })
+      )
+      expect(provider.getStatusSnapshot().installation).toEqual(provider.installationStatus)
+    })
+  })
+
+  it('summarizes running Everything with missing CLI as a CLI install action', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      provider.isEnabled = true
+      provider.isAvailable = false
+      provider.backend = 'unavailable'
+      provider.esPath = null
+
+      execFileMock.mockImplementation((file, _args, _options, callback) => {
+        if (file === 'tasklist') {
+          callback(null, { stdout: '"Everything.exe","1234","Console","1","42,000 K"' })
+          return
+        }
+        if (file === 'sc.exe') {
+          callback(null, { stdout: 'STATE              : 4  RUNNING' })
+          return
+        }
+        callback(Object.assign(new Error(`${file} failed`), { code: 'ENOENT' }))
+      })
+
+      await provider.refreshInstallationStatus()
+
+      expect(provider.installationStatus).toEqual(
+        expect.objectContaining({
+          state: 'missing-cli',
+          recommendation: 'install-cli',
+          everythingInstalled: true,
+          everythingRunning: true,
+          serviceRunning: true,
+          cliFound: false
+        })
+      )
     })
   })
 

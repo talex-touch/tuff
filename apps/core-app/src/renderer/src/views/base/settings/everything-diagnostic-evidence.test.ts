@@ -16,6 +16,20 @@ const DEFAULT_PATH_FILTERING: EverythingStatusResponse['pathFiltering'] = {
   reason: 'outside-file-index-watch-roots'
 }
 
+const DEFAULT_INSTALLATION: EverythingStatusResponse['installation'] = {
+  supported: true,
+  state: 'ready',
+  recommendation: 'ready',
+  everythingInstalled: true,
+  everythingRunning: true,
+  serviceRunning: true,
+  cliFound: true,
+  appPath: 'C:\\Program Files\\Everything\\Everything.exe',
+  cliPath: 'C:\\Program Files\\Everything\\es.exe',
+  checkedAt: 1_700_000_000_000,
+  reason: null
+}
+
 function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): EverythingStatusResponse {
   return {
     enabled: true,
@@ -33,6 +47,7 @@ function buildStatus(overrides: Partial<EverythingStatusResponse> = {}): Everyth
     fallbackChain: ['sdk-napi', 'cli', 'unavailable'],
     lastChecked: 1_700_000_000_000,
     pathFiltering: DEFAULT_PATH_FILTERING,
+    installation: DEFAULT_INSTALLATION,
     ...overrides
   }
 }
@@ -64,6 +79,7 @@ describe('everything diagnostic evidence', () => {
           version: '1.5.0',
           esPath: 'C:\\Program Files\\Everything\\es.exe',
           configuredCliPath: null,
+          installation: DEFAULT_INSTALLATION,
           pathFiltering: DEFAULT_PATH_FILTERING,
           errorCode: null,
           lastBackendError: null

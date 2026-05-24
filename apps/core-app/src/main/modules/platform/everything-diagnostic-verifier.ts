@@ -31,6 +31,7 @@ export interface EverythingDiagnosticEvidencePayload {
       version: string | null
       esPath: string | null
       configuredCliPath?: string | null
+      installation?: EverythingStatusResponse['installation'] | null
       pathFiltering?: EverythingDiagnosticEvidenceStatus['pathFiltering']
       errorCode: string | null
       lastBackendError: string | null
