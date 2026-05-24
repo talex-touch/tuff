@@ -121,9 +121,26 @@ pnpm dev
 ```bash
 pnpm preview:cf
 ```
-命令会先执行 `pnpm build`，再调用 `wrangler pages dev`，使用 `dist` 与 Nitro 产出的 Functions 进行本地模拟。
+命令会先执行 `pnpm build`，再调用 `wrangler pages dev`，使用 `dist` 与 Nitro 产出的 Functions 进行本地模拟。`wrangler pages dev` 的 Worker runtime 不会自动继承 Nuxt build 阶段读取的 `.env` / `.env.local`，因此 `preview:cf` 会把本地默认 `AUTH_ORIGIN`、`AUTH_SECRET`、`APP_AUTH_JWT_SECRET` 和 `NUXT_INTELLIGENCE_ENCRYPT_KEY` 作为 Wrangler `--binding` 注入。需要覆盖时直接在命令前设置同名环境变量：
+
+```bash
+AUTH_ORIGIN=http://127.0.0.1:8791 pnpm preview:cf -- --port 8791
+```
+
+直接手动调用 Wrangler 时也必须显式传入生产必需变量：
+
+```bash
+npx wrangler pages dev dist \
+  --compatibility-date=2024-08-14 \
+  --port 8791 \
+  --binding AUTH_ORIGIN=http://127.0.0.1:8791 \
+  --binding AUTH_SECRET=replace-with-local-secret \
+  --binding APP_AUTH_JWT_SECRET=replace-with-local-app-secret \
+  --binding NUXT_INTELLIGENCE_ENCRYPT_KEY=replace-with-local-encrypt-key
+```
 
 > 如提示未登录 Cloudflare，运行 `npx wrangler login` 或提供 `CLOUDFLARE_API_TOKEN`。
+> 只传 shell 环境变量或 `--env-file .env.local` 但不传 `--binding`，当前 Wrangler Pages dev 仍可能在 Worker 启动阶段报 `AUTH_NO_ORIGIN`。
 
 ## 6. 部署流水线建议
 1. 在 Cloudflare Pages 的 **Build settings** 中配置：
