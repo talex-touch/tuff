@@ -4,6 +4,24 @@ export type EverythingBackendType = 'sdk-napi' | 'cli' | 'unavailable'
 export type EverythingHealthState = 'healthy' | 'degraded' | 'unsupported'
 export type EverythingDiagnosticStage = 'sdk-load' | 'sdk-query' | 'cli-detect' | 'cli-query'
 export type EverythingDiagnosticStatus = 'success' | 'failed' | 'skipped'
+export type EverythingInstallationState =
+  | 'ready'
+  | 'disabled'
+  | 'unsupported'
+  | 'missing-everything'
+  | 'not-running'
+  | 'missing-cli'
+  | 'backend-failed'
+  | 'unknown'
+export type EverythingInstallationRecommendation =
+  | 'ready'
+  | 'enable-in-settings'
+  | 'install-everything'
+  | 'start-everything'
+  | 'install-cli'
+  | 'check-diagnostics'
+  | 'check-manually'
+  | 'unsupported'
 
 export interface EverythingDiagnosticStageSummary {
   stage: EverythingDiagnosticStage
@@ -29,6 +47,20 @@ export interface EverythingPathFilteringStatus {
   lastFilteredResultCount: number | null
   lastDroppedResultCount: number | null
   lastChecked: number | null
+  reason: string | null
+}
+
+export interface EverythingInstallationStatus {
+  supported: boolean
+  state: EverythingInstallationState
+  recommendation: EverythingInstallationRecommendation
+  everythingInstalled: boolean | null
+  everythingRunning: boolean | null
+  serviceRunning: boolean | null
+  cliFound: boolean
+  appPath: string | null
+  cliPath: string | null
+  checkedAt: number | null
   reason: string | null
 }
 
@@ -61,6 +93,7 @@ export interface EverythingStatusResponse {
   fallbackChain: EverythingBackendType[]
   lastChecked: number | null
   pathFiltering: EverythingPathFilteringStatus
+  installation?: EverythingInstallationStatus
   diagnostics?: EverythingDiagnostics
 }
 

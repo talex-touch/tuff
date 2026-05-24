@@ -22,7 +22,12 @@ export function shouldShowEverythingToggle(status: EverythingStatusResponse | nu
 }
 
 export function shouldShowEverythingInstallGuide(status: EverythingStatusResponse | null): boolean {
-  return Boolean(status?.enabled && !status.available)
+  if (!status?.enabled || status.available) return false
+
+  const recommendation = status.installation?.recommendation
+  if (!recommendation) return true
+
+  return ['install-everything', 'install-cli', 'check-manually'].includes(recommendation)
 }
 
 export function shouldShowEverythingDiagnostics(status: EverythingStatusResponse | null): boolean {

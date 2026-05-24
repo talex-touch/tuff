@@ -1,5 +1,6 @@
 <script setup lang="ts" name="SettingEverything">
-import { TxButton } from '@talex-touch/tuffex/button'
+import { TxButton } from '@talex-touch/tuffex'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'
@@ -39,6 +40,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const appSdk = useAppSdk()
 const settingEverythingLog = createRendererLogger('SettingEverything')
 
 const openFileEvent = defineRawEvent<
@@ -260,11 +262,11 @@ async function clearCliPath() {
 }
 
 function openEverythingDownload() {
-  window.open('https://www.voidtools.com/', '_blank')
+  void appSdk.openExternal('https://www.voidtools.com/')
 }
 
 function openCLIDownload() {
-  window.open('https://www.voidtools.com/support/everything/command_line_interface/', '_blank')
+  void appSdk.openExternal('https://www.voidtools.com/support/everything/command_line_interface/')
 }
 
 function openInstallDialog(event: MouseEvent): void {
@@ -430,6 +432,42 @@ const backendSummaryText = computed(() => {
   return `${backendText.value} / ${healthText.value}`
 })
 
+const installationStatus = computed(() => {
+  return everythingStatus.value?.installation ?? null
+})
+
+const installationStateText = computed(() => {
+  const state = installationStatus.value?.state
+  if (!state) return '-'
+  return t(`settings.settingEverything.installState.${state}`)
+})
+
+const installationActionText = computed(() => {
+  const recommendation = installationStatus.value?.recommendation
+  if (!recommendation) return '-'
+  return t(`settings.settingEverything.installRecommendation.${recommendation}`)
+})
+
+const installationDescription = computed(() => {
+  return installationStatus.value?.reason || t('settings.settingEverything.installDiagnosisDesc')
+})
+
+const showDownloadEverythingAction = computed(() => {
+  const recommendation = installationStatus.value?.recommendation
+  return recommendation === 'install-everything' || recommendation === 'check-manually'
+})
+
+const showDownloadCliAction = computed(() => {
+  const recommendation = installationStatus.value?.recommendation
+  return recommendation === 'install-cli' || recommendation === 'check-manually'
+})
+
+function formatBooleanProbe(value: boolean | null | undefined): string {
+  if (value === true) return t('settings.settingEverything.probeYes')
+  if (value === false) return t('settings.settingEverything.probeNo')
+  return t('settings.settingEverything.probeUnknown')
+}
+
 const diagnosticSummary = computed(() => {
   const stages = diagnosticStages.value
   if (stages.length === 0) return t('settings.settingEverything.diagnosticsEmpty')
@@ -589,6 +627,79 @@ watch(
         >
           {{ t('settings.settingEverything.viewDiagnostics') }}
         </TxButton>
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.healthTitle')"
+      :description="everythingStatus.healthReason || t('settings.settingEverything.healthDesc')"
+      default-icon="i-carbon-pulse"
+      active-icon="i-carbon-pulse"
+    >
+      <div class="version-info">
+        {{ healthText }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="installationStatus"
+      :title="t('settings.settingEverything.installDiagnosisTitle')"
+      :description="installationDescription"
+      default-icon="i-carbon-ibm-cloud-pak-system"
+      active-icon="i-carbon-ibm-cloud-pak-system"
+    >
+      <div class="installation-panel">
+        <div class="installation-summary">
+          <span class="installation-state">{{ installationStateText }}</span>
+          <span class="installation-action">{{ installationActionText }}</span>
+        </div>
+        <div class="installation-grid">
+          <span>{{ t('settings.settingEverything.probeEverythingInstalled') }}</span>
+          <strong>{{ formatBooleanProbe(installationStatus.everythingInstalled) }}</strong>
+          <span>{{ t('settings.settingEverything.probeEverythingRunning') }}</span>
+          <strong>{{ formatBooleanProbe(installationStatus.everythingRunning) }}</strong>
+          <span>{{ t('settings.settingEverything.probeEverythingService') }}</span>
+          <strong>{{ formatBooleanProbe(installationStatus.serviceRunning) }}</strong>
+          <span>{{ t('settings.settingEverything.probeCliFound') }}</span>
+          <strong>{{ formatBooleanProbe(installationStatus.cliFound) }}</strong>
+        </div>
+        <div v-if="installationStatus.appPath" class="cli-path-row">
+          <span>{{ t('settings.settingEverything.detectedAppPath') }}</span>
+          <code>{{ installationStatus.appPath }}</code>
+        </div>
+        <div class="install-buttons">
+          <TxButton
+            v-if="showDownloadEverythingAction"
+            variant="flat"
+            type="primary"
+            @click="openEverythingDownload"
+          >
+            {{ t('settings.settingEverything.downloadEverything') }}
+          </TxButton>
+          <TxButton v-if="showDownloadCliAction" variant="flat" @click="openCLIDownload">
+            {{ t('settings.settingEverything.downloadCLI') }}
+          </TxButton>
+          <TxButton variant="flat" :disabled="isChecking" @click="checkStatus(true)">
+            {{
+              isChecking
+                ? t('settings.settingEverything.checking')
+                : t('settings.settingEverything.checkNow')
+            }}
+          </TxButton>
+        </div>
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.fallbackChainTitle')"
+      :description="t('settings.settingEverything.fallbackChainDesc')"
+      default-icon="i-carbon-flow-stream"
+      active-icon="i-carbon-flow-stream"
+    >
+      <div class="version-info">
+        {{ fallbackChainText }}
       </div>
     </TuffBlockSlot>
 
@@ -1000,6 +1111,55 @@ watch(
   gap: 8px;
   min-width: 280px;
   max-width: 520px;
+}
+
+.installation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 280px;
+  max-width: 560px;
+}
+
+.installation-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.installation-state {
+  color: var(--tuff-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.installation-action {
+  color: var(--tuff-text-secondary);
+  font-size: 12px;
+}
+
+.installation-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(48px, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+  color: var(--tuff-text-secondary);
+  font-size: 12px;
+
+  strong {
+    color: var(--tuff-text-primary);
+    font-weight: 500;
+  }
+}
+
+.cli-path-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--tuff-text-secondary);
 
   code {
     min-width: 0;

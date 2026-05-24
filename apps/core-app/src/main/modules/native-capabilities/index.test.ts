@@ -67,6 +67,19 @@ const mocks = vi.hoisted(() => ({
     backendAttemptErrors: {},
     fallbackChain: [],
     lastChecked: null,
+    installation: {
+      supported: false,
+      state: 'unsupported',
+      recommendation: 'unsupported',
+      everythingInstalled: false,
+      everythingRunning: false,
+      serviceRunning: false,
+      cliFound: false,
+      appPath: null,
+      cliPath: null,
+      checkedAt: null,
+      reason: 'not-windows'
+    },
     pathFiltering: {
       enabled: true,
       allowedRootCount: 0,

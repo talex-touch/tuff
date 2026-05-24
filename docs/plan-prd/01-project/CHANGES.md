@@ -5106,6 +5106,16 @@
   - Added `dashboard.trends.operationsTimeline` as an aggregate-only daily timeline that merges existing anonymized user signup, search quality, plugin, provider, upload, and storage trend signals.
   - Rendered the latest daily operations rows inside the governance operations dashboard for compact operator review, including daily risk score, search selection/problem rate, provider tokens, upload failure rate, and storage operations.
   - Kept the Nexus Data Governance status as in-progress rather than production-complete; live browser, live send, live storage, production D1, and real quota fail-closed evidence remain open validation gaps.
+### feat(core): refine Windows Everything installation diagnosis
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- `apps/core-app/src/shared/events/everything.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a Windows installation diagnosis layer to the Everything status payload, covering local app detection, running process/service probes, CLI availability, state, recommendation, and reason.
+  - Updated the Everything settings view to present a clearer local check result and action path: manual Everything install first, optional CLI download/selection when `es.exe` is missing, and explicit recheck without attempting silent installation.
+  - Extended diagnostic evidence payloads and targeted tests so Windows regression records include the new installation summary.
+  - Verification: targeted Everything provider/settings vitest suites, `pnpm -C "apps/core-app" run typecheck:node`, and `pnpm -C "apps/core-app" run typecheck:web` passed.
 
 ### fix(nexus): restore storage smoke policy resolver for Pages build
 

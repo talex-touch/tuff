@@ -41,6 +41,7 @@ import {
   type EverythingInstallStatusResponse,
   type EverythingStatusResponse,
   type EverythingBackendType,
+  type EverythingInstallationStatus,
   type EverythingPathFilteringStatus
 } from '../../../../../shared/events/everything'
 import compressing from 'compressing'
@@ -112,6 +113,30 @@ const EVERYTHING_INSTALL_HASHES: Record<string, string> = {
   'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268',
   'ES-1.1.0.30.x86.zip': '7e9f04cb92e9eb0440655a395537b204e98e3accd5335e610649d323b15f5117',
   'ES-1.1.0.30.ARM64.zip': 'af5f02b29d6e91b7e70d3b6809bbfe931af671d981e060ecb4f015c30f9697b9'
+}
+
+const EVERYTHING_APP_CANDIDATES = [
+  'C:\\Program Files\\Everything\\Everything.exe',
+  'C:\\Program Files (x86)\\Everything\\Everything.exe',
+  path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Everything', 'Everything.exe'),
+  path.join(process.env.PROGRAMFILES || '', 'Everything', 'Everything.exe'),
+  path.join(process.env['PROGRAMFILES(X86)'] || '', 'Everything', 'Everything.exe')
+].filter((candidate): candidate is string => Boolean(candidate))
+
+function uniqueCandidates(candidates: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>()
+  const unique: string[] = []
+
+  for (const candidate of candidates) {
+    const normalized = typeof candidate === 'string' ? candidate.trim() : ''
+    if (!normalized) continue
+    const key = normalized.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(normalized)
+  }
+
+  return unique
 }
 
 function usesWindowsSeparators(filePath: string): boolean {
@@ -230,6 +255,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private everythingVersion: string | null = null
   private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
+  private installationStatus: EverythingInstallationStatus =
+    this.createUnsupportedInstallationStatus()
   private pathFilteringStatus: EverythingPathFilteringStatus = {
     enabled: true,
     allowedRootCount: 0,
@@ -305,12 +332,24 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const refreshStart = performance.now()
 
     try {
+      if (!this.isEnabled) {
+        this.isAvailable = false
+        this.backend = 'unavailable'
+        this.initializationError = null
+        this.lastBackendError = null
+        this.lastBackendErrorCode = null
+        this.lastChecked = Date.now()
+        await this.refreshInstallationStatusSafe()
+        return false
+      }
+
       const initialized = await this.initializeSearchBackend()
       this.isAvailable = initialized
       this.lastChecked = Date.now()
 
       if (initialized) {
         this.initializationError = null
+        await this.refreshInstallationStatusSafe()
         this.logInfo('Everything backend ready', {
           reason,
           duration: formatDuration(performance.now() - refreshStart),
@@ -323,6 +362,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       this.backend = 'unavailable'
       this.initializationError = new Error('No available Everything backend (SDK/CLI)')
+      await this.refreshInstallationStatusSafe()
       this.logWarn('Everything backend is unavailable after refresh', undefined, {
         reason,
         duration: formatDuration(performance.now() - refreshStart),
@@ -334,6 +374,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       this.isAvailable = false
       this.backend = 'unavailable'
       this.lastChecked = Date.now()
+      await this.refreshInstallationStatusSafe()
       this.logWarn('Everything backend refresh failed', error, {
         reason,
         duration: formatDuration(performance.now() - refreshStart),
@@ -350,6 +391,256 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.lastBackendError = message
     this.lastBackendErrorCode = errorCode
     this.lastChecked = Date.now()
+  }
+
+  private createUnsupportedInstallationStatus(): EverythingInstallationStatus {
+    return {
+      supported: process.platform === 'win32',
+      state: process.platform === 'win32' ? 'unknown' : 'unsupported',
+      recommendation: process.platform === 'win32' ? 'check-manually' : 'unsupported',
+      everythingInstalled: process.platform === 'win32' ? null : false,
+      everythingRunning: process.platform === 'win32' ? null : false,
+      serviceRunning: process.platform === 'win32' ? null : false,
+      cliFound: false,
+      appPath: null,
+      cliPath: null,
+      checkedAt: null,
+      reason:
+        process.platform === 'win32'
+          ? 'Everything installation has not been checked yet.'
+          : 'Everything is only available on Windows.'
+    }
+  }
+
+  private async getCliCandidates(): Promise<string[]> {
+    const registryCandidates = await this.getWindowsRegistryPathExecutableCandidates('es.exe')
+
+    return uniqueCandidates([
+      'es.exe',
+      ...registryCandidates,
+      'C:\\Program Files\\Everything\\es.exe',
+      'C:\\Program Files (x86)\\Everything\\es.exe',
+      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Everything', 'es.exe'),
+      path.join(process.env.PROGRAMFILES || '', 'Everything', 'es.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'Everything', 'es.exe')
+    ])
+  }
+
+  private async findExistingPath(candidates: string[]): Promise<string | null> {
+    for (const candidate of candidates) {
+      if (candidate.toLowerCase() === 'es.exe') continue
+      try {
+        await fs.access(candidate)
+        return candidate
+      } catch {
+        // Keep probing the remaining default locations.
+      }
+    }
+
+    return null
+  }
+
+  private async isEverythingProcessRunning(): Promise<boolean | null> {
+    try {
+      const { stdout } = await execFileAsync(
+        'tasklist',
+        ['/FI', 'IMAGENAME eq Everything.exe', '/FO', 'CSV', '/NH'],
+        { timeout: 2000, windowsHide: true }
+      )
+      return /"Everything\.exe"/i.test(String(stdout))
+    } catch (error) {
+      this.logDebug('Everything process probe failed', { error: getErrorMessage(error) })
+      return null
+    }
+  }
+
+  private async getEverythingServiceStatus(): Promise<{
+    exists: boolean | null
+    running: boolean | null
+  }> {
+    try {
+      const { stdout } = await execFileAsync('sc.exe', ['query', 'Everything'], {
+        timeout: 2000,
+        windowsHide: true
+      })
+      const output = String(stdout)
+      return {
+        exists: true,
+        running: /\bSTATE\s*:\s*\d+\s+RUNNING\b/i.test(output)
+      }
+    } catch (error) {
+      const message = getErrorMessage(error)
+      if (/1060|does not exist|does not exist as an installed service/i.test(message)) {
+        return { exists: false, running: false }
+      }
+
+      if (isRecord(error)) {
+        const output = [error.stdout, error.stderr]
+          .filter((value): value is string => typeof value === 'string')
+          .join('\n')
+        if (/1060|does not exist|does not exist as an installed service/i.test(output)) {
+          return { exists: false, running: false }
+        }
+      }
+
+      this.logDebug('Everything service probe failed', { error: message })
+      return { exists: null, running: null }
+    }
+  }
+
+  private async refreshInstallationStatus(): Promise<void> {
+    const checkedAt = Date.now()
+
+    if (process.platform !== 'win32') {
+      this.installationStatus = {
+        ...this.createUnsupportedInstallationStatus(),
+        checkedAt
+      }
+      return
+    }
+
+    const [appPath, processRunning, serviceStatus] = await Promise.all([
+      this.findExistingPath(EVERYTHING_APP_CANDIDATES),
+      this.isEverythingProcessRunning(),
+      this.getEverythingServiceStatus()
+    ])
+
+    const cliPath = this.backend === 'cli' ? this.esPath : null
+    const cliFound = Boolean(cliPath)
+    const everythingInstalled = Boolean(
+      appPath || processRunning || serviceStatus.exists || cliPath || this.backend === 'sdk-napi'
+    )
+    const runningProbeKnown = processRunning !== null || serviceStatus.running !== null
+    const everythingRunning =
+      processRunning === true || serviceStatus.running === true
+        ? true
+        : runningProbeKnown
+          ? false
+          : null
+    const serviceRunning = serviceStatus.running
+
+    if (!this.isEnabled) {
+      this.installationStatus = {
+        supported: true,
+        state: 'disabled',
+        recommendation: 'enable-in-settings',
+        everythingInstalled,
+        everythingRunning,
+        serviceRunning,
+        cliFound,
+        appPath,
+        cliPath,
+        checkedAt,
+        reason: 'Everything search is disabled in Tuff settings.'
+      }
+      return
+    }
+
+    if (this.isAvailable && everythingRunning !== false) {
+      this.installationStatus = {
+        supported: true,
+        state: 'ready',
+        recommendation: 'ready',
+        everythingInstalled,
+        everythingRunning,
+        serviceRunning,
+        cliFound: this.backend === 'cli' ? cliFound : true,
+        appPath,
+        cliPath,
+        checkedAt,
+        reason: null
+      }
+      return
+    }
+
+    if (!everythingInstalled) {
+      this.installationStatus = {
+        supported: true,
+        state: 'missing-everything',
+        recommendation: 'install-everything',
+        everythingInstalled: false,
+        everythingRunning: false,
+        serviceRunning,
+        cliFound,
+        appPath,
+        cliPath,
+        checkedAt,
+        reason:
+          'Everything app was not found in default locations and no running process/service was detected.'
+      }
+      return
+    }
+
+    if (everythingRunning === false) {
+      this.installationStatus = {
+        supported: true,
+        state: 'not-running',
+        recommendation: 'start-everything',
+        everythingInstalled: true,
+        everythingRunning: false,
+        serviceRunning,
+        cliFound,
+        appPath,
+        cliPath,
+        checkedAt,
+        reason: 'Everything appears to be installed, but the app or service is not running.'
+      }
+      return
+    }
+
+    if (!cliFound) {
+      this.installationStatus = {
+        supported: true,
+        state: 'missing-cli',
+        recommendation: 'install-cli',
+        everythingInstalled: true,
+        everythingRunning: true,
+        serviceRunning,
+        cliFound: false,
+        appPath,
+        cliPath: null,
+        checkedAt,
+        reason:
+          'Everything is running, but es.exe was not found from PATH or default install directories.'
+      }
+      return
+    }
+
+    this.installationStatus = {
+      supported: true,
+      state: 'backend-failed',
+      recommendation: 'check-diagnostics',
+      everythingInstalled: true,
+      everythingRunning: true,
+      serviceRunning,
+      cliFound,
+      appPath,
+      cliPath,
+      checkedAt,
+      reason:
+        this.lastBackendError || this.initializationError?.message || 'Everything backend failed.'
+    }
+  }
+
+  private async refreshInstallationStatusSafe(): Promise<void> {
+    try {
+      await this.refreshInstallationStatus()
+    } catch (error) {
+      this.logWarn('Everything installation probe failed', error)
+      this.installationStatus = {
+        supported: process.platform === 'win32',
+        state: process.platform === 'win32' ? 'unknown' : 'unsupported',
+        recommendation: process.platform === 'win32' ? 'check-manually' : 'unsupported',
+        everythingInstalled: null,
+        everythingRunning: null,
+        serviceRunning: null,
+        cliFound: Boolean(this.esPath),
+        appPath: null,
+        cliPath: this.esPath,
+        checkedAt: Date.now(),
+        reason: getErrorMessage(error)
+      }
+    }
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
@@ -891,6 +1182,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       fallbackChain: this.fallbackChain,
       lastChecked: this.lastChecked,
       pathFiltering: this.pathFilteringStatus,
+      installation: this.installationStatus,
       diagnostics: this.diagnosticsTracker.snapshot()
     }
   }
@@ -968,6 +1260,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       if (this.isEnabled) {
         await this.refreshBackendState('toggle-enable')
+      } else {
+        this.isAvailable = false
+        this.backend = 'unavailable'
+        this.lastChecked = Date.now()
+        await this.refreshInstallationStatusSafe()
       }
 
       this.logInfo('Everything toggled', { enabled: this.isEnabled })
@@ -1212,23 +1509,15 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       if (configuredResolved) return
     }
 
-    const possiblePaths = this.dedupeCliCandidates([
-      'es.exe', // In current process PATH
-      ...(await this.getWindowsRegistryPathExecutableCandidates('es.exe')),
-      'C:\\Program Files\\Everything\\es.exe',
-      'C:\\Program Files (x86)\\Everything\\es.exe',
-      path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Everything', 'es.exe'),
-      path.join(process.env.PROGRAMFILES || '', 'Everything', 'es.exe'),
-      path.join(process.env['PROGRAMFILES(X86)'] || '', 'Everything', 'es.exe')
-    ])
+    const candidates = await this.getCliCandidates()
 
-    for (const esPath of possiblePaths) {
+    for (const esPath of candidates) {
       const resolved = await this.tryProbeEverythingCli(esPath)
       if (resolved) return
     }
 
     throw new Error(
-      'Everything Command-line Interface (es.exe) not found. Please install Everything from https://www.voidtools.com/'
+      'Everything Command-line Interface (es.exe) not found. Install Everything manually, then install or select es.exe from the Everything CLI package.'
     )
   }
 
