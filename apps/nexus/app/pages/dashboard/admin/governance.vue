@@ -31,11 +31,44 @@ type GovernanceConfigType =
 type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'muted'
 type StoragePolicyEvaluationStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
 type StorageChannelPressureStatus = StoragePolicyEvaluationStatus | 'unmanaged'
+type StorageActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+type StorageActionQueueSuggestedAction =
+  | 'configure-policy'
+  | 'increase-storage-limit'
+  | 'increase-traffic-limit'
+  | 'increase-operation-limit'
+  | 'review-burn-rate'
+  | 'monitor-channel'
+type StorageSmokeEvidenceMode = 'dry-run' | 'write' | 'unknown'
+type StorageSmokeEvidenceStatus = 'ready' | 'sent' | 'failed'
 type ProviderQuotaStatus = 'ok' | 'warning' | 'blocked' | 'disabled'
 type ProviderQuotaRiskReason = 'blocked' | 'warning-threshold' | 'overage' | 'low-remaining' | 'projected-exhaustion'
+type ProviderQuotaActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+type ProviderQuotaActionQueueSuggestedAction =
+  | 'increase-token-limit'
+  | 'increase-request-limit'
+  | 'reduce-provider-traffic'
+  | 'split-provider-channel'
+  | 'enable-provider-quota'
+  | 'set-provider-limit'
+  | 'monitor-burn-rate'
+type ProviderQuotaActionQueueReason =
+  | 'token-overage'
+  | 'request-overage'
+  | 'token-exhausted'
+  | 'request-exhausted'
+  | 'warning-threshold'
+  | 'projected-exhaustion'
+  | 'quota-disabled'
+  | 'missing-hard-limit'
+type ProviderQuotaSmokeMode = 'dry-run' | 'consume'
+type ProviderQuotaSmokeStatus = 'allowed' | 'blocked' | 'consumed' | 'failed'
 type StorageAlertMetric = 'storedBytes' | 'trafficBytes' | 'operations'
 type StorageAlertLimitKey = 'maxBytes' | 'trafficBytes' | 'maxOperations' | 'alertBytes'
 type PlatformGovernanceD1ReadinessStatus = 'ready' | 'warning' | 'blocked'
+type PlatformGovernanceReportStatus = 'ok' | 'watch' | 'critical'
+type PlatformGovernanceReportPriority = 'critical' | 'high' | 'medium' | 'low'
+type PlatformGovernanceReportEvidenceStatus = 'ready' | 'local-only' | 'open'
 
 interface GovernanceSummary {
   totalEvents: number
@@ -142,6 +175,24 @@ interface GovernanceSearchJourney {
   segments: GovernanceSearchJourneySegment[]
 }
 
+interface GovernanceSearchFrequencyCohort {
+  cohort: string
+  users: number
+  searches: number
+  quantity: number
+  activeDays: number
+  avgSearchesPerUser: number
+  avgActiveDaysPerUser: number
+  selectionRate: number
+  zeroResultRate: number
+  problemRate: number
+  topLocalTimeSlots: GovernanceMetric[]
+  topUserPreferenceModes: GovernanceMetric[]
+  topContextAppCategories: GovernanceMetric[]
+  topPlugins: GovernanceMetric[]
+  selectedPlugins: GovernanceMetric[]
+}
+
 interface GovernanceTrendPoint {
   date: string
   events: number
@@ -162,6 +213,22 @@ interface GovernanceHeatmapPoint {
   uniqueActors: number
 }
 
+interface GovernanceSearchTimeHeatmapPoint extends GovernanceHeatmapPoint {
+  timeSlot: string
+  selected: number
+  selectionRate: number
+  zeroResult: number
+  zeroResultRate: number
+  providerProblem: number
+  problemRate: number
+  providerErrors: number
+  providerTimeouts: number
+  topContextAppCategories: GovernanceMetric[]
+  topContextSources: GovernanceMetric[]
+  topPlugins: GovernanceMetric[]
+  selectedPlugins: GovernanceMetric[]
+}
+
 interface GovernanceNumberStat {
   count: number
   average: number
@@ -180,6 +247,28 @@ interface StorageUsageBreakdown {
   uniqueActors: number
 }
 
+interface UploadSceneAssetHealthItem {
+  key: string
+  sceneId: string | null
+  capability: string | null
+  providerId: string | null
+  assetKind: string | null
+  resourceType: string
+  storageChannel: string | null
+  storageProvider: string | null
+  surface: string
+  started: number
+  completed: number
+  failed: number
+  bytes: number
+  failureRate: number
+  avgDurationMs: number
+  avgSize: number
+  latestAt: string
+  failureReasons: Array<{ key: string, events: number }>
+  statusCodes: Array<{ key: string, events: number }>
+}
+
 interface StorageUsageTrendPoint {
   date: string
   events: number
@@ -189,6 +278,29 @@ interface StorageUsageTrendPoint {
   writes: number
   reads: number
   deletes: number
+  uniqueActors: number
+}
+
+interface StorageSmokeEvidenceItem {
+  key: string
+  policyId: string | null
+  policyName: string | null
+  channel: string | null
+  provider: string | null
+  mode: StorageSmokeEvidenceMode
+  status: StorageSmokeEvidenceStatus
+  reason: string | null
+  operations: string[]
+  bytesWritten: number
+  bytesRead: number
+  credentialRequired: boolean | null
+  hasCredentialRef: boolean | null
+  hasCredential: boolean | null
+  latestAt: string
+  events: number
+  ready: number
+  sent: number
+  failed: number
   uniqueActors: number
 }
 
@@ -236,6 +348,53 @@ interface StorageChannelPressure {
   trend: StorageUsageTrendPoint[]
 }
 
+interface StorageActionQueueItem {
+  key: string
+  priority: StorageActionQueuePriority
+  suggestedAction: StorageActionQueueSuggestedAction
+  reason: string
+  channel: string
+  provider: string | null
+  policyId: string | null
+  policyName: string | null
+  pressureStatus: StorageChannelPressureStatus
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+  highestUtilization: number
+  policyAlerts: number
+  policyReasons: string[]
+  remaining: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  overage: {
+    storedBytes: number
+    trafficBytes: number
+    operations: number
+    alertBytes: number
+  }
+  burnRate: {
+    storedBytesPerDay: number
+    trafficBytesPerDay: number
+    operationsPerDay: number
+  }
+  projectedExhaustionDays: {
+    storedBytes: number | null
+    trafficBytes: number | null
+    operations: number | null
+    alertBytes: number | null
+  }
+  latestTrendDate: string | null
+}
+
 interface ProviderQuotaRiskItem {
   configId: string
   providerId: string
@@ -267,6 +426,52 @@ interface ProviderQuotaRiskItem {
   }
 }
 
+interface ProviderQuotaActionQueueItem {
+  key: string
+  priority: ProviderQuotaActionQueuePriority
+  suggestedAction: ProviderQuotaActionQueueSuggestedAction
+  reason: ProviderQuotaActionQueueReason
+  configId: string
+  providerId: string
+  name: string
+  channel: string | null
+  provider: string | null
+  status: ProviderQuotaStatus
+  windowDays: number
+  requests: number
+  tokens: number
+  maxRequests: number | null
+  maxTokens: number | null
+  requestUtilization: number | null
+  tokenUtilization: number | null
+  remainingRequests: number | null
+  remainingTokens: number | null
+  requestOverage: number
+  tokenOverage: number
+  requestsPerDay: number
+  tokensPerDay: number
+  projectedRequestExhaustionDays: number | null
+  projectedTokenExhaustionDays: number | null
+}
+
+interface ProviderQuotaSmokeEvidenceItem {
+  key: string
+  providerId: string
+  channel: string | null
+  mode: ProviderQuotaSmokeMode
+  status: ProviderQuotaSmokeStatus
+  reason: string | null
+  requestRecorded: boolean
+  tokensRecorded: number
+  latestAt: string
+  events: number
+  allowed: number
+  blocked: number
+  consumed: number
+  failed: number
+  uniqueActors: number
+}
+
 interface GovernanceScopedAnalytics {
   totalEvents: number
   totalQuantity: number
@@ -286,6 +491,95 @@ interface GovernanceGrowth {
 type NotificationChannelRiskStatus = 'ok' | 'warning' | 'disabled'
 type NotificationChannelReadinessStatus = 'ready' | 'warning' | 'disabled'
 type NotificationChannelDisplayStatus = NotificationChannelRiskStatus | NotificationChannelReadinessStatus
+type NotificationDeliveryStatus = 'planned' | 'sent' | 'skipped' | 'failed'
+type NotificationActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+type NotificationActionQueueSource = 'channel-config' | 'delivery-health'
+type NotificationActionQueueSuggestedAction =
+  | 'enable-channel'
+  | 'fix-channel-config'
+  | 'bind-credential-ref'
+  | 'configure-runtime'
+  | 'configure-relay'
+  | 'enable-send-mode'
+  | 'investigate-failures'
+  | 'review-skipped-deliveries'
+  | 'monitor-provider'
+
+interface NotificationActionQueueItem {
+  key: string
+  source: NotificationActionQueueSource
+  priority: NotificationActionQueuePriority
+  suggestedAction: NotificationActionQueueSuggestedAction
+  reason: string
+  configId: string | null
+  name: string | null
+  channel: string | null
+  provider: string | null
+  providerType: string | null
+  adapter: string | null
+  status: NotificationChannelRiskStatus | 'delivery-risk'
+  reasons: string[]
+  enabled: boolean | null
+  credentialRequired: boolean
+  hasCredentialRef: boolean
+  productionReady: boolean | null
+  total: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  sentRate: number
+  failureRate: number
+  durationMs: GovernanceNumberStat
+  latestFailureReason: string | null
+  latestFailureStatusCode: number | null
+  latestFailureAt: string | null
+}
+
+interface NotificationTestEvidenceItem {
+  key: string
+  configId: string
+  configName: string | null
+  notificationAction: string | null
+  channel: string | null
+  provider: string | null
+  providerType: string | null
+  adapter: string | null
+  status: NotificationDeliveryStatus
+  reason: string | null
+  durationMs: number | null
+  statusCode: number | null
+  latestAt: string
+  events: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  uniqueActors: number
+}
+
+interface NotificationDeliveryEvidenceItem {
+  key: string
+  configId: string | null
+  configName: string | null
+  notificationAction: string | null
+  resourceType: string | null
+  channel: string | null
+  provider: string | null
+  providerType: string | null
+  adapter: string | null
+  status: NotificationDeliveryStatus
+  reason: string | null
+  durationMs: number | null
+  statusCode: number | null
+  latestAt: string
+  events: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  uniqueActors: number
+}
 
 interface NotificationDeliveryAnalytics {
   channelSummary: {
@@ -338,6 +632,7 @@ interface NotificationDeliveryAnalytics {
       hasRelayEndpoint: boolean
     }
   }>
+  actionQueue: NotificationActionQueueItem[]
   deliveries: {
     total: number
     planned: number
@@ -378,6 +673,8 @@ interface NotificationDeliveryAnalytics {
     latestFailureStatusCode: number | null
     latestFailureAt: string | null
   }>
+  deliveryEvidence: NotificationDeliveryEvidenceItem[]
+  testEvidence: NotificationTestEvidenceItem[]
   browserPushSubscriptions: {
     total: number
     registered: number
@@ -437,6 +734,17 @@ interface ProviderChannelDistributionItem {
   quantity: number
   uniqueActors: number
   byModel: Array<{ model: string, tokens: number }>
+  byProviderType: Array<{ providerType: string, quantity: number }>
+}
+
+interface ProviderModelChannelDistributionItem {
+  model: string
+  channel: string
+  requests: number
+  tokens: number
+  quantity: number
+  uniqueActors: number
+  byProvider: Array<{ providerId: string, quantity: number }>
   byProviderType: Array<{ providerType: string, quantity: number }>
 }
 
@@ -564,6 +872,8 @@ interface GovernanceAnalytics {
     growth: GovernanceGrowth
     trend: GovernanceTrendPoint[]
     heatmap: GovernanceHeatmapPoint[]
+    timeHeatmap: GovernanceSearchTimeHeatmapPoint[]
+    frequencyCohorts: GovernanceSearchFrequencyCohort[]
     byQueryType: GovernanceMetric[]
     byScene: GovernanceMetric[]
     byInputType: GovernanceMetric[]
@@ -664,6 +974,7 @@ interface GovernanceAnalytics {
     byFailureReason: GovernanceMetric[]
     byStatusCode: GovernanceMetric[]
     bySurface: GovernanceMetric[]
+    sceneAssetHealth: UploadSceneAssetHealthItem[]
     pipelineSummary: Array<{
       key: string
       resourceType: string
@@ -707,6 +1018,31 @@ interface GovernanceAnalytics {
       latestSampleAt: string | null
       suggestedAction: 'retry-monitor' | 'storage-provider-check' | 'quota-policy-check' | 'payload-validation' | 'manual-investigation'
     }>
+    actionQueue: Array<{
+      key: string
+      priority: 'critical' | 'high' | 'medium' | 'low'
+      suggestedAction: 'retry-monitor' | 'storage-provider-check' | 'quota-policy-check' | 'payload-validation' | 'manual-investigation' | 'stuck-attempt-check'
+      reason: string
+      resourceType: string
+      surface: string | null
+      storageChannel: string | null
+      storageProvider: string | null
+      statusCode: number | null
+      events: number
+      failedAttempts: number
+      stuckAttempts: number
+      retryableFailures: number
+      scheduledRetries: number
+      exhaustedRetries: number
+      sampleCount: number
+      calibrationStatus: 'verified' | 'sampled' | 'needs-calibration' | 'unknown'
+      sampleSource: 'live' | 'manual' | 'synthetic' | 'unknown'
+      latestAt: string
+      oldestAgeMs: number | null
+      nextRetryDelayMs: number | null
+      evidenceAttemptHashes: string[]
+      evidenceResourceHashes: string[]
+    }>
     retrySummary: {
       retryableFailures: number
       nonRetryableFailures: number
@@ -740,6 +1076,23 @@ interface GovernanceAnalytics {
     }>
     uploadSize: GovernanceNumberStat
     uploadDurationMs: GovernanceNumberStat
+    recoveredEvidence: Array<{
+      attemptHash: string
+      resourceHash: string
+      resourceType: string
+      surface: string | null
+      storageChannel: string | null
+      storageProvider: string | null
+      contentType: string | null
+      durationMs: number | null
+      size: number | null
+      retryCount: number | null
+      maxRetries: number | null
+      attempts: number | null
+      storageOperation: string | null
+      storageStatusCode: number | null
+      latestAt: string
+    }>
     problemAttempts: Array<{
       attemptHash: string
       resourceHash: string
@@ -774,6 +1127,8 @@ interface GovernanceAnalytics {
     byResourceTypeUsage: StorageUsageBreakdown[]
     byActionUsage: StorageUsageBreakdown[]
     channelPressure: StorageChannelPressure[]
+    actionQueue: StorageActionQueueItem[]
+    smokeEvidence: StorageSmokeEvidenceItem[]
     trend: StorageUsageTrendPoint[]
     policySummary: {
       total: number
@@ -804,6 +1159,7 @@ interface GovernanceAnalytics {
     byProviderType: GovernanceMetric[]
     channelDistribution: ProviderChannelDistributionItem[]
     modelDistribution: ProviderModelDistributionItem[]
+    modelChannelDistribution: ProviderModelChannelDistributionItem[]
     quotaSummary: {
       total: number
       active: number
@@ -819,7 +1175,9 @@ interface GovernanceAnalytics {
       nearestRequestExhaustionDays: number | null
       nearestTokenExhaustionDays: number | null
     }
+    quotaActionQueue: ProviderQuotaActionQueueItem[]
     quotaRiskItems: ProviderQuotaRiskItem[]
+    quotaSmokeEvidence: ProviderQuotaSmokeEvidenceItem[]
     quotas: Array<{
       configId: string
       providerId: string
@@ -917,6 +1275,63 @@ interface PlatformGovernanceD1Readiness {
   }
   checks: PlatformGovernanceD1ReadinessCheck[]
   generatedAt: string
+}
+
+interface PlatformGovernanceReportScorecard {
+  key: string
+  label: string
+  value: number
+  total: number | null
+  unit: string
+  delta: number | null
+  rate: number | null
+  status: PlatformGovernanceReportStatus
+  reason: string | null
+}
+
+interface PlatformGovernanceReportRiskQueueItem {
+  key: string
+  area: 'search' | 'upload' | 'storage' | 'notification' | 'provider-quota'
+  priority: PlatformGovernanceReportPriority
+  suggestedAction: string
+  reason: string
+  status: string
+  metric: number
+  latestAt: string | null
+  details: Record<string, string | number | boolean | null>
+}
+
+interface PlatformGovernanceReportEvidenceItem {
+  key: string
+  label: string
+  status: PlatformGovernanceReportEvidenceStatus
+  evidenceCount: number
+  blocker: string | null
+}
+
+interface PlatformGovernanceReportSnapshot {
+  days: number
+  generatedAt: string
+  report: {
+    status: PlatformGovernanceReportStatus
+    riskScore: number
+    scorecards: PlatformGovernanceReportScorecard[]
+    evidenceStatus: PlatformGovernanceReportEvidenceItem[]
+    riskQueue: PlatformGovernanceReportRiskQueueItem[]
+    leaderboards: {
+      hotPlugins: PluginLeaderboardItem[]
+      topModels: ProviderModelDistributionItem[]
+      topProviders: ProviderLeaderboardItem[]
+    }
+    trendSummary: {
+      latestDate: string | null
+      operationsDays: number
+      peakSearches: number
+      peakPluginInstalls: number
+      peakProviderTokens: number
+      peakRiskScore: number
+    }
+  }
 }
 
 interface StoragePolicyEvaluation {
@@ -1124,8 +1539,6 @@ interface NotificationChannelsResponse {
   profiles: NotificationChannelProfileTemplate[]
   generatedAt: string
 }
-
-type NotificationDeliveryStatus = 'planned' | 'sent' | 'skipped' | 'failed'
 
 interface NotificationDeliveryRecord {
   configId: string
@@ -1339,6 +1752,8 @@ function emptyStorageAnalytics(): GovernanceAnalytics['storage'] {
     byResourceTypeUsage: [],
     byActionUsage: [],
     channelPressure: [],
+    actionQueue: [],
+    smokeEvidence: [],
     trend: [],
     policySummary: {
       total: 0,
@@ -1425,7 +1840,6 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         leaderboards: {
           hotPlugins: [],
           topModels: [],
-          topProviders: [],
         },
         riskSummary: {
           uploadProblems: 0,
@@ -1480,6 +1894,8 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         growth: { previousEvents: 0, currentEvents: 0, eventGrowthRate: 0 },
         trend: [],
         heatmap: [],
+        timeHeatmap: [],
+        frequencyCohorts: [],
         byQueryType: [],
         byScene: [],
         byInputType: [],
@@ -1590,8 +2006,10 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byFailureReason: [],
         byStatusCode: [],
         bySurface: [],
+        sceneAssetHealth: [],
         pipelineSummary: [],
         failureMatrix: [],
+        actionQueue: [],
         retrySummary: {
           retryableFailures: 0,
           nonRetryableFailures: 0,
@@ -1614,6 +2032,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         retryTrend: [],
         uploadSize: emptyNumberStat(),
         uploadDurationMs: emptyNumberStat(),
+        recoveredEvidence: [],
         problemAttempts: [],
       },
       notifications: {
@@ -1632,6 +2051,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         },
         providerMix: [],
         channelRisks: [],
+        actionQueue: [],
         deliveries: {
           total: 0,
           planned: 0,
@@ -1651,6 +2071,8 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byNotificationAction: [],
         deliveryTrend: [],
         providerHealth: [],
+        deliveryEvidence: [],
+        testEvidence: [],
         browserPushSubscriptions: {
           total: 0,
           registered: 0,
@@ -1674,6 +2096,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         byProviderType: [],
         channelDistribution: [],
         modelDistribution: [],
+        modelChannelDistribution: [],
         quotaSummary: {
           total: 0,
           active: 0,
@@ -1689,11 +2112,55 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
           nearestRequestExhaustionDays: null,
           nearestTokenExhaustionDays: null,
         },
+        quotaActionQueue: [],
         quotaRiskItems: [],
+        quotaSmokeEvidence: [],
         quotas: [],
         leaderboard: [],
       },
     }),
+    server: false,
+  },
+)
+
+function emptyGovernanceReportSnapshot(): PlatformGovernanceReportSnapshot {
+  return {
+    days: summaryDays.value,
+    generatedAt: '',
+    report: {
+      status: 'ok',
+      riskScore: 0,
+      scorecards: [],
+      evidenceStatus: [],
+      riskQueue: [],
+      leaderboards: {
+        hotPlugins: [],
+        topModels: [],
+        topProviders: [],
+      },
+      trendSummary: {
+        latestDate: null,
+        operationsDays: 0,
+        peakSearches: 0,
+        peakPluginInstalls: 0,
+        peakProviderTokens: 0,
+        peakRiskScore: 0,
+      },
+    },
+  }
+}
+
+const { data: reportData, pending: reportPending, error: reportError, refresh: refreshReport } = await useAsyncData<PlatformGovernanceReportSnapshot>(
+  'dashboard-governance-report',
+  async () => await requestJson<PlatformGovernanceReportSnapshot>('/api/dashboard/governance/report', {
+    query: {
+      days: summaryDays.value,
+      limit: 5000,
+      topLimit: 12,
+    },
+  }),
+  {
+    default: emptyGovernanceReportSnapshot,
     server: false,
   },
 )
@@ -1855,6 +2322,7 @@ const storagePolicies = computed(() => storagePoliciesData.value?.policies ?? []
 const notificationCredentials = computed(() => notificationCredentialsData.value?.credentials ?? [])
 const d1Readiness = computed(() => d1ReadinessData.value ?? emptyD1Readiness())
 const d1ReadinessGaps = computed(() => d1Readiness.value.checks.filter(item => item.status !== 'ready'))
+const governanceReport = computed(() => reportData.value ?? emptyGovernanceReportSnapshot())
 const storagePolicyPeakUtilization = computed(() => Math.max(
   analyticsData.value.storage.policySummary.highestStoredUtilization,
   analyticsData.value.storage.policySummary.highestTrafficUtilization,
@@ -1892,6 +2360,25 @@ const dashboardOperationsPeaks = computed(() => {
     riskScore: Math.max(1, ...timeline.map(item => item.riskScore)),
   }
 })
+const searchTimeHeatmap = computed(() => analyticsData.value.searches.timeHeatmap)
+const searchTimeHeatmapPeak = computed(() => Math.max(1, ...searchTimeHeatmap.value.map(item => item.events)))
+const searchTimeHeatmapHours = computed(() => {
+  const hours = Array.from(new Set(searchTimeHeatmap.value.map(item => item.hour))).sort()
+  return hours.length ? hours : ['00', '06', '12', '18']
+})
+const searchTimeHeatmapRows = computed(() => {
+  const cells = new Map(searchTimeHeatmap.value.map(item => [`${item.dayOfWeek}:${item.hour}`, item]))
+  return [0, 1, 2, 3, 4, 5, 6]
+    .map(dayOfWeek => ({
+      dayOfWeek,
+      label: formatWeekdayLabel(dayOfWeek),
+      cells: searchTimeHeatmapHours.value.map(hour => cells.get(`${dayOfWeek}:${hour}`) ?? null),
+    }))
+    .filter(row => row.cells.some(Boolean))
+})
+const searchTimeHeatmapTop = computed(() => [...searchTimeHeatmap.value]
+  .sort((left, right) => right.events - left.events || right.selectionRate - left.selectionRate || right.problemRate - left.problemRate)
+  .slice(0, 6))
 const groupedConfigs = computed(() => ({
   analytics: configs.value.filter(item => item.configType === 'analytics_collection'),
   storage: configs.value.filter(item => item.configType === 'storage_channel'),
@@ -2038,7 +2525,7 @@ async function saveConfig(
       },
     })
     saveMessage.value = t('dashboard.governance.saved', 'Saved.')
-    await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
+    await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
   }
   catch (error) {
     saveError.value = error instanceof Error ? error.message : t('dashboard.governance.saveFailed', 'Save failed.')
@@ -2134,7 +2621,7 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
     saveMessage.value = mode === 'send'
       ? t('dashboard.governance.notificationTest.sent', 'Notification channel test sent.')
       : t('dashboard.governance.notificationTest.planned', 'Notification channel dry-run recorded.')
-    await Promise.all([refreshSummary(), refreshAnalytics(), refreshD1Readiness()])
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshReport(), refreshD1Readiness()])
   }
   catch (error) {
     notificationTestError.value = error instanceof Error ? error.message : t('dashboard.governance.notificationTest.failed', 'Notification channel test failed.')
@@ -2168,7 +2655,7 @@ async function notifyStorageAlerts(mode: 'plan' | 'send'): Promise<void> {
     saveMessage.value = mode === 'send'
       ? t('dashboard.governance.storageAlerts.sent', 'Storage alert notifications sent.')
       : t('dashboard.governance.storageAlerts.planned', 'Storage alert notification dry-run recorded.')
-    await Promise.all([refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
   }
   catch (error) {
     storageAlertNotifyError.value = error instanceof Error ? error.message : t('dashboard.governance.storageAlerts.failed', 'Storage alert notification failed.')
@@ -2204,7 +2691,7 @@ async function smokeStoragePolicy(policyId: string, mode: StorageChannelSmokeMod
       : mode === 'write'
         ? t('dashboard.governance.storageSmoke.sent', 'Storage write/read/delete smoke completed.')
         : t('dashboard.governance.storageSmoke.ready', 'Storage channel dry-run completed.')
-    await Promise.all([refreshSummary(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
+    await Promise.all([refreshSummary(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
   }
   catch (error) {
     storageSmokeError.value = error instanceof Error ? error.message : t('dashboard.governance.storageSmoke.error', 'Storage smoke failed.')
@@ -2216,7 +2703,17 @@ async function smokeStoragePolicy(policyId: string, mode: StorageChannelSmokeMod
 }
 
 async function refreshAll(): Promise<void> {
-  await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
+  await Promise.all([refreshSummary(), refreshConfigs(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
+}
+
+function exportGovernanceReport(): void {
+  const params = new URLSearchParams({
+    days: String(summaryDays.value),
+    limit: '5000',
+    topLimit: '12',
+    format: 'markdown',
+  })
+  window.open(`/api/dashboard/governance/report?${params.toString()}`, '_blank')
 }
 
 function formatNumber(value: number): string {
@@ -2254,6 +2751,16 @@ function formatTrendWidth(value: number, peak: number): string {
   if (!Number.isFinite(value) || !Number.isFinite(peak) || value <= 0 || peak <= 0)
     return '0%'
   return `${Math.min(100, Math.max(4, Math.round((value / peak) * 100)))}%`
+}
+
+function formatHeatmapCellOpacity(value: number, peak: number): string {
+  if (!Number.isFinite(value) || !Number.isFinite(peak) || value <= 0 || peak <= 0)
+    return '0.08'
+  return String(Math.min(0.96, Math.max(0.18, Math.round((value / peak) * 100) / 100)))
+}
+
+function formatWeekdayLabel(dayOfWeek: number): string {
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayOfWeek] ?? String(dayOfWeek)
 }
 
 function formatDate(value: string): string {
@@ -2311,6 +2818,22 @@ function storageChannelPressureLabel(status: StorageChannelPressureStatus): stri
   return storageEvaluationLabel(status)
 }
 
+function storageSmokeEvidenceTone(status: StorageSmokeEvidenceStatus): StatusTone {
+  if (status === 'failed')
+    return 'danger'
+  if (status === 'sent' || status === 'ready')
+    return 'success'
+  return 'info'
+}
+
+function storageSmokeEvidenceLabel(status: StorageSmokeEvidenceStatus): string {
+  if (status === 'ready')
+    return t('dashboard.governance.storageSmoke.readyStatus', 'Ready')
+  if (status === 'sent')
+    return t('dashboard.governance.storageSmoke.sentStatus', 'Sent')
+  return t('dashboard.governance.storageSmoke.failedStatus', 'Failed')
+}
+
 function providerQuotaTone(status: ProviderQuotaStatus): StatusTone {
   return storageEvaluationTone(status)
 }
@@ -2325,6 +2848,26 @@ function providerQuotaLabel(status: ProviderQuotaStatus): string {
   return t('dashboard.governance.providerQuota.disabled', 'Disabled')
 }
 
+function providerQuotaSmokeTone(status: ProviderQuotaSmokeStatus): StatusTone {
+  if (status === 'blocked')
+    return 'danger'
+  if (status === 'failed')
+    return 'warning'
+  if (status === 'consumed' || status === 'allowed')
+    return 'success'
+  return 'info'
+}
+
+function providerQuotaSmokeLabel(status: ProviderQuotaSmokeStatus): string {
+  if (status === 'allowed')
+    return t('dashboard.governance.providerQuotaSmoke.allowed', 'Allowed')
+  if (status === 'consumed')
+    return t('dashboard.governance.providerQuotaSmoke.consumed', 'Consumed')
+  if (status === 'blocked')
+    return t('dashboard.governance.providerQuotaSmoke.blocked', 'Blocked')
+  return t('dashboard.governance.providerQuotaSmoke.failed', 'Failed')
+}
+
 function providerQuotaRiskReasonLabel(reason: ProviderQuotaRiskReason): string {
   if (reason === 'overage')
     return t('dashboard.governance.analytics.providerQuotaRiskOverage', 'Over limit')
@@ -2335,6 +2878,76 @@ function providerQuotaRiskReasonLabel(reason: ProviderQuotaRiskReason): string {
   if (reason === 'blocked')
     return t('dashboard.governance.analytics.providerQuotaRiskBlocked', 'Blocked')
   return t('dashboard.governance.analytics.providerQuotaRiskWarning', 'Warning threshold')
+}
+
+function providerQuotaActionTone(priority: ProviderQuotaActionQueuePriority): StatusTone {
+  if (priority === 'critical')
+    return 'danger'
+  if (priority === 'high')
+    return 'warning'
+  if (priority === 'medium')
+    return 'info'
+  return 'muted'
+}
+
+function providerQuotaActionReasonLabel(reason: ProviderQuotaActionQueueReason): string {
+  if (reason === 'token-overage')
+    return t('dashboard.governance.analytics.providerQuotaActionTokenOverage', 'Token overage')
+  if (reason === 'request-overage')
+    return t('dashboard.governance.analytics.providerQuotaActionRequestOverage', 'Request overage')
+  if (reason === 'token-exhausted')
+    return t('dashboard.governance.analytics.providerQuotaActionTokenExhausted', 'Tokens exhausted')
+  if (reason === 'request-exhausted')
+    return t('dashboard.governance.analytics.providerQuotaActionRequestExhausted', 'Requests exhausted')
+  if (reason === 'projected-exhaustion')
+    return t('dashboard.governance.analytics.providerQuotaActionProjected', 'Projected exhaustion')
+  if (reason === 'quota-disabled')
+    return t('dashboard.governance.analytics.providerQuotaActionDisabled', 'Quota disabled')
+  if (reason === 'missing-hard-limit')
+    return t('dashboard.governance.analytics.providerQuotaActionMissingLimit', 'Missing hard limit')
+  return t('dashboard.governance.analytics.providerQuotaActionWarning', 'Warning threshold')
+}
+
+function reportStatusTone(status: PlatformGovernanceReportStatus): StatusTone {
+  if (status === 'critical')
+    return 'danger'
+  if (status === 'watch')
+    return 'warning'
+  return 'success'
+}
+
+function reportStatusLabel(status: PlatformGovernanceReportStatus): string {
+  if (status === 'critical')
+    return t('dashboard.governance.report.critical', 'Critical')
+  if (status === 'watch')
+    return t('dashboard.governance.report.watch', 'Watch')
+  return t('dashboard.governance.report.ok', 'OK')
+}
+
+function reportEvidenceTone(status: PlatformGovernanceReportEvidenceStatus): StatusTone {
+  if (status === 'ready')
+    return 'success'
+  if (status === 'local-only')
+    return 'warning'
+  return 'muted'
+}
+
+function reportEvidenceLabel(status: PlatformGovernanceReportEvidenceStatus): string {
+  if (status === 'ready')
+    return t('dashboard.governance.report.evidenceReady', 'Ready')
+  if (status === 'local-only')
+    return t('dashboard.governance.report.evidenceLocalOnly', 'Local only')
+  return t('dashboard.governance.report.evidenceOpen', 'Open')
+}
+
+function reportPriorityTone(priority: PlatformGovernanceReportPriority): StatusTone {
+  if (priority === 'critical')
+    return 'danger'
+  if (priority === 'high')
+    return 'warning'
+  if (priority === 'medium')
+    return 'info'
+  return 'muted'
 }
 
 function storageAlertMetricLabel(metric: StorageAlertMetric): string {
@@ -2387,6 +3000,12 @@ function notificationChannelLabel(status: NotificationChannelDisplayStatus): str
   return t('dashboard.governance.analytics.notificationChannelOk', 'OK')
 }
 
+function notificationActionQueueStatusLabel(item: NotificationActionQueueItem): string {
+  if (item.source === 'delivery-health')
+    return t('dashboard.governance.analytics.notificationDeliveryRisk', 'Delivery risk')
+  return notificationChannelLabel(item.status as NotificationChannelRiskStatus)
+}
+
 function notificationChannelCredentialLabel(channel: { credentialRequired: boolean, hasCredentialRef?: boolean, credentialRef?: string | null }): string {
   if (!channel.credentialRequired)
     return t('dashboard.governance.analytics.notificationChannelCredentialNotRequired', 'no credential required')
@@ -2437,9 +3056,9 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           {{ t('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
         </p>
       </div>
-      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" @click="refreshAll">
-        <TxSpinner v-if="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" :size="14" />
-        <span :class="summaryPending || configsPending || analyticsPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
+      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending || reportPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" @click="refreshAll">
+        <TxSpinner v-if="summaryPending || configsPending || analyticsPending || reportPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" :size="14" />
+        <span :class="summaryPending || configsPending || analyticsPending || reportPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
     </header>
 
@@ -2447,13 +3066,140 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       {{ t('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
     </div>
 
-    <div v-if="summaryError || configsError || analyticsError || storagePoliciesError || storageChannelAnalyticsError || storageCredentialsError || notificationCredentialsError || notificationChannelsError || d1ReadinessError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-      {{ saveError || notificationTestError || storageAlertNotifyError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (storagePoliciesError as any)?.message || (storageChannelAnalyticsError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message || (notificationChannelsError as any)?.message || (d1ReadinessError as any)?.message }}
+    <div v-if="summaryError || configsError || analyticsError || reportError || storagePoliciesError || storageChannelAnalyticsError || storageCredentialsError || notificationCredentialsError || notificationChannelsError || d1ReadinessError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+      {{ saveError || notificationTestError || storageAlertNotifyError || (summaryError as any)?.message || (configsError as any)?.message || (analyticsError as any)?.message || (reportError as any)?.message || (storagePoliciesError as any)?.message || (storageChannelAnalyticsError as any)?.message || (storageCredentialsError as any)?.message || (notificationCredentialsError as any)?.message || (notificationChannelsError as any)?.message || (d1ReadinessError as any)?.message }}
     </div>
 
     <div v-if="saveMessage" class="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
       {{ saveMessage }}
     </div>
+
+    <section class="apple-card-lg p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="text-base font-semibold text-black dark:text-white">
+            {{ t('dashboard.governance.report.title', 'Operations report snapshot') }}
+          </h2>
+          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+            {{ t('dashboard.governance.report.subtitle', 'Read-only executive snapshot built from anonymized governance aggregates.') }}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <TxButton variant="secondary" size="small" :disabled="reportPending" @click="exportGovernanceReport">
+            {{ t('dashboard.governance.report.exportMarkdown', 'Export Markdown') }}
+          </TxButton>
+          <TxStatusBadge :text="reportStatusLabel(governanceReport.report.status)" size="sm" :status="reportStatusTone(governanceReport.report.status)" />
+          <span class="text-xs text-black/45 dark:text-white/45">{{ formatDate(governanceReport.generatedAt) }}</span>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div v-for="item in governanceReport.report.scorecards" :key="`governance-report-score:${item.key}`" class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+          <div class="flex items-center justify-between gap-2">
+            <p class="font-semibold text-black/70 dark:text-white/70">
+              {{ item.label }}
+            </p>
+            <TxStatusBadge :text="reportStatusLabel(item.status)" size="sm" :status="reportStatusTone(item.status)" />
+          </div>
+          <p class="mt-2 text-xl font-semibold text-black dark:text-white">
+            {{ formatNumber(item.value) }}
+            <span class="text-xs font-normal text-black/40 dark:text-white/40">{{ item.unit }}</span>
+          </p>
+          <p class="mt-1 truncate text-black/45 dark:text-white/45">
+            <span v-if="item.total !== null">{{ formatNumber(item.total) }} total</span>
+            <span v-if="item.delta !== null"> · {{ formatDelta(item.delta) }}</span>
+            <span v-if="item.rate !== null"> · {{ formatPercent(item.rate) }}</span>
+          </p>
+          <p v-if="item.reason" class="mt-1 truncate text-black/40 dark:text-white/40">
+            {{ item.reason }}
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr]">
+        <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+          <div class="flex items-center justify-between gap-3">
+            <p class="font-semibold text-black dark:text-white">
+              {{ t('dashboard.governance.report.evidence', 'Evidence status') }}
+            </p>
+            <span class="text-black/40 dark:text-white/40">{{ formatNumber(governanceReport.report.evidenceStatus.length) }}</span>
+          </div>
+          <div class="mt-3 grid gap-2">
+            <div v-for="item in governanceReport.report.evidenceStatus" :key="`governance-report-evidence:${item.key}`" class="flex items-center justify-between gap-3 rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+              <div class="min-w-0">
+                <p class="truncate font-medium text-black/70 dark:text-white/70">
+                  {{ item.label }}
+                </p>
+                <p class="truncate text-black/40 dark:text-white/40">
+                  {{ formatNumber(item.evidenceCount) }} evidence · {{ item.blocker || '-' }}
+                </p>
+              </div>
+              <TxStatusBadge :text="reportEvidenceLabel(item.status)" size="sm" :status="reportEvidenceTone(item.status)" />
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
+          <div class="flex items-center justify-between gap-3">
+            <p class="font-semibold text-black dark:text-white">
+              {{ t('dashboard.governance.report.riskQueue', 'Report risk queue') }}
+            </p>
+            <span class="text-black/40 dark:text-white/40">{{ formatNumber(governanceReport.report.riskQueue.length) }}</span>
+          </div>
+          <div v-if="governanceReport.report.riskQueue.length" class="mt-3 grid gap-2">
+            <div v-for="item in governanceReport.report.riskQueue.slice(0, 6)" :key="`governance-report-risk:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+              <div class="flex items-center justify-between gap-2">
+                <p class="truncate font-medium text-black/70 dark:text-white/70">
+                  {{ item.area }} · {{ item.suggestedAction }}
+                </p>
+                <TxStatusBadge :text="item.priority" size="sm" :status="reportPriorityTone(item.priority)" />
+              </div>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ item.reason }} · {{ item.status }} · {{ formatNumber(item.metric) }}
+              </p>
+            </div>
+          </div>
+          <p v-else class="mt-3 text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.report.riskQueueEmpty', 'No report risks in the current window.') }}
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 md:grid-cols-4">
+        <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
+          <p class="text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.report.riskScore', 'Risk score') }}
+          </p>
+          <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+            {{ formatNumber(governanceReport.report.riskScore) }}
+          </p>
+        </div>
+        <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
+          <p class="text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.report.operationsDays', 'Timeline days') }}
+          </p>
+          <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+            {{ formatNumber(governanceReport.report.trendSummary.operationsDays) }}
+          </p>
+        </div>
+        <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
+          <p class="text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.report.peakTokens', 'Peak tokens') }}
+          </p>
+          <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+            {{ formatNumber(governanceReport.report.trendSummary.peakProviderTokens) }}
+          </p>
+        </div>
+        <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
+          <p class="text-black/45 dark:text-white/45">
+            {{ t('dashboard.governance.report.latestDate', 'Latest date') }}
+          </p>
+          <p class="mt-1 text-lg font-semibold text-black dark:text-white">
+            {{ formatShortDate(governanceReport.report.trendSummary.latestDate || '') }}
+          </p>
+        </div>
+      </div>
+    </section>
 
     <section class="grid gap-4 md:grid-cols-4">
       <div class="apple-card-lg p-5">
@@ -3126,6 +3872,83 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.zeroResult) }} zero · {{ formatNumber(item.providerErrors + item.providerTimeouts) }} provider</span>
             </div>
+            <div
+              v-for="item in analyticsData.searches.frequencyCohorts.slice(0, 4)"
+              :key="`search-frequency-cohort:${item.cohort}`"
+              class="grid gap-1 rounded-lg bg-black/[0.02] p-2 text-xs dark:bg-white/[0.03]"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate text-black/60 dark:text-white/60">
+                  {{ t('dashboard.governance.analytics.searchFrequencyCohorts', 'Search frequency cohort') }} · {{ item.cohort }}
+                </span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(item.users) }} users</span>
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ formatNumber(item.searches) }} searches · {{ formatNumber(item.quantity) }} qty · {{ formatNumber(item.activeDays) }} active days
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchFrequencyAverage', 'Average') }} · {{ formatNumber(item.avgSearchesPerUser) }} searches/user · {{ formatNumber(item.avgActiveDaysPerUser) }} days/user
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ formatPercent(item.selectionRate) }} selected · {{ formatPercent(item.zeroResultRate) }} zero · {{ formatPercent(item.problemRate) }} problem
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchLocalTimeSlot', 'Local time slot') }} · {{ item.topLocalTimeSlots.slice(0, 2).map(slot => `${slot.key} ${formatNumber(slot.events)}`).join(' · ') || '—' }}
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.topUserPreferenceModes.slice(0, 2).map(mode => `${mode.key} ${formatNumber(mode.events)}`).join(' · ') || '—' }}
+              </div>
+              <div class="truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 2).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+              </div>
+            </div>
+            <div class="grid gap-3 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTimeHeatmap', 'Search heatmap') }}</span>
+                <span class="font-medium text-black dark:text-white">{{ formatNumber(searchTimeHeatmap.length) }}</span>
+              </div>
+              <div v-if="searchTimeHeatmapRows.length" class="overflow-x-auto">
+                <div class="grid min-w-[360px] gap-1" :style="{ gridTemplateColumns: `48px repeat(${searchTimeHeatmapHours.length}, minmax(36px, 1fr))` }">
+                  <div />
+                  <div v-for="hour in searchTimeHeatmapHours" :key="`search-heatmap-hour:${hour}`" class="text-center text-[10px] text-black/45 dark:text-white/45">
+                    {{ hour }}
+                  </div>
+                  <template v-for="row in searchTimeHeatmapRows" :key="`search-heatmap-row:${row.dayOfWeek}`">
+                    <div class="flex h-8 items-center text-[10px] text-black/45 dark:text-white/45">
+                      {{ row.label }}
+                    </div>
+                    <div
+                      v-for="(cell, index) in row.cells"
+                      :key="`search-heatmap-cell:${row.dayOfWeek}:${searchTimeHeatmapHours[index]}`"
+                      class="flex h-8 items-center justify-center rounded-md border border-black/[0.03] text-[10px] font-medium text-black dark:border-white/[0.04] dark:text-white"
+                      :class="cell ? '' : 'bg-black/[0.02] text-black/30 dark:bg-white/[0.02] dark:text-white/25'"
+                      :style="cell ? { backgroundColor: `rgba(16, 185, 129, ${formatHeatmapCellOpacity(cell.events, searchTimeHeatmapPeak)})` } : undefined"
+                      :title="cell ? `${row.label} ${cell.hour}:00 · ${formatNumber(cell.events)} searches · ${formatPercent(cell.selectionRate)} selected · ${formatPercent(cell.problemRate)} problem` : `${row.label} ${searchTimeHeatmapHours[index]}:00`"
+                    >
+                      {{ cell ? formatNumber(cell.events) : '0' }}
+                    </div>
+                  </template>
+                </div>
+              </div>
+              <p v-else class="text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.searchTimeHeatmapEmpty', 'No local-time search heatmap yet.') }}
+              </p>
+              <div v-for="item in searchTimeHeatmapTop" :key="`search-heatmap-top:${item.dayOfWeek}:${item.hour}`" class="grid gap-1 rounded-md bg-white/70 p-2 dark:bg-black/20">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate text-black/60 dark:text-white/60">{{ formatWeekdayLabel(item.dayOfWeek) }} · {{ item.hour }}:00 · {{ item.timeSlot }}</span>
+                  <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
+                </div>
+                <div class="truncate text-black/45 dark:text-white/45">
+                  {{ formatPercent(item.selectionRate) }} selected · {{ formatPercent(item.zeroResultRate) }} zero · {{ formatPercent(item.problemRate) }} problem
+                </div>
+                <div class="truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.searchContextApp', 'Context app') }} · {{ item.topContextAppCategories.slice(0, 2).map(context => `${context.key} ${formatNumber(context.events)}`).join(' · ') || '—' }}
+                </div>
+                <div class="truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 2).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                </div>
+              </div>
+            </div>
             <div v-for="item in analyticsData.searches.byHour.slice(0, 6)" :key="`hour:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="text-black/60 dark:text-white/60">{{ item.key }}:00 UTC</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
@@ -3410,6 +4233,38 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadSurface', 'Surface') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
+            <div v-if="analyticsData.uploads.sceneAssetHealth.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadSceneAssetHealth', 'Scene asset upload health') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.uploads.sceneAssetHealth.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.uploads.sceneAssetHealth.slice(0, 5)" :key="`upload-scene-asset:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black/70 dark:text-white/70">
+                    {{ item.sceneId || 'unknown' }} · {{ item.capability || 'unknown' }}
+                  </span>
+                  <span class="text-black/45 dark:text-white/45">
+                    {{ formatPercent(item.failureRate) }} failed
+                  </span>
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.providerId || 'unknown' }} · {{ item.assetKind || 'unknown' }} · {{ item.resourceType }} · {{ item.storageProvider || item.storageChannel || 'unknown' }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ formatNumber(item.started) }} started · {{ formatNumber(item.completed) }} completed · {{ formatNumber(item.failed) }} failed · {{ formatBytes(item.bytes) }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ formatDurationMs(item.avgDurationMs) }} avg · {{ formatBytes(item.avgSize) }} avg size · {{ item.latestAt }}
+                </p>
+                <p v-if="item.failureReasons.length || item.statusCodes.length" class="mt-1 truncate text-red-500/80 dark:text-red-200/80">
+                  {{ item.failureReasons[0]?.key || '-' }} · {{ item.statusCodes[0]?.key || '-' }}
+                </p>
+              </div>
+            </div>
             <div v-for="item in analyticsData.uploads.byStatusCode.slice(0, 4)" :key="`upload-status:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-red-500/80 dark:text-red-200/80">{{ t('dashboard.governance.analytics.uploadStatusCode', 'Status') }} · {{ item.key }}</span>
               <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
@@ -3421,6 +4276,38 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-for="item in analyticsData.uploads.byRetryDisposition.slice(0, 4)" :key="`upload-retry:${item.key}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadRetryDisposition', 'Retry') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
+            </div>
+            <div v-if="analyticsData.uploads.actionQueue.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadActionQueue', 'Upload action queue') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.uploads.actionQueue.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.uploads.actionQueue.slice(0, 5)" :key="`upload-action-queue:${item.key}`" class="rounded-lg border border-red-500/10 p-2 dark:border-red-200/10">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-red-600 dark:text-red-100">
+                    {{ item.priority }} · {{ item.suggestedAction }}
+                  </span>
+                  <span class="text-red-500/80 dark:text-red-200/80">
+                    {{ formatNumber(item.failedAttempts) }} failed · {{ formatNumber(item.stuckAttempts) }} stuck
+                  </span>
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.reason }} · {{ item.resourceType }} · {{ item.surface || 'unknown' }} · {{ item.storageProvider || item.storageChannel || 'unknown' }} · {{ item.statusCode ?? '-' }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadRetryState', 'Retry state') }} · {{ formatNumber(item.retryableFailures) }} retryable · {{ formatNumber(item.scheduledRetries) }} scheduled · {{ formatNumber(item.exhaustedRetries) }} exhausted
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }} · {{ item.calibrationStatus }} · {{ item.sampleSource }} · {{ formatNumber(item.sampleCount) }} samples
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadActionEvidence', 'Evidence') }} · {{ formatNumber(item.evidenceAttemptHashes.length) }} attempts · {{ formatNumber(item.evidenceResourceHashes.length) }} resources · {{ item.oldestAgeMs == null ? '-' : formatDurationMs(item.oldestAgeMs) }} oldest · {{ item.nextRetryDelayMs == null ? '-' : formatDurationMs(item.nextRetryDelayMs) }} next
+                </p>
+              </div>
             </div>
             <div v-if="analyticsData.uploads.failureMatrix.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
@@ -3458,6 +4345,32 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-for="item in analyticsData.uploads.retryTrend.slice(-3)" :key="`upload-retry-trend:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted · {{ formatNumber(item.retryable) }} retryable · {{ formatNumber(item.recovered) }} recovered</span>
+            </div>
+            <div v-if="analyticsData.uploads.recoveredEvidence.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.uploadRecoveredEvidence', 'Recovered evidence') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.uploads.recoveredEvidence.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.uploads.recoveredEvidence.slice(0, 5)" :key="`upload-recovered:${item.attemptHash}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black/70 dark:text-white/70">
+                    {{ item.resourceType }} · {{ item.attemptHash }}
+                  </span>
+                  <span class="text-black/45 dark:text-white/45">
+                    {{ formatNumber(item.retryCount ?? 0) }}/{{ item.maxRetries ?? '-' }}
+                  </span>
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.surface || 'unknown' }} · {{ item.storageProvider || item.storageChannel || 'unknown' }} · {{ item.contentType || 'unknown' }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.storageOperation || 'storage.write' }} · {{ item.storageStatusCode ?? '-' }} · {{ formatDurationMs(item.durationMs ?? 0) }} · {{ item.size == null ? '-' : formatBytes(item.size) }} · {{ formatDate(item.latestAt) }}
+                </p>
+              </div>
             </div>
             <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
               <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
@@ -3520,6 +4433,74 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <p class="mt-3 text-xs text-black/45 dark:text-white/45">
             {{ formatNumber(analyticsData.storage.writes) }} writes · {{ formatNumber(analyticsData.storage.reads) }} reads · {{ formatNumber(analyticsData.storage.deletes) }} deletes
           </p>
+          <div v-if="analyticsData.storage.smokeEvidence.length" class="mt-4 grid gap-2 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageSmokeEvidence', 'Storage smoke evidence') }}
+              </p>
+              <span class="text-xs text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.storage.smokeEvidence.length) }}
+              </span>
+            </div>
+            <div v-for="item in analyticsData.storage.smokeEvidence.slice(0, 5)" :key="`storage-smoke:${item.key}`" class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">
+                  {{ item.policyName || item.policyId || 'unknown' }} · {{ item.mode }}
+                </span>
+                <TxStatusBadge :text="storageSmokeEvidenceLabel(item.status)" size="sm" :status="storageSmokeEvidenceTone(item.status)" />
+              </div>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ item.channel || 'unknown' }} · {{ item.provider || 'default' }} · {{ item.reason || '-' }}
+              </p>
+              <p class="mt-2 truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageSmokeOperations', 'Operations') }} · {{ item.operations.join(', ') || '-' }} · {{ formatBytes(item.bytesWritten) }} written · {{ formatBytes(item.bytesRead) }} read
+              </p>
+              <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                {{ t('dashboard.governance.analytics.storageSmokeCredential', 'Credential') }} · {{ item.credentialRequired ? 'required' : 'optional' }} · {{ item.hasCredentialRef ? 'ref' : 'no-ref' }} · {{ item.hasCredential === null ? 'unknown' : item.hasCredential ? 'bound' : 'missing' }} · {{ formatDate(item.latestAt) }}
+              </p>
+              <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                {{ formatNumber(item.events) }} events · {{ formatNumber(item.ready) }} ready · {{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.uniqueActors) }} actors
+              </p>
+            </div>
+          </div>
+          <div v-if="analyticsData.storage.actionQueue.length" class="mt-4 grid gap-2 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageActionQueue', 'Storage action queue') }}
+              </p>
+              <span class="text-xs text-black/45 dark:text-white/45">
+                {{ formatNumber(analyticsData.storage.actionQueue.length) }}
+              </span>
+            </div>
+            <div v-for="item in analyticsData.storage.actionQueue.slice(0, 5)" :key="`storage-action-queue:${item.key}`" class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="truncate font-medium text-black dark:text-white">
+                  {{ item.priority }} · {{ item.suggestedAction }}
+                </span>
+                <TxStatusBadge :text="storageChannelPressureLabel(item.pressureStatus)" size="sm" :status="storageChannelPressureTone(item.pressureStatus)" />
+              </div>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ item.reason }} · {{ item.channel }} · {{ item.provider || 'default' }} · {{ item.policyName || t('dashboard.governance.analytics.storageChannelNoPolicy', 'No matched policy') }}
+              </p>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
+                <span>{{ formatBytes(item.storedBytes) }} stored</span>
+                <span>{{ formatBytes(item.trafficBytes) }} traffic</span>
+                <span>{{ formatNumber(item.operations) }} ops</span>
+              </div>
+              <p class="mt-2 truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageActionQueueRemaining', 'Remaining') }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }} ops
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageActionQueueOverage', 'Overage') }} · {{ formatStorageBudgetValue(item.overage.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.overage.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.overage.operations, 'operations') }} ops
+              </p>
+              <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                {{ t('dashboard.governance.analytics.storageActionQueueBurnRate', 'Burn/day') }} · {{ formatBytes(item.burnRate.storedBytesPerDay) }} stored · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} traffic · {{ formatNumber(item.burnRate.operationsPerDay) }} ops
+              </p>
+              <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                {{ formatRatio(item.highestUtilization) }} peak · {{ formatNumber(item.policyAlerts) }} alerts · {{ item.latestTrendDate || '-' }}
+              </p>
+            </div>
+          </div>
           <div v-if="analyticsData.storage.channelPressure.length" class="mt-4 grid gap-2 text-sm">
             <div class="flex items-center justify-between gap-3">
               <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
@@ -3698,6 +4679,94 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-for="item in analyticsData.notifications.deliveryTrend.slice(-3)" :key="`notification-trend:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ item.date }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped</span>
+            </div>
+            <div v-if="analyticsData.notifications.deliveryEvidence.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.notificationDeliveryEvidence', 'Delivery evidence') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.notifications.deliveryEvidence.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.notifications.deliveryEvidence.slice(0, 5)" :key="`notification-delivery-evidence:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black/70 dark:text-white/70">
+                    {{ item.configName || item.configId || item.provider || item.channel || 'notification' }}
+                  </span>
+                  <TxStatusBadge :text="item.status" size="sm" :status="notificationDeliveryTone(item.status)" />
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.notificationAction || 'notification' }} · {{ item.resourceType || 'resource' }} · {{ item.channel || 'unknown' }} · {{ item.providerType || item.adapter || 'generic' }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.reason || '-' }} · {{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped · {{ formatNumber(item.planned) }} planned
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ formatDurationMs(item.durationMs ?? 0) }} · {{ item.statusCode ?? '-' }} · {{ formatDate(item.latestAt) }} · {{ formatNumber(item.uniqueActors) }} actors
+                </p>
+              </div>
+            </div>
+            <div v-if="analyticsData.notifications.testEvidence.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.notificationTestEvidence', 'Notification test evidence') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.notifications.testEvidence.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.notifications.testEvidence.slice(0, 5)" :key="`notification-test-evidence:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black/70 dark:text-white/70">
+                    {{ item.configName || item.configId }}
+                  </span>
+                  <TxStatusBadge :text="item.status" size="sm" :status="notificationDeliveryTone(item.status)" />
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.notificationAction || 'system.notification.test' }} · {{ item.channel || 'unknown' }} · {{ item.provider || 'default' }} · {{ item.providerType || item.adapter || 'generic' }}
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.reason || '-' }} · {{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped · {{ formatNumber(item.planned) }} planned
+                </p>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ formatDurationMs(item.durationMs ?? 0) }} · {{ item.statusCode ?? '-' }} · {{ formatDate(item.latestAt) }} · {{ formatNumber(item.uniqueActors) }} actors
+                </p>
+              </div>
+            </div>
+            <div v-if="analyticsData.notifications.actionQueue.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+              <div class="flex items-center justify-between gap-3">
+                <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                  {{ t('dashboard.governance.analytics.notificationActionQueue', 'Notification action queue') }}
+                </span>
+                <span class="text-black/45 dark:text-white/45">
+                  {{ formatNumber(analyticsData.notifications.actionQueue.length) }}
+                </span>
+              </div>
+              <div v-for="item in analyticsData.notifications.actionQueue.slice(0, 5)" :key="`notification-action-queue:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="truncate font-medium text-black/70 dark:text-white/70">
+                    {{ item.priority }} · {{ item.suggestedAction }}
+                  </span>
+                  <TxStatusBadge
+                    :text="notificationActionQueueStatusLabel(item)"
+                    size="sm"
+                    :status="item.priority === 'critical' ? 'danger' : item.priority === 'high' ? 'warning' : 'info'"
+                  />
+                </div>
+                <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.reason }} · {{ item.channel || 'unknown' }} · {{ item.provider || item.name || 'default' }} · {{ item.providerType || item.adapter || 'generic' }}
+                </p>
+                <p v-if="item.source === 'channel-config'" class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ item.reasons.join(', ') || '-' }} · {{ notificationChannelCredentialLabel(item) }} · {{ item.productionReady ? t('dashboard.governance.analytics.notificationChannelReady', 'production ready') : t('dashboard.governance.analytics.notificationChannelNotReady', 'not production ready') }}
+                </p>
+                <p v-else class="mt-1 truncate text-black/45 dark:text-white/45">
+                  {{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped · {{ formatPercent(item.failureRate) }} failed · {{ formatDurationMs(item.durationMs.average) }} avg
+                </p>
+                <p v-if="item.latestFailureReason" class="mt-1 truncate text-red-600 dark:text-red-100">
+                  {{ item.latestFailureReason }} · {{ item.latestFailureStatusCode ?? '-' }} · {{ item.latestFailureAt ? formatDate(item.latestFailureAt) : '-' }}
+                </p>
+              </div>
             </div>
             <div v-if="analyticsData.notifications.providerMix.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
@@ -3921,6 +4990,63 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   </p>
                 </div>
               </div>
+              <div v-if="analyticsData.providers.quotaActionQueue.length" class="mt-3 grid gap-2">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaActionQueue', 'Provider quota action queue') }}
+                  </p>
+                  <span class="text-xs text-black/45 dark:text-white/45">
+                    {{ formatNumber(analyticsData.providers.quotaActionQueue.length) }}
+                  </span>
+                </div>
+                <div v-for="item in analyticsData.providers.quotaActionQueue.slice(0, 5)" :key="`provider-quota-action:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate font-medium text-black/70 dark:text-white/70">
+                      {{ item.priority }} · {{ item.suggestedAction }}
+                    </span>
+                    <TxStatusBadge :text="providerQuotaActionReasonLabel(item.reason)" size="sm" :status="providerQuotaActionTone(item.priority)" />
+                  </div>
+                  <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                    {{ item.name || item.providerId }} · {{ item.channel || item.provider || 'global' }} · {{ item.windowDays }}d
+                  </p>
+                  <div class="mt-2 grid gap-1 text-black/55 dark:text-white/55 sm:grid-cols-2">
+                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionUsage', 'Usage') }}: {{ formatNumber(item.requests) }} req · {{ formatNumber(item.tokens) }} tok</span>
+                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionUtilization', 'Utilization') }}: {{ formatRatio(Math.max(item.requestUtilization ?? 0, item.tokenUtilization ?? 0)) }}</span>
+                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionRemaining', 'Remaining') }}: {{ item.remainingRequests == null ? '-' : `${formatNumber(item.remainingRequests)} req` }} · {{ item.remainingTokens == null ? '-' : `${formatNumber(item.remainingTokens)} tok` }}</span>
+                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionOverage', 'Overage') }}: {{ formatNumber(item.requestOverage) }} req · {{ formatNumber(item.tokenOverage) }} tok</span>
+                  </div>
+                  <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaActionBurnRate', 'Burn/day') }}: {{ formatNumber(item.requestsPerDay) }} req · {{ formatNumber(item.tokensPerDay) }} tok ·
+                    {{ t('dashboard.governance.analytics.providerQuotaActionExhaustion', 'Exhaustion') }}:
+                    {{ formatProjectedDays(item.projectedRequestExhaustionDays) }} /
+                    {{ formatProjectedDays(item.projectedTokenExhaustionDays) }}
+                  </p>
+                </div>
+              </div>
+              <div v-if="analyticsData.providers.quotaSmokeEvidence.length" class="mt-3 grid gap-2">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerQuotaSmokeEvidence', 'Provider quota smoke evidence') }}
+                  </p>
+                  <span class="text-xs text-black/45 dark:text-white/45">
+                    {{ formatNumber(analyticsData.providers.quotaSmokeEvidence.length) }}
+                  </span>
+                </div>
+                <div v-for="item in analyticsData.providers.quotaSmokeEvidence.slice(0, 5)" :key="`provider-quota-smoke:${item.key}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="truncate font-medium text-black/70 dark:text-white/70">
+                      {{ item.providerId }} · {{ item.channel || 'global' }} · {{ item.mode }}
+                    </span>
+                    <TxStatusBadge :text="providerQuotaSmokeLabel(item.status)" size="sm" :status="providerQuotaSmokeTone(item.status)" />
+                  </div>
+                  <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                    {{ item.reason || '-' }} · {{ item.requestRecorded ? 'request recorded' : 'dry-run' }} · {{ formatNumber(item.tokensRecorded) }} tokens · {{ formatDate(item.latestAt) }}
+                  </p>
+                  <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                    {{ formatNumber(item.events) }} events · {{ formatNumber(item.allowed) }} allowed · {{ formatNumber(item.consumed) }} consumed · {{ formatNumber(item.blocked) }} blocked · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.uniqueActors) }} actors
+                  </p>
+                </div>
+              </div>
               <div class="mt-3 grid gap-2">
                 <div v-for="item in analyticsData.providers.quotaRiskItems.slice(0, 4)" :key="`provider-quota-risk:${item.configId}`" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
                   <div class="flex items-center justify-between gap-3">
@@ -4065,6 +5191,32 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   </div>
                   <p v-if="analyticsData.providers.modelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
                     {{ t('dashboard.governance.analytics.providerModelBreakdownEmpty', 'No model usage breakdown yet.') }}
+                  </p>
+                </div>
+              </div>
+              <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
+                <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
+                  {{ t('dashboard.governance.analytics.providerModelChannelBreakdown', 'Model by channel usage') }}
+                </h4>
+                <div class="mt-2 grid gap-2">
+                  <div
+                    v-for="item in analyticsData.providers.modelChannelDistribution.slice(0, 6)"
+                    :key="`provider-model-channel:${item.model}:${item.channel}`"
+                    class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]"
+                  >
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="truncate font-medium text-black dark:text-white">{{ item.model }} · {{ item.channel }}</span>
+                      <span class="shrink-0 text-black/55 dark:text-white/55">{{ formatNumber(item.tokens) }} tok · {{ formatNumber(item.requests) }} req</span>
+                    </div>
+                    <p class="mt-1 truncate text-black/45 dark:text-white/45">
+                      {{ t('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byProvider[0]?.providerId || 'unknown' }}
+                    </p>
+                    <p class="mt-1 truncate text-black/40 dark:text-white/40">
+                      {{ item.byProviderType.slice(0, 2).map(provider => `${provider.providerType}:${formatNumber(provider.quantity)}`).join(' · ') || 'unknown' }}
+                    </p>
+                  </div>
+                  <p v-if="analyticsData.providers.modelChannelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.governance.analytics.providerModelChannelBreakdownEmpty', 'No model/channel usage breakdown yet.') }}
                   </p>
                 </div>
               </div>

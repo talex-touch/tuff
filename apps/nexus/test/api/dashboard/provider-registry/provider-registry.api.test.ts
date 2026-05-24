@@ -71,6 +71,7 @@ let patchProviderHandler: (event: any) => Promise<any>
 let deleteProviderHandler: (event: any) => Promise<any>
 let getProviderQuotaHandler: (event: any) => Promise<any>
 let postProviderQuotaHandler: (event: any) => Promise<any>
+let smokeProviderQuotaHandler: (event: any) => Promise<any>
 let listCapabilitiesHandler: (event: any) => Promise<any>
 let createCapabilityHandler: (event: any) => Promise<any>
 let patchCapabilityHandler: (event: any) => Promise<any>
@@ -87,6 +88,7 @@ beforeAll(async () => {
   deleteProviderHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id].delete')).default as (event: any) => Promise<any>
   getProviderQuotaHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/quota.get')).default as (event: any) => Promise<any>
   postProviderQuotaHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/quota.post')).default as (event: any) => Promise<any>
+  smokeProviderQuotaHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/quota/smoke.post')).default as (event: any) => Promise<any>
   listCapabilitiesHandler = (await import('../../../../server/api/dashboard/provider-registry/capabilities.get')).default as (event: any) => Promise<any>
   createCapabilityHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/capabilities.post')).default as (event: any) => Promise<any>
   patchCapabilityHandler = (await import('../../../../server/api/dashboard/provider-registry/providers/[id]/capabilities/[capabilityId].patch')).default as (event: any) => Promise<any>
@@ -534,6 +536,86 @@ describe('/api/dashboard/provider-registry', () => {
       },
     })
     expect(state.db?.governanceConfigs.size).toBe(1)
+  })
+
+  it('Provider quota smoke 记录受控消费并产生 fail-closed 证据', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'Smoke provider quota',
+      channel: 'text.translate',
+      limits: {
+        windowDays: 30,
+        maxRequests: 1,
+        maxTokens: 10,
+      },
+    })
+    await postProviderQuotaHandler(makeEvent())
+
+    h3Mocks.readBody.mockResolvedValue({
+      channel: 'text.translate',
+      mode: 'consume',
+      tokenQuantity: 10,
+    })
+    const consumed = await smokeProviderQuotaHandler(makeEvent())
+
+    expect(consumed.result).toMatchObject({
+      providerId: created.provider.id,
+      channel: 'text.translate',
+      mode: 'consume',
+      status: 'blocked',
+      reason: 'request-quota-exceeded',
+      requestRecorded: true,
+      tokensRecorded: 10,
+      evaluation: expect.objectContaining({
+        providerId: created.provider.id,
+        channel: 'text.translate',
+        status: 'blocked',
+        usage: {
+          requests: 1,
+          tokens: 10,
+        },
+        remaining: {
+          requests: 0,
+          tokens: 0,
+        },
+      }),
+    })
+
+    h3Mocks.readBody.mockResolvedValue({
+      channel: 'text.translate',
+      mode: 'dry-run',
+    })
+    const dryRun = await smokeProviderQuotaHandler(makeEvent())
+    expect(dryRun.result).toMatchObject({
+      providerId: created.provider.id,
+      channel: 'text.translate',
+      mode: 'dry-run',
+      status: 'failed',
+      reason: 'request-quota-exceeded',
+      requestRecorded: false,
+      tokensRecorded: 0,
+    })
+
+    const events = [...(state.db?.governanceEvents ?? [])]
+    const serialized = JSON.stringify(events)
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: 'provider.quota_smoke.blocked',
+        resource_id: created.provider.id,
+        channel: 'text.translate',
+      }),
+      expect.objectContaining({
+        action: 'provider.quota_smoke.failed',
+        resource_id: created.provider.id,
+        channel: 'text.translate',
+      }),
+    ]))
+    expect(serialized).not.toContain('admin_1')
+    expect(serialized).not.toContain('secret-key-unit-test')
+    expect(serialized).not.toContain('secure://providers')
   })
 
   it('可以更新 status 与 capabilities', async () => {

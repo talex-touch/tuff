@@ -5,8 +5,10 @@ import {
   buildStoragePolicyAlerts,
   evaluateStorageChannelPolicy,
   evaluateIntelligenceProviderQuotas,
+  formatPlatformGovernanceReportMarkdown,
   getPluginGovernanceAnalytics,
   getPlatformGovernanceAnalytics,
+  getPlatformGovernanceReportSnapshot,
   listPlatformGovernanceEvents,
   recordPlatformGovernanceEvent,
   recordStorageChannelUsage,
@@ -217,6 +219,30 @@ describe('platformGovernanceStore', () => {
         relayMissing: 1,
       }),
     ]))
+    expect(analytics.notifications.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'channel-config',
+        priority: 'high',
+        suggestedAction: 'bind-credential-ref',
+        reason: 'credential-ref-required',
+        configId: smtp.id,
+        adapter: 'email/smtp',
+        status: 'warning',
+        credentialRequired: true,
+        hasCredentialRef: false,
+        productionReady: false,
+        reasons: expect.arrayContaining(['credential-ref-required', 'send-mode-required', 'smtp-relay-endpoint-required']),
+      }),
+      expect.objectContaining({
+        source: 'channel-config',
+        priority: 'medium',
+        suggestedAction: 'enable-channel',
+        reason: 'channel-disabled',
+        configId: browser.id,
+        adapter: 'browser',
+        status: 'disabled',
+      }),
+    ]))
   })
 
   it('surfaces Web Push production readiness gaps without leaking runtime secrets', async () => {
@@ -249,6 +275,17 @@ describe('platformGovernanceStore', () => {
           requiresPublicRuntime: true,
           hasPublicRuntime: false,
         }),
+      }),
+    ]))
+    expect(analytics.notifications.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'channel-config',
+        priority: 'high',
+        suggestedAction: 'configure-runtime',
+        reason: 'webpush-vapid-public-key-missing',
+        configId: channel.id,
+        adapter: 'webpush',
+        productionReady: false,
       }),
     ]))
     expect(serialized).not.toContain('secure://notifications')
@@ -592,6 +629,10 @@ describe('platformGovernanceStore', () => {
     const signupSource = `auth-register-${marker}`
     const providerModel = `gpt-4o-mini-${marker}`
     const providerType = `openai-${marker}`
+    const sceneAssetAttempt = `scene-asset-attempt-${marker}`
+    const sceneAssetFailedAttempt = `scene-asset-failed-attempt-${marker}`
+    const sceneAssetResourceId = `scene_asset_${marker}`
+    const sceneAssetFailedResourceId = `scene_asset_failed_${marker}`
     const staleUploadStartedAt = new Date(Date.now() - 20 * 60 * 1000).toISOString()
 
     await recordPlatformGovernanceEvent(h3Event, {
@@ -877,6 +918,111 @@ describe('platformGovernanceStore', () => {
         failureCalibrated: true,
       },
     })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'upload',
+      action: 'resource.started',
+      actorId: 'admin@example.com',
+      resourceType: 'scene-output-image',
+      resourceId: sceneAssetResourceId,
+      channel: 'image/png',
+      unit: 'file',
+      quantity: 1,
+      metadata: {
+        contentType: 'image/png',
+        resourceType: 'scene-output-image',
+        attemptId: sceneAssetAttempt,
+        surface: 'scene-adapter-upload',
+        sceneId: 'corebox.selection.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        capability: 'text.translate',
+        assetId: `translated-image-raw-${marker}`,
+        assetKind: 'translated-image',
+        objectKey: `private/scene/raw-object-${marker}.png`,
+        fileName: `translated-image-${marker}.png`,
+        size: 3072,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'upload',
+      action: 'resource.completed',
+      actorId: 'admin@example.com',
+      resourceType: 'scene-output-image',
+      resourceId: sceneAssetResourceId,
+      channel: 'image/png',
+      unit: 'byte',
+      quantity: 3072,
+      metadata: {
+        contentType: 'image/png',
+        resourceType: 'scene-output-image',
+        attemptId: sceneAssetAttempt,
+        surface: 'scene-adapter-upload',
+        sceneId: 'corebox.selection.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        capability: 'text.translate',
+        assetId: `translated-image-raw-${marker}`,
+        assetKind: 'translated-image',
+        objectKey: `private/scene/raw-object-${marker}.png`,
+        fileName: `translated-image-${marker}.png`,
+        storageChannel: 'r2',
+        storageProvider: 'cloudflare-r2',
+        durationMs: 180,
+        size: 3072,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'upload',
+      action: 'resource.started',
+      actorId: 'admin@example.com',
+      resourceType: 'scene-output-image',
+      resourceId: sceneAssetFailedResourceId,
+      channel: 'image/png',
+      unit: 'file',
+      quantity: 1,
+      metadata: {
+        contentType: 'image/png',
+        resourceType: 'scene-output-image',
+        attemptId: sceneAssetFailedAttempt,
+        surface: 'scene-adapter-upload',
+        sceneId: 'corebox.selection.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        capability: 'text.translate',
+        assetId: `translated-image-failed-raw-${marker}`,
+        assetKind: 'translated-image',
+        objectKey: `private/scene/raw-failed-object-${marker}.png`,
+        fileName: `failed-translated-image-${marker}.png`,
+        size: 10485760,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'upload',
+      action: 'resource.failed',
+      actorId: 'admin@example.com',
+      resourceType: 'scene-output-image',
+      resourceId: sceneAssetFailedResourceId,
+      channel: 'image/png',
+      unit: 'file',
+      quantity: 1,
+      metadata: {
+        contentType: 'image/png',
+        resourceType: 'scene-output-image',
+        attemptId: sceneAssetFailedAttempt,
+        surface: 'scene-adapter-upload',
+        sceneId: 'corebox.selection.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        capability: 'text.translate',
+        assetId: `translated-image-failed-raw-${marker}`,
+        assetKind: 'translated-image',
+        objectKey: `private/scene/raw-failed-object-${marker}.png`,
+        fileName: `failed-translated-image-${marker}.png`,
+        reason: 'scene-asset-preflight-failed',
+        statusCode: 413,
+        failureCategory: 'payload-validation',
+        failureSampleSource: 'live',
+        failureCalibrationStatus: 'sampled',
+        retryable: false,
+        size: 10485760,
+      },
+    })
     await recordStorageChannelUsage(h3Event, {
       action: 'storage.write',
       actorId: 'storage-user@example.com',
@@ -942,6 +1088,44 @@ describe('platformGovernanceStore', () => {
         providerType,
       },
     })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'intelligence',
+      action: 'provider.quota_smoke.allowed',
+      actorId: 'provider-admin@example.com',
+      resourceType: 'provider',
+      resourceId: providerId,
+      channel: 'chat.completion',
+      unit: 'smoke',
+      quantity: 1,
+      metadata: {
+        providerId,
+        channel: 'chat.completion',
+        mode: 'dry-run',
+        reason: 'provider-quota-allows-request',
+        requestRecorded: false,
+        tokensRecorded: 0,
+        credentialRef: 'secure://providers/provider-quota-smoke',
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'intelligence',
+      action: 'provider.quota_smoke.blocked',
+      actorId: 'provider-admin@example.com',
+      resourceType: 'provider',
+      resourceId: providerId,
+      channel: 'chat.completion',
+      unit: 'smoke',
+      quantity: 0,
+      metadata: {
+        providerId,
+        channel: 'chat.completion',
+        mode: 'consume',
+        reason: 'token-quota-exceeded',
+        requestRecorded: true,
+        tokensRecorded: 128,
+        credentialRef: 'secure://providers/provider-quota-smoke',
+      },
+    })
 
     const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
     const serializedAnalytics = JSON.stringify(analytics)
@@ -953,8 +1137,18 @@ describe('platformGovernanceStore', () => {
     expect(serializedAnalytics).not.toContain(`stuck-attempt-${marker}`)
     expect(serializedAnalytics).not.toContain(`failed-attempt-${marker}`)
     expect(serializedAnalytics).not.toContain(`exhausted-attempt-${marker}`)
+    expect(serializedAnalytics).not.toContain(sceneAssetAttempt)
+    expect(serializedAnalytics).not.toContain(sceneAssetFailedAttempt)
     expect(serializedAnalytics).not.toContain(`asset_failed_${marker}`)
     expect(serializedAnalytics).not.toContain(`asset_failed_exhausted_${marker}`)
+    expect(serializedAnalytics).not.toContain(sceneAssetResourceId)
+    expect(serializedAnalytics).not.toContain(sceneAssetFailedResourceId)
+    expect(serializedAnalytics).not.toContain(`translated-image-raw-${marker}`)
+    expect(serializedAnalytics).not.toContain(`translated-image-failed-raw-${marker}`)
+    expect(serializedAnalytics).not.toContain(`private/scene/raw-object-${marker}.png`)
+    expect(serializedAnalytics).not.toContain(`private/scene/raw-failed-object-${marker}.png`)
+    expect(serializedAnalytics).not.toContain(`translated-image-${marker}.png`)
+    expect(serializedAnalytics).not.toContain(`failed-translated-image-${marker}.png`)
     expect(analytics.users.signups).toBeGreaterThanOrEqual(1)
     expect(analytics.users.signupTrend.length).toBeGreaterThan(0)
     expect(analytics.users.signupGrowthTrend).toEqual(expect.arrayContaining([
@@ -1195,6 +1389,69 @@ describe('platformGovernanceStore', () => {
     expect(analytics.searches.byLocalTimeSlot).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'morning', events: 1 }),
     ]))
+    expect(analytics.searches.timeHeatmap).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        dayOfWeek: 2,
+        hour: '09',
+        timeSlot: 'morning',
+        events: 1,
+        selected: 1,
+        selectionRate: 100,
+        zeroResult: 0,
+        zeroResultRate: 0,
+        providerProblem: 1,
+        problemRate: 100,
+        providerErrors: 0,
+        providerTimeouts: 1,
+        uniqueActors: 1,
+        topContextAppCategories: expect.arrayContaining([
+          expect.objectContaining({ key: 'developer_tools', events: 1 }),
+        ]),
+        topContextSources: expect.arrayContaining([
+          expect.objectContaining({ key: 'active-app', events: 1 }),
+        ]),
+        topPlugins: expect.arrayContaining([
+          expect.objectContaining({ key: pluginId, events: 1 }),
+        ]),
+        selectedPlugins: expect.arrayContaining([
+          expect.objectContaining({ key: pluginId, events: 1 }),
+        ]),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.searches.timeHeatmap)).not.toContain('searcher@example.com')
+    expect(analytics.searches.frequencyCohorts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        cohort: 'light-search',
+        users: 1,
+        searches: 2,
+        quantity: 2,
+        activeDays: 1,
+        avgSearchesPerUser: 2,
+        avgActiveDaysPerUser: 1,
+        selectionRate: 50,
+        zeroResultRate: 50,
+        problemRate: 100,
+        topLocalTimeSlots: expect.arrayContaining([
+          expect.objectContaining({ key: 'morning', events: 1 }),
+          expect.objectContaining({ key: 'unknown', events: 1 }),
+        ]),
+        topUserPreferenceModes: expect.arrayContaining([
+          expect.objectContaining({ key: 'recent-first', events: 1 }),
+          expect.objectContaining({ key: 'unknown', events: 1 }),
+        ]),
+        topContextAppCategories: expect.arrayContaining([
+          expect.objectContaining({ key: 'developer_tools', events: 1 }),
+          expect.objectContaining({ key: 'unknown', events: 1 }),
+        ]),
+        topPlugins: expect.arrayContaining([
+          expect.objectContaining({ key: pluginId, events: 1 }),
+        ]),
+        selectedPlugins: expect.arrayContaining([
+          expect.objectContaining({ key: pluginId, events: 1 }),
+        ]),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.searches.frequencyCohorts)).not.toContain('searcher@example.com')
     expect(analytics.searches.filterUsage.filterRate).toBe(50)
     expect(analytics.searches.reliabilitySummary).toEqual(expect.objectContaining({
       total: expect.any(Number),
@@ -1263,9 +1520,9 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.attempts).toBeGreaterThanOrEqual(3)
     expect(analytics.uploads.stuckAttempts).toBe(1)
     expect(analytics.uploads.stuckAttemptAgeMs).toBe(15 * 60 * 1000)
-    expect(analytics.uploads.stuckRate).toBe(20)
-    expect(analytics.uploads.failureRate).toBeCloseTo(66.67, 2)
-    expect(analytics.uploads.bytes).toBeGreaterThanOrEqual(2048)
+    expect(analytics.uploads.stuckRate).toBeCloseTo(14.29, 2)
+    expect(analytics.uploads.failureRate).toBeCloseTo(60, 2)
+    expect(analytics.uploads.bytes).toBeGreaterThanOrEqual(5120)
     expect(analytics.uploads.byExtension).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'png', quantity: 2048 }),
     ]))
@@ -1277,28 +1534,88 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.byResourceType).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'resource', events: 3 }),
+      expect.objectContaining({ key: 'scene-output-image', events: 2 }),
     ]))
     expect(analytics.uploads.byContentType).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'image/png', quantity: 2048 }),
+      expect.objectContaining({ key: 'image/png', quantity: 5121 }),
       expect.objectContaining({ key: 'application/zip', quantity: 2 }),
     ]))
     expect(analytics.uploads.byStorageChannel).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 's3', quantity: 2048 }),
+      expect.objectContaining({ key: 'r2', quantity: 3072 }),
     ]))
     expect(analytics.uploads.byStorageProvider).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'aws-s3', quantity: 2048 }),
+      expect.objectContaining({ key: 'cloudflare-r2', quantity: 3072 }),
     ]))
     expect(analytics.uploads.byFailureReason).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'r2-timeout', events: 1 }),
       expect.objectContaining({ key: 'oss-rate-limited', events: 1 }),
+      expect.objectContaining({ key: 'scene-asset-preflight-failed', events: 1 }),
     ]))
     expect(analytics.uploads.byStatusCode).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: '504', events: 1 }),
       expect.objectContaining({ key: '429', events: 1 }),
+      expect.objectContaining({ key: '413', events: 1 }),
     ]))
     expect(analytics.uploads.bySurface).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'dashboard-resource', events: 5 }),
+      expect.objectContaining({ key: 'scene-adapter-upload', events: 4 }),
     ]))
+    expect(analytics.uploads.sceneAssetHealth).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sceneId: 'corebox.selection.translate',
+        capability: 'text.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        assetKind: 'translated-image',
+        resourceType: 'scene-output-image',
+        storageChannel: 'r2',
+        storageProvider: 'cloudflare-r2',
+        surface: 'scene-adapter-upload',
+        started: 1,
+        completed: 1,
+        failed: 0,
+        bytes: 3072,
+        failureRate: 0,
+        avgDurationMs: 180,
+        avgSize: 3072,
+        failureReasons: [],
+        statusCodes: [],
+      }),
+      expect.objectContaining({
+        sceneId: 'corebox.selection.translate',
+        capability: 'text.translate',
+        providerId: 'prv_tencent_cloud_mt',
+        assetKind: 'translated-image',
+        resourceType: 'scene-output-image',
+        storageChannel: null,
+        storageProvider: null,
+        surface: 'scene-adapter-upload',
+        started: 1,
+        completed: 0,
+        failed: 1,
+        bytes: 0,
+        failureRate: 100,
+        avgSize: 10485760,
+        failureReasons: expect.arrayContaining([
+          expect.objectContaining({ key: 'scene-asset-preflight-failed', events: 1 }),
+        ]),
+        statusCodes: expect.arrayContaining([
+          expect.objectContaining({ key: '413', events: 1 }),
+        ]),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain('admin@example.com')
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(sceneAssetAttempt)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(sceneAssetFailedAttempt)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(sceneAssetResourceId)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(sceneAssetFailedResourceId)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(`translated-image-raw-${marker}`)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(`translated-image-failed-raw-${marker}`)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(`private/scene/raw-object-${marker}.png`)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(`private/scene/raw-failed-object-${marker}.png`)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(`translated-image-${marker}.png`)
+    expect(JSON.stringify(analytics.uploads.sceneAssetHealth)).not.toContain(`failed-translated-image-${marker}.png`)
     expect(analytics.uploads.pipelineSummary).toEqual(expect.arrayContaining([
       expect.objectContaining({
         resourceType: 'resource',
@@ -1328,6 +1645,35 @@ describe('platformGovernanceStore', () => {
         completionRate: 100,
         avgDurationMs: 120,
       }),
+      expect.objectContaining({
+        resourceType: 'scene-output-image',
+        surface: 'scene-adapter-upload',
+        storageChannel: 'r2',
+        storageProvider: 'cloudflare-r2',
+        attempts: 1,
+        started: 1,
+        completed: 1,
+        failed: 0,
+        stuck: 0,
+        pending: 0,
+        completionRate: 100,
+        failureRate: 0,
+        avgDurationMs: 180,
+      }),
+      expect.objectContaining({
+        resourceType: 'scene-output-image',
+        surface: 'scene-adapter-upload',
+        storageChannel: null,
+        storageProvider: null,
+        attempts: 1,
+        started: 1,
+        completed: 0,
+        failed: 1,
+        stuck: 0,
+        pending: 0,
+        completionRate: 0,
+        failureRate: 100,
+      }),
     ]))
     expect(analytics.uploads.statusTrend).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -1340,15 +1686,15 @@ describe('platformGovernanceStore', () => {
     ]))
     expect(analytics.uploads.retrySummary).toMatchObject({
       retryableFailures: 2,
-      nonRetryableFailures: 0,
+      nonRetryableFailures: 1,
       scheduledRetries: 1,
       exhaustedFailures: 1,
       recoveredUploads: 1,
       recoveredRetryCount: 2,
-      recoveredRetryRate: 100,
-      calibratedFailureSamples: 2,
+      recoveredRetryRate: 50,
+      calibratedFailureSamples: 3,
       verifiedFailureSamples: 1,
-      liveFailureSamples: 1,
+      liveFailureSamples: 2,
       manualFailureSamples: 1,
       calibrationCoverageRate: 100,
     })
@@ -1358,6 +1704,7 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.byRetryDisposition).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: 'retry-scheduled', events: 1 }),
       expect.objectContaining({ key: 'retry-exhausted', events: 1 }),
+      expect.objectContaining({ key: 'not-retryable', events: 1 }),
       expect.objectContaining({ key: 'retry-recovered', events: 1 }),
     ]))
     expect(analytics.uploads.failureMatrix).toEqual(expect.arrayContaining([
@@ -1396,7 +1743,75 @@ describe('platformGovernanceStore', () => {
         latestSampleAt: expect.any(String),
         suggestedAction: 'quota-policy-check',
       }),
+      expect.objectContaining({
+        resourceType: 'scene-output-image',
+        surface: 'scene-adapter-upload',
+        reason: 'scene-asset-preflight-failed',
+        disposition: 'not-retryable',
+        statusCode: 413,
+        events: 1,
+        retryable: 0,
+        scheduled: 0,
+        exhausted: 0,
+        totalRetryCount: 0,
+        calibrationStatus: 'sampled',
+        sampleSource: 'live',
+        sampleCount: 1,
+        latestSampleAt: expect.any(String),
+        suggestedAction: 'payload-validation',
+      }),
     ]))
+    expect(analytics.uploads.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        priority: 'high',
+        suggestedAction: 'retry-monitor',
+        reason: 'r2-timeout',
+        failedAttempts: 1,
+        retryableFailures: 1,
+        scheduledRetries: 1,
+        exhaustedRetries: 0,
+        evidenceAttemptHashes: expect.arrayContaining([expect.stringMatching(/^[a-f0-9]{16}$/)]),
+        evidenceResourceHashes: expect.arrayContaining([expect.stringMatching(/^[a-f0-9]{16}$/)]),
+      }),
+      expect.objectContaining({
+        priority: 'critical',
+        suggestedAction: 'quota-policy-check',
+        reason: 'oss-rate-limited',
+        statusCode: 429,
+        failedAttempts: 1,
+        exhaustedRetries: 1,
+        calibrationStatus: 'verified',
+        sampleSource: 'manual',
+      }),
+      expect.objectContaining({
+        priority: 'medium',
+        suggestedAction: 'payload-validation',
+        reason: 'scene-asset-preflight-failed',
+        resourceType: 'scene-output-image',
+        surface: 'scene-adapter-upload',
+        statusCode: 413,
+        failedAttempts: 1,
+        retryableFailures: 0,
+        calibrationStatus: 'sampled',
+        sampleSource: 'live',
+      }),
+      expect.objectContaining({
+        priority: 'critical',
+        suggestedAction: 'stuck-attempt-check',
+        reason: 'application/octet-stream',
+        stuckAttempts: 1,
+        oldestAgeMs: expect.any(Number),
+        evidenceAttemptHashes: expect.arrayContaining([expect.stringMatching(/^[a-f0-9]{16}$/)]),
+        evidenceResourceHashes: expect.arrayContaining([expect.stringMatching(/^[a-f0-9]{16}$/)]),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain('admin@example.com')
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain(`stuck-attempt-${marker}`)
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain(`failed-attempt-${marker}`)
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain(`exhausted-attempt-${marker}`)
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain(sceneAssetAttempt)
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain(sceneAssetFailedAttempt)
+    expect(JSON.stringify(analytics.uploads.actionQueue)).not.toContain(`asset_failed_${marker}`)
     expect(analytics.uploads.retryTrend).toEqual(expect.arrayContaining([
       expect.objectContaining({
         failed: expect.any(Number),
@@ -1407,8 +1822,30 @@ describe('platformGovernanceStore', () => {
         uniqueActors: expect.any(Number),
       }),
     ]))
-    expect(analytics.uploads.uploadSize.average).toBeCloseTo(4778.67, 2)
-    expect(analytics.uploads.uploadDurationMs.average).toBe(120)
+    expect(analytics.uploads.recoveredEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        attemptHash: expect.stringMatching(/^[a-f0-9]{16}$/),
+        resourceHash: expect.stringMatching(/^[a-f0-9]{16}$/),
+        resourceType: 'resource',
+        surface: 'dashboard-resource',
+        storageChannel: 's3',
+        storageProvider: 'aws-s3',
+        contentType: 'image/png',
+        durationMs: 120,
+        size: 2048,
+        retryCount: 2,
+        maxRetries: 2,
+        attempts: 3,
+        storageOperation: 'storage.write',
+        storageStatusCode: 503,
+        latestAt: expect.any(String),
+      }),
+    ]))
+    expect(JSON.stringify(analytics.uploads.recoveredEvidence)).not.toContain('admin@example.com')
+    expect(JSON.stringify(analytics.uploads.recoveredEvidence)).not.toContain(`completed-attempt-${marker}`)
+    expect(JSON.stringify(analytics.uploads.recoveredEvidence)).not.toContain(`asset_${marker}`)
+    expect(analytics.uploads.uploadSize.average).toBeCloseTo(2_100_633.6, 2)
+    expect(analytics.uploads.uploadDurationMs.average).toBe(150)
     expect(analytics.uploads.problemAttempts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         status: 'failed',
@@ -1433,6 +1870,14 @@ describe('platformGovernanceStore', () => {
         maxRetries: 3,
       }),
       expect.objectContaining({
+        status: 'failed',
+        resourceType: 'scene-output-image',
+        surface: 'scene-adapter-upload',
+        reason: 'scene-asset-preflight-failed',
+        statusCode: 413,
+        retryable: false,
+      }),
+      expect.objectContaining({
         status: 'stuck',
         resourceType: 'resource',
         surface: 'dashboard-resource',
@@ -1444,10 +1889,14 @@ describe('platformGovernanceStore', () => {
     expect(analytics.uploads.problemAttempts.every(item => /^[a-f0-9]{16}$/.test(item.resourceHash))).toBe(true)
     expect(JSON.stringify(analytics.uploads.failureMatrix)).not.toContain('admin@example.com')
     expect(JSON.stringify(analytics.uploads.failureMatrix)).not.toContain(`failed-attempt-${marker}`)
+    expect(JSON.stringify(analytics.uploads.failureMatrix)).not.toContain(sceneAssetFailedAttempt)
     expect(JSON.stringify(analytics.uploads.failureMatrix)).not.toContain(`asset_failed_${marker}`)
+    expect(JSON.stringify(analytics.uploads.failureMatrix)).not.toContain(sceneAssetFailedResourceId)
     expect(JSON.stringify(analytics.uploads.pipelineSummary)).not.toContain('admin@example.com')
     expect(JSON.stringify(analytics.uploads.pipelineSummary)).not.toContain(`failed-attempt-${marker}`)
+    expect(JSON.stringify(analytics.uploads.pipelineSummary)).not.toContain(sceneAssetFailedAttempt)
     expect(JSON.stringify(analytics.uploads.pipelineSummary)).not.toContain(`asset_failed_${marker}`)
+    expect(JSON.stringify(analytics.uploads.pipelineSummary)).not.toContain(sceneAssetFailedResourceId)
     expect(analytics.dashboard.growth.uploads).toEqual(expect.objectContaining({
       latestStarted: expect.any(Number),
       latestCompleted: expect.any(Number),
@@ -1483,6 +1932,28 @@ describe('platformGovernanceStore', () => {
     expect(analytics.storage.byActionUsage.find(item => item.key === 'storage.write')?.storedBytes).toBeGreaterThanOrEqual(2048)
     expect(analytics.storage.byActionUsage.find(item => item.key === 'storage.read')?.trafficBytes).toBeGreaterThanOrEqual(512)
     expect(analytics.storage.byActionUsage.find(item => item.key === 'storage.delete')?.deletes).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        priority: 'medium',
+        suggestedAction: 'configure-policy',
+        reason: 'unmanaged-channel',
+        channel: 'r2',
+        provider: `cloudflare-r2-${marker}`,
+        pressureStatus: 'unmanaged',
+        events: 3,
+        storedBytes: 2048,
+        trafficBytes: 512,
+        operations: 3,
+        writes: 1,
+        reads: 1,
+        deletes: 1,
+        uniqueActors: 1,
+        policyId: null,
+        policyName: null,
+      }),
+    ]))
+    expect(JSON.stringify(analytics.storage.actionQueue)).not.toContain('storage-user@example.com')
+    expect(JSON.stringify(analytics.storage.actionQueue)).not.toContain(`pkg:${marker}`)
     expect(analytics.storage.trend).toEqual(expect.arrayContaining([
       expect.objectContaining({
         storedBytes: expect.any(Number),
@@ -1533,6 +2004,22 @@ describe('platformGovernanceStore', () => {
         ]),
         byChannel: expect.arrayContaining([
           expect.objectContaining({ channel: 'chat.completion', quantity: 513 }),
+        ]),
+        byProviderType: expect.arrayContaining([
+          expect.objectContaining({ providerType, quantity: 512 }),
+        ]),
+      }),
+    ]))
+    expect(analytics.providers.modelChannelDistribution).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        model: providerModel,
+        channel: 'chat.completion',
+        quantity: 513,
+        requests: 1,
+        tokens: 512,
+        uniqueActors: 1,
+        byProvider: expect.arrayContaining([
+          expect.objectContaining({ providerId, quantity: 513 }),
         ]),
         byProviderType: expect.arrayContaining([
           expect.objectContaining({ providerType, quantity: 512 }),
@@ -1639,8 +2126,68 @@ describe('platformGovernanceStore', () => {
         },
       }),
     ]))
+    expect(analytics.providers.quotaActionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        providerId,
+        channel: 'chat.completion',
+        priority: 'medium',
+        suggestedAction: 'monitor-burn-rate',
+        reason: 'warning-threshold',
+        status: 'warning',
+        requests: 1,
+        tokens: 512,
+        maxRequests: 2,
+        maxTokens: 600,
+        requestUtilization: 50,
+        tokenUtilization: 85.33,
+        remainingRequests: 1,
+        remainingTokens: 88,
+        requestOverage: 0,
+        tokenOverage: 0,
+        requestsPerDay: 0.03,
+        tokensPerDay: 17.07,
+        projectedRequestExhaustionDays: 30,
+        projectedTokenExhaustionDays: 5.16,
+      }),
+    ]))
+    expect(analytics.providers.quotaSmokeEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        providerId,
+        channel: 'chat.completion',
+        mode: 'consume',
+        status: 'blocked',
+        reason: 'token-quota-exceeded',
+        requestRecorded: true,
+        tokensRecorded: 128,
+        events: 1,
+        allowed: 0,
+        blocked: 1,
+        consumed: 0,
+        failed: 0,
+        uniqueActors: 1,
+      }),
+      expect.objectContaining({
+        providerId,
+        channel: 'chat.completion',
+        mode: 'dry-run',
+        status: 'allowed',
+        reason: 'provider-quota-allows-request',
+        requestRecorded: false,
+        tokensRecorded: 0,
+        events: 1,
+        allowed: 1,
+        blocked: 0,
+        consumed: 0,
+        failed: 0,
+        uniqueActors: 1,
+      }),
+    ]))
     expect(JSON.stringify(analytics.providers.quotaRiskItems)).not.toContain('secure://')
     expect(JSON.stringify(analytics.providers.quotaRiskItems)).not.toContain('admin@example.com')
+    expect(JSON.stringify(analytics.providers.quotaActionQueue)).not.toContain('secure://')
+    expect(JSON.stringify(analytics.providers.quotaActionQueue)).not.toContain('admin@example.com')
+    expect(JSON.stringify(analytics.providers.quotaSmokeEvidence)).not.toContain('secure://')
+    expect(JSON.stringify(analytics.providers.quotaSmokeEvidence)).not.toContain('provider-admin@example.com')
     expect(analytics.dashboard.riskSummary).toEqual(expect.objectContaining({
       uploadProblems: expect.any(Number),
       storageAlerts: expect.any(Number),
@@ -1680,6 +2227,88 @@ describe('platformGovernanceStore', () => {
     expect(JSON.stringify(analytics.dashboard.trends.operationsTimeline)).not.toContain('admin@example.com')
     expect(JSON.stringify(analytics.dashboard.trends.operationsTimeline)).not.toContain(`failed-attempt-${marker}`)
     expect(serializedAnalytics).not.toContain('secure://')
+
+    const report = await getPlatformGovernanceReportSnapshot(h3Event, { days: 30, limit: 5000, topLimit: 10 })
+    const serializedReport = JSON.stringify(report)
+    expect(report.report.scorecards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: 'search-demand', status: 'watch', reason: 'search-problem-rate' }),
+      expect.objectContaining({ key: 'provider-tokens', status: expect.stringMatching(/^(watch|critical)$/), reason: expect.stringMatching(/^provider-quota-/) }),
+      expect.objectContaining({ key: 'upload-health', status: 'watch' }),
+    ]))
+    expect(report.report.evidenceStatus).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'admin-cockpit',
+        status: 'open',
+        blocker: 'authenticated-browser-evidence-required',
+      }),
+      expect.objectContaining({
+        key: 'provider-quota',
+        status: 'local-only',
+        evidenceCount: expect.any(Number),
+        blocker: 'real-provider-call-evidence-required',
+      }),
+      expect.objectContaining({
+        key: 'd1-production',
+        status: 'open',
+        blocker: 'production-d1-backfill-required',
+      }),
+    ]))
+    expect(report.report.riskQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        area: 'search',
+        suggestedAction: 'review-search-provider-and-zero-result-segments',
+        reason: 'search-reliability-risk',
+      }),
+      expect.objectContaining({
+        area: 'upload',
+        suggestedAction: 'quota-policy-check',
+        reason: 'oss-rate-limited',
+      }),
+      expect.objectContaining({
+        area: 'provider-quota',
+        suggestedAction: expect.stringMatching(/^(increase-request-limit|increase-token-limit|monitor-burn-rate|reduce-provider-traffic|split-provider-channel)$/),
+        reason: expect.stringMatching(/^(request-exhausted|token-exhausted|warning-threshold|projected-exhaustion|request-overage|token-overage)$/),
+      }),
+    ]))
+    expect(report.report.leaderboards.hotPlugins).toEqual(expect.arrayContaining([
+      expect.objectContaining({ pluginId, hotScore: 21 }),
+    ]))
+    expect(report.report.leaderboards.topModels).toEqual(expect.arrayContaining([
+      expect.objectContaining({ model: providerModel, tokens: 512 }),
+    ]))
+    expect(report.report.trendSummary).toEqual(expect.objectContaining({
+      operationsDays: expect.any(Number),
+      peakProviderTokens: expect.any(Number),
+      peakRiskScore: expect.any(Number),
+    }))
+    const markdownReport = formatPlatformGovernanceReportMarkdown(report)
+    expect(markdownReport).toContain('# Nexus Data Governance Operations Report')
+    expect(markdownReport).toContain('## Scorecards')
+    expect(markdownReport).toContain('## Evidence Status')
+    expect(markdownReport).toContain('## Risk Queue')
+    expect(markdownReport).toContain('## Leaderboards')
+    expect(markdownReport).toContain('search-demand')
+    expect(markdownReport).toContain('provider-quota')
+    expect(serializedReport).not.toContain('searcher@example.com')
+    expect(serializedReport).not.toContain('admin@example.com')
+    expect(serializedReport).not.toContain('storage-user@example.com')
+    expect(serializedReport).not.toContain('provider-admin@example.com')
+    expect(serializedReport).not.toContain(`failed-attempt-${marker}`)
+    expect(serializedReport).not.toContain(sceneAssetFailedAttempt)
+    expect(serializedReport).not.toContain(sceneAssetFailedResourceId)
+    expect(serializedReport).not.toContain(`private/scene/raw-failed-object-${marker}.png`)
+    expect(serializedReport).not.toContain(`pkg:${marker}`)
+    expect(serializedReport).not.toContain('secure://')
+    expect(markdownReport).not.toContain('searcher@example.com')
+    expect(markdownReport).not.toContain('admin@example.com')
+    expect(markdownReport).not.toContain('storage-user@example.com')
+    expect(markdownReport).not.toContain('provider-admin@example.com')
+    expect(markdownReport).not.toContain(`failed-attempt-${marker}`)
+    expect(markdownReport).not.toContain(sceneAssetFailedAttempt)
+    expect(markdownReport).not.toContain(sceneAssetFailedResourceId)
+    expect(markdownReport).not.toContain(`private/scene/raw-failed-object-${marker}.png`)
+    expect(markdownReport).not.toContain(`pkg:${marker}`)
+    expect(markdownReport).not.toContain('secure://')
 
     const pluginAnalytics = await getPluginGovernanceAnalytics(h3Event, pluginId, { days: 30, limit: 5000, topLimit: 50 })
     expect(pluginAnalytics.downloads).toBe(2)
@@ -2066,6 +2695,87 @@ describe('platformGovernanceStore', () => {
     expect(serializedRetention).not.toContain('retention-new@example.com')
   })
 
+  it('builds aggregate private plugin owner action queue', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(`plugin-owner-action-${marker}`)
+    const pluginId = `plugin_owner_action_${marker}`
+
+    const records = [
+      [`owner-download-${marker}@example.com`, 'download', 80, '2026-05-20T09:00:00.000Z'],
+      [`owner-install-1-${marker}@example.com`, 'install', 1, '2026-05-21T09:00:00.000Z'],
+      [`owner-install-2-${marker}@example.com`, 'install', 1, '2026-05-21T10:00:00.000Z'],
+      [`owner-install-3-${marker}@example.com`, 'install', 1, '2026-05-21T11:00:00.000Z'],
+      [`owner-install-4-${marker}@example.com`, 'install', 1, '2026-05-21T12:00:00.000Z'],
+      [`owner-invoke-${marker}@example.com`, 'invoke', 5, '2026-05-22T09:00:00.000Z'],
+    ] as const
+
+    for (const [actorId, action, quantity, occurredAt] of records) {
+      await recordPlatformGovernanceEvent(h3Event, {
+        scope: 'plugin',
+        action,
+        actorId,
+        resourceType: 'plugin',
+        resourceId: pluginId,
+        channel: 'stable',
+        unit: action === 'invoke' ? 'call' : action,
+        quantity,
+        occurredAt,
+        metadata: {
+          countryCode: 'US',
+          status: action === 'invoke' ? 'failed' : undefined,
+        },
+      })
+    }
+
+    const analytics = await getPluginGovernanceAnalytics(h3Event, pluginId, { days: 30, limit: 100, topLimit: 10 })
+    const serializedQueue = JSON.stringify(analytics.actionQueue)
+
+    expect(analytics.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'high-invocation-failure-rate',
+        priority: 'high',
+        suggestedAction: 'investigate-invocation-failures',
+        reason: 'high-invocation-failure-rate',
+        downloads: 80,
+        installs: 4,
+        invocations: 5,
+        uniqueActors: 6,
+        installRate: 5,
+        invocationRate: 125,
+        invocationsPerActor: 0.83,
+        failureRate: 100,
+        retentionRate: 0,
+        topCountryKey: 'us',
+        topCountryShare: 100,
+        latestDate: '2026-05-22',
+      }),
+      expect.objectContaining({
+        key: 'low-install-conversion',
+        priority: 'high',
+        suggestedAction: 'improve-install-conversion',
+        reason: 'low-install-rate',
+      }),
+      expect.objectContaining({
+        key: 'low-return-rate',
+        priority: 'high',
+        suggestedAction: 'improve-retention',
+        reason: 'low-return-rate',
+      }),
+      expect.objectContaining({
+        key: 'single-country-concentration',
+        priority: 'medium',
+        suggestedAction: 'expand-location-coverage',
+        reason: 'single-country-concentration',
+      }),
+    ]))
+    expect(analytics.actionQueue[0]?.priority).toBe('high')
+    expect(serializedQueue).not.toContain('owner-download')
+    expect(serializedQueue).not.toContain('owner-install')
+    expect(serializedQueue).not.toContain('owner-invoke')
+    expect(serializedQueue).not.toContain('example.com')
+    expect(serializedQueue).not.toContain(marker)
+  })
+
   it('records plugin package storage writes, reads, and deletes for storage governance', async () => {
     const marker = crypto.randomUUID()
     const h3Event = event(marker)
@@ -2376,6 +3086,80 @@ describe('platformGovernanceStore', () => {
       resourceId,
       quantity: 1,
     })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'storage',
+      action: 'storage.channel_smoke.ready',
+      actorId: 'storage-admin@example.com',
+      resourceType: 'storage_channel',
+      resourceId: policy.id,
+      channel: 'r2',
+      unit: 'smoke',
+      quantity: 1,
+      metadata: {
+        policyName: `R2 pressure budget ${marker}`,
+        provider: 'cloudflare-r2',
+        mode: 'dry-run',
+        reason: 'storage-channel-resolved',
+        operations: ['resolve'],
+        credentialRequired: false,
+        hasCredentialRef: false,
+        hasCredential: null,
+        bytesWritten: 0,
+        bytesRead: 0,
+        credentialRef: `secure://storage/r2-smoke-${marker}`,
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'storage',
+      action: 'storage.channel_smoke.sent',
+      actorId: 'storage-admin@example.com',
+      resourceType: 'storage_channel',
+      resourceId: policy.id,
+      channel: 'r2',
+      unit: 'smoke',
+      quantity: 1,
+      metadata: {
+        policyName: `R2 pressure budget ${marker}`,
+        provider: 'cloudflare-r2',
+        mode: 'write',
+        reason: 'storage-channel-write-read-delete-ok',
+        operations: ['resolve', 'write', 'read', 'delete'],
+        credentialRequired: false,
+        hasCredentialRef: false,
+        hasCredential: null,
+        bytesWritten: 21,
+        bytesRead: 21,
+        credentialRef: `secure://storage/r2-smoke-${marker}`,
+      },
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.write',
+      actorId: 'storage-admin@example.com',
+      channel: 'memory',
+      provider: 'memory',
+      resourceType: `storage-smoke-local-${marker}`,
+      resourceId: `storage-smoke:${policy.id}`,
+      quantity: 21,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.read',
+      actorId: 'storage-admin@example.com',
+      channel: 'memory',
+      provider: 'memory',
+      resourceType: `storage-smoke-local-${marker}`,
+      resourceId: `storage-smoke:${policy.id}`,
+      quantity: 21,
+    })
+    await recordStorageChannelUsage(h3Event, {
+      action: 'storage.delete',
+      actorId: 'storage-admin@example.com',
+      channel: 'memory',
+      provider: 'memory',
+      resourceType: `storage-smoke-local-${marker}`,
+      resourceId: `storage-smoke:${policy.id}`,
+      unit: 'operation',
+      quantity: 1,
+    })
 
     const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
     const serialized = JSON.stringify(analytics)
@@ -2410,6 +3194,25 @@ describe('platformGovernanceStore', () => {
         uniqueActors: 1,
       }),
     ]))
+    expect(analytics.storage.byResourceTypeUsage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: `storage-smoke-local-${marker}`,
+        storedBytes: 21,
+        trafficBytes: 21,
+        operations: 3,
+        writes: 1,
+        reads: 1,
+        deletes: 1,
+        uniqueActors: 1,
+      }),
+    ]))
+    const memoryChannelBucket = analytics.storage.byChannelUsage.find(item => item.key === 'memory')
+    expect(memoryChannelBucket?.storedBytes).toBeGreaterThanOrEqual(21)
+    expect(memoryChannelBucket?.trafficBytes).toBeGreaterThanOrEqual(21)
+    expect(memoryChannelBucket?.operations).toBeGreaterThanOrEqual(3)
+    expect(memoryChannelBucket?.writes).toBeGreaterThanOrEqual(1)
+    expect(memoryChannelBucket?.reads).toBeGreaterThanOrEqual(1)
+    expect(memoryChannelBucket?.deletes).toBeGreaterThanOrEqual(1)
 
     const writeBucket = analytics.storage.byActionUsage.find(item => item.key === 'storage.write')
     const readBucket = analytics.storage.byActionUsage.find(item => item.key === 'storage.read')
@@ -2473,6 +3276,77 @@ describe('platformGovernanceStore', () => {
     expect(pressureTrend?.trafficBytes).toBeGreaterThanOrEqual(300)
     expect(pressureTrend?.operations).toBeGreaterThanOrEqual(3)
     expect(pressureTrend?.uniqueActors).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        priority: 'high',
+        suggestedAction: 'increase-operation-limit',
+        reason: expect.stringMatching(/^(alert-bytes-reached|projected-exhaustion)$/),
+        channel: 'r2',
+        provider: 'cloudflare-r2',
+        policyId: policy.id,
+        policyName: `R2 pressure budget ${marker}`,
+        pressureStatus: 'warning',
+        highestUtilization: 90,
+        policyAlerts: expect.any(Number),
+        policyReasons: expect.arrayContaining(['alert-bytes-reached', 'max-bytes-warning']),
+        remaining: expect.objectContaining({
+          storedBytes: 100,
+          trafficBytes: 200,
+          operations: 1,
+          alertBytes: 0,
+        }),
+        overage: expect.objectContaining({
+          alertBytes: 100,
+        }),
+        burnRate: expect.objectContaining({
+          storedBytesPerDay: 30,
+          trafficBytesPerDay: 10,
+          operationsPerDay: 0.1,
+        }),
+        projectedExhaustionDays: expect.objectContaining({
+          storedBytes: 3.33,
+          trafficBytes: 20,
+          operations: 10,
+          alertBytes: 0,
+        }),
+        latestTrendDate: expect.any(String),
+      }),
+    ]))
+    expect(analytics.storage.actionQueue.find(item => item.policyId === policy.id)?.policyAlerts).toBeGreaterThanOrEqual(1)
+    expect(analytics.storage.smokeEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        policyId: policy.id,
+        policyName: `R2 pressure budget ${marker}`,
+        channel: 'r2',
+        provider: 'cloudflare-r2',
+        mode: 'write',
+        status: 'sent',
+        reason: 'storage-channel-write-read-delete-ok',
+        operations: ['resolve', 'write', 'read', 'delete'],
+        bytesWritten: 21,
+        bytesRead: 21,
+        credentialRequired: false,
+        hasCredentialRef: false,
+        hasCredential: null,
+        events: 1,
+        ready: 0,
+        sent: 1,
+        failed: 0,
+        uniqueActors: 1,
+      }),
+      expect.objectContaining({
+        policyId: policy.id,
+        mode: 'dry-run',
+        status: 'ready',
+        reason: 'storage-channel-resolved',
+        operations: ['resolve'],
+        events: 1,
+        ready: 1,
+        sent: 0,
+        failed: 0,
+        uniqueActors: 1,
+      }),
+    ]))
 
     const idlePressure = analytics.storage.channelPressure.find(item => item.policyId === idlePolicy.id)
     expect(idlePressure).toMatchObject({
@@ -2518,8 +3392,18 @@ describe('platformGovernanceStore', () => {
       }),
       trend: [],
     })
+    expect(analytics.storage.actionQueue).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        policyId: idlePolicy.id,
+      }),
+    ]))
     expect(serialized).not.toContain('storage-user@example.com')
+    expect(serialized).not.toContain('storage-admin@example.com')
     expect(serialized).not.toContain(resourceId)
+    expect(serialized).not.toContain('diagnostics/storage-smoke')
+    expect(serialized).not.toContain('tuff-storage-smoke-v1')
+    expect(serialized).not.toContain(`secure://storage/idle-oss-${marker}`)
+    expect(serialized).not.toContain(`secure://storage/r2-smoke-${marker}`)
   })
 
   it('builds notification delivery health analytics without leaking recipients or credential refs', async () => {
@@ -2600,12 +3484,69 @@ describe('platformGovernanceStore', () => {
         statusCode: 502,
       },
     })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.planned',
+      actorId: 'notification-admin@example.com',
+      resourceType: 'notification_channel',
+      resourceId: `channel-${marker}`,
+      channel: 'email',
+      unit: 'delivery',
+      quantity: 1,
+      metadata: {
+        notificationAction: 'system.notification.test',
+        configId: `channel-${marker}`,
+        configName: `Resend channel ${marker}`,
+        provider: `resend-test-${marker}`,
+        providerType: 'resend',
+        adapter: 'email/resend',
+        reason: 'delivery-planned',
+        durationMs: 3,
+        context: {
+          test: true,
+          channelTestId: `channel-${marker}`,
+          scenario: 'governance-channel-test',
+          recipient: 'admin-recipient@example.com',
+          credentialRef: `secure://notification/${marker}`,
+        },
+      },
+    })
+    await recordPlatformGovernanceEvent(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.sent',
+      actorId: 'notification-admin@example.com',
+      resourceType: 'notification_channel',
+      resourceId: `channel-${marker}`,
+      channel: 'email',
+      unit: 'delivery',
+      quantity: 1,
+      metadata: {
+        notificationAction: 'system.notification.test',
+        configId: `channel-${marker}`,
+        configName: `Resend channel ${marker}`,
+        provider: `resend-test-${marker}`,
+        providerType: 'resend',
+        adapter: 'email/resend',
+        reason: 'delivery-sent',
+        durationMs: 18,
+        statusCode: 202,
+        context: {
+          test: true,
+          channelTestId: `channel-${marker}`,
+          scenario: 'governance-channel-test',
+          body: 'notification body must not leak',
+        },
+      },
+    })
 
     const analytics = await getPlatformGovernanceAnalytics(h3Event, { days: 30, limit: 5000, topLimit: 50 })
     const serialized = JSON.stringify(analytics)
 
     expect(serialized).not.toContain('reviewer@example.com')
     expect(serialized).not.toContain('ops@example.com')
+    expect(serialized).not.toContain('notification-admin@example.com')
+    expect(serialized).not.toContain('admin-recipient@example.com')
+    expect(serialized).not.toContain('notification body must not leak')
     expect(serialized).not.toContain('secure://')
     expect(analytics.notifications.deliveries.total).toBeGreaterThanOrEqual(3)
     expect(analytics.notifications.deliveries.planned).toBeGreaterThanOrEqual(1)
@@ -2616,8 +3557,8 @@ describe('platformGovernanceStore', () => {
     expect(analytics.notifications.deliveries.sentRate).toBeGreaterThan(0)
     expect(analytics.notifications.deliveries.failureRate).toBeGreaterThan(0)
     expect(analytics.notifications.deliveries.durationMs).toEqual(expect.objectContaining({
-      count: 4,
-      average: 26.5,
+      count: 6,
+      average: 21.17,
       max: 75,
     }))
     expect(analytics.notifications.byDeliveryStatus.find(item => item.key === 'planned')?.events).toBeGreaterThanOrEqual(1)
@@ -2626,21 +3567,23 @@ describe('platformGovernanceStore', () => {
     expect(analytics.notifications.byDeliveryStatus.find(item => item.key === 'failed')?.events).toBeGreaterThanOrEqual(1)
     expect(analytics.notifications.byProvider).toEqual(expect.arrayContaining([
       expect.objectContaining({ key: `resend-primary-${marker}`, events: 2 }),
+      expect.objectContaining({ key: `resend-test-${marker}`, events: 2 }),
       expect.objectContaining({ key: `smtp-ops-${marker}`, events: 1 }),
     ]))
     expect(analytics.notifications.byAdapter).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'email/resend', events: 2 }),
+      expect.objectContaining({ key: 'email/resend', events: 4 }),
       expect.objectContaining({ key: 'email/smtp', events: 1 }),
     ]))
     expect(analytics.notifications.byReason).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: 'delivery-sent', events: 1 }),
+      expect.objectContaining({ key: 'delivery-sent', events: 2 }),
       expect.objectContaining({ key: 'adapter-http-error', events: 1 }),
     ]))
     expect(analytics.notifications.byStatusCode).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: '202', events: 1 }),
+      expect.objectContaining({ key: '202', events: 2 }),
       expect.objectContaining({ key: '502', events: 1 }),
     ]))
     expect(analytics.notifications.byNotificationAction.find(item => item.key === 'plugin.version.approved')?.events).toBeGreaterThanOrEqual(4)
+    expect(analytics.notifications.byNotificationAction.find(item => item.key === 'system.notification.test')?.events).toBe(2)
     expect(analytics.notifications.deliveryTrend).toEqual(expect.arrayContaining([
       expect.objectContaining({
         planned: expect.any(Number),
@@ -2684,6 +3627,111 @@ describe('platformGovernanceStore', () => {
         }),
       }),
     ]))
+    expect(analytics.notifications.deliveryEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: `resend-primary-${marker}:plugin.version.approved:plugin`,
+        notificationAction: 'plugin.version.approved',
+        resourceType: 'plugin',
+        channel: 'email',
+        provider: `resend-primary-${marker}`,
+        providerType: 'resend',
+        adapter: 'email/resend',
+        status: 'sent',
+        reason: 'delivery-sent',
+        durationMs: 25,
+        statusCode: 202,
+        events: 2,
+        planned: 1,
+        sent: 1,
+        failed: 0,
+        uniqueActors: 1,
+      }),
+      expect.objectContaining({
+        key: `smtp-ops-${marker}:plugin.version.approved:plugin`,
+        notificationAction: 'plugin.version.approved',
+        resourceType: 'plugin',
+        provider: `smtp-ops-${marker}`,
+        status: 'failed',
+        reason: 'adapter-http-error',
+        failed: 1,
+      }),
+    ]))
+    expect(analytics.notifications.deliveryEvidence).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        notificationAction: 'system.notification.test',
+      }),
+    ]))
+    expect(analytics.notifications.testEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: `channel-${marker}:system.notification.test`,
+        configId: `channel-${marker}`,
+        configName: `Resend channel ${marker}`,
+        notificationAction: 'system.notification.test',
+        channel: 'email',
+        provider: `resend-test-${marker}`,
+        providerType: 'resend',
+        adapter: 'email/resend',
+        status: 'sent',
+        reason: 'delivery-sent',
+        durationMs: 18,
+        statusCode: 202,
+        events: 2,
+        planned: 1,
+        sent: 1,
+        failed: 0,
+        uniqueActors: 1,
+      }),
+    ]))
+    expect(analytics.notifications.testEvidence).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        notificationAction: 'plugin.version.approved',
+      }),
+    ]))
+    expect(analytics.notifications.actionQueue).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: 'delivery-health',
+        priority: 'critical',
+        suggestedAction: 'investigate-failures',
+        reason: 'adapter-http-error',
+        provider: `smtp-ops-${marker}`,
+        providerType: 'smtp',
+        adapter: 'email/smtp',
+        channel: 'email',
+        status: 'delivery-risk',
+        total: 1,
+        failed: 1,
+        sentRate: 0,
+        failureRate: 100,
+        latestFailureReason: 'adapter-http-error',
+        latestFailureStatusCode: 502,
+        latestFailureAt: expect.any(String),
+        durationMs: expect.objectContaining({
+          count: 1,
+          average: 75,
+          max: 75,
+        }),
+      }),
+      expect.objectContaining({
+        source: 'delivery-health',
+        priority: 'medium',
+        suggestedAction: 'review-skipped-deliveries',
+        reason: 'skipped-deliveries',
+        provider: 'browser',
+        providerType: 'browser',
+        adapter: 'browser',
+        skipped: 1,
+      }),
+    ]))
+    expect(JSON.stringify(analytics.notifications.testEvidence)).not.toContain('notification-admin@example.com')
+    expect(JSON.stringify(analytics.notifications.testEvidence)).not.toContain('admin-recipient@example.com')
+    expect(JSON.stringify(analytics.notifications.testEvidence)).not.toContain('notification body must not leak')
+    expect(JSON.stringify(analytics.notifications.testEvidence)).not.toContain('secure://')
+    expect(JSON.stringify(analytics.notifications.deliveryEvidence)).not.toContain('reviewer@example.com')
+    expect(JSON.stringify(analytics.notifications.deliveryEvidence)).not.toContain('ops@example.com')
+    expect(JSON.stringify(analytics.notifications.deliveryEvidence)).not.toContain('secure://')
+    expect(JSON.stringify(analytics.notifications.actionQueue)).not.toContain('reviewer@example.com')
+    expect(JSON.stringify(analytics.notifications.actionQueue)).not.toContain('ops@example.com')
+    expect(JSON.stringify(analytics.notifications.actionQueue)).not.toContain('secure://')
   })
 
   it('builds browser push subscription analytics without leaking endpoints or keys', async () => {

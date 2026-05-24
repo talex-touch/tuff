@@ -62,6 +62,26 @@ describe('/api/dashboard/plugins/:id/analytics', () => {
       installs: 7,
       invocations: 5,
       uniqueActors: 3,
+      actionQueue: [
+        {
+          key: 'high-invocation-failure-rate',
+          priority: 'medium',
+          suggestedAction: 'investigate-invocation-failures',
+          reason: 'high-invocation-failure-rate',
+          downloads: 12,
+          installs: 7,
+          invocations: 5,
+          uniqueActors: 3,
+          installRate: 58.33,
+          invocationRate: 71.43,
+          invocationsPerActor: 1.67,
+          failureRate: 20,
+          retentionRate: 66.67,
+          topCountryKey: 'us',
+          topCountryShare: 100,
+          latestDate: '2026-05-22',
+        },
+      ],
       trend: [],
       installTrend: [],
       byAction: [],
@@ -169,12 +189,36 @@ describe('/api/dashboard/plugins/:id/analytics', () => {
           lowRatingRate: 0,
         },
       ],
+      statusTrend: [
+        {
+          date: '2026-05-21',
+          total: 4,
+          approved: 2,
+          pending: 1,
+          rejected: 1,
+        },
+      ],
       comments: {
         withTitle: 3,
         withContent: 4,
         titleCoverageRate: 75,
         contentCoverageRate: 100,
         averageContentLength: 42,
+        qualityBuckets: [
+          {
+            key: 'short',
+            total: 4,
+            approved: 2,
+            pending: 1,
+            rejected: 1,
+            averageRating: 4,
+            lowRatingCount: 0,
+            lowRatingRate: 0,
+            titleCoverageRate: 75,
+            contentCoverageRate: 100,
+            averageContentLength: 42,
+          },
+        ],
         byStatus: [],
         trend: [
           {
@@ -188,6 +232,66 @@ describe('/api/dashboard/plugins/:id/analytics', () => {
           },
         ],
       },
+      moderationTiming: {
+        pending: {
+          total: 1,
+          approved: 0,
+          pending: 1,
+          rejected: 0,
+          averageHours: 6,
+          maxHours: 6,
+          buckets: [
+            {
+              key: 'oneTo24h',
+              total: 1,
+              approved: 0,
+              pending: 1,
+              rejected: 0,
+              averageHours: 6,
+              maxHours: 6,
+            },
+          ],
+        },
+        processed: {
+          total: 3,
+          approved: 2,
+          pending: 0,
+          rejected: 1,
+          averageHours: 12,
+          maxHours: 20,
+          buckets: [
+            {
+              key: 'oneTo24h',
+              total: 3,
+              approved: 2,
+              pending: 0,
+              rejected: 1,
+              averageHours: 12,
+              maxHours: 20,
+            },
+          ],
+        },
+      },
+      actionQueue: [
+        {
+          key: 'pending-review-backlog',
+          priority: 'high',
+          suggestedAction: 'moderate-pending-reviews',
+          reason: 'pending-review-backlog',
+          total: 4,
+          approved: 2,
+          pending: 1,
+          rejected: 1,
+          ratingCount: 2,
+          averageRating: 4,
+          lowRatingCount: 0,
+          lowRatingRate: 0,
+          titleCoverageRate: 75,
+          contentCoverageRate: 100,
+          averageContentLength: 42,
+          latestDate: '2026-05-21',
+        },
+      ],
       latestAt: '2026-05-21T00:00:00.000Z',
     })
   })
@@ -208,6 +312,26 @@ describe('/api/dashboard/plugins/:id/analytics', () => {
       days: 14,
       analytics: {
         downloads: 12,
+        actionQueue: [
+          {
+            key: 'high-invocation-failure-rate',
+            priority: 'medium',
+            suggestedAction: 'investigate-invocation-failures',
+            reason: 'high-invocation-failure-rate',
+            downloads: 12,
+            installs: 7,
+            invocations: 5,
+            uniqueActors: 3,
+            installRate: 58.33,
+            invocationRate: 71.43,
+            invocationsPerActor: 1.67,
+            failureRate: 20,
+            retentionRate: 66.67,
+            topCountryKey: 'us',
+            topCountryShare: 100,
+            latestDate: '2026-05-22',
+          },
+        ],
         retention: {
           activeActors: 3,
           returningActors: 2,
@@ -273,15 +397,94 @@ describe('/api/dashboard/plugins/:id/analytics', () => {
               lowRatingRate: 0,
             },
           ],
+          actionQueue: [
+            {
+              key: 'pending-review-backlog',
+              priority: 'high',
+              suggestedAction: 'moderate-pending-reviews',
+              reason: 'pending-review-backlog',
+              pending: 1,
+              titleCoverageRate: 75,
+              contentCoverageRate: 100,
+            },
+          ],
           comments: {
             withTitle: 3,
             withContent: 4,
             titleCoverageRate: 75,
             contentCoverageRate: 100,
             averageContentLength: 42,
+            qualityBuckets: [
+              {
+                key: 'short',
+                total: 4,
+                approved: 2,
+                pending: 1,
+                rejected: 1,
+                averageRating: 4,
+                lowRatingRate: 0,
+              },
+            ],
+          },
+          moderationTiming: {
+            pending: {
+              total: 1,
+              averageHours: 6,
+              maxHours: 6,
+            },
+            processed: {
+              total: 3,
+              averageHours: 12,
+              maxHours: 20,
+            },
           },
         },
       },
     })
+  })
+
+  it('allows admins to read private plugin analytics across owners', async () => {
+    authMocks.requireAuthOrApiKey.mockResolvedValue({ userId: 'admin-1' })
+    userMocks.getUserById.mockResolvedValue({ id: 'admin-1', role: 'admin' })
+    pluginMocks.getPluginById.mockResolvedValue({
+      id: 'plugin-1',
+      slug: 'reviewed-plugin',
+      userId: 'owner-1',
+    })
+
+    const result = await analyticsHandler({ context: { params: { id: 'plugin-1' } } })
+
+    expect(result.analytics.reviews).toMatchObject({
+      total: 4,
+      moderationTiming: {
+        pending: {
+          total: 1,
+        },
+      },
+    })
+    expect(governanceMocks.getPluginGovernanceAnalytics).toHaveBeenCalledWith(expect.anything(), 'plugin-1', {
+      days: 14,
+      limit: 50,
+      topLimit: 5,
+    })
+    expect(reviewMocks.getPluginReviewAnalytics).toHaveBeenCalledWith(expect.anything(), 'plugin-1')
+  })
+
+  it('rejects non-owner private plugin analytics before aggregate queries run', async () => {
+    authMocks.requireAuthOrApiKey.mockResolvedValue({ userId: 'other-user' })
+    userMocks.getUserById.mockResolvedValue({ id: 'other-user', role: 'user' })
+    pluginMocks.getPluginById.mockResolvedValue({
+      id: 'plugin-1',
+      slug: 'reviewed-plugin',
+      userId: 'owner-1',
+    })
+
+    await expect(analyticsHandler({ context: { params: { id: 'plugin-1' } } })).rejects.toMatchObject({
+      statusCode: 403,
+      statusMessage: 'Forbidden',
+    })
+
+    expect(governanceMocks.getPluginGovernanceAnalytics).not.toHaveBeenCalled()
+    expect(reviewMocks.getPluginReviewAnalytics).not.toHaveBeenCalled()
   })
 })
