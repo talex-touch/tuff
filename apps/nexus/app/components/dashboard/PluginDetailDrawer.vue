@@ -4,6 +4,10 @@ import type {
   DashboardPluginAnalytics,
   DashboardPluginAnalyticsConversionTrendPoint,
   DashboardPluginAnalyticsMetric,
+  DashboardPluginOwnerActionQueueItem,
+  DashboardPluginReviewActionQueueItem,
+  DashboardPluginReviewCommentQualityBucket,
+  DashboardPluginReviewModerationTimingBucket,
   DashboardPluginReviewRatingTrendPoint,
   DashboardPluginReviewStatusTrendPoint,
   DashboardPluginAnalyticsTrendPoint,
@@ -93,6 +97,22 @@ function channelTone(channel: PluginChannel) {
     default:
       return 'muted'
   }
+}
+
+function reviewActionQueuePriorityTone(priority: DashboardPluginReviewActionQueueItem['priority']) {
+  if (priority === 'high')
+    return 'warning'
+  if (priority === 'medium')
+    return 'info'
+  return 'muted'
+}
+
+function ownerActionQueuePriorityTone(priority: DashboardPluginOwnerActionQueueItem['priority']) {
+  if (priority === 'high')
+    return 'warning'
+  if (priority === 'medium')
+    return 'info'
+  return 'muted'
 }
 
 const canSubmitReview = computed(() => {
@@ -251,6 +271,34 @@ const reviewCommentTrendMeta = computed(() => {
     averageLength: formatMetricValue(point.averageContentLength),
   })
 })
+const reviewCommentQualityBuckets = computed(() =>
+  (reviewAnalytics.value?.comments?.qualityBuckets ?? []).filter(item => item.total > 0),
+)
+const reviewModerationTimingItems = computed(() => {
+  const timing = reviewAnalytics.value?.moderationTiming
+  return [
+    {
+      key: 'pending',
+      label: t('dashboard.sections.plugins.analytics.reviews.moderationTiming.pending'),
+      total: timing?.pending.total ?? 0,
+      averageHours: timing?.pending.averageHours ?? 0,
+      maxHours: timing?.pending.maxHours ?? 0,
+    },
+    {
+      key: 'processed',
+      label: t('dashboard.sections.plugins.analytics.reviews.moderationTiming.processed'),
+      total: timing?.processed.total ?? 0,
+      averageHours: timing?.processed.averageHours ?? 0,
+      maxHours: timing?.processed.maxHours ?? 0,
+    },
+  ].filter(item => item.total > 0)
+})
+const reviewModerationTimingBuckets = computed(() =>
+  (reviewAnalytics.value?.moderationTiming?.pending.buckets ?? [])
+    .concat(reviewAnalytics.value?.moderationTiming?.processed.buckets ?? [])
+    .filter(item => item.total > 0),
+)
+const reviewActionQueue = computed(() => reviewAnalytics.value?.actionQueue ?? [])
 
 const analyticsConversionItems = computed(() => {
   const conversion = props.analytics?.conversion
@@ -272,6 +320,7 @@ const analyticsConversionItems = computed(() => {
     },
   ]
 })
+const ownerActionQueue = computed(() => props.analytics?.actionQueue ?? [])
 
 const latestConversionTrendPoint = computed(() => {
   const trend = props.analytics?.conversionTrend ?? []
@@ -687,6 +736,85 @@ function formatReviewRatingTrendMeta(point: DashboardPluginReviewRatingTrendPoin
   })
 }
 
+function formatReviewCommentQualityLabel(key: DashboardPluginReviewCommentQualityBucket['key']) {
+  return t(`dashboard.sections.plugins.analytics.reviews.commentQualityBuckets.${key}`)
+}
+
+function formatReviewCommentQualityMeta(item: DashboardPluginReviewCommentQualityBucket) {
+  return t('dashboard.sections.plugins.analytics.reviews.commentQualityMeta', {
+    averageLength: formatMetricValue(item.averageContentLength),
+    lowRatingRate: formatPercent(item.lowRatingRate),
+    titleCoverageRate: formatPercent(item.titleCoverageRate),
+    contentCoverageRate: formatPercent(item.contentCoverageRate),
+  })
+}
+
+function formatHours(value?: number | null) {
+  return t('dashboard.sections.plugins.analytics.reviews.moderationTiming.hoursValue', {
+    hours: formatMetricValue(value),
+  })
+}
+
+function formatReviewModerationTimingBucketLabel(key: DashboardPluginReviewModerationTimingBucket['key']) {
+  return t(`dashboard.sections.plugins.analytics.reviews.moderationTiming.buckets.${key}`)
+}
+
+function formatReviewModerationTimingBucketMeta(item: DashboardPluginReviewModerationTimingBucket) {
+  return t('dashboard.sections.plugins.analytics.reviews.moderationTiming.bucketMeta', {
+    averageHours: formatHours(item.averageHours),
+    maxHours: formatHours(item.maxHours),
+  })
+}
+
+function formatReviewActionQueuePriority(priority: DashboardPluginReviewActionQueueItem['priority']) {
+  return t(`dashboard.sections.plugins.analytics.reviews.actionQueue.priorities.${priority}`)
+}
+
+function formatReviewActionQueueSuggestedAction(action: DashboardPluginReviewActionQueueItem['suggestedAction']) {
+  return t(`dashboard.sections.plugins.analytics.reviews.actionQueue.suggestedActions.${action}`)
+}
+
+function formatReviewActionQueueReason(reason: DashboardPluginReviewActionQueueItem['reason']) {
+  return t(`dashboard.sections.plugins.analytics.reviews.actionQueue.reasons.${reason}`)
+}
+
+function formatReviewActionQueueMeta(item: DashboardPluginReviewActionQueueItem) {
+  return t('dashboard.sections.plugins.analytics.reviews.actionQueue.itemMeta', {
+    pending: formatMetricValue(item.pending),
+    rejected: formatMetricValue(item.rejected),
+    lowRatingRate: formatPercent(item.lowRatingRate),
+    contentCoverageRate: formatPercent(item.contentCoverageRate),
+    date: formatDate(item.latestDate),
+  })
+}
+
+function formatOwnerActionQueuePriority(priority: DashboardPluginOwnerActionQueueItem['priority']) {
+  return t(`dashboard.sections.plugins.analytics.actionQueue.priorities.${priority}`)
+}
+
+function formatOwnerActionQueueSuggestedAction(action: DashboardPluginOwnerActionQueueItem['suggestedAction']) {
+  return t(`dashboard.sections.plugins.analytics.actionQueue.suggestedActions.${action}`)
+}
+
+function formatOwnerActionQueueReason(reason: DashboardPluginOwnerActionQueueItem['reason']) {
+  return t(`dashboard.sections.plugins.analytics.actionQueue.reasons.${reason}`)
+}
+
+function formatOwnerActionQueueMeta(item: DashboardPluginOwnerActionQueueItem) {
+  return t('dashboard.sections.plugins.analytics.actionQueue.itemMeta', {
+    downloads: formatMetricValue(item.downloads),
+    installs: formatMetricValue(item.installs),
+    invocations: formatMetricValue(item.invocations),
+    installRate: formatPercent(item.installRate),
+    invocationRate: formatPercent(item.invocationRate),
+    failureRate: formatPercent(item.failureRate),
+    retentionRate: formatPercent(item.retentionRate),
+    topCountry: item.topCountryKey ? formatMetricKey(item.topCountryKey) : '—',
+    topCountryShare: formatPercent(item.topCountryShare),
+    date: formatDate(item.latestDate),
+  })
+}
+
 function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPoint) {
   return t('dashboard.sections.plugins.analytics.invocationHealth.trendMeta', {
     date: formatDate(point.date),
@@ -798,6 +926,41 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                   </div>
                 </div>
 
+                <div v-if="ownerActionQueue.length" class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.actionQueue.title') }}
+                    </p>
+                    <span class="text-xs text-black/40 dark:text-white/40">
+                      {{ t('dashboard.sections.plugins.analytics.actionQueue.count', { count: formatMetricValue(ownerActionQueue.length) }) }}
+                    </span>
+                  </div>
+                  <div class="mt-3 grid gap-2">
+                    <div
+                      v-for="item in ownerActionQueue.slice(0, 4)"
+                      :key="`owner-action:${item.key}`"
+                      class="rounded-lg border border-black/[0.05] bg-black/[0.02] p-3 text-xs dark:border-white/[0.06] dark:bg-white/[0.03]"
+                    >
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="font-medium text-black/70 dark:text-white/70">
+                          {{ formatOwnerActionQueueSuggestedAction(item.suggestedAction) }}
+                        </p>
+                        <TxStatusBadge
+                          :text="formatOwnerActionQueuePriority(item.priority)"
+                          :status="ownerActionQueuePriorityTone(item.priority)"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="mt-1 text-black/45 dark:text-white/45">
+                        {{ formatOwnerActionQueueReason(item.reason) }}
+                      </p>
+                      <p class="mt-2 text-black/45 dark:text-white/45">
+                        {{ formatOwnerActionQueueMeta(item) }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
                   <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -826,6 +989,38 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                       </p>
                       <p class="mt-1 text-sm font-semibold text-black dark:text-white">
                         {{ formatMetricValue(item.value) }}
+                      </p>
+                    </div>
+                  </div>
+                  <div v-if="reviewActionQueue.length" class="mt-4 grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <p class="font-medium text-black/65 dark:text-white/65">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.actionQueue.title') }}
+                      </p>
+                      <span class="text-black/40 dark:text-white/40">
+                        {{ t('dashboard.sections.plugins.analytics.reviews.actionQueue.count', { count: formatMetricValue(reviewActionQueue.length) }) }}
+                      </span>
+                    </div>
+                    <div
+                      v-for="item in reviewActionQueue.slice(0, 4)"
+                      :key="`review-action:${item.key}`"
+                      class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]"
+                    >
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="font-medium text-black/70 dark:text-white/70">
+                          {{ formatReviewActionQueueSuggestedAction(item.suggestedAction) }}
+                        </p>
+                        <TxStatusBadge
+                          :text="formatReviewActionQueuePriority(item.priority)"
+                          :status="reviewActionQueuePriorityTone(item.priority)"
+                          size="sm"
+                        />
+                      </div>
+                      <p class="mt-1 text-black/45 dark:text-white/45">
+                        {{ formatReviewActionQueueReason(item.reason) }}
+                      </p>
+                      <p class="mt-2 text-black/45 dark:text-white/45">
+                        {{ formatReviewActionQueueMeta(item) }}
                       </p>
                     </div>
                   </div>
@@ -901,6 +1096,74 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                   <p v-if="reviewCommentTrendMeta" class="mt-3 text-xs text-black/45 dark:text-white/45">
                     {{ reviewCommentTrendMeta }}
                   </p>
+                  <div v-if="reviewCommentQualityBuckets.length" class="mt-4">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.reviews.commentQuality') }}
+                    </p>
+                    <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <div
+                        v-for="item in reviewCommentQualityBuckets"
+                        :key="item.key"
+                        class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                      >
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="text-xs font-semibold text-black dark:text-white">
+                            {{ formatReviewCommentQualityLabel(item.key) }}
+                          </p>
+                          <span class="text-xs text-black/45 dark:text-white/45">
+                            {{ formatMetricValue(item.total) }}
+                          </span>
+                        </div>
+                        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                          {{ formatReviewCommentQualityMeta(item) }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="reviewModerationTimingItems.length" class="mt-4">
+                    <p class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.analytics.reviews.moderationTiming.title') }}
+                    </p>
+                    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div
+                        v-for="item in reviewModerationTimingItems"
+                        :key="`moderation-timing-${item.key}`"
+                        class="rounded-lg bg-black/[0.02] px-3 py-2 dark:bg-white/[0.03]"
+                      >
+                        <p class="text-[11px] text-black/45 dark:text-white/45">
+                          {{ item.label }}
+                        </p>
+                        <p class="mt-1 text-sm font-semibold text-black dark:text-white">
+                          {{ formatHours(item.averageHours) }}
+                        </p>
+                        <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                          {{ t('dashboard.sections.plugins.analytics.reviews.moderationTiming.summaryMeta', {
+                            total: formatMetricValue(item.total),
+                            maxHours: formatHours(item.maxHours),
+                          }) }}
+                        </p>
+                      </div>
+                    </div>
+                    <div v-if="reviewModerationTimingBuckets.length" class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <div
+                        v-for="item in reviewModerationTimingBuckets"
+                        :key="`moderation-bucket-${item.key}-${item.pending}-${item.approved}-${item.rejected}`"
+                        class="rounded-lg border border-black/[0.05] px-3 py-2 text-xs dark:border-white/[0.06]"
+                      >
+                        <div class="flex items-center justify-between gap-3">
+                          <p class="font-medium text-black/65 dark:text-white/65">
+                            {{ formatReviewModerationTimingBucketLabel(item.key) }}
+                          </p>
+                          <span class="text-black/45 dark:text-white/45">
+                            {{ formatMetricValue(item.total) }}
+                          </span>
+                        </div>
+                        <p class="mt-1 text-black/45 dark:text-white/45">
+                          {{ formatReviewModerationTimingBucketMeta(item) }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">

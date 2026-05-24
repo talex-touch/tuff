@@ -126,6 +126,202 @@ export interface StorageChannelAnalyticsOptions extends GovernanceAnalyticsOptio
   provider?: string | null
 }
 
+export type PlatformGovernanceReportStatus = 'ok' | 'watch' | 'critical'
+export type PlatformGovernanceReportPriority = 'critical' | 'high' | 'medium' | 'low'
+export type PlatformGovernanceReportEvidenceStatus = 'ready' | 'local-only' | 'open'
+
+export interface PlatformGovernanceReportScorecard {
+  key: string
+  label: string
+  value: number
+  total: number | null
+  unit: string
+  delta: number | null
+  rate: number | null
+  status: PlatformGovernanceReportStatus
+  reason: string | null
+}
+
+export interface PlatformGovernanceReportRiskQueueItem {
+  key: string
+  area: 'search' | 'upload' | 'storage' | 'notification' | 'provider-quota'
+  priority: PlatformGovernanceReportPriority
+  suggestedAction: string
+  reason: string
+  status: string
+  metric: number
+  latestAt: string | null
+  details: Record<string, string | number | boolean | null>
+}
+
+export interface PlatformGovernanceReportEvidenceItem {
+  key: string
+  label: string
+  status: PlatformGovernanceReportEvidenceStatus
+  evidenceCount: number
+  blocker: string | null
+}
+
+export interface PlatformGovernanceReportSnapshot {
+  days: number
+  generatedAt: string
+  report: {
+    status: PlatformGovernanceReportStatus
+    riskScore: number
+    scorecards: PlatformGovernanceReportScorecard[]
+    evidenceStatus: PlatformGovernanceReportEvidenceItem[]
+    riskQueue: PlatformGovernanceReportRiskQueueItem[]
+    leaderboards: {
+      hotPlugins: ReturnType<typeof createOperationsDashboardSummary>['leaderboards']['hotPlugins']
+      topModels: ReturnType<typeof createOperationsDashboardSummary>['leaderboards']['topModels']
+      topProviders: ReturnType<typeof createProviderAnalytics>['leaderboard']
+    }
+    trendSummary: {
+      latestDate: string | null
+      operationsDays: number
+      peakSearches: number
+      peakPluginInstalls: number
+      peakProviderTokens: number
+      peakRiskScore: number
+    }
+  }
+}
+
+function formatReportCell(value: unknown): string {
+  if (value == null || value === '')
+    return '-'
+  return String(value).replace(/\r?\n/g, ' ').replace(/\|/g, '\\|')
+}
+
+function formatReportNumber(value: number | null | undefined): string {
+  return value == null ? '-' : String(Math.round(value * 100) / 100)
+}
+
+function formatReportRate(value: number | null | undefined): string {
+  return value == null ? '-' : `${formatReportNumber(value)}%`
+}
+
+function createMarkdownTable(headers: string[], rows: unknown[][]): string[] {
+  return [
+    `| ${headers.map(formatReportCell).join(' | ')} |`,
+    `| ${headers.map(() => '---').join(' | ')} |`,
+    ...rows.map(row => `| ${row.map(formatReportCell).join(' | ')} |`),
+  ]
+}
+
+export function formatPlatformGovernanceReportMarkdown(snapshot: PlatformGovernanceReportSnapshot): string {
+  const report = snapshot.report
+  const lines = [
+    '# Nexus Data Governance Operations Report',
+    '',
+    `- Generated at: ${formatReportCell(snapshot.generatedAt)}`,
+    `- Window: ${formatReportNumber(snapshot.days)} days`,
+    `- Status: ${formatReportCell(report.status)}`,
+    `- Risk score: ${formatReportNumber(report.riskScore)}`,
+    '',
+    '## Scorecards',
+    '',
+    ...createMarkdownTable(
+      ['Key', 'Value', 'Total', 'Unit', 'Delta', 'Rate', 'Status', 'Reason'],
+      report.scorecards.map(item => [
+        item.key,
+        formatReportNumber(item.value),
+        formatReportNumber(item.total),
+        item.unit,
+        formatReportRate(item.delta),
+        formatReportRate(item.rate),
+        item.status,
+        item.reason,
+      ]),
+    ),
+    '',
+    '## Evidence Status',
+    '',
+    ...createMarkdownTable(
+      ['Key', 'Status', 'Evidence', 'Blocker'],
+      report.evidenceStatus.map(item => [
+        item.key,
+        item.status,
+        formatReportNumber(item.evidenceCount),
+        item.blocker,
+      ]),
+    ),
+    '',
+    '## Risk Queue',
+    '',
+    ...createMarkdownTable(
+      ['Area', 'Priority', 'Status', 'Metric', 'Reason', 'Suggested action', 'Latest at'],
+      report.riskQueue.map(item => [
+        item.area,
+        item.priority,
+        item.status,
+        formatReportNumber(item.metric),
+        item.reason,
+        item.suggestedAction,
+        item.latestAt,
+      ]),
+    ),
+    '',
+    '## Trend Summary',
+    '',
+    ...createMarkdownTable(
+      ['Latest date', 'Timeline days', 'Peak searches', 'Peak plugin installs', 'Peak provider tokens', 'Peak risk score'],
+      [[
+        report.trendSummary.latestDate,
+        formatReportNumber(report.trendSummary.operationsDays),
+        formatReportNumber(report.trendSummary.peakSearches),
+        formatReportNumber(report.trendSummary.peakPluginInstalls),
+        formatReportNumber(report.trendSummary.peakProviderTokens),
+        formatReportNumber(report.trendSummary.peakRiskScore),
+      ]],
+    ),
+    '',
+    '## Leaderboards',
+    '',
+    '### Hot Plugins',
+    '',
+    ...createMarkdownTable(
+      ['Plugin', 'Hot score', 'Downloads', 'Installs', 'Invocations', 'Actors'],
+      report.leaderboards.hotPlugins.map(item => [
+        item.pluginId,
+        formatReportNumber(item.hotScore),
+        formatReportNumber(item.downloads),
+        formatReportNumber(item.installs),
+        formatReportNumber(item.invocations),
+        formatReportNumber(item.uniqueActors),
+      ]),
+    ),
+    '',
+    '### Top Models',
+    '',
+    ...createMarkdownTable(
+      ['Model', 'Tokens', 'Requests', 'Actors'],
+      report.leaderboards.topModels.map(item => [
+        item.model,
+        formatReportNumber(item.tokens),
+        formatReportNumber(item.requests),
+        formatReportNumber(item.uniqueActors),
+      ]),
+    ),
+    '',
+    '### Top Providers',
+    '',
+    ...createMarkdownTable(
+      ['Provider', 'Tokens', 'Requests', 'Quantity', 'Actors'],
+      report.leaderboards.topProviders.map(item => [
+        item.providerId,
+        formatReportNumber(item.tokens),
+        formatReportNumber(item.requests),
+        formatReportNumber(item.quantity),
+        formatReportNumber(item.uniqueActors),
+      ]),
+    ),
+    '',
+  ]
+
+  return lines.join('\n')
+}
+
 export type StorageGovernanceAction = 'storage.write' | 'storage.read' | 'storage.delete'
 
 export interface RecordStorageChannelUsageInput {
@@ -194,6 +390,47 @@ export interface IntelligenceProviderQuotaEvaluation {
   }
 }
 
+export type IntelligenceProviderQuotaSmokeMode = 'dry-run' | 'consume'
+export type IntelligenceProviderQuotaSmokeStatus = 'allowed' | 'blocked' | 'consumed' | 'failed'
+
+export interface RunIntelligenceProviderQuotaSmokeInput {
+  providerId: unknown
+  channel?: unknown
+  mode?: unknown
+  tokenQuantity?: unknown
+  actorId?: unknown
+}
+
+export interface IntelligenceProviderQuotaSmokeResult {
+  providerId: string
+  channel: string | null
+  mode: IntelligenceProviderQuotaSmokeMode
+  status: IntelligenceProviderQuotaSmokeStatus
+  reason: string
+  requestRecorded: boolean
+  tokensRecorded: number
+  evaluation: IntelligenceProviderQuotaEvaluation | null
+  generatedAt: string
+}
+
+export interface IntelligenceProviderQuotaSmokeEvidenceItem {
+  key: string
+  providerId: string
+  channel: string | null
+  mode: IntelligenceProviderQuotaSmokeMode
+  status: IntelligenceProviderQuotaSmokeStatus
+  reason: string | null
+  requestRecorded: boolean
+  tokensRecorded: number
+  latestAt: string
+  events: number
+  allowed: number
+  blocked: number
+  consumed: number
+  failed: number
+  uniqueActors: number
+}
+
 export interface IntelligenceProviderQuotaRiskItem {
   configId: string
   providerId: string
@@ -223,6 +460,53 @@ export interface IntelligenceProviderQuotaRiskItem {
     requests: number | null
     tokens: number | null
   }
+}
+
+export type ProviderQuotaActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+export type ProviderQuotaActionQueueSuggestedAction =
+  | 'increase-token-limit'
+  | 'increase-request-limit'
+  | 'reduce-provider-traffic'
+  | 'split-provider-channel'
+  | 'enable-provider-quota'
+  | 'set-provider-limit'
+  | 'monitor-burn-rate'
+export type ProviderQuotaActionQueueReason =
+  | 'token-overage'
+  | 'request-overage'
+  | 'token-exhausted'
+  | 'request-exhausted'
+  | 'warning-threshold'
+  | 'projected-exhaustion'
+  | 'quota-disabled'
+  | 'missing-hard-limit'
+
+export interface ProviderQuotaActionQueueItem {
+  key: string
+  priority: ProviderQuotaActionQueuePriority
+  suggestedAction: ProviderQuotaActionQueueSuggestedAction
+  reason: ProviderQuotaActionQueueReason
+  configId: string
+  providerId: string
+  name: string
+  channel: string | null
+  provider: string | null
+  status: IntelligenceProviderQuotaStatus
+  windowDays: number
+  requests: number
+  tokens: number
+  maxRequests: number | null
+  maxTokens: number | null
+  requestUtilization: number | null
+  tokenUtilization: number | null
+  remainingRequests: number | null
+  remainingTokens: number | null
+  requestOverage: number
+  tokenOverage: number
+  requestsPerDay: number
+  tokensPerDay: number
+  projectedRequestExhaustionDays: number | null
+  projectedTokenExhaustionDays: number | null
 }
 
 export interface StoragePolicyEvaluationOptions {
@@ -322,6 +606,67 @@ interface StoragePolicyAnalytics {
 }
 
 type StorageChannelPressureStatus = StoragePolicyEvaluationStatus | 'unmanaged'
+type StorageActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+type StorageActionQueueSuggestedAction =
+  | 'configure-policy'
+  | 'increase-storage-limit'
+  | 'increase-traffic-limit'
+  | 'increase-operation-limit'
+  | 'review-burn-rate'
+  | 'monitor-channel'
+type StorageSmokeEvidenceMode = 'dry-run' | 'write' | 'unknown'
+type StorageSmokeEvidenceStatus = 'ready' | 'sent' | 'failed'
+
+interface StorageSmokeEvidenceItem {
+  key: string
+  policyId: string | null
+  policyName: string | null
+  channel: string | null
+  provider: string | null
+  mode: StorageSmokeEvidenceMode
+  status: StorageSmokeEvidenceStatus
+  reason: string | null
+  operations: string[]
+  bytesWritten: number
+  bytesRead: number
+  credentialRequired: boolean | null
+  hasCredentialRef: boolean | null
+  hasCredential: boolean | null
+  latestAt: string
+  events: number
+  ready: number
+  sent: number
+  failed: number
+  uniqueActors: number
+}
+
+interface StorageActionQueueItem {
+  key: string
+  priority: StorageActionQueuePriority
+  suggestedAction: StorageActionQueueSuggestedAction
+  reason: string
+  channel: string
+  provider: string | null
+  policyId: string | null
+  policyName: string | null
+  pressureStatus: StorageChannelPressureStatus
+  events: number
+  storedBytes: number
+  trafficBytes: number
+  operations: number
+  writes: number
+  reads: number
+  deletes: number
+  uniqueActors: number
+  highestUtilization: number
+  policyAlerts: number
+  policyReasons: string[]
+  remaining: StoragePolicyEvaluation['remaining']
+  overage: StoragePolicyEvaluation['overage']
+  burnRate: StoragePolicyEvaluation['burnRate']
+  projectedExhaustionDays: StoragePolicyEvaluation['projectedExhaustionDays']
+  latestTrendDate: string | null
+}
 
 interface StorageChannelPressureTrendPoint {
   date: string
@@ -372,6 +717,119 @@ interface StorageChannelPressure {
 
 type NotificationChannelRiskStatus = 'ok' | 'warning' | 'disabled'
 type NotificationChannelReadinessStatus = 'ready' | 'warning' | 'disabled'
+type NotificationActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+type NotificationActionQueueSource = 'channel-config' | 'delivery-health'
+type NotificationDeliveryStatus = 'planned' | 'sent' | 'skipped' | 'failed'
+type NotificationActionQueueSuggestedAction =
+  | 'enable-channel'
+  | 'fix-channel-config'
+  | 'bind-credential-ref'
+  | 'configure-runtime'
+  | 'configure-relay'
+  | 'enable-send-mode'
+  | 'investigate-failures'
+  | 'review-skipped-deliveries'
+  | 'monitor-provider'
+
+interface NotificationNumberStat {
+  count: number
+  average: number
+  max: number
+}
+
+interface NotificationProviderHealthItem {
+  provider: string
+  providerType: string | null
+  adapter: string | null
+  channel: string | null
+  total: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  sentRate: number
+  failureRate: number
+  durationMs: NotificationNumberStat
+  latestFailureReason: string | null
+  latestFailureStatusCode: number | null
+  latestFailureAt: string | null
+}
+
+interface NotificationTestEvidenceItem {
+  key: string
+  configId: string
+  configName: string | null
+  notificationAction: string | null
+  channel: string | null
+  provider: string | null
+  providerType: string | null
+  adapter: string | null
+  status: NotificationDeliveryStatus
+  reason: string | null
+  durationMs: number | null
+  statusCode: number | null
+  latestAt: string
+  events: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  uniqueActors: number
+}
+
+interface NotificationDeliveryEvidenceItem {
+  key: string
+  configId: string | null
+  configName: string | null
+  notificationAction: string | null
+  resourceType: string | null
+  channel: string | null
+  provider: string | null
+  providerType: string | null
+  adapter: string | null
+  status: NotificationDeliveryStatus
+  reason: string | null
+  durationMs: number | null
+  statusCode: number | null
+  latestAt: string
+  events: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  uniqueActors: number
+}
+
+interface NotificationActionQueueItem {
+  key: string
+  source: NotificationActionQueueSource
+  priority: NotificationActionQueuePriority
+  suggestedAction: NotificationActionQueueSuggestedAction
+  reason: string
+  configId: string | null
+  name: string | null
+  channel: string | null
+  provider: string | null
+  providerType: string | null
+  adapter: string | null
+  status: NotificationChannelRiskStatus | 'delivery-risk'
+  reasons: string[]
+  enabled: boolean | null
+  credentialRequired: boolean
+  hasCredentialRef: boolean
+  productionReady: boolean | null
+  total: number
+  planned: number
+  sent: number
+  skipped: number
+  failed: number
+  sentRate: number
+  failureRate: number
+  durationMs: NotificationNumberStat
+  latestFailureReason: string | null
+  latestFailureStatusCode: number | null
+  latestFailureAt: string | null
+}
 
 interface NotificationChannelAnalytics {
   channelSummary: {
@@ -424,6 +882,7 @@ interface NotificationChannelAnalytics {
       hasRelayEndpoint: boolean
     }
   }>
+  actionQueue: NotificationActionQueueItem[]
 }
 
 type UploadFailureDisposition = 'retry-scheduled' | 'retry-exhausted' | 'retryable' | 'not-retryable' | 'unknown'
@@ -455,6 +914,97 @@ interface UploadFailureMatrixItem {
   sampleCount: number
   latestSampleAt: string | null
   suggestedAction: 'retry-monitor' | 'storage-provider-check' | 'quota-policy-check' | 'payload-validation' | 'manual-investigation'
+}
+
+type UploadActionQueuePriority = 'critical' | 'high' | 'medium' | 'low'
+
+type UploadActionQueueSuggestedAction = UploadFailureMatrixItem['suggestedAction'] | 'stuck-attempt-check'
+
+interface UploadActionQueueItem {
+  key: string
+  priority: UploadActionQueuePriority
+  suggestedAction: UploadActionQueueSuggestedAction
+  reason: string
+  resourceType: string
+  surface: string | null
+  storageChannel: string | null
+  storageProvider: string | null
+  statusCode: number | null
+  events: number
+  failedAttempts: number
+  stuckAttempts: number
+  retryableFailures: number
+  scheduledRetries: number
+  exhaustedRetries: number
+  sampleCount: number
+  calibrationStatus: UploadFailureCalibrationStatus | 'unknown'
+  sampleSource: UploadFailureSampleSource
+  latestAt: string
+  oldestAgeMs: number | null
+  nextRetryDelayMs: number | null
+  evidenceAttemptHashes: string[]
+  evidenceResourceHashes: string[]
+}
+
+interface UploadProblemAttempt {
+  attemptHash: string
+  resourceHash: string
+  status: 'failed' | 'stuck'
+  resourceType: string
+  surface: string | null
+  storageChannel: string | null
+  storageProvider: string | null
+  contentType: string | null
+  reason: string | null
+  statusCode: number | null
+  durationMs: number | null
+  size: number | null
+  retryable: boolean | null
+  retryCount: number | null
+  maxRetries: number | null
+  nextRetryDelayMs: number | null
+  latestAt: string
+  ageMs: number | null
+}
+
+interface UploadRecoveredEvidenceItem {
+  attemptHash: string
+  resourceHash: string
+  resourceType: string
+  surface: string | null
+  storageChannel: string | null
+  storageProvider: string | null
+  contentType: string | null
+  durationMs: number | null
+  size: number | null
+  retryCount: number | null
+  maxRetries: number | null
+  attempts: number | null
+  storageOperation: string | null
+  storageStatusCode: number | null
+  latestAt: string
+}
+
+interface UploadSceneAssetHealthItem {
+  key: string
+  sceneId: string | null
+  capability: string | null
+  providerId: string | null
+  assetKind: string | null
+  resourceType: string
+  storageChannel: string | null
+  storageProvider: string | null
+  surface: string
+  started: number
+  completed: number
+  failed: number
+  bytes: number
+  failureRate: number
+  avgDurationMs: number
+  avgSize: number
+  latestAt: string
+  failureReasons: Array<{ key: string, events: number }>
+  statusCodes: Array<{ key: string, events: number }>
 }
 
 interface UploadAttemptSummary {
@@ -1020,6 +1570,11 @@ function readEventMetadataNumberAny(event: PlatformGovernanceEvent, keys: string
   return null
 }
 
+function readEventMetadataObject(event: PlatformGovernanceEvent, key: string): Record<string, unknown> | null {
+  const value = event.metadata?.[key]
+  return isPlainObject(value) ? value : null
+}
+
 function createMetricBucket() {
   return {
     events: 0,
@@ -1530,6 +2085,33 @@ interface PluginUsageTiming {
   trend: PluginUsageTimingTrendPoint[]
 }
 
+type PluginOwnerActionQueuePriority = 'high' | 'medium' | 'low'
+type PluginOwnerActionQueueSuggestedAction =
+  | 'improve-install-conversion'
+  | 'improve-invocation-conversion'
+  | 'investigate-invocation-failures'
+  | 'improve-retention'
+  | 'expand-location-coverage'
+
+interface PluginOwnerActionQueueItem {
+  key: string
+  priority: PluginOwnerActionQueuePriority
+  suggestedAction: PluginOwnerActionQueueSuggestedAction
+  reason: string
+  downloads: number
+  installs: number
+  invocations: number
+  uniqueActors: number
+  installRate: number
+  invocationRate: number
+  invocationsPerActor: number
+  failureRate: number
+  retentionRate: number
+  topCountryKey: string | null
+  topCountryShare: number
+  latestDate: string | null
+}
+
 function sanitizePluginInvocationDimension(value: string | null): string | null {
   if (!value)
     return null
@@ -1757,6 +2339,120 @@ function createPluginInvocationHealth(events: PlatformGovernanceEvent[], topLimi
   }
 }
 
+function rankPluginOwnerActionQueuePriority(priority: PluginOwnerActionQueuePriority): number {
+  switch (priority) {
+    case 'high':
+      return 3
+    case 'medium':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function createPluginOwnerActionQueue(input: {
+  downloads: number
+  installs: number
+  invocations: number
+  uniqueActors: number
+  conversion: {
+    installRate: number
+    invocationRate: number
+    invocationsPerActor: number
+  }
+  invocationHealth: ReturnType<typeof createPluginInvocationHealth>
+  retention: ReturnType<typeof createPluginRetentionAnalytics>
+  trend: ReturnType<typeof createPluginDailyTrend>
+  byCountry: ReturnType<typeof mapMetricBuckets>
+}): PluginOwnerActionQueueItem[] {
+  if (input.downloads <= 0 && input.installs <= 0 && input.invocations <= 0)
+    return []
+
+  const knownCountries = input.byCountry
+    .map(item => ({
+      ...item,
+      key: sanitizePluginInvocationDimension(item.key),
+    }))
+    .filter(item => item.key && item.key !== 'unknown' && item.key !== 'redacted')
+  const topCountry = knownCountries[0] ?? null
+  const knownCountryQuantity = knownCountries.reduce((sum, item) => sum + item.quantity, 0)
+  const topCountryShare = topCountry ? percentage(topCountry.quantity, knownCountryQuantity) : 0
+  const latestDate = input.trend.at(-1)?.date
+    ?? input.invocationHealth.trend.at(-1)?.date
+    ?? input.retention.trend.at(-1)?.date
+    ?? null
+  const baseMetrics = {
+    downloads: input.downloads,
+    installs: input.installs,
+    invocations: input.invocations,
+    uniqueActors: input.uniqueActors,
+    installRate: input.conversion.installRate,
+    invocationRate: input.conversion.invocationRate,
+    invocationsPerActor: input.conversion.invocationsPerActor,
+    failureRate: input.invocationHealth.failureRate,
+    retentionRate: input.retention.retentionRate,
+    topCountryKey: topCountry?.key ?? null,
+    topCountryShare,
+    latestDate,
+  }
+  const queue: PluginOwnerActionQueueItem[] = []
+
+  if (input.downloads >= 5 && input.conversion.installRate < 25) {
+    queue.push({
+      key: 'low-install-conversion',
+      priority: input.conversion.installRate < 10 ? 'high' : 'medium',
+      suggestedAction: 'improve-install-conversion',
+      reason: 'low-install-rate',
+      ...baseMetrics,
+    })
+  }
+
+  if (input.installs >= 3 && input.conversion.invocationRate < 50) {
+    queue.push({
+      key: 'low-invocation-conversion',
+      priority: input.conversion.invocationRate < 25 ? 'high' : 'medium',
+      suggestedAction: 'improve-invocation-conversion',
+      reason: 'low-invocation-rate',
+      ...baseMetrics,
+    })
+  }
+
+  if (input.invocationHealth.total >= 5 && input.invocationHealth.failureRate >= 10) {
+    queue.push({
+      key: 'high-invocation-failure-rate',
+      priority: input.invocationHealth.failureRate >= 25 ? 'high' : 'medium',
+      suggestedAction: 'investigate-invocation-failures',
+      reason: 'high-invocation-failure-rate',
+      ...baseMetrics,
+    })
+  }
+
+  if (input.retention.activeActors >= 3 && input.retention.retentionRate < 35) {
+    queue.push({
+      key: 'low-return-rate',
+      priority: input.retention.retentionRate < 15 ? 'high' : 'medium',
+      suggestedAction: 'improve-retention',
+      reason: 'low-return-rate',
+      ...baseMetrics,
+    })
+  }
+
+  if (input.uniqueActors >= 5 && knownCountries.length === 1 && topCountryShare >= 80) {
+    queue.push({
+      key: 'single-country-concentration',
+      priority: topCountryShare >= 95 ? 'medium' : 'low',
+      suggestedAction: 'expand-location-coverage',
+      reason: 'single-country-concentration',
+      ...baseMetrics,
+    })
+  }
+
+  return queue.sort((a, b) => {
+    const priorityDelta = rankPluginOwnerActionQueuePriority(b.priority) - rankPluginOwnerActionQueuePriority(a.priority)
+    return priorityDelta || a.key.localeCompare(b.key)
+  })
+}
+
 function createPluginGrowth(events: PlatformGovernanceEvent[], days: number) {
   const now = Date.now()
   const windowMs = days * 24 * 60 * 60 * 1000
@@ -1908,6 +2604,168 @@ function createNotificationProviderMix(risks: NotificationChannelRisk[], topLimi
     .slice(0, topLimit)
 }
 
+function emptyNotificationNumberStat(): NotificationNumberStat {
+  return {
+    count: 0,
+    average: 0,
+    max: 0,
+  }
+}
+
+function rankNotificationActionQueuePriority(priority: NotificationActionQueuePriority): number {
+  if (priority === 'critical')
+    return 4
+  if (priority === 'high')
+    return 3
+  if (priority === 'medium')
+    return 2
+  return 1
+}
+
+function resolveNotificationChannelActionPriority(item: NotificationChannelRisk): NotificationActionQueuePriority {
+  if (item.status === 'warning')
+    return 'high'
+  if (item.status === 'disabled')
+    return 'medium'
+  return 'low'
+}
+
+function resolveNotificationChannelSuggestedAction(item: NotificationChannelRisk): NotificationActionQueueSuggestedAction {
+  if (item.reasons.includes('unsupported-adapter'))
+    return 'fix-channel-config'
+  if (item.reasons.includes('credential-ref-required'))
+    return 'bind-credential-ref'
+  if (item.readiness.reasons.includes('webpush-vapid-public-key-missing'))
+    return 'configure-runtime'
+  if (item.readiness.reasons.includes('smtp-relay-endpoint-required'))
+    return 'configure-relay'
+  if (item.readiness.reasons.includes('send-mode-required'))
+    return 'enable-send-mode'
+  if (item.reasons.includes('channel-disabled'))
+    return 'enable-channel'
+  return 'fix-channel-config'
+}
+
+function resolveNotificationChannelActionReason(item: NotificationChannelRisk): string {
+  const reasonOrder = [
+    'unsupported-adapter',
+    'credential-ref-required',
+    'webpush-vapid-public-key-missing',
+    'smtp-relay-endpoint-required',
+    'send-mode-required',
+    'channel-disabled',
+  ]
+  return reasonOrder.find(reason => item.reasons.includes(reason)) ?? item.reasons[0] ?? 'channel-risk'
+}
+
+function resolveNotificationProviderActionPriority(item: NotificationProviderHealthItem): NotificationActionQueuePriority {
+  if (item.failed > 0 && item.failureRate >= 50)
+    return 'critical'
+  if (item.failed > 0)
+    return 'high'
+  if (item.skipped > 0)
+    return 'medium'
+  if (item.total >= 3 && item.sentRate < 50)
+    return 'medium'
+  return 'low'
+}
+
+function resolveNotificationProviderSuggestedAction(item: NotificationProviderHealthItem): NotificationActionQueueSuggestedAction {
+  if (item.failed > 0)
+    return 'investigate-failures'
+  if (item.skipped > 0)
+    return 'review-skipped-deliveries'
+  return 'monitor-provider'
+}
+
+function resolveNotificationProviderActionReason(item: NotificationProviderHealthItem): string {
+  if (item.failed > 0)
+    return item.latestFailureReason ?? 'delivery-failure'
+  if (item.skipped > 0)
+    return 'skipped-deliveries'
+  if (item.sentRate < 50)
+    return 'low-sent-rate'
+  return 'provider-monitor'
+}
+
+function createNotificationActionQueue(
+  channelRisks: NotificationChannelRisk[],
+  providerHealth: NotificationProviderHealthItem[],
+  topLimit: number,
+): NotificationActionQueueItem[] {
+  const channelItems = channelRisks.map((item): NotificationActionQueueItem => ({
+    key: `channel:${item.configId}`,
+    source: 'channel-config',
+    priority: resolveNotificationChannelActionPriority(item),
+    suggestedAction: resolveNotificationChannelSuggestedAction(item),
+    reason: resolveNotificationChannelActionReason(item),
+    configId: item.configId,
+    name: item.name,
+    channel: item.channel,
+    provider: item.provider,
+    providerType: item.providerType,
+    adapter: item.adapter,
+    status: item.status,
+    reasons: item.reasons,
+    enabled: item.enabled,
+    credentialRequired: item.credentialRequired,
+    hasCredentialRef: item.hasCredentialRef,
+    productionReady: item.readiness.productionReady,
+    total: 0,
+    planned: 0,
+    sent: 0,
+    skipped: 0,
+    failed: 0,
+    sentRate: 0,
+    failureRate: 0,
+    durationMs: emptyNotificationNumberStat(),
+    latestFailureReason: null,
+    latestFailureStatusCode: null,
+    latestFailureAt: null,
+  }))
+
+  const providerItems = providerHealth.map((item): NotificationActionQueueItem => ({
+    key: `provider:${item.provider}:${item.providerType ?? 'default'}:${item.adapter ?? 'default'}`,
+    source: 'delivery-health',
+    priority: resolveNotificationProviderActionPriority(item),
+    suggestedAction: resolveNotificationProviderSuggestedAction(item),
+    reason: resolveNotificationProviderActionReason(item),
+    configId: null,
+    name: null,
+    channel: item.channel,
+    provider: item.provider,
+    providerType: item.providerType,
+    adapter: item.adapter,
+    status: 'delivery-risk',
+    reasons: [resolveNotificationProviderActionReason(item)],
+    enabled: null,
+    credentialRequired: false,
+    hasCredentialRef: false,
+    productionReady: null,
+    total: item.total,
+    planned: item.planned,
+    sent: item.sent,
+    skipped: item.skipped,
+    failed: item.failed,
+    sentRate: item.sentRate,
+    failureRate: item.failureRate,
+    durationMs: item.durationMs,
+    latestFailureReason: item.latestFailureReason,
+    latestFailureStatusCode: item.latestFailureStatusCode,
+    latestFailureAt: item.latestFailureAt,
+  }))
+
+  return [...channelItems, ...providerItems]
+    .filter(item => item.priority !== 'low')
+    .sort((left, right) => rankNotificationActionQueuePriority(right.priority) - rankNotificationActionQueuePriority(left.priority)
+      || right.failed - left.failed
+      || right.skipped - left.skipped
+      || right.reasons.length - left.reasons.length
+      || right.total - left.total
+      || left.key.localeCompare(right.key))
+    .slice(0, topLimit)
+}
+
 function createNotificationChannelAnalytics(
   configs: PlatformGovernanceConfig[],
   topLimit: number,
@@ -1980,14 +2838,198 @@ function createNotificationChannelAnalytics(
     sendModeMissing: 0,
   })
 
+  const channelRisks = risks
+    .filter(item => item.status !== 'ok')
+    .sort((left, right) => notificationChannelStatusRank(right.status) - notificationChannelStatusRank(left.status) || right.reasons.length - left.reasons.length)
+    .slice(0, topLimit)
+
   return {
     channelSummary: summary,
     providerMix: createNotificationProviderMix(risks, topLimit),
-    channelRisks: risks
-      .filter(item => item.status !== 'ok')
-      .sort((left, right) => notificationChannelStatusRank(right.status) - notificationChannelStatusRank(left.status) || right.reasons.length - left.reasons.length)
-      .slice(0, topLimit),
+    channelRisks,
+    actionQueue: createNotificationActionQueue(channelRisks, [], topLimit),
   }
+}
+
+function parseNotificationDeliveryStatus(action: string): NotificationDeliveryStatus | null {
+  const status = action.slice('notification.delivery.'.length)
+  if (status === 'planned' || status === 'sent' || status === 'skipped' || status === 'failed')
+    return status
+  return null
+}
+
+function readNotificationTestConfigId(event: PlatformGovernanceEvent): string | null {
+  const context = readEventMetadataObject(event, 'context')
+  if (!context)
+    return null
+
+  const channelTestId = typeof context.channelTestId === 'string' && context.channelTestId.trim()
+    ? context.channelTestId.trim()
+    : null
+  if (channelTestId)
+    return channelTestId
+
+  return context.test === true ? readEventMetadataString(event, 'configId') : null
+}
+
+function isNotificationTestDeliveryEvent(event: PlatformGovernanceEvent): boolean {
+  return Boolean(readNotificationTestConfigId(event))
+}
+
+function readNotificationDeliveryEvidenceStatus(event: PlatformGovernanceEvent): NotificationDeliveryStatus | null {
+  const status = parseNotificationDeliveryStatus(event.action)
+  if (!status || isNotificationTestDeliveryEvent(event))
+    return null
+  return status
+}
+
+function createNotificationTestEvidence(
+  deliveryEvents: PlatformGovernanceEvent[],
+  topLimit: number,
+): NotificationTestEvidenceItem[] {
+  const buckets = new Map<string, NotificationTestEvidenceItem & { actors: Set<string>, latestTime: number }>()
+
+  for (const event of deliveryEvents) {
+    const status = parseNotificationDeliveryStatus(event.action)
+    const configId = readNotificationTestConfigId(event)
+    if (!status || !configId)
+      continue
+
+    const notificationAction = readEventMetadataString(event, 'notificationAction')
+    const key = `${configId}:${notificationAction ?? 'unknown'}`
+    const occurredTime = Date.parse(event.occurredAt)
+    const latestTime = Number.isFinite(occurredTime) ? occurredTime : 0
+    const item = buckets.get(key) ?? {
+      key,
+      configId,
+      configName: readEventMetadataString(event, 'configName'),
+      notificationAction,
+      channel: event.channel,
+      provider: readEventMetadataString(event, 'provider'),
+      providerType: readEventMetadataString(event, 'providerType'),
+      adapter: readEventMetadataString(event, 'adapter'),
+      status,
+      reason: readEventMetadataString(event, 'reason'),
+      durationMs: readEventMetadataNumber(event, 'durationMs'),
+      statusCode: readEventMetadataNumber(event, 'statusCode'),
+      latestAt: event.occurredAt,
+      latestTime,
+      events: 0,
+      planned: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      uniqueActors: 0,
+      actors: new Set<string>(),
+    }
+
+    item.events += 1
+    item[status] += 1
+    if (latestTime >= item.latestTime) {
+      item.configName = readEventMetadataString(event, 'configName') ?? item.configName
+      item.notificationAction = notificationAction ?? item.notificationAction
+      item.channel = event.channel
+      item.provider = readEventMetadataString(event, 'provider')
+      item.providerType = readEventMetadataString(event, 'providerType')
+      item.adapter = readEventMetadataString(event, 'adapter')
+      item.status = status
+      item.reason = readEventMetadataString(event, 'reason')
+      item.durationMs = readEventMetadataNumber(event, 'durationMs')
+      item.statusCode = readEventMetadataNumber(event, 'statusCode')
+      item.latestAt = event.occurredAt
+      item.latestTime = latestTime
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    buckets.set(key, item)
+  }
+
+  return Array.from(buckets.values())
+    .map(({ actors, latestTime: _latestTime, ...item }) => ({
+      ...item,
+      uniqueActors: actors.size,
+    }))
+    .sort((left, right) => right.latestAt.localeCompare(left.latestAt) || right.failed - left.failed || right.sent - left.sent || right.events - left.events)
+    .slice(0, topLimit)
+}
+
+function createNotificationDeliveryEvidence(
+  deliveryEvents: PlatformGovernanceEvent[],
+  topLimit: number,
+): NotificationDeliveryEvidenceItem[] {
+  const buckets = new Map<string, NotificationDeliveryEvidenceItem & { actors: Set<string>, latestTime: number }>()
+
+  for (const event of deliveryEvents) {
+    const status = readNotificationDeliveryEvidenceStatus(event)
+    if (!status)
+      continue
+
+    const configId = readEventMetadataString(event, 'configId')
+    const notificationAction = readEventMetadataString(event, 'notificationAction')
+    const provider = readEventMetadataString(event, 'provider') ?? event.channel ?? 'unknown'
+    const providerType = readEventMetadataString(event, 'providerType')
+    const adapter = readEventMetadataString(event, 'adapter')
+    const resourceType = event.resourceType
+    const key = `${configId ?? provider}:${notificationAction ?? 'unknown'}:${resourceType ?? 'unknown'}`
+    const occurredTime = Date.parse(event.occurredAt)
+    const latestTime = Number.isFinite(occurredTime) ? occurredTime : 0
+    const item = buckets.get(key) ?? {
+      key,
+      configId,
+      configName: readEventMetadataString(event, 'configName'),
+      notificationAction,
+      resourceType,
+      channel: event.channel,
+      provider,
+      providerType,
+      adapter,
+      status,
+      reason: readEventMetadataString(event, 'reason'),
+      durationMs: readEventMetadataNumber(event, 'durationMs'),
+      statusCode: readEventMetadataNumber(event, 'statusCode'),
+      latestAt: event.occurredAt,
+      latestTime,
+      events: 0,
+      planned: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      uniqueActors: 0,
+      actors: new Set<string>(),
+    }
+
+    item.events += 1
+    item[status] += 1
+    if (latestTime >= item.latestTime) {
+      item.configId = configId ?? item.configId
+      item.configName = readEventMetadataString(event, 'configName') ?? item.configName
+      item.notificationAction = notificationAction ?? item.notificationAction
+      item.resourceType = resourceType ?? item.resourceType
+      item.channel = event.channel
+      item.provider = provider
+      item.providerType = providerType
+      item.adapter = adapter
+      item.status = status
+      item.reason = readEventMetadataString(event, 'reason')
+      item.durationMs = readEventMetadataNumber(event, 'durationMs')
+      item.statusCode = readEventMetadataNumber(event, 'statusCode')
+      item.latestAt = event.occurredAt
+      item.latestTime = latestTime
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    buckets.set(key, item)
+  }
+
+  return Array.from(buckets.values())
+    .map(({ actors, latestTime: _latestTime, ...item }) => ({
+      ...item,
+      uniqueActors: actors.size,
+    }))
+    .sort((left, right) => right.latestAt.localeCompare(left.latestAt) || right.sent - left.sent || right.failed - left.failed || right.events - left.events)
+    .slice(0, topLimit)
 }
 
 function createNotificationAnalytics(
@@ -2139,10 +3181,21 @@ function createNotificationAnalytics(
   }
 
   const total = deliveryEvents.length
+  const channelAnalytics = createNotificationChannelAnalytics(configs, topLimit, event)
+  const mappedProviderHealth: NotificationProviderHealthItem[] = Array.from(providerHealth.values())
+    .map(item => ({
+      ...item,
+      sentRate: item.total ? Math.round((item.sent / item.total) * 10000) / 100 : 0,
+      failureRate: item.total ? Math.round((item.failed / item.total) * 10000) / 100 : 0,
+      durationMs: mapNumberStat(item.durationMs),
+    }))
+    .sort((a, b) => b.failed - a.failed || b.failureRate - a.failureRate || b.total - a.total)
+    .slice(0, topLimit)
 
   return {
     ...createScopedAnalytics(events, topLimit),
-    ...createNotificationChannelAnalytics(configs, topLimit, event),
+    ...channelAnalytics,
+    actionQueue: createNotificationActionQueue(channelAnalytics.channelRisks, mappedProviderHealth, topLimit),
     deliveries: {
       total,
       planned,
@@ -2170,17 +3223,11 @@ function createNotificationAnalytics(
         failed: item.failed,
         quantity: item.quantity,
         uniqueActors: item.actors.size,
-      }))
+    }))
       .sort((a, b) => a.date.localeCompare(b.date)),
-    providerHealth: Array.from(providerHealth.values())
-      .map(item => ({
-        ...item,
-        sentRate: item.total ? Math.round((item.sent / item.total) * 10000) / 100 : 0,
-        failureRate: item.total ? Math.round((item.failed / item.total) * 10000) / 100 : 0,
-        durationMs: mapNumberStat(item.durationMs),
-      }))
-      .sort((a, b) => b.failed - a.failed || b.failureRate - a.failureRate || b.total - a.total)
-      .slice(0, topLimit),
+    providerHealth: mappedProviderHealth,
+    deliveryEvidence: createNotificationDeliveryEvidence(deliveryEvents, topLimit),
+    testEvidence: createNotificationTestEvidence(deliveryEvents, topLimit),
     browserPushSubscriptions: {
       total: pushSubscriptionEvents.length,
       registered: pushRegistered,
@@ -2495,6 +3542,8 @@ function createSearchAnalytics(events: PlatformGovernanceEvent[], days: number, 
     growth: createGrowth(searchEvents, days),
     trend: createDailyTrend(searchEvents),
     heatmap: createTimeHeatmap(searchEvents),
+    timeHeatmap: createSearchTimeHeatmap(searchEvents, topLimit),
+    frequencyCohorts: createSearchFrequencyCohorts(searchEvents, topLimit),
     byQueryType: mapMetricBuckets(byQueryType, topLimit),
     byScene: mapMetricBuckets(byScene, topLimit),
     byInputType: mapMetricBuckets(byInputType, topLimit),
@@ -2591,10 +3640,287 @@ function readSearchLocalTimeSlot(event: PlatformGovernanceEvent): string {
     : localTimeSlotFromHour(localHour)
 }
 
+function readSearchLocalDayOfWeek(event: PlatformGovernanceEvent): number | null {
+  const localDayOfWeek = readEventMetadataNumber(event, 'localDayOfWeek')
+  if (typeof localDayOfWeek === 'number' && localDayOfWeek >= 0 && localDayOfWeek <= 6)
+    return Math.floor(localDayOfWeek)
+
+  const localWeekday = readEventMetadataNumber(event, 'localWeekday')
+  if (typeof localWeekday === 'number' && localWeekday >= 0 && localWeekday <= 6)
+    return Math.floor(localWeekday)
+
+  return null
+}
+
+function searchFrequencyCohort(searches: number): string {
+  if (searches <= 1)
+    return 'single-search'
+  if (searches <= 3)
+    return 'light-search'
+  if (searches <= 9)
+    return 'regular-search'
+  return 'power-search'
+}
+
+function searchFrequencyCohortRank(cohort: string): number {
+  if (cohort === 'power-search')
+    return 4
+  if (cohort === 'regular-search')
+    return 3
+  if (cohort === 'light-search')
+    return 2
+  return 1
+}
+
+function mergeMetricBuckets(
+  target: Map<string, ReturnType<typeof createMetricBucket>>,
+  source: Map<string, ReturnType<typeof createMetricBucket>>,
+): void {
+  for (const [key, sourceBucket] of source.entries()) {
+    const targetBucket = target.get(key) ?? createMetricBucket()
+    targetBucket.events += sourceBucket.events
+    targetBucket.quantity += sourceBucket.quantity
+    for (const actor of sourceBucket.actors)
+      targetBucket.actors.add(actor)
+    target.set(key, targetBucket)
+  }
+}
+
+function createSearchFrequencyCohorts(events: PlatformGovernanceEvent[], topLimit: number) {
+  const users = new Map<string, {
+    searches: number
+    quantity: number
+    selected: number
+    zeroResult: number
+    problemSearches: number
+    activeDays: Set<string>
+    localTimeSlots: Map<string, ReturnType<typeof createMetricBucket>>
+    userPreferenceModes: Map<string, ReturnType<typeof createMetricBucket>>
+    contextAppCategories: Map<string, ReturnType<typeof createMetricBucket>>
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+
+  for (const event of events) {
+    const actor = readEventActor(event)
+    if (!actor)
+      continue
+
+    const item = users.get(actor) ?? {
+      searches: 0,
+      quantity: 0,
+      selected: 0,
+      zeroResult: 0,
+      problemSearches: 0,
+      activeDays: new Set<string>(),
+      localTimeSlots: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      userPreferenceModes: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      contextAppCategories: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+
+    item.searches += 1
+    item.quantity += event.quantity
+    item.activeDays.add(event.occurredAt.slice(0, 10))
+
+    const resultCount = readEventMetadataNumber(event, 'searchResultCount')
+    const providerErrorCount = readEventMetadataNumber(event, 'providerErrorCount') ?? 0
+    const providerTimeoutCount = readEventMetadataNumber(event, 'providerTimeoutCount') ?? 0
+    if (isSearchSelected(event))
+      item.selected += 1
+    if (resultCount === 0)
+      item.zeroResult += 1
+    if (resultCount === 0 || providerErrorCount > 0 || providerTimeoutCount > 0)
+      item.problemSearches += 1
+
+    addMetricBucket(item.localTimeSlots, readSearchLocalTimeSlot(event), event)
+    addMetricBucket(item.userPreferenceModes, readEventMetadataString(event, 'userPreferenceMode'), event)
+    addMetricBucket(item.contextAppCategories, readEventMetadataString(event, 'contextAppCategory'), event)
+    addStringArrayBuckets(item.plugins, event.metadata?.pluginIds, event)
+    const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
+    if (selectedPluginId)
+      addMetricBucket(item.selectedPlugins, selectedPluginId, event)
+
+    users.set(actor, item)
+  }
+
+  const cohorts = new Map<string, {
+    cohort: string
+    users: number
+    searches: number
+    quantity: number
+    selected: number
+    zeroResult: number
+    problemSearches: number
+    activeDays: number
+    localTimeSlots: Map<string, ReturnType<typeof createMetricBucket>>
+    userPreferenceModes: Map<string, ReturnType<typeof createMetricBucket>>
+    contextAppCategories: Map<string, ReturnType<typeof createMetricBucket>>
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+
+  for (const user of users.values()) {
+    const cohort = searchFrequencyCohort(user.searches)
+    const item = cohorts.get(cohort) ?? {
+      cohort,
+      users: 0,
+      searches: 0,
+      quantity: 0,
+      selected: 0,
+      zeroResult: 0,
+      problemSearches: 0,
+      activeDays: 0,
+      localTimeSlots: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      userPreferenceModes: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      contextAppCategories: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+
+    item.users += 1
+    item.searches += user.searches
+    item.quantity += user.quantity
+    item.selected += user.selected
+    item.zeroResult += user.zeroResult
+    item.problemSearches += user.problemSearches
+    item.activeDays += user.activeDays.size
+    mergeMetricBuckets(item.localTimeSlots, user.localTimeSlots)
+    mergeMetricBuckets(item.userPreferenceModes, user.userPreferenceModes)
+    mergeMetricBuckets(item.contextAppCategories, user.contextAppCategories)
+    mergeMetricBuckets(item.plugins, user.plugins)
+    mergeMetricBuckets(item.selectedPlugins, user.selectedPlugins)
+    cohorts.set(cohort, item)
+  }
+
+  return Array.from(cohorts.values())
+    .map(item => ({
+      cohort: item.cohort,
+      users: item.users,
+      searches: item.searches,
+      quantity: item.quantity,
+      activeDays: item.activeDays,
+      avgSearchesPerUser: Math.round((item.searches / Math.max(item.users, 1)) * 100) / 100,
+      avgActiveDaysPerUser: Math.round((item.activeDays / Math.max(item.users, 1)) * 100) / 100,
+      selectionRate: percentage(item.selected, item.searches),
+      zeroResultRate: percentage(item.zeroResult, item.searches),
+      problemRate: percentage(item.problemSearches, item.searches),
+      topLocalTimeSlots: mapMetricBuckets(item.localTimeSlots, topLimit),
+      topUserPreferenceModes: mapMetricBuckets(item.userPreferenceModes, topLimit),
+      topContextAppCategories: mapMetricBuckets(item.contextAppCategories, topLimit),
+      topPlugins: mapMetricBuckets(item.plugins, topLimit),
+      selectedPlugins: mapMetricBuckets(item.selectedPlugins, topLimit),
+    }))
+    .sort((left, right) => searchFrequencyCohortRank(right.cohort) - searchFrequencyCohortRank(left.cohort)
+      || right.searches - left.searches
+      || left.cohort.localeCompare(right.cohort))
+    .slice(0, topLimit)
+}
+
 function isSearchSelected(event: PlatformGovernanceEvent): boolean {
   return readEventMetadataBoolean(event, 'selected') === true
     || readEventMetadataNumber(event, 'selectedRank') != null
     || Boolean(readEventMetadataString(event, 'selectedPluginId') || readEventMetadataString(event, 'selectedProvider'))
+}
+
+function createSearchTimeHeatmap(events: PlatformGovernanceEvent[], topLimit: number) {
+  const buckets = new Map<string, {
+    dayOfWeek: number
+    hour: string
+    timeSlot: string
+    events: number
+    quantity: number
+    selected: number
+    zeroResult: number
+    providerProblem: number
+    providerErrors: number
+    providerTimeouts: number
+    actors: Set<string>
+    contextAppCategories: Map<string, ReturnType<typeof createMetricBucket>>
+    contextSources: Map<string, ReturnType<typeof createMetricBucket>>
+    plugins: Map<string, ReturnType<typeof createMetricBucket>>
+    selectedPlugins: Map<string, ReturnType<typeof createMetricBucket>>
+  }>()
+
+  for (const event of events) {
+    const localHour = normalizeLocalHour(readEventMetadataNumber(event, 'localHour') ?? Number.NaN)
+    const dayOfWeek = readSearchLocalDayOfWeek(event)
+    if (localHour == null || dayOfWeek == null)
+      continue
+
+    const hour = localHour.toString().padStart(2, '0')
+    const key = `${dayOfWeek}:${hour}`
+    const item = buckets.get(key) ?? {
+      dayOfWeek,
+      hour,
+      timeSlot: localTimeSlotFromHour(localHour),
+      events: 0,
+      quantity: 0,
+      selected: 0,
+      zeroResult: 0,
+      providerProblem: 0,
+      providerErrors: 0,
+      providerTimeouts: 0,
+      actors: new Set<string>(),
+      contextAppCategories: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      contextSources: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      plugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+      selectedPlugins: new Map<string, ReturnType<typeof createMetricBucket>>(),
+    }
+
+    item.events += 1
+    item.quantity += event.quantity
+
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+
+    const resultCount = readEventMetadataNumber(event, 'searchResultCount')
+    const providerErrorCount = readEventMetadataNumber(event, 'providerErrorCount') ?? 0
+    const providerTimeoutCount = readEventMetadataNumber(event, 'providerTimeoutCount') ?? 0
+    const hasProviderProblem = providerErrorCount > 0 || providerTimeoutCount > 0
+    if (isSearchSelected(event))
+      item.selected += 1
+    if (resultCount === 0)
+      item.zeroResult += 1
+    if (resultCount === 0 || hasProviderProblem)
+      item.providerProblem += 1
+    item.providerErrors += providerErrorCount
+    item.providerTimeouts += providerTimeoutCount
+
+    addMetricBucket(item.contextAppCategories, readEventMetadataString(event, 'contextAppCategory'), event)
+    addMetricBucket(item.contextSources, readEventMetadataString(event, 'contextSource'), event)
+    addStringArrayBuckets(item.plugins, event.metadata?.pluginIds, event)
+    const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
+    if (selectedPluginId)
+      addMetricBucket(item.selectedPlugins, selectedPluginId, event)
+
+    buckets.set(key, item)
+  }
+
+  return Array.from(buckets.values())
+    .map(item => ({
+      dayOfWeek: item.dayOfWeek,
+      hour: item.hour,
+      timeSlot: item.timeSlot,
+      events: item.events,
+      quantity: item.quantity,
+      selected: item.selected,
+      selectionRate: percentage(item.selected, item.events),
+      zeroResult: item.zeroResult,
+      zeroResultRate: percentage(item.zeroResult, item.events),
+      providerProblem: item.providerProblem,
+      problemRate: percentage(item.providerProblem, item.events),
+      providerErrors: item.providerErrors,
+      providerTimeouts: item.providerTimeouts,
+      uniqueActors: item.actors.size,
+      topContextAppCategories: mapMetricBuckets(item.contextAppCategories, topLimit),
+      topContextSources: mapMetricBuckets(item.contextSources, topLimit),
+      topPlugins: mapMetricBuckets(item.plugins, topLimit),
+      selectedPlugins: mapMetricBuckets(item.selectedPlugins, topLimit),
+    }))
+    .sort((left, right) => left.dayOfWeek - right.dayOfWeek || left.hour.localeCompare(right.hour))
 }
 
 function createSearchJourneyAnalytics(events: PlatformGovernanceEvent[], topLimit: number) {
@@ -2732,7 +4058,7 @@ function createSearchJourneyAnalytics(events: PlatformGovernanceEvent[], topLimi
 
     const pluginIds = event.metadata?.pluginIds
     if (Array.isArray(pluginIds)) {
-      for (const pluginId of new Set(pluginIds.filter((value): value is string => typeof value === 'string' && value.trim())))
+      for (const pluginId of new Set(pluginIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)))
         addMetricBucket(item.plugins, pluginId, event)
     }
     const selectedPluginId = readEventMetadataString(event, 'selectedPluginId')
@@ -3062,6 +4388,16 @@ function createSinglePluginAnalytics(pluginId: string, pluginEvents: PlatformGov
     addNumberStat(packageSize, readEventMetadataNumber(event, 'packageSize'))
   }
 
+  const conversion = {
+    installRate: downloads > 0 ? Math.round((installs / downloads) * 10000) / 100 : 0,
+    invocationRate: installs > 0 ? Math.round((invocations / installs) * 10000) / 100 : 0,
+    invocationsPerActor: actors.size > 0 ? Math.round((invocations / actors.size) * 100) / 100 : 0,
+  }
+  const invocationHealth = createPluginInvocationHealth(scoped, topLimit)
+  const retention = createPluginRetentionAnalytics(scoped, topLimit)
+  const trend = createPluginDailyTrend(scoped)
+  const byCountryBuckets = mapMetricBuckets(byCountry, topLimit)
+
   return {
     days,
     pluginId,
@@ -3070,26 +4406,33 @@ function createSinglePluginAnalytics(pluginId: string, pluginEvents: PlatformGov
     invocations,
     events: scoped.length,
     uniqueActors: actors.size,
-    conversion: {
-      installRate: downloads > 0 ? Math.round((installs / downloads) * 10000) / 100 : 0,
-      invocationRate: installs > 0 ? Math.round((invocations / installs) * 10000) / 100 : 0,
-      invocationsPerActor: actors.size > 0 ? Math.round((invocations / actors.size) * 100) / 100 : 0,
-    },
+    conversion,
+    actionQueue: createPluginOwnerActionQueue({
+      downloads,
+      installs,
+      invocations,
+      uniqueActors: actors.size,
+      conversion,
+      invocationHealth,
+      retention,
+      trend,
+      byCountry: byCountryBuckets,
+    }),
     conversionTrend: createPluginConversionTrend(scoped),
     actionTrend: createPluginActionTrend(scoped, topLimit),
     locationTrend: createPluginLocationTrend(scoped, topLimit),
     channelTrend: createPluginDimensionTrend(scoped, topLimit, 'channel'),
     versionTrend: createPluginDimensionTrend(scoped, topLimit, 'version'),
-    invocationHealth: createPluginInvocationHealth(scoped, topLimit),
-    retention: createPluginRetentionAnalytics(scoped, topLimit),
+    invocationHealth,
+    retention,
     usageTiming: createPluginUsageTiming(scoped, topLimit),
     growth: createGrowth(scoped, days),
-    trend: createPluginDailyTrend(scoped),
+    trend,
     installTrend: createPluginDailyTrend(scoped.filter(event => event.action === 'install')),
     heatmap: createTimeHeatmap(scoped),
     byAction: mapMetricBuckets(byAction, topLimit),
     byChannel: mapMetricBuckets(byChannel, topLimit),
-    byCountry: mapMetricBuckets(byCountry, topLimit),
+    byCountry: byCountryBuckets,
     byRegion: mapMetricBuckets(byRegion, topLimit),
     byVersion: mapMetricBuckets(byVersion, topLimit),
     byArtifactType: mapMetricBuckets(byArtifactType, topLimit),
@@ -3297,6 +4640,207 @@ function mapUploadFailureMatrix(
     .slice(0, topLimit)
 }
 
+function rankUploadActionQueuePriority(priority: UploadActionQueuePriority): number {
+  switch (priority) {
+    case 'critical':
+      return 4
+    case 'high':
+      return 3
+    case 'medium':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function rankUploadActionQueueCalibrationStatus(status: UploadFailureCalibrationStatus | 'unknown'): number {
+  switch (status) {
+    case 'verified':
+      return 4
+    case 'sampled':
+      return 3
+    case 'needs-calibration':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function mergeUploadActionQueueCalibrationStatus(
+  current: UploadFailureCalibrationStatus | 'unknown',
+  next: UploadFailureCalibrationStatus | 'unknown',
+): UploadFailureCalibrationStatus | 'unknown' {
+  return rankUploadActionQueueCalibrationStatus(next) > rankUploadActionQueueCalibrationStatus(current) ? next : current
+}
+
+function resolveUploadActionQueuePriority(item: Pick<UploadActionQueueItem, 'stuckAttempts' | 'exhaustedRetries' | 'failedAttempts' | 'scheduledRetries' | 'sampleCount'>): UploadActionQueuePriority {
+  if (item.stuckAttempts > 0 || item.exhaustedRetries > 0)
+    return 'critical'
+  if (item.failedAttempts >= 2 || item.scheduledRetries > 0)
+    return 'high'
+  if (item.failedAttempts > 0)
+    return 'medium'
+  return item.sampleCount > 0 ? 'low' : 'medium'
+}
+
+function resolveUploadProblemAttemptDisposition(attempt: UploadProblemAttempt): UploadFailureDisposition {
+  if (attempt.retryable === true && attempt.maxRetries != null && attempt.retryCount != null && attempt.retryCount >= attempt.maxRetries)
+    return 'retry-exhausted'
+  if (attempt.retryable === true && attempt.nextRetryDelayMs != null && attempt.nextRetryDelayMs > 0)
+    return 'retry-scheduled'
+  if (attempt.retryable === true)
+    return 'retryable'
+  if (attempt.retryable === false)
+    return 'not-retryable'
+  return 'unknown'
+}
+
+function createUploadActionQueue(
+  failureMatrix: UploadFailureMatrixItem[],
+  problemAttempts: UploadProblemAttempt[],
+  topLimit: number,
+): UploadActionQueueItem[] {
+  const queue = new Map<string, UploadActionQueueItem>()
+
+  const upsert = (key: string, input: Omit<UploadActionQueueItem, 'key' | 'priority'>): void => {
+    const item = queue.get(key) ?? {
+      key,
+      priority: 'medium',
+      suggestedAction: input.suggestedAction,
+      reason: input.reason,
+      resourceType: input.resourceType,
+      surface: input.surface,
+      storageChannel: input.storageChannel,
+      storageProvider: input.storageProvider,
+      statusCode: input.statusCode,
+      events: 0,
+      failedAttempts: 0,
+      stuckAttempts: 0,
+      retryableFailures: 0,
+      scheduledRetries: 0,
+      exhaustedRetries: 0,
+      sampleCount: 0,
+      calibrationStatus: 'unknown',
+      sampleSource: 'unknown',
+      latestAt: input.latestAt,
+      oldestAgeMs: null,
+      nextRetryDelayMs: null,
+      evidenceAttemptHashes: [],
+      evidenceResourceHashes: [],
+    }
+
+    item.events += input.events
+    item.failedAttempts += input.failedAttempts
+    item.stuckAttempts += input.stuckAttempts
+    item.retryableFailures += input.retryableFailures
+    item.scheduledRetries += input.scheduledRetries
+    item.exhaustedRetries += input.exhaustedRetries
+    item.sampleCount += input.sampleCount
+    item.latestAt = input.latestAt.localeCompare(item.latestAt) > 0 ? input.latestAt : item.latestAt
+    item.oldestAgeMs = item.oldestAgeMs == null && input.oldestAgeMs == null
+      ? null
+      : Math.max(item.oldestAgeMs ?? 0, input.oldestAgeMs ?? 0)
+    item.nextRetryDelayMs = item.nextRetryDelayMs == null && input.nextRetryDelayMs == null
+      ? null
+      : Math.max(item.nextRetryDelayMs ?? 0, input.nextRetryDelayMs ?? 0)
+    item.calibrationStatus = mergeUploadActionQueueCalibrationStatus(item.calibrationStatus, input.calibrationStatus)
+    item.sampleSource = mergeUploadFailureSampleSource(item.sampleSource, input.sampleSource)
+    item.evidenceAttemptHashes = Array.from(new Set([...item.evidenceAttemptHashes, ...input.evidenceAttemptHashes])).slice(0, 3)
+    item.evidenceResourceHashes = Array.from(new Set([...item.evidenceResourceHashes, ...input.evidenceResourceHashes])).slice(0, 3)
+    item.priority = resolveUploadActionQueuePriority(item)
+    queue.set(key, item)
+  }
+
+  for (const item of failureMatrix) {
+    const key = [
+      item.suggestedAction,
+      item.resourceType,
+      item.surface ?? 'unknown',
+      item.storageChannel ?? 'unknown',
+      item.storageProvider ?? 'unknown',
+      item.reason,
+      item.statusCode == null ? 'none' : String(item.statusCode),
+    ].join('|')
+    upsert(key, {
+      suggestedAction: item.suggestedAction,
+      reason: item.reason,
+      resourceType: item.resourceType,
+      surface: item.surface,
+      storageChannel: item.storageChannel,
+      storageProvider: item.storageProvider,
+      statusCode: item.statusCode,
+      events: item.events,
+      failedAttempts: item.events,
+      stuckAttempts: 0,
+      retryableFailures: item.retryable,
+      scheduledRetries: item.scheduled,
+      exhaustedRetries: item.exhausted,
+      sampleCount: item.sampleCount,
+      calibrationStatus: item.calibrationStatus,
+      sampleSource: item.sampleSource,
+      latestAt: item.latestAt,
+      oldestAgeMs: null,
+      nextRetryDelayMs: item.nextRetryDelayMs,
+      evidenceAttemptHashes: [],
+      evidenceResourceHashes: [],
+    })
+  }
+
+  for (const attempt of problemAttempts) {
+    const disposition = resolveUploadProblemAttemptDisposition(attempt)
+    const suggestedAction: UploadActionQueueSuggestedAction = attempt.status === 'stuck'
+      ? 'stuck-attempt-check'
+      : resolveUploadFailureSuggestedAction(
+          attempt.reason ?? attempt.contentType ?? attempt.status,
+          disposition,
+          attempt.statusCode,
+          null,
+          attempt.storageChannel,
+          attempt.storageProvider,
+        )
+    const key = [
+      suggestedAction,
+      attempt.resourceType,
+      attempt.surface ?? 'unknown',
+      attempt.storageChannel ?? 'unknown',
+      attempt.storageProvider ?? 'unknown',
+      attempt.reason ?? attempt.contentType ?? attempt.status,
+      attempt.statusCode == null ? 'none' : String(attempt.statusCode),
+    ].join('|')
+    const hasFailureAggregate = attempt.status === 'failed' && queue.has(key)
+    upsert(key, {
+      suggestedAction,
+      reason: attempt.reason ?? attempt.contentType ?? attempt.status,
+      resourceType: attempt.resourceType,
+      surface: attempt.surface,
+      storageChannel: attempt.storageChannel,
+      storageProvider: attempt.storageProvider,
+      statusCode: attempt.statusCode,
+      events: hasFailureAggregate ? 0 : 1,
+      failedAttempts: hasFailureAggregate ? 0 : attempt.status === 'failed' ? 1 : 0,
+      stuckAttempts: attempt.status === 'stuck' ? 1 : 0,
+      retryableFailures: hasFailureAggregate ? 0 : attempt.retryable ? 1 : 0,
+      scheduledRetries: hasFailureAggregate ? 0 : disposition === 'retry-scheduled' ? 1 : 0,
+      exhaustedRetries: hasFailureAggregate ? 0 : disposition === 'retry-exhausted' ? 1 : 0,
+      sampleCount: 0,
+      calibrationStatus: 'unknown',
+      sampleSource: 'unknown',
+      latestAt: attempt.latestAt,
+      oldestAgeMs: attempt.ageMs,
+      nextRetryDelayMs: attempt.nextRetryDelayMs,
+      evidenceAttemptHashes: [attempt.attemptHash],
+      evidenceResourceHashes: [attempt.resourceHash],
+    })
+  }
+
+  return Array.from(queue.values())
+    .sort((left, right) => rankUploadActionQueuePriority(right.priority) - rankUploadActionQueuePriority(left.priority)
+      || (right.failedAttempts + right.stuckAttempts) - (left.failedAttempts + left.stuckAttempts)
+      || right.events - left.events
+      || right.latestAt.localeCompare(left.latestAt))
+    .slice(0, topLimit)
+}
+
 function uploadPipelineKey(item: UploadAttemptSummary): string {
   return [
     item.resourceType || 'unknown',
@@ -3391,6 +4935,245 @@ function createUploadPipelineSummary(
         || right.attempts - left.attempts
         || right.latestAt.localeCompare(left.latestAt)
     })
+    .slice(0, topLimit)
+}
+
+function createUploadRecoveredEvidence(
+  events: PlatformGovernanceEvent[],
+  topLimit: number,
+): UploadRecoveredEvidenceItem[] {
+  const items: UploadRecoveredEvidenceItem[] = []
+
+  for (const event of events) {
+    const recovered = event.action === 'resource.completed'
+      && (readEventMetadataBoolean(event, 'recovered') === true || readEventMetadataBoolean(event, 'recoveredRetry') === true)
+    if (!recovered)
+      continue
+
+    const attemptId = readEventMetadataString(event, 'attemptId') ?? `${event.resourceId ?? event.id}:${event.occurredAt}`
+    const resourceId = event.resourceId ?? attemptId
+    items.push({
+      attemptHash: hashIdentifier(attemptId)?.slice(0, 16) ?? 'unknown',
+      resourceHash: hashIdentifier(resourceId)?.slice(0, 16) ?? 'unknown',
+      resourceType: readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? 'unknown',
+      surface: readEventMetadataString(event, 'surface'),
+      storageChannel: readEventMetadataString(event, 'storageChannel'),
+      storageProvider: readEventMetadataString(event, 'storageProvider'),
+      contentType: readEventMetadataString(event, 'contentType') ?? event.channel,
+      durationMs: readEventMetadataNumber(event, 'durationMs'),
+      size: readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null),
+      retryCount: readEventMetadataNumber(event, 'retryCount'),
+      maxRetries: readEventMetadataNumber(event, 'maxRetries'),
+      attempts: readEventMetadataNumberAny(event, ['attempts', 'storageAttempts']),
+      storageOperation: readEventMetadataString(event, 'storageOperation'),
+      storageStatusCode: readEventMetadataNumber(event, 'storageStatusCode'),
+      latestAt: event.occurredAt,
+    })
+  }
+
+  return items
+    .sort((left, right) => right.latestAt.localeCompare(left.latestAt) || (right.retryCount ?? 0) - (left.retryCount ?? 0))
+    .slice(0, topLimit)
+}
+
+function isSceneAdapterUploadEvent(event: PlatformGovernanceEvent): boolean {
+  return event.scope === 'upload'
+    && readEventMetadataString(event, 'surface') === 'scene-adapter-upload'
+}
+
+function createSceneAssetUploadHealth(
+  attempts: Iterable<UploadAttemptSummary>,
+  events: PlatformGovernanceEvent[],
+  topLimit: number,
+): UploadSceneAssetHealthItem[] {
+  const sceneAttempts = new Map<string, {
+    attemptId: string
+    sceneId: string | null
+    capability: string | null
+    providerId: string | null
+    assetKind: string | null
+    resourceType: string
+    storageChannel: string | null
+    storageProvider: string | null
+    surface: string
+    started: boolean
+    completed: boolean
+    failed: boolean
+    bytes: number
+    durationMs: number | null
+    size: number | null
+    latestAt: string
+    failureReasons: Map<string, number>
+    statusCodes: Map<string, number>
+  }>()
+
+  const ensureAttempt = (attemptId: string, event: PlatformGovernanceEvent) => {
+    const item = sceneAttempts.get(attemptId) ?? {
+      attemptId,
+      sceneId: null,
+      capability: null,
+      providerId: null,
+      assetKind: null,
+      resourceType: readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? 'unknown',
+      storageChannel: null,
+      storageProvider: null,
+      surface: 'scene-adapter-upload',
+      started: false,
+      completed: false,
+      failed: false,
+      bytes: 0,
+      durationMs: null,
+      size: null,
+      latestAt: event.occurredAt,
+      failureReasons: new Map<string, number>(),
+      statusCodes: new Map<string, number>(),
+    }
+
+    item.sceneId ??= readEventMetadataString(event, 'sceneId')
+    item.capability ??= readEventMetadataString(event, 'capability')
+    item.providerId ??= readEventMetadataString(event, 'providerId')
+    item.assetKind ??= readEventMetadataString(event, 'assetKind')
+    item.storageChannel ??= readEventMetadataString(event, 'storageChannel')
+    item.storageProvider ??= readEventMetadataString(event, 'storageProvider')
+    item.resourceType = readEventMetadataString(event, 'resourceType') ?? event.resourceType ?? item.resourceType
+    item.started = item.started || event.action === 'resource.started'
+    item.completed = item.completed || event.action === 'resource.completed'
+    item.failed = item.failed || event.action === 'resource.failed'
+    if (event.action === 'resource.completed' && event.unit === 'byte')
+      item.bytes += event.quantity
+    item.durationMs ??= readEventMetadataNumber(event, 'durationMs')
+    item.size ??= readEventMetadataNumber(event, 'size') ?? (event.unit === 'byte' ? event.quantity : null)
+    if (event.action === 'resource.failed') {
+      const reason = readEventMetadataString(event, 'reason') ?? 'unknown'
+      item.failureReasons.set(reason, (item.failureReasons.get(reason) ?? 0) + 1)
+      const statusCode = readEventMetadataNumber(event, 'statusCode')
+      if (typeof statusCode === 'number') {
+        const statusKey = String(Math.round(statusCode))
+        item.statusCodes.set(statusKey, (item.statusCodes.get(statusKey) ?? 0) + 1)
+      }
+    }
+    if (event.occurredAt.localeCompare(item.latestAt) > 0)
+      item.latestAt = event.occurredAt
+    sceneAttempts.set(attemptId, item)
+    return item
+  }
+
+  for (const event of events) {
+    if (!isSceneAdapterUploadEvent(event))
+      continue
+    const attemptId = readEventMetadataString(event, 'attemptId')
+    if (attemptId)
+      ensureAttempt(attemptId, event)
+  }
+
+  for (const attempt of attempts) {
+    const item = sceneAttempts.get(attempt.attemptId)
+    if (!item)
+      continue
+    item.storageChannel ??= attempt.storageChannel
+    item.storageProvider ??= attempt.storageProvider
+    item.resourceType = attempt.resourceType || item.resourceType
+    item.durationMs ??= attempt.durationMs
+    item.size ??= attempt.size
+  }
+
+  const buckets = new Map<string, {
+    key: string
+    sceneId: string | null
+    capability: string | null
+    providerId: string | null
+    assetKind: string | null
+    resourceType: string
+    storageChannel: string | null
+    storageProvider: string | null
+    surface: string
+    started: number
+    completed: number
+    failed: number
+    bytes: number
+    durationMs: ReturnType<typeof createNumberStats>
+    size: ReturnType<typeof createNumberStats>
+    latestAt: string
+    failureReasons: Map<string, number>
+    statusCodes: Map<string, number>
+  }>()
+
+  for (const attempt of sceneAttempts.values()) {
+    const key = [
+      attempt.sceneId ?? 'unknown',
+      attempt.capability ?? 'unknown',
+      attempt.providerId ?? 'unknown',
+      attempt.assetKind ?? 'unknown',
+      attempt.resourceType,
+      attempt.storageChannel ?? 'unknown',
+      attempt.storageProvider ?? 'unknown',
+    ].join(':')
+    const bucket = buckets.get(key) ?? {
+      key,
+      sceneId: attempt.sceneId,
+      capability: attempt.capability,
+      providerId: attempt.providerId,
+      assetKind: attempt.assetKind,
+      resourceType: attempt.resourceType,
+      storageChannel: attempt.storageChannel,
+      storageProvider: attempt.storageProvider,
+      surface: attempt.surface,
+      started: 0,
+      completed: 0,
+      failed: 0,
+      bytes: 0,
+      durationMs: createNumberStats(),
+      size: createNumberStats(),
+      latestAt: attempt.latestAt,
+      failureReasons: new Map<string, number>(),
+      statusCodes: new Map<string, number>(),
+    }
+    bucket.started += attempt.started ? 1 : 0
+    bucket.completed += attempt.completed ? 1 : 0
+    bucket.failed += attempt.failed ? 1 : 0
+    bucket.bytes += attempt.bytes
+    addNumberStat(bucket.durationMs, attempt.durationMs)
+    addNumberStat(bucket.size, attempt.size)
+    if (attempt.latestAt.localeCompare(bucket.latestAt) > 0)
+      bucket.latestAt = attempt.latestAt
+    for (const [reason, count] of attempt.failureReasons.entries())
+      bucket.failureReasons.set(reason, (bucket.failureReasons.get(reason) ?? 0) + count)
+    for (const [statusCode, count] of attempt.statusCodes.entries())
+      bucket.statusCodes.set(statusCode, (bucket.statusCodes.get(statusCode) ?? 0) + count)
+    buckets.set(key, bucket)
+  }
+
+  const mapRankedCounts = (values: Map<string, number>) => Array.from(values.entries())
+    .map(([key, events]) => ({ key, events }))
+    .sort((left, right) => right.events - left.events || left.key.localeCompare(right.key))
+    .slice(0, 5)
+
+  return Array.from(buckets.values())
+    .map(item => ({
+      key: item.key,
+      sceneId: item.sceneId,
+      capability: item.capability,
+      providerId: item.providerId,
+      assetKind: item.assetKind,
+      resourceType: item.resourceType,
+      storageChannel: item.storageChannel,
+      storageProvider: item.storageProvider,
+      surface: item.surface,
+      started: item.started,
+      completed: item.completed,
+      failed: item.failed,
+      bytes: item.bytes,
+      failureRate: percentage(item.failed, item.completed + item.failed),
+      avgDurationMs: mapNumberStat(item.durationMs).average,
+      avgSize: mapNumberStat(item.size).average,
+      latestAt: item.latestAt,
+      failureReasons: mapRankedCounts(item.failureReasons),
+      statusCodes: mapRankedCounts(item.statusCodes),
+    }))
+    .sort((left, right) => right.failed - left.failed
+      || right.failureRate - left.failureRate
+      || right.started - left.started
+      || right.latestAt.localeCompare(left.latestAt))
     .slice(0, topLimit)
 }
 
@@ -3633,9 +5416,9 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       return Number.isFinite(latestAt) && latestAt <= stuckBefore
     })
   const stuckAttemptIds = new Set(stuckAttempts.map(item => item.attemptId))
-  const problemAttempts = Array.from(attempts.values())
+  const problemAttempts: UploadProblemAttempt[] = Array.from(attempts.values())
     .filter(item => item.failed || stuckAttemptIds.has(item.attemptId))
-    .map((item) => {
+    .map((item): UploadProblemAttempt => {
       const latestAt = Date.parse(item.latestAt)
       return {
         attemptHash: hashIdentifier(item.attemptId)?.slice(0, 16) ?? 'unknown',
@@ -3664,6 +5447,9 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       return (right.ageMs ?? 0) - (left.ageMs ?? 0)
     })
     .slice(0, topLimit)
+  const mappedFailureMatrix = mapUploadFailureMatrix(failureMatrix, topLimit)
+  const recoveredEvidence = createUploadRecoveredEvidence(completed, topLimit)
+  const sceneAssetHealth = createSceneAssetUploadHealth(attempts.values(), uploadEvents, topLimit)
 
   return {
     ...createScopedAnalytics(uploadEvents, topLimit),
@@ -3685,7 +5471,9 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
     byFailureReason: mapMetricBuckets(byFailureReason, topLimit),
     byStatusCode: mapMetricBuckets(byStatusCode, topLimit),
     bySurface: mapMetricBuckets(bySurface, topLimit),
-    failureMatrix: mapUploadFailureMatrix(failureMatrix, topLimit),
+    sceneAssetHealth,
+    failureMatrix: mappedFailureMatrix,
+    actionQueue: createUploadActionQueue(mappedFailureMatrix, problemAttempts, topLimit),
     retrySummary: {
       retryableFailures,
       nonRetryableFailures,
@@ -3730,6 +5518,7 @@ function createUploadAnalytics(events: PlatformGovernanceEvent[], topLimit: numb
       .sort((a, b) => a.date.localeCompare(b.date)),
     uploadSize: mapNumberStat(uploadSize),
     uploadDurationMs: mapNumberStat(uploadDurationMs),
+    recoveredEvidence,
     problemAttempts,
   }
 }
@@ -3748,6 +5537,102 @@ function createStorageUsageBucket() {
 }
 
 type StorageUsageBucket = ReturnType<typeof createStorageUsageBucket>
+
+function parseStorageSmokeStatus(action: string): StorageSmokeEvidenceStatus | null {
+  if (action === 'storage.channel_smoke.ready')
+    return 'ready'
+  if (action === 'storage.channel_smoke.sent')
+    return 'sent'
+  if (action === 'storage.channel_smoke.failed')
+    return 'failed'
+  return null
+}
+
+function normalizeStorageSmokeMode(value: string | null): StorageSmokeEvidenceMode {
+  if (value === 'dry-run' || value === 'write')
+    return value
+  return 'unknown'
+}
+
+function readStringArrayMetadata(event: PlatformGovernanceEvent, key: string): string[] {
+  const value = event.metadata?.[key]
+  if (!Array.isArray(value))
+    return []
+  return value
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map(item => item.trim())
+    .slice(0, 8)
+}
+
+function createStorageSmokeEvidence(events: PlatformGovernanceEvent[], limit: number): StorageSmokeEvidenceItem[] {
+  const buckets = new Map<string, StorageSmokeEvidenceItem & { actors: Set<string>, latestTime: number }>()
+
+  for (const event of events) {
+    const status = parseStorageSmokeStatus(event.action)
+    if (!status)
+      continue
+
+    const policyId = event.resourceId ?? null
+    const mode = normalizeStorageSmokeMode(readEventMetadataString(event, 'mode'))
+    const key = `${policyId ?? 'unknown'}:${mode}`
+    const occurredTime = Date.parse(event.occurredAt)
+    const latestTime = Number.isFinite(occurredTime) ? occurredTime : 0
+    const item = buckets.get(key) ?? {
+      key,
+      policyId,
+      policyName: readEventMetadataString(event, 'policyName'),
+      channel: event.channel,
+      provider: readEventMetadataString(event, 'provider'),
+      mode,
+      status,
+      reason: readEventMetadataString(event, 'reason'),
+      operations: readStringArrayMetadata(event, 'operations'),
+      bytesWritten: 0,
+      bytesRead: 0,
+      credentialRequired: readEventMetadataBoolean(event, 'credentialRequired'),
+      hasCredentialRef: readEventMetadataBoolean(event, 'hasCredentialRef'),
+      hasCredential: readEventMetadataBoolean(event, 'hasCredential'),
+      latestAt: event.occurredAt,
+      latestTime,
+      events: 0,
+      ready: 0,
+      sent: 0,
+      failed: 0,
+      uniqueActors: 0,
+      actors: new Set<string>(),
+    }
+
+    item.events += 1
+    item[status] += 1
+    if (latestTime >= item.latestTime) {
+      item.status = status
+      item.reason = readEventMetadataString(event, 'reason')
+      item.operations = readStringArrayMetadata(event, 'operations')
+      item.bytesWritten = readEventMetadataNumber(event, 'bytesWritten') ?? 0
+      item.bytesRead = readEventMetadataNumber(event, 'bytesRead') ?? 0
+      item.credentialRequired = readEventMetadataBoolean(event, 'credentialRequired')
+      item.hasCredentialRef = readEventMetadataBoolean(event, 'hasCredentialRef')
+      item.hasCredential = readEventMetadataBoolean(event, 'hasCredential')
+      item.policyName = readEventMetadataString(event, 'policyName') ?? item.policyName
+      item.provider = readEventMetadataString(event, 'provider')
+      item.channel = event.channel
+      item.latestAt = event.occurredAt
+      item.latestTime = latestTime
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    buckets.set(key, item)
+  }
+
+  return Array.from(buckets.values())
+    .map(({ actors, latestTime: _latestTime, ...item }) => ({
+      ...item,
+      uniqueActors: actors.size,
+    }))
+    .sort((a, b) => b.latestAt.localeCompare(a.latestAt) || b.events - a.events)
+    .slice(0, limit)
+}
 
 interface ProviderChannelDistributionBucket {
   providerId: string
@@ -3965,6 +5850,161 @@ function mapStorageChannelPressure(
     .slice(0, topLimit)
 }
 
+function rankStorageActionQueuePriority(priority: StorageActionQueuePriority): number {
+  switch (priority) {
+    case 'critical':
+      return 4
+    case 'high':
+      return 3
+    case 'medium':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function nearestStorageProjectedExhaustionDays(item: StorageChannelPressure): number | null {
+  const values = [
+    item.projectedExhaustionDays.storedBytes,
+    item.projectedExhaustionDays.trafficBytes,
+    item.projectedExhaustionDays.operations,
+    item.projectedExhaustionDays.alertBytes,
+  ].filter((value): value is number => value != null && Number.isFinite(value))
+
+  return values.length ? Math.min(...values) : null
+}
+
+function resolveStorageActionQueuePriority(item: StorageChannelPressure): StorageActionQueuePriority {
+  const nearestExhaustion = nearestStorageProjectedExhaustionDays(item)
+  if (
+    item.pressureStatus === 'blocked'
+    || item.overage.storedBytes > 0
+    || item.overage.trafficBytes > 0
+    || item.overage.operations > 0
+  ) {
+    return 'critical'
+  }
+  if (
+    item.pressureStatus === 'warning'
+    || item.policyAlerts > 0
+    || item.highestUtilization >= 90
+    || (nearestExhaustion != null && nearestExhaustion <= 7)
+  ) {
+    return 'high'
+  }
+  if (
+    (item.pressureStatus === 'unmanaged' && item.operations > 0)
+    || item.highestUtilization >= 70
+    || (nearestExhaustion != null && nearestExhaustion <= 30)
+  ) {
+    return 'medium'
+  }
+  return 'low'
+}
+
+function resolveStorageActionQueueSuggestedAction(item: StorageChannelPressure): StorageActionQueueSuggestedAction {
+  if (item.pressureStatus === 'unmanaged')
+    return 'configure-policy'
+  if (
+    item.overage.operations > 0
+    || item.remaining.operations === 0
+    || (item.projectedExhaustionDays.operations != null && item.projectedExhaustionDays.operations <= 14)
+  ) {
+    return 'increase-operation-limit'
+  }
+  if (
+    item.overage.trafficBytes > 0
+    || item.remaining.trafficBytes === 0
+    || (item.projectedExhaustionDays.trafficBytes != null && item.projectedExhaustionDays.trafficBytes <= 14)
+  ) {
+    return 'increase-traffic-limit'
+  }
+  if (
+    item.overage.storedBytes > 0
+    || item.overage.alertBytes > 0
+    || item.remaining.storedBytes === 0
+    || item.remaining.alertBytes === 0
+    || (item.projectedExhaustionDays.storedBytes != null && item.projectedExhaustionDays.storedBytes <= 14)
+    || (item.projectedExhaustionDays.alertBytes != null && item.projectedExhaustionDays.alertBytes <= 14)
+  ) {
+    return 'increase-storage-limit'
+  }
+  if (
+    item.highestUtilization >= 70
+    || item.burnRate.storedBytesPerDay > 0
+    || item.burnRate.trafficBytesPerDay > 0
+    || item.burnRate.operationsPerDay > 0
+  ) {
+    return 'review-burn-rate'
+  }
+  return 'monitor-channel'
+}
+
+function resolveStorageActionQueueReason(item: StorageChannelPressure): string {
+  if (item.pressureStatus === 'unmanaged')
+    return 'unmanaged-channel'
+  if (item.overage.operations > 0)
+    return 'operation-limit-overage'
+  if (item.overage.trafficBytes > 0)
+    return 'traffic-limit-overage'
+  if (item.overage.storedBytes > 0)
+    return 'storage-limit-overage'
+  if (item.overage.alertBytes > 0)
+    return 'alert-bytes-reached'
+  const nearestExhaustion = nearestStorageProjectedExhaustionDays(item)
+  if (nearestExhaustion != null && nearestExhaustion <= 30)
+    return 'projected-exhaustion'
+  if (item.policyReasons.length)
+    return item.policyReasons[0] ?? 'policy-risk'
+  if (item.highestUtilization >= 70)
+    return 'high-utilization'
+  return 'monitor-channel'
+}
+
+function createStorageActionQueue(
+  channelPressure: StorageChannelPressure[],
+  topLimit: number,
+): StorageActionQueueItem[] {
+  return channelPressure
+    .map((item): StorageActionQueueItem => {
+      const priority = resolveStorageActionQueuePriority(item)
+      const latestTrend = item.trend.length ? item.trend[item.trend.length - 1] : null
+      return {
+        key: `${item.channel}|${item.provider ?? 'default'}|${item.policyId ?? 'unmanaged'}`,
+        priority,
+        suggestedAction: resolveStorageActionQueueSuggestedAction(item),
+        reason: resolveStorageActionQueueReason(item),
+        channel: item.channel,
+        provider: item.provider,
+        policyId: item.policyId,
+        policyName: item.policyName,
+        pressureStatus: item.pressureStatus,
+        events: item.events,
+        storedBytes: item.storedBytes,
+        trafficBytes: item.trafficBytes,
+        operations: item.operations,
+        writes: item.writes,
+        reads: item.reads,
+        deletes: item.deletes,
+        uniqueActors: item.uniqueActors,
+        highestUtilization: item.highestUtilization,
+        policyAlerts: item.policyAlerts,
+        policyReasons: item.policyReasons,
+        remaining: item.remaining,
+        overage: item.overage,
+        burnRate: item.burnRate,
+        projectedExhaustionDays: item.projectedExhaustionDays,
+        latestTrendDate: latestTrend?.date ?? null,
+      }
+    })
+    .filter(item => item.priority !== 'low')
+    .sort((left, right) => rankStorageActionQueuePriority(right.priority) - rankStorageActionQueuePriority(left.priority)
+      || right.highestUtilization - left.highestUtilization
+      || (right.storedBytes + right.trafficBytes) - (left.storedBytes + left.trafficBytes)
+      || right.operations - left.operations)
+    .slice(0, topLimit)
+}
+
 function storagePolicyStatusRank(status: StoragePolicyEvaluationStatus): number {
   if (status === 'blocked')
     return 4
@@ -4050,6 +6090,7 @@ function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: num
     reads: 0,
     deletes: 0,
   })
+  const mappedChannelPressure = mapStorageChannelPressure(channelPressure, policyEvaluations, topLimit)
 
   return {
     ...createScopedAnalytics(storageEvents, topLimit),
@@ -4059,7 +6100,9 @@ function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: num
     byProviderUsage: mapStorageUsageBuckets(byProviderUsage, topLimit),
     byResourceTypeUsage: mapStorageUsageBuckets(byResourceTypeUsage, topLimit),
     byActionUsage: mapStorageUsageBuckets(byActionUsage, topLimit),
-    channelPressure: mapStorageChannelPressure(channelPressure, policyEvaluations, topLimit),
+    channelPressure: mappedChannelPressure,
+    actionQueue: createStorageActionQueue(mappedChannelPressure, topLimit),
+    smokeEvidence: createStorageSmokeEvidence(storageEvents, topLimit),
     trend: Array.from(trend.values())
       .map(item => ({
         date: item.date,
@@ -4077,7 +6120,11 @@ function createStorageAnalytics(events: PlatformGovernanceEvent[], topLimit: num
 }
 
 function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number, topLimit: number) {
-  const providerEvents = events.filter(event => event.scope === 'intelligence' && event.resourceType === 'provider')
+  const providerEvents = events.filter(event =>
+    event.scope === 'intelligence'
+    && event.resourceType === 'provider'
+    && (event.action === 'provider.request' || event.action === 'provider.usage'),
+  )
   const providers = new Map<string, {
     providerId: string
     requests: number
@@ -4096,6 +6143,16 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
     actors: Set<string>
     providers: Map<string, number>
     channels: Map<string, number>
+    providerTypes: Map<string, number>
+  }>()
+  const modelChannels = new Map<string, {
+    model: string
+    channel: string
+    requests: number
+    tokens: number
+    quantity: number
+    actors: Set<string>
+    providers: Map<string, number>
     providerTypes: Map<string, number>
   }>()
   const channelDistribution = new Map<string, ProviderChannelDistributionBucket>()
@@ -4150,6 +6207,7 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       providerTypes: new Map<string, number>(),
     }
     const channelKey = `${providerId}:${channel}`
+    const modelChannelKey = `${model}:${channel}`
     const channelItem = channelDistribution.get(channelKey) ?? {
       providerId,
       channel,
@@ -4160,12 +6218,23 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       models: new Map<string, number>(),
       providerTypes: new Map<string, number>(),
     }
+    const modelChannelItem = modelChannels.get(modelChannelKey) ?? {
+      model,
+      channel,
+      requests: 0,
+      tokens: 0,
+      quantity: 0,
+      actors: new Set<string>(),
+      providers: new Map<string, number>(),
+      providerTypes: new Map<string, number>(),
+    }
     if (event.action === 'provider.request') {
       item.requests += event.quantity
       channelItem.requests += event.quantity
       trendItem.requests += event.quantity
       usageSummary.requests += event.quantity
       modelItem.requests += event.quantity
+      modelChannelItem.requests += event.quantity
     }
     if (event.action === 'provider.usage' && event.unit === 'token') {
       item.tokens += event.quantity
@@ -4173,10 +6242,12 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       trendItem.tokens += event.quantity
       usageSummary.tokens += event.quantity
       modelItem.tokens += event.quantity
+      modelChannelItem.tokens += event.quantity
     }
     item.quantity += event.quantity
     modelItem.quantity += event.quantity
     channelItem.quantity += event.quantity
+    modelChannelItem.quantity += event.quantity
     trendItem.events += 1
     trendItem.quantity += event.quantity
     const actor = readEventActor(event)
@@ -4184,10 +6255,12 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       item.actors.add(actor)
       modelItem.actors.add(actor)
       channelItem.actors.add(actor)
+      modelChannelItem.actors.add(actor)
       trendItem.actors.add(actor)
     }
     item.units.set(event.unit, (item.units.get(event.unit) ?? 0) + event.quantity)
     modelItem.providers.set(providerId, (modelItem.providers.get(providerId) ?? 0) + event.quantity)
+    modelChannelItem.providers.set(providerId, (modelChannelItem.providers.get(providerId) ?? 0) + event.quantity)
     if (event.channel) {
       item.channels.set(event.channel, (item.channels.get(event.channel) ?? 0) + event.quantity)
       modelItem.channels.set(event.channel, (modelItem.channels.get(event.channel) ?? 0) + event.quantity)
@@ -4201,9 +6274,11 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       addMetricBucket(byProviderType, providerType, event)
       modelItem.providerTypes.set(providerType, (modelItem.providerTypes.get(providerType) ?? 0) + event.quantity)
       channelItem.providerTypes.set(providerType, (channelItem.providerTypes.get(providerType) ?? 0) + event.quantity)
+      modelChannelItem.providerTypes.set(providerType, (modelChannelItem.providerTypes.get(providerType) ?? 0) + event.quantity)
     }
     providers.set(providerId, item)
     models.set(model, modelItem)
+    modelChannels.set(modelChannelKey, modelChannelItem)
     channelDistribution.set(channelKey, channelItem)
     trend.set(date, trendItem)
   }
@@ -4265,6 +6340,25 @@ function createProviderAnalytics(events: PlatformGovernanceEvent[], days: number
       }))
       .sort((a, b) => b.tokens - a.tokens || b.requests - a.requests || b.quantity - a.quantity)
       .slice(0, topLimit),
+    modelChannelDistribution: Array.from(modelChannels.values())
+      .map(item => ({
+        model: item.model,
+        channel: item.channel,
+        requests: item.requests,
+        tokens: item.tokens,
+        quantity: item.quantity,
+        uniqueActors: item.actors.size,
+        byProvider: Array.from(item.providers.entries())
+          .map(([providerId, quantity]) => ({ providerId, quantity }))
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5),
+        byProviderType: Array.from(item.providerTypes.entries())
+          .map(([providerType, quantity]) => ({ providerType, quantity }))
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 5),
+      }))
+      .sort((a, b) => b.tokens - a.tokens || b.requests - a.requests || b.quantity - a.quantity)
+      .slice(0, topLimit),
     leaderboard: Array.from(providers.values())
       .map(item => ({
         providerId: item.providerId,
@@ -4296,6 +6390,8 @@ function createProviderQuotaAnalytics(
 ) {
   const items = evaluateIntelligenceProviderQuotaConfigs(providerEvents, quotas)
   const riskItems = createProviderQuotaRiskItems(items, topLimit)
+  const actionQueue = createProviderQuotaActionQueue(items, topLimit)
+  const smokeEvidence = createProviderQuotaSmokeEvidence(providerEvents, topLimit)
 
   const summary = items.reduce((result, item) => {
     result.total += 1
@@ -4352,8 +6448,218 @@ function createProviderQuotaAnalytics(
   return {
     summary,
     riskItems,
+    actionQueue,
+    smokeEvidence,
     items: items.slice(0, topLimit),
   }
+}
+
+function parseProviderQuotaSmokeStatus(action: string): IntelligenceProviderQuotaSmokeStatus | null {
+  if (action === 'provider.quota_smoke.allowed')
+    return 'allowed'
+  if (action === 'provider.quota_smoke.blocked')
+    return 'blocked'
+  if (action === 'provider.quota_smoke.consumed')
+    return 'consumed'
+  if (action === 'provider.quota_smoke.failed')
+    return 'failed'
+  return null
+}
+
+function normalizeProviderQuotaSmokeMode(value: string | null): IntelligenceProviderQuotaSmokeMode {
+  return value === 'consume' ? 'consume' : 'dry-run'
+}
+
+function createProviderQuotaSmokeEvidence(
+  events: PlatformGovernanceEvent[],
+  limit: number,
+): IntelligenceProviderQuotaSmokeEvidenceItem[] {
+  const buckets = new Map<string, IntelligenceProviderQuotaSmokeEvidenceItem & { actors: Set<string>, latestTime: number }>()
+
+  for (const event of events) {
+    const status = parseProviderQuotaSmokeStatus(event.action)
+    if (!status)
+      continue
+
+    const providerId = event.resourceId ?? readEventMetadataString(event, 'providerId') ?? 'unknown'
+    const channel = event.channel ?? readEventMetadataString(event, 'channel')
+    const mode = normalizeProviderQuotaSmokeMode(readEventMetadataString(event, 'mode'))
+    const key = `${providerId}:${channel ?? 'global'}:${mode}`
+    const occurredTime = Date.parse(event.occurredAt)
+    const latestTime = Number.isFinite(occurredTime) ? occurredTime : 0
+    const item = buckets.get(key) ?? {
+      key,
+      providerId,
+      channel,
+      mode,
+      status,
+      reason: readEventMetadataString(event, 'reason'),
+      requestRecorded: readEventMetadataBoolean(event, 'requestRecorded') ?? false,
+      tokensRecorded: readEventMetadataNumber(event, 'tokensRecorded') ?? 0,
+      latestAt: event.occurredAt,
+      latestTime,
+      events: 0,
+      allowed: 0,
+      blocked: 0,
+      consumed: 0,
+      failed: 0,
+      uniqueActors: 0,
+      actors: new Set<string>(),
+    }
+
+    item.events += 1
+    item[status] += 1
+    if (latestTime >= item.latestTime) {
+      item.status = status
+      item.reason = readEventMetadataString(event, 'reason')
+      item.requestRecorded = readEventMetadataBoolean(event, 'requestRecorded') ?? false
+      item.tokensRecorded = readEventMetadataNumber(event, 'tokensRecorded') ?? 0
+      item.latestAt = event.occurredAt
+      item.latestTime = latestTime
+    }
+    const actor = readEventActor(event)
+    if (actor)
+      item.actors.add(actor)
+    buckets.set(key, item)
+  }
+
+  return Array.from(buckets.values())
+    .map(({ actors, latestTime: _latestTime, ...item }) => ({
+      ...item,
+      uniqueActors: actors.size,
+    }))
+    .sort((left, right) => right.latestAt.localeCompare(left.latestAt) || right.events - left.events)
+    .slice(0, limit)
+}
+
+function rankProviderQuotaActionQueuePriority(priority: ProviderQuotaActionQueuePriority): number {
+  switch (priority) {
+    case 'critical':
+      return 4
+    case 'high':
+      return 3
+    case 'medium':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function nearestProviderQuotaProjectedExhaustionDays(item: IntelligenceProviderQuotaEvaluation): number | null {
+  const values = [
+    item.projectedExhaustionDays.requests,
+    item.projectedExhaustionDays.tokens,
+  ].filter((value): value is number => value != null && Number.isFinite(value))
+
+  return values.length ? Math.min(...values) : null
+}
+
+function providerQuotaHasUsage(item: IntelligenceProviderQuotaEvaluation): boolean {
+  return item.usage.requests > 0 || item.usage.tokens > 0
+}
+
+function resolveProviderQuotaActionQueueReason(item: IntelligenceProviderQuotaEvaluation): ProviderQuotaActionQueueReason | null {
+  if (!item.enabled && providerQuotaHasUsage(item))
+    return 'quota-disabled'
+  if (item.limits.maxRequests == null && item.limits.maxTokens == null && providerQuotaHasUsage(item))
+    return 'missing-hard-limit'
+  if (item.overage.tokens > 0)
+    return 'token-overage'
+  if (item.overage.requests > 0)
+    return 'request-overage'
+  if (item.remaining.tokens === 0)
+    return 'token-exhausted'
+  if (item.remaining.requests === 0)
+    return 'request-exhausted'
+  const nearestExhaustion = nearestProviderQuotaProjectedExhaustionDays(item)
+  if (nearestExhaustion != null && nearestExhaustion <= 3)
+    return 'projected-exhaustion'
+  if (item.status === 'warning')
+    return 'warning-threshold'
+  return null
+}
+
+function resolveProviderQuotaActionQueuePriority(reason: ProviderQuotaActionQueueReason): ProviderQuotaActionQueuePriority {
+  if (
+    reason === 'token-overage'
+    || reason === 'request-overage'
+    || reason === 'token-exhausted'
+    || reason === 'request-exhausted'
+  ) {
+    return 'critical'
+  }
+  if (reason === 'projected-exhaustion')
+    return 'high'
+  return 'medium'
+}
+
+function resolveProviderQuotaActionQueueSuggestedAction(
+  item: IntelligenceProviderQuotaEvaluation,
+  reason: ProviderQuotaActionQueueReason,
+): ProviderQuotaActionQueueSuggestedAction {
+  if (reason === 'quota-disabled')
+    return 'enable-provider-quota'
+  if (reason === 'missing-hard-limit')
+    return 'set-provider-limit'
+  if (reason === 'token-overage' || reason === 'token-exhausted')
+    return 'increase-token-limit'
+  if (reason === 'request-overage' || reason === 'request-exhausted')
+    return 'increase-request-limit'
+  if (reason === 'projected-exhaustion')
+    return item.channel ? 'reduce-provider-traffic' : 'split-provider-channel'
+  return 'monitor-burn-rate'
+}
+
+function createProviderQuotaActionQueue(
+  items: IntelligenceProviderQuotaEvaluation[],
+  topLimit: number,
+): ProviderQuotaActionQueueItem[] {
+  return items
+    .map((item): ProviderQuotaActionQueueItem | null => {
+      const reason = resolveProviderQuotaActionQueueReason(item)
+      if (!reason)
+        return null
+
+      return {
+        key: `${item.configId}:${reason}`,
+        priority: resolveProviderQuotaActionQueuePriority(reason),
+        suggestedAction: resolveProviderQuotaActionQueueSuggestedAction(item, reason),
+        reason,
+        configId: item.configId,
+        providerId: item.providerId,
+        name: item.name,
+        channel: item.channel,
+        provider: item.provider,
+        status: item.status,
+        windowDays: item.windowDays,
+        requests: item.usage.requests,
+        tokens: item.usage.tokens,
+        maxRequests: item.limits.maxRequests,
+        maxTokens: item.limits.maxTokens,
+        requestUtilization: item.utilization.requests,
+        tokenUtilization: item.utilization.tokens,
+        remainingRequests: item.remaining.requests,
+        remainingTokens: item.remaining.tokens,
+        requestOverage: item.overage.requests,
+        tokenOverage: item.overage.tokens,
+        requestsPerDay: item.burnRate.requestsPerDay,
+        tokensPerDay: item.burnRate.tokensPerDay,
+        projectedRequestExhaustionDays: item.projectedExhaustionDays.requests,
+        projectedTokenExhaustionDays: item.projectedExhaustionDays.tokens,
+      }
+    })
+    .filter((item): item is ProviderQuotaActionQueueItem => item != null)
+    .sort((left, right) => {
+      const leftProjected = Math.min(left.projectedRequestExhaustionDays ?? Number.POSITIVE_INFINITY, left.projectedTokenExhaustionDays ?? Number.POSITIVE_INFINITY)
+      const rightProjected = Math.min(right.projectedRequestExhaustionDays ?? Number.POSITIVE_INFINITY, right.projectedTokenExhaustionDays ?? Number.POSITIVE_INFINITY)
+      return rankProviderQuotaActionQueuePriority(right.priority) - rankProviderQuotaActionQueuePriority(left.priority)
+        || (right.requestOverage + right.tokenOverage) - (left.requestOverage + left.tokenOverage)
+        || Math.max(right.requestUtilization ?? 0, right.tokenUtilization ?? 0) - Math.max(left.requestUtilization ?? 0, left.tokenUtilization ?? 0)
+        || leftProjected - rightProjected
+        || (right.requests + right.tokens) - (left.requests + left.tokens)
+        || left.key.localeCompare(right.key)
+    })
+    .slice(0, topLimit)
 }
 
 function createProviderQuotaRiskItems(
@@ -4629,6 +6935,9 @@ function createOperationsDashboardSummary(input: {
   storage: ReturnType<typeof createStorageAnalytics>
   providers: ReturnType<typeof createProviderAnalytics> & {
     quotaSummary: ReturnType<typeof createProviderQuotaAnalytics>['summary']
+    quotaActionQueue: ReturnType<typeof createProviderQuotaAnalytics>['actionQueue']
+    quotaRiskItems: ReturnType<typeof createProviderQuotaAnalytics>['riskItems']
+    quotaSmokeEvidence: ReturnType<typeof createProviderQuotaAnalytics>['smokeEvidence']
     quotas: ReturnType<typeof createProviderQuotaAnalytics>['items']
   }
 }, topLimit: number) {
@@ -4699,6 +7008,338 @@ function createOperationsDashboardSummary(input: {
       providerUsage: input.providers.trend.slice(-topLimit),
       uploadStatus: input.uploads.statusTrend.slice(-topLimit),
       operationsTimeline: createOperationsTimeline(input, topLimit),
+    },
+  }
+}
+
+function rankGovernanceReportPriority(priority: PlatformGovernanceReportPriority): number {
+  switch (priority) {
+    case 'critical':
+      return 4
+    case 'high':
+      return 3
+    case 'medium':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function resolveGovernanceReportStatus(riskScore: number): PlatformGovernanceReportStatus {
+  if (riskScore >= 100)
+    return 'critical'
+  if (riskScore > 0)
+    return 'watch'
+  return 'ok'
+}
+
+function createGovernanceReportScorecards(
+  analytics: Awaited<ReturnType<typeof getPlatformGovernanceAnalytics>>,
+): PlatformGovernanceReportScorecard[] {
+  const dashboard = analytics.dashboard
+  return [
+    {
+      key: 'user-growth',
+      label: 'User growth',
+      value: dashboard.growth.userSignups.latestQuantity,
+      total: dashboard.growth.userSignups.cumulative,
+      unit: 'users',
+      delta: dashboard.growth.userSignups.growthRate,
+      rate: null,
+      status: 'ok',
+      reason: null,
+    },
+    {
+      key: 'search-demand',
+      label: 'Search demand',
+      value: dashboard.growth.searches.latestQuantity,
+      total: dashboard.growth.searches.total,
+      unit: 'searches',
+      delta: dashboard.growth.searches.growthRate,
+      rate: dashboard.growth.searches.selectionRate,
+      status: dashboard.growth.searches.problemRate >= 10 || dashboard.growth.searches.zeroResultRate >= 30 ? 'watch' : 'ok',
+      reason: dashboard.growth.searches.problemRate >= 10
+        ? 'search-problem-rate'
+        : dashboard.growth.searches.zeroResultRate >= 30
+          ? 'search-zero-result-rate'
+          : null,
+    },
+    {
+      key: 'plugin-installs',
+      label: 'Plugin installs',
+      value: dashboard.growth.pluginInstalls.latestQuantity,
+      total: dashboard.growth.pluginInstalls.total,
+      unit: 'installs',
+      delta: dashboard.growth.pluginInstalls.growthRate,
+      rate: null,
+      status: 'ok',
+      reason: null,
+    },
+    {
+      key: 'provider-tokens',
+      label: 'Provider tokens',
+      value: dashboard.growth.providerUsage.latestTokens,
+      total: dashboard.growth.providerUsage.tokens,
+      unit: 'tokens',
+      delta: null,
+      rate: analytics.providers.quotaSummary.highestTokenUtilization,
+      status: analytics.providers.quotaSummary.blocked > 0 || analytics.providers.quotaSummary.tokenOverage > 0
+        ? 'critical'
+        : analytics.providers.quotaSummary.warning > 0
+          ? 'watch'
+          : 'ok',
+      reason: analytics.providers.quotaSummary.blocked > 0 || analytics.providers.quotaSummary.tokenOverage > 0
+        ? 'provider-quota-blocked'
+        : analytics.providers.quotaSummary.warning > 0
+          ? 'provider-quota-warning'
+          : null,
+    },
+    {
+      key: 'upload-health',
+      label: 'Upload health',
+      value: dashboard.growth.uploads.latestCompleted,
+      total: dashboard.growth.uploads.latestStarted,
+      unit: 'uploads',
+      delta: null,
+      rate: dashboard.growth.uploads.failureRate,
+      status: dashboard.growth.uploads.failureRate >= 10 || dashboard.riskSummary.uploadProblems > 0 ? 'watch' : 'ok',
+      reason: dashboard.riskSummary.uploadProblems > 0 ? 'upload-problem-attempts' : null,
+    },
+    {
+      key: 'storage-risk',
+      label: 'Storage risk',
+      value: analytics.storage.policySummary.alerts,
+      total: analytics.storage.policySummary.total,
+      unit: 'alerts',
+      delta: null,
+      rate: Math.max(
+        analytics.storage.policySummary.highestStoredUtilization,
+        analytics.storage.policySummary.highestTrafficUtilization,
+        analytics.storage.policySummary.highestOperationUtilization,
+      ),
+      status: analytics.storage.policySummary.blocked > 0
+        ? 'critical'
+        : analytics.storage.policySummary.alerts > 0
+          ? 'watch'
+          : 'ok',
+      reason: analytics.storage.policySummary.blocked > 0
+        ? 'storage-policy-blocked'
+        : analytics.storage.policySummary.alerts > 0
+          ? 'storage-policy-alert'
+          : null,
+    },
+    {
+      key: 'notification-health',
+      label: 'Notification health',
+      value: analytics.notifications.deliveries.failed,
+      total: analytics.notifications.deliveries.total,
+      unit: 'failed',
+      delta: null,
+      rate: analytics.notifications.deliveries.failureRate,
+      status: analytics.notifications.deliveries.failed > 0 || analytics.notifications.channelRisks.length > 0 ? 'watch' : 'ok',
+      reason: analytics.notifications.deliveries.failed > 0
+        ? 'notification-delivery-failed'
+        : analytics.notifications.channelRisks.length > 0
+          ? 'notification-channel-risk'
+          : null,
+    },
+  ]
+}
+
+function createGovernanceReportEvidenceStatus(
+  analytics: Awaited<ReturnType<typeof getPlatformGovernanceAnalytics>>,
+): PlatformGovernanceReportEvidenceItem[] {
+  return [
+    {
+      key: 'admin-cockpit',
+      label: 'Authenticated admin cockpit',
+      status: 'open',
+      evidenceCount: analytics.overview.totalEvents,
+      blocker: 'authenticated-browser-evidence-required',
+    },
+    {
+      key: 'storage-smoke',
+      label: 'Storage smoke evidence',
+      status: analytics.storage.smokeEvidence.length > 0 ? 'local-only' : 'open',
+      evidenceCount: analytics.storage.smokeEvidence.length,
+      blocker: 'live-r2-s3-oss-smoke-required',
+    },
+    {
+      key: 'notification-send',
+      label: 'Notification live-send evidence',
+      status: analytics.notifications.deliveryEvidence.some(item => item.sent > 0) ? 'local-only' : 'open',
+      evidenceCount: analytics.notifications.deliveryEvidence.length + analytics.notifications.testEvidence.length,
+      blocker: 'real-credential-backed-send-required',
+    },
+    {
+      key: 'provider-quota',
+      label: 'Provider quota fail-closed evidence',
+      status: analytics.providers.quotaSmokeEvidence.length > 0 ? 'local-only' : 'open',
+      evidenceCount: analytics.providers.quotaSmokeEvidence.length,
+      blocker: 'real-provider-call-evidence-required',
+    },
+    {
+      key: 'd1-production',
+      label: 'Production D1 migration/backfill',
+      status: 'open',
+      evidenceCount: 0,
+      blocker: 'production-d1-backfill-required',
+    },
+  ]
+}
+
+function createGovernanceReportRiskQueue(
+  analytics: Awaited<ReturnType<typeof getPlatformGovernanceAnalytics>>,
+  topLimit: number,
+): PlatformGovernanceReportRiskQueueItem[] {
+  const queue: PlatformGovernanceReportRiskQueueItem[] = []
+
+  if (analytics.searches.reliabilitySummary.problemRate > 0 || analytics.searches.reliabilitySummary.zeroResultRate > 0) {
+    queue.push({
+      key: 'search:reliability',
+      area: 'search',
+      priority: analytics.searches.reliabilitySummary.problemRate >= 10 ? 'high' : 'medium',
+      suggestedAction: 'review-search-provider-and-zero-result-segments',
+      reason: 'search-reliability-risk',
+      status: analytics.searches.reliabilitySummary.problemRate >= 10 ? 'watch' : 'ok',
+      metric: analytics.searches.reliabilitySummary.problemRate,
+      latestAt: latestTrendPoint(analytics.searches.reliabilityTrend)?.date ?? null,
+      details: {
+        total: analytics.searches.reliabilitySummary.total,
+        zeroResultRate: analytics.searches.reliabilitySummary.zeroResultRate,
+        selectionRate: analytics.searches.selectionSummary.selectionRate,
+      },
+    })
+  }
+
+  for (const item of analytics.uploads.actionQueue.slice(0, topLimit)) {
+    queue.push({
+      key: `upload:${item.key}`,
+      area: 'upload',
+      priority: item.priority,
+      suggestedAction: item.suggestedAction,
+      reason: item.reason,
+      status: item.calibrationStatus,
+      metric: item.failedAttempts + item.stuckAttempts,
+      latestAt: item.latestAt,
+      details: {
+        resourceType: item.resourceType,
+        storageChannel: item.storageChannel,
+        storageProvider: item.storageProvider,
+        failedAttempts: item.failedAttempts,
+        stuckAttempts: item.stuckAttempts,
+      },
+    })
+  }
+
+  for (const item of analytics.storage.actionQueue.slice(0, topLimit)) {
+    queue.push({
+      key: `storage:${item.key}`,
+      area: 'storage',
+      priority: item.priority,
+      suggestedAction: item.suggestedAction,
+      reason: item.reason,
+      status: item.pressureStatus,
+      metric: item.highestUtilization,
+      latestAt: item.latestTrendDate,
+      details: {
+        channel: item.channel,
+        provider: item.provider,
+        operations: item.operations,
+        storedBytes: item.storedBytes,
+        trafficBytes: item.trafficBytes,
+      },
+    })
+  }
+
+  for (const item of analytics.notifications.actionQueue.slice(0, topLimit)) {
+    queue.push({
+      key: `notification:${item.key}`,
+      area: 'notification',
+      priority: item.priority,
+      suggestedAction: item.suggestedAction,
+      reason: item.reason,
+      status: item.status,
+      metric: item.failed || item.failureRate || item.total,
+      latestAt: item.latestFailureAt,
+      details: {
+        channel: item.channel,
+        provider: item.provider,
+        adapter: item.adapter,
+        failed: item.failed,
+        failureRate: item.failureRate,
+      },
+    })
+  }
+
+  for (const item of analytics.providers.quotaActionQueue.slice(0, topLimit)) {
+    queue.push({
+      key: `provider-quota:${item.key}`,
+      area: 'provider-quota',
+      priority: item.priority,
+      suggestedAction: item.suggestedAction,
+      reason: item.reason,
+      status: item.status,
+      metric: Math.max(item.requestUtilization ?? 0, item.tokenUtilization ?? 0),
+      latestAt: null,
+      details: {
+        providerId: item.providerId,
+        channel: item.channel,
+        requests: item.requests,
+        tokens: item.tokens,
+        remainingRequests: item.remainingRequests,
+        remainingTokens: item.remainingTokens,
+      },
+    })
+  }
+
+  return queue
+    .sort((left, right) =>
+      rankGovernanceReportPriority(right.priority) - rankGovernanceReportPriority(left.priority)
+      || right.metric - left.metric
+      || left.key.localeCompare(right.key),
+    )
+    .slice(0, topLimit)
+}
+
+function createPlatformGovernanceReportSnapshot(
+  analytics: Awaited<ReturnType<typeof getPlatformGovernanceAnalytics>>,
+  topLimit: number,
+): PlatformGovernanceReportSnapshot {
+  const riskQueue = createGovernanceReportRiskQueue(analytics, topLimit)
+  const riskScore = riskQueue.reduce((sum, item) => {
+    if (item.priority === 'critical')
+      return sum + 20
+    if (item.priority === 'high')
+      return sum + 10
+    if (item.priority === 'medium')
+      return sum + 5
+    return sum + 1
+  }, 0)
+  const operationsTimeline = analytics.dashboard.trends.operationsTimeline
+
+  return {
+    days: analytics.days,
+    generatedAt: analytics.generatedAt,
+    report: {
+      status: resolveGovernanceReportStatus(riskScore),
+      riskScore,
+      scorecards: createGovernanceReportScorecards(analytics),
+      evidenceStatus: createGovernanceReportEvidenceStatus(analytics),
+      riskQueue,
+      leaderboards: {
+        hotPlugins: analytics.dashboard.leaderboards.hotPlugins.slice(0, topLimit),
+        topModels: analytics.dashboard.leaderboards.topModels.slice(0, topLimit),
+        topProviders: analytics.providers.leaderboard.slice(0, topLimit),
+      },
+      trendSummary: {
+        latestDate: operationsTimeline.at(-1)?.date ?? null,
+        operationsDays: operationsTimeline.length,
+        peakSearches: Math.max(0, ...operationsTimeline.map(item => item.searches)),
+        peakPluginInstalls: Math.max(0, ...operationsTimeline.map(item => item.pluginInstalls)),
+        peakProviderTokens: Math.max(0, ...operationsTimeline.map(item => item.providerTokens)),
+        peakRiskScore: Math.max(0, ...operationsTimeline.map(item => item.riskScore)),
+      },
     },
   }
 }
@@ -4872,7 +7513,9 @@ export async function getPlatformGovernanceAnalytics(
   const providerDashboard = {
     ...providers,
     quotaSummary: providerQuotaAnalytics.summary,
+    quotaActionQueue: providerQuotaAnalytics.actionQueue,
     quotaRiskItems: providerQuotaAnalytics.riskItems,
+    quotaSmokeEvidence: providerQuotaAnalytics.smokeEvidence,
     quotas: providerQuotaAnalytics.items,
   }
 
@@ -4901,6 +7544,15 @@ export async function getPlatformGovernanceAnalytics(
     storage,
     providers: providerDashboard,
   }
+}
+
+export async function getPlatformGovernanceReportSnapshot(
+  event: H3Event | undefined,
+  options: GovernanceAnalyticsOptions = {},
+): Promise<PlatformGovernanceReportSnapshot> {
+  const topLimit = normalizeAnalyticsTopLimit(options.topLimit)
+  const analytics = await getPlatformGovernanceAnalytics(event, options)
+  return createPlatformGovernanceReportSnapshot(analytics, topLimit)
 }
 
 function matchesStorageProvider(event: PlatformGovernanceEvent, provider: string): boolean {
@@ -5633,6 +8285,174 @@ export async function assertIntelligenceProviderQuota(
         },
       })
     }
+  }
+}
+
+function normalizeProviderQuotaSmokeModeInput(value: unknown): IntelligenceProviderQuotaSmokeMode {
+  if (value == null || value === '')
+    return 'dry-run'
+  if (value === 'dry-run' || value === 'consume')
+    return value
+  throw createError({ statusCode: 400, statusMessage: 'mode must be dry-run or consume.' })
+}
+
+function findProviderQuotaEvaluation(
+  evaluations: IntelligenceProviderQuotaEvaluation[],
+  channel: string | null,
+): IntelligenceProviderQuotaEvaluation | null {
+  return evaluations.find(item => item.channel === channel)
+    ?? evaluations.find(item => item.channel == null)
+    ?? evaluations[0]
+    ?? null
+}
+
+async function recordProviderQuotaSmokeAudit(
+  event: H3Event,
+  actorId: unknown,
+  result: IntelligenceProviderQuotaSmokeResult,
+): Promise<void> {
+  await recordPlatformGovernanceEvent(event, {
+    scope: 'intelligence',
+    action: `provider.quota_smoke.${result.status}`,
+    actorId,
+    resourceType: 'provider',
+    resourceId: result.providerId,
+    channel: result.channel ?? undefined,
+    unit: 'smoke',
+    quantity: result.status === 'blocked' || result.status === 'failed' ? 0 : 1,
+    metadata: {
+      providerId: result.providerId,
+      channel: result.channel,
+      mode: result.mode,
+      reason: result.reason,
+      requestRecorded: result.requestRecorded,
+      tokensRecorded: result.tokensRecorded,
+      quotaConfigId: result.evaluation?.configId ?? null,
+      quotaName: result.evaluation?.name ?? null,
+      quotaStatus: result.evaluation?.status ?? null,
+      remainingRequests: result.evaluation?.remaining.requests ?? null,
+      remainingTokens: result.evaluation?.remaining.tokens ?? null,
+      requestUtilization: result.evaluation?.utilization.requests ?? null,
+      tokenUtilization: result.evaluation?.utilization.tokens ?? null,
+    },
+  })
+}
+
+function providerQuotaSmokeErrorReason(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const data = (error as { data?: { code?: unknown } }).data
+    if (data?.code === 'INTELLIGENCE_PROVIDER_REQUEST_QUOTA_EXCEEDED')
+      return 'request-quota-exceeded'
+    if (data?.code === 'INTELLIGENCE_PROVIDER_TOKEN_QUOTA_EXCEEDED')
+      return 'token-quota-exceeded'
+    const statusMessage = (error as { statusMessage?: unknown }).statusMessage
+    if (typeof statusMessage === 'string' && statusMessage.trim())
+      return statusMessage
+  }
+  return error instanceof Error && error.message ? error.message : 'provider-quota-smoke-failed'
+}
+
+export async function runIntelligenceProviderQuotaSmoke(
+  event: H3Event,
+  input: RunIntelligenceProviderQuotaSmokeInput,
+): Promise<IntelligenceProviderQuotaSmokeResult> {
+  const providerId = assertString(input.providerId, 'providerId', 180)
+  const channel = normalizeString(input.channel, 120) ?? null
+  const mode = normalizeProviderQuotaSmokeModeInput(input.mode)
+  const tokenQuantity = normalizeQuantity(input.tokenQuantity)
+  const generatedAt = new Date().toISOString()
+
+  try {
+    await assertIntelligenceProviderQuota(event, providerId, channel ?? undefined)
+
+    if (mode === 'dry-run') {
+      const evaluations = await evaluateIntelligenceProviderQuotas(event, providerId)
+      const result: IntelligenceProviderQuotaSmokeResult = {
+        providerId,
+        channel,
+        mode,
+        status: 'allowed',
+        reason: 'provider-quota-allows-request',
+        requestRecorded: false,
+        tokensRecorded: 0,
+        evaluation: findProviderQuotaEvaluation(evaluations, channel),
+        generatedAt,
+      }
+      await recordProviderQuotaSmokeAudit(event, input.actorId, result)
+      return result
+    }
+
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'intelligence',
+      action: 'provider.request',
+      actorId: input.actorId,
+      resourceType: 'provider',
+      resourceId: providerId,
+      channel: channel ?? undefined,
+      unit: 'request',
+      quantity: 1,
+      metadata: {
+        source: 'provider-quota-smoke',
+        mode,
+      },
+    })
+    if (tokenQuantity > 0) {
+      await recordPlatformGovernanceEvent(event, {
+        scope: 'intelligence',
+        action: 'provider.usage',
+        actorId: input.actorId,
+        resourceType: 'provider',
+        resourceId: providerId,
+        channel: channel ?? undefined,
+        unit: 'token',
+        quantity: tokenQuantity,
+        metadata: {
+          source: 'provider-quota-smoke',
+          mode,
+        },
+      })
+    }
+
+    let status: IntelligenceProviderQuotaSmokeStatus = 'consumed'
+    let reason = 'provider-quota-consumed'
+    try {
+      await assertIntelligenceProviderQuota(event, providerId, channel ?? undefined)
+    }
+    catch (error) {
+      status = 'blocked'
+      reason = providerQuotaSmokeErrorReason(error)
+    }
+
+    const evaluations = await evaluateIntelligenceProviderQuotas(event, providerId)
+    const result: IntelligenceProviderQuotaSmokeResult = {
+      providerId,
+      channel,
+      mode,
+      status,
+      reason,
+      requestRecorded: true,
+      tokensRecorded: tokenQuantity,
+      evaluation: findProviderQuotaEvaluation(evaluations, channel),
+      generatedAt,
+    }
+    await recordProviderQuotaSmokeAudit(event, input.actorId, result)
+    return result
+  }
+  catch (error) {
+    const evaluations = await evaluateIntelligenceProviderQuotas(event, providerId)
+    const result: IntelligenceProviderQuotaSmokeResult = {
+      providerId,
+      channel,
+      mode,
+      status: 'failed',
+      reason: providerQuotaSmokeErrorReason(error),
+      requestRecorded: false,
+      tokensRecorded: 0,
+      evaluation: findProviderQuotaEvaluation(evaluations, channel),
+      generatedAt,
+    }
+    await recordProviderQuotaSmokeAudit(event, input.actorId, result)
+    return result
   }
 }
 

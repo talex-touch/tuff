@@ -56,6 +56,22 @@ export interface GovernanceConfigRow {
   updated_at: string
 }
 
+export interface GovernanceEventRow {
+  id: string
+  scope: string
+  action: string
+  actor_hash: string | null
+  context_hash: string | null
+  resource_type: string | null
+  resource_id: string | null
+  channel: string | null
+  unit: string
+  quantity: number
+  metadata_json: string | null
+  occurred_at: string
+  created_at: string
+}
+
 export interface IntelligenceProviderRow {
   id: string
   user_id: string
@@ -107,6 +123,7 @@ export class MockD1Database {
   capabilities = new Map<string, CapabilityRow>()
   credentials = new Map<string, CredentialRow>()
   governanceConfigs = new Map<string, GovernanceConfigRow>()
+  governanceEvents: GovernanceEventRow[] = []
   intelligenceProviders = new Map<string, IntelligenceProviderRow>()
 
   prepare(sql: string) {
@@ -231,6 +248,40 @@ export class MockD1Database {
         created_by: String(createdBy),
         created_at: String(createdAt),
         updated_at: String(updatedAt),
+      })
+      return { meta: { changes: 1 } }
+    }
+
+    if (sql.includes('INSERT INTO platform_governance_events')) {
+      const [
+        id,
+        scope,
+        action,
+        actorHash,
+        contextHash,
+        resourceType,
+        resourceId,
+        channel,
+        unit,
+        quantity,
+        metadataJson,
+        occurredAt,
+        createdAt,
+      ] = args
+      this.governanceEvents.push({
+        id: String(id),
+        scope: String(scope),
+        action: String(action),
+        actor_hash: actorHash == null ? null : String(actorHash),
+        context_hash: contextHash == null ? null : String(contextHash),
+        resource_type: resourceType == null ? null : String(resourceType),
+        resource_id: resourceId == null ? null : String(resourceId),
+        channel: channel == null ? null : String(channel),
+        unit: String(unit),
+        quantity: Number(quantity),
+        metadata_json: metadataJson == null ? null : String(metadataJson),
+        occurred_at: String(occurredAt),
+        created_at: String(createdAt),
       })
       return { meta: { changes: 1 } }
     }
@@ -389,6 +440,10 @@ export class MockD1Database {
       return this.filterGovernanceConfigs(sql, args)
     }
 
+    if (sql.includes('FROM platform_governance_events')) {
+      return this.filterGovernanceEvents(sql, args)
+    }
+
     if (sql.includes('FROM provider_registry')) {
       return this.filterProviders(sql, args)
     }
@@ -482,6 +537,30 @@ export class MockD1Database {
     }))
 
     return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+  }
+
+  private filterGovernanceEvents(sql: string, args: any[]) {
+    let rows = [...this.governanceEvents]
+    const filterCandidates: Array<[string, keyof GovernanceEventRow, (value: any) => string | number]> = [
+      ['scope = ?', 'scope', String],
+      ['action = ?', 'action', String],
+      ['resource_type = ?', 'resource_type', String],
+      ['resource_id = ?', 'resource_id', String],
+      ['channel = ?', 'channel', String],
+      ['unit = ?', 'unit', String],
+    ]
+    let argIndex = 0
+    if (sql.includes('occurred_at >= ?'))
+      argIndex += 1
+
+    for (const [fragment, column, normalize] of filterCandidates) {
+      if (!sql.includes(fragment))
+        continue
+      const expected = normalize(args[argIndex++])
+      rows = rows.filter(row => (row as any)[column] === expected)
+    }
+
+    return rows.sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
   }
 }
 

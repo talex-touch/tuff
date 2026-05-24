@@ -249,14 +249,85 @@ export interface DashboardPluginReviewCommentTrendPoint {
   averageContentLength: number
 }
 
+export type DashboardPluginReviewCommentQualityBucketKey = 'empty' | 'short' | 'medium' | 'long'
+
+export interface DashboardPluginReviewCommentQualityBucket {
+  key: DashboardPluginReviewCommentQualityBucketKey
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageRating: number
+  lowRatingCount: number
+  lowRatingRate: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+}
+
 export interface DashboardPluginReviewCommentAnalytics {
   withTitle: number
   withContent: number
   titleCoverageRate: number
   contentCoverageRate: number
   averageContentLength: number
+  qualityBuckets: DashboardPluginReviewCommentQualityBucket[]
   byStatus: DashboardPluginReviewCommentStatusBucket[]
   trend: DashboardPluginReviewCommentTrendPoint[]
+}
+
+export type DashboardPluginReviewModerationTimingBucketKey = 'under1h' | 'oneTo24h' | 'oneTo7d' | 'over7d'
+
+export interface DashboardPluginReviewModerationTimingBucket {
+  key: DashboardPluginReviewModerationTimingBucketKey
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageHours: number
+  maxHours: number
+}
+
+export interface DashboardPluginReviewModerationTimingSummary {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageHours: number
+  maxHours: number
+  buckets: DashboardPluginReviewModerationTimingBucket[]
+}
+
+export interface DashboardPluginReviewModerationTimingAnalytics {
+  pending: DashboardPluginReviewModerationTimingSummary
+  processed: DashboardPluginReviewModerationTimingSummary
+}
+
+export type DashboardPluginReviewActionQueuePriority = 'high' | 'medium' | 'low'
+
+export type DashboardPluginReviewActionQueueSuggestedAction =
+  | 'moderate-pending-reviews'
+  | 'review-rejected-feedback'
+  | 'investigate-low-ratings'
+  | 'improve-review-prompts'
+
+export interface DashboardPluginReviewActionQueueItem {
+  key: string
+  priority: DashboardPluginReviewActionQueuePriority
+  suggestedAction: DashboardPluginReviewActionQueueSuggestedAction
+  reason: string
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  ratingCount: number
+  averageRating: number
+  lowRatingCount: number
+  lowRatingRate: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+  latestDate: string | null
 }
 
 export interface DashboardPluginReviewAnalytics {
@@ -270,7 +341,37 @@ export interface DashboardPluginReviewAnalytics {
   ratingTrend: DashboardPluginReviewRatingTrendPoint[]
   statusTrend: DashboardPluginReviewStatusTrendPoint[]
   comments: DashboardPluginReviewCommentAnalytics
+  moderationTiming: DashboardPluginReviewModerationTimingAnalytics
+  actionQueue: DashboardPluginReviewActionQueueItem[]
   latestAt: string | null
+}
+
+export type DashboardPluginOwnerActionQueuePriority = 'high' | 'medium' | 'low'
+
+export type DashboardPluginOwnerActionQueueSuggestedAction =
+  | 'improve-install-conversion'
+  | 'improve-invocation-conversion'
+  | 'investigate-invocation-failures'
+  | 'improve-retention'
+  | 'expand-location-coverage'
+
+export interface DashboardPluginOwnerActionQueueItem {
+  key: string
+  priority: DashboardPluginOwnerActionQueuePriority
+  suggestedAction: DashboardPluginOwnerActionQueueSuggestedAction
+  reason: string
+  downloads: number
+  installs: number
+  invocations: number
+  uniqueActors: number
+  installRate: number
+  invocationRate: number
+  invocationsPerActor: number
+  failureRate: number
+  retentionRate: number
+  topCountryKey: string | null
+  topCountryShare: number
+  latestDate: string | null
 }
 
 export interface DashboardPluginAnalytics {
@@ -286,6 +387,7 @@ export interface DashboardPluginAnalytics {
     invocationRate: number
     invocationsPerActor: number
   }
+  actionQueue: DashboardPluginOwnerActionQueueItem[]
   conversionTrend: DashboardPluginAnalyticsConversionTrendPoint[]
   actionTrend: DashboardPluginAnalyticsActionTrendPoint[]
   locationTrend: DashboardPluginAnalyticsLocationTrendPoint[]

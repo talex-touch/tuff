@@ -125,14 +125,85 @@ export interface PluginReviewCommentTrendPoint {
   averageContentLength: number
 }
 
+export type PluginReviewCommentQualityBucketKey = 'empty' | 'short' | 'medium' | 'long'
+
+export interface PluginReviewCommentQualityBucket {
+  key: PluginReviewCommentQualityBucketKey
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageRating: number
+  lowRatingCount: number
+  lowRatingRate: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+}
+
 export interface PluginReviewCommentAnalytics {
   withTitle: number
   withContent: number
   titleCoverageRate: number
   contentCoverageRate: number
   averageContentLength: number
+  qualityBuckets: PluginReviewCommentQualityBucket[]
   byStatus: PluginReviewCommentStatusBucket[]
   trend: PluginReviewCommentTrendPoint[]
+}
+
+export type PluginReviewModerationTimingBucketKey = 'under1h' | 'oneTo24h' | 'oneTo7d' | 'over7d'
+
+export interface PluginReviewModerationTimingBucket {
+  key: PluginReviewModerationTimingBucketKey
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageHours: number
+  maxHours: number
+}
+
+export interface PluginReviewModerationTimingSummary {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageHours: number
+  maxHours: number
+  buckets: PluginReviewModerationTimingBucket[]
+}
+
+export interface PluginReviewModerationTimingAnalytics {
+  pending: PluginReviewModerationTimingSummary
+  processed: PluginReviewModerationTimingSummary
+}
+
+export type PluginReviewActionQueuePriority = 'high' | 'medium' | 'low'
+
+export type PluginReviewActionQueueSuggestedAction =
+  | 'moderate-pending-reviews'
+  | 'review-rejected-feedback'
+  | 'investigate-low-ratings'
+  | 'improve-review-prompts'
+
+export interface PluginReviewActionQueueItem {
+  key: string
+  priority: PluginReviewActionQueuePriority
+  suggestedAction: PluginReviewActionQueueSuggestedAction
+  reason: string
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  ratingCount: number
+  averageRating: number
+  lowRatingCount: number
+  lowRatingRate: number
+  titleCoverageRate: number
+  contentCoverageRate: number
+  averageContentLength: number
+  latestDate: string | null
 }
 
 export interface PluginReviewAnalytics {
@@ -146,10 +217,15 @@ export interface PluginReviewAnalytics {
   ratingTrend: PluginReviewRatingTrendPoint[]
   statusTrend: PluginReviewStatusTrendPoint[]
   comments: PluginReviewCommentAnalytics
+  moderationTiming: PluginReviewModerationTimingAnalytics
+  actionQueue: PluginReviewActionQueueItem[]
   latestAt: string | null
 }
 
 const REVIEW_STATUSES: PluginReviewStatus[] = ['approved', 'pending', 'rejected']
+const COMMENT_QUALITY_BUCKETS: PluginReviewCommentQualityBucketKey[] = ['empty', 'short', 'medium', 'long']
+const MODERATION_TIMING_BUCKETS: PluginReviewModerationTimingBucketKey[] = ['under1h', 'oneTo24h', 'oneTo7d', 'over7d']
+const HOUR_MS = 60 * 60 * 1000
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
@@ -360,11 +436,145 @@ function createReviewRatingTrend(
     .sort((a, b) => a.date.localeCompare(b.date))
 }
 
+interface ReviewModerationTimingAggregation {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  hoursTotal: number
+  maxHours: number
+}
+
+function createEmptyModerationTimingAggregation(): ReviewModerationTimingAggregation {
+  return {
+    total: 0,
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+    hoursTotal: 0,
+    maxHours: 0,
+  }
+}
+
+function parseReviewDate(value?: string | null): number | null {
+  if (!value)
+    return null
+  const time = Date.parse(value)
+  return Number.isFinite(time) ? time : null
+}
+
+function diffReviewHours(start?: string | null, end?: string | null): number | null {
+  const startTime = parseReviewDate(start)
+  const endTime = parseReviewDate(end)
+  if (startTime === null || endTime === null || endTime < startTime)
+    return null
+  return (endTime - startTime) / HOUR_MS
+}
+
+function classifyModerationTiming(hours: number): PluginReviewModerationTimingBucketKey {
+  if (hours < 1)
+    return 'under1h'
+  if (hours < 24)
+    return 'oneTo24h'
+  if (hours < 168)
+    return 'oneTo7d'
+  return 'over7d'
+}
+
+function pushModerationTimingAggregation(
+  aggregation: ReviewModerationTimingAggregation,
+  review: { status: PluginReviewStatus },
+  hours: number,
+): void {
+  aggregation.total += 1
+  aggregation[review.status] += 1
+  aggregation.hoursTotal += hours
+  aggregation.maxHours = Math.max(aggregation.maxHours, hours)
+}
+
+function mapModerationTimingAggregation(
+  key: PluginReviewModerationTimingBucketKey,
+  aggregation: ReviewModerationTimingAggregation,
+): PluginReviewModerationTimingBucket {
+  return {
+    key,
+    total: aggregation.total,
+    approved: aggregation.approved,
+    pending: aggregation.pending,
+    rejected: aggregation.rejected,
+    averageHours: roundAverage(aggregation.total ? aggregation.hoursTotal / aggregation.total : 0),
+    maxHours: roundAverage(aggregation.maxHours),
+  }
+}
+
+function mapModerationTimingSummary(
+  total: ReviewModerationTimingAggregation,
+  buckets: Map<PluginReviewModerationTimingBucketKey, ReviewModerationTimingAggregation>,
+): PluginReviewModerationTimingSummary {
+  return {
+    total: total.total,
+    approved: total.approved,
+    pending: total.pending,
+    rejected: total.rejected,
+    averageHours: roundAverage(total.total ? total.hoursTotal / total.total : 0),
+    maxHours: roundAverage(total.maxHours),
+    buckets: MODERATION_TIMING_BUCKETS.map(key =>
+      mapModerationTimingAggregation(key, buckets.get(key) ?? createEmptyModerationTimingAggregation()),
+    ),
+  }
+}
+
+function createReviewModerationTimingAnalytics(
+  reviews: Array<{ status: PluginReviewStatus, createdAt?: string | null, updatedAt?: string | null }>,
+  now = new Date(),
+): PluginReviewModerationTimingAnalytics {
+  const pendingTotal = createEmptyModerationTimingAggregation()
+  const processedTotal = createEmptyModerationTimingAggregation()
+  const pendingBuckets = new Map<PluginReviewModerationTimingBucketKey, ReviewModerationTimingAggregation>()
+  const processedBuckets = new Map<PluginReviewModerationTimingBucketKey, ReviewModerationTimingAggregation>()
+  const nowIso = now.toISOString()
+
+  for (const review of reviews) {
+    const endAt = review.status === 'pending' ? nowIso : review.updatedAt
+    const hours = diffReviewHours(review.createdAt, endAt)
+    if (hours === null)
+      continue
+
+    const bucketKey = classifyModerationTiming(hours)
+    if (review.status === 'pending') {
+      const bucket = pendingBuckets.get(bucketKey) ?? createEmptyModerationTimingAggregation()
+      pushModerationTimingAggregation(pendingTotal, review, hours)
+      pushModerationTimingAggregation(bucket, review, hours)
+      pendingBuckets.set(bucketKey, bucket)
+      continue
+    }
+
+    const bucket = processedBuckets.get(bucketKey) ?? createEmptyModerationTimingAggregation()
+    pushModerationTimingAggregation(processedTotal, review, hours)
+    pushModerationTimingAggregation(bucket, review, hours)
+    processedBuckets.set(bucketKey, bucket)
+  }
+
+  return {
+    pending: mapModerationTimingSummary(pendingTotal, pendingBuckets),
+    processed: mapModerationTimingSummary(processedTotal, processedBuckets),
+  }
+}
+
 interface ReviewCommentAggregation {
   total: number
   withTitle: number
   withContent: number
   contentLength: number
+}
+
+interface ReviewCommentQualityAggregation extends ReviewCommentAggregation {
+  approved: number
+  pending: number
+  rejected: number
+  ratingCount: number
+  ratingTotal: number
+  lowRatingCount: number
 }
 
 function createEmptyCommentAggregation(): ReviewCommentAggregation {
@@ -387,6 +597,46 @@ function pushReviewCommentAggregation(
   aggregation.contentLength += content.length
 }
 
+function createEmptyCommentQualityAggregation(): ReviewCommentQualityAggregation {
+  return {
+    ...createEmptyCommentAggregation(),
+    approved: 0,
+    pending: 0,
+    rejected: 0,
+    ratingCount: 0,
+    ratingTotal: 0,
+    lowRatingCount: 0,
+  }
+}
+
+function classifyReviewCommentLength(content?: string | null): PluginReviewCommentQualityBucketKey {
+  const length = typeof content === 'string' ? content.trim().length : 0
+  if (length <= 0)
+    return 'empty'
+  if (length < 40)
+    return 'short'
+  if (length < 160)
+    return 'medium'
+  return 'long'
+}
+
+function pushReviewCommentQualityAggregation(
+  aggregation: ReviewCommentQualityAggregation,
+  review: { status: PluginReviewStatus, rating?: unknown, title?: string | null, content?: string | null },
+): void {
+  pushReviewCommentAggregation(aggregation, review)
+  aggregation[review.status] += 1
+
+  const rating = normalizeRating(review.rating)
+  if (!rating)
+    return
+
+  aggregation.ratingCount += 1
+  aggregation.ratingTotal += rating
+  if (rating <= 2)
+    aggregation.lowRatingCount += 1
+}
+
 function mapReviewCommentAggregation(
   aggregation: ReviewCommentAggregation,
 ): Omit<PluginReviewCommentStatusBucket, 'status'> {
@@ -400,9 +650,32 @@ function mapReviewCommentAggregation(
   }
 }
 
+function mapReviewCommentQualityBucket(
+  key: PluginReviewCommentQualityBucketKey,
+  aggregation: ReviewCommentQualityAggregation,
+): PluginReviewCommentQualityBucket {
+  return {
+    key,
+    total: aggregation.total,
+    approved: aggregation.approved,
+    pending: aggregation.pending,
+    rejected: aggregation.rejected,
+    averageRating: normalizeAverageRating(
+      aggregation.ratingCount,
+      aggregation.ratingCount ? aggregation.ratingTotal / aggregation.ratingCount : 0,
+    ),
+    lowRatingCount: aggregation.lowRatingCount,
+    lowRatingRate: roundPercent(aggregation.lowRatingCount, aggregation.ratingCount),
+    titleCoverageRate: roundPercent(aggregation.withTitle, aggregation.total),
+    contentCoverageRate: roundPercent(aggregation.withContent, aggregation.total),
+    averageContentLength: roundAverage(aggregation.total ? aggregation.contentLength / aggregation.total : 0),
+  }
+}
+
 function createReviewCommentAnalytics(
   reviews: Array<{
     status: PluginReviewStatus
+    rating?: unknown
     title?: string | null
     content?: string | null
     createdAt?: string | null
@@ -412,6 +685,7 @@ function createReviewCommentAnalytics(
   const total = createEmptyCommentAggregation()
   const byStatus = new Map<PluginReviewStatus, ReviewCommentAggregation>()
   const trend = new Map<string, ReviewCommentAggregation>()
+  const qualityBuckets = new Map<PluginReviewCommentQualityBucketKey, ReviewCommentQualityAggregation>()
 
   for (const review of reviews) {
     pushReviewCommentAggregation(total, review)
@@ -426,6 +700,11 @@ function createReviewCommentAnalytics(
       pushReviewCommentAggregation(trendAggregation, review)
       trend.set(date, trendAggregation)
     }
+
+    const qualityKey = classifyReviewCommentLength(review.content)
+    const qualityAggregation = qualityBuckets.get(qualityKey) ?? createEmptyCommentQualityAggregation()
+    pushReviewCommentQualityAggregation(qualityAggregation, review)
+    qualityBuckets.set(qualityKey, qualityAggregation)
   }
 
   const summary = mapReviewCommentAggregation(total)
@@ -436,6 +715,9 @@ function createReviewCommentAnalytics(
     titleCoverageRate: summary.titleCoverageRate,
     contentCoverageRate: summary.contentCoverageRate,
     averageContentLength: summary.averageContentLength,
+    qualityBuckets: COMMENT_QUALITY_BUCKETS.map(key =>
+      mapReviewCommentQualityBucket(key, qualityBuckets.get(key) ?? createEmptyCommentQualityAggregation()),
+    ),
     byStatus: REVIEW_STATUSES.map(status => ({
       status,
       ...mapReviewCommentAggregation(byStatus.get(status) ?? createEmptyCommentAggregation()),
@@ -447,6 +729,102 @@ function createReviewCommentAnalytics(
       }))
       .sort((a, b) => a.date.localeCompare(b.date)),
   }
+}
+
+function rankPluginReviewActionQueuePriority(priority: PluginReviewActionQueuePriority): number {
+  switch (priority) {
+    case 'high':
+      return 3
+    case 'medium':
+      return 2
+    default:
+      return 1
+  }
+}
+
+function createPluginReviewActionQueue(input: {
+  total: number
+  approved: number
+  pending: number
+  rejected: number
+  averageRating: number
+  ratingCount: number
+  ratingDistribution: PluginReviewRatingBucket[]
+  ratingTrend: PluginReviewRatingTrendPoint[]
+  comments: PluginReviewCommentAnalytics
+  latestAt: string | null
+}): PluginReviewActionQueueItem[] {
+  if (input.total <= 0)
+    return []
+
+  const latestRatingTrend = input.ratingTrend.at(-1)
+  const lowRatingCount = input.ratingDistribution
+    .filter(bucket => bucket.rating <= 2)
+    .reduce((sum, bucket) => sum + bucket.count, 0)
+  const lowRatingRate = roundPercent(lowRatingCount, input.ratingCount)
+  const latestLowRatingCount = latestRatingTrend?.lowRatingCount ?? 0
+  const latestLowRatingRate = latestRatingTrend?.lowRatingRate ?? 0
+  const latestDate = (input.latestAt || latestRatingTrend?.date || '').slice(0, 10) || null
+  const baseMetrics = {
+    total: input.total,
+    approved: input.approved,
+    pending: input.pending,
+    rejected: input.rejected,
+    ratingCount: input.ratingCount,
+    averageRating: input.averageRating,
+    lowRatingCount,
+    lowRatingRate,
+    titleCoverageRate: input.comments.titleCoverageRate,
+    contentCoverageRate: input.comments.contentCoverageRate,
+    averageContentLength: input.comments.averageContentLength,
+    latestDate,
+  }
+  const queue: PluginReviewActionQueueItem[] = []
+
+  if (input.pending > 0) {
+    queue.push({
+      key: 'pending-review-backlog',
+      priority: 'high',
+      suggestedAction: 'moderate-pending-reviews',
+      reason: 'pending-review-backlog',
+      ...baseMetrics,
+    })
+  }
+
+  if (lowRatingCount > 0 || latestLowRatingCount > 0) {
+    queue.push({
+      key: 'low-rating-signal',
+      priority: latestLowRatingRate >= 30 || lowRatingRate >= 30 ? 'high' : 'medium',
+      suggestedAction: 'investigate-low-ratings',
+      reason: latestLowRatingCount > 0 ? 'latest-low-rating-spike' : 'low-rating-pattern',
+      ...baseMetrics,
+    })
+  }
+
+  if (input.comments.contentCoverageRate < 80 || input.comments.titleCoverageRate < 80) {
+    queue.push({
+      key: 'review-prompt-coverage',
+      priority: input.comments.contentCoverageRate < 60 ? 'high' : 'medium',
+      suggestedAction: 'improve-review-prompts',
+      reason: 'low-comment-coverage',
+      ...baseMetrics,
+    })
+  }
+
+  if (input.rejected > 0) {
+    queue.push({
+      key: 'rejected-review-pattern',
+      priority: 'medium',
+      suggestedAction: 'review-rejected-feedback',
+      reason: 'rejected-review-pattern',
+      ...baseMetrics,
+    })
+  }
+
+  return queue.sort((a, b) => {
+    const priorityDelta = rankPluginReviewActionQueuePriority(b.priority) - rankPluginReviewActionQueuePriority(a.priority)
+    return priorityDelta || a.key.localeCompare(b.key)
+  })
 }
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
@@ -883,56 +1261,23 @@ export async function getPluginReviewAnalytics(
       lowRatingCount: number | null
     }>()
 
-    const commentRow = await db.prepare(`
-      SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN TRIM(COALESCE(title, '')) <> '' THEN 1 ELSE 0 END) as withTitle,
-        SUM(CASE WHEN TRIM(COALESCE(content, '')) <> '' THEN 1 ELSE 0 END) as withContent,
-        AVG(LENGTH(TRIM(COALESCE(content, '')))) as averageContentLength
-      FROM ${PLUGIN_REVIEWS_TABLE}
-      WHERE plugin_id = ?1;
-    `).bind(pluginId).first<{
-      total: number
-      withTitle: number | null
-      withContent: number | null
-      averageContentLength: number | null
-    }>()
-
-    const commentStatusRows = await db.prepare(`
+    const commentRows = await db.prepare(`
       SELECT
         status,
-        COUNT(*) as total,
-        SUM(CASE WHEN TRIM(COALESCE(title, '')) <> '' THEN 1 ELSE 0 END) as withTitle,
-        SUM(CASE WHEN TRIM(COALESCE(content, '')) <> '' THEN 1 ELSE 0 END) as withContent,
-        AVG(LENGTH(TRIM(COALESCE(content, '')))) as averageContentLength
+        rating,
+        title,
+        content,
+        created_at as createdAt,
+        updated_at as updatedAt
       FROM ${PLUGIN_REVIEWS_TABLE}
-      WHERE plugin_id = ?1
-      GROUP BY status;
+      WHERE plugin_id = ?1;
     `).bind(pluginId).all<{
       status: PluginReviewStatus
-      total: number
-      withTitle: number | null
-      withContent: number | null
-      averageContentLength: number | null
-    }>()
-
-    const commentTrendRows = await db.prepare(`
-      SELECT
-        substr(COALESCE(NULLIF(updated_at, ''), created_at), 1, 10) as date,
-        COUNT(*) as total,
-        SUM(CASE WHEN TRIM(COALESCE(title, '')) <> '' THEN 1 ELSE 0 END) as withTitle,
-        SUM(CASE WHEN TRIM(COALESCE(content, '')) <> '' THEN 1 ELSE 0 END) as withContent,
-        AVG(LENGTH(TRIM(COALESCE(content, '')))) as averageContentLength
-      FROM ${PLUGIN_REVIEWS_TABLE}
-      WHERE plugin_id = ?1
-      GROUP BY substr(COALESCE(NULLIF(updated_at, ''), created_at), 1, 10)
-      ORDER BY date ASC;
-    `).bind(pluginId).all<{
-      date: string | null
-      total: number
-      withTitle: number | null
-      withContent: number | null
-      averageContentLength: number | null
+      rating: number
+      title: string | null
+      content: string | null
+      createdAt: string | null
+      updatedAt: string | null
     }>()
 
     const distributionCounts = new Map(
@@ -965,69 +1310,47 @@ export async function getPluginReviewAnalytics(
         }
       })
     const ratingCount = Number(ratingRow?.count ?? 0) || 0
-    const commentTotal = Number(commentRow?.total ?? 0) || 0
-    const commentWithTitle = Number(commentRow?.withTitle ?? 0) || 0
-    const commentWithContent = Number(commentRow?.withContent ?? 0) || 0
-    const commentStatusCounts = new Map(
-      (commentStatusRows.results ?? []).map(row => [row.status, {
-        total: Number(row.total ?? 0) || 0,
-        withTitle: Number(row.withTitle ?? 0) || 0,
-        withContent: Number(row.withContent ?? 0) || 0,
-        averageContentLength: roundAverage(row.averageContentLength),
-      }]),
-    )
-    const comments: PluginReviewCommentAnalytics = {
-      withTitle: commentWithTitle,
-      withContent: commentWithContent,
-      titleCoverageRate: roundPercent(commentWithTitle, commentTotal),
-      contentCoverageRate: roundPercent(commentWithContent, commentTotal),
-      averageContentLength: roundAverage(commentRow?.averageContentLength),
-      byStatus: REVIEW_STATUSES.map((status) => {
-        const item = commentStatusCounts.get(status) ?? {
-          total: 0,
-          withTitle: 0,
-          withContent: 0,
-          averageContentLength: 0,
-        }
-        return {
-          status,
-          total: item.total,
-          withTitle: item.withTitle,
-          withContent: item.withContent,
-          titleCoverageRate: roundPercent(item.withTitle, item.total),
-          contentCoverageRate: roundPercent(item.withContent, item.total),
-          averageContentLength: item.averageContentLength,
-        }
-      }),
-      trend: (commentTrendRows.results ?? [])
-        .filter(row => Boolean(row.date))
-        .map((row) => {
-          const total = Number(row.total ?? 0) || 0
-          const withTitle = Number(row.withTitle ?? 0) || 0
-          const withContent = Number(row.withContent ?? 0) || 0
-          return {
-            date: row.date ?? '',
-            total,
-            withTitle,
-            withContent,
-            titleCoverageRate: roundPercent(withTitle, total),
-            contentCoverageRate: roundPercent(withContent, total),
-            averageContentLength: roundAverage(row.averageContentLength),
-          }
-        }),
-    }
+    const commentReviewRows = (commentRows.results ?? []).map(row => ({
+      status: REVIEW_STATUSES.includes(row.status) ? row.status : 'pending',
+      rating: row.rating,
+      title: row.title,
+      content: row.content,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }))
+    const comments = createReviewCommentAnalytics(commentReviewRows)
+    const moderationTiming = createReviewModerationTimingAnalytics(commentReviewRows)
+
+    const total = Number(statusRow?.total ?? 0) || 0
+    const approved = Number(statusRow?.approved ?? 0) || 0
+    const pending = Number(statusRow?.pending ?? 0) || 0
+    const rejected = Number(statusRow?.rejected ?? 0) || 0
+    const averageRating = normalizeAverageRating(ratingCount, ratingRow?.average)
 
     return {
-      total: Number(statusRow?.total ?? 0) || 0,
-      approved: Number(statusRow?.approved ?? 0) || 0,
-      pending: Number(statusRow?.pending ?? 0) || 0,
-      rejected: Number(statusRow?.rejected ?? 0) || 0,
-      averageRating: normalizeAverageRating(ratingCount, ratingRow?.average),
+      total,
+      approved,
+      pending,
+      rejected,
+      averageRating,
       ratingCount,
       ratingDistribution,
       ratingTrend,
       statusTrend,
       comments,
+      moderationTiming,
+      actionQueue: createPluginReviewActionQueue({
+        total,
+        approved,
+        pending,
+        rejected,
+        averageRating,
+        ratingCount,
+        ratingDistribution,
+        ratingTrend,
+        comments,
+        latestAt: statusRow?.latestAt ?? null,
+      }),
       latestAt: statusRow?.latestAt ?? null,
     }
   }
@@ -1046,17 +1369,41 @@ export async function getPluginReviewAnalytics(
     return !latest || value.localeCompare(latest) > 0 ? value : latest
   }, null)
 
+  const total = reviews.length
+  const approved = reviews.filter(item => item.status === 'approved').length
+  const pending = reviews.filter(item => item.status === 'pending').length
+  const rejected = reviews.filter(item => item.status === 'rejected').length
+  const averageRating = normalizeAverageRating(ratingCount, average)
+  const ratingDistribution = createRatingDistribution(approvedReviews)
+  const ratingTrend = createReviewRatingTrend(reviews)
+  const statusTrend = createReviewStatusTrend(reviews)
+  const comments = createReviewCommentAnalytics(reviews)
+  const moderationTiming = createReviewModerationTimingAnalytics(reviews)
+
   return {
-    total: reviews.length,
-    approved: reviews.filter(item => item.status === 'approved').length,
-    pending: reviews.filter(item => item.status === 'pending').length,
-    rejected: reviews.filter(item => item.status === 'rejected').length,
-    averageRating: normalizeAverageRating(ratingCount, average),
+    total,
+    approved,
+    pending,
+    rejected,
+    averageRating,
     ratingCount,
-    ratingDistribution: createRatingDistribution(approvedReviews),
-    ratingTrend: createReviewRatingTrend(reviews),
-    statusTrend: createReviewStatusTrend(reviews),
-    comments: createReviewCommentAnalytics(reviews),
+    ratingDistribution,
+    ratingTrend,
+    statusTrend,
+    comments,
+    moderationTiming,
+    actionQueue: createPluginReviewActionQueue({
+      total,
+      approved,
+      pending,
+      rejected,
+      averageRating,
+      ratingCount,
+      ratingDistribution,
+      ratingTrend,
+      comments,
+      latestAt,
+    }),
     latestAt,
   }
 }
