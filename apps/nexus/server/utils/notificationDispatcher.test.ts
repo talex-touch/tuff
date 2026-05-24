@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listBrowserNotificationInbox } from './browserNotificationInboxStore'
 import { dispatchNotificationEvent } from './notificationDispatcher'
+import { sendEmail } from './email'
 import { listPlatformGovernanceEvents, upsertPlatformGovernanceConfig } from './platformGovernanceStore'
 
 const credentialMocks = vi.hoisted(() => ({
@@ -399,6 +400,70 @@ describe('notificationDispatcher', () => {
     expect(serialized).not.toContain('developer@example.com')
     expect(serialized).not.toContain('reviewer@example.com')
     expect(serialized).not.toContain('re-unit-test-secret')
+  })
+
+  it('routes auth email helpers through notification channel configs without auditing raw payloads', async () => {
+    const marker = crypto.randomUUID()
+    const h3Event = event(marker)
+    const authRef = `secure://notifications/auth-email-${marker}`
+    await upsertPlatformGovernanceConfig(h3Event, {
+      configType: 'notification_channel',
+      name: `Auth email ${marker}`,
+      channel: 'email',
+      provider: `auth-resend-${marker}`,
+      config: {
+        mode: 'send',
+        providerType: 'resend',
+        credentialRef: authRef,
+        from: 'Tuff Auth <auth@example.com>',
+        events: ['auth.password.reset'],
+      },
+    }, 'admin')
+    credentialMocks.notificationCredentialExists.mockResolvedValueOnce(true)
+    credentialMocks.getNotificationCredential.mockResolvedValueOnce({ apiKey: 'auth-email-secret' })
+
+    await sendEmail({
+      to: 'owner@example.com',
+      subject: 'Reset your password',
+      text: `Use reset token auth-reset-token-${marker}`,
+      html: `<p>reset auth-reset-token-${marker}</p><a href="https://tuff.local/reset?token=auth-reset-token-${marker}&email=owner%40example.com">reset</a>`,
+      action: 'auth.password.reset',
+      resourceType: 'auth_user',
+      resourceId: `user-${marker}`,
+    }, h3Event)
+
+    expect(networkMocks.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'https://api.resend.com/emails',
+      headers: expect.objectContaining({
+        Authorization: 'Bearer auth-email-secret',
+      }),
+      body: expect.objectContaining({
+        from: 'Tuff Auth <auth@example.com>',
+        to: ['owner@example.com'],
+        subject: 'Reset your password',
+        text: `Use reset token auth-reset-token-${marker}`,
+        html: `<p>reset auth-reset-token-${marker}</p><a href="https://tuff.local/reset?token=auth-reset-token-${marker}&email=owner%40example.com">reset</a>`,
+      }),
+    }))
+
+    const events = await listPlatformGovernanceEvents(h3Event, {
+      scope: 'notification',
+      action: 'notification.delivery.sent',
+      resourceType: 'auth_user',
+      resourceId: `user-${marker}`,
+      limit: 20,
+    })
+    const serialized = JSON.stringify(events)
+    expect(serialized).toContain('delivery-sent')
+    expect(serialized).toContain('auth.password.reset')
+    expect(serialized).not.toContain('owner@example.com')
+    expect(serialized).not.toContain('owner%40example.com')
+    expect(serialized).not.toContain(`auth-reset-token-${marker}`)
+    expect(serialized).not.toContain('Reset your password')
+    expect(serialized).not.toContain('<p>reset')
+    expect(serialized).not.toContain('auth-email-secret')
+    expect(serialized).not.toContain(authRef)
   })
 
   it('records sanitized HTTP status codes for failed notification adapter responses', async () => {

@@ -1,8 +1,14 @@
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord } from './sceneRegistryStore'
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getPlatformGovernanceAnalytics, listPlatformGovernanceEvents } from './platformGovernanceStore'
+import {
+  getPlatformGovernanceAnalytics,
+  listPlatformGovernanceEvents,
+  recordPlatformGovernanceEvent,
+  upsertPlatformGovernanceConfig,
+} from './platformGovernanceStore'
 import { buildSceneAssetGovernanceResourceId, requireSceneAsset } from './sceneAssetStorage'
 import {
   clearSceneCapabilityAdaptersForTest,
@@ -403,6 +409,97 @@ describe('runSceneOrchestrator', () => {
         expect.objectContaining({ unit: 'character', quantity: 5 }),
       ]),
     }))
+  })
+
+  it('按 scene capability 隔离 Provider quota channel', async () => {
+    const quotaEvent = makeEvent()
+    const providerId = `prv_quota_channel_${randomUUID()}`
+    const multiCapabilityProvider = provider({
+      id: providerId,
+      name: 'quota-channel-provider',
+      displayName: 'Quota Channel Provider',
+      capabilities: [
+        capability(providerId, 'text.translate', 'character'),
+        capability(providerId, 'image.translate', 'image'),
+      ],
+    })
+    storeMocks.getProviderRegistryEntry.mockResolvedValue(multiCapabilityProvider)
+    storeMocks.getSceneRegistryEntry.mockResolvedValue(scene({
+      id: 'corebox.screenshot.translate',
+      displayName: 'CoreBox Screenshot Translate',
+      requiredCapabilities: ['image.translate'],
+      bindings: [
+        {
+          ...binding(providerId, 'image.translate', 10),
+          sceneId: 'corebox.screenshot.translate',
+        },
+      ],
+    }))
+    registerSceneCapabilityAdapter('tencent-cloud:image.translate', async ({ provider, capability }) => ({
+      output: {
+        translatedImageBase64: 'translated-image',
+      },
+      usage: [
+        {
+          unit: 'image',
+          quantity: 1,
+          billable: true,
+          providerId: provider.id,
+          capability,
+          estimated: true,
+        },
+      ],
+    }))
+
+    await upsertPlatformGovernanceConfig(quotaEvent, {
+      configType: 'intelligence_provider_quota',
+      name: 'Text translate quota',
+      targetId: providerId,
+      channel: 'text.translate',
+      limits: {
+        maxRequests: 1,
+        windowDays: 30,
+      },
+    }, 'admin')
+    await upsertPlatformGovernanceConfig(quotaEvent, {
+      configType: 'intelligence_provider_quota',
+      name: 'Image translate quota',
+      targetId: providerId,
+      channel: 'image.translate',
+      limits: {
+        maxRequests: 2,
+        windowDays: 30,
+      },
+    }, 'admin')
+    await recordPlatformGovernanceEvent(quotaEvent, {
+      scope: 'intelligence',
+      action: 'provider.request',
+      resourceType: 'provider',
+      resourceId: providerId,
+      channel: 'text.translate',
+      unit: 'request',
+      quantity: 1,
+    })
+
+    const run = await runSceneOrchestrator(quotaEvent, 'corebox.screenshot.translate', {
+      input: {
+        imageBase64: 'source-image-base64',
+        imageMimeType: 'image/png',
+      },
+    })
+    const events = await listPlatformGovernanceEvents(quotaEvent, {
+      scope: 'intelligence',
+      resourceType: 'provider',
+      resourceId: providerId,
+      limit: 20,
+    })
+
+    expect(run).toMatchObject({
+      status: 'completed',
+      output: { translatedImageBase64: 'translated-image' },
+    })
+    expect(events.filter(item => item.action === 'provider.request' && item.channel === 'image.translate')).toHaveLength(1)
+    expect(events.filter(item => item.action === 'provider.request' && item.channel === 'text.translate')).toHaveLength(1)
   })
 
   it('合并 adapter/upload/assets/constraints 配置并只在 trace 暴露脱敏摘要', async () => {

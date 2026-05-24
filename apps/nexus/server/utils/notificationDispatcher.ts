@@ -76,18 +76,24 @@ const SENSITIVE_METADATA_KEYS = new Set([
   'actorid',
   'auth',
   'authref',
+  'body',
   'credential',
   'credentialref',
   'email',
   'from',
+  'html',
   'p256dh',
   'password',
   'recipient',
   'recipients',
   'secret',
   'secretkey',
+  'subject',
   'token',
   'to',
+  'text',
+  'title',
+  'url',
   'userid',
   'webhookurl',
   'webpushsubscription',
@@ -215,6 +221,24 @@ function createNotificationTitle(delivery: EvaluatedNotificationDelivery, input:
   return readConfigString(delivery.config, 'title', 180)
     ?? readConfigString(delivery.config, 'subject', 180)
     ?? `[Tuff] ${input.action}`
+}
+
+function readNotificationText(delivery: EvaluatedNotificationDelivery, input: DispatchNotificationInput): string {
+  return readConfigString(delivery.config, 'text', 4000)
+    ?? normalizeString(input.metadata?.text, 4000)
+    ?? createNotificationText(delivery, input)
+}
+
+function readNotificationSubject(delivery: EvaluatedNotificationDelivery, input: DispatchNotificationInput): string {
+  return readConfigString(delivery.config, 'subject', 240)
+    ?? normalizeString(input.metadata?.subject, 240)
+    ?? `[Tuff] ${input.action}`
+}
+
+function readNotificationHtml(delivery: EvaluatedNotificationDelivery, input: DispatchNotificationInput): string | null {
+  return readConfigString(delivery.config, 'html', 8000)
+    ?? normalizeString(input.metadata?.html, 8000)
+    ?? null
 }
 
 function resolveNotificationOwnerId(
@@ -450,8 +474,9 @@ async function sendResendNotification(
   if (!from)
     return createSendResult('sender-missing')
 
-  const subject = readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`
-  const text = readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input)
+  const subject = readNotificationSubject(delivery, input)
+  const text = readNotificationText(delivery, input)
+  const html = readNotificationHtml(delivery, input)
   const response = await networkClient.request({
     method: 'POST',
     url: 'https://api.resend.com/emails',
@@ -466,6 +491,7 @@ async function sendResendNotification(
       to: recipients,
       subject,
       text,
+      html: html ?? undefined,
     },
   })
 
@@ -505,11 +531,11 @@ async function sendSendgridNotification(
         },
       ],
       from: { email: from },
-      subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
+      subject: readNotificationSubject(delivery, input),
       content: [
         {
-          type: 'text/plain',
-          value: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+          type: readNotificationHtml(delivery, input) ? 'text/html' : 'text/plain',
+          value: readNotificationHtml(delivery, input) ?? readNotificationText(delivery, input),
         },
       ],
     },
@@ -548,8 +574,11 @@ async function sendMailgunNotification(
   body.set('from', from)
   for (const recipient of recipients)
     body.append('to', recipient)
-  body.set('subject', readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`)
-  body.set('text', readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input))
+  body.set('subject', readNotificationSubject(delivery, input))
+  body.set('text', readNotificationText(delivery, input))
+  const html = readNotificationHtml(delivery, input)
+  if (html)
+    body.set('html', html)
 
   const response = await networkClient.request({
     method: 'POST',
@@ -595,8 +624,9 @@ async function sendPostmarkNotification(
     body: {
       From: from,
       To: recipients.join(','),
-      Subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
-      TextBody: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+      Subject: readNotificationSubject(delivery, input),
+      TextBody: readNotificationText(delivery, input),
+      HtmlBody: readNotificationHtml(delivery, input) ?? undefined,
       MessageStream: readConfigString(delivery.config, 'messageStream', 120) ?? undefined,
     },
   })
@@ -658,8 +688,9 @@ async function sendGenericEmailNotification(
     action: input.action,
     from,
     to: recipients,
-    subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
-    text: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+    subject: readNotificationSubject(delivery, input),
+    text: readNotificationText(delivery, input),
+    html: readNotificationHtml(delivery, input) ?? undefined,
     resourceType: input.resourceType ?? null,
     resourceId: input.resourceId ?? null,
     metadata: sanitizeDispatchMetadata(input.metadata),
@@ -724,8 +755,9 @@ async function sendSmtpRelayNotification(
       },
       from,
       to: recipients,
-      subject: readConfigString(delivery.config, 'subject', 240) ?? `[Tuff] ${input.action}`,
-      text: readConfigString(delivery.config, 'text', 4000) ?? createNotificationText(delivery, input),
+      subject: readNotificationSubject(delivery, input),
+      text: readNotificationText(delivery, input),
+      html: readNotificationHtml(delivery, input) ?? undefined,
       resourceType: input.resourceType ?? null,
       resourceId: input.resourceId ?? null,
       metadata: sanitizeDispatchMetadata(input.metadata),

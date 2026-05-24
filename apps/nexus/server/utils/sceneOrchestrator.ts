@@ -1605,7 +1605,7 @@ export async function runSceneOrchestrator(
       }
 
       try {
-        await assertIntelligenceProviderQuota(event, provider.id)
+        await assertIntelligenceProviderQuota(event, provider.id, plan.capability)
         await recordIntelligenceProviderRequest(event, provider.id, plan.capability)
         const adapterInput = buildCapabilityInput(plan.capability, request.input, outputs)
         const result = await adapter({

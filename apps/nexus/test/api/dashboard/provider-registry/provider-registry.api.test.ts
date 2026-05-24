@@ -431,6 +431,75 @@ describe('/api/dashboard/provider-registry', () => {
     expect(state.db?.governanceConfigs.size).toBe(1)
   })
 
+  it('Provider quota API 返回同一 provider 的多 channel 配额', async () => {
+    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+    const created = await createProviderHandler(makeEvent())
+    const now = new Date().toISOString()
+    const rows = [
+      {
+        id: `quota_text_${created.provider.id}`,
+        channel: 'text.translate',
+        maxRequests: 100,
+      },
+      {
+        id: `quota_image_${created.provider.id}`,
+        channel: 'image.translate',
+        maxRequests: 20,
+      },
+    ]
+    for (const row of rows) {
+      state.db?.governanceConfigs.set(row.id, {
+        id: row.id,
+        config_type: 'intelligence_provider_quota',
+        name: `${row.channel} quota`,
+        owner_scope: 'system',
+        owner_id: '',
+        target_id: created.provider.id,
+        channel: row.channel,
+        provider: 'tencent-cloud',
+        enabled: 1,
+        limits_json: JSON.stringify({ windowDays: 30, maxRequests: row.maxRequests }),
+        warning_threshold: 80,
+        config_json: JSON.stringify({ source: 'provider-registry-panel' }),
+        created_by: 'admin',
+        created_at: now,
+        updated_at: now,
+      })
+    }
+
+    h3Mocks.getRouterParam.mockReturnValue(created.provider.id)
+    const listed = await getProviderQuotaHandler(makeEvent())
+
+    expect(listed.quota).toEqual(expect.objectContaining({
+      configType: 'intelligence_provider_quota',
+      targetId: created.provider.id,
+    }))
+    expect(listed.quotas).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        targetId: created.provider.id,
+        channel: 'text.translate',
+        limits: { windowDays: 30, maxRequests: 100 },
+      }),
+      expect.objectContaining({
+        targetId: created.provider.id,
+        channel: 'image.translate',
+        limits: { windowDays: 30, maxRequests: 20 },
+      }),
+    ]))
+    expect(listed.evaluations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        providerId: created.provider.id,
+        channel: 'text.translate',
+        remaining: expect.objectContaining({ requests: 100 }),
+      }),
+      expect.objectContaining({
+        providerId: created.provider.id,
+        channel: 'image.translate',
+        remaining: expect.objectContaining({ requests: 20 }),
+      }),
+    ]))
+  })
+
   it('Provider quota API 更新同一 provider 配额而不是重复创建', async () => {
     h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
     const created = await createProviderHandler(makeEvent())

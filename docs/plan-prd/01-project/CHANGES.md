@@ -13,6 +13,56 @@
 
 ## 2026-05-24
 
+### feat(nexus): route auth recovery through notification channels
+
+- `apps/nexus/server/utils/email.ts`
+- `apps/nexus/server/utils/notificationDispatcher.ts`
+- `apps/nexus/server/utils/browserNotificationInboxStore.ts`
+- `apps/nexus/server/utils/notificationDispatcher.test.ts`
+- `apps/nexus/server/api/auth/[...].ts`
+- `apps/nexus/server/api/auth/register.post.ts`
+- `apps/nexus/server/api/auth/bind-email.post.ts`
+- `apps/nexus/server/api/auth/password/forgot.post.ts`
+- `apps/nexus/server/api/admin/users/[id]/password-reset-link.post.ts`
+- `apps/nexus/app/pages/dashboard/admin/users.vue`
+- `apps/nexus/test/api/auth/auth-email-channel-contract.test.ts`
+- `apps/nexus/test/api/admin/users-password-reset-link.api.test.ts`
+- `apps/nexus/README.md`
+- `apps/nexus/SETUP.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Routed register verification, email binding verification, password reset, and NextAuth magic-link emails through configured notification email channels.
+  - Treat Resend as a `notification_channel` adapter with `providerType: "resend"`, backed by encrypted `secure://notifications/*` credentials, instead of a channel-bypassing `RESEND_API_KEY` fallback.
+  - Added an admin-only Users dashboard control and API endpoint for bounded one-time password reset links for active users, with TTL clamping and token-free admin audit metadata.
+  - Hardened notification governance audit and browser inbox metadata sanitization so subjects, bodies, HTML/text, URLs, recipients, tokens, credential refs, and provider secrets are not stored in governance telemetry or inbox metadata.
+
+### feat(nexus): centralize AI provider config in Provider Registry
+
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Removed legacy Intelligence provider CRUD controls from the Intelligence admin panel and redirected provider configuration to the shared Provider Registry.
+  - Added Provider Registry templates for Tencent translation, OpenAI-compatible AI, and DeepSeek AI so AI providers start from governed provider records, capabilities, and secure `authRef` references.
+  - Localized the Provider Registry mirror, migration readiness, scene error, quota/template, and support-recovery labels in both Chinese and English locale files.
+
+### fix(nexus): scope scene provider quotas by capability channel
+
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota.get.ts`
+- `apps/nexus/test/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
+- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
+- `apps/nexus/app/utils/provider-registry-admin.ts`
+- `apps/nexus/app/utils/provider-registry-admin.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Passed the Scene Orchestrator capability id into provider quota checks so an exhausted channel such as `text.translate` does not block another capability such as `image.translate` on the same provider.
+  - Extended the Provider Registry quota GET response with a backward-compatible `quotas[]` list and rendered multi-channel quota summaries in the admin panel.
+
 ### feat(nexus): add governance operations command board
 
 - `apps/nexus/app/pages/dashboard/admin/governance.vue`

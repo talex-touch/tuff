@@ -24,11 +24,11 @@ AUTH_SECRET=your_auth_secret
 AUTH_ORIGIN=http://localhost:3200
 GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
-RESEND_API_KEY=your_resend_key
+AUTH_EMAIL_SERVER=smtp://placeholder
 AUTH_EMAIL_FROM="Tuff <noreply@tuff.chat>"
 ```
 
-Additional optional variables are described in `SETUP.md`.
+Auth email delivery is governed by notification channels. Configure a `notification_channel` with `channel: "email"` and `providerType: "resend"` (or another email adapter), then bind the API key through `secure://notifications/*` credentials.
 
 ## Deployment environment variables
 
@@ -48,10 +48,11 @@ Auth providers (optional):
 - `LINUXDO_CLIENT_SECRET`
 - `LINUXDO_ISSUER`
 
-Email login / Magic Link (optional):
-- `RESEND_API_KEY`
+Email login / Magic Link (optional gate):
 - `AUTH_EMAIL_FROM`
 - `AUTH_EMAIL_SERVER`
+
+Actual email sending is handled by notification channel configs and encrypted notification credentials. Resend is one email channel provider, not a standalone env fallback.
 
 Turnstile (optional):
 - `TURNSTILE_SITEKEY` or `NUXT_PUBLIC_TURNSTILE_SITE_KEY`

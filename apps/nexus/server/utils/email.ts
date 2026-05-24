@@ -1,33 +1,33 @@
-import { networkClient } from '@talex-touch/utils/network'
-import { useRuntimeConfig } from '#imports'
+import type { H3Event } from 'h3'
+import { dispatchNotificationEvent } from './notificationDispatcher'
 
 interface EmailPayload {
   to: string
   subject: string
   html: string
+  text?: string
+  action?: string
+  resourceType?: string
+  resourceId?: string
 }
 
-export async function sendEmail(payload: EmailPayload): Promise<void> {
-  const config = useRuntimeConfig()
-  const apiKey = config.auth?.email?.resendApiKey as string | undefined
-  const from = config.auth?.email?.from as string | undefined
-  if (!apiKey || !from) {
-    console.warn('[email] Missing RESEND config, skipping email send.')
-    return
-  }
-
-  await networkClient.request({
-    method: 'POST',
-    url: 'https://api.resend.com/emails',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: {
-      from,
+export async function sendEmail(payload: EmailPayload, event?: H3Event): Promise<void> {
+  const deliveries = await dispatchNotificationEvent(event, {
+    action: payload.action ?? 'auth.email.send',
+    resourceType: payload.resourceType ?? 'auth_email',
+    resourceId: payload.resourceId ?? null,
+    deliveryChannels: ['email'],
+    executionMode: 'config',
+    metadata: {
       to: payload.to,
       subject: payload.subject,
-      html: payload.html
-    }
+      text: payload.text ?? payload.html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      html: payload.html,
+    },
   })
+
+  if (deliveries.some(delivery => delivery.channel === 'email' && delivery.status === 'sent'))
+    return
+
+  console.warn('[email] No notification_channel email delivery was sent; configure an email channel such as providerType=resend.')
 }
