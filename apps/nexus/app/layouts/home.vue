@@ -1,3 +1,11 @@
+<script setup lang="ts">
+const route = useRoute()
+
+const hideFooter = computed(() => {
+  return route.path === '/updates' && route.query.view !== 'all'
+})
+</script>
+
 <template>
   <div class="min-h-screen text-light">
     <TheHeader class="z-10" />
@@ -5,5 +13,5 @@
       <slot />
     </main>
   </div>
-  <TuffFooter />
+  <TuffFooter v-if="!hideFooter" />
 </template>
