@@ -46,6 +46,8 @@ import { getLiveViewWebContents } from './web-contents-view-guard'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 const COREBOX_MIN_HEIGHT = 64
+const COREBOX_HEIGHT_TARGET_TOLERANCE = 4
+const COREBOX_ANIMATION_RETARGET_TOLERANCE = 12
 
 const windowAnimation = useWindowAnimation()
 
@@ -400,14 +402,16 @@ export class WindowManager {
       y: this.lastSetBounds?.y ?? rawBounds.y
     }
 
-    if (
-      this.currentAnimationTarget &&
-      isClose(this.currentAnimationTarget.x, target.x) &&
-      isClose(this.currentAnimationTarget.y, target.y) &&
-      isClose(this.currentAnimationTarget.width, target.width) &&
-      isClose(this.currentAnimationTarget.height, target.height, 6)
-    ) {
-      return
+    if (this.currentAnimationTarget) {
+      const targetDelta = Math.abs(this.currentAnimationTarget.height - target.height)
+      if (
+        isClose(this.currentAnimationTarget.x, target.x) &&
+        isClose(this.currentAnimationTarget.y, target.y) &&
+        isClose(this.currentAnimationTarget.width, target.width) &&
+        targetDelta < COREBOX_ANIMATION_RETARGET_TOLERANCE
+      ) {
+        return
+      }
     }
 
     if (
@@ -833,7 +837,7 @@ export class WindowManager {
    * Set CoreBox to a specific height (called from frontend)
    */
   public setHeight(height: number): void {
-    const safeHeight = Math.max(COREBOX_MIN_HEIGHT, Math.min(height, 600))
+    const safeHeight = Math.round(Math.max(COREBOX_MIN_HEIGHT, Math.min(height, 600)))
 
     const currentWindow = this.current
     if (!currentWindow) {
@@ -843,7 +847,7 @@ export class WindowManager {
 
     // Skip if already at target height (within tolerance)
     const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
-    if (Math.abs(currentHeight - safeHeight) < 3) {
+    if (Math.abs(currentHeight - safeHeight) < COREBOX_HEIGHT_TARGET_TOLERANCE) {
       return
     }
 
