@@ -402,6 +402,16 @@
   - Added focused coverage for resolving S3 external storage config from an explicit governance storage policy so Nitro/Rollup static imports cannot regress silently.
   - Reproduced the Cloudflare Pages `tuff` production build failure locally with `pnpm nexus:build`, then verified the same command completes successfully after the fix.
 
+### fix(corebox): stabilize resize animation and collapsed result area
+
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Fixed the CoreBox resize feedback loop by measuring actual result children instead of stretched scroll height, and by adding main-process height target tolerance during animated bounds updates.
+  - Hid the result container while CoreBox is collapsed or has no result/search state so its top border does not leak as a tiny strip below the search input.
+  - Verification: `pnpm -C "apps/core-app" run typecheck:node`, `pnpm -C "apps/core-app" run typecheck:web`, and targeted CoreBox vitest suites passed; dev app stayed alive during the post-fix observation window.
+
 ## 2026-05-23
 
 ### docs(repo): record completed branch cleanup

@@ -552,6 +552,9 @@ const searchState = computed(() =>
     mode: boxOptions.mode
   })
 )
+const shouldShowResultArea = computed(
+  () => !isUIMode.value && (res.value.length > 0 || !!searchState.value)
+)
 
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
 
@@ -695,11 +698,15 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
 
     <div
       class="CoreBoxRes flex"
-      :class="{ 'CoreBoxRes--canvas': isCanvasLayout, 'CoreBoxRes--widget': isWidgetMode }"
+      :class="{
+        'CoreBoxRes--canvas': isCanvasLayout,
+        'CoreBoxRes--widget': isWidgetMode,
+        'CoreBoxRes--visible': shouldShowResultArea
+      }"
       @contextmenu="previewHistory.handleContextMenu"
     >
       <!-- Hide result area when plugin UI view is attached -->
-      <template v-if="!isUIMode">
+      <template v-if="shouldShowResultArea">
         <div
           class="CoreBoxRes-Main"
           :style="getCanvasAreaStyle('results')"
@@ -965,7 +972,7 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
 }
 
 .core-box {
-  .CoreBoxRes {
+  .CoreBoxRes.CoreBoxRes--visible {
     display: flex !important;
   }
 }
