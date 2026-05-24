@@ -87,6 +87,21 @@ export interface CapabilityFormRow {
   meteringUnit: string
 }
 
+export type ProviderRegistryTemplateId = 'tencent-translation' | 'openai-compatible-ai' | 'deepseek-ai'
+
+export interface ProviderRegistryTemplate {
+  id: ProviderRegistryTemplateId
+  vendor: ProviderVendor
+  name: string
+  displayName: string
+  authType: ProviderAuthType
+  authRef: string
+  endpoint: string
+  region: string
+  capabilities: CapabilityFormRow[]
+  metadata: Record<string, unknown>
+}
+
 export interface BindingFormRow {
   providerId: string
   capability: string
@@ -153,6 +168,7 @@ export interface ProviderQuotaPanelState {
 export interface ProviderQuotaSummary {
   configured: boolean
   enabled: boolean
+  count: number
   windowDays: string
   maxRequests: string
   maxTokens: string
@@ -353,6 +369,68 @@ export const sceneOwnerOptions: SceneOwner[] = ['nexus', 'core-app', 'app', 'plu
 export const strategyOptions: SceneStrategyMode[] = ['priority', 'least_cost', 'lowest_latency', 'balanced', 'manual']
 export const fallbackOptions: SceneFallback[] = ['enabled', 'disabled']
 export const bindingStatusOptions: BindingStatus[] = ['enabled', 'disabled']
+export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
+  {
+    id: 'tencent-translation',
+    vendor: 'tencent-cloud',
+    name: 'tencent-cloud-mt-main',
+    displayName: 'Tencent Cloud Machine Translation',
+    authType: 'secret_pair',
+    authRef: 'secure://providers/tencent-cloud-mt-main',
+    endpoint: 'https://tmt.tencentcloudapi.com',
+    region: 'ap-shanghai',
+    capabilities: [
+      { capability: 'text.translate', schemaRef: 'nexus://schemas/provider/text-translate.v1', meteringUnit: 'character' },
+      { capability: 'image.translate', schemaRef: 'nexus://schemas/provider/image-translate.v1', meteringUnit: 'image' },
+      { capability: 'image.translate.e2e', schemaRef: 'nexus://schemas/provider/image-translate-e2e.v1', meteringUnit: 'image' },
+    ],
+    metadata: {
+      source: 'provider-registry',
+      template: 'tencent-translation',
+    },
+  },
+  {
+    id: 'openai-compatible-ai',
+    vendor: 'openai',
+    name: 'openai-compatible-ai-main',
+    displayName: 'OpenAI Compatible AI',
+    authType: 'api_key',
+    authRef: 'secure://providers/openai-compatible-ai-main',
+    endpoint: 'https://api.openai.com/v1',
+    region: 'global',
+    capabilities: [
+      { capability: 'chat.completion', schemaRef: 'nexus://schemas/provider/chat-completion.v1', meteringUnit: 'token' },
+      { capability: 'text.summarize', schemaRef: 'nexus://schemas/provider/text-summarize.v1', meteringUnit: 'token' },
+      { capability: 'content.extract', schemaRef: 'nexus://schemas/provider/content-extract.v1', meteringUnit: 'token' },
+      { capability: 'vision.ocr', schemaRef: 'nexus://schemas/provider/vision-ocr.v1', meteringUnit: 'token' },
+    ],
+    metadata: {
+      source: 'intelligence',
+      routingShape: 'providers-scenes',
+      template: 'openai-compatible-ai',
+    },
+  },
+  {
+    id: 'deepseek-ai',
+    vendor: 'deepseek',
+    name: 'deepseek-ai-main',
+    displayName: 'DeepSeek AI',
+    authType: 'api_key',
+    authRef: 'secure://providers/deepseek-ai-main',
+    endpoint: 'https://api.deepseek.com/v1',
+    region: 'global',
+    capabilities: [
+      { capability: 'chat.completion', schemaRef: 'nexus://schemas/provider/chat-completion.v1', meteringUnit: 'token' },
+      { capability: 'text.summarize', schemaRef: 'nexus://schemas/provider/text-summarize.v1', meteringUnit: 'token' },
+      { capability: 'content.extract', schemaRef: 'nexus://schemas/provider/content-extract.v1', meteringUnit: 'token' },
+    ],
+    metadata: {
+      source: 'intelligence',
+      routingShape: 'providers-scenes',
+      template: 'deepseek-ai',
+    },
+  },
+]
 export const providerObservabilityFilters: ProviderObservabilityFilter[] = ['all', 'attention', 'healthy', 'degraded', 'unhealthy', 'unknown']
 export const sceneObservabilityFilters: SceneObservabilityFilter[] = ['all', 'attention', 'completed', 'failed', 'planned', 'unknown']
 export const usageLedgerFilters: UsageLedgerFilter[] = ['all', 'attention', 'completed', 'failed', 'planned', 'estimated']
@@ -1011,10 +1089,22 @@ export function summarizeProviderQuota(quota: ProviderQuotaRecord | null | undef
   return {
     configured,
     enabled: quota?.enabled ?? false,
+    count: configured ? 1 : 0,
     windowDays: readLimitText(quota, 'windowDays') || '30',
     maxRequests: readLimitText(quota, 'maxRequests') || '-',
     maxTokens: readLimitText(quota, 'maxTokens') || '-',
     warningThreshold: quota?.warningThreshold == null ? '-' : String(quota.warningThreshold),
+  }
+}
+
+export function summarizeProviderQuotaList(quotas: ProviderQuotaRecord[] | null | undefined): ProviderQuotaSummary {
+  const items = quotas ?? []
+  const primary = items[0] ?? null
+  return {
+    ...summarizeProviderQuota(primary),
+    configured: items.length > 0,
+    enabled: items.some(item => item.enabled),
+    count: items.length,
   }
 }
 

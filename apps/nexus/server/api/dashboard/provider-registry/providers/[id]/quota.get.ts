@@ -14,11 +14,12 @@ export default defineEventHandler(async (event) => {
   if (!provider)
     throw createError({ statusCode: 404, statusMessage: 'Provider registry entry not found.' })
 
-  const [quota = null] = await listPlatformGovernanceConfigs(event, {
+  const quotas = await listPlatformGovernanceConfigs(event, {
     configType: 'intelligence_provider_quota',
     targetId: id,
   })
+  const [quota = null] = quotas
   const evaluations = await evaluateIntelligenceProviderQuotas(event, id)
 
-  return { quota, evaluations }
+  return { quota, quotas, evaluations }
 })

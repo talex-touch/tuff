@@ -1,4 +1,5 @@
 import { createError, readBody } from 'h3'
+import { useRuntimeConfig } from '#imports'
 import { createVerificationToken, getUserByEmail, getUserById, setEmailState, setUserEmail  } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
 import { requireSessionAuth } from '../../utils/auth'
@@ -34,13 +35,16 @@ export default defineEventHandler(async (event) => {
   await setUserEmail(event, userId, email, 'unverified', null)
 
   const token = await createVerificationToken(event, email, 1000 * 60 * 60 * 24)
-  const origin = useRuntimeConfig().auth?.origin as string | undefined
+  const origin = useRuntimeConfig(event).auth?.origin as string | undefined
   const verifyUrl = origin ? `${origin}/verify?email=${encodeURIComponent(email)}&token=${token}` : ''
   await sendEmail({
     to: email,
     subject: 'Verify your email',
     html: `<p>Click the link to verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
-  })
+    action: 'auth.email.bind.verify',
+    resourceType: 'auth_user',
+    resourceId: userId,
+  }, event)
 
   return { success: true }
 })

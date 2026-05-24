@@ -23,13 +23,14 @@ import {
   parseJsonObjectField,
   providerStatusOptions,
   providerObservabilityFilters,
+  providerRegistryTemplates,
   providerVendorOptions,
   observabilityTone,
   healthCheckFilters,
   resolveProviderObservability,
   resolveProviderObservabilityActionHint,
   resolveProviderObservabilityEmptyState,
-  summarizeProviderQuota,
+  summarizeProviderQuotaList,
   resolveHealthCheckActionHint,
   resolveHealthCheckEmptyState,
   resolveHealthCheckReason,
@@ -60,6 +61,7 @@ import {
   type ProviderQuotaPanelState,
   type ProviderQuotaRecord,
   type ProviderRegistryRecord,
+  type ProviderRegistryTemplateId,
   type ProviderStatus,
   type ProviderUsageLedgerEntry,
   type ProviderVendor,
@@ -116,7 +118,9 @@ export function useProviderRegistryAdmin() {
   const providerQuotaPanels = reactive<Record<string, ProviderQuotaPanelState>>({})
   const sceneEditPanels = reactive<Record<string, SceneEditPanelState>>({})
   const providerQuotas = ref<Record<string, ProviderQuotaRecord | null>>({})
+  const providerQuotaLists = ref<Record<string, ProviderQuotaRecord[]>>({})
   const error = ref<string | null>(null)
+  const providerTemplateId = ref<ProviderRegistryTemplateId>('tencent-translation')
 
   const providerForm = reactive({
     name: 'tencent-cloud-mt-main',
@@ -246,6 +250,30 @@ export function useProviderRegistryAdmin() {
     label: filter,
     count: filterHealthCheckEntries(healthEntries.value, filter).length,
   })))
+  const providerTemplateOptions = computed(() => providerRegistryTemplates.map(template => ({
+    value: template.id,
+    label: template.displayName,
+  })))
+
+  function applyProviderTemplate(templateId: ProviderRegistryTemplateId | string | number) {
+    const template = providerRegistryTemplates.find(item => item.id === String(templateId))
+    if (!template)
+      return
+
+    providerTemplateId.value = template.id
+    providerForm.name = template.name
+    providerForm.displayName = template.displayName
+    providerForm.vendor = template.vendor
+    providerForm.status = 'disabled'
+    providerForm.authType = template.authType
+    providerForm.authRef = template.authRef
+    providerForm.ownerScope = 'system'
+    providerForm.endpoint = template.endpoint
+    providerForm.region = template.region
+    providerForm.secretId = ''
+    providerForm.secretKey = ''
+    capabilityRows.value = template.capabilities.map(row => ({ ...row }))
+  }
 
   function addCapabilityRow() {
     capabilityRows.value.push({ capability: '', schemaRef: '', meteringUnit: 'request' })
@@ -454,7 +482,11 @@ export function useProviderRegistryAdmin() {
   }
 
   function getProviderQuotaSummary(providerId: string) {
-    return summarizeProviderQuota(providerQuotas.value[providerId])
+    return summarizeProviderQuotaList(getProviderQuotaList(providerId))
+  }
+
+  function getProviderQuotaList(providerId: string) {
+    return providerQuotaLists.value[providerId] ?? (providerQuotas.value[providerId] ? [providerQuotas.value[providerId]!] : [])
   }
 
   function parseQuotaNumber(value: string, field: string, min = 0, max?: number): number | undefined {
@@ -515,10 +547,11 @@ export function useProviderRegistryAdmin() {
       usageEntries.value = usageResult.entries ?? []
       healthEntries.value = healthResult.entries ?? []
       const quotaEntries = await Promise.all(providers.value.map(async provider => {
-        const result = await rawFetch<{ quota: ProviderQuotaRecord | null }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/quota`)
-        return [provider.id, result.quota] as const
+        const result = await rawFetch<{ quota: ProviderQuotaRecord | null, quotas?: ProviderQuotaRecord[] }>(`/api/dashboard/provider-registry/providers/${encodeURIComponent(provider.id)}/quota`)
+        return [provider.id, result] as const
       }))
-      providerQuotas.value = Object.fromEntries(quotaEntries)
+      providerQuotas.value = Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quota]))
+      providerQuotaLists.value = Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quotas ?? (result.quota ? [result.quota] : [])]))
 
       const firstBinding = bindingRows.value[0]
       const firstProvider = providers.value[0]
@@ -552,6 +585,7 @@ export function useProviderRegistryAdmin() {
         ownerScope: providerForm.ownerScope,
         endpoint: providerForm.endpoint.trim() || undefined,
         region: providerForm.region.trim() || undefined,
+        metadata: providerRegistryTemplates.find(item => item.id === providerTemplateId.value)?.metadata ?? undefined,
         capabilities: capabilityRows.value
           .filter(row => row.capability.trim())
           .map(row => ({
@@ -738,6 +772,10 @@ export function useProviderRegistryAdmin() {
       providerQuotas.value = {
         ...providerQuotas.value,
         [provider.id]: result.quota,
+      }
+      providerQuotaLists.value = {
+        ...providerQuotaLists.value,
+        [provider.id]: [result.quota],
       }
       toast.success(t('dashboard.providerRegistry.quota.saved', 'Provider quota saved.'))
     }
@@ -952,6 +990,7 @@ export function useProviderRegistryAdmin() {
     addCapabilityRow,
     addProviderCapabilityEditRow,
     addSceneBindingEditRow,
+    applyProviderTemplate,
     authTypeOptions,
     bindingRows,
     bindingStatusOptions,
@@ -978,6 +1017,7 @@ export function useProviderRegistryAdmin() {
     getProviderEditPanel,
     getProviderQuotaPanel,
     getProviderAdapterSummary,
+    getProviderQuotaList,
     getProviderQuotaSummary,
     getHealthCheckActionHint,
     getHealthCheckReason,
@@ -1003,6 +1043,8 @@ export function useProviderRegistryAdmin() {
     providerObservabilityEmptyState,
     providerOptions,
     providerStatusOptions,
+    providerTemplateId,
+    providerTemplateOptions,
     providers,
     providerQuotaPanels,
     providerQuotas,

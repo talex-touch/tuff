@@ -43,8 +43,10 @@ function createEmailProvider(server: string, from: string) {
       await sendEmail({
         to: identifier,
         subject: 'Sign in to Tuff',
-        html: `<p>Click the link to sign in:</p><p><a href="${url}">${url}</a></p>`
-      })
+        html: `<p>Click the link to sign in:</p><p><a href="${url}">${url}</a></p>`,
+        action: 'auth.email.magic_link',
+        resourceType: 'auth_session',
+      }, tryCreateAuthEvent())
     },
   } as any
 }
@@ -86,6 +88,15 @@ function createAuthEvent(headers?: AuthRequestHeaders): H3Event {
       },
     },
   } as unknown as H3Event
+}
+
+function tryCreateAuthEvent(headers?: AuthRequestHeaders): H3Event | undefined {
+  try {
+    return createAuthEvent(headers)
+  }
+  catch {
+    return undefined
+  }
 }
 
 function parseUrlWithBase(value: string, baseUrl: string) {

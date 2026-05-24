@@ -9,6 +9,7 @@ const {
   addCapabilityRow,
   addProviderCapabilityEditRow,
   addSceneBindingEditRow,
+  applyProviderTemplate,
   authTypeOptions,
   bindingRows,
   bindingStatusOptions,
@@ -34,6 +35,7 @@ const {
   getProviderCheckResult,
   getProviderEditPanel,
   getProviderQuotaPanel,
+  getProviderQuotaList,
   getProviderQuotaSummary,
   getProviderAdapterSummary,
   getHealthCheckActionHint,
@@ -61,6 +63,8 @@ const {
   providerObservabilityEmptyState,
   providerOptions,
   providerStatusOptions,
+  providerTemplateId,
+  providerTemplateOptions,
   providers,
   providerVendorOptions,
   removeBindingRow,
@@ -207,6 +211,17 @@ const {
               </div>
 
               <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.template', 'Template') }}</label>
+                  <TuffSelect v-model="providerTemplateId" class="w-full" @change="applyProviderTemplate">
+                    <TuffSelectItem
+                      v-for="template in providerTemplateOptions"
+                      :key="template.value"
+                      :value="template.value"
+                      :label="template.label"
+                    />
+                  </TuffSelect>
+                </div>
                 <div>
                   <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.name', 'Name') }}</label>
                   <TuffInput v-model="providerForm.name" class="w-full" />
@@ -433,7 +448,24 @@ const {
                         {{ t('dashboard.providerRegistry.quota.requests', 'requests') }} {{ getProviderQuotaSummary(provider.id).maxRequests }}
                         · {{ t('dashboard.providerRegistry.quota.tokens', 'tokens') }} {{ getProviderQuotaSummary(provider.id).maxTokens }}
                         · {{ getProviderQuotaSummary(provider.id).windowDays }}d
+                        · {{ getProviderQuotaSummary(provider.id).count }} {{ t('dashboard.providerRegistry.quota.channels', 'channels') }}
                       </p>
+                      <div v-if="getProviderQuotaList(provider.id).length > 1" class="mt-2 grid gap-1">
+                        <div
+                          v-for="quota in getProviderQuotaList(provider.id).slice(0, 4)"
+                          :key="quota.id"
+                          class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/60 px-2 py-1 text-[11px] dark:bg-black/20"
+                        >
+                          <span class="truncate text-black/55 dark:text-white/55">
+                            {{ quota.channel || t('dashboard.providerRegistry.quota.defaultChannel', 'default') }}
+                          </span>
+                          <span class="font-medium text-black/70 dark:text-white/70">
+                            {{ t('dashboard.providerRegistry.quota.requests', 'requests') }} {{ quota.limits?.maxRequests ?? '-' }}
+                            · {{ t('dashboard.providerRegistry.quota.tokens', 'tokens') }} {{ quota.limits?.maxTokens ?? '-' }}
+                            · {{ quota.limits?.windowDays ?? 30 }}d
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   <div

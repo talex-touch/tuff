@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   createProviderQuotaPanel,
@@ -19,6 +20,8 @@ import {
   resolveUsageLedgerEmptyState,
   resolveUsageLedgerReference,
   summarizeProviderQuota,
+  summarizeProviderQuotaList,
+  providerRegistryTemplates,
   type ProviderHealthCheckEntry,
   type ProviderQuotaRecord,
   type ProviderRegistryRecord,
@@ -193,6 +196,7 @@ describe('provider registry quota helpers', () => {
     expect(summarizeProviderQuota(quota)).toEqual({
       configured: true,
       enabled: false,
+      count: 1,
       windowDays: '7',
       maxRequests: '250',
       maxTokens: '500000',
@@ -201,11 +205,88 @@ describe('provider registry quota helpers', () => {
     expect(summarizeProviderQuota(null)).toEqual({
       configured: false,
       enabled: false,
+      count: 0,
       windowDays: '30',
       maxRequests: '-',
       maxTokens: '-',
       warningThreshold: '-',
     })
+  })
+
+  it('summarizes multi-channel provider quotas without collapsing count', () => {
+    const textQuota = quotaRecord({
+      id: 'quota-text',
+      channel: 'text.translate',
+      limits: {
+        windowDays: 14,
+        maxRequests: 250,
+      },
+    })
+    const imageQuota = quotaRecord({
+      id: 'quota-image',
+      channel: 'image.translate',
+      limits: {
+        windowDays: 7,
+        maxTokens: 500000,
+      },
+    })
+
+    expect(summarizeProviderQuotaList([textQuota, imageQuota])).toEqual({
+      configured: true,
+      enabled: true,
+      count: 2,
+      windowDays: '14',
+      maxRequests: '250',
+      maxTokens: '-',
+      warningThreshold: '75',
+    })
+  })
+})
+
+describe('provider registry quota UI contract', () => {
+  it('renders multi-channel provider quota summaries in the admin panel', () => {
+    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+
+    expect(panel).toContain('getProviderQuotaList')
+    expect(panel).toContain('getProviderQuotaList(provider.id).slice(0, 4)')
+    expect(panel).toContain('dashboard.providerRegistry.quota.channels')
+    expect(panel).toContain('dashboard.providerRegistry.quota.defaultChannel')
+    expect(panel).toContain('quota.channel')
+    expect(panel).toContain('quota.limits?.maxRequests')
+    expect(panel).toContain('quota.limits?.maxTokens')
+  })
+})
+
+describe('provider registry provider templates', () => {
+  it('includes AI provider templates so Intelligence configuration starts in Provider Registry', () => {
+    const aiTemplates = providerRegistryTemplates.filter(template => template.metadata.source === 'intelligence')
+
+    expect(aiTemplates.map(template => template.id)).toEqual(expect.arrayContaining([
+      'openai-compatible-ai',
+      'deepseek-ai',
+    ]))
+    expect(aiTemplates.flatMap(template => template.capabilities.map(row => row.capability))).toEqual(expect.arrayContaining([
+      'chat.completion',
+      'text.summarize',
+      'content.extract',
+      'vision.ocr',
+    ]))
+    for (const template of aiTemplates) {
+      expect(template.authType).toBe('api_key')
+      expect(template.authRef).toMatch(/^secure:\/\/providers\//)
+      expect(template.metadata).toMatchObject({
+        source: 'intelligence',
+        routingShape: 'providers-scenes',
+      })
+    }
+  })
+
+  it('renders provider template selector in the admin panel', () => {
+    const panel = readFileSync(new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url), 'utf8')
+
+    expect(panel).toContain('providerTemplateOptions')
+    expect(panel).toContain('applyProviderTemplate')
+    expect(panel).toContain('dashboard.providerRegistry.fields.template')
   })
 })
 

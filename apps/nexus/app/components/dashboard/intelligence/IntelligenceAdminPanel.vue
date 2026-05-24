@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { networkClient } from '@talex-touch/utils/network'
-import { TuffInput, TuffSelect, TuffSelectItem, TuffSwitch, TxButton, TxPagination, TxPopperDialog, TxSkeleton, TxSpinner, TxStatusBadge, TxTabItem, TxTabs } from '@talex-touch/tuffex'
-import { defineComponent, h, inject } from 'vue'
+import { TuffInput, TuffSelect, TuffSelectItem, TuffSwitch, TxButton, TxPagination, TxSkeleton, TxSpinner, TxStatusBadge, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { $fetch as rawFetch } from 'ofetch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import IntelligenceAgentWorkspace from '~/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue'
@@ -21,9 +20,6 @@ watch(isAdmin, (admin) => {
     navigateTo('/dashboard/overview')
   }
 }, { immediate: true })
-
-// ── Provider types ──
-const PROVIDER_TYPES = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'local', 'custom'] as const
 
 interface Provider {
   id: string
@@ -294,7 +290,7 @@ async function fetchProviders() {
     providers.value = data.providers
   }
   catch (e: any) {
-    error.value = e.data?.message || 'Failed to load providers'
+    error.value = e.data?.message || t('dashboard.sections.intelligence.providers.loadFailed', 'Failed to load providers')
   }
   finally {
     loading.value = false
@@ -466,7 +462,7 @@ async function fetchSceneRegistry() {
     hydrateSelectedScene()
   }
   catch (e: any) {
-    scenesError.value = e.data?.message || e.data?.statusMessage || 'Failed to load scene registry'
+    scenesError.value = e.data?.message || e.data?.statusMessage || t('dashboard.sections.intelligence.scenes.errors.loadRegistry', 'Failed to load scene registry')
   }
   finally {
     scenesLoading.value = false
@@ -652,7 +648,7 @@ async function saveSceneConfig() {
     await fetchSceneRegistry()
   }
   catch (e: any) {
-    scenesError.value = e.data?.message || e.data?.statusMessage || e.message || 'Failed to save scene'
+    scenesError.value = e.data?.message || e.data?.statusMessage || e.message || t('dashboard.sections.intelligence.scenes.errors.saveScene', 'Failed to save scene')
   }
   finally {
     sceneSaving.value = false
@@ -675,7 +671,7 @@ async function runProviderRegistryMigration(dryRun: boolean) {
     }
   }
   catch (e: any) {
-    migrationError.value = e.data?.message || e.data?.statusMessage || 'Failed to migrate providers'
+    migrationError.value = e.data?.message || e.data?.statusMessage || t('dashboard.sections.intelligence.providers.migration.migrationFailed', 'Failed to migrate providers')
   }
   finally {
     migrationLoading.value = false
@@ -719,7 +715,7 @@ async function fetchAudits() {
     auditTotal.value = data.total || 0
   }
   catch (e: any) {
-    auditError.value = e.data?.message || 'Failed to load audit logs'
+    auditError.value = e.data?.message || t('dashboard.sections.intelligence.audit.loadFailed', 'Failed to load audit logs')
   }
   finally {
     auditLoading.value = false
@@ -739,7 +735,7 @@ async function fetchOverview() {
     overviewData.value = data
   }
   catch (e: any) {
-    overviewError.value = e.data?.message || 'Failed to load overview'
+    overviewError.value = e.data?.message || t('dashboard.sections.intelligence.overview.loadFailed', 'Failed to load overview')
   }
   finally {
     overviewLoading.value = false
@@ -757,11 +753,11 @@ async function fetchUserUsage() {
       query: { userId },
     })
     if (!data.ok)
-      throw new Error(data.error || 'Failed to load usage')
+      throw new Error(data.error || t('dashboard.sections.intelligence.usage.loadFailed', 'Failed to load usage'))
     userUsageResult.value = data.result || null
   }
   catch (e: any) {
-    userUsageError.value = e.data?.message || e.message || 'Failed to load usage'
+    userUsageError.value = e.data?.message || e.message || t('dashboard.sections.intelligence.usage.loadFailed', 'Failed to load usage')
   }
   finally {
     userUsageLoading.value = false
@@ -784,7 +780,7 @@ async function fetchIpBans() {
       ipBanError.value = null
       return
     }
-    ipBanError.value = e.data?.message || 'Failed to load IP bans'
+    ipBanError.value = e.data?.message || t('dashboard.sections.intelligence.security.loadIpBansFailed', 'Failed to load IP bans')
   }
   finally {
     ipBanLoading.value = false
@@ -819,7 +815,7 @@ async function addIpBan() {
       ipBanError.value = null
       return
     }
-    ipBanError.value = e.data?.message || 'Failed to add IP ban'
+    ipBanError.value = e.data?.message || t('dashboard.sections.intelligence.security.addIpBanFailed', 'Failed to add IP ban')
   }
   finally {
     ipBanLoading.value = false
@@ -846,7 +842,7 @@ async function toggleIpBan(ban: IpBan) {
       ipBanError.value = null
       return
     }
-    ipBanError.value = e.data?.message || 'Failed to update IP ban'
+    ipBanError.value = e.data?.message || t('dashboard.sections.intelligence.security.updateIpBanFailed', 'Failed to update IP ban')
   }
   finally {
     ipBanLoading.value = false
@@ -872,7 +868,7 @@ async function removeIpBan(ban: IpBan) {
       ipBanError.value = null
       return
     }
-    ipBanError.value = e.data?.message || 'Failed to remove IP ban'
+    ipBanError.value = e.data?.message || t('dashboard.sections.intelligence.security.removeIpBanFailed', 'Failed to remove IP ban')
   }
   finally {
     ipBanLoading.value = false
@@ -992,133 +988,12 @@ watch(activeTab, (value) => {
     ensureCreditsLoaded()
 })
 
-// ── Create / Edit overlay ──
-const showFormOverlay = ref(false)
-const formOverlaySource = ref<HTMLElement | null>(null)
-const formMode = ref<'create' | 'edit'>('create')
-const formSaving = ref(false)
-const editingId = ref<string | null>(null)
-
-const form = reactive({
-  type: 'openai' as string,
-  name: '',
-  apiKey: '',
-  baseUrl: '',
-  models: '',
-  defaultModel: '',
-  instructions: '',
-  timeout: 30000,
-  priority: 50,
-})
-
-const formTitle = computed(() => {
-  if (formMode.value === 'create')
-    return t('dashboard.sections.intelligence.providers.addButton')
-  return form.name.trim() || t('dashboard.sections.intelligence.providers.addButton')
-})
-
-function resetForm() {
-  form.type = 'openai'
-  form.name = ''
-  form.apiKey = ''
-  form.baseUrl = ''
-  form.models = ''
-  form.defaultModel = ''
-  form.instructions = ''
-  form.timeout = 30000
-  form.priority = 50
+function openProviderRegistry() {
+  navigateTo('/dashboard/admin/provider-registry')
 }
 
-const addTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
-const emptyAddTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
-
-function openCreateForm(source?: HTMLElement | null) {
-  formMode.value = 'create'
-  editingId.value = null
-  resetForm()
-  formOverlaySource.value = source ?? null
-  showFormOverlay.value = true
-}
-
-function openEditForm(provider: Provider, event?: MouseEvent) {
-  formMode.value = 'edit'
-  editingId.value = provider.id
-  form.type = provider.type
-  form.name = provider.name
-  form.apiKey = ''
-  form.baseUrl = provider.baseUrl || ''
-  form.models = (provider.models || []).join('\n')
-  form.defaultModel = provider.defaultModel || ''
-  form.instructions = provider.instructions || ''
-  form.timeout = provider.timeout
-  form.priority = provider.priority
-  formOverlaySource.value = (event?.currentTarget as HTMLElement) ?? null
-  showFormOverlay.value = true
-}
-
-async function submitForm() {
-  if (!form.name.trim())
-    return
-
-  formSaving.value = true
-  try {
-    const modelsArray = form.models
-      .split('\n')
-      .map(m => m.trim())
-      .filter(Boolean)
-
-    const body: Record<string, any> = {
-      type: form.type,
-      name: form.name.trim(),
-      baseUrl: form.baseUrl.trim() || null,
-      models: modelsArray.length ? modelsArray : [],
-      defaultModel: form.defaultModel.trim() || null,
-      instructions: form.instructions.trim() || null,
-      timeout: form.timeout,
-      priority: form.priority,
-    }
-
-    if (form.apiKey.trim())
-      body.apiKey = form.apiKey.trim()
-
-    if (formMode.value === 'create') {
-      await rawFetch('/api/dashboard/intelligence/providers', {
-        method: 'POST',
-        body,
-      })
-    }
-    else if (editingId.value) {
-      await rawFetch(`/api/dashboard/intelligence/providers/${editingId.value}`, {
-        method: 'PATCH',
-        body,
-      })
-    }
-
-    showFormOverlay.value = false
-    await fetchProviders()
-    await fetchSceneRegistry()
-  }
-  catch (e: any) {
-    error.value = e.data?.message || 'Failed to save provider'
-  }
-  finally {
-    formSaving.value = false
-  }
-}
-
-// ── Toggle enabled ──
-async function toggleProvider(provider: Provider) {
-  try {
-    await rawFetch(`/api/dashboard/intelligence/providers/${provider.id}`, {
-      method: 'PATCH',
-      body: { enabled: !provider.enabled },
-    })
-    provider.enabled = !provider.enabled
-    await fetchSceneRegistry()
-  }
-  catch (e: any) {
-    error.value = e.data?.message || 'Failed to toggle provider'
-  }
+function providerRegistryDisplayId(provider: Provider): string | null {
+  return registryProviderForIntelligenceProvider(provider.id)?.id ?? null
 }
 
 // ── Provider probe overlay ──
@@ -1385,104 +1260,6 @@ async function runProviderProbe() {
   }
 }
 
-// ── Fetch models for form ──
-const fetchingFormModels = ref(false)
-
-async function fetchFormModels() {
-  fetchingFormModels.value = true
-  try {
-    const body: Record<string, unknown> = {}
-    if (form.apiKey.trim())
-      body.apiKey = form.apiKey.trim()
-    if (form.baseUrl.trim())
-      body.baseUrl = form.baseUrl.trim()
-
-    let models: string[] = []
-
-    if (formMode.value === 'edit' && editingId.value) {
-      const data = await postJsonStrict<{ success: boolean, models: string[] }>(
-        `/api/dashboard/intelligence/providers/${editingId.value}/test`,
-        body,
-      )
-      models = data.models || []
-    }
-    else {
-      // For create mode, use a temporary test via the models endpoint
-      const data = await rawFetch<{ models: string[] }>('/api/dashboard/intelligence/models', {
-        method: 'POST',
-        body: {
-          ...body,
-          type: form.type,
-        },
-      })
-      models = data.models || []
-    }
-
-    if (models.length)
-      form.models = models.join('\n')
-  }
-  catch {}
-  finally {
-    fetchingFormModels.value = false
-  }
-}
-
-// ── Delete ──
-const deleteConfirmVisible = ref(false)
-const pendingDeleteId = ref<string | null>(null)
-const pendingDeleteName = ref('')
-
-function requestDelete(provider: Provider) {
-  pendingDeleteId.value = provider.id
-  pendingDeleteName.value = provider.name
-  deleteConfirmVisible.value = true
-}
-
-async function confirmDelete(): Promise<boolean> {
-  if (!pendingDeleteId.value)
-    return true
-  try {
-    await rawFetch(`/api/dashboard/intelligence/providers/${pendingDeleteId.value}`, { method: 'DELETE' })
-    await fetchProviders()
-    await fetchSceneRegistry()
-  }
-  catch (e: any) {
-    error.value = e.data?.message || 'Failed to delete provider'
-  }
-  finally {
-    pendingDeleteId.value = null
-    pendingDeleteName.value = ''
-  }
-  return true
-}
-
-function closeDeleteConfirm() {
-  deleteConfirmVisible.value = false
-  pendingDeleteId.value = null
-}
-
-const DeleteConfirmDialog = defineComponent({
-  name: 'ProviderDeleteDialog',
-  setup() {
-    const destroy = inject<() => void>('destroy')
-    const handleCancel = () => destroy?.()
-    const handleDelete = async () => {
-      await confirmDelete()
-      destroy?.()
-    }
-    return () => h('div', { class: 'ProviderDeleteDialog' }, [
-      h('div', { class: 'ProviderDeleteDialog-Header' }, [
-        h('h2', { class: 'ProviderDeleteDialog-Title' }, t('dashboard.sections.intelligence.providers.delete')),
-        h('p', { class: 'ProviderDeleteDialog-Desc' }, t('dashboard.sections.intelligence.providers.confirmDelete', { name: pendingDeleteName.value })),
-      ]),
-      h('div', { class: 'ProviderDeleteDialog-Actions' }, [
-        h(TxButton, { variant: 'secondary', size: 'small', 'native-type': 'button', onClick: handleCancel }, { default: () => t('dashboard.sections.intelligence.form.cancel') }),
-        h(TxButton, { variant: 'danger', size: 'small', 'native-type': 'button', onClick: handleDelete }, { default: () => t('dashboard.sections.intelligence.providers.delete') }),
-      ]),
-    ])
-  },
-})
-
 // ── Save settings ──
 async function saveSettings() {
   settingsSaving.value = true
@@ -1493,7 +1270,7 @@ async function saveSettings() {
     })
   }
   catch (e: any) {
-    error.value = e.data?.message || 'Failed to save settings'
+    error.value = e.data?.message || t('dashboard.sections.intelligence.settings.saveFailed', 'Failed to save settings')
   }
   finally {
     settingsSaving.value = false
@@ -1501,10 +1278,6 @@ async function saveSettings() {
 }
 
 // ── Computed ──
-const formModelsList = computed(() =>
-  form.models.split('\n').map(m => m.trim()).filter(Boolean),
-)
-
 function providerTypeLabel(type: string) {
   return t(`dashboard.sections.intelligence.types.${type}`, type)
 }
@@ -1934,9 +1707,9 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.providers.modelsSubtitle', 'Providers expose available models; scenes decide which provider/model path is used.') }}
                 </p>
               </div>
-              <TxButton v-if="providers.length" ref="addTriggerRef" variant="primary" size="small" @click="openCreateForm(addTriggerRef?.$el || null)">
-                <span class="i-carbon-add mr-1 text-base" />
-                {{ t('dashboard.sections.intelligence.providers.addButton') }}
+              <TxButton variant="primary" size="small" @click="openProviderRegistry">
+                <span class="i-carbon-launch mr-1 text-base" />
+                {{ t('dashboard.sections.intelligence.providers.openRegistry', '打开 Provider Registry') }}
               </TxButton>
             </div>
 
@@ -2049,13 +1822,13 @@ function formatEndpointCandidates(list?: string[]) {
                 class="group relative rounded-2xl bg-black/[0.02] p-4 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
               >
                 <div class="flex flex-wrap items-center justify-between gap-4">
-                  <div class="flex min-w-0 items-center gap-4" @click="openEditForm(provider, $event)">
+                  <div class="flex min-w-0 items-center gap-4">
                     <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/[0.04] dark:bg-white/[0.06]">
                       <span class="i-carbon-machine-learning-model text-lg text-black/60 dark:text-white/60" />
                     </div>
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
-                        <p class="cursor-pointer truncate font-medium text-black dark:text-white">
+                        <p class="truncate font-medium text-black dark:text-white">
                           {{ provider.name }}
                         </p>
                         <TxStatusBadge
@@ -2077,6 +1850,10 @@ function formatEndpointCandidates(list?: string[]) {
                           <span>·</span>
                           <span class="truncate">{{ provider.defaultModel }}</span>
                         </template>
+                        <template v-if="providerRegistryDisplayId(provider)">
+                          <span>·</span>
+                          <span class="truncate font-mono">{{ providerRegistryDisplayId(provider) }}</span>
+                        </template>
                       </div>
                     </div>
                   </div>
@@ -2093,15 +1870,16 @@ function formatEndpointCandidates(list?: string[]) {
                         {{ t('dashboard.sections.intelligence.providers.testConnection') }}
                       </span>
                     </TxButton>
-                    <TuffSwitch :model-value="provider.enabled" size="small" @change="() => toggleProvider(provider)" />
                     <TxButton
-                      variant="bare"
-                      circle
+                      variant="secondary"
                       size="mini"
-                      class="rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
-                      @click="requestDelete(provider)"
+                      class="rounded-lg"
+                      @click="openProviderRegistry"
                     >
-                      <span class="i-carbon-trash-can text-base" />
+                      <span class="i-carbon-settings-adjust text-base" />
+                      <span class="ml-1 text-[11px]">
+                        {{ t('dashboard.sections.intelligence.providers.configureInRegistry', '在 Registry 配置') }}
+                      </span>
                     </TxButton>
                   </div>
                 </div>
@@ -2118,8 +1896,8 @@ function formatEndpointCandidates(list?: string[]) {
               <p class="mt-1 text-sm text-black/50 dark:text-white/50">
                 {{ t('dashboard.sections.intelligence.providers.empty') }}
               </p>
-              <TxButton ref="emptyAddTriggerRef" variant="primary" class="mt-4" @click="openCreateForm(emptyAddTriggerRef?.$el || null)">
-                {{ t('dashboard.sections.intelligence.providers.addButton') }}
+              <TxButton variant="primary" class="mt-4" @click="openProviderRegistry">
+                {{ t('dashboard.sections.intelligence.providers.openRegistry', '打开 Provider Registry') }}
               </TxButton>
             </div>
           </section>
@@ -2657,155 +2435,6 @@ function formatEndpointCandidates(list?: string[]) {
       </TxTabItem>
     </TxTabs>
 
-    <!-- Create / Edit Overlay -->
-    <FlipDialog
-        v-model="showFormOverlay"
-        :reference="formOverlaySource"
-        size="lg"
-      >
-        <template #default="{ close }">
-          <div class="ProviderOverlay-Inner">
-            <div class="space-y-1">
-              <h2 class="ProviderOverlay-Title">
-                {{ formTitle }}
-              </h2>
-            </div>
-
-            <div class="ProviderOverlay-Body space-y-4">
-              <!-- Type -->
-              <div class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.sections.intelligence.form.type') }}
-                </label>
-                <TuffSelect v-model="form.type" class="w-full" :disabled="formMode === 'edit'">
-                  <TuffSelectItem
-                    v-for="pt in PROVIDER_TYPES"
-                    :key="pt"
-                    :value="pt"
-                    :label="providerTypeLabel(pt)"
-                  />
-                </TuffSelect>
-              </div>
-
-              <!-- Name -->
-              <div class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.sections.intelligence.form.name') }}
-                </label>
-                <TuffInput v-model="form.name" :placeholder="t('dashboard.sections.intelligence.form.namePlaceholder')" class="w-full" />
-              </div>
-
-              <!-- API Key -->
-              <div v-if="form.type !== 'local'" class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.sections.intelligence.form.apiKey') }}
-                </label>
-                <TuffInput v-model="form.apiKey" type="password" :placeholder="formMode === 'edit' ? '••••••••' : t('dashboard.sections.intelligence.form.apiKeyPlaceholder')" class="w-full" />
-                <p class="text-[11px] text-black/30 dark:text-white/30">
-                  {{ t('dashboard.sections.intelligence.form.apiKeyHint') }}
-                </p>
-              </div>
-
-              <!-- Base URL -->
-              <div class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.sections.intelligence.form.baseUrl') }}
-                </label>
-                <TuffInput v-model="form.baseUrl" :placeholder="t('dashboard.sections.intelligence.form.baseUrlPlaceholder')" class="w-full" />
-                <p class="text-[11px] text-black/30 dark:text-white/30">
-                  {{ t('dashboard.sections.intelligence.form.baseUrlHint') }}
-                </p>
-              </div>
-
-              <!-- Models -->
-              <div class="space-y-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-xs text-black/60 dark:text-white/60">
-                    {{ t('dashboard.sections.intelligence.form.models') }}
-                  </label>
-                  <TxButton
-                    variant="bare"
-                    size="mini"
-                    :disabled="fetchingFormModels || (formMode === 'create' && form.type !== 'local' && !form.apiKey.trim())"
-                    @click="fetchFormModels"
-                  >
-                    {{ fetchingFormModels ? t('dashboard.sections.intelligence.form.fetchingModels') : t('dashboard.sections.intelligence.form.fetchModels') }}
-                  </TxButton>
-                </div>
-                <TuffInput
-                  v-model="form.models"
-                  type="textarea"
-                  :placeholder="t('dashboard.sections.intelligence.form.modelsPlaceholder')"
-                  :rows="4"
-                  class="w-full"
-                />
-                <p class="text-[11px] text-black/30 dark:text-white/30">
-                  {{ t('dashboard.sections.intelligence.form.modelsHint') }}
-                </p>
-              </div>
-
-              <!-- Default Model -->
-              <div v-if="formModelsList.length" class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.sections.intelligence.form.defaultModel') }}
-                </label>
-                <TuffSelect v-model="form.defaultModel" class="w-full">
-                  <TuffSelectItem value="" :label="t('dashboard.sections.intelligence.form.defaultModelPlaceholder')" />
-                  <TuffSelectItem
-                    v-for="m in formModelsList"
-                    :key="m"
-                    :value="m"
-                    :label="m"
-                  />
-                </TuffSelect>
-              </div>
-
-              <!-- Instructions -->
-              <div class="space-y-2">
-                <label class="text-xs text-black/60 dark:text-white/60">
-                  {{ t('dashboard.sections.intelligence.form.instructions') }}
-                </label>
-                <TuffInput
-                  v-model="form.instructions"
-                  type="textarea"
-                  :placeholder="t('dashboard.sections.intelligence.form.instructionsPlaceholder')"
-                  :rows="2"
-                  class="w-full"
-                />
-              </div>
-
-              <!-- Timeout & Priority -->
-              <div class="grid grid-cols-2 gap-4">
-                <div class="space-y-2">
-                  <label class="text-xs text-black/60 dark:text-white/60">
-                    {{ t('dashboard.sections.intelligence.form.timeout') }}
-                  </label>
-                  <TuffInput v-model.number="form.timeout" type="number" class="w-full" />
-                </div>
-                <div class="space-y-2">
-                  <label class="text-xs text-black/60 dark:text-white/60">
-                    {{ t('dashboard.sections.intelligence.form.priority') }}
-                  </label>
-                  <TuffInput v-model.number="form.priority" type="number" class="w-full" />
-                  <p class="text-[11px] text-black/30 dark:text-white/30">
-                    {{ t('dashboard.sections.intelligence.form.priorityHint') }}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div class="ProviderOverlay-Actions">
-              <TxButton variant="secondary" size="small" @click="close">
-                {{ t('dashboard.sections.intelligence.form.cancel') }}
-              </TxButton>
-              <TxButton variant="primary" size="small" :disabled="!form.name.trim() || formSaving" @click="submitForm">
-                {{ formSaving ? t('dashboard.sections.intelligence.form.saving') : (formMode === 'create' ? t('dashboard.sections.intelligence.form.create') : t('dashboard.sections.intelligence.form.save')) }}
-              </TxButton>
-            </div>
-          </div>
-        </template>
-      </FlipDialog>
-
     <!-- Provider Probe Overlay -->
     <FlipDialog
         v-model="showProbeOverlay"
@@ -2956,13 +2585,6 @@ function formatEndpointCandidates(list?: string[]) {
           </div>
         </template>
       </FlipDialog>
-
-    <!-- Delete Confirm -->
-    <TxPopperDialog
-      v-if="deleteConfirmVisible"
-      :comp="DeleteConfirmDialog"
-      :close="closeDeleteConfirm"
-    />
   </div>
 </template>
 

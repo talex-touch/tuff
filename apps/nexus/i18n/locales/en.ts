@@ -440,6 +440,13 @@ export default {
         emptyAttention: 'No health checks need attention',
         emptyAttentionDetail: 'No degraded or unhealthy health checks match this view.',
       },
+      quota: {
+        channels: 'channels',
+        defaultChannel: 'default',
+      },
+      fields: {
+        template: 'Template',
+      },
       observability: {
         actionHint: 'Next action',
         actions: {
@@ -1618,6 +1625,26 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           saveSuccess: 'User updated.',
           saveFailed: 'Failed to update user.',
         },
+        passwordReset: {
+          title: 'Password reset',
+          hint: 'Generate a one-time reset link for support recovery. The token is shown only in this result and is not kept in page state.',
+          generate: 'Generate link',
+          generated: 'Password reset link generated.',
+          generateFailed: 'Failed to generate password reset link.',
+          activeOnly: 'Only active users can receive a password reset link.',
+          expiresAt: 'Expires in {ttl} minutes ({expiresAt})',
+          copy: 'Copy',
+          copied: 'Password reset link copied.',
+          copiedShort: 'Copied',
+          copyFailed: 'Failed to copy password reset link.',
+          errors: {
+            invalidTtl: 'Invalid reset link TTL.',
+            userIdRequired: 'User id is required.',
+            userNotFound: 'User not found.',
+            mergedUser: 'Merged users cannot reset password.',
+            inactiveUser: 'Only active users can reset password.',
+          },
+        },
         pagination: {
           prev: 'Prev',
           next: 'Next',
@@ -1757,6 +1784,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           title: 'Intelligence Overview',
           subtitle: 'Aggregate recent AI traffic and cost signals.',
           refresh: 'Refresh',
+          loadFailed: 'Failed to load intelligence overview.',
           sampleHint: 'Based on the latest {count} audit entries',
           empty: 'No data',
           cards: {
@@ -1797,10 +1825,13 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
         providers: {
           title: 'Providers',
-          modelsTitle: 'Providers + Models',
-          modelsSubtitle: 'Providers expose available models; scenes decide which provider/model path is used.',
+          modelsTitle: 'Provider Registry Mirrors',
+          modelsSubtitle: 'AI provider configuration is centralized in Provider Registry. This page only shows migration state, scene bindings, and probes.',
           addButton: 'Add Provider',
-          empty: 'No AI providers configured yet. Click above to add one.',
+          openRegistry: 'Open Provider Registry',
+          configureInRegistry: 'Configure in Registry',
+          empty: 'No AI providers configured yet. Create providers and capabilities in Provider Registry.',
+          loadFailed: 'Failed to load providers.',
           loading: 'Loading providers…',
           enabled: 'Enabled',
           disabled: 'Disabled',
@@ -1833,6 +1864,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             copyEvidence: 'Copy evidence',
             evidenceCopied: 'Evidence copied.',
             copyEvidenceFailed: 'Failed to copy migration evidence.',
+            migrationFailed: 'Failed to migrate providers.',
             readyDescription: 'The executed migration has a complete registry mirror and can be promoted to registry-primary reads.',
             blockedDescription: 'Registry-primary reads must stay disabled until every blocker is resolved.',
             planningDescription: 'Dry-run only previews the migration plan; it is not evidence that registry-primary reads are safe.',
@@ -1894,6 +1926,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           bindings: 'Scene bindings',
           addBinding: 'Add binding',
           errors: {
+            loadRegistry: 'Failed to load scene registry.',
+            saveScene: 'Failed to save scene.',
             registryMissing: 'Provider {name} has no Provider Registry mirror.',
             capabilityMissing: 'Provider {name} does not declare {capability}.',
             duplicateProvider: 'Provider {name} is already bound to this scene.',
@@ -1942,11 +1976,13 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           enableCacheHint: 'Cache identical request responses to reduce cost and latency.',
           cacheExpiration: 'Cache Expiration (seconds)',
           saveSuccess: 'Global settings saved',
+          saveFailed: 'Failed to save global settings.',
         },
         audit: {
           title: 'Audit Logs',
           subtitle: 'Review recent AI requests and error details.',
           refresh: 'Refresh',
+          loadFailed: 'Failed to load audit logs.',
           userFilter: 'Filter by user ID',
           filter: 'Filter',
           empty: 'No audit records yet.',
@@ -1968,6 +2004,15 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             success: 'Success',
             failed: 'Failed',
           },
+        },
+        usage: {
+          loadFailed: 'Failed to load usage.',
+        },
+        security: {
+          loadIpBansFailed: 'Failed to load IP bans.',
+          addIpBanFailed: 'Failed to add IP ban.',
+          updateIpBanFailed: 'Failed to update IP ban.',
+          removeIpBanFailed: 'Failed to remove IP ban.',
         },
         types: {
           openai: 'OpenAI',

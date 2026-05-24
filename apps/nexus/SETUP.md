@@ -169,10 +169,10 @@ pnpm preview:cf
    GITHUB_CLIENT_ID=xxx
    GITHUB_CLIENT_SECRET=xxx
 
-   RESEND_API_KEY=xxx
+   AUTH_EMAIL_SERVER=smtp://placeholder
    AUTH_EMAIL_FROM="Tuff <noreply@tuff.chat>"
    ```
-3. 将 `AUTH_SECRET`、`APP_AUTH_JWT_SECRET`、`GITHUB_CLIENT_SECRET`、`RESEND_API_KEY` 作为 **Secrets** 写入 Cloudflare Pages；其余变量可作为普通环境变量注入。`APP_AUTH_JWT_SECRET` 必须在生产/预览部署中保持稳定一致，否则 CLI / App JWT 会出现刚签发即被其他 API 拒绝的情况。
+3. 将 `AUTH_SECRET`、`APP_AUTH_JWT_SECRET`、`GITHUB_CLIENT_SECRET` 作为 **Secrets** 写入 Cloudflare Pages；其余变量可作为普通环境变量注入。`APP_AUTH_JWT_SECRET` 必须在生产/预览部署中保持稳定一致，否则 CLI / App JWT 会出现刚签发即被其他 API 拒绝的情况。邮件发送统一走通知渠道配置：Resend 是 `notification_channel` 的 `providerType: "resend"`，API Key 需通过 `secure://notifications/*` 通知凭据保存，不再使用渠道外 `RESEND_API_KEY` 兜底。
 4. `/sign-in` 与 `/sign-up` 为自定义表单，支持邮箱密码、GitHub、Magic Link、Passkeys（仅 Web 端）。登录后可进入 `Dashboard` 管理账号与设备。
 
 ## 11. Drizzle ORM 方案评估

@@ -54,6 +54,14 @@ const actionPendingId = ref<string | null>(null)
 const editorOpen = ref(false)
 const selectedUser = ref<AdminUser | null>(null)
 const editorSaving = ref(false)
+const resetLinkGenerating = ref(false)
+const resetLinkCopied = ref(false)
+const resetLinkResult = ref<{
+  userId: string
+  resetUrl: string
+  expiresAt: string
+  ttlMinutes: number
+} | null>(null)
 const pagination = reactive<Pagination>({
   page: 1,
   limit: 20,
@@ -82,6 +90,7 @@ const hasPrev = computed(() => pagination.page > 1)
 const hasNext = computed(() => pagination.page < pagination.totalPages)
 const actionsLocked = computed(() => loading.value || actionPendingId.value !== null)
 const selectedUserLocked = computed(() => !selectedUser.value || selectedUser.value.status === 'merged' || selectedUser.value.id === user.value?.id)
+const selectedUserCanGenerateResetLink = computed(() => selectedUser.value?.status === 'active')
 
 const statusOptions = computed(() => ([
   { value: 'all', label: t('dashboard.sections.users.filters.statusAll', 'All statuses') },
@@ -179,6 +188,21 @@ function formatDate(value: string | null) {
   })
 }
 
+function resolvePasswordResetError(err: any): string {
+  const code = err?.data?.data?.errorCode || err?.data?.errorCode
+  if (code === 'ADMIN_PASSWORD_RESET_INVALID_TTL')
+    return t('dashboard.sections.users.passwordReset.errors.invalidTtl', 'Invalid reset link TTL.')
+  if (code === 'ADMIN_PASSWORD_RESET_USER_ID_REQUIRED')
+    return t('dashboard.sections.users.passwordReset.errors.userIdRequired', 'User id is required.')
+  if (code === 'ADMIN_PASSWORD_RESET_USER_NOT_FOUND')
+    return t('dashboard.sections.users.passwordReset.errors.userNotFound', 'User not found.')
+  if (code === 'ADMIN_PASSWORD_RESET_MERGED_USER')
+    return t('dashboard.sections.users.passwordReset.errors.mergedUser', 'Merged users cannot reset password.')
+  if (code === 'ADMIN_PASSWORD_RESET_INACTIVE_USER')
+    return t('dashboard.sections.users.passwordReset.errors.inactiveUser', 'Only active users can reset password.')
+  return t('dashboard.sections.users.passwordReset.generateFailed', 'Failed to generate password reset link.')
+}
+
 function applyUserUpdate(updated: AdminUser) {
   users.value = users.value.map(entry => (entry.id === updated.id ? { ...entry, ...updated } : entry))
   if (selectedUser.value?.id === updated.id)
@@ -187,6 +211,8 @@ function applyUserUpdate(updated: AdminUser) {
 
 function openEditor(entry: AdminUser) {
   selectedUser.value = entry
+  resetLinkCopied.value = false
+  resetLinkResult.value = null
   editorForm.name = entry.name || ''
   editorForm.image = entry.image || ''
   editorForm.locale = entry.locale || 'none'
@@ -267,6 +293,51 @@ async function grantSubscription(entry: AdminUser) {
       expiresInDays: Number(editorForm.durationDays),
     },
   })
+}
+
+async function generatePasswordResetLink() {
+  const entry = selectedUser.value
+  if (!entry || resetLinkGenerating.value)
+    return
+
+  resetLinkGenerating.value = true
+  resetLinkCopied.value = false
+  try {
+    const res = await rawFetch<{ resetUrl: string, expiresAt: string, ttlMinutes: number }>(`/api/admin/users/${entry.id}/password-reset-link`, {
+      method: 'POST',
+      body: { ttlMinutes: 30 },
+    })
+    resetLinkResult.value = {
+      userId: entry.id,
+      resetUrl: res.resetUrl,
+      expiresAt: res.expiresAt,
+      ttlMinutes: res.ttlMinutes,
+    }
+    toast.success(t('dashboard.sections.users.passwordReset.generated', 'Password reset link generated.'))
+  }
+  catch (err: any) {
+    toast.warning(resolvePasswordResetError(err))
+  }
+  finally {
+    resetLinkGenerating.value = false
+  }
+}
+
+async function copyPasswordResetLink() {
+  if (!resetLinkResult.value?.resetUrl)
+    return
+  try {
+    await navigator.clipboard.writeText(resetLinkResult.value.resetUrl)
+    resetLinkCopied.value = true
+    toast.success(t('dashboard.sections.users.passwordReset.copied', 'Password reset link copied.'))
+    setTimeout(() => {
+      resetLinkCopied.value = false
+    }, 2000)
+  }
+  catch (err: any) {
+    const fallback = t('dashboard.sections.users.passwordReset.copyFailed', 'Failed to copy password reset link.')
+    toast.warning(err?.message || fallback)
+  }
 }
 
 async function saveEditor() {
@@ -568,6 +639,42 @@ onMounted(() => {
               </label>
               <TuffInput v-model="editorForm.durationDays" type="number" class="w-full" :disabled="!editorForm.grantSubscription" />
             </div>
+          </div>
+        </section>
+
+        <section class="space-y-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <h3 class="apple-section-title">
+                {{ t('dashboard.sections.users.passwordReset.title', 'Password reset') }}
+              </h3>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.sections.users.passwordReset.hint', 'Generate a one-time reset link for support recovery. The token is not stored in this page.') }}
+              </p>
+            </div>
+            <TxButton
+              variant="secondary"
+              size="small"
+              :loading="resetLinkGenerating"
+              :disabled="resetLinkGenerating || !selectedUserCanGenerateResetLink"
+              @click="generatePasswordResetLink"
+            >
+              {{ t('dashboard.sections.users.passwordReset.generate', 'Generate link') }}
+            </TxButton>
+          </div>
+          <p v-if="!selectedUserCanGenerateResetLink" class="rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
+            {{ t('dashboard.sections.users.passwordReset.activeOnly', 'Only active users can receive a password reset link.') }}
+          </p>
+          <div v-if="resetLinkResult?.userId === selectedUser.id" class="space-y-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="text-xs text-black/50 dark:text-white/50">
+                {{ t('dashboard.sections.users.passwordReset.expiresAt', { expiresAt: formatDate(resetLinkResult.expiresAt), ttl: resetLinkResult.ttlMinutes }, `Expires in ${resetLinkResult.ttlMinutes} minutes`) }}
+              </span>
+              <TxButton variant="secondary" size="mini" @click="copyPasswordResetLink">
+                {{ resetLinkCopied ? t('dashboard.sections.users.passwordReset.copiedShort', 'Copied') : t('dashboard.sections.users.passwordReset.copy', 'Copy') }}
+              </TxButton>
+            </div>
+            <TuffInput :model-value="resetLinkResult.resetUrl" readonly class="w-full font-mono text-xs" />
           </div>
         </section>
       </div>

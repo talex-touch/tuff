@@ -54,13 +54,16 @@ export default defineEventHandler(async (event) => {
   }).catch(() => {})
 
   const token = await createVerificationToken(event, email, 1000 * 60 * 60 * 24)
-  const origin = useRuntimeConfig().auth?.origin as string | undefined
+  const origin = useRuntimeConfig(event).auth?.origin as string | undefined
   const verifyUrl = origin ? `${origin}/verify?email=${encodeURIComponent(email)}&token=${token}` : ''
   await sendEmail({
     to: email,
     subject: 'Verify your email',
-    html: `<p>Click the link to verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`
-  })
+    html: `<p>Click the link to verify your email:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`,
+    action: 'auth.email.verify',
+    resourceType: 'auth_user',
+    resourceId: user.id,
+  }, event)
 
   return { success: true }
 })
