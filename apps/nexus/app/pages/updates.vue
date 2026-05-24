@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
-import type { ReleaseChannelId } from '~/data/updates'
-import { computed, ref, watch } from 'vue'
-import GrainGradientHeroSection from '~/components/ui/GrainGradientHeroSection.vue'
+import { computed, ref } from 'vue'
 import UpdatesAllView from '~/components/updates/UpdatesAllView.vue'
-import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel, resolveReleaseNotesHtml } from '~/composables/useReleases'
-import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
+import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel } from '~/composables/useReleases'
 import { requestJson } from '~/utils/request'
 
 interface LocalizedText {
@@ -34,106 +31,43 @@ definePageMeta({
   },
 })
 
+const GITHUB_RELEASES_URL = 'https://github.com/talex-touch/tuff/releases'
+const STABLE_RELEASE_CHANNEL: ReleaseChannel = 'RELEASE'
+
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const { releases, loading, fetchReleases } = useReleases()
+const { releases, fetchReleases } = useReleases()
 const { data: updatesPayload } = await useAsyncData('public-updates', () =>
   requestJson<{ updates: DashboardUpdate[] }>('/api/updates'),
 )
-const channelIds = releaseChannels.map(channel => channel.id)
 
 // Detect user's platform
 const userPlatform = ref(detectPlatform())
 const userArch = ref(detectArch())
-const downloadsSectionRef = ref<HTMLElement | null>(null)
 
 onMounted(() => {
   userPlatform.value = detectPlatform()
   userArch.value = detectArch()
 })
 
-function isSameQuery(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-) {
-  const keysA = Object.keys(a)
-  const keysB = Object.keys(b)
-  if (keysA.length !== keysB.length)
-    return false
-  return keysA.every(key => a[key] === b[key])
-}
-
-function buildChannelQuery(channel: ReleaseChannelId) {
-  const { channel: _channel, history: _history, ...rest } = route.query
-  return channel === 'release' ? rest : { ...rest, channel }
-}
-
-function resolveChannel(value: unknown): ReleaseChannelId {
-  if (typeof value === 'string' && channelIds.includes(value as ReleaseChannelId))
-    return value as ReleaseChannelId
-  return 'release'
-}
-
-const selectedChannel = ref<ReleaseChannelId>(resolveChannel(route.query.channel))
-const historyExpanded = ref(route.query.history === '1')
-
-watch(
-  () => route.query.channel,
-  (channel) => {
-    selectedChannel.value = resolveChannel(channel)
-  },
-)
-
-watch(selectedChannel, async (channel) => {
-  const nextQuery = buildChannelQuery(channel)
-
-  if (!isSameQuery(nextQuery, route.query))
-    await router.replace({ query: nextQuery })
-
-  historyExpanded.value = false
-
-  // Fetch releases for the selected channel
-  await fetchReleases({
-    channel: mapLocalChannelToApi(channel) as ReleaseChannel,
-    status: 'published',
-    includeAssets: true,
-  })
-})
-
-// Initial fetch
 onMounted(async () => {
   await fetchReleases({
-    channel: mapLocalChannelToApi(selectedChannel.value) as ReleaseChannel,
+    channel: STABLE_RELEASE_CHANNEL,
     status: 'published',
     includeAssets: true,
   })
 })
 
-const channelOptions = computed(() =>
-  releaseChannels.map(channel => ({
-    id: channel.id,
-    icon: channel.icon,
-    badge: t(channel.badgeKey),
-    label: t(channel.labelKey),
-    description: t(channel.descriptionKey),
-    meta: t(channel.metaKey),
-  })),
-)
-
-// Use API releases data
 const filteredReleases = computed(() => {
   return releases.value
-    .filter(r => mapApiChannelToLocal(r.channel) === selectedChannel.value)
+    .filter(r => r.channel === STABLE_RELEASE_CHANNEL)
     .slice()
     .sort((a, b) => new Date(b.publishedAt ?? b.createdAt).getTime() - new Date(a.publishedAt ?? a.createdAt).getTime())
 })
 
 const latestRelease = computed<AppRelease | null>(() => filteredReleases.value[0] ?? null)
-const historyReleases = computed(() => filteredReleases.value.slice(1))
-
-const hasHistory = computed(() => historyReleases.value.length > 0)
 
 // Get download asset for user's platform
 const primaryDownload = computed(() => {
@@ -148,29 +82,40 @@ const allDownloads = computed(() => {
     return []
   return latestRelease.value.assets
 })
-
-const latestReleaseNotes = computed(() => {
-  if (!latestRelease.value)
-    return ''
-  return resolveReleaseNotesHtml(
-    latestRelease.value.notesHtml,
-    latestRelease.value.notes,
-    locale.value,
-  )
+const primaryDownloadPlatform = computed(() => primaryDownload.value?.platform ?? userPlatform.value)
+const primaryDownloadPlatformLabel = computed(() => getPlatformLabel(primaryDownloadPlatform.value as any))
+const primaryDownloadIcon = computed(() => {
+  if (primaryDownloadPlatform.value === 'darwin')
+    return 'i-carbon-logo-apple'
+  if (primaryDownloadPlatform.value === 'win32')
+    return 'i-carbon-logo-windows'
+  if (primaryDownloadPlatform.value === 'linux')
+    return 'i-carbon-logo-linux'
+  return 'i-carbon-download'
 })
+const platformRequirementLabel = computed(() => {
+  if (primaryDownloadPlatform.value === 'darwin')
+    return 'macOS 13.0+ · Apple Silicon or Intel'
+  if (primaryDownloadPlatform.value === 'win32')
+    return 'Windows 10+ · x64 or ARM64'
+  return `${primaryDownloadPlatformLabel.value} · x64 or ARM64`
+})
+const latestVersionText = computed(() => latestRelease.value?.version || latestRelease.value?.tag || '')
+const primaryDownloadVersionText = computed(() => latestRelease.value?.name || latestRelease.value?.tag || latestVersionText.value)
+const heroSubtitle = computed(() => isZh.value ? '获取最新版本，体验更强大的创作能力。' : 'Get the latest version and unlock a stronger creative workflow.')
 
 const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
 const isAllUpdatesView = computed(() => route.path === '/updates/all' || route.query.view === 'all')
-const selectedNewsTab = ref<'release' | 'announcement'>('release')
-const featuredUpdateLimit = 6
+const featuredUpdateLimit = 3
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, featuredUpdateLimit))
-const announcementUpdates = computed(() => updateItems.value.filter(update => update.type === 'announcement').slice(0, featuredUpdateLimit))
-const activeNewsList = computed(() => selectedNewsTab.value === 'announcement' ? announcementUpdates.value : releaseUpdates.value)
-const hasUpdateList = computed(() => activeNewsList.value.length > 0)
+const hasUpdateList = computed(() => releaseUpdates.value.length > 0)
 const isZh = computed(() => locale.value.startsWith('zh'))
-const UPDATE_RELEASE_TAG_COLOR = 'var(--tx-color-primary)'
-const UPDATE_NEWS_TAG_COLOR = 'var(--tx-text-color-secondary)'
-const UPDATE_CRITICAL_TAG_COLOR = 'var(--tx-color-danger)'
+
+useHead(() => ({
+  bodyAttrs: {
+    class: isAllUpdatesView.value ? '' : 'nexus-updates-single-page',
+  },
+}))
 
 function resolveUpdateText(text: LocalizedText) {
   if (isZh.value)
@@ -187,29 +132,6 @@ function openUpdateLink(link?: string) {
     return
   }
   router.push(link)
-}
-
-function scrollToDownloads() {
-  if (!import.meta.client || !downloadsSectionRef.value)
-    return
-
-  const targetTop = Math.max(
-    0,
-    downloadsSectionRef.value.getBoundingClientRect().top + window.scrollY - 88,
-  )
-
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    window.scrollTo(0, targetTop)
-    return
-  }
-
-  const initialTop = window.scrollY
-  window.scrollTo({ top: targetTop, behavior: 'smooth' })
-
-  window.setTimeout(() => {
-    if (Math.abs(window.scrollY - initialTop) < 2)
-      window.scrollTo(0, targetTop)
-  }, 120)
 }
 
 function updateTypeLabel(update: DashboardUpdate) {
@@ -245,27 +167,8 @@ function updateTypeTagColor(type: DashboardUpdate['type']) {
     return 'var(--tx-color-success)'
   if (type === 'data')
     return 'var(--tx-color-primary)'
-  return UPDATE_NEWS_TAG_COLOR
+  return 'var(--tx-text-color-secondary)'
 }
-
-watch(historyExpanded, (expanded) => {
-  const nextQuery = expanded
-    ? { ...route.query, history: '1' }
-    : (() => {
-        const { history: _history, ...rest } = route.query
-        return rest
-      })()
-
-  if (!isSameQuery(nextQuery, route.query))
-    router.replace({ query: nextQuery })
-})
-
-watch(
-  () => route.query.history,
-  (historyValue) => {
-    historyExpanded.value = historyValue === '1'
-  },
-)
 
 const dateFormatter = computed(() => new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium' }))
 
@@ -276,11 +179,6 @@ function formatReleaseDate(dateString: string) {
   return dateFormatter.value.format(parsed)
 }
 
-function channelLabel(id: ReleaseChannelId) {
-  const channel = channelOptions.value.find(option => option.id === id)
-  return channel ? channel.label : id
-}
-
 function getDownloadLabel(asset: { platform: string, arch: string }) {
   return `${getPlatformLabel(asset.platform as any)} (${getArchLabel(asset.arch as any)})`
 }
@@ -289,123 +187,121 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 <template>
   <UpdatesAllView v-if="isAllUpdatesView" :updates="updateItems" />
 
-  <main v-else class="updates-page relative min-h-screen overflow-hidden bg-[#05050a]">
-    <GrainGradientHeroSection
-      :eyebrow="t('updates.badge')"
-      :title="t('updates.title')"
-      :subtitle="t('updates.subtitle')"
-      :cta-label="t('updates.heroCta')"
-      cta-icon="i-carbon-download"
-      @cta="scrollToDownloads"
-    />
-
-    <section
-      id="updates-downloads"
-      ref="downloadsSectionRef"
-      class="updates-content relative z-1 mx-auto w-full scroll-mt-28 flex flex-col gap-10 bg-white px-6 py-16 text-gray-900 md:px-12 lg:px-24 dark:bg-[#05050a] dark:text-white"
+  <main v-else class="updates-page" aria-labelledby="updates-page-title">
+    <img
+      class="updates-page__background"
+      src="/assets/updates/download-bg.png"
+      alt=""
+      aria-hidden="true"
     >
-      <div class="mx-auto max-w-2xl w-full animate-fade-in-up" style="animation-delay: 60ms;">
-        <TxRadioGroup
-          v-model="selectedChannel"
-          type="button"
-          indicator-variant="blur"
-          :update-on-settled="false"
-          class="updates-channel-radio-group"
-        >
-          <TxRadio
-            v-for="option in channelOptions"
-            :key="option.id"
-            :value="option.id"
-            class="updates-channel-radio"
+    <div class="updates-page__overlay" aria-hidden="true" />
+
+    <section class="updates-shell">
+      <div class="updates-hero-panel animate-fade-in-up">
+        <h1 id="updates-page-title" class="updates-title">
+          {{ t('updates.title') }}
+        </h1>
+        <p class="updates-subtitle">
+          {{ heroSubtitle }}
+        </p>
+
+        <div class="updates-hero-actions">
+          <a
+            v-if="primaryDownload"
+            :href="primaryDownload.downloadUrl"
+            target="_blank"
+            rel="noopener"
+            class="download-btn updates-primary-download"
           >
-            <span :class="option.icon" class="updates-channel-radio__icon" />
-            <span>{{ option.badge }}</span>
-          </TxRadio>
-        </TxRadioGroup>
+            <span :class="primaryDownloadIcon" class="updates-download-icon" aria-hidden="true" />
+            <span class="updates-download-copy">
+              <strong>{{ isZh ? `下载 ${primaryDownloadPlatformLabel} 版` : `Download for ${primaryDownloadPlatformLabel}` }}</strong>
+              <small v-if="primaryDownloadVersionText">{{ primaryDownloadVersionText }}</small>
+            </span>
+          </a>
+
+          <TxButton
+            v-else
+            variant="bare"
+            native-type="button"
+            class="updates-disabled-download"
+            :disabled="true"
+          >
+            <span class="i-carbon-incomplete text-lg" aria-hidden="true" />
+            <span>{{ t('updates.empty') }}</span>
+          </TxButton>
+
+          <div class="updates-platform-menu">
+            <TxButton variant="bare" native-type="button" class="updates-platform-menu__button">
+              <span class="i-carbon-apps updates-download-icon" aria-hidden="true" />
+              <span>{{ isZh ? '其他平台与版本' : 'Other Platforms' }}</span>
+              <span class="i-carbon-chevron-down text-lg" aria-hidden="true" />
+            </TxButton>
+            <div v-if="allDownloads.length" class="updates-platform-menu__list">
+              <a
+                v-for="asset in allDownloads"
+                :key="asset.id"
+                :href="asset.downloadUrl"
+                target="_blank"
+                rel="noopener"
+                class="updates-platform-menu__item"
+              >
+                <span>{{ getDownloadLabel(asset) }}</span>
+                <span v-if="asset.size">{{ formatFileSize(asset.size) }}</span>
+              </a>
+            </div>
+          </div>
+
+          <p class="updates-platform-hint">
+            <span>{{ platformRequirementLabel }}</span>
+            <span class="updates-platform-hint__dot">·</span>
+            <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener">
+              More versions
+            </a>
+          </p>
+        </div>
       </div>
 
-      <section class="mx-auto max-w-4xl w-full animate-fade-in-up" style="animation-delay: 100ms;">
-        <div class="UpdateNewsSection">
-          <div class="flex flex-wrap items-center justify-between gap-3">
+      <aside class="updates-control-panel animate-fade-in-up" style="animation-delay: 90ms;">
+        <section class="updates-news-panel" :aria-label="t('updates.news.title')">
+          <div class="updates-news-head">
             <div>
-              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                {{ t('updates.news.title') }}
-              </h2>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('updates.news.subtitle') }}
-              </p>
+              <h2>{{ t('updates.news.title') }}</h2>
+              <p>{{ t('updates.news.latestHint') }}</p>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="hidden text-xs text-gray-400 sm:inline dark:text-gray-500">
-                {{ t('updates.news.latestHint') }}
-              </span>
-              <NuxtLink
-                to="/updates?view=all"
-                class="UpdateNewsViewAllBtn"
+            <NuxtLink to="/updates?view=all" class="updates-news-more">
+              {{ isZh ? '查看全部' : 'View all' }}
+            </NuxtLink>
+          </div>
+
+          <TxEdgeFadeMask v-if="hasUpdateList" axis="horizontal" :size="42" class="updates-news-scroller">
+            <div class="updates-news-track">
+              <TxCardItem
+                v-for="update in releaseUpdates"
+                :key="update.id"
+                class="UpdateNewsItem UpdateNewsItem--carousel"
+                :title="resolveUpdateText(update.title)"
+                :icon-class="updateTypeIcon(update.type)"
+                :role="update.link ? 'link' : 'article'"
+                :clickable="Boolean(update.link)"
+                @click="openUpdateLink(update.link)"
               >
-                <span>{{ t('updates.news.viewAll') }}</span>
-                <span class="i-carbon-arrow-right text-sm" />
-              </NuxtLink>
+                <template #subtitle>
+                  <div class="UpdateNewsMeta">
+                    <span>{{ formatReleaseDate(update.timestamp) }}</span>
+                    <TxTag size="sm" :label="updateTypeLabel(update)" :color="updateTypeTagColor(update.type)" />
+                  </div>
+                </template>
+
+                <template #description>
+                  <p class="UpdateNewsSummary">
+                    {{ resolveUpdateText(update.summary) }}
+                  </p>
+                </template>
+              </TxCardItem>
             </div>
-          </div>
+          </TxEdgeFadeMask>
 
-          <div class="mt-3 flex items-center gap-2">
-            <TxButton
-              variant="bare"
-              native-type="button"
-              class="news-tab-btn"
-              :class="{ 'news-tab-btn--active': selectedNewsTab === 'release' }"
-              @click="selectedNewsTab = 'release'"
-            >
-              {{ t('updates.news.typeNews') }}
-            </TxButton>
-            <TxButton
-              variant="bare"
-              native-type="button"
-              class="news-tab-btn"
-              :class="{ 'news-tab-btn--active': selectedNewsTab === 'announcement' }"
-              @click="selectedNewsTab = 'announcement'"
-            >
-              {{ t('updates.news.typeAnnouncement') }}
-            </TxButton>
-          </div>
-
-          <div v-if="hasUpdateList" class="UpdateNewsCarousel mt-4">
-            <TxEdgeFadeMask axis="horizontal" :size="48" class="UpdateNewsScroller">
-              <div class="UpdateNewsTrack">
-                <TxCardItem
-                  v-for="update in activeNewsList"
-                  :key="update.id"
-                  class="UpdateNewsItem UpdateNewsItem--carousel"
-                  :title="resolveUpdateText(update.title)"
-                  :icon-class="updateTypeIcon(update.type)"
-                  :role="update.link ? 'link' : 'article'"
-                  :clickable="Boolean(update.link)"
-                  @click="openUpdateLink(update.link)"
-                >
-                  <template #subtitle>
-                    <div class="UpdateNewsMeta">
-                      <span>{{ formatReleaseDate(update.timestamp) }}</span>
-                      <TxTag size="sm" :label="updateTypeLabel(update)" :color="updateTypeTagColor(update.type)" />
-                      <TxTag
-                        v-for="tag in update.tags.slice(0, 2)"
-                        :key="tag"
-                        size="sm"
-                        :label="tag"
-                        :color="UPDATE_NEWS_TAG_COLOR"
-                      />
-                    </div>
-                  </template>
-
-                  <template #description>
-                    <p class="UpdateNewsSummary">
-                      {{ resolveUpdateText(update.summary) }}
-                    </p>
-                  </template>
-                </TxCardItem>
-              </div>
-            </TxEdgeFadeMask>
-          </div>
           <TxNoData
             v-else
             class="UpdateNewsEmpty"
@@ -415,196 +311,40 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             align="start"
             size="small"
           />
+        </section>
+
+        <div class="updates-latest-footer">
+          <span class="i-carbon-version-major" aria-hidden="true" />
+          <span>{{ t('updates.latest.heading') }}</span>
+          <strong>{{ latestVersionText || t('updates.latest.releaseDateFallback') }}</strong>
+          <span v-if="latestRelease">{{ formatReleaseDate(latestRelease.publishedAt || latestRelease.createdAt) }}</span>
         </div>
-      </section>
-
-      <!-- Loading State -->
-      <Transition name="fade" mode="out-in">
-        <div
-          v-if="loading"
-          key="loading"
-          class="mx-auto max-w-3xl w-full flex flex-col items-center gap-4 rounded-2xl bg-gray-50 px-8 py-12 text-center dark:bg-gray-800/50"
-        >
-          <TxSpinner :size="26" />
-          <p class="text-gray-500 dark:text-gray-400">
-            {{ t('updates.loading') }}
-          </p>
-          <div class="UpdateLoadingSkeleton">
-            <TxSkeleton :loading="true" :lines="2" />
-            <TxSkeleton :loading="true" :lines="2" />
-          </div>
-        </div>
-
-        <!-- Latest Release Card -->
-        <div
-          v-else-if="latestRelease"
-          key="content"
-          class="mx-auto max-w-3xl w-full animate-fade-in-up"
-          style="animation-delay: 200ms;"
-        >
-          <TxCard
-            :id="latestRelease.tag"
-            class="release-card"
-            background="glass"
-            shadow="soft"
-            :padding="28"
-            :radius="16"
-          >
-            <!-- Release Header -->
-            <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
-              <div class="flex flex-col gap-2">
-                <div class="flex flex-wrap items-center gap-2">
-                  <TxTag :label="t('updates.latest.heading')" :color="UPDATE_RELEASE_TAG_COLOR" />
-                  <TxTag :label="channelLabel(mapApiChannelToLocal(latestRelease.channel))" :color="UPDATE_NEWS_TAG_COLOR" />
-                  <TxTag
-                    v-if="latestRelease.isCritical"
-                    icon="i-carbon-warning-filled"
-                    :label="t('updates.latest.critical')"
-                    :color="UPDATE_CRITICAL_TAG_COLOR"
-                  />
-                </div>
-                <h2 class="text-2xl font-bold text-gray-900 md:text-3xl dark:text-white">
-                  {{ latestRelease.name || latestRelease.tag }}
-                </h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('updates.latest.releaseDate', { date: formatReleaseDate(latestRelease.publishedAt || latestRelease.createdAt) }) }}
-                </p>
-              </div>
-            </div>
-
-            <!-- Release Notes -->
-            <div
-              v-if="latestReleaseNotes"
-              class="prose prose-sm prose-gray mb-6 max-w-none dark:prose-invert"
-              v-html="latestReleaseNotes"
-            />
-
-            <!-- Download Buttons -->
-            <div class="flex flex-wrap items-center gap-3">
-              <a
-                v-if="primaryDownload"
-                :href="primaryDownload.downloadUrl"
-                target="_blank"
-                rel="noopener"
-                class="download-btn inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
-              >
-                <span class="i-carbon-download text-base" />
-                {{ t('updates.downloads.downloadFor') }} {{ getDownloadLabel(primaryDownload) }}
-                <span v-if="primaryDownload.size" class="text-xs opacity-70">({{ formatFileSize(primaryDownload.size) }})</span>
-              </a>
-
-              <div v-if="allDownloads.length > 1" class="relative group">
-                <TxButton variant="bare" native-type="button" class="inline-flex items-center gap-2 rounded-lg text-sm font-medium text-gray-700 transition-all duration-200 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700">
-                  <span class="i-carbon-overflow-menu-horizontal text-base" />
-                  {{ t('updates.downloads.otherPlatforms') }}
-                </TxButton>
-                <div class="absolute left-0 top-full z-10 mt-2 hidden min-w-48 flex-col rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg group-hover:flex dark:border-gray-700 dark:bg-gray-800">
-                  <a
-                    v-for="asset in allDownloads"
-                    :key="asset.id"
-                    :href="asset.downloadUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-700 transition hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                  >
-                    <span class="i-carbon-download text-base" />
-                    <span>{{ getDownloadLabel(asset) }}</span>
-                    <span v-if="asset.size" class="ml-auto text-xs text-gray-400">{{ formatFileSize(asset.size) }}</span>
-                  </a>
-                </div>
-              </div>
-            </div>
-          </TxCard>
-        </div>
-
-        <!-- Empty State -->
-        <div
-          v-else
-          key="empty"
-          class="mx-auto max-w-3xl w-full"
-        >
-          <TxNoData
-            :title="t('updates.empty')"
-            description=""
-            icon="i-carbon-incomplete"
-            surface="card"
-            size="large"
-          />
-        </div>
-      </Transition>
-
-      <!-- Release History -->
-      <div
-        v-if="filteredReleases.length > 1"
-        class="mx-auto max-w-3xl w-full animate-fade-in-up"
-        style="animation-delay: 300ms;"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('updates.table.title') }}
-          </h3>
-          <TxButton v-if="hasHistory" variant="bare" native-type="button" class="inline-flex items-center gap-2 rounded-lg text-sm font-medium text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" @click="historyExpanded = !historyExpanded">
-            <span :class="historyExpanded ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'" class="text-base transition-transform duration-200" />
-            {{ historyExpanded ? t('updates.table.hideLabel') : t('updates.table.toggleLabel') }}
-          </TxButton>
-        </div>
-
-        <Transition name="slide-fade">
-          <div
-            v-if="historyExpanded"
-            class="ReleaseHistoryList"
-          >
-            <TxCardItem
-              v-for="release in historyReleases"
-              :id="release.tag"
-              :key="release.tag"
-              class="ReleaseHistoryItem release-row"
-              role="article"
-              icon-class="i-carbon-version-major"
-            >
-              <template #title>
-                <div class="ReleaseHistoryTitle">
-                  <span class="truncate">
-                    {{ release.name || release.tag }}
-                  </span>
-                  <TxTag
-                    v-if="release.isCritical"
-                    size="sm"
-                    :label="t('updates.latest.critical')"
-                    :color="UPDATE_CRITICAL_TAG_COLOR"
-                  />
-                </div>
-              </template>
-
-              <template #subtitle>
-                <span>{{ formatReleaseDate(release.publishedAt || release.createdAt) }}</span>
-              </template>
-
-              <template #right>
-                <div class="flex items-center gap-2 shrink-0">
-                  <a
-                    v-for="asset in (release.assets || []).slice(0, 1)"
-                    :key="asset.id"
-                    :href="asset.downloadUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                  >
-                    <span class="i-carbon-download text-sm" />
-                    {{ getDownloadLabel(asset) }}
-                  </a>
-                </div>
-              </template>
-            </TxCardItem>
-          </div>
-        </Transition>
-      </div>
+      </aside>
     </section>
   </main>
 </template>
 
 <style scoped>
-/* Animations */
+:global(body.nexus-updates-single-page) {
+  overflow: hidden;
+  background: #05050a;
+}
+
+:global(body.nexus-updates-single-page .TuffFooter) {
+  display: none;
+}
+
+:global(body.nexus-updates-single-page .TuffHeader-Main) {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(5, 8, 18, 0.42) !important;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.22);
+}
+
+:global(body.nexus-updates-single-page .TuffHeader a),
+:global(body.nexus-updates-single-page .TuffHeader button) {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -613,7 +353,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -621,18 +361,13 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.4s ease-out both;
-}
-
 .animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out both;
+  animation: fade-in-up 0.56s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
-/* Transitions */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.22s ease;
 }
 
 .fade-enter-from,
@@ -640,203 +375,397 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   opacity: 0;
 }
 
-.slide-fade-enter-active {
-  transition: all 0.3s ease-out;
-}
-
-.slide-fade-leave-active {
-  transition: all 0.2s ease-in;
-}
-
-.slide-fade-enter-from {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-.slide-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-.ReleaseHistoryList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.UpdateNewsCarousel {
+.updates-page {
   position: relative;
-  margin-inline: -2px;
+  isolation: isolate;
+  height: 100svh;
+  overflow: hidden;
+  background: #05050a;
+  color: #fff;
 }
 
-.UpdateNewsScroller {
-  height: 196px;
+.updates-page__background {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  object-position: center;
+  filter: saturate(0.78) brightness(0.74);
+  transform: none;
 }
 
-.UpdateNewsScroller :deep(.tx-edge-fade-mask__viewport) {
+.updates-page__overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.04), transparent 42%),
+    linear-gradient(90deg, rgba(3, 5, 14, 0.48) 0%, rgba(3, 5, 14, 0.24) 44%, rgba(3, 5, 14, 0.48) 100%),
+    linear-gradient(180deg, rgba(3, 5, 14, 0.12), rgba(3, 5, 14, 0.46));
+  pointer-events: none;
+}
+
+.updates-shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: min(1120px, calc(100% - 56px));
+  height: 100%;
+  margin: 0 auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: start;
+  gap: clamp(44px, 7svh, 78px);
+  padding: clamp(84px, 9svh, 104px) 0 clamp(28px, 5svh, 52px);
+}
+
+.updates-hero-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 18px 32px;
+  text-align: center;
+  text-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+}
+
+.updates-title {
+  flex: 1 1 100%;
+  margin: 0;
+  color: #fff;
+  background: linear-gradient(180deg, #fff 4%, rgba(255, 255, 255, 0.82) 42%, rgba(184, 196, 255, 0.52) 100%);
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(56px, 7.2vw, 96px);
+  font-weight: 850;
+  letter-spacing: -0.064em;
+  line-height: 0.94;
+  -webkit-background-clip: text;
+}
+
+.updates-subtitle {
+  flex: 1 1 100%;
+  margin: -4px 0 18px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: clamp(16px, 1.7vw, 22px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.updates-hero-actions {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 0;
+}
+
+.updates-primary-download,
+.updates-disabled-download,
+.updates-platform-menu__button {
+  min-height: 76px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  border-radius: 18px;
+  padding: 0 34px;
+  font-size: 17px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+.updates-primary-download {
+  border: 1px solid rgba(255, 255, 255, 0.76);
+  min-width: min(292px, 34vw);
+  border-color: rgba(176, 163, 255, 0.72);
+  background: linear-gradient(135deg, rgba(149, 128, 255, 0.94), rgba(42, 66, 226, 0.88));
+  color: #fff;
+  box-shadow: 0 26px 80px rgba(80, 76, 255, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.updates-primary-download:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, rgba(166, 148, 255, 0.98), rgba(52, 78, 244, 0.94));
+  box-shadow: 0 34px 96px rgba(80, 76, 255, 0.44), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+.updates-download-icon {
+  flex: 0 0 auto;
+  font-size: 30px;
+}
+
+.updates-download-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  text-align: left;
+}
+
+.updates-download-copy strong,
+.updates-download-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.updates-download-copy small {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.updates-disabled-download {
+  --tx-button-bare-bg: rgba(255, 255, 255, 0.18);
+  --tx-button-bare-hover: rgba(255, 255, 255, 0.18);
+  --tx-button-bare-padding: 0 22px;
+  color: rgba(255, 255, 255, 0.74) !important;
+}
+
+.updates-platform-menu {
+  position: relative;
+}
+
+.updates-platform-menu__button {
+  min-width: min(270px, 32vw) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  background: rgba(8, 12, 34, 0.48) !important;
+  color: rgba(255, 255, 255, 0.84) !important;
+  --tx-button-bare-padding: 0 34px;
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+.updates-platform-menu__button:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+
+.updates-platform-menu__list {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 10;
+  display: none;
+  min-width: 260px;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 20px;
+  background: rgba(8, 10, 20, 0.84);
+  padding: 8px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+
+.updates-platform-menu:hover .updates-platform-menu__list {
+  display: flex;
+}
+
+.updates-platform-menu__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 14px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 12px;
+  text-decoration: none;
+}
+
+.updates-platform-menu__item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.updates-platform-hint {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 2px 0 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.updates-platform-hint a {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+}
+
+.updates-platform-hint a:hover {
+  color: #fff;
+}
+
+.updates-platform-hint__dot {
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.updates-control-panel {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto auto;
+  align-content: start;
+  align-items: start;
+  align-self: start;
+  gap: 12px;
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid rgba(150, 156, 220, 0.26);
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(11, 16, 38, 0.58), rgba(7, 10, 26, 0.42));
+  box-shadow: 0 32px 120px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  padding: 34px 38px 30px;
+  backdrop-filter: blur(26px) saturate(160%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+}
+
+.updates-news-panel {
+  min-height: 0;
+  min-width: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.updates-news-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.updates-news-head h2,
+.updates-news-head p {
+  margin: 0;
+}
+
+.updates-news-head h2 {
+  color: #fff;
+  font-size: 19px;
+  font-weight: 850;
+}
+
+.updates-news-head p {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 13px;
+}
+
+.updates-news-more {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-decoration: none;
+}
+
+.updates-news-more:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.updates-news-scroller {
+  margin-top: 28px;
+}
+
+.updates-news-scroller :deep(.tx-edge-fade-mask__viewport) {
   scrollbar-width: none;
 }
 
-.UpdateNewsScroller :deep(.tx-edge-fade-mask__viewport::-webkit-scrollbar) {
+.updates-news-scroller :deep(.tx-edge-fade-mask__viewport::-webkit-scrollbar) {
   display: none;
 }
 
-.UpdateNewsTrack {
-  display: flex;
-  width: max-content;
-  height: 100%;
-  align-items: stretch;
-  gap: 12px;
-  padding: 2px 2px 12px;
-}
-
-.UpdateNewsSection {
-  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-light, rgba(148, 163, 184, 0.36)) 72%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color-light, rgba(148, 163, 184, 0.36)) 72%, transparent);
-  padding: 24px 0;
-}
-
-.UpdateNewsItem,
-.ReleaseHistoryItem {
-  border-color: color-mix(in srgb, var(--tx-border-color-light, rgba(148, 163, 184, 0.36)) 62%, transparent);
-  background: color-mix(in srgb, var(--tx-fill-color-light, rgb(248, 250, 252)) 72%, transparent);
+.updates-news-track {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 0;
 }
 
 .UpdateNewsItem--carousel {
-  flex: 0 0 min(82vw, 360px);
-  height: calc(100% - 2px);
-  --tx-card-item-padding: 16px;
-  --tx-card-item-radius: 18px;
+  min-width: 0;
+  min-height: 118px;
+  --tx-card-item-padding: 0 24px 0 0;
+  --tx-card-item-radius: 0;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+}
+
+.UpdateNewsItem--carousel:hover {
+  background: transparent;
 }
 
 .UpdateNewsItem--carousel :deep(.tx-card-item__title) {
   display: -webkit-box;
   overflow: hidden;
+  color: rgba(255, 255, 255, 0.9);
   white-space: normal;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-size: 15px;
-  line-height: 1.35;
+  -webkit-line-clamp: 1;
 }
 
-.UpdateNewsItem--carousel :deep(.tx-card-item__desc) {
-  margin-top: 10px;
+.UpdateNewsItem--carousel:nth-child(3n),
+.UpdateNewsItem--carousel:last-child {
+  border-right: 0;
 }
 
-.UpdateNewsItem:hover,
-.ReleaseHistoryItem:hover {
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, rgb(255, 255, 255)) 86%, transparent);
-}
-
-.UpdateNewsMeta,
-.ReleaseHistoryTitle {
+.UpdateNewsMeta {
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-}
-
-.UpdateNewsMeta {
-  color: var(--tx-text-color-secondary, rgb(107, 114, 128));
+  color: rgba(255, 255, 255, 0.48);
   font-size: 12px;
 }
 
 .UpdateNewsSummary {
   display: -webkit-box;
   overflow: hidden;
-  margin: 0;
-  color: color-mix(in srgb, var(--tx-text-color-secondary, rgb(75, 85, 99)) 94%, transparent);
-  font-size: 14px;
-  line-height: 1.6;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.UpdateNewsViewAllBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 999px;
-  color: var(--tx-color-primary, rgb(59, 130, 246));
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.48);
   font-size: 12px;
-  font-weight: 700;
-  padding: 5px 10px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .UpdateNewsEmpty {
-  margin-top: 16px;
-  padding: 4px 0;
+  margin-top: 12px;
 }
 
-.UpdateLoadingSkeleton {
-  display: grid;
-  width: min(100%, 420px);
-  gap: 12px;
-}
-
-.updates-channel-radio-group {
-  width: 100%;
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  padding: 6px !important;
-  gap: 8px !important;
-  border-radius: 18px !important;
-  border-color: color-mix(in srgb, var(--tx-color-primary, rgb(59, 130, 246)) 24%, transparent) !important;
-  background: color-mix(in srgb, var(--tx-color-primary, rgb(59, 130, 246)) 11%, rgba(15, 23, 42, 0.72)) !important;
-}
-
-.updates-channel-radio-group :deep(.tx-radio) {
-  flex: 1 1 0 !important;
+.updates-latest-footer {
+  grid-column: 1 / -1;
+  display: flex;
   min-width: 0;
-  height: 44px;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 10px;
-  border-radius: 14px;
-  padding: 0 16px;
-  color: color-mix(in srgb, var(--tx-text-color-secondary, rgb(148, 163, 184)) 82%, transparent);
-  font-size: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 13px;
   font-weight: 700;
+  padding-top: 12px;
 }
 
-.updates-channel-radio-group :deep(.tx-radio.is-checked) {
-  color: var(--tx-text-color-primary, rgb(248, 250, 252));
+.updates-latest-footer strong {
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.updates-channel-radio__icon {
-  flex: 0 0 auto;
-  font-size: 16px;
-}
-
-.news-tab-btn {
-  border: 1px solid transparent;
-  border-radius: 999px;
-  color: var(--tx-text-color-secondary, rgb(107, 114, 128));
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-}
-.news-tab-btn--active {
-  background: color-mix(in srgb, var(--tx-color-primary, rgb(59, 130, 246)) 14%, transparent);
-  border-color: color-mix(in srgb, var(--tx-color-primary, rgb(59, 130, 246)) 32%, transparent);
-  color: var(--tx-color-primary, rgb(59, 130, 246));
-}
-
-/* Release card hover effect */
-.release-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.release-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-}
-
-:root.dark .release-card:hover {
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
-}
-
-/* Download button pulse on hover */
 .download-btn {
   position: relative;
   overflow: hidden;
@@ -846,23 +775,140 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-  transform: translateX(-100%);
-  transition: transform 0.5s ease;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-120%);
+  transition: transform 0.52s ease;
 }
 
 .download-btn:hover::after {
-  transform: translateX(100%);
+  transform: translateX(120%);
 }
 
-/* Release row stagger animation */
-.release-row {
-  animation: fade-in-up 0.3s ease-out both;
+@media (max-width: 980px) {
+  .updates-shell {
+    width: min(760px, calc(100% - 36px));
+    align-content: center;
+    gap: 26px;
+    padding-top: 88px;
+    padding-bottom: 24px;
+  }
+
+  .updates-title {
+    font-size: clamp(44px, 10vw, 68px);
+  }
+
+  .updates-subtitle {
+    margin-bottom: 8px;
+    font-size: 15px;
+  }
+
+  .updates-control-panel {
+    max-height: none;
+    padding: 24px;
+  }
+
+  .updates-news-track {
+    display: flex;
+    width: max-content;
+    gap: 12px;
+  }
+
+  .UpdateNewsItem--carousel {
+    flex: 0 0 280px;
+    border-right: 0;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.06);
+    --tx-card-item-padding: 14px;
+  }
 }
 
-.release-row:nth-child(1) { animation-delay: 0ms; }
-.release-row:nth-child(2) { animation-delay: 50ms; }
-.release-row:nth-child(3) { animation-delay: 100ms; }
-.release-row:nth-child(4) { animation-delay: 150ms; }
-.release-row:nth-child(5) { animation-delay: 200ms; }
+@media (max-width: 640px) {
+  .updates-shell {
+    width: calc(100% - 28px);
+    padding-top: 84px;
+    padding-bottom: 16px;
+  }
+
+  .updates-title {
+    margin-top: 16px;
+    font-size: clamp(38px, 12vw, 54px);
+  }
+
+  .updates-subtitle {
+    margin: -6px 0 2px;
+  }
+
+  .updates-hero-actions {
+    margin-top: 12px;
+  }
+
+  .updates-primary-download,
+  .updates-disabled-download,
+  .updates-platform-menu,
+  .updates-platform-menu__button {
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  .updates-platform-hint {
+    flex-wrap: wrap;
+    font-size: 12px;
+  }
+
+  .updates-control-panel {
+    border-radius: 24px;
+    padding: 18px;
+  }
+
+  .updates-news-head h2 {
+    font-size: 16px;
+  }
+
+  .UpdateNewsItem--carousel {
+    flex-basis: 260px;
+  }
+}
+
+@media (max-height: 760px) {
+  .updates-shell {
+    padding-top: 82px;
+    padding-bottom: 16px;
+  }
+
+  .updates-title {
+    font-size: clamp(42px, 6vw, 68px);
+  }
+
+  .updates-subtitle {
+    display: none;
+  }
+
+  .updates-control-panel {
+    gap: 10px;
+    padding: 18px 22px;
+  }
+
+  .UpdateNewsSummary {
+    -webkit-line-clamp: 1;
+  }
+
+  .UpdateNewsItem--carousel {
+    min-height: 118px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .updates-primary-download,
+  .updates-platform-menu__button,
+  .download-btn::after {
+    animation: none;
+    transition: none;
+  }
+
+  .updates-primary-download:hover,
+  .updates-platform-menu__button:hover {
+    transform: none;
+  }
+}
 </style>

@@ -13,6 +13,19 @@
 
 ## 2026-05-24
 
+### fix(nexus): make Nexus updates download page single-screen
+
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/app/layouts/home.vue`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/public/assets/updates/download-bg.png`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Replaced the `/updates` click-to-scroll hero/download flow with a single-screen, non-scrolling download surface backed by the provided image asset.
+  - Removed release channel switching from the public surface, fixed the default display to the stable channel, and routed `More versions` to GitHub Releases.
+  - Restyled the page as a centered marketing/download hero with compact platform cards, a GitHub-backed alternate-platform menu, and a responsive glass updates/news panel.
+  - Kept `/updates?view=all` and `/updates/all` as the full update-list experience while hiding the home footer on the single-screen view.
+  - Disabled server-side auth session fetching for public `/updates` routes so transient `/api/auth/session` failures cannot turn the download pages into a 500 response.
+
 ### feat(nexus): route auth recovery through notification channels
 
 - `apps/nexus/server/utils/email.ts`

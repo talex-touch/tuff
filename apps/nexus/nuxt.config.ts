@@ -234,6 +234,11 @@ export default defineNuxtConfig({
     ],
   },
 
+  routeRules: {
+    '/updates': { disableServerSideAuth: true },
+    '/updates/**': { disableServerSideAuth: true },
+  },
+
   future: {
     compatibilityVersion: 4,
   },
