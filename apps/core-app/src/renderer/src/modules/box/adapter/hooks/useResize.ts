@@ -20,6 +20,7 @@ const HEADER_HEIGHT = 64
 const MIN_HEIGHT = 64
 const MAX_HEIGHT = 600
 const RESULT_LAYOUT_SETTLE_MS = 180
+const MIN_MEASURABLE_CONTENT_HEIGHT = 1
 
 const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
 
@@ -51,21 +52,29 @@ function measureResultContentHeight(resultContent: HTMLElement): number {
   const paddingTop = toPx(containerStyle.paddingTop)
   const paddingBottom = toPx(containerStyle.paddingBottom)
 
-  let visualBottom = paddingTop
+  let visualBottom = 0
+  let measuredChildren = 0
   const children = Array.from(resultContent.children) as HTMLElement[]
   for (const child of children) {
+    const childRect = child.getBoundingClientRect()
+    if (!Number.isFinite(childRect.height) || childRect.height <= 0) continue
+
     const childStyle = getComputedStyle(child)
     const marginBottom = toPx(childStyle.marginBottom)
     const childBottom = child.offsetTop + child.offsetHeight + marginBottom
     if (childBottom > visualBottom) {
       visualBottom = childBottom
     }
+    measuredChildren += 1
   }
 
-  const visualHeight = Math.ceil(visualBottom + paddingBottom)
-  const scrollHeight = resultContent.scrollHeight
-  // Keep whichever is larger to avoid under-measure during transition states.
-  return Math.max(visualHeight, scrollHeight)
+  if (measuredChildren === 0 || visualBottom <= MIN_MEASURABLE_CONTENT_HEIGHT) {
+    return 0
+  }
+
+  // Do not use scrollHeight here: TxScroll stretches content to the current viewport height,
+  // and feeding that value back into BrowserWindow height creates a resize feedback loop.
+  return Math.ceil(Math.max(visualBottom + paddingBottom, paddingTop + paddingBottom))
 }
 
 function calculateDesiredHeight(resultCount: number): number {
@@ -90,6 +99,8 @@ function calculateDesiredHeight(resultCount: number): number {
     if (Number.isFinite(contentHeight) && contentHeight > 0) {
       return clampHeight(contentHeight + headerHeight + HEIGHT_SAFETY_PADDING)
     }
+
+    return clampHeight(headerHeight)
   }
 
   const nativeWrap = scrollRoot.querySelector(
