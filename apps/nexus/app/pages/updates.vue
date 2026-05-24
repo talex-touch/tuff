@@ -255,8 +255,9 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
           <p class="updates-platform-hint">
             <span>{{ platformRequirementLabel }}</span>
             <span class="updates-platform-hint__dot">·</span>
-            <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener">
-              More versions
+            <a :href="GITHUB_RELEASES_URL" target="_blank" rel="noopener" class="updates-more-versions">
+              <span>More versions</span>
+              <span class="i-carbon-chevron-right" aria-hidden="true" />
             </a>
           </p>
         </div>
@@ -411,13 +412,13 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   position: relative;
   z-index: 1;
   display: grid;
-  width: min(1120px, calc(100% - 56px));
+  width: min(1080px, calc(100% - 56px));
   height: 100%;
   margin: 0 auto;
   grid-template-rows: auto auto;
   align-content: center;
   align-items: start;
-  gap: clamp(44px, 7svh, 78px);
+  gap: clamp(36px, 5.6svh, 62px);
   padding: clamp(84px, 9svh, 104px) 0 clamp(28px, 5svh, 52px);
 }
 
@@ -438,7 +439,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   background: linear-gradient(180deg, #fff 4%, rgba(255, 255, 255, 0.82) 42%, rgba(184, 196, 255, 0.52) 100%);
   background-clip: text;
   color: transparent;
-  font-size: clamp(56px, 7.2vw, 96px);
+  font-size: clamp(48px, 6vw, 78px);
   font-weight: 850;
   letter-spacing: -0.064em;
   line-height: 0.94;
@@ -449,7 +450,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   flex: 1 1 100%;
   margin: -4px 0 18px;
   color: rgba(255, 255, 255, 0.5);
-  font-size: clamp(16px, 1.7vw, 22px);
+  font-size: clamp(14px, 1.35vw, 18px);
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -467,14 +468,14 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 .updates-primary-download,
 .updates-disabled-download,
 .updates-platform-menu__button {
-  min-height: 76px;
+  min-height: 58px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  border-radius: 18px;
-  padding: 0 34px;
-  font-size: 17px;
+  gap: 14px;
+  border-radius: 16px;
+  padding: 0 24px;
+  font-size: 15px;
   font-weight: 800;
   text-decoration: none;
   transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
@@ -482,7 +483,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 
 .updates-primary-download {
   border: 1px solid rgba(255, 255, 255, 0.76);
-  min-width: min(292px, 34vw);
+  min-width: min(268px, 32vw);
   border-color: rgba(176, 163, 255, 0.72);
   background: linear-gradient(135deg, rgba(149, 128, 255, 0.94), rgba(42, 66, 226, 0.88));
   color: #fff;
@@ -497,7 +498,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 
 .updates-download-icon {
   flex: 0 0 auto;
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .updates-download-copy {
@@ -516,7 +517,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 
 .updates-download-copy small {
   color: rgba(255, 255, 255, 0.56);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -532,11 +533,11 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 }
 
 .updates-platform-menu__button {
-  min-width: min(270px, 32vw) !important;
+  min-width: min(248px, 30vw) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   background: rgba(8, 12, 34, 0.48) !important;
   color: rgba(255, 255, 255, 0.84) !important;
-  --tx-button-bare-padding: 0 34px;
+  --tx-button-bare-padding: 0 24px;
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
 }
@@ -593,17 +594,24 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   gap: 10px;
   margin: 2px 0 0;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
-.updates-platform-hint a {
-  color: rgba(255, 255, 255, 0.72);
-  text-decoration: none;
+.updates-more-versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.76);
+  text-decoration: underline;
+  text-decoration-color: rgba(147, 102, 255, 0.78);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
 }
 
-.updates-platform-hint a:hover {
+.updates-more-versions:hover {
   color: #fff;
+  text-decoration-color: rgba(190, 164, 255, 0.96);
 }
 
 .updates-platform-hint__dot {
@@ -691,22 +699,45 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   display: grid;
   width: 100%;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
   padding: 0;
 }
 
 .UpdateNewsItem--carousel {
   min-width: 0;
-  min-height: 118px;
-  --tx-card-item-padding: 0 24px 0 0;
-  --tx-card-item-radius: 0;
-  border: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  background: transparent;
+  min-height: 132px;
+  --tx-card-item-padding: 18px;
+  --tx-card-item-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  outline: 0;
 }
 
-.UpdateNewsItem--carousel:hover {
-  background: transparent;
+.UpdateNewsItem--carousel:hover,
+.UpdateNewsItem--carousel:focus,
+.UpdateNewsItem--carousel:focus-visible,
+.UpdateNewsItem--carousel:focus-within {
+  border-color: rgba(176, 163, 255, 0.26);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  outline: 0;
+}
+
+.UpdateNewsItem--carousel :deep(.tx-card-item),
+.UpdateNewsItem--carousel :deep(.tx-card-item:focus),
+.UpdateNewsItem--carousel :deep(.tx-card-item:focus-visible),
+.UpdateNewsItem--carousel :deep(.tx-card-item:hover) {
+  border-radius: 20px;
+  outline: 0;
+}
+
+.UpdateNewsItem--carousel :deep(.tx-card-item__icon) {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .UpdateNewsItem--carousel :deep(.tx-card-item__title) {
@@ -716,11 +747,6 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
-}
-
-.UpdateNewsItem--carousel:nth-child(3n),
-.UpdateNewsItem--carousel:last-child {
-  border-right: 0;
 }
 
 .UpdateNewsMeta {

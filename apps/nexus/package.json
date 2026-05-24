@@ -21,7 +21,7 @@
     "generate": "nuxt generate",
     "prepare": "nuxt prepare",
     "preview": "nuxt preview",
-    "preview:cf": "pnpm build && npx wrangler pages dev dist --compatibility-date=2024-08-14",
+    "preview:cf": "pnpm build && npx wrangler pages dev dist --compatibility-date=2024-08-14 --binding AUTH_ORIGIN=${AUTH_ORIGIN:-http://127.0.0.1:8788} --binding AUTH_SECRET=${AUTH_SECRET:-tuff-local-pages-preview-secret} --binding APP_AUTH_JWT_SECRET=${APP_AUTH_JWT_SECRET:-tuff-local-app-auth-jwt-secret} --binding NUXT_INTELLIGENCE_ENCRYPT_KEY=${NUXT_INTELLIGENCE_ENCRYPT_KEY:-tuff-local-intelligence-encrypt-key}",
     "deploy:cf": "pnpm build && npx wrangler pages deploy dist",
     "start": "node .output/server/index.mjs",
     "start:generate": "npx serve .output/public",
