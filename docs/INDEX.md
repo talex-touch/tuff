@@ -34,6 +34,8 @@
 - `docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md` - Intelligence 能力路由与 Provider 抽象。
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排重构 PRD。
 - `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md` - Nexus Data Governance 当前 8 项进度快照。
+- `docs/plan-prd/04-implementation/NexusStorageGovernanceRunbook-2026-05-24.md` - Nexus storage channel sizing、smoke 与告警响应 runbook。
+- `docs/plan-prd/04-implementation/NexusNotificationGovernanceRunbook-2026-05-24.md` - Nexus notification channel 配置、live-send evidence 与隐私审计 runbook。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-deep-review-2026-05-13.md` - 跨平台兼容与占位实现深度复核报告。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-followup-2026-05-14.md` - 跨平台兼容与占位实现跟进报告。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-summary-2026-05-15.md` - 跨平台兼容、占位实现与治理口径总结。
@@ -51,8 +53,8 @@
 - 2.5.5 本地模型方向：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重按需下载到用户数据目录。
 - 2.5.8 ASR 方向：本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto`；TTS 不进入 Stable。
 - Nexus Provider Registry / Scene 编排：Provider 列表已暴露 capability adapter readiness，能在运行前标出声明能力缺少可执行 Scene adapter 的配置风险；真实 adapter 执行仍由 Scene Orchestrator 负责。
-- Nexus 数据治理方向：Data Governance 已覆盖治理事件/config、dashboard analytics、访问/搜索/signup/plugin analytics、上传 retry/problem attempts、通知健康、存储策略/告警、Provider usage/quota、operations summary、secure credential reference 与 object storage executor；direct invoke quota 与 Provider Registry quota admin 已并入同一治理口径，详细历史以 `docs/plan-prd/01-project/CHANGES.md` 为准。
-- Nexus 数据治理当前缺口：真实浏览器证据、真实凭据/live send、SMTP socket 或托管 relay、Web Push 生产 VAPID/relay、S3/OSS live storage、生产 D1 migration/backfill 与更深运营大屏。
+- Nexus 数据治理方向：Data Governance 已覆盖治理事件/config、dashboard analytics、访问/搜索/signup/plugin analytics、上传 retry/problem attempts、通知健康/channel-test/delivery evidence、存储策略/告警、local/memory storage smoke evidence、Provider usage/quota、operations summary、secure credential reference 与 object storage executor；direct invoke quota 与 Provider Registry quota admin 已并入同一治理口径，详细历史以 `docs/plan-prd/01-project/CHANGES.md` 为准。
+- Nexus 数据治理当前缺口：真实浏览器证据、真实凭据/live send、SMTP socket 或托管 relay、Web Push 生产 VAPID/relay、R2/S3/OSS live storage、生产 D1 migration/backfill 与更深运营大屏。
 - App Data Plugins 与 Everything 方向：先建立统一数据源/索引诊断基线；Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地，Browser Data 已有 source-level diagnostics 与书签 URL 打开 `network.internet` gate，后续继续补历史扫描、Everything/App Launcher evidence、Quicklinks 与 Context Actions；Nexus SDK 插件开发任务流已落地，TuffEx CommandPalette 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
 - 插件 capability 诊断方向：shell/OS/network 类外部动作继续补展示期 non-mutating capability metadata、执行期 request/block 状态与 focused tests；`touch-browser-bookmarks` 与 `touch-browser-data` 外链打开已纳入 `network.internet` 口径。
 - 插件发布当前切片：`touch-intelligence` 已补齐 Nexus 发布资产并修复 1.0.0 运行时加载源码 TS 的问题；1.0.1 包使用 bundled prelude 与 `@talex-touch/tuff-intelligence/client` CJS 入口，可重新发布到 Nexus；公共 npm 子包补发仍等待具备 `@talex-touch` publish 权限的 `NPM_TOKEN`。

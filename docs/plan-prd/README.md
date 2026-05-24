@@ -51,8 +51,8 @@
 - Tuff 2.5.8 ASR Provider Runtime：方向已锁定为本地 `whisper.cpp` + 云端 ASR provider 抽象，支持 `local-only/cloud-only/auto` 策略；TTS 不进入该版本 Stable。
 - App Data Plugins 与 Everything 收口：新增 Roadmap 与 Raycast/uTools 常用能力差距矩阵，Calculator 显式入口、`touch-snippets` date/time/uuid/clipboard 首批 placeholders、`touch-emoji-symbols` 首版 emoji/symbol 搜索复制已落地；Browser Data 已有 source-level diagnostics 与书签 URL 打开 `network.internet` gate，后续聚焦历史扫描、写索引、disable/clear/rebuild UI、Everything/App Launcher evidence、Quicklinks、Context Actions，以及 Windows Everything SDK/CLI 策略、路径授权过滤与真机 evidence；Nexus SDK 插件开发任务流文档已落地，TuffEx 场景化 demo、基础组件与 per-component docs 首批覆盖已完成，后续继续深化真实使用场景；不包含更新系统 Nexus Hard-Cut。
 - Nexus Provider Registry / Scene 编排：已具备 secure store、Scene run、Dashboard run、AI mirror、health/usage ledger、Provider capability adapter readiness 与最小策略路由；Provider 列表会标出声明能力是否有可执行 Scene adapter，后续补旧 AI provider 表退场与高级策略。
-- Nexus Data Governance / Analytics：治理事件/config、`/api/dashboard/governance/analytics`、Data Governance cockpit、访问/搜索/signup/plugin analytics、上传 retry/problem attempts、通知健康、存储策略/告警、Provider usage/quota、operations summary、secure credential reference 与 object storage executor 已形成当前基线；direct invoke quota 与 Provider Registry quota admin 已并入同一治理口径。详细历史与文件级变更以 `01-project/CHANGES.md` 为准。
-- Nexus Data Governance 当前缺口：仍需真实浏览器证据、真实凭据/live send、直接 SMTP socket 或托管 relay、Web Push 生产 VAPID/relay、S3/OSS live storage、生产 D1 migration/backfill 与更深运营大屏。
+- Nexus Data Governance / Analytics：治理事件/config、`/api/dashboard/governance/analytics`、Data Governance cockpit、访问/搜索/signup/plugin analytics、上传 retry/problem attempts、通知健康/channel-test/delivery evidence、存储策略/告警、local/memory storage smoke evidence、Provider usage/quota、operations summary、secure credential reference 与 object storage executor 已形成当前基线；direct invoke quota 与 Provider Registry quota admin 已并入同一治理口径。Storage sizing、smoke 与告警响应见 `04-implementation/NexusStorageGovernanceRunbook-2026-05-24.md`，Notification channel/live-send 证据流程见 `04-implementation/NexusNotificationGovernanceRunbook-2026-05-24.md`，详细历史与文件级变更以 `01-project/CHANGES.md` 为准。
+- Nexus Data Governance 当前缺口：仍需真实浏览器证据、真实凭据/live send、直接 SMTP socket 或托管 relay、Web Push 生产 VAPID/relay、R2/S3/OSS live storage、生产 D1 migration/backfill 与更深运营大屏。
 - Native transport V1：补 macOS/Windows/Linux 真机 smoke 与打包依赖验证。
 - AttachUIView、Multi Attach View、Widget Sandbox、Flow Transfer、DivisionBox 等进入长期债务池。
 
@@ -71,6 +71,8 @@
 - [Active goal / branch cleanup snapshot](./04-implementation/ActiveGoalBranchCleanup-2026-05-23.md)
 - [Nexus Provider 聚合与 Scene 编排 PRD](./02-architecture/nexus-provider-scene-aggregation-prd.md)
 - [Nexus Data Governance 当前进度快照](./01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md)
+- [Nexus Storage Governance Runbook](./04-implementation/NexusStorageGovernanceRunbook-2026-05-24.md)
+- [Nexus Notification Governance Runbook](./04-implementation/NexusNotificationGovernanceRunbook-2026-05-24.md)
 - [Nexus Intelligence Provider 旧表退场实施计划](./04-implementation/NexusIntelligenceProviderRetirement-2026-05-16.md)
 - [Intelligence 能力路由与 Provider 抽象](./02-architecture/intelligence-power-generic-api-prd.md)
 - [跨平台兼容与占位实现深度复核报告](./report/cross-platform-compat-placeholder-deep-review-2026-05-13.md)

@@ -13,20 +13,214 @@
 
 ## 2026-05-24
 
+### feat(nexus): add read-only operations report snapshot
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/api/dashboard/governance/report.get.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/test/api/dashboard/governance/report.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added an admin-only `/api/dashboard/governance/report` endpoint that builds a read-only operations report snapshot from existing anonymized governance analytics.
+  - The snapshot contains cross-area scorecards, open/local-only evidence status, prioritized search/upload/storage/notification/provider-quota risk queue, hot plugin/model/provider leaderboards, and operations trend peaks.
+  - Rendered the report snapshot in the Data Governance cockpit above the existing analytics panels so operators can inspect executive posture and evidence blockers without opening raw event rows.
+  - Kept the payload aggregate/config-only: raw actor ids, emails, attempt ids, resource ids, object keys, credential refs, provider secrets, and request payloads are not exposed.
+  - This strengthens local report/dashboard coverage for item 7, but authenticated browser visual evidence and longer production trend samples remain separate completion evidence.
+
+### feat(nexus): add scene asset upload health analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `uploads.sceneAssetHealth`, grouping Scene adapter asset upload attempts by scene, capability, provider, asset kind, resource type, storage channel, and storage provider.
+  - Rendered Scene asset upload health in the Data Governance upload cockpit with started/completed/failed counts, bytes, failure rate, average duration/size, top failure reason, and top status code.
+  - Kept the payload aggregate-only: raw admin ids, attempt ids, resource ids, asset ids, object keys, filenames, base64 payloads, credential refs, and upload payload contents are not exposed.
+  - This improves local upload reliability and Intelligence/adapt asset-upload visibility, but live adapter execution and real object-storage smoke artifacts remain separate production evidence.
+
+### feat(nexus): add provider model-channel analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `providers.modelChannelDistribution`, grouping Intelligence provider usage by model and channel with aggregate requests, tokens, quantity, unique actors, provider mix, and provider type mix.
+  - Rendered the model-by-channel breakdown in the Data Governance provider cockpit next to existing model and channel distribution blocks.
+  - Kept the payload aggregate-only: raw actors, prompts, request bodies, credential refs, provider secrets, account ids, and per-request identifiers are not exposed.
+
+### feat(nexus): add plugin review comment quality buckets
+
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+- `apps/nexus/server/utils/pluginReviewStore.test.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added aggregate review comment quality buckets for plugin owners: empty, short, medium, and long comment groups with status counts, average rating, low-rating rate, title coverage, comment coverage, and average content length.
+  - Added aggregate moderation timing for pending review age and processed review turnaround, grouped into under-1-hour, 1-24-hour, 1-7-day, and over-7-day buckets with average/max hours.
+  - Rendered the buckets and moderation timing summaries in the plugin detail review quality panel so owners can inspect prompt quality, low-rating concentration, and review backlog without opening raw review text.
+  - Reused the same comment analytics helper for D1-backed and local fallback analytics to avoid drift between production and local paths.
+  - Added focused API contract coverage for owner reads, admin cross-owner reads, and non-owner rejection before private analytics aggregate queries run.
+  - Kept the payload aggregate-only: raw reviewer ids, author names, emails, review ids, comment bodies, and raw review content are not exposed.
+
 ### fix(nexus): make Nexus updates download page single-screen
 
 - `apps/nexus/app/pages/updates.vue`
 - `apps/nexus/app/layouts/home.vue`
-- `apps/nexus/nuxt.config.ts`
 - `apps/nexus/public/assets/updates/download-bg.png`
 - `docs/plan-prd/01-project/CHANGES.md`
-  - Replaced the `/updates` click-to-scroll hero/download flow with a single-screen, non-scrolling download surface backed by the provided image asset.
-  - Removed release channel switching from the public surface, fixed the default display to the stable channel, and routed `More versions` to GitHub Releases.
-  - Restyled the page as a centered marketing/download hero with compact platform cards, a GitHub-backed alternate-platform menu, and a responsive glass updates/news panel.
-  - Kept `/updates?view=all` and `/updates/all` as the full update-list experience while hiding the home footer on the single-screen view.
+  - Replaced the `/updates` click-to-scroll hero/download flow with a single-screen, non-scrolling download surface.
+  - Swapped the generated gradient hero background for the provided downloaded background image asset, using full-image contain scaling with reduced saturation to avoid the previous blue-tint crop.
+  - Removed the extra hero badge/subtitle copy and changed the page composition to a top hero plus lower controls/content stack.
+  - Reduced the hero title scale with gradient text, stretched the provided background to fill the viewport, removed release channel switching, and fixed the public surface to the stable channel while routing `More versions` to GitHub Releases.
+  - Removed the oversized stable-version empty card from the single-screen surface and kept latest-version footer metadata as the compact release indicator.
+  - Restored updates/news to the compact horizontal scrolling card strip under the download controls.
+  - Kept current-platform primary download, alternate platform assets, and compact update highlights available within the fixed viewport.
+  - Hid the home footer on the single-screen `/updates` view so the page no longer creates extra vertical scroll height; `/updates?view=all` and `/updates/all` keep the normal full update list behavior.
   - Disabled server-side auth session fetching for public `/updates` routes so transient `/api/auth/session` failures cannot turn the download pages into a 500 response.
 
-### feat(nexus): route auth recovery through notification channels
+### feat(nexus): add provider quota smoke evidence
+
+- `apps/nexus/server/api/dashboard/provider-registry/providers/[id]/quota/smoke.post.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/test/api/dashboard/provider-registry/provider-registry.api.test.ts`
+- `apps/nexus/test/helpers/provider-registry-test-utils.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added an admin-only provider quota smoke endpoint that can dry-run a provider/channel quota or consume one synthetic request plus bounded token usage to prove the quota gate blocks subsequent calls.
+  - Added `providers.quotaSmokeEvidence` analytics derived from `provider.quota_smoke.allowed/consumed/blocked/failed` events, including provider/channel, mode, latest status, reason, request/token recording, counts, and unique actor count.
+  - Rendered recent provider quota smoke evidence in the Data Governance cockpit beside quota action/risk rows.
+  - Kept smoke events out of normal provider request/token distribution so diagnostics do not distort usage leaderboards.
+  - Kept the payload aggregate/config-only: raw admin ids, provider credential refs, provider secrets, and request payloads are not exposed.
+
+### feat(nexus): add notification channel test evidence analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `notifications.testEvidence` analytics derived from sanitized channel-test delivery audit context (`test` / `channelTestId`), grouped by notification channel config and action.
+  - Rendered recent notification channel test evidence in the Data Governance cockpit with latest status, reason, provider/adapter, duration, status code, planned/sent/skipped/failed counts, and unique actor count.
+  - Kept the evidence aggregate/config-only: raw admin ids, recipient emails, message body/content, credential refs, endpoint keys, and provider secrets are not exposed.
+  - Focused coverage verifies backend aggregation and UI contract exposure; this is local channel-test auditability and still does not replace real credential-backed send proof.
+
+### feat(nexus): separate notification delivery evidence from channel tests
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `notifications.deliveryEvidence` analytics for non-test notification delivery audit events, grouped by provider/config/action/resource type.
+  - Kept channel-test events in `notifications.testEvidence` only, so business notification evidence and admin channel-test evidence remain separately inspectable.
+  - Rendered recent delivery evidence in the Data Governance cockpit with latest status, provider/adapter, action/resource type, duration, status code, planned/sent/skipped/failed counts, and unique actor count.
+  - Kept the payload aggregate/config-only: raw reviewer/admin ids, recipient emails, credential refs, endpoint keys, provider secrets, and delivery payloads are not exposed.
+  - Focused coverage verifies aggregation, test/non-test separation, UI contract exposure, and privacy boundaries; live credential-backed send proof remains a separate production evidence requirement.
+
+### feat(nexus): add recovered upload evidence analytics
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `uploads.recoveredEvidence` analytics for upload attempts that completed after retry recovery, including bounded attempt/resource hashes, storage channel/provider, content type, duration, size, retry count, attempt count, storage operation, and upstream storage status code.
+  - Rendered recovered upload evidence in the Data Governance cockpit so operators can inspect retry recovery samples without opening raw upload logs.
+  - Kept the payload hash/aggregate-only: raw admin ids, attempt ids, resource ids, object keys, credential refs, and upload payload contents are not exposed.
+  - Focused coverage verifies recovered evidence aggregation, UI contract exposure, and privacy boundaries; live failed-sample calibration and real S3/OSS/R2 object evidence remain separate production proof.
+
+### fix(nexus): restore storage smoke route and evidence analytics
+
+- `apps/nexus/server/api/dashboard/storage/channels/smoke.post.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/test/api/dashboard/storage/channels-smoke.api.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Restored the admin storage smoke endpoint behind `requireAdmin`, wiring `/api/dashboard/storage/channels/smoke` to `runStorageChannelSmoke` with the authenticated admin actor id.
+  - Added `storage.smokeEvidence` analytics derived from `storage.channel_smoke.ready/sent/failed` audit events, including latest status, policy/channel/provider, mode, operations, bytes written/read, credential readiness flags, counts, and unique actor count.
+  - Rendered the smoke evidence list in the Data Governance cockpit before storage action queue rows so operators can see dry-run/write smoke history without opening raw event logs.
+  - Kept the payload aggregate/config-only: raw admin ids, emails, object keys, credential refs, and storage payload contents are not exposed.
+  - Added focused route, store, and UI contract coverage; this is local smoke auditability evidence and still does not replace live local/S3/OSS/R2 object write/read/delete proof.
+
+### test(nexus): add local storage write smoke artifact evidence
+
+- `apps/nexus/test/api/dashboard/storage/channels-smoke.api.test.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added an admin smoke-route write-mode test for the memory/local storage channel, proving `runStorageChannelSmoke` performs resolve/write/read/delete, emits `storage.channel_smoke.sent`, and records storage write/read/delete usage against the stable `storage-smoke:<policyId>` governance resource id.
+  - Extended storage governance analytics coverage so local/memory smoke artifact usage appears in resource-type and channel usage buckets while smoke history still appears in `storage.smokeEvidence`.
+  - Kept the evidence payload bounded: raw admin ids, object keys, diagnostic key prefixes, credential refs, and the smoke payload content are not exposed.
+  - This closes the local/memory object smoke artifact test-evidence gap only; live R2/S3/OSS smoke artifacts and authenticated cockpit evidence remain open.
+
+### docs(nexus): add storage governance sizing and alert response runbook
+
+- `docs/plan-prd/04-implementation/NexusStorageGovernanceRunbook-2026-05-24.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a storage governance operator runbook covering supported local/memory, R2, S3-compatible, and OSS channel profiles; required policy fields; sizing defaults; smoke procedures; privacy checks; alert response; notification flow; and focused verification commands.
+  - Linked the runbook from the primary docs index, PRD README, TODO, and Data Governance progress snapshot so item 5 has an explicit operator reference instead of only implementation/test notes.
+  - Kept the status in progress: local/memory smoke remains test evidence, while live R2/S3/OSS smoke artifacts, authenticated cockpit evidence, alert-send evidence, and production D1 backfill remain open.
+
+### docs(nexus): add notification governance live-send runbook
+
+- `docs/plan-prd/04-implementation/NexusNotificationGovernanceRunbook-2026-05-24.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a notification governance operator runbook covering browser inbox, Resend, SendGrid, Mailgun, Postmark, SMTP relay, generic HTTP email relay, Feishu/Lark bots, webhook, and Web Push relay profiles.
+  - Documented channel config shape, secure credential payload shapes, dry-run and live-send procedure, failure response, governance privacy boundary, evidence checklist, and focused verification commands.
+  - Linked the runbook from the primary docs index, PRD README, TODO, and Data Governance progress snapshot so item 6 has an explicit live-send/privacy evidence reference.
+  - Kept the status in progress: local channel-test/delivery analytics remain implementation evidence, while real credential-backed email/chat/webhook sends, Web Push relay evidence, and authenticated cockpit evidence remain open.
+
+### fix(nexus): restore Data Governance D1 readiness route
+
+- `apps/nexus/server/api/dashboard/governance/d1-readiness.get.ts`
+- `apps/nexus/server/utils/platformGovernanceD1Readiness.test.ts`
+- `apps/nexus/test/api/dashboard/governance/d1-readiness.api.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Restored the admin-only `/api/dashboard/governance/d1-readiness` route that the Data Governance cockpit already calls, wiring it to the read-only `getPlatformGovernanceD1Readiness` diagnostic utility.
+  - Added focused utility coverage for missing D1 binding, missing index plus backfill warning, and fully seeded ready states; added API coverage for admin gating and sanitized readiness output.
+  - Kept the evidence read-only: the route does not run migrations or mutate D1, and the response does not expose raw admin ids, `secure://` refs, API keys, or secrets.
+  - This restores local readiness-contract evidence only; production D1 migration/backfill execution evidence remains open.
+
+### fix(nexus): document and stabilize local Pages preview runtime bindings
+
+- `apps/nexus/package.json`
+- `apps/nexus/SETUP.md`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Updated `pnpm preview:cf` so local `wrangler pages dev` receives default development `AUTH_ORIGIN`, `AUTH_SECRET`, `APP_AUTH_JWT_SECRET`, and `NUXT_INTELLIGENCE_ENCRYPT_KEY` values as explicit Wrangler bindings.
+  - Documented that `.env` / `.env.local` and shell env are read by Nuxt build, but current Wrangler Pages dev does not automatically expose those values to the Worker runtime without `--binding`, which otherwise surfaces as Sidebase `AUTH_NO_ORIGIN`.
+  - Recorded the real `tuff` Cloudflare Pages deployment status: failed production deployment `b937459f-a069-44ed-8b6d-c686f8de0671` on `ffc0a4f` was superseded by successful production deployment `c933f4f3-a786-4265-b64f-87a540523f79` on `ad5f243`; public checks returned `200` for the latest deployment and `tuff.tagzxia.com`.
+  - Kept Data Governance evidence status in-progress because the local Pages browser pass was unauthenticated and does not replace admin cockpit, live send, live storage, D1 migration/backfill, or real provider quota evidence.
+
+### feat(nexus): route auth emails through notification governance channels
 
 - `apps/nexus/server/utils/email.ts`
 - `apps/nexus/server/utils/notificationDispatcher.ts`
@@ -40,29 +234,15 @@
 - `apps/nexus/app/pages/dashboard/admin/users.vue`
 - `apps/nexus/test/api/auth/auth-email-channel-contract.test.ts`
 - `apps/nexus/test/api/admin/users-password-reset-link.api.test.ts`
-- `apps/nexus/README.md`
-- `apps/nexus/SETUP.md`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
 - `docs/plan-prd/01-project/CHANGES.md`
-  - Routed register verification, email binding verification, password reset, and NextAuth magic-link emails through configured notification email channels.
-  - Treat Resend as a `notification_channel` adapter with `providerType: "resend"`, backed by encrypted `secure://notifications/*` credentials, instead of a channel-bypassing `RESEND_API_KEY` fallback.
-  - Added an admin-only Users dashboard control and API endpoint for bounded one-time password reset links for active users, with TTL clamping and token-free admin audit metadata.
-  - Hardened notification governance audit and browser inbox metadata sanitization so subjects, bodies, HTML/text, URLs, recipients, tokens, credential refs, and provider secrets are not stored in governance telemetry or inbox metadata.
+  - Routed register verification, email binding verification, password reset, and NextAuth magic-link emails through configured notification email channels. Resend is handled as the `providerType: "resend"` channel adapter, not as a channel-bypassing environment fallback.
+  - Reused notification channel send-mode adapters for auth email HTML/text delivery while preserving per-action routing tags such as `auth.email.verify`, `auth.email.bind.verify`, `auth.password.reset`, and `auth.email.magic_link`.
+  - Added an admin-only support recovery endpoint and Users dashboard control to generate bounded one-time password reset links for active users, with TTL clamping and admin audit metadata that records expiry/TTL but not the reset token.
+  - Hardened notification governance audit and browser inbox metadata sanitization so subjects, bodies, HTML/text, URLs, recipients, tokens, credential refs, and provider secrets are not stored in aggregate governance telemetry or inbox metadata.
+  - Kept the status as local implementation evidence only; live credential-backed send evidence is still required before production completion sign-off.
 
-### feat(nexus): centralize AI provider config in Provider Registry
-
-- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAdminPanel.vue`
-- `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
-- `apps/nexus/app/composables/useProviderRegistryAdmin.ts`
-- `apps/nexus/app/utils/provider-registry-admin.ts`
-- `apps/nexus/app/utils/provider-registry-admin.test.ts`
-- `apps/nexus/i18n/locales/en.ts`
-- `apps/nexus/i18n/locales/zh.ts`
-- `docs/plan-prd/01-project/CHANGES.md`
-  - Removed legacy Intelligence provider CRUD controls from the Intelligence admin panel and redirected provider configuration to the shared Provider Registry.
-  - Added Provider Registry templates for Tencent translation, OpenAI-compatible AI, and DeepSeek AI so AI providers start from governed provider records, capabilities, and secure `authRef` references.
-  - Localized the Provider Registry mirror, migration readiness, scene error, quota/template, and support-recovery labels in both Chinese and English locale files.
-
-### fix(nexus): scope scene provider quotas by capability channel
+### fix(nexus): scope scene provider quota checks by capability channel
 
 - `apps/nexus/server/utils/sceneOrchestrator.ts`
 - `apps/nexus/server/utils/sceneOrchestrator.test.ts`
@@ -72,9 +252,124 @@
 - `apps/nexus/app/components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue`
 - `apps/nexus/app/utils/provider-registry-admin.ts`
 - `apps/nexus/app/utils/provider-registry-admin.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
 - `docs/plan-prd/01-project/CHANGES.md`
-  - Passed the Scene Orchestrator capability id into provider quota checks so an exhausted channel such as `text.translate` does not block another capability such as `image.translate` on the same provider.
-  - Extended the Provider Registry quota GET response with a backward-compatible `quotas[]` list and rendered multi-channel quota summaries in the admin panel.
+  - Passed the Scene Orchestrator capability id into `assertIntelligenceProviderQuota` so provider quota enforcement matches the `provider.request` channel recorded for each scene capability.
+  - Added a regression test proving an exhausted `text.translate` quota does not block an `image.translate` scene for the same provider, while the executed capability still records its own request channel.
+  - Extended the Provider Registry quota GET response with a backward-compatible `quotas[]` list so multi-channel provider quota configs are visible without replacing the existing `quota` field.
+  - Rendered multi-channel provider quota summaries in the Provider Registry admin panel, including per-channel request/token/window limits and the configured channel count.
+  - Kept the change narrowly scoped to channel isolation; this is local fail-closed evidence, not production provider-call evidence.
+
+### feat(nexus): add anonymous search frequency cohorts
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `searches.frequencyCohorts` to group anonymized search users into single/light/regular/power search cohorts with search count, active-day, selection, zero-result, problem, local-time, preference, context, and plugin aggregates.
+  - Rendered the cohorts in the Data Governance cockpit before the raw search heatmap and bucket lists so operators can compare casual and power-search behavior without drilling into actor-level data.
+  - Kept the payload aggregate-only: raw query text, actor ids, emails, context ids, resource ids, attempt ids, credential refs, and actor/context hashes are not exposed.
+
+### feat(nexus): add provider quota action queue
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `providers.quotaActionQueue` to derive prioritized operator actions from aggregate Intelligence provider quota evaluations.
+  - Rendered the queue in the Data Governance cockpit before raw quota risk rows, including priority, suggested action, reason, provider/channel context, usage, utilization, remaining budget, overage, burn rate, and projected exhaustion.
+  - Kept the payload aggregate/config-only: no raw actor, email, credential ref, provider secret, attempt id, account id, or per-request payload is exposed.
+
+### feat(nexus): add plugin owner analytics action queue
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `analytics.actionQueue` for owner/private plugin analytics, derived from aggregate install conversion, invocation conversion, failure rate, retention, and country concentration signals.
+  - Rendered the owner queue in the plugin detail analytics panel before review quality, including priority, suggested action, reason, conversion/failure/retention context, top country share, and latest aggregate date.
+  - Kept the payload aggregate-only: no raw actor id, email, reviewer id, resource id, attempt id, or raw plugin usage event is exposed.
+
+### feat(nexus): add plugin review action queue
+
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+- `apps/nexus/server/utils/pluginReviewStore.test.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/analytics.get.ts`
+- `apps/nexus/test/api/dashboard/plugins/analytics.api.test.ts`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `reviews.actionQueue` to derive prioritized plugin-owner actions from aggregate pending/rejected review backlog, low-rating signals, and title/comment coverage quality.
+  - Rendered the queue in the plugin detail review quality panel before rating distribution, including priority, suggested action, reason, pending/rejected counts, low-rating rate, comment coverage, and latest aggregate date.
+  - Kept the payload aggregate-only: no raw reviewer id, author name, email, review id, comment body, or raw review content is exposed.
+
+### feat(nexus): add notification governance action queue
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `notifications.actionQueue` to merge notification channel readiness risks and provider delivery health into prioritized operator actions.
+  - Rendered the action queue in the Data Governance cockpit before provider mix and raw channel risk rows, including priority, suggested action, reason, channel/provider context, delivery counts, failure rate, duration, and latest failure context.
+  - Kept the payload aggregate/config-only: no raw actor, recipient address, credential ref, endpoint key, provider secret, or delivery payload content is exposed.
+
+### feat(nexus): add storage governance action queue
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `storage.actionQueue` to derive prioritized storage governance actions from aggregate channel pressure and policy evaluation rows.
+  - Rendered the action queue in the Data Governance cockpit before raw channel pressure, including priority, suggested action, reason, status, remaining budget, overage, burn rate, utilization, alert count, and latest trend date.
+  - Kept the payload aggregate-only: no raw actor, email, storage object key, resource id, package id, credential ref, or storage payload content is exposed.
+
+### feat(nexus): add upload reliability action queue
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `uploads.actionQueue` to derive prioritized upload reliability actions from the existing aggregate failure matrix and failed/stuck problem attempts.
+  - Rendered the action queue in the Data Governance cockpit before the failure matrix, including priority, suggested action, retry state, calibration state, age, next retry delay, and bounded evidence hash counts.
+  - Kept the payload aggregate/hash-only: no raw actor, email, attempt id, resource id, credential ref, object key, or upload payload content is exposed.
+
+### feat(nexus): add governance search local-time heatmap
+
+- `apps/nexus/server/utils/platformGovernanceStore.ts`
+- `apps/nexus/server/utils/platformGovernanceStore.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `searches.timeHeatmap` to aggregate anonymized local weekday and local hour search behavior into heatmap cells with selection, zero-result, provider-problem, context, and plugin buckets.
+  - Rendered the heatmap in the Data Governance cockpit for quick operator scanning of search frequency and quality by local time window.
+  - Kept the payload aggregate-only: no raw query, actor, email, context id, resource id, attempt id, credential ref, or secret-bearing metadata is exposed.
 
 ### feat(nexus): add governance operations command board
 
@@ -476,7 +771,7 @@
 - `apps/nexus/app/pages/sign-in/components/SignInLoginStep.vue`
 - `apps/nexus/app/pages/dashboard/admin/users.vue`
 - `apps/nexus/app/pages/dashboard/admin/governance.vue`
-  - Nexus auth email delivery now resolves production-ready Resend notification channels before legacy env config, and exposes a capability endpoint for the sign-in UI.
+  - Nexus auth email delivery now resolves production-ready Resend notification channels through notification governance config, and exposes a capability endpoint for the sign-in UI.
   - Email registration treats verification email delivery as required and compensates created user/team/token rows on failure, preventing half-created accounts that later report “email already registered”. Existing active unverified accounts can retry signup with the same password to resend verification mail.
   - Sign-in hides Magic Link when no Resend/email delivery is configured, while admin user management can generate short-lived magic login links or password reset links for active users; the governance Resend template now defaults to send mode so it is immediately eligible for auth email delivery after binding credentials.
 
