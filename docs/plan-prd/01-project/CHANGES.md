@@ -13,6 +13,20 @@
 
 ## 2026-05-25
 
+### fix(nexus): restore docs component navigation and outline
+
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/components/DocsOutline.vue`
+- `apps/nexus/app/components/docs/DocsComponentSyncTable.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/utils/docs-api.ts`
+- `apps/nexus/content/docs/dev/components/index.{en,zh}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Forced JSON parsing for prerendered docs navigation/sidebar/component-sync payloads and added array coercion so production static API responses served as `application/octet-stream` no longer break `.filter()`-based sidebar and table rendering.
+  - Converted the component sync table usage in the Tuffex component index docs from raw Vue self-closing syntax to MDC block syntax, preventing Nuxt Content from treating the rest of the page as the component slot and hiding later headings from the DOM.
+  - Made the docs outline SVG track start from the first measured entry and suppress invalid paths, avoiding browser `<path d>` errors when the first visible outline entry is not measured yet.
+  - Focused validation: scoped Nexus ESLint, `nuxi prepare`, targeted Vitest docs/content tests, and local Nuxt dev smoke for docs API payloads and `/docs/dev/components/index` SSR output. Full Nexus vue-tsc still fails on pre-existing Cloudflare binding / PreviewSDK strictness errors unrelated to this change.
+
 ### fix(nexus): dedupe Nitro server utils auto-imports
 
 - `apps/nexus/nuxt.config.ts`

@@ -31,7 +31,8 @@ code: |
 - `AI migrated`: migration is complete, but source-code verification is recommended.
 - `Reviewed`: manually reviewed.
 
-<DocsComponentSyncTable />
+::DocsComponentSyncTable
+::
 
 ## Chapter Overview
 

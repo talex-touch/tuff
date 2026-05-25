@@ -31,7 +31,8 @@ code: |
 - `AI 迁移`：已完成迁移，但仍建议结合源码核对。
 - `已审阅`：人工审阅完成。
 
-<DocsComponentSyncTable />
+::DocsComponentSyncTable
+::
 
 ## 章节总览
 

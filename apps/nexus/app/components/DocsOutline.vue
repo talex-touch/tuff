@@ -72,6 +72,10 @@ function normalizeHash(hash: string) {
   }
 }
 
+function isValidSvgPath(path: string) {
+  return /^[Mm]/.test(path.trim())
+}
+
 function setActiveHash(hash?: string | null) {
   if (!hash) {
     activeHash.value = ''
@@ -318,6 +322,10 @@ const svgPaths = computed(() => {
     return []
 
   const paths: { d: string, class: string }[] = []
+  const pushPath = (path: { d: string, class: string }) => {
+    if (isValidSvgPath(path.d))
+      paths.push(path)
+  }
 
   // Step 1: Group siblings by (indent, parentId)
   const siblingGroups = new Map<string, TreeNode[]>()
@@ -384,7 +392,7 @@ const svgPaths = computed(() => {
     const x = TREE_LINE_X + first.indent * INDENT_SIZE
 
     if (gaps.length === 0) {
-      paths.push({ d: `M ${x} ${startY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
+      pushPath({ d: `M ${x} ${startY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
     }
     else {
       // Sort and merge overlapping gaps
@@ -402,11 +410,11 @@ const svgPaths = computed(() => {
       let currentY = startY
       for (const gap of merged) {
         if (gap.start > currentY)
-          paths.push({ d: `M ${x} ${currentY} L ${x} ${gap.start}`, class: 'tree-line tree-trunk' })
+          pushPath({ d: `M ${x} ${currentY} L ${x} ${gap.start}`, class: 'tree-line tree-trunk' })
         currentY = Math.max(currentY, gap.end)
       }
       if (endY > currentY)
-        paths.push({ d: `M ${x} ${currentY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
+        pushPath({ d: `M ${x} ${currentY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
     }
   }
 
@@ -428,7 +436,7 @@ const svgPaths = computed(() => {
     const endX = TREE_LINE_X + node.indent * INDENT_SIZE
     const cy = pos.centerY
 
-    paths.push({
+    pushPath({
       d: `M ${parentTrunkX} ${cy - BRANCH_CURVE_H} L ${endX} ${cy}`,
       class: 'tree-line tree-branch',
     })
@@ -456,7 +464,7 @@ const svgPaths = computed(() => {
       continue
     const trunkX = TREE_LINE_X + node.indent * INDENT_SIZE
     const childX = TREE_LINE_X + lastChild.indent * INDENT_SIZE
-    paths.push({
+    pushPath({
       d: `M ${childX} ${lcp.centerY} L ${trunkX} ${lcp.centerY + BRANCH_CURVE_H}`,
       class: 'tree-line tree-branch',
     })
@@ -559,10 +567,10 @@ const treeTrack = computed(() => {
   let curX = 0
   let curY = 0
 
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i]
-    if (!node)
-      continue
+  let hasStarted = false
+  let prevNode: TreeNode | null = null
+
+  for (const node of nodes) {
     const pos = positions.get(node.id)
     if (!pos)
       continue
@@ -570,17 +578,15 @@ const treeTrack = computed(() => {
     const x = TREE_LINE_X + node.indent * INDENT_SIZE
     const cy = pos.centerY
 
-    if (i === 0) {
+    if (!hasStarted || !prevNode) {
       parts.push(`M ${x} ${cy}`)
       curX = x
       curY = cy
       distances.set(node.id, 0)
+      hasStarted = true
+      prevNode = node
       continue
     }
-
-    const prevNode = nodes[i - 1]
-    if (!prevNode)
-      continue
 
     if (node.indent > prevNode.indent) {
       // Going deeper: trunk down to branch start, then forward 45° diagonal
@@ -617,6 +623,7 @@ const treeTrack = computed(() => {
     curX = x
     curY = cy
     distances.set(node.id, totalLength)
+    prevNode = node
   }
 
   return { d: parts.join(' '), distances, totalLength }
@@ -631,6 +638,10 @@ const activeTrackOffset = computed(() => {
 // Static SVG paths for skeleton tree lines
 const skeletonSvgPaths = computed(() => {
   const paths: { d: string }[] = []
+  const pushPath = (path: { d: string }) => {
+    if (isValidSvgPath(path.d))
+      paths.push(path)
+  }
 
   // Branch connectors for indented items
   for (let i = 0; i < skeletonEntries.length; i++) {
@@ -643,7 +654,7 @@ const skeletonSvgPaths = computed(() => {
       const parentTrunkX = TREE_LINE_X + (entry.indent - 1) * INDENT_SIZE
       const endX = TREE_LINE_X + entry.indent * INDENT_SIZE
 
-      paths.push({
+      pushPath({
         d: `M ${parentTrunkX} ${centerY - BRANCH_CURVE_H} L ${endX} ${centerY}`,
       })
     }
@@ -689,7 +700,7 @@ const skeletonSvgPaths = computed(() => {
       }
     }
 
-    paths.push({
+    pushPath({
       d: `M ${TREE_LINE_X} ${firstY} L ${TREE_LINE_X} ${lastY}`,
     })
   }
@@ -698,6 +709,7 @@ const skeletonSvgPaths = computed(() => {
 })
 
 const skeletonSvgHeight = computed(() => skeletonEntries.length * SKELETON_ROW_HEIGHT)
+const safeTreeTrackPath = computed(() => isValidSvgPath(treeTrack.value.d) ? treeTrack.value.d : '')
 
 const hasOutline = computed(() => outlineEntries.value.length > 0)
 const showSkeleton = computed(() => outlineLoadingState.value && !hasOutline.value)
@@ -799,21 +811,21 @@ watch(
           <g class="tree-indicator-layer">
             <!-- Indicator line: same treeTrack path, dash-clipped to active chain range -->
             <path
-              :d="treeTrack.d"
+              :d="safeTreeTrackPath"
               class="tree-indicator-line"
               fill="none"
               :stroke-dasharray="`${indicatorTrackRange?.length ?? 0} ${(treeTrack.totalLength || 9999) * 2}`"
               :stroke-dashoffset="`${-(indicatorTrackRange?.start ?? 0)}`"
-              :style="{ opacity: indicatorTrackRange ? 1 : 0 }"
+              :style="{ opacity: indicatorTrackRange && safeTreeTrackPath ? 1 : 0 }"
             />
             <!-- Main active dot: stroke-dash animation along tree track -->
             <path
-              :d="treeTrack.d"
+              :d="safeTreeTrackPath"
               class="tree-indicator-dot-track"
               fill="none"
               :stroke-dasharray="`0.1 ${(treeTrack.totalLength || 9999) * 2}`"
               :stroke-dashoffset="`${-activeTrackOffset}`"
-              :style="{ opacity: activeHash && treeTrack.d ? 1 : 0 }"
+              :style="{ opacity: activeHash && safeTreeTrackPath ? 1 : 0 }"
             />
           </g>
         </svg>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
@@ -14,9 +15,9 @@ interface ComponentSyncRow {
 
 const { locale } = useI18n()
 
-const { data: componentDocs, pending, error } = await useTypedFetch<ComponentSyncRow[]>(
+const { data: componentDocsPayload, pending, error } = await useTypedFetch<unknown>(
   '/api/docs/component-sync',
-  { key: 'docs-components-sync' },
+  { key: 'docs-components-sync', responseType: 'json' },
 )
 
 const STATUS_LABELS: Record<string, Record<SyncStatusKey, string>> = {
@@ -38,7 +39,7 @@ const localeKey = computed(() => (locale.value === 'zh' ? 'zh' : 'en'))
 
 const rows = computed(() => {
   const targetLocale = localeKey.value
-  return (componentDocs.value ?? [])
+  return coerceJsonArray<ComponentSyncRow>(componentDocsPayload.value)
     .filter(item => item.locale === targetLocale)
     .map((item) => {
       const statusKey = item.syncStatus

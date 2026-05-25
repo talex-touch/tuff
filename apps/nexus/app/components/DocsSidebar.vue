@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
+import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
@@ -25,18 +26,20 @@ const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
   verified: 'verified',
 }
 
-const { data: navigationTree, pending, error } = await useTypedFetch<any[]>(
+const { data: navigationTreePayload, pending, error } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
     key: 'docs-navigation',
+    responseType: 'json',
     default: () => [],
   },
 )
-const { data: componentDocs, pending: componentDocsPending } = await useTypedFetch<SidebarComponentDoc[]>(
+const { data: componentDocsPayload, pending: componentDocsPending } = await useTypedFetch<unknown>(
   '/api/docs/sidebar-components',
   {
     key: 'docs-components-meta',
     server: true,
+    responseType: 'json',
     default: () => [],
   },
 )
@@ -385,8 +388,8 @@ function sortTree(items: any[], parentPath: string | null): any[] {
   })
 }
 
-const items = computed(() => navigationTree.value ?? [])
-const componentItems = computed(() => filterByLocale((componentDocs.value ?? []) as any[]))
+const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
+const componentItems = computed(() => filterByLocale(coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[]))
 const lastComponentSections = shallowRef<any[]>([])
 const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
