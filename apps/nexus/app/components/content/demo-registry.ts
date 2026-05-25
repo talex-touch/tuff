@@ -20,6 +20,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   AvatarTextDemo: () => import('./demos/AvatarTextDemo.vue'),
   AvatarVariantsAvatarVariantsGalleryDemo: () => import('./demos/AvatarVariantsAvatarVariantsGalleryDemo.vue'),
   BadgeBadgeVariantsDemo: () => import('./demos/BadgeBadgeVariantsDemo.vue'),
+  BaseAnchorAnimationDemo: () => import('./demos/BaseAnchorAnimationDemo.vue'),
   BaseAnchorBasicDemo: () => import('./demos/BaseAnchorBasicDemo.vue'),
   BaseAnchorCustomEaseDemo: () => import('./demos/BaseAnchorCustomEaseDemo.vue'),
   BaseAnchorPlacementDemo: () => import('./demos/BaseAnchorPlacementDemo.vue'),

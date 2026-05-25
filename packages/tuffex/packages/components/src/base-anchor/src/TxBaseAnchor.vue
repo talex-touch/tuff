@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxCardProps } from '../../card/src/types'
-import type { BaseAnchorClassValue, BaseAnchorProps } from './types'
+import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorClassValue, BaseAnchorProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import gsap from 'gsap'
 import type { StyleValue } from 'vue'
@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   maxHeight: 420,
   unlimitedHeight: false,
   matchReferenceWidth: false,
+  animation: () => ({}),
   duration: 432,
   ease: 'back.out(2)',
   useCard: true,
@@ -273,8 +274,47 @@ const outlinePath = computed(() => {
   ].join(' ')
 })
 
+const DEFAULT_ANIMATION: Required<BaseAnchorAnimationOptions> = {
+  type: 'transfer',
+  duration: 432,
+  closeDuration: 194.4,
+  ease: 'back.out(2)',
+  closeEase: 'power3.in',
+  distance: 30,
+  scale: 1.08,
+  blur: 12,
+  opacity: 0,
+}
+
+const LEGACY_CLOSE_DURATION_RATIO = 0.45
+
+const resolvedAnimation = computed<Required<BaseAnchorAnimationOptions>>(() => {
+  const animation = props.animation ?? {}
+  const duration = Math.max(0, animation.duration ?? props.duration ?? DEFAULT_ANIMATION.duration)
+  const closeDuration = Math.max(0, animation.closeDuration ?? duration * LEGACY_CLOSE_DURATION_RATIO)
+  const type = animation.type ?? DEFAULT_ANIMATION.type
+
+  return {
+    type,
+    duration,
+    closeDuration,
+    ease: animation.ease ?? props.ease ?? DEFAULT_ANIMATION.ease,
+    closeEase: animation.closeEase ?? DEFAULT_ANIMATION.closeEase,
+    distance: Math.max(0, animation.distance ?? DEFAULT_ANIMATION.distance),
+    scale: Math.max(0.01, animation.scale ?? DEFAULT_ANIMATION.scale),
+    blur: Math.max(0, animation.blur ?? DEFAULT_ANIMATION.blur),
+    opacity: Math.min(1, Math.max(0, animation.opacity ?? DEFAULT_ANIMATION.opacity)),
+  }
+})
+
+const animationType = computed<BaseAnchorAnimationType>(() => resolvedAnimation.value.type)
+const usesTransferMotion = computed(() => animationType.value === 'transfer')
+
 /* ─── bounce padding on the far side ─── */
 const bouncePad = computed(() => {
+  if (!usesTransferMotion.value)
+    return {}
+
   const pad = '10px'
   switch (side.value) {
     case 'bottom': return { paddingBottom: pad }
@@ -287,7 +327,7 @@ const bouncePad = computed(() => {
 
 /* ─── helpers ─── */
 function getTranslate(): { x: number, y: number } {
-  const d = 30
+  const d = resolvedAnimation.value.distance
   switch (side.value) {
     case 'bottom': return { x: 0, y: -d }
     case 'top': return { x: 0, y: d }
@@ -317,6 +357,30 @@ function getArrowInsetTranslate(): { x: number, y: number } {
     case 'right': return { x: d, y: 0 }
     default: return { x: 0, y: d }
   }
+}
+
+function resetClipElement(visible: boolean, overflow: 'visible' | 'hidden' = visible ? 'visible' : 'hidden') {
+  const clip = clipRef.value
+  if (!clip)
+    return
+  clip.style.visibility = visible ? 'visible' : 'hidden'
+  clip.style.clipPath = 'none'
+  clip.style.overflow = overflow
+  clip.style.willChange = 'auto'
+}
+
+function resetContentElement() {
+  const content = contentRef.value
+  if (!content)
+    return
+  gsap.set(content, { clearProps: 'transform,opacity,filter,willChange' })
+  content.style.willChange = 'auto'
+}
+
+function resetArrowElement() {
+  const arrowEl = arrowRef.value
+  if (arrowEl)
+    gsap.set(arrowEl, { clearProps: 'transform,opacity,filter,willChange' })
 }
 
 function clearTimeline() {
@@ -371,16 +435,9 @@ function settleOpenVisualStateForFollow() {
     pulsePanelSurfaceMoving(120)
   }
 
-  clip.style.visibility = 'visible'
-  clip.style.clipPath = 'none'
-  clip.style.overflow = 'visible'
-  clip.style.willChange = 'auto'
-
-  gsap.set(content, { clearProps: 'transform' })
-  content.style.willChange = 'auto'
-
-  if (arrowEl)
-    gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+  resetClipElement(true, 'visible')
+  resetContentElement()
+  resetArrowElement()
 }
 
 function readReferenceRect(): RectSnapshot | null {
@@ -415,11 +472,103 @@ function hasReferenceMoved(): boolean {
   return moved
 }
 
+function shouldAdaptSurfaceFor(type: BaseAnchorAnimationType) {
+  return type === 'transfer' || type === 'boom'
+}
+
+function finishOpen(currentRunId: number) {
+  if (currentRunId !== runId)
+    return
+  resetClipElement(true, 'visible')
+  resetContentElement()
+  resetArrowElement()
+  setPanelSurfaceMoving(false)
+  tl = null
+}
+
+function finishClose(currentRunId: number) {
+  if (currentRunId !== runId)
+    return
+  resetClipElement(false, 'hidden')
+  resetContentElement()
+  resetArrowElement()
+  if (!props.keepAliveContent)
+    mounted.value = false
+  setPanelSurfaceMoving(false)
+  tl = null
+}
+
+function prepareArrowOpen(type: BaseAnchorAnimationType) {
+  const arrowEl = arrowRef.value
+  if (!props.showArrow || !arrowEl)
+    return
+
+  if (type === 'transfer') {
+    const insetT = getArrowInsetTranslate()
+    gsap.set(arrowEl, {
+      x: insetT.x,
+      y: insetT.y,
+      scale: 0.72,
+      opacity: 0,
+      willChange: 'transform,opacity',
+    })
+    return
+  }
+
+  gsap.set(arrowEl, {
+    x: 0,
+    y: 0,
+    scale: type === 'boom' ? 0.86 : 1,
+    opacity: 0,
+    willChange: type === 'opacity' ? 'opacity' : 'transform,opacity',
+  })
+}
+
+function addArrowOpenTween(timeline: gsap.core.Timeline, type: BaseAnchorAnimationType, duration: number) {
+  const arrowEl = arrowRef.value
+  if (!props.showArrow || !arrowEl || type === 'none')
+    return
+
+  const arrowDur = type === 'transfer'
+    ? Math.min(0.16, Math.max(0.09, duration * 0.28))
+    : Math.min(0.18, Math.max(0.08, duration * 0.36))
+  const startAt = type === 'transfer' ? Math.max(0, duration - arrowDur * 0.85) : 0
+
+  timeline.to(arrowEl, {
+    x: 0,
+    y: 0,
+    scale: 1,
+    opacity: 1,
+    duration: arrowDur,
+    ease: 'power2.out',
+  }, startAt)
+}
+
+function addArrowCloseTween(timeline: gsap.core.Timeline, type: BaseAnchorAnimationType, duration: number) {
+  const arrowEl = arrowRef.value
+  if (!props.showArrow || !arrowEl || type === 'none')
+    return 0
+
+  const arrowDur = Math.min(0.11, Math.max(0.07, duration * 0.4))
+  const insetT = type === 'transfer' ? getArrowInsetTranslate() : { x: 0, y: 0 }
+
+  gsap.set(arrowEl, { willChange: type === 'opacity' ? 'opacity' : 'transform,opacity' })
+  timeline.to(arrowEl, {
+    x: insetT.x,
+    y: insetT.y,
+    scale: type === 'transfer' ? 0.72 : type === 'boom' ? 0.86 : 1,
+    opacity: 0,
+    duration: arrowDur,
+    ease: 'power2.in',
+  }, 0)
+
+  return type === 'transfer' ? arrowDur : 0
+}
+
 /* ─── animate open ─── */
 function animateOpen(currentRunId: number) {
   const clip = clipRef.value
   const content = contentRef.value
-  const arrowEl = arrowRef.value
   if (isUnlimitedHeight.value) {
     clearTimeline()
     if (!clip || !content) {
@@ -427,16 +576,7 @@ function animateOpen(currentRunId: number) {
       setPanelSurfaceMoving(false)
       return
     }
-    clip.style.visibility = 'visible'
-    clip.style.clipPath = 'none'
-    clip.style.overflow = 'visible'
-    clip.style.willChange = 'auto'
-    gsap.set(content, { clearProps: 'transform' })
-    content.style.willChange = 'auto'
-    if (arrowEl)
-      gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
-    setPanelSurfaceMoving(false)
-    tl = null
+    finishOpen(currentRunId)
     return
   }
   if (!clip || !content || !hasWindow()) {
@@ -446,104 +586,83 @@ function animateOpen(currentRunId: number) {
   }
 
   clearTimeline()
-  setPanelSurfaceMoving(true)
 
-  const durMs = Math.max(0, props.duration)
-  if (durMs <= 0) {
-    clip.style.visibility = 'visible'
-    clip.style.clipPath = 'none'
-    clip.style.overflow = 'visible'
-    clip.style.willChange = 'auto'
-    gsap.set(content, { clearProps: 'transform' })
-    content.style.willChange = 'auto'
-    if (props.showArrow && arrowEl) {
-      gsap.set(arrowEl, {
-        x: 0,
-        y: 0,
-        scale: 1,
-        opacity: 1,
-        clearProps: 'willChange',
-      })
-    }
-    setPanelSurfaceMoving(false)
-    tl = null
+  const animation = resolvedAnimation.value
+  const type = animation.type
+  const durMs = animation.duration
+  setPanelSurfaceMoving(shouldAdaptSurfaceFor(type))
+
+  if (durMs <= 0 || type === 'none') {
+    finishOpen(currentRunId)
     return
   }
 
-  const hiddenT = getTranslate()
   const dur = durMs / 1000
-
-  // prepare
-  clip.style.overflow = 'hidden'
   clip.style.visibility = 'visible'
-  clip.style.clipPath = getClipPath(0)
-  clip.style.willChange = 'clip-path'
-  content.style.willChange = 'transform'
-  gsap.set(content, { x: hiddenT.x, y: hiddenT.y })
-  if (props.showArrow && arrowEl) {
-    const insetT = getArrowInsetTranslate()
-    gsap.set(arrowEl, {
-      x: insetT.x,
-      y: insetT.y,
-      scale: 0.72,
-      opacity: 0,
-      willChange: 'transform,opacity',
-    })
-  }
-
-  const clipState = { progress: 0 }
-  const arrowEnterDur = Math.min(0.16, Math.max(0.09, dur * 0.28))
+  clip.style.overflow = type === 'transfer' ? 'hidden' : 'visible'
+  clip.style.clipPath = type === 'transfer' ? getClipPath(0) : 'none'
+  clip.style.willChange = type === 'transfer' ? 'clip-path' : 'auto'
+  prepareArrowOpen(type)
 
   tl = gsap.timeline({
-    onComplete: () => {
-      if (currentRunId !== runId)
-        return
-      clip.style.clipPath = 'none'
-      clip.style.overflow = 'visible'
-      // clear GPU layers for smooth scroll repositioning
-      clip.style.willChange = 'auto'
-      gsap.set(content, { clearProps: 'transform' })
-      content.style.willChange = 'auto'
-      if (arrowEl)
-        gsap.set(arrowEl, { clearProps: 'willChange' })
-      setPanelSurfaceMoving(false)
-      tl = null
-    },
+    onComplete: () => finishOpen(currentRunId),
   })
 
-  tl.to(clipState, {
-    progress: 1,
-    duration: dur * 0.85,
-    ease: 'power2.inOut',
-    onUpdate() {
-      clip.style.clipPath = getClipPath(clipState.progress)
-    },
-  }, 0)
+  if (type === 'transfer') {
+    const hiddenT = getTranslate()
+    const clipState = { progress: 0 }
+    content.style.willChange = 'transform'
+    gsap.set(content, { x: hiddenT.x, y: hiddenT.y })
 
-  tl.to(content, {
-    x: 0,
-    y: 0,
-    duration: dur,
-    ease: props.ease,
-  }, 0)
+    tl.to(clipState, {
+      progress: 1,
+      duration: dur * 0.85,
+      ease: 'power2.inOut',
+      onUpdate() {
+        clip.style.clipPath = getClipPath(clipState.progress)
+      },
+    }, 0)
 
-  if (props.showArrow && arrowEl) {
-    tl.to(arrowEl, {
+    tl.to(content, {
       x: 0,
       y: 0,
+      duration: dur,
+      ease: animation.ease,
+    }, 0)
+  }
+  else if (type === 'boom') {
+    content.style.willChange = 'transform,opacity,filter'
+    gsap.set(content, {
+      scale: animation.scale,
+      opacity: animation.opacity,
+      filter: `blur(${animation.blur}px)`,
+      transformOrigin: '50% 50%',
+    })
+    tl.to(content, {
       scale: 1,
       opacity: 1,
-      duration: arrowEnterDur,
-      ease: 'power2.out',
-    }, Math.max(0, dur - arrowEnterDur * 0.85))
+      filter: 'blur(0px)',
+      duration: dur,
+      ease: animation.ease,
+    }, 0)
   }
+  else if (type === 'opacity') {
+    content.style.willChange = 'opacity'
+    gsap.set(content, { opacity: animation.opacity })
+    tl.to(content, {
+      opacity: 1,
+      duration: dur,
+      ease: animation.ease,
+    }, 0)
+  }
+
+  addArrowOpenTween(tl, type, dur)
 }
 
 /* ─── animate close ─── */
 function animateClose(currentRunId: number) {
   const clip = clipRef.value
   const content = contentRef.value
-  const arrowEl = arrowRef.value
   if (isUnlimitedHeight.value) {
     clearTimeline()
     if (!clip || !content) {
@@ -551,18 +670,7 @@ function animateClose(currentRunId: number) {
       setPanelSurfaceMoving(false)
       return
     }
-    clip.style.visibility = 'hidden'
-    clip.style.clipPath = 'none'
-    clip.style.overflow = 'hidden'
-    clip.style.willChange = 'auto'
-    gsap.set(content, { clearProps: 'transform' })
-    content.style.willChange = 'auto'
-    if (arrowEl)
-      gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
-    if (!props.keepAliveContent)
-      mounted.value = false
-    setPanelSurfaceMoving(false)
-    tl = null
+    finishClose(currentRunId)
     return
   }
   if (!clip || !content || !hasWindow()) {
@@ -572,91 +680,76 @@ function animateClose(currentRunId: number) {
   }
 
   clearTimeline()
-  setPanelSurfaceMoving(true)
 
-  const durMs = Math.max(0, props.duration * 0.45)
-  if (durMs <= 0) {
-    clip.style.visibility = 'hidden'
-    clip.style.clipPath = 'none'
-    clip.style.overflow = 'hidden'
-    clip.style.willChange = 'auto'
-    gsap.set(content, { clearProps: 'transform' })
-    content.style.willChange = 'auto'
-    if (arrowEl)
-      gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
-    if (!props.keepAliveContent)
-      mounted.value = false
-    setPanelSurfaceMoving(false)
-    tl = null
+  const animation = resolvedAnimation.value
+  const type = animation.type
+  const durMs = animation.closeDuration
+  setPanelSurfaceMoving(shouldAdaptSurfaceFor(type))
+
+  if (durMs <= 0 || type === 'none') {
+    finishClose(currentRunId)
     return
   }
 
   const startCloseMotion = () => {
-    if (currentRunId !== runId || open.value) {
+    if (currentRunId !== runId || open.value)
       return
-    }
 
-    // restore GPU layers for animation
-    clip.style.willChange = 'clip-path'
-    content.style.willChange = 'transform'
-    clip.style.overflow = 'hidden'
-    clip.style.clipPath = getClipPath(1)
-
-    const hiddenT = getTranslate()
     const dur = durMs / 1000
-    const clipState = { progress: 1 }
-    const hasArrow = !!(props.showArrow && arrowEl)
-    const arrowInsetT = hasArrow ? getArrowInsetTranslate() : { x: 0, y: 0 }
-    const arrowHideDur = hasArrow ? Math.min(0.11, Math.max(0.07, dur * 0.4)) : 0
-    const motionStart = arrowHideDur
+    clip.style.visibility = 'visible'
+    clip.style.overflow = type === 'transfer' ? 'hidden' : 'visible'
+    clip.style.clipPath = type === 'transfer' ? getClipPath(1) : 'none'
+    clip.style.willChange = type === 'transfer' ? 'clip-path' : 'auto'
 
     tl = gsap.timeline({
-      onComplete: () => {
-        if (currentRunId !== runId)
-          return
-        clip.style.visibility = 'hidden'
-        clip.style.clipPath = 'none'
-        clip.style.willChange = 'auto'
-        content.style.willChange = 'auto'
-        if (arrowEl)
-          gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
-        if (!props.keepAliveContent)
-          mounted.value = false
-        setPanelSurfaceMoving(false)
-        tl = null
-      },
+      onComplete: () => finishClose(currentRunId),
     })
 
-    if (hasArrow && arrowEl) {
-      gsap.set(arrowEl, { willChange: 'transform,opacity' })
-      tl.to(arrowEl, {
-        x: arrowInsetT.x,
-        y: arrowInsetT.y,
-        scale: 0.72,
-        opacity: 0,
-        duration: arrowHideDur,
-        ease: 'power2.in',
-      }, 0)
+    const motionStart = addArrowCloseTween(tl, type, dur)
+
+    if (type === 'transfer') {
+      const hiddenT = getTranslate()
+      const clipState = { progress: 1 }
+      content.style.willChange = 'transform'
+
+      tl.to(content, {
+        x: hiddenT.x,
+        y: hiddenT.y,
+        duration: dur,
+        ease: animation.closeEase,
+      }, motionStart)
+
+      tl.to(clipState, {
+        progress: 0,
+        duration: dur,
+        ease: animation.closeEase,
+        onUpdate() {
+          clip.style.clipPath = getClipPath(clipState.progress)
+        },
+      }, motionStart)
     }
-
-    tl.to(content, {
-      x: hiddenT.x,
-      y: hiddenT.y,
-      duration: dur,
-      ease: 'power3.in',
-    }, motionStart)
-
-    tl.to(clipState, {
-      progress: 0,
-      duration: dur,
-      ease: 'power3.in',
-      onUpdate() {
-        clip.style.clipPath = getClipPath(clipState.progress)
-      },
-    }, motionStart)
+    else if (type === 'boom') {
+      content.style.willChange = 'transform,opacity,filter'
+      gsap.set(content, { transformOrigin: '50% 50%' })
+      tl.to(content, {
+        scale: animation.scale,
+        opacity: animation.opacity,
+        filter: `blur(${animation.blur}px)`,
+        duration: dur,
+        ease: animation.closeEase,
+      }, motionStart)
+    }
+    else if (type === 'opacity') {
+      content.style.willChange = 'opacity'
+      tl.to(content, {
+        opacity: animation.opacity,
+        duration: dur,
+        ease: animation.closeEase,
+      }, motionStart)
+    }
   }
 
-  if (props.panelBackground === 'refraction') {
+  if (props.panelBackground === 'refraction' && type === 'transfer') {
     closePrepareTimer = setTimeout(() => {
       closePrepareTimer = null
       startCloseMotion()

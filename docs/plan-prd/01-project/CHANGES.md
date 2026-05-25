@@ -11,6 +11,34 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-26
+
+### feat(tuffex): add BaseAnchor animation modes
+
+- `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts`
+- `packages/tuffex/packages/components/src/base-anchor/index.ts`
+- `packages/tuffex/packages/components/src/popover/src/types.ts`
+- `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+- `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts`
+- `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts`
+- `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue`
+- `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts`
+- `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`
+- `packages/tuffex/packages/components/src/tooltip/__tests__/tooltip.test.ts`
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/app/components/content/demos/BaseAnchorAnimationDemo.vue`
+- `apps/nexus/app/components/content/demos/BaseAnchor*.vue`
+- `apps/nexus/content/docs/dev/components/base-anchor.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/{index.zh,popover.*,dropdown-menu.*}.mdc`
+  - Renamed the Chinese BaseAnchor docs and navigation from the previous visual metaphor to `BaseAnchor 锚点定位`.
+  - Added `BaseAnchorAnimationOptions` and `animation.type` modes: `transfer` for the existing directional reveal, `boom` for focus-scale blur/scale/opacity motion, `opacity` for fade-only motion, and `none` for instant show/hide.
+  - Kept legacy `duration` / `ease` as compatibility fallbacks while forwarding the unified `animation` object through Popover / DropdownMenu / Tooltip wrappers.
+  - Added a Nexus animation demo and expanded the BaseAnchor playground/docs to compare animation modes and surface behavior.
+  - Validated with BaseAnchor / Popover / DropdownMenu / Tooltip Vitest, TuffEx `vue-tsc --noEmit --skipLibCheck`, scoped ESLint for changed TuffEx/Nexus files; Nexus `vue-tsc --noEmit --skipLibCheck` still reports pre-existing unrelated Volar export warnings plus `TuffPropsTable` timeout and `packages/utils/core-box/preview/abilities/*` strictness errors.
+
 ## 2026-05-25
 
 ### docs(nexus): mark Input docs reviewed

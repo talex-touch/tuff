@@ -1,4 +1,4 @@
-import type { BaseAnchorClassValue, BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+import type { BaseAnchorAnimationOptions, BaseAnchorClassValue, BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
 
 export type PopoverPlacement
   = | 'top'
@@ -34,6 +34,7 @@ export interface PopoverProps {
   trigger?: 'click' | 'hover'
   openDelay?: number
   closeDelay?: number
+  animation?: BaseAnchorAnimationOptions
   duration?: number
   keepAliveContent?: boolean
   toggleOnReferenceClick?: boolean

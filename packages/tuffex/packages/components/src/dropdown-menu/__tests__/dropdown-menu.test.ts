@@ -10,6 +10,7 @@ const PopoverStub = defineComponent({
     modelValue: { type: Boolean, default: false },
     placement: { type: String, default: 'bottom-start' },
     offset: { type: Number, default: 6 },
+    animation: { type: Object, default: undefined },
     duration: { type: Number, default: 180 },
     width: { type: Number, default: 0 },
     minWidth: { type: Number, default: 0 },
@@ -71,9 +72,11 @@ describe('txDropdownMenu', () => {
   it('forwards placement, sizing, and panel styling props to Popover', () => {
     const panelCard = { variant: 'plain', radius: 12 }
     const referenceClass = ['menu-trigger']
+    const animation = { type: 'opacity', duration: 240 }
     const wrapper = mountMenu({
       placement: 'top-end',
       offset: 12,
+      animation,
       duration: 240,
       minWidth: 260,
       maxHeight: 320,
@@ -91,6 +94,7 @@ describe('txDropdownMenu', () => {
 
     expect(popover.props('placement')).toBe('top-end')
     expect(popover.props('offset')).toBe(12)
+    expect(popover.props('animation')).toEqual(animation)
     expect(popover.props('duration')).toBe(240)
     expect(popover.props('width')).toBe(0)
     expect(popover.props('minWidth')).toBe(260)

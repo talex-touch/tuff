@@ -1,4 +1,4 @@
-import type { BaseAnchorClassValue, BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+import type { BaseAnchorAnimationOptions, BaseAnchorClassValue, BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
 
 export type DropdownPlacement
   = | 'top-start'
@@ -15,6 +15,7 @@ export interface DropdownMenuProps {
   placement?: DropdownPlacement
   offset?: number
   closeOnSelect?: boolean
+  animation?: BaseAnchorAnimationOptions
   duration?: number
 
   minWidth?: number

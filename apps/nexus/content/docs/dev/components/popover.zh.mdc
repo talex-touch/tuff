@@ -149,6 +149,8 @@ code: |
 | `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式 |
 | `openDelay` | `number` | `120` | hover 模式打开延迟（ms） |
 | `closeDelay` | `number` | `100` | hover 模式关闭延迟（ms） |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180, ease: 'power2.out' }` | 透传给 BaseAnchor 的锚点动画配置 |
+| `duration` | `number` | `180` | 兼容旧用法的动画时长，建议改用 `animation.duration` |
 | `keepAliveContent` | `boolean` | `true` | 是否保留弹层内部状态 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 时是否切换开关 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |

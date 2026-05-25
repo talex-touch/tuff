@@ -7,8 +7,8 @@ const open = ref(false)
 const labels = computed(() => {
   if (locale.value === 'zh') {
     return {
-      trigger: '带横线',
-      content: '内容从可见裂缝中浮现，箭头会随浮层自动定位。',
+      trigger: '定位动效',
+      content: '内容从锚点方向浮现，箭头会随浮层自动定位。',
     }
   }
 

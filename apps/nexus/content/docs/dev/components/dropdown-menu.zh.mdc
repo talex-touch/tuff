@@ -89,6 +89,8 @@ code: |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | 位置 |
 | `offset` | `number` | `6` | 间距 |
 | `closeOnSelect` | `boolean` | `true` | 选择后自动关闭 |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180 }` | 透传给 BaseAnchor 的锚点动画配置 |
+| `duration` | `number` | `180` | 兼容旧用法的动画时长，建议改用 `animation.duration` |
 | `minWidth` | `number` | `220` | 最小宽度 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
 | `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |

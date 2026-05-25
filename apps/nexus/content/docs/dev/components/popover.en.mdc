@@ -149,6 +149,8 @@ code: |
 | `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode |
 | `openDelay` | `number` | `120` | Hover open delay (ms) |
 | `closeDelay` | `number` | `100` | Hover close delay (ms) |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180, ease: 'power2.out' }` | Anchor animation config forwarded to BaseAnchor. |
+| `duration` | `number` | `180` | Backward-compatible animation duration; prefer `animation.duration`. |
 | `keepAliveContent` | `boolean` | `true` | Keep floating content mounted between open/close |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggle by clicking reference |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Card border variant |

@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   trigger: 'click',
   openDelay: 120,
   closeDelay: 100,
+  animation: () => ({}),
   duration: 180,
   keepAliveContent: true,
   toggleOnReferenceClick: undefined,
@@ -127,8 +128,12 @@ const anchorCloseOnClickOutside = computed(() => {
   return props.closeOnClickOutside
 })
 
-const anchorDuration = computed(() => Math.max(0, props.duration))
-const anchorEase = computed(() => 'power2.out')
+const anchorAnimation = computed(() => ({
+  type: 'transfer' as const,
+  duration: Math.max(0, props.duration),
+  ease: 'power2.out',
+  ...props.animation,
+}))
 
 const anchorToggleOnReferenceClick = computed(() => {
   if (typeof props.toggleOnReferenceClick === 'boolean')
@@ -175,8 +180,7 @@ onBeforeUnmount(() => {
     :max-height="props.maxHeight"
     :unlimited-height="props.unlimitedHeight"
     :match-reference-width="props.width <= 0"
-    :duration="anchorDuration"
-    :ease="anchorEase"
+    :animation="anchorAnimation"
     :panel-variant="props.panelVariant"
     :panel-background="props.panelBackground"
     :panel-shadow="props.panelShadow"

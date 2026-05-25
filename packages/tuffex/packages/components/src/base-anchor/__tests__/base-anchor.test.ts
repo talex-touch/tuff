@@ -1,4 +1,5 @@
 import { mount } from '@vue/test-utils'
+import gsap from 'gsap'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import TxBaseAnchor from '../src/TxBaseAnchor.vue'
@@ -153,6 +154,38 @@ describe('txBaseAnchor', () => {
     expect(floating?.classList.contains('custom-floating')).toBe(true)
     expect(floating?.dataset.testid).toBe('panel')
     expect(floating?.getAttribute('style')).toContain('color: red')
+  })
+
+  it('supports animation object variants and legacy duration/ease fallbacks', async () => {
+    const boom = mountAnchor({
+      props: {
+        animation: { type: 'boom', duration: 360, scale: 1.12, blur: 18, opacity: 0.12 },
+      },
+    })
+
+    await boom.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+
+    expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({
+      scale: 1.12,
+      opacity: 0.12,
+      filter: 'blur(18px)',
+    }))
+
+    vi.mocked(gsap.set).mockClear()
+
+    const opacity = mountAnchor({
+      props: {
+        animation: { type: 'opacity' },
+        duration: 280,
+        ease: 'power2.out',
+      },
+    })
+
+    await opacity.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+
+    expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({ opacity: 0 }))
   })
 
   it('hard-cuts surface motion adaptation to auto, manual, and off strategies', () => {

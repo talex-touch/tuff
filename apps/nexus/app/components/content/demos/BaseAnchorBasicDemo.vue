@@ -8,13 +8,13 @@ const labels = computed(() => {
   if (locale.value === 'zh') {
     return {
       trigger: '点击',
-      content: '裂缝动画弹出内容，箭头会跟随浮层位置自动校准。',
+      content: '锚点定位弹出内容，箭头会跟随浮层位置自动校准。',
     }
   }
 
   return {
     trigger: 'Click',
-    content: 'Popover content with split-line animation and a placement-following arrow.',
+    content: 'Popover content with anchor-positioned motion and a placement-following arrow.',
   }
 })
 </script>

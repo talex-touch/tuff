@@ -8,6 +8,20 @@ export type BaseAnchorPlacement
 
 export type BaseAnchorSurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
 
+export type BaseAnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+
+export interface BaseAnchorAnimationOptions {
+  type?: BaseAnchorAnimationType
+  duration?: number
+  closeDuration?: number
+  ease?: string
+  closeEase?: string
+  distance?: number
+  scale?: number
+  blur?: number
+  opacity?: number
+}
+
 export type BaseAnchorPanelCardProps = Partial<Pick<
   TxCardProps,
   | 'glassBlur'
@@ -47,6 +61,7 @@ export interface BaseAnchorProps {
   referenceClass?: BaseAnchorClassValue
 
   // animation
+  animation?: BaseAnchorAnimationOptions
   duration?: number
   ease?: string
 

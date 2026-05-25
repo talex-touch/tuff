@@ -123,7 +123,7 @@ code: |
 - [Toast 提示](./toast.zh.md)
 - [Tooltip 提示](./tooltip.zh.md)
 - [Popover 弹出层](./popover.zh.md)
-- [BaseAnchor 裂缝弹出层](./base-anchor.zh.md)
+- [BaseAnchor 锚点定位](./base-anchor.zh.md)
 - [LoadingState 加载态](./loading-state.zh.md)
 - [LoadingOverlay 加载遮罩](./loading-overlay.zh.md)
 - [Progress 进度](./progress.zh.md)
