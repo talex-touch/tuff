@@ -13,6 +13,17 @@
 
 ## 2026-05-25
 
+### fix(nexus): simplify docs redirect loading and update page overlays
+
+- `apps/nexus/app/components/docs/DocsRedirectLoading.vue`
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/content/docs/dev/components/glass-surface.en.mdc`
+- `apps/nexus/content/docs/dev/components/glass-surface.zh.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Simplified docs redirect loading pages to a centered spinner badge, removing the large skeleton preview and secondary loading copy.
+  - Raised the updates page platform dropdown above the release/news card panel so the popover remains visible when opened.
+  - Marked the GlassSurface component docs as manually reviewed via `verified: true` metadata.
+
 ### fix(nexus): restore docs component navigation and outline
 
 - `apps/nexus/app/components/DocsSidebar.vue`

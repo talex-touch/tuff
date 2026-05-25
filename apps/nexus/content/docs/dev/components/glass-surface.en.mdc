@@ -3,6 +3,7 @@ title: "GlassSurface"
 description: "Refractive glass container with SVG displacement, backdrop-filter, and solid fallback rendering paths."
 category: Layout
 syncStatus: migrated
+verified: true
 ---
 # GlassSurface
 

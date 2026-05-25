@@ -423,6 +423,8 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 }
 
 .updates-hero-panel {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -530,6 +532,12 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 
 .updates-platform-menu {
   position: relative;
+  z-index: 20;
+}
+
+.updates-platform-menu:hover,
+.updates-platform-menu:focus-within {
+  z-index: 30;
 }
 
 .updates-platform-menu__button {
@@ -551,7 +559,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  z-index: 10;
+  z-index: 40;
   display: none;
   min-width: 260px;
   flex-direction: column;
@@ -619,6 +627,8 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
 }
 
 .updates-control-panel {
+  position: relative;
+  z-index: 1;
   display: grid;
   min-height: 0;
   grid-template-rows: auto auto;
