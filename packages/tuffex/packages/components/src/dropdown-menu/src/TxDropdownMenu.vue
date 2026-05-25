@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<DropdownMenuProps>(), {
   placement: 'bottom-start',
   offset: 6,
   closeOnSelect: true,
+  animation: () => ({}),
   duration: 180,
 
   minWidth: 220,
@@ -55,6 +56,7 @@ provide('txDropdownMenu', {
     class="tx-dropdown"
     :placement="placement"
     :offset="offset"
+    :animation="animation"
     :duration="duration"
     :width="0"
     :min-width="minWidth"

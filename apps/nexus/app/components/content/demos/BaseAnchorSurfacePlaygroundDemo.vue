@@ -7,6 +7,7 @@ type PanelVariant = 'solid' | 'plain' | 'dashed'
 type Shadow = 'none' | 'soft' | 'medium'
 type WidthMode = 'auto' | 'compact' | 'wide'
 type SurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
+type AnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
 
 const { locale } = useI18n()
 
@@ -17,6 +18,7 @@ const panelVariant = ref<PanelVariant>('plain')
 const panelShadow = ref<Shadow>('soft')
 const widthMode = ref<WidthMode>('auto')
 const surfaceMotionAdaptation = ref<SurfaceMotionAdaptation>('auto')
+const animationType = ref<AnchorAnimationType>('transfer')
 const showArrow = ref(true)
 const useCard = ref(true)
 const matchReferenceWidth = ref(false)
@@ -35,47 +37,55 @@ const labels = computed(() => {
     return {
       trigger: '打开 Playground',
       controlsTitle: 'Anchor 参数控制台',
-      controlsDesc: '可自由调 placement / motion / surface / card 外观，重点观察 surface 差异。',
+      controlsDesc: '可自由调整位置、动画、材质和卡片外观，重点观察锚点定位效果。',
       section: {
-        surface: 'Surface',
-        placement: 'Placement',
-        width: 'Width',
-        motionAdaptation: 'Surface adaptation',
-        variant: 'Variant',
-        shadow: 'Shadow',
-        ease: 'Ease',
+        surface: '材质',
+        placement: '位置',
+        width: '宽度',
+        motionAdaptation: '运动适配',
+        animation: '动画',
+        variant: '样式',
+        shadow: '阴影',
+        ease: '缓动',
       },
       switch: {
-        showArrow: 'Show arrow',
-        useCard: 'Use card',
-        matchReferenceWidth: 'Match reference width',
-        toggleOnReferenceClick: 'Toggle on click',
-        manualSurfaceMoving: 'Manual surface moving',
+        showArrow: '显示箭头',
+        useCard: '使用卡片',
+        matchReferenceWidth: '匹配触发宽度',
+        toggleOnReferenceClick: '点击切换',
+        manualSurfaceMoving: '手动运动态',
       },
       slider: {
-        offset: 'Offset',
-        radius: 'Radius',
-        padding: 'Padding',
-        duration: 'Duration',
-        maskOpacity: 'Mask opacity',
-        fallbackMaskOpacity: 'Fallback mask',
+        offset: '间距',
+        radius: '圆角',
+        padding: '内边距',
+        duration: '时长',
+        maskOpacity: '遮罩透明度',
+        fallbackMaskOpacity: '降级遮罩',
       },
       widthMode: {
-        auto: 'auto',
-        compact: 'compact',
-        wide: 'wide',
+        auto: '自适应',
+        compact: '紧凑',
+        wide: '宽屏',
       },
       adaptationMode: {
-        auto: 'auto',
-        manual: 'manual',
-        off: 'off',
+        auto: '自动',
+        manual: '手动',
+        off: '关闭',
+      },
+      animationMode: {
+        transfer: '位移动画',
+        boom: '聚焦缩放',
+        opacity: '透明度',
+        none: '无动画',
       },
       panel: {
-        title: 'BaseAnchor Surface Preview',
-        desc: '切换 surface 可明显看到材质变化；支持 auto/manual/off 三种降级策略。',
-        action: 'Apply Settings',
+        title: 'BaseAnchor 锚点定位预览',
+        desc: '切换动画与材质，可观察锚点定位动效和面板材质变化。',
+        action: '应用设置',
       },
-      surfacePreset: 'Surface Presets',
+      surfacePreset: '材质预设',
+      animationPreset: '动画预设',
     }
   }
 
@@ -88,6 +98,7 @@ const labels = computed(() => {
       placement: 'Placement',
       width: 'Width',
       motionAdaptation: 'Surface adaptation',
+      animation: 'Animation',
       variant: 'Variant',
       shadow: 'Shadow',
       ease: 'Ease',
@@ -117,12 +128,19 @@ const labels = computed(() => {
       manual: 'manual',
       off: 'off',
     },
+    animationMode: {
+      transfer: 'transfer',
+      boom: 'focus',
+      opacity: 'opacity',
+      none: 'none',
+    },
     panel: {
       title: 'BaseAnchor Surface Preview',
-      desc: 'Switch surface to inspect material differences with auto/manual/off downgrade modes.',
+      desc: 'Switch animation and surface to inspect anchor positioning motion and material differences.',
       action: 'Apply Settings',
     },
     surfacePreset: 'Surface Presets',
+    animationPreset: 'Animation Presets',
   }
 })
 
@@ -132,6 +150,7 @@ const variantOptions: PanelVariant[] = ['plain', 'solid', 'dashed']
 const shadowOptions: Shadow[] = ['none', 'soft', 'medium']
 const widthOptions: WidthMode[] = ['auto', 'compact', 'wide']
 const adaptationOptions: SurfaceMotionAdaptation[] = ['auto', 'manual', 'off']
+const animationOptions: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']
 const easeOptions = ['back.out(2)', 'power2.out', 'elastic.out(1, 0.45)']
 
 const resolvedWidth = computed(() => {
@@ -149,6 +168,15 @@ const resolvedMaxWidth = computed(() => {
     return 280
   return 420
 })
+
+const anchorAnimation = computed(() => ({
+  type: animationType.value,
+  duration: duration.value,
+  ease: ease.value,
+  closeEase: animationType.value === 'transfer' ? 'power3.in' : 'power2.in',
+  scale: animationType.value === 'boom' ? 1.08 : undefined,
+  blur: animationType.value === 'boom' ? 14 : undefined,
+}))
 
 const panelCard = computed(() => ({
   maskOpacity: maskOpacity.value,
@@ -199,6 +227,18 @@ const panelCard = computed(() => ({
               :key="item"
               :value="item"
               :label="labels.adaptationMode[item]"
+            />
+          </TxFlatSelect>
+        </label>
+
+        <label class="anchor-playground__field">
+          <span>{{ labels.section.animation }}</span>
+          <TxFlatSelect v-model="animationType">
+            <TxFlatSelectItem
+              v-for="item in animationOptions"
+              :key="item"
+              :value="item"
+              :label="labels.animationMode[item]"
             />
           </TxFlatSelect>
         </label>
@@ -276,6 +316,19 @@ const panelCard = computed(() => ({
       </div>
 
       <div class="anchor-playground__surface-row">
+        <span class="anchor-playground__surface-label">{{ labels.animationPreset }}</span>
+        <TxButton
+          v-for="item in animationOptions"
+          :key="`animation-${item}`"
+          size="small"
+          :variant="animationType === item ? 'primary' : 'ghost'"
+          @click="animationType = item"
+        >
+          {{ labels.animationMode[item] }}
+        </TxButton>
+      </div>
+
+      <div class="anchor-playground__surface-row">
         <span class="anchor-playground__surface-label">{{ labels.surfacePreset }}</span>
         <TxButton
           v-for="item in surfaceOptions"
@@ -294,8 +347,7 @@ const panelCard = computed(() => ({
         v-model="open"
         :placement="placement"
         :offset="offset"
-        :duration="duration"
-        :ease="ease"
+        :animation="anchorAnimation"
         :show-arrow="showArrow"
         :use-card="useCard"
         :panel-background="surface"
@@ -324,6 +376,7 @@ const panelCard = computed(() => ({
             {{ labels.panel.desc }}
           </p>
           <div class="anchor-playground__meta">
+            <TxTag :label="`animation: ${animationType}`" size="sm" />
             <TxTag :label="`surface: ${surface}`" size="sm" />
             <TxTag :label="`variant: ${panelVariant}`" size="sm" />
             <TxTag :label="`shadow: ${panelShadow}`" size="sm" />

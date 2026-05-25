@@ -1,15 +1,15 @@
 ---
-title: "BaseAnchor 裂缝弹出层"
-description: "基于 GSAP 驱动渐变遮罩动画的弹出层，内容从 placement 方向滑入，带有物理回弹效果。"
+title: "BaseAnchor 锚点定位"
+description: "基于 Floating UI 与 GSAP 的锚点定位弹出层，支持位移、聚焦缩放、透明度与无动画模式。"
 category: Feedback
 status: beta
 since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
 syncStatus: migrated
 ---
-# BaseAnchor 裂缝弹出层
+# BaseAnchor 锚点定位
 
-基于 GSAP 驱动渐变遮罩动画的弹出层 — 内容从 placement 方向通过柔和的渐变边缘滑入，带有加速→减速→回弹的物理效果。无透明度变化，纯空间遮罩揭示。
+BaseAnchor 是 TuffEx 的底层锚点定位弹出层：由 Floating UI 负责 placement、碰撞处理、箭头定位与 reference 跟随，由 GSAP 负责打开/关闭动效。
 
 默认面板容器使用 `TxCard` 渲染，可通过 `panelBackground / panelShadow / panelRadius / panelPadding` 控制外观；也可以用 `useCard=false` 退回为纯内容包装层。
 
@@ -32,16 +32,16 @@ code: |
       </template>
 
       <div style="width: 220px; padding: 4px;">
-        渐变遮罩动画弹出内容
+        锚点定位弹出内容
       </div>
     </TxBaseAnchor>
   </template>
 ---
 :::
 
-## 渐变边缘
+## 位移动画
 
-BaseAnchor 内置柔和遮罩边缘，并支持 `show-arrow` 让三角箭头跟随最终浮层方向与位置。
+`animation.type='transfer'` 是默认动画：内容从 placement 方向通过柔和边缘进入，关闭时原路回收。`show-arrow` 会让三角箭头跟随最终浮层方向与位置。
 
 ### 柔和边缘
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
@@ -64,7 +64,7 @@ code: |
       </template>
 
       <div style="width: 240px; padding: 4px;">
-        内容从柔和渐变边缘中浮现
+        内容从锚点方向浮现
       </div>
     </TxBaseAnchor>
   </template>
@@ -122,9 +122,42 @@ code: |
 ---
 :::
 
+## 动画模式
+
+通过一个 `animation` 对象统一配置动画。当前支持：`transfer`（默认位移动画）、`boom`（聚焦缩放：模糊 + 缩放 + 透明度）、`opacity`（透明度）、`none`（瞬时显示/隐藏）。
+
+### 多种动画
+:::TuffDemoWrapper{demo="BaseAnchorAnimationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor
+      v-model="open"
+      placement="bottom"
+      :show-arrow="true"
+      :animation="{ type: 'boom', duration: 420, scale: 1.08, blur: 14 }"
+    >
+      <template #reference>
+        <TxButton>聚焦缩放</TxButton>
+      </template>
+
+      <div style="width: 220px; padding: 4px;">
+        模糊、缩放和透明度组合的锚点定位动画
+      </div>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
 ## 自定义动画
 
-通过 `duration` 和 `ease` 控制动画时长和 GSAP 缓动函数。
+推荐使用 `animation` 对象控制动画类型、时长和 GSAP 缓动函数。`duration` / `ease` 仍保留兼容，但新用法应写入 `animation`。
 
 ### 弹性缓动
 :::TuffDemoWrapper{demo="BaseAnchorCustomEaseDemo" code-lang="vue"}
@@ -140,8 +173,7 @@ code: |
     <TxBaseAnchor
       v-model="open"
       placement="bottom-start"
-      :duration="600"
-      ease="elastic.out(1, 0.4)"
+      :animation="{ type: 'transfer', duration: 600, ease: 'elastic.out(1, 0.4)' }"
     >
       <template #reference>
         <TxButton>弹性</TxButton>
@@ -183,8 +215,9 @@ code: |
 | `minWidth` | `number` | `0` | 最小宽度 |
 | `maxWidth` | `number` | `360` | 最大宽度 |
 | `matchReferenceWidth` | `boolean` | `false` | `width=0` 时是否跟随 reference 宽度 |
-| `duration` | `number` | `432` | 动画时长 (ms) |
-| `ease` | `string` | `'back.out(2)'` | GSAP 缓动函数（打开动画） |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | 动画配置对象，统一控制动画类型、时长、缓动与效果参数 |
+| `duration` | `number` | `432` | 兼容旧用法的动画时长 (ms)，建议改用 `animation.duration` |
+| `ease` | `string` | `'back.out(2)'` | 兼容旧用法的打开缓动，建议改用 `animation.ease` |
 | `useCard` | `boolean` | `true` | 是否使用内置 `TxCard` 包裹浮层内容 |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
@@ -197,6 +230,20 @@ code: |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 | `toggleOnReferenceClick` | `boolean` | `true` | 点击 reference 是否自动切换开关 |
+
+### BaseAnchorAnimationOptions
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `type` | `'transfer' \| 'boom' \| 'opacity' \| 'none'` | `'transfer'` | 动画类型。`boom` 为聚焦缩放效果，不用于中文命名 |
+| `duration` | `number` | `432` | 打开动画时长 (ms) |
+| `closeDuration` | `number` | `duration * 0.45` | 关闭动画时长 (ms) |
+| `ease` | `string` | `'back.out(2)'` | 打开动画 GSAP 缓动 |
+| `closeEase` | `string` | `'power3.in'` | 关闭动画 GSAP 缓动 |
+| `distance` | `number` | `30` | `transfer` 位移距离 (px) |
+| `scale` | `number` | `1.08` | `boom` 打开初始/关闭结束缩放 |
+| `blur` | `number` | `12` | `boom` 打开初始/关闭结束模糊半径 (px) |
+| `opacity` | `number` | `0` | `boom` / `opacity` 打开初始与关闭结束透明度 |
 
 ### Events
 
@@ -228,3 +275,4 @@ code: |
 - `toggleOnReferenceClick=false` 会阻断 reference 点击切换，适合输入框等自行处理点击行为的 reference。
 - `class`、`style` 与非 class attrs 会透传到浮层面板；reference 包装层样式使用 `referenceClass`。
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
+- 新动画优先使用 `animation` 对象；`duration` / `ease` 仅作为兼容入口参与默认值合并。

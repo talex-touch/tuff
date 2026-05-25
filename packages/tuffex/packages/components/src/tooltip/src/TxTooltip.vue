@@ -134,6 +134,13 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     ? anchor.toggleOnReferenceClick
     : props.trigger === 'click'
 
+  const animation = {
+    type: 'transfer' as const,
+    duration: anchor.animation?.duration ?? anchor.duration ?? 432,
+    ease: anchor.animation?.ease ?? anchor.ease ?? 'back.out(2)',
+    ...anchor.animation,
+  }
+
   return {
     placement: 'top',
     offset: 8,
@@ -141,8 +148,6 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     minWidth: 0,
     maxWidth: 280,
     matchReferenceWidth: false,
-    duration: 432,
-    ease: 'back.out(2)',
     useCard: true,
     panelVariant: 'solid',
     panelBackground: 'refraction',
@@ -154,6 +159,7 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     keepAliveContent: props.keepAliveContent,
     closeOnEsc: true,
     ...anchor,
+    animation,
     closeOnClickOutside,
     toggleOnReferenceClick,
   }

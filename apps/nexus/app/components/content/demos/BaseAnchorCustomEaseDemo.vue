@@ -23,8 +23,7 @@ const labels = computed(() => {
   <TxBaseAnchor
     v-model="open"
     placement="bottom-start"
-    :duration="600"
-    ease="elastic.out(1, 0.4)"
+    :animation="{ type: 'transfer', duration: 600, ease: 'elastic.out(1, 0.4)' }"
   >
     <template #reference>
       <TxButton>{{ labels.trigger }}</TxButton>

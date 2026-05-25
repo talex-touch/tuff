@@ -9,6 +9,7 @@ const BaseAnchorStub = defineComponent({
     modelValue: { type: Boolean, default: false },
     keepAliveContent: { type: Boolean, default: false },
     closeOnClickOutside: { type: Boolean, default: false },
+    animation: { type: Object, default: undefined },
   },
   emits: ['update:modelValue', 'open', 'close'],
   template: `
@@ -35,6 +36,33 @@ describe('txTooltip', () => {
       global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
     })
     expect(keepAliveWrapper.find('.tx-base-anchor-stub').attributes('data-keep-alive-content')).toBe('true')
+  })
+
+  it('forwards default anchor animation as object config', () => {
+    const wrapper = mount(TxTooltip, {
+      slots: { default: '<button>reference</button>' },
+      global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
+    })
+
+    expect(wrapper.findComponent(BaseAnchorStub).props('animation')).toEqual({
+      type: 'transfer',
+      duration: 432,
+      ease: 'back.out(2)',
+    })
+  })
+
+  it('merges legacy anchor duration and ease into animation fallback', () => {
+    const wrapper = mount(TxTooltip, {
+      props: { anchor: { duration: 260, ease: 'power2.out' } },
+      slots: { default: '<button>reference</button>' },
+      global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
+    })
+
+    expect(wrapper.findComponent(BaseAnchorStub).props('animation')).toEqual({
+      type: 'transfer',
+      duration: 260,
+      ease: 'power2.out',
+    })
   })
 
   it('content slot 可以拿到 side 上下文', () => {

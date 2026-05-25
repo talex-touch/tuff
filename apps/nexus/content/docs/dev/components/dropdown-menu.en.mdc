@@ -89,7 +89,8 @@ code: |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
 | `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
 | `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
-| `duration` | `number` | `180` | Popover transition duration in milliseconds. |
+| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180 }` | Popover animation config forwarded to BaseAnchor. |
+| `duration` | `number` | `180` | Backward-compatible popover transition duration; prefer `animation.duration`. |
 | `minWidth` | `number` | `220` | Minimum panel width in pixels. |
 | `maxHeight` | `number` | `420` | Maximum scrollable panel height in pixels. |
 | `unlimitedHeight` | `boolean` | `false` | Disables the panel max-height constraint. |
