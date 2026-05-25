@@ -111,6 +111,53 @@ code: |
 ---
 :::
 
+**`tuff doctor`**
+
+只读检查本机 AI 工具、Codex/Claude 配置、Codex skills 根目录和推荐 skills 状态，不写入用户目录。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff doctor
+---
+:::
+
+**`tuff setup skills`**
+
+显式安装可选 Codex skills。默认只安装低风险 core skills；需要外部服务或更高风险的 skills 必须通过 `--include-gated` 显式加入。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # 预览写入计划，不修改文件
+  tuff setup skills --dry-run
+
+  # 安装 core skills 到默认 ~/.codex/skills
+  tuff setup skills
+
+  # 包含 gated skills，并跳过确认
+  tuff setup skills --include-gated --yes
+---
+:::
+
+**选项:**
+- `--include-gated` - 包含 GitHub、Sentry、Linear、Cloudflare、Netlify 等 gated skills
+- `--target-dir <dir>` - 指定 skills 写入目录
+- `--overwrite` - 覆盖已有 `SKILL.md`
+- `--dry-run` - 仅预览写入计划
+- `--yes` - 跳过确认提示
+
+**`tuff setup mcp`**
+
+展示 MCP 配置边界和当前本地状态。当前 MVP 不会自动写 MCP profile；后续会在该入口补可审计的 profile manifest 写入。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff setup mcp
+---
+:::
+
 **`tuff help`** / **`tuff about`**
 
 输出帮助或工具信息。
