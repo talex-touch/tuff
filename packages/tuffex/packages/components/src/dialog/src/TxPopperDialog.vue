@@ -11,6 +11,7 @@ import {
 
 } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { TxButton } from '../../button'
 
 defineOptions({
   name: 'TxPopperDialog',
@@ -28,6 +29,10 @@ const props = defineProps({
   message: {
     type: String,
     default: '',
+  },
+  confirmText: {
+    type: String,
+    default: 'Confirm',
   },
   comp: {
     type: Object as PropType<Component>,
@@ -61,7 +66,7 @@ onMounted(() => {
 
   if (dialogWrapper.value) {
     dialogWrapper.value.setAttribute('tabindex', '-1')
-    dialogWrapper.value.focus()
+    dialogWrapper.value.focus({ preventScroll: true })
   }
 })
 
@@ -112,13 +117,14 @@ provide('destroy', destroy)
             <span v-html="message" />
           </div>
 
-          <button
-            type="button"
+          <TxButton
             class="tx-popper-dialog__confirm"
+            type="primary"
+            native-type="button"
             @click="destroy"
           >
-            Confirm
-          </button>
+            {{ confirmText }}
+          </TxButton>
         </template>
       </div>
     </div>
@@ -199,32 +205,7 @@ provide('destroy', destroy)
     left: 16px;
     right: 16px;
     bottom: 16px;
-    height: 32px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    user-select: none;
-    color: #fff;
-    background: linear-gradient(
-      to right,
-      var(--tx-color-primary-light-3, #79bbff),
-      var(--tx-color-primary-light-5, #a0cfff),
-      var(--tx-color-primary-light-3, #79bbff)
-    );
-    transition: all 0.2s ease;
-
-    &:hover {
-      filter: brightness(1.05);
-    }
-
-    &:active {
-      transform: scale(0.98);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--tx-color-primary, #409eff);
-      outline-offset: 2px;
-    }
+    width: auto;
   }
 }
 </style>

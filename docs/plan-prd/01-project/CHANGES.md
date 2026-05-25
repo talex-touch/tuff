@@ -13,6 +13,32 @@
 
 ## 2026-05-25
 
+### refactor(tuffex): use TxButton for dialog internal actions
+
+- `packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue`
+- `packages/tuffex/packages/components/src/dialog/src/TxBlowDialog.vue`
+- `packages/tuffex/packages/components/src/dialog/src/TxPopperDialog.vue`
+- `packages/tuffex/packages/components/src/dialog/src/TxTouchTip.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Replaced Dialog / BottomDialog / PopperDialog / TouchTip internal action `<button>` markup with `TxButton` so Nexus component demos render dialog actions with TuffEx button behavior and native component styling.
+  - Added `confirmText` for BlowDialog / PopperDialog and wired Nexus Dialog demos/docs so Chinese pages show localized confirmation text instead of hard-coded `Confirm`.
+  - Adjusted BlowDialog / PopperDialog confirmation button layout for absolute-positioned `TxButton` usage and focused the dialog container on open to avoid an immediate visible button focus ring in demos.
+  - Marked Nexus Dialog component docs as manually reviewed via `verified: true` metadata.
+  - Removed duplicated local spinner/button visual styles from dialog internals while preserving layout hooks, loading states, countdown text, focus behavior, and close callbacks.
+  - Validated with `pnpm -C "../../packages/tuffex" exec vue-tsc --noEmit --skipLibCheck` and scoped ESLint for the changed dialog components.
+
+### refactor(core-app): migrate legacy dialog actions to TxButton
+
+- `apps/core-app/src/renderer/src/components/base/dialog/TouchTip.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/TDialogMention.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/TBottomDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/TBlowDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/TPopperDialog.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Replaced legacy dialog action controls that used custom `div`/`span` interactive elements plus `v-wave` and local loading markup with `TxButton` from `@talex-touch/tuffex`.
+  - Preserved existing dialog action semantics, loading state, countdown text, close behavior, and dialog layout hooks while removing now-unused custom button loading styles.
+  - Validated with `pnpm -C "apps/core-app" run typecheck:web`.
+
 ### release(tuffex): queue 0.3.6 package publish
 
 - `packages/tuffex/package.json`

@@ -1,5 +1,7 @@
 <script lang="ts" setup>
+import type { TxButtonProps } from '@talex-touch/tuffex'
 import type { ITuffIcon } from '@talex-touch/utils'
+import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import Loading from '~/components/icon/LoadingIcon.vue'
@@ -69,6 +71,11 @@ const props = withDefaults(defineProps<Props>(), {
 // Refs
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const wholeDom = ref<HTMLElement | null>(null)
+
+function getButtonType(type?: ButtonState['type']): TxButtonProps['type'] {
+  if (type === 'error') return 'danger'
+  return type || 'info'
+}
 
 // Store previously focused element for focus restoration
 let previouslyFocusedElement: HTMLElement | null = null
@@ -220,31 +227,17 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
         <!-- Dialog buttons container -->
         <div class="TDialogTip-Btn">
           <!-- Render each button -->
-          <div
+          <TxButton
             v-for="(btn, index) in btnArray"
             :key="index"
-            v-wave
-            :class="{
-              'info-tip': btn.value?.type === 'info',
-              'warn-tip': btn.value?.type === 'warning',
-              'error-tip': btn.value?.type === 'error',
-              'success-tip': btn.value?.type === 'success',
-              'loading-tip': btn.value.loading
-            }"
-            class="TDialogTip-Btn-Item"
-            role="button"
-            tabindex="0"
+            variant="flat"
+            size="sm"
+            :type="getButtonType(btn.value?.type)"
+            :loading="btn.value.loading"
             @click="clickBtn(btn)"
-            @keydown.enter="clickBtn(btn)"
-            @keydown.space="clickBtn(btn)"
           >
-            <!-- Button loading indicator -->
-            <span class="TDialogTip-Btn-Item-Loading">
-              <Loading />
-            </span>
-            <!-- Button text -->
-            <span class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
-          </div>
+            {{ btn.value.content }}
+          </TxButton>
         </div>
       </div>
 
@@ -268,10 +261,6 @@ $dialog-transition-duration: 0.3s;
 $dialog-transition-easing: cubic-bezier(0.25, 0.8, 0.25, 1);
 $icon-size: 72px;
 $plugin-icon-size: 48px;
-$loading-icon-size: 16px;
-$loading-icon-top: -10px;
-$btn-height: 28px;
-$btn-padding: 8px 0;
 $btn-width: 80%;
 $btn-bottom: 5%;
 $content-width: 80%;
@@ -353,23 +342,6 @@ $content-height: calc(100% - 30px);
   }
 }
 
-// Theme color variables
-.success-tip {
-  --theme-color: var(--tx-color-success);
-}
-
-.info-tip {
-  --theme-color: var(--tx-color-primary);
-}
-
-.warn-tip {
-  --theme-color: var(--tx-color-warning);
-}
-
-.error-tip {
-  --theme-color: var(--tx-color-danger);
-}
-
 // Dialog wrapper styles
 .TDialogTip-Wrapper {
   z-index: 1000;
@@ -437,24 +409,6 @@ $content-height: calc(100% - 30px);
     opacity: 0;
     animation: slideIn 0.25s 1s forwards linear;
   }
-
-  // Loading indicator styles
-  .TDialogTip-Btn-Item-Loading {
-    position: relative;
-    display: inline-block;
-    margin: -8px;
-
-    top: $loading-icon-top;
-    left: 50%;
-
-    width: $loading-icon-size;
-    height: $loading-icon-size;
-
-    transform: scale(0) translateX(-50%);
-    opacity: 0;
-    --bg-color: var(--theme-color);
-    transition: $dialog-transition-duration $dialog-transition-easing;
-  }
 }
 
 // Main wrapper styles
@@ -500,12 +454,11 @@ $content-height: calc(100% - 30px);
   position: relative;
   display: flex;
   justify-content: space-around;
-  padding: $btn-padding;
+  gap: 8px;
 
   bottom: $btn-bottom;
 
   width: $btn-width;
-  height: $btn-height;
 
   text-align: center;
   user-select: none;
@@ -576,41 +529,7 @@ $content-height: calc(100% - 30px);
   animation: out 1s forwards;
 }
 
-// Loading tip styles
 .loading-tip {
-  .TDialogTip-Btn-Item-Loading {
-    opacity: 1;
-
-    transform: scale(0.5) translateX(-50%);
-  }
-
-  .TDialogTip-Container-Btn-Item-Text {
-    opacity: 0.25;
-
-    transform: scale(0.65);
-  }
-
   pointer-events: none;
-}
-
-// Button text styles
-.TDialogTip-Container-Btn-Item-Text {
-  position: relative;
-  padding: 8px 24px;
-
-  left: 0;
-  top: 0;
-
-  width: 320px;
-  height: 180px;
-
-  text-align: center;
-  border-radius: $dialog-border-radius;
-  background-color: var(--tx-color-primary-light-5);
-
-  cursor: pointer;
-
-  color: var(--theme-color, var(--tx-text-color-regular));
-  transition: $dialog-transition-duration $dialog-transition-easing;
 }
 </style>

@@ -23,6 +23,7 @@ import type { BottomDialogProps, DialogButton } from './types'
  */
 import { computed, onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { TxButton } from '../../button'
 
 defineOptions({
   name: 'TxBottomDialog',
@@ -62,6 +63,10 @@ let previouslyFocusedElement: HTMLElement | null = null
  */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function resolveButtonType(type?: ButtonState['type']): 'info' | 'warning' | 'danger' | 'success' {
+  return type === 'error' ? 'danger' : type || 'info'
 }
 
 /**
@@ -189,29 +194,19 @@ async function forClose(): Promise<void> {
         </div>
 
         <div class="tx-bottom-dialog__buttons">
-          <button
+          <TxButton
             v-for="(btn, i) in btnArray"
             :key="i"
-            type="button"
-            class="tx-bottom-dialog__btn" :class="[
-              {
-                'tx-bottom-dialog__btn--info': btn.value?.type === 'info',
-                'tx-bottom-dialog__btn--warning': btn.value?.type === 'warning',
-                'tx-bottom-dialog__btn--error': btn.value?.type === 'error',
-                'tx-bottom-dialog__btn--success': btn.value?.type === 'success',
-                'tx-bottom-dialog__btn--loading': btn.value.loading,
-              },
-            ]"
+            class="tx-bottom-dialog__btn"
+            :type="resolveButtonType(btn.value?.type)"
+            :loading="btn.value.loading"
+            block
+            size="lg"
+            native-type="button"
             @click="clickBtn(btn)"
           >
-            <span v-if="btn.value.loading" class="tx-bottom-dialog__spinner">
-              <svg class="tx-spinner" viewBox="0 0 24 24" width="16" height="16">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="31.416" stroke-dashoffset="31.416" />
-              </svg>
-            </span>
-            <span v-else-if="btn.value.time" class="tx-bottom-dialog__btn-text">{{ btn.value.content }} ({{ btn.value.time }}s)</span>
-            <span v-else class="tx-bottom-dialog__btn-text">{{ btn.value.content }}</span>
-          </button>
+            {{ btn.value.time ? `${btn.value.content} (${btn.value.time}s)` : btn.value.content }}
+          </TxButton>
         </div>
       </div>
     </div>
@@ -227,32 +222,6 @@ async function forClose(): Promise<void> {
   100% {
     opacity: 1;
     transform: scale(1) translateX(-50%) translateY(0);
-  }
-}
-
-@keyframes tx-spinner-rotate {
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes tx-spinner-dash {
-  0% {
-    stroke-dashoffset: 31.416;
-  }
-  50% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -31.416;
-  }
-}
-
-.tx-spinner {
-  animation: tx-spinner-rotate 1s linear infinite;
-
-  circle {
-    animation: tx-spinner-dash 1.5s ease-in-out infinite;
   }
 }
 
@@ -306,57 +275,5 @@ async function forClose(): Promise<void> {
     margin-top: auto;
   }
 
-  &__btn {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px 16px;
-    width: 100%;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #fff;
-    background: var(--tx-btn-color, var(--tx-color-info, #909399));
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.25s ease;
-
-    &:hover {
-      filter: brightness(1.1);
-    }
-
-    &:active {
-      transform: scale(0.98);
-    }
-
-    &--info {
-      --tx-btn-color: var(--tx-color-primary, #409eff);
-    }
-
-    &--warning {
-      --tx-btn-color: var(--tx-color-warning, #e6a23c);
-    }
-
-    &--error {
-      --tx-btn-color: var(--tx-color-danger);
-    }
-
-    &--success {
-      --tx-btn-color: var(--tx-color-success);
-    }
-
-    &--loading {
-      pointer-events: none;
-      opacity: 0.7;
-    }
-  }
-
-  &__spinner {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
 }
 </style>

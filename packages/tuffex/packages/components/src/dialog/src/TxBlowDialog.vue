@@ -28,6 +28,7 @@ import {
 
 } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { TxButton } from '../../button'
 
 defineOptions({
   name: 'TxBlowDialog',
@@ -45,6 +46,10 @@ const props = defineProps({
   message: {
     type: String,
     default: '',
+  },
+  confirmText: {
+    type: String,
+    default: 'Confirm',
   },
   comp: {
     type: Object as PropType<Component>,
@@ -93,13 +98,9 @@ onUnmounted(() => {
  * Sets focus to the dialog or its confirm button.
  */
 function setFocusToDialog(): void {
-  const confirmButton = dialogWrapper.value?.querySelector('.tx-blow-dialog__confirm')
-  if (confirmButton instanceof HTMLElement) {
-    confirmButton.focus()
-  }
-  else if (dialogWrapper.value) {
+  if (dialogWrapper.value) {
     dialogWrapper.value.setAttribute('tabindex', '-1')
-    dialogWrapper.value.focus()
+    dialogWrapper.value.focus({ preventScroll: true })
   }
 }
 
@@ -184,13 +185,14 @@ provide('destroy', destroy)
           <div class="tx-blow-dialog__content">
             <span v-html="message" />
           </div>
-          <button
-            type="button"
+          <TxButton
             class="tx-blow-dialog__confirm"
+            type="primary"
+            native-type="button"
             @click="destroy"
           >
-            Confirm
-          </button>
+            {{ confirmText }}
+          </TxButton>
         </template>
       </div>
     </div>
@@ -279,34 +281,7 @@ provide('destroy', destroy)
     bottom: 20px;
     left: 24px;
     right: 24px;
-    padding: 12px 16px;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    color: #fff;
-    background: linear-gradient(
-      to right,
-      var(--tx-color-primary-light-3, #79bbff),
-      var(--tx-color-primary-light-5, #a0cfff),
-      var(--tx-color-primary-light-3, #79bbff)
-    );
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.25s;
-
-    &:hover {
-      filter: brightness(1.1);
-    }
-
-    &:active {
-      transform: scale(0.98);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--tx-color-primary);
-      outline-offset: 2px;
-    }
+    width: auto;
   }
 }
 </style>

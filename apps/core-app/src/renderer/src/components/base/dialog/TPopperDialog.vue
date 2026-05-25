@@ -1,5 +1,6 @@
 <script lang="ts" name="TPopperDialog" setup>
 import type { Component, VNodeChild } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
 import TouchScroll from '../TouchScroll.vue'
@@ -72,26 +73,16 @@ provide('destroy', destroy)
           />
           <!-- eslint-enable vue/no-v-html -->
         </TouchScroll>
-        <div
-          v-wave
-          class="TPopperDialog-Confirm absolute w-[calc(100%-40px)] h-30px leading-30px bottom-1.5rem cursor-pointer select-none text-center rounded-5px"
-          style="
-            background: linear-gradient(
-              to right,
-              var(--tx-color-primary-light-3),
-              var(--tx-color-primary-light-5),
-              var(--tx-color-primary-light-3)
-            );
-          "
-          role="button"
-          tabindex="0"
+        <TxButton
+          class="absolute w-[calc(100%-40px)] bottom-1.5rem"
+          variant="flat"
+          type="primary"
+          block
           aria-label="Confirm and close dialog"
           @click="destroy"
-          @keydown.enter="destroy"
-          @keydown.space="destroy"
         >
           Confirm
-        </div>
+        </TxButton>
       </template>
     </div>
   </div>

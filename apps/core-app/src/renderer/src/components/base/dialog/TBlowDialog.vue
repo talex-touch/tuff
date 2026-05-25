@@ -1,5 +1,6 @@
 <script lang="ts" name="TBlowDialog" setup>
 import type { Component, VNode } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils/common'
 
 /**
@@ -76,7 +77,7 @@ onUnmounted(() => {
  */
 function setFocusToDialog(): void {
   // If there is a confirm button, focus on it
-  const confirmButton = dialogWrapper.value?.querySelector('.TBlowDialog-Confirm')
+  const confirmButton = dialogWrapper.value?.querySelector('.tx-button')
   if (confirmButton instanceof HTMLElement) {
     confirmButton.focus()
   } else if (dialogWrapper.value) {
@@ -164,17 +165,7 @@ provide('destroy', destroy)
           <!-- eslint-disable-next-line vue/no-v-html -->
           <span style="position: relative; height: 100%" v-html="message" />
         </div>
-        <div
-          v-wave
-          class="TBlowDialog-Confirm"
-          role="button"
-          tabindex="0"
-          @click="destroy"
-          @keydown.enter="destroy"
-          @keydown.space="destroy"
-        >
-          Confirm
-        </div>
+        <TxButton variant="flat" type="primary" block @click="destroy"> Confirm </TxButton>
       </template>
     </div>
   </div>
@@ -184,8 +175,6 @@ provide('destroy', destroy)
 // SCSS variables
 $dialog-transition-duration: 0.5s;
 $dialog-border-radius: 8px;
-$confirm-button-height: 30px;
-$confirm-button-border-radius: 5px;
 $container-padding: 20px;
 $container-padding-vertical: 8px;
 
@@ -275,22 +264,10 @@ $container-padding-vertical: 8px;
     box-sizing: border-box;
   }
 
-  .TBlowDialog-Confirm {
+  > .tx-button {
     position: absolute;
     width: calc(100% - (#{$container-padding} * 2));
-    height: $confirm-button-height;
-    line-height: $confirm-button-height;
     bottom: 20px;
-    cursor: pointer;
-    user-select: none;
-    text-align: center;
-    border-radius: $confirm-button-border-radius;
-    background: linear-gradient(
-      to right,
-      var(--tx-color-primary-light-3),
-      var(--tx-color-primary-light-5),
-      var(--tx-color-primary-light-3)
-    );
   }
 
   p {

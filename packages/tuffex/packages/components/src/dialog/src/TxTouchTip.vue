@@ -3,6 +3,7 @@ import type { PropType } from 'vue'
 import type { TouchTipButton } from './types'
 import { onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { TxButton } from '../../button'
 
 defineOptions({
   name: 'TxTouchTip',
@@ -43,6 +44,10 @@ let previouslyFocusedElement: HTMLElement | null = null
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function resolveButtonType(type?: ButtonState['type']): 'info' | 'warning' | 'danger' | 'success' {
+  return type === 'error' ? 'danger' : type || 'info'
 }
 
 watchEffect(() => {
@@ -149,29 +154,18 @@ onUnmounted(() => {
         />
 
         <div class="tx-touch-tip__btns">
-          <button
+          <TxButton
             v-for="(btn, index) in btnArray"
             :key="index"
-            type="button"
             class="tx-touch-tip__btn"
-            :class="[
-              {
-                'tx-touch-tip__btn--info': btn.value?.type === 'info',
-                'tx-touch-tip__btn--warning': btn.value?.type === 'warning',
-                'tx-touch-tip__btn--error': btn.value?.type === 'error',
-                'tx-touch-tip__btn--success': btn.value?.type === 'success',
-                'tx-touch-tip__btn--loading': btn.value.loading,
-              },
-            ]"
+            :type="resolveButtonType(btn.value?.type)"
+            :loading="btn.value.loading"
+            block
+            native-type="button"
             @click="clickBtn(btn)"
           >
-            <span v-if="btn.value.loading" class="tx-touch-tip__spinner">
-              <svg class="tx-spinner" viewBox="0 0 24 24" width="16" height="16">
-                <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="31.416" stroke-dashoffset="31.416" />
-              </svg>
-            </span>
-            <span v-else class="tx-touch-tip__btn-text">{{ btn.value.content }}</span>
-          </button>
+            {{ btn.value.content }}
+          </TxButton>
         </div>
       </div>
     </div>
@@ -187,32 +181,6 @@ onUnmounted(() => {
   100% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
-  }
-}
-
-@keyframes tx-spinner-rotate {
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes tx-spinner-dash {
-  0% {
-    stroke-dashoffset: 31.416;
-  }
-  50% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -31.416;
-  }
-}
-
-.tx-spinner {
-  animation: tx-spinner-rotate 1s linear infinite;
-
-  circle {
-    animation: tx-spinner-dash 1.5s ease-in-out infinite;
   }
 }
 
@@ -281,54 +249,6 @@ onUnmounted(() => {
 
   &__btn {
     flex: 1;
-    height: 32px;
-    border: none;
-    border-radius: 10px;
-    cursor: pointer;
-    user-select: none;
-    color: #fff;
-    background: var(--tx-tip-btn-color, var(--tx-color-primary, #409eff));
-    transition: all 0.2s ease;
-
-    &:hover {
-      filter: brightness(1.05);
-    }
-
-    &:active {
-      transform: scale(0.98);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--tx-color-primary, #409eff);
-      outline-offset: 2px;
-    }
-
-    &--info {
-      --tx-tip-btn-color: var(--tx-color-primary, #409eff);
-    }
-
-    &--warning {
-      --tx-tip-btn-color: var(--tx-color-warning, #e6a23c);
-    }
-
-    &--error {
-      --tx-tip-btn-color: var(--tx-color-danger, #f56c6c);
-    }
-
-    &--success {
-      --tx-tip-btn-color: var(--tx-color-success, #67c23a);
-    }
-
-    &--loading {
-      pointer-events: none;
-      opacity: 0.7;
-    }
-  }
-
-  &__spinner {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
   }
 }
 </style>

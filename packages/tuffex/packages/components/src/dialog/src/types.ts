@@ -117,6 +117,12 @@ export interface BlowDialogProps {
   message?: string
 
   /**
+   * Confirm button text.
+   * @default 'Confirm'
+   */
+  confirmText?: string
+
+  /**
    * A Vue component to render in the dialog.
    */
   comp?: Component
@@ -143,6 +149,7 @@ export interface PopperDialogProps {
   close: () => void
   title?: string
   message?: string
+  confirmText?: string
   comp?: Component
   render?: () => VNode
 }
