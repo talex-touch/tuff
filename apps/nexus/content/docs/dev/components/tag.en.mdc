@@ -10,10 +10,6 @@ syncStatus: migrated
 
 # Tag
 
-> Small labels for categories, status, and context.  
-> **Status**: Beta
-
-
 ## Demo
 ### Tags
 Color and size variations
@@ -21,13 +17,82 @@ Color and size variations
 ---
 code: |
   <template>
-    <TxTag label="Default" />
-    <TxTag label="Success" color="var(--tx-color-success)" />
-    <TxTag label="Warning" color="var(--tx-color-warning)" />
-    <TxTag label="Danger" color="var(--tx-color-danger)" />
+    <TxTag label="Default" size="sm" />
+    <TxTag label="Success" size="md" color="var(--tx-color-success)" />
+    <TxTag label="Warning" size="sm" color="var(--tx-color-warning)" />
+    <TxTag label="Danger" size="md" color="var(--tx-color-danger)" />
   </template>
 ---
 :::
+
+### Closable
+Use closable tags for removable filters or user-defined labels.
+:::TuffDemoWrapper{demo="TagClosableDemo" code-lang="vue"}
+---
+code: |
+  <script setup>
+  import { ref } from 'vue'
+
+  const tags = ref(['Design', 'Docs', 'Pending'])
+
+  function removeTag(tag) {
+    tags.value = tags.value.filter(item => item !== tag)
+  }
+  </script>
+
+  <template>
+    <TxTag
+      v-for="tag in tags"
+      :key="tag"
+      :label="tag"
+      closable
+      @close="removeTag(tag)"
+    />
+  </template>
+---
+:::
+
+### Icon and Custom Color
+Combine `icon`, `color`, `background`, and `border` for semantic tags.
+:::TuffDemoWrapper{demo="TagIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTag label="AI Pick" icon="i-carbon-ai" color="#8b5cf6" />
+    <TxTag label="Synced" icon="i-carbon-checkmark-filled" color="var(--tx-color-success)" />
+    <TxTag
+      label="Protected"
+      icon="i-carbon-locked"
+      color="#f59e0b"
+      background="rgba(245, 158, 11, 0.14)"
+      border="rgba(245, 158, 11, 0.36)"
+    />
+  </template>
+---
+:::
+
+### Interaction and Disabled
+Clickable tags can toggle lightweight state. Disabled tags block both `click` and `close`.
+:::TuffDemoWrapper{demo="TagStateDemo" code-lang="vue"}
+---
+code: |
+  <script setup>
+  import { ref } from 'vue'
+
+  const active = ref(false)
+  </script>
+
+  <template>
+    <TxTag
+      :label="active ? 'Selected' : 'Clickable'"
+      :color="active ? 'var(--tx-color-success)' : 'var(--tx-color-primary)'"
+      @click="active = !active"
+    />
+    <TxTag label="Disabled" disabled />
+  </template>
+---
+:::
+
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -78,8 +143,15 @@ Tags paired with actions.
 ---
 code: |
   <template>
-    <TxTag label="Beta" />
+    <TxTag class="tag-action-demo__tag" label="Beta" size="md" />
     <TxButton size="sm">Upgrade</TxButton>
   </template>
+
+  <style scoped>
+  .tag-action-demo__tag {
+    box-sizing: border-box;
+    height: 26px;
+  }
+  </style>
 ---
 :::

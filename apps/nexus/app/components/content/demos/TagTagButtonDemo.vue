@@ -16,9 +16,16 @@ const labels = computed(() => (locale.value === 'zh'
 
 <template>
   <div class="tuff-demo-row">
-    <TxTag :label="labels.badge" />
+    <TxTag class="tag-action-demo__tag" :label="labels.badge" size="md" />
     <TxButton size="sm">
       {{ labels.action }}
     </TxButton>
   </div>
 </template>
+
+<style scoped>
+.tag-action-demo__tag {
+  box-sizing: border-box;
+  height: 26px;
+}
+</style>
