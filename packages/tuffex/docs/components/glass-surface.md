@@ -49,4 +49,12 @@ import GlassSurfaceControlsDemoSource from '../.vitepress/theme/components/demos
 | `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | Y 轴通道选择 |
 | `mixBlendMode` | `string` | `'difference'` | 混合模式 |
 
-> 该组件会根据浏览器能力自动降级（不支持 SVG filter / backdrop-filter 时）。
+## Fallback 降级
+
+`TxGlassSurface` 会按浏览器能力依次选择渲染路径：
+
+1. **SVG filter 折射路径**：当浏览器支持 `backdrop-filter: url(#filter)` 时，使用组件生成的 SVG displacement map，保留 RGB 通道位移、`distortionScale`、`redOffset` / `greenOffset` / `blueOffset`、`xChannel` / `yChannel`、`displace`、`saturation` 等折射参数。
+2. **backdrop-filter 模糊路径**：当 SVG filter 不可用、但支持原生 `backdrop-filter` 时，降级为 `blur(${blur}px) saturate(1.8) brightness(1.06)` 的毛玻璃背景，并保留半透明背景与边框；此时不再渲染 RGB 位移 / 色散效果。
+3. **纯半透明背景路径**：当 `backdrop-filter` 也不可用时，最终降级为半透明背景 + 边框，不再提供真实模糊和折射，但仍保持容器尺寸、圆角和基础可读性。
+
+Safari 与 Firefox 当前会跳过 SVG filter 折射路径，优先进入后两级 fallback。

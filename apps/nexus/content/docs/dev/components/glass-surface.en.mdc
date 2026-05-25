@@ -16,9 +16,32 @@ verified: true
 ---
 code: |
   <template>
-    <TxGlassSurface :width="360" :height="160" :border-radius="20" :background-opacity="0">
-      <div style="padding: 16px; font-weight: 700;">GlassSurface</div>
-    </TxGlassSurface>
+    <div
+      style="
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 280px;
+        overflow: hidden;
+        border-radius: 18px;
+        background:
+          radial-gradient(circle at 16% 18%, rgba(255, 122, 122, 0.72), transparent 25%),
+          radial-gradient(circle at 78% 24%, rgba(89, 203, 255, 0.7), transparent 28%),
+          linear-gradient(135deg, #f8e3c5 0%, #d7ebff 48%, #d6f5df 100%);
+      "
+    >
+      <div style="position: absolute; top: 32px; left: 36px; max-width: 390px; color: rgba(28, 29, 34, 0.82);">
+        <strong style="display: block; margin-bottom: 8px; font-size: 24px;">Layered clarity with visible depth</strong>
+        <span style="font-size: 14px;">Background bands and text make blur, refraction, and edge highlights visible.</span>
+      </div>
+
+      <TxGlassSurface :width="360" :height="160" :border-radius="20" :background-opacity="0.08">
+        <div style="display: grid; width: 100%; height: 100%; place-items: center; padding: 16px; color: rgba(20, 22, 28, 0.78); font-weight: 700;">
+          GlassSurface
+        </div>
+      </TxGlassSurface>
+    </div>
   </template>
 ---
 :::
@@ -357,24 +380,86 @@ code: |
 
 ### Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `width` | `string \| number` | `'200px'` | Surface width. Numeric values are normalized to px; strings are passed through. |
-| `height` | `string \| number` | `'200px'` | Surface height. Numeric values are normalized to px; strings are passed through. |
-| `borderRadius` | `number` | `20` | Outer radius in px, also applied to the generated displacement map rectangles. |
-| `borderWidth` | `number` | `0.07` | Edge-size multiplier used when generating the displacement map mask. |
-| `brightness` | `number` | `70` | Lightness percentage for the generated inner displacement mask. |
-| `opacity` | `number` | `0.93` | Alpha value for the generated inner displacement mask. |
-| `blur` | `number` | `11` | Blur radius for the generated displacement mask; also drives the backdrop-filter fallback blur. |
-| `displace` | `number` | `0.5` | Final SVG `feGaussianBlur.stdDeviation` applied after the RGB displacement maps are blended. |
-| `backgroundOpacity` | `number` | `0` | Background alpha used on the SVG-filter rendering path. |
-| `saturation` | `number` | `1` | Saturation value appended to the SVG-filter `backdrop-filter` chain. |
-| `distortionScale` | `number` | `-180` | Base SVG displacement scale applied to the red, green, and blue maps. |
-| `redOffset` | `number` | `0` | Offset added to `distortionScale` for the red displacement map. |
-| `greenOffset` | `number` | `10` | Offset added to `distortionScale` for the green displacement map. |
-| `blueOffset` | `number` | `20` | Offset added to `distortionScale` for the blue displacement map. |
-| `xChannel` | `'R' \| 'G' \| 'B'` | `'R'` | SVG displacement X channel selector forwarded to all RGB maps. |
-| `yChannel` | `'R' \| 'G' \| 'B'` | `'G'` | SVG displacement Y channel selector forwarded to all RGB maps. |
-| `mixBlendMode` | `string` | `'difference'` | CSS `mix-blend-mode` used by the generated blue gradient rectangle in the displacement map. |
+::TuffPropsTable
+---
+rows:
+  - name: width
+    type: "string | number"
+    default: "'200px'"
+    description: Surface width. Numeric values are normalized to px; strings are passed through.
+  - name: height
+    type: "string | number"
+    default: "'200px'"
+    description: Surface height. Numeric values are normalized to px; strings are passed through.
+  - name: borderRadius
+    type: number
+    default: 20
+    description: Outer radius in px, also applied to the generated displacement map rectangles.
+  - name: borderWidth
+    type: number
+    default: 0.07
+    description: Edge-size multiplier used when generating the displacement map mask.
+  - name: brightness
+    type: number
+    default: 70
+    description: Lightness percentage for the generated inner displacement mask.
+  - name: opacity
+    type: number
+    default: 0.93
+    description: Alpha value for the generated inner displacement mask.
+  - name: blur
+    type: number
+    default: 11
+    description: Blur radius for the generated displacement mask; also drives the backdrop-filter fallback blur.
+  - name: displace
+    type: number
+    default: 0.5
+    description: Final SVG feGaussianBlur.stdDeviation applied after the RGB displacement maps are blended.
+  - name: backgroundOpacity
+    type: number
+    default: 0
+    description: Background alpha used on the SVG-filter rendering path.
+  - name: saturation
+    type: number
+    default: 1
+    description: Saturation value appended to the SVG-filter backdrop-filter chain.
+  - name: distortionScale
+    type: number
+    default: -180
+    description: Base SVG displacement scale applied to the red, green, and blue maps.
+  - name: redOffset
+    type: number
+    default: 0
+    description: Offset added to distortionScale for the red displacement map.
+  - name: greenOffset
+    type: number
+    default: 10
+    description: Offset added to distortionScale for the green displacement map.
+  - name: blueOffset
+    type: number
+    default: 20
+    description: Offset added to distortionScale for the blue displacement map.
+  - name: xChannel
+    type: "'R' | 'G' | 'B'"
+    default: "'R'"
+    description: SVG displacement X channel selector forwarded to all RGB maps.
+  - name: yChannel
+    type: "'R' | 'G' | 'B'"
+    default: "'G'"
+    description: SVG displacement Y channel selector forwarded to all RGB maps.
+  - name: mixBlendMode
+    type: string
+    default: "'difference'"
+    description: CSS mix-blend-mode used by the generated blue gradient rectangle in the displacement map.
+---
+::
 
-> This component degrades based on browser capabilities (when SVG filter/backdrop-filter is unsupported).
+## Fallback degradation
+
+`TxGlassSurface` selects the rendering path in this order:
+
+1. **SVG filter refraction path**: when the browser supports `backdrop-filter: url(#filter)`, the component uses the generated SVG displacement map and keeps RGB channel displacement, `distortionScale`, `redOffset` / `greenOffset` / `blueOffset`, `xChannel` / `yChannel`, `displace`, and `saturation`.
+2. **backdrop-filter blur path**: when SVG filters are unavailable but native `backdrop-filter` is supported, it falls back to `blur(${blur}px) saturate(1.8) brightness(1.06)` with a translucent background and border. RGB displacement and chromatic refraction are no longer rendered.
+3. **solid translucent path**: when `backdrop-filter` is also unavailable, it falls back to a translucent background plus border. Real blur and refraction are disabled, but width, height, radius, and baseline readability are preserved.
+
+Safari and Firefox currently skip the SVG filter refraction path and enter the latter fallback paths first.

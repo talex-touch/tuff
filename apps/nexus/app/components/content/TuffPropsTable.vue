@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
+import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 
 interface PropRow {
@@ -13,18 +14,34 @@ interface PropRow {
 const props = withDefaults(defineProps<{ rows?: PropRow[] }>(), {
   rows: () => [],
 })
-const labels = {
-  property: 'Property',
-  type: 'Type',
-  default: 'Default',
-  description: 'Description',
-}
+
+const { locale } = useI18n()
+
+const labels = computed(() => {
+  const zh = locale.value.startsWith('zh')
+  return {
+    property: zh ? '属性名' : 'Property',
+    type: zh ? '类型' : 'Type',
+    default: zh ? '默认值' : 'Default',
+    description: zh ? '说明' : 'Description',
+    copy: zh ? '点击复制' : 'Click to copy',
+    copied: zh ? '已复制' : 'Copied',
+  }
+})
 
 const copiedKey = ref('')
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+function stripWrappingBackticks(value: string) {
+  const trimmed = value.trim()
+  if (trimmed.length < 2 || !trimmed.startsWith('`') || !trimmed.endsWith('`'))
+    return trimmed
+  return trimmed.replace(/^`+/, '').replace(/`+$/, '').trim()
+}
 
 function toCopyText(value: unknown): string {
   if (typeof value === 'string')
-    return value
+    return stripWrappingBackticks(value)
   if (typeof value === 'number' || typeof value === 'boolean')
     return String(value)
   return ''
@@ -43,9 +60,12 @@ function extractValues(type?: unknown) {
 
 const normalizedRows = computed(() => {
   return props.rows.map((row) => {
-    const values = row.values?.length ? row.values : extractValues(row.type)
+    const values = row.values?.length ? row.values.map(value => toCopyText(value)) : extractValues(row.type)
     return {
       ...row,
+      displayName: toCopyText(row.name),
+      displayType: toCopyText(row.type),
+      displayDefault: toCopyText(row.default),
       values,
     }
   })
@@ -56,6 +76,17 @@ function isCopyable(value?: unknown) {
   if (!trimmed || trimmed === '-' || trimmed === '—')
     return false
   return true
+}
+
+function copyKey(scope: string, name: string, value = '') {
+  return `${scope}:${name}:${value}`
+}
+
+function handleKeyCopy(event: KeyboardEvent, value: unknown, key?: string) {
+  if (event.key !== 'Enter' && event.key !== ' ')
+    return
+  event.preventDefault()
+  copyText(value, key)
 }
 
 function fallbackCopy(text: string) {
@@ -89,9 +120,13 @@ async function copyText(text?: unknown, key?: string) {
   }
   if (key) {
     copiedKey.value = key
-    window.setTimeout(() => {
+    toast.success(labels.value.copied)
+    if (copiedTimer)
+      window.clearTimeout(copiedTimer)
+    copiedTimer = window.setTimeout(() => {
       if (copiedKey.value === key)
         copiedKey.value = ''
+      copiedTimer = null
     }, 1400)
   }
 }
@@ -111,8 +146,15 @@ async function copyText(text?: unknown, key?: string) {
       <tbody>
         <tr v-for="row in normalizedRows" :key="row.name">
           <td class="tuff-props-table__name">
-            <span>{{ row.name }}</span>
-            <TxButton circle size="small" variant="ghost" native-type="button" :icon="copiedKey === row.name ? 'i-carbon-checkmark' : 'i-carbon-copy'" :aria-label="`Copy ${row.name}`" @click="copyText(row.name, row.name)" />
+            <span
+              class="tuff-props-table__copy-token"
+              :class="{ 'is-copied': copiedKey === copyKey('name', row.name) }"
+              role="button"
+              tabindex="0"
+              :title="labels.copy"
+              @click="copyText(row.displayName, copyKey('name', row.name))"
+              @keydown="handleKeyCopy($event, row.displayName, copyKey('name', row.name))"
+            >{{ row.displayName }}</span>
           </td>
           <td class="tuff-props-table__type">
             <template v-if="row.values.length">
@@ -120,19 +162,23 @@ async function copyText(text?: unknown, key?: string) {
                 v-for="value in row.values"
                 :key="value"
                 class="tuff-props-table__tag"
+                :class="{ 'is-copied': copiedKey === copyKey('value', row.name, value) }"
                 :label="value"
                 size="sm"
-                @click="copyText(value)"
+                :title="labels.copy"
+                @click="copyText(value, copyKey('value', row.name, value))"
               />
             </template>
-            <TxButton v-else-if="isCopyable(row.type)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" @click="copyText(row.type)">
-              {{ row.type }}
+            <TxButton v-else-if="isCopyable(row.displayType)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" :class="{ 'is-copied': copiedKey === copyKey('type', row.name) }" :title="labels.copy" @click="copyText(row.displayType, copyKey('type', row.name))">
+              <span v-if="copiedKey === copyKey('type', row.name)" class="i-carbon-checkmark" aria-hidden="true" />
+              {{ row.displayType }}
             </TxButton>
             <span v-else class="tuff-props-table__placeholder">-</span>
           </td>
           <td class="tuff-props-table__default">
-            <TxButton v-if="isCopyable(row.default)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" @click="copyText(row.default)">
-              {{ row.default }}
+            <TxButton v-if="isCopyable(row.displayDefault)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" :class="{ 'is-copied': copiedKey === copyKey('default', row.name) }" :title="labels.copy" @click="copyText(row.displayDefault, copyKey('default', row.name))">
+              <span v-if="copiedKey === copyKey('default', row.name)" class="i-carbon-checkmark" aria-hidden="true" />
+              {{ row.displayDefault }}
             </TxButton>
             <span v-else class="tuff-props-table__placeholder">-</span>
           </td>
@@ -150,6 +196,7 @@ async function copyText(text?: unknown, key?: string) {
 
 <style scoped>
 .tuff-props-table {
+  position: relative;
   width: 100%;
   background: transparent;
   border: none;
@@ -202,11 +249,31 @@ async function copyText(text?: unknown, key?: string) {
 }
 
 .tuff-props-table__name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   font-weight: 600;
   color: var(--docs-accent);
+}
+
+.tuff-props-table__copy-token {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 6px;
+  padding: 2px 4px;
+  cursor: copy;
+  transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.tuff-props-table__copy-token:hover {
+  background: color-mix(in srgb, var(--docs-accent) 12%, transparent);
+}
+
+.tuff-props-table__copy-token.is-copied {
+  background: color-mix(in srgb, #22c55e 16%, transparent);
+  color: #16a34a;
+}
+
+.tuff-props-table__copy-token:active {
+  transform: translateY(1px);
 }
 
 .tuff-props-table__type,
@@ -231,6 +298,12 @@ async function copyText(text?: unknown, key?: string) {
 
 .tuff-props-table__tag {
   margin: 0 8px 6px 0;
+  cursor: copy;
+}
+
+.tuff-props-table__tag.is-copied {
+  color: #16a34a;
+  outline: 1px solid color-mix(in srgb, #22c55e 42%, transparent);
 }
 
 .tuff-props-table__desc {
@@ -239,8 +312,15 @@ async function copyText(text?: unknown, key?: string) {
 }
 
 .tuff-props-table__mono {
+  gap: 4px;
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
+  cursor: copy;
+}
+
+.tuff-props-table__mono.is-copied {
+  color: #16a34a;
+  background: color-mix(in srgb, #22c55e 12%, transparent);
 }
 
 .tuff-props-table__placeholder {

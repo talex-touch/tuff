@@ -670,8 +670,11 @@ onBeforeUnmount(() => {
   clearRenderedCodeHeaders()
   docsOverlayResizeObserver?.disconnect()
   docsOverlayResizeObserver = null
-  if (import.meta.client)
+  if (import.meta.client) {
     window.removeEventListener('resize', scheduleDocsAnalyticsOverlay)
+    document.removeEventListener('click', handleDocsInlineCodeClick)
+    document.removeEventListener('keydown', handleDocsInlineCodeKeydown)
+  }
   if (docsOverlayFrameRaf)
     cancelAnimationFrame(docsOverlayFrameRaf)
   if (docsTrackerRefreshRaf)
@@ -1389,6 +1392,7 @@ const copyLabels = computed(() => {
   const isZh = locale.value === 'zh'
   return {
     copy: isZh ? '复制' : 'Copy',
+    copyInline: isZh ? '点击复制' : 'Click to copy',
     copied: isZh ? '已复制' : 'Copied',
     failed: isZh ? '复制失败' : 'Copy failed',
     text: isZh ? '文本' : 'Text',
@@ -1431,6 +1435,86 @@ async function writeToClipboard(text: string) {
   textarea.select()
   document.execCommand('copy')
   document.body.removeChild(textarea)
+}
+
+function getInlineCodeElement(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement))
+    return null
+
+  const code = target.closest<HTMLElement>('.docs-prose code')
+  if (!code || code.closest('pre'))
+    return null
+  if (code.closest('.tuff-code-block') || code.parentElement?.closest('a, button, [role="button"]'))
+    return null
+
+  return code
+}
+
+async function copyInlineCode(code: HTMLElement) {
+  const text = code.textContent?.trim() ?? ''
+  if (!text)
+    return
+
+  try {
+    await writeToClipboard(text)
+    code.classList.add('is-copied')
+    window.setTimeout(() => code.classList.remove('is-copied'), 900)
+    toast.success(copyLabels.value.copied)
+    void docsTracker.recordAction({
+      type: 'copy',
+      source: 'inline_code',
+      sectionId: 'root',
+      sectionTitle: 'Inline Code',
+      text,
+    })
+  }
+  catch {
+    toast.error(copyLabels.value.failed)
+  }
+}
+
+function handleDocsInlineCodeClick(event: MouseEvent) {
+  const code = getInlineCodeElement(event.target)
+  if (!code)
+    return
+
+  event.preventDefault()
+  event.stopPropagation()
+  void copyInlineCode(code)
+}
+
+function handleDocsInlineCodeKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' && event.key !== ' ')
+    return
+
+  const code = getInlineCodeElement(event.target)
+  if (!code)
+    return
+
+  event.preventDefault()
+  event.stopPropagation()
+  void copyInlineCode(code)
+}
+
+function enhanceInlineCode() {
+  if (import.meta.server)
+    return
+
+  const nodes = document.querySelectorAll<HTMLElement>('.docs-prose code')
+  nodes.forEach((code) => {
+    if (code.dataset.inlineCodeEnhanced === 'true')
+      return
+    if (code.closest('pre'))
+      return
+    if (code.closest('.tuff-code-block') || code.parentElement?.closest('a, button, [role="button"]'))
+      return
+
+    code.dataset.inlineCodeEnhanced = 'true'
+    code.classList.add('docs-inline-code-copyable')
+    code.setAttribute('role', 'button')
+    code.setAttribute('tabindex', '0')
+    code.setAttribute('title', copyLabels.value.copyInline)
+  })
 }
 
 const GITHUB_REPO = 'AJLoveChina/talex-touch'
@@ -1538,6 +1622,8 @@ function enhanceCodeBlocks() {
   if (import.meta.server)
     return
 
+  enhanceInlineCode()
+
   const blocks = document.querySelectorAll<HTMLPreElement>('.docs-prose pre')
   blocks.forEach((pre) => {
     if (pre.dataset.codeEnhanced === 'true')
@@ -1615,6 +1701,8 @@ onMounted(() => {
   docsAnalyticsOptionsReady.value = true
   clampDocsAnalyticsOptions()
   window.addEventListener('resize', scheduleDocsAnalyticsOverlay, { passive: true })
+  document.addEventListener('click', handleDocsInlineCodeClick)
+  document.addEventListener('keydown', handleDocsInlineCodeKeydown)
 })
 
 // Refetch view count when doc changes (for admins)
@@ -2107,7 +2195,7 @@ watch(
         </div>
     </div>
     <ClientOnly>
-      <Toaster position="bottom-left" />
+      <Toaster position="bottom-left" :offset="72" />
     </ClientOnly>
   </div>
 </template>
@@ -2614,6 +2702,27 @@ a.docs-hero-crumb:hover {
   background-color: var(--docs-inline-code-bg);
   border: 1px solid var(--docs-inline-code-border);
   color: var(--docs-ink);
+}
+
+:deep(.docs-prose code::before),
+:deep(.docs-prose code::after) {
+  content: none !important;
+}
+
+:deep(.docs-prose code.docs-inline-code-copyable) {
+  cursor: copy;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+:deep(.docs-prose code.docs-inline-code-copyable:hover),
+:deep(.docs-prose code.docs-inline-code-copyable.is-copied) {
+  border-color: color-mix(in srgb, var(--docs-accent) 45%, transparent);
+  background-color: color-mix(in srgb, var(--docs-accent) 12%, var(--docs-inline-code-bg));
+  color: var(--docs-accent);
+}
+
+:deep(.docs-prose code.docs-inline-code-copyable:active) {
+  transform: translateY(1px);
 }
 
 :deep(.dark .docs-prose code),
