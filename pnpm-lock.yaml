@@ -1262,7 +1262,11 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(typescript@5.9.3)
 
+  plugins/touch-browser-data: {}
+
   plugins/touch-dev-utils: {}
+
+  plugins/touch-emoji-symbols: {}
 
   plugins/touch-image:
     dependencies:
