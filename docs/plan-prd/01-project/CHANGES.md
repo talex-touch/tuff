@@ -18,14 +18,27 @@
 - `apps/nexus/app/components/DocsSidebar.vue`
 - `apps/nexus/app/components/DocsOutline.vue`
 - `apps/nexus/app/components/docs/DocsComponentSyncTable.vue`
+- `apps/nexus/app/components/docs/DocsRedirectLoading.vue`
+- `apps/nexus/app/layouts/docs.vue`
 - `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/pages/docs/index.vue`
+- `apps/nexus/app/pages/docs/dev/index.vue`
+- `apps/nexus/app/pages/docs/guide/index.vue`
 - `apps/nexus/app/utils/docs-api.ts`
+- `apps/nexus/app/utils/docs-api.test.ts`
+- `apps/nexus/app/utils/docs-outline.ts`
+- `apps/nexus/app/utils/docs-outline.test.ts`
 - `apps/nexus/content/docs/dev/components/index.{en,zh}.mdc`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
   - Forced JSON parsing for prerendered docs navigation/sidebar/component-sync payloads and added array coercion so production static API responses served as `application/octet-stream` no longer break `.filter()`-based sidebar and table rendering.
   - Converted the component sync table usage in the Tuffex component index docs from raw Vue self-closing syntax to MDC block syntax, preventing Nuxt Content from treating the rest of the page as the component slot and hiding later headings from the DOM.
   - Made the docs outline SVG track start from the first measured entry and suppress invalid paths, avoiding browser `<path d>` errors when the first visible outline entry is not measured yet.
-  - Focused validation: scoped Nexus ESLint, `nuxi prepare`, targeted Vitest docs/content tests, and local Nuxt dev smoke for docs API payloads and `/docs/dev/components/index` SSR output. Full Nexus vue-tsc still fails on pre-existing Cloudflare binding / PreviewSDK strictness errors unrelated to this change.
+  - Added a shared fullscreen redirect loading/skeleton surface for `/docs`, `/docs/dev`, and `/docs/guide`, so docs entry redirects no longer render the footer or a floating toast-only placeholder.
+  - Added a tested minimark heading fallback for outline data when `body.toc.links` is empty and hid the right aside outline panel when no outline exists, while preserving the loading skeleton during fetch.
+  - Slightly increased the right-side Tuff Assistant trigger height to improve hit area consistency.
+  - Focused validation: scoped Nexus ESLint, `nuxi prepare`, targeted Vitest docs/content tests plus docs API/outline helper tests, and local Nuxt dev smoke for docs API payloads and `/docs/dev/components/index` SSR output. Full Nexus vue-tsc still fails on pre-existing unrelated TypeScript errors (currently Vue Router Volar export warnings and `packages/utils/core-box/preview/abilities/*` strictness errors).
 
 ### fix(nexus): dedupe Nitro server utils auto-imports
 

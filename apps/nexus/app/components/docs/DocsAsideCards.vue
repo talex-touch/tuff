@@ -185,13 +185,14 @@ const assistantAriaLabel = computed(() => (locale.value === 'zh' ? '打开 Tuff 
 }
 
 .docs-aside-card--assistant {
-  padding: 10px;
+  padding: 8px 10px;
 }
 
 .docs-aside-assistant {
   width: 100%;
+  min-height: 38px;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-radius: 14px;
   color: var(--tx-text-color-primary, #303133);
   background: color-mix(in srgb, var(--tx-bg-color-overlay, #ffffff) 86%, transparent);

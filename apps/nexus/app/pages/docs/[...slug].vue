@@ -10,7 +10,8 @@ import type {
   DocAnalyticsResponse,
 } from '~/types/docs-engagement'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import { coerceJsonArray } from '~/utils/docs-api'
+import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
+import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { useTypedFetch } from '~/utils/request'
 
 definePageMeta({
@@ -117,20 +118,7 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
   if (!record || typeof record !== 'object')
     return {}
 
-  const rawMeta = record.meta
-  let parsedMeta: Record<string, any> = {}
-
-  if (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) {
-    parsedMeta = rawMeta as Record<string, any>
-  }
-  else if (typeof rawMeta === 'string') {
-    try {
-      const maybeMeta = JSON.parse(rawMeta)
-      if (maybeMeta && typeof maybeMeta === 'object' && !Array.isArray(maybeMeta))
-        parsedMeta = maybeMeta as Record<string, any>
-    }
-    catch {}
-  }
+  const parsedMeta = coerceJsonRecord<Record<string, any>>(record.meta) ?? {}
 
   return {
     ...parsedMeta,
@@ -212,12 +200,7 @@ watch(
   },
 )
 
-interface TocEntry {
-  id: string
-  text: string
-  depth: number
-  children?: TocEntry[]
-}
+type TocEntry = DocTocEntry
 
 interface DocSectionInsight {
   sectionId: string
@@ -287,27 +270,6 @@ function buildAssistantContext(value: any): string {
   return text.length > ASSISTANT_CONTEXT_LIMIT ? text.slice(0, ASSISTANT_CONTEXT_LIMIT) : text
 }
 
-function buildTocTree(entries: TocEntry[]) {
-  const root: TocEntry[] = []
-  const stack: TocEntry[] = []
-  for (const entry of entries) {
-    const node: TocEntry = { ...entry, children: [] }
-    while (stack.length) {
-      const last = stack.at(-1)
-      if (!last || last.depth < node.depth)
-        break
-      stack.pop()
-    }
-    const parent = stack.at(-1)
-    if (parent)
-      parent.children?.push(node)
-    else
-      root.push(node)
-    stack.push(node)
-  }
-  return root
-}
-
 function collectDomToc(): TocEntry[] {
   if (import.meta.server)
     return []
@@ -321,7 +283,7 @@ function collectDomToc(): TocEntry[] {
       return { id: heading.id, text, depth }
     })
     .filter(entry => entry.id && entry.text)
-  return buildTocTree(entries)
+  return buildDocOutlineTree(entries)
 }
 
 async function scheduleOutlineSync(delay = 0) {
@@ -676,7 +638,7 @@ watch(
   () => [doc.value, locale.value] as const,
   ([currentDoc]) => {
     if (currentDoc) {
-      outlineState.value = currentDoc.body?.toc?.links ?? []
+      outlineState.value = buildDocOutlineFromBody(currentDoc.body)
       const rawTitle = currentDoc.seo?.title ?? currentDoc.title ?? ''
       docTitleState.value = normalizeTitleForLocale(String(rawTitle), currentDoc.path ?? docPath.value)
       docLocaleState.value = resolveDocLocale(currentDoc)
