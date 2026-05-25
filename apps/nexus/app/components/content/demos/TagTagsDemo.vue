@@ -20,9 +20,9 @@ const labels = computed(() => (locale.value === 'zh'
 
 <template>
   <div class="tuff-demo-row">
-    <TxTag :label="labels.default" />
-    <TxTag :label="labels.success" color="var(--tx-color-success)" />
-    <TxTag :label="labels.warning" color="var(--tx-color-warning)" />
-    <TxTag :label="labels.danger" color="var(--tx-color-danger)" />
+    <TxTag :label="labels.default" size="sm" />
+    <TxTag :label="labels.success" size="md" color="var(--tx-color-success)" />
+    <TxTag :label="labels.warning" size="sm" color="var(--tx-color-warning)" />
+    <TxTag :label="labels.danger" size="md" color="var(--tx-color-danger)" />
   </div>
 </template>
