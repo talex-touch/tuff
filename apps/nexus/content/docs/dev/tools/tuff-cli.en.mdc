@@ -111,6 +111,53 @@ code: |
 ---
 :::
 
+**`tuff doctor`**
+
+Inspect local AI tools, Codex/Claude config files, the Codex skills root, and recommended skill readiness without writing user files.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff doctor
+---
+:::
+
+**`tuff setup skills`**
+
+Explicitly install optional Codex skills. By default it installs low-risk core skills only; external-service or higher-risk skills require `--include-gated`.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # Preview the write plan without changing files
+  tuff setup skills --dry-run
+
+  # Install core skills into ~/.codex/skills
+  tuff setup skills
+
+  # Include gated skills and skip confirmation
+  tuff setup skills --include-gated --yes
+---
+:::
+
+**Options:**
+- `--include-gated` - Include GitHub, Sentry, Linear, Cloudflare, Netlify, and similar gated skills
+- `--target-dir <dir>` - Override the skills target directory
+- `--overwrite` - Replace existing `SKILL.md` files
+- `--dry-run` - Preview the write plan only
+- `--yes` - Skip confirmation prompts
+
+**`tuff setup mcp`**
+
+Show MCP setup boundaries and current local status. This MVP does not automatically write MCP profiles; a later slice should add auditable profile manifest writes behind this entry.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff setup mcp
+---
+:::
+
 **`tuff help`** / **`tuff about`**
 
 Show help or tool information.

@@ -2,6 +2,7 @@
 /* eslint-disable no-console */
 import type { BuildConfig, DevConfig } from '@talex-touch/tuff-cli-core'
 import type { Locale } from '../cli/i18n'
+import type { SkillInstallPlan, SkillInstallPlanItem } from '../cli/local-capabilities'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
@@ -39,6 +40,11 @@ import {
   setLocale,
   t,
 } from '../cli/i18n'
+import {
+  getLocalCapabilityEnvironment,
+  installRecommendedSkills,
+  resolveSkillInstallPlan,
+} from '../cli/local-capabilities'
 import {
   askConfirm,
   askLanguageSwitch,
@@ -140,6 +146,8 @@ function printHelp() {
   console.log('  validate    Validate manifest.json and permission declarations')
   console.log('  login       Authenticate with Tuff Nexus')
   console.log('  logout      Clear authentication')
+  console.log('  doctor      Inspect local AI tools, config files, MCP readiness, and skills')
+  console.log('  setup       Configure optional local capabilities')
   console.log('  help        Show this help message')
   console.log('  about       Display tool information')
   console.log('')
@@ -167,6 +175,8 @@ function printAbout() {
   console.log('  - dev:     Start a Vite dev server for plugin development')
   console.log('  - publish: Publish plugin packages to Nexus server')
   console.log('  - validate: Validate manifest compatibility and permissions')
+  console.log('  - doctor:  Inspect local AI tools and skill readiness')
+  console.log('  - setup:   Configure optional Codex skills and MCP capability hints')
 }
 
 function printVersion() {
@@ -210,6 +220,30 @@ function printLoginHelp() {
   console.log('')
   console.log('Without a token, Tuff opens the browser authorization flow.')
   console.log('Passing a token is kept for compatibility with existing API/app tokens.')
+  console.log('')
+}
+
+function printDoctorHelp() {
+  console.log(`Usage: ${CLI_COMMAND_NAME} doctor`)
+  console.log('')
+  console.log('Inspect local AI tools, Codex/Claude config files, MCP readiness, and skills.')
+  console.log('This command is read-only.')
+  console.log('')
+}
+
+function printSetupHelp() {
+  console.log(`Usage: ${CLI_COMMAND_NAME} setup [skills|mcp] [options]`)
+  console.log('')
+  console.log('Commands:')
+  console.log('  skills        Install optional Codex skills')
+  console.log('  mcp           Show MCP setup boundary and current status')
+  console.log('')
+  console.log('Options for skills:')
+  console.log('  --include-gated       Include gated skills for external services')
+  console.log('  --target-dir <dir>    Override skills target directory')
+  console.log('  --overwrite           Replace existing generated SKILL.md files')
+  console.log('  --dry-run             Preview changes without writing files')
+  console.log('  --yes                 Skip confirmation prompts')
   console.log('')
 }
 
@@ -1061,6 +1095,222 @@ async function runTemplatePicker(): Promise<void> {
   }
 }
 
+interface SetupSkillsOptions {
+  includeGated: boolean
+  overwrite: boolean
+  dryRun: boolean
+  yes: boolean
+  targetRoot?: string
+}
+
+function formatBoolean(value: boolean): string {
+  return value ? 'yes' : 'no'
+}
+
+function formatSkillStatus(item: SkillInstallPlanItem): string {
+  if (item.status === 'skip') {
+    return item.reason === 'already-installed' ? 'skip (already installed)' : 'skip'
+  }
+  return item.status
+}
+
+function parseSetupSkillsOptions(args: string[]): SetupSkillsOptions {
+  const options: SetupSkillsOptions = {
+    includeGated: false,
+    overwrite: false,
+    dryRun: false,
+    yes: false,
+  }
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '--include-gated') {
+      options.includeGated = true
+      continue
+    }
+    if (arg === '--overwrite') {
+      options.overwrite = true
+      continue
+    }
+    if (arg === '--dry-run') {
+      options.dryRun = true
+      continue
+    }
+    if (arg === '--yes' || arg === '-y') {
+      options.yes = true
+      continue
+    }
+    if (arg === '--target-dir') {
+      const next = args[i + 1]
+      if (!next || next.startsWith('-')) {
+        throw new Error('Missing value for --target-dir')
+      }
+      options.targetRoot = path.resolve(next)
+      i += 1
+      continue
+    }
+    if (arg.startsWith('--target-dir=')) {
+      const value = arg.slice(13)
+      if (!value) {
+        throw new Error('Missing value for --target-dir')
+      }
+      options.targetRoot = path.resolve(value)
+      continue
+    }
+    if (arg.startsWith('-')) {
+      throw new Error(`Unknown setup skills option: ${arg}`)
+    }
+  }
+
+  return options
+}
+
+function printSkillInstallPlan(plan: SkillInstallPlan): void {
+  printHeader('Codex skills install plan', plan.targetRoot)
+  printList(
+    plan.items.map(
+      item => `${item.name} [${item.mode}] -> ${formatSkillStatus(item)} -> ${item.manifestPath}`,
+    ),
+  )
+}
+
+async function runDoctorCommand(): Promise<void> {
+  const environment = await getLocalCapabilityEnvironment(process.cwd())
+  const installedTools = environment.tools.filter(tool => tool.installed).length
+  const installedSkills = environment.skillProviders.filter(skill => skill.installed).length
+  const readyCoreSkills = environment.skillProviders.filter(
+    skill => skill.installed && skill.mode === 'core',
+  ).length
+  const gatedSkills = environment.skillProviders.filter(skill => skill.mode === 'gated')
+
+  printHeader('Local capability doctor', environment.cwd)
+  printInfo(`Scanned at: ${new Date(environment.scannedAt).toISOString()}`)
+  printInfo(`Codex skills root: ${environment.skillsRoot}`)
+
+  printHeader('Tools')
+  printList(
+    environment.tools.map((tool) => {
+      const state = tool.installed ? 'installed' : 'missing'
+      const location = tool.executablePath ? ` · ${tool.executablePath}` : ''
+      return `${tool.name}: ${state}${location}`
+    }),
+  )
+
+  printHeader('Config files')
+  printList(
+    environment.configFiles.map((file) => {
+      const state = file.exists ? 'found' : 'missing'
+      const sensitive = file.sensitiveKeyPaths.length
+        ? ` · sensitive keys: ${file.sensitiveKeyPaths.join(', ')}`
+        : ''
+      return `${file.tool}/${file.kind}: ${state} · ${file.path}${sensitive}`
+    }),
+  )
+
+  printHeader('Skills')
+  printList(
+    environment.skillProviders.map((skill) => {
+      const state = skill.installed ? 'installed' : 'missing'
+      return `${skill.name}: ${state} · ${skill.mode} · risk=${skill.riskLevel}`
+    }),
+  )
+
+  printHeader('Summary')
+  printList([
+    `Tools installed: ${installedTools}/${environment.tools.length}`,
+    `Skills installed: ${installedSkills}/${environment.skillProviders.length}`,
+    `Core skills ready: ${readyCoreSkills}`,
+    `Gated skills available: ${gatedSkills.length}`,
+    'MCP: runtime registry is available in Core App workflows; persistent MCP profile installation is not enabled by this CLI MVP.',
+  ])
+}
+
+async function runSetupSkillsCommand(args: string[]): Promise<void> {
+  const options = parseSetupSkillsOptions(args)
+  const plan = await resolveSkillInstallPlan({
+    targetRoot: options.targetRoot,
+    includeGated: options.includeGated,
+    overwrite: options.overwrite,
+  })
+  printSkillInstallPlan(plan)
+
+  const writableItems = plan.items.filter(item => item.status !== 'skip')
+  if (writableItems.length === 0) {
+    printInfo('No skill files need to be written.')
+    return
+  }
+
+  if (options.dryRun) {
+    printInfo('Dry run complete. No files were written.')
+    return
+  }
+
+  if (!options.yes) {
+    const confirmed = await askConfirm(
+      `Write ${writableItems.length} skill file(s) to ${plan.targetRoot}?`,
+      false,
+    )
+    if (!confirmed) {
+      printWarning('Setup cancelled. No files were written.')
+      return
+    }
+  }
+
+  const result = await installRecommendedSkills(plan)
+  printInfo(`Installed ${result.written.length} skill file(s), skipped ${result.skipped.length}.`)
+}
+
+async function runSetupMcpCommand(): Promise<void> {
+  const environment = await getLocalCapabilityEnvironment(process.cwd())
+  printHeader('MCP setup')
+  printWarning('Persistent MCP profile installation is not enabled in this CLI MVP.')
+  printList([
+    'Core App already has a runtime MCP registry for workflow metadata profiles.',
+    'Use tuffcli doctor to inspect local tools and skills before enabling MCP profiles.',
+    'Next implementation slice should add an auditable profile manifest with --dry-run and --yes.',
+    `Codex installed: ${formatBoolean(Boolean(environment.tools.find(tool => tool.id === 'codex')?.installed))}`,
+    `Codex skills root: ${environment.skillsRoot}`,
+  ])
+}
+
+async function runSetupCommand(args: string[]): Promise<void> {
+  const subcommand = (args[0] || '').toLowerCase()
+  const commandArgs = args.slice(1)
+  const hasHelpFlag = args.includes('--help') || args.includes('-h')
+
+  if (hasHelpFlag || subcommand === 'help') {
+    printSetupHelp()
+    return
+  }
+
+  if (subcommand === 'skills') {
+    await runSetupSkillsCommand(commandArgs)
+    return
+  }
+
+  if (subcommand === 'mcp') {
+    await runSetupMcpCommand()
+    return
+  }
+
+  if (!subcommand) {
+    const action = await askSelect('Choose setup target:', [
+      { label: 'Install Codex skills', value: 'skills' },
+      { label: 'Show MCP setup status', value: 'mcp' },
+      { label: 'Cancel', value: 'cancel' },
+    ])
+    if (action === 'skills') {
+      await runSetupSkillsCommand([])
+    }
+    else if (action === 'mcp') {
+      await runSetupMcpCommand()
+    }
+    return
+  }
+
+  throw new Error(`Unknown setup target: ${subcommand}`)
+}
+
 async function runPluginMenu(): Promise<void> {
   while (true) {
     printHeader(t('plugins.title'))
@@ -1243,6 +1493,7 @@ async function runInteractiveMode(): Promise<void> {
       { label: t('menu.plugins'), value: 'plugins' },
       { label: t('menu.account'), value: 'account' },
       { label: t('menu.settings'), value: 'settings' },
+      { label: 'Local capabilities', value: 'capabilities' },
       { label: t('menu.help'), value: 'help' },
       { label: t('menu.exit'), value: 'exit' },
     ])
@@ -1261,6 +1512,10 @@ async function runInteractiveMode(): Promise<void> {
       const outcome = await runSettingsMenu()
       if (outcome === 'logout')
         return
+      continue
+    }
+    if (action === 'capabilities') {
+      await runSetupCommand([])
       continue
     }
     if (action === 'help') {
@@ -1439,6 +1694,17 @@ async function main() {
     }
     else if (command === 'logout') {
       await (await loadPublishModule()).logout()
+    }
+    else if (command === 'doctor') {
+      if (hasHelpFlag) {
+        printDoctorHelp()
+      }
+      else {
+        await runDoctorCommand()
+      }
+    }
+    else if (command === 'setup') {
+      await runSetupCommand(commandArgs)
     }
     else if (command === 'about') {
       printAbout()
