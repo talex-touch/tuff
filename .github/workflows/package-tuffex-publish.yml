@@ -81,10 +81,21 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          set -euo pipefail
+
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
             echo "NPM_TOKEN is required."
             exit 1
           fi
+
+          if ! npm whoami >/tmp/npm-whoami.txt 2>/tmp/npm-whoami.err; then
+            echo "NPM_TOKEN is configured but npm whoami failed. The token may be expired, revoked, or not valid for registry.npmjs.org."
+            cat /tmp/npm-whoami.err
+            exit 1
+          fi
+
+          npm_user=$(cat /tmp/npm-whoami.txt)
+          echo "Authenticated to npm as ${npm_user}."
 
       - name: Publish to npm
         if: steps.version_check.outputs.should_publish == 'true'
@@ -124,6 +135,10 @@ jobs:
               echo "@talex-touch/tuffex@${version} became available during publish. Treating duplicate publish as success."
               exit 0
             fi
+          fi
+
+          if grep -Eqi '404 Not Found - PUT .*@talex-touch%2ftuffex|is not in this registry' "${publish_log}"; then
+            echo "::error::npm publish returned 404 for @talex-touch/tuffex. For scoped package publishes this usually means NPM_TOKEN is authenticated but lacks write/publish access to the @talex-touch scope/package, or the token is restricted to another organization/package. Regenerate/update the repository NPM_TOKEN with @talex-touch read/write publish permission and 2FA bypass/automation support."
           fi
 
           exit "${publish_status}"
