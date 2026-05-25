@@ -160,33 +160,39 @@ export function useLocaleOrchestrator() {
     return normalizeLocale(locale.value) || normalized
   }
 
-  const initLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {
+  const reconcileClientLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {
+    if (import.meta.server)
+      return normalizeLocale(locale.value)
+
     const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
-    if (import.meta.client && !clientInitDone.value) {
-      const profileLocale = input?.isAuthenticated
-        ? normalizeLocaleWithMetrics(input.profileLocale, 'profile')
-        : null
-      const browserLocale = resolveBrowserLocale()
-      const target = preferredLocale || profileLocale || browserLocale
-      const source: LocaleSource = preferredLocale
-        ? 'cookie'
-        : profileLocale
-          ? 'profile'
-          : 'browser'
+    const profileLocale = input?.isAuthenticated
+      ? normalizeLocaleWithMetrics(input.profileLocale, 'profile')
+      : null
+    const browserLocale = resolveBrowserLocale()
+    const target = preferredLocale || profileLocale || browserLocale
+    const source: LocaleSource = preferredLocale
+      ? 'cookie'
+      : profileLocale
+        ? 'profile'
+        : 'browser'
 
-      await setLocaleSerial(target, source)
-      persistLocale(target, source)
-      clientInitDone.value = true
-      initDone.value = true
+    await setLocaleSerial(target, source)
+    persistLocale(target, source)
+    clientInitDone.value = true
+    initDone.value = true
 
-      console.info(`${LOG_PREFIX} initialized`, {
-        source,
-        locale: target,
-        clientReconciled: true,
-      })
+    console.info(`${LOG_PREFIX} initialized`, {
+      source,
+      locale: target,
+      clientReconciled: true,
+    })
 
-      return target
-    }
+    return target
+  }
+
+  const initLocale = async (input?: { isAuthenticated?: boolean, profileLocale?: string | null }) => {
+    if (import.meta.client && !clientInitDone.value)
+      return normalizeLocale(locale.value)
 
     if (initDone.value) {
       if (import.meta.client)
@@ -196,6 +202,8 @@ export function useLocaleOrchestrator() {
 
     if (localeInitQueue)
       return await localeInitQueue
+
+    const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
 
     localeInitQueue = (async () => {
       const profileLocale = input?.isAuthenticated
@@ -291,6 +299,7 @@ export function useLocaleOrchestrator() {
   return {
     normalizeLocale,
     initLocale,
+    reconcileClientLocale,
     persistLocale,
     setLocaleSerial,
     setManualLocale,

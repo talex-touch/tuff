@@ -38,7 +38,7 @@ describe('dashboard data governance UI contract', () => {
     expect(page).toContain('timeHeatmap: GovernanceSearchTimeHeatmapPoint[]')
     expect(page).toContain('interface GovernanceSearchFrequencyCohort')
     expect(page).toContain('frequencyCohorts: GovernanceSearchFrequencyCohort[]')
-    expect(page).toContain('analyticsData.value.searches.timeHeatmap')
+    expect(page).toContain('analytics.value.searches.timeHeatmap')
     expect(page).toContain('const searchTimeHeatmapRows = computed')
     expect(page).toContain('const searchTimeHeatmapTop = computed')
     expect(page).toContain('formatHeatmapCellOpacity(cell.events, searchTimeHeatmapPeak)')

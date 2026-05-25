@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-24
+> 更新时间：2026-05-25
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,42 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-25
+
+### fix(nexus): stabilize governance hydration and admin i18n
+
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/composables/useLocaleOrchestrator.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/provider-registry.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/nuxt.config.ts`
+- `docs/plan-prd/01-project/NEXUS-DATA-GOVERNANCE-PROGRESS-2026-05-23.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Split locale orchestration so SSR init no longer forces immediate client/profile reconciliation before mount; client locale reconciliation now runs after mount and auth/profile sync is gated until the client is ready.
+  - Gated Dashboard navigation revalidation, notification unread refresh, admin menu derivation, and team admin derivation behind the mounted state to avoid SSR/client role drift.
+  - Converted the Provider Registry admin page to a ClientOnly lazy admin panel shell using the generated `LazyDashboardProviderRegistryAdminPanel` component.
+  - Replaced Data Governance cockpit raw fallback translation calls with `tt()` guards and added the missing English/Chinese dashboard, Provider Registry, and common action labels so admin pages keep stable text during SSR and runtime i18n lookup.
+  - Kept Data Governance status in progress: this improves local admin hydration/i18n stability and operator readability, but does not close authenticated browser evidence, live send, live object storage, production D1 backfill, or real provider quota evidence.
+  - Focused validation: `pnpm -C "apps/nexus" exec vitest run "app/pages/dashboard/admin/governance.test.ts"`, file-scoped ESLint for the touched Nexus files, `git diff --check`, and local `pnpm nexus:build`.
+
+### release: v2.4.11-beta.3
+
+- `package.json`
+- `apps/core-app/package.json`
+- `pnpm-lock.yaml`
+- Git tag `v2.4.11-beta.3`
+  - Published the `2.4.11-beta.3` prerelease from a clean release worktree so unrelated Nexus goal edits stayed out of the release commit.
+  - Local packaging completed before release with `pnpm build:beta:mac`, producing the macOS beta artifact under `apps/core-app/dist/`.
+  - GitHub Actions `Build and Release` completed successfully for the release tag, including Windows, Linux, macOS matrix jobs, release asset upload, and Nexus release sync.
+  - Nexus release API returned a published prerelease record for `v2.4.11-beta.3`; `/api/releases/latest` remains on the latest stable release as expected.
 
 ## 2026-05-24
 

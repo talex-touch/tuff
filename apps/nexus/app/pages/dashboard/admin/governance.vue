@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -12,7 +12,12 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, te } = useI18n()
+const tt = (key: string, fallback: string) => te(key) ? t(key) : fallback
+const mounted = ref(false)
+onMounted(() => {
+  mounted.value = true
+})
 const { user } = useAuthUser()
 
 const isAdmin = computed(() => user.value?.role === 'admin')
@@ -1840,6 +1845,7 @@ const { data: analyticsData, pending: analyticsPending, error: analyticsError, r
         leaderboards: {
           hotPlugins: [],
           topModels: [],
+          topProviders: [],
         },
         riskSummary: {
           uploadProblems: 0,
@@ -2317,30 +2323,34 @@ const { data: storageChannelAnalyticsData, pending: storageChannelAnalyticsPendi
   },
 )
 const selectedStorageChannelAnalytics = computed(() => storageChannelAnalyticsData.value ?? emptyStorageChannelAnalytics())
+const governancePagePending = computed(() => mounted.value && (summaryPending.value || configsPending.value || analyticsPending.value || reportPending.value || storagePoliciesPending.value || storageChannelAnalyticsPending.value || storageCredentialsPending.value || notificationCredentialsPending.value || notificationChannelsPending.value || d1ReadinessPending.value))
+const reportHydratedPending = computed(() => mounted.value && reportPending.value)
+const storageChannelAnalyticsHydratedPending = computed(() => mounted.value && storageChannelAnalyticsPending.value)
 const storageCredentials = computed(() => storageCredentialsData.value?.credentials ?? [])
 const storagePolicies = computed(() => storagePoliciesData.value?.policies ?? [])
 const notificationCredentials = computed(() => notificationCredentialsData.value?.credentials ?? [])
 const d1Readiness = computed(() => d1ReadinessData.value ?? emptyD1Readiness())
 const d1ReadinessGaps = computed(() => d1Readiness.value.checks.filter(item => item.status !== 'ready'))
+const analytics = computed(() => analyticsData.value!)
 const governanceReport = computed(() => reportData.value ?? emptyGovernanceReportSnapshot())
 const storagePolicyPeakUtilization = computed(() => Math.max(
-  analyticsData.value.storage.policySummary.highestStoredUtilization,
-  analyticsData.value.storage.policySummary.highestTrafficUtilization,
-  analyticsData.value.storage.policySummary.highestOperationUtilization,
+  analytics.value.storage.policySummary.highestStoredUtilization,
+  analytics.value.storage.policySummary.highestTrafficUtilization,
+  analytics.value.storage.policySummary.highestOperationUtilization,
 ))
 const providerQuotaPeakUtilization = computed(() => Math.max(
-  analyticsData.value.providers.quotaSummary.highestRequestUtilization,
-  analyticsData.value.providers.quotaSummary.highestTokenUtilization,
+  analytics.value.providers.quotaSummary.highestRequestUtilization,
+  analytics.value.providers.quotaSummary.highestTokenUtilization,
 ))
 const providerQuotaNearestExhaustionDays = computed(() => {
   const values = [
-    analyticsData.value.providers.quotaSummary.nearestRequestExhaustionDays,
-    analyticsData.value.providers.quotaSummary.nearestTokenExhaustionDays,
+    analytics.value.providers.quotaSummary.nearestRequestExhaustionDays,
+    analytics.value.providers.quotaSummary.nearestTokenExhaustionDays,
   ].filter((value): value is number => value != null)
   return values.length ? Math.min(...values) : null
 })
 const dashboardRiskTotal = computed(() => {
-  const risk = analyticsData.value.dashboard.riskSummary
+  const risk = analytics.value.dashboard.riskSummary
   return risk.uploadProblems
     + risk.storageAlerts
     + risk.storageBlockedPolicies
@@ -2349,7 +2359,7 @@ const dashboardRiskTotal = computed(() => {
     + risk.providerQuotaBlocked
     + risk.providerQuotaWarning
 })
-const dashboardOperationsTimeline = computed(() => analyticsData.value.dashboard.trends.operationsTimeline)
+const dashboardOperationsTimeline = computed(() => analytics.value.dashboard.trends.operationsTimeline)
 const dashboardOperationsLatest = computed(() => dashboardOperationsTimeline.value.at(-1) ?? null)
 const dashboardOperationsPeaks = computed(() => {
   const timeline = dashboardOperationsTimeline.value
@@ -2360,7 +2370,7 @@ const dashboardOperationsPeaks = computed(() => {
     riskScore: Math.max(1, ...timeline.map(item => item.riskScore)),
   }
 })
-const searchTimeHeatmap = computed(() => analyticsData.value.searches.timeHeatmap)
+const searchTimeHeatmap = computed(() => analytics.value.searches.timeHeatmap)
 const searchTimeHeatmapPeak = computed(() => Math.max(1, ...searchTimeHeatmap.value.map(item => item.events)))
 const searchTimeHeatmapHours = computed(() => {
   const hours = Array.from(new Set(searchTimeHeatmap.value.map(item => item.hour))).sort()
@@ -2524,11 +2534,11 @@ async function saveConfig(
         config: parseJsonObject(form.configJson, 'config'),
       },
     })
-    saveMessage.value = t('dashboard.governance.saved', 'Saved.')
+    saveMessage.value = tt('dashboard.governance.saved', 'Saved.')
     await Promise.all([refreshConfigs(), refreshSummary(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshStorageCredentials(), refreshNotificationCredentials(), refreshNotificationChannels(), refreshD1Readiness()])
   }
   catch (error) {
-    saveError.value = error instanceof Error ? error.message : t('dashboard.governance.saveFailed', 'Save failed.')
+    saveError.value = error instanceof Error ? error.message : tt('dashboard.governance.saveFailed', 'Save failed.')
   }
   finally {
     saving.value = false
@@ -2554,11 +2564,11 @@ async function saveStorageCredential(): Promise<void> {
       },
     })
     storageCredentialForm.credentialsJson = ''
-    saveMessage.value = t('dashboard.governance.storageCredentials.saved', 'Storage credential saved.')
+    saveMessage.value = tt('dashboard.governance.storageCredentials.saved', 'Storage credential saved.')
     await refreshStorageCredentials()
   }
   catch (error) {
-    saveError.value = error instanceof Error ? error.message : t('dashboard.governance.storageCredentials.saveFailed', 'Storage credential save failed.')
+    saveError.value = error instanceof Error ? error.message : tt('dashboard.governance.storageCredentials.saveFailed', 'Storage credential save failed.')
   }
   finally {
     saving.value = false
@@ -2584,11 +2594,11 @@ async function saveNotificationCredential(): Promise<void> {
       },
     })
     notificationCredentialForm.credentialsJson = ''
-    saveMessage.value = t('dashboard.governance.credentials.saved', 'Credential saved.')
+    saveMessage.value = tt('dashboard.governance.credentials.saved', 'Credential saved.')
     await refreshNotificationCredentials()
   }
   catch (error) {
-    saveError.value = error instanceof Error ? error.message : t('dashboard.governance.credentials.saveFailed', 'Credential save failed.')
+    saveError.value = error instanceof Error ? error.message : tt('dashboard.governance.credentials.saveFailed', 'Credential save failed.')
   }
   finally {
     saving.value = false
@@ -2619,12 +2629,12 @@ async function testNotificationChannel(mode: 'plan' | 'send'): Promise<void> {
     })
     notificationTestResult.value = result
     saveMessage.value = mode === 'send'
-      ? t('dashboard.governance.notificationTest.sent', 'Notification channel test sent.')
-      : t('dashboard.governance.notificationTest.planned', 'Notification channel dry-run recorded.')
+      ? tt('dashboard.governance.notificationTest.sent', 'Notification channel test sent.')
+      : tt('dashboard.governance.notificationTest.planned', 'Notification channel dry-run recorded.')
     await Promise.all([refreshSummary(), refreshAnalytics(), refreshReport(), refreshD1Readiness()])
   }
   catch (error) {
-    notificationTestError.value = error instanceof Error ? error.message : t('dashboard.governance.notificationTest.failed', 'Notification channel test failed.')
+    notificationTestError.value = error instanceof Error ? error.message : tt('dashboard.governance.notificationTest.failed', 'Notification channel test failed.')
     saveMessage.value = ''
   }
   finally {
@@ -2653,12 +2663,12 @@ async function notifyStorageAlerts(mode: 'plan' | 'send'): Promise<void> {
     })
     storageAlertNotifyResult.value = result
     saveMessage.value = mode === 'send'
-      ? t('dashboard.governance.storageAlerts.sent', 'Storage alert notifications sent.')
-      : t('dashboard.governance.storageAlerts.planned', 'Storage alert notification dry-run recorded.')
+      ? tt('dashboard.governance.storageAlerts.sent', 'Storage alert notifications sent.')
+      : tt('dashboard.governance.storageAlerts.planned', 'Storage alert notification dry-run recorded.')
     await Promise.all([refreshSummary(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
   }
   catch (error) {
-    storageAlertNotifyError.value = error instanceof Error ? error.message : t('dashboard.governance.storageAlerts.failed', 'Storage alert notification failed.')
+    storageAlertNotifyError.value = error instanceof Error ? error.message : tt('dashboard.governance.storageAlerts.failed', 'Storage alert notification failed.')
     saveMessage.value = ''
   }
   finally {
@@ -2687,14 +2697,14 @@ async function smokeStoragePolicy(policyId: string, mode: StorageChannelSmokeMod
     })
     storageSmokeResult.value = result
     saveMessage.value = result.status === 'failed'
-      ? t('dashboard.governance.storageSmoke.failed', 'Storage smoke failed.')
+      ? tt('dashboard.governance.storageSmoke.failed', 'Storage smoke failed.')
       : mode === 'write'
-        ? t('dashboard.governance.storageSmoke.sent', 'Storage write/read/delete smoke completed.')
-        : t('dashboard.governance.storageSmoke.ready', 'Storage channel dry-run completed.')
+        ? tt('dashboard.governance.storageSmoke.sent', 'Storage write/read/delete smoke completed.')
+        : tt('dashboard.governance.storageSmoke.ready', 'Storage channel dry-run completed.')
     await Promise.all([refreshSummary(), refreshAnalytics(), refreshReport(), refreshStoragePolicies(), refreshStorageChannelAnalytics(), refreshD1Readiness()])
   }
   catch (error) {
-    storageSmokeError.value = error instanceof Error ? error.message : t('dashboard.governance.storageSmoke.error', 'Storage smoke failed.')
+    storageSmokeError.value = error instanceof Error ? error.message : tt('dashboard.governance.storageSmoke.error', 'Storage smoke failed.')
     saveMessage.value = ''
   }
   finally {
@@ -2780,12 +2790,12 @@ function formatShortDate(value: string): string {
 
 function configTypeLabel(type: GovernanceConfigType): string {
   if (type === 'analytics_collection')
-    return t('dashboard.governance.types.analytics', 'Analytics')
+    return tt('dashboard.governance.types.analytics', 'Analytics')
   if (type === 'storage_channel')
-    return t('dashboard.governance.types.storage', 'Storage')
+    return tt('dashboard.governance.types.storage', 'Storage')
   if (type === 'notification_channel')
-    return t('dashboard.governance.types.notification', 'Notification')
-  return t('dashboard.governance.types.providerQuota', 'Provider quota')
+    return tt('dashboard.governance.types.notification', 'Notification')
+  return tt('dashboard.governance.types.providerQuota', 'Provider quota')
 }
 
 function storageEvaluationTone(status: StoragePolicyEvaluationStatus): StatusTone {
@@ -2800,12 +2810,12 @@ function storageEvaluationTone(status: StoragePolicyEvaluationStatus): StatusTon
 
 function storageEvaluationLabel(status: StoragePolicyEvaluationStatus): string {
   if (status === 'ok')
-    return t('dashboard.governance.storagePolicy.ok', 'OK')
+    return tt('dashboard.governance.storagePolicy.ok', 'OK')
   if (status === 'warning')
-    return t('dashboard.governance.storagePolicy.warning', 'Warning')
+    return tt('dashboard.governance.storagePolicy.warning', 'Warning')
   if (status === 'blocked')
-    return t('dashboard.governance.storagePolicy.blocked', 'Blocked')
-  return t('dashboard.governance.storagePolicy.disabled', 'Disabled')
+    return tt('dashboard.governance.storagePolicy.blocked', 'Blocked')
+  return tt('dashboard.governance.storagePolicy.disabled', 'Disabled')
 }
 
 function storageChannelPressureTone(status: StorageChannelPressureStatus): StatusTone {
@@ -2814,7 +2824,7 @@ function storageChannelPressureTone(status: StorageChannelPressureStatus): Statu
 
 function storageChannelPressureLabel(status: StorageChannelPressureStatus): string {
   if (status === 'unmanaged')
-    return t('dashboard.governance.analytics.storageChannelUnmanaged', 'Unmanaged')
+    return tt('dashboard.governance.analytics.storageChannelUnmanaged', 'Unmanaged')
   return storageEvaluationLabel(status)
 }
 
@@ -2828,10 +2838,10 @@ function storageSmokeEvidenceTone(status: StorageSmokeEvidenceStatus): StatusTon
 
 function storageSmokeEvidenceLabel(status: StorageSmokeEvidenceStatus): string {
   if (status === 'ready')
-    return t('dashboard.governance.storageSmoke.readyStatus', 'Ready')
+    return tt('dashboard.governance.storageSmoke.readyStatus', 'Ready')
   if (status === 'sent')
-    return t('dashboard.governance.storageSmoke.sentStatus', 'Sent')
-  return t('dashboard.governance.storageSmoke.failedStatus', 'Failed')
+    return tt('dashboard.governance.storageSmoke.sentStatus', 'Sent')
+  return tt('dashboard.governance.storageSmoke.failedStatus', 'Failed')
 }
 
 function providerQuotaTone(status: ProviderQuotaStatus): StatusTone {
@@ -2840,12 +2850,12 @@ function providerQuotaTone(status: ProviderQuotaStatus): StatusTone {
 
 function providerQuotaLabel(status: ProviderQuotaStatus): string {
   if (status === 'ok')
-    return t('dashboard.governance.providerQuota.ok', 'OK')
+    return tt('dashboard.governance.providerQuota.ok', 'OK')
   if (status === 'warning')
-    return t('dashboard.governance.providerQuota.warning', 'Warning')
+    return tt('dashboard.governance.providerQuota.warning', 'Warning')
   if (status === 'blocked')
-    return t('dashboard.governance.providerQuota.blocked', 'Blocked')
-  return t('dashboard.governance.providerQuota.disabled', 'Disabled')
+    return tt('dashboard.governance.providerQuota.blocked', 'Blocked')
+  return tt('dashboard.governance.providerQuota.disabled', 'Disabled')
 }
 
 function providerQuotaSmokeTone(status: ProviderQuotaSmokeStatus): StatusTone {
@@ -2860,24 +2870,24 @@ function providerQuotaSmokeTone(status: ProviderQuotaSmokeStatus): StatusTone {
 
 function providerQuotaSmokeLabel(status: ProviderQuotaSmokeStatus): string {
   if (status === 'allowed')
-    return t('dashboard.governance.providerQuotaSmoke.allowed', 'Allowed')
+    return tt('dashboard.governance.providerQuotaSmoke.allowed', 'Allowed')
   if (status === 'consumed')
-    return t('dashboard.governance.providerQuotaSmoke.consumed', 'Consumed')
+    return tt('dashboard.governance.providerQuotaSmoke.consumed', 'Consumed')
   if (status === 'blocked')
-    return t('dashboard.governance.providerQuotaSmoke.blocked', 'Blocked')
-  return t('dashboard.governance.providerQuotaSmoke.failed', 'Failed')
+    return tt('dashboard.governance.providerQuotaSmoke.blocked', 'Blocked')
+  return tt('dashboard.governance.providerQuotaSmoke.failed', 'Failed')
 }
 
 function providerQuotaRiskReasonLabel(reason: ProviderQuotaRiskReason): string {
   if (reason === 'overage')
-    return t('dashboard.governance.analytics.providerQuotaRiskOverage', 'Over limit')
+    return tt('dashboard.governance.analytics.providerQuotaRiskOverage', 'Over limit')
   if (reason === 'low-remaining')
-    return t('dashboard.governance.analytics.providerQuotaRiskLowRemaining', 'Low remaining')
+    return tt('dashboard.governance.analytics.providerQuotaRiskLowRemaining', 'Low remaining')
   if (reason === 'projected-exhaustion')
-    return t('dashboard.governance.analytics.providerQuotaRiskProjected', 'Projected exhaustion')
+    return tt('dashboard.governance.analytics.providerQuotaRiskProjected', 'Projected exhaustion')
   if (reason === 'blocked')
-    return t('dashboard.governance.analytics.providerQuotaRiskBlocked', 'Blocked')
-  return t('dashboard.governance.analytics.providerQuotaRiskWarning', 'Warning threshold')
+    return tt('dashboard.governance.analytics.providerQuotaRiskBlocked', 'Blocked')
+  return tt('dashboard.governance.analytics.providerQuotaRiskWarning', 'Warning threshold')
 }
 
 function providerQuotaActionTone(priority: ProviderQuotaActionQueuePriority): StatusTone {
@@ -2892,20 +2902,20 @@ function providerQuotaActionTone(priority: ProviderQuotaActionQueuePriority): St
 
 function providerQuotaActionReasonLabel(reason: ProviderQuotaActionQueueReason): string {
   if (reason === 'token-overage')
-    return t('dashboard.governance.analytics.providerQuotaActionTokenOverage', 'Token overage')
+    return tt('dashboard.governance.analytics.providerQuotaActionTokenOverage', 'Token overage')
   if (reason === 'request-overage')
-    return t('dashboard.governance.analytics.providerQuotaActionRequestOverage', 'Request overage')
+    return tt('dashboard.governance.analytics.providerQuotaActionRequestOverage', 'Request overage')
   if (reason === 'token-exhausted')
-    return t('dashboard.governance.analytics.providerQuotaActionTokenExhausted', 'Tokens exhausted')
+    return tt('dashboard.governance.analytics.providerQuotaActionTokenExhausted', 'Tokens exhausted')
   if (reason === 'request-exhausted')
-    return t('dashboard.governance.analytics.providerQuotaActionRequestExhausted', 'Requests exhausted')
+    return tt('dashboard.governance.analytics.providerQuotaActionRequestExhausted', 'Requests exhausted')
   if (reason === 'projected-exhaustion')
-    return t('dashboard.governance.analytics.providerQuotaActionProjected', 'Projected exhaustion')
+    return tt('dashboard.governance.analytics.providerQuotaActionProjected', 'Projected exhaustion')
   if (reason === 'quota-disabled')
-    return t('dashboard.governance.analytics.providerQuotaActionDisabled', 'Quota disabled')
+    return tt('dashboard.governance.analytics.providerQuotaActionDisabled', 'Quota disabled')
   if (reason === 'missing-hard-limit')
-    return t('dashboard.governance.analytics.providerQuotaActionMissingLimit', 'Missing hard limit')
-  return t('dashboard.governance.analytics.providerQuotaActionWarning', 'Warning threshold')
+    return tt('dashboard.governance.analytics.providerQuotaActionMissingLimit', 'Missing hard limit')
+  return tt('dashboard.governance.analytics.providerQuotaActionWarning', 'Warning threshold')
 }
 
 function reportStatusTone(status: PlatformGovernanceReportStatus): StatusTone {
@@ -2918,10 +2928,10 @@ function reportStatusTone(status: PlatformGovernanceReportStatus): StatusTone {
 
 function reportStatusLabel(status: PlatformGovernanceReportStatus): string {
   if (status === 'critical')
-    return t('dashboard.governance.report.critical', 'Critical')
+    return tt('dashboard.governance.report.critical', 'Critical')
   if (status === 'watch')
-    return t('dashboard.governance.report.watch', 'Watch')
-  return t('dashboard.governance.report.ok', 'OK')
+    return tt('dashboard.governance.report.watch', 'Watch')
+  return tt('dashboard.governance.report.ok', 'OK')
 }
 
 function reportEvidenceTone(status: PlatformGovernanceReportEvidenceStatus): StatusTone {
@@ -2934,10 +2944,10 @@ function reportEvidenceTone(status: PlatformGovernanceReportEvidenceStatus): Sta
 
 function reportEvidenceLabel(status: PlatformGovernanceReportEvidenceStatus): string {
   if (status === 'ready')
-    return t('dashboard.governance.report.evidenceReady', 'Ready')
+    return tt('dashboard.governance.report.evidenceReady', 'Ready')
   if (status === 'local-only')
-    return t('dashboard.governance.report.evidenceLocalOnly', 'Local only')
-  return t('dashboard.governance.report.evidenceOpen', 'Open')
+    return tt('dashboard.governance.report.evidenceLocalOnly', 'Local only')
+  return tt('dashboard.governance.report.evidenceOpen', 'Open')
 }
 
 function reportPriorityTone(priority: PlatformGovernanceReportPriority): StatusTone {
@@ -2952,10 +2962,10 @@ function reportPriorityTone(priority: PlatformGovernanceReportPriority): StatusT
 
 function storageAlertMetricLabel(metric: StorageAlertMetric): string {
   if (metric === 'storedBytes')
-    return t('dashboard.governance.storageAlerts.storedBytes', 'Stored bytes')
+    return tt('dashboard.governance.storageAlerts.storedBytes', 'Stored bytes')
   if (metric === 'trafficBytes')
-    return t('dashboard.governance.storageAlerts.trafficBytes', 'Traffic bytes')
-  return t('dashboard.governance.storageAlerts.operations', 'Operations')
+    return tt('dashboard.governance.storageAlerts.trafficBytes', 'Traffic bytes')
+  return tt('dashboard.governance.storageAlerts.operations', 'Operations')
 }
 
 function formatStorageAlertValue(alert: StoragePolicyAlert, value: number | null): string {
@@ -2994,30 +3004,30 @@ function notificationChannelTone(status: NotificationChannelDisplayStatus): Stat
 
 function notificationChannelLabel(status: NotificationChannelDisplayStatus): string {
   if (status === 'warning')
-    return t('dashboard.governance.analytics.notificationChannelWarning', 'Warning')
+    return tt('dashboard.governance.analytics.notificationChannelWarning', 'Warning')
   if (status === 'disabled')
-    return t('dashboard.governance.analytics.notificationChannelDisabled', 'Disabled')
-  return t('dashboard.governance.analytics.notificationChannelOk', 'OK')
+    return tt('dashboard.governance.analytics.notificationChannelDisabled', 'Disabled')
+  return tt('dashboard.governance.analytics.notificationChannelOk', 'OK')
 }
 
 function notificationActionQueueStatusLabel(item: NotificationActionQueueItem): string {
   if (item.source === 'delivery-health')
-    return t('dashboard.governance.analytics.notificationDeliveryRisk', 'Delivery risk')
+    return tt('dashboard.governance.analytics.notificationDeliveryRisk', 'Delivery risk')
   return notificationChannelLabel(item.status as NotificationChannelRiskStatus)
 }
 
 function notificationChannelCredentialLabel(channel: { credentialRequired: boolean, hasCredentialRef?: boolean, credentialRef?: string | null }): string {
   if (!channel.credentialRequired)
-    return t('dashboard.governance.analytics.notificationChannelCredentialNotRequired', 'no credential required')
+    return tt('dashboard.governance.analytics.notificationChannelCredentialNotRequired', 'no credential required')
   return (channel.hasCredentialRef ?? Boolean(channel.credentialRef))
-    ? t('dashboard.governance.analytics.notificationChannelCredentialBound', 'credentialRef bound')
-    : t('dashboard.governance.analytics.notificationChannelCredentialMissing', 'credentialRef missing')
+    ? tt('dashboard.governance.analytics.notificationChannelCredentialBound', 'credentialRef bound')
+    : tt('dashboard.governance.analytics.notificationChannelCredentialMissing', 'credentialRef missing')
 }
 
 function notificationChannelReadinessLabel(channel: { readiness: { productionReady: boolean, reasons: string[] } }): string {
   if (channel.readiness.productionReady)
-    return t('dashboard.governance.analytics.notificationChannelProductionReady', 'production ready')
-  return channel.readiness.reasons.join(', ') || t('dashboard.governance.analytics.notificationChannelReadinessPending', 'readiness pending')
+    return tt('dashboard.governance.analytics.notificationChannelProductionReady', 'production ready')
+  return channel.readiness.reasons.join(', ') || tt('dashboard.governance.analytics.notificationChannelReadinessPending', 'readiness pending')
 }
 
 function formatRatio(value: number | null): string {
@@ -3034,10 +3044,10 @@ function d1ReadinessTone(status: PlatformGovernanceD1ReadinessStatus): StatusTon
 
 function d1ReadinessLabel(status: PlatformGovernanceD1ReadinessStatus): string {
   if (status === 'ready')
-    return t('dashboard.governance.d1Readiness.ready', 'Ready')
+    return tt('dashboard.governance.d1Readiness.ready', 'Ready')
   if (status === 'warning')
-    return t('dashboard.governance.d1Readiness.warning', 'Needs backfill')
-  return t('dashboard.governance.d1Readiness.blocked', 'Blocked')
+    return tt('dashboard.governance.d1Readiness.warning', 'Needs backfill')
+  return tt('dashboard.governance.d1Readiness.blocked', 'Blocked')
 }
 
 function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): string {
@@ -3050,20 +3060,20 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
     <header class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="apple-heading-md">
-          {{ t('dashboard.governance.title', 'Data Governance') }}
+          {{ tt('dashboard.governance.title', 'Data Governance') }}
         </h1>
         <p class="mt-2 max-w-3xl text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
+          {{ tt('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
         </p>
       </div>
-      <TxButton variant="secondary" size="small" :disabled="summaryPending || configsPending || analyticsPending || reportPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" @click="refreshAll">
-        <TxSpinner v-if="summaryPending || configsPending || analyticsPending || reportPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending" :size="14" />
-        <span :class="summaryPending || configsPending || analyticsPending || reportPending || storagePoliciesPending || storageChannelAnalyticsPending || storageCredentialsPending || notificationCredentialsPending || notificationChannelsPending || d1ReadinessPending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
+      <TxButton variant="secondary" size="small" :disabled="governancePagePending" @click="refreshAll">
+        <TxSpinner v-if="governancePagePending" :size="14" />
+        <span :class="governancePagePending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
     </header>
 
     <div v-if="!isAdmin" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
-      {{ t('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
+      {{ tt('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
     </div>
 
     <div v-if="summaryError || configsError || analyticsError || reportError || storagePoliciesError || storageChannelAnalyticsError || storageCredentialsError || notificationCredentialsError || notificationChannelsError || d1ReadinessError || saveError || notificationTestError" class="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
@@ -3078,15 +3088,15 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.report.title', 'Operations report snapshot') }}
+            {{ tt('dashboard.governance.report.title', 'Operations report snapshot') }}
           </h2>
           <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.governance.report.subtitle', 'Read-only executive snapshot built from anonymized governance aggregates.') }}
+            {{ tt('dashboard.governance.report.subtitle', 'Read-only executive snapshot built from anonymized governance aggregates.') }}
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <TxButton variant="secondary" size="small" :disabled="reportPending" @click="exportGovernanceReport">
-            {{ t('dashboard.governance.report.exportMarkdown', 'Export Markdown') }}
+          <TxButton variant="secondary" size="small" :disabled="reportHydratedPending" @click="exportGovernanceReport">
+            {{ tt('dashboard.governance.report.exportMarkdown', 'Export Markdown') }}
           </TxButton>
           <TxStatusBadge :text="reportStatusLabel(governanceReport.report.status)" size="sm" :status="reportStatusTone(governanceReport.report.status)" />
           <span class="text-xs text-black/45 dark:text-white/45">{{ formatDate(governanceReport.generatedAt) }}</span>
@@ -3120,7 +3130,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
           <div class="flex items-center justify-between gap-3">
             <p class="font-semibold text-black dark:text-white">
-              {{ t('dashboard.governance.report.evidence', 'Evidence status') }}
+              {{ tt('dashboard.governance.report.evidence', 'Evidence status') }}
             </p>
             <span class="text-black/40 dark:text-white/40">{{ formatNumber(governanceReport.report.evidenceStatus.length) }}</span>
           </div>
@@ -3142,7 +3152,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
           <div class="flex items-center justify-between gap-3">
             <p class="font-semibold text-black dark:text-white">
-              {{ t('dashboard.governance.report.riskQueue', 'Report risk queue') }}
+              {{ tt('dashboard.governance.report.riskQueue', 'Report risk queue') }}
             </p>
             <span class="text-black/40 dark:text-white/40">{{ formatNumber(governanceReport.report.riskQueue.length) }}</span>
           </div>
@@ -3160,7 +3170,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
           </div>
           <p v-else class="mt-3 text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.report.riskQueueEmpty', 'No report risks in the current window.') }}
+            {{ tt('dashboard.governance.report.riskQueueEmpty', 'No report risks in the current window.') }}
           </p>
         </div>
       </div>
@@ -3168,7 +3178,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="mt-4 grid gap-3 md:grid-cols-4">
         <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
           <p class="text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.report.riskScore', 'Risk score') }}
+            {{ tt('dashboard.governance.report.riskScore', 'Risk score') }}
           </p>
           <p class="mt-1 text-lg font-semibold text-black dark:text-white">
             {{ formatNumber(governanceReport.report.riskScore) }}
@@ -3176,7 +3186,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
           <p class="text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.report.operationsDays', 'Timeline days') }}
+            {{ tt('dashboard.governance.report.operationsDays', 'Timeline days') }}
           </p>
           <p class="mt-1 text-lg font-semibold text-black dark:text-white">
             {{ formatNumber(governanceReport.report.trendSummary.operationsDays) }}
@@ -3184,7 +3194,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
           <p class="text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.report.peakTokens', 'Peak tokens') }}
+            {{ tt('dashboard.governance.report.peakTokens', 'Peak tokens') }}
           </p>
           <p class="mt-1 text-lg font-semibold text-black dark:text-white">
             {{ formatNumber(governanceReport.report.trendSummary.peakProviderTokens) }}
@@ -3192,7 +3202,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-lg border border-black/[0.05] p-3 text-xs dark:border-white/[0.06]">
           <p class="text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.report.latestDate', 'Latest date') }}
+            {{ tt('dashboard.governance.report.latestDate', 'Latest date') }}
           </p>
           <p class="mt-1 text-lg font-semibold text-black dark:text-white">
             {{ formatShortDate(governanceReport.report.trendSummary.latestDate || '') }}
@@ -3204,7 +3214,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
     <section class="grid gap-4 md:grid-cols-4">
       <div class="apple-card-lg p-5">
         <p class="apple-section-title">
-          {{ t('dashboard.governance.summary.events', 'Events') }}
+          {{ tt('dashboard.governance.summary.events', 'Events') }}
         </p>
         <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
           {{ formatNumber(summaryData.totalEvents) }}
@@ -3212,7 +3222,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       </div>
       <div class="apple-card-lg p-5">
         <p class="apple-section-title">
-          {{ t('dashboard.governance.summary.quantity', 'Quantity') }}
+          {{ tt('dashboard.governance.summary.quantity', 'Quantity') }}
         </p>
         <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
           {{ formatNumber(summaryData.totalQuantity) }}
@@ -3220,7 +3230,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       </div>
       <div class="apple-card-lg p-5">
         <p class="apple-section-title">
-          {{ t('dashboard.governance.summary.actors', 'Unique actors') }}
+          {{ tt('dashboard.governance.summary.actors', 'Unique actors') }}
         </p>
         <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
           {{ formatNumber(summaryData.uniqueActors) }}
@@ -3228,7 +3238,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       </div>
       <div class="apple-card-lg p-5">
         <p class="apple-section-title">
-          {{ t('dashboard.governance.summary.policies', 'Policies') }}
+          {{ tt('dashboard.governance.summary.policies', 'Policies') }}
         </p>
         <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
           {{ formatNumber(configs.length) }}
@@ -3240,10 +3250,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.d1Readiness.title', 'D1 migration readiness') }}
+            {{ tt('dashboard.governance.d1Readiness.title', 'D1 migration readiness') }}
           </h2>
           <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.governance.d1Readiness.subtitle', 'Read-only production schema, index, seed, and backfill checks for Data Governance.') }}
+            {{ tt('dashboard.governance.d1Readiness.subtitle', 'Read-only production schema, index, seed, and backfill checks for Data Governance.') }}
           </p>
         </div>
         <TxStatusBadge
@@ -3256,15 +3266,15 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
           <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
-            {{ t('dashboard.governance.d1Readiness.database', 'Database') }}
+            {{ tt('dashboard.governance.d1Readiness.database', 'Database') }}
           </p>
           <p class="mt-1 text-sm font-semibold text-black dark:text-white">
-            {{ d1Readiness.database.present ? (d1Readiness.database.binding || 'DB') : t('dashboard.governance.d1Readiness.missing', 'Missing') }}
+            {{ d1Readiness.database.present ? (d1Readiness.database.binding || 'DB') : tt('dashboard.governance.d1Readiness.missing', 'Missing') }}
           </p>
         </div>
         <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
           <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
-            {{ t('dashboard.governance.d1Readiness.checks', 'Checks') }}
+            {{ tt('dashboard.governance.d1Readiness.checks', 'Checks') }}
           </p>
           <p class="mt-1 text-sm font-semibold text-black dark:text-white">
             {{ formatNumber(d1Readiness.summary.ready) }} / {{ formatNumber(d1Readiness.summary.total) }}
@@ -3272,7 +3282,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
           <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
-            {{ t('dashboard.governance.d1Readiness.tables', 'Missing tables') }}
+            {{ tt('dashboard.governance.d1Readiness.tables', 'Missing tables') }}
           </p>
           <p class="mt-1 text-sm font-semibold text-black dark:text-white">
             {{ formatNumber(d1Readiness.summary.missingTables) }}
@@ -3280,7 +3290,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
           <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
-            {{ t('dashboard.governance.d1Readiness.indexes', 'Missing indexes') }}
+            {{ tt('dashboard.governance.d1Readiness.indexes', 'Missing indexes') }}
           </p>
           <p class="mt-1 text-sm font-semibold text-black dark:text-white">
             {{ formatNumber(d1Readiness.summary.missingIndexes) }}
@@ -3288,7 +3298,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] bg-black/[0.015] p-3 dark:border-white/[0.08] dark:bg-white/[0.025]">
           <p class="text-[11px] uppercase tracking-wide text-black/40 dark:text-white/40">
-            {{ t('dashboard.governance.d1Readiness.backfill', 'Backfill') }}
+            {{ tt('dashboard.governance.d1Readiness.backfill', 'Backfill') }}
           </p>
           <p class="mt-1 text-sm font-semibold text-black dark:text-white">
             {{ formatNumber(d1Readiness.summary.backfillRequired) }}
@@ -3310,17 +3320,17 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <TxStatusBadge :text="d1ReadinessLabel(check.status)" size="sm" :status="d1ReadinessTone(check.status)" />
           </div>
           <p v-if="check.missingTables.length || check.missingIndexes.length" class="mt-2 text-xs text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.d1Readiness.missingObjects', 'Missing') }}:
+            {{ tt('dashboard.governance.d1Readiness.missingObjects', 'Missing') }}:
             {{ formatD1MissingObjects(check) }}
           </p>
           <p v-if="check.minimumCount !== null" class="mt-1 text-xs text-black/40 dark:text-white/40">
-            {{ t('dashboard.governance.d1Readiness.observed', 'Observed') }}:
+            {{ tt('dashboard.governance.d1Readiness.observed', 'Observed') }}:
             {{ formatNumber(check.observedCount ?? 0) }} / {{ formatNumber(check.minimumCount) }}
           </p>
         </div>
       </div>
       <p v-else class="mt-4 text-xs text-black/45 dark:text-white/45">
-        {{ t('dashboard.governance.d1Readiness.empty', 'All required D1 checks are ready.') }}
+        {{ tt('dashboard.governance.d1Readiness.empty', 'All required D1 checks are ready.') }}
       </p>
     </section>
 
@@ -3328,10 +3338,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.title', 'Analytics cockpit') }}
+            {{ tt('dashboard.governance.analytics.title', 'Analytics cockpit') }}
           </h2>
           <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.governance.analytics.subtitle', 'Aggregated from hashed governance events; query text and raw actor identifiers stay out of the report.') }}
+            {{ tt('dashboard.governance.analytics.subtitle', 'Aggregated from hashed governance events; query text and raw actor identifiers stay out of the report.') }}
           </p>
         </div>
         <span class="text-xs text-black/45 dark:text-white/45">
@@ -3343,14 +3353,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="text-sm font-semibold text-black dark:text-white">
-              {{ t('dashboard.governance.analytics.operationsDashboard', 'Operations dashboard') }}
+              {{ tt('dashboard.governance.analytics.operationsDashboard', 'Operations dashboard') }}
             </h3>
             <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.operationsDashboardHint', 'Growth, leaderboard, risk, token, and model distribution signals for daily review.') }}
+              {{ tt('dashboard.governance.analytics.operationsDashboardHint', 'Growth, leaderboard, risk, token, and model distribution signals for daily review.') }}
             </p>
           </div>
           <TxStatusBadge
-            :text="dashboardRiskTotal ? t('dashboard.governance.analytics.dashboardRiskWatch', 'Risk watch') : t('dashboard.governance.analytics.dashboardRiskClear', 'Clear')"
+            :text="dashboardRiskTotal ? tt('dashboard.governance.analytics.dashboardRiskWatch', 'Risk watch') : tt('dashboard.governance.analytics.dashboardRiskClear', 'Clear')"
             size="sm"
             :status="dashboardRiskTotal ? 'warning' : 'success'"
           />
@@ -3363,15 +3373,15 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p class="font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.analytics.dashboardOperationsCommandBoard', 'Operations command board') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsCommandBoard', 'Operations command board') }}
               </p>
               <p class="mt-1 text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardOperationsCommandBoardHint', 'Latest daily posture for growth, demand, model cost, and risk.') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsCommandBoardHint', 'Latest daily posture for growth, demand, model cost, and risk.') }}
               </p>
             </div>
             <div class="text-right">
               <p class="text-black/40 dark:text-white/40">
-                {{ t('dashboard.governance.analytics.dashboardOperationsLatestSample', 'Latest sample') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsLatestSample', 'Latest sample') }}
               </p>
               <p class="mt-1 font-semibold text-black dark:text-white">
                 {{ formatShortDate(dashboardOperationsLatest.date) }}
@@ -3382,7 +3392,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="mt-4 grid gap-3 md:grid-cols-4">
             <div>
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardOperationsLatestSearches', 'Searches') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsLatestSearches', 'Searches') }}
               </p>
               <p class="mt-1 text-xl font-semibold text-black dark:text-white">
                 {{ formatNumber(dashboardOperationsLatest.searches) }}
@@ -3393,7 +3403,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardOperationsLatestPlugins', 'Plugin installs') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsLatestPlugins', 'Plugin installs') }}
               </p>
               <p class="mt-1 text-xl font-semibold text-black dark:text-white">
                 {{ formatNumber(dashboardOperationsLatest.pluginInstalls) }}
@@ -3404,7 +3414,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardOperationsLatestTokens', 'Provider tokens') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsLatestTokens', 'Provider tokens') }}
               </p>
               <p class="mt-1 text-xl font-semibold text-black dark:text-white">
                 {{ formatNumber(dashboardOperationsLatest.providerTokens) }}
@@ -3415,7 +3425,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardOperationsLatestRisk', 'Risk score') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsLatestRisk', 'Risk score') }}
               </p>
               <p class="mt-1 text-xl font-semibold text-black dark:text-white">
                 {{ formatNumber(dashboardOperationsLatest.riskScore) }}
@@ -3456,7 +3466,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardUserGrowth', 'User growth') }}
+                {{ tt('dashboard.governance.analytics.dashboardUserGrowth', 'User growth') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 +{{ formatNumber(analyticsData.dashboard.growth.userSignups.latestQuantity) }}
@@ -3467,7 +3477,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardSearchTrend', 'Search trend') }}
+                {{ tt('dashboard.governance.analytics.dashboardSearchTrend', 'Search trend') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.dashboard.growth.searches.latestQuantity) }}
@@ -3478,7 +3488,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardPluginInstalls', 'Plugin installs') }}
+                {{ tt('dashboard.governance.analytics.dashboardPluginInstalls', 'Plugin installs') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.dashboard.growth.pluginInstalls.latestQuantity) }}
@@ -3489,7 +3499,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardTokens', 'Tokens') }}
+                {{ tt('dashboard.governance.analytics.dashboardTokens', 'Tokens') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.dashboard.growth.providerUsage.tokens) }}
@@ -3500,7 +3510,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardUploadStatus', 'Upload status') }}
+                {{ tt('dashboard.governance.analytics.dashboardUploadStatus', 'Upload status') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.dashboard.growth.uploads.latestCompleted) }}/{{ formatNumber(analyticsData.dashboard.growth.uploads.latestStarted) }}
@@ -3511,7 +3521,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <p class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardRiskTotal', 'Risk total') }}
+                {{ tt('dashboard.governance.analytics.dashboardRiskTotal', 'Risk total') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(dashboardRiskTotal) }}
@@ -3526,7 +3536,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <p class="font-semibold text-black dark:text-white">
-                  {{ t('dashboard.governance.analytics.dashboardHotPlugins', 'Hot dashboard') }}
+                  {{ tt('dashboard.governance.analytics.dashboardHotPlugins', 'Hot dashboard') }}
                 </p>
                 <span class="text-black/40 dark:text-white/40">{{ formatNumber(analyticsData.dashboard.leaderboards.hotPlugins.length) }}</span>
               </div>
@@ -3536,14 +3546,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   <span class="font-medium text-black dark:text-white">{{ formatNumber(item.hotScore) }} hot</span>
                 </div>
                 <p v-if="analyticsData.dashboard.leaderboards.hotPlugins.length === 0" class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.dashboardHotPluginsEmpty', 'No plugin leaderboard yet.') }}
+                  {{ tt('dashboard.governance.analytics.dashboardHotPluginsEmpty', 'No plugin leaderboard yet.') }}
                 </p>
               </div>
             </div>
             <div class="rounded-lg bg-white/70 p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <p class="font-semibold text-black dark:text-white">
-                  {{ t('dashboard.governance.analytics.dashboardModelDistribution', 'Model distribution') }}
+                  {{ tt('dashboard.governance.analytics.dashboardModelDistribution', 'Model distribution') }}
                 </p>
                 <span class="text-black/40 dark:text-white/40">{{ formatNumber(analyticsData.dashboard.leaderboards.topModels.length) }}</span>
               </div>
@@ -3553,7 +3563,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   <span class="font-medium text-black dark:text-white">{{ formatNumber(item.tokens) }} tok</span>
                 </div>
                 <p v-if="analyticsData.dashboard.leaderboards.topModels.length === 0" class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.dashboardModelDistributionEmpty', 'No model usage yet.') }}
+                  {{ tt('dashboard.governance.analytics.dashboardModelDistributionEmpty', 'No model usage yet.') }}
                 </p>
               </div>
             </div>
@@ -3564,10 +3574,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p class="font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.analytics.dashboardOperationsTimeline', 'Daily operations timeline') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsTimeline', 'Daily operations timeline') }}
               </p>
               <p class="mt-1 text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.dashboardOperationsTimelineHint', 'Daily aggregate of growth, search, plugin, provider, upload, and storage signals.') }}
+                {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineHint', 'Daily aggregate of growth, search, plugin, provider, upload, and storage signals.') }}
               </p>
             </div>
             <span class="text-black/40 dark:text-white/40">
@@ -3589,38 +3599,38 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   class="rounded-full px-2 py-0.5 text-[11px] font-medium"
                   :class="item.riskScore ? 'bg-amber-500/10 text-amber-700 dark:text-amber-200' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'"
                 >
-                  {{ item.riskScore ? `${formatNumber(item.riskScore)} risk` : t('dashboard.governance.analytics.dashboardOperationsTimelineClear', 'clear') }}
+                  {{ item.riskScore ? `${formatNumber(item.riskScore)} risk` : tt('dashboard.governance.analytics.dashboardOperationsTimelineClear', 'clear') }}
                 </span>
               </div>
               <div class="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <p class="truncate text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineGrowth', 'Growth') }}:
+                  {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineGrowth', 'Growth') }}:
                   <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.userSignups) }} users · {{ formatDelta(item.userSignupGrowthRate) }}</span>
                 </p>
                 <p class="truncate text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineSearch', 'Search') }}:
+                  {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineSearch', 'Search') }}:
                   <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.searches) }} · {{ formatPercent(item.searchSelectionRate) }} selected · {{ formatPercent(item.searchProblemRate) }} problem</span>
                 </p>
                 <p class="truncate text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelinePlugins', 'Plugins') }}:
+                  {{ tt('dashboard.governance.analytics.dashboardOperationsTimelinePlugins', 'Plugins') }}:
                   <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.pluginInstalls) }} installs · {{ formatNumber(item.pluginInvocations) }} calls</span>
                 </p>
                 <p class="truncate text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineProvider', 'Provider') }}:
+                  {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineProvider', 'Provider') }}:
                   <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.providerRequests) }} req · {{ formatNumber(item.providerTokens) }} tok</span>
                 </p>
                 <p class="truncate text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineUpload', 'Upload') }}:
+                  {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineUpload', 'Upload') }}:
                   <span class="font-medium text-black/75 dark:text-white/75">{{ formatNumber(item.uploadCompleted) }}/{{ formatNumber(item.uploadStarted) }} ok · {{ formatNumber(item.uploadFailed) }} failed · {{ formatPercent(item.uploadFailureRate) }} · {{ formatBytes(item.uploadBytes) }}</span>
                 </p>
                 <p class="truncate text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.dashboardOperationsTimelineStorage', 'Storage') }}:
+                  {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineStorage', 'Storage') }}:
                   <span class="font-medium text-black/75 dark:text-white/75">{{ formatBytes(item.storageBytes) }} · {{ formatNumber(item.storageOperations) }} ops</span>
                 </p>
               </div>
             </div>
             <p v-if="dashboardOperationsTimeline.length === 0" class="text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.dashboardOperationsTimelineEmpty', 'No daily operations samples yet.') }}
+              {{ tt('dashboard.governance.analytics.dashboardOperationsTimelineEmpty', 'No daily operations samples yet.') }}
             </p>
           </div>
         </div>
@@ -3629,7 +3639,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.searches', 'Searches') }}
+            {{ tt('dashboard.governance.analytics.searches', 'Searches') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
             {{ formatNumber(analyticsData.searches.totalEvents) }}
@@ -3640,7 +3650,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.userSignups', 'User signups') }}
+            {{ tt('dashboard.governance.analytics.userSignups', 'User signups') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
             {{ formatNumber(analyticsData.users.signups) }}
@@ -3651,7 +3661,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.userGrowthTrend', 'User growth trend') }}
+            {{ tt('dashboard.governance.analytics.userGrowthTrend', 'User growth trend') }}
           </p>
           <div v-if="analyticsData.users.signupGrowthTrend.length" class="mt-3 space-y-2">
             <div
@@ -3661,17 +3671,17 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             >
               <span class="text-black/45 dark:text-white/45">{{ formatShortDate(item.date) }}</span>
               <span class="font-medium text-black dark:text-white">
-                +{{ formatNumber(item.quantity) }} · {{ t('dashboard.governance.analytics.userGrowthTotal', 'total') }} {{ formatNumber(item.cumulative) }} · {{ formatDelta(item.growthRate) }}
+                +{{ formatNumber(item.quantity) }} · {{ tt('dashboard.governance.analytics.userGrowthTotal', 'total') }} {{ formatNumber(item.cumulative) }} · {{ formatDelta(item.growthRate) }}
               </span>
             </div>
           </div>
           <p v-else class="mt-3 text-xs text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.analytics.userGrowthEmpty', 'No signup growth trend yet.') }}
+            {{ tt('dashboard.governance.analytics.userGrowthEmpty', 'No signup growth trend yet.') }}
           </p>
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.pluginInvokes', 'Plugin invokes') }}
+            {{ tt('dashboard.governance.analytics.pluginInvokes', 'Plugin invokes') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
             {{ formatNumber(analyticsData.plugins.leaderboard.reduce((sum, item) => sum + item.invocations, 0)) }}
@@ -3682,7 +3692,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.uploadHealth', 'Upload health') }}
+            {{ tt('dashboard.governance.analytics.uploadHealth', 'Upload health') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
             {{ formatPercent(analyticsData.uploads.failureRate) }}
@@ -3693,7 +3703,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.notificationHealth', 'Notification health') }}
+            {{ tt('dashboard.governance.analytics.notificationHealth', 'Notification health') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
             {{ formatPercent(analyticsData.notifications.deliveries.plannedRate) }}
@@ -3702,12 +3712,12 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             {{ formatNumber(analyticsData.notifications.deliveries.sent) }} sent · {{ formatNumber(analyticsData.notifications.deliveries.failed) }} failed · {{ formatNumber(analyticsData.notifications.deliveries.skipped) }} skipped
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-            {{ t('dashboard.governance.analytics.notificationAvgDuration', 'Avg duration') }} · {{ formatDurationMs(analyticsData.notifications.deliveries.durationMs.average) }}
+            {{ tt('dashboard.governance.analytics.notificationAvgDuration', 'Avg duration') }} · {{ formatDurationMs(analyticsData.notifications.deliveries.durationMs.average) }}
           </p>
         </div>
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <p class="apple-section-title">
-            {{ t('dashboard.governance.analytics.providerTokens', 'Provider tokens') }}
+            {{ tt('dashboard.governance.analytics.providerTokens', 'Provider tokens') }}
           </p>
           <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
             {{ formatNumber(analyticsData.providers.usageSummary.tokens) }}
@@ -3721,45 +3731,45 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <div class="mt-5 grid gap-4 lg:grid-cols-2">
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.visitHotspot', 'Visit hotspot') }}
+            {{ tt('dashboard.governance.analytics.visitHotspot', 'Visit hotspot') }}
           </h3>
           <div class="mt-3 grid gap-2 text-sm">
             <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitTotal', 'Visits') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.visitTotal', 'Visits') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.visits.totalEvents) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitActors', 'Actors') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.visitActors', 'Actors') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.visits.uniqueActors) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitGrowth', 'Growth') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.visitGrowth', 'Growth') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatDelta(analyticsData.visits.growth.eventGrowthRate) }}</span>
               </div>
             </div>
             <div v-for="item in analyticsData.visits.byRoute.slice(0, 5)" :key="`visit-route:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.visitRoute', 'Route') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.visitRoute', 'Route') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.visits.bySurface.slice(0, 4)" :key="`visit-surface:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitSurface', 'Surface') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.visitSurface', 'Surface') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.visits.byLocalTimeSlot.slice(0, 4)" :key="`visit-slot:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitLocalTimeSlot', 'Local time') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.visitLocalTimeSlot', 'Local time') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.visits.byLocalDayOfWeek.slice(0, 7)" :key="`visit-weekday:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitLocalWeekday', 'Local weekday') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.visitLocalWeekday', 'Local weekday') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.visits.byCountry.slice(0, 4)" :key="`visit-country:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.visitCountry', 'Country') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.visitCountry', 'Country') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <p class="truncate text-xs text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.visitRegionTimezone', 'Region / timezone') }} · {{ analyticsData.visits.byRegion[0]?.key || 'unknown' }} · {{ analyticsData.visits.byTimezone[0]?.key || 'unknown' }}
+              {{ tt('dashboard.governance.analytics.visitRegionTimezone', 'Region / timezone') }} · {{ analyticsData.visits.byRegion[0]?.key || 'unknown' }} · {{ analyticsData.visits.byTimezone[0]?.key || 'unknown' }}
             </p>
             <div v-for="item in analyticsData.visits.trend.slice(-3)" :key="`visit-trend:${item.date}`" class="flex items-center justify-between gap-3">
               <span class="truncate text-black/45 dark:text-white/45">{{ formatShortDate(item.date) }}</span>
@@ -3770,52 +3780,52 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.searchBreakdown', 'Search context') }}
+            {{ tt('dashboard.governance.analytics.searchBreakdown', 'Search context') }}
           </h3>
           <div class="mt-3 grid gap-2 text-sm">
             <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchFilterRate', 'Filter rate') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchFilterRate', 'Filter rate') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.filterUsage.filterRate) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchFirstResult', 'Avg first result') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchFirstResult', 'Avg first result') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.latency.firstResultMs.average) }} ms</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTotalDuration', 'Avg total duration') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchTotalDuration', 'Avg total duration') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.latency.totalDurationMs.average) }} ms</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchResults', 'Avg results') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchResults', 'Avg results') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.resultStats.resultCount.average) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchZeroResultRate', 'Zero-result rate') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchZeroResultRate', 'Zero-result rate') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.reliabilitySummary.zeroResultRate) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchProblemRate', 'Problem rate') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchProblemRate', 'Problem rate') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.reliabilitySummary.problemRate) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchSelectionRate', 'Selection rate') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchSelectionRate', 'Selection rate') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.searches.selectionSummary.selectionRate) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchProviderProblems', 'Provider problems') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchProviderProblems', 'Provider problems') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.reliabilitySummary.providerErrors) }} err · {{ formatNumber(analyticsData.searches.reliabilitySummary.providerTimeouts) }} timeout</span>
               </div>
             </div>
             <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchJourneyFunnel', 'Search journey funnel') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchJourneyFunnel', 'Search journey funnel') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.searches.journey.total) }}</span>
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
                   <p class="text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.searchJourneyWithResults', 'With results') }}
+                    {{ tt('dashboard.governance.analytics.searchJourneyWithResults', 'With results') }}
                   </p>
                   <p class="mt-1 font-medium text-black dark:text-white">
                     {{ formatPercent(analyticsData.searches.journey.withResultsRate) }}
@@ -3823,7 +3833,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
                   <p class="text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.searchJourneySelected', 'Selected') }}
+                    {{ tt('dashboard.governance.analytics.searchJourneySelected', 'Selected') }}
                   </p>
                   <p class="mt-1 font-medium text-black dark:text-white">
                     {{ formatPercent(analyticsData.searches.journey.selectionRate) }}
@@ -3831,7 +3841,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
                   <p class="text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.searchJourneyZeroResult', 'Zero result') }}
+                    {{ tt('dashboard.governance.analytics.searchJourneyZeroResult', 'Zero result') }}
                   </p>
                   <p class="mt-1 font-medium text-black dark:text-white">
                     {{ formatPercent(analyticsData.searches.journey.zeroResultRate) }}
@@ -3839,7 +3849,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-md bg-white/70 p-2 dark:bg-black/20">
                   <p class="text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.searchJourneyProviderProblem', 'Provider problem') }}
+                    {{ tt('dashboard.governance.analytics.searchJourneyProviderProblem', 'Provider problem') }}
                   </p>
                   <p class="mt-1 font-medium text-black dark:text-white">
                     {{ formatPercent(analyticsData.searches.journey.problemRate) }}
@@ -3854,7 +3864,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate text-black/60 dark:text-white/60">
-                  {{ t('dashboard.governance.analytics.searchJourneySegment', 'Journey segment') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
+                  {{ tt('dashboard.governance.analytics.searchJourneySegment', 'Journey segment') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
                 </span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(item.selectionRate) }}</span>
               </div>
@@ -3865,7 +3875,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ formatNumber(item.withResults) }} results · {{ formatNumber(item.selected) }} selected · {{ formatNumber(item.zeroResult) }} zero · {{ formatNumber(item.providerProblem) }} provider
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
             </div>
             <div v-for="item in analyticsData.searches.reliabilityTrend.slice(-3)" :key="`search-reliability:${item.date}`" class="flex items-center justify-between gap-3">
@@ -3879,7 +3889,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate text-black/60 dark:text-white/60">
-                  {{ t('dashboard.governance.analytics.searchFrequencyCohorts', 'Search frequency cohort') }} · {{ item.cohort }}
+                  {{ tt('dashboard.governance.analytics.searchFrequencyCohorts', 'Search frequency cohort') }} · {{ item.cohort }}
                 </span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(item.users) }} users</span>
               </div>
@@ -3887,24 +3897,24 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ formatNumber(item.searches) }} searches · {{ formatNumber(item.quantity) }} qty · {{ formatNumber(item.activeDays) }} active days
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchFrequencyAverage', 'Average') }} · {{ formatNumber(item.avgSearchesPerUser) }} searches/user · {{ formatNumber(item.avgActiveDaysPerUser) }} days/user
+                {{ tt('dashboard.governance.analytics.searchFrequencyAverage', 'Average') }} · {{ formatNumber(item.avgSearchesPerUser) }} searches/user · {{ formatNumber(item.avgActiveDaysPerUser) }} days/user
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
                 {{ formatPercent(item.selectionRate) }} selected · {{ formatPercent(item.zeroResultRate) }} zero · {{ formatPercent(item.problemRate) }} problem
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchLocalTimeSlot', 'Local time slot') }} · {{ item.topLocalTimeSlots.slice(0, 2).map(slot => `${slot.key} ${formatNumber(slot.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchLocalTimeSlot', 'Local time slot') }} · {{ item.topLocalTimeSlots.slice(0, 2).map(slot => `${slot.key} ${formatNumber(slot.events)}`).join(' · ') || '—' }}
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.topUserPreferenceModes.slice(0, 2).map(mode => `${mode.key} ${formatNumber(mode.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.topUserPreferenceModes.slice(0, 2).map(mode => `${mode.key} ${formatNumber(mode.events)}`).join(' · ') || '—' }}
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 2).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 2).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
             </div>
             <div class="grid gap-3 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTimeHeatmap', 'Search heatmap') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchTimeHeatmap', 'Search heatmap') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(searchTimeHeatmap.length) }}</span>
               </div>
               <div v-if="searchTimeHeatmapRows.length" class="overflow-x-auto">
@@ -3931,7 +3941,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
               </div>
               <p v-else class="text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchTimeHeatmapEmpty', 'No local-time search heatmap yet.') }}
+                {{ tt('dashboard.governance.analytics.searchTimeHeatmapEmpty', 'No local-time search heatmap yet.') }}
               </p>
               <div v-for="item in searchTimeHeatmapTop" :key="`search-heatmap-top:${item.dayOfWeek}:${item.hour}`" class="grid gap-1 rounded-md bg-white/70 p-2 dark:bg-black/20">
                 <div class="flex items-center justify-between gap-3">
@@ -3942,10 +3952,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ formatPercent(item.selectionRate) }} selected · {{ formatPercent(item.zeroResultRate) }} zero · {{ formatPercent(item.problemRate) }} problem
                 </div>
                 <div class="truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.searchContextApp', 'Context app') }} · {{ item.topContextAppCategories.slice(0, 2).map(context => `${context.key} ${formatNumber(context.events)}`).join(' · ') || '—' }}
+                  {{ tt('dashboard.governance.analytics.searchContextApp', 'Context app') }} · {{ item.topContextAppCategories.slice(0, 2).map(context => `${context.key} ${formatNumber(context.events)}`).join(' · ') || '—' }}
                 </div>
                 <div class="truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 2).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                  {{ tt('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 2).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
                 </div>
               </div>
             </div>
@@ -3954,67 +3964,67 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byLocalHour.slice(0, 6)" :key="`local-hour:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalHour', 'Local') }} {{ item.key }}:00</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchLocalHour', 'Local') }} {{ item.key }}:00</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byLocalTimeSlot.slice(0, 4)" :key="`local-slot:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalTimeSlot', 'Local time slot') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchLocalTimeSlot', 'Local time slot') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byLocalDayOfWeek.slice(0, 7)" :key="`local-weekday:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchLocalWeekday', 'Local weekday') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchLocalWeekday', 'Local weekday') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byContextAppCategory.slice(0, 4)" :key="`context-app:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchContextApp', 'Context app') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchContextApp', 'Context app') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byTriggerType.slice(0, 4)" :key="`trigger:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTrigger', 'Trigger') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchTrigger', 'Trigger') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byUserPreferenceMode.slice(0, 4)" :key="`preference:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchPreference', 'Preference') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.bySelectedRankBucket.slice(0, 4)" :key="`selected-rank:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchSelectedRank', 'Selected rank') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchSelectedRank', 'Selected rank') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byQueryLengthBucket.slice(0, 5)" :key="`query-length-bucket:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchQueryLengthBuckets', 'Query length') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchQueryLengthBuckets', 'Query length') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byResultCountBucket.slice(0, 4)" :key="`result-count-bucket:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchResultBuckets', 'Result count') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchResultBuckets', 'Result count') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byFirstResultLatencyBucket.slice(0, 4)" :key="`first-result-latency:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchFirstResultLatency', 'First result') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchFirstResultLatency', 'First result') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byTotalDurationBucket.slice(0, 4)" :key="`total-duration:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchTotalDuration', 'Total duration') }} · {{ item.key }}</span>
+              <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchTotalDuration', 'Total duration') }} · {{ item.key }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.bySelectedProvider.slice(0, 4)" :key="`selected-provider:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchSelectedProvider', 'Selected provider') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.searchSelectedProvider', 'Selected provider') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.bySelectedCategory.slice(0, 4)" :key="`selected-category:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchSelectedCategory', 'Selected category') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.searchSelectedCategory', 'Selected category') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.bySelectedPluginId.slice(0, 4)" :key="`selected-plugin:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchSelectedPlugin', 'Selected plugin') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.searchSelectedPlugin', 'Selected plugin') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byPluginId.slice(0, 4)" :key="`search-plugin:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchPlugins', 'Plugin') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.searchPlugins', 'Plugin') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.searches.byPluginCategory.slice(0, 4)" :key="`search-plugin-category:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.searchPluginCategories', 'Plugin category') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.searchPluginCategories', 'Plugin category') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div
@@ -4023,14 +4033,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               class="grid gap-1 rounded-lg bg-black/[0.02] p-2 text-xs dark:bg-white/[0.03]"
             >
               <div class="flex items-center justify-between gap-3">
-                <span class="truncate text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.searchPluginTimeSlot', 'Plugin preference') }} · {{ item.slot }}</span>
+                <span class="truncate text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.searchPluginTimeSlot', 'Plugin preference') }} · {{ item.slot }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(item.plugins[0]?.events ?? 0) }}</span>
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
             </div>
             <div
@@ -4040,7 +4050,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate text-black/60 dark:text-white/60">
-                  {{ t('dashboard.governance.analytics.searchPluginContext', 'Context plugin preference') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
+                  {{ tt('dashboard.governance.analytics.searchPluginContext', 'Context plugin preference') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
                 </span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(item.selectionRate) }}</span>
               </div>
@@ -4048,10 +4058,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ item.contextSource }} · {{ formatNumber(item.events) }} events · {{ formatNumber(item.uniqueActors) }} actors
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
             </div>
             <div
@@ -4061,7 +4071,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate text-black/60 dark:text-white/60">
-                  {{ t('dashboard.governance.analytics.searchContextSelectionMatrix', 'Context selection') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
+                  {{ tt('dashboard.governance.analytics.searchContextSelectionMatrix', 'Context selection') }} · {{ item.contextAppCategory }} · {{ item.localTimeSlot }}
                 </span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(item.selectionRate) }}</span>
               </div>
@@ -4069,10 +4079,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ item.contextSource }} · {{ item.selectedCategory }} · {{ formatNumber(item.events) }} events · {{ formatNumber(item.uniqueActors) }} actors
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSeen', 'Seen') }} · {{ item.plugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
               <div class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
+                {{ tt('dashboard.governance.analytics.searchPluginSelected', 'Selected') }} · {{ item.selectedPlugins.slice(0, 3).map(plugin => `${plugin.key} ${formatNumber(plugin.events)}`).join(' · ') || '—' }}
               </div>
             </div>
             <div v-for="item in analyticsData.searches.byProvider.slice(0, 6)" :key="`provider:${item.key}`" class="flex items-center justify-between gap-3">
@@ -4099,7 +4109,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.pluginLeaderboard', 'Plugin leaderboard') }}
+            {{ tt('dashboard.governance.analytics.pluginLeaderboard', 'Plugin leaderboard') }}
           </h3>
           <div class="mt-3 space-y-2">
             <div v-for="item in analyticsData.plugins.leaderboard.slice(0, 6)" :key="item.pluginId" class="rounded-lg bg-black/[0.02] p-3 text-sm dark:bg-white/[0.03]">
@@ -4122,79 +4132,79 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.uploadBreakdown', 'Upload breakdown') }}
+            {{ tt('dashboard.governance.analytics.uploadBreakdown', 'Upload breakdown') }}
           </h3>
           <div class="mt-3 grid gap-2 text-sm">
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadStarted', 'Started') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadStarted', 'Started') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.started) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadCompleted', 'Completed') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadCompleted', 'Completed') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.completed) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadFailed', 'Failed') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadFailed', 'Failed') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.failed) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadAvgSize', 'Avg size') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadAvgSize', 'Avg size') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatBytes(analyticsData.uploads.uploadSize.average) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadStuckAttempts', 'Stuck attempts') }} · {{ formatDurationMs(analyticsData.uploads.stuckAttemptAgeMs) }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadStuckAttempts', 'Stuck attempts') }} · {{ formatDurationMs(analyticsData.uploads.stuckAttemptAgeMs) }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.stuckAttempts) }} · {{ formatPercent(analyticsData.uploads.stuckRate) }}</span>
             </div>
             <div class="flex items-center justify-between gap-3">
-              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadAvgDuration', 'Avg duration') }}</span>
+              <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadAvgDuration', 'Avg duration') }}</span>
               <span class="font-medium text-black dark:text-white">{{ formatDurationMs(analyticsData.uploads.uploadDurationMs.average) }}</span>
             </div>
             <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRetryableFailures', 'Retryable failures') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadRetryableFailures', 'Retryable failures') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.retryableFailures) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadScheduledRetries', 'Scheduled retries') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadScheduledRetries', 'Scheduled retries') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.scheduledRetries) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRetryExhausted', 'Retry exhausted') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadRetryExhausted', 'Retry exhausted') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.exhaustedFailures) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredRetries', 'Recovered retries') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadRecoveredRetries', 'Recovered retries') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.recoveredUploads) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredRetryCount', 'Recovered retry count') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadRecoveredRetryCount', 'Recovered retry count') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.recoveredRetryCount) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredRetryRate', 'Recovered retry rate') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadRecoveredRetryRate', 'Recovered retry rate') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.uploads.retrySummary.recoveredRetryRate) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadRecoveredAttempts', 'Avg recovered attempts') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadRecoveredAttempts', 'Avg recovered attempts') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.recoveredAttempts.average) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadNextRetryDelay', 'Avg next retry') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadNextRetryDelay', 'Avg next retry') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatDurationMs(analyticsData.uploads.retrySummary.nextRetryDelayMs.average) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatPercent(analyticsData.uploads.retrySummary.calibrationCoverageRate) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.uploadFailureSamples', 'Failure samples') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.uploadFailureSamples', 'Failure samples') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.uploads.retrySummary.liveFailureSamples) }} live · {{ formatNumber(analyticsData.uploads.retrySummary.manualFailureSamples) }} manual</span>
               </div>
             </div>
             <div v-if="analyticsData.uploads.pipelineSummary.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadPipelineSummary', 'Upload pipeline') }}
+                  {{ tt('dashboard.governance.analytics.uploadPipelineSummary', 'Upload pipeline') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.uploads.pipelineSummary.length) }}
@@ -4226,17 +4236,17 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.quantity) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.byStorageProvider.slice(0, 4)" :key="`upload-storage-provider:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadStorageProvider', 'Provider') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.uploadStorageProvider', 'Provider') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.quantity) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.bySurface.slice(0, 4)" :key="`upload-surface:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadSurface', 'Surface') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.uploadSurface', 'Surface') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-if="analyticsData.uploads.sceneAssetHealth.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadSceneAssetHealth', 'Scene asset upload health') }}
+                  {{ tt('dashboard.governance.analytics.uploadSceneAssetHealth', 'Scene asset upload health') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.uploads.sceneAssetHealth.length) }}
@@ -4266,7 +4276,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
             </div>
             <div v-for="item in analyticsData.uploads.byStatusCode.slice(0, 4)" :key="`upload-status:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-red-500/80 dark:text-red-200/80">{{ t('dashboard.governance.analytics.uploadStatusCode', 'Status') }} · {{ item.key }}</span>
+              <span class="truncate text-red-500/80 dark:text-red-200/80">{{ tt('dashboard.governance.analytics.uploadStatusCode', 'Status') }} · {{ item.key }}</span>
               <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.byFailureReason.slice(0, 4)" :key="`upload-failure:${item.key}`" class="flex items-center justify-between gap-3">
@@ -4274,13 +4284,13 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-red-600 dark:text-red-100">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.uploads.byRetryDisposition.slice(0, 4)" :key="`upload-retry:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.uploadRetryDisposition', 'Retry') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.uploadRetryDisposition', 'Retry') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-if="analyticsData.uploads.actionQueue.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadActionQueue', 'Upload action queue') }}
+                  {{ tt('dashboard.governance.analytics.uploadActionQueue', 'Upload action queue') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.uploads.actionQueue.length) }}
@@ -4299,20 +4309,20 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ item.reason }} · {{ item.resourceType }} · {{ item.surface || 'unknown' }} · {{ item.storageProvider || item.storageChannel || 'unknown' }} · {{ item.statusCode ?? '-' }}
                 </p>
                 <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadRetryState', 'Retry state') }} · {{ formatNumber(item.retryableFailures) }} retryable · {{ formatNumber(item.scheduledRetries) }} scheduled · {{ formatNumber(item.exhaustedRetries) }} exhausted
+                  {{ tt('dashboard.governance.analytics.uploadRetryState', 'Retry state') }} · {{ formatNumber(item.retryableFailures) }} retryable · {{ formatNumber(item.scheduledRetries) }} scheduled · {{ formatNumber(item.exhaustedRetries) }} exhausted
                 </p>
                 <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }} · {{ item.calibrationStatus }} · {{ item.sampleSource }} · {{ formatNumber(item.sampleCount) }} samples
+                  {{ tt('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }} · {{ item.calibrationStatus }} · {{ item.sampleSource }} · {{ formatNumber(item.sampleCount) }} samples
                 </p>
                 <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadActionEvidence', 'Evidence') }} · {{ formatNumber(item.evidenceAttemptHashes.length) }} attempts · {{ formatNumber(item.evidenceResourceHashes.length) }} resources · {{ item.oldestAgeMs == null ? '-' : formatDurationMs(item.oldestAgeMs) }} oldest · {{ item.nextRetryDelayMs == null ? '-' : formatDurationMs(item.nextRetryDelayMs) }} next
+                  {{ tt('dashboard.governance.analytics.uploadActionEvidence', 'Evidence') }} · {{ formatNumber(item.evidenceAttemptHashes.length) }} attempts · {{ formatNumber(item.evidenceResourceHashes.length) }} resources · {{ item.oldestAgeMs == null ? '-' : formatDurationMs(item.oldestAgeMs) }} oldest · {{ item.nextRetryDelayMs == null ? '-' : formatDurationMs(item.nextRetryDelayMs) }} next
                 </p>
               </div>
             </div>
             <div v-if="analyticsData.uploads.failureMatrix.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadFailureMatrix', 'Failure matrix') }}
+                  {{ tt('dashboard.governance.analytics.uploadFailureMatrix', 'Failure matrix') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.uploads.failureMatrix.length) }}
@@ -4331,10 +4341,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ item.resourceType }} · {{ item.surface || 'unknown' }} · {{ item.storageProvider || item.storageChannel || 'unknown' }} · {{ item.statusCode ?? '-' }}
                 </p>
                 <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadSuggestedAction', 'Action') }} · {{ item.suggestedAction }} · {{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted
+                  {{ tt('dashboard.governance.analytics.uploadSuggestedAction', 'Action') }} · {{ item.suggestedAction }} · {{ formatNumber(item.scheduled) }} scheduled · {{ formatNumber(item.exhausted) }} exhausted
                 </p>
                 <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }} · {{ item.calibrationStatus }} · {{ item.sampleSource }} · {{ formatNumber(item.sampleCount) }} samples
+                  {{ tt('dashboard.governance.analytics.uploadFailureCalibration', 'Failure calibration') }} · {{ item.calibrationStatus }} · {{ item.sampleSource }} · {{ formatNumber(item.sampleCount) }} samples
                 </p>
               </div>
             </div>
@@ -4349,7 +4359,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-if="analyticsData.uploads.recoveredEvidence.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadRecoveredEvidence', 'Recovered evidence') }}
+                  {{ tt('dashboard.governance.analytics.uploadRecoveredEvidence', 'Recovered evidence') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.uploads.recoveredEvidence.length) }}
@@ -4374,7 +4384,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
               <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                {{ t('dashboard.governance.analytics.uploadProblemAttempts', 'Problem attempts') }}
+                {{ tt('dashboard.governance.analytics.uploadProblemAttempts', 'Problem attempts') }}
               </h4>
               <div class="mt-2 grid gap-2">
                 <div v-for="attempt in (analyticsData.uploads.problemAttempts ?? []).slice(0, 5)" :key="attempt.attemptHash" class="rounded-lg border border-black/[0.05] p-2 text-xs dark:border-white/[0.06]">
@@ -4389,11 +4399,11 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     {{ attempt.reason || attempt.contentType || 'pending' }} · {{ attempt.durationMs == null ? formatDurationMs(attempt.ageMs ?? 0) : formatDurationMs(attempt.durationMs) }}
                   </p>
                   <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.uploadRetryState', 'Retry state') }} · {{ attempt.retryable === null ? 'unknown' : attempt.retryable ? 'retryable' : 'not-retryable' }} · {{ attempt.retryCount ?? '-' }}/{{ attempt.maxRetries ?? '-' }} · {{ attempt.nextRetryDelayMs == null ? '-' : formatDurationMs(attempt.nextRetryDelayMs) }}
+                    {{ tt('dashboard.governance.analytics.uploadRetryState', 'Retry state') }} · {{ attempt.retryable === null ? 'unknown' : attempt.retryable ? 'retryable' : 'not-retryable' }} · {{ attempt.retryCount ?? '-' }}/{{ attempt.maxRetries ?? '-' }} · {{ attempt.nextRetryDelayMs == null ? '-' : formatDurationMs(attempt.nextRetryDelayMs) }}
                   </p>
                 </div>
                 <p v-if="(analyticsData.uploads.problemAttempts ?? []).length === 0" class="text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.uploadProblemAttemptsEmpty', 'No failed or stuck upload attempts yet.') }}
+                  {{ tt('dashboard.governance.analytics.uploadProblemAttemptsEmpty', 'No failed or stuck upload attempts yet.') }}
                 </p>
               </div>
             </div>
@@ -4402,12 +4412,12 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.storageUsage', 'Storage usage') }}
+            {{ tt('dashboard.governance.analytics.storageUsage', 'Storage usage') }}
           </h3>
           <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
             <div>
               <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageStored', 'Stored') }}
+                {{ tt('dashboard.governance.analytics.storageStored', 'Stored') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatBytes(analyticsData.storage.storedBytes) }}
@@ -4415,7 +4425,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageTraffic', 'Traffic') }}
+                {{ tt('dashboard.governance.analytics.storageTraffic', 'Traffic') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatBytes(analyticsData.storage.trafficBytes) }}
@@ -4423,7 +4433,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageOperations', 'Ops') }}
+                {{ tt('dashboard.governance.analytics.storageOperations', 'Ops') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.storage.operations) }}
@@ -4436,7 +4446,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div v-if="analyticsData.storage.smokeEvidence.length" class="mt-4 grid gap-2 text-sm">
             <div class="flex items-center justify-between gap-3">
               <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageSmokeEvidence', 'Storage smoke evidence') }}
+                {{ tt('dashboard.governance.analytics.storageSmokeEvidence', 'Storage smoke evidence') }}
               </p>
               <span class="text-xs text-black/45 dark:text-white/45">
                 {{ formatNumber(analyticsData.storage.smokeEvidence.length) }}
@@ -4453,10 +4463,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ item.channel || 'unknown' }} · {{ item.provider || 'default' }} · {{ item.reason || '-' }}
               </p>
               <p class="mt-2 truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageSmokeOperations', 'Operations') }} · {{ item.operations.join(', ') || '-' }} · {{ formatBytes(item.bytesWritten) }} written · {{ formatBytes(item.bytesRead) }} read
+                {{ tt('dashboard.governance.analytics.storageSmokeOperations', 'Operations') }} · {{ item.operations.join(', ') || '-' }} · {{ formatBytes(item.bytesWritten) }} written · {{ formatBytes(item.bytesRead) }} read
               </p>
               <p class="mt-1 truncate text-black/40 dark:text-white/40">
-                {{ t('dashboard.governance.analytics.storageSmokeCredential', 'Credential') }} · {{ item.credentialRequired ? 'required' : 'optional' }} · {{ item.hasCredentialRef ? 'ref' : 'no-ref' }} · {{ item.hasCredential === null ? 'unknown' : item.hasCredential ? 'bound' : 'missing' }} · {{ formatDate(item.latestAt) }}
+                {{ tt('dashboard.governance.analytics.storageSmokeCredential', 'Credential') }} · {{ item.credentialRequired ? 'required' : 'optional' }} · {{ item.hasCredentialRef ? 'ref' : 'no-ref' }} · {{ item.hasCredential === null ? 'unknown' : item.hasCredential ? 'bound' : 'missing' }} · {{ formatDate(item.latestAt) }}
               </p>
               <p class="mt-1 truncate text-black/40 dark:text-white/40">
                 {{ formatNumber(item.events) }} events · {{ formatNumber(item.ready) }} ready · {{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.uniqueActors) }} actors
@@ -4466,7 +4476,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div v-if="analyticsData.storage.actionQueue.length" class="mt-4 grid gap-2 text-sm">
             <div class="flex items-center justify-between gap-3">
               <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageActionQueue', 'Storage action queue') }}
+                {{ tt('dashboard.governance.analytics.storageActionQueue', 'Storage action queue') }}
               </p>
               <span class="text-xs text-black/45 dark:text-white/45">
                 {{ formatNumber(analyticsData.storage.actionQueue.length) }}
@@ -4480,7 +4490,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 <TxStatusBadge :text="storageChannelPressureLabel(item.pressureStatus)" size="sm" :status="storageChannelPressureTone(item.pressureStatus)" />
               </div>
               <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                {{ item.reason }} · {{ item.channel }} · {{ item.provider || 'default' }} · {{ item.policyName || t('dashboard.governance.analytics.storageChannelNoPolicy', 'No matched policy') }}
+                {{ item.reason }} · {{ item.channel }} · {{ item.provider || 'default' }} · {{ item.policyName || tt('dashboard.governance.analytics.storageChannelNoPolicy', 'No matched policy') }}
               </p>
               <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
                 <span>{{ formatBytes(item.storedBytes) }} stored</span>
@@ -4488,13 +4498,13 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 <span>{{ formatNumber(item.operations) }} ops</span>
               </div>
               <p class="mt-2 truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageActionQueueRemaining', 'Remaining') }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }} ops
+                {{ tt('dashboard.governance.analytics.storageActionQueueRemaining', 'Remaining') }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }} ops
               </p>
               <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageActionQueueOverage', 'Overage') }} · {{ formatStorageBudgetValue(item.overage.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.overage.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.overage.operations, 'operations') }} ops
+                {{ tt('dashboard.governance.analytics.storageActionQueueOverage', 'Overage') }} · {{ formatStorageBudgetValue(item.overage.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.overage.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.overage.operations, 'operations') }} ops
               </p>
               <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageActionQueueBurnRate', 'Burn/day') }} · {{ formatBytes(item.burnRate.storedBytesPerDay) }} stored · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} traffic · {{ formatNumber(item.burnRate.operationsPerDay) }} ops
+                {{ tt('dashboard.governance.analytics.storageActionQueueBurnRate', 'Burn/day') }} · {{ formatBytes(item.burnRate.storedBytesPerDay) }} stored · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} traffic · {{ formatNumber(item.burnRate.operationsPerDay) }} ops
               </p>
               <p class="mt-1 truncate text-black/40 dark:text-white/40">
                 {{ formatRatio(item.highestUtilization) }} peak · {{ formatNumber(item.policyAlerts) }} alerts · {{ item.latestTrendDate || '-' }}
@@ -4504,7 +4514,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div v-if="analyticsData.storage.channelPressure.length" class="mt-4 grid gap-2 text-sm">
             <div class="flex items-center justify-between gap-3">
               <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageChannelPressure', 'Channel pressure') }}
+                {{ tt('dashboard.governance.analytics.storageChannelPressure', 'Channel pressure') }}
               </p>
               <span class="text-xs text-black/45 dark:text-white/45">
                 {{ formatNumber(analyticsData.storage.channelPressure.length) }} channels
@@ -4518,7 +4528,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 <TxStatusBadge :text="storageChannelPressureLabel(item.pressureStatus)" size="sm" :status="storageChannelPressureTone(item.pressureStatus)" />
               </div>
               <p class="mt-1 truncate text-xs text-black/45 dark:text-white/45">
-                {{ item.policyName || t('dashboard.governance.analytics.storageChannelNoPolicy', 'No matched policy') }} · {{ formatRatio(item.highestUtilization) }} · {{ formatNumber(item.policyAlerts) }} alerts
+                {{ item.policyName || tt('dashboard.governance.analytics.storageChannelNoPolicy', 'No matched policy') }} · {{ formatRatio(item.highestUtilization) }} · {{ formatNumber(item.policyAlerts) }} alerts
               </p>
               <div class="mt-2 grid grid-cols-3 gap-2 text-xs text-black/50 dark:text-white/50">
                 <span>{{ formatBytes(item.storedBytes) }} stored</span>
@@ -4526,13 +4536,13 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 <span>{{ formatNumber(item.operations) }} ops</span>
               </div>
               <p class="mt-2 truncate text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageChannelRemaining', 'Remaining') }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }} ops
+                {{ tt('dashboard.governance.analytics.storageChannelRemaining', 'Remaining') }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }} stored · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }} traffic · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }} ops
               </p>
               <p class="mt-1 truncate text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageChannelBurnRate', 'Burn/day') }} · {{ formatBytes(item.burnRate.storedBytesPerDay) }} stored · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} traffic · {{ formatNumber(item.burnRate.operationsPerDay) }} ops
+                {{ tt('dashboard.governance.analytics.storageChannelBurnRate', 'Burn/day') }} · {{ formatBytes(item.burnRate.storedBytesPerDay) }} stored · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} traffic · {{ formatNumber(item.burnRate.operationsPerDay) }} ops
               </p>
               <p class="mt-1 truncate text-xs text-black/40 dark:text-white/40">
-                {{ t('dashboard.governance.analytics.storageChannelProjectedExhaustion', 'Projected exhaustion') }} · {{ formatProjectedDays(item.projectedExhaustionDays.storedBytes) }} stored · {{ formatProjectedDays(item.projectedExhaustionDays.trafficBytes) }} traffic · {{ formatProjectedDays(item.projectedExhaustionDays.operations) }} ops
+                {{ tt('dashboard.governance.analytics.storageChannelProjectedExhaustion', 'Projected exhaustion') }} · {{ formatProjectedDays(item.projectedExhaustionDays.storedBytes) }} stored · {{ formatProjectedDays(item.projectedExhaustionDays.trafficBytes) }} traffic · {{ formatProjectedDays(item.projectedExhaustionDays.operations) }} ops
               </p>
               <p v-if="item.trend.length" class="mt-1 truncate text-xs text-black/40 dark:text-white/40">
                 {{ item.trend.at(-1)?.date }} · {{ formatBytes((item.trend.at(-1)?.storedBytes ?? 0) + (item.trend.at(-1)?.trafficBytes ?? 0)) }} · {{ formatNumber(item.trend.at(-1)?.operations ?? 0) }} ops
@@ -4542,14 +4552,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
             <div class="flex items-center justify-between gap-3">
               <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storagePolicyUtilization', 'Policy utilization') }}
+                {{ tt('dashboard.governance.analytics.storagePolicyUtilization', 'Policy utilization') }}
               </p>
               <span class="text-xs font-medium text-black/70 dark:text-white/70">{{ formatRatio(storagePolicyPeakUtilization) }}</span>
             </div>
             <div class="mt-3 grid grid-cols-4 gap-2 text-xs">
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storagePolicyActive', 'Active') }}
+                  {{ tt('dashboard.governance.analytics.storagePolicyActive', 'Active') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatNumber(analyticsData.storage.policySummary.active) }}
@@ -4557,7 +4567,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storagePolicyBlocked', 'Blocked') }}
+                  {{ tt('dashboard.governance.analytics.storagePolicyBlocked', 'Blocked') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatNumber(analyticsData.storage.policySummary.blocked) }}
@@ -4565,7 +4575,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storagePolicyWarning', 'Warning') }}
+                  {{ tt('dashboard.governance.analytics.storagePolicyWarning', 'Warning') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatNumber(analyticsData.storage.policySummary.warning) }}
@@ -4573,7 +4583,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storagePolicyAlerts', 'Alerts') }}
+                  {{ tt('dashboard.governance.analytics.storagePolicyAlerts', 'Alerts') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatNumber(analyticsData.storage.policySummary.alerts) }}
@@ -4592,15 +4602,15 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </p>
             </div>
             <div v-for="item in analyticsData.storage.byProviderUsage.slice(0, 4)" :key="`storage-provider:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.storageProvider', 'Provider') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.storageProvider', 'Provider') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatBytes(item.storedBytes + item.trafficBytes) }}</span>
             </div>
             <div v-for="item in analyticsData.storage.byResourceTypeUsage.slice(0, 4)" :key="`storage-resource:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.storageResourceType', 'Resource') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.storageResourceType', 'Resource') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.operations) }}</span>
             </div>
             <div v-for="item in analyticsData.storage.byActionUsage.slice(0, 3)" :key="`storage-action:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.storageAction', 'Action') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.storageAction', 'Action') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.operations) }}</span>
             </div>
             <div v-for="item in analyticsData.storage.trend.slice(-3)" :key="`storage-trend:${item.date}`" class="flex items-center justify-between gap-3">
@@ -4616,51 +4626,51 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ policy.channel }} · {{ policy.provider || 'unknown' }} · {{ policy.reasons.join(', ') || '-' }}
               </p>
               <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
-                <span>{{ t('dashboard.governance.analytics.storagePolicyStored', 'Stored') }}: {{ formatRatio(policy.utilization.storedBytes) }}</span>
-                <span>{{ t('dashboard.governance.analytics.storagePolicyTraffic', 'Traffic') }}: {{ formatRatio(policy.utilization.trafficBytes) }}</span>
-                <span>{{ t('dashboard.governance.analytics.storagePolicyOps', 'Ops') }}: {{ formatRatio(policy.utilization.operations) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyStored', 'Stored') }}: {{ formatRatio(policy.utilization.storedBytes) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyTraffic', 'Traffic') }}: {{ formatRatio(policy.utilization.trafficBytes) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyOps', 'Ops') }}: {{ formatRatio(policy.utilization.operations) }}</span>
               </div>
               <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
-                <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingStored', 'Remaining stored') }}: {{ formatStorageBudgetValue(policy.remaining.storedBytes, 'bytes') }}</span>
-                <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingTraffic', 'Remaining traffic') }}: {{ formatStorageBudgetValue(policy.remaining.trafficBytes, 'bytes') }}</span>
-                <span>{{ t('dashboard.governance.analytics.storagePolicyRemainingOps', 'Remaining ops') }}: {{ formatStorageBudgetValue(policy.remaining.operations, 'operations') }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyRemainingStored', 'Remaining stored') }}: {{ formatStorageBudgetValue(policy.remaining.storedBytes, 'bytes') }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyRemainingTraffic', 'Remaining traffic') }}: {{ formatStorageBudgetValue(policy.remaining.trafficBytes, 'bytes') }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyRemainingOps', 'Remaining ops') }}: {{ formatStorageBudgetValue(policy.remaining.operations, 'operations') }}</span>
               </div>
               <div class="mt-2 grid grid-cols-3 gap-2 text-black/50 dark:text-white/50">
-                <span>{{ t('dashboard.governance.analytics.storagePolicyBurnStored', 'Burn stored/day') }}: {{ formatBytes(policy.burnRate.storedBytesPerDay) }}</span>
-                <span>{{ t('dashboard.governance.analytics.storagePolicyBurnTraffic', 'Burn traffic/day') }}: {{ formatBytes(policy.burnRate.trafficBytesPerDay) }}</span>
-                <span>{{ t('dashboard.governance.analytics.storagePolicyProjectedOps', 'Ops exhaustion') }}: {{ formatProjectedDays(policy.projectedExhaustionDays.operations) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyBurnStored', 'Burn stored/day') }}: {{ formatBytes(policy.burnRate.storedBytesPerDay) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyBurnTraffic', 'Burn traffic/day') }}: {{ formatBytes(policy.burnRate.trafficBytesPerDay) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.storagePolicyProjectedOps', 'Ops exhaustion') }}: {{ formatProjectedDays(policy.projectedExhaustionDays.operations) }}</span>
               </div>
             </div>
             <p v-if="analyticsData.storage.totalEvents === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.storageEmpty', 'No storage usage yet.') }}
+              {{ tt('dashboard.governance.analytics.storageEmpty', 'No storage usage yet.') }}
             </p>
           </div>
         </div>
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.notificationDelivery', 'Notification delivery') }}
+            {{ tt('dashboard.governance.analytics.notificationDelivery', 'Notification delivery') }}
           </h3>
           <div class="mt-3 grid gap-2 text-sm">
             <div class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsEnabled', 'Enabled channels') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.notificationChannelsEnabled', 'Enabled channels') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.enabled) }} / {{ formatNumber(analyticsData.notifications.channelSummary.total) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsCredentialMissing', 'Missing credential refs') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.notificationChannelsCredentialMissing', 'Missing credential refs') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.credentialMissing) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsUnsupported', 'Unsupported adapters') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.notificationChannelsUnsupported', 'Unsupported adapters') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.unsupported) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsProductionReady', 'Production-ready channels') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.notificationChannelsProductionReady', 'Production-ready channels') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.productionReady) }}</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <span class="text-black/60 dark:text-white/60">{{ t('dashboard.governance.analytics.notificationChannelsRuntimeMissing', 'Runtime config gaps') }}</span>
+                <span class="text-black/60 dark:text-white/60">{{ tt('dashboard.governance.analytics.notificationChannelsRuntimeMissing', 'Runtime config gaps') }}</span>
                 <span class="font-medium text-black dark:text-white">{{ formatNumber(analyticsData.notifications.channelSummary.runtimeMissing + analyticsData.notifications.channelSummary.relayMissing + analyticsData.notifications.channelSummary.sendModeMissing) }}</span>
               </div>
             </div>
@@ -4683,7 +4693,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-if="analyticsData.notifications.deliveryEvidence.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.notificationDeliveryEvidence', 'Delivery evidence') }}
+                  {{ tt('dashboard.governance.analytics.notificationDeliveryEvidence', 'Delivery evidence') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.notifications.deliveryEvidence.length) }}
@@ -4710,7 +4720,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-if="analyticsData.notifications.testEvidence.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.notificationTestEvidence', 'Notification test evidence') }}
+                  {{ tt('dashboard.governance.analytics.notificationTestEvidence', 'Notification test evidence') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.notifications.testEvidence.length) }}
@@ -4737,7 +4747,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-if="analyticsData.notifications.actionQueue.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.notificationActionQueue', 'Notification action queue') }}
+                  {{ tt('dashboard.governance.analytics.notificationActionQueue', 'Notification action queue') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.notifications.actionQueue.length) }}
@@ -4758,7 +4768,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ item.reason }} · {{ item.channel || 'unknown' }} · {{ item.provider || item.name || 'default' }} · {{ item.providerType || item.adapter || 'generic' }}
                 </p>
                 <p v-if="item.source === 'channel-config'" class="mt-1 truncate text-black/45 dark:text-white/45">
-                  {{ item.reasons.join(', ') || '-' }} · {{ notificationChannelCredentialLabel(item) }} · {{ item.productionReady ? t('dashboard.governance.analytics.notificationChannelReady', 'production ready') : t('dashboard.governance.analytics.notificationChannelNotReady', 'not production ready') }}
+                  {{ item.reasons.join(', ') || '-' }} · {{ notificationChannelCredentialLabel(item) }} · {{ item.productionReady ? tt('dashboard.governance.analytics.notificationChannelReady', 'production ready') : tt('dashboard.governance.analytics.notificationChannelNotReady', 'not production ready') }}
                 </p>
                 <p v-else class="mt-1 truncate text-black/45 dark:text-white/45">
                   {{ formatNumber(item.sent) }} sent · {{ formatNumber(item.failed) }} failed · {{ formatNumber(item.skipped) }} skipped · {{ formatPercent(item.failureRate) }} failed · {{ formatDurationMs(item.durationMs.average) }} avg
@@ -4771,7 +4781,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div v-if="analyticsData.notifications.providerMix.length" class="grid gap-2 rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.notificationProviderMix', 'Provider mix') }}
+                  {{ tt('dashboard.governance.analytics.notificationProviderMix', 'Provider mix') }}
                 </span>
                 <span class="text-black/45 dark:text-white/45">
                   {{ formatNumber(analyticsData.notifications.providerMix.length) }}
@@ -4802,14 +4812,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </p>
             </div>
             <p v-if="analyticsData.notifications.deliveries.total === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.notificationEmpty', 'No notification delivery audit yet.') }}
+              {{ tt('dashboard.governance.analytics.notificationEmpty', 'No notification delivery audit yet.') }}
             </p>
           </div>
         </div>
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.notificationReasons', 'Notification reasons') }}
+            {{ tt('dashboard.governance.analytics.notificationReasons', 'Notification reasons') }}
           </h3>
           <div class="mt-3 grid gap-2 text-sm">
             <div v-for="item in analyticsData.notifications.byReason.slice(0, 6)" :key="`notification-reason:${item.key}`" class="flex items-center justify-between gap-3">
@@ -4817,7 +4827,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-black dark:text-white">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.notifications.byStatusCode.slice(0, 4)" :key="`notification-status-code:${item.key}`" class="flex items-center justify-between gap-3">
-              <span class="truncate text-black/45 dark:text-white/45">{{ t('dashboard.governance.analytics.notificationStatusCode', 'Status code') }} · {{ item.key }}</span>
+              <span class="truncate text-black/45 dark:text-white/45">{{ tt('dashboard.governance.analytics.notificationStatusCode', 'Status code') }} · {{ item.key }}</span>
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <div v-for="item in analyticsData.notifications.byNotificationAction.slice(0, 4)" :key="`notification-action:${item.key}`" class="flex items-center justify-between gap-3">
@@ -4825,21 +4835,21 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <p v-if="analyticsData.notifications.byReason.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.notificationReasonEmpty', 'No delivery reason data yet.') }}
+              {{ tt('dashboard.governance.analytics.notificationReasonEmpty', 'No delivery reason data yet.') }}
             </p>
           </div>
         </div>
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.notificationProviderHealth', 'Notification provider health') }}
+            {{ tt('dashboard.governance.analytics.notificationProviderHealth', 'Notification provider health') }}
           </h3>
           <div class="mt-3 grid gap-2">
             <div v-for="item in analyticsData.notifications.providerHealth.slice(0, 6)" :key="`notification-health:${item.provider}`" class="rounded-lg bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03]">
               <div class="flex items-center justify-between gap-3">
                 <span class="truncate font-medium text-black dark:text-white">{{ item.provider }}</span>
                 <TxStatusBadge
-                  :text="item.failed ? t('dashboard.governance.analytics.notificationProviderFailed', 'Failed') : item.sent ? t('dashboard.governance.analytics.notificationProviderSent', 'Sent') : t('dashboard.governance.analytics.notificationProviderPlanned', 'Planned')"
+                  :text="item.failed ? tt('dashboard.governance.analytics.notificationProviderFailed', 'Failed') : item.sent ? tt('dashboard.governance.analytics.notificationProviderSent', 'Sent') : tt('dashboard.governance.analytics.notificationProviderPlanned', 'Planned')"
                   size="sm"
                   :status="item.failed ? 'danger' : item.sent ? 'success' : 'info'"
                 />
@@ -4848,31 +4858,31 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 {{ item.channel || 'unknown' }} · {{ item.providerType || item.adapter || 'generic' }}
               </p>
               <div class="mt-2 grid grid-cols-2 gap-2 text-black/60 dark:text-white/60">
-                <span>{{ t('dashboard.governance.analytics.notificationProviderSentRate', 'Sent rate') }}: {{ formatPercent(item.sentRate) }}</span>
-                <span>{{ t('dashboard.governance.analytics.notificationProviderFailureRate', 'Failure rate') }}: {{ formatPercent(item.failureRate) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.notificationProviderSentRate', 'Sent rate') }}: {{ formatPercent(item.sentRate) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.notificationProviderFailureRate', 'Failure rate') }}: {{ formatPercent(item.failureRate) }}</span>
                 <span>{{ formatNumber(item.sent) }} sent / {{ formatNumber(item.failed) }} failed</span>
                 <span>{{ formatNumber(item.skipped) }} skipped / {{ formatNumber(item.planned) }} planned</span>
-                <span>{{ t('dashboard.governance.analytics.notificationAvgDuration', 'Avg duration') }}: {{ formatDurationMs(item.durationMs.average) }}</span>
-                <span>{{ t('dashboard.governance.analytics.notificationMaxDuration', 'Max duration') }}: {{ formatDurationMs(item.durationMs.max) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.notificationAvgDuration', 'Avg duration') }}: {{ formatDurationMs(item.durationMs.average) }}</span>
+                <span>{{ tt('dashboard.governance.analytics.notificationMaxDuration', 'Max duration') }}: {{ formatDurationMs(item.durationMs.max) }}</span>
               </div>
               <p v-if="item.latestFailureReason" class="mt-2 truncate text-red-600 dark:text-red-100">
                 {{ item.latestFailureReason }} · {{ item.latestFailureStatusCode ?? '-' }} · {{ item.latestFailureAt ? formatDate(item.latestFailureAt) : '-' }}
               </p>
             </div>
             <p v-if="analyticsData.notifications.providerHealth.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.notificationProviderHealthEmpty', 'No provider delivery health yet.') }}
+              {{ tt('dashboard.governance.analytics.notificationProviderHealthEmpty', 'No provider delivery health yet.') }}
             </p>
           </div>
         </div>
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.browserPushSubscriptions', 'Browser push subscriptions') }}
+            {{ tt('dashboard.governance.analytics.browserPushSubscriptions', 'Browser push subscriptions') }}
           </h3>
           <div class="mt-3 grid grid-cols-3 gap-2 text-sm">
             <div>
               <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.pushTotal', 'Total') }}
+                {{ tt('dashboard.governance.analytics.pushTotal', 'Total') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.notifications.browserPushSubscriptions.total) }}
@@ -4880,7 +4890,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.pushRegistered', 'Registered') }}
+                {{ tt('dashboard.governance.analytics.pushRegistered', 'Registered') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.notifications.browserPushSubscriptions.registered) }}
@@ -4888,7 +4898,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div>
               <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.pushDeleted', 'Removed') }}
+                {{ tt('dashboard.governance.analytics.pushDeleted', 'Removed') }}
               </p>
               <p class="mt-1 text-lg font-semibold text-black dark:text-white">
                 {{ formatNumber(analyticsData.notifications.browserPushSubscriptions.deleted) }}
@@ -4905,14 +4915,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-black/70 dark:text-white/70">{{ formatNumber(item.events) }}</span>
             </div>
             <p v-if="analyticsData.notifications.browserPushSubscriptions.total === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.analytics.browserPushEmpty', 'No browser push subscription activity yet.') }}
+              {{ tt('dashboard.governance.analytics.browserPushEmpty', 'No browser push subscription activity yet.') }}
             </p>
           </div>
         </div>
 
         <div class="rounded-xl border border-black/[0.06] p-4 dark:border-white/[0.08]">
           <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.analytics.providerLeaderboard', 'Provider quota usage') }}
+            {{ tt('dashboard.governance.analytics.providerLeaderboard', 'Provider quota usage') }}
           </h3>
           <div class="mt-3 space-y-2">
             <div v-for="item in analyticsData.providers.leaderboard.slice(0, 6)" :key="item.providerId" class="rounded-lg bg-black/[0.02] p-3 text-sm dark:bg-white/[0.03]">
@@ -4926,12 +4936,12 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
             <div class="mt-4 rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
               <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                {{ t('dashboard.governance.analytics.providerQuotaUtilization', 'Quota utilization') }}
+                {{ tt('dashboard.governance.analytics.providerQuotaUtilization', 'Quota utilization') }}
               </h4>
               <div class="mt-3 grid gap-2 sm:grid-cols-4">
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaActive', 'Active') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaActive', 'Active') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-black dark:text-white">
                     {{ formatNumber(analyticsData.providers.quotaSummary.active) }}
@@ -4939,7 +4949,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaBlocked', 'Blocked') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaBlocked', 'Blocked') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-red-600 dark:text-red-100">
                     {{ formatNumber(analyticsData.providers.quotaSummary.blocked) }}
@@ -4947,7 +4957,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaWarning', 'Warning') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaWarning', 'Warning') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-amber-600 dark:text-amber-100">
                     {{ formatNumber(analyticsData.providers.quotaSummary.warning) }}
@@ -4955,7 +4965,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaPeak', 'Peak') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaPeak', 'Peak') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-black dark:text-white">
                     {{ formatRatio(providerQuotaPeakUtilization) }}
@@ -4965,7 +4975,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <div class="mt-3 grid gap-2 sm:grid-cols-3">
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaLowestRemaining', 'Lowest remaining') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaLowestRemaining', 'Lowest remaining') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-black dark:text-white">
                     {{ analyticsData.providers.quotaSummary.lowestRemainingRequests == null ? '-' : `${formatNumber(analyticsData.providers.quotaSummary.lowestRemainingRequests)} req` }}
@@ -4975,7 +4985,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaOverage', 'Overage') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaOverage', 'Overage') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-red-600 dark:text-red-100">
                     {{ formatNumber(analyticsData.providers.quotaSummary.requestOverage) }} req · {{ formatNumber(analyticsData.providers.quotaSummary.tokenOverage) }} tok
@@ -4983,7 +4993,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 </div>
                 <div class="rounded-lg border border-black/[0.05] p-2 dark:border-white/[0.06]">
                   <p class="text-[11px] text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaNearestExhaustion', 'Nearest exhaustion') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaNearestExhaustion', 'Nearest exhaustion') }}
                   </p>
                   <p class="mt-1 text-sm font-semibold text-black dark:text-white">
                     {{ formatProjectedDays(providerQuotaNearestExhaustionDays) }}
@@ -4993,7 +5003,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <div v-if="analyticsData.providers.quotaActionQueue.length" class="mt-3 grid gap-2">
                 <div class="flex items-center justify-between gap-3">
                   <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaActionQueue', 'Provider quota action queue') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaActionQueue', 'Provider quota action queue') }}
                   </p>
                   <span class="text-xs text-black/45 dark:text-white/45">
                     {{ formatNumber(analyticsData.providers.quotaActionQueue.length) }}
@@ -5010,14 +5020,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     {{ item.name || item.providerId }} · {{ item.channel || item.provider || 'global' }} · {{ item.windowDays }}d
                   </p>
                   <div class="mt-2 grid gap-1 text-black/55 dark:text-white/55 sm:grid-cols-2">
-                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionUsage', 'Usage') }}: {{ formatNumber(item.requests) }} req · {{ formatNumber(item.tokens) }} tok</span>
-                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionUtilization', 'Utilization') }}: {{ formatRatio(Math.max(item.requestUtilization ?? 0, item.tokenUtilization ?? 0)) }}</span>
-                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionRemaining', 'Remaining') }}: {{ item.remainingRequests == null ? '-' : `${formatNumber(item.remainingRequests)} req` }} · {{ item.remainingTokens == null ? '-' : `${formatNumber(item.remainingTokens)} tok` }}</span>
-                    <span>{{ t('dashboard.governance.analytics.providerQuotaActionOverage', 'Overage') }}: {{ formatNumber(item.requestOverage) }} req · {{ formatNumber(item.tokenOverage) }} tok</span>
+                    <span>{{ tt('dashboard.governance.analytics.providerQuotaActionUsage', 'Usage') }}: {{ formatNumber(item.requests) }} req · {{ formatNumber(item.tokens) }} tok</span>
+                    <span>{{ tt('dashboard.governance.analytics.providerQuotaActionUtilization', 'Utilization') }}: {{ formatRatio(Math.max(item.requestUtilization ?? 0, item.tokenUtilization ?? 0)) }}</span>
+                    <span>{{ tt('dashboard.governance.analytics.providerQuotaActionRemaining', 'Remaining') }}: {{ item.remainingRequests == null ? '-' : `${formatNumber(item.remainingRequests)} req` }} · {{ item.remainingTokens == null ? '-' : `${formatNumber(item.remainingTokens)} tok` }}</span>
+                    <span>{{ tt('dashboard.governance.analytics.providerQuotaActionOverage', 'Overage') }}: {{ formatNumber(item.requestOverage) }} req · {{ formatNumber(item.tokenOverage) }} tok</span>
                   </div>
                   <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaActionBurnRate', 'Burn/day') }}: {{ formatNumber(item.requestsPerDay) }} req · {{ formatNumber(item.tokensPerDay) }} tok ·
-                    {{ t('dashboard.governance.analytics.providerQuotaActionExhaustion', 'Exhaustion') }}:
+                    {{ tt('dashboard.governance.analytics.providerQuotaActionBurnRate', 'Burn/day') }}: {{ formatNumber(item.requestsPerDay) }} req · {{ formatNumber(item.tokensPerDay) }} tok ·
+                    {{ tt('dashboard.governance.analytics.providerQuotaActionExhaustion', 'Exhaustion') }}:
                     {{ formatProjectedDays(item.projectedRequestExhaustionDays) }} /
                     {{ formatProjectedDays(item.projectedTokenExhaustionDays) }}
                   </p>
@@ -5026,7 +5036,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <div v-if="analyticsData.providers.quotaSmokeEvidence.length" class="mt-3 grid gap-2">
                 <div class="flex items-center justify-between gap-3">
                   <p class="text-xs font-medium uppercase tracking-wide text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerQuotaSmokeEvidence', 'Provider quota smoke evidence') }}
+                    {{ tt('dashboard.governance.analytics.providerQuotaSmokeEvidence', 'Provider quota smoke evidence') }}
                   </p>
                   <span class="text-xs text-black/45 dark:text-white/45">
                     {{ formatNumber(analyticsData.providers.quotaSmokeEvidence.length) }}
@@ -5057,19 +5067,19 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     {{ item.providerId }} · {{ item.channel || item.provider || 'global' }} · {{ formatRatio(item.highestUtilization) }}
                   </p>
                   <p class="mt-1 text-black/55 dark:text-white/55">
-                    {{ t('dashboard.governance.analytics.providerQuotaRiskBudget', 'Remaining') }}:
+                    {{ tt('dashboard.governance.analytics.providerQuotaRiskBudget', 'Remaining') }}:
                     {{ item.remaining.requests == null ? '-' : `${formatNumber(item.remaining.requests)} req` }}
                     ·
                     {{ item.remaining.tokens == null ? '-' : `${formatNumber(item.remaining.tokens)} tok` }}
                     ·
-                    {{ t('dashboard.governance.analytics.providerQuotaRiskExhaustion', 'Exhaustion') }}:
+                    {{ tt('dashboard.governance.analytics.providerQuotaRiskExhaustion', 'Exhaustion') }}:
                     {{ formatProjectedDays(item.projectedExhaustionDays.requests) }}
                     /
                     {{ formatProjectedDays(item.projectedExhaustionDays.tokens) }}
                   </p>
                 </div>
                 <p v-if="analyticsData.providers.quotaRiskItems.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.providerQuotaRiskEmpty', 'No quota risk right now.') }}
+                  {{ tt('dashboard.governance.analytics.providerQuotaRiskEmpty', 'No quota risk right now.') }}
                 </p>
               </div>
               <div class="mt-2 grid gap-2">
@@ -5083,40 +5093,40 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   </p>
                   <div class="mt-2 grid gap-1 text-black/60 dark:text-white/60">
                     <div class="flex items-center justify-between gap-3">
-                      <span>{{ t('dashboard.governance.analytics.providerQuotaRequests', 'Requests') }}</span>
+                      <span>{{ tt('dashboard.governance.analytics.providerQuotaRequests', 'Requests') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.usage.requests) }} / {{ quota.limits.maxRequests == null ? '-' : formatNumber(quota.limits.maxRequests) }} · {{ formatRatio(quota.utilization.requests) }}</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                      <span>{{ t('dashboard.governance.analytics.providerQuotaRemainingRequests', 'Remaining requests') }}</span>
+                      <span>{{ tt('dashboard.governance.analytics.providerQuotaRemainingRequests', 'Remaining requests') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ quota.remaining.requests == null ? '-' : formatNumber(quota.remaining.requests) }}</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                      <span>{{ t('dashboard.governance.analytics.providerQuotaTokens', 'Tokens') }}</span>
+                      <span>{{ tt('dashboard.governance.analytics.providerQuotaTokens', 'Tokens') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.usage.tokens) }} / {{ quota.limits.maxTokens == null ? '-' : formatNumber(quota.limits.maxTokens) }} · {{ formatRatio(quota.utilization.tokens) }}</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                      <span>{{ t('dashboard.governance.analytics.providerQuotaRemainingTokens', 'Remaining tokens') }}</span>
+                      <span>{{ tt('dashboard.governance.analytics.providerQuotaRemainingTokens', 'Remaining tokens') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ quota.remaining.tokens == null ? '-' : formatNumber(quota.remaining.tokens) }}</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                      <span>{{ t('dashboard.governance.analytics.providerQuotaBurnRate', 'Burn / day') }}</span>
+                      <span>{{ tt('dashboard.governance.analytics.providerQuotaBurnRate', 'Burn / day') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ formatNumber(quota.burnRate.requestsPerDay) }} req · {{ formatNumber(quota.burnRate.tokensPerDay) }} tok</span>
                     </div>
                     <div class="flex items-center justify-between gap-3">
-                      <span>{{ t('dashboard.governance.analytics.providerQuotaProjectedExhaustion', 'Projected exhaustion') }}</span>
+                      <span>{{ tt('dashboard.governance.analytics.providerQuotaProjectedExhaustion', 'Projected exhaustion') }}</span>
                       <span class="font-medium text-black dark:text-white">{{ quota.projectedExhaustionDays.requests == null ? '-' : `${formatNumber(quota.projectedExhaustionDays.requests)}d` }} · {{ quota.projectedExhaustionDays.tokens == null ? '-' : `${formatNumber(quota.projectedExhaustionDays.tokens)}d` }}</span>
                     </div>
                   </div>
                 </div>
                 <p v-if="analyticsData.providers.quotas.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.providerQuotaEmpty', 'No provider quota policy yet.') }}
+                  {{ tt('dashboard.governance.analytics.providerQuotaEmpty', 'No provider quota policy yet.') }}
                 </p>
               </div>
             </div>
             <div class="mt-4 grid gap-3 md:grid-cols-2">
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                  {{ t('dashboard.governance.analytics.providerTrend', 'Provider trend') }}
+                  {{ tt('dashboard.governance.analytics.providerTrend', 'Provider trend') }}
                 </h4>
                 <div class="mt-2 grid gap-2">
                   <div v-for="item in analyticsData.providers.trend.slice(-3)" :key="`provider-trend:${item.date}`" class="flex items-center justify-between gap-3 text-xs">
@@ -5124,13 +5134,13 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     <span class="font-medium text-black dark:text-white">{{ formatNumber(item.requests) }} req · {{ formatNumber(item.tokens) }} tok</span>
                   </div>
                   <p v-if="analyticsData.providers.trend.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerTrendEmpty', 'No provider usage trend yet.') }}
+                    {{ tt('dashboard.governance.analytics.providerTrendEmpty', 'No provider usage trend yet.') }}
                   </p>
                 </div>
               </div>
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03]">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                  {{ t('dashboard.governance.analytics.providerModels', 'Model distribution') }}
+                  {{ tt('dashboard.governance.analytics.providerModels', 'Model distribution') }}
                 </h4>
                 <div class="mt-2 grid gap-2">
                   <div v-for="item in analyticsData.providers.byModel.slice(0, 6)" :key="`provider-model:${item.key}`" class="flex items-center justify-between gap-3 text-xs">
@@ -5138,13 +5148,13 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     <span class="font-medium text-black dark:text-white">{{ formatNumber(item.quantity) }}</span>
                   </div>
                   <p v-if="analyticsData.providers.byModel.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerModelsEmpty', 'No model usage yet.') }}
+                    {{ tt('dashboard.governance.analytics.providerModelsEmpty', 'No model usage yet.') }}
                   </p>
                 </div>
               </div>
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                  {{ t('dashboard.governance.analytics.providerChannelBreakdown', 'Provider channel usage') }}
+                  {{ tt('dashboard.governance.analytics.providerChannelBreakdown', 'Provider channel usage') }}
                 </h4>
                 <div class="mt-2 grid gap-2">
                   <div
@@ -5157,20 +5167,20 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                       <span class="shrink-0 text-black/55 dark:text-white/55">{{ formatNumber(item.tokens) }} tok · {{ formatNumber(item.requests) }} req</span>
                     </div>
                     <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                      {{ t('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byModel[0]?.model || 'unknown' }}
+                      {{ tt('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byModel[0]?.model || 'unknown' }}
                     </p>
                     <p class="mt-1 truncate text-black/40 dark:text-white/40">
                       {{ item.byProviderType.slice(0, 2).map(provider => `${provider.providerType}:${formatNumber(provider.quantity)}`).join(' · ') || 'unknown' }}
                     </p>
                   </div>
                   <p v-if="analyticsData.providers.channelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerChannelBreakdownEmpty', 'No provider channel usage yet.') }}
+                    {{ tt('dashboard.governance.analytics.providerChannelBreakdownEmpty', 'No provider channel usage yet.') }}
                   </p>
                 </div>
               </div>
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                  {{ t('dashboard.governance.analytics.providerModelBreakdown', 'Model usage breakdown') }}
+                  {{ tt('dashboard.governance.analytics.providerModelBreakdown', 'Model usage breakdown') }}
                 </h4>
                 <div class="mt-2 grid gap-2">
                   <div
@@ -5183,20 +5193,20 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                       <span class="shrink-0 text-black/55 dark:text-white/55">{{ formatNumber(item.tokens) }} tok · {{ formatNumber(item.requests) }} req</span>
                     </div>
                     <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                      {{ t('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byProvider[0]?.providerId || 'unknown' }} · {{ item.byChannel[0]?.channel || 'unknown' }}
+                      {{ tt('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byProvider[0]?.providerId || 'unknown' }} · {{ item.byChannel[0]?.channel || 'unknown' }}
                     </p>
                     <p class="mt-1 truncate text-black/40 dark:text-white/40">
                       {{ item.byProviderType.slice(0, 2).map(provider => `${provider.providerType}:${formatNumber(provider.quantity)}`).join(' · ') || 'unknown' }}
                     </p>
                   </div>
                   <p v-if="analyticsData.providers.modelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerModelBreakdownEmpty', 'No model usage breakdown yet.') }}
+                    {{ tt('dashboard.governance.analytics.providerModelBreakdownEmpty', 'No model usage breakdown yet.') }}
                   </p>
                 </div>
               </div>
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                  {{ t('dashboard.governance.analytics.providerModelChannelBreakdown', 'Model by channel usage') }}
+                  {{ tt('dashboard.governance.analytics.providerModelChannelBreakdown', 'Model by channel usage') }}
                 </h4>
                 <div class="mt-2 grid gap-2">
                   <div
@@ -5209,20 +5219,20 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                       <span class="shrink-0 text-black/55 dark:text-white/55">{{ formatNumber(item.tokens) }} tok · {{ formatNumber(item.requests) }} req</span>
                     </div>
                     <p class="mt-1 truncate text-black/45 dark:text-white/45">
-                      {{ t('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byProvider[0]?.providerId || 'unknown' }}
+                      {{ tt('dashboard.governance.analytics.providerModelActors', 'Actors') }} {{ formatNumber(item.uniqueActors) }} · {{ item.byProvider[0]?.providerId || 'unknown' }}
                     </p>
                     <p class="mt-1 truncate text-black/40 dark:text-white/40">
                       {{ item.byProviderType.slice(0, 2).map(provider => `${provider.providerType}:${formatNumber(provider.quantity)}`).join(' · ') || 'unknown' }}
                     </p>
                   </div>
                   <p v-if="analyticsData.providers.modelChannelDistribution.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerModelChannelBreakdownEmpty', 'No model/channel usage breakdown yet.') }}
+                    {{ tt('dashboard.governance.analytics.providerModelChannelBreakdownEmpty', 'No model/channel usage breakdown yet.') }}
                   </p>
                 </div>
               </div>
               <div class="rounded-lg bg-black/[0.02] p-3 dark:bg-white/[0.03] md:col-span-2">
                 <h4 class="text-xs font-semibold text-black/70 dark:text-white/70">
-                  {{ t('dashboard.governance.analytics.providerTypes', 'Provider types') }}
+                  {{ tt('dashboard.governance.analytics.providerTypes', 'Provider types') }}
                 </h4>
                 <div class="mt-2 grid gap-2">
                   <div v-for="item in analyticsData.providers.byProviderType.slice(0, 6)" :key="`provider-type:${item.key}`" class="flex items-center justify-between gap-3 text-xs">
@@ -5230,7 +5240,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     <span class="font-medium text-black dark:text-white">{{ formatNumber(item.quantity) }}</span>
                   </div>
                   <p v-if="analyticsData.providers.byProviderType.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.providerTypesEmpty', 'No provider type usage yet.') }}
+                    {{ tt('dashboard.governance.analytics.providerTypesEmpty', 'No provider type usage yet.') }}
                   </p>
                 </div>
               </div>
@@ -5246,10 +5256,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.forms.analyticsTitle', 'Analytics collection') }}
+                {{ tt('dashboard.governance.forms.analyticsTitle', 'Analytics collection') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.forms.analyticsHint', 'Keep event collection granular but hashed and metadata-bounded.') }}
+                {{ tt('dashboard.governance.forms.analyticsHint', 'Keep event collection granular but hashed and metadata-bounded.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveConfig('analytics_collection', analyticsForm)">
@@ -5271,19 +5281,19 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.notificationTest.title', 'Notification channel test') }}
+                {{ tt('dashboard.governance.notificationTest.title', 'Notification channel test') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.notificationTest.hint', 'Dry-run records sanitized delivery audit; send follows the selected channel config and runtime metadata.') }}
+                {{ tt('dashboard.governance.notificationTest.hint', 'Dry-run records sanitized delivery audit; send follows the selected channel config and runtime metadata.') }}
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <TxButton variant="secondary" size="small" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('plan')">
                 <TxSpinner v-if="notificationTesting" :size="14" />
-                <span :class="notificationTesting ? 'ml-2' : ''">{{ t('dashboard.governance.notificationTest.dryRun', 'Dry run') }}</span>
+                <span :class="notificationTesting ? 'ml-2' : ''">{{ tt('dashboard.governance.notificationTest.dryRun', 'Dry run') }}</span>
               </TxButton>
               <TxButton size="small" :disabled="notificationTesting || !notificationTestForm.configId" @click="testNotificationChannel('send')">
-                {{ t('dashboard.governance.notificationTest.send', 'Send using config') }}
+                {{ tt('dashboard.governance.notificationTest.send', 'Send using config') }}
               </TxButton>
             </div>
           </div>
@@ -5341,17 +5351,17 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ delivery.channel }} · {{ delivery.provider || 'default' }} · {{ delivery.providerType || delivery.adapter }} · {{ delivery.reason }}
                 </p>
                 <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.notificationAvgDuration', 'Duration') }} · {{ formatDurationMs(delivery.durationMs) }}
+                  {{ tt('dashboard.governance.analytics.notificationAvgDuration', 'Duration') }} · {{ formatDurationMs(delivery.durationMs) }}
                 </p>
                 <p v-if="delivery.statusCode != null" class="mt-1 text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.notificationStatusCode', 'Status code') }} · {{ delivery.statusCode }}
+                  {{ tt('dashboard.governance.analytics.notificationStatusCode', 'Status code') }} · {{ delivery.statusCode }}
                 </p>
                 <p class="mt-1 text-xs text-black/40 dark:text-white/40">
-                  {{ delivery.credentialRequired ? t('dashboard.governance.notificationTest.credentialRequired', 'Credential required') : t('dashboard.governance.notificationTest.credentialOptional', 'No credential required') }} · {{ delivery.hasCredentialRef ? t('dashboard.governance.notificationTest.credentialRefBound', 'credentialRef bound') : t('dashboard.governance.notificationTest.credentialRefMissing', 'credentialRef missing') }}
+                  {{ delivery.credentialRequired ? tt('dashboard.governance.notificationTest.credentialRequired', 'Credential required') : tt('dashboard.governance.notificationTest.credentialOptional', 'No credential required') }} · {{ delivery.hasCredentialRef ? tt('dashboard.governance.notificationTest.credentialRefBound', 'credentialRef bound') : tt('dashboard.governance.notificationTest.credentialRefMissing', 'credentialRef missing') }}
                 </p>
               </div>
               <p v-if="notificationTestResult.deliveries.length === 0" class="text-sm text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.notificationTest.empty', 'No delivery matched the selected channel.') }}
+                {{ tt('dashboard.governance.notificationTest.empty', 'No delivery matched the selected channel.') }}
               </p>
             </div>
           </div>
@@ -5361,10 +5371,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.forms.storageTitle', 'Storage channel policy') }}
+                {{ tt('dashboard.governance.forms.storageTitle', 'Storage channel policy') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.forms.storageHint', 'Configure local/R2/S3/OSS ceilings, traffic limits, and warning thresholds.') }}
+                {{ tt('dashboard.governance.forms.storageHint', 'Configure local/R2/S3/OSS ceilings, traffic limits, and warning thresholds.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveConfig('storage_channel', storageForm)">
@@ -5390,16 +5400,16 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               <span class="font-medium text-black/70 dark:text-white/70">{{ selectedStorageProfile.description }}</span>
               <TxStatusBadge
                 size="sm"
-                :text="selectedStorageProfile.status === 'active' ? t('dashboard.governance.storageProfiles.active', 'Active') : t('dashboard.governance.storageProfiles.policyReady', 'Policy ready')"
+                :text="selectedStorageProfile.status === 'active' ? tt('dashboard.governance.storageProfiles.active', 'Active') : tt('dashboard.governance.storageProfiles.policyReady', 'Policy ready')"
                 :status="selectedStorageProfile.status === 'active' ? 'success' : 'info'"
               />
             </div>
             <p class="mt-2">
-              {{ t('dashboard.governance.storageProfiles.configKeys', 'Config keys') }}:
+              {{ tt('dashboard.governance.storageProfiles.configKeys', 'Config keys') }}:
               {{ [...selectedStorageProfile.requiredConfigKeys, ...selectedStorageProfile.optionalConfigKeys].join(', ') || '-' }}
             </p>
             <p class="mt-1">
-              {{ t('dashboard.governance.storageProfiles.limitKeys', 'Limit keys') }}:
+              {{ tt('dashboard.governance.storageProfiles.limitKeys', 'Limit keys') }}:
               {{ selectedStorageProfile.limitKeys.slice(0, 8).join(', ') }}
             </p>
           </div>
@@ -5407,7 +5417,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="truncate text-xs font-semibold uppercase tracking-wide text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storageChannelDetail', 'Selected channel') }}
+                  {{ tt('dashboard.governance.analytics.storageChannelDetail', 'Selected channel') }}
                 </p>
                 <p class="mt-1 truncate text-sm font-medium text-black dark:text-white">
                   {{ selectedStorageChannelAnalytics.channel || storageForm.channel || 'unknown' }} · {{ selectedStorageChannelAnalytics.provider || storageForm.provider || 'default' }}
@@ -5415,14 +5425,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <TxStatusBadge
                 size="sm"
-                :text="storageChannelAnalyticsPending ? t('common.loading', 'Loading') : storageChannelPressureLabel(selectedStorageChannelAnalytics.channelPressure[0]?.pressureStatus ?? 'unmanaged')"
-                :status="storageChannelAnalyticsPending ? 'muted' : storageChannelPressureTone(selectedStorageChannelAnalytics.channelPressure[0]?.pressureStatus ?? 'unmanaged')"
+                :text="storageChannelAnalyticsHydratedPending ? t('common.loading', 'Loading') : storageChannelPressureLabel(selectedStorageChannelAnalytics.channelPressure[0]?.pressureStatus ?? 'unmanaged')"
+                :status="storageChannelAnalyticsHydratedPending ? 'muted' : storageChannelPressureTone(selectedStorageChannelAnalytics.channelPressure[0]?.pressureStatus ?? 'unmanaged')"
               />
             </div>
             <div class="mt-3 grid gap-2 text-xs md:grid-cols-4">
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storageStored', 'Stored') }}
+                  {{ tt('dashboard.governance.analytics.storageStored', 'Stored') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatBytes(selectedStorageChannelAnalytics.storedBytes) }}
@@ -5430,7 +5440,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storageTraffic', 'Traffic') }}
+                  {{ tt('dashboard.governance.analytics.storageTraffic', 'Traffic') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatBytes(selectedStorageChannelAnalytics.trafficBytes) }}
@@ -5438,7 +5448,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storageOperations', 'Ops') }}
+                  {{ tt('dashboard.governance.analytics.storageOperations', 'Ops') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatNumber(selectedStorageChannelAnalytics.operations) }}
@@ -5446,7 +5456,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </div>
               <div>
                 <p class="text-black/45 dark:text-white/45">
-                  {{ t('dashboard.governance.analytics.storagePolicyAlerts', 'Alerts') }}
+                  {{ tt('dashboard.governance.analytics.storagePolicyAlerts', 'Alerts') }}
                 </p>
                 <p class="mt-1 font-semibold text-black dark:text-white">
                   {{ formatNumber(selectedStorageChannelAnalytics.alerts.length) }}
@@ -5459,7 +5469,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             <div class="mt-3 grid gap-3 md:grid-cols-2">
               <div>
                 <p class="text-xs font-medium text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.storageResourceType', 'Resource') }}
+                  {{ tt('dashboard.governance.analytics.storageResourceType', 'Resource') }}
                 </p>
                 <div class="mt-2 grid gap-1">
                   <div v-for="item in storageChannelAnalyticsData.byResourceTypeUsage.slice(0, 3)" :key="`selected-storage-resource:${item.key}`" class="flex items-center justify-between gap-3 text-xs">
@@ -5467,13 +5477,13 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     <span class="shrink-0 font-medium text-black dark:text-white">{{ formatBytes(item.storedBytes + item.trafficBytes) }}</span>
                   </div>
                   <p v-if="storageChannelAnalyticsData.byResourceTypeUsage.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.storageChannelDetailEmpty', 'No usage yet.') }}
+                    {{ tt('dashboard.governance.analytics.storageChannelDetailEmpty', 'No usage yet.') }}
                   </p>
                 </div>
               </div>
               <div>
                 <p class="text-xs font-medium text-black/55 dark:text-white/55">
-                  {{ t('dashboard.governance.analytics.storageAction', 'Action') }}
+                  {{ tt('dashboard.governance.analytics.storageAction', 'Action') }}
                 </p>
                 <div class="mt-2 grid gap-1">
                   <div v-for="item in storageChannelAnalyticsData.byActionUsage.slice(0, 3)" :key="`selected-storage-action:${item.key}`" class="flex items-center justify-between gap-3 text-xs">
@@ -5481,17 +5491,17 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                     <span class="shrink-0 font-medium text-black dark:text-white">{{ formatNumber(item.operations) }} ops</span>
                   </div>
                   <p v-if="storageChannelAnalyticsData.byActionUsage.length === 0" class="text-xs text-black/45 dark:text-white/45">
-                    {{ t('dashboard.governance.analytics.storageChannelDetailEmpty', 'No usage yet.') }}
+                    {{ tt('dashboard.governance.analytics.storageChannelDetailEmpty', 'No usage yet.') }}
                   </p>
                 </div>
               </div>
             </div>
             <div v-if="selectedStorageChannelAnalytics.trend.at(-1) || selectedStorageChannelAnalytics.evaluations[0]" class="mt-3 grid gap-2 text-xs md:grid-cols-2">
               <p v-if="selectedStorageChannelAnalytics.trend.at(-1)" class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageChannelLatestTrend', 'Latest trend') }} · {{ selectedStorageChannelAnalytics.trend.at(-1)?.date }} · {{ formatBytes((selectedStorageChannelAnalytics.trend.at(-1)?.storedBytes ?? 0) + (selectedStorageChannelAnalytics.trend.at(-1)?.trafficBytes ?? 0)) }} · {{ formatNumber(selectedStorageChannelAnalytics.trend.at(-1)?.operations ?? 0) }} ops
+                {{ tt('dashboard.governance.analytics.storageChannelLatestTrend', 'Latest trend') }} · {{ selectedStorageChannelAnalytics.trend.at(-1)?.date }} · {{ formatBytes((selectedStorageChannelAnalytics.trend.at(-1)?.storedBytes ?? 0) + (selectedStorageChannelAnalytics.trend.at(-1)?.trafficBytes ?? 0)) }} · {{ formatNumber(selectedStorageChannelAnalytics.trend.at(-1)?.operations ?? 0) }} ops
               </p>
               <p v-if="selectedStorageChannelAnalytics.evaluations[0]" class="truncate text-black/45 dark:text-white/45">
-                {{ t('dashboard.governance.analytics.storageChannelPolicyState', 'Policy state') }} · {{ selectedStorageChannelAnalytics.evaluations[0].name }} · {{ storageEvaluationLabel(selectedStorageChannelAnalytics.evaluations[0].status) }} · {{ selectedStorageChannelAnalytics.evaluations[0].reasons.join(', ') || '-' }}
+                {{ tt('dashboard.governance.analytics.storageChannelPolicyState', 'Policy state') }} · {{ selectedStorageChannelAnalytics.evaluations[0].name }} · {{ storageEvaluationLabel(selectedStorageChannelAnalytics.evaluations[0].status) }} · {{ selectedStorageChannelAnalytics.evaluations[0].reasons.join(', ') || '-' }}
               </p>
             </div>
           </div>
@@ -5505,10 +5515,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.storageCredentials.title', 'Storage credential') }}
+                {{ tt('dashboard.governance.storageCredentials.title', 'Storage credential') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.storageCredentials.hint', 'Bind secure://storage/* refs to encrypted D1 access keys for S3-compatible and OSS executors.') }}
+                {{ tt('dashboard.governance.storageCredentials.hint', 'Bind secure://storage/* refs to encrypted D1 access keys for S3-compatible and OSS executors.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveStorageCredential">
@@ -5530,10 +5540,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ credential.credentialType }} · {{ credential.backend }} · {{ formatDate(credential.updatedAt) }}
                 </p>
               </div>
-              <TxStatusBadge :text="credential.hasCredential ? t('dashboard.governance.storageCredentials.bound', 'Bound') : t('dashboard.governance.storageCredentials.missing', 'Missing')" size="sm" :status="credential.hasCredential ? 'success' : 'warning'" />
+              <TxStatusBadge :text="credential.hasCredential ? tt('dashboard.governance.storageCredentials.bound', 'Bound') : tt('dashboard.governance.storageCredentials.missing', 'Missing')" size="sm" :status="credential.hasCredential ? 'success' : 'warning'" />
             </div>
             <p v-if="storageCredentials.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.storageCredentials.empty', 'No storage credentials bound yet.') }}
+              {{ tt('dashboard.governance.storageCredentials.empty', 'No storage credentials bound yet.') }}
             </p>
           </div>
         </section>
@@ -5542,10 +5552,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.forms.notificationTitle', 'Notification channel') }}
+                {{ tt('dashboard.governance.forms.notificationTitle', 'Notification channel') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.forms.notificationHint', 'Use provider for the channel instance and config.providerType for browser, Feishu/Lark, Resend, SendGrid, Mailgun, Postmark, SMTP relay, webhook, or Web Push adapters. Credentialed adapters use credentialRef only.') }}
+                {{ tt('dashboard.governance.forms.notificationHint', 'Use provider for the channel instance and config.providerType for browser, Feishu/Lark, Resend, SendGrid, Mailgun, Postmark, SMTP relay, webhook, or Web Push adapters. Credentialed adapters use credentialRef only.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveConfig('notification_channel', notificationForm)">
@@ -5576,12 +5586,12 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               />
             </div>
             <p class="mt-2">
-              {{ t('dashboard.governance.notificationProfiles.credential', 'Credential') }}:
-              {{ selectedNotificationProfile.credentialType || t('dashboard.governance.notificationProfiles.none', 'None') }}
+              {{ tt('dashboard.governance.notificationProfiles.credential', 'Credential') }}:
+              {{ selectedNotificationProfile.credentialType || tt('dashboard.governance.notificationProfiles.none', 'None') }}
               · {{ selectedNotificationProfile.credentialRefPrefix || '-' }}
             </p>
             <p class="mt-1">
-              {{ t('dashboard.governance.notificationProfiles.configKeys', 'Config keys') }}:
+              {{ tt('dashboard.governance.notificationProfiles.configKeys', 'Config keys') }}:
               {{ [...selectedNotificationProfile.requiredConfigKeys, ...selectedNotificationProfile.optionalConfigKeys].join(', ') || '-' }}
             </p>
           </div>
@@ -5595,10 +5605,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.credentials.title', 'Notification credential') }}
+                {{ tt('dashboard.governance.credentials.title', 'Notification credential') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.credentials.hint', 'Bind secure://notifications/* refs to encrypted D1 credentials. Governance configs only keep credentialRef.') }}
+                {{ tt('dashboard.governance.credentials.hint', 'Bind secure://notifications/* refs to encrypted D1 credentials. Governance configs only keep credentialRef.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveNotificationCredential">
@@ -5620,10 +5630,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                   {{ credential.credentialType }} · {{ credential.backend }} · {{ formatDate(credential.updatedAt) }}
                 </p>
               </div>
-              <TxStatusBadge :text="credential.hasCredential ? t('dashboard.governance.credentials.bound', 'Bound') : t('dashboard.governance.credentials.missing', 'Missing')" size="sm" :status="credential.hasCredential ? 'success' : 'warning'" />
+              <TxStatusBadge :text="credential.hasCredential ? tt('dashboard.governance.credentials.bound', 'Bound') : tt('dashboard.governance.credentials.missing', 'Missing')" size="sm" :status="credential.hasCredential ? 'success' : 'warning'" />
             </div>
             <p v-if="notificationCredentials.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.credentials.empty', 'No notification credentials bound yet.') }}
+              {{ tt('dashboard.governance.credentials.empty', 'No notification credentials bound yet.') }}
             </p>
           </div>
         </section>
@@ -5632,10 +5642,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-black dark:text-white">
-                {{ t('dashboard.governance.forms.providerQuotaTitle', 'Provider quota') }}
+                {{ tt('dashboard.governance.forms.providerQuotaTitle', 'Provider quota') }}
               </h2>
               <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.governance.forms.providerQuotaHint', 'Limit Intelligence provider requests and token budgets by channel.') }}
+                {{ tt('dashboard.governance.forms.providerQuotaHint', 'Limit Intelligence provider requests and token budgets by channel.') }}
               </p>
             </div>
             <TxButton size="small" :disabled="saving" @click="saveConfig('intelligence_provider_quota', providerQuotaForm)">
@@ -5659,7 +5669,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
       <aside class="space-y-4">
         <section class="apple-card-lg p-5">
           <h2 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.breakdown.actions', 'Event actions') }}
+            {{ tt('dashboard.governance.breakdown.actions', 'Event actions') }}
           </h2>
           <div class="mt-4 space-y-3">
             <div v-for="item in summaryData.byAction.slice(0, 8)" :key="item.action" class="flex items-center justify-between gap-3 text-sm">
@@ -5671,7 +5681,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
 
         <section class="apple-card-lg p-5">
           <h2 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.governance.breakdown.resources', 'Hot resources') }}
+            {{ tt('dashboard.governance.breakdown.resources', 'Hot resources') }}
           </h2>
           <div class="mt-4 space-y-3">
             <div v-for="item in summaryData.topResources" :key="`${item.resourceType}:${item.resourceId}:${item.action}`" class="rounded-xl bg-black/[0.02] p-3 text-sm dark:bg-white/[0.03]">
@@ -5689,14 +5699,14 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         <section class="apple-card-lg p-5">
           <div class="flex items-center justify-between gap-3">
             <h2 class="text-base font-semibold text-black dark:text-white">
-              {{ t('dashboard.governance.storageAlerts.title', 'Storage alerts') }}
+              {{ tt('dashboard.governance.storageAlerts.title', 'Storage alerts') }}
             </h2>
             <div class="flex items-center gap-2">
               <TxButton size="small" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('plan')">
-                {{ t('dashboard.governance.storageAlerts.dryRun', 'Dry run') }}
+                {{ tt('dashboard.governance.storageAlerts.dryRun', 'Dry run') }}
               </TxButton>
               <TxButton size="small" :disabled="storageAlertNotifying || storagePolicyAlerts.length === 0" @click="notifyStorageAlerts('send')">
-                {{ t('dashboard.governance.storageAlerts.send', 'Send') }}
+                {{ tt('dashboard.governance.storageAlerts.send', 'Send') }}
               </TxButton>
               <TxStatusBadge
                 size="sm"
@@ -5706,7 +5716,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
           </div>
           <p v-if="storageAlertNotifyResult" class="mt-2 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.governance.storageAlerts.dispatched', 'Dispatches') }}:
+            {{ tt('dashboard.governance.storageAlerts.dispatched', 'Dispatches') }}:
             {{ formatNumber(storageAlertNotifyResult.dispatches.reduce((sum, item) => sum + item.deliveries.length, 0)) }}
             · {{ storageAlertNotifyResult.mode }}
           </p>
@@ -5730,7 +5740,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </p>
             </div>
             <p v-if="storagePolicyAlerts.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.storageAlerts.empty', 'No storage alerts right now.') }}
+              {{ tt('dashboard.governance.storageAlerts.empty', 'No storage alerts right now.') }}
             </p>
           </div>
         </section>
@@ -5738,7 +5748,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         <section class="apple-card-lg p-5">
           <div class="flex items-center justify-between gap-3">
             <h2 class="text-base font-semibold text-black dark:text-white">
-              {{ t('dashboard.governance.storagePolicy.title', 'Storage policy health') }}
+              {{ tt('dashboard.governance.storagePolicy.title', 'Storage policy health') }}
             </h2>
             <span class="text-xs text-black/45 dark:text-white/45">
               {{ formatDate(storagePoliciesData.generatedAt) }}
@@ -5748,7 +5758,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             {{ storageSmokeError }}
           </p>
           <p v-if="storageSmokeResult" class="mt-2 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.governance.storageSmoke.result', 'Storage smoke') }}:
+            {{ tt('dashboard.governance.storageSmoke.result', 'Storage smoke') }}:
             {{ storageSmokeResult.policyName }} · {{ storageSmokeResult.mode }} · {{ storageSmokeResult.status }} · {{ storageSmokeResult.reason }}
           </p>
           <div class="mt-4 space-y-3">
@@ -5757,10 +5767,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
                 <span class="truncate font-medium text-black dark:text-white">{{ item.name }}</span>
                 <div class="flex shrink-0 items-center gap-2">
                   <TxButton size="small" variant="secondary" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'dry-run')">
-                    {{ t('dashboard.governance.storageSmoke.dryRun', 'Smoke') }}
+                    {{ tt('dashboard.governance.storageSmoke.dryRun', 'Smoke') }}
                   </TxButton>
                   <TxButton size="small" :disabled="storageSmokeRunning" @click="smokeStoragePolicy(item.policyId, 'write')">
-                    {{ t('dashboard.governance.storageSmoke.write', 'Write smoke') }}
+                    {{ tt('dashboard.governance.storageSmoke.write', 'Write smoke') }}
                   </TxButton>
                   <TxStatusBadge
                     :text="storageEvaluationLabel(item.status)"
@@ -5774,27 +5784,27 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </p>
               <div class="mt-3 grid gap-2 text-xs text-black/55 dark:text-white/55">
                 <div class="flex items-center justify-between gap-3">
-                  <span>{{ t('dashboard.governance.storagePolicy.stored', 'Stored') }}</span>
+                  <span>{{ tt('dashboard.governance.storagePolicy.stored', 'Stored') }}</span>
                   <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.storedBytes) }} · {{ formatRatio(item.utilization.storedBytes) }} · {{ formatStorageBudgetValue(item.remaining.storedBytes, 'bytes') }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
-                  <span>{{ t('dashboard.governance.storagePolicy.traffic', 'Traffic') }}</span>
+                  <span>{{ tt('dashboard.governance.storagePolicy.traffic', 'Traffic') }}</span>
                   <span class="font-medium text-black dark:text-white">{{ formatBytes(item.usage.trafficBytes) }} · {{ formatRatio(item.utilization.trafficBytes) }} · {{ formatStorageBudgetValue(item.remaining.trafficBytes, 'bytes') }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
-                  <span>{{ t('dashboard.governance.storagePolicy.operations', 'Operations') }}</span>
+                  <span>{{ tt('dashboard.governance.storagePolicy.operations', 'Operations') }}</span>
                   <span class="font-medium text-black dark:text-white">{{ formatNumber(item.usage.operations) }} · {{ formatRatio(item.utilization.operations) }} · {{ formatStorageBudgetValue(item.remaining.operations, 'operations') }}</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
-                  <span>{{ t('dashboard.governance.storagePolicy.burnRate', 'Burn/day') }}</span>
+                  <span>{{ tt('dashboard.governance.storagePolicy.burnRate', 'Burn/day') }}</span>
                   <span class="font-medium text-black dark:text-white">{{ formatBytes(item.burnRate.storedBytesPerDay) }} · {{ formatBytes(item.burnRate.trafficBytesPerDay) }} · {{ formatNumber(item.burnRate.operationsPerDay) }} ops</span>
                 </div>
                 <div class="flex items-center justify-between gap-3">
-                  <span>{{ t('dashboard.governance.storagePolicy.projectedExhaustion', 'Projected exhaustion') }}</span>
+                  <span>{{ tt('dashboard.governance.storagePolicy.projectedExhaustion', 'Projected exhaustion') }}</span>
                   <span class="font-medium text-black dark:text-white">{{ formatProjectedDays(item.projectedExhaustionDays.storedBytes) }} · {{ formatProjectedDays(item.projectedExhaustionDays.trafficBytes) }} · {{ formatProjectedDays(item.projectedExhaustionDays.operations) }}</span>
                 </div>
                 <div v-if="item.overage.alertBytes > 0" class="flex items-center justify-between gap-3 text-amber-600 dark:text-amber-200">
-                  <span>{{ t('dashboard.governance.storagePolicy.alertOverage', 'Alert overage') }}</span>
+                  <span>{{ tt('dashboard.governance.storagePolicy.alertOverage', 'Alert overage') }}</span>
                   <span class="font-medium">{{ formatBytes(item.overage.alertBytes) }}</span>
                 </div>
               </div>
@@ -5803,7 +5813,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
               </p>
             </div>
             <p v-if="storageEvaluations.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              {{ t('dashboard.governance.storagePolicy.empty', 'No storage policy evaluation yet.') }}
+              {{ tt('dashboard.governance.storagePolicy.empty', 'No storage policy evaluation yet.') }}
             </p>
           </div>
         </section>
@@ -5811,7 +5821,7 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
         <section class="apple-card-lg p-5">
           <div class="flex items-center justify-between gap-3">
             <h2 class="text-base font-semibold text-black dark:text-white">
-              {{ t('dashboard.governance.policies.title', 'Policies') }}
+              {{ tt('dashboard.governance.policies.title', 'Policies') }}
             </h2>
             <span class="text-xs text-black/45 dark:text-white/45">
               {{ formatDate(configsData.generatedAt) }}
@@ -5833,10 +5843,10 @@ function formatD1MissingObjects(check: PlatformGovernanceD1ReadinessCheck): stri
             </div>
           </div>
           <div class="mt-4 grid gap-2 text-xs text-black/50 dark:text-white/50">
-            <span>{{ t('dashboard.governance.policies.analytics', 'Analytics') }}: {{ groupedConfigs.analytics.length }}</span>
-            <span>{{ t('dashboard.governance.policies.storage', 'Storage') }}: {{ groupedConfigs.storage.length }}</span>
-            <span>{{ t('dashboard.governance.policies.notifications', 'Notifications') }}: {{ groupedConfigs.notifications.length }}</span>
-            <span>{{ t('dashboard.governance.policies.providerQuotas', 'Provider quotas') }}: {{ groupedConfigs.providerQuotas.length }}</span>
+            <span>{{ tt('dashboard.governance.policies.analytics', 'Analytics') }}: {{ groupedConfigs.analytics.length }}</span>
+            <span>{{ tt('dashboard.governance.policies.storage', 'Storage') }}: {{ groupedConfigs.storage.length }}</span>
+            <span>{{ tt('dashboard.governance.policies.notifications', 'Notifications') }}: {{ groupedConfigs.notifications.length }}</span>
+            <span>{{ tt('dashboard.governance.policies.providerQuotas', 'Provider quotas') }}: {{ groupedConfigs.providerQuotas.length }}</span>
           </div>
         </section>
       </aside>

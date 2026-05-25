@@ -21,9 +21,10 @@ const isAuthShellRoute = computed(() => {
     || path.startsWith('/device-auth')
 })
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearch()
-const { initLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
+const { initLocale, reconcileClientLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
 const { user, pending: authUserPending } = useAuthUser()
+const mounted = ref(false)
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
@@ -38,13 +39,15 @@ await initLocale({
 watch(
   () => [status.value, user.value?.id ?? null, user.value?.locale ?? null] as const,
   ([currentStatus, userId, profileLocale]) => {
+    if (!mounted.value)
+      return
+
     void syncFromProfileOnAuth({
       status: currentStatus,
       userId,
       profileLocale,
     })
   },
-  { immediate: true },
 )
 
 const redirectTarget = computed(() => sanitizeRedirect(route.fullPath, '/dashboard'))
@@ -91,8 +94,20 @@ function handleGlobalSearchShortcut(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  mounted.value = true
   closeSearch()
   window.addEventListener('keydown', handleGlobalSearchShortcut)
+  void (async () => {
+    await reconcileClientLocale({
+      isAuthenticated: status.value === 'authenticated',
+      profileLocale: user.value?.locale ?? null,
+    })
+    await syncFromProfileOnAuth({
+      status: status.value,
+      userId: user.value?.id ?? null,
+      profileLocale: user.value?.locale ?? null,
+    })
+  })()
 })
 
 onBeforeUnmount(() => {

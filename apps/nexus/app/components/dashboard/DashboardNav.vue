@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 const { t } = useI18n()
@@ -7,6 +7,7 @@ const route = useRoute()
 const { user, refresh, isAuthenticated } = useAuthUser()
 const runtimeConfig = useRuntimeConfig()
 const notificationUnreadCount = useState<number>('dashboard-notification-unread-count', () => 0)
+const mounted = ref(false)
 const { data: teamData, refresh: refreshTeamData } = useTypedFetch<{
   team?: {
     type?: string
@@ -24,7 +25,7 @@ const revalidateUser = () => {
 }
 
 const revalidateTeam = () => {
-  if (!isAuthenticated.value)
+  if (!mounted.value || !isAuthenticated.value)
     return
   void refreshTeamData()
 }
@@ -35,7 +36,7 @@ function setNotificationUnreadCount(value: unknown) {
 }
 
 async function refreshNotificationUnreadCount() {
-  if (!import.meta.client)
+  if (!import.meta.client || !mounted.value)
     return
   if (!isAuthenticated.value) {
     setNotificationUnreadCount(0)
@@ -57,6 +58,7 @@ async function refreshNotificationUnreadCount() {
 }
 
 onMounted(() => {
+  mounted.value = true
   revalidateUser()
   revalidateTeam()
   void refreshNotificationUnreadCount()
@@ -88,8 +90,11 @@ watch(
   { immediate: true },
 )
 
-const isAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'admin')
+const isAdmin = computed(() => mounted.value && String(user.value?.role || '').toLowerCase() === 'admin')
 const isTeamAdmin = computed(() => {
+  if (!mounted.value)
+    return false
+
   const team = teamData.value?.team
   const role = String(team?.role || '').toLowerCase()
   return team?.type === 'organization' && (role === 'owner' || role === 'admin')

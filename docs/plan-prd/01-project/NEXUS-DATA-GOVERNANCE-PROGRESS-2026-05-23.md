@@ -5,7 +5,7 @@
 
 ## Executive Status
 
-Current verdict: **in progress, not production-complete**. The local implementation has a broad code-backed baseline for the eight Nexus Data Governance areas, and the most recent focused validation covers the newly added search journey funnel, search local-time heatmap, upload reliability action queue, Scene asset upload health, storage governance action queue, local/memory write smoke artifact evidence, read-only D1 readiness diagnostics, notification action queue, plugin review rating trend/action queue, operations daily timeline, operations command board, and read-only operations report snapshot slices. The remaining blockers are evidence blockers rather than architecture unknowns: stable real browser screenshots/interactions, live notification sends, live R2/S3/OSS storage traces, production D1 migration/backfill execution, and real provider quota fail-closed calls.
+Current verdict: **in progress, not production-complete**. The local implementation has a broad code-backed baseline for the eight Nexus Data Governance areas, and the most recent focused validation covers the newly added search journey funnel, search local-time heatmap, upload reliability action queue, Scene asset upload health, storage governance action queue, local/memory write smoke artifact evidence, read-only D1 readiness diagnostics, notification action queue, plugin review rating trend/action queue, operations daily timeline, operations command board, read-only operations report snapshot, and admin hydration/i18n stabilization slices. The remaining blockers are evidence blockers rather than architecture unknowns: stable real browser screenshots/interactions, live notification sends, live R2/S3/OSS storage traces, production D1 migration/backfill execution, and real provider quota fail-closed calls.
 
 | Roll-up | Current state |
 | --- | --- |
@@ -49,6 +49,26 @@ Current verdict: **in progress, not production-complete**. The local implementat
   - `apps/nexus/app/pages/dashboard/admin/governance.test.ts`
   - `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
   - Storage, notification, provider-registry, scene, sync, asset upload API tests under `apps/nexus/test` and `apps/nexus/server/utils`.
+
+## 2026-05-25 Delta
+
+- Admin hydration and i18n stability were tightened:
+  - `useLocaleOrchestrator` now separates server/default init from client reconciliation, so profile/browser/cookie reconciliation runs after mount instead of during SSR setup.
+  - `app.vue` gates profile-locale sync until the client is mounted, then runs client reconciliation and profile sync with the latest auth state.
+  - `DashboardNav` gates user/team revalidation, unread notification refresh, and admin-derived navigation state behind the mounted flag to avoid SSR/client role drift.
+  - `provider-registry.vue` now uses the ClientOnly lazy admin panel shell through `LazyDashboardProviderRegistryAdminPanel`, matching the existing Nexus heavy-admin-page pattern.
+  - `governance.vue` replaces raw fallback translation usage with a guarded `tt()` helper, and English/Chinese locales now include the missing Provider Registry, Data Governance, common action, and dashboard menu labels used by the admin pages.
+  - This improves operator page stability and translation completeness, but it is not authenticated browser evidence and does not close production blockers.
+- Release and CI evidence were refreshed:
+  - `v2.4.11-beta.3` was published from `master` with release commit `0360271ec` and tag `v2.4.11-beta.3`.
+  - Local beta packaging passed before release with `pnpm build:beta:mac`.
+  - GitHub Actions `Build and Release` passed for the beta release, including Windows, Linux, macOS release jobs, GitHub release creation, and Nexus release sync.
+  - Nexus release API returned a published prerelease record for `v2.4.11-beta.3`; the stable latest-release endpoint still points at the latest stable channel, which is expected.
+- Focused validation for this slice:
+  - `pnpm -C "apps/nexus" exec vitest run "app/pages/dashboard/admin/governance.test.ts"` passed with 17 tests.
+  - File-scoped ESLint passed for the touched Nexus files.
+  - `git diff --check` passed.
+  - `pnpm nexus:build` passed locally; existing non-blocking warnings remain tracked as build-environment noise rather than completion evidence.
 
 ## 2026-05-24 Delta
 
