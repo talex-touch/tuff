@@ -13,6 +13,29 @@
 
 ## 2026-05-25
 
+### release(tuffex): queue 0.3.6 package publish
+
+- `packages/tuffex/package.json`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Bumped `@talex-touch/tuffex` from `0.3.5` to `0.3.6` so `.github/workflows/package-tuffex-publish.yml` can publish the new package from GitHub Actions on `master` push.
+  - Local validation completed with `pnpm -C "packages/tuffex" run build` and `cd packages/tuffex && npm publish --dry-run --access public`.
+  - Direct local `npm publish --access public` was not completed because the local npm session returned `E401 whoami` / `E404 PUT @talex-touch/tuffex`; publish authority is expected to come from the repository `NPM_TOKEN` used by GitHub Actions.
+
+### docs(plan-prd): add UI and architecture compatibility audit
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-25.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a current UI/compatibility/placeholder/architecture audit for CoreApp, Nexus, packages, plugins, and plan-prd docs.
+  - Confirmed no new P0 production fake-success was found in the scanned live tree, while keeping legacy retained aliases, old snippets placeholder plugins, Nexus memory fallback evidence, preload debug `innerHTML`, dialog `v-html`, and TuffEx visual smoke as P1/P2 follow-up work.
+  - Synchronized README/TODO/INDEX/Roadmap/Quality Baseline so the next execution window focuses on evidence-backed small slices instead of another broad placeholder sweep.
+
 ### fix(nexus): simplify docs redirect loading and update page overlays
 
 - `apps/nexus/app/components/docs/DocsRedirectLoading.vue`
