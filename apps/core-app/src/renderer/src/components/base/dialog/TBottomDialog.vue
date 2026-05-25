@@ -1,7 +1,8 @@
 <script lang="ts" name="TBottomDialog" setup>
+import type { TxButtonProps } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
-import Loading from '~/components/icon/LoadingIcon.vue'
 
 /**
  * Button interface for defining button properties
@@ -70,6 +71,11 @@ const props = withDefaults(defineProps<Props>(), {
 // Refs
 const wholeDom = ref<HTMLElement | null>(null)
 const btnArray = ref<Array<{ value: ButtonState }>>([])
+
+function getButtonType(type?: ButtonState['type']): TxButtonProps['type'] {
+  if (type === 'error') return 'danger'
+  return type || 'info'
+}
 
 // Store previously focused element for focus restoration
 let previouslyFocusedElement: HTMLElement | null = null
@@ -237,33 +243,18 @@ async function forClose(): Promise<void> {
         <!-- Dialog buttons container -->
         <div class="dialog-btns">
           <!-- Render each button -->
-          <span
+          <TxButton
             v-for="(btn, i) in btnArray"
             :key="i"
-            :class="{
-              'info-tip': btn.value?.type === 'info',
-              'warn-tip': btn.value?.type === 'warning',
-              'error-tip': btn.value?.type === 'error',
-              'success-tip': btn.value?.type === 'success',
-              'loading-tip': btn.value.loading
-            }"
-            class="btn-item"
-            role="button"
-            tabindex="0"
+            variant="flat"
+            :type="getButtonType(btn.value?.type)"
+            :loading="btn.value.loading"
+            block
             @click="clickBtn(btn)"
-            @keydown.enter="clickBtn(btn)"
-            @keydown.space="clickBtn(btn)"
           >
-            <!-- Loading indicator -->
-            <span class="TDialogTip-Btn-Item-Loading">
-              <Loading />
-            </span>
-            <!-- Button text with optional timer -->
-            <span v-if="btn.value.time" class="TDialogTip-Container-Btn-Item-Text"
-              >{{ btn.value.content }} ({{ btn.value.time }}s)</span
-            >
-            <span v-else class="TDialogTip-Container-Btn-Item-Text">{{ btn.value.content }}</span>
-          </span>
+            {{ btn.value.content
+            }}<template v-if="btn.value.time"> ({{ btn.value.time }}s)</template>
+          </TxButton>
         </div>
       </div>
     </div>
@@ -274,12 +265,6 @@ async function forClose(): Promise<void> {
 // SCSS variables
 $dialog-border-radius: 8px;
 $dialog-transition-duration: 0.25s;
-$btn-margin: 8px 0;
-$btn-padding: 8px 4px;
-$btn-width: 80%;
-$btn-left: 10%;
-$loading-icon-size: 16px;
-$loading-icon-top: -10px;
 
 // Animation keyframes
 @keyframes enter {
@@ -292,23 +277,6 @@ $loading-icon-top: -10px;
     opacity: 1;
     transform: scale(1) translateX(-50%) translateY(0);
   }
-}
-
-// Theme color variables
-.success-tip {
-  --theme-color: var(--tx-color-success);
-}
-
-.info-tip {
-  --theme-color: var(--tx-color-primary);
-}
-
-.warn-tip {
-  --theme-color: var(--tx-color-warning);
-}
-
-.error-tip {
-  --theme-color: var(--tx-color-danger);
 }
 
 // Dialog wrapper styles
@@ -378,65 +346,8 @@ $loading-icon-top: -10px;
 
     bottom: 5%;
 
+    gap: 8px;
     width: 80%;
-
-    // Individual button styles
-    .btn-item {
-      z-index: 10;
-      position: relative;
-      margin: $btn-margin;
-      padding: $btn-padding;
-
-      text-align: center;
-      left: $btn-left;
-      width: $btn-width;
-
-      color: #eee;
-      border-radius: $dialog-border-radius;
-      box-sizing: border-box;
-      transition: $dialog-transition-duration;
-      user-select: none;
-
-      // Button hover styles
-      &:hover {
-        cursor: pointer;
-
-        &:before {
-          opacity: 0.75;
-        }
-      }
-
-      // Button background styles
-      &:before {
-        z-index: -1;
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-
-        width: 100%;
-        height: 100%;
-
-        border-radius: $dialog-border-radius;
-        opacity: 0.5;
-        background-color: var(--theme-color, var(--tx-color-info));
-      }
-
-      // Loading icon styles
-      .TDialogTip-Btn-Item-Loading {
-        position: absolute;
-        display: inline-block;
-        top: $loading-icon-top;
-        left: 50%;
-
-        width: $loading-icon-size;
-        height: $loading-icon-size;
-
-        transform: scale(0) translateX(-50%);
-        opacity: 0;
-        --bg-color: var(--theme-color);
-      }
-    }
   }
 
   // Background effect styles

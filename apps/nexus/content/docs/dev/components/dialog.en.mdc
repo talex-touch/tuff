@@ -6,6 +6,7 @@ status: beta
 since: 1.0.0
 tags: [dialog, modal, confirm]
 syncStatus: migrated
+verified: true
 ---
 
 # Dialog
@@ -99,6 +100,7 @@ code: |
       v-if="blowOpen"
       title="Welcome"
       message="<strong>Hello!</strong> Welcome to the app."
+      confirm-text="Confirm"
       :close="() => (blowOpen = false)"
     />
   </template>
@@ -117,6 +119,7 @@ code: |
       v-if="popperOpen"
       title="Tip"
       message="This is a short tip."
+      confirm-text="Confirm"
       :close="() => (popperOpen = false)"
     />
   </template>
@@ -212,6 +215,7 @@ code: |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
 | `message` | `string` | `''` | Message (HTML supported) |
+| `confirmText` | `string` | `'Confirm'` | Confirm button text |
 | `close` | `() => void` | *required* | Close callback |
 | `comp` | `Component` | `undefined` | Custom component |
 | `render` | `() => VNode` | `undefined` | Render function |
@@ -222,6 +226,7 @@ code: |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
 | `message` | `string` | `''` | Message (HTML supported) |
+| `confirmText` | `string` | `'Confirm'` | Confirm button text |
 | `close` | `() => void` | *required* | Close callback |
 | `comp` | `Component` | `undefined` | Custom component |
 | `render` | `() => VNode` | `undefined` | Render function |

@@ -97,6 +97,7 @@ const btns = [
   v-if="blowOpen"
   title="欢迎"
   message="<strong>你好！</strong> 欢迎使用我们的应用。"
+  confirm-text="确认"
   :close="() => (blowOpen = false)"
 />
 </template>
@@ -109,6 +110,7 @@ const btns = [
     v-if="blowOpen"
     title="欢迎"
     message="<strong>你好！</strong> 欢迎使用我们的应用。"
+    confirm-text="确认"
     :close="() => (blowOpen = false)"
   />
 </template>
@@ -128,6 +130,7 @@ const btns = [
   v-if="popperOpen"
   title="Tip"
   message="这是一段提示内容。"
+  confirm-text="确认"
   :close="() => (popperOpen = false)"
 />
 </template>
@@ -140,6 +143,7 @@ const btns = [
     v-if="popperOpen"
     title="Tip"
     message="这是一段提示内容。"
+    confirm-text="确认"
     :close="() => (popperOpen = false)"
   />
 </template>
@@ -251,6 +255,7 @@ interface DialogButton {
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 消息内容 (支持 HTML) |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
 | `render` | `() => VNode` | `undefined` | 渲染函数 |
@@ -261,6 +266,7 @@ interface DialogButton {
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 消息内容 (支持 HTML) |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
 | `render` | `() => VNode` | `undefined` | 渲染函数 |
