@@ -10,7 +10,6 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 
 const resolvedTitle = computed(() => props.title || t('docs.redirecting'))
-const resolvedDescription = computed(() => props.description || t('docs.loading'))
 </script>
 
 <template>
@@ -22,14 +21,6 @@ const resolvedDescription = computed(() => props.description || t('docs.loading'
         <span class="i-carbon-circle-dash docs-redirect-loading__spinner" />
         <span>{{ resolvedTitle }}</span>
       </div>
-
-      <div class="docs-redirect-loading__skeleton" aria-hidden="true">
-        <TxLayoutSkeleton />
-      </div>
-
-      <p class="docs-redirect-loading__description">
-        {{ resolvedDescription }}
-      </p>
     </div>
   </section>
 </template>
@@ -64,11 +55,9 @@ const resolvedDescription = computed(() => props.description || t('docs.loading'
 .docs-redirect-loading__content {
   position: relative;
   z-index: 1;
-  width: min(1080px, 100%);
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 18px;
+  justify-content: center;
 }
 
 .docs-redirect-loading__badge {
@@ -92,30 +81,9 @@ const resolvedDescription = computed(() => props.description || t('docs.loading'
   animation: docs-redirect-spin 1.1s linear infinite;
 }
 
-.docs-redirect-loading__skeleton {
-  width: min(980px, 100%);
-  height: clamp(360px, 54vh, 620px);
-  border-radius: 24px;
-  overflow: hidden;
-  opacity: 0.9;
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.34);
-}
-
-.docs-redirect-loading__description {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 13px;
-}
-
 @keyframes docs-redirect-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 720px) {
-  .docs-redirect-loading__skeleton {
-    height: min(480px, 62vh);
   }
 }
 </style>
