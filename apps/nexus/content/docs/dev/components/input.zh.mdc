@@ -6,12 +6,10 @@ status: beta
 since: 1.0.0
 tags: [input, field, search]
 syncStatus: migrated
+verified: true
 ---
 
 # Input 输入
-
-> Input 输入框组件用于接收用户输入，支持多种类型和状态，具有流畅的动画效果和现代化的设计风格。  
-> **状态**：Beta
 
 ## 基础用法
 

@@ -6,12 +6,10 @@ status: beta
 since: 1.0.0
 tags: [input, field, search]
 syncStatus: migrated
+verified: true
 ---
 
 # Input
-
-> Input fields capture user input with multiple types and states, paired with smooth animations and modern styling.  
-> **Status**: Beta
 
 ## Basic Usage
 

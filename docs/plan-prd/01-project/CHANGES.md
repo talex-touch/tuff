@@ -13,6 +13,14 @@
 
 ## 2026-05-25
 
+### docs(nexus): mark Input docs reviewed
+
+- `apps/nexus/content/docs/dev/components/input.zh.mdc`
+- `apps/nexus/content/docs/dev/components/input.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Removed the introductory status quote from the Input component docs page.
+  - Marked the localized Input docs as manually reviewed via `verified: true` metadata.
+
 ### refactor(tuffex): use TxButton for dialog internal actions
 
 - `packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue`
