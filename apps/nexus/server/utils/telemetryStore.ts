@@ -19,7 +19,6 @@ import {
   safeStringify,
   type TelemetryEventInput,
 } from './telemetrySanitizer'
-export type { TelemetryEvent, TelemetryEventInput } from './telemetrySanitizer'
 
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'

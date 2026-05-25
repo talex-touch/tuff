@@ -13,6 +13,20 @@
 
 ## 2026-05-25
 
+### fix(nexus): dedupe Nitro server utils auto-imports
+
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.ts`
+- `apps/nexus/server/utils/sceneOrchestrator.test.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabTools.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Shared the Nexus auto-import file filter with Nitro so `server/utils/billing/index.ts` barrel exports are excluded from server utility scanning, removing duplicate billing provider/type auto-import warnings.
+  - Removed server utility re-exports that shadow canonical sources: Scene adapter readiness now comes from `sceneCapabilityAdapterRegistry`, and telemetry event types remain owned by `telemetrySanitizer`.
+  - Consolidated Intelligence Lab locale normalization on the canonical `server/utils/locale.ts` helper and kept tool-local coercion private, removing the duplicate `normalizeLocaleCode` auto-import source.
+  - Validated with Nexus `nuxt prepare`, focused ESLint, and related Vitest suites.
+
 ### fix(nexus): stabilize governance hydration and admin i18n
 
 - `apps/nexus/app/app.vue`

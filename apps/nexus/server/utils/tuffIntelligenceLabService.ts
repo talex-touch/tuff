@@ -44,9 +44,9 @@ import {
   type TuffIntelligencePauseReason,
   type TuffIntelligenceRuntimeStatus,
 } from './tuffIntelligenceRuntimeStore'
+import { normalizeLocaleCode } from './locale'
 import {
   executeTool,
-  normalizeLocaleCode,
   SUPPORTED_TOOL_IDS,
   type ToolExecutionContext,
 } from './tuffIntelligenceLabTools'
