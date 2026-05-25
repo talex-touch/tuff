@@ -26,7 +26,6 @@ const { t } = useI18n()
 const route = useRoute()
 
 const tocState = useState<TocLink[]>('docs-toc', () => [])
-const docTitleState = useState<string>('docs-title', () => '')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => false)
 
 const activeHash = ref('')
@@ -73,7 +72,8 @@ function normalizeHash(hash: string) {
 }
 
 function isValidSvgPath(path: string) {
-  return /^[Mm]/.test(path.trim())
+  const trimmed = path.trim()
+  return /^[Mm]/.test(trimmed) && !trimmed.includes('NaN')
 }
 
 function setActiveHash(hash?: string | null) {
@@ -714,6 +714,19 @@ const safeTreeTrackPath = computed(() => isValidSvgPath(treeTrack.value.d) ? tre
 const hasOutline = computed(() => outlineEntries.value.length > 0)
 const showSkeleton = computed(() => outlineLoadingState.value && !hasOutline.value)
 
+const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('docs-outline-state', () => ({
+  hasOutline: false,
+  loading: false,
+}))
+
+watch(
+  () => ({ hasOutline: hasOutline.value, loading: showSkeleton.value }),
+  (value) => {
+    outlinePublicState.value = value
+  },
+  { immediate: true },
+)
+
 watch(
   flatLinks,
   () => {
@@ -886,10 +899,6 @@ watch(
         }"
       />
     </div>
-
-    <div v-else class="outline-empty">
-      {{ t('docs.noOutline') }}
-    </div>
   </div>
 </template>
 
@@ -1011,11 +1020,6 @@ watch(
 
 .outline-item-nested .outline-link {
   font-size: 13px;
-}
-
-.outline-empty {
-  font-size: 12px;
-  color: var(--tx-text-color-placeholder, #a8abb2);
 }
 
 @keyframes outline-shimmer {

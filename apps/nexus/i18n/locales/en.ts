@@ -3149,6 +3149,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     notFoundDescription: 'We could not find content for this route yet. Head back to the docs overview.',
     backHome: 'Back to docs home',
     redirecting: 'Redirecting to the docs landing…',
+    redirectingDeveloper: 'Redirecting to Developer Docs…',
+    redirectingGuide: 'Redirecting to User Guide…',
     outlineLabel: 'Outline',
     sidebarLabel: 'Navigation',
     noOutline: 'Headings will appear here once added to this document.',

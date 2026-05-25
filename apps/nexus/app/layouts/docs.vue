@@ -9,6 +9,11 @@ const { t } = useI18n()
 const route = useRoute()
 const sidebarVisible = ref(false)
 const outlineVisible = ref(false)
+const outlinePublicState = useState<{ hasOutline: boolean, loading: boolean }>('docs-outline-state', () => ({
+  hasOutline: false,
+  loading: false,
+}))
+const shouldShowAsideOutline = computed(() => outlinePublicState.value.hasOutline || outlinePublicState.value.loading)
 
 const normalizedDocsPath = computed(() => {
   const path = route.path || '/'
@@ -62,7 +67,7 @@ const isTuffexDocs = computed(() => {
             <div class="sticky top-24 flex flex-col gap-6">
               <div id="docs-outline-tools" class="docs-outline-tools-anchor relative z-30" />
               <ClientOnly>
-                <div class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
+                <div v-show="shouldShowAsideOutline" class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
                   <DocsOutline />
                 </div>
                 <DocsAsideCards />
