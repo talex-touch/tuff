@@ -38,6 +38,11 @@ const ssrEnabled = isProd ? true : !disableSsr
 const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
+
+function isNexusAutoImportScannable(file: string) {
+  return !file.replace(/\\/g, '/').endsWith('/server/utils/billing/index.ts')
+}
+
 function isEnvFlagEnabled(value?: string) {
   if (!value)
     return false
@@ -90,7 +95,7 @@ export default defineNuxtConfig({
 
   imports: {
     dirsScanOptions: {
-      fileFilter: (file) => !file.replace(/\\/g, '/').endsWith('/server/utils/billing/index.ts'),
+      fileFilter: isNexusAutoImportScannable,
     },
   },
 
@@ -262,6 +267,11 @@ export default defineNuxtConfig({
   nitro: {
     minify: !disableNitroMinify,
     sourceMap: !disableNitroSourceMap,
+    imports: {
+      dirsScanOptions: {
+        fileFilter: isNexusAutoImportScannable,
+      },
+    },
     hooks: {
       'types:extend'(types) {
         for (const route of nitroTypegenRouteExcludes)

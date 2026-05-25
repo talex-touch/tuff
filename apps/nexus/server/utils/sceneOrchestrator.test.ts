@@ -10,10 +10,10 @@ import {
   upsertPlatformGovernanceConfig,
 } from './platformGovernanceStore'
 import { buildSceneAssetGovernanceResourceId, requireSceneAsset } from './sceneAssetStorage'
+import { resolveSceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
 import {
   clearSceneCapabilityAdaptersForTest,
   registerSceneCapabilityAdapter,
-  resolveSceneCapabilityAdapterReadiness,
   resetSceneCapabilityAdaptersForTest,
   runSceneOrchestrator,
 } from './sceneOrchestrator'

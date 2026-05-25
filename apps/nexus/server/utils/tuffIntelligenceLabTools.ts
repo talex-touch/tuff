@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { getCookie, setCookie } from 'h3'
 import { getUserById, updateUserProfile } from './authStore'
 import { getCreditSummary } from './creditsStore'
+import { normalizeLocaleCode, type SupportedLocaleCode } from './locale'
 import { getPlanFeatures, getUserSubscription } from './subscriptionStore'
 import { resolveActiveTeamContext } from './teamContext'
 
@@ -25,7 +26,6 @@ export const SUPPORTED_TOOL_IDS = [
   TOOL_NEXUS_THEME_SET,
 ] as const
 
-type SupportedLocale = 'en' | 'zh'
 type SupportedThemePreference = 'auto' | 'dark' | 'light'
 
 export interface ToolExecutionContext {
@@ -33,17 +33,8 @@ export interface ToolExecutionContext {
   userId?: string
 }
 
-export function normalizeLocaleCode(value: unknown): SupportedLocale | null {
-  if (typeof value !== 'string')
-    return null
-  const locale = value.trim().toLowerCase()
-  if (!locale)
-    return null
-  if (locale === 'zh' || locale === 'zh-cn' || locale === 'zh-hans')
-    return 'zh'
-  if (locale === 'en' || locale === 'en-us' || locale === 'en-gb')
-    return 'en'
-  return null
+function normalizeToolLocaleCode(value: unknown): SupportedLocaleCode | null {
+  return typeof value === 'string' ? normalizeLocaleCode(value) : null
 }
 
 function normalizeThemePreference(value: unknown): SupportedThemePreference | null {
@@ -188,7 +179,7 @@ export async function executeTool(
           email: profile.email,
           name: profile.name,
           role: profile.role,
-          locale: normalizeLocaleCode(profile.locale) || profile.locale || 'en',
+          locale: normalizeToolLocaleCode(profile.locale) || profile.locale || 'en',
           emailState: profile.emailState,
         },
         subscription: {
@@ -219,7 +210,7 @@ export async function executeTool(
     }
     case TOOL_NEXUS_LANGUAGE_SET: {
       const { event, userId } = requireToolExecutionContext(context, toolId)
-      const nextLocale = normalizeLocaleCode(input.locale ?? input.language)
+      const nextLocale = normalizeToolLocaleCode(input.locale ?? input.language)
       if (!nextLocale) {
         throw new Error('locale must be one of: en, zh.')
       }

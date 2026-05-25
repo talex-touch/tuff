@@ -21,7 +21,6 @@ import {
 } from './sceneCapabilityAdapterRegistry'
 
 export type { SceneCapabilityAdapterRegistryReadiness as SceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
-export { resolveSceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
 
 export type SceneRunStatus = 'planned' | 'completed' | 'failed'
 export type SceneRunMode = 'dry_run' | 'execute'
