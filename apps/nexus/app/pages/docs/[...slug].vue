@@ -10,6 +10,7 @@ import type {
   DocAnalyticsResponse,
 } from '~/types/docs-engagement'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
 
 definePageMeta({
@@ -185,10 +186,11 @@ const viewState = computed(() => {
   return 'not-found'
 })
 
-const { data: navigationTree } = await useTypedFetch<any[]>(
+const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
     key: 'docs:navigation',
+    responseType: 'json',
     default: () => [],
   },
 )
@@ -495,7 +497,7 @@ function collectSectionPages(node: any): any[] {
 }
 
 const navigationSections = computed(() => {
-  const items = navigationTree.value ?? []
+  const items = coerceJsonArray<any>(navigationTreePayload.value)
   if (!items.length)
     return []
   const [first] = items
