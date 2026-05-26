@@ -4,11 +4,12 @@ import type { LogLevel } from './utils/logger'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
-import { app, protocol } from 'electron'
+import { app, nativeTheme, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
 import { loadStartupModules } from './core/startup-module-loader'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
+import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
 
@@ -145,6 +146,15 @@ function applyLoggerConfig(appSettings: unknown): void {
     verboseLogs
 }
 
+function applyNativeThemeSource(themeStyleConfig: unknown): void {
+  const style =
+    isRecord(themeStyleConfig) && isRecord(themeStyleConfig.theme)
+      ? themeStyleConfig.theme.style
+      : null
+  const mode = resolveThemeModeFromStyle(isRecord(style) ? style : null)
+  nativeTheme.themeSource = mode === 'auto' ? 'system' : mode
+}
+
 applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 
 // Permission module instance
@@ -237,6 +247,16 @@ app.whenReady().then(async () => {
             })
           } catch (error) {
             mainLog.warn('Failed to load logger configuration', { error })
+          }
+
+          try {
+            const themeStyle = getMainConfig(StorageList.THEME_STYLE)
+            applyNativeThemeSource(themeStyle)
+            subscribeMainConfig(StorageList.THEME_STYLE, (data) => {
+              applyNativeThemeSource(data)
+            })
+          } catch (error) {
+            mainLog.warn('Failed to load native theme source', { error })
           }
         }
       }

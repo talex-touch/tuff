@@ -8,15 +8,18 @@ import {
   areThemeStylesEqual,
   createDefaultThemeStyle,
   normalizeThemeStyle,
+  resolveThemeModeFromStyle,
   resolveThemeModeState,
   type ThemeMode,
   type ThemeModeState,
-  type ThemeStyleState
+  type ThemeStyleState,
+  type ResolvedTheme
 } from './theme-style.utils'
 
 export {
   normalizeWindowPreference,
   type ThemeMode,
+  type ResolvedTheme,
   type ThemeStyleState,
   type ThemeTransitionRoute,
   type ThemeWindowPreference
@@ -65,6 +68,14 @@ export const isDark = useDark()
  */
 export const systemDarkMode = usePreferredDark()
 
+export const themeMode = computed<ThemeMode>(() =>
+  resolveThemeModeFromStyle(themeStyle.value.theme.style)
+)
+
+export const resolvedTheme = computed<ResolvedTheme>(
+  () => resolveThemeModeState(themeMode.value, systemDarkMode.value).resolvedTheme
+)
+
 function ensureThemeStyleStateNormalized(): void {
   const normalized = normalizeThemeStyle(themeStyle.value)
   if (areThemeStylesEqual(themeStyle.value, normalized)) {
@@ -78,49 +89,44 @@ watchEffect(() => {
   ensureThemeStyleStateNormalized()
 })
 
-// Automatically sync theme with system when in auto mode
 watchEffect(() => {
-  const style = themeStyle.value.theme.style
-  if (!style.auto) {
-    return
-  }
-
-  const autoState = resolveThemeModeState('auto', systemDarkMode.value)
-
-  if (style.dark !== autoState.dark) {
-    style.dark = autoState.dark
-  }
-  if (isDark.value !== autoState.isDark) {
-    isDark.value = autoState.isDark
-  }
-
-  updateDocumentClass(autoState.isDark)
+  syncResolvedTheme(resolveThemeModeState(themeMode.value, systemDarkMode.value))
 })
 
 /**
- * Updates document class based on dark mode state
- * @param isDarkMode - Whether dark mode is active
+ * Applies the resolved theme to app-level DOM state.
  */
-function updateDocumentClass(isDarkMode: boolean): void {
+function updateDocumentTheme(resolved: ResolvedTheme): void {
   if (!hasDocument()) {
     return
   }
 
-  const classList = document.documentElement.classList
-  isDarkMode ? classList.add('dark') : classList.remove('dark')
+  const root = document.documentElement
+  root.classList.toggle('dark', resolved === 'dark')
+  root.dataset.theme = resolved
+  root.style.colorScheme = resolved
+}
+
+function syncResolvedTheme(nextThemeState: ThemeModeState): void {
+  const style = themeStyle.value.theme.style
+
+  if (style.auto !== nextThemeState.auto) {
+    style.auto = nextThemeState.auto
+  }
+  if (style.dark !== nextThemeState.dark) {
+    style.dark = nextThemeState.dark
+  }
+  if (isDark.value !== nextThemeState.isDark) {
+    isDark.value = nextThemeState.isDark
+  }
+
+  updateDocumentTheme(nextThemeState.resolvedTheme)
 }
 
 function applyThemeMode(mode: ThemeMode): ThemeModeState {
   const nextThemeState = resolveThemeModeState(mode, systemDarkMode.value)
 
-  themeStyle.value.theme.style.auto = nextThemeState.auto
-  themeStyle.value.theme.style.dark = nextThemeState.dark
-
-  if (isDark.value !== nextThemeState.isDark) {
-    isDark.value = nextThemeState.isDark
-  }
-
-  updateDocumentClass(nextThemeState.isDark)
+  syncResolvedTheme(nextThemeState)
   return nextThemeState
 }
 

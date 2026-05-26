@@ -1,6 +1,22 @@
+import {
+  resolveThemeModeFromStyle,
+  resolveThemeModeState,
+  resolveThemeStateFromStyle,
+  type ResolvedTheme,
+  type ThemeMode,
+  type ThemeModeState
+} from '../../../../shared/theme/theme-mode'
+
 export type ThemeWindowPreference = 'pure' | 'refraction' | 'filter'
 export type ThemeTransitionRoute = 'slide' | 'fade' | 'zoom'
-export type ThemeMode = 'auto' | 'dark' | 'light'
+export {
+  resolveThemeModeFromStyle,
+  resolveThemeModeState,
+  resolveThemeStateFromStyle,
+  type ResolvedTheme,
+  type ThemeMode,
+  type ThemeModeState
+}
 
 export interface ThemeStyleState {
   theme: {
@@ -17,12 +33,6 @@ export interface ThemeStyleState {
       route: ThemeTransitionRoute
     }
   }
-}
-
-export interface ThemeModeState {
-  auto: boolean
-  dark: boolean
-  isDark: boolean
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -114,28 +124,4 @@ export function areThemeStylesEqual(a: ThemeStyleState, b: ThemeStyleState): boo
     a.theme.addon.coloring === b.theme.addon.coloring &&
     a.theme.transition.route === b.theme.transition.route
   )
-}
-
-export function resolveThemeModeState(mode: ThemeMode, systemDark: boolean): ThemeModeState {
-  if (mode === 'dark') {
-    return {
-      auto: false,
-      dark: true,
-      isDark: true
-    }
-  }
-
-  if (mode === 'light') {
-    return {
-      auto: false,
-      dark: false,
-      isDark: false
-    }
-  }
-
-  return {
-    auto: true,
-    dark: systemDark,
-    isDark: systemDark
-  }
 }
