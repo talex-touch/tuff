@@ -42,7 +42,9 @@ import {
   TxCommandPalette,
   TxContainer,
   TxContextMenu,
+  TxContextMenuDivider,
   TxContextMenuItem,
+  TxContextMenuPanel,
   TxCornerOverlay,
   TxCopyButton,
   TxDataTable,
@@ -278,7 +280,9 @@ export default {
     app.component('TxDropdownMenu', TxDropdownMenu)
     app.component('TxDropdownItem', TxDropdownItem)
     app.component('TxContextMenu', TxContextMenu)
+    app.component('TxContextMenuDivider', TxContextMenuDivider)
     app.component('TxContextMenuItem', TxContextMenuItem)
+    app.component('TxContextMenuPanel', TxContextMenuPanel)
 
     // 布局
     app.component('TxContainer', TxContainer)

@@ -1,73 +1,266 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const controlledOpen = ref(false)
 const x = ref(0)
 const y = ref(0)
+const clickOpen = ref(false)
+const clickX = ref(0)
+const clickY = ref(0)
+const popoverOpen = ref(false)
+const panelPopoverOpen = ref(false)
+const animationMode = ref<'transfer' | 'boom' | 'opacity' | 'none'>('transfer')
+const anchorMode = ref<'pointer' | 'reference'>('pointer')
+const lastAction = ref('Waiting for action')
+
+const animationOptions = computed(() => ({
+  type: animationMode.value,
+  duration: animationMode.value === 'none' ? 0 : 180,
+  closeDuration: animationMode.value === 'none' ? 0 : 120,
+  distance: 12,
+  scale: 0.94,
+  blur: 8,
+}))
+
+function setAction(action: string) {
+  lastAction.value = action
+}
 
 function openAtCenter() {
   x.value = Math.round(window.innerWidth * 0.5)
   y.value = Math.round(window.innerHeight * 0.38)
   controlledOpen.value = true
 }
+
+function openClickMenu(event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  clickX.value = Math.round(rect.left + rect.width / 2)
+  clickY.value = Math.round(rect.bottom + 8)
+  clickOpen.value = true
+}
 </script>
 
 <template>
-  <div style="display: grid; gap: 12px; width: 520px;">
-    <div style="display: flex; gap: 8px; align-items: center;">
+  <div class="context-menu-demo">
+    <div class="context-menu-demo__toolbar">
       <TxButton type="primary" @click="openAtCenter">
         Open controlled menu
       </TxButton>
-      <TxButton @click="controlledOpen = false">
+      <TxButton @click="controlledOpen = false; clickOpen = false">
         Close
       </TxButton>
+      <label class="context-menu-demo__select">
+        <span>Animation</span>
+        <select v-model="animationMode">
+          <option value="transfer">transfer</option>
+          <option value="boom">boom</option>
+          <option value="opacity">opacity</option>
+          <option value="none">none</option>
+        </select>
+      </label>
+      <label class="context-menu-demo__select">
+        <span>Anchor mode</span>
+        <select v-model="anchorMode">
+          <option value="pointer">pointer</option>
+          <option value="reference">reference</option>
+        </select>
+      </label>
     </div>
 
     <TxContextMenu
       v-model="controlledOpen"
       :x="x"
       :y="y"
-      @open="() => {}"
+      :animation="animationOptions"
+      show-arrow
+      @open="setAction('Controlled menu opened')"
     >
       <template #menu>
-        <TxContextMenuItem @select="() => {}">
+        <TxContextMenuItem shortcut="⌘C" @select="setAction('Copy')">
           Copy
         </TxContextMenuItem>
-        <TxContextMenuItem @select="() => {}">
-          Paste
+        <TxContextMenuItem shortcut="⌘V" disabled @select="setAction('Paste')">
+          Paste disabled
         </TxContextMenuItem>
-        <TxContextMenuItem danger @select="() => {}">
+        <TxContextMenuDivider />
+        <TxContextMenuItem color="#8b5cf6" shortcut="⌘K" @select="setAction('Custom color')">
+          Custom purple action
+        </TxContextMenuItem>
+        <TxContextMenuItem danger shortcut="⌫" @select="setAction('Delete')">
           Delete
         </TxContextMenuItem>
       </template>
     </TxContextMenu>
 
-    <TxContextMenu>
+    <TxContextMenu
+      :animation="animationOptions"
+      :anchor-mode="anchorMode"
+      :width="260"
+      @open="setAction('Context menu followed the latest position')"
+      @close="popoverOpen = false"
+    >
       <template #trigger>
-        <div
-          style="
-            width: 100%;
-            padding: 24px;
-            border: 1px dashed var(--tx-border-color);
-            border-radius: 12px;
-            user-select: none;
-          "
-        >
-          Right click here (uncontrolled)
+        <div class="context-menu-demo__zone">
+          Right-click here: the menu avoids edges and follows the latest click position.
         </div>
       </template>
 
       <template #menu>
-        <TxContextMenuItem @select="() => {}">
+        <TxContextMenuItem shortcut="⌘R" @select="setAction('Refresh')">
           Refresh
         </TxContextMenuItem>
-        <TxContextMenuItem @select="() => {}">
+        <TxContextMenuItem shortcut="↩" @select="setAction('Rename')">
           Rename
         </TxContextMenuItem>
-        <TxContextMenuItem danger @select="() => {}">
+        <TxContextMenuDivider dashed />
+        <TxPopover
+          v-model="popoverOpen"
+          placement="right-start"
+          :offset="8"
+          :show-arrow="false"
+          :toggle-on-reference-click="false"
+          :close-on-click-outside="false"
+          reference-full-width
+          :animation="{ type: 'boom', duration: 160, closeDuration: 100, scale: 0.96, blur: 6 }"
+          :panel-padding="6"
+          :panel-radius="14"
+        >
+          <template #reference>
+            <TxContextMenuItem submenu :close-on-select="false" @select="popoverOpen = true">
+              More actions
+            </TxContextMenuItem>
+          </template>
+          <TxContextMenuPanel :width="180" :close="() => { popoverOpen = false }" outside-guard>
+            <TxContextMenuItem shortcut="⌘D" @select="setAction('Duplicate'); popoverOpen = false">
+              Duplicate
+            </TxContextMenuItem>
+            <TxContextMenuItem color="var(--tx-color-primary, #409eff)" @select="setAction('Share'); popoverOpen = false">
+              Share link
+            </TxContextMenuItem>
+          </TxContextMenuPanel>
+        </TxPopover>
+        <TxContextMenuItem danger shortcut="⌘⌫" @select="setAction('Delete')">
           Delete
         </TxContextMenuItem>
       </template>
     </TxContextMenu>
+
+    <div class="context-menu-demo__grid">
+      <TxButton @click="openClickMenu">
+        Open coordinate menu by click
+      </TxButton>
+      <TxContextMenu
+        v-model="clickOpen"
+        trigger="manual"
+        :x="clickX"
+        :y="clickY"
+        :width="230"
+        :animation="{ type: 'boom', duration: 180, closeDuration: 120, scale: 0.92, blur: 10 }"
+        panel-background="glass"
+      >
+        <template #menu>
+          <TxContextMenuItem shortcut="⌘N" @select="setAction('New file')">
+            New file
+          </TxContextMenuItem>
+          <TxContextMenuItem shortcut="⇧⌘N" @select="setAction('New folder')">
+            New folder
+          </TxContextMenuItem>
+        </template>
+      </TxContextMenu>
+
+      <TxPopover
+        v-model="panelPopoverOpen"
+        placement="bottom-start"
+        :width="260"
+        :panel-padding="6"
+        :show-arrow="true"
+        :animation="{ type: 'transfer', duration: 180, closeDuration: 120 }"
+      >
+        <template #reference>
+          <TxButton>ContextMenu panel inside Popover</TxButton>
+        </template>
+        <TxContextMenuPanel :close="() => { panelPopoverOpen = false }">
+          <TxContextMenuItem shortcut="⌘P" @select="setAction('Pinned from popover')">
+            Pin to top
+          </TxContextMenuItem>
+          <TxContextMenuItem color="#10b981" @select="setAction('Approved')">
+            Approve
+          </TxContextMenuItem>
+          <TxContextMenuDivider inset />
+          <TxContextMenuItem danger @select="setAction('Rejected')">
+            Reject
+          </TxContextMenuItem>
+          <p class="context-menu-demo__hint">
+            This panel has no context trigger; it only reuses the menu surface and item behavior.
+          </p>
+        </TxContextMenuPanel>
+      </TxPopover>
+    </div>
+
+    <div class="context-menu-demo__status">
+      Last action: {{ lastAction }}
+    </div>
   </div>
 </template>
+
+<style scoped>
+.context-menu-demo {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 680px);
+}
+
+.context-menu-demo__toolbar,
+.context-menu-demo__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.context-menu-demo__select {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 13px;
+}
+
+.context-menu-demo__select select {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--tx-border-color-light, #e4e7ed);
+  border-radius: 10px;
+  color: var(--tx-text-color-primary, #303133);
+  background: var(--tx-bg-color-overlay, #fff);
+}
+
+.context-menu-demo__zone {
+  width: 100%;
+  min-height: 86px;
+  display: flex;
+  align-items: center;
+  padding: 24px;
+  border: 1px dashed var(--tx-border-color, #dcdfe6);
+  border-radius: 14px;
+  color: var(--tx-text-color-primary, #303133);
+  user-select: none;
+  box-sizing: border-box;
+}
+
+.context-menu-demo__status {
+  width: fit-content;
+  padding: 8px 10px;
+  border-radius: 12px;
+  color: var(--tx-text-color-secondary, #909399);
+  background: color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 70%, transparent);
+  font-size: 13px;
+}
+
+.context-menu-demo__hint {
+  margin: 6px 8px 2px;
+  color: var(--tx-text-color-secondary, #909399);
+  font-size: 12px;
+  line-height: 1.45;
+}
+</style>

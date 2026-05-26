@@ -44,6 +44,11 @@ export type BaseAnchorPanelCardProps = Partial<Pick<
 
 export type BaseAnchorClassValue = string | Record<string, boolean> | BaseAnchorClassValue[]
 
+export interface BaseAnchorVirtualReference {
+  getBoundingClientRect: () => DOMRect | ClientRect
+  contextElement?: Element
+}
+
 export interface BaseAnchorProps {
   modelValue?: boolean
   disabled?: boolean
@@ -59,6 +64,7 @@ export interface BaseAnchorProps {
   unlimitedHeight?: boolean
   matchReferenceWidth?: boolean
   referenceClass?: BaseAnchorClassValue
+  virtualReference?: BaseAnchorVirtualReference
 
   // animation
   animation?: BaseAnchorAnimationOptions

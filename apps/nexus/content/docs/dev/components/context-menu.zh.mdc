@@ -1,94 +1,285 @@
 ---
 title: "ContextMenu 右键菜单"
-description: "基于 Floating UI 的右键菜单（跟随鼠标坐标）。"
+description: "可右键、可坐标控制、可嵌入 Popover 的通用菜单面板。"
 category: Feedback
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # ContextMenu 右键菜单
 
-基于 Floating UI 的右键菜单（跟随鼠标坐标）。
+`TxContextMenu` 是一个更通用的菜单浮层：既可以绑定原生右键，也可以用受控坐标打开；底层通过 `TxBaseAnchor` 的 virtual anchor 模式承载定位、碰撞处理、Card surface 与动画，并在连续右键时自动跟随最新鼠标位置。菜单内容也可以拆成 `TxContextMenuPanel` 嵌入到 `TxPopover` / 自定义浮层里复用。
 
-## 基础用法
+## 基础与组合场景
 
 ### ContextMenu
 :::TuffDemoWrapper{demo="ContextMenuContextMenuDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { ref } from 'vue'
+  import { computed, ref } from 'vue'
 
   const controlledOpen = ref(false)
   const x = ref(0)
   const y = ref(0)
+  const clickOpen = ref(false)
+  const clickX = ref(0)
+  const clickY = ref(0)
+  const popoverOpen = ref(false)
+  const animationMode = ref<'transfer' | 'boom' | 'opacity' | 'none'>('transfer')
+  const lastAction = ref('等待操作')
+
+  const animationOptions = computed(() => ({
+    type: animationMode.value,
+    duration: animationMode.value === 'none' ? 0 : 180,
+    closeDuration: animationMode.value === 'none' ? 0 : 120,
+    distance: 12,
+    scale: 0.94,
+    blur: 8,
+  }))
+
+  function setAction(action: string) {
+    lastAction.value = action
+  }
 
   function openAtCenter() {
     x.value = Math.round(window.innerWidth * 0.5)
     y.value = Math.round(window.innerHeight * 0.38)
     controlledOpen.value = true
   }
+
+  function openClickMenu(event: MouseEvent) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    clickX.value = Math.round(rect.left + rect.width / 2)
+    clickY.value = Math.round(rect.bottom + 8)
+    clickOpen.value = true
+  }
   </script>
 
   <template>
-    <div style="display: grid; gap: 12px; width: 520px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
+    <div style="display: grid; gap: 14px; width: min(100%, 680px);">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
         <TxButton type="primary" @click="openAtCenter">
-          Open controlled menu
+          在中心打开受控菜单
         </TxButton>
-        <TxButton @click="controlledOpen = false">
-          Close
+        <TxButton @click="controlledOpen = false; clickOpen = false">
+          关闭
         </TxButton>
       </div>
 
+      <!-- 受控坐标：适合命令面板、编辑器、自定义快捷键触发 -->
       <TxContextMenu
         v-model="controlledOpen"
         :x="x"
         :y="y"
-        @open="() => {}"
+        :animation="animationOptions"
+        show-arrow
       >
         <template #menu>
-          <TxContextMenuItem @select="() => {}">
+          <TxContextMenuItem shortcut="⌘C" @select="setAction('Copy')">
             Copy
           </TxContextMenuItem>
-          <TxContextMenuItem @select="() => {}">
-            Paste
+          <TxContextMenuItem shortcut="⌘V" disabled>
+            Paste disabled
           </TxContextMenuItem>
-          <TxContextMenuItem danger @select="() => {}">
+          <TxContextMenuDivider />
+          <TxContextMenuItem color="#8b5cf6" shortcut="⌘K">
+            Custom purple action
+          </TxContextMenuItem>
+          <TxContextMenuItem danger shortcut="⌫">
             Delete
           </TxContextMenuItem>
         </template>
       </TxContextMenu>
 
-      <TxContextMenu>
+      <!-- 非受控右键：每次 contextmenu 都会更新坐标并自动定位 -->
+      <TxContextMenu :animation="animationOptions" :width="260">
         <template #trigger>
-          <div
-            style="
-              width: 100%;
-              padding: 24px;
-              border: 1px dashed var(--tx-border-color);
-              border-radius: 12px;
-              user-select: none;
-            "
-          >
-            Right click here (uncontrolled)
+          <div style="padding: 24px; border: 1px dashed var(--tx-border-color); border-radius: 14px; user-select: none;">
+            在这里右键：菜单会自动避让边缘，重复右键会跟随最新位置
           </div>
         </template>
 
         <template #menu>
-          <TxContextMenuItem @select="() => {}">
-            Refresh
-          </TxContextMenuItem>
-          <TxContextMenuItem @select="() => {}">
-            Rename
-          </TxContextMenuItem>
-          <TxContextMenuItem danger @select="() => {}">
-            Delete
-          </TxContextMenuItem>
+          <TxContextMenuItem shortcut="⌘R">Refresh</TxContextMenuItem>
+          <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
+          <TxContextMenuDivider dashed />
+          <TxPopover v-model="popoverOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false">
+            <template #reference>
+              <TxContextMenuItem submenu :close-on-select="false" @select="popoverOpen = true">
+                More actions
+              </TxContextMenuItem>
+            </template>
+            <TxContextMenuPanel :width="180" :close="() => { popoverOpen = false }" outside-guard>
+              <TxContextMenuItem shortcut="⌘D">Duplicate</TxContextMenuItem>
+              <TxContextMenuItem color="var(--tx-color-primary)">Share link</TxContextMenuItem>
+            </TxContextMenuPanel>
+          </TxPopover>
+          <TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
         </template>
       </TxContextMenu>
+
+      <!-- 自定义触发方式：按钮点击后写入坐标 -->
+      <TxButton @click="openClickMenu">
+        点击按钮打开坐标菜单
+      </TxButton>
+      <TxContextMenu
+        v-model="clickOpen"
+        trigger="manual"
+        :x="clickX"
+        :y="clickY"
+        :width="230"
+        :animation="{ type: 'boom', duration: 180, closeDuration: 120, scale: 0.92, blur: 10 }"
+        panel-background="glass"
+      >
+        <template #menu>
+          <TxContextMenuItem shortcut="⌘N">New file</TxContextMenuItem>
+          <TxContextMenuItem shortcut="⇧⌘N">New folder</TxContextMenuItem>
+        </template>
+      </TxContextMenu>
+
+      <!-- 嵌入 Popover：只复用菜单面板和 item 行为 -->
+      <TxPopover placement="bottom-start" :width="260" :panel-padding="6">
+        <template #reference>
+          <TxButton>嵌入 Popover 的菜单面板</TxButton>
+        </template>
+        <TxContextMenuPanel :close="() => {}">
+          <TxContextMenuItem shortcut="⌘P">Pin to top</TxContextMenuItem>
+          <TxContextMenuItem color="#10b981">Approve</TxContextMenuItem>
+          <TxContextMenuDivider inset />
+          <TxContextMenuItem danger>Reject</TxContextMenuItem>
+        </TxContextMenuPanel>
+      </TxPopover>
     </div>
   </template>
 ---
 :::
+
+## 常见用法
+
+### 绑定到右键
+
+```vue
+<TxContextMenu>
+  <template #trigger>
+    <div class="file-row">Right click file row</div>
+  </template>
+
+  <template #menu>
+    <TxContextMenuItem shortcut="⌘O">Open</TxContextMenuItem>
+    <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
+    <TxContextMenuDivider />
+    <TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
+  </template>
+</TxContextMenu>
+```
+
+### 锚点模式：跟随鼠标或跟随触发区域
+
+默认 `anchorMode="pointer"`，右键菜单会跟随鼠标坐标；如果需要像 Popover/Dropdown 一样贴着触发区域，改成 `anchorMode="reference"`。
+
+```vue
+<!-- 跟随鼠标/传入坐标，适合标准右键菜单 -->
+<TxContextMenu anchor-mode="pointer" />
+
+<!-- 跟随触发区域，适合更接近 Dropdown 的菜单 -->
+<TxContextMenu anchor-mode="reference" />
+```
+
+### 受控坐标 / 自定义触发方式
+
+适用于按钮点击、编辑器快捷键、画布节点菜单等场景。`trigger="manual"` 会禁用组件内部触发，只由 `v-model + x/y` 控制打开位置。
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const open = ref(false)
+const x = ref(0)
+const y = ref(0)
+
+function openFromButton(event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  x.value = rect.left
+  y.value = rect.bottom + 8
+  open.value = true
+}
+</script>
+
+<template>
+  <TxButton @click="openFromButton">Open menu</TxButton>
+  <TxContextMenu v-model="open" trigger="manual" :x="x" :y="y">
+    <template #menu>
+      <TxContextMenuItem shortcut="⌘N">New</TxContextMenuItem>
+    </template>
+  </TxContextMenu>
+</template>
+```
+
+### 嵌入 Popover
+
+`TxContextMenuPanel` 不包含定位和触发器，只提供菜单布局、item 注入和关闭上下文，因此可以放进 `TxPopover`、`TxDropdownMenu` 或自定义 Overlay。
+
+```vue
+<TxPopover placement="bottom-start" :width="240" :panel-padding="6">
+  <template #reference>
+    <TxButton>More</TxButton>
+  </template>
+
+  <TxContextMenuPanel>
+    <TxContextMenuItem shortcut="⌘P">Pin</TxContextMenuItem>
+    <TxContextMenuItem color="#10b981">Approve</TxContextMenuItem>
+    <TxContextMenuDivider />
+    <TxContextMenuItem danger>Reject</TxContextMenuItem>
+  </TxContextMenuPanel>
+</TxPopover>
+```
+
+### 自定义二级 Context Menu
+
+可以用 `TxPopover` 承载子菜单，并将父级 item 的 `close-on-select` 设为 `false`，点击后不关闭父菜单。若子菜单在父 `TxContextMenu` 外层 Teleport，可在 `TxContextMenuPanel` 上加 `outside-guard`，避免点击子菜单时父菜单被外部点击逻辑关闭。
+
+```vue
+<TxPopover v-model="submenuOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false" reference-full-width>
+  <template #reference>
+    <TxContextMenuItem submenu :close-on-select="false" @select="submenuOpen = true">
+      More actions
+    </TxContextMenuItem>
+  </template>
+
+  <TxContextMenuPanel :close="() => { submenuOpen = false }" outside-guard>
+    <TxContextMenuItem shortcut="⌘D">Duplicate</TxContextMenuItem>
+    <TxContextMenuItem color="var(--tx-color-primary)">Share link</TxContextMenuItem>
+  </TxContextMenuPanel>
+</TxPopover>
+```
+
+### Divider / Disabled / Danger / 自定义颜色 / 快捷键
+
+```vue
+<TxContextMenuItem shortcut="⌘C">Copy</TxContextMenuItem>
+<TxContextMenuItem disabled shortcut="⌘V">Paste</TxContextMenuItem>
+<TxContextMenuDivider dashed />
+<TxContextMenuItem color="#8b5cf6" shortcut="⌘K">Run command</TxContextMenuItem>
+<TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
+```
+
+### Anchor 动画与自动定位
+
+`TxContextMenu` 通过 `TxBaseAnchor` 使用 Floating UI 的 `flip + shift + size` 自动定位：靠近视口边缘时会自动翻转/平移，并限制最大高度。`anchorMode="pointer"` 时同一个 trigger 多次右键会更新 virtual anchor 坐标并跟随最新鼠标位置；`anchorMode="reference"` 时菜单跟随触发区域。
+
+动画直接走 `BaseAnchor`，支持 `transfer`、`boom`、`opacity`、`none`。
+
+```vue
+<TxContextMenu
+  :animation="{
+    type: 'boom',
+    duration: 180,
+    closeDuration: 120,
+    scale: 0.92,
+    blur: 10
+  }"
+/>
+```
 
 ## API
 
@@ -97,18 +288,68 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `modelValue` | `boolean \| undefined` | `undefined` | 是否打开（v-model）；`undefined` 时为非受控模式 |
-| `x` | `number` | `0` | 打开坐标 X（可选） |
-| `y` | `number` | `0` | 打开坐标 Y（可选） |
-| `width` | `number` | `220` | 菜单宽度 |
+| `x` | `number` | `0` | 受控/手动打开坐标 X |
+| `y` | `number` | `0` | 受控/手动打开坐标 Y |
+| `width` | `number` | `220` | 菜单宽度；`0` 表示自动宽度 |
+| `minWidth` | `number` | `0` | 最小宽度 |
+| `maxWidth` | `number` | `360` | 最大宽度；`0` 表示不限制 |
+| `maxHeight` | `number` | `420` | 最大高度；会结合可用视口高度自动收缩 |
+| `unlimitedHeight` | `boolean` | `false` | 不限制高度 |
+| `disabled` | `boolean` | `false` | 禁用触发与打开 |
+| `eager` | `boolean` | `false` | 提前挂载菜单内容 |
+| `trigger` | `'contextmenu' \| 'click' \| 'both' \| 'manual'` | `'contextmenu'` | 触发方式；`manual` 仅由外部坐标控制 |
+| `anchorMode` | `'pointer' \| 'reference'` | `'pointer'` | 锚点模式：`pointer` 跟随鼠标/传入坐标，`reference` 跟随触发区域 |
+| `preventDefault` | `boolean` | `true` | 右键触发时阻止浏览器默认菜单 |
+| `placement` | `BaseAnchorPlacement` | `'bottom-start'` | 相对坐标点的初始方向，支持 top/bottom/left/right 及 start/end |
+| `offset` | `number` | `2` | 与坐标点的距离 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
-| `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
+| `closeOnClickOutside` | `boolean` | `true` | 点击菜单外部关闭 |
+| `closeOnTriggerPointerDown` | `boolean` | `true` | 菜单打开后点击触发区域也关闭；`click` / `both` 触发模式下自动忽略，避免点击打开后马上关闭 |
+| `closeOnAnyPointerDown` | `boolean` | `false` | 点击任意非菜单区域都关闭，包括触发区域和页面其它区域 |
+| `closeOnSelect` | `boolean` | `true` | 菜单项选中后自动关闭 |
+| `showArrow` | `boolean` | `false` | 显示指向坐标点的箭头 |
+| `arrowSize` | `number` | `10` | 箭头尺寸 |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | 打开/关闭动画，支持 `transfer` / `boom` / `opacity` / `none` |
+| `duration` | `number` | `160` | 兼容快捷动画时长；优先使用 `animation.duration` |
+| `keepAliveContent` | `boolean` | `true` | 关闭后保留内容状态 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框样式 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景效果 |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | 面板阴影 |
+| `panelRadius` | `number` | `14` | 面板圆角 |
+| `panelPadding` | `number` | `6` | 面板内边距 |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给内部 `TxCard` 的高级视觉参数 |
 
 ### TxContextMenu Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
+| `update:modelValue` | `boolean` | 打开状态变化 |
 | `open` | `{ x: number; y: number }` | 打开时触发（包含最终打开坐标） |
 | `close` | - | 关闭时触发 |
+
+### TxContextMenu Exposes
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `openAt` | `(target?: { x: number; y: number } \| MouseEvent \| PointerEvent) => void` | 按坐标或事件打开菜单 |
+| `openFromEvent` | `(event: MouseEvent \| PointerEvent) => void` | 从鼠标/指针事件打开菜单 |
+| `close` | `() => void` | 关闭菜单 |
+| `updatePosition` | `() => void` | 手动刷新 Floating UI 定位 |
+
+### TxContextMenuPanel Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `width` | `number \| string` | - | 面板宽度 |
+| `minWidth` | `number \| string` | - | 最小宽度 |
+| `maxWidth` | `number \| string` | - | 最大宽度 |
+| `maxHeight` | `number \| string` | - | 最大高度 |
+| `closeOnSelect` | `boolean` | `true` | 内部 item 选中后是否关闭 |
+| `close` | `() => void` | - | 面板关闭回调，供 item 注入使用 |
+| `dense` | `boolean` | `false` | 更紧凑的 item 间距 |
+| `outsideGuard` | `boolean` | `false` | 标记为 ContextMenu 外部保护层，用于二级菜单/Teleport 组合 |
+| `role` | `string` | `'menu'` | ARIA role |
+| `ariaLabel` | `string` | - | ARIA label |
 
 ### TxContextMenuItem Props
 
@@ -116,9 +357,20 @@ code: |
 |------|------|---------|------|
 | `disabled` | `boolean` | `false` | 是否禁用 |
 | `danger` | `boolean` | `false` | 危险操作样式 |
+| `color` | `string` | - | 自定义文字颜色，支持 CSS 变量 |
+| `shortcut` | `string` | - | 右侧快捷键提示 |
+| `submenu` | `boolean` | `false` | 显示二级菜单箭头 |
+| `closeOnSelect` | `boolean` | - | 覆盖父级 `closeOnSelect` |
 
 ### TxContextMenuItem Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `select` | - | 选中条目（点击后自动关闭菜单） |
+| `select` | - | 选中条目；未禁用时触发 |
+
+### TxContextMenuDivider Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `dashed` | `boolean` | `false` | 虚线分隔符 |
+| `inset` | `boolean` | `false` | 左侧缩进，适合与有图标/层级的 item 对齐 |

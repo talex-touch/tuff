@@ -1,94 +1,285 @@
 ---
 title: "ContextMenu"
-description: "Right-click and controlled floating menu built on Floating UI."
+description: "General menu surface for right-click, controlled coordinates, and Popover composition."
 category: Feedback
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # ContextMenu
 
-Right-click and controlled floating menu built on Floating UI. It supports uncontrolled context-menu triggers and controlled coordinates through `v-model`, `x`, and `y`.
+`TxContextMenu` is a general menu overlay. It can bind to the native `contextmenu` event and open from controlled coordinates. Positioning, collision handling, Card surface, and motion are now hosted by `TxBaseAnchor` through virtual-anchor mode, so the menu follows the latest position when users right-click repeatedly. The visual/content part is also available as `TxContextMenuPanel`, so the same menu items can be embedded inside `TxPopover` or any custom overlay.
 
-## Basic Usage
+## Basic and Composition Scenarios
 
 ### ContextMenu
 :::TuffDemoWrapper{demo="ContextMenuContextMenuDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { ref } from 'vue'
+  import { computed, ref } from 'vue'
 
   const controlledOpen = ref(false)
   const x = ref(0)
   const y = ref(0)
+  const clickOpen = ref(false)
+  const clickX = ref(0)
+  const clickY = ref(0)
+  const popoverOpen = ref(false)
+  const animationMode = ref<'transfer' | 'boom' | 'opacity' | 'none'>('transfer')
+  const lastAction = ref('Waiting for action')
+
+  const animationOptions = computed(() => ({
+    type: animationMode.value,
+    duration: animationMode.value === 'none' ? 0 : 180,
+    closeDuration: animationMode.value === 'none' ? 0 : 120,
+    distance: 12,
+    scale: 0.94,
+    blur: 8,
+  }))
+
+  function setAction(action: string) {
+    lastAction.value = action
+  }
 
   function openAtCenter() {
     x.value = Math.round(window.innerWidth * 0.5)
     y.value = Math.round(window.innerHeight * 0.38)
     controlledOpen.value = true
   }
+
+  function openClickMenu(event: MouseEvent) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    clickX.value = Math.round(rect.left + rect.width / 2)
+    clickY.value = Math.round(rect.bottom + 8)
+    clickOpen.value = true
+  }
   </script>
 
   <template>
-    <div style="display: grid; gap: 12px; width: 520px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
+    <div style="display: grid; gap: 14px; width: min(100%, 680px);">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
         <TxButton type="primary" @click="openAtCenter">
           Open controlled menu
         </TxButton>
-        <TxButton @click="controlledOpen = false">
+        <TxButton @click="controlledOpen = false; clickOpen = false">
           Close
         </TxButton>
       </div>
 
+      <!-- Controlled coordinates: useful for command palettes, editors, custom shortcuts, and canvas nodes. -->
       <TxContextMenu
         v-model="controlledOpen"
         :x="x"
         :y="y"
-        @open="() => {}"
+        :animation="animationOptions"
+        show-arrow
       >
         <template #menu>
-          <TxContextMenuItem @select="() => {}">
+          <TxContextMenuItem shortcut="⌘C" @select="setAction('Copy')">
             Copy
           </TxContextMenuItem>
-          <TxContextMenuItem @select="() => {}">
-            Paste
+          <TxContextMenuItem shortcut="⌘V" disabled>
+            Paste disabled
           </TxContextMenuItem>
-          <TxContextMenuItem danger @select="() => {}">
+          <TxContextMenuDivider />
+          <TxContextMenuItem color="#8b5cf6" shortcut="⌘K">
+            Custom purple action
+          </TxContextMenuItem>
+          <TxContextMenuItem danger shortcut="⌫">
             Delete
           </TxContextMenuItem>
         </template>
       </TxContextMenu>
 
-      <TxContextMenu>
+      <!-- Uncontrolled right-click: every contextmenu event refreshes coordinates and placement. -->
+      <TxContextMenu :animation="animationOptions" :width="260">
         <template #trigger>
-          <div
-            style="
-              width: 100%;
-              padding: 24px;
-              border: 1px dashed var(--tx-border-color);
-              border-radius: 12px;
-              user-select: none;
-            "
-          >
-            Right click here (uncontrolled)
+          <div style="padding: 24px; border: 1px dashed var(--tx-border-color); border-radius: 14px; user-select: none;">
+            Right-click here: the menu avoids edges and follows the latest click position.
           </div>
         </template>
 
         <template #menu>
-          <TxContextMenuItem @select="() => {}">
-            Refresh
-          </TxContextMenuItem>
-          <TxContextMenuItem @select="() => {}">
-            Rename
-          </TxContextMenuItem>
-          <TxContextMenuItem danger @select="() => {}">
-            Delete
-          </TxContextMenuItem>
+          <TxContextMenuItem shortcut="⌘R">Refresh</TxContextMenuItem>
+          <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
+          <TxContextMenuDivider dashed />
+          <TxPopover v-model="popoverOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false">
+            <template #reference>
+              <TxContextMenuItem submenu :close-on-select="false" @select="popoverOpen = true">
+                More actions
+              </TxContextMenuItem>
+            </template>
+            <TxContextMenuPanel :width="180" :close="() => { popoverOpen = false }" outside-guard>
+              <TxContextMenuItem shortcut="⌘D">Duplicate</TxContextMenuItem>
+              <TxContextMenuItem color="var(--tx-color-primary)">Share link</TxContextMenuItem>
+            </TxContextMenuPanel>
+          </TxPopover>
+          <TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
         </template>
       </TxContextMenu>
+
+      <!-- Custom trigger: write coordinates from a button click. -->
+      <TxButton @click="openClickMenu">
+        Open coordinate menu by click
+      </TxButton>
+      <TxContextMenu
+        v-model="clickOpen"
+        trigger="manual"
+        :x="clickX"
+        :y="clickY"
+        :width="230"
+        :animation="{ type: 'boom', duration: 180, closeDuration: 120, scale: 0.92, blur: 10 }"
+        panel-background="glass"
+      >
+        <template #menu>
+          <TxContextMenuItem shortcut="⌘N">New file</TxContextMenuItem>
+          <TxContextMenuItem shortcut="⇧⌘N">New folder</TxContextMenuItem>
+        </template>
+      </TxContextMenu>
+
+      <!-- Embedded in Popover: reuse only the panel and item behavior. -->
+      <TxPopover placement="bottom-start" :width="260" :panel-padding="6">
+        <template #reference>
+          <TxButton>ContextMenu panel inside Popover</TxButton>
+        </template>
+        <TxContextMenuPanel :close="() => {}">
+          <TxContextMenuItem shortcut="⌘P">Pin to top</TxContextMenuItem>
+          <TxContextMenuItem color="#10b981">Approve</TxContextMenuItem>
+          <TxContextMenuDivider inset />
+          <TxContextMenuItem danger>Reject</TxContextMenuItem>
+        </TxContextMenuPanel>
+      </TxPopover>
     </div>
   </template>
 ---
 :::
+
+## Common Patterns
+
+### Bind to right-click
+
+```vue
+<TxContextMenu>
+  <template #trigger>
+    <div class="file-row">Right click file row</div>
+  </template>
+
+  <template #menu>
+    <TxContextMenuItem shortcut="⌘O">Open</TxContextMenuItem>
+    <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
+    <TxContextMenuDivider />
+    <TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
+  </template>
+</TxContextMenu>
+```
+
+### Anchor mode: follow pointer or trigger reference
+
+The default is `anchorMode="pointer"`, so the context menu follows the mouse coordinates. Use `anchorMode="reference"` when the menu should behave more like a Popover/Dropdown and attach to the trigger area.
+
+```vue
+<!-- Follow mouse / provided coordinates. Good for standard context menus. -->
+<TxContextMenu anchor-mode="pointer" />
+
+<!-- Follow the trigger area. Good for dropdown-like menus. -->
+<TxContextMenu anchor-mode="reference" />
+```
+
+### Controlled coordinates / custom trigger
+
+Use this for button clicks, editor shortcuts, canvas node menus, and other non-right-click flows. `trigger="manual"` disables internal event handling, so the menu opens only through `v-model + x/y`.
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const open = ref(false)
+const x = ref(0)
+const y = ref(0)
+
+function openFromButton(event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  x.value = rect.left
+  y.value = rect.bottom + 8
+  open.value = true
+}
+</script>
+
+<template>
+  <TxButton @click="openFromButton">Open menu</TxButton>
+  <TxContextMenu v-model="open" trigger="manual" :x="x" :y="y">
+    <template #menu>
+      <TxContextMenuItem shortcut="⌘N">New</TxContextMenuItem>
+    </template>
+  </TxContextMenu>
+</template>
+```
+
+### Embed in Popover
+
+`TxContextMenuPanel` has no positioning or trigger logic. It only provides menu layout, item injection, and close context, so it can live inside `TxPopover`, `TxDropdownMenu`, or a custom overlay.
+
+```vue
+<TxPopover placement="bottom-start" :width="240" :panel-padding="6">
+  <template #reference>
+    <TxButton>More</TxButton>
+  </template>
+
+  <TxContextMenuPanel>
+    <TxContextMenuItem shortcut="⌘P">Pin</TxContextMenuItem>
+    <TxContextMenuItem color="#10b981">Approve</TxContextMenuItem>
+    <TxContextMenuDivider />
+    <TxContextMenuItem danger>Reject</TxContextMenuItem>
+  </TxContextMenuPanel>
+</TxPopover>
+```
+
+### Custom secondary context menu
+
+Use `TxPopover` for a submenu and set `close-on-select="false"` on the parent item so selecting it does not close the parent menu. If the submenu is teleported outside the parent `TxContextMenu`, add `outside-guard` on `TxContextMenuPanel` to prevent the parent outside-click handler from closing immediately.
+
+```vue
+<TxPopover v-model="submenuOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false" reference-full-width>
+  <template #reference>
+    <TxContextMenuItem submenu :close-on-select="false" @select="submenuOpen = true">
+      More actions
+    </TxContextMenuItem>
+  </template>
+
+  <TxContextMenuPanel :close="() => { submenuOpen = false }" outside-guard>
+    <TxContextMenuItem shortcut="⌘D">Duplicate</TxContextMenuItem>
+    <TxContextMenuItem color="var(--tx-color-primary)">Share link</TxContextMenuItem>
+  </TxContextMenuPanel>
+</TxPopover>
+```
+
+### Divider / Disabled / Danger / custom color / shortcuts
+
+```vue
+<TxContextMenuItem shortcut="⌘C">Copy</TxContextMenuItem>
+<TxContextMenuItem disabled shortcut="⌘V">Paste</TxContextMenuItem>
+<TxContextMenuDivider dashed />
+<TxContextMenuItem color="#8b5cf6" shortcut="⌘K">Run command</TxContextMenuItem>
+<TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
+```
+
+### Anchor animation and automatic placement
+
+`TxContextMenu` uses Floating UI `flip + shift + size` placement through `TxBaseAnchor`. It flips or shifts near viewport edges and constrains max height to the available viewport. With `anchorMode="pointer"`, repeated right-clicks update the virtual anchor to the latest mouse position; with `anchorMode="reference"`, the menu follows the trigger area.
+
+Animation is handled directly by `BaseAnchor`: `transfer`, `boom`, `opacity`, and `none`.
+
+```vue
+<TxContextMenu
+  :animation="{
+    type: 'boom',
+    duration: 180,
+    closeDuration: 120,
+    scale: 0.92,
+    blur: 10
+  }"
+/>
+```
 
 ## API
 
@@ -97,28 +288,89 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `modelValue` | `boolean \| undefined` | `undefined` | Controlled open state; leave undefined for internal uncontrolled state. |
-| `x` | `number` | `0` | Controlled menu anchor X coordinate. |
-| `y` | `number` | `0` | Controlled menu anchor Y coordinate. |
-| `width` | `number` | `220` | Menu panel width in pixels. |
-| `closeOnEsc` | `boolean` | `true` | Closes the menu when Escape is pressed. |
-| `closeOnClickOutside` | `boolean` | `true` | Closes the menu on pointer events outside the trigger and menu. |
+| `x` | `number` | `0` | Controlled/manual anchor X coordinate. |
+| `y` | `number` | `0` | Controlled/manual anchor Y coordinate. |
+| `width` | `number` | `220` | Menu width in pixels; `0` keeps automatic width. |
+| `minWidth` | `number` | `0` | Minimum width. |
+| `maxWidth` | `number` | `360` | Maximum width; `0` means unlimited. |
+| `maxHeight` | `number` | `420` | Maximum height; also constrained by available viewport height. |
+| `unlimitedHeight` | `boolean` | `false` | Disables height limiting. |
+| `disabled` | `boolean` | `false` | Disables triggers and opening. |
+| `eager` | `boolean` | `false` | Mounts menu content before first open. |
+| `trigger` | `'contextmenu' \| 'click' \| 'both' \| 'manual'` | `'contextmenu'` | Trigger mode. `manual` opens only through external state/coordinates. |
+| `anchorMode` | `'pointer' \| 'reference'` | `'pointer'` | Anchor mode. `pointer` follows the mouse / provided coordinates; `reference` follows the trigger area. |
+| `preventDefault` | `boolean` | `true` | Prevents the browser native context menu on right-click. |
+| `placement` | `BaseAnchorPlacement` | `'bottom-start'` | Initial placement relative to the coordinate point. Supports top/bottom/left/right and start/end variants. |
+| `offset` | `number` | `2` | Distance from the coordinate point. |
+| `closeOnEsc` | `boolean` | `true` | Closes the menu on Escape. |
+| `closeOnClickOutside` | `boolean` | `true` | Closes the menu on pointer events outside the menu. |
+| `closeOnTriggerPointerDown` | `boolean` | `true` | Closes when users click the trigger area after the menu is open; automatically ignored for `click` / `both` trigger modes to avoid closing immediately after opening. |
+| `closeOnAnyPointerDown` | `boolean` | `false` | Closes on any non-menu pointer down, including the trigger area and the rest of the page. |
+| `closeOnSelect` | `boolean` | `true` | Closes the menu after an item is selected. |
+| `showArrow` | `boolean` | `false` | Shows an arrow pointing to the coordinate anchor. |
+| `arrowSize` | `number` | `10` | Arrow size. |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | Enter/leave animation. Supports `transfer`, `boom`, `opacity`, and `none`. |
+| `duration` | `number` | `160` | Backward-compatible animation duration; prefer `animation.duration`. |
+| `keepAliveContent` | `boolean` | `true` | Preserves content state after close. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Panel border style. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background effect. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'medium'` | Panel shadow. |
+| `panelRadius` | `number` | `14` | Panel radius. |
+| `panelPadding` | `number` | `6` | Panel padding. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Advanced visual props forwarded to the internal `TxCard`. |
 
 ### TxContextMenu Events
 
 | Event | Params | Description |
 |------|------|------|
+| `update:modelValue` | `boolean` | Emitted when open state changes. |
 | `open` | `{ x: number; y: number }` | Emitted when the menu opens with the active anchor coordinates. |
 | `close` | - | Emitted when the menu closes. |
+
+### TxContextMenu Exposes
+
+| Name | Type | Description |
+|------|------|------|
+| `openAt` | `(target?: { x: number; y: number } \| MouseEvent \| PointerEvent) => void` | Opens the menu at a point or event coordinate. |
+| `openFromEvent` | `(event: MouseEvent \| PointerEvent) => void` | Opens from a mouse/pointer event. |
+| `close` | `() => void` | Closes the menu. |
+| `updatePosition` | `() => void` | Manually refreshes Floating UI placement. |
+
+### TxContextMenuPanel Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `width` | `number \| string` | - | Panel width. |
+| `minWidth` | `number \| string` | - | Minimum width. |
+| `maxWidth` | `number \| string` | - | Maximum width. |
+| `maxHeight` | `number \| string` | - | Maximum height. |
+| `closeOnSelect` | `boolean` | `true` | Whether child items close the panel after selection. |
+| `close` | `() => void` | - | Close callback injected into child items. |
+| `dense` | `boolean` | `false` | Uses tighter item spacing. |
+| `outsideGuard` | `boolean` | `false` | Marks the panel as a protected ContextMenu layer for teleported submenus. |
+| `role` | `string` | `'menu'` | ARIA role. |
+| `ariaLabel` | `string` | - | ARIA label. |
 
 ### TxContextMenuItem Props
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `disabled` | `boolean` | `false` | Disables selection and item clickability. |
-| `danger` | `boolean` | `false` | Applies danger styling to the item label. |
+| `disabled` | `boolean` | `false` | Disables selection and clickability. |
+| `danger` | `boolean` | `false` | Applies danger styling to the label. |
+| `color` | `string` | - | Custom label color. CSS variables are supported. |
+| `shortcut` | `string` | - | Shortcut hint rendered on the right. |
+| `submenu` | `boolean` | `false` | Shows a submenu arrow. |
+| `closeOnSelect` | `boolean` | - | Overrides parent `closeOnSelect`. |
 
 ### TxContextMenuItem Events
 
 | Event | Params | Description |
 |------|------|------|
-| `select` | - | Emitted when an enabled item is selected; the parent context menu then closes. |
+| `select` | - | Emitted when an enabled item is selected. |
+
+### TxContextMenuDivider Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `dashed` | `boolean` | `false` | Uses a dashed separator. |
+| `inset` | `boolean` | `false` | Adds left inset to align with icon/nested content. |
