@@ -36,7 +36,7 @@
 
 ### Release Notes (optional)
 
-<!-- Provide a concise summary that can be reused in release notes. -->
+<!-- Optional: provide one user-facing sentence. The release workflow also collects merged PR metadata automatically. -->
 
 ## Additional Context
 

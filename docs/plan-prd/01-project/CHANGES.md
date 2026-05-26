@@ -13,6 +13,20 @@
 
 ## 2026-05-26
 
+### ci(release): generate concise bilingual GitHub release notes
+
+- `.github/workflows/build-and-release.yml`
+- `scripts/generate-release-notes.mjs`
+- `scripts/generate-release-notes.test.mjs`
+- `.github/workflows/README.md`
+- `.github/PULL_REQUEST_TEMPLATE/en.md`
+- `.github/PULL_REQUEST_TEMPLATE/zh-CN.md`
+- `docs/plan-prd/docs/github-automation.zh-CN.md`
+  - Replaced the long hard-coded GitHub Release body with a generated concise bilingual release body.
+  - Added a release notes generator that resolves the previous same-channel tag, collects merged PR metadata from the release range, filters `skip-changelog`, and writes GitHub/Nexus-ready notes artifacts.
+  - Kept committed `notes/update_<version>.{zh,en}.md` files as the highest-priority source for Nexus sync while using generated notes as the fallback.
+  - Validated with generator Vitest, file-level ESLint, historical tag dry-run, workflow YAML parse, and `git diff --check`.
+
 ### feat(tuffex): add Checkbox visual variants
 
 - `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`
