@@ -13,6 +13,13 @@
 
 ## 2026-05-26
 
+### docs(nexus): mark BaseAnchor docs reviewed
+
+- `apps/nexus/content/docs/dev/components/base-anchor.zh.mdc`
+- `apps/nexus/content/docs/dev/components/base-anchor.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Marked localized BaseAnchor docs as manually reviewed via `verified: true` metadata.
+
 ### feat(tuffex): add BaseAnchor animation modes
 
 - `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
