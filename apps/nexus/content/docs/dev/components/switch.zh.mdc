@@ -5,7 +5,8 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [switch, toggle, state]
-syncStatus: reviewed
+syncStatus: migrated
+verified: true
 ---
 
 # Switch 开关
