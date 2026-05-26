@@ -1,14 +1,22 @@
 <script setup lang="ts">
-const { locale } = useI18n()
+import { ref } from 'vue'
+
+const firstSwitch = ref(false)
+const secondSwitch = ref(true)
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TuffSwitch :model-value="false" />
-        <TuffSwitch :model-value="true" />
-  </div>
-  <div v-else>
-        <TuffSwitch :model-value="false" />
-        <TuffSwitch :model-value="true" />
+  <div class="switch-toggle-state-demo">
+    <TuffSwitch v-model="firstSwitch" />
+    <TuffSwitch v-model="secondSwitch" />
   </div>
 </template>
+
+<style scoped>
+.switch-toggle-state-demo {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+</style>

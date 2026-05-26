@@ -5,48 +5,157 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [switch, toggle, state]
-syncStatus: migrated
+syncStatus: reviewed
 ---
 
 # Switch 开关
-
-> 轻触反馈 + 明确状态色，适合密集设置页。  
-> **状态**：Beta
-
 
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const enabled = ref(true)
+  </script>
+
   <template>
     <TuffSwitch v-model="enabled" />
-    <TuffSwitch v-model="enabled" size="small" />
   </template>
 ---
 ::
 
 ## Demo
 ### Toggle State
-移动与颜色同步变化。
+点击或使用 Enter / Space 可切换状态，位移与颜色同步变化。
 :::TuffDemoWrapper{demo="SwitchToggleStateDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const firstSwitch = ref(false)
+  const secondSwitch = ref(true)
+  </script>
+
   <template>
-    <TuffSwitch :model-value="false" />
-    <TuffSwitch :model-value="true" />
+    <div style="display: inline-flex; align-items: center; gap: 12px;">
+      <TuffSwitch v-model="firstSwitch" />
+      <TuffSwitch v-model="secondSwitch" />
+    </div>
   </template>
 ---
 :::
+
+### 不同大小
+小尺寸适合密集列表，默认尺寸适合表单，大尺寸适合突出设置项。
+:::TuffDemoWrapper{demo="SwitchSizesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const smallEnabled = ref(true)
+  const defaultEnabled = ref(true)
+  const largeEnabled = ref(true)
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <TuffSwitch v-model="smallEnabled" size="small" />
+      <TuffSwitch v-model="defaultEnabled" />
+      <TuffSwitch v-model="largeEnabled" size="large" />
+    </div>
+  </template>
+---
+:::
+
+### 禁用效果
+禁用态会降低透明度、移除聚焦，并阻止点击与键盘切换。
+:::TuffDemoWrapper{demo="SwitchDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const enabled = ref(true)
+  const disabledOff = ref(false)
+  const disabledOn = ref(true)
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <TuffSwitch v-model="enabled" />
+      <TuffSwitch v-model="disabledOff" disabled />
+      <TuffSwitch v-model="disabledOn" disabled />
+    </div>
+  </template>
+---
+:::
+
+### 前后 Label
+在开关前后放置状态文本，或与说明文案组成设置行。
+:::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const compact = ref(false)
+  const autoSync = ref(true)
+  </script>
+
+  <template>
+    <label style="display: inline-flex; align-items: center; gap: 10px;">
+      <span>关</span>
+      <TuffSwitch v-model="compact" />
+      <span>开</span>
+      <strong>紧凑模式</strong>
+    </label>
+  </template>
+---
+:::
+
+### 自定义颜色
+Switch 暂不提供颜色 prop，可通过 CSS 变量或局部 class 覆盖激活态颜色。
+:::TuffDemoWrapper{demo="SwitchCustomColorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const success = ref(true)
+  const warning = ref(true)
+  </script>
+
+  <template>
+    <div class="custom-switch-row">
+      <TuffSwitch v-model="success" class="custom-switch custom-switch--success" />
+      <TuffSwitch v-model="warning" class="custom-switch custom-switch--warning" />
+    </div>
+  </template>
+
+  <style scoped>
+  .custom-switch-row :deep(.custom-switch--success.is-active) {
+    background-color: var(--tx-color-success);
+  }
+
+  .custom-switch-row :deep(.custom-switch--warning.is-active) {
+    background-color: var(--tx-color-warning);
+  }
+  </style>
+---
+:::
+
 ## 状态
 ::TuffPropsTable
 ---
 rows:
   - name: disabled
     description: '禁用态'
-  - name: loading
-    description: '加载态'
   - name: size
-    values: ['small', 'medium', 'large']
+    values: ['small', 'default', 'large']
     description: '尺寸规格'
 ---
 ::
@@ -60,8 +169,8 @@ rows:
     default: 'false'
     description: '开关值'
   - name: size
-    type: "'small' | 'medium' | 'large'"
-    default: "'medium'"
+    type: "'small' | 'default' | 'large'"
+    default: "'default'"
     description: '尺寸'
   - name: disabled
     type: 'boolean'
@@ -70,19 +179,67 @@ rows:
 ---
 ::
 
+## Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: boolean) => void` | v-model 更新事件。 |
+| `change` | `(value: boolean) => void` | 用户切换后的状态变更事件。 |
+
 ## Design Notes
-- 开关位移与颜色变化必须同步。  
+- 开关位移与颜色变化必须同步。
 - 小尺寸用于列表，大尺寸用于设置页。
+- 带前后 label 时，label 与 switch 应保持垂直居中。
+- 自定义颜色建议只覆盖激活态，避免破坏禁用态和焦点态。
 
 ## 组合示例
 ### 设置项
-开关搭配标签用于设置列表。
+开关搭配标签、说明文案和状态文本，用于设置列表。
 :::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+
+  const settings = reactive({
+    notifications: true,
+    focusMode: false,
+    autoUpdate: true,
+  })
+  </script>
+
   <template>
-    <TxTag>通知</TxTag>
-    <TuffSwitch :model-value="true" />
+    <div class="settings-panel">
+      <div class="settings-row">
+        <div>
+          <TxTag label="通知" />
+          <p>接收系统和插件的重要提醒。</p>
+        </div>
+        <TuffSwitch v-model="settings.notifications" />
+      </div>
+      <div class="settings-row">
+        <div>
+          <TxTag label="专注模式" color="var(--tx-color-warning)" />
+          <p>隐藏非必要提示，减少打断。</p>
+        </div>
+        <TuffSwitch v-model="settings.focusMode" />
+      </div>
+    </div>
   </template>
+
+  <style scoped>
+  .settings-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 560px);
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  </style>
 ---
 :::

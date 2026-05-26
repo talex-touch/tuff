@@ -5,38 +5,149 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [switch, toggle, state]
-syncStatus: migrated
+syncStatus: reviewed
 ---
 
 # Switch
-
-> Tactile toggles with clear state color and movement.  
-> **Status**: Beta
-
 
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const enabled = ref(true)
+  </script>
+
   <template>
     <TuffSwitch v-model="enabled" />
-    <TuffSwitch v-model="enabled" size="small" />
   </template>
 ---
 ::
 
 ## Demo
 ### Toggle State
-Movement and color change together.
+Click, Enter, or Space toggles the switch. Movement and color change together.
 :::TuffDemoWrapper{demo="SwitchToggleStateDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const firstSwitch = ref(false)
+  const secondSwitch = ref(true)
+  </script>
+
   <template>
-    <TuffSwitch :model-value="false" />
-    <TuffSwitch :model-value="true" />
+    <div style="display: inline-flex; align-items: center; gap: 12px;">
+      <TuffSwitch v-model="firstSwitch" />
+      <TuffSwitch v-model="secondSwitch" />
+    </div>
   </template>
 ---
 :::
+
+### Sizes
+Small works well in dense lists, default fits forms, and large highlights important settings.
+:::TuffDemoWrapper{demo="SwitchSizesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const smallEnabled = ref(true)
+  const defaultEnabled = ref(true)
+  const largeEnabled = ref(true)
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <TuffSwitch v-model="smallEnabled" size="small" />
+      <TuffSwitch v-model="defaultEnabled" />
+      <TuffSwitch v-model="largeEnabled" size="large" />
+    </div>
+  </template>
+---
+:::
+
+### Disabled
+Disabled switches reduce opacity, remove focusability, and block pointer or keyboard toggles.
+:::TuffDemoWrapper{demo="SwitchDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const enabled = ref(true)
+  const disabledOff = ref(false)
+  const disabledOn = ref(true)
+  </script>
+
+  <template>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <TuffSwitch v-model="enabled" />
+      <TuffSwitch v-model="disabledOff" disabled />
+      <TuffSwitch v-model="disabledOn" disabled />
+    </div>
+  </template>
+---
+:::
+
+### Labels Before and After
+Place state labels before or after the switch, or combine it with setting copy.
+:::TuffDemoWrapper{demo="SwitchLabelDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const compact = ref(false)
+  const autoSync = ref(true)
+  </script>
+
+  <template>
+    <label style="display: inline-flex; align-items: center; gap: 10px;">
+      <span>Off</span>
+      <TuffSwitch v-model="compact" />
+      <span>On</span>
+      <strong>Compact mode</strong>
+    </label>
+  </template>
+---
+:::
+
+### Custom Colors
+Switch does not expose a color prop yet. Override the active state with CSS variables or local classes.
+:::TuffDemoWrapper{demo="SwitchCustomColorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const success = ref(true)
+  const warning = ref(true)
+  </script>
+
+  <template>
+    <div class="custom-switch-row">
+      <TuffSwitch v-model="success" class="custom-switch custom-switch--success" />
+      <TuffSwitch v-model="warning" class="custom-switch custom-switch--warning" />
+    </div>
+  </template>
+
+  <style scoped>
+  .custom-switch-row :deep(.custom-switch--success.is-active) {
+    background-color: var(--tx-color-success);
+  }
+
+  .custom-switch-row :deep(.custom-switch--warning.is-active) {
+    background-color: var(--tx-color-warning);
+  }
+  </style>
+---
+:::
+
 ## States
 ::TuffPropsTable
 ---
@@ -76,18 +187,59 @@ rows:
 | `change` | `(value: boolean) => void` | Emitted with the next checked state after an enabled toggle. |
 
 ## Design Notes
-- Movement and color should sync.  
+- Movement and color should sync.
 - Use smaller size for dense lists, larger for settings.
+- Keep labels vertically centered when placed before or after the switch.
+- Prefer overriding only the active color so disabled and focus states remain intact.
 
 ## Composite Patterns
 ### Settings Row
-Switch paired with labels.
+Switch paired with labels, helper copy, and live state text for settings lists.
 :::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+
+  const settings = reactive({
+    notifications: true,
+    focusMode: false,
+    autoUpdate: true,
+  })
+  </script>
+
   <template>
-    <TxTag>Notifications</TxTag>
-    <TuffSwitch :model-value="true" />
+    <div class="settings-panel">
+      <div class="settings-row">
+        <div>
+          <TxTag label="Notifications" />
+          <p>Receive important system and plugin alerts.</p>
+        </div>
+        <TuffSwitch v-model="settings.notifications" />
+      </div>
+      <div class="settings-row">
+        <div>
+          <TxTag label="Focus mode" color="var(--tx-color-warning)" />
+          <p>Hide non-essential prompts to reduce interruptions.</p>
+        </div>
+        <TuffSwitch v-model="settings.focusMode" />
+      </div>
+    </div>
   </template>
+
+  <style scoped>
+  .settings-panel {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 560px);
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  </style>
 ---
 :::
