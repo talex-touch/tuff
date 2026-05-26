@@ -62,7 +62,7 @@ const builtinIcons = {
   },
   'star-half': {
     viewBox: '0 0 24 24',
-    path: 'M12 2l2.19 6.62 7.81.62-5.9 4.73 1.82 7.03L12 17.77V2z',
+    path: 'M12 2v15.77L6.08 21l1.82-7.03L2 9.24l7.19-.62L12 2z',
   },
 } as const
 

@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-25
+> 更新时间：2026-05-26
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -12,6 +12,21 @@
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
 ## 2026-05-26
+
+### feat(tuffex): expand Rating customization demos
+
+- `packages/tuffex/packages/components/src/rating/src/TxRating.vue`
+- `packages/tuffex/packages/components/src/rating/src/types.ts`
+- `packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- `apps/nexus/app/components/content/demos/Rating*.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/rating.{zh,en}.mdc`
+- `packages/tuffex/docs/components/rating.md`
+  - Fixed half-star rendering so fractional ratings fill from the left side instead of showing the right-half glyph.
+  - Fixed half-star click handling so users can still select a full star / max score; clicking the currently selected full star toggles down to `.5`.
+  - Added explicit runtime props for Rating customization so shared/custom icons, colors, size, gap, text color, and animation settings work in compiled Nexus demos.
+  - Strengthened the click feedback into a visible bounce + glow + ripple animation and expanded docs with color and heart-icon examples.
+  - Expanded Nexus Rating docs with style, custom icon, and animation demos while preserving the existing basic half-star sample.
 
 ### docs(nexus): mark BaseAnchor docs reviewed
 

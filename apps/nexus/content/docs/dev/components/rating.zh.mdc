@@ -7,13 +7,13 @@ syncStatus: migrated
 
 # Rating 评分
 
-用于收集打分或满意度反馈。
+用于收集打分或满意度反馈。支持半星精度、只读展示、自定义颜色、图标、尺寸与点击动画。
 
 ## 基础用法
 
-### 评分组件
+### 半星评分
 
-支持半星评分。
+支持 `precision="0.5"` 半星评分。半星会从左侧填充。
 
 ::TuffDemoWrapper{demo="RatingBasicDemo" code-lang="vue"}
 ---
@@ -26,6 +26,85 @@ code: |
 
   <template>
     <TxRating v-model="score" :precision="0.5" show-text />
+  </template>
+---
+::
+
+## 样式定制
+
+通过 `filled-color`、`empty-color`、`hover-color`、`text-color`、`size` 与 `gap` 调整视觉样式。下面包含橙色、绿色只读与紫色紧凑三种外观。
+
+::TuffDemoWrapper{demo="RatingStyleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const score = ref(4)
+  </script>
+
+  <template>
+    <TxRating
+      v-model="score"
+      :size="28"
+      :gap="6"
+      :precision="0.5"
+      filled-color="#f97316"
+      empty-color="rgba(148, 163, 184, 0.34)"
+      hover-color="#fb923c"
+      text-color="var(--tx-color-warning)"
+      show-text
+    />
+  </template>
+---
+::
+
+## 自定义图标
+
+`icon` 可以统一设置图标；也可以分别使用 `filled-icon`、`empty-icon`、`half-icon` 控制填充、空态与半星图标。支持内置图标、Iconify class 与 emoji，包括爱心、钻石和表情等。
+
+::TuffDemoWrapper{demo="RatingIconDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const mood = ref(3)
+  const hearts = ref(4.5)
+  </script>
+
+  <template>
+    <TxRating v-model="mood" icon="💎" :size="26" filled-color="#38bdf8" show-text />
+    <TxRating
+      v-model="hearts"
+      :precision="0.5"
+      :size="28"
+      icon="i-carbon-favorite-filled"
+      filled-color="#f43f5e"
+      empty-color="rgba(244, 63, 94, 0.18)"
+      show-text
+    />
+  </template>
+---
+::
+
+## 点击动画
+
+默认点击星级会触发更明显的 bounce + glow + ripple 动画；通过 `:animated="false"` 关闭。
+
+::TuffDemoWrapper{demo="RatingAnimationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const animated = ref(2)
+  const still = ref(2)
+  </script>
+
+  <template>
+    <TxRating v-model="animated" :precision="0.5" show-text />
+    <TxRating v-model="still" :animated="false" filled-color="#a78bfa" show-text />
   </template>
 ---
 ::
@@ -62,6 +141,50 @@ rows:
     type: boolean
     default: 'false'
     description: 只展示模式
+  - name: icon
+    type: "string | TxIconSource"
+    default: '-'
+    description: 统一设置评分图标
+  - name: filledIcon
+    type: "string | TxIconSource"
+    default: 'star'
+    description: 已填充图标
+  - name: emptyIcon
+    type: "string | TxIconSource"
+    default: 'star'
+    description: 空态图标
+  - name: halfIcon
+    type: "string | TxIconSource"
+    default: '-'
+    description: 半星图标；未设置时使用左侧裁切填充层
+  - name: filledColor
+    type: string
+    default: '#fbbf24'
+    description: 已填充颜色
+  - name: emptyColor
+    type: string
+    default: '#d1d5db'
+    description: 空态颜色
+  - name: hoverColor
+    type: string
+    default: 'filledColor'
+    description: 悬停颜色
+  - name: textColor
+    type: string
+    default: '#6b7280'
+    description: 分数文本颜色
+  - name: size
+    type: "number | string"
+    default: '20px'
+    description: 星级图标大小
+  - name: gap
+    type: "number | string"
+    default: '2px'
+    description: 星级间距
+  - name: animated
+    type: boolean
+    default: 'true'
+    description: 点击后是否播放 pop 动画
 ---
 :::
 

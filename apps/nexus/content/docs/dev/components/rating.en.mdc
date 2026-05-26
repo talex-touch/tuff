@@ -7,13 +7,13 @@ syncStatus: migrated
 
 # Rating
 
-Star rating control for feedback input.
+Star rating control for feedback input. It supports half-star precision, read-only display, custom colors, custom icons, sizing, and click animation.
 
 ## Basic Usage
 
-### Rating
+### Half-star Rating
 
-Select a score with half steps.
+Use `precision="0.5"` for half-step ratings. Half stars fill from the left side.
 
 ::TuffDemoWrapper{demo="RatingBasicDemo" code-lang="vue"}
 ---
@@ -26,6 +26,85 @@ code: |
 
   <template>
     <TxRating v-model="score" :precision="0.5" show-text />
+  </template>
+---
+::
+
+## Style Customization
+
+Use `filled-color`, `empty-color`, `hover-color`, `text-color`, `size`, and `gap` to tune the visual style. The demo includes orange, green read-only, and compact violet appearances.
+
+::TuffDemoWrapper{demo="RatingStyleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const score = ref(4)
+  </script>
+
+  <template>
+    <TxRating
+      v-model="score"
+      :size="28"
+      :gap="6"
+      :precision="0.5"
+      filled-color="#f97316"
+      empty-color="rgba(148, 163, 184, 0.34)"
+      hover-color="#fb923c"
+      text-color="var(--tx-color-warning)"
+      show-text
+    />
+  </template>
+---
+::
+
+## Custom Icons
+
+Set `icon` to reuse one icon for all states, or use `filled-icon`, `empty-icon`, and `half-icon` separately. Built-in icons, Iconify classes, and emoji are supported, including hearts, diamonds, and face icons.
+
+::TuffDemoWrapper{demo="RatingIconDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const mood = ref(3)
+  const hearts = ref(4.5)
+  </script>
+
+  <template>
+    <TxRating v-model="mood" icon="💎" :size="26" filled-color="#38bdf8" show-text />
+    <TxRating
+      v-model="hearts"
+      :precision="0.5"
+      :size="28"
+      icon="i-carbon-favorite-filled"
+      filled-color="#f43f5e"
+      empty-color="rgba(244, 63, 94, 0.18)"
+      show-text
+    />
+  </template>
+---
+::
+
+## Click Animation
+
+Rating plays a more visible bounce + glow + ripple animation after a click by default. Set `:animated="false"` to disable it.
+
+::TuffDemoWrapper{demo="RatingAnimationDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const animated = ref(2)
+  const still = ref(2)
+  </script>
+
+  <template>
+    <TxRating v-model="animated" :precision="0.5" show-text />
+    <TxRating v-model="still" :animated="false" filled-color="#a78bfa" show-text />
   </template>
 ---
 ::
@@ -62,6 +141,50 @@ rows:
     type: boolean
     default: 'false'
     description: Display-only mode
+  - name: icon
+    type: "string | TxIconSource"
+    default: '-'
+    description: Shared rating icon
+  - name: filledIcon
+    type: "string | TxIconSource"
+    default: 'star'
+    description: Filled icon
+  - name: emptyIcon
+    type: "string | TxIconSource"
+    default: 'star'
+    description: Empty icon
+  - name: halfIcon
+    type: "string | TxIconSource"
+    default: '-'
+    description: Half icon; when omitted, Rating clips the filled layer from the left
+  - name: filledColor
+    type: string
+    default: '#fbbf24'
+    description: Filled color
+  - name: emptyColor
+    type: string
+    default: '#d1d5db'
+    description: Empty color
+  - name: hoverColor
+    type: string
+    default: 'filledColor'
+    description: Hover color
+  - name: textColor
+    type: string
+    default: '#6b7280'
+    description: Score text color
+  - name: size
+    type: "number | string"
+    default: '20px'
+    description: Star icon size
+  - name: gap
+    type: "number | string"
+    default: '2px'
+    description: Gap between stars
+  - name: animated
+    type: boolean
+    default: 'true'
+    description: Play the click pop animation
 ---
 :::
 
