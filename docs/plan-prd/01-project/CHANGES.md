@@ -13,6 +13,19 @@
 
 ## 2026-05-26
 
+### feat(tuffex): add Checkbox visual variants
+
+- `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`
+- `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts`
+- `apps/nexus/app/components/content/demos/CheckboxCheckbox*.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/checkbox.{zh,en}.mdc`
+- `packages/tuffex/docs/components/checkbox.md`
+  - Fixed Nexus Checkbox demos so preview panels render real `TxCheckbox` components instead of escaped template text.
+  - Added `variant="fill" | "checkmark"`; `fill` remains the default pure filled-square style, while `checkmark` enables an inner SVG tick.
+  - Added a localized Nexus variants demo and documented the new prop in Nexus and TuffEx component docs.
+  - Validated with Checkbox Vitest, TuffEx `vue-tsc --noEmit --skipLibCheck`, and scoped ESLint for changed Checkbox/Nexus demo files.
+
 ### feat(tuffex): expand Rating customization demos
 
 - `packages/tuffex/packages/components/src/rating/src/TxRating.vue`

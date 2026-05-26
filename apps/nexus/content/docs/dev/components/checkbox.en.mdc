@@ -1,87 +1,144 @@
 ---
 title: "Checkbox"
-description: "Accessible boolean selection control with label placement, keyboard toggling, and SVG tick motion."
+description: "Accessible boolean selection control with keyboard toggling, label placement, fill state, and SVG tick variant."
 category: Form
 status: beta
 since: 1.0.0
 tags: [checkbox, form, selection]
 syncStatus: migrated
+verified: true
 ---
 # Checkbox
 
-`TxCheckbox` is a compact boolean control for settings, filters, and form rows. It exposes checkbox ARIA state, supports click/Enter/Space toggling, and only uses `aria-label` when no visible label or default slot is present.
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const checked1 = ref(false)
-const checked2 = ref(true)
-const checked3 = ref(false)
-const checked4 = ref(true)
-const checked5 = ref(false)
-</script>
+`TxCheckbox` is a compact boolean control for settings, filters, and form rows. It exposes `role="checkbox"`, `aria-checked`, and disabled state, supports click / Enter / Space toggling, and only uses `aria-label` when no visible label or default slot is present.
 
 ## Basic Usage
+
+Click the box or its label to toggle the state. The checked state follows the selected visual variant with either fill or tick motion.
 
 ### Checkbox
 :::TuffDemoWrapper{demo="CheckboxCheckboxDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" label="Option" /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(false)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked" label="Option" />
+  </template>
 ---
 :::
 
-## Label First (labelPlacement = start)
+## Variants
+
+The default `fill` variant uses a pure filled square. Use `variant="checkmark"` when the checked state should include a stronger inner tick affordance.
+
+### Checkbox variants
+:::TuffDemoWrapper{demo="CheckboxCheckboxVariantsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const fillChecked = ref(true)
+  const checkmarkChecked = ref(true)
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox v-model="fillChecked" label="Fill style" />
+      <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="With checkmark" />
+    </div>
+  </template>
+---
+:::
+
+## Label First
+
+Use `label-placement="start"` to render the visible label before the checkbox box.
 
 ### Checkbox (label start)
 :::TuffDemoWrapper{demo="CheckboxCheckboxLabelStartDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" label="Text" label-placement="start" /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(true)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked" label="Text first" label-placement="start" />
+  </template>
 ---
 :::
 
 ## No Label
 
-When there is no label/slot, pass `aria-label`.
+When there is no `label` or default slot, pass `aria-label` so assistive technology can identify the control.
 
 ### Checkbox (no label)
 :::TuffDemoWrapper{demo="CheckboxCheckboxNoLabelDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" aria-label="Text" /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(false)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked" aria-label="Toggle option" />
+  </template>
 ---
 :::
 
 ## Disabled State
 
+`disabled` removes focusability and prevents click or keyboard toggles while preserving the current checked state.
+
 ### Checkbox (disabled)
 :::TuffDemoWrapper{demo="CheckboxCheckboxDisabledDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" label="Disabled" disabled /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const disabledUnchecked = ref(false)
+  const disabledChecked = ref(true)
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox v-model="disabledUnchecked" label="Disabled" disabled />
+      <TxCheckbox v-model="disabledChecked" label="Disabled checked" disabled />
+    </div>
+  </template>
 ---
 :::
 
 ## Using Slots
 
+The default slot replaces `label` as the visible label. Use it for rich text, helper copy, icons, or emphasis.
+
 ### Checkbox (slot)
 :::TuffDemoWrapper{demo="CheckboxCheckboxSlotDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked"&gt;
-      &lt;span&gt;CustomText&lt;/span&gt;
-    &lt;/TxCheckbox&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(false)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked">
+      <span>Custom label</span>
+    </TxCheckbox>
+  </template>
 ---
 :::
 
@@ -95,17 +152,18 @@ code: |
 | disabled | Disables focus and prevents click or keyboard toggles. | `boolean` | `false` |
 | label | Visible text label rendered next to the checkbox. | `string` | - |
 | labelPlacement | Places the visible label before or after the checkbox box. | `'start' \| 'end'` | `'end'` |
+| variant | Visual variant: `fill` uses a pure filled square; `checkmark` shows the inner tick. | `'checkmark' \| 'fill'` | `'fill'` |
 | ariaLabel | Accessible label used only when neither `label` nor the default slot is visible. | `string` | - |
 
 ### Events
 
 | Event | Description | Params |
 |--------|------|----------|
-| change | Emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
 | update:modelValue | v-model update emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
+| change | Emitted with the next checked state after an enabled toggle. | `(value: boolean) => void` |
 
 ### Slots
 
-| Column | Description |
+| Slot | Description |
 |--------|------|
-| default | Replaces `label` with custom visible label content. |
+| default | Custom visible label content. When present, it replaces `label` rendering. |

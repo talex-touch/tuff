@@ -1,87 +1,144 @@
 ---
 title: "Checkbox 复选框"
-description: "复选框组件，具有 SVG 动画勾选效果。"
+description: "用于布尔选择的复选框组件，支持键盘切换、可访问性标签、填充态和 SVG 勾选变体。"
 category: Form
 status: beta
 since: 1.0.0
 tags: [checkbox, form, selection]
 syncStatus: migrated
+verified: true
 ---
 # Checkbox 复选框
 
-复选框组件，具有 SVG 动画勾选效果。
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const checked1 = ref(false)
-const checked2 = ref(true)
-const checked3 = ref(false)
-const checked4 = ref(true)
-const checked5 = ref(false)
-</script>
+`TxCheckbox` 用于设置项、过滤条件和表单行等布尔选择场景。组件会暴露 `role="checkbox"`、`aria-checked` 与禁用状态，支持点击、Enter / Space 键切换；无可见文案或默认插槽时，请传入 `aria-label`。
 
 ## 基础用法
+
+点击复选框或文案即可切换状态，选中态会跟随视觉变体播放填充或勾选动画。
 
 ### Checkbox
 :::TuffDemoWrapper{demo="CheckboxCheckboxDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" label="选项" /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(false)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked" label="选项" />
+  </template>
 ---
 :::
 
-## 文案在前（labelPlacement = start）
+## 样式变体
+
+默认 `fill` 是纯填充样式；当需要更明确的完成/勾选反馈时，可使用 `variant="checkmark"` 显示内部勾选标记。
+
+### Checkbox variants
+:::TuffDemoWrapper{demo="CheckboxCheckboxVariantsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const fillChecked = ref(true)
+  const checkmarkChecked = ref(true)
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox v-model="fillChecked" label="填充样式" />
+      <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="带勾选标记" />
+    </div>
+  </template>
+---
+:::
+
+## 文案在前
+
+通过 `label-placement="start"` 将标签放到勾选框左侧，适合“状态文本 + 控件”的紧凑布局。
 
 ### Checkbox (label start)
 :::TuffDemoWrapper{demo="CheckboxCheckboxLabelStartDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" label="我在前面" label-placement="start" /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(true)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked" label="我在前面" label-placement="start" />
+  </template>
 ---
 :::
 
 ## 无文案
 
-无 label / 无插槽时，建议传入 `aria-label`。
+无 `label` / 无默认插槽时，必须提供 `aria-label`，保证屏幕阅读器能识别控件含义。
 
 ### Checkbox (no label)
 :::TuffDemoWrapper{demo="CheckboxCheckboxNoLabelDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" aria-label="勾选" /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(false)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked" aria-label="勾选" />
+  </template>
 ---
 :::
 
 ## 禁用状态
 
+`disabled` 会移除可聚焦能力，并阻止点击与键盘切换；禁用态仍会保留当前选中状态。
+
 ### Checkbox (disabled)
 :::TuffDemoWrapper{demo="CheckboxCheckboxDisabledDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked" label="禁用" disabled /&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const disabledUnchecked = ref(false)
+  const disabledChecked = ref(true)
+  </script>
+
+  <template>
+    <div style="display: inline-flex; align-items: center; gap: 18px;">
+      <TxCheckbox v-model="disabledUnchecked" label="禁用" disabled />
+      <TxCheckbox v-model="disabledChecked" label="禁用且已选中" disabled />
+    </div>
+  </template>
 ---
 :::
 
 ## 使用插槽
 
+默认插槽会替代 `label` 作为可见标签，适合加入说明文本、图标或强调样式。
+
 ### Checkbox (slot)
 :::TuffDemoWrapper{demo="CheckboxCheckboxSlotDemo" code-lang="vue"}
 ---
 code: |
-  &lt;template&gt;
-    &lt;TxCheckbox v-model="checked"&gt;
-      &lt;span&gt;自定义标签&lt;/span&gt;
-    &lt;/TxCheckbox&gt;
-  &lt;/template&gt;
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const checked = ref(false)
+  </script>
+
+  <template>
+    <TxCheckbox v-model="checked">
+      <span>自定义标签</span>
+    </TxCheckbox>
+  </template>
 ---
 :::
 
@@ -91,21 +148,22 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `boolean` | `false` |
-| disabled | 是否禁用 | `boolean` | `false` |
-| label | 标签文本 | `string` | - |
-| labelPlacement | 标签位置（start=前置，end=后置） | `'start' \| 'end'` | `'end'` |
-| ariaLabel | 无标签时的可访问性文本 | `string` | - |
+| modelValue / v-model | 绑定的选中状态。启用时通过点击、Enter 或 Space 更新。 | `boolean` | `false` |
+| disabled | 是否禁用。禁用后不可聚焦，且不会触发切换。 | `boolean` | `false` |
+| label | 显示在复选框旁边的文本标签。 | `string` | - |
+| labelPlacement | 标签位置：`start` 为前置，`end` 为后置。 | `'start' \| 'end'` | `'end'` |
+| variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'fill'` |
+| ariaLabel | 无可见 `label` / 默认插槽时使用的可访问性标签。 | `string` | - |
 
 ### Events
 
 | 事件名 | 说明 | 回调参数 |
 |--------|------|----------|
-| change | 状态改变时触发 | `(value: boolean) => void` |
-| update:modelValue | 值更新时触发 | `(value: boolean) => void` |
+| update:modelValue | 用户切换后触发的 v-model 更新事件。 | `(value: boolean) => void` |
+| change | 用户切换后触发的状态变更事件。 | `(value: boolean) => void` |
 
 ### Slots
 
 | 插槽名 | 说明 |
 |--------|------|
-| default | 自定义标签内容 |
+| default | 自定义可见标签内容；存在时会替代 `label` 展示。 |
