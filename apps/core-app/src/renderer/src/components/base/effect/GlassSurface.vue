@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
-import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
 import { getRendererBrowserEngine } from '~/modules/platform/renderer-platform'
+import { resolvedTheme } from '~/modules/storage/theme-style'
 
 interface GlassSurfaceProps {
   width?: string | number
@@ -66,22 +67,7 @@ const props = withDefaults(defineProps<GlassSurfaceProps>(), {
   style: () => ({})
 })
 
-const isDarkMode = ref(false)
-
-function updateDarkMode() {
-  if (!hasWindow()) return
-
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  isDarkMode.value = mediaQuery.matches
-
-  const handler = (e: MediaQueryListEvent) => {
-    isDarkMode.value = e.matches
-  }
-
-  mediaQuery.addEventListener('change', handler)
-
-  return () => mediaQuery.removeEventListener('change', handler)
-}
+const isDarkMode = computed(() => resolvedTheme.value === 'dark')
 
 // Generate unique IDs for SVG elements
 function generateUniqueId() {
@@ -308,8 +294,6 @@ watch([() => props.width, () => props.height], () => {
 })
 
 onMounted(() => {
-  const cleanup = updateDarkMode()
-
   nextTick(() => {
     updateDisplacementMap()
     updateFilterElements()
@@ -317,7 +301,6 @@ onMounted(() => {
   })
 
   onUnmounted(() => {
-    if (cleanup) cleanup()
     if (resizeObserver) {
       resizeObserver.disconnect()
     }

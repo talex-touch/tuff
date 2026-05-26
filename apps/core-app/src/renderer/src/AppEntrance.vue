@@ -6,6 +6,7 @@ import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
 import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { useAppState } from './modules/hooks/useAppStates'
 import { useStartupInfo } from './modules/hooks/useStartupInfo'
+import { resolvedTheme } from './modules/storage/theme-style'
 import FloatingBall from './views/assistant/FloatingBall.vue'
 import VoicePanel from './views/assistant/VoicePanel.vue'
 import CoreBox from './views/box/CoreBox.vue'
@@ -63,7 +64,7 @@ watchEffect(() => {
 
 <template>
   <div class="AppEntrance absolute inset-0" :class="{ 'has-update': showUpdateIndicator }">
-    <Toaster position="bottom-left" theme="system" rich-colors />
+    <Toaster position="bottom-left" :theme="resolvedTheme" rich-colors />
     <template v-if="appEntranceMode === 'MetaOverlay'">
       <MetaOverlay />
     </template>

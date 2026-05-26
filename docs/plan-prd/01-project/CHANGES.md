@@ -13,6 +13,20 @@
 
 ## 2026-05-26
 
+### fix(core-app): unify app theme resolution
+
+- `apps/core-app/src/shared/theme/theme-mode.ts`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/components/base/effect/GlassSurface.vue`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+  - Added a shared `light | dark | auto` theme resolver that preserves the existing storage shape while exposing a concrete `resolvedTheme`.
+  - Unified renderer DOM theme application across `html.dark`, `html[data-theme]`, and `color-scheme` so TuffEx tokens and browser-native surfaces receive the same resolved mode.
+  - Made Sonner toasts and GlassSurface follow the app resolved theme instead of independently reading system preference.
+  - Synced Electron `nativeTheme.themeSource` from the stored app theme and updated CoreBox injected UI views with `data-theme` and `color-scheme`.
+  - Verification: targeted theme tests, `typecheck:node`, scoped ESLint, and `git diff --check` passed; `typecheck:web` remains blocked by the existing TuffEx `arrowEl` unused-variable error.
+
 ### feat(tuffex): generalize ContextMenu overlays
 
 - `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`

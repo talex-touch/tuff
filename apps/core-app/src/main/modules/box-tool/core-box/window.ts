@@ -23,6 +23,7 @@ import fse from 'fs-extra'
 import { BoxWindowOption } from '../../../config/default'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
+import { resolveThemeStateFromStyle } from '../../../../shared/theme/theme-mode'
 import {
   CoreBoxWindowHiddenEvent,
   CoreBoxWindowShownEvent,
@@ -985,10 +986,11 @@ export class WindowManager {
     followSystem: boolean
     dark: boolean
   } {
-    const style = themeStyle.theme?.style
-    const followSystem = style?.auto ?? true
-    const dark = followSystem ? nativeTheme.shouldUseDarkColors : Boolean(style?.dark)
-    return { followSystem, dark }
+    const themeState = resolveThemeStateFromStyle(
+      themeStyle.theme?.style,
+      nativeTheme.shouldUseDarkColors
+    )
+    return { followSystem: themeState.auto, dark: themeState.isDark }
   }
 
   private resolveThemeStoragePath(): { directory: string; file: string } {
@@ -1086,7 +1088,10 @@ export class WindowManager {
       (() => {
         const root = document.documentElement;
         if (!root) { return; }
-        root.classList.${isDark ? 'add' : 'remove'}('dark');
+        const theme = '${isDark ? 'dark' : 'light'}';
+        root.classList.toggle('dark', theme === 'dark');
+        root.dataset.theme = theme;
+        root.style.colorScheme = theme;
       })();
     `
 
