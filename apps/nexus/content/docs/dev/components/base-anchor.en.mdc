@@ -6,6 +6,7 @@ status: beta
 since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
 syncStatus: migrated
+verified: true
 ---
 # BaseAnchor
 
