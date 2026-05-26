@@ -667,6 +667,11 @@ jobs:
           echo "macOS: ${{ needs.build-and-release.result == 'success' }}"
           echo "Linux: ${{ needs.build-and-release.result == 'success' }}"
 
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
@@ -906,6 +911,16 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Generate Release Notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/generate-release-notes.mjs \
+            --tag "${{ steps.release-info.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --target-ref "${{ github.sha }}" \
+            --output-dir "generated-release-notes"
+
       - name: Create Release
         id: create-release
         uses: softprops/action-gh-release@v3
@@ -916,88 +931,7 @@ jobs:
           prerelease: ${{ steps.release-info.outputs.prerelease == 'true' }}
           files: ${{ steps.release-files.outputs.files }}
           fail_on_unmatched_files: false
-          body: |
-            ## Release ${{ steps.release-info.outputs.name }}
-
-            ### Downloads
-            - **Windows**: Installer (.exe)
-            - **macOS**: ZIP Package (contains `tuff.app`) or Disk Image (.dmg)
-            - **Linux**: AppImage and Debian packages
-
-            ### Installation
-            - **Windows**: Run the installer executable
-            - **macOS**:
-              - **DMG**: Mount the DMG and drag to Applications
-              - **ZIP Package**:
-                1. Download and extract the zip file
-                2. **Double-click `tuff.app`** to launch (or right-click and select "Open" if you see a security warning)
-            - **Linux**:
-              - AppImage: Make executable and run
-              - Debian: `sudo dpkg -i *.deb`
-
-            ### Quick Start (macOS ZIP Package)
-
-            The easiest way to run the app:
-
-            1. **Download** `tuff.app.zip` from the assets above
-            2. **Extract** the zip file (double-click or use `unzip`)
-            3. **Double-click `tuff.app`** to launch
-
-            **Note**: If you see "damaged and cannot be opened" error:
-            - Right-click on `tuff.app` and select "Open"
-            - Click "Open" in the security dialog
-            - This bypasses Gatekeeper for unsigned apps
-
-            ### Troubleshooting (macOS)
-
-            If you encounter "Application cannot be opened" or "App is damaged" errors on macOS, follow these steps:
-
-            #### Quick Fix Script
-            We provide a fix script in the repository. Run it from the project root:
-            ```bash
-            ./scripts/fix-app-permissions.sh /path/to/tuff.app
-            ```
-
-            #### Manual Fix
-
-            **1. Remove Quarantine Attribute**
-            macOS Gatekeeper adds a quarantine attribute to downloaded files. Remove it:
-            ```bash
-            xattr -dr com.apple.quarantine /path/to/tuff.app
-            ```
-
-            **2. Fix Executable Permissions**
-            Ensure the main executable has proper permissions:
-            ```bash
-            chmod +x /path/to/tuff.app/Contents/MacOS/tuff
-            ```
-
-            **3. Fix Helper Process Permissions**
-            Fix permissions for all Helper processes (required for GPU and renderer processes):
-            ```bash
-            find /path/to/tuff.app/Contents/Frameworks -type f ! -name "*.dylib" ! -name "*.plist" -exec chmod +x {} \;
-            ```
-
-            #### Complete Fix Command
-            Run all fixes at once:
-            ```bash
-            APP_PATH="/path/to/tuff.app"
-            xattr -dr com.apple.quarantine "$APP_PATH"
-            chmod +x "$APP_PATH/Contents/MacOS/tuff"
-            find "$APP_PATH/Contents/Frameworks" -type f ! -name "*.dylib" ! -name "*.plist" -exec chmod +x {} \;
-            ```
-
-            #### Why This Happens
-            - The app is currently unsigned (we will add code signing in future releases)
-            - macOS Gatekeeper blocks unsigned apps from unknown developers
-            - Extracting from ZIP files may reset file permissions
-
-            #### Alternative: Right-Click to Open
-            If the above doesn't work, try:
-            1. Right-click on `tuff.app`
-            2. Select "Open" from the context menu
-            3. Click "Open" in the security dialog
-            This bypasses Gatekeeper for that specific app instance.
+          body_path: generated-release-notes/release-notes.github.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -1057,6 +991,8 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -1073,6 +1009,14 @@ jobs:
 
           jq -e '.id and (.assets | type == "array")' /tmp/github-release.json >/dev/null
 
+      - name: Generate Release Notes
+        run: |
+          node scripts/generate-release-notes.mjs \
+            --tag "${TAG}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target-ref "${GITHUB_SHA}" \
+            --output-dir "/tmp/generated-release-notes"
+
       - name: Resolve release notes payload
         run: |
           set -euo pipefail
@@ -1086,8 +1030,19 @@ jobs:
             fallback_body="Release ${TAG}"
           fi
 
+          generated_zh="/tmp/generated-release-notes/update_${VERSION}.zh.md"
+          generated_en="/tmp/generated-release-notes/update_${VERSION}.en.md"
+
           notes_zh="${fallback_body}"
           notes_en="${fallback_body}"
+
+          if [ -f "${generated_zh}" ]; then
+            notes_zh=$(cat "${generated_zh}")
+          fi
+
+          if [ -f "${generated_en}" ]; then
+            notes_en=$(cat "${generated_en}")
+          fi
 
           if [ -f "${NOTES_BASE}.md" ]; then
             shared_body=$(cat "${NOTES_BASE}.md")
