@@ -27,7 +27,7 @@ function handleToggle() {
 </script>
 
 <template>
-  <div class="DocSection my-2 flex flex-col gap-2">
+  <div class="DocSection flex flex-col" :class="active ? 'is-expanded' : 'is-collapsed'">
     <NuxtLink
       v-if="linkable"
       :to="link"
@@ -69,6 +69,24 @@ function handleToggle() {
 </template>
 
 <style scoped>
+.DocSection {
+  gap: 6px;
+  margin-block: 4px;
+  transition: gap 0.2s ease, margin 0.2s ease;
+}
+
+.DocSection.is-collapsed {
+  gap: 0;
+  margin-block: 2px;
+}
+
+.DocSection-Header {
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  line-height: 1.35;
+}
+
 .DocSection-Indicator {
   margin-left: auto;
   font-size: 12px;
