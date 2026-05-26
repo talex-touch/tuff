@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
-import TxStatusIcon from '../src/TxStatusIcon.vue'
 import TxIcon from '../src/TxIcon.vue'
+import TxStatusIcon from '../src/TxStatusIcon.vue'
 import { TX_ICON_CONFIG_KEY } from '../src/types'
 
 describe('txIcon', () => {
@@ -23,6 +23,14 @@ describe('txIcon', () => {
     expect(builtin.attributes('data-icon-type')).toBe('builtin')
     expect(builtin.find('svg').exists()).toBe(true)
     expect(builtin.find('path').attributes('d')).not.toContain('4.954.95')
+
+    const halfStar = mount(TxIcon, {
+      props: { name: 'star-half' },
+    })
+
+    const halfStarPath = halfStar.find('path').attributes('d')
+    expect(halfStarPath).toContain('M12 2v15.77')
+    expect(halfStarPath).not.toContain('V2z')
   })
 
   it('renders emoji, empty, loading, and error states', () => {
