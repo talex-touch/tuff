@@ -3,7 +3,7 @@ import type { StartupInfo } from '../shared/types/startup-info'
 import { electronAPI } from '@electron-toolkit/preload'
 import { hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
-import { isCoreBox, isMainWindow, useArgMapper } from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import { isCoreBox, isMainWindow } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import { parseWindowArgs, resolveRendererWindowMode } from '@talex-touch/utils/renderer/window-role'
 import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents } from '@talex-touch/utils/transport'
@@ -530,13 +530,22 @@ function useLoading(options: LoadingOptions) {
 
     const wrapper = document.createElement('div')
     wrapper.className = `${className}__debug`
-    wrapper.innerHTML = `
-      <div class="${className}__debug-header">
-        <span>Debug Startup Logs</span>
-        <span>${new Date().toLocaleTimeString()}</span>
-      </div>
-      <div class="${className}__debug-body" aria-live="polite"></div>
-    `
+
+    const header = document.createElement('div')
+    header.className = `${className}__debug-header`
+
+    const title = document.createElement('span')
+    title.textContent = 'Debug Startup Logs'
+
+    const createdAt = document.createElement('span')
+    createdAt.textContent = new Date().toLocaleTimeString()
+
+    const body = document.createElement('div')
+    body.className = `${className}__debug-body`
+    body.setAttribute('aria-live', 'polite')
+
+    header.append(title, createdAt)
+    wrapper.append(header, body)
 
     container.appendChild(wrapper)
     return wrapper
@@ -547,12 +556,12 @@ function useLoading(options: LoadingOptions) {
     const body = debugWrapper.querySelector(`.${className}__debug-body`)
     if (!body) return
 
-    body.innerHTML = debugList
-      .slice(-12)
-      .map((item) => {
-        return `<div>[${new Date(item.timestamp).toLocaleTimeString()}] ${item.message}</div>`
-      }) // logs kept short
-      .join('')
+    body.replaceChildren()
+    for (const item of debugList.slice(-12)) {
+      const row = document.createElement('div')
+      row.textContent = `[${new Date(item.timestamp).toLocaleTimeString()}] ${item.message}`
+      body.appendChild(row)
+    }
     body.scrollTop = body.scrollHeight
   }
 
@@ -685,19 +694,7 @@ const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoad
 
 domReady().then(() => {
   const info = useInitialize()
-  const argMapper = useArgMapper()
   const startupContext = startupContextSnapshot ?? resolvePreloadStartupContext(null)
-
-  if (isDebugMode) {
-    console.log('[preload] process.argv:', process.argv)
-    console.log('[preload] argMapper:', argMapper)
-    console.log('[preload] touchType:', argMapper.touchType)
-    console.log('[preload] coreType:', argMapper.coreType ?? argMapper.rawCoreType)
-    console.log('[preload] isMainWindow:', isMainWindow())
-    console.log('[preload] isCoreBox:', isCoreBox())
-    console.log('[preload] rendererMode:', startupContext.windowMode)
-    console.log('[preload] isMetaOverlay:', startupContext.metaOverlay)
-  }
 
   if (isMainWindow()) {
     appendLoading()
