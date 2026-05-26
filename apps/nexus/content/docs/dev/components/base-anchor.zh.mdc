@@ -216,6 +216,7 @@ code: |
 | `minWidth` | `number` | `0` | 最小宽度 |
 | `maxWidth` | `number` | `360` | 最大宽度 |
 | `matchReferenceWidth` | `boolean` | `false` | `width=0` 时是否跟随 reference 宽度 |
+| `virtualReference` | `BaseAnchorVirtualReference` | `undefined` | 使用虚拟 reference（如鼠标坐标）进行定位；适合 ContextMenu / 画布节点 / 光标菜单 |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | 动画配置对象，统一控制动画类型、时长、缓动与效果参数 |
 | `duration` | `number` | `432` | 兼容旧用法的动画时长 (ms)，建议改用 `animation.duration` |
 | `ease` | `string` | `'back.out(2)'` | 兼容旧用法的打开缓动，建议改用 `animation.ease` |
@@ -267,6 +268,7 @@ code: |
 |------|------|------|
 | `close` | - | 编程式关闭 |
 | `toggle` | - | 编程式切换 |
+| `updatePosition` | - | 手动刷新 Floating UI 定位 |
 
 ## 交互契约
 
@@ -274,6 +276,7 @@ code: |
 - `disabled` 会阻断打开；已打开的非受控 Anchor 在切换为 disabled 后会关闭。
 - `closeOnClickOutside` 与 `closeOnEsc` 分别控制外部指针事件和 Escape 关闭。
 - `toggleOnReferenceClick=false` 会阻断 reference 点击切换，适合输入框等自行处理点击行为的 reference。
+- `virtualReference` 会覆盖 DOM reference 参与 Floating UI 定位，但 reference 插槽仍会渲染以保持结构与插槽契约。适合需要坐标锚点的组件。
 - `class`、`style` 与非 class attrs 会透传到浮层面板；reference 包装层样式使用 `referenceClass`。
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
 - 新动画优先使用 `animation` 对象；`duration` / `ease` 仅作为兼容入口参与默认值合并。

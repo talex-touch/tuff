@@ -13,6 +13,28 @@
 
 ## 2026-05-26
 
+### feat(tuffex): generalize ContextMenu overlays
+
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
+- `packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue`
+- `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue`
+- `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue`
+- `packages/tuffex/packages/components/src/context-menu/src/TxContextMenuDivider.vue`
+- `packages/tuffex/packages/components/src/context-menu/src/types.ts`
+- `apps/nexus/app/components/content/demos/ContextMenuContextMenuDemo.vue`
+- `apps/nexus/content/docs/dev/components/context-menu.{zh,en}.mdc`
+- `packages/tuffex/docs/components/context-menu.md`
+  - Added `TxBaseAnchor.virtualReference` and `updatePosition()` so coordinate-anchored overlays can share BaseAnchor positioning, Card surface, arrow, outside close, and GSAP animation behavior.
+  - Generalized ContextMenu from a simple right-click surface into a coordinate-aware overlay with `contextmenu` / `click` / `both` / `manual` triggers, repeated right-click position following, viewport collision handling, arrow support, and configurable animation modes.
+  - Rewired ContextMenu to use `TxBaseAnchor` virtual-anchor mode instead of maintaining separate Floating UI / CSS-transition logic.
+  - Added reusable `TxContextMenuPanel` for embedding menu content inside `TxPopover` or custom overlays, plus `TxContextMenuDivider` for separator rows.
+  - Expanded item capabilities with disabled/danger/custom color/shortcut/submenu indicators and per-item `closeOnSelect` control.
+  - Added trigger-area and any-pointer close options so right-click targets can dismiss the menu on normal clicks without breaking click-triggered menus.
+  - Ensured ContextMenu rows used as Popover references stretch to full panel width for secondary menu scenarios.
+  - Expanded Nexus and TuffEx docs with right-click binding, controlled coordinates, custom trigger, Popover embedding, secondary menus, divider/disabled/danger/color/shortcut examples, and automatic placement/animation guidance.
+  - Validated with BaseAnchor/ContextMenu/Popover Vitest, TuffEx `vue-tsc --noEmit --skipLibCheck`, and scoped ESLint for changed TuffEx/Nexus files.
+
 ### ci(release): generate concise bilingual GitHub release notes
 
 - `.github/workflows/build-and-release.yml`

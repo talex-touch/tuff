@@ -216,6 +216,7 @@ code: |
 | `minWidth` | `number` | `0` | Minimum width. |
 | `maxWidth` | `number` | `360` | Maximum width. |
 | `matchReferenceWidth` | `boolean` | `false` | Follow reference width when `width` is 0. |
+| `virtualReference` | `BaseAnchorVirtualReference` | `undefined` | Use a virtual reference, such as a mouse coordinate, for placement. Useful for ContextMenu, canvas nodes, and cursor menus. |
 | `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer' }` | Unified animation config for motion type, timings, easing, and effect parameters. |
 | `duration` | `number` | `432` | Backward-compatible animation duration (ms); prefer `animation.duration`. |
 | `ease` | `string` | `'back.out(2)'` | Backward-compatible open ease; prefer `animation.ease`. |
@@ -267,6 +268,7 @@ code: |
 |--------|--------|-------------|
 | `close` | - | Programmatically close. |
 | `toggle` | - | Programmatically toggle. |
+| `updatePosition` | - | Manually refresh Floating UI placement. |
 
 ## Interaction Contract
 
@@ -274,6 +276,7 @@ code: |
 - `disabled` blocks opening and closes an already open uncontrolled anchor.
 - `closeOnClickOutside` and `closeOnEsc` independently control outside pointer and Escape closing.
 - `toggleOnReferenceClick=false` keeps reference clicks from changing open state; use it for editable references that own their click behavior.
+- `virtualReference` overrides the DOM reference used by Floating UI, while the reference slot still renders to preserve structure and slot contracts. Use it for coordinate-anchored components.
 - `class`, `style`, and non-class attrs are applied to the floating panel. Use `referenceClass` for the reference wrapper.
 - `surfaceMotionAdaptation` is an active hard-cut strategy: `auto` uses anchor motion state, `manual` forwards `panelCard.surfaceMoving`, and `off` forces `surfaceMoving=false`.
 - Prefer `animation` for new motion config. `duration` / `ease` are only compatibility fallbacks merged into animation defaults.

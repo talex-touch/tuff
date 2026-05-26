@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { ContextMenuProps } from './types'
-import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import type { ContextMenuOpenTarget, ContextMenuPoint, ContextMenuProps } from './types'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { TxBaseAnchor } from '../../base-anchor'
+import TxContextMenuPanel from './TxContextMenuPanel.vue'
 
 defineOptions({ name: 'TxContextMenu' })
 
@@ -11,8 +11,32 @@ const props = withDefaults(defineProps<ContextMenuProps>(), {
   x: 0,
   y: 0,
   width: 220,
+  minWidth: 0,
+  maxWidth: 360,
+  maxHeight: 420,
+  unlimitedHeight: false,
+  disabled: false,
+  eager: false,
+  trigger: 'contextmenu',
+  anchorMode: 'pointer',
+  preventDefault: true,
+  placement: 'bottom-start',
+  offset: 2,
   closeOnEsc: true,
   closeOnClickOutside: true,
+  closeOnTriggerPointerDown: true,
+  closeOnAnyPointerDown: false,
+  closeOnSelect: true,
+  showArrow: false,
+  arrowSize: 10,
+  animation: () => ({}),
+  duration: 160,
+  keepAliveContent: true,
+  panelVariant: 'solid',
+  panelBackground: 'refraction',
+  panelShadow: 'medium',
+  panelRadius: 14,
+  panelPadding: 6,
 })
 
 const emit = defineEmits<{
@@ -22,10 +46,17 @@ const emit = defineEmits<{
 }>()
 
 const internalOpen = ref(false)
+const triggerRef = ref<HTMLElement | null>(null)
+const anchorRef = ref<InstanceType<typeof TxBaseAnchor> | null>(null)
+const point = ref<ContextMenuPoint>({ x: props.x, y: props.y })
+const lastOpenedAt = ref(0)
+const openedByContextMenu = ref(false)
 
 const open = computed({
   get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
   set: (v) => {
+    if (props.disabled && v)
+      return
     if (typeof props.modelValue !== 'boolean')
       internalOpen.value = v
     emit('update:modelValue', v)
@@ -36,57 +67,122 @@ const open = computed({
   },
 })
 
-const triggerRef = ref<HTMLElement | null>(null)
-const menuRef = ref<HTMLElement | null>(null)
-const zIndex = ref(getZIndex())
-const point = ref({ x: props.x, y: props.y })
-
-const lastOpenedAt = ref(0)
-
-const virtualReference = computed(() => {
+function getPointerRect(): DOMRect {
+  const { x, y } = point.value
   return {
-    getBoundingClientRect() {
-      return {
-        x: point.value.x,
-        y: point.value.y,
-        top: point.value.y,
-        left: point.value.x,
-        right: point.value.x,
-        bottom: point.value.y,
-        width: 0,
-        height: 0,
-      } as DOMRect
-    },
-  }
-})
+    x,
+    y,
+    top: y,
+    left: x,
+    right: x,
+    bottom: y,
+    width: 0,
+    height: 0,
+  } as DOMRect
+}
 
-const cleanupAutoUpdate = ref<(() => void) | null>(null)
-
-const { floatingStyles, update } = useFloating(virtualReference as any, menuRef, {
-  placement: 'bottom-start',
-  strategy: 'fixed',
-  middleware: [flip({ padding: 8 }), shift({ padding: 8 })],
+const virtualReference = markRaw({
+  getBoundingClientRect() {
+    if (props.anchorMode === 'reference')
+      return triggerRef.value?.getBoundingClientRect() ?? getPointerRect()
+    return getPointerRect()
+  },
 })
 
 function close() {
   open.value = false
 }
 
-provide('txContextMenu', {
-  close,
-})
+function readPoint(target?: ContextMenuOpenTarget): ContextMenuPoint {
+  if (!target)
+    return point.value
+  if ('clientX' in target && 'clientY' in target) {
+    return {
+      x: Math.round(target.clientX),
+      y: Math.round(target.clientY),
+    }
+  }
+  return {
+    x: Math.round(target.x),
+    y: Math.round(target.y),
+  }
+}
 
-function onContextMenu(e: MouseEvent) {
-  e.preventDefault()
-  point.value = { x: e.clientX, y: e.clientY }
+async function syncPosition() {
+  await nextTick()
+  await anchorRef.value?.updatePosition?.()
+}
+
+function openAt(target?: ContextMenuOpenTarget) {
+  if (props.disabled)
+    return
+  point.value = readPoint(target)
   lastOpenedAt.value = performance.now()
   open.value = true
+  void syncPosition()
+}
+
+function openFromEvent(e: MouseEvent | PointerEvent) {
+  openAt(e)
+}
+
+function isContextMenuTriggerEnabled() {
+  return props.trigger === 'contextmenu' || props.trigger === 'both'
+}
+
+function isClickTriggerEnabled() {
+  return props.trigger === 'click' || props.trigger === 'both'
+}
+
+function onContextMenu(e: MouseEvent) {
+  if (!isContextMenuTriggerEnabled())
+    return
+  if (props.preventDefault)
+    e.preventDefault()
+  openedByContextMenu.value = true
+  openFromEvent(e)
+}
+
+function onClick(e: MouseEvent) {
+  if (!isClickTriggerEnabled())
+    return
+  openedByContextMenu.value = false
+  openFromEvent(e)
+}
+
+function shouldCloseFromTriggerPointerDown(e: MouseEvent) {
+  if (!props.closeOnTriggerPointerDown)
+    return false
+  if (isClickTriggerEnabled())
+    return false
+  if (!openedByContextMenu.value)
+    return false
+  if (e.button !== 0)
+    return false
+  return true
+}
+
+function onTriggerPointerDown(e: PointerEvent) {
+  if (!open.value)
+    return
+  if (!shouldCloseFromTriggerPointerDown(e as unknown as MouseEvent))
+    return
+  close()
 }
 
 watch(
   () => [props.x, props.y],
   ([x, y]) => {
     point.value = { x: x ?? 0, y: y ?? 0 }
+  },
+)
+
+watch(
+  () => [point.value.x, point.value.y],
+  () => {
+    if (!open.value)
+      return
+    void syncPosition()
   },
 )
 
@@ -101,82 +197,126 @@ function isEventInside(e: Event, el: HTMLElement | null): boolean {
   return !!t && el.contains(t)
 }
 
-function handleOutside(e: MouseEvent) {
-  if (!props.closeOnClickOutside)
+function isEventInsideMenuLayer(e: Event): boolean {
+  const anyE = e as any
+  const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
+  const nodes = path && path.length ? path : [(e.target ?? null) as EventTarget | null]
+  return nodes.some((node) => {
+    if (!(node instanceof HTMLElement))
+      return false
+    return !!node.closest('[data-tx-context-menu-layer="true"]')
+  })
+}
+
+function handlePointerDown(e: MouseEvent) {
+  if (!props.closeOnAnyPointerDown && !props.closeOnTriggerPointerDown)
     return
   if (!open.value)
     return
   if (performance.now() - lastOpenedAt.value < 60)
     return
 
+  if (isEventInsideMenuLayer(e))
+    return
+
   const inTrigger = isEventInside(e, triggerRef.value)
-  const inMenu = isEventInside(e, menuRef.value)
-  if (!inTrigger && !inMenu)
+  if (props.closeOnAnyPointerDown || (inTrigger && shouldCloseFromTriggerPointerDown(e)))
     close()
 }
 
-function handleEsc(e: KeyboardEvent) {
-  if (!props.closeOnEsc)
-    return
-  if (e.key !== 'Escape')
-    return
-  if (!open.value)
-    return
-  close()
+function onAnchorUpdate(v: boolean) {
+  open.value = v
 }
 
+function onAnchorOpen() {}
+
+function onAnchorClose() {}
+
 watch(
-  open,
-  async (v) => {
-    if (!v) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = null
-      return
-    }
-    zIndex.value = nextZIndex()
-    await nextTick()
-    await update()
-    if (menuRef.value) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(document.documentElement, menuRef.value, () => update())
-    }
+  () => props.disabled,
+  (disabled) => {
+    if (disabled)
+      close()
   },
-  { flush: 'post' },
 )
 
 onMounted(() => {
-  document.addEventListener('pointerdown', handleOutside, true)
-  document.addEventListener('keydown', handleEsc)
+  document.addEventListener('pointerdown', handlePointerDown, true)
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handleOutside, true)
-  document.removeEventListener('keydown', handleEsc)
-  cleanupAutoUpdate.value?.()
-  cleanupAutoUpdate.value = null
+  document.removeEventListener('pointerdown', handlePointerDown, true)
+})
+
+defineExpose({
+  close,
+  openAt,
+  openFromEvent,
+  updatePosition: () => anchorRef.value?.updatePosition?.(),
 })
 </script>
 
 <template>
-  <div ref="triggerRef" class="tx-context-menu__trigger" @contextmenu="onContextMenu">
+  <div
+    ref="triggerRef"
+    class="tx-context-menu__trigger"
+    :class="{ 'is-disabled': disabled }"
+    @contextmenu="onContextMenu"
+    @pointerdown="onTriggerPointerDown"
+    @click="onClick"
+  >
     <slot name="trigger">
       <slot />
     </slot>
   </div>
 
-  <Teleport to="body">
-    <Transition name="tx-context-menu">
-      <div
-        v-show="open"
-        ref="menuRef"
-        class="tx-context-menu"
-        :style="[floatingStyles, { width: `${width}px`, zIndex }]"
-        role="menu"
+  <TxBaseAnchor
+    ref="anchorRef"
+    class="tx-context-menu"
+    :model-value="open"
+    :disabled="disabled"
+    :eager="eager"
+    :virtual-reference="virtualReference"
+    :placement="placement"
+    :offset="offset"
+    :width="width"
+    :min-width="minWidth"
+    :max-width="maxWidth"
+    :max-height="maxHeight"
+    :unlimited-height="unlimitedHeight"
+    :match-reference-width="false"
+    :animation="animation"
+    :duration="duration"
+    :use-card="true"
+    :panel-variant="panelVariant"
+    :panel-background="panelBackground"
+    :panel-shadow="panelShadow"
+    :panel-radius="panelRadius"
+    :panel-padding="panelPadding"
+    :panel-card="panelCard"
+    :show-arrow="showArrow"
+    :arrow-size="arrowSize"
+    :keep-alive-content="keepAliveContent"
+    :close-on-click-outside="closeOnClickOutside"
+    :close-on-esc="closeOnEsc"
+    :toggle-on-reference-click="false"
+    @update:model-value="onAnchorUpdate"
+    @open="onAnchorOpen"
+    @close="onAnchorClose"
+  >
+    <template #reference>
+      <span aria-hidden="true" />
+    </template>
+
+    <template #default>
+      <TxContextMenuPanel
+        :close="close"
+        :close-on-select="closeOnSelect"
       >
         <slot name="menu" />
-      </div>
-    </Transition>
-  </Teleport>
+      </TxContextMenuPanel>
+    </template>
+  </TxBaseAnchor>
 </template>
 
 <style lang="scss" scoped>
@@ -185,24 +325,12 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
-.tx-context-menu {
-  padding: 6px;
-  border-radius: 12px;
-  border: 1px solid var(--tx-border-color-light, #e4e7ed);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
-  box-shadow: var(--tx-box-shadow-dark, 0 16px 48px 16px rgba(0, 0, 0, 0.08));
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+.tx-context-menu__trigger.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
-.tx-context-menu-enter-active,
-.tx-context-menu-leave-active {
-  transition: opacity 0.14s ease, transform 0.14s ease;
-}
-
-.tx-context-menu-enter-from,
-.tx-context-menu-leave-to {
-  opacity: 0;
-  transform: translateY(6px) scale(0.98);
+:global(.tx-context-menu.tx-base-anchor) {
+  --tx-card-fake-background: var(--tx-bg-color-overlay, #fff);
 }
 </style>

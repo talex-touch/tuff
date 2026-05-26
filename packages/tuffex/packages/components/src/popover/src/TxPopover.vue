@@ -222,6 +222,12 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+:deep(.tx-context-menu-panel) .tx-popover__reference,
+:deep(.tx-context-menu-panel) .tx-base-anchor__reference {
+  display: flex;
+  width: 100%;
+}
+
 .tx-popover__reference {
   display: inline-flex;
   align-items: center;

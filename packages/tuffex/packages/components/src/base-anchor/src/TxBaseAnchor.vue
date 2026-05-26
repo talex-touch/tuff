@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxCardProps } from '../../card/src/types'
-import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorClassValue, BaseAnchorProps } from './types'
+import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorClassValue, BaseAnchorProps, BaseAnchorVirtualReference } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import gsap from 'gsap'
 import type { StyleValue } from 'vue'
@@ -23,6 +23,7 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   maxHeight: 420,
   unlimitedHeight: false,
   matchReferenceWidth: false,
+  virtualReference: undefined,
   animation: () => ({}),
   duration: 432,
   ease: 'back.out(2)',
@@ -95,7 +96,9 @@ let tl: gsap.core.Timeline | null = null
 let runId = 0
 
 /* ─── floating-ui ─── */
-const { floatingStyles, middlewareData, placement, update } = useFloating(referenceRef, floatingRef, {
+const floatingReference = computed(() => props.virtualReference ?? referenceRef.value)
+
+const { floatingStyles, middlewareData, placement, update } = useFloating(floatingReference as any, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
   transform: false,
@@ -440,17 +443,22 @@ function settleOpenVisualStateForFollow() {
   resetArrowElement()
 }
 
-function readReferenceRect(): RectSnapshot | null {
-  const el = referenceRef.value
-  if (!el)
-    return null
-  const rect = el.getBoundingClientRect()
+function normalizeRect(rect: DOMRect | ClientRect): RectSnapshot {
+  const domRect = rect as DOMRect
   return {
-    x: rect.x,
-    y: rect.y,
+    x: typeof domRect.x === 'number' ? domRect.x : rect.left,
+    y: typeof domRect.y === 'number' ? domRect.y : rect.top,
     width: rect.width,
     height: rect.height,
   }
+}
+
+function readReferenceRect(): RectSnapshot | null {
+  const reference = floatingReference.value as HTMLElement | BaseAnchorVirtualReference | null
+  if (!reference)
+    return null
+  const rect = reference.getBoundingClientRect()
+  return normalizeRect(rect)
 }
 
 function hasReferenceMoved(): boolean {
@@ -782,6 +790,7 @@ function close() {
 defineExpose({
   close,
   toggle,
+  updatePosition: update,
 })
 
 /* ─── outside click / esc ─── */
@@ -846,22 +855,34 @@ watch(
     syncOutlineSize()
     setupResizeObserver()
 
-    if (referenceRef.value && floatingRef.value) {
+    const reference = floatingReference.value
+    if (reference && floatingRef.value) {
       cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(
-        referenceRef.value,
-        floatingRef.value,
-        () => {
-          const referenceMoved = hasReferenceMoved()
-          update()
-          if (referenceMoved && open.value && props.panelBackground !== 'refraction') {
-            pulsePanelSurfaceMoving(120)
-          }
-          if (referenceMoved && tl && open.value)
-            settleOpenVisualStateForFollow()
-        },
-        { animationFrame: true },
-      )
+      if (props.virtualReference) {
+        const updatePosition = () => update()
+        window.addEventListener('resize', updatePosition, { passive: true })
+        window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
+        cleanupAutoUpdate.value = () => {
+          window.removeEventListener('resize', updatePosition)
+          window.removeEventListener('scroll', updatePosition, { capture: true } as EventListenerOptions)
+        }
+      }
+      else {
+        cleanupAutoUpdate.value = autoUpdate(
+          reference,
+          floatingRef.value,
+          () => {
+            const referenceMoved = hasReferenceMoved()
+            update()
+            if (referenceMoved && open.value && props.panelBackground !== 'refraction') {
+              pulsePanelSurfaceMoving(120)
+            }
+            if (referenceMoved && tl && open.value)
+              settleOpenVisualStateForFollow()
+          },
+          { animationFrame: true },
+        )
+      }
     }
 
     await nextTick()
@@ -910,7 +931,7 @@ onBeforeUnmount(() => {
   <div
     ref="referenceRef"
     class="tx-base-anchor__reference"
-    :class="props.referenceClass"
+    :class="[props.referenceClass, { 'is-virtual-reference': !!props.virtualReference }]"
     @click.capture="handleReferenceClick"
   >
     <slot name="reference" />
@@ -975,6 +996,16 @@ onBeforeUnmount(() => {
 .tx-base-anchor__reference.is-full-width {
   display: flex;
   width: 100%;
+}
+
+.tx-base-anchor__reference.is-virtual-reference {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .tx-base-anchor {
