@@ -7,6 +7,8 @@ import { ref } from 'vue'
 
 const basicUnchecked = ref(false)
 const basicChecked = ref(true)
+const fillVariantChecked = ref(true)
+const checkmarkVariantChecked = ref(true)
 const labelStartUnchecked = ref(false)
 const labelStartChecked = ref(true)
 const noLabelChecked = ref(false)
@@ -30,6 +32,28 @@ const slotChecked = ref(false)
 &lt;template&gt;
   &lt;TxCheckbox v-model="checked" label="选项" /&gt;
 &lt;/template&gt;
+```
+</template>
+</DemoBlock>
+
+## 样式变体
+
+默认 `fill` 为纯填充样式；需要更明确的勾选反馈时，可使用 `variant="checkmark"` 显示内部勾选标记。
+
+<DemoBlock title="Checkbox variants">
+<template #preview>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
+  <TxCheckbox v-model="fillVariantChecked" label="填充样式" />
+  <TxCheckbox v-model="checkmarkVariantChecked" variant="checkmark" label="带勾选标记" />
+</div>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxCheckbox v-model="fillChecked" label="填充样式" />
+  <TxCheckbox v-model="checkmarkChecked" variant="checkmark" label="带勾选标记" />
+</template>
 ```
 </template>
 </DemoBlock>
@@ -124,6 +148,7 @@ const slotChecked = ref(false)
 | disabled | 是否禁用 | `boolean` | `false` |
 | label | 标签文本 | `string` | - |
 | labelPlacement | 标签位置（start=前置，end=后置） | `'start' \| 'end'` | `'end'` |
+| variant | 视觉变体：`fill` 为纯填充，`checkmark` 为内部勾选标记。 | `'checkmark' \| 'fill'` | `'fill'` |
 | ariaLabel | 无标签时的可访问性文本 | `string` | - |
 
 ### Events

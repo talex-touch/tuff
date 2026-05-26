@@ -63,6 +63,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   CheckboxCheckboxLabelStartDemo: () => import('./demos/CheckboxCheckboxLabelStartDemo.vue'),
   CheckboxCheckboxNoLabelDemo: () => import('./demos/CheckboxCheckboxNoLabelDemo.vue'),
   CheckboxCheckboxSlotDemo: () => import('./demos/CheckboxCheckboxSlotDemo.vue'),
+  CheckboxCheckboxVariantsDemo: () => import('./demos/CheckboxCheckboxVariantsDemo.vue'),
   CodeEditorCodeEditorDemo: () => import('./demos/CodeEditorCodeEditorDemo.vue'),
   CollapseBasicDemo: () => import('./demos/CollapseBasicDemo.vue'),
   CommandPaletteCommandPaletteDemo: () => import('./demos/CommandPaletteCommandPaletteDemo.vue'),

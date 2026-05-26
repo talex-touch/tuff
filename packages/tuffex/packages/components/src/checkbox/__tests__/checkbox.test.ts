@@ -48,6 +48,31 @@ describe('txCheckbox', () => {
     expect(wrapper.element.firstElementChild?.classList.contains('tx-checkbox__label')).toBe(true)
   })
 
+  it('uses fill variant by default without the inner checkmark', () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: true,
+        label: 'Selected',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('tx-checkbox--fill')
+    expect(wrapper.find('svg').exists()).toBe(false)
+  })
+
+  it('renders checkmark variant with the inner tick svg', () => {
+    const wrapper = mount(TxCheckbox, {
+      props: {
+        modelValue: true,
+        label: 'Selected',
+        variant: 'checkmark',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('tx-checkbox--checkmark')
+    expect(wrapper.find('svg .tx-checkbox__tick').exists()).toBe(true)
+  })
+
   it('emits v-model and change events on click and keyboard toggle', async () => {
     const wrapper = mount(TxCheckbox, {
       props: {

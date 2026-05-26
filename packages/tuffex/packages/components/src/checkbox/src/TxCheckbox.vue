@@ -11,12 +11,14 @@ const props = withDefaults(
     disabled?: boolean
     label?: string
     labelPlacement?: 'start' | 'end'
+    variant?: 'fill' | 'checkmark'
     ariaLabel?: string
   }>(),
   {
     modelValue: false,
     disabled: false,
     labelPlacement: 'end',
+    variant: 'fill',
   },
 )
 
@@ -60,6 +62,7 @@ function toggle() {
         'is-checked': isChecked,
         'is-disabled': disabled,
       },
+      `tx-checkbox--${variant || 'fill'}`,
     ]"
     @click="toggle"
     @keydown.enter.prevent="toggle"
@@ -73,7 +76,7 @@ function toggle() {
     </span>
 
     <span class="tx-checkbox__box" aria-hidden="true">
-      <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+      <svg v-if="variant === 'checkmark'" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <polyline
           fill="none"
           stroke-width="24"
@@ -119,7 +122,7 @@ function toggle() {
     }
 
     .tx-checkbox__tick {
-      stroke: var(--tx-fill-color-blank, #fff);
+      stroke: var(--tx-checkbox-checkmark-color, #fff);
       stroke-dasharray: 306.27;
       stroke-dashoffset: 306.27;
       transition: stroke-dashoffset 0.3s ease;
