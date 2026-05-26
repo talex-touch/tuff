@@ -77,6 +77,20 @@
   - Strengthened the click feedback into a visible bounce + glow + ripple animation and expanded docs with color and heart-icon examples.
   - Expanded Nexus Rating docs with style, custom icon, and animation demos while preserving the existing basic half-star sample.
 
+### fix(core-app): render preload debug logs as text nodes
+
+- `apps/core-app/src/preload/index.ts`
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-25.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/INDEX.md`
+  - Replaced the preload debug panel runtime log rendering from `innerHTML` string assembly with explicit `createElement`, `textContent`, and `replaceChildren` calls.
+  - Removed the adjacent `debug-preload` console noise while preserving the debug overlay path.
+  - Kept the static loading overlay/logo markup boundary unchanged and documented the preload debug slice as closed.
+  - Validated with `pnpm -C "apps/core-app" exec eslint --cache --quiet "src/preload/index.ts"` and `pnpm -C "apps/core-app" run typecheck:node`.
+
 ### docs(nexus): mark BaseAnchor docs reviewed
 
 - `apps/nexus/content/docs/dev/components/base-anchor.zh.mdc`

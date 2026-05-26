@@ -67,7 +67,7 @@
 2. 生产/preview operator evidence 必须使用 D1/R2/真实 provider，不接受 memory source 作为闭环。
 3. 把 `source: 'memory'` 的 API 列入证据分类表。
 
-### P1：preload debug panel 使用 HTML 字符串拼装日志
+### P1：preload debug panel 使用 HTML 字符串拼装日志（2026-05-26 已收口）
 
 证据：
 - `apps/core-app/src/preload/index.ts` 用 `container.innerHTML` 构建 loading overlay。
@@ -78,9 +78,9 @@
 - 但 preload 是高敏感边界，`innerHTML` 拼日志不符合当前质量基线里的“裸 console / DOM 注入面收口”方向。
 
 下一步：
-1. 把 debug log 行改为 `document.createElement` + `textContent`。
-2. 保留静态 SVG/logo markup 的边界说明，避免把受控构建资产和运行时日志混为一谈。
-3. 清理 preload debug `console.log`，改为受控 logger 或仅 evidence mode 开启。
+1. 已于 2026-05-26 把 debug panel 与 debug log 行改为 `document.createElement` + `textContent` / `replaceChildren`。
+2. 静态 loading overlay 与 logo markup 仍作为受控构建资产边界保留，不和运行时日志混为一谈。
+3. 已清理同一段 `debug-preload` 下的 preload `console.log` 噪音。
 
 ### P2：历史 dialog 组件仍暴露通用 `v-html` message 渲染
 
