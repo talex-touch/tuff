@@ -2,7 +2,8 @@
 title: "SearchInput 搜索输入框"
 description: "基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。"
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # SearchInput 搜索输入框
 
@@ -120,6 +121,37 @@ code: |
 ---
 :::
 
+## 后台筛选工具栏
+
+`TxSearchInput` 适合承载关键词输入；当筛选还需要“范围/类型”时，搭配 `TxSearchSelect` 和 `TxSearchEmpty` 可以形成完整的列表筛选路径。
+
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="已通过本地 Nexus 页面截图验证的搜索输入、筛选选择器与搜索空态组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: '全部' },
+    { value: 'docs', label: '文档' },
+    { value: 'tasks', label: '任务' },
+  ]
+  const records = ['插件发布流水', 'Tuffex 组件教程', '截图核验任务']
+  const filteredRecords = computed(() => records.filter(item => item.includes(query.value)))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" remote placeholder="搜索插件 / 文档 / 任务" />
+      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="筛选范围" />
+      <TxSearchEmpty v-if="!filteredRecords.length" description="换一个关键词或筛选范围。" />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### TxSearchInput Props
@@ -153,3 +185,10 @@ code: |
 | `clear()` | `() => void` | 清空 |
 | `setValue(v)` | `(v: string) => void` | 设置值 |
 | `getValue()` | `() => string` | 获取值 |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`
+- 建议：仅需要关键词与回车触发时使用 `TxSearchInput`；需要结果面板或选项回填时优先使用 `TxSearchSelect`。
+- 交互：`remote` 模式会在输入变化后按 `searchDebounce` 触发 `search`，Enter 会立即触发 `search`。
+- 可访问性：不要只依赖 placeholder 表达业务语义；在表单或复杂工具栏中应提供外部标签、分组标题或上下文说明。

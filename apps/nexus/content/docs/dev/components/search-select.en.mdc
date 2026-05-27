@@ -2,7 +2,8 @@
 title: "SearchSelect"
 description: "Searchable select input with local filtering, remote search events, and Popover-backed options panel."
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # SearchSelect
 
@@ -97,6 +98,41 @@ code: |
 - Remote mode requires updating `options` in the `search` event; results are not cached.
 - Closing the dropdown keeps input and panel state; reopening does not auto-reset.
 
+## Dashboard Filter Toolbar
+
+In dashboard list filters, `TxSearchSelect` works best for structured scopes such as range, type, or status. Keep keyword entry in `TxSearchInput`, and use `TxSearchEmpty` for the no-match recovery path.
+
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="A screenshot-verifiable composition of search input, search select, and search empty state."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'docs', label: 'Docs' },
+    { value: 'tasks', label: 'Tasks' },
+  ]
+  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" placeholder="Search plugins / docs / tasks" remote />
+      <TxSearchSelect
+        v-model="selectedScope"
+        :options="scopeOptions"
+        placeholder="Filter scope"
+        panel-background="glass"
+      />
+      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### Props
@@ -142,3 +178,10 @@ code: |
   }
 ---
 :::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`
+- Recommendation: pass `options` directly for small local lists; use `remote` + `search` for external data sources and write results back through `options`.
+- Interaction: disabled options remain visible but cannot be selected; clearing emits both `update:modelValue` and `change` with an empty value.
+- Surface: the panel is hosted by `TxPopover`; use `panelBackground`, `panelShadow`, and `panelRadius` to align with the surrounding surface hierarchy.

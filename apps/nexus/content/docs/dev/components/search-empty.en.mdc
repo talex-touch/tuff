@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [search, empty, state]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # SearchEmpty
 
@@ -27,8 +28,32 @@ code: |
 
 `TxSearchEmpty` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
 
+## Dashboard Filter Toolbar
+
+Render search-empty feedback inside the filtered-results container and provide a reset/refine action so users do not mistake the list for a loading state.
+
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="No-match feedback, reset action, and scope switching stay inside one data container."}
+---
+code: |
+  <template>
+    <TxSearchEmpty
+      title="No matches"
+      description="Try another keyword or filter scope, then search again."
+      surface="card"
+      :primary-action="{ label: 'Reset filters', type: 'primary', icon: 'i-carbon-reset' }"
+    />
+  </template>
+---
+:::
+
 ## Interaction Contract
 
 - `TxSearchEmpty` always forwards `variant="search-empty"` to `TxEmptyState`.
 - The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
 - `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`
+- Recommendation: use `TxSearchEmpty` for no-match search results; keep `TxEmptyState` or `TxNoData` for ordinary empty datasets.
+- Accessibility: the title should state that no matches were found, and actions should point to a recovery path such as reset filters, adjust scope, or search again.

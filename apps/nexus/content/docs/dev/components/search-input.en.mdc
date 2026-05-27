@@ -1,12 +1,13 @@
 ---
 title: "SearchInput"
-description: "Enter `search`"
+description: "Search input with a built-in icon, clear affordance, Enter search, and optional debounced remote search."
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # SearchInput
 
-Enter `search`
+`TxSearchInput` wraps the base input with a search icon, clear affordance, Enter-triggered `search`, and optional debounced remote search.
 
 If you need a search input that expands results like Select, use `SearchSelect`.
 
@@ -120,6 +121,37 @@ code: |
 ---
 :::
 
+## Dashboard Filter Toolbar
+
+Use `TxSearchInput` for the keyword field. When a list also needs scope/type filtering, combine it with `TxSearchSelect` and `TxSearchEmpty` so filtering, matching, and recovery states stay in one path.
+
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="A screenshot-verified composition of search input, search select, and search empty state on the local Nexus page."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'docs', label: 'Docs' },
+    { value: 'tasks', label: 'Tasks' },
+  ]
+  const records = ['Plugin release stream', 'Tuffex component tutorial', 'Screenshot verification task']
+  const filteredRecords = computed(() => records.filter(item => item.toLowerCase().includes(query.value.toLowerCase())))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" remote placeholder="Search plugins / docs / tasks" />
+      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="Filter scope" />
+      <TxSearchEmpty v-if="!filteredRecords.length" description="Try another keyword or filter scope." />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### TxSearchInput Props
@@ -153,3 +185,10 @@ code: |
 | `clear()` | `() => void` | Clears the current value and emits `clear`. |
 | `setValue(v)` | `(v: string) => void` | Sets the current input value. |
 | `getValue()` | `() => string` | Returns the current input value. |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`
+- Recommendation: use `TxSearchInput` for keyword and Enter workflows; prefer `TxSearchSelect` when results need a dropdown panel or selected-value refill.
+- Interaction: `remote` emits `search` after `searchDebounce` on input changes, while Enter emits `search` immediately.
+- Accessibility: do not rely on placeholder text as the only business label; provide an external label, section heading, or surrounding context in dense toolbars.

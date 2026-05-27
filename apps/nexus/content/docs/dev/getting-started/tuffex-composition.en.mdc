@@ -13,9 +13,9 @@ This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more 
 
 | Group | Recommended components | Purpose |
 |------|----------|------|
-| Actions | `TxButton`, `TuffInput`, `TuffSwitch` | Search, refresh, deploy, sync, and other immediate operations |
+| Actions | `TxButton`, `TuffInput`, `TxSearchInput`, `TxSearchSelect`, `TuffSwitch` | Search, filter, refresh, deploy, sync, and other immediate operations |
 | Status | `TxStatusBadge`, `TxTag`, `TxProgressBar` | Review, sync, release, capacity, and quota state |
-| Data | `TxDataTable`, `TxEmptyState`, `TxLoadingState` | Records, row selection, empty state, and loading state |
+| Data | `TxDataTable`, `TxEmptyState`, `TxSearchEmpty`, `TxLoadingState` | Records, row selection, empty state, and loading state |
 | Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
 
 ## 2. Minimal Working Slice
@@ -61,7 +61,37 @@ code: |
 ---
 ::
 
-## 3. Operations Status Header
+## 3. Search And Filter Path
+
+Do not split “enter keyword”, “choose scope”, and “no matches” into disconnected regions. Compose `TxSearchInput`, `TxSearchSelect`, and `TxSearchEmpty` inside one filter container so users can see active conditions, match count, and recovery actions together.
+
+::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="Keyword search, scope filtering, and search-empty recovery share one path."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'docs', label: 'Docs' },
+    { value: 'tasks', label: 'Tasks' },
+  ]
+  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" remote placeholder="Search plugins / docs / tasks" />
+      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="Filter scope" />
+      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+    </section>
+  </template>
+---
+::
+
+## 4. Operations Status Header
 
 Dashboard / Admin pages should first answer “is the system healthy?”. Structure the first screen in this order:
 
@@ -91,7 +121,7 @@ code: |
 ---
 ::
 
-## 4. Trend Sections
+## 5. Trend Sections
 
 Dashboard trend charts should reuse `DashboardSparklineChart` / `DashboardMetricChart` instead of page-local `svg` polylines. This keeps tooltip behavior, dark theme styling, ResizeObserver resizing, and empty states consistent.
 
@@ -112,7 +142,7 @@ code: |
 ---
 ::
 
-## 5. Data Recovery Paths
+## 6. Data Recovery Paths
 
 Every data panel needs three recovery paths: loading, no data, and request failure. They should occupy the same container to avoid layout jumps and duplicated placeholders.
 
@@ -129,16 +159,20 @@ code: |
 ---
 ::
 
-## 6. Review Checklist
+## 7. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
+- **Filter loop**: keyword, scope filtering, match count, and no-match recovery should come from the same reactive model.
 - **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
 - **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 7. Continue Reading
+## 8. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
+- [SearchInput](../components/search-input.en.md)
+- [SearchSelect](../components/search-select.en.md)
+- [SearchEmpty](../components/search-empty.en.md)
 - [StatCard](../components/stat-card.en.md)
 - [DataTable](../components/data-table.en.md)
 - [StatusBadge](../components/status-badge.en.md)

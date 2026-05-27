@@ -108,10 +108,37 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="将 SearchInput、SearchSelect、SearchEmpty 组合成列表筛选与空结果恢复路径。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: '全部' },
+    { value: 'docs', label: '文档' },
+    { value: 'tasks', label: '任务' },
+  ]
+  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" remote placeholder="搜索插件 / 文档 / 任务" />
+      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="筛选范围" />
+      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+    </section>
+  </template>
+---
+::
+
 ## 教程路径
 
 - 新手先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.md)》，掌握“操作区 → 状态区 → 数据区”的页面切法。
 - 后台首屏建议从“运营状态面板”模式开始，再按需向下展开表格、趋势图和详情抽屉。
+- 列表页优先把关键词、范围筛选和无结果恢复设计成同一条路径，复用 `TxSearchInput`、`TxSearchSelect`、`TxSearchEmpty`。
 - 数据区必须同时设计加载、空态和错误恢复路径，优先复用 `TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。

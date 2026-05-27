@@ -108,10 +108,37 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="Compose SearchInput, SearchSelect, and SearchEmpty into one list-filtering and no-match recovery path."}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'docs', label: 'Docs' },
+    { value: 'tasks', label: 'Tasks' },
+  ]
+  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" remote placeholder="Search plugins / docs / tasks" />
+      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="Filter scope" />
+      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+    </section>
+  </template>
+---
+::
+
 ## Tutorial Path
 
 - Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.md) to learn the “actions → status → data” page structure.
 - Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, and detail drawers.
+- For list pages, keep keyword search, scope filtering, and no-match recovery in one path with `TxSearchInput`, `TxSearchSelect`, and `TxSearchEmpty`.
 - Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
