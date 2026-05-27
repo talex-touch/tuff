@@ -1,0 +1,76 @@
+---
+title: Composing Tuffex Interfaces
+description: Build reviewable, screenshot-backed dashboard slices with Tuffex components
+syncStatus: migrated
+verified: true
+---
+
+# Composing Tuffex Interfaces
+
+This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more components; it is to structure a page as “actions → status → data” so users can understand state and act quickly.
+
+## 1. Page Groups
+
+| Group | Recommended components | Purpose |
+|------|----------|------|
+| Actions | `TxButton`, `TuffInput`, `TuffSwitch` | Search, refresh, deploy, sync, and other immediate operations |
+| Status | `TxStatusBadge`, `TxTag`, `TxProgressBar` | Review, sync, release, capacity, and quota state |
+| Data | `TxDataTable`, `TxEmptyState`, `TxLoadingState` | Records, row selection, empty state, and loading state |
+| Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
+
+## 2. Minimal Working Slice
+
+::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="Release workspace composition" description="A screenshot-verifiable Dashboard composition slice."}
+---
+code: |
+  <script setup lang="ts">
+  import type { DataTableColumn } from '@talex-touch/tuffex'
+  import { computed, ref } from 'vue'
+
+  interface Row {
+    id: number
+    task: string
+    owner: string
+    status: string
+    score: number
+  }
+
+  const query = ref('')
+  const selectedKeys = ref<Array<number | string>>([1])
+  const rows: Row[] = [
+    { id: 1, task: 'Verify component screenshots', owner: 'Nexus', status: 'review', score: 84 },
+    { id: 2, task: 'Complete API tables', owner: 'Tuffex', status: 'ready', score: 92 },
+    { id: 3, task: 'Dark-mode regression', owner: 'QA', status: 'failed', score: 48 },
+  ]
+  const columns: DataTableColumn<Row>[] = [
+    { key: 'task', title: 'Task' },
+    { key: 'owner', title: 'Owner' },
+    { key: 'status', title: 'Status' },
+    { key: 'score', title: 'Score', sortable: true },
+  ]
+  const filteredRows = computed(() => rows.filter(row => row.task.includes(query.value) || row.owner.includes(query.value)))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TuffInput v-model="query" placeholder="Search tasks" prefix-icon="i-carbon-search" clearable />
+      <TxProgressBar :percentage="84" status="success" show-text />
+      <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="filteredRows" row-key="id" selectable />
+    </section>
+  </template>
+---
+::
+
+## 3. Review Checklist
+
+- **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
+- **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
+- **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
+- **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
+
+## 4. Continue Reading
+
+- [Tuffex Components](../components/index.en.md)
+- [DataTable](../components/data-table.en.md)
+- [StatusBadge](../components/status-badge.en.md)
+- [ProgressBar](../components/progress-bar.en.md)

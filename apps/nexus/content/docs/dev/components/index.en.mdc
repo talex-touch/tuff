@@ -2,6 +2,7 @@
 title: Tuffex Components
 description: Component documentation hub for Tuffex
 syncStatus: migrated
+verified: true
 ---
 
 # Tuffex Components
@@ -24,6 +25,61 @@ code: |
   </template>
 ---
 ::
+
+## Composed Workspace Demo
+
+This demo validates component composition in a realistic admin slice: search input, switch, button, status badges, progress, and selectable table work together in one responsive panel.
+
+::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="Release workspace" description="A practical baseline for Dashboard / Admin component composition."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const query = ref('')
+  const selectedKeys = ref([1])
+  const automationEnabled = ref(true)
+  </script>
+
+  <template>
+    <section class="workflow-panel">
+      <header>
+        <h3>Release workspace</h3>
+        <TxButton variant="primary" size="sm" icon="i-carbon-rocket">Deploy</TxButton>
+      </header>
+      <TuffInput v-model="query" placeholder="Search tasks" prefix-icon="i-carbon-search" clearable />
+      <TuffSwitch v-model="automationEnabled" />
+      <TxProgressBar :percentage="84" status="success" show-text />
+      <TxStatusBadge text="Reviewing" status="warning" />
+      <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="rows" row-key="id" selectable />
+    </section>
+  </template>
+---
+::
+
+::TuffDemoWrapper{demo="ComponentsDashboardSparklineDemo" code-lang="vue" title="Dashboard trends" description="Reuse DashboardSparklineChart instead of page-local SVG sparklines."}
+---
+code: |
+  <script setup lang="ts">
+  import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
+  </script>
+
+  <template>
+    <DashboardSparklineChart
+      :values="[18, 24, 21, 36, 42, 38, 54]"
+      :labels="['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']"
+      color="var(--tx-color-primary, #409eff)"
+      show-grid
+    />
+  </template>
+---
+::
+
+## Tutorial Path
+
+- Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.md) to learn the “actions → status → data” page structure.
+- Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
+- Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 
 ## Migration Dashboard
 

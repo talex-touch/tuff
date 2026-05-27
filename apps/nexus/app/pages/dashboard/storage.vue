@@ -3,6 +3,7 @@ import type { DataTableColumn } from '@talex-touch/tuffex'
 import { TxButton, TxDataTable, TxStatusBadge } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -229,23 +230,6 @@ function formatRelativeTime(value: string): string {
   return `${days}${t('dashboard.storage.daysAgo', ' 天前')}`
 }
 
-function normalizeSparkline(values: number[], width: number, height: number): { line: string, area: string } {
-  if (!values.length) {
-    return { line: '', area: '' }
-  }
-
-  const max = Math.max(1, ...values)
-  const stepX = values.length > 1 ? width / (values.length - 1) : width
-  const points = values.map((value, index) => {
-    const x = Number((index * stepX).toFixed(2))
-    const y = Number((height - (value / max) * height).toFixed(2))
-    return { x, y }
-  })
-  const line = points.map((point) => `${point.x},${point.y}`).join(' ')
-  const area = `0,${height} ${line} ${width},${height}`
-  return { line, area }
-}
-
 const storageSparkline = computed(() => {
   const days: string[] = []
   const counts = new Map<string, number>()
@@ -270,13 +254,11 @@ const storageSparkline = computed(() => {
   const latest = values[values.length - 1] ?? 0
   const delta = latest - baseline
   const trend = delta === 0 ? '0%' : `${delta > 0 ? '+' : ''}${Math.round((delta / Math.max(1, baseline || 1)) * 100)}%`
-  const chart = normalizeSparkline(values, 280, 64)
 
   return {
-    line: chart.line,
-    area: chart.area,
     trend,
     values,
+    days,
   }
 })
 
@@ -286,7 +268,6 @@ const connectionSparkline = computed(() => {
     samples.length > 0
       ? samples.reverse()
       : [90, 92, 91, 93, 95, 94, 96, 95, 94, 96, 97, 98]
-  const chart = normalizeSparkline(values, 280, 54)
   const failedCount = recentSessions.value.slice(0, 12).filter((item) => item.status === 'failed').length
   const healthLabel =
     failedCount === 0
@@ -295,9 +276,8 @@ const connectionSparkline = computed(() => {
       ? t('dashboard.storage.connectionWarning', 'Attention')
       : t('dashboard.storage.connectionUnstable', 'Unstable')
   return {
-    line: chart.line,
-    area: chart.area,
     healthLabel,
+    values,
   }
 })
 
@@ -524,10 +504,13 @@ watch(showDetailsOverlay, (open) => {
             <span>{{ t('dashboard.storage.activity7Day', '7-Day Activity') }}</span>
             <span class="StorageMiniChart-Trend">{{ storageSparkline.trend }}</span>
           </div>
-          <svg viewBox="0 0 280 64" preserveAspectRatio="none" class="StorageMiniChart-Svg">
-            <polygon :points="storageSparkline.area" class="StorageMiniChart-Area StorageMiniChart-Area--blue" />
-            <polyline :points="storageSparkline.line" class="StorageMiniChart-Line StorageMiniChart-Line--blue" />
-          </svg>
+          <DashboardSparklineChart
+            :values="storageSparkline.values"
+            :labels="storageSparkline.days"
+            :height="70"
+            color="#3b82f6"
+            :aria-label="t('dashboard.storage.activity7Day', '7-Day Activity')"
+          />
         </div>
       </article>
 
@@ -562,13 +545,12 @@ watch(showDetailsOverlay, (open) => {
             <span>{{ t('dashboard.storage.activeConnections', 'Active Connections') }}</span>
             <span class="StorageMiniChart-Trend">{{ connectionSparkline.healthLabel }}</span>
           </div>
-          <svg viewBox="0 0 280 54" preserveAspectRatio="none" class="StorageMiniChart-Svg">
-            <polygon :points="connectionSparkline.area" class="StorageMiniChart-Area StorageMiniChart-Area--violet" />
-            <polyline
-              :points="connectionSparkline.line"
-              class="StorageMiniChart-Line StorageMiniChart-Line--violet"
-            />
-          </svg>
+          <DashboardSparklineChart
+            :values="connectionSparkline.values"
+            :height="62"
+            color="#a855f7"
+            :aria-label="t('dashboard.storage.activeConnections', 'Active Connections')"
+          />
         </div>
       </article>
     </section>
@@ -1003,38 +985,6 @@ watch(showDetailsOverlay, (open) => {
 
 .StorageMiniChart-Trend {
   font-weight: 600;
-}
-
-.StorageMiniChart-Svg {
-  width: 100%;
-  height: 70px;
-}
-
-.StorageMiniChart-Area {
-  opacity: 0.22;
-}
-
-.StorageMiniChart-Area--blue {
-  fill: #3b82f6;
-}
-
-.StorageMiniChart-Area--violet {
-  fill: #a855f7;
-}
-
-.StorageMiniChart-Line {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.StorageMiniChart-Line--blue {
-  stroke: #3b82f6;
-}
-
-.StorageMiniChart-Line--violet {
-  stroke: #a855f7;
 }
 
 .StoragePanel {

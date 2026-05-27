@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-26
+> 更新时间：2026-05-27
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -11,7 +11,45 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-27
+
+### docs(nexus): add Tuffex composition tutorial and chart-backed dashboard sparklines
+
+- `apps/nexus/app/components/content/demos/ComponentsWorkflowPanelDemo.vue`
+- `apps/nexus/app/components/content/demos/ComponentsDashboardSparklineDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/index.{zh,en}.mdc`
+- `apps/nexus/app/components/dashboard/DashboardSparklineChart.client.vue`
+- `apps/nexus/app/pages/dashboard/{credits,overview,storage}.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+  - Added a reviewed Tuffex composition demo that combines search input, switch, primary action, status badges, progress, and selectable data table into a screenshot-verifiable admin slice.
+  - Added bilingual Tuffex composition tutorials under developer getting-started docs and linked them from the component hub and getting-started index.
+  - Added a reusable ECharts-backed `DashboardSparklineChart` client component, documented it with a public screenshotable demo, and replaced one-off SVG sparklines in Credits, Storage, and Overview dashboard pages.
+  - Kept the change scoped to Nexus docs/dashboard UI without altering API contracts or storage behavior.
+
 ## 2026-05-26
+
+### ci(npm): guard publish manifests before registry release
+
+- `scripts/package-publish.config.mjs`
+- `scripts/validate-publish-manifests.mjs`
+- `scripts/publish-package.mjs`
+- `package.json`
+- `packages/tuffex/package.json`
+- `scripts/check-release-gates/local-checks.mjs`
+- `.github/workflows/package-*-publish.yml`
+- `.github/workflows/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/TODO.md`
+  - Added an explicit publishable package registry and source/packed manifest validator so public npm packages cannot ship `catalog:` / `workspace:` / `file:` / `link:` protocols to registry consumers.
+  - Added a unified publish entry that runs the manifest gate, optional build/test steps, dependency availability waits, npm duplicate-race handling, and registry manifest verification.
+  - Wired package publish workflows and release-gate local checks through the shared guard instead of ad-hoc publish commands.
+  - Prepared `@talex-touch/tuffex@0.3.7` by replacing publish-facing `catalog:` specs for `gsap` and `sass` with concrete semver ranges.
 
 ### docs(nexus): expand FlatRadio docs with multiple and keyboard scenarios
 

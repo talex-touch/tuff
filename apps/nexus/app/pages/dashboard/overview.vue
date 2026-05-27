@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 import { useTypedFetch } from '~/utils/request'
 
@@ -189,28 +190,21 @@ const overviewKpis = computed<OverviewKpis>(() => {
 
 const searchTrendHasData = computed(() => currentTelemetryPoints.value.some(point => point.searches > 0))
 
-const searchTrendMax = computed(() => {
-  const values = currentTelemetryPoints.value.map(point => point.searches)
-  return Math.max(1, ...values)
-})
-
 const latencyTrendMax = computed(() => {
   const values = currentTelemetryPoints.value.map(point => point.avgLatency)
   return Math.max(1, ...values)
 })
 
-const searchLinePoints = computed(() => {
-  return buildLinePoints(currentTelemetryPoints.value.map(point => point.searches), searchTrendMax.value)
-})
+const searchTrendValues = computed(() => currentTelemetryPoints.value.map(point => point.searches))
 
-const rangeLabels = computed(() => {
+const rangeLabels = computed<string[]>(() => {
   const keys = currentTelemetryPoints.value.map(point => point.date)
   if (!keys.length)
     return []
 
-  const first = keys[0]
-  const middle = keys[Math.floor((keys.length - 1) / 2)]
-  const last = keys[keys.length - 1]
+  const first = keys[0] ?? ''
+  const middle = keys[Math.floor((keys.length - 1) / 2)] ?? first
+  const last = keys[keys.length - 1] ?? middle
 
   return [first, middle, last].map((value) => {
     const date = new Date(`${value}T00:00:00`)
@@ -267,21 +261,6 @@ function toDateValue(value: string | null | undefined): number {
     return 0
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? 0 : date.getTime()
-}
-
-function buildLinePoints(values: number[], max: number): string {
-  if (!values.length)
-    return ''
-
-  const safeMax = max > 0 ? max : 1
-
-  return values
-    .map((value, index) => {
-      const x = values.length === 1 ? 50 : 4 + (index / (values.length - 1)) * 92
-      const y = 34 - (Math.max(0, value) / safeMax) * 28
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
 }
 
 function getLatencyBarHeight(value: number) {
@@ -490,21 +469,15 @@ function isCurrentDevice(device: DeviceItem) {
               </div>
             </div>
 
-            <div class="relative mt-3 h-44 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
-              <div class="pointer-events-none absolute inset-0 grid grid-rows-4 px-3 py-2">
-                <div v-for="line in 4" :key="`search-grid-${line}`" class="border-b border-black/[0.05] dark:border-white/[0.07]" />
-              </div>
-              <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="absolute inset-0 h-full w-full p-3">
-                <polyline
-                  :points="searchLinePoints"
-                  fill="none"
-                  stroke="currentColor"
-                  class="text-primary"
-                  stroke-width="1.7"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
+            <div class="mt-3 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
+              <DashboardSparklineChart
+                :values="searchTrendValues"
+                :labels="rangeLabels"
+                :height="152"
+                color="var(--tx-color-primary, #409eff)"
+                :aria-label="t('dashboard.overview.trends.searchTitle')"
+                show-grid
+              />
             </div>
 
             <div class="mt-3 flex items-center justify-between text-xs text-black/45 dark:text-white/45">
