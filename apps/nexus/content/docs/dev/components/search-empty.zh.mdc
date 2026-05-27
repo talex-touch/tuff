@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [search, empty, state]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # SearchEmpty 搜索空态
 
@@ -27,8 +28,32 @@ code: |
 
 `TxSearchEmpty` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
 
+## 后台筛选工具栏
+
+搜索空态应直接出现在筛选结果容器里，并提供“重置/调整筛选”的动作，避免用户误以为列表仍在加载。
+
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="空结果、重置筛选与范围切换在同一数据容器内完成。"}
+---
+code: |
+  <template>
+    <TxSearchEmpty
+      title="没有匹配结果"
+      description="换一个关键词或筛选范围，再重新搜索。"
+      surface="card"
+      :primary-action="{ label: '重置筛选', type: 'primary', icon: 'i-carbon-reset' }"
+    />
+  </template>
+---
+:::
+
 ## 交互契约
 
 - `TxSearchEmpty` 始终向 `TxEmptyState` 透传 `variant="search-empty"`。
 - 组件不额外改写 `title`、`description`、`surface` 或 action 配置；显式 props 会原样透传。
 - `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue`
+- 建议：搜索无结果时优先使用 `TxSearchEmpty`；普通无数据场景继续使用 `TxEmptyState` 或 `TxNoData`。
+- 可访问性：标题应说明“没有匹配结果”，动作应指向可恢复路径，例如重置筛选、调整范围或重新搜索。

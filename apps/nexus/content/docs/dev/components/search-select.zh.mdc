@@ -2,7 +2,8 @@
 title: "SearchSelect 搜索选择器"
 description: "搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。"
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # SearchSelect 搜索选择器
 
@@ -97,6 +98,41 @@ code: |
 - 远程模式需要在 `search` 事件中自行更新 `options`，组件不会缓存结果。
 - 下拉关闭后会保留输入与面板内部状态，重新打开不会自动重置。
 
+## 后台筛选工具栏
+
+在 Dashboard 列表筛选中，`TxSearchSelect` 适合承载范围、类型、状态等结构化筛选；关键词仍交给 `TxSearchInput`，无结果恢复交给 `TxSearchEmpty`。
+
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="搜索输入、搜索选择器与搜索空态的可截图验证组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: '全部' },
+    { value: 'docs', label: '文档' },
+    { value: 'tasks', label: '任务' },
+  ]
+  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" placeholder="搜索插件 / 文档 / 任务" remote />
+      <TxSearchSelect
+        v-model="selectedScope"
+        :options="scopeOptions"
+        placeholder="筛选范围"
+        panel-background="glass"
+      />
+      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### Props
@@ -142,3 +178,10 @@ code: |
   }
 ---
 :::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue`
+- 建议：本地小列表直接传 `options`；远程数据源使用 `remote` + `search` 事件，并由外部写回 `options`。
+- 交互：禁用项会展示但不可选择；清空会同步发出 `update:modelValue` 和 `change` 的空值。
+- 浮层：面板由 `TxPopover` 承载，使用 `panelBackground`、`panelShadow`、`panelRadius` 与页面表面层级对齐。

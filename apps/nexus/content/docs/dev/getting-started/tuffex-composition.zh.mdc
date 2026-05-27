@@ -13,9 +13,9 @@ verified: true
 
 | 分组 | 推荐组件 | 说明 |
 |------|----------|------|
-| 操作区 | `TxButton`、`TuffInput`、`TuffSwitch` | 承载搜索、刷新、发布、同步等即时操作 |
+| 操作区 | `TxButton`、`TuffInput`、`TxSearchInput`、`TxSearchSelect`、`TuffSwitch` | 承载搜索、筛选、刷新、发布、同步等即时操作 |
 | 状态区 | `TxStatusBadge`、`TxTag`、`TxProgressBar` | 展示审核、同步、发布、容量等状态 |
-| 数据区 | `TxDataTable`、`TxEmptyState`、`TxLoadingState` | 展示记录、选择行、空态和加载态 |
+| 数据区 | `TxDataTable`、`TxEmptyState`、`TxSearchEmpty`、`TxLoadingState` | 展示记录、选择行、空态和加载态 |
 | 趋势区 | Dashboard 图表组件 | 趋势图优先复用图表封装，避免手写一次性 SVG |
 
 ## 2. 最小可运行片段
@@ -61,7 +61,37 @@ code: |
 ---
 ::
 
-## 3. 运营状态首屏
+## 3. 搜索与筛选路径
+
+列表页不要把“输入关键词”“选择范围”“没有结果”拆成三个孤立区域。推荐把 `TxSearchInput`、`TxSearchSelect` 与 `TxSearchEmpty` 放进同一个筛选容器，保证用户能清楚看到当前条件、匹配数量和恢复动作。
+
+::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="关键词、筛选范围与搜索空态共用同一条恢复路径。"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('all')
+  const scopeOptions = [
+    { value: 'all', label: '全部' },
+    { value: 'docs', label: '文档' },
+    { value: 'tasks', label: '任务' },
+  ]
+  const filteredRecords = computed(() => (query.value ? [] : scopeOptions))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" remote placeholder="搜索插件 / 文档 / 任务" />
+      <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="筛选范围" />
+      <TxSearchEmpty v-if="!filteredRecords.length" surface="card" />
+    </section>
+  </template>
+---
+::
+
+## 4. 运营状态首屏
 
 Dashboard / Admin 页面通常先让用户判断“系统是否健康”。首屏建议按下面顺序组织：
 
@@ -91,7 +121,7 @@ code: |
 ---
 ::
 
-## 4. 趋势图区
+## 5. 趋势图区
 
 后台页的趋势图优先复用 `DashboardSparklineChart` / `DashboardMetricChart`，不要在页面里写一次性 `svg` 折线。这样可以统一 tooltip、暗色主题、ResizeObserver 和空态表现。
 
@@ -112,7 +142,7 @@ code: |
 ---
 ::
 
-## 5. 数据恢复路径
+## 6. 数据恢复路径
 
 每个数据面板都要同时设计三种恢复路径：加载中、无数据、请求失败。它们应占用同一个容器，避免用户看到页面跳动或重复占位。
 
@@ -129,16 +159,20 @@ code: |
 ---
 ::
 
-## 6. 审阅检查清单
+## 7. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
+- **筛选闭环**：关键词、范围筛选、匹配数量和无结果恢复应来自同一组响应式数据。
 - **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
 - **空态可见**：没有数据时使用空态组件，不展示空白表格。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 7. 继续阅读
+## 8. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
+- [SearchInput 搜索输入框](../components/search-input.zh.md)
+- [SearchSelect 搜索选择器](../components/search-select.zh.md)
+- [SearchEmpty 搜索空态](../components/search-empty.zh.md)
 - [StatCard 指标卡片](../components/stat-card.zh.md)
 - [DataTable 数据表格](../components/data-table.zh.md)
 - [StatusBadge 状态徽标](../components/status-badge.zh.md)

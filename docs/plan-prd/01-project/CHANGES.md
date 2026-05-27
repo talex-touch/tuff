@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify search filter demos
+
+- `apps/nexus/app/components/content/demos/ComponentsSearchFiltersDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{search-input,search-select,search-empty}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable dashboard filter toolbar demo that composes `TxSearchInput`, `TxSearchSelect`, `TxSearchEmpty`, `TxStatusBadge`, and `TxTag`.
+  - Marked SearchInput, SearchSelect, and SearchEmpty docs as reviewed/verified with source references, interaction contracts, and accessibility/recovery guidance.
+  - Expanded the Tuffex composition tutorial with a search/filter path so Dashboard/Admin list pages keep keyword search, scope filtering, match count, and no-match recovery in one reactive path.
+
 ### docs(nexus): verify empty and recovery state demos
 
 - `apps/nexus/app/components/content/demos/ComponentsRecoveryStatesDemo.vue`

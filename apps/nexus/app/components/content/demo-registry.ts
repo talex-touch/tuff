@@ -71,6 +71,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   ComponentsLineupDemo: () => import('./demos/ComponentsLineupDemo.vue'),
   ComponentsOperationsStatusDemo: () => import('./demos/ComponentsOperationsStatusDemo.vue'),
   ComponentsRecoveryStatesDemo: () => import('./demos/ComponentsRecoveryStatesDemo.vue'),
+  ComponentsSearchFiltersDemo: () => import('./demos/ComponentsSearchFiltersDemo.vue'),
   ComponentsWorkflowPanelDemo: () => import('./demos/ComponentsWorkflowPanelDemo.vue'),
   ContainerContainerDemo: () => import('./demos/ContainerContainerDemo.vue'),
   ContextMenuContextMenuDemo: () => import('./demos/ContextMenuContextMenuDemo.vue'),
