@@ -18,6 +18,7 @@ This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more 
 | Data | `TxDataTable`, `TxPagination`, `TxEmptyState`, `TxSearchEmpty`, `TxSkeleton`, `TxLoadingState` | Records, row selection, pagination, empty state, and loading state |
 | Feedback | `TxToastHost`, `TxTooltip`, `TxLoadingOverlay`, `TxSpinner` | Task results, action hints, local blocking refreshes, and inline waits |
 | Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
+| Permission orchestration | `TxTree`, `TxTreeSelect`, `TxTransfer`, `TxTimeline` | Permission scope, owner team, resource grants, and audit progress |
 | Navigation config | `TxTabs`, `TxDropdownMenu`, `TxPopover`, `TxDrawer` | Use Tabs for fixed sections, menus/popovers for lightweight actions, and Drawer for dense configuration |
 
 ## 2. Minimal Working Slice
@@ -207,7 +208,35 @@ code: |
 ---
 ::
 
-## 9. Navigation And Configuration Shell
+## 9. Permission Orchestration Path
+
+Admin authorization pages should first answer “which scope is being authorized?”, then “who owns it, which resources are granted, and where is the audit flow?”. Use `TxTree` for left-side scopes, `TxTreeSelect` for owner teams, `TxTransfer` for resource grants, and `TxTimeline` for audit progress.
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A Tree / TreeSelect / Transfer / Timeline composition for admin authorization."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selectedScope = ref<string | number>('release')
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const assignedKeys = ref<Array<string | number>>(['read-docs'])
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxTree v-model="selectedScope" :nodes="scopeNodes" />
+      <TxTreeSelect v-model="ownerTeam" :nodes="teamNodes" placeholder="Owner team" />
+      <TxTransfer v-model="assignedKeys" :data="resources" />
+      <TxTimeline>
+        <TxTimelineItem title="Assign resources" time="10:20" color="success" active />
+      </TxTimeline>
+    </section>
+  </template>
+---
+::
+
+## 10. Navigation And Configuration Shell
 
 Dashboard settings pages should first answer “which section am I in?”, then answer “what can I do here?”. Keep first-level sections in `TxTabs`, one-off actions in `TxDropdownMenu`, short explanations in `TxPopover`, and dense configuration in `TxDrawer`.
 
@@ -237,7 +266,7 @@ code: |
 ---
 ::
 
-## 10. Review Checklist
+## 11. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
 - **Filter loop**: keyword, scope filtering, match count, and no-match recovery should come from the same reactive model.
@@ -245,10 +274,11 @@ code: |
 - **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
 - **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
 - **Feedback roles**: Toast handles short feedback, Tooltip handles short hints, LoadingOverlay blocks local refreshes, and Spinner communicates short waits.
+- **Authorization roles**: Tree shows hierarchy, TreeSelect chooses ownership, Transfer assigns resources, and Timeline records audit history.
 - **Configuration layering**: put short actions in menus, short notes in popovers, and long configuration in drawers; do not make one Popover carry a complex form.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 11. Continue Reading
+## 12. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
 - [SearchInput](../components/search-input.en.md)
@@ -258,6 +288,10 @@ code: |
 - [DataTable](../components/data-table.en.md)
 - [Pagination](../components/pagination.en.md)
 - [Skeleton](../components/skeleton.en.md)
+- [Tree](../components/tree.en.md)
+- [TreeSelect](../components/tree-select.en.md)
+- [Transfer](../components/transfer.en.md)
+- [Timeline](../components/timeline.en.md)
 - [LayoutSkeleton](../components/layout-skeleton.en.md)
 - [Tabs](../components/tabs.en.md)
 - [DropdownMenu](../components/dropdown-menu.en.md)

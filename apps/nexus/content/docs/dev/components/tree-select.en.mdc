@@ -2,7 +2,11 @@
 title: "TreeSelect"
 description: "Tree-backed select control with single and multiple selection, search, clear, and Popover placement controls."
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [tree-select, form, hierarchy]
+syncStatus: reviewed
+verified: true
 ---
 # TreeSelect
 
@@ -77,6 +81,41 @@ code: |
 ---
 :::
 
+## Admin Ownership Picker
+
+In permission, member, and release-policy pages, `TxTreeSelect` works well for owner teams, namespaces, and organization units. It saves space compared with a full tree and composes naturally with `TxTransfer` and `TxTimeline` in authorization flows.
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="Screenshot-verified owner selection, resource grants, and audit flow."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const nodes = [
+    {
+      key: 'ops',
+      label: 'Operations',
+      children: [
+        { key: 'docs', label: 'Docs maintainers' },
+        { key: 'release', label: 'Release managers' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <TxTreeSelect
+      v-model="ownerTeam"
+      :nodes="nodes"
+      placeholder="Owner team"
+      :default-expanded-keys="['ops']"
+      :dropdown-max-height="220"
+    />
+  </template>
+---
+:::
+
 ## Notes
 
 - When `multiple` is true, `modelValue` must be an array; clearing returns an empty array.
@@ -139,3 +178,9 @@ code: |
 | `setValue(v)` | `(v: TreeSelectValue) => void` | Emits the supplied value through `update:modelValue` and `change`. |
 | `getValue()` | `() => TreeSelectValue` | Returns the current `modelValue`. |
 | `getCheckedKeys()` | `() => Array<string \| number>` | Returns the currently selected keys as an array. |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`.
+- Screenshot: `.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`.
+- Recommendation: use `key`/`label` in `nodes` instead of legacy select `value` fields; clearing returns `undefined` in single mode and an empty array in multiple mode.

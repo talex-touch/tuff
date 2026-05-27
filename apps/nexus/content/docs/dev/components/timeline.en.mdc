@@ -2,7 +2,11 @@
 title: Timeline
 description: Event timeline for status history
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [timeline, audit, status]
+syncStatus: reviewed
+verified: true
 ---
 
 # Timeline
@@ -24,6 +28,29 @@ code: |
   </template>
 ---
 :::
+
+## Admin Audit Flow
+
+`TxTimeline` works well for authorization, release, sync, and other admin task event streams. Use `active` to highlight the current step and treat color as a semantic aid only; the important state should still be present in `title` or slot text.
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified authorization audit timeline."}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="Pick scope" time="09:30" color="primary">
+        release
+      </TxTimelineItem>
+      <TxTimelineItem title="Assign resources" time="10:20" color="success" active>
+        docs + notes
+      </TxTimelineItem>
+      <TxTimelineItem title="Await review" time="11:05" color="warning">
+        security review
+      </TxTimelineItem>
+    </TxTimeline>
+  </template>
+---
+::
 ## API (Lite)
 ### TxTimeline Props
 ::TuffPropsTable
@@ -71,3 +98,9 @@ rows:
 
 ## Source
 <TuffDocSourceLink />
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` and `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue`.
+- Screenshot: `.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`.
+- Recommendation: mark the current event with `active`; keep `color` within `'default' | 'primary' | 'success' | 'warning' | 'error'` and avoid undefined semantic tones.
