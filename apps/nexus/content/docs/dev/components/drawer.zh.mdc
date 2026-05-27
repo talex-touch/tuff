@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [drawer, panel, overlay]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Drawer 抽屉
@@ -131,6 +132,47 @@ code: |
 ---
 ::
 
+## 后台导航配置组合
+
+后台页的导航与配置不应把所有内容塞进同一个表单。推荐用 `TxTabs` 固定一级分区，用 `TxDropdownMenu` 承载当前区的轻量操作，用 `TxPopover` 展示短说明，再把高密度配置放进 `TxDrawer`。
+
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="后台导航配置壳层" description="截图验证的 Tabs / DropdownMenu / Popover / Drawer 组合，适合作为 Dashboard 设置页基础骨架。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('总览')
+  const drawerVisible = ref(false)
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>发布操作</TxButton>
+        </template>
+        <TxDropdownItem>快速发布</TxDropdownItem>
+      </TxDropdownMenu>
+
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">策略说明</TxButton>
+        </template>
+        浮层只放短说明和轻量动作。
+      </TxPopover>
+
+      <TxTabs v-model="active" placement="left" indicator-variant="pill">
+        <TxTabItem name="总览" activation>总览配置</TxTabItem>
+        <TxTabItem name="发布">发布配置</TxTabItem>
+      </TxTabs>
+
+      <TxDrawer v-model:visible="drawerVisible" title="发布策略" />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### 属性
@@ -215,3 +257,10 @@ rows:
 - 打开时聚焦抽屉根节点；隐藏或卸载时恢复到打开前的焦点元素。
 - 关闭按钮、遮罩点击和 Escape 默认都会触发 `update:visible(false)` 与 `close`；`closeOnClickMask=false` 或 `closeOnPressEscape=false` 会分别阻断对应关闭路径。
 - `showClose=false` 会移除关闭按钮，但不影响遮罩和 Escape 的配置化关闭能力。
+
+## 审阅要点
+
+- Drawer 根节点已经提供 `role="dialog"` / `aria-modal="true"` 和标题关联，正文中仍需为表单字段提供明确 label。
+- 打开时会记录之前的焦点元素，隐藏或卸载后恢复焦点；不要在外层手动抢焦点造成冲突。
+- Dashboard 配置页建议把长表单、权限矩阵、审计明细放进 Drawer，而不是塞进 Popover。
+- 源码：`packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`

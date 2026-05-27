@@ -147,12 +147,39 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="Compose Tabs, DropdownMenu, Popover, and Drawer into a dashboard settings shell."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>Release actions</TxButton>
+        </template>
+        <TxDropdownItem>Quick release</TxDropdownItem>
+      </TxDropdownMenu>
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">Policy notes</TxButton>
+        </template>
+        Keep popovers short and action-light.
+      </TxPopover>
+      <TxTabs placement="left" indicator-variant="pill">
+        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+      </TxTabs>
+      <TxDrawer :visible="false" title="Release policy" />
+    </section>
+  </template>
+---
+::
+
 ## Tutorial Path
 
 - Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.md) to learn the “actions → status → data” page structure.
-- Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, and detail drawers.
+- Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, navigation settings, and detail drawers.
 - For list pages, keep keyword search, scope filtering, and no-match recovery in one path with `TxSearchInput`, `TxSearchSelect`, and `TxSearchEmpty`.
 - For data lists, use `TxDataTable` for the main body, `TxPagination` for navigation, and `TxSkeleton` / `TxLayoutSkeleton` for waiting states.
+- For settings pages and admin shells, use `TxTabs` for fixed sections, `TxDropdownMenu` / `TxPopover` for lightweight actions and short notes, and `TxDrawer` for dense configuration.
 - Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.

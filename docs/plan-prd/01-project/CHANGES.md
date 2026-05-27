@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify navigation shell demos
+
+- `apps/nexus/app/components/content/demos/ComponentsNavigationShellDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{tabs,dropdown-menu,popover,drawer}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable dashboard navigation shell demo that composes `TxTabs`, `TxDropdownMenu`, `TxPopover`, `TxDrawer`, `TxStatusBadge`, `TxProgressBar`, `TxTag`, and `TuffSwitch`.
+  - Marked Tabs, DropdownMenu, Popover, and Drawer docs as reviewed/verified with source references, interaction contracts, and admin settings guidance.
+  - Expanded the Tuffex composition tutorial with a navigation/configuration section so Dashboard/Admin settings pages separate fixed navigation, lightweight actions, short notes, and dense configuration.
+
 ### docs(nexus): verify data operations demos
 
 - `apps/nexus/app/components/content/demos/ComponentsDataOperationsDemo.vue`
