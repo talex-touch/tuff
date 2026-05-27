@@ -20,6 +20,7 @@ This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more 
 | Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
 | Permission orchestration | `TxTree`, `TxTreeSelect`, `TxTransfer`, `TxTimeline` | Permission scope, owner team, resource grants, and audit progress |
 | Navigation config | `TxTabs`, `TxDropdownMenu`, `TxPopover`, `TxDrawer` | Use Tabs for fixed sections, menus/popovers for lightweight actions, and Drawer for dense configuration |
+| Release configuration | `TxCascader`, `TxFlatSelect`, `TxSegmentedSlider`, `TxSlider`, `TxTagInput` | Choose release scope, package format, rollout mode, risk tier, traffic ramp, and short tags |
 
 ## 2. Minimal Working Slice
 
@@ -266,7 +267,58 @@ code: |
 ---
 ::
 
-## 11. Review Checklist
+## 11. Release Policy Configuration
+
+Release configuration pages should not dump every field into one large form. Choose scope first with `TxCascader`, keep low-noise single choices in `TxFlatSelect`, put discrete risk into `TxSegmentedSlider`, continuous percentages into `TxSlider`, and keep `TxTagInput` limited to short metadata.
+
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A Cascader / FlatSelect / SegmentedSlider / Slider / TagInput composition for admin release configuration."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: 'Desktop',
+      children: [
+        {
+          value: 'stable',
+          label: 'Stable',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: 'Low' },
+    { value: 2, label: 'Med' },
+    { value: 3, label: 'High' },
+    { value: 4, label: 'Freeze' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
+        <TxFlatSelectItem value="signed" label="Signed build" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value />
+      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" />
+    </section>
+  </template>
+---
+::
+
+## 12. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
 - **Filter loop**: keyword, scope filtering, match count, and no-match recovery should come from the same reactive model.
@@ -276,9 +328,10 @@ code: |
 - **Feedback roles**: Toast handles short feedback, Tooltip handles short hints, LoadingOverlay blocks local refreshes, and Spinner communicates short waits.
 - **Authorization roles**: Tree shows hierarchy, TreeSelect chooses ownership, Transfer assigns resources, and Timeline records audit history.
 - **Configuration layering**: put short actions in menus, short notes in popovers, and long configuration in drawers; do not make one Popover carry a complex form.
+- **Release policy roles**: Cascader owns scope, FlatSelect owns single-choice policy, SegmentedSlider owns discrete risk, Slider owns continuous ratios, and TagInput owns short metadata.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 12. Continue Reading
+## 13. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
 - [SearchInput](../components/search-input.en.md)
@@ -288,6 +341,11 @@ code: |
 - [DataTable](../components/data-table.en.md)
 - [Pagination](../components/pagination.en.md)
 - [Skeleton](../components/skeleton.en.md)
+- [Cascader](../components/cascader.en.md)
+- [FlatSelect](../components/flat-select.en.md)
+- [SegmentedSlider](../components/segmented-slider.en.md)
+- [Slider](../components/slider.en.md)
+- [TagInput](../components/tag-input.en.md)
 - [Tree](../components/tree.en.md)
 - [TreeSelect](../components/tree-select.en.md)
 - [Transfer](../components/transfer.en.md)

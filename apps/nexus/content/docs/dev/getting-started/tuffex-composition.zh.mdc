@@ -20,6 +20,7 @@ verified: true
 | 趋势区 | Dashboard 图表组件 | 趋势图优先复用图表封装，避免手写一次性 SVG |
 | 权限编排区 | `TxTree`、`TxTreeSelect`、`TxTransfer`、`TxTimeline` | 选择权限域、归属团队、资源授权和审计进度 |
 | 导航配置区 | `TxTabs`、`TxDropdownMenu`、`TxPopover`、`TxDrawer` | 设置页用 Tabs 固定分区，轻操作进菜单/浮层，高密度配置进抽屉 |
+| 发布配置区 | `TxCascader`、`TxFlatSelect`、`TxSegmentedSlider`、`TxSlider`、`TxTagInput` | 选择发布范围、包格式、发布模式、风险档位、灰度比例和短标签 |
 
 ## 2. 最小可运行片段
 
@@ -266,7 +267,58 @@ code: |
 ---
 ::
 
-## 11. 审阅检查清单
+## 11. 发布策略配置
+
+发布配置页要避免把所有字段堆进一个大表单。推荐先用 `TxCascader` 明确范围，再用 `TxFlatSelect` 做低噪音单选；离散风险给 `TxSegmentedSlider`，连续比例给 `TxSlider`，标签输入只放短元数据。
+
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="发布策略配置" description="Cascader / FlatSelect / SegmentedSlider / Slider / TagInput 的后台发布配置组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: '桌面端',
+      children: [
+        {
+          value: 'stable',
+          label: '稳定通道',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: '低' },
+    { value: 2, label: '中' },
+    { value: 3, label: '高' },
+    { value: 4, label: '冻结' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
+      <TxFlatSelect v-model="packageFormat" placeholder="包格式">
+        <TxFlatSelectItem value="signed" label="签名构建" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value />
+      <TxTagInput v-model="labels" placeholder="输入标签后回车" />
+    </section>
+  </template>
+---
+::
+
+## 12. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
 - **筛选闭环**：关键词、范围筛选、匹配数量和无结果恢复应来自同一组响应式数据。
@@ -276,9 +328,10 @@ code: |
 - **反馈分工**：Toast 只做短反馈，Tooltip 只做短解释，LoadingOverlay 只阻断局部刷新，Spinner 只表达短等待。
 - **授权分工**：Tree 只表达层级范围，TreeSelect 只表达归属选择，Transfer 只表达资源分配，Timeline 只表达审计历史。
 - **配置分层**：短操作进菜单，短说明进浮层，长配置进抽屉，避免一个 Popover 承担复杂表单。
+- **发布策略分工**：Cascader 只表达范围，FlatSelect 只表达单选策略，SegmentedSlider 表达离散风险，Slider 表达连续比例，TagInput 只表达短元数据。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 12. 继续阅读
+## 13. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
 - [SearchInput 搜索输入框](../components/search-input.zh.md)
@@ -288,6 +341,11 @@ code: |
 - [DataTable 数据表格](../components/data-table.zh.md)
 - [Pagination 分页](../components/pagination.zh.md)
 - [Skeleton 骨架屏](../components/skeleton.zh.md)
+- [Cascader 级联选择](../components/cascader.zh.md)
+- [FlatSelect 平铺下拉选择器](../components/flat-select.zh.md)
+- [SegmentedSlider 分段滑块](../components/segmented-slider.zh.md)
+- [Slider 滑块](../components/slider.zh.md)
+- [TagInput 标签输入](../components/tag-input.zh.md)
 - [Tree 树形](../components/tree.zh.md)
 - [TreeSelect 树选择器](../components/tree-select.zh.md)
 - [Transfer 穿梭框](../components/transfer.zh.md)

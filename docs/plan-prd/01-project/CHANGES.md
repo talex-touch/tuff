@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify release policy form demos
+
+- `apps/nexus/app/components/content/demos/ComponentsReleasePolicyDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{cascader,flat-select,segmented-slider,slider,tag-input}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable release policy demo that composes `TxCascader`, `TxFlatSelect`, `TxSegmentedSlider`, `TxSlider`, `TxTagInput`, `TxTag`, `TxStatusBadge`, and `TxProgressBar`.
+  - Marked Cascader, FlatSelect, SegmentedSlider, Slider, and TagInput docs as reviewed/verified with source references, interaction contracts, and admin release-policy guidance.
+  - Expanded the Tuffex component hub and composition tutorial with a release configuration path so Dashboard/Admin forms separate scope, policy, thresholds, and metadata.
+
 ### docs(nexus): verify permission orchestration demos
 
 - `apps/nexus/app/components/content/demos/ComponentsPermissionOrchestrationDemo.vue`

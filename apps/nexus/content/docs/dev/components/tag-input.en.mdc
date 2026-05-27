@@ -2,7 +2,11 @@
 title: "TagInput"
 description: "Input component for quickly adding tags with separators and Enter confirmation."
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+status: beta
+since: 1.0.0
+tags: [tag, input, form]
+verified: true
 ---
 # TagInput
 
@@ -21,6 +25,62 @@ code: |
 
   <template>
     <TxTagInput v-model="tags" placeholder="Press Enter to add tags" />
+  </template>
+---
+::
+
+## Release Policy Configuration
+
+This component set fits an admin flow that chooses scope first, then policy, then thresholds and metadata. `TxCascader` owns hierarchical scope, `TxFlatSelect` keeps low-noise single selection, `TxSegmentedSlider` / `TxSlider` handle discrete risk and continuous ratios, and `TxTagInput` carries searchable metadata.
+
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="A screenshot-verified Cascader / FlatSelect / SegmentedSlider / Slider / TagInput admin configuration composition."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: 'Desktop',
+      children: [
+        {
+          value: 'stable',
+          label: 'Stable',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: 'Low' },
+    { value: 2, label: 'Med' },
+    { value: 3, label: 'High' },
+    { value: 4, label: 'Freeze' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
+        <TxFlatSelectItem value="signed" label="Signed build" />
+        <TxFlatSelectItem value="archive" label="Archive" />
+      </TxFlatSelect>
+      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
+        <TxFlatSelectItem value="phased" label="Phased" />
+        <TxFlatSelectItem value="guarded" label="Guarded" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" :max="5" />
+    </section>
   </template>
 ---
 ::
@@ -49,3 +109,9 @@ code: |
 | `remove` | `(tag)` | Tag removed |
 | `focus` | `(event)` | Focus event |
 | `blur` | `(event)` | Blur event |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue`.
+- Screenshot: `.codex-screenshots/nexus-tag-input-release-policy-demo-playwright-2026-05-28.png`.
+- Recommendation: tags should carry short metadata only; release notes, long descriptions, or approval reasons belong in text fields or detail forms.

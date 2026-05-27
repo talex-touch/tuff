@@ -195,6 +195,56 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="发布策略配置" description="将 Cascader、FlatSelect、SegmentedSlider、Slider 与 TagInput 组合成后台发布配置流。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: '桌面端',
+      children: [
+        {
+          value: 'stable',
+          label: '稳定通道',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: '低' },
+    { value: 2, label: '中' },
+    { value: 3, label: '高' },
+    { value: 4, label: '冻结' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
+      <TxFlatSelect v-model="packageFormat" placeholder="包格式">
+        <TxFlatSelectItem value="signed" label="签名构建" />
+      </TxFlatSelect>
+      <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
+        <TxFlatSelectItem value="phased" label="分阶段" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value />
+      <TxTagInput v-model="labels" placeholder="输入标签后回车" />
+    </section>
+  </template>
+---
+::
+
 ::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="后台导航配置壳层" description="将 Tabs、DropdownMenu、Popover 与 Drawer 组合成后台设置页骨架。"}
 ---
 code: |
@@ -231,6 +281,7 @@ code: |
 - 数据区必须同时设计加载、空态和错误恢复路径，优先复用 `TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 任务反馈路径建议使用 `TxToastHost` 挂载通知、`TxTooltip` 解释动作、`TxLoadingOverlay` 阻断局部刷新、`TxSpinner` 表达行内等待。
 - 权限编排路径建议用 `TxTree` 选择权限域、`TxTreeSelect` 选择归属团队、`TxTransfer` 分配资源、`TxTimeline` 展示审计进度。
+- 发布配置路径建议用 `TxCascader` 选择发布范围、`TxFlatSelect` 选择包格式与发布模式、`TxSegmentedSlider` 表达风险档位、`TxSlider` 调整灰度比例、`TxTagInput` 记录短标签。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
 
