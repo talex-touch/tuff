@@ -95,10 +95,24 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="Place LoadingState, EmptyState, and ErrorState in one data container for loading/no-data/failure paths."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxLoadingState title="Loading rules" surface="card" />
+      <TxEmptyState variant="no-data" title="No automation rules yet" surface="card" />
+      <TxErrorState title="Rules failed to load" surface="card" />
+    </section>
+  </template>
+---
+::
+
 ## Tutorial Path
 
 - Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.md) to learn the “actions → status → data” page structure.
 - Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, and detail drawers.
+- Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 

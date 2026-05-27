@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [loading, state, placeholder]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # LoadingState
 
@@ -23,6 +24,24 @@ code: |
 ---
 :::
 
+## Dashboard Recovery States
+
+Loading states should reserve the same container size as empty/error states to avoid layout jumps after data resolves.
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="A loading state sharing the same container with empty/error states for dashboard data panels."}
+---
+code: |
+  <template>
+    <TxLoadingState
+      title="Loading rules"
+      description="Syncing team automation rules. Please wait."
+      surface="card"
+      size="large"
+    />
+  </template>
+---
+:::
+
 ## API
 
 `TxLoadingState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
@@ -32,3 +51,9 @@ code: |
 - `TxLoadingState` always forwards `variant="loading"` to `TxEmptyState`.
 - The wrapper does not rewrite `title`, `description`, `loading`, or action config; explicit props are forwarded as-is.
 - `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue`
+- Recommendation: use `TxLoadingState` for full-panel first-load states; use `TxSpinner` or `TxProgressBar loading` for inline/local waiting.
+- Accessibility: loading copy should name what is being loaded, for example “Loading rules”, not only “Loading”.

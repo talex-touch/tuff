@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify empty and recovery state demos
+
+- `apps/nexus/app/components/content/demos/ComponentsRecoveryStatesDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{empty-state,error-state,loading-state}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a dashboard recovery-state demo that composes loading, empty, error, no-data, search-empty, and no-selection states inside one data container.
+  - Marked EmptyState, ErrorState, and LoadingState docs as reviewed/verified with source references, accessibility guidance, and recovery-path usage notes.
+  - Expanded the Tuffex composition tutorial with a dedicated data recovery section so Dashboard/Admin pages cover loading, no-data, and request-failure paths together.
+
 ### docs(nexus): verify dashboard status component docs
 
 - `apps/nexus/app/components/content/demos/ComponentsOperationsStatusDemo.vue`

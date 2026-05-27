@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 2.4.7
 tags: [empty, state, error, feedback]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # ErrorState
 
@@ -47,6 +48,25 @@ code: |
 ---
 :::
 
+## Dashboard Recovery States
+
+Error states should share the same data container with loading and empty states, and always provide a clear recovery action instead of only showing red error text.
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="An error state composed with loading/empty states in one Dashboard container."}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="Rules failed to load"
+      description="The service is temporarily unavailable. Retry or check backend logs."
+      surface="card"
+      :primary-action="{ label: 'Retry', type: 'primary', icon: 'i-carbon-renew' }"
+      :secondary-action="{ label: 'View guide', icon: 'i-carbon-help' }"
+    />
+  </template>
+---
+:::
+
 ## API
 
 `TxErrorState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
@@ -71,3 +91,9 @@ code: |
 - `TxErrorState` always forwards `variant="error"` to `TxEmptyState`.
 - The wrapper does not rewrite `title`, `description`, `surface`, or action config; explicit props are forwarded as-is.
 - `icon`, `title`, `description`, and `actions` slots are forwarded unchanged to `TxEmptyState`.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue`
+- Recommendation: error states must provide a recovery path, such as retry, go back, or open logs. Do not show error text only.
+- Accessibility: the title should name the failed object, for example “Rules failed to load”, not only “Something went wrong”.

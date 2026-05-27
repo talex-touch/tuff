@@ -112,17 +112,35 @@ code: |
 ---
 ::
 
-## 5. 审阅检查清单
+## 5. 数据恢复路径
+
+每个数据面板都要同时设计三种恢复路径：加载中、无数据、请求失败。它们应占用同一个容器，避免用户看到页面跳动或重复占位。
+
+::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="加载、空态、错误态共用一个数据容器。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxLoadingState title="正在加载规则" surface="card" />
+      <TxEmptyState variant="no-data" title="还没有自动化规则" surface="card" />
+      <TxErrorState title="规则加载失败" surface="card" />
+    </section>
+  </template>
+---
+::
+
+## 6. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
 - **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
 - **空态可见**：没有数据时使用空态组件，不展示空白表格。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 6. 继续阅读
+## 7. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
 - [StatCard 指标卡片](../components/stat-card.zh.md)
 - [DataTable 数据表格](../components/data-table.zh.md)
 - [StatusBadge 状态徽标](../components/status-badge.zh.md)
 - [ProgressBar 进度条](../components/progress-bar.zh.md)
+- [EmptyState 空态引导](../components/empty-state.zh.md)

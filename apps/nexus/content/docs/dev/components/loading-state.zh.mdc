@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [loading, state, placeholder]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # LoadingState 加载态
 
@@ -23,6 +24,24 @@ code: |
 ---
 :::
 
+## 后台恢复状态
+
+加载态建议占用与空态/错误态相同的容器尺寸，避免列表区域在请求完成后跳动。
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="加载态与空态/错误态共享容器，适合 Dashboard 数据面板。"}
+---
+code: |
+  <template>
+    <TxLoadingState
+      title="正在加载规则"
+      description="正在同步团队自动化规则，请稍等。"
+      surface="card"
+      size="large"
+    />
+  </template>
+---
+:::
+
 ## API
 
 `TxLoadingState` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
@@ -32,3 +51,9 @@ code: |
 - `TxLoadingState` 始终向 `TxEmptyState` 透传 `variant="loading"`。
 - 组件不额外改写 `title`、`description`、`loading` 或 action 配置；显式 props 会原样透传。
 - `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue`
+- 建议：首屏整块加载用 `TxLoadingState`，局部行内等待用 `TxSpinner` 或 `TxProgressBar loading`。
+- 可访问性：加载说明需要写明正在加载什么，例如“正在加载规则”，不要只写“Loading”。

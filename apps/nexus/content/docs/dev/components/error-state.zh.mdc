@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 2.4.7
 tags: [empty, state, error, feedback]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # ErrorState 错误状态
 
@@ -47,6 +48,25 @@ code: |
 ---
 :::
 
+## 后台恢复状态
+
+错误态应与加载态、空态共用一个数据容器，并提供明确恢复动作，避免只展示红色报错。
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="错误态与加载/空态共用容器的 Dashboard 组合。"}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="规则加载失败"
+      description="服务暂时不可用，请重试或检查后台日志。"
+      surface="card"
+      :primary-action="{ label: '重试', type: 'primary', icon: 'i-carbon-renew' }"
+      :secondary-action="{ label: '查看教程', icon: 'i-carbon-help' }"
+    />
+  </template>
+---
+:::
+
 ## API
 
 `TxErrorState` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
@@ -71,3 +91,9 @@ code: |
 - `TxErrorState` 始终向 `TxEmptyState` 透传 `variant="error"`。
 - 组件不额外改写 `title`、`description`、`surface` 或 action 配置；显式 props 会原样透传。
 - `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue`
+- 建议：错误态必须提供可恢复路径，如重试、返回上级或打开日志；不可只展示错误文本。
+- 可访问性：错误标题应包含失败对象，例如“规则加载失败”，不要只写“出错了”。
