@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [tooltip, hint, overlay]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Tooltip
@@ -152,6 +153,7 @@ rows:
 - Keep text short and avoid multiline hints.  
 - Keep spacing light around the trigger element.
 - Put visual complexity in `anchor`, not in tooltip-specific props.
+- Tooltip should not carry forms, long explanations, or bulk actions; upgrade complex content to `TxPopover` / `TxDrawer`.
 
 ## Composite Patterns
 
@@ -194,3 +196,27 @@ code: |
   </template>
 ---
 ::
+
+## Dashboard Feedback Center
+
+In admin task panels, Tooltip should explain one action or metric without interrupting the flow. Use `TxToastHost` for persistent task results and `TxLoadingOverlay` when a panel needs to be blocked during refresh.
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified composition of Tooltip with Toast / LoadingOverlay / Spinner."}
+---
+code: |
+  <template>
+    <TxTooltip
+      content="Tooltip explains the current action only."
+      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'glass' }"
+    >
+      <TxButton variant="secondary">Send toast</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue` and `packages/tuffex/packages/components/src/tooltip/src/types.ts`.
+- Screenshot: `.codex-screenshots/nexus-tooltip-feedback-task-center-demo-playwright-2026-05-28.png`.
+- Recommendation: use `TxTooltip` for short hints, `TxPopover` for lightweight content, and `TxDrawer` for dense configuration; do not place complex interactions inside Tooltip.

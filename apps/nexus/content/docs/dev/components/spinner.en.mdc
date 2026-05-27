@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [spinner, loading, progress]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Spinner
 
@@ -99,3 +100,25 @@ code: |
 | `strokeWidth` | `number` | `2` | Stroke width used by the ring and SVG fallback. |
 | `fallback` | `boolean` | `false` | Renders the SVG fallback spinner instead of the default animated shape. |
 | `visible` | `boolean` | `true` | Shows or hides the spinner with the built-in transition. |
+
+## Dashboard Inline Waiting
+
+Use `TxSpinner` for short waits inside buttons, inline status rows, or overlays. Prefer `TxProgressBar` when progress is known; prefer `TxLoadingState` for full first-load states. Spinner is best when the wait is short and no percentage is available.
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Spinner with Toast / Tooltip / LoadingOverlay."}
+---
+code: |
+  <template>
+    <span class="inline-flex items-center gap-2">
+      <TxSpinner :size="14" />
+      Inline wait
+    </span>
+  </template>
+---
+::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue` and `packages/tuffex/packages/components/src/spinner/src/types.ts`.
+- Screenshot: `.codex-screenshots/nexus-spinner-feedback-task-center-demo-playwright-2026-05-28.png`.
+- Recommendation: Spinner does not communicate completion; switch to `TxProgressBar` for numeric progress and `TxLoadingState` when the panel needs a complete recovery path.

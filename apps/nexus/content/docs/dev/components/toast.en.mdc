@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [toast, feedback, status]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Toast
@@ -57,6 +58,45 @@ code: |
 - `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
 - Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
 
+## Dashboard Feedback Center
+
+Mount `TxToastHost` once at the app or page root. Business actions should call `toast()`; persistent status notifications should use a stable `id + duration: 0` so the same queue state does not stack repeatedly. In admin task centers, Toast handles transient feedback, `TxTooltip` explains the action, `TxLoadingOverlay` blocks local refreshes, and `TxSpinner` handles inline waiting.
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Toast / Tooltip / LoadingOverlay / Spinner composition."}
+---
+code: |
+  <script setup lang="ts">
+  import { clearToasts, toast } from '@talex-touch/tuffex/utils'
+  import { ref } from 'vue'
+
+  const syncing = ref(true)
+
+  function showFeedbackToast() {
+    toast({
+      id: 'feedback-task-center',
+      title: 'Sync task queued',
+      description: 'Screenshot verification will complete within 2 minutes.',
+      variant: 'warning',
+      duration: 0,
+    })
+  }
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxToastHost />
+      <TxTooltip content="Tooltip explains the current action only.">
+        <TxButton @click="showFeedbackToast">Send toast</TxButton>
+      </TxTooltip>
+      <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…">
+        <TxSpinner :size="16" />
+      </TxLoadingOverlay>
+      <TxButton variant="ghost" @click="clearToasts()">Clear toast</TxButton>
+    </section>
+  </template>
+---
+:::
+
 ### dismissToast / clearToasts
 
 Import from `@talex-touch/tuffex/utils`:
@@ -67,3 +107,9 @@ code: |
   import { dismissToast, clearToasts } from '@talex-touch/tuffex/utils'
 ---
 ::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/toast/src/TxToastHost.vue` and `packages/tuffex/packages/utils/toast.ts`.
+- Screenshot: `.codex-screenshots/nexus-toast-feedback-task-center-demo-playwright-2026-05-28.png`.
+- Recommendation: mount `TxToastHost` at the app root and let business code use `toast` / `dismissToast` / `clearToasts`; persistent task notifications must provide a stable `id`.

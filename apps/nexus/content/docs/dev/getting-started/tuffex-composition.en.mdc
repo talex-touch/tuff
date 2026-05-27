@@ -16,6 +16,7 @@ This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more 
 | Actions | `TxButton`, `TuffInput`, `TxSearchInput`, `TxSearchSelect`, `TuffSwitch` | Search, filter, refresh, deploy, sync, and other immediate operations |
 | Status | `TxStatusBadge`, `TxTag`, `TxProgressBar` | Review, sync, release, capacity, and quota state |
 | Data | `TxDataTable`, `TxPagination`, `TxEmptyState`, `TxSearchEmpty`, `TxSkeleton`, `TxLoadingState` | Records, row selection, pagination, empty state, and loading state |
+| Feedback | `TxToastHost`, `TxTooltip`, `TxLoadingOverlay`, `TxSpinner` | Task results, action hints, local blocking refreshes, and inline waits |
 | Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
 | Navigation config | `TxTabs`, `TxDropdownMenu`, `TxPopover`, `TxDrawer` | Use Tabs for fixed sections, menus/popovers for lightweight actions, and Drawer for dense configuration |
 
@@ -178,7 +179,35 @@ code: |
 ::
 
 
-## 8. Navigation And Configuration Shell
+## 8. Task Feedback Path
+
+Admin task feedback should split “action explanation, result notification, local blocking, and inline waiting” into separate roles: `TxTooltip` explains the button, `TxToastHost` shows short feedback, `TxLoadingOverlay` blocks a refreshing data block, and `TxSpinner` is only for short waits without percentages.
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A Toast / Tooltip / LoadingOverlay / Spinner composition for admin tasks."}
+---
+code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  import { ref } from 'vue'
+
+  const syncing = ref(true)
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxToastHost />
+      <TxTooltip content="Tooltip explains the current action only.">
+        <TxButton @click="toast({ title: 'Sync task queued', duration: 0 })">Send toast</TxButton>
+      </TxTooltip>
+      <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…">
+        <TxSpinner :size="16" />
+      </TxLoadingOverlay>
+    </section>
+  </template>
+---
+::
+
+## 9. Navigation And Configuration Shell
 
 Dashboard settings pages should first answer “which section am I in?”, then answer “what can I do here?”. Keep first-level sections in `TxTabs`, one-off actions in `TxDropdownMenu`, short explanations in `TxPopover`, and dense configuration in `TxDrawer`.
 
@@ -208,17 +237,18 @@ code: |
 ---
 ::
 
-## 9. Review Checklist
+## 10. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
 - **Filter loop**: keyword, scope filtering, match count, and no-match recovery should come from the same reactive model.
 - **Attached pagination**: pagination must stay near the list footer and share the same filtering and selection model.
 - **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
 - **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
+- **Feedback roles**: Toast handles short feedback, Tooltip handles short hints, LoadingOverlay blocks local refreshes, and Spinner communicates short waits.
 - **Configuration layering**: put short actions in menus, short notes in popovers, and long configuration in drawers; do not make one Popover carry a complex form.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 10. Continue Reading
+## 11. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
 - [SearchInput](../components/search-input.en.md)
@@ -236,3 +266,7 @@ code: |
 - [StatusBadge](../components/status-badge.en.md)
 - [ProgressBar](../components/progress-bar.en.md)
 - [EmptyState](../components/empty-state.en.md)
+- [Toast](../components/toast.en.md)
+- [Tooltip](../components/tooltip.en.md)
+- [LoadingOverlay](../components/loading-overlay.en.md)
+- [Spinner](../components/spinner.en.md)

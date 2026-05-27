@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [tooltip, hint, overlay]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Tooltip 提示
@@ -151,6 +152,7 @@ rows:
 - 文案尽量短，避免多行提示。  
 - 与触发元素的间距保持轻盈。
 - 复杂外观和动效请通过 `anchor` 配置，不在 Tooltip 层重复抽象。
+- Tooltip 不承载表单、长说明或批量操作；复杂内容升级为 `TxPopover` / `TxDrawer`。
 
 ## 组合示例
 ### 提示按钮
@@ -192,3 +194,27 @@ code: |
   </template>
 ---
 ::
+
+## 后台反馈中心
+
+Tooltip 在后台任务面板中只解释一个动作或指标，不打断当前流程。若提示需要持续展示任务结果，请使用 `TxToastHost`；若需要阻断刷新中的面板，请使用 `TxLoadingOverlay`。
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="Tooltip 与 Toast / LoadingOverlay / Spinner 的截图验证组合。"}
+---
+code: |
+  <template>
+    <TxTooltip
+      content="Tooltip 只解释当前动作。"
+      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'glass' }"
+    >
+      <TxButton variant="secondary">发送提示</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue` 与 `packages/tuffex/packages/components/src/tooltip/src/types.ts`。
+- 截图：`.codex-screenshots/nexus-tooltip-feedback-task-center-demo-playwright-2026-05-28.png`。
+- 建议：短说明用 `TxTooltip`，轻量内容用 `TxPopover`，长配置用 `TxDrawer`，不要让 Tooltip 承担复杂交互。

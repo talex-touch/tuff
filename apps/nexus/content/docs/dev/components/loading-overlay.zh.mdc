@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [loading, overlay, mask]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # LoadingOverlay 加载遮罩
 
@@ -56,3 +57,27 @@ code: |
 | `text` | `string` | `''` | 文案 |
 | `spinnerSize` | `number` | `18` | spinner 尺寸 |
 | `background` | `string` | - | 背景遮罩色 |
+
+## 后台任务遮罩
+
+`TxLoadingOverlay` 适合阻断“某个数据容器正在刷新”的短等待，不应该替代首屏加载态。首屏加载用 `TxLoadingState`；表格局部刷新或任务队列重算时再使用遮罩，并保持底层内容可见，减少布局跳动。
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="局部 LoadingOverlay 与 Toast / Tooltip / Spinner 的截图验证组合。"}
+---
+code: |
+  <template>
+    <TxLoadingOverlay :loading="true" text="正在刷新任务队列…" :spinner-size="22">
+      <section class="grid gap-2">
+        <TxProgressBar :percentage="72" status="warning" />
+        <TxProgressBar :percentage="96" status="success" />
+      </section>
+    </TxLoadingOverlay>
+  </template>
+---
+::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue`。
+- 截图：`.codex-screenshots/nexus-loading-overlay-feedback-task-center-demo-playwright-2026-05-28.png`。
+- 建议：容器遮罩用于局部异步刷新；全屏遮罩仅用于必须阻断全局操作的流程。
