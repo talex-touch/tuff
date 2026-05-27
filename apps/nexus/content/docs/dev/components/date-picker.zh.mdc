@@ -1,48 +1,81 @@
 ---
 title: "DatePicker 日期选择"
-description: "基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。"
+description: "基于 TxPicker 的日期选择器，使用 YYYY-MM-DD 模型。"
 category: Form
 syncStatus: migrated
+verified: true
 ---
 # DatePicker 日期选择
 
-基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。
+`TxDatePicker` 基于 `TxPicker` 封装年、月、日三列，并统一输出 `YYYY-MM-DD` 字符串模型。适合表单日期、受限日期范围和需要内联展示的排期面板。
 
 ## 基础用法
 
-### DatePicker
+### 弹层、边界与内联模式
+
+示例覆盖三个常见工作流：从表单行打开弹层、通过 `min` / `max` 限制可选日期，以及使用 `popup="false"` 把选择器直接嵌入面板。
+
 :::TuffDemoWrapper{demo="DatePickerDatePickerDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const visible = ref(false)
-  const value = ref('2026-01-02')
+  const popupValue = ref('2026-01-02')
+  const popupVisible = ref(false)
+  const boundedValue = ref('2026-05-20')
+  const inlineValue = ref('2026-07-14')
   </script>
 
   <template>
-    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton variant="primary" @click="visible = true">
-          Open date picker
+    <div style="display: grid; gap: 16px;">
+      <section>
+        <TxButton variant="primary" @click="popupVisible = true">
+          打开日期选择器
         </TxButton>
-        <div style="color: var(--tx-text-color-secondary);">
-          Value: {{ value }}
-        </div>
-      </div>
 
-      <TxDatePicker
-        v-model="value"
-        v-model:visible="visible"
-        title="Date"
-        min="2025-01-01"
-        max="2030-12-31"
-      />
+        <TxDatePicker
+          v-model="popupValue"
+          v-model:visible="popupVisible"
+          title="发布日期"
+          min="2025-01-01"
+          max="2030-12-31"
+          confirm-text="应用"
+          cancel-text="取消"
+        />
+      </section>
+
+      <section>
+        <TxDatePicker
+          v-model="boundedValue"
+          :visible="true"
+          :popup="false"
+          :show-toolbar="false"
+          min="2026-05-10"
+          max="2026-05-31"
+        />
+      </section>
+
+      <section>
+        <TxDatePicker
+          v-model="inlineValue"
+          :visible="true"
+          :popup="false"
+          title="排期日期"
+        />
+      </section>
     </div>
   </template>
 ---
 :::
+
+## 交互契约
+
+- 模型值始终按 `YYYY-MM-DD` 输出。
+- 空值或非法 `modelValue` 会先使用本地当前日期初始化，再按 `min` / `max` 进行 clamp。
+- `min` 与 `max` 使用 `YYYY-MM-DD`；非法边界会被忽略。
+- 弹层模式通过 `v-model:visible` 控制显示；`popup` 为 `false` 时以内联选择器渲染。
+- `confirm` 会输出当前格式化日期，并沿用底层 Picker 的关闭行为。滚动列实时变更会同时触发 `update:modelValue` 与 `change`。
 
 ## API
 
@@ -50,26 +83,29 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | 当前值（`YYYY-MM-DD`） |
-| `visible` | `boolean` | `false` | 弹层显示（v-model:visible） |
-| `popup` | `boolean` | `true` | 是否使用底部弹层模式 |
-| `title` | `string` | `'Select date'` | 标题 |
-| `min` | `string` | - | 最小日期（`YYYY-MM-DD`） |
-| `max` | `string` | - | 最大日期（`YYYY-MM-DD`） |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `showToolbar` | `boolean` | `true` | 是否显示工具栏 |
-| `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
-| `cancelText` | `string` | `'Cancel'` | 取消按钮文案 |
-| `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭 |
+| `modelValue` | `string` | `''` | 当前日期，格式为 `YYYY-MM-DD`。空值或非法值会按今天初始化，并在存在 `min` / `max` 时被限制到边界内。 |
+| `visible` | `boolean` | `false` | 通过 `v-model:visible` 控制弹层显示状态。 |
+| `popup` | `boolean` | `true` | 为 `true` 时使用 Picker 弹层；为 `false` 时以内联模式渲染。 |
+| `title` | `string` | `'Select date'` | 转发给 `TxPicker` 的工具栏标题。 |
+| `min` | `string` | - | 最早可选日期，格式为 `YYYY-MM-DD`。更早的年 / 月 / 日选项会被禁用或 clamp。 |
+| `max` | `string` | - | 最晚可选日期，格式为 `YYYY-MM-DD`。更晚的年 / 月 / 日选项会被禁用或 clamp。 |
+| `disabled` | `boolean` | `false` | 禁用选择器交互。 |
+| `showToolbar` | `boolean` | `true` | 是否显示 Picker 工具栏。 |
+| `confirmText` | `string` | `'Confirm'` | 转发给 `TxPicker` 的确认按钮文案。 |
+| `cancelText` | `string` | `'Cancel'` | 转发给 `TxPicker` 的取消按钮文案。 |
+| `closeOnClickMask` | `boolean` | `true` | 弹层模式下是否允许点击遮罩关闭。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value: string)` | v-model 更新 |
-| `change` | `(value: string)` | 值变化 |
-| `update:visible` | `(visible: boolean)` | 弹层显示更新 |
-| `confirm` | `(value: string)` | 点击确认 |
-| `cancel` | - | 点击取消 |
-| `open` | - | 打开弹层 |
-| `close` | - | 关闭弹层 |
+| `update:modelValue` | `(value: string)` | 选择列变化时触发，参数为格式化后的 `YYYY-MM-DD`。 |
+| `change` | `(value: string)` | 与选择列变化同步触发，参数同样为格式化日期。 |
+| `update:visible` | `(visible: boolean)` | 底层 Picker 请求更新显示状态时触发。 |
+| `confirm` | `(value: string)` | 用户点击确认时触发，参数为当前格式化日期。 |
+| `cancel` | - | 用户点击取消时触发。 |
+| `open` | - | Picker 打开时转发。 |
+| `close` | - | Picker 关闭时转发。 |
+
+## Source
+<TuffDocSourceLink />

@@ -1355,6 +1355,19 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           averagePackageSize: 'Average package {size}',
           latestDay: 'Latest active day',
           peakDay: 'Peak day',
+          activityTrend: 'Activity trend',
+          actionTrend: {
+            title: 'Action trend',
+          },
+          locationTrend: {
+            title: 'Location trend',
+          },
+          channelTrend: {
+            title: 'Channel trend',
+          },
+          versionTrend: {
+            title: 'Version trend',
+          },
           noTrend: 'No trend data yet.',
           noBreakdown: 'No distribution data yet.',
           metricMeta: '{quantity} qty · {actors} users · {events} events',

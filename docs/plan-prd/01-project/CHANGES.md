@@ -13,6 +13,17 @@
 
 ## 2026-05-26
 
+### docs(nexus): expand FlatRadio docs with multiple and keyboard scenarios
+
+- `apps/nexus/app/components/content/demos/FlatRadioMultipleDemo.vue`
+- `apps/nexus/app/components/content/demos/FlatRadioKeyboardDemo.vue`
+- `apps/nexus/content/docs/dev/components/flat-radio.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `FlatRadioMultipleDemo` to cover `multiple` model behavior with icon options and selected-value readout.
+  - Added `FlatRadioKeyboardDemo` to demonstrate keyboard workflow in both single and multiple modes.
+  - Updated Chinese and English FlatRadio docs with `multiple` and keyboard demo blocks, and aligned API/Event signatures to `string | number | (string | number)[]` payloads.
+  - This change keeps docs and demos aligned with the current `TxFlatRadio` implementation contract.
+
 ### fix(core-app): unify app theme resolution
 
 - `apps/core-app/src/shared/theme/theme-mode.ts`
@@ -26,6 +37,50 @@
   - Made Sonner toasts and GlassSurface follow the app resolved theme instead of independently reading system preference.
   - Synced Electron `nativeTheme.themeSource` from the stored app theme and updated CoreBox injected UI views with `data-theme` and `color-scheme`.
   - Verification: targeted theme tests, `typecheck:node`, scoped ESLint, and `git diff --check` passed; `typecheck:web` remains blocked by the existing TuffEx `arrowEl` unused-variable error.
+
+### docs(nexus): expand DatePicker component documentation
+
+- `apps/nexus/app/components/content/demos/DatePickerDatePickerDemo.vue`
+- `apps/nexus/content/docs/dev/components/date-picker.{zh,en}.mdc`
+  - Expanded the DatePicker demo from a single popup sample into popup, bounded-range, and inline rendering workflows with localized labels and live value readouts.
+  - Synchronized English and Chinese DatePicker docs around the real `YYYY-MM-DD` contract, invalid-value initialization, min/max clamping, popup vs inline behavior, and event semantics.
+  - Added source links and verified metadata so the migrated docs slice has the same audit affordance as other reviewed TuffEx component pages.
+
+### docs(nexus): verify Picker component documentation
+
+- `apps/nexus/app/components/content/demos/PickerPickerDemo.vue`
+- `apps/nexus/content/docs/dev/components/picker.{zh,en}.mdc`
+  - Replaced the placeholder Picker demo with popup, inline disabled-option, and dense-row workflows using typed `PickerValue` array models.
+  - Synchronized English and Chinese Picker docs around array value normalization, disabled-option fallback, popup vs inline rendering, toolbar events, and row sizing clamps.
+  - Added source links and verified metadata so the migrated Picker docs page is ready for browser-backed review.
+
+### docs(nexus): verify Radio component documentation
+
+- `apps/nexus/app/components/content/demos/RadioRadio*.vue`
+- `apps/nexus/content/docs/dev/components/radio.{zh,en}.mdc`
+  - Replaced migrated placeholder Radio demos with typed values, localized option labels, visible selected-value readouts, disabled-option coverage, and a working props playground.
+  - Synchronized English and Chinese Radio docs around group/item responsibilities, button/standard/card modes, keyboard navigation, disabled-state behavior, and animated indicator semantics.
+  - Added source links and verified metadata so the Radio docs page is ready for browser-backed review.
+
+### docs(nexus): verify Select component documentation
+
+- `apps/nexus/app/components/content/demos/SelectSelect*.vue`
+- `apps/nexus/content/docs/dev/components/select.{zh,en}.mdc`
+  - Replaced migrated Select examples with typed values, localized labels, selected-value readouts, and focused demos for local filtering, remote editable search, disabled states, and scrollable panels.
+  - Synchronized English and Chinese Select docs around primitive value handling, option label registration, local vs remote search semantics, disabled behavior, Popover panel props, events, and exposed methods.
+  - Added source links and verified metadata so the Select docs page is ready for browser-backed review.
+
+### feat(nexus): render plugin analytics with chart runtime
+
+- `apps/nexus/package.json`
+- `apps/nexus/app/components/dashboard/DashboardMetricChart.client.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.test.ts`
+- `apps/nexus/i18n/locales/{zh,en}.ts`
+- `pnpm-lock.yaml`
+  - Added a Nexus-local ECharts runtime wrapper for dashboard metric charts with client-only loading, dark/light styling, tooltip/legend defaults, ResizeObserver resize handling, and empty-state fallback.
+  - Upgraded plugin private analytics from dense recent-text lists to chart-backed activity, conversion, retention, usage-hour, invocation-health, action, channel, and version trend sections while preserving text summaries for scanning.
+  - Added localized analytics trend copy and static contract checks so the plugin analytics drawer keeps using the chart component for high-density data.
 
 ### feat(tuffex): generalize ContextMenu overlays
 

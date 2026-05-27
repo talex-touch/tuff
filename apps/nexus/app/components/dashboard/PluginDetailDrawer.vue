@@ -20,6 +20,7 @@ import type {
 } from '~/types/dashboard-plugin'
 import { TxButton, TxStatusBadge, TxTag } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import DashboardMetricChart from '~/components/dashboard/DashboardMetricChart.client.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
 
 interface Props {
@@ -57,6 +58,7 @@ const { t, locale } = useI18n()
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const numberFormatter = computed(() => new Intl.NumberFormat(localeTag.value))
 const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { dateStyle: 'medium' }))
+const shortDateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { month: 'short', day: 'numeric' }))
 
 function formatNumber(count: number) {
   return numberFormatter.value.format(count)
@@ -69,6 +71,15 @@ function formatDate(value?: string | null) {
   if (Number.isNaN(parsed.getTime()))
     return value
   return dateFormatter.value.format(parsed)
+}
+
+function formatShortDate(value?: string | null) {
+  if (!value)
+    return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime()))
+    return value
+  return shortDateFormatter.value.format(parsed)
 }
 
 function formatSize(bytes?: number | null) {
@@ -484,6 +495,134 @@ const recentUsageTimingTrend = computed(() => (usageTiming.value?.trend ?? []).s
 const recentLocationTrend = computed(() => (props.analytics?.locationTrend ?? []).slice(-5).reverse())
 const recentChannelTrend = computed(() => (props.analytics?.channelTrend ?? []).slice(-5).reverse())
 const recentVersionTrend = computed(() => (props.analytics?.versionTrend ?? []).slice(-5).reverse())
+
+const analyticsTrendChart = computed(() => {
+  const trend = props.analytics?.trend ?? []
+  return {
+    categories: trend.map(point => formatShortDate(point.date)),
+    series: [
+      {
+        name: t('dashboard.sections.plugins.analytics.stats.downloads'),
+        values: trend.map(point => point.downloads),
+        color: '#2563eb',
+      },
+      {
+        name: t('dashboard.sections.plugins.analytics.stats.installs'),
+        values: trend.map(point => point.installs),
+        color: '#16a34a',
+      },
+      {
+        name: t('dashboard.sections.plugins.analytics.stats.invocations'),
+        values: trend.map(point => point.invocations),
+        color: '#f97316',
+      },
+    ],
+  }
+})
+
+const conversionTrendChart = computed(() => {
+  const trend = props.analytics?.conversionTrend ?? []
+  return {
+    categories: trend.map(point => formatShortDate(point.date)),
+    series: [
+      {
+        name: t('dashboard.sections.plugins.analytics.conversion.installRate'),
+        values: trend.map(point => point.installRate),
+        color: '#2563eb',
+      },
+      {
+        name: t('dashboard.sections.plugins.analytics.conversion.invocationRate'),
+        values: trend.map(point => point.invocationRate),
+        color: '#9333ea',
+      },
+    ],
+  }
+})
+
+const retentionTrendChart = computed(() => {
+  const trend = retentionAnalytics.value?.trend ?? []
+  return {
+    categories: trend.map(point => formatShortDate(point.date)),
+    series: [
+      {
+        name: t('dashboard.sections.plugins.analytics.retention.returningActors'),
+        values: trend.map(point => point.returningActors),
+        color: '#16a34a',
+      },
+      {
+        name: t('dashboard.sections.plugins.analytics.stats.invocations'),
+        values: trend.map(point => point.invocations),
+        color: '#2563eb',
+      },
+    ],
+  }
+})
+
+const invocationHealthTrendChart = computed(() => {
+  const trend = invocationHealth.value?.trend ?? []
+  return {
+    categories: trend.map(point => formatShortDate(point.date)),
+    series: [
+      {
+        name: t('dashboard.sections.plugins.analytics.invocationHealth.successful'),
+        values: trend.map(point => point.successful),
+        type: 'bar' as const,
+        stack: 'status',
+        color: '#16a34a',
+      },
+      {
+        name: t('dashboard.sections.plugins.analytics.invocationHealth.failed'),
+        values: trend.map(point => point.failed),
+        type: 'bar' as const,
+        stack: 'status',
+        color: '#dc2626',
+      },
+      {
+        name: t('dashboard.sections.plugins.analytics.invocationHealth.skipped'),
+        values: trend.map(point => point.skipped),
+        type: 'bar' as const,
+        stack: 'status',
+        color: '#f59e0b',
+      },
+    ],
+  }
+})
+
+const usageTimingHourChart = computed(() => ({
+  categories: (usageTiming.value?.byHour ?? []).map(item => formatHourKey(item.key)),
+  series: [
+    {
+      name: t('dashboard.sections.plugins.analytics.usageTiming.hours'),
+      values: (usageTiming.value?.byHour ?? []).map(item => item.quantity),
+      type: 'bar' as const,
+      color: '#2563eb',
+    },
+  ],
+}))
+
+function createDimensionTrendChart(points: Array<{ date: string, items: DashboardPluginAnalyticsMetric[] }>) {
+  const topKeys = Array.from(
+    new Set(points.flatMap(point => point.items.slice(0, 3).map(item => item.key))),
+  ).slice(0, 4)
+
+  return {
+    categories: points.map(point => formatShortDate(point.date)),
+    series: topKeys.map((key, index) => ({
+      name: formatMetricKey(key),
+      values: points.map((point) => {
+        return point.items.find(item => item.key === key)?.quantity ?? 0
+      }),
+      color: ['#2563eb', '#16a34a', '#f97316', '#9333ea'][index],
+    })),
+  }
+}
+
+const actionTrendChart = computed(() => createDimensionTrendChart(props.analytics?.actionTrend.map(point => ({
+  date: point.date,
+  items: point.actions,
+})) ?? []))
+const channelTrendChart = computed(() => createDimensionTrendChart(props.analytics?.channelTrend ?? []))
+const versionTrendChart = computed(() => createDimensionTrendChart(props.analytics?.versionTrend ?? []))
 
 const analyticsBreakdowns = computed(() => {
   const analytics = props.analytics
@@ -926,6 +1065,16 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                   </div>
                 </div>
 
+                <div class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+                  <DashboardMetricChart
+                    :title="t('dashboard.sections.plugins.analytics.activityTrend')"
+                    :categories="analyticsTrendChart.categories"
+                    :series="analyticsTrendChart.series"
+                    :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                    :aria-label="t('dashboard.sections.plugins.analytics.activityTrend')"
+                  />
+                </div>
+
                 <div v-if="ownerActionQueue.length" class="rounded-xl border border-black/[0.04] bg-black/[0.015] p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
                   <div class="flex flex-wrap items-center justify-between gap-2">
                     <p class="apple-section-title">
@@ -1205,6 +1354,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                   <p class="apple-section-title">
                     {{ t('dashboard.sections.plugins.analytics.conversion.title') }}
                   </p>
+                  <div class="mt-3">
+                    <DashboardMetricChart
+                      :categories="conversionTrendChart.categories"
+                      :series="conversionTrendChart.series"
+                      :height="180"
+                      :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                      :aria-label="t('dashboard.sections.plugins.analytics.conversion.title')"
+                    />
+                  </div>
                   <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div
                       v-for="item in analyticsConversionItems"
@@ -1254,6 +1412,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                         {{ item.value }}
                       </p>
                     </div>
+                  </div>
+                  <div class="mt-4">
+                    <DashboardMetricChart
+                      :categories="retentionTrendChart.categories"
+                      :series="retentionTrendChart.series"
+                      :height="190"
+                      :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                      :aria-label="t('dashboard.sections.plugins.analytics.retention.trend')"
+                    />
                   </div>
                   <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div>
@@ -1317,6 +1484,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                     </div>
                   </div>
                   <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <div class="md:col-span-3">
+                      <DashboardMetricChart
+                        :categories="usageTimingHourChart.categories"
+                        :series="usageTimingHourChart.series"
+                        :height="170"
+                        :empty-text="t('dashboard.sections.plugins.analytics.noBreakdown')"
+                        :aria-label="t('dashboard.sections.plugins.analytics.usageTiming.hours')"
+                      />
+                    </div>
                     <div
                       v-for="breakdown in usageTimingBreakdowns"
                       :key="`usage-timing-${breakdown.key}`"
@@ -1409,6 +1585,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                       </p>
                     </div>
                   </div>
+                  <div class="mt-4">
+                    <DashboardMetricChart
+                      :categories="invocationHealthTrendChart.categories"
+                      :series="invocationHealthTrendChart.series"
+                      :height="190"
+                      :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                      :aria-label="t('dashboard.sections.plugins.analytics.invocationHealth.title')"
+                    />
+                  </div>
                   <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                     <div>
                       <p class="text-[11px] font-medium uppercase tracking-wide text-black/35 dark:text-white/35">
@@ -1465,6 +1650,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                     <p class="apple-section-title">
                       {{ t('dashboard.sections.plugins.analytics.actionTrend.title', 'Action trend') }}
                     </p>
+                    <div class="mt-3">
+                      <DashboardMetricChart
+                        :categories="actionTrendChart.categories"
+                        :series="actionTrendChart.series"
+                        :height="170"
+                        :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                        :aria-label="t('dashboard.sections.plugins.analytics.actionTrend.title', 'Action trend')"
+                      />
+                    </div>
                     <div v-if="recentActionTrend.length" class="mt-3 space-y-2">
                       <div
                         v-for="point in recentActionTrend"
@@ -1506,6 +1700,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                     <p class="apple-section-title">
                       {{ t('dashboard.sections.plugins.analytics.channelTrend.title', 'Channel trend') }}
                     </p>
+                    <div class="mt-3">
+                      <DashboardMetricChart
+                        :categories="channelTrendChart.categories"
+                        :series="channelTrendChart.series"
+                        :height="170"
+                        :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                        :aria-label="t('dashboard.sections.plugins.analytics.channelTrend.title', 'Channel trend')"
+                      />
+                    </div>
                     <div v-if="recentChannelTrend.length" class="mt-3 space-y-2">
                       <div
                         v-for="point in recentChannelTrend"
@@ -1524,6 +1727,15 @@ function formatInvocationTrendMeta(point: DashboardPluginInvocationHealthTrendPo
                     <p class="apple-section-title">
                       {{ t('dashboard.sections.plugins.analytics.versionTrend.title', 'Version trend') }}
                     </p>
+                    <div class="mt-3">
+                      <DashboardMetricChart
+                        :categories="versionTrendChart.categories"
+                        :series="versionTrendChart.series"
+                        :height="170"
+                        :empty-text="t('dashboard.sections.plugins.analytics.noTrend')"
+                        :aria-label="t('dashboard.sections.plugins.analytics.versionTrend.title', 'Version trend')"
+                      />
+                    </div>
                     <div v-if="recentVersionTrend.length" class="mt-3 space-y-2">
                       <div
                         v-for="point in recentVersionTrend"

@@ -143,6 +143,26 @@ function checkManifest({ repoRoot, stage, manifestArg, pushCheck }) {
   }
 }
 
+function checkPublishManifests({ repoRoot, pushCheck }) {
+  const scriptPath = path.join(repoRoot, 'scripts', 'validate-publish-manifests.mjs')
+  try {
+    const output = execFileSync('node', [scriptPath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    pushCheck('publish-manifests', 'pass', 'Publish package source manifests are npm-compatible.', {
+      output: output.trim()
+    })
+  } catch (error) {
+    const stdout = error?.stdout ? String(error.stdout) : ''
+    const stderr = error?.stderr ? String(error.stderr) : ''
+    pushCheck('publish-manifests', 'fail', 'Publish package source manifest validation failed.', {
+      output: `${stdout}\n${stderr}`.trim()
+    })
+  }
+}
+
 export function runLocalReleaseGateChecks({
   repoRoot,
   version,
@@ -154,4 +174,5 @@ export function runLocalReleaseGateChecks({
   checkVersionBaseline({ repoRoot, version, stage, pushCheck })
   checkRiskP0({ repoRoot, pushCheck })
   checkManifest({ repoRoot, stage, manifestArg, pushCheck })
+  checkPublishManifests({ repoRoot, pushCheck })
 }

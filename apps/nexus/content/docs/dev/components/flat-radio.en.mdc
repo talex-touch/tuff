@@ -153,7 +153,59 @@ code: |
 ---
 :::
 
+## Multiple Mode
+
+Enable `multiple` to switch from single-select to checkbox-like multi-select behavior.
+
+### FlatRadio (multiple)
+:::TuffDemoWrapper{demo="FlatRadioMultipleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref(['mention', 'reply'])
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value" multiple>
+      <TxFlatRadioItem value="mention" label="Mention" icon="i-carbon-at" />
+      <TxFlatRadioItem value="reply" label="Reply" icon="i-carbon-reply" />
+      <TxFlatRadioItem value="archive" label="Archive" icon="i-carbon-archive" />
+      <TxFlatRadioItem value="mute" label="Mute" icon="i-carbon-volume-mute" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
 ## Keyboard Navigation
+
+### FlatRadio (keyboard)
+:::TuffDemoWrapper{demo="FlatRadioKeyboardDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const single = ref('overview')
+  const multiple = ref(['email'])
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="single">
+      <TxFlatRadioItem value="overview" label="Overview" />
+      <TxFlatRadioItem value="activity" label="Activity" />
+      <TxFlatRadioItem value="settings" label="Settings" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="multiple" multiple>
+      <TxFlatRadioItem value="email" label="Email" />
+      <TxFlatRadioItem value="push" label="Push" />
+      <TxFlatRadioItem value="sms" label="SMS" />
+    </TxFlatRadio>
+  </template>
+---
+:::
 
 When the container is focused:
 

@@ -1,62 +1,136 @@
 ---
 title: "Picker 滚轮选择"
-description: "移动端风格的滚轮选择器，支持多列。"
+description: "列式滚轮选择器，支持弹层/内联渲染、工具栏操作、禁用项和数组值归一化。"
 category: Form
 syncStatus: migrated
+verified: true
 ---
 # Picker 滚轮选择
 
-移动端风格的滚轮选择器，支持多列。
+`TxPicker` 用一列或多列滚轮选项完成选择。它可以以内联方式嵌入页面，也可以作为底部弹层出现；组件会把缺失值归一化到每列第一个可用选项，并同时发出实时变更与工具栏确认/取消事件。
 
 ## 基础用法
 
-### Picker
+### 弹层、内联与紧凑行高
+
+这个示例覆盖三个常见契约：受控弹层显示、带禁用项的内联渲染，以及通过 `itemHeight` / `visibleItemCount` 配置紧凑行高。
+
 :::TuffDemoWrapper{demo="PickerPickerDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { PickerColumn, PickerValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const visible = ref(false)
-  const value = ref<(string | number)[]>(['b', 2])
+  const popupVisible = ref(false)
+  const popupValue = ref<PickerValue>(['pro', 'monthly'])
+  const inlineValue = ref<PickerValue>(['high', 'triage'])
+  const denseValue = ref<PickerValue>(['apac', 30])
 
-  const columns = [
+  const popupColumns: PickerColumn[] = [
     {
-      key: 'letter',
+      key: 'plan',
       options: [
-        { value: 'a', label: 'A' },
-        { value: 'b', label: 'B' },
-        { value: 'c', label: 'C' },
+        { value: 'free', label: '免费版' },
+        { value: 'pro', label: '专业版' },
+        { value: 'team', label: '团队版' },
       ],
     },
     {
-      key: 'number',
+      key: 'cycle',
       options: [
-        { value: 1, label: '1' },
-        { value: 2, label: '2' },
-        { value: 3, label: '3' },
-        { value: 4, label: '4', disabled: true },
+        { value: 'monthly', label: '月付' },
+        { value: 'annual', label: '年付' },
+      ],
+    },
+  ]
+
+  const inlineColumns: PickerColumn[] = [
+    {
+      key: 'priority',
+      options: [
+        { value: 'low', label: '低优先级' },
+        { value: 'high', label: '高优先级' },
+        { value: 'frozen', label: '冻结中', disabled: true },
+      ],
+    },
+    {
+      key: 'queue',
+      options: [
+        { value: 'inbox', label: '收件箱' },
+        { value: 'triage', label: '分诊队列' },
+      ],
+    },
+  ]
+
+  const denseColumns: PickerColumn[] = [
+    {
+      key: 'region',
+      options: [
+        { value: 'na', label: '北美' },
+        { value: 'eu', label: '欧洲' },
+        { value: 'apac', label: '亚太' },
+      ],
+    },
+    {
+      key: 'window',
+      options: [
+        { value: 15, label: '15 分钟' },
+        { value: 30, label: '30 分钟' },
+        { value: 60, label: '60 分钟' },
       ],
     },
   ]
   </script>
 
   <template>
-    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton variant="primary" @click="visible = true">
-          Open picker
+    <div style="display: grid; gap: 16px;">
+      <section>
+        <TxButton variant="primary" @click="popupVisible = true">
+          打开选择器
         </TxButton>
-        <div style="color: var(--tx-text-color-secondary);">
-          Value: {{ value }}
-        </div>
-      </div>
+        <TxPicker
+          v-model="popupValue"
+          v-model:visible="popupVisible"
+          title="订阅计划"
+          :columns="popupColumns"
+          confirm-text="应用"
+          cancel-text="取消"
+        />
+      </section>
 
-      <TxPicker v-model="value" v-model:visible="visible" title="Picker" :columns="columns" />
+      <section>
+        <TxPicker
+          v-model="inlineValue"
+          :popup="false"
+          title="告警策略"
+          :columns="inlineColumns"
+        />
+      </section>
+
+      <section>
+        <TxPicker
+          v-model="denseValue"
+          :popup="false"
+          :show-toolbar="false"
+          :columns="denseColumns"
+          :item-height="28"
+          :visible-item-count="4"
+        />
+      </section>
     </div>
   </template>
 ---
 :::
+
+## 交互契约
+
+- `modelValue` 始终是数组，每一列对应一个 `string | number` 值。
+- 缺失、非法或非数组值会归一化到每列第一个可用选项。
+- 禁用选项不能被选中，并且会在归一化回退时被跳过。
+- 弹层模式由 `visible` / `v-model:visible` 控制；`popup` 为 `false` 时直接内联渲染。
+- `visibleItemCount` 会向上修正为奇数，且不小于 `3`；`itemHeight` 最小会限制为 `24`。
+- 滚动选择会触发 `update:modelValue` 和 `change`；点击确认会用当前归一化值触发 `confirm`，随后关闭弹层。
 
 ## API
 
@@ -64,43 +138,52 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `(string \| number)[]` | `[]` | 当前值（按列） |
-| `columns` | `PickerColumn[]` | `[]` | 列定义（options） |
-| `visible` | `boolean` | `false` | 弹层显示（v-model:visible） |
-| `popup` | `boolean` | `true` | 是否使用底部弹层模式 |
-| `title` | `string` | `''` | 标题 |
-| `showToolbar` | `boolean` | `true` | 是否显示工具栏 |
-| `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
-| `cancelText` | `string` | `'Cancel'` | 取消按钮文案 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `itemHeight` | `number` | `36` | 每项高度（px） |
-| `visibleItemCount` | `number` | `5` | 可见项数量（会自动调整为奇数） |
-| `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭 |
-| `lazyMount` | `boolean` | `true` | 首次打开后再渲染弹层 |
+| `modelValue` | `PickerValue` | `[]` | 当前每列选中值。缺失、非法或非数组值会归一化到第一个可用选项。 |
+| `columns` | `PickerColumn[]` | `[]` | 从左到右渲染的列定义。 |
+| `visible` | `boolean` | `false` | 弹层显示状态，可通过 `v-model:visible` 控制。 |
+| `popup` | `boolean` | `true` | 为 true 时渲染为 Teleport 底部弹层；为 false 时内联渲染。 |
+| `title` | `string` | `''` | 工具栏中间标题。 |
+| `showToolbar` | `boolean` | `true` | 是否展示取消、标题和确认工具栏。 |
+| `confirmText` | `string` | `'Confirm'` | 确认按钮文案。 |
+| `cancelText` | `string` | `'Cancel'` | 取消按钮文案。 |
+| `disabled` | `boolean` | `false` | 禁用工具栏按钮、选项按钮和拖拽状态更新。 |
+| `itemHeight` | `number` | `36` | 选项行高，单位 px；小于 24 时会被限制为 24。 |
+| `visibleItemCount` | `number` | `5` | 可见行数量。偶数会向上修正为奇数，且最小为 3。 |
+| `closeOnClickMask` | `boolean` | `true` | 点击弹层遮罩时是否关闭。 |
+| `lazyMount` | `boolean` | `true` | 弹层内容首次打开后再挂载。 |
+
+### PickerValue
+
+```ts
+type PickerValue = Array<string | number>
+```
 
 ### PickerColumn
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `key` | `string` | 可选 key |
-| `options` | `PickerOption[]` | 选项列表 |
+| `key` | `string` | 可选稳定 key。 |
+| `options` | `PickerOption[]` | 当前列的可选项。 |
 
 ### PickerOption
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `value` | `string \| number` | 值 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 是否禁用 |
+| `value` | `string \| number` | 当前列发出的原始值。 |
+| `label` | `string` | 展示文本。 |
+| `disabled` | `boolean` | 禁止选择该选项，并在归一化回退时跳过。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value)` | v-model 更新 |
-| `change` | `(value)` | 值变化 |
-| `update:visible` | `(visible)` | 弹层显示更新 |
-| `confirm` | `(value)` | 点击确认 |
-| `cancel` | - | 点击取消 |
-| `open` | - | 打开弹层 |
-| `close` | - | 关闭弹层 |
+| `update:modelValue` | `(value: PickerValue)` | 滚动导致列值变化时触发。 |
+| `change` | `(value: PickerValue)` | 实时列值变化后用同一个归一化值触发。 |
+| `update:visible` | `(visible: boolean)` | 打开/关闭动作触发的弹层显示状态更新。 |
+| `confirm` | `(value: PickerValue)` | 点击确认时用当前本地值触发，随后关闭弹层。 |
+| `cancel` | - | 点击取消时触发，随后关闭弹层。 |
+| `open` | - | 选择器打开时触发。 |
+| `close` | - | 选择器关闭时触发。 |
+
+## Source
+<TuffDocSourceLink />

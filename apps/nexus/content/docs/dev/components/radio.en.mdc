@@ -1,520 +1,244 @@
 ---
 title: "Radio"
-description: "`TxRadioGroup` + `TxRadio`****+********"
+description: "Single-choice controls with button, standard, and card presentations, keyboard navigation, disabled states, and animated button indicators."
 category: Form
 status: beta
 since: 1.0.0
 tags: [radio, form, selection]
 syncStatus: migrated
+verified: true
 ---
 # Radio
 
-`TxRadioGroup` + `TxRadio`****+********
+`TxRadioGroup` coordinates a set of `TxRadio` items for one primitive `string | number` value. Use the button style for compact segmented choices, the standard style for familiar form rows, and the card style when each option needs supporting copy.
 
 ## Standard Single-Select
 
-Standard single-select with a dot + label, good for many options.
+Standard radios render a dot indicator and label. `direction="row"` keeps short choices compact, while column direction remains available for longer lists.
 
 ### Radio (standard)
 :::TuffDemoWrapper{demo="RadioRadioStandardDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('editor')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo--max-400">
-      <TxRadioGroup v-model="value" type="standard" direction="row">
-        <TxRadio value="a" label="Option A" />
-        <TxRadio value="b" label="Option B" />
-        <TxRadio value="c" label="Option C" />
-      </TxRadioGroup>
-
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value" type="standard" direction="row">
+      <TxRadio value="viewer" label="Viewer" />
+      <TxRadio value="editor" label="Editor" />
+      <TxRadio value="owner" label="Owner" />
+    </TxRadioGroup>
   </template>
 ---
 :::
 
-## Card Single-Select Style
+## Card Single-Select
 
-Single-select emphasizing hierarchy, good for explanatory text.
+Card radios use the default slot for richer option content. Disabled cards stay visible, cannot be selected, and are skipped by keyboard navigation.
 
 ### Radio (card)
 :::TuffDemoWrapper{demo="RadioRadioCardDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('sync')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo--max-520">
-      <TxRadioGroup v-model="value" type="card">
-        <TxRadio value="a">
-          <div class="tx-demo__title">
-            Option A
-          </div>
-          <div class="tx-demo__desc">
-            Description text for option A
-          </div>
-        </TxRadio>
-        <TxRadio value="b">
-          <div class="tx-demo__title">
-            Option B
-          </div>
-          <div class="tx-demo__desc">
-            A longer description line to test wrapping and spacing
-          </div>
-        </TxRadio>
-        <TxRadio value="c" disabled>
-          <div class="tx-demo__title">
-            Option C (disabled)
-          </div>
-          <div class="tx-demo__desc">
-            Disabled option
-          </div>
-        </TxRadio>
-      </TxRadioGroup>
-
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value" type="card">
+      <TxRadio value="local">
+        <div class="tx-demo__title">Local only</div>
+        <div class="tx-demo__desc">Keep settings on this device.</div>
+      </TxRadio>
+      <TxRadio value="sync">
+        <div class="tx-demo__title">Sync across devices</div>
+        <div class="tx-demo__desc">Use account sync for preferences.</div>
+      </TxRadio>
+      <TxRadio value="managed" disabled>
+        <div class="tx-demo__title">Managed by workspace</div>
+        <div class="tx-demo__desc">Policy-driven settings are not enabled.</div>
+      </TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
-## Button Group Style
+## Button Group
 
-Compact button group, good for few options.
+Button radios are the default style and behave like a compact segmented control with a moving indicator.
 
 ### Radio (simple)
 :::TuffDemoWrapper{demo="RadioRadioSimpleDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('week')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col">
-      <TxRadioGroup v-model="value">
-        <TxRadio value="a">
-          Option A
-        </TxRadio>
-        <TxRadio value="b">
-          Option B
-        </TxRadio>
-        <TxRadio value="c">
-          Option C
-        </TxRadio>
-      </TxRadioGroup>
-
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value">
+      <TxRadio value="day">Day</TxRadio>
+      <TxRadio value="week">Week</TxRadio>
+      <TxRadio value="month">Month</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
-## Indicator Animation
+## Indicator Motion
 
-Button group animation with indicator: default → normal → blur → glass.
+Button groups support solid, outline, blur, and glass indicators. `elastic` controls stretch/impact motion, while `stiffness` and `damping` tune the spring.
 
 ### Radio (indicator)
 :::TuffDemoWrapper{demo="RadioRadioIndicatorDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const valueDefault = ref<'a' | 'b' | 'c'>('a')
-  const valuePlain = ref<'a' | 'b' | 'c'>('a')
-  const valueBlur = ref<'a' | 'b' | 'c'>('a')
-  const valueGlass = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('focus')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo__col--18">
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Default
-        </div>
-        <TxRadioGroup v-model="valueDefault">
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Plain
-        </div>
-        <TxRadioGroup v-model="valuePlain" :elastic="false">
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Blur
-        </div>
-        <TxRadioGroup v-model="valueBlur" blur>
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Glass
-        </div>
-        <TxRadioGroup v-model="valueGlass" glass>
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-    </div>
+    <TxRadioGroup v-model="value" indicator-variant="glass">
+      <TxRadio value="focus">Focus</TxRadio>
+      <TxRadio value="review">Review</TxRadio>
+      <TxRadio value="ship">Ship</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
 ## Disabled State
 
+Disable the whole group when every option should be inert, or disable individual radios to keep unavailable choices visible.
+
 ### Radio (disabled)
 :::TuffDemoWrapper{demo="RadioRadioDisabledDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b'>('a')
+  const groupValue = ref<TxRadioValue>('locked')
+  const optionValue = ref<TxRadioValue>('manual')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__row">
-      <TxRadioGroup v-model="value" disabled>
-        <TxRadio value="a">
-          Disabled A
-        </TxRadio>
-        <TxRadio value="b">
-          Disabled B
-        </TxRadio>
-      </TxRadioGroup>
+    <TxRadioGroup v-model="groupValue" disabled>
+      <TxRadio value="locked">Locked</TxRadio>
+      <TxRadio value="archived">Archived</TxRadio>
+    </TxRadioGroup>
 
-      <TxRadioGroup v-model="value">
-        <TxRadio value="a" disabled>
-          Option A
-        </TxRadio>
-        <TxRadio value="b">
-          Option B
-        </TxRadio>
-      </TxRadioGroup>
-    </div>
+    <TxRadioGroup v-model="optionValue">
+      <TxRadio value="automatic" disabled>Automatic</TxRadio>
+      <TxRadio value="manual">Manual</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
 ## Playground
 
-A control panel for `TxRadioGroup` props to quickly validate variants/params.
+The playground exposes the core group props so you can compare type, direction, disabled state, indicator variant, and motion tuning without changing code.
 
 ### RadioGroup (playground)
 :::TuffDemoWrapper{demo="RadioRadioGroupPlaygroundDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import type { TxRadioValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
 
   type GroupType = 'button' | 'standard' | 'card'
-
-  type OptionValue = 'a' | 'b' | 'c'
-
-  const type = ref<GroupType>('button')
-  const direction = ref<'row' | 'column'>('row')
-  const disabled = ref(false)
-
   type IndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
 
+  const type = ref<GroupType>('button')
   const indicatorVariant = ref<IndicatorVariant>('solid')
-
-  const glass = ref(false)
-  const blur = ref(false)
-  const elastic = ref(true)
-
-  const stiffness = ref(110)
-  const damping = ref(12)
-  const blurAmount = ref(1)
-
-  const value = ref<OptionValue>('a')
-
-  const shouldShowDirection = computed(() => type.value !== 'button')
-  const shouldShowIndicatorProps = computed(() => type.value === 'button')
-
-  const resolvedGlass = computed(() => {
-    if (!shouldShowIndicatorProps.value)
-      return false
-    if (indicatorVariant.value === 'glass')
-      return true
-    return glass.value
-  })
-
-  const resolvedBlur = computed(() => {
-    if (!shouldShowIndicatorProps.value)
-      return false
-    if (indicatorVariant.value === 'blur')
-      return true
-    return blur.value
-  })
-
-  const typeOptions = [
-    { value: 'button', label: 'button' },
-    { value: 'standard', label: 'standard' },
-    { value: 'card', label: 'card' },
-  ]
-
-  const directionOptions = [
-    { value: 'row', label: 'row' },
-    { value: 'column', label: 'column' },
-  ]
+  const value = ref<TxRadioValue>('alpha')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col" style="max-width: 720px;">
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-        <div class="tx-demo__col" style="gap: 12px;">
-          <div class="tx-demo__row">
-            <label class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">type</span>
-              <TuffSelect v-model="type" style="min-width: 180px;">
-                <TuffSelectItem v-for="opt in typeOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-              </TuffSelect>
-            </label>
-
-            <label v-if="shouldShowDirection" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">direction</span>
-              <TuffSelect v-model="direction" style="min-width: 180px;">
-                <TuffSelectItem v-for="opt in directionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-              </TuffSelect>
-            </label>
-          </div>
-
-          <div class="tx-demo__row">
-            <label class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">disabled</span>
-              <TxSwitch v-model="disabled" />
-            </label>
-
-            <label class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">elastic</span>
-              <TxSwitch v-model="elastic" />
-            </label>
-
-            <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">indicator</span>
-              <TuffSelect v-model="indicatorVariant" style="min-width: 180px;">
-                <TuffSelectItem value="solid" label="solid" />
-                <TuffSelectItem value="outline" label="outline" />
-                <TuffSelectItem value="glass" label="glass" />
-                <TuffSelectItem value="blur" label="blur" />
-              </TuffSelect>
-            </label>
-
-            <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">blur</span>
-              <TxSwitch v-model="blur" />
-            </label>
-
-            <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">glass</span>
-              <TxSwitch v-model="glass" />
-            </label>
-          </div>
-
-          <div class="tx-demo__col" style="gap: 10px;">
-            <div class="tx-demo__label">
-              stiffness
-            </div>
-            <TxSlider v-model="stiffness" :min="60" :max="220" :step="1" show-value />
-          </div>
-
-          <div class="tx-demo__col" style="gap: 10px;">
-            <div class="tx-demo__label">
-              damping
-            </div>
-            <TxSlider v-model="damping" :min="4" :max="30" :step="1" show-value />
-          </div>
-
-          <div v-if="shouldShowIndicatorProps && blur" class="tx-demo__col" style="gap: 10px;">
-            <div class="tx-demo__label">
-              blurAmount
-            </div>
-            <TxSlider v-model="blurAmount" :min="0" :max="24" :step="1" show-value />
-          </div>
-        </div>
-      </TxCard>
-
-      <TxCard variant="plain" background="mask" :padding="18" :radius="14" style="width: 100%;">
-        <TxRadioGroup
-          v-model="value"
-          :type="type"
-          :direction="shouldShowDirection ? direction : undefined"
-          :disabled="disabled"
-          :indicator-variant="shouldShowIndicatorProps ? indicatorVariant : undefined"
-          :glass="resolvedGlass"
-          :blur="resolvedBlur"
-          :elastic="elastic"
-          :stiffness="stiffness"
-          :damping="damping"
-          :blur-amount="blurAmount"
-        >
-          <TxRadio value="a" :disabled="disabled && type !== 'button'">
-            <template v-if="type === 'card'">
-              <div class="tx-demo__title">
-                Option A
-              </div>
-              <div class="tx-demo__desc">
-                Card description A
-              </div>
-            </template>
-            <template v-else>
-              Option A
-            </template>
-          </TxRadio>
-
-          <TxRadio value="b">
-            <template v-if="type === 'card'">
-              <div class="tx-demo__title">
-                Option B
-              </div>
-              <div class="tx-demo__desc">
-                Card description B
-              </div>
-            </template>
-            <template v-else>
-              Option B
-            </template>
-          </TxRadio>
-
-          <TxRadio value="c" :disabled="type === 'button' ? false : true">
-            <template v-if="type === 'card'">
-              <div class="tx-demo__title">
-                Option C (disabled)
-              </div>
-              <div class="tx-demo__desc">
-                Disabled in non-button types
-              </div>
-            </template>
-            <template v-else>
-              Option C
-            </template>
-          </TxRadio>
-        </TxRadioGroup>
-
-        <div class="tx-demo__meta" style="margin-top: 12px;">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value" :type="type" :indicator-variant="indicatorVariant">
+      <TxRadio value="alpha">Alpha</TxRadio>
+      <TxRadio value="beta">Beta</TxRadio>
+      <TxRadio value="gamma">Gamma</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
+## Interaction Contract
+
+- `TxRadioGroup` owns the selected primitive value and provides type, disabled state, and keyboard navigation to child radios.
+- Clicking an enabled unchecked `TxRadio` emits `click` on that item and `update:modelValue` / `change` from the group.
+- Clicking the already checked radio is a no-op; radio groups are single-choice by design.
+- Group-level `disabled` disables every child. Item-level `disabled` disables only that radio.
+- Keyboard navigation uses only enabled radios: arrow keys wrap, and `Home` / `End` jump to the first / last enabled item.
+- Button groups render an animated indicator. For `glass` and `blur` indicators, `updateOnSettled` defaults to waiting for the indicator to settle before emitting the model update.
+- `direction` only affects `standard` and `card` groups. Button groups always resolve to row layout.
+
 ## API
 
-### TxRadioGroup
+### TxRadioGroup Props
 
-#### Props
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number` | - | Selected radio value. |
+| `disabled` | `boolean` | `false` | Disables all radios in the group and blocks keyboard selection. |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | Visual style shared by child radios. |
+| `direction` | `'row' \| 'column'` | - | Layout direction. `button` always resolves to row, `standard` defaults to row, and `card` defaults to column. |
+| `indicatorVariant` | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - | Button-group indicator style. When omitted, `glass` maps to `glass`, `blur` maps to `blur`, otherwise `solid` is used. |
+| `glass` | `boolean` | `false` | Shortcut for the `glass` button indicator variant. |
+| `blur` | `boolean` | `false` | Shortcut for the `blur` button indicator variant. |
+| `updateOnSettled` | `boolean` | - | For button groups, delays v-model/change emission until the animated indicator settles. Defaults to enabled for `glass` or `blur` indicators. |
+| `stiffness` | `number` | `110` | Spring stiffness for button indicator motion. Higher values settle faster. |
+| `damping` | `number` | `12` | Spring damping for button indicator motion. Lower values feel more elastic. |
+| `blurAmount` | `number` | `1` | Backdrop blur strength for the `blur` indicator. |
+| `elastic` | `boolean` | `true` | Enables stretch/impact motion on the button indicator. |
 
-| Prop | Description | Type | Default |
-|--------|------|------|--------|
-| modelValue / v-model | Selected radio value. | `string \| number` | - |
-| disabled | Disables all radios in the group and blocks keyboard selection. | `boolean` | `false` |
-| type | Visual style shared by child radios. | `'button' \| 'standard' \| 'card'` | `'button'` |
-| direction | Layout direction. `button` always resolves to row, `standard` defaults to row, and `card` defaults to column. | `'row' \| 'column'` | - |
-| indicatorVariant | Button-group indicator style. When omitted, `glass` maps to `glass`, `blur` maps to `blur`, otherwise `solid` is used. | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
-| glass | Shortcut for the `glass` button indicator variant. | `boolean` | `false` |
-| blur | Shortcut for the `blur` button indicator variant. | `boolean` | `false` |
-| updateOnSettled | For button groups, delays v-model/change emission until the animated indicator settles. Defaults to enabled for `glass` or `blur` indicators. | `boolean` | - |
-| stiffness | Spring stiffness for button indicator motion. Higher values settle faster. | `number` | `110` |
-| damping | Spring damping for button indicator motion. Lower values feel more elastic. | `number` | `12` |
-| blurAmount | Backdrop blur strength for the `blur` indicator. | `number` | `1` |
-| elastic | Enables stretch/impact motion on the button indicator. | `boolean` | `true` |
+### TxRadioGroup Events
 
-#### Events
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number)` | Emitted when an enabled child radio selects a new value. |
+| `change` | `(value: string \| number)` | Emitted with the selected value after an enabled selection. |
 
-| Event | Description | Params |
-|--------|------|----------|
-| update:modelValue | v-model update emitted when an enabled child radio selects a new value. | `(value: string \| number) => void` |
-| change | Emitted with the selected value after an enabled selection. | `(value: string \| number) => void` |
-
-#### Keyboard
+### Keyboard
 
 | Key | Behavior |
-|--------|------|
-| ArrowRight / ArrowDown | Select the next enabled radio. |
-| ArrowLeft / ArrowUp | Select the previous enabled radio. |
-| Home / End | Select the first / last enabled radio. |
+|------|------|
+| `ArrowRight` / `ArrowDown` | Select the next enabled radio. |
+| `ArrowLeft` / `ArrowUp` | Select the previous enabled radio. |
+| `Home` / `End` | Select the first / last enabled radio. |
 
-### TxRadio
+### TxRadio Props
 
-#### Props
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `value` | `string \| number` | - | Value written to the parent `TxRadioGroup` when selected. |
+| `label` | `string` | `''` | Fallback visible label when no default slot is provided. |
+| `disabled` | `boolean` | `false` | Disables this radio and removes it from group keyboard navigation. |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | Standalone visual style when the radio is not controlled by a group; grouped radios inherit the group type. |
 
-| Prop | Description | Type | Default |
-|--------|------|------|--------|
-| value | Value written to the parent `TxRadioGroup` when selected. | `string \| number` | - |
-| label | Fallback visible label when no default slot is provided. | `string` | `''` |
-| disabled | Disables this radio and removes it from group keyboard navigation. | `boolean` | `false` |
-| type | Standalone visual style when the radio is not controlled by a group; grouped radios inherit the group type. | `'button' \| 'standard' \| 'card'` | `'button'` |
+### TxRadio Events
 
-#### Events
+| Event | Params | Description |
+|------|------|------|
+| `click` | `(value: string \| number)` | Emitted after an enabled, unchecked radio selects itself through the parent group. |
 
-| Event | Description | Params |
-|--------|------|----------|
-| click | Emitted after an enabled, unchecked radio selects itself through the parent group. | `(value: string \| number) => void` |
+## Source
+<TuffDocSourceLink />
