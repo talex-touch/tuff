@@ -5,7 +5,8 @@ category: Data
 status: beta
 since: 1.0.0
 tags: [table, data, list]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # DataTable
 
@@ -63,6 +64,30 @@ code: |
 
 Sortable headers expose `aria-sort` and support pointer click, Enter, and Space to cycle through ascending, descending, and unsorted states. When `sortOnClient=false`, the table still emits `sortChange` without reordering local rows.
 
+## Dashboard Data Operations
+
+In dashboard data regions, `TxDataTable` owns the primary list, `TxPagination` owns page navigation, and `TxSkeleton` / `TxLayoutSkeleton` keep loading previews from collapsing into blank space.
+
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="A screenshot-verified table, pagination, and skeleton-loading composition on the local Nexus page."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDataTable
+        v-model:selected-keys="selectedKeys"
+        :columns="columns"
+        :data="pagedRows"
+        row-key="id"
+        selectable
+        striped
+        bordered
+      />
+      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### TxDataTable Props
@@ -113,3 +138,10 @@ Sortable headers expose `aria-sort` and support pointer click, Enter, and Space 
 | `header-<columnKey>` | Custom header |
 | `cell-<columnKey>` | Custom cell |
 | `empty` | Empty slot |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`
+- Recommendation: pass a stable `rowKey` for business lists; when selection persists across pages, drive `selectedKeys` with business ids instead of default indexes.
+- Interaction: sortable columns support click, Enter, and Space; use `sortOnClient=false` with `sortChange` for remote sorting.
+- Accessibility: sortable headers expose `aria-sort`; custom cells should still preserve readable text or status-badge labels.

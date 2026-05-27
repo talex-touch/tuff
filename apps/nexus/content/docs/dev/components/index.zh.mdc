@@ -134,11 +134,25 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="将 DataTable、Pagination、Skeleton 与 LayoutSkeleton 组合成后台数据区。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDataTable :columns="columns" :data="pagedRows" row-key="id" selectable />
+      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+      <TxSkeleton :loading="true" :lines="3" />
+    </section>
+  </template>
+---
+::
+
 ## 教程路径
 
 - 新手先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.md)》，掌握“操作区 → 状态区 → 数据区”的页面切法。
 - 后台首屏建议从“运营状态面板”模式开始，再按需向下展开表格、趋势图和详情抽屉。
 - 列表页优先把关键词、范围筛选和无结果恢复设计成同一条路径，复用 `TxSearchInput`、`TxSearchSelect`、`TxSearchEmpty`。
+- 数据列表建议使用 `TxDataTable` 承担主体、`TxPagination` 承担页码、`TxSkeleton` / `TxLayoutSkeleton` 承担等待态。
 - 数据区必须同时设计加载、空态和错误恢复路径，优先复用 `TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
@@ -278,11 +292,11 @@ code: |
 ## 数据与列表
 
 - [DataTable 数据表格](./data-table.zh.md)
+- [Pagination 分页](./pagination.zh.md)
 - [Tree 树形](./tree.zh.md)
 - [TreeSelect 树选择器](./tree-select.zh.md)
 - [SortableList 拖拽排序](./sortable-list.zh.md)
 - [VirtualList 虚拟列表](./virtual-list.zh.md)
-- [Pagination 分页](./pagination.zh.md)
 - [Steps 步骤条](./steps.zh.md)
 - [Timeline 时间线](./timeline.zh.md)
 - [Transfer 穿梭框](./transfer.zh.md)

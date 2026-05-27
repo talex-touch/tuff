@@ -134,11 +134,25 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Compose DataTable, Pagination, Skeleton, and LayoutSkeleton into one dashboard data region."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDataTable :columns="columns" :data="pagedRows" row-key="id" selectable />
+      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+      <TxSkeleton :loading="true" :lines="3" />
+    </section>
+  </template>
+---
+::
+
 ## Tutorial Path
 
 - Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.md) to learn the “actions → status → data” page structure.
 - Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, and detail drawers.
 - For list pages, keep keyword search, scope filtering, and no-match recovery in one path with `TxSearchInput`, `TxSearchSelect`, and `TxSearchEmpty`.
+- For data lists, use `TxDataTable` for the main body, `TxPagination` for navigation, and `TxSkeleton` / `TxLayoutSkeleton` for waiting states.
 - Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
@@ -278,11 +292,11 @@ code: |
 ## Data & Lists
 
 - [DataTable](./data-table.en.md)
+- [Pagination](./pagination.en.md)
 - [Tree](./tree.en.md)
 - [TreeSelect](./tree-select.en.md)
 - [SortableList](./sortable-list.en.md)
 - [VirtualList](./virtual-list.en.md)
-- [Pagination](./pagination.en.md)
 - [Steps](./steps.en.md)
 - [Timeline](./timeline.en.md)
 - [Transfer](./transfer.en.md)

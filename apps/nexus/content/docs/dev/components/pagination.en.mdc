@@ -2,7 +2,8 @@
 title: Pagination
 description: Page navigation for long lists
 category: Data
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Pagination
@@ -75,7 +76,7 @@ rows:
     default: 'false'
     description: Show first/last buttons
 ---
-:::
+::
 
 ## Events
 ::TuffPropsTable
@@ -90,7 +91,7 @@ rows:
     default: '-'
     description: Triggered when users navigate to another page
 ---
-:::
+::
 
 ## Slots
 ::TuffPropsTable
@@ -101,13 +102,38 @@ rows:
     default: '-'
     description: Custom page info area
 ---
-:::
+::
 
 ## Interaction Contract
 
 - `total` takes precedence for page-count calculation with `pageSize`; `totalPages` is used when `total` is not provided.
 - `showFirstLast` renders first/last page jump buttons, and boundary pages disable first/previous or next/last controls.
 - The active page button exposes `aria-current="page"`; previous/next/first/last controls expose readable `aria-label` values.
+
+## Dashboard Data Operations
+
+Place pagination directly below the table and bind it to the same reactive model as filtering and selection; avoid floating pagination away from the list container.
+
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Pagination shares the data-region state with DataTable and Skeleton."}
+---
+code: |
+  <template>
+    <TxPagination
+      v-model:current-page="page"
+      :total="rows.length"
+      :page-size="4"
+      show-info
+      show-first-last
+    />
+  </template>
+---
+::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/pagination/src/TxPagination.vue`
+- Recommendation: prefer `total + pageSize`; use `totalPages` only when the backend returns a page count without total items.
+- Accessibility: the active page uses `aria-current="page"`; previous, next, first, and last controls include readable `aria-label` values.
 
 ## Source
 <TuffDocSourceLink />

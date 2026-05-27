@@ -15,7 +15,7 @@ This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more 
 |------|----------|------|
 | Actions | `TxButton`, `TuffInput`, `TxSearchInput`, `TxSearchSelect`, `TuffSwitch` | Search, filter, refresh, deploy, sync, and other immediate operations |
 | Status | `TxStatusBadge`, `TxTag`, `TxProgressBar` | Review, sync, release, capacity, and quota state |
-| Data | `TxDataTable`, `TxEmptyState`, `TxSearchEmpty`, `TxLoadingState` | Records, row selection, empty state, and loading state |
+| Data | `TxDataTable`, `TxPagination`, `TxEmptyState`, `TxSearchEmpty`, `TxSkeleton`, `TxLoadingState` | Records, row selection, pagination, empty state, and loading state |
 | Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
 
 ## 2. Minimal Working Slice
@@ -159,15 +159,33 @@ code: |
 ---
 ::
 
-## 7. Review Checklist
+## 7. Data Lists And Pagination
+
+Dashboard data regions should keep “table body, selection state, pagination, and loading placeholders” inside one workspace. The table should not own ad-hoc status copy, pagination should stay near the table footer, and longer waits should preserve space with skeletons.
+
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Table selection, pagination, and skeleton loading share one dashboard data region."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDataTable :columns="columns" :data="pagedRows" row-key="id" selectable />
+      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+      <TxSkeleton :loading="true" :lines="3" />
+    </section>
+  </template>
+---
+::
+
+## 8. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
 - **Filter loop**: keyword, scope filtering, match count, and no-match recovery should come from the same reactive model.
+- **Attached pagination**: pagination must stay near the list footer and share the same filtering and selection model.
 - **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
 - **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 8. Continue Reading
+## 9. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
 - [SearchInput](../components/search-input.en.md)
@@ -175,6 +193,9 @@ code: |
 - [SearchEmpty](../components/search-empty.en.md)
 - [StatCard](../components/stat-card.en.md)
 - [DataTable](../components/data-table.en.md)
+- [Pagination](../components/pagination.en.md)
+- [Skeleton](../components/skeleton.en.md)
+- [LayoutSkeleton](../components/layout-skeleton.en.md)
 - [StatusBadge](../components/status-badge.en.md)
 - [ProgressBar](../components/progress-bar.en.md)
 - [EmptyState](../components/empty-state.en.md)

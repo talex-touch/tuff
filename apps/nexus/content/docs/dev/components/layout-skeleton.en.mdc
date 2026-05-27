@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [skeleton, layout, loading]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # LayoutSkeleton
@@ -61,6 +62,21 @@ rows:
 - The component always renders a header, 6 sidebar items, and 8 content lines.
 - Content line widths are deterministic and do not depend on runtime randomness.
 
+## Dashboard Data Operations
+
+Use `TxLayoutSkeleton` in detail panes, side summaries, or page-level placeholders to show that a layout is coming; do not use it as a replacement for concrete table rows.
+
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Layout skeletons cover side/detail regions while DataTable owns the primary table body."}
+---
+code: |
+  <template>
+    <div style="height: 190px;">
+      <TxLayoutSkeleton />
+    </div>
+  </template>
+---
+:::
+
 ## Composite Patterns
 ### Panel Placeholder
 Skeleton paired with card containers.
@@ -74,3 +90,9 @@ code: |
   </template>
 ---
 :::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`
+- Recommendation: give the wrapper an explicit height; use it for page-level loading, while row-level loading should use `TxSkeleton` or table loading.
+- Stability: content line widths use a fixed sequence, not randomness, which keeps docs screenshots and SSR output stable.

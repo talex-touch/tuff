@@ -15,7 +15,7 @@ verified: true
 |------|----------|------|
 | 操作区 | `TxButton`、`TuffInput`、`TxSearchInput`、`TxSearchSelect`、`TuffSwitch` | 承载搜索、筛选、刷新、发布、同步等即时操作 |
 | 状态区 | `TxStatusBadge`、`TxTag`、`TxProgressBar` | 展示审核、同步、发布、容量等状态 |
-| 数据区 | `TxDataTable`、`TxEmptyState`、`TxSearchEmpty`、`TxLoadingState` | 展示记录、选择行、空态和加载态 |
+| 数据区 | `TxDataTable`、`TxPagination`、`TxEmptyState`、`TxSearchEmpty`、`TxSkeleton`、`TxLoadingState` | 展示记录、选择行、分页、空态和加载态 |
 | 趋势区 | Dashboard 图表组件 | 趋势图优先复用图表封装，避免手写一次性 SVG |
 
 ## 2. 最小可运行片段
@@ -159,15 +159,33 @@ code: |
 ---
 ::
 
-## 7. 审阅检查清单
+## 7. 数据列表与分页
+
+后台数据区应优先把“表格主体、选择状态、分页、加载占位”放在同一块工作区里。表格不要自带临时状态文案，分页不要脱离表格底部，长耗时加载用骨架保持空间。
+
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="表格选择、分页和骨架加载共用一个后台数据区。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDataTable :columns="columns" :data="pagedRows" row-key="id" selectable />
+      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+      <TxSkeleton :loading="true" :lines="3" />
+    </section>
+  </template>
+---
+::
+
+## 8. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
 - **筛选闭环**：关键词、范围筛选、匹配数量和无结果恢复应来自同一组响应式数据。
+- **分页贴合**：分页必须贴近列表底部，并与当前筛选、选择状态共用数据模型。
 - **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
 - **空态可见**：没有数据时使用空态组件，不展示空白表格。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 8. 继续阅读
+## 9. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
 - [SearchInput 搜索输入框](../components/search-input.zh.md)
@@ -175,6 +193,9 @@ code: |
 - [SearchEmpty 搜索空态](../components/search-empty.zh.md)
 - [StatCard 指标卡片](../components/stat-card.zh.md)
 - [DataTable 数据表格](../components/data-table.zh.md)
+- [Pagination 分页](../components/pagination.zh.md)
+- [Skeleton 骨架屏](../components/skeleton.zh.md)
+- [LayoutSkeleton 布局骨架](../components/layout-skeleton.zh.md)
 - [StatusBadge 状态徽标](../components/status-badge.zh.md)
 - [ProgressBar 进度条](../components/progress-bar.zh.md)
 - [EmptyState 空态引导](../components/empty-state.zh.md)

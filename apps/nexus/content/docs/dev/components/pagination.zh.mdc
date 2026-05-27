@@ -2,7 +2,8 @@
 title: Pagination 分页
 description: 大数据列表的分页导航
 category: Data
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Pagination 分页
@@ -75,7 +76,7 @@ rows:
     default: 'false'
     description: 显示首末页按钮
 ---
-:::
+::
 
 ## Events
 ::TuffPropsTable
@@ -90,7 +91,7 @@ rows:
     default: '-'
     description: 用户切换页码时触发
 ---
-:::
+::
 
 ## Slots
 ::TuffPropsTable
@@ -101,13 +102,38 @@ rows:
     default: '-'
     description: 自定义页码信息区域
 ---
-:::
+::
 
 ## 交互契约
 
 - `total` 优先用于按 `pageSize` 计算总页数；未提供 `total` 时使用 `totalPages`。
 - `showFirstLast` 会渲染首末页跳转按钮，边界页会禁用首/上一页或下一页/末页。
 - 当前页按钮带 `aria-current="page"`，上一页/下一页/首末页按钮带可读 `aria-label`。
+
+## 后台数据运维面板
+
+分页建议紧贴表格底部，和当前筛选/选择状态共享同一组响应式数据；不要让分页脱离列表容器单独悬浮。
+
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="分页与 DataTable、Skeleton 共同承担数据区状态。"}
+---
+code: |
+  <template>
+    <TxPagination
+      v-model:current-page="page"
+      :total="rows.length"
+      :page-size="4"
+      show-info
+      show-first-last
+    />
+  </template>
+---
+::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/pagination/src/TxPagination.vue`
+- 建议：优先传 `total + pageSize`，只有后端只返回页数时再传 `totalPages`。
+- 可访问性：当前页使用 `aria-current="page"`；上一页、下一页、首末页按钮都带可读 `aria-label`。
 
 ## Source
 <TuffDocSourceLink />

@@ -68,6 +68,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   CollapseBasicDemo: () => import('./demos/CollapseBasicDemo.vue'),
   CommandPaletteCommandPaletteDemo: () => import('./demos/CommandPaletteCommandPaletteDemo.vue'),
   ComponentsDashboardSparklineDemo: () => import('./demos/ComponentsDashboardSparklineDemo.vue'),
+  ComponentsDataOperationsDemo: () => import('./demos/ComponentsDataOperationsDemo.vue'),
   ComponentsLineupDemo: () => import('./demos/ComponentsLineupDemo.vue'),
   ComponentsOperationsStatusDemo: () => import('./demos/ComponentsOperationsStatusDemo.vue'),
   ComponentsRecoveryStatesDemo: () => import('./demos/ComponentsRecoveryStatesDemo.vue'),

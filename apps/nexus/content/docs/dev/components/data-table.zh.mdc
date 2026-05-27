@@ -5,7 +5,8 @@ category: Data
 status: beta
 since: 1.0.0
 tags: [table, data, list]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # DataTable 数据表格
 
@@ -63,6 +64,30 @@ code: |
 
 可排序表头会暴露 `aria-sort` 状态，并支持鼠标点击、Enter 与 Space 在升序、降序、未排序之间切换。`sortOnClient=false` 时仍会触发 `sortChange`，但不会重排本地数据。
 
+## 后台数据运维面板
+
+在 Dashboard 数据区中，`TxDataTable` 负责主列表，`TxPagination` 负责页码切换，加载预览用 `TxSkeleton` / `TxLayoutSkeleton` 承接，避免空白等待。
+
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="已通过本地 Nexus 页面截图验证的数据表格、分页与骨架加载组合。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDataTable
+        v-model:selected-keys="selectedKeys"
+        :columns="columns"
+        :data="pagedRows"
+        row-key="id"
+        selectable
+        striped
+        bordered
+      />
+      <TxPagination v-model:current-page="page" :total="rows.length" :page-size="4" show-info />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### TxDataTable Props
@@ -113,3 +138,10 @@ code: |
 | `header-<columnKey>` | 自定义表头 |
 | `cell-<columnKey>` | 自定义单元格 |
 | `empty` | 空状态 |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`
+- 建议：业务列表必须传稳定 `rowKey`；需要跨页保留选择时，用业务 id 驱动 `selectedKeys`，不要依赖默认 index。
+- 交互：可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
+- 可访问性：可排序表头会写入 `aria-sort`；自定义单元格时仍需保留可读文本或状态徽标文本。
