@@ -195,6 +195,56 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="Release policy configuration" description="Compose Cascader, FlatSelect, SegmentedSlider, Slider, and TagInput into one admin release configuration flow."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: 'Desktop',
+      children: [
+        {
+          value: 'stable',
+          label: 'Stable',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: 'Low' },
+    { value: 2, label: 'Med' },
+    { value: 3, label: 'High' },
+    { value: 4, label: 'Freeze' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="Release scope" />
+      <TxFlatSelect v-model="packageFormat" placeholder="Package format">
+        <TxFlatSelectItem value="signed" label="Signed build" />
+      </TxFlatSelect>
+      <TxFlatSelect v-model="rolloutMode" placeholder="Rollout mode">
+        <TxFlatSelectItem value="phased" label="Phased" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value />
+      <TxTagInput v-model="labels" placeholder="Press Enter to add tags" />
+    </section>
+  </template>
+---
+::
+
 ::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="Compose Tabs, DropdownMenu, Popover, and Drawer into a dashboard settings shell."}
 ---
 code: |
@@ -231,6 +281,7 @@ code: |
 - Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
 - Task feedback paths should mount `TxToastHost` for notifications, use `TxTooltip` for action hints, `TxLoadingOverlay` for local blocking refreshes, and `TxSpinner` for inline waiting.
 - Permission orchestration paths should use `TxTree` for scope, `TxTreeSelect` for owner team, `TxTransfer` for resource grants, and `TxTimeline` for audit progress.
+- Release configuration paths should use `TxCascader` for release scope, `TxFlatSelect` for package and rollout choices, `TxSegmentedSlider` for risk tiers, `TxSlider` for traffic ramps, and `TxTagInput` for short metadata.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 

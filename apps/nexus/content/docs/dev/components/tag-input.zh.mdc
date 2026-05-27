@@ -2,7 +2,11 @@
 title: "TagInput 标签输入"
 description: "用于快速录入标签，支持分隔符与回车确认。"
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+status: beta
+since: 1.0.0
+tags: [tag, input, form]
+verified: true
 ---
 # TagInput 标签输入
 
@@ -21,6 +25,62 @@ code: |
 
   <template>
     <TxTagInput v-model="tags" placeholder="输入标签后回车" />
+  </template>
+---
+::
+
+## 发布策略配置
+
+这组组件适合后台“先选范围，再定策略，再给阈值和标签”的配置流：`TxCascader` 负责层级范围，`TxFlatSelect` 负责低噪音单选，`TxSegmentedSlider` / `TxSlider` 负责离散风险和连续比例，`TxTagInput` 负责检索元数据。
+
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="发布策略配置" description="截图验证的 Cascader / FlatSelect / SegmentedSlider / Slider / TagInput 后台配置组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: '桌面端',
+      children: [
+        {
+          value: 'stable',
+          label: '稳定通道',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: '低' },
+    { value: 2, label: '中' },
+    { value: 3, label: '高' },
+    { value: 4, label: '冻结' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
+      <TxFlatSelect v-model="packageFormat" placeholder="包格式">
+        <TxFlatSelectItem value="signed" label="签名构建" />
+        <TxFlatSelectItem value="archive" label="归档包" />
+      </TxFlatSelect>
+      <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
+        <TxFlatSelectItem value="phased" label="分阶段" />
+        <TxFlatSelectItem value="guarded" label="护栏发布" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+      <TxTagInput v-model="labels" placeholder="输入标签后回车" :max="5" />
+    </section>
   </template>
 ---
 ::
@@ -49,3 +109,9 @@ code: |
 | `remove` | `(tag)` | 移除 |
 | `focus` | `(event)` | 聚焦 |
 | `blur` | `(event)` | 失焦 |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue`。
+- 截图：`.codex-screenshots/nexus-tag-input-release-policy-demo-playwright-2026-05-28.png`。
+- 建议：标签只承载短元数据；发布备注、长说明或审批原因不要塞进标签输入，应使用文本域或详情表单。

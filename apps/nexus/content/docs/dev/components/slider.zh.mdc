@@ -5,7 +5,8 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [slider, form, input]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Slider 滑块
 
@@ -682,6 +683,62 @@ code: |
 ---
 :::
 
+## 发布策略配置
+
+这组组件适合后台“先选范围，再定策略，再给阈值和标签”的配置流：`TxCascader` 负责层级范围，`TxFlatSelect` 负责低噪音单选，`TxSegmentedSlider` / `TxSlider` 负责离散风险和连续比例，`TxTagInput` 负责检索元数据。
+
+::TuffDemoWrapper{demo="ComponentsReleasePolicyDemo" code-lang="vue" title="发布策略配置" description="截图验证的 Cascader / FlatSelect / SegmentedSlider / Slider / TagInput 后台配置组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const releasePath = ref(['desktop', 'stable', 'macos'])
+  const packageFormat = ref('signed')
+  const rolloutMode = ref('phased')
+  const riskLevel = ref(2)
+  const traffic = ref(35)
+  const labels = ref(['nexus', 'verified'])
+  const scopeOptions = [
+    {
+      value: 'desktop',
+      label: '桌面端',
+      children: [
+        {
+          value: 'stable',
+          label: '稳定通道',
+          children: [{ value: 'macos', label: 'macOS', leaf: true }],
+        },
+      ],
+    },
+  ]
+  const riskSegments = [
+    { value: 1, label: '低' },
+    { value: 2, label: '中' },
+    { value: 3, label: '高' },
+    { value: 4, label: '冻结' },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxCascader v-model="releasePath" :options="scopeOptions" placeholder="发布范围" />
+      <TxFlatSelect v-model="packageFormat" placeholder="包格式">
+        <TxFlatSelectItem value="signed" label="签名构建" />
+        <TxFlatSelectItem value="archive" label="归档包" />
+      </TxFlatSelect>
+      <TxFlatSelect v-model="rolloutMode" placeholder="发布模式">
+        <TxFlatSelectItem value="phased" label="分阶段" />
+        <TxFlatSelectItem value="guarded" label="护栏发布" />
+      </TxFlatSelect>
+      <TxSegmentedSlider v-model="riskLevel" :segments="riskSegments" />
+      <TxSlider v-model="traffic" :min="5" :max="100" :step="5" show-value :format-value="value => value + '%'" />
+      <TxTagInput v-model="labels" placeholder="输入标签后回车" :max="5" />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### Props
@@ -723,3 +780,17 @@ code: |
 |------|------|------|
 | `update:modelValue` | `number` | v-model 更新 |
 | `change` | `number` | change 事件 |
+
+## 交互契约
+
+- 原生 range 输入会把 `modelValue` 夹在 `min..max` 范围内展示。
+- 原生 `input` 触发 `update:modelValue`，原生 `change` 触发 `change`。
+- `disabled` 会阻止值更新并隐藏 tooltip。
+- `formatValue` 控制右侧展示值；未传 `tooltipFormatter` 时也作为 tooltip 文本。
+- tooltip 显示遵循 `tooltipTrigger`：`drag`、`hover` 或 `always`；`showTooltip=false` 会完全禁用。
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/slider/src/TxSlider.vue`。
+- 截图：`.codex-screenshots/nexus-slider-release-policy-demo-playwright-2026-05-28.png`。
+- 建议：滑块只表达连续阈值；发布流量、容量比例和采样率适合用它，风险档位应交给 `TxSegmentedSlider`。
