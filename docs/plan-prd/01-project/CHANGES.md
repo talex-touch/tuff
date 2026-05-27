@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify data operations demos
+
+- `apps/nexus/app/components/content/demos/ComponentsDataOperationsDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{data-table,pagination,skeleton,layout-skeleton}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable dashboard data operations demo that composes `TxDataTable`, `TxPagination`, `TxSkeleton`, `TxLayoutSkeleton`, `TxStatusBadge`, and `TxTag`.
+  - Marked DataTable, Pagination, Skeleton, and LayoutSkeleton docs as reviewed/verified with source references, interaction contracts, and accessibility/loading guidance.
+  - Expanded the Tuffex composition tutorial with a data list and pagination section so Dashboard/Admin data regions keep table body, selection state, pagination, and placeholders in one workspace.
+
 ### docs(nexus): verify search filter demos
 
 - `apps/nexus/app/components/content/demos/ComponentsSearchFiltersDemo.vue`

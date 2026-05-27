@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [skeleton, loading, placeholder]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Skeleton 骨架屏
@@ -63,6 +64,22 @@ rows:
 - `lines` 最小渲染 1 行，避免空骨架。
 - `variant="circle"` 固定使用圆形半径，忽略 `radius`。
 
+## 后台数据运维面板
+
+表格数据加载时，短耗时可用 `TxDataTable loading` 遮罩；长耗时或侧栏摘要建议用 `TxSkeleton` 保留结构节奏。
+
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="骨架屏与表格加载态一起覆盖数据区等待状态。"}
+---
+code: |
+  <template>
+    <aside class="grid gap-3">
+      <TxSkeleton :loading="true" :lines="3" height="10px" />
+      <TxLayoutSkeleton />
+    </aside>
+  </template>
+---
+:::
+
 ## 组合示例
 ### 卡片占位
 骨架屏配合卡片承载列表。
@@ -76,3 +93,9 @@ code: |
   </template>
 ---
 :::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`
+- 建议：骨架宽高应贴近最终内容；不要把 `TxSkeleton` 当作通用灰色装饰使用。
+- 交互：`loading=false` 会渲染默认 slot，适合用同一组件包住最终内容，降低状态分支复杂度。

@@ -5,7 +5,8 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [skeleton, layout, loading]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # LayoutSkeleton 布局骨架
@@ -61,6 +62,21 @@ rows:
 - 组件固定渲染 header、6 个 sidebar item 与 8 条内容行。
 - 内容行宽度是确定性的，不依赖运行时随机数。
 
+## 后台数据运维面板
+
+`TxLayoutSkeleton` 适合放在详情栏、侧边摘要或页面级占位里，展示“布局即将出现”的结构，而不是替代具体表格行。
+
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="布局骨架用于侧栏/详情区域，表格主体继续由 DataTable 管理。"}
+---
+code: |
+  <template>
+    <div style="height: 190px;">
+      <TxLayoutSkeleton />
+    </div>
+  </template>
+---
+:::
+
 ## 组合示例
 ### 面板占位
 布局骨架搭配卡片容器使用。
@@ -74,3 +90,9 @@ code: |
   </template>
 ---
 :::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue`
+- 建议：外层容器必须给出明确高度；页面级加载用它，列表行加载仍优先用 `TxSkeleton` 或表格 loading。
+- 稳定性：内容行宽度为固定序列，不依赖随机数，适合文档截图与 SSR 输出。

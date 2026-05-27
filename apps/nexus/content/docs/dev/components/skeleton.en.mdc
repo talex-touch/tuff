@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [skeleton, loading, placeholder]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Skeleton
@@ -63,6 +64,22 @@ rows:
 - `lines` always renders at least one item, preventing empty skeleton output.
 - `variant="circle"` always uses a circular radius and ignores `radius`.
 
+## Dashboard Data Operations
+
+For table loading, short waits can use the `TxDataTable loading` overlay; longer waits or side summaries should use `TxSkeleton` to preserve layout rhythm.
+
+:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Skeleton placeholders and table loading cover the data-region wait state together."}
+---
+code: |
+  <template>
+    <aside class="grid gap-3">
+      <TxSkeleton :loading="true" :lines="3" height="10px" />
+      <TxLayoutSkeleton />
+    </aside>
+  </template>
+---
+:::
+
 ## Composite Patterns
 ### Card Placeholder
 Skeletons inside cards for feeds.
@@ -76,3 +93,9 @@ code: |
   </template>
 ---
 :::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue`
+- Recommendation: match skeleton width and height to the final content; do not use `TxSkeleton` as decorative gray chrome.
+- Interaction: `loading=false` renders the default slot, so the same wrapper can cover placeholder and final content without extra branching.
