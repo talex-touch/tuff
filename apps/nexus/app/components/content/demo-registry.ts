@@ -70,6 +70,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   ComponentsDashboardSparklineDemo: () => import('./demos/ComponentsDashboardSparklineDemo.vue'),
   ComponentsDataOperationsDemo: () => import('./demos/ComponentsDataOperationsDemo.vue'),
   ComponentsLineupDemo: () => import('./demos/ComponentsLineupDemo.vue'),
+  ComponentsNavigationShellDemo: () => import('./demos/ComponentsNavigationShellDemo.vue'),
   ComponentsOperationsStatusDemo: () => import('./demos/ComponentsOperationsStatusDemo.vue'),
   ComponentsRecoveryStatesDemo: () => import('./demos/ComponentsRecoveryStatesDemo.vue'),
   ComponentsSearchFiltersDemo: () => import('./demos/ComponentsSearchFiltersDemo.vue'),

@@ -2,7 +2,8 @@
 title: "Tabs"
 description: "Windows Tabs"
 category: Layout
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Tabs
 
@@ -435,6 +436,47 @@ code: |
 ---
 :::
 
+## Dashboard Navigation Composition
+
+Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
+
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('Overview')
+  const drawerVisible = ref(false)
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>Release actions</TxButton>
+        </template>
+        <TxDropdownItem>Quick release</TxDropdownItem>
+      </TxDropdownMenu>
+
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">Policy notes</TxButton>
+        </template>
+        Keep popovers short and action-light.
+      </TxPopover>
+
+      <TxTabs v-model="active" placement="left" indicator-variant="pill">
+        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+        <TxTabItem name="Releases">Release settings</TxTabItem>
+      </TxTabs>
+
+      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### TxTabs Props
@@ -494,3 +536,10 @@ code: |
 |------|------|------|
 | `change` | `string` | Emitted after user activation or uncontrolled default activation changes the active tab. |
 | `update:modelValue` | `string` | Emitted with the active tab name for `v-model` updates. |
+
+## Review Notes
+
+- `modelValue` / `update:modelValue` should be the only controlled active-section source; do not duplicate section state inside tab content.
+- `TxTabItemGroup` groups navigation only; real panel content still belongs to child `TxTabItem` nodes.
+- Dashboard settings pages should prefer `placement="left"`; top/bottom tabs fit shorter secondary switches.
+- Source: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`

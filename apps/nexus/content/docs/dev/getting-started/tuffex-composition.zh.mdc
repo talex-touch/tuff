@@ -17,6 +17,7 @@ verified: true
 | 状态区 | `TxStatusBadge`、`TxTag`、`TxProgressBar` | 展示审核、同步、发布、容量等状态 |
 | 数据区 | `TxDataTable`、`TxPagination`、`TxEmptyState`、`TxSearchEmpty`、`TxSkeleton`、`TxLoadingState` | 展示记录、选择行、分页、空态和加载态 |
 | 趋势区 | Dashboard 图表组件 | 趋势图优先复用图表封装，避免手写一次性 SVG |
+| 导航配置区 | `TxTabs`、`TxDropdownMenu`、`TxPopover`、`TxDrawer` | 设置页用 Tabs 固定分区，轻操作进菜单/浮层，高密度配置进抽屉 |
 
 ## 2. 最小可运行片段
 
@@ -176,16 +177,48 @@ code: |
 ---
 ::
 
-## 8. 审阅检查清单
+
+## 8. 导航与配置壳层
+
+后台设置页需要先回答“我在哪个分区”，再回答“当前能做什么操作”。推荐把一级分区固定在 `TxTabs`，把一次性操作放进 `TxDropdownMenu`，把短说明放进 `TxPopover`，把长配置放进 `TxDrawer`。
+
+::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="后台导航配置壳层" description="Tabs / DropdownMenu / Popover / Drawer 的后台设置页组合。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>发布操作</TxButton>
+        </template>
+        <TxDropdownItem>快速发布</TxDropdownItem>
+      </TxDropdownMenu>
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">策略说明</TxButton>
+        </template>
+        浮层只放短说明和轻量动作。
+      </TxPopover>
+      <TxTabs placement="left" indicator-variant="pill">
+        <TxTabItem name="总览" activation>总览配置</TxTabItem>
+      </TxTabs>
+      <TxDrawer :visible="false" title="发布策略" />
+    </section>
+  </template>
+---
+::
+
+## 9. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
 - **筛选闭环**：关键词、范围筛选、匹配数量和无结果恢复应来自同一组响应式数据。
 - **分页贴合**：分页必须贴近列表底部，并与当前筛选、选择状态共用数据模型。
 - **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
 - **空态可见**：没有数据时使用空态组件，不展示空白表格。
+- **配置分层**：短操作进菜单，短说明进浮层，长配置进抽屉，避免一个 Popover 承担复杂表单。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 9. 继续阅读
+## 10. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
 - [SearchInput 搜索输入框](../components/search-input.zh.md)
@@ -196,6 +229,10 @@ code: |
 - [Pagination 分页](../components/pagination.zh.md)
 - [Skeleton 骨架屏](../components/skeleton.zh.md)
 - [LayoutSkeleton 布局骨架](../components/layout-skeleton.zh.md)
+- [Tabs 标签页](../components/tabs.zh.md)
+- [DropdownMenu 下拉菜单](../components/dropdown-menu.zh.md)
+- [Popover 弹出层](../components/popover.zh.md)
+- [Drawer 抽屉](../components/drawer.zh.md)
 - [StatusBadge 状态徽标](../components/status-badge.zh.md)
 - [ProgressBar 进度条](../components/progress-bar.zh.md)
 - [EmptyState 空态引导](../components/empty-state.zh.md)

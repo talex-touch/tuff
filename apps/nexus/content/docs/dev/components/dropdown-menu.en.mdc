@@ -2,7 +2,8 @@
 title: "DropdownMenu"
 description: "Compact menu surface built on Popover"
 category: Form
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # DropdownMenu
 
@@ -79,6 +80,47 @@ code: |
 ---
 :::
 
+## Dashboard Navigation Composition
+
+Admin pages should not put every setting into one large form. Use `TxTabs` for first-level sections, `TxDropdownMenu` for lightweight actions in the current section, `TxPopover` for short explanations, and `TxDrawer` for dense configuration.
+
+:::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A screenshot-verified Tabs / DropdownMenu / Popover / Drawer composition for Dashboard settings pages."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('Overview')
+  const drawerVisible = ref(false)
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>Release actions</TxButton>
+        </template>
+        <TxDropdownItem>Quick release</TxDropdownItem>
+      </TxDropdownMenu>
+
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">Policy notes</TxButton>
+        </template>
+        Keep popovers short and action-light.
+      </TxPopover>
+
+      <TxTabs v-model="active" placement="left" indicator-variant="pill">
+        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+        <TxTabItem name="Releases">Release settings</TxTabItem>
+      </TxTabs>
+
+      <TxDrawer v-model:visible="drawerVisible" title="Release policy" />
+    </section>
+  </template>
+---
+:::
+
 ## API
 
 ### TxDropdownMenu Props
@@ -123,3 +165,10 @@ code: |
 | Event | Params | Description |
 |------|------|------|
 | `select` | - | Emitted when an enabled item is clicked. |
+
+## Interaction Contract
+
+- `TxDropdownMenu` is for short action lists; use `TxPopover` / `TxDrawer` when content includes explanations, forms, or complex state.
+- `closeOnSelect` closes the parent menu after enabled items emit `select`; disabled items do not select or close.
+- The panel is backed by `TxPopover`, so `placement`, `offset`, and `panelBackground` should follow Popover behavior.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue`

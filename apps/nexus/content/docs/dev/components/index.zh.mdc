@@ -147,12 +147,39 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="后台导航配置壳层" description="将 Tabs、DropdownMenu、Popover 与 Drawer 组合成后台设置页骨架。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>发布操作</TxButton>
+        </template>
+        <TxDropdownItem>快速发布</TxDropdownItem>
+      </TxDropdownMenu>
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">策略说明</TxButton>
+        </template>
+        浮层只放短说明和轻量动作。
+      </TxPopover>
+      <TxTabs placement="left" indicator-variant="pill">
+        <TxTabItem name="总览" activation>总览配置</TxTabItem>
+      </TxTabs>
+      <TxDrawer :visible="false" title="发布策略" />
+    </section>
+  </template>
+---
+::
+
 ## 教程路径
 
 - 新手先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.md)》，掌握“操作区 → 状态区 → 数据区”的页面切法。
-- 后台首屏建议从“运营状态面板”模式开始，再按需向下展开表格、趋势图和详情抽屉。
+- 后台首屏建议从“运营状态面板”模式开始，再按需向下展开表格、趋势图、导航配置和详情抽屉。
 - 列表页优先把关键词、范围筛选和无结果恢复设计成同一条路径，复用 `TxSearchInput`、`TxSearchSelect`、`TxSearchEmpty`。
 - 数据列表建议使用 `TxDataTable` 承担主体、`TxPagination` 承担页码、`TxSkeleton` / `TxLayoutSkeleton` 承担等待态。
+- 设置页与后台壳层建议使用 `TxTabs` 固定分区，`TxDropdownMenu` / `TxPopover` 放轻操作与短说明，`TxDrawer` 承载高密度配置。
 - 数据区必须同时设计加载、空态和错误恢复路径，优先复用 `TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。

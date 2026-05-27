@@ -17,6 +17,7 @@ This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more 
 | Status | `TxStatusBadge`, `TxTag`, `TxProgressBar` | Review, sync, release, capacity, and quota state |
 | Data | `TxDataTable`, `TxPagination`, `TxEmptyState`, `TxSearchEmpty`, `TxSkeleton`, `TxLoadingState` | Records, row selection, pagination, empty state, and loading state |
 | Trends | Dashboard chart components | Prefer chart wrappers for trends instead of one-off SVG |
+| Navigation config | `TxTabs`, `TxDropdownMenu`, `TxPopover`, `TxDrawer` | Use Tabs for fixed sections, menus/popovers for lightweight actions, and Drawer for dense configuration |
 
 ## 2. Minimal Working Slice
 
@@ -176,16 +177,48 @@ code: |
 ---
 ::
 
-## 8. Review Checklist
+
+## 8. Navigation And Configuration Shell
+
+Dashboard settings pages should first answer “which section am I in?”, then answer “what can I do here?”. Keep first-level sections in `TxTabs`, one-off actions in `TxDropdownMenu`, short explanations in `TxPopover`, and dense configuration in `TxDrawer`.
+
+::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="A Dashboard settings composition with Tabs / DropdownMenu / Popover / Drawer."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxDropdownMenu>
+        <template #trigger>
+          <TxButton>Release actions</TxButton>
+        </template>
+        <TxDropdownItem>Quick release</TxDropdownItem>
+      </TxDropdownMenu>
+      <TxPopover>
+        <template #reference>
+          <TxButton variant="secondary">Policy notes</TxButton>
+        </template>
+        Keep popovers short and action-light.
+      </TxPopover>
+      <TxTabs placement="left" indicator-variant="pill">
+        <TxTabItem name="Overview" activation>Overview settings</TxTabItem>
+      </TxTabs>
+      <TxDrawer :visible="false" title="Release policy" />
+    </section>
+  </template>
+---
+::
+
+## 9. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
 - **Filter loop**: keyword, scope filtering, match count, and no-match recovery should come from the same reactive model.
 - **Attached pagination**: pagination must stay near the list footer and share the same filtering and selection model.
 - **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
 - **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
+- **Configuration layering**: put short actions in menus, short notes in popovers, and long configuration in drawers; do not make one Popover carry a complex form.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 9. Continue Reading
+## 10. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
 - [SearchInput](../components/search-input.en.md)
@@ -196,6 +229,10 @@ code: |
 - [Pagination](../components/pagination.en.md)
 - [Skeleton](../components/skeleton.en.md)
 - [LayoutSkeleton](../components/layout-skeleton.en.md)
+- [Tabs](../components/tabs.en.md)
+- [DropdownMenu](../components/dropdown-menu.en.md)
+- [Popover](../components/popover.en.md)
+- [Drawer](../components/drawer.en.md)
 - [StatusBadge](../components/status-badge.en.md)
 - [ProgressBar](../components/progress-bar.en.md)
 - [EmptyState](../components/empty-state.en.md)
