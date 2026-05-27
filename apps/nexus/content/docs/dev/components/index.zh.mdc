@@ -95,10 +95,24 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="将 LoadingState、EmptyState、ErrorState 放进同一个数据容器，覆盖加载/无数据/失败路径。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxLoadingState title="正在加载规则" surface="card" />
+      <TxEmptyState variant="no-data" title="还没有自动化规则" surface="card" />
+      <TxErrorState title="规则加载失败" surface="card" />
+    </section>
+  </template>
+---
+::
+
 ## 教程路径
 
 - 新手先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.md)》，掌握“操作区 → 状态区 → 数据区”的页面切法。
 - 后台首屏建议从“运营状态面板”模式开始，再按需向下展开表格、趋势图和详情抽屉。
+- 数据区必须同时设计加载、空态和错误恢复路径，优先复用 `TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
 

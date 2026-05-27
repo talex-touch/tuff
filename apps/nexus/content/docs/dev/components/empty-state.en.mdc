@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [empty, state, guide]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # EmptyState
 
@@ -71,6 +72,35 @@ code: |
 ---
 :::
 
+## Dashboard Recovery States
+
+Dashboard data regions should switch loading, empty, and error states inside one container to avoid layout jumps and duplicated placeholders.
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="A composed loading, empty, error, and compact preset state example."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const mode = ref<'loading' | 'empty' | 'error'>('empty')
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxLoadingState v-if="mode === 'loading'" title="Loading rules" surface="card" />
+      <TxEmptyState
+        v-else-if="mode === 'empty'"
+        variant="no-data"
+        title="No automation rules yet"
+        surface="card"
+        :primary-action="{ label: 'Create rule', type: 'primary' }"
+      />
+      <TxErrorState v-else title="Rules failed to load" surface="card" />
+    </section>
+  </template>
+---
+:::
+
 ## Preset Components
 
 - `TxBlankSlate`: large blank state (default `size="large"`)
@@ -129,3 +159,9 @@ code: |
 |------|------|
 | `primary` | Emitted when the generated primary action button is clicked. |
 | `secondary` | Emitted when the generated secondary action button is clicked. |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`
+- Recommendation: use `variant` for data-container states; override `title`, `description`, or `icon` only when business context needs specific copy.
+- Accessibility: titles should explain the current user situation, and action labels should describe the next step. Avoid vague “empty” copy.

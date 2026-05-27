@@ -112,17 +112,35 @@ code: |
 ---
 ::
 
-## 5. Review Checklist
+## 5. Data Recovery Paths
+
+Every data panel needs three recovery paths: loading, no data, and request failure. They should occupy the same container to avoid layout jumps and duplicated placeholders.
+
+::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="Dashboard recovery states" description="Loading, empty, and error states share one data container."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxLoadingState title="Loading rules" surface="card" />
+      <TxEmptyState variant="no-data" title="No automation rules yet" surface="card" />
+      <TxErrorState title="Rules failed to load" surface="card" />
+    </section>
+  </template>
+---
+::
+
+## 6. Review Checklist
 
 - **One primary action**: keep one highest-weight button per panel; use `secondary` / `ghost` for supporting actions.
 - **Shared state**: table selection, progress, and badges should come from the same reactive model instead of duplicated constants.
 - **Visible empty state**: use empty-state components when no data exists; do not leave a blank table.
 - **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
 
-## 6. Continue Reading
+## 7. Continue Reading
 
 - [Tuffex Components](../components/index.en.md)
 - [StatCard](../components/stat-card.en.md)
 - [DataTable](../components/data-table.en.md)
 - [StatusBadge](../components/status-badge.en.md)
 - [ProgressBar](../components/progress-bar.en.md)
+- [EmptyState](../components/empty-state.en.md)

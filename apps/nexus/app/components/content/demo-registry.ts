@@ -70,6 +70,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   ComponentsDashboardSparklineDemo: () => import('./demos/ComponentsDashboardSparklineDemo.vue'),
   ComponentsLineupDemo: () => import('./demos/ComponentsLineupDemo.vue'),
   ComponentsOperationsStatusDemo: () => import('./demos/ComponentsOperationsStatusDemo.vue'),
+  ComponentsRecoveryStatesDemo: () => import('./demos/ComponentsRecoveryStatesDemo.vue'),
   ComponentsWorkflowPanelDemo: () => import('./demos/ComponentsWorkflowPanelDemo.vue'),
   ContainerContainerDemo: () => import('./demos/ContainerContainerDemo.vue'),
   ContextMenuContextMenuDemo: () => import('./demos/ContextMenuContextMenuDemo.vue'),

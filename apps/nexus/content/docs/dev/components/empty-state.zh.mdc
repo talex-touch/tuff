@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [empty, state, guide]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # EmptyState 空态引导
 
@@ -71,6 +72,35 @@ code: |
 ---
 :::
 
+## 后台恢复状态
+
+Dashboard 数据区建议把加载、空态、错误态放在同一容器内切换，避免页面跳动或多个状态组件重复占位。
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="加载、空态、错误态和小尺寸预设组件的组合示例。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const mode = ref<'loading' | 'empty' | 'error'>('empty')
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxLoadingState v-if="mode === 'loading'" title="正在加载规则" surface="card" />
+      <TxEmptyState
+        v-else-if="mode === 'empty'"
+        variant="no-data"
+        title="还没有自动化规则"
+        surface="card"
+        :primary-action="{ label: '创建规则', type: 'primary' }"
+      />
+      <TxErrorState v-else title="规则加载失败" surface="card" />
+    </section>
+  </template>
+---
+:::
+
 ## 预设组件
 
 - `TxBlankSlate`：大尺寸空白页（默认 `size="large"`）
@@ -129,3 +159,9 @@ code: |
 |------|------|
 | `primary` | 主操作点击 |
 | `secondary` | 次操作点击 |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`
+- 建议：数据容器优先用 `variant` 表达状态；只有文案/图标需要业务化时才覆盖 `title`、`description`、`icon`。
+- 可访问性：空态标题需说明用户当前处境，操作按钮需表达下一步；不要只写“暂无”。
