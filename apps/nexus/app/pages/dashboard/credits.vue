@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { TxButton, TxStatCard, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
+import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import { useToast } from '~/composables/useToast'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
@@ -123,7 +124,7 @@ const trendRangeLabels = computed(() => {
 const trendSparkline = computed(() => {
   const values = trend.value?.values ?? []
   if (!values.length) {
-    return { line: '', area: '', trend: '0%' }
+    return { trend: '0%', values: [] }
   }
   const baseline = values[0] ?? 0
   const latest = values[values.length - 1] ?? 0
@@ -131,11 +132,9 @@ const trendSparkline = computed(() => {
   const trendLabel = delta === 0
     ? '0%'
     : `${delta > 0 ? '+' : ''}${Math.round((delta / Math.max(1, baseline || 1)) * 100)}%`
-  const chart = normalizeSparkline(values, 280, 72)
   return {
-    line: chart.line,
-    area: chart.area,
     trend: trendLabel,
+    values,
   }
 })
 
@@ -167,23 +166,6 @@ const modelGroups = computed(() => {
 
 const claimLoading = ref(false)
 const checkinLoading = ref(false)
-
-function normalizeSparkline(values: number[], width: number, height: number): { line: string, area: string } {
-  if (!values.length) {
-    return { line: '', area: '' }
-  }
-
-  const max = Math.max(1, ...values)
-  const stepX = values.length > 1 ? width / (values.length - 1) : width
-  const points = values.map((value, index) => {
-    const x = Number((index * stepX).toFixed(2))
-    const y = Number((height - (value / max) * height).toFixed(2))
-    return { x, y }
-  })
-  const line = points.map(point => `${point.x},${point.y}`).join(' ')
-  const area = `0,${height} ${line} ${width},${height}`
-  return { line, area }
-}
 
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== 'number')
@@ -421,17 +403,15 @@ function handleGoAccount() {
                 <div v-if="trendPending" class="flex items-center justify-center py-6">
                   <TxSpinner :size="16" />
                 </div>
-                <div v-else-if="trend?.values?.length" class="mt-3">
-                  <svg viewBox="0 0 280 72" preserveAspectRatio="none" class="h-24 w-full">
-                    <polygon
-                      :points="trendSparkline.area"
-                      style="fill: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);"
-                    />
-                    <polyline
-                      :points="trendSparkline.line"
-                      style="fill: none; stroke: var(--tx-color-primary, #409eff); stroke-width: 2;"
-                    />
-                  </svg>
+                <div v-else-if="trendSparkline.values.length" class="mt-3">
+                  <DashboardSparklineChart
+                    :values="trendSparkline.values"
+                    :labels="trendRangeLabels"
+                    :height="96"
+                    color="var(--tx-color-primary, #409eff)"
+                    :aria-label="t('dashboard.credits.trend.title', '消耗趋势')"
+                    show-grid
+                  />
                   <div class="mt-2 flex items-center justify-between text-[11px] text-black/45 dark:text-white/45">
                     <span>{{ trendRangeLabels[0] }}</span>
                     <span>{{ trendRangeLabels[1] }}</span>

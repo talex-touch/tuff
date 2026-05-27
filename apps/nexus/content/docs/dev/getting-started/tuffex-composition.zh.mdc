@@ -1,0 +1,76 @@
+---
+title: Tuffex 组合界面教程
+description: 使用 Tuffex 组件搭建可审阅、可截图验证的后台页面切片
+syncStatus: migrated
+verified: true
+---
+
+# Tuffex 组合界面教程
+
+本教程面向 Nexus / Dashboard / Admin 页面：目标不是堆组件，而是把页面切成“操作区 → 状态区 → 数据区”，让用户能快速判断当前状态并完成动作。
+
+## 1. 页面分组
+
+| 分组 | 推荐组件 | 说明 |
+|------|----------|------|
+| 操作区 | `TxButton`、`TuffInput`、`TuffSwitch` | 承载搜索、刷新、发布、同步等即时操作 |
+| 状态区 | `TxStatusBadge`、`TxTag`、`TxProgressBar` | 展示审核、同步、发布、容量等状态 |
+| 数据区 | `TxDataTable`、`TxEmptyState`、`TxLoadingState` | 展示记录、选择行、空态和加载态 |
+| 趋势区 | Dashboard 图表组件 | 趋势图优先复用图表封装，避免手写一次性 SVG |
+
+## 2. 最小可运行片段
+
+::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="发布工作台组合" description="一个截图可验证的 Dashboard 组合片段。"}
+---
+code: |
+  <script setup lang="ts">
+  import type { DataTableColumn } from '@talex-touch/tuffex'
+  import { computed, ref } from 'vue'
+
+  interface Row {
+    id: number
+    task: string
+    owner: string
+    status: string
+    score: number
+  }
+
+  const query = ref('')
+  const selectedKeys = ref<Array<number | string>>([1])
+  const rows: Row[] = [
+    { id: 1, task: '组件截图核验', owner: 'Nexus', status: 'review', score: 84 },
+    { id: 2, task: 'API 表格补齐', owner: 'Tuffex', status: 'ready', score: 92 },
+    { id: 3, task: '暗色模式回归', owner: 'QA', status: 'failed', score: 48 },
+  ]
+  const columns: DataTableColumn<Row>[] = [
+    { key: 'task', title: '任务' },
+    { key: 'owner', title: '负责人' },
+    { key: 'status', title: '状态' },
+    { key: 'score', title: '评分', sortable: true },
+  ]
+  const filteredRows = computed(() => rows.filter(row => row.task.includes(query.value) || row.owner.includes(query.value)))
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TuffInput v-model="query" placeholder="搜索任务" prefix-icon="i-carbon-search" clearable />
+      <TxProgressBar :percentage="84" status="success" show-text />
+      <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="filteredRows" row-key="id" selectable />
+    </section>
+  </template>
+---
+::
+
+## 3. 审阅检查清单
+
+- **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
+- **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
+- **空态可见**：没有数据时使用空态组件，不展示空白表格。
+- **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
+
+## 4. 继续阅读
+
+- [Tuffex 组件总览](../components/index.zh.md)
+- [DataTable 数据表格](../components/data-table.zh.md)
+- [StatusBadge 状态徽标](../components/status-badge.zh.md)
+- [ProgressBar 进度条](../components/progress-bar.zh.md)

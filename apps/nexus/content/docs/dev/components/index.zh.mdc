@@ -2,6 +2,7 @@
 title: Tuffex 组件
 description: 塔芙组件库的组件展示中心
 syncStatus: migrated
+verified: true
 ---
 
 # Tuffex 组件
@@ -24,6 +25,61 @@ code: |
   </template>
 ---
 ::
+
+## 组合工作台 Demo
+
+这一组 Demo 用真实后台片段校验组件组合：搜索输入、开关、按钮、状态徽标、进度条与可选择表格会在同一个响应式面板里协同工作。
+
+::TuffDemoWrapper{demo="ComponentsWorkflowPanelDemo" code-lang="vue" title="发布工作台" description="适合作为 Dashboard / Admin 页面组合组件的基础形态。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const query = ref('')
+  const selectedKeys = ref([1])
+  const automationEnabled = ref(true)
+  </script>
+
+  <template>
+    <section class="workflow-panel">
+      <header>
+        <h3>发布工作台</h3>
+        <TxButton variant="primary" size="sm" icon="i-carbon-rocket">发布</TxButton>
+      </header>
+      <TuffInput v-model="query" placeholder="搜索任务" prefix-icon="i-carbon-search" clearable />
+      <TuffSwitch v-model="automationEnabled" />
+      <TxProgressBar :percentage="84" status="success" show-text />
+      <TxStatusBadge text="审阅中" status="warning" />
+      <TxDataTable v-model:selected-keys="selectedKeys" :columns="columns" :data="rows" row-key="id" selectable />
+    </section>
+  </template>
+---
+::
+
+::TuffDemoWrapper{demo="ComponentsDashboardSparklineDemo" code-lang="vue" title="后台趋势图" description="复用 DashboardSparklineChart 封装，替代页面内手写 SVG sparkline。"}
+---
+code: |
+  <script setup lang="ts">
+  import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
+  </script>
+
+  <template>
+    <DashboardSparklineChart
+      :values="[18, 24, 21, 36, 42, 38, 54]"
+      :labels="['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']"
+      color="var(--tx-color-primary, #409eff)"
+      show-grid
+    />
+  </template>
+---
+::
+
+## 教程路径
+
+- 新手先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.md)》，掌握“操作区 → 状态区 → 数据区”的页面切法。
+- 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
+- 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
 
 ## 迁移状态看板
 
