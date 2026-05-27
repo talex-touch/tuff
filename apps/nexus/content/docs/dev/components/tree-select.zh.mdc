@@ -2,7 +2,11 @@
 title: "TreeSelect 树选择器"
 description: "用于在下拉浮层中选择树形数据，支持搜索、单选/多选。"
 category: Form
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [tree-select, form, hierarchy]
+syncStatus: reviewed
+verified: true
 ---
 # TreeSelect 树选择器
 
@@ -77,6 +81,41 @@ code: |
 ---
 :::
 
+## 后台归属选择
+
+在权限、成员、发布策略页面中，`TxTreeSelect` 更适合放“归属团队/命名空间/组织单元”这类层级选择；它比完整树更节省空间，也能和 `TxTransfer`、`TxTimeline` 共同构成授权流程。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的归属团队选择、资源授权和审计流程。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const nodes = [
+    {
+      key: 'ops',
+      label: '运营组',
+      children: [
+        { key: 'docs', label: '文档维护' },
+        { key: 'release', label: '发布管理' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <TxTreeSelect
+      v-model="ownerTeam"
+      :nodes="nodes"
+      placeholder="归属团队"
+      :default-expanded-keys="['ops']"
+      :dropdown-max-height="220"
+    />
+  </template>
+---
+:::
+
 ## 注意事项
 
 - `multiple` 为 true 时，`modelValue` 需要为数组；清空会回传空数组。
@@ -139,3 +178,9 @@ code: |
 | `setValue(v)` | `(v) => void` | 设置值 |
 | `getValue()` | `() => any` | 获取当前值 |
 | `getCheckedKeys()` | `() => Array<string \| number>` | 获取选中 key（单选也返回数组） |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue`。
+- 截图：`.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`。
+- 建议：`nodes` 使用 `key`/`label`，不要沿用旧选择器的 `value` 字段；单选清空为 `undefined`，多选清空为空数组。

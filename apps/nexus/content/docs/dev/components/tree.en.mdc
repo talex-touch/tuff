@@ -2,7 +2,11 @@
 title: "Tree"
 description: "Tree component with filtering, single/multi select, and expand controls."
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [tree, data, hierarchy]
+syncStatus: reviewed
+verified: true
 ---
 # Tree
 
@@ -51,6 +55,44 @@ code: |
 ---
 ::
 
+## Admin Permission Scopes
+
+`TxTree` is a good fit for resource scopes, permission domains, and organization hierarchies in admin pages. Pair it with `TxSearchInput`, pass the keyword into `filterText`, and let the selected key drive details, transfer lists, or audit timelines.
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified Tree / TreeSelect / Transfer / Timeline composition."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('release')
+  const nodes = [
+    {
+      key: 'workspace',
+      label: 'Workspace',
+      children: [
+        { key: 'release', label: 'Release control' },
+        { key: 'audit', label: 'Audit logs' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" placeholder="Filter scopes" />
+      <TxTree
+        v-model="selectedScope"
+        :nodes="nodes"
+        :default-expanded-keys="['workspace']"
+        :filter-text="query"
+      />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### TxTree Props
@@ -94,3 +136,9 @@ code: |
 |------|------|
 | `item` | Custom item renderer |
 | `empty` | Empty state |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
+- Screenshot: `.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`.
+- Recommendation: use `key` as the stable node identifier; keep permission-scope trees single-select and move actual resource grants into `TxTransfer` so the tree does not own two responsibilities.

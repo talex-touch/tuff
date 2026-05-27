@@ -171,6 +171,30 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="Compose Tree, TreeSelect, Transfer, and Timeline into one admin authorization workflow."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selectedScope = ref<string | number>('release')
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const assignedKeys = ref<Array<string | number>>(['read-docs'])
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxTree v-model="selectedScope" :nodes="scopeNodes" />
+      <TxTreeSelect v-model="ownerTeam" :nodes="teamNodes" placeholder="Owner team" />
+      <TxTransfer v-model="assignedKeys" :data="resources" />
+      <TxTimeline>
+        <TxTimelineItem title="Assign resources" time="10:20" color="success" active />
+      </TxTimeline>
+    </section>
+  </template>
+---
+::
+
 ::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="Dashboard navigation shell" description="Compose Tabs, DropdownMenu, Popover, and Drawer into a dashboard settings shell."}
 ---
 code: |
@@ -206,6 +230,7 @@ code: |
 - For settings pages and admin shells, use `TxTabs` for fixed sections, `TxDropdownMenu` / `TxPopover` for lightweight actions and short notes, and `TxDrawer` for dense configuration.
 - Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
 - Task feedback paths should mount `TxToastHost` for notifications, use `TxTooltip` for action hints, `TxLoadingOverlay` for local blocking refreshes, and `TxSpinner` for inline waiting.
+- Permission orchestration paths should use `TxTree` for scope, `TxTreeSelect` for owner team, `TxTransfer` for resource grants, and `TxTimeline` for audit progress.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 

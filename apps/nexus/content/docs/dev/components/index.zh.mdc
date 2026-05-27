@@ -171,6 +171,30 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="将 Tree、TreeSelect、Transfer 与 Timeline 组合成后台授权工作流。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selectedScope = ref<string | number>('release')
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const assignedKeys = ref<Array<string | number>>(['read-docs'])
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxTree v-model="selectedScope" :nodes="scopeNodes" />
+      <TxTreeSelect v-model="ownerTeam" :nodes="teamNodes" placeholder="归属团队" />
+      <TxTransfer v-model="assignedKeys" :data="resources" />
+      <TxTimeline>
+        <TxTimelineItem title="分配资源" time="10:20" color="success" active />
+      </TxTimeline>
+    </section>
+  </template>
+---
+::
+
 ::TuffDemoWrapper{demo="ComponentsNavigationShellDemo" code-lang="vue" title="后台导航配置壳层" description="将 Tabs、DropdownMenu、Popover 与 Drawer 组合成后台设置页骨架。"}
 ---
 code: |
@@ -206,6 +230,7 @@ code: |
 - 设置页与后台壳层建议使用 `TxTabs` 固定分区，`TxDropdownMenu` / `TxPopover` 放轻操作与短说明，`TxDrawer` 承载高密度配置。
 - 数据区必须同时设计加载、空态和错误恢复路径，优先复用 `TxLoadingState`、`TxEmptyState`、`TxErrorState`。
 - 任务反馈路径建议使用 `TxToastHost` 挂载通知、`TxTooltip` 解释动作、`TxLoadingOverlay` 阻断局部刷新、`TxSpinner` 表达行内等待。
+- 权限编排路径建议用 `TxTree` 选择权限域、`TxTreeSelect` 选择归属团队、`TxTransfer` 分配资源、`TxTimeline` 展示审计进度。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
 

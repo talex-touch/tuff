@@ -2,7 +2,11 @@
 title: Transfer
 description: Move and filter items between two lists
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [transfer, data, permission]
+syncStatus: reviewed
+verified: true
 ---
 
 # Transfer
@@ -39,6 +43,38 @@ code: |
       empty-text="No items"
       add-aria-label="Add selected channels"
       remove-aria-label="Remove selected channels"
+    />
+  </template>
+---
+:::
+
+## Permission Resource Grants
+
+In admin authorization flows, `TxTransfer` should only own controlled movement between assignable and granted resources. Let `TxTree` select the permission scope, `TxTreeSelect` select the owner team, and `TxTimeline` show audit progress so every component keeps one clear responsibility.
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified resource grant transfer."}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const assignedKeys = ref<Array<string | number>>(['read-docs', 'publish-notes'])
+  const resources = [
+    { key: 'read-docs', label: 'Read docs' },
+    { key: 'publish-notes', label: 'Publish notes' },
+    { key: 'manage-assets', label: 'Manage assets' },
+    { key: 'rotate-keys', label: 'Rotate keys', disabled: true },
+  ]
+  </script>
+
+  <template>
+    <TxTransfer
+      v-model="assignedKeys"
+      :data="resources"
+      :titles="['Assignable resources', 'Granted']"
+      filterable
+      filter-placeholder="Filter resources"
+      empty-text="No resources"
     />
   </template>
 ---
@@ -98,3 +134,9 @@ rows:
 ## Source
 
 <TuffDocSourceLink label="View source" />
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`.
+- Screenshot: `.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`.
+- Recommendation: keep `modelValue` controlled by the host; show disabled items in place instead of filtering them out so users can distinguish unavailable resources from missing resources.

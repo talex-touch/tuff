@@ -18,6 +18,7 @@ verified: true
 | 数据区 | `TxDataTable`、`TxPagination`、`TxEmptyState`、`TxSearchEmpty`、`TxSkeleton`、`TxLoadingState` | 展示记录、选择行、分页、空态和加载态 |
 | 反馈区 | `TxToastHost`、`TxTooltip`、`TxLoadingOverlay`、`TxSpinner` | 展示任务结果、解释动作、阻断局部刷新和行内等待 |
 | 趋势区 | Dashboard 图表组件 | 趋势图优先复用图表封装，避免手写一次性 SVG |
+| 权限编排区 | `TxTree`、`TxTreeSelect`、`TxTransfer`、`TxTimeline` | 选择权限域、归属团队、资源授权和审计进度 |
 | 导航配置区 | `TxTabs`、`TxDropdownMenu`、`TxPopover`、`TxDrawer` | 设置页用 Tabs 固定分区，轻操作进菜单/浮层，高密度配置进抽屉 |
 
 ## 2. 最小可运行片段
@@ -207,7 +208,35 @@ code: |
 ---
 ::
 
-## 9. 导航与配置壳层
+## 9. 权限编排路径
+
+后台授权页需要先回答“授权哪个范围”，再回答“交给谁、给哪些资源、当前审计到哪一步”。推荐用 `TxTree` 放左侧权限域，`TxTreeSelect` 放归属团队，`TxTransfer` 管资源授权，`TxTimeline` 显示审计进度。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="Tree / TreeSelect / Transfer / Timeline 的后台授权组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const selectedScope = ref<string | number>('release')
+  const ownerTeam = ref<string | number | undefined>('docs')
+  const assignedKeys = ref<Array<string | number>>(['read-docs'])
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxTree v-model="selectedScope" :nodes="scopeNodes" />
+      <TxTreeSelect v-model="ownerTeam" :nodes="teamNodes" placeholder="归属团队" />
+      <TxTransfer v-model="assignedKeys" :data="resources" />
+      <TxTimeline>
+        <TxTimelineItem title="分配资源" time="10:20" color="success" active />
+      </TxTimeline>
+    </section>
+  </template>
+---
+::
+
+## 10. 导航与配置壳层
 
 后台设置页需要先回答“我在哪个分区”，再回答“当前能做什么操作”。推荐把一级分区固定在 `TxTabs`，把一次性操作放进 `TxDropdownMenu`，把短说明放进 `TxPopover`，把长配置放进 `TxDrawer`。
 
@@ -237,7 +266,7 @@ code: |
 ---
 ::
 
-## 10. 审阅检查清单
+## 11. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
 - **筛选闭环**：关键词、范围筛选、匹配数量和无结果恢复应来自同一组响应式数据。
@@ -245,10 +274,11 @@ code: |
 - **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
 - **空态可见**：没有数据时使用空态组件，不展示空白表格。
 - **反馈分工**：Toast 只做短反馈，Tooltip 只做短解释，LoadingOverlay 只阻断局部刷新，Spinner 只表达短等待。
+- **授权分工**：Tree 只表达层级范围，TreeSelect 只表达归属选择，Transfer 只表达资源分配，Timeline 只表达审计历史。
 - **配置分层**：短操作进菜单，短说明进浮层，长配置进抽屉，避免一个 Popover 承担复杂表单。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 11. 继续阅读
+## 12. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
 - [SearchInput 搜索输入框](../components/search-input.zh.md)
@@ -258,6 +288,10 @@ code: |
 - [DataTable 数据表格](../components/data-table.zh.md)
 - [Pagination 分页](../components/pagination.zh.md)
 - [Skeleton 骨架屏](../components/skeleton.zh.md)
+- [Tree 树形](../components/tree.zh.md)
+- [TreeSelect 树选择器](../components/tree-select.zh.md)
+- [Transfer 穿梭框](../components/transfer.zh.md)
+- [Timeline 时间线](../components/timeline.zh.md)
 - [LayoutSkeleton 布局骨架](../components/layout-skeleton.zh.md)
 - [Tabs 标签页](../components/tabs.zh.md)
 - [DropdownMenu 下拉菜单](../components/dropdown-menu.zh.md)

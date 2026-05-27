@@ -2,7 +2,11 @@
 title: "Tree 树形"
 description: "基础树形组件，支持搜索过滤、单选/多选与展开控制。"
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [tree, data, hierarchy]
+syncStatus: reviewed
+verified: true
 ---
 # Tree 树形
 
@@ -51,6 +55,44 @@ code: |
 ---
 ::
 
+## 后台权限域
+
+`TxTree` 适合承载后台页面的资源域、权限域和组织层级；搭配 `TxSearchInput` 使用时，搜索文本直接传给 `filterText`，选中 key 再驱动右侧详情、穿梭框或审计流。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的 Tree / TreeSelect / Transfer / Timeline 组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const query = ref('')
+  const selectedScope = ref<string | number>('release')
+  const nodes = [
+    {
+      key: 'workspace',
+      label: '工作区',
+      children: [
+        { key: 'release', label: '发布控制' },
+        { key: 'audit', label: '审计日志' },
+      ],
+    },
+  ]
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxSearchInput v-model="query" placeholder="过滤权限域" />
+      <TxTree
+        v-model="selectedScope"
+        :nodes="nodes"
+        :default-expanded-keys="['workspace']"
+        :filter-text="query"
+      />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### TxTree Props
@@ -94,3 +136,9 @@ code: |
 |------|------|
 | `item` | 自定义节点 |
 | `empty` | 空状态 |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/tree/src/TxTree.vue`。
+- 截图：`.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`。
+- 建议：节点标识统一使用 `key` 字段；后台权限域建议保持单选，真正的资源分配交给 `TxTransfer`，避免一个树承担选择和授权两个职责。

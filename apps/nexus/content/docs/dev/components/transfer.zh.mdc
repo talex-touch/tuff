@@ -2,7 +2,11 @@
 title: Transfer 穿梭框
 description: 在两个列表之间移动并筛选条目
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [transfer, data, permission]
+syncStatus: reviewed
+verified: true
 ---
 
 # Transfer 穿梭框
@@ -39,6 +43,38 @@ code: |
       empty-text="暂无数据"
       add-aria-label="添加选中渠道"
       remove-aria-label="移除选中渠道"
+    />
+  </template>
+---
+:::
+
+## 权限资源授权
+
+后台授权场景里，`TxTransfer` 只负责“可分配资源 ↔ 已授权资源”的受控移动；权限域由 `TxTree` 选择，归属团队由 `TxTreeSelect` 选择，审计进度由 `TxTimeline` 呈现，这样每个组件职责都更清晰。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的资源授权穿梭框。"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const assignedKeys = ref<Array<string | number>>(['read-docs', 'publish-notes'])
+  const resources = [
+    { key: 'read-docs', label: '读取文档' },
+    { key: 'publish-notes', label: '发布日志' },
+    { key: 'manage-assets', label: '管理资源' },
+    { key: 'rotate-keys', label: '轮换密钥', disabled: true },
+  ]
+  </script>
+
+  <template>
+    <TxTransfer
+      v-model="assignedKeys"
+      :data="resources"
+      :titles="['可分配资源', '已授权']"
+      filterable
+      filter-placeholder="筛选资源"
+      empty-text="暂无资源"
     />
   </template>
 ---
@@ -98,3 +134,9 @@ rows:
 ## Source
 
 <TuffDocSourceLink />
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`。
+- 截图：`.codex-screenshots/nexus-transfer-permission-orchestration-demo-playwright-2026-05-28.png`。
+- 建议：保持 `modelValue` 由业务侧受控；禁用项只展示不可移动，不要在外层过滤掉，避免用户误判权限资源不存在。

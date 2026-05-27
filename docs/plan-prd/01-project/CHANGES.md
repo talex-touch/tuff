@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify permission orchestration demos
+
+- `apps/nexus/app/components/content/demos/ComponentsPermissionOrchestrationDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{tree,tree-select,transfer,timeline}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable permission orchestration demo that composes `TxTree`, `TxTreeSelect`, `TxTransfer`, `TxTimeline`, `TxSearchInput`, `TxStatusBadge`, and `TxTag`.
+  - Marked Tree, TreeSelect, Transfer, and Timeline docs as reviewed/verified with source references, interaction contracts, and admin authorization guidance.
+  - Expanded the Tuffex composition tutorial with a permission orchestration path so Dashboard/Admin authorization pages separate scope, owner, resource grants, and audit history.
+
 ### docs(nexus): verify feedback task center demos
 
 - `apps/nexus/app/components/content/demos/ComponentsFeedbackTaskCenterDemo.vue`

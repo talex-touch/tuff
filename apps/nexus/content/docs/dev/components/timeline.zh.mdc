@@ -2,7 +2,11 @@
 title: Timeline 时间线
 description: 用于展示事件流
 category: Data
-syncStatus: migrated
+status: beta
+since: 1.0.0
+tags: [timeline, audit, status]
+syncStatus: reviewed
+verified: true
 ---
 
 # Timeline 时间线
@@ -24,6 +28,29 @@ code: |
   </template>
 ---
 :::
+
+## 后台审计流程
+
+`TxTimeline` 适合展示授权、发布、同步等后台任务的事件流。当前步骤用 `active` 突出，颜色只表达语义辅助；关键状态仍应写进 `title` 或默认插槽，保证可读性和无障碍体验。
+
+::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的授权审计时间线。"}
+---
+code: |
+  <template>
+    <TxTimeline>
+      <TxTimelineItem title="选择权限域" time="09:30" color="primary">
+        release
+      </TxTimelineItem>
+      <TxTimelineItem title="分配资源" time="10:20" color="success" active>
+        docs + notes
+      </TxTimelineItem>
+      <TxTimelineItem title="等待复核" time="11:05" color="warning">
+        security review
+      </TxTimelineItem>
+    </TxTimeline>
+  </template>
+---
+::
 ## API（Lite）
 ### TxTimeline Props
 ::TuffPropsTable
@@ -71,3 +98,9 @@ rows:
 
 ## Source
 <TuffDocSourceLink />
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/timeline/src/TxTimeline.vue` 与 `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue`。
+- 截图：`.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`。
+- 建议：使用 `active` 标记当前事件，`color` 只使用 `'default' | 'primary' | 'success' | 'warning' | 'error'`，不要传入未定义语义色。
