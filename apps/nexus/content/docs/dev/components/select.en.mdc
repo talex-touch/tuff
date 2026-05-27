@@ -1,98 +1,146 @@
 ---
 title: "Select"
-description: "Popover-backed select with optional local filtering, editable remote search, and panel styling controls."
+description: "Popover-backed primitive select with local filtering, editable remote search, disabled states, and panel styling controls."
 category: Form
 status: beta
 since: 1.0.0
 tags: [select, form, dropdown]
 syncStatus: migrated
+verified: true
 ---
 # Select
 
-`TuffSelect` renders a Popover-backed dropdown for primitive string/number values. Options register their labels through `TuffSelectItem`, disabled options stay visible but cannot be selected, and remote editable mode emits search queries from the trigger input.
+`TuffSelect` renders a Popover-backed dropdown for one primitive `string | number` value. Options are registered by `TuffSelectItem`, selected labels mirror into the trigger input, disabled options stay visible, and editable remote mode emits search queries from the trigger.
 
+## Basic Selection
 
-## Basic Usage
+Use the default mode for compact form fields and filters. The trigger is read-only, opens on click, and displays the selected item label after an enabled option is picked.
 
 ### Select
 :::TuffDemoWrapper{demo="SelectSelectDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('engineering')
+  </script>
+
   <template>
-    <TuffSelect v-model="value" placeholder="Select an option">
-      <TuffSelectItem value="option1" label="Option 1" />
-      <TuffSelectItem value="option2" label="Option 2" />
-      <TuffSelectItem value="option3" label="Option 3" />
+    <TuffSelect v-model="value" placeholder="Please select">
+      <TuffSelectItem value="design" label="Design team" />
+      <TuffSelectItem value="engineering" label="Engineering team" />
+      <TuffSelectItem value="support" label="Support team" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## Remote Search (Editable)
+## Local Filtering
+
+Set `searchable` when all options are already available locally. The search input is rendered inside the dropdown panel and filters registered option labels.
+
+### Select (searchable)
+:::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('docs')
+  </script>
+
+  <template>
+    <TuffSelect
+      v-model="value"
+      placeholder="Search workspace"
+      search-placeholder="Type a tag name"
+      searchable
+    >
+      <TuffSelectItem value="docs" label="Docs" />
+      <TuffSelectItem value="sdk" label="SDK tools" />
+      <TuffSelectItem value="release" label="Release" />
+    </TuffSelect>
+  </template>
+---
+:::
+
+## Remote Search
+
+Use `remote` with `editable` when option data comes from a remote source. The trigger becomes an editable input, opens on focus, and emits `search` while the dropdown is open.
 
 ### Select (remote searchable)
 :::TuffDemoWrapper{demo="SelectSelectRemoteSearchableDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref('')
-  const remoteOptions = ref<Array<{ value: string; label: string }>>([])
+  const value = ref<TxSelectValue>('agent-builder')
+  const sourceOptions = [
+    { value: 'agent-builder', label: 'Agent Builder' },
+    { value: 'flow-runner', label: 'Flow Runner' },
+  ]
+  const options = ref(sourceOptions)
 
-  async function onSearch(q: string) {
-    // remote request
-    // remoteOptions.value = await fetch(...)
+  function onSearch(query: string) {
+    // Replace this local filter with a debounced remote request.
+    options.value = sourceOptions.filter(option =>
+      option.label.toLowerCase().includes(query.toLowerCase()),
+    )
   }
   </script>
 
   <template>
-    <TuffSelect v-model="value" remote editable @search="onSearch">
-      <TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" />
+    <TuffSelect v-model="value" remote editable placeholder="Search remote capability" @search="onSearch">
+      <TuffSelectItem v-for="option in options" :key="option.value" :value="option.value" :label="option.label" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## Searchable
+## Disabled States
 
-### Select (searchable)
-:::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffSelect v-model="value" placeholder="Searchable" searchable>
-      <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
-    </TuffSelect>
-  </template>
----
-:::
-
-## Disabled State
+Disable the whole select when the current value should be read-only, or disable individual items when unavailable choices should remain visible.
 
 ### Select (disabled)
 :::TuffDemoWrapper{demo="SelectSelectDisabledDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('locked')
+  </script>
+
   <template>
-    <TuffSelect v-model="value" placeholder="Disabled state" disabled>
-      <TuffSelectItem value="option1" label="Option 1" />
+    <TuffSelect v-model="value" placeholder="Disabled" disabled eager>
+      <TuffSelectItem value="locked" label="Locked configuration" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## Disabled Options
-
 ### Select (disabled option)
 :::TuffDemoWrapper{demo="SelectSelectDisabledOptionDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('standard')
+  </script>
+
   <template>
-    <TuffSelect v-model="value" placeholder="Select an option">
-      <TuffSelectItem value="option1" label="Option 1" />
-      <TuffSelectItem value="option2" label="DisabledOption" disabled />
-      <TuffSelectItem value="option3" label="Option 2" />
+    <TuffSelect v-model="value" placeholder="Please select">
+      <TuffSelectItem value="standard" label="Standard policy" />
+      <TuffSelectItem value="enterprise" label="Enterprise policy" disabled />
+      <TuffSelectItem value="manual" label="Manual policy" />
     </TuffSelect>
   </template>
 ---
@@ -100,53 +148,96 @@ code: |
 
 ## Scroll Panel
 
+Use `dropdownMaxHeight` to cap long option lists. When the panel opens, the selected item scrolls into view.
+
 ### Select (scrollable dropdown)
 :::TuffDemoWrapper{demo="SelectSelectScrollableDropdownDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('queue-12')
+  const queues = Array.from({ length: 24 }).map((_, index) => {
+    const id = index + 1
+    return { value: `queue-${id}`, label: `Processing queue ${id}` }
+  })
+  </script>
+
   <template>
-    <TuffSelect v-model="value" :dropdown-max-height="220">
-      <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
+    <TuffSelect v-model="value" placeholder="Select queue" :dropdown-max-height="180">
+      <TuffSelectItem
+        v-for="queue in queues"
+        :key="queue.value"
+        :value="queue.value"
+        :label="queue.label"
+      />
     </TuffSelect>
   </template>
 ---
 :::
 
+## Interaction Contract
+
+- `TuffSelect` owns a single primitive `string | number` value. Empty state is represented by `''`.
+- `TuffSelectItem` registers its value and label with the parent select; when `label` is omitted, slot text is used, then the raw value.
+- Clicking the trigger toggles the dropdown in non-editable mode. In `editable` or `remote` mode, focusing the trigger opens the dropdown and the trigger text becomes editable.
+- Picking an enabled option emits `update:modelValue` and `change`, updates the selected label, and closes the dropdown.
+- Disabled selects close the dropdown and block trigger/option interaction. Use `eager` when a disabled select must resolve the selected label before the panel is ever opened. Disabled items remain visible but do not emit updates.
+- `searchable` filters registered option labels locally through the panel search input. It is ignored for editable/remote filtering.
+- `remote` mode clears child local filtering and emits `search` from editable trigger text only while the dropdown is open.
+- When a value is provided before items mount, the select resolves the display label after options register. Numeric strings and numbers compare by numeric value when both are finite.
+
 ## API
 
 ### TuffSelect Props
 
-| Prop | Description | Type | Default |
-|--------|------|------|--------|
-| modelValue / v-model | Selected primitive value. | `string \| number` | `''` |
-| placeholder | Placeholder shown in the trigger input when no label is selected. | `string` | `'请选择'` |
-| disabled | Disables the trigger, closes the dropdown, and blocks option selection. | `boolean` | `false` |
-| eager | Eagerly mounts the Popover panel. | `boolean` | `false` |
-| searchable | Shows an internal search input for local option filtering when the select is not editable. | `boolean` | `false` |
-| searchPlaceholder | Placeholder for the internal local search input. | `string` | `'Search'` |
-| editable | Uses the trigger input as editable search text and opens on focus. | `boolean` | `false` |
-| remote | Enables editable remote mode and emits `search` while the dropdown is open. | `boolean` | `false` |
-| dropdownMaxHeight | Maximum dropdown list height in pixels. | `number` | `280` |
-| dropdownOffset | Popover offset from the trigger. | `number` | `6` |
-| panelVariant | Popover panel surface variant. | `'solid' \| 'dashed' \| 'plain'` | `'solid'` |
-| panelBackground | Popover panel background style. | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` |
-| panelShadow | Popover panel shadow strength. | `'none' \| 'soft' \| 'medium'` | `'soft'` |
-| panelRadius | Popover panel corner radius. | `number` | `18` |
-| panelPadding | Popover panel inner padding. | `number` | `4` |
-| panelCard | Optional panel card overrides forwarded to the Popover panel. | `BaseAnchorPanelCardProps` | - |
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number` | `''` | Selected primitive value. |
+| `placeholder` | `string` | `'请选择'` | Placeholder shown in the trigger input when no label is selected. |
+| `disabled` | `boolean` | `false` | Disables the trigger, closes the dropdown, and blocks option selection. |
+| `eager` | `boolean` | `false` | Eagerly mounts the Popover panel. |
+| `searchable` | `boolean` | `false` | Shows an internal search input for local option filtering when the select is not editable. |
+| `searchPlaceholder` | `string` | `'Search'` | Placeholder for the internal local search input. |
+| `editable` | `boolean` | `false` | Uses the trigger input as editable search text and opens on focus. |
+| `remote` | `boolean` | `false` | Enables editable remote mode and emits `search` while the dropdown is open. |
+| `dropdownMaxHeight` | `number` | `280` | Maximum dropdown list height in pixels. |
+| `dropdownOffset` | `number` | `6` | Popover offset from the trigger. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover panel background style. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |
+| `panelRadius` | `number` | `18` | Popover panel corner radius. |
+| `panelPadding` | `number` | `4` | Popover panel inner padding. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Optional panel card overrides forwarded to the Popover panel. |
 
 ### TuffSelect Events
 
-| Event | Description | Params |
-|--------|------|----------|
-| change | Emitted with the selected value after an enabled option is picked or the value is cleared. | `(value: string \| number) => void` |
-| update:modelValue | v-model update emitted with the selected value or empty string on clear. | `(value: string \| number) => void` |
-| search | Emitted in remote mode while the dropdown is open and editable text changes. | `(query: string) => void` |
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number)` | Emitted with the selected value, or `''` when `clear()` is called through the exposed instance. |
+| `change` | `(value: string \| number)` | Emitted with the same value after enabled selection or clear. |
+| `search` | `(query: string)` | Emitted in remote mode while the dropdown is open and editable text changes. |
 
 ### TuffSelectItem Props
 
-| Prop | Description | Type | Default |
-|--------|------|------|--------|
-| value | Primitive option value written to the parent select when picked. | `string \| number` | - |
-| label | Fallback visible label and registered selected-label text. | `string` | - |
-| disabled | Prevents picking this option while leaving it visible in the dropdown. | `boolean` | `false` |
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `value` | `string \| number` | - | Primitive option value written to the parent select when picked. |
+| `label` | `string` | - | Fallback visible label and registered selected-label text. Slot text is used when omitted. |
+| `disabled` | `boolean` | `false` | Prevents picking this option while leaving it visible in the dropdown. |
+
+### Exposed Methods
+
+| Method | Description |
+|------|------|
+| `open()` | Opens the dropdown. |
+| `close()` | Closes the dropdown. |
+| `toggle()` | Toggles the dropdown. |
+| `focus()` | Focuses the trigger input. |
+| `blur()` | Blurs the trigger input. |
+| `clear()` | Clears the value and selected label, then emits `update:modelValue` / `change` with `''`. |
+
+## Source
+<TuffDocSourceLink />

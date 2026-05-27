@@ -3,46 +3,79 @@ title: "DatePicker"
 description: "Date selector built on TxPicker with a YYYY-MM-DD model."
 category: Form
 syncStatus: migrated
+verified: true
 ---
 # DatePicker
 
-`TxDatePicker` wraps `TxPicker` with year, month, and day columns and exposes a `YYYY-MM-DD` string model. Use it when the UI needs a compact date selector with optional popup behavior and simple min/max bounds.
+`TxDatePicker` wraps `TxPicker` with year, month, and day columns and exposes a `YYYY-MM-DD` string model. Use it when the UI needs a compact date selector, bounded date range, or inline picker surface.
 
 ## Basic Usage
 
-### DatePicker
+### Popup, Bounds, And Inline
+
+The demo shows the three common workflows: opening a popup from a form row, constraining selectable days with `min` / `max`, and embedding the picker inline with `popup="false"`.
+
 :::TuffDemoWrapper{demo="DatePickerDatePickerDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const visible = ref(false)
-  const value = ref('2026-01-02')
+  const popupValue = ref('2026-01-02')
+  const popupVisible = ref(false)
+  const boundedValue = ref('2026-05-20')
+  const inlineValue = ref('2026-07-14')
   </script>
 
   <template>
-    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton variant="primary" @click="visible = true">
+    <div style="display: grid; gap: 16px;">
+      <section>
+        <TxButton variant="primary" @click="popupVisible = true">
           Open date picker
         </TxButton>
-        <div style="color: var(--tx-text-color-secondary);">
-          Value: {{ value }}
-        </div>
-      </div>
 
-      <TxDatePicker
-        v-model="value"
-        v-model:visible="visible"
-        title="Date"
-        min="2025-01-01"
-        max="2030-12-31"
-      />
+        <TxDatePicker
+          v-model="popupValue"
+          v-model:visible="popupVisible"
+          title="Release date"
+          min="2025-01-01"
+          max="2030-12-31"
+          confirm-text="Apply"
+          cancel-text="Cancel"
+        />
+      </section>
+
+      <section>
+        <TxDatePicker
+          v-model="boundedValue"
+          :visible="true"
+          :popup="false"
+          :show-toolbar="false"
+          min="2026-05-10"
+          max="2026-05-31"
+        />
+      </section>
+
+      <section>
+        <TxDatePicker
+          v-model="inlineValue"
+          :visible="true"
+          :popup="false"
+          title="Schedule date"
+        />
+      </section>
     </div>
   </template>
 ---
 :::
+
+## Interaction Contract
+
+- The model is always emitted as `YYYY-MM-DD`.
+- Empty or invalid `modelValue` initializes from the current local date, then clamps to `min` / `max` when present.
+- `min` and `max` use `YYYY-MM-DD`; invalid bounds are ignored.
+- Popup mode uses `v-model:visible`; inline mode renders immediately when `popup` is `false`.
+- `confirm` emits the formatted date and then closes through the underlying picker. Live column changes emit both `update:modelValue` and `change`.
 
 ## API
 
@@ -52,7 +85,7 @@ code: |
 |------|------|---------|------|
 | `modelValue` | `string` | `''` | Selected date in `YYYY-MM-DD` format. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
 | `visible` | `boolean` | `false` | Controls popup visibility via `v-model:visible`. |
-| `popup` | `boolean` | `true` | Renders through the picker popup surface when enabled. |
+| `popup` | `boolean` | `true` | Renders through the picker popup surface when true; renders inline when false. |
 | `title` | `string` | `'Select date'` | Toolbar title forwarded to `TxPicker`. |
 | `min` | `string` | - | Earliest selectable date in `YYYY-MM-DD` format. Earlier year/month/day options are disabled or clamped. |
 | `max` | `string` | - | Latest selectable date in `YYYY-MM-DD` format. Later year/month/day options are disabled or clamped. |
@@ -73,3 +106,6 @@ code: |
 | `cancel` | - | Emitted when the picker cancel action fires. |
 | `open` | - | Forwarded when the picker opens. |
 | `close` | - | Forwarded when the picker closes. |
+
+## Source
+<TuffDocSourceLink />

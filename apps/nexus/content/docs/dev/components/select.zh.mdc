@@ -1,68 +1,102 @@
 ---
 title: "Select 选择器"
-description: "下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。"
+description: "基于 Popover 的原始值选择器，支持本地过滤、可编辑远程搜索、禁用状态和面板样式控制。"
 category: Form
 status: beta
 since: 1.0.0
 tags: [select, form, dropdown]
 syncStatus: migrated
+verified: true
 ---
 # Select 选择器
 
-下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。
+`TuffSelect` 用于选择一个 `string | number` 原始值。选项由 `TuffSelectItem` 注册，选中后 label 会回填到触发器输入框，禁用选项保持可见，远程可编辑模式会从触发器输入发出搜索查询。
 
+## 基础选择
 
-## 基础用法
+默认模式适合紧凑表单和筛选器。触发器只读，点击展开，选择启用项后展示当前选项 label。
 
 ### Select
 :::TuffDemoWrapper{demo="SelectSelectDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('engineering')
+  </script>
+
   <template>
     <TuffSelect v-model="value" placeholder="请选择">
-      <TuffSelectItem value="option1" label="选项 1" />
-      <TuffSelectItem value="option2" label="选项 2" />
-      <TuffSelectItem value="option3" label="选项 3" />
+      <TuffSelectItem value="design" label="设计团队" />
+      <TuffSelectItem value="engineering" label="工程团队" />
+      <TuffSelectItem value="support" label="支持团队" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## 远程搜索（可编辑）
+## 本地过滤
+
+当所有选项已在本地可用时使用 `searchable`。搜索框渲染在下拉面板内，并根据已注册选项 label 进行过滤。
+
+### Select (searchable)
+:::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('docs')
+  </script>
+
+  <template>
+    <TuffSelect
+      v-model="value"
+      placeholder="搜索工作区"
+      search-placeholder="输入标签名称"
+      searchable
+    >
+      <TuffSelectItem value="docs" label="Docs 文档" />
+      <TuffSelectItem value="sdk" label="SDK 工具" />
+      <TuffSelectItem value="release" label="Release 发布" />
+    </TuffSelect>
+  </template>
+---
+:::
+
+## 远程搜索
+
+选项来自远程数据源时，组合使用 `remote` 与 `editable`。触发器会变成可编辑输入框，聚焦后展开，并在面板打开期间发出 `search`。
 
 ### Select (remote searchable)
 :::TuffDemoWrapper{demo="SelectSelectRemoteSearchableDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref('')
-  const remoteOptions = ref<Array<{ value: string; label: string }>>([])
+  const value = ref<TxSelectValue>('agent-builder')
+  const sourceOptions = [
+    { value: 'agent-builder', label: 'Agent Builder' },
+    { value: 'flow-runner', label: 'Flow Runner' },
+  ]
+  const options = ref(sourceOptions)
 
-  async function onSearch(q: string) {
-    // remote request
-    // remoteOptions.value = await fetch(...)
+  function onSearch(query: string) {
+    // 实际项目里替换为 debounce 后的远程请求。
+    options.value = sourceOptions.filter(option =>
+      option.label.toLowerCase().includes(query.toLowerCase()),
+    )
   }
   </script>
 
   <template>
-    <TuffSelect v-model="value" remote editable @search="onSearch">
-      <TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" />
-    </TuffSelect>
-  </template>
----
-:::
-
-## 可搜索
-
-### Select (searchable)
-:::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TuffSelect v-model="value" placeholder="Searchable" searchable>
-      <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
+    <TuffSelect v-model="value" remote editable placeholder="搜索远程能力" @search="onSearch">
+      <TuffSelectItem v-for="option in options" :key="option.value" :value="option.value" :label="option.label" />
     </TuffSelect>
   </template>
 ---
@@ -70,29 +104,43 @@ code: |
 
 ## 禁用状态
 
+当前值只读时禁用整个选择器；部分选项暂不可用但仍需要展示时，禁用对应 `TuffSelectItem`。
+
 ### Select (disabled)
 :::TuffDemoWrapper{demo="SelectSelectDisabledDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('locked')
+  </script>
+
   <template>
-    <TuffSelect v-model="value" placeholder="禁用状态" disabled>
-      <TuffSelectItem value="option1" label="选项 1" />
+    <TuffSelect v-model="value" placeholder="禁用状态" disabled eager>
+      <TuffSelectItem value="locked" label="已锁定配置" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## 禁用选项
-
 ### Select (disabled option)
 :::TuffDemoWrapper{demo="SelectSelectDisabledOptionDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('standard')
+  </script>
+
   <template>
     <TuffSelect v-model="value" placeholder="请选择">
-      <TuffSelectItem value="option1" label="可选项 1" />
-      <TuffSelectItem value="option2" label="禁用选项" disabled />
-      <TuffSelectItem value="option3" label="可选项 2" />
+      <TuffSelectItem value="standard" label="标准策略" />
+      <TuffSelectItem value="enterprise" label="企业策略" disabled />
+      <TuffSelectItem value="manual" label="手动策略" />
     </TuffSelect>
   </template>
 ---
@@ -100,46 +148,96 @@ code: |
 
 ## 滚动面板
 
+使用 `dropdownMaxHeight` 限制长列表面板高度。打开面板时，当前选中项会滚入可视区域。
+
 ### Select (scrollable dropdown)
 :::TuffDemoWrapper{demo="SelectSelectScrollableDropdownDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import type { TxSelectValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
+
+  const value = ref<TxSelectValue>('queue-12')
+  const queues = Array.from({ length: 24 }).map((_, index) => {
+    const id = index + 1
+    return { value: `queue-${id}`, label: `处理队列 ${id}` }
+  })
+  </script>
+
   <template>
-    <TuffSelect v-model="value" :dropdown-max-height="220">
-      <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
+    <TuffSelect v-model="value" placeholder="选择队列" :dropdown-max-height="180">
+      <TuffSelectItem
+        v-for="queue in queues"
+        :key="queue.value"
+        :value="queue.value"
+        :label="queue.label"
+      />
     </TuffSelect>
   </template>
 ---
 :::
 
+## 交互契约
+
+- `TuffSelect` 持有单个 `string | number` 原始值；空值使用 `''` 表示。
+- `TuffSelectItem` 会把 value 和 label 注册到父级。没有传 `label` 时优先使用插槽文本，再退回原始 value。
+- 非编辑模式下点击触发器会展开/收起下拉面板。`editable` 或 `remote` 模式下，聚焦触发器会展开面板，触发器文本可编辑。
+- 选择启用项时会触发 `update:modelValue` 和 `change`，更新选中 label，并关闭下拉面板。
+- Select 级 `disabled` 会关闭面板并阻止触发器/选项交互；如果禁用态也需要在首次打开前解析选中 label，请同时使用 `eager`。禁用选项保持可见，但不会发出更新。
+- `searchable` 通过面板内搜索框对已注册选项 label 做本地过滤；可编辑/远程模式不会使用这条本地过滤。
+- `remote` 模式会清空子项本地过滤，并只在面板打开时根据可编辑触发器文本发出 `search`。
+- value 先于选项挂载传入时，Select 会在选项注册后解析展示 label。有限数字形式的字符串和数字会按数值相等匹配。
+
 ## API
 
 ### TuffSelect Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string \| number` | `''` |
-| placeholder | 占位文本 | `string` | `'请选择'` |
-| disabled | 是否禁用 | `boolean` | `false` |
-| searchable | 是否可搜索 | `boolean` | `false` |
-| searchPlaceholder | 搜索框占位 | `string` | `'Search'` |
-| editable | 是否可编辑（在触发器输入） | `boolean` | `false` |
-| remote | 是否远程搜索（输入时触发 `search`） | `boolean` | `false` |
-| dropdownMaxHeight | 下拉面板最大高度 | `number` | `280` |
-| dropdownOffset | 触发器与面板间距 | `number` | `6` |
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number` | `''` | 当前选中的原始值。 |
+| `placeholder` | `string` | `'请选择'` | 没有选中 label 时展示在触发器输入框中的占位文本。 |
+| `disabled` | `boolean` | `false` | 禁用触发器，关闭下拉面板，并阻止选择选项。 |
+| `eager` | `boolean` | `false` | 是否提前挂载 Popover 面板。 |
+| `searchable` | `boolean` | `false` | 非编辑模式下是否展示面板内本地搜索框。 |
+| `searchPlaceholder` | `string` | `'Search'` | 面板内本地搜索框占位文本。 |
+| `editable` | `boolean` | `false` | 是否把触发器输入框作为可编辑搜索文本，并在聚焦时展开。 |
+| `remote` | `boolean` | `false` | 启用可编辑远程模式，并在面板打开时发出 `search`。 |
+| `dropdownMaxHeight` | `number` | `280` | 下拉列表最大高度，单位 px。 |
+| `dropdownOffset` | `number` | `6` | Popover 与触发器之间的距离。 |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover 面板表面样式。 |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover 面板背景样式。 |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover 面板阴影强度。 |
+| `panelRadius` | `number` | `18` | Popover 面板圆角。 |
+| `panelPadding` | `number` | `4` | Popover 面板内边距。 |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | 透传给 Popover 面板的可选 card 覆盖配置。 |
 
 ### TuffSelect Events
 
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| change | 选中值改变时触发 | `(value: string \| number) => void` |
-| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
-| search | 输入触发搜索（remote 模式） | `(query: string) => void` |
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number)` | 选择新值时触发；通过实例 `clear()` 清空时会以 `''` 触发。 |
+| `change` | `(value: string \| number)` | 启用选择或清空完成后触发，参数与 model 更新一致。 |
+| `search` | `(query: string)` | 远程模式下，面板打开且可编辑文本变化时触发。 |
 
 ### TuffSelectItem Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| value | 选项值 | `string \| number` | - |
-| label | 选项标签 | `string` | - |
-| disabled | 是否禁用 | `boolean` | `false` |
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `value` | `string \| number` | - | 选中时写入父级 Select 的原始值。 |
+| `label` | `string` | - | 可见 label 和选中后展示文本；未传时使用插槽文本。 |
+| `disabled` | `boolean` | `false` | 禁止选中当前项，但仍保留在下拉列表中。 |
+
+### 暴露方法
+
+| 方法 | 说明 |
+|------|------|
+| `open()` | 打开下拉面板。 |
+| `close()` | 关闭下拉面板。 |
+| `toggle()` | 切换下拉面板打开状态。 |
+| `focus()` | 聚焦触发器输入框。 |
+| `blur()` | 让触发器输入框失焦。 |
+| `clear()` | 清空 value 和选中 label，并以 `''` 触发 `update:modelValue` / `change`。 |
+
+## Source
+<TuffDocSourceLink />

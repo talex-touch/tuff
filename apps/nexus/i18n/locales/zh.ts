@@ -1354,6 +1354,19 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           averagePackageSize: '平均包体 {size}',
           latestDay: '最近活跃日',
           peakDay: '峰值日',
+          activityTrend: '活跃趋势',
+          actionTrend: {
+            title: '操作趋势',
+          },
+          locationTrend: {
+            title: '地区趋势',
+          },
+          channelTrend: {
+            title: '渠道趋势',
+          },
+          versionTrend: {
+            title: '版本趋势',
+          },
           noTrend: '暂无趋势数据。',
           noBreakdown: '暂无分布数据。',
           metricMeta: '{quantity} 次 · {actors} 人 · {events} 条',

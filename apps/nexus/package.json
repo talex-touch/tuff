@@ -45,6 +45,7 @@
     "@talex-touch/tuff-intelligence": "workspace:*",
     "@talex-touch/tuffex": "workspace:*",
     "@talex-touch/utils": "workspace:*",
+    "echarts": "^6.1.0",
     "fighting-design": "catalog:",
     "gsap": "catalog:",
     "jszip": "catalog:",

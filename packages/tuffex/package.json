@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/tuffex",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
   "description": "TuffEx - Modern Vue3 component library with beautiful animations and tactile experience.",
   "keywords": [
@@ -70,7 +70,7 @@
     "@number-flow/vue": "^0.5.0",
     "@vueuse/core": "^14.2.1",
     "dompurify": "^3.4.1",
-    "gsap": "catalog:",
+    "gsap": "^3.15.0",
     "marked": "^12.0.2",
     "v-wave": "^3.0.4",
     "yaml": "^2.8.3"
@@ -90,7 +90,7 @@
     "gulp": "^5.0.1",
     "gulp-autoprefixer": "^9.0.0",
     "gulp-sass": "^5.1.0",
-    "sass": "catalog:",
+    "sass": "^1.99.0",
     "search-insights": "^2.17.3",
     "sucrase": "^3.35.1",
     "ts-node": "^10.9.2",

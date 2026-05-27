@@ -7,6 +7,9 @@ on:
       - main
     paths:
       - "packages/tuffex/**"
+      - "scripts/package-publish.config.mjs"
+      - "scripts/validate-publish-manifests.mjs"
+      - "scripts/publish-package.mjs"
       - ".github/workflows/package-tuffex-publish.yml"
 
 jobs:
@@ -99,46 +102,6 @@ jobs:
 
       - name: Publish to npm
         if: steps.version_check.outputs.should_publish == 'true'
-        working-directory: packages/tuffex
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          version="${{ steps.version_check.outputs.current_version }}"
-          dist_tag="latest"
-          if [[ "${version}" == *"-"* ]]; then
-            dist_tag="next"
-          fi
-
-          if npm view "@talex-touch/tuffex@${version}" version >/dev/null 2>&1; then
-            echo "@talex-touch/tuffex@${version} already published. Skipping."
-            exit 0
-          fi
-
-          publish_log="$(mktemp)"
-          trap 'rm -f "${publish_log}"' EXIT
-
-          set +e
-          npm publish --access public --tag "${dist_tag}" >"${publish_log}" 2>&1
-          publish_status=$?
-          set -e
-
-          cat "${publish_log}"
-
-          if [ "${publish_status}" -eq 0 ]; then
-            exit 0
-          fi
-
-          if grep -Eqi 'previously published versions|cannot publish over the previously published version' "${publish_log}"; then
-            if npm view "@talex-touch/tuffex@${version}" version >/dev/null 2>&1; then
-              echo "@talex-touch/tuffex@${version} became available during publish. Treating duplicate publish as success."
-              exit 0
-            fi
-          fi
-
-          if grep -Eqi '404 Not Found - PUT .*@talex-touch%2ftuffex|is not in this registry' "${publish_log}"; then
-            echo "::error::npm publish returned 404 for @talex-touch/tuffex. For scoped package publishes this usually means NPM_TOKEN is authenticated but lacks write/publish access to the @talex-touch scope/package, or the token is restricted to another organization/package. Regenerate/update the repository NPM_TOKEN with @talex-touch read/write publish permission and 2FA bypass/automation support."
-          fi
-
-          exit "${publish_status}"
+        run: node scripts/publish-package.mjs --filter "@talex-touch/tuffex" --skip-git-check --skip-build

@@ -1,8 +1,9 @@
 ---
 title: "Picker"
-description: "Column picker with popup or inline rendering, toolbar actions, disabled options, and normalized values."
+description: "Column picker with popup or inline rendering, toolbar actions, disabled options, and normalized array values."
 category: Form
 syncStatus: migrated
+verified: true
 ---
 # Picker
 
@@ -10,53 +11,126 @@ syncStatus: migrated
 
 ## Basic Usage
 
-### Picker
+### Popup, Inline, And Dense Rows
+
+The demo covers the three common contracts: controlled popup visibility, inline rendering with disabled options, and compact row sizing through `itemHeight` / `visibleItemCount`.
+
 :::TuffDemoWrapper{demo="PickerPickerDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { PickerColumn, PickerValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const visible = ref(false)
-  const value = ref<(string | number)[]>(['b', 2])
+  const popupVisible = ref(false)
+  const popupValue = ref<PickerValue>(['pro', 'monthly'])
+  const inlineValue = ref<PickerValue>(['high', 'triage'])
+  const denseValue = ref<PickerValue>(['apac', 30])
 
-  const columns = [
+  const popupColumns: PickerColumn[] = [
     {
-      key: 'letter',
+      key: 'plan',
       options: [
-        { value: 'a', label: 'A' },
-        { value: 'b', label: 'B' },
-        { value: 'c', label: 'C' },
+        { value: 'free', label: 'Free' },
+        { value: 'pro', label: 'Pro' },
+        { value: 'team', label: 'Team' },
       ],
     },
     {
-      key: 'number',
+      key: 'cycle',
       options: [
-        { value: 1, label: '1' },
-        { value: 2, label: '2' },
-        { value: 3, label: '3' },
-        { value: 4, label: '4', disabled: true },
+        { value: 'monthly', label: 'Monthly' },
+        { value: 'annual', label: 'Annual' },
+      ],
+    },
+  ]
+
+  const inlineColumns: PickerColumn[] = [
+    {
+      key: 'priority',
+      options: [
+        { value: 'low', label: 'Low priority' },
+        { value: 'high', label: 'High priority' },
+        { value: 'frozen', label: 'Frozen', disabled: true },
+      ],
+    },
+    {
+      key: 'queue',
+      options: [
+        { value: 'inbox', label: 'Inbox' },
+        { value: 'triage', label: 'Triage queue' },
+      ],
+    },
+  ]
+
+  const denseColumns: PickerColumn[] = [
+    {
+      key: 'region',
+      options: [
+        { value: 'na', label: 'North America' },
+        { value: 'eu', label: 'Europe' },
+        { value: 'apac', label: 'Asia Pacific' },
+      ],
+    },
+    {
+      key: 'window',
+      options: [
+        { value: 15, label: '15 minutes' },
+        { value: 30, label: '30 minutes' },
+        { value: 60, label: '60 minutes' },
       ],
     },
   ]
   </script>
 
   <template>
-    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton variant="primary" @click="visible = true">
+    <div style="display: grid; gap: 16px;">
+      <section>
+        <TxButton variant="primary" @click="popupVisible = true">
           Open picker
         </TxButton>
-        <div style="color: var(--tx-text-color-secondary);">
-          Value: {{ value }}
-        </div>
-      </div>
+        <TxPicker
+          v-model="popupValue"
+          v-model:visible="popupVisible"
+          title="Subscription plan"
+          :columns="popupColumns"
+          confirm-text="Apply"
+          cancel-text="Cancel"
+        />
+      </section>
 
-      <TxPicker v-model="value" v-model:visible="visible" title="Picker" :columns="columns" />
+      <section>
+        <TxPicker
+          v-model="inlineValue"
+          :popup="false"
+          title="Alert routing"
+          :columns="inlineColumns"
+        />
+      </section>
+
+      <section>
+        <TxPicker
+          v-model="denseValue"
+          :popup="false"
+          :show-toolbar="false"
+          :columns="denseColumns"
+          :item-height="28"
+          :visible-item-count="4"
+        />
+      </section>
     </div>
   </template>
 ---
 :::
+
+## Interaction Contract
+
+- `modelValue` is always an array with one primitive value per column.
+- Missing, invalid, or non-array model values normalize to the first enabled option in each column.
+- Disabled options cannot be selected and are skipped by normalization fallback.
+- Popup mode is controlled by `visible` / `v-model:visible`; inline mode renders immediately when `popup` is `false`.
+- `visibleItemCount` is rounded up to an odd number and never below `3`; `itemHeight` is clamped to at least `24`.
+- Scrolling emits `update:modelValue` and `change`; clicking confirm emits `confirm` with the current normalized value and then closes.
 
 ## API
 
@@ -64,7 +138,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `(string \| number)[]` | `[]` | Selected value per column. Missing or invalid entries normalize to the first enabled option. |
+| `modelValue` | `PickerValue` | `[]` | Selected value per column. Missing, invalid, or non-array values normalize to the first enabled option. |
 | `columns` | `PickerColumn[]` | `[]` | Column definitions rendered from left to right. |
 | `visible` | `boolean` | `false` | Popup open state controlled by `v-model:visible`. |
 | `popup` | `boolean` | `true` | Renders as a Teleport bottom popup when true; renders inline when false. |
@@ -74,9 +148,15 @@ code: |
 | `cancelText` | `string` | `'Cancel'` | Text for the cancel button. |
 | `disabled` | `boolean` | `false` | Disables toolbar buttons, option buttons, and drag state updates. |
 | `itemHeight` | `number` | `36` | Option row height in pixels; values below 24 are clamped to 24. |
-| `visibleItemCount` | `number` | `5` | Number of visible rows. Even values are rounded up to the next odd count. |
+| `visibleItemCount` | `number` | `5` | Number of visible rows. Even values are rounded up to the next odd count, with a minimum of 3. |
 | `closeOnClickMask` | `boolean` | `true` | Closes the popup when the mask is clicked. |
 | `lazyMount` | `boolean` | `true` | Delays popup body rendering until the picker has opened once. |
+
+### PickerValue
+
+```ts
+type PickerValue = Array<string | number>
+```
 
 ### PickerColumn
 
@@ -104,3 +184,6 @@ code: |
 | `cancel` | - | Emitted when cancel is clicked, then closes. |
 | `open` | - | Emitted when the picker opens. |
 | `close` | - | Emitted when the picker closes. |
+
+## Source
+<TuffDocSourceLink />

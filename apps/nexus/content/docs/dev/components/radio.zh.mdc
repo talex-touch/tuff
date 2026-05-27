@@ -1,519 +1,244 @@
 ---
 title: "Radio 单选框"
-description: "用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。"
+description: "单选控件，支持按钮组、标准单选、卡片单选、键盘导航、禁用状态和按钮指示器动效。"
 category: Form
 status: beta
 since: 1.0.0
 tags: [radio, form, selection]
 syncStatus: migrated
+verified: true
 ---
 # Radio 单选框
 
-用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。
+`TxRadioGroup` 协调一组 `TxRadio`，只保存一个 `string | number` 原始值。按钮组适合紧凑分段选择，标准样式适合常规表单行，卡片样式适合需要解释文本的选项。
 
 ## 标准单选形式
 
-前圆点+后文案的标准单选形式，适合选项较多的场景。
+标准样式展示圆点指示器和标签。短选项可以使用 `direction="row"` 横向排列，长列表可以切回纵向。
 
 ### Radio (standard)
 :::TuffDemoWrapper{demo="RadioRadioStandardDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('editor')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo--max-400">
-      <TxRadioGroup v-model="value" type="standard" direction="row">
-        <TxRadio value="a" label="Option A" />
-        <TxRadio value="b" label="Option B" />
-        <TxRadio value="c" label="Option C" />
-      </TxRadioGroup>
-
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value" type="standard" direction="row">
+      <TxRadio value="viewer" label="只读成员" />
+      <TxRadio value="editor" label="编辑成员" />
+      <TxRadio value="owner" label="管理员" />
+    </TxRadioGroup>
   </template>
 ---
 :::
 
 ## 卡片单选形式
 
-更强调信息层级的单选形式，适合需要解释文本的场景。
+卡片样式通过默认插槽承载更丰富的选项内容。禁用卡片仍然可见，但不能被选择，也会被键盘导航跳过。
 
 ### Radio (card)
 :::TuffDemoWrapper{demo="RadioRadioCardDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('sync')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo--max-520">
-      <TxRadioGroup v-model="value" type="card">
-        <TxRadio value="a">
-          <div class="tx-demo__title">
-            Option A
-          </div>
-          <div class="tx-demo__desc">
-            Description text for option A
-          </div>
-        </TxRadio>
-        <TxRadio value="b">
-          <div class="tx-demo__title">
-            Option B
-          </div>
-          <div class="tx-demo__desc">
-            A longer description line to test wrapping and spacing
-          </div>
-        </TxRadio>
-        <TxRadio value="c" disabled>
-          <div class="tx-demo__title">
-            Option C (disabled)
-          </div>
-          <div class="tx-demo__desc">
-            Disabled option
-          </div>
-        </TxRadio>
-      </TxRadioGroup>
-
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value" type="card">
+      <TxRadio value="local">
+        <div class="tx-demo__title">仅本地</div>
+        <div class="tx-demo__desc">只保存在当前设备。</div>
+      </TxRadio>
+      <TxRadio value="sync">
+        <div class="tx-demo__title">跨设备同步</div>
+        <div class="tx-demo__desc">通过账号同步偏好设置。</div>
+      </TxRadio>
+      <TxRadio value="managed" disabled>
+        <div class="tx-demo__title">组织托管</div>
+        <div class="tx-demo__desc">当前租户未启用托管策略。</div>
+      </TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
 ## 按钮组形式
 
-紧凑排列的按钮组，适合选项较少的场景。
+按钮组是默认样式，表现为紧凑分段控件，并带有随选项移动的指示器。
 
 ### Radio (simple)
 :::TuffDemoWrapper{demo="RadioRadioSimpleDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('week')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col">
-      <TxRadioGroup v-model="value">
-        <TxRadio value="a">
-          Option A
-        </TxRadio>
-        <TxRadio value="b">
-          Option B
-        </TxRadio>
-        <TxRadio value="c">
-          Option C
-        </TxRadio>
-      </TxRadioGroup>
-
-      <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-        <div class="tx-demo__meta">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value">
+      <TxRadio value="day">日</TxRadio>
+      <TxRadio value="week">周</TxRadio>
+      <TxRadio value="month">月</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
-## Indicator 动效
+## 指示器动效
 
-带指示器的按钮组动效示例：默认 → 普通 → 模糊 → 玻璃。
+按钮组支持 solid、outline、blur、glass 四种指示器。`elastic` 控制拉伸/撞击动效，`stiffness` 和 `damping` 用于调整弹簧手感。
 
 ### Radio (indicator)
 :::TuffDemoWrapper{demo="RadioRadioIndicatorDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const valueDefault = ref<'a' | 'b' | 'c'>('a')
-  const valuePlain = ref<'a' | 'b' | 'c'>('a')
-  const valueBlur = ref<'a' | 'b' | 'c'>('a')
-  const valueGlass = ref<'a' | 'b' | 'c'>('a')
+  const value = ref<TxRadioValue>('focus')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col tx-demo__col--18">
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Default
-        </div>
-        <TxRadioGroup v-model="valueDefault">
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Plain
-        </div>
-        <TxRadioGroup v-model="valuePlain" :elastic="false">
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Blur
-        </div>
-        <TxRadioGroup v-model="valueBlur" blur>
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-
-      <div class="tx-demo__col tx-demo__col--10">
-        <div class="tx-demo__label">
-          Glass
-        </div>
-        <TxRadioGroup v-model="valueGlass" glass>
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-      </div>
-    </div>
+    <TxRadioGroup v-model="value" indicator-variant="glass">
+      <TxRadio value="focus">专注</TxRadio>
+      <TxRadio value="review">复盘</TxRadio>
+      <TxRadio value="ship">发布</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
 ## 禁用状态
 
+整组不可操作时禁用 `TxRadioGroup`；只有部分选项不可用时，禁用对应 `TxRadio` 即可。
+
 ### Radio (disabled)
 :::TuffDemoWrapper{demo="RadioRadioDisabledDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import type { TxRadioValue } from '@talex-touch/tuffex'
   import { ref } from 'vue'
 
-  const value = ref<'a' | 'b'>('a')
+  const groupValue = ref<TxRadioValue>('locked')
+  const optionValue = ref<TxRadioValue>('manual')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__row">
-      <TxRadioGroup v-model="value" disabled>
-        <TxRadio value="a">
-          Disabled A
-        </TxRadio>
-        <TxRadio value="b">
-          Disabled B
-        </TxRadio>
-      </TxRadioGroup>
+    <TxRadioGroup v-model="groupValue" disabled>
+      <TxRadio value="locked">锁定</TxRadio>
+      <TxRadio value="archived">归档</TxRadio>
+    </TxRadioGroup>
 
-      <TxRadioGroup v-model="value">
-        <TxRadio value="a" disabled>
-          Option A
-        </TxRadio>
-        <TxRadio value="b">
-          Option B
-        </TxRadio>
-      </TxRadioGroup>
-    </div>
+    <TxRadioGroup v-model="optionValue">
+      <TxRadio value="automatic" disabled>自动</TxRadio>
+      <TxRadio value="manual">手动</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
 ## Playground
 
-把 `TxRadioGroup` 的主要属性做成可调节的控制面板，用于快速验证不同形态/参数组合。
+Playground 暴露核心 group props，方便直接比较类型、方向、禁用状态、指示器样式和动效参数。
 
 ### RadioGroup (playground)
 :::TuffDemoWrapper{demo="RadioRadioGroupPlaygroundDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
-  import { computed, ref } from 'vue'
+  import type { TxRadioValue } from '@talex-touch/tuffex'
+  import { ref } from 'vue'
 
   type GroupType = 'button' | 'standard' | 'card'
-
-  type OptionValue = 'a' | 'b' | 'c'
-
-  const type = ref<GroupType>('button')
-  const direction = ref<'row' | 'column'>('row')
-  const disabled = ref(false)
-
   type IndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
 
+  const type = ref<GroupType>('button')
   const indicatorVariant = ref<IndicatorVariant>('solid')
-
-  const glass = ref(false)
-  const blur = ref(false)
-  const elastic = ref(true)
-
-  const stiffness = ref(110)
-  const damping = ref(12)
-  const blurAmount = ref(1)
-
-  const value = ref<OptionValue>('a')
-
-  const shouldShowDirection = computed(() => type.value !== 'button')
-  const shouldShowIndicatorProps = computed(() => type.value === 'button')
-
-  const resolvedGlass = computed(() => {
-    if (!shouldShowIndicatorProps.value)
-      return false
-    if (indicatorVariant.value === 'glass')
-      return true
-    return glass.value
-  })
-
-  const resolvedBlur = computed(() => {
-    if (!shouldShowIndicatorProps.value)
-      return false
-    if (indicatorVariant.value === 'blur')
-      return true
-    return blur.value
-  })
-
-  const typeOptions = [
-    { value: 'button', label: 'button' },
-    { value: 'standard', label: 'standard' },
-    { value: 'card', label: 'card' },
-  ]
-
-  const directionOptions = [
-    { value: 'row', label: 'row' },
-    { value: 'column', label: 'column' },
-  ]
+  const value = ref<TxRadioValue>('alpha')
   </script>
 
   <template>
-    <div class="tx-demo tx-demo__col" style="max-width: 720px;">
-      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
-        <div class="tx-demo__col" style="gap: 12px;">
-          <div class="tx-demo__row">
-            <label class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">type</span>
-              <TuffSelect v-model="type" style="min-width: 180px;">
-                <TuffSelectItem v-for="opt in typeOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-              </TuffSelect>
-            </label>
-
-            <label v-if="shouldShowDirection" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">direction</span>
-              <TuffSelect v-model="direction" style="min-width: 180px;">
-                <TuffSelectItem v-for="opt in directionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-              </TuffSelect>
-            </label>
-          </div>
-
-          <div class="tx-demo__row">
-            <label class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">disabled</span>
-              <TxSwitch v-model="disabled" />
-            </label>
-
-            <label class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">elastic</span>
-              <TxSwitch v-model="elastic" />
-            </label>
-
-            <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">indicator</span>
-              <TuffSelect v-model="indicatorVariant" style="min-width: 180px;">
-                <TuffSelectItem value="solid" label="solid" />
-                <TuffSelectItem value="outline" label="outline" />
-                <TuffSelectItem value="glass" label="glass" />
-                <TuffSelectItem value="blur" label="blur" />
-              </TuffSelect>
-            </label>
-
-            <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">blur</span>
-              <TxSwitch v-model="blur" />
-            </label>
-
-            <label v-if="shouldShowIndicatorProps" class="tx-demo__row" style="gap: 8px;">
-              <span class="tx-demo__label">glass</span>
-              <TxSwitch v-model="glass" />
-            </label>
-          </div>
-
-          <div class="tx-demo__col" style="gap: 10px;">
-            <div class="tx-demo__label">
-              stiffness
-            </div>
-            <TxSlider v-model="stiffness" :min="60" :max="220" :step="1" show-value />
-          </div>
-
-          <div class="tx-demo__col" style="gap: 10px;">
-            <div class="tx-demo__label">
-              damping
-            </div>
-            <TxSlider v-model="damping" :min="4" :max="30" :step="1" show-value />
-          </div>
-
-          <div v-if="shouldShowIndicatorProps && blur" class="tx-demo__col" style="gap: 10px;">
-            <div class="tx-demo__label">
-              blurAmount
-            </div>
-            <TxSlider v-model="blurAmount" :min="0" :max="24" :step="1" show-value />
-          </div>
-        </div>
-      </TxCard>
-
-      <TxCard variant="plain" background="mask" :padding="18" :radius="14" style="width: 100%;">
-        <TxRadioGroup
-          v-model="value"
-          :type="type"
-          :direction="shouldShowDirection ? direction : undefined"
-          :disabled="disabled"
-          :indicator-variant="shouldShowIndicatorProps ? indicatorVariant : undefined"
-          :glass="resolvedGlass"
-          :blur="resolvedBlur"
-          :elastic="elastic"
-          :stiffness="stiffness"
-          :damping="damping"
-          :blur-amount="blurAmount"
-        >
-          <TxRadio value="a" :disabled="disabled && type !== 'button'">
-            <template v-if="type === 'card'">
-              <div class="tx-demo__title">
-                Option A
-              </div>
-              <div class="tx-demo__desc">
-                Card description A
-              </div>
-            </template>
-            <template v-else>
-              Option A
-            </template>
-          </TxRadio>
-
-          <TxRadio value="b">
-            <template v-if="type === 'card'">
-              <div class="tx-demo__title">
-                Option B
-              </div>
-              <div class="tx-demo__desc">
-                Card description B
-              </div>
-            </template>
-            <template v-else>
-              Option B
-            </template>
-          </TxRadio>
-
-          <TxRadio value="c" :disabled="type === 'button' ? false : true">
-            <template v-if="type === 'card'">
-              <div class="tx-demo__title">
-                Option C (disabled)
-              </div>
-              <div class="tx-demo__desc">
-                Disabled in non-button types
-              </div>
-            </template>
-            <template v-else>
-              Option C
-            </template>
-          </TxRadio>
-        </TxRadioGroup>
-
-        <div class="tx-demo__meta" style="margin-top: 12px;">
-          selected: {{ value }}
-        </div>
-      </TxCard>
-    </div>
+    <TxRadioGroup v-model="value" :type="type" :indicator-variant="indicatorVariant">
+      <TxRadio value="alpha">Alpha</TxRadio>
+      <TxRadio value="beta">Beta</TxRadio>
+      <TxRadio value="gamma">Gamma</TxRadio>
+    </TxRadioGroup>
   </template>
 ---
 :::
 
+## 交互契约
+
+- `TxRadioGroup` 持有当前选中的原始值，并向子级提供类型、禁用状态和键盘导航。
+- 点击一个启用且未选中的 `TxRadio` 时，该项会触发 `click`，父级会触发 `update:modelValue` / `change`。
+- 点击已经选中的 radio 不会重复触发选择；RadioGroup 始终是单选。
+- group 级 `disabled` 会禁用所有子项；item 级 `disabled` 只禁用当前项。
+- 键盘导航只遍历启用项：方向键循环切换，`Home` / `End` 跳到第一个 / 最后一个启用项。
+- 按钮组会渲染动画指示器。`glass` 和 `blur` 指示器下，`updateOnSettled` 默认等指示器动画收敛后再发出模型更新。
+- `direction` 只影响 `standard` 和 `card`；按钮组始终解析为横向布局。
+
 ## API
 
-### TxRadioGroup
+### TxRadioGroup Props
 
-#### Props
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number` | - | 当前选中的 radio 值。 |
+| `disabled` | `boolean` | `false` | 禁用整组，并阻止键盘选择。 |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 子级 radio 共享的视觉样式。 |
+| `direction` | `'row' \| 'column'` | - | 排列方向。`button` 固定为 row，`standard` 默认 row，`card` 默认 column。 |
+| `indicatorVariant` | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - | 按钮组指示器样式。未传时，`glass` 映射为 `glass`，`blur` 映射为 `blur`，否则为 `solid`。 |
+| `glass` | `boolean` | `false` | `glass` 按钮指示器的快捷开关。 |
+| `blur` | `boolean` | `false` | `blur` 按钮指示器的快捷开关。 |
+| `updateOnSettled` | `boolean` | - | 按钮组下是否等指示器动画收敛后再触发 v-model/change；`glass` 或 `blur` 默认启用。 |
+| `stiffness` | `number` | `110` | 按钮指示器弹簧刚度，数值越高收敛越快。 |
+| `damping` | `number` | `12` | 按钮指示器弹簧阻尼，数值越低越弹。 |
+| `blurAmount` | `number` | `1` | `blur` 指示器的背景模糊强度。 |
+| `elastic` | `boolean` | `true` | 是否启用指示器拉伸/撞击动效。 |
 
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string \| number` | - |
-| disabled | 是否禁用（整组） | `boolean` | `false` |
-| type | 形态：按钮组 / 标准单选 / 卡片 | `'button' \| 'standard' \| 'card'` | `'button'` |
-| direction | 排列方向（button 无效；standard 默认 row；card 默认 column） | `'row' \| 'column'` | - |
-| indicatorVariant | 指示器样式（button 有效） | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
-| glass | 玻璃指示器（button 有效） | `boolean` | `false` |
-| blur | 模糊指示器（button 有效） | `boolean` | `false` |
-| stiffness | 动效刚度（越大越快） | `number` | `110` |
-| damping | 动效阻尼（越大越稳） | `number` | `12` |
-| blurAmount | 模糊强度（blur 有效） | `number` | `1` |
-| elastic | 是否启用弹性形变 | `boolean` | `true` |
+### TxRadioGroup Events
 
-#### Events
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number)` | 启用子项选中新的值时触发。 |
+| `change` | `(value: string \| number)` | 启用选择完成后触发。 |
 
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
-| change | 值变化时触发 | `(value: string \| number) => void` |
-
-#### Keyboard
+### Keyboard
 
 | 按键 | 行为 |
-|--------|------|
-| ArrowRight / ArrowDown | 选择下一个可用单选项。 |
-| ArrowLeft / ArrowUp | 选择上一个可用单选项。 |
-| Home / End | 选择第一个 / 最后一个可用单选项。 |
+|------|------|
+| `ArrowRight` / `ArrowDown` | 选择下一个启用 radio。 |
+| `ArrowLeft` / `ArrowUp` | 选择上一个启用 radio。 |
+| `Home` / `End` | 选择第一个 / 最后一个启用 radio。 |
 
-### TxRadio
+### TxRadio Props
 
-#### Props
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `value` | `string \| number` | - | 选中时写入父级 `TxRadioGroup` 的值。 |
+| `label` | `string` | `''` | 没有默认插槽时的备用可见文本。 |
+| `disabled` | `boolean` | `false` | 禁用当前 radio，并从 group 键盘导航中移除。 |
+| `type` | `'button' \| 'standard' \| 'card'` | `'button'` | 未受 group 控制时的独立视觉样式；在 group 内会继承 group 类型。 |
 
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| value | 当前项的值 | `string \| number` | - |
-| label | 文案（无插槽时） | `string` | `''` |
-| disabled | 是否禁用（单项） | `boolean` | `false` |
-| type | 形态（一般由 group 决定） | `'button' \| 'standard' \| 'card'` | `'button'` |
+### TxRadio Events
 
-#### Events
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `click` | `(value: string \| number)` | 启用且未选中的 radio 通过父级选中自身后触发。 |
 
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| click | 点击（仅在组内变更时触发） | `(value: string \| number) => void` |
+## Source
+<TuffDocSourceLink />

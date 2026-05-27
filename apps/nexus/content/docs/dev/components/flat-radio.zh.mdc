@@ -153,7 +153,59 @@ code: |
 ---
 :::
 
+## 多选模式
+
+设置 `multiple` 后，组件会从单选切换为类似复选的多选行为。
+
+### FlatRadio (multiple)
+:::TuffDemoWrapper{demo="FlatRadioMultipleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref(['mention', 'reply'])
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value" multiple>
+      <TxFlatRadioItem value="mention" label="Mention" icon="i-carbon-at" />
+      <TxFlatRadioItem value="reply" label="Reply" icon="i-carbon-reply" />
+      <TxFlatRadioItem value="archive" label="Archive" icon="i-carbon-archive" />
+      <TxFlatRadioItem value="mute" label="Mute" icon="i-carbon-volume-mute" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
 ## 键盘导航
+
+### FlatRadio (keyboard)
+:::TuffDemoWrapper{demo="FlatRadioKeyboardDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const single = ref('overview')
+  const multiple = ref(['email'])
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="single">
+      <TxFlatRadioItem value="overview" label="Overview" />
+      <TxFlatRadioItem value="activity" label="Activity" />
+      <TxFlatRadioItem value="settings" label="Settings" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="multiple" multiple>
+      <TxFlatRadioItem value="email" label="Email" />
+      <TxFlatRadioItem value="push" label="Push" />
+      <TxFlatRadioItem value="sms" label="SMS" />
+    </TxFlatRadio>
+  </template>
+---
+:::
 
 容器聚焦后可通过键盘控制：
 
@@ -172,7 +224,8 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string \| number` | - |
+| modelValue / v-model | 单选时为单值，多选时为值数组 | `string \| number \| (string \| number)[]` | - |
+| multiple | 是否启用多选模式（开启后隐藏滑动指示器） | `boolean` | `false` |
 | disabled | 是否禁用（整组） | `boolean` | `false` |
 | size | 尺寸 | `'sm' \| 'md' \| 'lg'` | `'md'` |
 | bordered | 是否显示外边框 | `boolean` | `false` |
@@ -181,8 +234,8 @@ code: |
 
 | 事件名 | 说明 | 回调参数 |
 |--------|------|----------|
-| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
-| change | 值变化时触发 | `(value: string \| number) => void` |
+| update:modelValue | 值更新时触发 | `(value: string \| number \| (string \| number)[]) => void` |
+| change | 值变化时触发 | `(value: string \| number \| (string \| number)[]) => void` |
 
 #### Slots
 

@@ -1,50 +1,49 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import type { TxRadioValue } from '@talex-touch/tuffex'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
-const value = ref('')
+const value = ref<TxRadioValue>('week')
+
+const labels = computed(() => {
+  if (locale.value === 'zh') {
+    return {
+      selected: '当前选中',
+      options: [
+        { value: 'day', label: '日' },
+        { value: 'week', label: '周' },
+        { value: 'month', label: '月' },
+      ],
+    }
+  }
+
+  return {
+    selected: 'Selected',
+    options: [
+      { value: 'day', label: 'Day' },
+      { value: 'week', label: 'Week' },
+      { value: 'month', label: 'Month' },
+    ],
+  }
+})
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-      <div class="tx-demo tx-demo__col">
-        <TxRadioGroup v-model="value">
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
+  <div class="tx-demo tx-demo__col">
+    <TxRadioGroup v-model="value">
+      <TxRadio
+        v-for="option in labels.options"
+        :key="option.value"
+        :value="option.value"
+      >
+        {{ option.label }}
+      </TxRadio>
+    </TxRadioGroup>
 
-        <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-          <div class="tx-demo__meta">
-            selected: {{ value }}
-          </div>
-        </TxCard>
+    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
+      <div class="tx-demo__meta">
+        {{ labels.selected }}: {{ value }}
       </div>
-  </div>
-  <div v-else>
-      <div class="tx-demo tx-demo__col">
-        <TxRadioGroup v-model="value">
-          <TxRadio value="a">
-            Option A
-          </TxRadio>
-          <TxRadio value="b">
-            Option B
-          </TxRadio>
-          <TxRadio value="c">
-            Option C
-          </TxRadio>
-        </TxRadioGroup>
-
-        <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-          <div class="tx-demo__meta">
-            selected: {{ value }}
-          </div>
-        </TxCard>
-      </div>
+    </TxCard>
   </div>
 </template>
