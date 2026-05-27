@@ -13,6 +13,20 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify dashboard status component docs
+
+- `apps/nexus/app/components/content/demos/ComponentsOperationsStatusDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{status-badge,progress-bar,stat-card}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable operations status demo that composes `TxStatCard`, `TxStatusBadge`, `TxProgressBar`, `TuffSwitch`, and `TxButton` into a dashboard header pattern.
+  - Marked StatusBadge, ProgressBar, and StatCard docs as reviewed/verified, expanded bilingual API notes, accessibility notes, and dashboard composition examples.
+  - Expanded the Tuffex composition tutorial with operations status and chart sections so dashboard/admin pages have a clearer “status → metric → progress → trend” pattern.
+  - Replaced the Team dashboard credit trend hand-written SVG sparkline with the shared ECharts-backed `DashboardSparklineChart` wrapper.
+
 ### docs(nexus): add Tuffex composition tutorial and chart-backed dashboard sparklines
 
 - `apps/nexus/app/components/content/demos/ComponentsWorkflowPanelDemo.vue`

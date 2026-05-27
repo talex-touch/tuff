@@ -75,9 +75,30 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="将 StatCard、StatusBadge、ProgressBar 与 Switch 组合成后台首屏状态区。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatCard
+        variant="progress"
+        value="99.9%"
+        label="API 可用率"
+        meta="正常"
+        :progress="99"
+        icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
+      />
+      <TxStatusBadge text="审阅完成" status="success" size="sm" />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
+  </template>
+---
+::
+
 ## 教程路径
 
 - 新手先读《[Tuffex 组合界面教程](../getting-started/tuffex-composition.zh.md)》，掌握“操作区 → 状态区 → 数据区”的页面切法。
+- 后台首屏建议从“运营状态面板”模式开始，再按需向下展开表格、趋势图和详情抽屉。
 - 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
 

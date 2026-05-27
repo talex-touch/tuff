@@ -75,9 +75,30 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="Compose StatCard, StatusBadge, ProgressBar, and Switch into a dashboard status header."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatCard
+        variant="progress"
+        value="99.9%"
+        label="API availability"
+        meta="Normal"
+        :progress="99"
+        icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
+      />
+      <TxStatusBadge text="Review done" status="success" size="sm" />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
+  </template>
+---
+::
+
 ## Tutorial Path
 
 - Start with [Composing Tuffex interfaces](../getting-started/tuffex-composition.en.md) to learn the “actions → status → data” page structure.
+- Start dashboard headers from the “Operations status panel” pattern, then expand into tables, trend charts, and detail drawers.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 

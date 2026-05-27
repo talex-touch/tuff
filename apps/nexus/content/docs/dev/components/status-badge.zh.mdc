@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [badge, status, signal]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # StatusBadge 状态徽标
@@ -27,6 +28,24 @@ code: |
     <TxStatusBadge text="警告" status="warning" />
     <TxStatusBadge text="错误" status="danger" />
     <TxStatusBadge text="信息" status="info" />
+  </template>
+---
+::
+
+### 后台运营状态
+
+在 Dashboard 首屏中，`TxStatusBadge` 通常与 `TxStatCard`、`TxProgressBar`、`TuffSwitch` 一起呈现发布、构建与同步状态。
+
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="已通过本地 Nexus 页面截图验证的后台状态组合。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatusBadge text="审阅完成" status="success" size="sm" />
+      <TxStatusBadge text="构建稳定" status="success" os="linux" size="sm" />
+      <TxStatusBadge text="同步健康" status-key="granted" size="sm" />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
   </template>
 ---
 ::
@@ -69,6 +88,12 @@ rows:
 ## 契约说明
 
 显式 `status` 优先于 `statusKey`。`statusKey` 会把 `granted/denied/notDetermined/unsupported` 映射到 success/danger/warning/muted，未知 key 回退到 info。平台图标会渲染在状态图标前；`osOnly` 会隐藏状态图标。点击徽标会触发 `click` 事件。
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue`
+- 建议：状态来自后端枚举时优先传 `statusKey`，页面本地判断时再显式传 `status`。
+- 可访问性：组件使用 `role="status"`；同屏多个徽标时，文本必须能独立表达状态，不依赖颜色。
 
 ## 组合示例
 ### 状态行

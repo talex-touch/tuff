@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [progress, bar, loading]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # ProgressBar
@@ -25,6 +26,21 @@ code: |
     <TxProgressBar :percentage="68" status="warning" show-text />
     <TxProgressBar success message="Done" />
     <TxProgressBar loading message="Syncing" />
+  </template>
+---
+:::
+
+### Dashboard Operations Progress
+Multiple bars can represent release batches, quality checks, and capacity waterlines.
+:::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="Progress bars combine with metric cards and status badges to express dashboard health."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxProgressBar :percentage="86" status="success" height="10px" show-text flow-effect="shimmer" />
+      <TxProgressBar :percentage="72" status="warning" height="10px" show-text flow-effect="wave" />
+      <TxProgressBar :percentage="48" height="10px" show-text indicator-effect="sparkle" />
+    </section>
   </template>
 ---
 :::
@@ -71,8 +87,30 @@ rows:
     type: "'none' | 'shimmer' | 'wave' | 'particles'"
     default: 'none'
     description: 'Flow overlay effect'
+  - name: height
+    type: 'string'
+    default: "'5px'"
+    description: 'Bar height'
+  - name: textPlacement
+    type: "'inside' | 'outside'"
+    default: 'inside'
+    description: 'Text placement'
+  - name: indicatorEffect
+    type: "'none' | 'sparkle'"
+    default: 'none'
+    description: 'Endpoint indicator effect'
+  - name: maskBackground
+    type: "'blur' | 'glass' | 'mask'"
+    default: 'blur'
+    description: 'Track background style'
 ---
 ::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`
+- Recommendation: use `percentage` for known page-level progress; use `loading` or `indeterminate` for unknown-duration work instead of faking a percentage.
+- Accessibility: the component renders `role="progressbar"`; `message` is used as both helper label and visible text.
 
 ## Composite Patterns
 ### Status Panel

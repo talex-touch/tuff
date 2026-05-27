@@ -2,6 +2,7 @@
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPagination, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, reactive, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
+import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 defineI18nRoute(false)
@@ -175,23 +176,6 @@ function formatDateTime(value: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
-function normalizeSparkline(values: number[], width: number, height: number): { line: string, area: string } {
-  if (!values.length) {
-    return { line: '', area: '' }
-  }
-
-  const max = Math.max(1, ...values)
-  const stepX = values.length > 1 ? width / (values.length - 1) : width
-  const points = values.map((value, index) => {
-    const x = Number((index * stepX).toFixed(2))
-    const y = Number((height - (value / max) * height).toFixed(2))
-    return { x, y }
-  })
-  const line = points.map(point => `${point.x},${point.y}`).join(' ')
-  const area = `0,${height} ${line} ${width},${height}`
-  return { line, area }
-}
-
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== 'number')
     return '0'
@@ -211,7 +195,7 @@ function usagePercent(item: { used: number; quota: number }) {
 const creditTrendSparkline = computed(() => {
   const values = creditTrend.value?.values ?? []
   if (!values.length) {
-    return { line: '', area: '', trend: '0%' }
+    return { trend: '0%' }
   }
   const baseline = values[0] ?? 0
   const latest = values[values.length - 1] ?? 0
@@ -219,10 +203,7 @@ const creditTrendSparkline = computed(() => {
   const trend = delta === 0
     ? '0%'
     : `${delta > 0 ? '+' : ''}${Math.round((delta / Math.max(1, baseline || 1)) * 100)}%`
-  const chart = normalizeSparkline(values, 280, 72)
   return {
-    line: chart.line,
-    area: chart.area,
     trend,
   }
 })
@@ -861,16 +842,15 @@ watch(() => creditTab.value, (value) => {
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
                   {{ formatNumber(creditTrend?.totalUsed ?? 0) }}
                 </p>
-                <svg viewBox="0 0 280 72" preserveAspectRatio="none" class="mt-3 h-24 w-full">
-                  <polygon
-                    :points="creditTrendSparkline.area"
-                    style="fill: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);"
-                  />
-                  <polyline
-                    :points="creditTrendSparkline.line"
-                    style="fill: none; stroke: var(--tx-color-primary, #409eff); stroke-width: 2;"
-                  />
-                </svg>
+                <DashboardSparklineChart
+                  class="mt-3"
+                  :values="creditTrend.values"
+                  :labels="creditTrend.days"
+                  :height="96"
+                  color="var(--tx-color-primary, #409eff)"
+                  :aria-label="t('dashboard.team.credits.trendLabel', '最近趋势')"
+                  show-grid
+                />
               </div>
 
               <div v-else class="text-xs text-black/40 dark:text-white/40">
