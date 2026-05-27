@@ -108,6 +108,30 @@ code: |
 ---
 ::
 
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="Compose Toast, Tooltip, LoadingOverlay, and Spinner into one admin feedback path."}
+---
+code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  import { ref } from 'vue'
+
+  const syncing = ref(true)
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxToastHost />
+      <TxTooltip content="Tooltip explains the current action only.">
+        <TxButton @click="toast({ title: 'Sync task queued', duration: 0 })">Send toast</TxButton>
+      </TxTooltip>
+      <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…">
+        <TxSpinner :size="16" />
+      </TxLoadingOverlay>
+    </section>
+  </template>
+---
+::
+
 ::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="Compose SearchInput, SearchSelect, and SearchEmpty into one list-filtering and no-match recovery path."}
 ---
 code: |
@@ -181,6 +205,7 @@ code: |
 - For data lists, use `TxDataTable` for the main body, `TxPagination` for navigation, and `TxSkeleton` / `TxLayoutSkeleton` for waiting states.
 - For settings pages and admin shells, use `TxTabs` for fixed sections, `TxDropdownMenu` / `TxPopover` for lightweight actions and short notes, and `TxDrawer` for dense configuration.
 - Data regions must design loading, empty, and error recovery paths together; prefer `TxLoadingState`, `TxEmptyState`, and `TxErrorState`.
+- Task feedback paths should mount `TxToastHost` for notifications, use `TxTooltip` for action hints, `TxLoadingOverlay` for local blocking refreshes, and `TxSpinner` for inline waiting.
 - Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 

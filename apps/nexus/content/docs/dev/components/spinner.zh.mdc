@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [spinner, loading, progress]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # Spinner 加载
 
@@ -99,3 +100,25 @@ code: |
 | `strokeWidth` | `number` | `2` | 线宽 |
 | `fallback` | `boolean` | `false` | 使用 SVG fallback 样式 |
 | `visible` | `boolean` | `true` | 显示/隐藏（内部 v-if，带 enter/leave 过渡动画） |
+
+## 后台行内等待
+
+`TxSpinner` 用于按钮、行内状态或遮罩内部的短等待。已知进度请优先使用 `TxProgressBar`；整块首屏加载请使用 `TxLoadingState`；只有在等待时间短且不需要百分比时使用 Spinner。
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="Spinner 与 Toast / Tooltip / LoadingOverlay 的截图验证组合。"}
+---
+code: |
+  <template>
+    <span class="inline-flex items-center gap-2">
+      <TxSpinner :size="14" />
+      行内等待
+    </span>
+  </template>
+---
+::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue` 与 `packages/tuffex/packages/components/src/spinner/src/types.ts`。
+- 截图：`.codex-screenshots/nexus-spinner-feedback-task-center-demo-playwright-2026-05-28.png`。
+- 建议：Spinner 不表达完成度；有数值进度时切换为 `TxProgressBar`，有完整恢复路径时切换为 `TxLoadingState`。

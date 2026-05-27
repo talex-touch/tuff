@@ -13,6 +13,18 @@
 
 ## 2026-05-27
 
+### docs(nexus): verify feedback task center demos
+
+- `apps/nexus/app/components/content/demos/ComponentsFeedbackTaskCenterDemo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/{toast,tooltip,loading-overlay,spinner}.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/components/index.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/getting-started/tuffex-composition.{zh,en}.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a screenshot-verifiable dashboard task feedback demo that composes `TxToastHost`, `TxTooltip`, `TxLoadingOverlay`, `TxSpinner`, `TxStatusBadge`, `TxProgressBar`, `TxTag`, `TuffSwitch`, and `TxButton`.
+  - Marked Toast, Tooltip, LoadingOverlay, and Spinner docs as reviewed/verified with source references, interaction contracts, and admin feedback guidance.
+  - Expanded the Tuffex composition tutorial with a task feedback path so Dashboard/Admin pages separate short feedback, action hints, local blocking refreshes, and inline waiting.
+
 ### docs(nexus): verify navigation shell demos
 
 - `apps/nexus/app/components/content/demos/ComponentsNavigationShellDemo.vue`

@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [toast, feedback, status]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # Toast 提示
@@ -57,6 +58,45 @@ code: |
 - `duration > 0` 时自动关闭，`duration: 0` 时保持显示直到调用 `dismissToast(id)` 或 `clearToasts()`。
 - 传入相同 `id` 会替换现有 toast，避免重复堆叠同一业务提示。
 
+## 后台反馈中心
+
+`TxToastHost` 建议只在应用或页面根部挂一次；业务动作通过 `toast()` 触发，常驻提示用稳定 `id + duration: 0`，避免同一队列状态重复堆叠。后台任务中心里，Toast 负责短反馈，`TxTooltip` 解释动作，`TxLoadingOverlay` 阻断局部刷新，`TxSpinner` 承担行内等待。
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="截图验证的 Toast / Tooltip / LoadingOverlay / Spinner 组合。"}
+---
+code: |
+  <script setup lang="ts">
+  import { clearToasts, toast } from '@talex-touch/tuffex/utils'
+  import { ref } from 'vue'
+
+  const syncing = ref(true)
+
+  function showFeedbackToast() {
+    toast({
+      id: 'feedback-task-center',
+      title: '同步任务已排队',
+      description: '将在 2 分钟内完成截图核验。',
+      variant: 'warning',
+      duration: 0,
+    })
+  }
+  </script>
+
+  <template>
+    <section class="grid gap-3">
+      <TxToastHost />
+      <TxTooltip content="Tooltip 只解释当前动作。">
+        <TxButton @click="showFeedbackToast">发送提示</TxButton>
+      </TxTooltip>
+      <TxLoadingOverlay :loading="syncing" text="正在刷新任务队列…">
+        <TxSpinner :size="16" />
+      </TxLoadingOverlay>
+      <TxButton variant="ghost" @click="clearToasts()">清空提示</TxButton>
+    </section>
+  </template>
+---
+:::
+
 ### dismissToast / clearToasts
 
 从 `@talex-touch/tuffex/utils` 导入：
@@ -67,3 +107,9 @@ code: |
   import { dismissToast, clearToasts } from '@talex-touch/tuffex/utils'
 ---
 ::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/toast/src/TxToastHost.vue` 与 `packages/tuffex/packages/utils/toast.ts`。
+- 截图：`.codex-screenshots/nexus-toast-feedback-task-center-demo-playwright-2026-05-28.png`。
+- 建议：应用根部挂载 `TxToastHost`，业务层只调用 `toast` / `dismissToast` / `clearToasts`；常驻任务提示必须提供稳定 `id`。

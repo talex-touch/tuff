@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [loading, overlay, mask]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # LoadingOverlay
 
@@ -56,3 +57,27 @@ code: |
 | `text` | `string` | `''` | Optional message displayed below the spinner. |
 | `spinnerSize` | `number` | `18` | Spinner size in pixels. |
 | `background` | `string` | - | CSS background used for the overlay mask. |
+
+## Dashboard Task Overlay
+
+Use `TxLoadingOverlay` for short waits that block one data container while it refreshes. Do not use it as a replacement for first-load screens; use `TxLoadingState` for first-load states. For table refreshes or task queue recalculation, keep the underlying content visible so the layout does not jump.
+
+::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified local LoadingOverlay with Toast / Tooltip / Spinner."}
+---
+code: |
+  <template>
+    <TxLoadingOverlay :loading="true" text="Refreshing task queue…" :spinner-size="22">
+      <section class="grid gap-2">
+        <TxProgressBar :percentage="72" status="warning" />
+        <TxProgressBar :percentage="96" status="success" />
+      </section>
+    </TxLoadingOverlay>
+  </template>
+---
+::
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue`.
+- Screenshot: `.codex-screenshots/nexus-loading-overlay-feedback-task-center-demo-playwright-2026-05-28.png`.
+- Recommendation: use container overlays for local async refreshes; reserve fullscreen overlays for flows that must block global interaction.
