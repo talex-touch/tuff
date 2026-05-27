@@ -2,7 +2,8 @@
 title: "StatCard"
 description: "Metric card for values, insights, and progress summaries."
 category: Data
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # StatCard
 
@@ -169,6 +170,30 @@ code: |
 ---
 ::
 
+### Dashboard Operations Panel
+
+`TxStatCard` can compose with `TxStatusBadge` and `TxProgressBar` to form a dashboard status header for API availability, pending queues, and alerts.
+
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="A dashboard composition with metric cards, status badges, and progress bars."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatCard
+        variant="progress"
+        value="99.9%"
+        label="API availability"
+        meta="Normal"
+        :progress="99"
+        icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
+      />
+      <TxStatusBadge text="Review done" status="success" size="sm" />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### Props
@@ -203,3 +228,9 @@ code: |
 | `value` | Custom value area. |
 | `label` | Custom label area. |
 | `meta` | Meta line for progress variant. |
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
+- Recommendation: use the default variant for plain metrics, `insight` for deltas, and `variant="progress"` for bounded health or capacity values.
+- Accessibility: the root renders `role="group"`; provide nearby heading/context in dashboards so users are not left with bare numbers.

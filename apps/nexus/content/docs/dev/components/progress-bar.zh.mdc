@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [progress, bar, loading]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # ProgressBar 进度条
@@ -25,6 +26,21 @@ code: |
     <TxProgressBar :percentage="68" status="warning" show-text />
     <TxProgressBar success message="完成" />
     <TxProgressBar loading message="同步中" />
+  </template>
+---
+:::
+
+### 后台运营进度
+多条进度可组合成发布批次、质量检查、容量水位等后台状态。
+:::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="进度条与指标卡、状态徽标共同表达后台健康度。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxProgressBar :percentage="86" status="success" height="10px" show-text flow-effect="shimmer" />
+      <TxProgressBar :percentage="72" status="warning" height="10px" show-text flow-effect="wave" />
+      <TxProgressBar :percentage="48" height="10px" show-text indicator-effect="sparkle" />
+    </section>
   </template>
 ---
 :::
@@ -71,8 +87,30 @@ rows:
     type: "'none' | 'shimmer' | 'wave' | 'particles'"
     default: 'none'
     description: '流动效果'
+  - name: height
+    type: 'string'
+    default: "'5px'"
+    description: '进度条高度'
+  - name: textPlacement
+    type: "'inside' | 'outside'"
+    default: 'inside'
+    description: '文本位置'
+  - name: indicatorEffect
+    type: "'none' | 'sparkle'"
+    default: 'none'
+    description: '进度端点效果'
+  - name: maskBackground
+    type: "'blur' | 'glass' | 'mask'"
+    default: 'blur'
+    description: '轨道背景风格'
 ---
 ::
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue`
+- 建议：页面级进度优先传 `percentage`；未知时长任务使用 `loading` 或 `indeterminate`，不要伪造百分比。
+- 可访问性：组件内部使用 `role="progressbar"`；`message` 会作为辅助标签与可见文案使用。
 
 ## 组合示例
 ### 状态面板

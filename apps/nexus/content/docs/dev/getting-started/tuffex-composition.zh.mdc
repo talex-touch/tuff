@@ -61,16 +61,68 @@ code: |
 ---
 ::
 
-## 3. 审阅检查清单
+## 3. 运营状态首屏
+
+Dashboard / Admin 页面通常先让用户判断“系统是否健康”。首屏建议按下面顺序组织：
+
+| 层级 | 组件 | 使用要点 |
+|------|------|----------|
+| 标题层 | 原生标题 + `TxButton` | 标题说明当前运营范围，右侧只放一个主刷新/发布操作 |
+| 状态层 | `TxStatusBadge` | 用文字表达状态，不只依赖颜色 |
+| 指标层 | `TxStatCard` | 默认展示数字，健康度/容量使用 `variant="progress"` |
+| 进度层 | `TxProgressBar` | 已知百分比用 `percentage`，未知时长用 `loading` |
+
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="适合作为后台页面首屏的状态、指标和进度组合。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatusBadge text="审阅完成" status="success" />
+      <TxStatCard
+        variant="progress"
+        value="99.9%"
+        label="API 可用率"
+        meta="正常"
+        :progress="99"
+      />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
+  </template>
+---
+::
+
+## 4. 趋势图区
+
+后台页的趋势图优先复用 `DashboardSparklineChart` / `DashboardMetricChart`，不要在页面里写一次性 `svg` 折线。这样可以统一 tooltip、暗色主题、ResizeObserver 和空态表现。
+
+::TuffDemoWrapper{demo="ComponentsDashboardSparklineDemo" code-lang="vue" title="后台趋势图" description="ECharts 封装后的轻量趋势图。"}
+---
+code: |
+  <script setup lang="ts">
+  import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
+  </script>
+
+  <template>
+    <DashboardSparklineChart
+      :values="[18, 24, 21, 36, 42, 38, 54]"
+      color="var(--tx-color-primary, #409eff)"
+      show-grid
+    />
+  </template>
+---
+::
+
+## 5. 审阅检查清单
 
 - **单一主动作**：每个面板只保留一个最高权重按钮，其余操作使用 `secondary` / `ghost`。
 - **状态同步**：表格选择、进度条、徽标文字必须来自同一组响应式数据，避免重复常量。
 - **空态可见**：没有数据时使用空态组件，不展示空白表格。
 - **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
-## 4. 继续阅读
+## 6. 继续阅读
 
 - [Tuffex 组件总览](../components/index.zh.md)
+- [StatCard 指标卡片](../components/stat-card.zh.md)
 - [DataTable 数据表格](../components/data-table.zh.md)
 - [StatusBadge 状态徽标](../components/status-badge.zh.md)
 - [ProgressBar 进度条](../components/progress-bar.zh.md)

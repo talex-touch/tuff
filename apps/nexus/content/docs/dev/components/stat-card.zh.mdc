@@ -2,7 +2,8 @@
 title: "StatCard 指标卡片"
 description: "用于展示一个数字/指标与对应描述。"
 category: Data
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 # StatCard 指标卡片
 
@@ -169,6 +170,30 @@ code: |
 ---
 ::
 
+### 后台运营面板
+
+`TxStatCard` 可与 `TxStatusBadge`、`TxProgressBar` 组合成后台首屏状态区，适合展示 API 可用率、待处理队列和告警数量。
+
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="运营状态面板" description="指标卡、状态徽标与进度条的后台组合示例。"}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatCard
+        variant="progress"
+        value="99.9%"
+        label="API 可用率"
+        meta="正常"
+        :progress="99"
+        icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
+      />
+      <TxStatusBadge text="审阅完成" status="success" size="sm" />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
+  </template>
+---
+::
+
 ## API
 
 ### Props
@@ -203,3 +228,9 @@ code: |
 | `value` | 自定义数值区域 |
 | `label` | 自定义标题区域 |
 | `meta` | 进度变体底部说明 |
+
+## 审阅说明
+
+- 源码：`packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
+- 建议：普通指标使用默认变体，增减趋势使用 `insight`，0-100 边界明确的健康度/容量使用 `variant="progress"`。
+- 可访问性：组件根节点使用 `role="group"`；在 Dashboard 中应给相邻标题或上下文，避免只显示裸数字。

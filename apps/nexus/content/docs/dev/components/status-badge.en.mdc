@@ -5,7 +5,8 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [badge, status, signal]
-syncStatus: migrated
+syncStatus: reviewed
+verified: true
 ---
 
 # StatusBadge
@@ -28,6 +29,24 @@ code: |
     <TxStatusBadge text="Warning" status="warning" />
     <TxStatusBadge text="Error" status="danger" />
     <TxStatusBadge text="Info" status="info" />
+  </template>
+---
+::
+
+### Dashboard Operations Status
+
+In dashboard headers, `TxStatusBadge` usually works with `TxStatCard`, `TxProgressBar`, and `TuffSwitch` to summarize release, build, and sync health.
+
+::TuffDemoWrapper{demo="ComponentsOperationsStatusDemo" code-lang="vue" title="Operations status panel" description="A dashboard status composition verified on the local Nexus page."}
+---
+code: |
+  <template>
+    <section class="grid gap-3">
+      <TxStatusBadge text="Review done" status="success" size="sm" />
+      <TxStatusBadge text="Build stable" status="success" os="linux" size="sm" />
+      <TxStatusBadge text="Sync healthy" status-key="granted" size="sm" />
+      <TxProgressBar :percentage="86" status="success" show-text />
+    </section>
   </template>
 ---
 ::
@@ -70,6 +89,12 @@ rows:
 ## Contract
 
 Explicit `status` takes precedence over `statusKey`. `statusKey` maps `granted/denied/notDetermined/unsupported` to success/danger/warning/muted, and unknown keys fall back to info. Platform icons render before the tone icon; `osOnly` hides the tone icon. The badge emits `click` when clicked.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue`
+- Recommendation: prefer `statusKey` for backend status enums; use explicit `status` for page-local decisions.
+- Accessibility: the component uses `role="status"`; badge text must express the state without relying on color alone.
 
 ## Composite Patterns
 
