@@ -2,6 +2,11 @@
 
 ## [Unreleased] - 2026-05-21
 
+### 🚀 发布链路
+
+- 修复 `@talex-touch/tuffex@0.3.7` 发布前的 lockfile specifier 不一致问题，确保 `pnpm install --frozen-lockfile`、构建与发布 manifest 校验可复现。
+- 补齐 Tuffex CI/Publish workflow 对 `pnpm-lock.yaml` 与 workspace catalog 变更的触发，避免依赖规格修复漏跑包级流水线。
+
 ### 📚 文档站修复
 
 - 修复组件文档中 `ApiSpecTable` 内联对象数组导致的 VitePress 构建失败，改为在 `<script setup>` 中声明数据后引用。

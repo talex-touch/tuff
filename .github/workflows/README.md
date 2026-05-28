@@ -82,11 +82,11 @@ This is a reusable workflow that can be called by other workflows to standardize
   - Requires repository secret `NPM_TOKEN` with publish permission for the `@talex-touch` scope
 
 - **`package-tuffex-ci.yml`** - CI for `@talex-touch/tuffex`
-  - Triggers on changes to `packages/tuffex/**`
+  - Triggers on changes to `packages/tuffex/**`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, or package CI workflow files
   - Runs build process
 
 - **`package-tuffex-publish.yml`** - Publish for `@talex-touch/tuffex`
-  - Triggers on `packages/tuffex/**` changes or workflow changes (push to `main` / `master`)
+  - Triggers on `packages/tuffex/**`, `pnpm-lock.yaml`, workspace catalog, publish scripts, or workflow changes (push to `main` / `master`)
   - Publishes when the current version is missing from npm, even if the package version did not change relative to the pushed base
   - Builds and publishes to npm with `latest` / `next` dist-tag selection
   - Skips when the target version already exists on npm
