@@ -1,6 +1,6 @@
 {
   "name": "@talex-touch/core-app",
-  "version": "2.4.11-beta.4",
+  "version": "2.4.11-beta.5",
   "private": true,
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
@@ -22,6 +22,7 @@
     "start": "electron-vite preview",
     "dev": "node scripts/dev-electron-wrapper.mjs",
     "build": "pnpm run typecheck && electron-vite build",
+    "build:vite": "electron-vite build",
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -41,6 +42,7 @@
     "build:release:win": "node scripts/build-target.js --target=win --type=release",
     "build:release:mac": "node scripts/build-target.js --target=mac --type=release",
     "build:release:linux": "node scripts/build-target.js --target=linux --type=release",
+    "perf:bundle:size": "node scripts/bundle-size-report.mjs",
     "startup:bench:dev": "node \"scripts/startup-benchmark-dev.mjs\" --mode run --runs 30 --continueOnFail",
     "startup:bench:packaged:hot": "node \"scripts/startup-benchmark-dev.mjs\" --target packaged --profile hot --mode run --runs 10 --continueOnFail",
     "startup:bench:packaged:cold": "node \"scripts/startup-benchmark-dev.mjs\" --target packaged --profile cold --mode run --runs 10 --continueOnFail",

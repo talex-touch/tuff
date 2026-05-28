@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-05-27
+> 更新时间：2026-05-28
 > 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
 
 ## 主入口
@@ -15,9 +15,10 @@
 
 ## 当前状态快照
 
-- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前 beta 已发布到 `2.4.11-beta.4`，release matrix、GitHub Release 创建与 Nexus prerelease sync 已通过。
+- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前已发布 beta 为 `2.4.11-beta.4`，`2.4.11-beta.5` candidate 已准备，等待 release workflow 创建 GitHub Release 与 Nexus prerelease sync。
 - 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS release-blocking 回归；Linux best-effort。CoreBox app launch handoff 已补 immediate hide，避免慢启动期间 launcher 可见卡死；AI compat 生产退役端点已钉住 HTTP `410` 与迁移目标，不再返回可消费占位 payload。
 - 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR；Workflow/Skills/Automation 保持 Beta。
+- CoreApp 性能当前切片：2026-05-28 已新增启动、CoreBox 搜索、常驻 CPU/内存、构建与包体的第一轮性能基线执行计划，并新增 `build:vite` 与 `perf:bundle:size` 分析入口；当前不改变 `build`、`quality:pr` 或 `quality:release` 门禁。
 - Nexus/Tuffex 文档当前切片：2026-05-27 已新增 Tuffex 组合界面教程、组件总览组合 Demo 与 ECharts-backed dashboard sparkline 通用组件，Credits/Storage/Overview 小趋势图已从手写 SVG 收敛为图表封装；后续继续按“组件页审阅 + 真实截图证据”分批推进。
 - 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），当前临时 master 已在干净依赖 worktree 通过 `pnpm quality:pr`（changed-file lint、`test:targeted`、CoreApp node/web typecheck）；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，本轮已补 CoreBox app launch immediate-hide、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint 410 合同测试；2026-05-22 已继续推进 Assistant 剪贴板图片翻译 typed event、`smoke:assistant` 悬浮球/VoicePanel 可见入口 smoke、推荐上下文来源开关、可选 AI embedding/rerank fail-open 测试、壁纸个性化、设置页资产兼容提示、统一网络/代理高级设置入口、TuffEx 基础组件文档覆盖与 Nexus storage/upload lifecycle governance telemetry 与 telemetry-to-governance analytics 写入链路；2026-05-25 已完成 Nexus Data Governance / Provider Registry admin hydration 与 i18n 稳定化，focused governance test、file-scoped ESLint、`git diff --check` 与 `pnpm nexus:build` 通过；同日 `v2.4.11-beta.4` release workflow、GitHub Release、Nexus BETA latest 与 Cloudflare Pages `tuff` 生产部署已验证成功；同日 UI/兼容/占位/架构审计未发现新的 P0 fixed fake-success，但确认 legacy retained aliases、旧 snippets placeholder 插件、Nexus memory fallback 证据分层、preload debug `innerHTML`、dialog `v-html` 与 TuffEx visual smoke 是下一批高信号治理点；2026-05-26 已收口 preload debug panel 运行时日志安全渲染与同段 debug console 噪音；npm 公共包发布已新增 `publish:check` / packed manifest 防污染门禁，`@talex-touch/tuffex@0.3.7` 已清理 `catalog:` 依赖并等待具备 `@talex-touch` scope publish 权限的 `NPM_TOKEN` 发布；Data Governance 已有本地 Wrangler/Miniflare seeded admin 认证浏览器证据，但生产/preview 认证 operator evidence、live send、live object storage、production D1 migration/backfill 与真实 provider quota 仍未闭环；`touch-browser-bookmarks` 与 `touch-browser-data` 外链打开已纳入 `network.internet` capability 口径，展示期只做 non-mutating permission check，执行期 request/block；`touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍按全仓 lint/build 另行收口，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准。
 
@@ -44,6 +45,7 @@
 - `docs/plan-prd/report/cross-platform-compat-placeholder-incremental-audit-2026-05-19.md` - 跨平台兼容、占位实现与架构健壮性增量审计。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md` - 跨平台兼容、占位实现与架构健壮性自动化审计。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-25.md` - 跨平台兼容、占位实现、UI 适配与架构健壮性审计。
+- `docs/plan-prd/04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md` - CoreApp 启动、CoreBox 搜索、常驻 CPU/内存、构建与包体第一轮性能基线与优化门槛。
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析。
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md` - 当前 2.4.11 稳定化、插件 capability 与后续 Intelligence 小切片执行顺序。
 - `docs/plan-prd/04-implementation/ActiveGoalBranchCleanup-2026-05-23.md` - 当前 goal 进度与截图分支清理记录。

@@ -429,7 +429,6 @@ function pulsePanelSurfaceMoving(duration = 96) {
 function settleOpenVisualStateForFollow() {
   const clip = clipRef.value
   const content = contentRef.value
-  const arrowEl = arrowRef.value
   if (!clip || !content || !hasWindow())
     return
 

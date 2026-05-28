@@ -1,11 +1,12 @@
 # Talex Touch - 项目文档中心
 
-> 更新时间：2026-05-26
+> 更新时间：2026-05-28
 > 定位：PRD / 规划主入口。历史长文已下沉到 `CHANGES` 与专题文档；当前执行项以 `TODO.md` 为准。
 
 ## 快速入口
 
 - [项目待办（2 周主清单）](./TODO.md)
+- [CoreApp 性能基线与优化执行计划](./04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md)
 - [产品总览与路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)
 - [变更日志（近 30 天 + 历史归档）](./01-project/CHANGES.md)
 - [文档质量基线](./docs/PRD-QUALITY-BASELINE.md)
@@ -14,7 +15,7 @@
 
 ## 当前单一口径
 
-- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前 beta 已发布到 `2.4.11-beta.4`，GitHub release matrix、Release 创建与 Nexus prerelease sync 已通过。
+- 当前基线：`2.4.10`（GitHub Release 与 Nexus release metadata sync 已成功）；当前已发布 beta 为 `2.4.11-beta.4`，`2.4.11-beta.5` candidate 已准备，等待 GitHub release matrix、Release 创建与 Nexus prerelease sync。
 - 当前主线：`2.4.11` 关闭或显式降权剩余 legacy/compat/size 债务，补齐 Windows/macOS 阻塞级回归；Linux 保持 documented best-effort。CoreBox app launch handoff 已补 immediate hide，避免慢启动期间 launcher 可见卡死；AI compat 生产退役端点已钉住 HTTP `410` 与迁移目标，不再返回可消费占位 payload。
 - 下一版本门槛：`2.5.0` AI 桌面入口收口，Stable 只承诺文本 + OCR，Workflow/Skills/Automation 保持 Beta。
 - 质量现状：PR lint 已收敛为 changed-file lint；`file-provider.ts` 编译边界已恢复（完整 `fileProvider` 导出），当前临时 master 已在干净依赖 worktree 通过 `pnpm quality:pr`（changed-file lint、`test:targeted`、CoreApp node/web typecheck）；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，本轮已补 CoreBox app launch immediate-hide、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint 410 合同测试；2026-05-22 已继续推进 Assistant 剪贴板图片翻译 typed event、`smoke:assistant` 悬浮球/VoicePanel 可见入口 smoke、推荐上下文来源开关、可选 AI embedding/rerank fail-open 测试、壁纸个性化、设置页资产兼容提示、统一网络/代理高级设置入口、TuffEx 基础组件文档覆盖与 Nexus storage/upload lifecycle governance telemetry 与 telemetry-to-governance analytics 写入链路；2026-05-25 已完成 Nexus Data Governance / Provider Registry admin hydration 与 i18n 稳定化，并通过 focused governance test、file-scoped ESLint、`git diff --check` 与 `pnpm nexus:build`；同日 `v2.4.11-beta.4` 三端 release workflow、GitHub Release、Nexus BETA latest 与 Cloudflare Pages `tuff` 生产部署均已恢复；同日 UI/兼容/占位/架构审计未发现新的 P0 fixed fake-success，但把 legacy retained aliases、旧 snippets placeholder 插件、Nexus memory fallback 证据分层、preload debug `innerHTML`、dialog `v-html` 与 TuffEx visual smoke 标为后续高信号治理项；2026-05-26 已将 preload debug panel 运行时日志改为 `createElement` + `textContent` 安全渲染，并清理同段 debug console 噪音；Data Governance 本地 Wrangler/Miniflare 认证浏览器证据已补到 cockpit 可见，但生产/preview 认证 operator evidence、live send、live object storage、production D1 migration/backfill 与真实 provider quota 仍未闭环；`touch-browser-bookmarks` 与 `touch-browser-data` 外链打开已纳入 `network.internet` capability 口径，展示期只做 non-mutating permission check，执行期 request/block；`touch-snipaste` shell capability、`touch-window-presets` 展示期权限请求、Browser Data source-level diagnostics、widget runtime sandbox、裸 console 与 SRP 大文件仍是优先治理点；`quality:release` 仍按全仓 lint/build 另行收口，需记录最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，治理以 `quality:pr`、`quality:release`、Windows acceptance verifier、最近路径测试与人工清单为准；npm 公共子包发布仍因 `NPM_TOKEN` 无法 publish `@talex-touch` scope 阻塞。
@@ -39,7 +40,7 @@
 - CLI token 与插件 provider secret storage 收口：文件权限缓解与 `usePluginSecret()` 迁移已推进；CoreApp secure-store 已优先 Electron `safeStorage`，Credential Locker/libsecret 与遗留 secret evidence 仍待闭环。
 - 插件 shell/OS/network capability 诊断统一：`touch-browser-bookmarks` 与 `touch-browser-data` 已完成 `network.internet` 展示期 metadata 与执行期 request/block。
 - Transport Wave A retained alias/hard-cut 继续推进。
-- CoreApp 启动异步化真机 benchmark 与长尾补证。
+- CoreApp 启动异步化真机 benchmark 与长尾补证；2026-05-28 已新增性能基线执行计划，先采集启动、CoreBox、runtime 与 build/package 数据，不改变 release gate。
 - 公共 npm 子包补发：`@talex-touch/tuffex@0.3.6` 已 bump 并等待 `.github/workflows/package-tuffex-publish.yml` 在 `master` push 后通过仓库 `NPM_TOKEN` 自动发布（本地 build 与 npm dry-run 已通过，本机无 npm publish 权限）；`@talex-touch/utils@1.0.50`、`@talex-touch/unplugin-export-plugin@1.2.16`、`@talex-touch/tuff-cli@0.0.3`、`@talex-touch/tuff-core@0.0.1`、`@talex-touch/tuff-intelligence@0.0.2` 仍需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
 
 ### P1+
@@ -82,6 +83,7 @@
 - [跨平台兼容、占位实现与架构健壮性增量审计](./report/cross-platform-compat-placeholder-incremental-audit-2026-05-19.md)
 - [跨平台兼容、占位实现与架构健壮性自动化审计](./report/cross-platform-compat-placeholder-automation-audit-2026-05-20.md)
 - [跨平台兼容、占位实现、UI 适配与架构健壮性审计](./report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-25.md)
+- [CoreApp 性能基线与优化执行计划](./04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md)
 - [CoreApp 启动异步化与首屏卡顿分析](./report/coreapp-startup-async-blocking-analysis-2026-05-13.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)
 - [v2.4.7 发版收口清单（historical）](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)

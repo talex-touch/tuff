@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-27
+> 更新时间：2026-05-28
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -12,6 +12,27 @@
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
 ## 2026-05-28
+
+### fix(tuffex): unblock beta typecheck readiness
+
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+  - Removed an unused BaseAnchor local variable surfaced by CoreApp `typecheck` during the `2.4.11-beta.5` readiness pass.
+  - Kept behavior unchanged; this only restores the current typecheck path for the beta candidate.
+
+### docs(coreapp): add performance baseline execution plan
+
+- `apps/core-app/package.json`
+- `apps/core-app/scripts/bundle-size-report.mjs`
+- `docs/plan-prd/04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md`
+- `docs/plan-prd/04-implementation/README.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the first-round CoreApp performance baseline plan covering startup, CoreBox search, runtime CPU/memory, and build/package size.
+  - Added `build:vite` for quick bundle analysis and `perf:bundle:size` for existing artifact size reports without changing `build`, `quality:pr`, or `quality:release`.
+  - Registered low-risk optimization ranking and high-risk refactor gates before any runtime behavior changes.
 
 ### ci(tuffex): restore 0.3.7 publish gate
 
