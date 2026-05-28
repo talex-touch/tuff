@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - 'packages/tuffex/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - '.github/workflows/package-tuffex-ci.yml'
       - '.github/workflows/package-ci.yml'
   push:
@@ -15,6 +17,10 @@ on:
       - main
     paths:
       - 'packages/tuffex/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/package-tuffex-ci.yml'
+      - '.github/workflows/package-ci.yml'
 
 jobs:
   ci:

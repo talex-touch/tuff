@@ -11,6 +11,23 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-28
+
+### ci(tuffex): restore 0.3.7 publish gate
+
+- `pnpm-lock.yaml`
+- `.github/workflows/package-tuffex-ci.yml`
+- `.github/workflows/package-tuffex-publish.yml`
+- `.github/workflows/README.md`
+- `packages/tuffex/CHANGELOG.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - Fixed the `@talex-touch/tuffex@0.3.7` publish blocker by aligning the lockfile specifiers for `gsap` and `sass` with the publish-safe concrete semver ranges already declared in `packages/tuffex/package.json`.
+  - Expanded Tuffex CI/Publish path filters to include `pnpm-lock.yaml` and `pnpm-workspace.yaml`, so dependency specifier/catalog fixes rerun the package build and publish workflows.
+  - Verified locally with `CI=true pnpm install --frozen-lockfile`, `pnpm -C "packages/tuffex" run build`, and `node scripts/validate-publish-manifests.mjs --filter "@talex-touch/tuffex" --pack`.
+
 ## 2026-05-27
 
 ### docs(nexus): verify release policy form demos

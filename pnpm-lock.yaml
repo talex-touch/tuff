@@ -1044,7 +1044,7 @@ importers:
         specifier: ^3.4.1
         version: 3.4.1
       gsap:
-        specifier: 'catalog:'
+        specifier: ^3.15.0
         version: 3.15.0
       marked:
         specifier: ^12.0.2
@@ -1099,7 +1099,7 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0
       sass:
-        specifier: 'catalog:'
+        specifier: ^1.99.0
         version: 1.99.0
       search-insights:
         specifier: ^2.17.3
