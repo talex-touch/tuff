@@ -1,6 +1,6 @@
 # 04-implementation 状态索引
 
-> 更新时间: 2026-05-23
+> 更新时间: 2026-05-28
 > 状态: 目录清点完成 / 持续维护
 > 用途: 只做实施文档的入口与有效状态判定；当前发布 gate 仍以 `../TODO.md`、`../01-project/CHANGES.md` 与对应专题 PRD 为准。
 
@@ -24,6 +24,7 @@
 | `NexusDeviceAuthRiskControl-260316.md` | 当前参考 / 非当前主线 | Phase 0/1 已落地并保留证据入口；后续只在设备授权风控变化时更新。 |
 | `NexusLocaleBackfillRunbook-260226.md` | Runbook / 历史操作入口 | 生产回填前必须重新确认 DB、环境、备份、凭证与回滚窗口。 |
 | `PerformanceLag260111.md` | 历史参考 | 卡顿归因与 Worker/Idle 方向可追溯；真实 release 验收仍看 search trace 与 clipboard stress evidence。 |
+| `performance/CoreAppPerformanceBaseline-2026-05-28.md` | 当前参考 | CoreApp 启动、CoreBox 搜索、常驻 CPU/内存、构建与包体的第一轮性能基线方案；只定义指标、采集命令、低风险优化排序与高风险重构门槛，不替代真实设备 benchmark 或 release gate。 |
 | `Quality260111.md` | 历史参考 | 质量审查快照；后续治理以当前 lint/typecheck/test、超长文件治理与 TODO 债务池为准。 |
 | `QualityAnalysis260111.md` | 历史参考 / 部分落地 | 环境工具抽离已部分落地；新增治理需先复核当前 `@talex-touch/utils/env` 使用面。 |
 | `SqliteRetryRetrier260222.md` | 实施草案 | 继续推进前需先对照当前 `sqlite-retry` 与 `createRetrier` 实现，避免重复迁移。 |
