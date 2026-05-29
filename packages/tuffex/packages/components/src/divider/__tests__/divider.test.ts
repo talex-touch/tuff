@@ -35,4 +35,29 @@ describe('txDivider', () => {
     expect(wrapper.classes()).toContain('tx-divider--vertical')
     expect(wrapper.find('.tx-divider__text').exists()).toBe(false)
   })
+
+  it('renders gradient divider modes', () => {
+    const both = mount(TxDivider, {
+      props: {
+        gradient: true,
+      },
+    })
+    const end = mount(TxDivider, {
+      props: {
+        gradient: 'end',
+      },
+    })
+    const vertical = mount(TxDivider, {
+      props: {
+        direction: 'vertical',
+        gradient: 'start',
+      },
+    })
+
+    expect(both.classes()).toContain('tx-divider--gradient')
+    expect(both.classes()).toContain('tx-divider--gradient-both')
+    expect(end.classes()).toContain('tx-divider--gradient-end')
+    expect(vertical.classes()).toContain('tx-divider--vertical')
+    expect(vertical.classes()).toContain('tx-divider--gradient-start')
+  })
 })
