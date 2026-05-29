@@ -3187,6 +3187,8 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "App Launch Failed",
     "appLaunchFailedBody": "Failed to launch {name}\n{error}",
+    "fileIndexRebuildCompleteTitle": "File Index Rebuild Complete",
+    "fileIndexRebuildCompleteBody": "Manual file index rebuild has completed and search results are up to date.",
     "pluginInstallSuccessTitle": "Plugin Added",
     "pluginInstallSuccessBody": "Added {name} to your plugin list.",
     "pluginInstallExistsTitle": "Plugin Already Added",

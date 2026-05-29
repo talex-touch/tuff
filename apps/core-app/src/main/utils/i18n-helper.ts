@@ -34,7 +34,7 @@ const i18nLog = createLogger('I18n')
  * Initialize i18n with system locale and register IPC handler
  */
 export function initI18n(): void {
-  const systemLocale = app.getLocale()
+  const systemLocale = typeof app.getLocale === 'function' ? app.getLocale() : 'zh-CN'
   currentLocale = resolveLocale(systemLocale)
   i18nLog.info(`Initialized with locale: ${currentLocale} (system: ${systemLocale})`)
 }

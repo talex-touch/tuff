@@ -37,6 +37,7 @@ export interface UIViewStateResponse {
 }
 
 const keyTransportLog = createLogger('CoreBox').child('KeyTransport')
+const BLOCKED_FUNCTION_KEY_PATTERN = /^F(?:[1-9]|1\d|2[0-4])$/
 
 /**
  * Handles keyboard event forwarding from CoreBox renderer to plugin UI views.
@@ -91,6 +92,11 @@ class CoreBoxKeyTransport {
    * @param event - The forwarded keyboard event data
    */
   private handleKeyEvent(event: ForwardedKeyEvent): void {
+    if (BLOCKED_FUNCTION_KEY_PATTERN.test(event.key)) {
+      keyTransportLog.debug(`Key event ignored: blocked function key ${event.key}`)
+      return
+    }
+
     if (!windowManager.isUIViewActive()) {
       keyTransportLog.debug('Key event ignored: no active UI view')
       return

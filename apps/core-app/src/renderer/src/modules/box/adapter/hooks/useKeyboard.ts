@@ -186,6 +186,11 @@ const ALT_FORWARD_KEYS = new Set(['Backspace', 'Delete', 'ArrowLeft', 'ArrowRigh
  * These are system-level shortcuts handled by CoreBox itself.
  */
 const SYSTEM_KEYS = new Set(['Escape'])
+const BLOCKED_FUNCTION_KEY_PATTERN = /^F(?:[1-9]|1\d|2[0-4])$/
+
+function isBlockedFunctionKey(event: KeyboardEvent): boolean {
+  return BLOCKED_FUNCTION_KEY_PATTERN.test(event.key)
+}
 
 /**
  * Text editing shortcuts that should stay in CoreBox input when input is visible.
@@ -403,8 +408,8 @@ function isInputEditingShortcut(event: KeyboardEvent): boolean {
  * @returns True if the event should be forwarded
  */
 function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
-  // Never forward system keys (Escape for exit)
-  if (SYSTEM_KEYS.has(event.key)) {
+  // Never forward system keys (Escape for exit) or function keys (F11 fullscreen etc.)
+  if (SYSTEM_KEYS.has(event.key) || isBlockedFunctionKey(event)) {
     return false
   }
 
@@ -543,6 +548,12 @@ export function useKeyboard(
     }
 
     if (!document.body.classList.contains('core-box')) {
+      return
+    }
+
+    if (isBlockedFunctionKey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
       return
     }
 
