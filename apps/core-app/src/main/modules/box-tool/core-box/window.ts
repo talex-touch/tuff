@@ -49,6 +49,9 @@ const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 const COREBOX_MIN_HEIGHT = 64
 const COREBOX_HEIGHT_TARGET_TOLERANCE = 4
 const COREBOX_ANIMATION_RETARGET_TOLERANCE = 12
+const BLOCKED_COREBOX_FUNCTION_KEYS = new Set(
+  Array.from({ length: 24 }, (_, index) => `F${index + 1}`)
+)
 
 const windowAnimation = useWindowAnimation()
 
@@ -260,7 +263,14 @@ export class WindowManager {
     let wasVisibleBeforeReload = false
 
     window.window.webContents.on('before-input-event', (event, input) => {
-      if (input.type === 'keyDown' && input.key === 'r' && (input.control || input.meta)) {
+      if (input.type !== 'keyDown') return
+
+      if (BLOCKED_COREBOX_FUNCTION_KEYS.has(input.key)) {
+        event.preventDefault()
+        return
+      }
+
+      if (input.key === 'r' && (input.control || input.meta)) {
         if (app.isPackaged) {
           event.preventDefault()
           return
@@ -1297,6 +1307,11 @@ export class WindowManager {
     this.uiView.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return
 
+      if (BLOCKED_COREBOX_FUNCTION_KEYS.has(input.key)) {
+        event.preventDefault()
+        return
+      }
+
       // ESC: exit UI mode
       if (input.key === 'Escape') {
         coreBoxWindowLog.debug('ESC pressed in UI view, exiting UI mode')
@@ -1704,6 +1719,11 @@ export class WindowManager {
     const webContents = this.getAliveUIViewWebContents()
     if (!webContents) {
       coreBoxWindowLog.debug('Cannot forward key event: UI view webContents is unavailable')
+      return
+    }
+
+    if (BLOCKED_COREBOX_FUNCTION_KEYS.has(event.key)) {
+      coreBoxWindowLog.debug(`Blocked function key forwarding: ${event.key}`)
       return
     }
 

@@ -52,6 +52,7 @@ import {
 } from './everything-errors'
 import { EverythingIconCache } from './everything-icon-cache'
 import { fileProvider } from './file-provider'
+import { expandWindowsEnvironmentVariables } from '../apps/app-provider-path-utils'
 import { mapFileToTuffItem } from './utils'
 
 const execFileAsync = promisify(execFile)
@@ -93,6 +94,11 @@ interface EverythingSdkAddon {
 }
 
 const EVERYTHING_TEST_QUERY = '*.txt'
+
+type WindowsRegistryPathRecord = {
+  Path?: string
+  path?: string
+}
 
 type EverythingFileSearchMeta = TuffMeta & {
   fileSearchContext?: FileSearchContextCandidate
@@ -681,35 +687,112 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
    * Detect Everything Command-line Interface (es.exe)
    */
   private async detectEverything(): Promise<void> {
-    const possiblePaths = [
-      this.configuredCliPath,
-      'es.exe', // In PATH
+    const configuredPath = this.configuredCliPath?.trim()
+    if (configuredPath) {
+      const configuredResolved = await this.tryProbeEverythingCli(configuredPath)
+      if (configuredResolved) return
+    }
+
+    const possiblePaths = this.dedupeCliCandidates([
+      'es.exe', // In current process PATH
+      ...(await this.getWindowsRegistryPathExecutableCandidates('es.exe')),
       'C:\\Program Files\\Everything\\es.exe',
       'C:\\Program Files (x86)\\Everything\\es.exe',
       path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Everything', 'es.exe'),
       path.join(process.env.PROGRAMFILES || '', 'Everything', 'es.exe'),
       path.join(process.env['PROGRAMFILES(X86)'] || '', 'Everything', 'es.exe')
-    ].filter((candidate): candidate is string => Boolean(candidate))
+    ])
 
     for (const esPath of possiblePaths) {
-      try {
-        const { version } = await this.probeEverythingCli(esPath)
-        this.esPath = esPath
-        this.everythingVersion = version
-        this.logInfo('Found Everything CLI', {
-          path: esPath,
-          version: this.everythingVersion
-        })
-        return
-      } catch (error) {
-        this.backendAttemptErrors[esPath] = getErrorMessage(error)
-        // Continue to next path
-      }
+      const resolved = await this.tryProbeEverythingCli(esPath)
+      if (resolved) return
     }
 
     throw new Error(
       'Everything Command-line Interface (es.exe) not found. Please install Everything from https://www.voidtools.com/'
     )
+  }
+
+  private async tryProbeEverythingCli(esPath: string): Promise<boolean> {
+    try {
+      const { version } = await this.probeEverythingCli(esPath)
+      this.esPath = esPath
+      this.everythingVersion = version
+      this.logInfo('Found Everything CLI', {
+        path: esPath,
+        version: this.everythingVersion
+      })
+      return true
+    } catch (error) {
+      this.backendAttemptErrors[esPath] = getErrorMessage(error)
+      return false
+    }
+  }
+
+  private dedupeCliCandidates(candidates: string[]): string[] {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const candidate of candidates) {
+      const normalized = candidate?.trim()
+      if (!normalized) continue
+      const key = process.platform === 'win32' ? normalized.toLowerCase() : normalized
+      if (seen.has(key)) continue
+      seen.add(key)
+      result.push(normalized)
+    }
+    return result
+  }
+
+  private async getWindowsRegistryPathExecutableCandidates(
+    executableName: string
+  ): Promise<string[]> {
+    if (process.platform !== 'win32') return []
+
+    const pathValues = await this.readWindowsRegistryPathValues()
+    const candidates: string[] = []
+
+    for (const pathValue of pathValues) {
+      for (const rawDir of pathValue.split(';')) {
+        const dir = expandWindowsEnvironmentVariables(rawDir.trim().replace(/^["']|["']$/g, ''))
+        if (!dir) continue
+        candidates.push(path.win32.join(dir, executableName))
+      }
+    }
+
+    return this.dedupeCliCandidates(candidates)
+  }
+
+  private async readWindowsRegistryPathValues(): Promise<string[]> {
+    try {
+      const script = [
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+        '$values = @()',
+        "$machine = (Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
+        "$user = (Get-ItemProperty -Path 'HKCU:\\Environment' -Name Path -ErrorAction SilentlyContinue).Path",
+        'foreach ($value in @($machine, $user)) {',
+        '  if ($value) { $values += [PSCustomObject]@{ Path = [string]$value } }',
+        '}',
+        '$values | ConvertTo-Json -Compress'
+      ].join('\n')
+
+      const { stdout } = await execFileAsync(
+        'powershell',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        { timeout: 3000, windowsHide: true }
+      )
+      const raw = stdout.trim()
+      if (!raw) return []
+
+      const parsed = JSON.parse(raw) as WindowsRegistryPathRecord | WindowsRegistryPathRecord[]
+      const records = Array.isArray(parsed) ? parsed : [parsed]
+      return records
+        .map((record) => record.Path || record.path || '')
+        .filter((value): value is string => value.trim().length > 0)
+    } catch (error) {
+      this.backendAttemptErrors['registry:PATH'] = getErrorMessage(error)
+      this.logWarn('Failed to read Windows PATH registry entries', error)
+      return []
+    }
   }
 
   private async probeEverythingCli(esPath: string): Promise<{ version: string | null }> {

@@ -124,6 +124,7 @@ interface MutableEverythingProvider {
   buildEverythingQuery: (searchText: string) => string
   parseEverythingOutput: (output: string) => Array<{ path: string; name: string; size: number }>
   parseEverythingSdkOutput: (output: unknown) => Array<{ path: string; isDir: boolean }>
+  readWindowsRegistryPathValues: () => Promise<string[]>
   getStatusSnapshot: () => {
     pathFiltering: MutableEverythingProvider['pathFilteringStatus']
   }
@@ -637,6 +638,31 @@ describe('everything-provider fallback chain', () => {
       expect(execFileMock).toHaveBeenCalledTimes(1)
       expect(execFileMock.mock.calls[0]?.[0]).toBe('D:\\Tools\\Everything\\es.exe')
       expect(provider.esPath).toBe('D:\\Tools\\Everything\\es.exe')
+    })
+  })
+
+  it('probes Everything CLI candidates from Windows registry Path when inherited PATH misses', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const registryPathSpy = vi
+        .spyOn(provider, 'readWindowsRegistryPathValues')
+        .mockResolvedValue(['C:\\Tools\\Everything;C:\\Other'])
+
+      execFileMock.mockImplementation((file, _args, _options, callback) => {
+        if (file === 'C:\\Tools\\Everything\\es.exe') {
+          callback(null, { stdout: 'Everything ES 1.1.0' })
+          return
+        }
+        callback(new Error(`not found: ${String(file)}`), { stdout: '' })
+      })
+
+      await provider.detectEverything()
+
+      expect(registryPathSpy).toHaveBeenCalledTimes(1)
+      expect(execFileMock.mock.calls.map(([file]) => file)).toEqual(
+        expect.arrayContaining(['es.exe', 'C:\\Tools\\Everything\\es.exe'])
+      )
+      expect(provider.esPath).toBe('C:\\Tools\\Everything\\es.exe')
     })
   })
 

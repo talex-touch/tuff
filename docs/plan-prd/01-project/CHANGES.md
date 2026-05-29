@@ -13,6 +13,31 @@
 
 ## 2026-05-29
 
+### docs(plan): add post-slice UI compatibility review
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-post-slice-review-2026-05-29.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Added a post-slice review after the 2026-05-29 UI/compatibility governance slices, confirming no new P0 fixed fake-success was found in the current live tree.
+  - Recorded the current UI direction as a professional, dense, scan-friendly desktop tool surface, with evidence and consistency now more important than a broad visual redesign.
+  - Synced the next-step focus to recent-path validation for Windows App indexing, Everything registry PATH probing, CoreBox function key hardening, and manual file index rebuild completion notification, plus Windows real-device evidence and TuffEx visual smoke screenshots.
+
+### fix(coreapp): harden Windows app indexing and CoreBox key handling
+
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/{everything-provider,file-provider}.ts`
+- `apps/core-app/src/main/utils/i18n-helper.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/{window,key-transport}.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Windows app scanner now verifies shortcut targets before indexing, expands `%ENV%` in registry paths, and adds the Windows `App Paths` registry as an extra app discovery source behind Start Menu results; Everything CLI detection also probes executable candidates built from registry `Path` entries instead of relying only on the inherited process `PATH`.
+  - CoreBox now blocks function keys (`F1`-`F24`) in the renderer, BrowserWindow, attached plugin UI views, and key-forwarding transport to prevent F11 fullscreen or plugin-side function-key leakage.
+  - Manual file index rebuild now emits a system notification after the manual indexing run completes successfully; the main-process i18n helper also tolerates Electron app mocks without `getLocale` in focused tests.
+
 ### fix(corebox): hide placeholder during IME composition input
 
 - `apps/core-app/src/renderer/src/views/box/BoxInput.vue`

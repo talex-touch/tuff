@@ -46,6 +46,8 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
 import { app, shell } from 'electron'
+import { notificationModule } from '../../../notification'
+import { t } from '../../../../utils/i18n-helper'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
@@ -323,6 +325,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly workerStatusService = new FileProviderWorkerStatusService()
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
+  private manualRebuildPendingNotification = false
 
   private touchApp: TouchApp | null = null
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
@@ -754,6 +757,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .then(() => {
         this.initializationFailed = false
         this.logInfo(`File indexing ${source} run completed successfully`)
+        if (source === 'manual') {
+          this.notifyManualRebuildCompleted()
+        }
       })
       .catch((error) => {
         this.initializationFailed = true
@@ -761,6 +767,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.logError(`File indexing ${source} run failed`, error)
         this.emitIndexingProgress('idle', 0, 0)
         this.notifyIndexingFailure(error)
+        if (source === 'manual') {
+          this.manualRebuildPendingNotification = false
+        }
       })
       .finally(() => {
         if (this.isInitializing === run) {
@@ -770,6 +779,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.isInitializing = run
     return run
+  }
+
+  private notifyManualRebuildCompleted(): void {
+    if (!this.manualRebuildPendingNotification) return
+
+    this.manualRebuildPendingNotification = false
+    notificationModule.showInternalSystemNotification({
+      title: t('notifications.fileIndexRebuildCompleteTitle'),
+      message: t('notifications.fileIndexRebuildCompleteBody'),
+      level: 'success',
+      system: { silent: false }
+    })
   }
 
   public isStartupReady(): boolean {
@@ -1287,7 +1308,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     await this.ensureFileSystemWatchers()
-    void this.startIndexing('manual')
+    this.manualRebuildPendingNotification = true
+    void this.startIndexing('manual').catch((error) => {
+      this.manualRebuildPendingNotification = false
+      this.logWarn('Manual index rebuild failed before completion notification', error)
+    })
 
     return {
       success: true,

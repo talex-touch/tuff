@@ -3179,6 +3179,8 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "应用启动失败",
     "appLaunchFailedBody": "未能启动 {name}\n{error}",
+    "fileIndexRebuildCompleteTitle": "文件索引重建完成",
+    "fileIndexRebuildCompleteBody": "手动文件索引重建已完成，搜索结果已更新。",
     "pluginInstallSuccessTitle": "插件已添加",
     "pluginInstallSuccessBody": "已添加插件 {name}，已为你打开详情",
     "pluginInstallExistsTitle": "插件已存在",

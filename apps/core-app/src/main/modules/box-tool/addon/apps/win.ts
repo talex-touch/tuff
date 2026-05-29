@@ -8,6 +8,7 @@ import { shell } from 'electron'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
 import { reportAppScanError } from './app-error-reporter'
 import { getSteamApps } from './steam-provider'
+import { expandWindowsEnvironmentVariables } from './app-provider-path-utils'
 import { createLogger } from '../../../../utils/logger'
 
 type AppInfo = ScannedAppInfo
@@ -145,6 +146,10 @@ function normalizeWindowsQuotedPath(value?: string): string {
   return (value || '').trim().replace(/^["']|["']$/g, '')
 }
 
+function normalizeWindowsPathValue(value?: string): string {
+  return expandWindowsEnvironmentVariables(normalizeWindowsQuotedPath(value))
+}
+
 function resolveKnownFolderGuidPath(value: string): string | null {
   const match = value.match(KNOWN_FOLDER_GUID_PATH_PATTERN)
   if (!match) return null
@@ -156,9 +161,9 @@ function resolveKnownFolderGuidPath(value: string): string | null {
 }
 
 function resolveStartAppDesktopPath(appId: string): string | null {
-  const normalized = normalizeWindowsQuotedPath(appId)
+  const normalized = normalizeWindowsPathValue(appId)
   if (!normalized) return null
-  if (isWindowsAbsolutePath(normalized)) return normalized
+  if (isWindowsAbsolutePath(normalized)) return path.win32.normalize(normalized)
   return resolveKnownFolderGuidPath(normalized)
 }
 
@@ -190,16 +195,18 @@ function shouldSkipRegistryAppName(displayName: string): boolean {
 
 function parseRegistryExePath(value?: string): string | null {
   if (!value) return null
-  const match = value.match(REGISTRY_DISPLAY_ICON_EXE_PATTERN)
+  const normalized = expandWindowsEnvironmentVariables(value)
+  const match = normalized.match(REGISTRY_DISPLAY_ICON_EXE_PATTERN)
   const candidate = match?.[1] || match?.[2]
   if (!candidate) return null
-  return candidate.trim().replace(/^["']|["']$/g, '')
+  return normalizeWindowsPathValue(candidate)
 }
 
 async function findExecutableInInstallLocation(installLocation?: string): Promise<string | null> {
-  if (!installLocation) return null
+  const normalizedInstallLocation = normalizeWindowsPathValue(installLocation)
+  if (!normalizedInstallLocation) return null
   try {
-    const entries = await fs.readdir(installLocation)
+    const entries = await fs.readdir(normalizedInstallLocation)
     const exeFiles = entries
       .filter((entry) => entry.toLowerCase().endsWith('.exe'))
       .filter((entry) => !shouldSkipAppTarget(entry))
@@ -215,10 +222,31 @@ async function findExecutableInInstallLocation(installLocation?: string): Promis
       return normalizedLeftPriority - normalizedRightPriority || left.length - right.length
     })
 
-    return path.join(installLocation, exeFiles[0])
+    return path.join(normalizedInstallLocation, exeFiles[0])
   } catch {
     return null
   }
+}
+
+function parseAppPathRegistryField(
+  entry: AppPathRegistryRecord,
+  keys: Array<keyof AppPathRegistryRecord>
+): string {
+  for (const key of keys) {
+    const rawValue = entry[key]
+    if (typeof rawValue === 'string' && rawValue.trim().length > 0) {
+      return rawValue.trim()
+    }
+  }
+  return ''
+}
+
+function normalizeAppPathRegistryExecutablePath(value?: string): string | null {
+  const direct = normalizeWindowsPathValue(value)
+  if (!direct) return null
+
+  const extracted = parseRegistryExePath(direct) || direct
+  return isWindowsAbsolutePath(extracted) ? path.win32.normalize(extracted) : null
 }
 
 function escapeRegExp(value: string): string {
@@ -527,6 +555,15 @@ type RegistryAppRecord = {
   parentKeyName?: string
 }
 
+type AppPathRegistryRecord = {
+  name?: string
+  Name?: string
+  executablePath?: string
+  ExecutablePath?: string
+  pathValue?: string
+  PathValue?: string
+}
+
 async function getRegistryAppRecords(): Promise<RegistryAppRecord[]> {
   try {
     const script = [
@@ -581,9 +618,7 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
   if (record.systemComponent === 1 || record.releaseType || record.parentKeyName) return null
 
   const iconExePath = parseRegistryExePath(record.displayIcon)
-  const installExePath = await findExecutableInInstallLocation(
-    normalizeWindowsQuotedPath(record.installLocation)
-  )
+  const installExePath = await findExecutableInInstallLocation(record.installLocation)
   const targetPath = iconExePath || installExePath
   if (!targetPath || shouldSkipAppTarget(targetPath)) return null
 
@@ -617,6 +652,98 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
 async function listRegistryApps(): Promise<AppInfo[]> {
   const records = await getRegistryAppRecords()
   const apps = await Promise.all(records.map((record) => buildRegistryAppInfo(record)))
+  return apps.filter(Boolean) as AppInfo[]
+}
+
+async function getAppPathRegistryRecords(): Promise<AppPathRegistryRecord[]> {
+  try {
+    const script = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      '$paths = @(',
+      "  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*',",
+      "  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*',",
+      "  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths\\*'",
+      ')',
+      '$apps = foreach ($path in $paths) {',
+      '  Get-Item -Path $path -ErrorAction SilentlyContinue | ForEach-Object {',
+      "    $executablePath = [string]$_.GetValue('')",
+      '    if (-not $executablePath) { return }',
+      '    [PSCustomObject]@{',
+      '      Name = [string]$_.PSChildName',
+      '      ExecutablePath = $executablePath',
+      "      PathValue = [string]$_.GetValue('Path')",
+      '    }',
+      '  }',
+      '}',
+      '$apps | ConvertTo-Json -Compress'
+    ].join('\n')
+
+    const { stdout } = await execFileSafe(
+      'powershell',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      { windowsHide: true }
+    )
+    const raw = stdout.trim()
+    if (!raw) return []
+
+    const parsed = JSON.parse(raw) as AppPathRegistryRecord | AppPathRegistryRecord[]
+    return Array.isArray(parsed) ? parsed : [parsed]
+  } catch (error) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : ''
+    if (code !== 'ENOENT') {
+      windowsAppLog.warn('Failed to enumerate App Paths registry apps', { error })
+    }
+    return []
+  }
+}
+
+async function buildAppPathRegistryAppInfo(record: AppPathRegistryRecord): Promise<AppInfo | null> {
+  const targetPath = normalizeAppPathRegistryExecutablePath(
+    parseAppPathRegistryField(record, ['executablePath', 'ExecutablePath'])
+  )
+  if (!targetPath || shouldSkipAppTarget(targetPath)) return null
+
+  const stats = await fs.stat(targetPath).catch(() => null)
+  if (!stats?.isFile()) return null
+
+  const rawName = parseAppPathRegistryField(record, ['name', 'Name'])
+  const fileName = path.basename(targetPath, path.extname(targetPath))
+  const displayName = path.basename(rawName || fileName, path.extname(rawName || fileName))
+  if (!displayName || shouldSkipRegistryAppName(displayName)) return null
+
+  const stableId = `registry:${buildPathStableId(targetPath)}`
+  const icon = await getAppIcon(targetPath, stableId)
+  const pathValue = parseAppPathRegistryField(record, ['pathValue', 'PathValue'])
+
+  return {
+    name: displayName,
+    displayName,
+    displayNameSource: 'App Paths registry',
+    displayNameQuality: 'registry',
+    identityKind: 'windows-path',
+    description: normalizeWindowsPathValue(pathValue) || undefined,
+    path: targetPath,
+    icon,
+    bundleId: '',
+    uniqueId: stableId,
+    stableId,
+    launchKind: 'path',
+    launchTarget: targetPath,
+    displayPath: targetPath,
+    alternateNames: normalizeAlternateNames(
+      [rawName, fileName, targetPath, pathValue],
+      displayName
+    ),
+    lastModified: stats.mtime
+  }
+}
+
+async function listAppPathRegistryApps(): Promise<AppInfo[]> {
+  const records = await getAppPathRegistryRecords()
+  const apps = await Promise.all(records.map((record) => buildAppPathRegistryAppInfo(record)))
   return apps.filter(Boolean) as AppInfo[]
 }
 
@@ -673,6 +800,14 @@ async function buildDesktopAppInfo(
     })
   }
 
+  const targetStats = await fs.stat(targetPath).catch(() => null)
+  if (!targetStats?.isFile()) {
+    windowsAppLog.warn('Skipping Windows app with missing launch target', {
+      meta: { sourcePath, targetPath }
+    })
+    return null
+  }
+
   const launchKind = isShortcut ? 'shortcut' : 'path'
   const stableId =
     launchKind === 'shortcut'
@@ -680,7 +815,6 @@ async function buildDesktopAppInfo(
       : buildPathStableId(targetPath)
   const iconSource = shortcutDetails?.icon?.trim() || targetPath
   const icon = await getAppIcon(iconSource, stableId)
-  const targetStats = await fs.stat(targetPath).catch(() => stats)
   const sourceBaseName = path.basename(fileName, path.extname(fileName))
   const targetBaseName = path.basename(targetPath, path.extname(targetPath))
   const displayNameMeta = resolveWindowsDisplayName(
@@ -771,6 +905,7 @@ export async function getApps(): Promise<AppInfo[]> {
     ...START_MENU_PATHS.map((item) => fileDisplay(item)),
     listWindowsStoreApps(),
     listRegistryApps(),
+    listAppPathRegistryApps(),
     getSteamApps()
   ]
 
