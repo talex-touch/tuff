@@ -36,6 +36,28 @@ const inputValue = computed({
   set: (value: string) => emit('update:modelValue', value)
 })
 
+const visualInputValue = ref(props.modelValue)
+
+function syncVisualInputValue(event?: Event): void {
+  if (event?.target instanceof HTMLInputElement) {
+    visualInputValue.value = event.target.value
+    return
+  }
+
+  visualInputValue.value = inputEl.value?.value ?? props.modelValue
+}
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    visualInputValue.value = value
+  }
+)
+
+const hasVisualInput = computed(
+  () => visualInputValue.value.length > 0 || inputValue.value.length > 0
+)
+
 const placeholder = computed(() => {
   // Use custom placeholder if provided via props
   if (props.placeholder) return props.placeholder
@@ -57,7 +79,7 @@ const placeholder = computed(() => {
 
 <template>
   <div class="BoxInput-Wrapper">
-    <span :class="{ hidden: inputValue }" class="BoxInput-Placeholder transition-cubic">{{
+    <span :class="{ hidden: hasVisualInput }" class="BoxInput-Placeholder transition-cubic">{{
       placeholder
     }}</span>
     <input
@@ -65,6 +87,10 @@ const placeholder = computed(() => {
       ref="inputEl"
       v-model="inputValue"
       :disabled="props.disabled"
+      @input="syncVisualInputValue"
+      @compositionstart="syncVisualInputValue"
+      @compositionupdate="syncVisualInputValue"
+      @compositionend="syncVisualInputValue"
       @focus="options.focus = true"
       @blur="options.focus = false"
     />

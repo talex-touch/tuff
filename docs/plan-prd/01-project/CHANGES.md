@@ -13,6 +13,12 @@
 
 ## 2026-05-29
 
+### fix(corebox): hide placeholder during IME composition input
+
+- `apps/core-app/src/renderer/src/views/box/BoxInput.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Synced the custom CoreBox placeholder visibility with the native input DOM value during `input` and IME composition events, so pinyin pre-edit text hides the overlay placeholder before Vue `v-model` commits.
+
 ### feat(quality): close UI compatibility debt slices
 
 - `apps/core-app/src/main/utils/legacy-alias-telemetry.ts`
