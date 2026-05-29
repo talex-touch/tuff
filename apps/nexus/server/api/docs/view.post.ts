@@ -14,6 +14,7 @@ import {
   recordDocViolation,
 } from '../../utils/docAnalyticsStore'
 import { readCloudflareBindings } from '../../utils/cloudflare'
+import { EvidenceSource } from '../../utils/evidenceSource'
 
 const SESSION_TTL_MS = 10 * 60_000
 const CHALLENGE_TTL_MS = 10 * 60_000
@@ -59,7 +60,7 @@ export default defineEventHandler(async (event) => {
     return {
       success: true,
       views: 1,
-      source: 'memory',
+      source: EvidenceSource.Memory,
       riskLevel: 0,
       sessionId: null,
       token: null,
@@ -148,7 +149,7 @@ export default defineEventHandler(async (event) => {
   return {
     success: true,
     views,
-    source: 'd1',
+    source: EvidenceSource.D1,
     riskLevel,
     sessionId: session.sessionId,
     token,

@@ -18,6 +18,9 @@ export interface OfficialPluginManifestEntry {
   author?: string
   version: string
   category?: string
+  deprecated?: boolean
+  hidden?: boolean
+  replacedBy?: string
   description?: string
   path: string
   timestamp?: string

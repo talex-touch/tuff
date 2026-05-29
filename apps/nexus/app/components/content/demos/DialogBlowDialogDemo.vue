@@ -8,13 +8,13 @@ const labels = computed(() => (locale.value === 'zh'
   ? {
       trigger: '显示爆炸对话框',
       title: '欢迎',
-      message: '<strong>你好！</strong> 欢迎使用我们的应用。',
+      message: '你好！欢迎使用我们的应用。',
       confirm: '确认',
     }
   : {
       trigger: 'Show blow dialog',
       title: 'Welcome',
-      message: '<strong>Hello!</strong> Welcome to the app.',
+      message: 'Hello! Welcome to the app.',
       confirm: 'Confirm',
     }))
 </script>

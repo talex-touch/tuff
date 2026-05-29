@@ -1,4 +1,20 @@
 export type DocEngagementSource = 'docs_page' | 'doc_comments_admin'
+export enum EvidenceSource {
+  Live = 'live',
+  D1 = 'd1',
+  R2 = 'r2',
+  LocalOnly = 'local-only',
+  Memory = 'memory',
+  Open = 'open',
+}
+
+export function isProductionEvidenceSource(source: EvidenceSource): boolean {
+  return source === EvidenceSource.Live || source === EvidenceSource.D1 || source === EvidenceSource.R2
+}
+
+export function isFallbackEvidenceSource(source: EvidenceSource): boolean {
+  return source === EvidenceSource.Memory || source === EvidenceSource.LocalOnly
+}
 
 export interface DocSectionBucketPayload {
   bucket: number
@@ -46,7 +62,7 @@ export interface DocChallengePayload {
 export interface DocViewSessionResponse {
   success: boolean
   views: number
-  source: 'd1' | 'memory'
+  source: EvidenceSource
   riskLevel: number
   sessionId: string | null
   token: string | null
@@ -116,4 +132,5 @@ export interface DocAnalyticsResponse {
     heatmap: DocAnalyticsHeatmapSummary[]
     evidence: DocAnalyticsEvidenceSummary[]
   } | null
+  source?: EvidenceSource
 }

@@ -13,6 +13,8 @@ interface Props {
   title?: string
   /** Dialog message content */
   message?: string
+  /** Trusted HTML dialog message content */
+  messageHtml?: string
   /** Component to render */
   comp?: Component
   /** Render function */
@@ -25,6 +27,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
+  messageHtml: '',
   comp: undefined,
   render: undefined
 })
@@ -161,9 +164,11 @@ provide('destroy', destroy)
         <p v-if="title" id="dialog-title">
           {{ title }}
         </p>
-        <div class="TBlowDialog-Content">
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <span style="position: relative; height: 100%" v-html="message" />
+        <div v-if="message || messageHtml" class="TBlowDialog-Content">
+          <span v-if="messageHtml" style="position: relative; height: 100%" v-html="messageHtml" />
+          <span v-else style="position: relative; height: 100%">
+            {{ message }}
+          </span>
         </div>
         <TxButton variant="flat" type="primary" block @click="destroy"> Confirm </TxButton>
       </template>
@@ -280,6 +285,7 @@ $container-padding-vertical: 8px;
     width: 100%;
     display: block;
     text-align: center;
+    white-space: pre-line;
   }
 }
 

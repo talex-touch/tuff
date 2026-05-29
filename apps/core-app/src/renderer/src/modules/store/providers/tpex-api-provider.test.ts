@@ -67,4 +67,61 @@ describe('TpexApiProvider', () => {
       })
     ])
   })
+
+  it('keeps hidden deprecated placeholders out of store results', async () => {
+    const provider = createProvider({
+      plugins: [
+        {
+          id: 'snippets',
+          slug: 'touch-snippets',
+          name: 'touch-snippets',
+          summary: 'snippets',
+          category: 'tools',
+          installs: 12,
+          isOfficial: true,
+          badges: [],
+          latestVersion: {
+            id: 'version-1',
+            version: '1.0.1',
+            channel: 'stable',
+            packageUrl: '/downloads/touch-snippets.tpex',
+            packageSize: 1024,
+            createdAt: '2026-04-21T00:00:00.000Z'
+          },
+          createdAt: '2026-04-20T00:00:00.000Z',
+          updatedAt: '2026-04-21T00:00:00.000Z'
+        },
+        {
+          id: 'text-snippets',
+          slug: 'touch-text-snippets',
+          name: 'touch-text-snippets',
+          summary: 'legacy placeholder',
+          category: 'tools',
+          installs: 0,
+          isOfficial: true,
+          badges: [],
+          deprecated: true,
+          hidden: true,
+          replacedBy: 'touch-snippets',
+          latestVersion: {
+            id: 'version-legacy',
+            version: '1.0.1',
+            channel: 'stable',
+            packageUrl: '/downloads/touch-text-snippets.tpex',
+            packageSize: 1024,
+            createdAt: '2026-04-21T00:00:00.000Z'
+          },
+          createdAt: '2026-04-20T00:00:00.000Z',
+          updatedAt: '2026-04-21T00:00:00.000Z'
+        }
+      ],
+      total: 2
+    })
+
+    await expect(provider.list({ force: true })).resolves.toEqual([
+      expect.objectContaining({
+        id: 'touch-snippets'
+      })
+    ])
+  })
 })

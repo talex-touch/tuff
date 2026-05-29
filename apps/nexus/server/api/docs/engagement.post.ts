@@ -2,6 +2,7 @@ import { getCookie, getHeader } from 'h3'
 import type { H3Event } from 'h3'
 import { resolveRequestIp } from '../../utils/ipSecurityStore'
 import { readCloudflareBindings } from '../../utils/cloudflare'
+import { EvidenceSource } from '../../utils/evidenceSource'
 import {
   buildPayloadHash,
   ensureDocAnalyticsSchema,
@@ -125,7 +126,7 @@ export default defineEventHandler(async (event) => {
 
   const bindings = readCloudflareBindings(event)
   if (!bindings?.DB)
-    return { success: true, source: 'memory', truncated: false }
+    return { success: true, source: EvidenceSource.Memory, truncated: false }
 
   const db = bindings.DB
   await ensureDocAnalyticsSchema(db)
@@ -228,5 +229,5 @@ export default defineEventHandler(async (event) => {
 
   await markDocSessionReported(db, sessionId)
 
-  return { success: true, source: 'd1', truncated: sectionTruncated || actionTruncated }
+  return { success: true, source: EvidenceSource.D1, truncated: sectionTruncated || actionTruncated }
 })

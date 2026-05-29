@@ -10,7 +10,7 @@ import type { Component, PropType, VNode } from 'vue'
  * ```vue
  * <TxBlowDialog
  *   title="Welcome"
- *   message="<strong>Hello!</strong> Welcome to our app."
+ *   message="Hello! Welcome to our app."
  *   :close="closeDialog"
  * />
  * ```
@@ -44,6 +44,10 @@ const props = defineProps({
     default: '',
   },
   message: {
+    type: String,
+    default: '',
+  },
+  messageHtml: {
     type: String,
     default: '',
   },
@@ -182,8 +186,9 @@ provide('destroy', destroy)
           <p v-if="title" id="tx-blow-dialog-title" class="tx-blow-dialog__title">
             {{ title }}
           </p>
-          <div class="tx-blow-dialog__content">
-            <span v-html="message" />
+          <div v-if="message || messageHtml" class="tx-blow-dialog__content">
+            <span v-if="messageHtml" v-html="messageHtml" />
+            <span v-else>{{ message }}</span>
           </div>
           <TxButton
             class="tx-blow-dialog__confirm"
@@ -273,6 +278,7 @@ provide('destroy', destroy)
       width: 100%;
       text-align: center;
       color: var(--tx-text-color-secondary, #909399);
+      white-space: pre-line;
     }
   }
 

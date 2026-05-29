@@ -1,5 +1,6 @@
 import { readCloudflareBindings } from '../../utils/cloudflare'
 import { ensureDocAnalyticsSchema, isAllowedDocPathForSource, normalizeDocPath, normalizeDocSourceType } from '../../utils/docAnalyticsStore'
+import { EvidenceSource } from '../../utils/evidenceSource'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
       return {
         views: result?.views ?? 0,
         updatedAt: result?.updated_at ?? null,
-        source: 'd1',
+        source: EvidenceSource.D1,
       }
     }
     catch (error) {
@@ -44,6 +45,6 @@ export default defineEventHandler(async (event) => {
   return {
     views: 0,
     updatedAt: null,
-    source: 'memory',
+    source: EvidenceSource.Memory,
   }
 })

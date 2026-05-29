@@ -70,6 +70,12 @@ export interface StorePlugin {
   version?: string
   description?: string
   category?: string
+  /**
+   * Legacy entries can stay install-compatible while being removed from normal discovery.
+   */
+  deprecated?: boolean
+  hidden?: boolean
+  replacedBy?: string
   tags?: string[]
   author?: string
   /**

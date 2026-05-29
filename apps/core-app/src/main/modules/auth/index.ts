@@ -33,6 +33,7 @@ import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
+import { withLegacyAliasTelemetry } from '../../utils/legacy-alias-telemetry'
 
 const authLog = getLogger('auth')
 
@@ -89,7 +90,19 @@ function registerAuthHandler<TPayload, TResult>(
   if (!transport) {
     return []
   }
-  return [transport.on(primaryEvent, handler), transport.on(legacyEvent, handler)]
+  return [
+    transport.on(primaryEvent, handler),
+    transport.on(
+      legacyEvent,
+      withLegacyAliasTelemetry(handler, {
+        family: 'auth',
+        legacyEvent,
+        canonicalEvent: primaryEvent,
+        direction: 'renderer-to-main',
+        sourceModule: 'AuthModule'
+      })
+    )
+  ]
 }
 
 function cloneAuthState(): AuthState {

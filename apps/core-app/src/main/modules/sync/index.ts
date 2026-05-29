@@ -34,6 +34,7 @@ import {
   TalexEvents as TouchEvents,
   touchEventBus
 } from '../../core/eventbus/touch-event'
+import { withLegacyAliasTelemetry } from '../../utils/legacy-alias-telemetry'
 import {
   encryptSyncPayload,
   getSyncPayloadKeyRegistration,
@@ -1685,15 +1686,42 @@ export class SyncModule extends BaseModule<TalexEvents> {
 
       this.transportDisposers.push(
         transport.on(SyncEvents.lifecycle.start, startHandler),
-        transport.on(SyncEvents.legacy.start, startHandler)
+        transport.on(
+          SyncEvents.legacy.start,
+          withLegacyAliasTelemetry(startHandler, {
+            family: 'sync',
+            legacyEvent: SyncEvents.legacy.start,
+            canonicalEvent: SyncEvents.lifecycle.start,
+            direction: 'renderer-to-main',
+            sourceModule: 'SyncModule'
+          })
+        )
       )
       this.transportDisposers.push(
         transport.on(SyncEvents.lifecycle.stop, stopHandler),
-        transport.on(SyncEvents.legacy.stop, stopHandler)
+        transport.on(
+          SyncEvents.legacy.stop,
+          withLegacyAliasTelemetry(stopHandler, {
+            family: 'sync',
+            legacyEvent: SyncEvents.legacy.stop,
+            canonicalEvent: SyncEvents.lifecycle.stop,
+            direction: 'renderer-to-main',
+            sourceModule: 'SyncModule'
+          })
+        )
       )
       this.transportDisposers.push(
         transport.on(SyncEvents.lifecycle.trigger, triggerHandler),
-        transport.on(SyncEvents.legacy.trigger, triggerHandler)
+        transport.on(
+          SyncEvents.legacy.trigger,
+          withLegacyAliasTelemetry(triggerHandler, {
+            family: 'sync',
+            legacyEvent: SyncEvents.legacy.trigger,
+            canonicalEvent: SyncEvents.lifecycle.trigger,
+            direction: 'renderer-to-main',
+            sourceModule: 'SyncModule'
+          })
+        )
       )
     }
 

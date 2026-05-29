@@ -2,6 +2,7 @@ import type { DocEngagementSourceType } from '../../../utils/docAnalyticsStore'
 import { requireAdmin } from '../../../utils/auth'
 import { readCloudflareBindings } from '../../../utils/cloudflare'
 import { ensureDocAnalyticsSchema, getDocAnalyticsDashboard, normalizeDocPath } from '../../../utils/docAnalyticsStore'
+import { EvidenceSource } from '../../../utils/evidenceSource'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
       },
       docs: [],
       detail: null,
-      source: 'memory',
+      source: EvidenceSource.Memory,
     }
   }
 
@@ -46,6 +47,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     ...result,
-    source: 'd1',
+    source: EvidenceSource.D1,
   }
 })

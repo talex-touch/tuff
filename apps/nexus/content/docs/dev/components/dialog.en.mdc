@@ -99,7 +99,7 @@ code: |
     <TxBlowDialog
       v-if="blowOpen"
       title="Welcome"
-      message="<strong>Hello!</strong> Welcome to the app."
+      message="Hello! Welcome to the app."
       confirm-text="Confirm"
       :close="() => (blowOpen = false)"
     />
@@ -182,6 +182,8 @@ code: |
 
 ## API
 
+`message` is rendered as plain text and preserves line breaks through component styles. Use `messageHtml` only for trusted, sanitized internal content.
+
 ### TxBottomDialog props
 
 | Name | Type | Default | Description |
@@ -214,7 +216,8 @@ code: |
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
-| `message` | `string` | `''` | Message (HTML supported) |
+| `message` | `string` | `''` | Plain-text message |
+| `messageHtml` | `string` | `''` | Trusted HTML message for sanitized internal call sites |
 | `confirmText` | `string` | `'Confirm'` | Confirm button text |
 | `close` | `() => void` | *required* | Close callback |
 | `comp` | `Component` | `undefined` | Custom component |
@@ -225,7 +228,8 @@ code: |
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Dialog title |
-| `message` | `string` | `''` | Message (HTML supported) |
+| `message` | `string` | `''` | Plain-text message |
+| `messageHtml` | `string` | `''` | Trusted HTML message for sanitized internal call sites |
 | `confirmText` | `string` | `'Confirm'` | Confirm button text |
 | `close` | `() => void` | *required* | Close callback |
 | `comp` | `Component` | `undefined` | Custom component |
@@ -237,6 +241,7 @@ code: |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | Title |
 | `message` | `string` | `''` | Message text |
+| `messageHtml` | `string` | `''` | Trusted HTML message for sanitized internal call sites |
 | `buttons` | `TouchTipButton[]` | `[]` | Button configs |
 | `close` | `() => void` | *required* | Close callback |
 

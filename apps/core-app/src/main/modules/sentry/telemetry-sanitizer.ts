@@ -54,6 +54,11 @@ const FEATURE_STRING_FIELDS = new Map([
   ['action', 64],
   ['stage', 32],
   ['result', 32],
+  ['family', 32],
+  ['legacyEvent', 96],
+  ['canonicalEvent', 96],
+  ['direction', 32],
+  ['sourceModule', 96],
   ['sourceType', 64],
   ['sourceId', 96],
   ['sourceName', 96],
@@ -244,6 +249,12 @@ function sanitizeFeatureUseMetadata(
     max: MAX_SEARCH_DURATION_MS
   })
   if (executeLatencyMs !== undefined) output.executeLatencyMs = executeLatencyMs
+
+  const timestamp = normalizeNumber(metadata.timestamp, {
+    min: 0,
+    max: Number.MAX_SAFE_INTEGER
+  })
+  if (timestamp !== undefined) output.timestamp = timestamp
 
   return Object.keys(output).length ? output : undefined
 }

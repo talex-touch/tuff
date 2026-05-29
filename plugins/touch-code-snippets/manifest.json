@@ -10,6 +10,9 @@
     "value": "assets/logo.svg"
   },
   "description": "Legacy placeholder. 代码片段已收口到 touch-snippets。",
+  "deprecated": true,
+  "hidden": true,
+  "replacedBy": "touch-snippets",
   "main": "index.js",
   "permissions": {
     "required": [],
