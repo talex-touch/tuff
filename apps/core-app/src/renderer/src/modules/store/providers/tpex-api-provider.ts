@@ -16,6 +16,9 @@ interface TpexApiPlugin {
   homepage?: string | null
   isOfficial: boolean
   badges: string[]
+  deprecated?: boolean
+  hidden?: boolean
+  replacedBy?: string
   author?: { name: string; avatarColor?: string } | null
   icon?: unknown
   iconUrl?: string | null
@@ -87,7 +90,9 @@ export class TpexApiProvider extends BaseStoreProvider {
     }
 
     const baseUrl = this.resolveBaseUrl()
-    const plugins = response.data.plugins.map((entry) => this.normalizeEntry(entry, baseUrl))
+    const plugins = response.data.plugins
+      .map((entry) => this.normalizeEntry(entry, baseUrl))
+      .filter((plugin) => !plugin.hidden)
 
     this.#cache = plugins
 
@@ -119,6 +124,9 @@ export class TpexApiProvider extends BaseStoreProvider {
       version: entry.latestVersion?.version,
       description: entry.summary,
       category: entry.category,
+      deprecated: entry.deprecated === true,
+      hidden: entry.hidden === true,
+      replacedBy: entry.replacedBy,
       timestamp: entry.latestVersion?.createdAt || entry.updatedAt,
       icon: normalizedIcon.icon,
       iconUrl: normalizedIcon.iconUrl,
@@ -182,7 +190,9 @@ export class TpexApiProvider extends BaseStoreProvider {
       return []
     }
 
-    return response.data.plugins.map((entry) => this.normalizeEntry(entry, baseUrl))
+    return response.data.plugins
+      .map((entry) => this.normalizeEntry(entry, baseUrl))
+      .filter((plugin) => !plugin.hidden)
   }
 
   private resolveBaseUrl(): string | null {

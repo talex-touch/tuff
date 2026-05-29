@@ -44,6 +44,8 @@ interface Props {
   title?: string
   /** Dialog message */
   message?: string
+  /** Trusted HTML dialog message */
+  messageHtml?: string
   /** Stay time in milliseconds */
   stay?: number
   /** Close callback function */
@@ -62,6 +64,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
+  messageHtml: '',
   stay: 0,
   btns: () => [],
   icon: '',
@@ -204,21 +207,22 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
       role="dialog"
       aria-modal="true"
       :aria-labelledby="title ? 'dialog-title' : undefined"
-      :aria-describedby="message ? 'dialog-message' : undefined"
+      :aria-describedby="message || messageHtml ? 'dialog-message' : undefined"
       @keydown.esc="forClose"
     >
       <!-- Main content wrapper -->
       <div class="TDialogTip-Main-Wrapper">
         <!-- Dialog title -->
         <h1 id="dialog-title" v-text="title" />
-        <!-- Dialog message content with line breaks -->
-        <!-- eslint-disable vue/no-v-html -->
         <span
+          v-if="messageHtml"
           id="dialog-message"
           class="TDialogTip-Content"
-          v-html="message.replace('\n', '<br /><br />')"
+          v-html="messageHtml"
         />
-        <!-- eslint-enable vue/no-v-html -->
+        <span v-else id="dialog-message" class="TDialogTip-Content">
+          {{ message }}
+        </span>
 
         <!-- Loading indicator wrapper -->
         <div class="TDialogTip-Loading-Wrapper">
@@ -444,6 +448,7 @@ $content-height: calc(100% - 30px);
 
   width: $content-width;
   height: $content-height;
+  white-space: pre-line;
 
   opacity: 0;
   animation: slideIn 0.25s 1s forwards linear;

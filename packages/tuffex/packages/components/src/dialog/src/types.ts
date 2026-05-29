@@ -56,6 +56,7 @@ export interface BottomDialogProps {
 
   /**
    * The message content of the dialog.
+   * Rendered as plain text. New lines are preserved by component styles.
    * @default ''
    */
   message?: string
@@ -111,10 +112,15 @@ export interface BlowDialogProps {
 
   /**
    * The message content of the dialog.
-   * Supports HTML content.
+   * Rendered as plain text. New lines are preserved by component styles.
    * @default ''
    */
   message?: string
+  /**
+   * Trusted HTML message content. Use only for sanitized internal call sites.
+   * @default ''
+   */
+  messageHtml?: string
 
   /**
    * Confirm button text.
@@ -149,6 +155,7 @@ export interface PopperDialogProps {
   close: () => void
   title?: string
   message?: string
+  messageHtml?: string
   confirmText?: string
   comp?: Component
   render?: () => VNode
@@ -164,6 +171,7 @@ export interface TouchTipButton {
 export interface TouchTipProps {
   title?: string
   message?: string
+  messageHtml?: string
   buttons: TouchTipButton[]
   close: () => void
 }

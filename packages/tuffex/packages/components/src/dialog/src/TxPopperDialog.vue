@@ -30,6 +30,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  messageHtml: {
+    type: String,
+    default: '',
+  },
   confirmText: {
     type: String,
     default: 'Confirm',
@@ -95,7 +99,7 @@ provide('destroy', destroy)
       role="dialog"
       aria-modal="true"
       :aria-labelledby="title ? 'tx-popper-dialog-title' : undefined"
-      :aria-describedby="message ? 'tx-popper-dialog-content' : undefined"
+      :aria-describedby="message || messageHtml ? 'tx-popper-dialog-content' : undefined"
       @keydown.esc="destroy"
     >
       <div
@@ -110,11 +114,12 @@ provide('destroy', destroy)
           </p>
 
           <div
-            v-if="message"
+            v-if="message || messageHtml"
             id="tx-popper-dialog-content"
             class="tx-popper-dialog__content"
           >
-            <span v-html="message" />
+            <span v-if="messageHtml" v-html="messageHtml" />
+            <span v-else>{{ message }}</span>
           </div>
 
           <TxButton
@@ -197,6 +202,7 @@ provide('destroy', destroy)
       text-align: center;
       line-height: 1.4;
       color: var(--tx-text-color-secondary, #909399);
+      white-space: pre-line;
     }
   }
 

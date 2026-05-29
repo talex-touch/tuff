@@ -24,7 +24,7 @@ describe('resolveClipboardTriggerMention', () => {
       )
     ).toEqual({
       title: 'Copied Text',
-      message: '&lt;b&gt;Hello&lt;/b&gt;<br />World'
+      message: '<b>Hello</b>\nWorld'
     })
   })
 

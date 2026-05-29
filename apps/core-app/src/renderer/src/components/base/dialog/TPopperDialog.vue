@@ -9,6 +9,7 @@ interface Props {
   close: () => void
   title?: string
   message?: string
+  messageHtml?: string
   comp?: Component
   render?: () => VNodeChild
 }
@@ -16,6 +17,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
+  messageHtml: '',
   comp: undefined,
   render: undefined
 })
@@ -47,7 +49,7 @@ provide('destroy', destroy)
     role="dialog"
     aria-modal="true"
     :aria-labelledby="title ? 'dialog-title' : undefined"
-    :aria-describedby="message ? 'dialog-content' : undefined"
+    :aria-describedby="message || messageHtml ? 'dialog-content' : undefined"
   >
     <div
       class="TPopperDialog-Container fake-background relative p-4 w-360px max-w-80% max-h-80% rounded-2xl box-border overflow-hidden"
@@ -65,13 +67,19 @@ provide('destroy', destroy)
           no-padding
           class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px box-border"
         >
-          <!-- eslint-disable vue/no-v-html -->
           <span
+            v-if="messageHtml"
             class="w-full block text-center my-1rem leading-1.25rem"
             style="position: relative; height: 100%"
-            v-html="message"
+            v-html="messageHtml"
           />
-          <!-- eslint-enable vue/no-v-html -->
+          <span
+            v-else
+            class="w-full block text-center my-1rem leading-1.25rem"
+            style="position: relative; height: 100%"
+          >
+            {{ message }}
+          </span>
         </TouchScroll>
         <TxButton
           class="absolute w-[calc(100%-40px)] bottom-1.5rem"
@@ -151,6 +159,10 @@ $fade-in-easing: cubic-bezier(0.785, 0.135, 0.15, 0.86);
 
   .FlatMarkdown-Container {
     --fake-inner-opacity: 0;
+  }
+
+  .TPopperDialog-Content span {
+    white-space: pre-line;
   }
 }
 

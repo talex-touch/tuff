@@ -46,14 +46,5 @@ function formatClipboardTextPreview(value: string, emptyText: string): string {
       ? `${normalized.slice(0, CLIPBOARD_TEXT_PREVIEW_LIMIT).trimEnd()}...`
       : normalized
 
-  return escapeHtml(preview).replace(/\n/g, '<br />')
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+  return preview
 }

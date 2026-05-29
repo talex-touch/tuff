@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TxBottomDialog from '../src/TxBottomDialog.vue'
+import TxBlowDialog from '../src/TxBlowDialog.vue'
+import TxPopperDialog from '../src/TxPopperDialog.vue'
 import TxTouchTip from '../src/TxTouchTip.vue'
 
 describe('dialog components', () => {
@@ -108,6 +110,101 @@ describe('dialog components', () => {
     expect(document.getElementById(describedBy ?? '')?.textContent).toBe('Use this action')
 
     wrapper.unmount()
+  })
+
+  it('renders TouchTip message as text by default', () => {
+    const wrapper = mount(TxTouchTip, {
+      props: {
+        title: 'Tip',
+        message: '<script>alert(1)</script>\nNext',
+        close: vi.fn(),
+        buttons: [],
+      },
+      attachTo: document.body,
+    })
+
+    const content = document.body.querySelector<HTMLElement>('.tx-touch-tip__content')
+
+    expect(content?.textContent).toBe('<script>alert(1)</script>\nNext')
+    expect(content?.querySelector('script')).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('renders TouchTip trusted messageHtml only when explicitly provided', () => {
+    const wrapper = mount(TxTouchTip, {
+      props: {
+        title: 'Tip',
+        messageHtml: '<strong>Trusted</strong>',
+        close: vi.fn(),
+        buttons: [],
+      },
+      attachTo: document.body,
+    })
+
+    const content = document.body.querySelector<HTMLElement>('.tx-touch-tip__content')
+
+    expect(content?.querySelector('strong')?.textContent).toBe('Trusted')
+
+    wrapper.unmount()
+  })
+
+  it('renders PopperDialog message as text and messageHtml as trusted html', () => {
+    const textWrapper = mount(TxPopperDialog, {
+      props: {
+        title: 'Text',
+        message: '<strong>Text</strong>',
+        close: vi.fn(),
+      },
+      attachTo: document.body,
+    })
+
+    let content = document.body.querySelector<HTMLElement>('.tx-popper-dialog__content')
+    expect(content?.textContent).toBe('<strong>Text</strong>')
+    expect(content?.querySelector('strong')).toBeNull()
+    textWrapper.unmount()
+
+    const htmlWrapper = mount(TxPopperDialog, {
+      props: {
+        title: 'HTML',
+        messageHtml: '<strong>Trusted</strong>',
+        close: vi.fn(),
+      },
+      attachTo: document.body,
+    })
+
+    content = document.body.querySelector<HTMLElement>('.tx-popper-dialog__content')
+    expect(content?.querySelector('strong')?.textContent).toBe('Trusted')
+    htmlWrapper.unmount()
+  })
+
+  it('renders BlowDialog message as text and messageHtml as trusted html', () => {
+    const textWrapper = mount(TxBlowDialog, {
+      props: {
+        title: 'Text',
+        message: '<em>Text</em>',
+        close: vi.fn(),
+      },
+      attachTo: document.body,
+    })
+
+    let content = document.body.querySelector<HTMLElement>('.tx-blow-dialog__content')
+    expect(content?.textContent).toBe('<em>Text</em>')
+    expect(content?.querySelector('em')).toBeNull()
+    textWrapper.unmount()
+
+    const htmlWrapper = mount(TxBlowDialog, {
+      props: {
+        title: 'HTML',
+        messageHtml: '<em>Trusted</em>',
+        close: vi.fn(),
+      },
+      attachTo: document.body,
+    })
+
+    content = document.body.querySelector<HTMLElement>('.tx-blow-dialog__content')
+    expect(content?.querySelector('em')?.textContent).toBe('Trusted')
+    htmlWrapper.unmount()
   })
 
   it('blocks TouchTip close when button returns false', async () => {

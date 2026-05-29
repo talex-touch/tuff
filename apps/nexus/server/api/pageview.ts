@@ -1,4 +1,5 @@
 import { readCloudflareBindings } from '../utils/cloudflare'
+import { EvidenceSource } from '../utils/evidenceSource'
 
 const startAt = Date.now()
 let fallbackCount = 0
@@ -30,7 +31,7 @@ export default defineEventHandler(async (event) => {
       return {
         pageview: nextValue,
         startAt,
-        source: 'd1',
+        source: EvidenceSource.D1,
       }
     }
     catch (error) {
@@ -43,6 +44,6 @@ export default defineEventHandler(async (event) => {
   return {
     pageview: value,
     startAt,
-    source: 'memory',
+    source: EvidenceSource.Memory,
   }
 })

@@ -96,7 +96,7 @@ const btns = [
 <TxBlowDialog
   v-if="blowOpen"
   title="欢迎"
-  message="<strong>你好！</strong> 欢迎使用我们的应用。"
+  message="你好！欢迎使用我们的应用。"
   confirm-text="确认"
   :close="() => (blowOpen = false)"
 />
@@ -109,7 +109,7 @@ const btns = [
   <TxBlowDialog
     v-if="blowOpen"
     title="欢迎"
-    message="<strong>你好！</strong> 欢迎使用我们的应用。"
+    message="你好！欢迎使用我们的应用。"
     confirm-text="确认"
     :close="() => (blowOpen = false)"
   />
@@ -225,6 +225,8 @@ function showRenderDialog() {
 
 ## API
 
+`message` 始终按纯文本渲染，并通过组件样式保留换行。需要展示 HTML 时，只能使用显式的 `messageHtml`，且调用点必须确保内容可信并已清洗。
+
 ### TxBottomDialog 属性
 
 | 属性名 | 类型 | 默认值 | 说明 |
@@ -254,7 +256,8 @@ interface DialogButton {
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
-| `message` | `string` | `''` | 消息内容 (支持 HTML) |
+| `message` | `string` | `''` | 纯文本消息内容 |
+| `messageHtml` | `string` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
@@ -265,7 +268,8 @@ interface DialogButton {
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
-| `message` | `string` | `''` | 消息内容 (支持 HTML) |
+| `message` | `string` | `''` | 纯文本消息内容 |
+| `messageHtml` | `string` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
@@ -277,6 +281,7 @@ interface DialogButton {
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 标题 |
 | `message` | `string` | `''` | 文本内容 |
+| `messageHtml` | `string` | `''` | 可信 HTML 内容，仅限已清洗的内部调用点 |
 | `buttons` | `TouchTipButton[]` | `[]` | 按钮配置 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 

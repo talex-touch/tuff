@@ -540,6 +540,18 @@ export interface IManifest {
    */
   category?: string
   /**
+   * Marks legacy manifest entries that remain for migration compatibility.
+   */
+  deprecated?: boolean
+  /**
+   * Hides the plugin from normal store and capability listings.
+   */
+  hidden?: boolean
+  /**
+   * Replacement plugin name or id shown by store/governance surfaces.
+   */
+  replacedBy?: string
+  /**
    * Short description of the plugin's functionality.
    */
   description: string

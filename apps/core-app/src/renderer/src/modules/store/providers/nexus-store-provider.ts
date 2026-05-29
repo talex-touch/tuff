@@ -10,6 +10,9 @@ interface NexusManifestEntry {
   author?: string | { name: string }
   version: string
   category?: string
+  deprecated?: boolean
+  hidden?: boolean
+  replacedBy?: string
   description?: string
   summary?: string
   timestamp?: string | number
@@ -104,7 +107,9 @@ export class NexusStoreProvider extends BaseStoreProvider {
     if (data && typeof data === 'object' && 'plugins' in data && Array.isArray(data.plugins)) {
       const entries = data.plugins as NexusManifestEntry[]
       const baseUrl = this.resolveBaseUrl(manifestUrl)
-      const plugins = entries.map((entry) => this.normalizeEntry(entry, baseUrl))
+      const plugins = entries
+        .map((entry) => this.normalizeEntry(entry, baseUrl))
+        .filter((plugin) => !plugin.hidden)
       this.#cache = plugins
       return plugins
     }
@@ -209,6 +214,9 @@ export class NexusStoreProvider extends BaseStoreProvider {
       version,
       description,
       category: entry.category,
+      deprecated: entry.deprecated === true,
+      hidden: entry.hidden === true,
+      replacedBy: entry.replacedBy,
       timestamp: entry.updatedAt || entry.createdAt || entry.timestamp,
       icon: normalizedIcon.icon,
       iconUrl: normalizedIcon.iconUrl,

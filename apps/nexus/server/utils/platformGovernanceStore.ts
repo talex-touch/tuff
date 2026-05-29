@@ -128,7 +128,7 @@ export interface StorageChannelAnalyticsOptions extends GovernanceAnalyticsOptio
 
 export type PlatformGovernanceReportStatus = 'ok' | 'watch' | 'critical'
 export type PlatformGovernanceReportPriority = 'critical' | 'high' | 'medium' | 'low'
-export type PlatformGovernanceReportEvidenceStatus = 'ready' | 'local-only' | 'open'
+export type PlatformGovernanceReportEvidenceStatus = 'live' | 'd1' | 'r2' | 'local-only' | 'memory' | 'open'
 
 export interface PlatformGovernanceReportScorecard {
   key: string
@@ -7160,21 +7160,21 @@ function createGovernanceReportEvidenceStatus(
     {
       key: 'storage-smoke',
       label: 'Storage smoke evidence',
-      status: analytics.storage.smokeEvidence.length > 0 ? 'local-only' : 'open',
+      status: analytics.storage.smokeEvidence.some(item => item.mode === 'write' && item.channel === 'r2' && item.status === 'sent') ? 'r2' : analytics.storage.smokeEvidence.length > 0 ? 'local-only' : 'open',
       evidenceCount: analytics.storage.smokeEvidence.length,
       blocker: 'live-r2-s3-oss-smoke-required',
     },
     {
       key: 'notification-send',
       label: 'Notification live-send evidence',
-      status: analytics.notifications.deliveryEvidence.some(item => item.sent > 0) ? 'local-only' : 'open',
+      status: analytics.notifications.deliveryEvidence.some(item => item.sent > 0) ? 'live' : analytics.notifications.testEvidence.length > 0 ? 'local-only' : 'open',
       evidenceCount: analytics.notifications.deliveryEvidence.length + analytics.notifications.testEvidence.length,
       blocker: 'real-credential-backed-send-required',
     },
     {
       key: 'provider-quota',
       label: 'Provider quota fail-closed evidence',
-      status: analytics.providers.quotaSmokeEvidence.length > 0 ? 'local-only' : 'open',
+      status: analytics.providers.quotaSmokeEvidence.some(item => item.mode === 'consume' && item.status === 'consumed') ? 'live' : analytics.providers.quotaSmokeEvidence.length > 0 ? 'local-only' : 'open',
       evidenceCount: analytics.providers.quotaSmokeEvidence.length,
       blocker: 'real-provider-call-evidence-required',
     },

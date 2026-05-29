@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-28
+> 更新时间：2026-05-29
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,42 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-29
+
+### feat(quality): close UI compatibility debt slices
+
+- `apps/core-app/src/main/utils/legacy-alias-telemetry.ts`
+- `apps/core-app/src/main/modules/{terminal,sync,auth,box-tool}/**`
+- `plugins/touch-{text,code}-snippets/manifest.json`
+- `apps/core-app/src/renderer/src/modules/store/providers/{nexus-store-provider,tpex-api-provider}.ts`
+- `packages/tuffex/packages/components/src/dialog/src/*`
+- `apps/core-app/src/renderer/src/components/base/dialog/*`
+- `apps/nexus/server/utils/evidenceSource.ts`
+- `apps/nexus/server/api/{pageview,docs/**,admin/analytics/docs.get}.ts`
+- `apps/nexus/app/pages/dashboard/admin/governance.vue`
+- `apps/nexus/scripts/tuffex-visual-smoke.mjs`
+- `docs/plan-prd/{README.md,TODO.md,docs/PRD-QUALITY-BASELINE.md}`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/INDEX.md`
+  - Added payload-free legacy alias telemetry for Terminal / Sync / Auth / CoreBox retained listeners with fixed `family`, `legacyEvent`, `canonicalEvent`, `direction`, `timestamp`, and `sourceModule` metadata.
+  - Marked old snippets placeholders as `deprecated`, `hidden`, and `replacedBy: "touch-snippets"` while filtering hidden entries from normal CoreApp Store discovery.
+  - Split dialog `message` into plain-text rendering and explicit trusted-only `messageHtml`, with TuffEx/CoreApp tests and docs updated away from implicit HTML examples.
+  - Added a shared Nexus evidence source enum/guards for `live | d1 | r2 | local-only | memory | open`; governance UI now treats `memory/local-only` as fallback evidence, not production-ready evidence.
+  - Added focused TuffEx composition visual smoke coverage for data operations, navigation shell, feedback task center, permission orchestration, and release policy forms across 375/768/1440, light/dark, and reduced motion. This remains focused evidence and does not change `quality:pr` or `quality:release`.
+
+### docs(audit): update UI and compatibility debt report
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-29.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Added the 2026-05-29 incremental audit for UI adaptation, placeholder/fake implementation risk, compatibility debt, and architecture robustness.
+  - Reconfirmed no new P0 production fixed fake-success in the sampled live tree.
+  - Recorded that Nexus/TuffEx composition demos and dashboard chart wrappers improve UI completeness, and identified legacy alias telemetry/hard-cut, old snippets placeholder retirement, Nexus `source: memory` evidence separation, dialog message text/HTML split, and TuffEx visual screenshot smoke as the follow-up execution slices now tracked above.
 
 ## 2026-05-28
 

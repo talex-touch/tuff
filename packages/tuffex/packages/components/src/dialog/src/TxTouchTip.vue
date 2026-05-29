@@ -18,6 +18,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  messageHtml: {
+    type: String,
+    default: '',
+  },
   buttons: {
     type: Array as PropType<TouchTipButton[]>,
     default: () => [],
@@ -141,17 +145,24 @@ onUnmounted(() => {
         role="dialog"
         aria-modal="true"
         :aria-labelledby="title ? titleId : undefined"
-        :aria-describedby="message ? messageId : undefined"
+        :aria-describedby="message || messageHtml ? messageId : undefined"
         @keydown.esc="forClose"
       >
         <h1 v-if="title" :id="titleId" class="tx-touch-tip__title" v-text="title" />
 
         <span
-          v-if="message"
+          v-if="messageHtml"
           :id="messageId"
           class="tx-touch-tip__content"
-          v-html="message.replace('\n', '<br /><br />')"
+          v-html="messageHtml"
         />
+        <span
+          v-else-if="message"
+          :id="messageId"
+          class="tx-touch-tip__content"
+        >
+          {{ message }}
+        </span>
 
         <div class="tx-touch-tip__btns">
           <TxButton
@@ -234,6 +245,7 @@ onUnmounted(() => {
     height: calc(100% - 30px);
     text-align: center;
     color: var(--tx-text-color-secondary, #909399);
+    white-space: pre-line;
   }
 
   &__btns {

@@ -29,6 +29,7 @@
     "lint:fix": "eslint --fix .",
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
+    "visual:smoke:tuffex": "node scripts/tuffex-visual-smoke.mjs",
     "openapi:sync": "openapi-typescript ./openapi/nexus-sync.yaml -o ./types/sync-api.d.ts"
   },
   "dependencies": {

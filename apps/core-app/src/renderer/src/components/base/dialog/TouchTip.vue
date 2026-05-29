@@ -40,6 +40,8 @@ interface Props {
   title?: string
   /** Dialog message */
   message?: string
+  /** Trusted HTML dialog message */
+  messageHtml?: string
   /** Array of buttons */
   buttons?: Button[]
   /** Close callback function */
@@ -52,6 +54,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   title: '',
   message: '',
+  messageHtml: '',
   buttons: () => []
 })
 
@@ -192,20 +195,21 @@ onUnmounted(() => {
       role="dialog"
       aria-modal="true"
       :aria-labelledby="title ? 'dialog-title' : undefined"
-      :aria-describedby="message ? 'dialog-message' : undefined"
+      :aria-describedby="message || messageHtml ? 'dialog-message' : undefined"
       @keydown.esc="forClose"
     >
       <!-- Dialog title -->
       <h1 id="dialog-title" v-text="title" />
 
-      <!-- Dialog message content with line breaks -->
-      <!-- eslint-disable vue/no-v-html -->
       <span
+        v-if="messageHtml"
         id="dialog-message"
         class="TDialogTip-Content"
-        v-html="message.replace('\n', '<br /><br />')"
+        v-html="messageHtml"
       />
-      <!-- eslint-enable vue/no-v-html -->
+      <span v-else id="dialog-message" class="TDialogTip-Content">
+        {{ message }}
+      </span>
 
       <!-- Dialog buttons container -->
       <div class="TDialogTip-Btn">
@@ -363,5 +367,6 @@ $fake-inner-opacity: 0.75;
 
   width: $content-width;
   height: $content-height;
+  white-space: pre-line;
 }
 </style>

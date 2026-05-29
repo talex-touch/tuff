@@ -2270,6 +2270,16 @@ describe('platformGovernanceStore', () => {
         reason: expect.stringMatching(/^(request-exhausted|token-exhausted|warning-threshold|projected-exhaustion|request-overage|token-overage)$/),
       }),
     ]))
+    expect(report.report.evidenceStatus).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'storage-smoke',
+        status: 'r2',
+      }),
+      expect.objectContaining({
+        key: 'notification-send',
+        status: 'open',
+      }),
+    ]))
     expect(report.report.leaderboards.hotPlugins).toEqual(expect.arrayContaining([
       expect.objectContaining({ pluginId, hotScore: 21 }),
     ]))

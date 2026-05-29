@@ -99,4 +99,41 @@ describe('NexusStoreProvider', () => {
 
     await expect(provider.list({ force: true })).rejects.toThrow('STORE_NEXUS_PACKAGE_URL_REQUIRED')
   })
+
+  it('filters hidden legacy placeholder plugins from normal discovery', async () => {
+    const provider = createProvider({
+      plugins: [
+        {
+          id: 'touch-snippets',
+          slug: 'touch-snippets',
+          name: 'touch-snippets',
+          version: '1.0.0',
+          latestVersion: {
+            version: '1.0.0',
+            packageUrl: '/downloads/touch-snippets.tpex'
+          }
+        },
+        {
+          id: 'touch-text-snippets',
+          slug: 'touch-text-snippets',
+          name: 'touch-text-snippets',
+          version: '1.0.0',
+          deprecated: true,
+          hidden: true,
+          replacedBy: 'touch-snippets',
+          latestVersion: {
+            version: '1.0.0',
+            packageUrl: '/downloads/touch-text-snippets.tpex'
+          }
+        }
+      ],
+      total: 2
+    })
+
+    await expect(provider.list({ force: true })).resolves.toEqual([
+      expect.objectContaining({
+        id: 'touch-snippets'
+      })
+    ])
+  })
 })

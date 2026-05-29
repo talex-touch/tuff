@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import type { EvidenceSource as PlatformGovernanceReportEvidenceStatus } from '~/types/docs-engagement'
+import { isFallbackEvidenceSource, isProductionEvidenceSource } from '~/types/docs-engagement'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -73,7 +75,6 @@ type StorageAlertLimitKey = 'maxBytes' | 'trafficBytes' | 'maxOperations' | 'ale
 type PlatformGovernanceD1ReadinessStatus = 'ready' | 'warning' | 'blocked'
 type PlatformGovernanceReportStatus = 'ok' | 'watch' | 'critical'
 type PlatformGovernanceReportPriority = 'critical' | 'high' | 'medium' | 'low'
-type PlatformGovernanceReportEvidenceStatus = 'ready' | 'local-only' | 'open'
 
 interface GovernanceSummary {
   totalEvents: number
@@ -2935,18 +2936,24 @@ function reportStatusLabel(status: PlatformGovernanceReportStatus): string {
 }
 
 function reportEvidenceTone(status: PlatformGovernanceReportEvidenceStatus): StatusTone {
-  if (status === 'ready')
+  if (isProductionEvidenceSource(status))
     return 'success'
-  if (status === 'local-only')
+  if (isFallbackEvidenceSource(status))
     return 'warning'
   return 'muted'
 }
 
 function reportEvidenceLabel(status: PlatformGovernanceReportEvidenceStatus): string {
-  if (status === 'ready')
-    return tt('dashboard.governance.report.evidenceReady', 'Ready')
+  if (status === 'live')
+    return tt('dashboard.governance.report.evidenceLive', 'Live')
+  if (status === 'd1')
+    return tt('dashboard.governance.report.evidenceD1', 'D1')
+  if (status === 'r2')
+    return tt('dashboard.governance.report.evidenceR2', 'R2')
   if (status === 'local-only')
     return tt('dashboard.governance.report.evidenceLocalOnly', 'Local only')
+  if (status === 'memory')
+    return tt('dashboard.governance.report.evidenceMemory', 'Memory')
   return tt('dashboard.governance.report.evidenceOpen', 'Open')
 }
 
