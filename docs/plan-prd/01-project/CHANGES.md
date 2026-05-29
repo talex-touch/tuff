@@ -34,6 +34,24 @@
   - Added a shared Nexus evidence source enum/guards for `live | d1 | r2 | local-only | memory | open`; governance UI now treats `memory/local-only` as fallback evidence, not production-ready evidence.
   - Added focused TuffEx composition visual smoke coverage for data operations, navigation shell, feedback task center, permission orchestration, and release policy forms across 375/768/1440, light/dark, and reduced motion. This remains focused evidence and does not change `quality:pr` or `quality:release`.
 
+### feat(tuffex): expand drawer direction, sizing, slots and mask controls
+
+- `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`
+- `packages/tuffex/packages/components/src/drawer/src/types.ts`
+- `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts`
+- `packages/tuffex/docs/components/drawer.md`
+- `apps/nexus/content/docs/dev/components/drawer.{zh,en}.mdc`
+- `apps/nexus/app/components/content/demos/Drawer{Direction,CustomWidth,SlotsEffects}Demo.vue`
+- `apps/nexus/app/components/content/demo-registry.ts`
+- `apps/nexus/content/docs/dev/components/divider.{zh,en}.mdc`
+- `apps/nexus/app/components/content/demos/Divider{Basic,Vertical}Demo.vue`
+  - Expanded `TxDrawer` from left/right width-only behavior to four directions with one `size` prop that maps to width or height by direction and supports CSS lengths, percentages, numeric px, and `full`.
+  - Added the discoverable `full` boolean prop as an equivalent to `size="full"` for 100% active-axis opening.
+  - Added custom Header/Footer slots, `showHeader` / `showFooter`, TxDivider-based built-in separators, configurable `maskEffect`, transparent panel mode, and default mobile bottom-sheet adaptation with `mobileAdapt=false` opt-out.
+  - Kept deprecated `width` as a compatibility alias while updating TuffEx/Nexus Drawer docs and demos to cover each new prop path.
+  - Added the missing Nexus `TxDivider` documentation pages, runnable basic/vertical demos, registry entries, and component index links so Drawer separator dependencies have standalone docs.
+  - Extended `TxDivider` with `gradient` fade modes (`start` / `end` / `both` / boolean) and updated TuffEx/Nexus docs plus demos for gradient separators.
+
 ### docs(audit): update UI and compatibility debt report
 
 - `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-29.md`

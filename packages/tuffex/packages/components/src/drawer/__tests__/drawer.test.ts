@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxDrawer from '../src/TxDrawer.vue'
 
+const DESKTOP_WIDTH = 1024
+
 describe('txDrawer', () => {
   beforeEach(() => {
+    vi.stubGlobal('innerWidth', DESKTOP_WIDTH)
     document.body.innerHTML = '<button id="before">Before</button>'
     document.getElementById('before')?.focus()
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     document.body.innerHTML = ''
   })
 
@@ -19,7 +23,7 @@ describe('txDrawer', () => {
         visible: true,
         title: 'Settings',
         direction: 'left',
-        width: '420px',
+        size: '420px',
       },
       slots: {
         default: '<p class="drawer-body">Body</p>',
@@ -37,12 +41,131 @@ describe('txDrawer', () => {
     expect(drawer?.getAttribute('aria-hidden')).toBe('false')
     expect(drawer?.classList.contains('tx-drawer--left')).toBe(true)
     expect(drawer?.classList.contains('tx-drawer--visible')).toBe(true)
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-size: 420px')
     expect(drawer?.getAttribute('style')).toContain('--tx-drawer-width: 420px')
     expect(document.getElementById(titleId ?? '')?.textContent).toBe('Settings')
     expect(document.body.querySelector('.drawer-body')?.textContent).toBe('Body')
     expect(document.body.querySelector('.drawer-footer')?.textContent).toBe('Save')
+    expect(document.body.querySelectorAll('.tx-drawer__divider')).toHaveLength(2)
 
     wrapper.unmount()
+  })
+
+  it('resolves one size across four directions and supports full', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        direction: 'top',
+        size: '18rem',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    let drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--top')).toBe(true)
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-width: 100%')
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-height: 18rem')
+
+    await wrapper.setProps({ direction: 'bottom', size: 'full' })
+    drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--bottom')).toBe(true)
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-size: 100%')
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-height: 100%')
+
+    await wrapper.setProps({ direction: 'left', size: '360px', full: true })
+    drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--left')).toBe(true)
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-size: 100%')
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-width: 100%')
+
+    await wrapper.setProps({ direction: 'right', size: 360, full: false })
+    drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--right')).toBe(true)
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-size: 360px')
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-width: 360px')
+    expect(drawer?.getAttribute('style')).toContain('--tx-drawer-height: 100%')
+  })
+
+  it('keeps width as a deprecated compatibility alias for size', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        width: '420px',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    expect(document.body.querySelector('.tx-drawer')?.getAttribute('style')).toContain('--tx-drawer-width: 420px')
+
+    wrapper.unmount()
+  })
+
+  it('supports custom header/footer slots and can hide them', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        title: 'Custom',
+      },
+      slots: {
+        header: '<div class="custom-header">Header Slot</div>',
+        default: '<p>Body</p>',
+        footer: '<div class="custom-footer">Footer Slot</div>',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    expect(document.body.querySelector('.custom-header')?.textContent).toBe('Header Slot')
+    expect(document.body.querySelector('.custom-footer')?.textContent).toBe('Footer Slot')
+    expect(document.body.querySelector('.tx-drawer__title')).toBeNull()
+    expect(document.body.querySelectorAll('.tx-drawer__divider')).toHaveLength(2)
+
+    await wrapper.setProps({ showHeader: false, showFooter: false })
+    expect(document.body.querySelector('.tx-drawer__header')).toBeNull()
+    expect(document.body.querySelector('.tx-drawer__footer')).toBeNull()
+    expect(document.body.querySelectorAll('.tx-drawer__divider')).toHaveLength(0)
+  })
+
+  it('applies mask and panel transparency options', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        maskEffect: 'opacity',
+        panelTransparent: true,
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    const drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--mask-opacity')).toBe(true)
+    expect(drawer?.classList.contains('tx-drawer--panel-transparent')).toBe(true)
+
+    await wrapper.setProps({ maskEffect: 'transparent' })
+    expect(drawer?.classList.contains('tx-drawer--mask-transparent')).toBe(true)
+  })
+
+  it('adapts to bottom direction on mobile unless disabled', async () => {
+    vi.stubGlobal('innerWidth', 480)
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        direction: 'right',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    let drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--bottom')).toBe(true)
+    expect(drawer?.classList.contains('tx-drawer--mobile')).toBe(true)
+
+    await wrapper.setProps({ mobileAdapt: false })
+    drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    expect(drawer?.classList.contains('tx-drawer--right')).toBe(true)
+    expect(drawer?.classList.contains('tx-drawer--mobile')).toBe(false)
   })
 
   it('emits open and focuses drawer when visible', async () => {

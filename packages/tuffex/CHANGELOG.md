@@ -20,6 +20,8 @@
 
 ### 🐛 组件修复
 
+- 增强 `TxDrawer`：支持四方向、统一 `size`、`full` 全屏 prop、Header/Footer 自定义与关闭、TxDivider 分割线、遮罩/透明面板配置，以及移动端默认底部弹出。
+- 增强 `TxDivider`：新增 `gradient` 渐变透明分割模式，支持起点、终点与两端透明衰减。
 - 修复 `TxInput` 在 flex 容器中的收缩与横向溢出问题。
 - 修复 `TxChatMessage`、`TxScroll`、`TxStagger` 在 VitePress SSR / hydration 场景下的客户端结构不一致问题。
 - 修复 `TxStatCard` 默认数值与 insight 在文档站中可能被 `NumberFlow` 渲染为空的问题，改为稳定可见的文本基线。

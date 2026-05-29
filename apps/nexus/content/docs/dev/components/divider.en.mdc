@@ -1,0 +1,121 @@
+---
+title: Divider
+description: Content grouping, inline separation, and gradient fade separators
+category: Basic
+status: beta
+since: 1.0.0
+tags: [divider, separator, layout]
+syncStatus: reviewed
+verified: true
+---
+
+# Divider
+
+`TxDivider` creates lightweight grouping between content blocks. It supports horizontal separators, text labels, dashed style, gradient fade separators, and inline vertical separation. Drawer also reuses it for built-in Header / Footer separators.
+
+## Basic Usage
+
+### Basic Divider
+Use a horizontal divider by itself, or pass default slot text as a label.
+
+:::TuffDemoWrapper{demo="DividerBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <p>Primary configuration area</p>
+    <TxDivider />
+    <p>Advanced configuration area</p>
+    <TxDivider text-placement="left">Advanced options</TxDivider>
+    <TxDivider dashed text-placement="right">Dashed divider</TxDivider>
+  </template>
+---
+:::
+
+## Gradient Divider
+
+### Gradient Divider
+Use `gradient` to fade a divider from one area to another. `true` is equivalent to `both`; explicit modes are `start`, `end`, and `both`.
+
+:::TuffDemoWrapper{demo="DividerGradientDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDivider gradient="start" />
+    <TxDivider gradient="end" />
+    <TxDivider gradient />
+    <TxDivider gradient text-placement="center">Gradient label</TxDivider>
+  </template>
+---
+:::
+
+## Vertical Divider
+
+### Vertical Divider
+Use `direction="vertical"` to separate inline metadata such as tags, status, or ownership. Vertical dividers also support `dashed` and `gradient`.
+
+:::TuffDemoWrapper{demo="DividerVerticalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span>Published</span>
+    <TxDivider direction="vertical" />
+    <span>Platform team</span>
+    <TxDivider direction="vertical" dashed />
+    <span>Updated just now</span>
+    <TxDivider direction="vertical" gradient />
+    <span>Gradient</span>
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+::TuffPropsTable
+---
+rows:
+  - name: direction
+    description: 'Divider direction'
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+  - name: dashed
+    description: 'Render dashed line'
+    type: 'boolean'
+    default: 'false'
+  - name: textPlacement
+    description: 'Text placement for horizontal dividers'
+    type: "'left' | 'center' | 'right'"
+    default: "'center'"
+  - name: gradient
+    description: 'Gradient fade direction; true is equivalent to both'
+    type: "boolean | 'start' | 'end' | 'both'"
+    default: 'false'
+---
+::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: 'Text content displayed inside horizontal dividers; ignored for vertical dividers'
+    type: '-'
+    default: '-'
+---
+::
+
+## Interaction Contract
+
+- The root node uses `role="separator"` and sets `aria-orientation` from `direction`.
+- Horizontal dividers span the container width by default; text renders only in horizontal mode.
+- `gradient="start"` fades from transparent to solid, `gradient="end"` fades from solid to transparent, and `gradient` / `gradient="both"` fades both ends while keeping the middle clear.
+- Vertical gradient uses vertical fade and works well in toolbars or metadata rows.
+- Prefer `TxDivider` inside Drawer / Card / Form surfaces instead of duplicating border styles.
+
+## Review Notes
+
+- Source: `packages/tuffex/packages/components/src/divider/src/TxDivider.vue`
+- Export: `packages/tuffex/packages/components/src/divider/index.ts`
+- Component index: `packages/tuffex/packages/components/src/components.ts`

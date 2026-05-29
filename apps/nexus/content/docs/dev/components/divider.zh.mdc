@@ -1,0 +1,121 @@
+---
+title: Divider 分割线
+description: 内容分组、行内分隔与渐变透明分割
+category: Basic
+status: beta
+since: 1.0.0
+tags: [divider, separator, layout]
+syncStatus: reviewed
+verified: true
+---
+
+# Divider 分割线
+
+`TxDivider` 用于在内容之间建立轻量分组关系，支持水平分割、文字分割、虚线、渐变透明分割和行内垂直分隔。Drawer 内部 Header / Footer 分割线也复用该组件。
+
+## 基础用法
+
+### Basic Divider
+水平分割线可以单独使用，也可以通过默认插槽显示文字。
+
+:::TuffDemoWrapper{demo="DividerBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <p>主要配置区域</p>
+    <TxDivider />
+    <p>高级配置区域</p>
+    <TxDivider text-placement="left">高级选项</TxDivider>
+    <TxDivider dashed text-placement="right">虚线分割</TxDivider>
+  </template>
+---
+:::
+
+## 渐变分割
+
+### Gradient Divider
+`gradient` 用于让分割线从某个区域到某个区域逐渐透明。`true` 等价于 `both`，也可以显式传入 `start`、`end`、`both`。
+
+:::TuffDemoWrapper{demo="DividerGradientDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxDivider gradient="start" />
+    <TxDivider gradient="end" />
+    <TxDivider gradient />
+    <TxDivider gradient text-placement="center">渐变标签</TxDivider>
+  </template>
+---
+:::
+
+## 垂直分割
+
+### Vertical Divider
+`direction="vertical"` 适合在标签、状态、元信息之间做行内分隔，也支持 `dashed` 和 `gradient`。
+
+:::TuffDemoWrapper{demo="DividerVerticalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <span>已发布</span>
+    <TxDivider direction="vertical" />
+    <span>平台团队</span>
+    <TxDivider direction="vertical" dashed />
+    <span>刚刚更新</span>
+    <TxDivider direction="vertical" gradient />
+    <span>渐变</span>
+  </template>
+---
+:::
+
+## API
+
+### 属性
+
+::TuffPropsTable
+---
+rows:
+  - name: direction
+    description: '分割线方向'
+    type: "'horizontal' | 'vertical'"
+    default: "'horizontal'"
+  - name: dashed
+    description: '是否显示为虚线'
+    type: 'boolean'
+    default: 'false'
+  - name: textPlacement
+    description: '水平分割线文字位置'
+    type: "'left' | 'center' | 'right'"
+    default: "'center'"
+  - name: gradient
+    description: '渐变透明方向；true 等价于 both'
+    type: "boolean | 'start' | 'end' | 'both'"
+    default: 'false'
+---
+::
+
+### 插槽
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: '水平分割线中间的文字内容；垂直分割线不渲染插槽文字'
+    type: '-'
+    default: '-'
+---
+::
+
+## 交互契约
+
+- 根节点使用 `role="separator"`，并根据 `direction` 设置 `aria-orientation`。
+- 水平分割线默认占满容器宽度，文字只在水平模式渲染。
+- `gradient="start"` 从起点透明到清晰，`gradient="end"` 从清晰到终点透明，`gradient` / `gradient="both"` 两端透明中间清晰。
+- 垂直渐变使用纵向透明衰减，适合工具栏或元信息行。
+- 需要 Drawer / Card / Form 内部分隔时优先使用 `TxDivider`，避免重复硬编码边框样式。
+
+## 审阅要点
+
+- 源码：`packages/tuffex/packages/components/src/divider/src/TxDivider.vue`
+- 导出：`packages/tuffex/packages/components/src/divider/index.ts`
+- 组件索引：`packages/tuffex/packages/components/src/components.ts`

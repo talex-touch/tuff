@@ -37,6 +37,7 @@ const fromCornerOverlay = () => import('@tuffex-components/corner-overlay')
 const fromDataTable = () => import('@tuffex-components/data-table')
 const fromDatePicker = () => import('@tuffex-components/date-picker')
 const fromDialog = () => import('@tuffex-components/dialog')
+const fromDivider = () => import('@tuffex-components/divider')
 const fromDrawer = () => import('@tuffex-components/drawer')
 const fromDropdownMenu = () => import('@tuffex-components/dropdown-menu')
 const fromEdgeFadeMask = () => import('@tuffex-components/edge-fade-mask')
@@ -159,6 +160,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxCornerOverlay: asyncTuffexComponent(fromCornerOverlay, 'TxCornerOverlay'),
   TxDataTable: asyncTuffexComponent(fromDataTable, 'TxDataTable'),
   TxDatePicker: asyncTuffexComponent(fromDatePicker, 'TxDatePicker'),
+  TxDivider: asyncTuffexComponent(fromDivider, 'TxDivider'),
   TxDrawer: asyncTuffexComponent(fromDrawer, 'TxDrawer'),
   TxDropdownItem: asyncTuffexComponent(fromDropdownMenu, 'TxDropdownItem'),
   TxDropdownMenu: asyncTuffexComponent(fromDropdownMenu, 'TxDropdownMenu'),

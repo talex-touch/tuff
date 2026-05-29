@@ -1,4 +1,10 @@
-import type { DrawerEmits, DrawerProps } from './src/types'
+import type {
+  DrawerDirection,
+  DrawerEmits,
+  DrawerMaskEffect,
+  DrawerProps,
+  DrawerSize,
+} from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxDrawer from './src/TxDrawer.vue'
 
@@ -20,7 +26,7 @@ import TxDrawer from './src/TxDrawer.vue'
 const Drawer = withInstall(TxDrawer)
 
 export { Drawer, TxDrawer }
-export type { DrawerEmits, DrawerProps }
+export type { DrawerDirection, DrawerEmits, DrawerMaskEffect, DrawerProps, DrawerSize }
 export type TxDrawerInstance = InstanceType<typeof TxDrawer>
 
 export default Drawer
