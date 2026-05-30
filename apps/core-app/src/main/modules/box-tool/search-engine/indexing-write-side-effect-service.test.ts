@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { IndexedWriteSideEffectService as SdkIndexedWriteSideEffectService } from '@talex-touch/utils/search'
 import { IndexedWriteSideEffectService } from './indexing-write-side-effect-service'
 
 async function settlePromises(): Promise<void> {
@@ -7,6 +8,10 @@ async function settlePromises(): Promise<void> {
 }
 
 describe('indexing-write-side-effect-service', () => {
+  it('re-exports the public SDK write side-effect service for legacy CoreApp imports', () => {
+    expect(IndexedWriteSideEffectService).toBe(SdkIndexedWriteSideEffectService)
+  })
+
   it('skips empty record batches', async () => {
     const processExtensions = vi.fn(async () => undefined)
     const scheduleIndexing = vi.fn()
@@ -14,7 +19,8 @@ describe('indexing-write-side-effect-service', () => {
     const service = new IndexedWriteSideEffectService({
       processExtensions,
       scheduleIndexing,
-      logWarn
+      logWarn,
+      formatExtensionFailureMessage: (context) => `processFileExtensions failed (${context})`
     })
 
     service.dispatch([], {
@@ -71,6 +77,6 @@ describe('indexing-write-side-effect-service', () => {
     await settlePromises()
 
     expect(scheduleIndexing).toHaveBeenCalledWith(records, 'reconciliation-insert')
-    expect(logWarn).toHaveBeenCalledWith('processFileExtensions failed (reconciliation)', error)
+    expect(logWarn).toHaveBeenCalledWith('processExtensions failed (reconciliation)', error)
   })
 })
