@@ -1,5 +1,5 @@
 import { isSqliteBusyError } from '../../../../../db/sqlite-retry'
-import { IndexedWriteFlushRetryService } from '../../../search-engine/indexing-write-flush-retry-service'
+import { IndexedWriteFlushRetryService } from '@talex-touch/utils/search'
 
 export interface FileProviderIndexFlushRetryConfig {
   baseDelayMs?: number

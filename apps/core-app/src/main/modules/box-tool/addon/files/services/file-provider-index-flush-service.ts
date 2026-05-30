@@ -1,9 +1,9 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import { IndexedWriteBufferService } from '../../../search-engine/indexing-write-buffer-service'
+import { IndexedWriteBufferService } from '@talex-touch/utils/search'
 import {
   getIndexedWriteFlushDelay,
   getIndexedWriteFlushExponentialRetryDelay
-} from '../../../search-engine/indexing-write-flush-retry-service'
+} from '@talex-touch/utils/search'
 
 export interface IndexWorkerBusyRetryOptions {
   baseDelayMs?: number

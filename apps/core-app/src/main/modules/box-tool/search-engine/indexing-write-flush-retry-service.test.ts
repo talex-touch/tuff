@@ -1,11 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
+  IndexedWriteFlushRetryService as SdkIndexedWriteFlushRetryService,
+  getIndexedWriteFlushDelay as sdkGetIndexedWriteFlushDelay,
+  getIndexedWriteFlushExponentialRetryDelay as sdkGetIndexedWriteFlushExponentialRetryDelay
+} from '@talex-touch/utils/search'
+import {
   getIndexedWriteFlushDelay,
   getIndexedWriteFlushExponentialRetryDelay,
   IndexedWriteFlushRetryService
 } from './indexing-write-flush-retry-service'
 
 describe('indexing-write-flush-retry-service', () => {
+  it('re-exports public SDK flush retry helpers for legacy CoreApp imports', () => {
+    expect(getIndexedWriteFlushDelay).toBe(sdkGetIndexedWriteFlushDelay)
+    expect(getIndexedWriteFlushExponentialRetryDelay).toBe(
+      sdkGetIndexedWriteFlushExponentialRetryDelay
+    )
+    expect(IndexedWriteFlushRetryService).toBe(SdkIndexedWriteFlushRetryService)
+  })
+
   it('uses backlog delay after pending size crosses the configured threshold', () => {
     expect(getIndexedWriteFlushDelay(5, { baseDelayMs: 100, backlogDelayMs: 300 })).toBe(100)
     expect(getIndexedWriteFlushDelay(31, { baseDelayMs: 100, backlogDelayMs: 300 })).toBe(300)
