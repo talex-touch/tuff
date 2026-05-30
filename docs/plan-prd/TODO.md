@@ -51,10 +51,10 @@
 
 已落地：
 
-- SDK 层：`IndexedSource*` 类型、source admission、lifecycle contract issue、contract summary、task eligibility、watch root routing、Search Provider descriptor/config/manifest resolver 已进入 `@talex-touch/utils`；Quicklinks、Browser Bookmarks、Browser History、System Settings 已有 descriptor template。
+- SDK 层：`IndexedSource*` 类型、source admission、lifecycle contract issue、contract summary、task eligibility、watch root routing、watch delta queue、indexing progress ETA/stream helpers、Search Provider descriptor/config/manifest resolver 已进入 `@talex-touch/utils`；Quicklinks、Browser Bookmarks、Browser History、System Settings 已有 descriptor template。
 - Runtime 层：CoreApp 已新增 `IndexingRuntime`、scan/watch/reconcile task 统计、root policy、diagnostics typed transport、source admission/lifecycle contract diagnostics、Settings maintenance SDK 与 `SearchIndexStoreAdapter` 最小写入边界。
 - Provider 层：App/File/Everything 已作为 thin indexed-source adapter 接入统一 diagnostics 与 runtime lifecycle；Everything path filtering 改读 runtime root policy，避免绕过 File source roots；Provider registry 已把 plugin registration issue / provider id collision 作为 `SearchProviderConfigResponse.issues` 暴露给 Settings，补齐插件 provider 权限阻断的用户可见诊断。
-- File 层：watch delta queue、write plan、insert/update/delete executor、flush retry/runtime/snapshot/buffer、worker scheduler、worker persist mapper、post-write side-effect、progress ETA/stream 已抽成通用 primitive 或薄适配。
+- File 层：watch delta queue 与 progress ETA/stream 已下沉到 `@talex-touch/utils/search` SDK；write plan、insert/update/delete executor、flush retry/runtime/snapshot/buffer、worker scheduler、worker persist mapper、post-write side-effect 已抽成 CoreApp 通用 primitive 或薄适配。
 - Settings / 插件层：Settings 已支持 source diagnostics、provider enable/order、source-to-provider link；插件可声明 `manifest.searchProviders`，第三方 push provider 需 `root-results` + `defaultState: "ask"` + `requiresUserConsent: true` 才能通过 loader policy；向 root results push/update 已同时受 `search.root-results` 权限 gate 与 provider `enabled === true` 用户配置约束；CoreBox root-result store 对已有 provider-tagged items 也按严格 enabled 过滤，避免旧 push 结果残留。
 - Browser Bookmarks：已新增 high-privacy runtime skeleton，默认 disabled/pending migration；只有显式启用 `browser-bookmarks` 或 `touch-browser-data.browser-bookmarks` provider 后才允许 scanner-backed 读取。
 
