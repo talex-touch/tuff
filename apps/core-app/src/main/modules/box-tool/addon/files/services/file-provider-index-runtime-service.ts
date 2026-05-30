@@ -1,8 +1,10 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import type { IndexedWriteFlushSnapshot } from '../../../search-engine/indexing-write-flush-snapshot-service'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
 import { IndexedWriteFlushRuntimeService } from '../../../search-engine/indexing-write-flush-runtime-service'
-import { IndexedWriteFlushSnapshotService } from '../../../search-engine/indexing-write-flush-snapshot-service'
+import {
+  IndexedWriteFlushSnapshotService,
+  type IndexedWriteFlushSnapshot
+} from '@talex-touch/utils/search'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 import {
   FileProviderIndexFlushExecutorService,
