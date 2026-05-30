@@ -1,6 +1,7 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { FileProviderRuntimeResetResult } from './file-provider-runtime-reset-service'
+import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
 import { performance } from 'node:perf_hooks'
 import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
@@ -23,7 +24,7 @@ export interface FileProviderIntegrityServiceDeps {
   sourceId: string
   countSearchIndexByProvider: (providerId: string, reason: string) => Promise<number>
   resetRuntimeState: (request: {
-    reason: 'integrity-repair'
+    reason: Extract<IndexedSourceResetReason, typeof IndexedSourceResetReasons.IntegrityRepair>
     clearSearchIndex: boolean
     clearScanProgress: boolean
   }) => Promise<FileProviderRuntimeResetResult>
