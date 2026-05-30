@@ -96,15 +96,29 @@ export async function checkRemoteRelease({
     }
   )
 
-  const hasManifest = assets.some((item) => item?.filename === 'tuff-release-manifest.json')
+  const githubReleaseUrl = `https://api.github.com/repos/talex-touch/tuff/releases/tags/${encodeURIComponent(tag)}`
+  let hasManifest = false
+  let githubManifestStatus = null
+  try {
+    const githubReleaseResp = await fetchWithTimeout(githubReleaseUrl, {}, timeoutMs)
+    githubManifestStatus = githubReleaseResp.status
+    if (githubReleaseResp.ok) {
+      const githubRelease = await githubReleaseResp.json()
+      const githubAssets = Array.isArray(githubRelease?.assets) ? githubRelease.assets : []
+      hasManifest = githubAssets.some((item) => item?.name === 'tuff-release-manifest.json')
+    }
+  } catch (error) {
+    githubManifestStatus = 'error'
+  }
+
   const manifestMissingStatus = stage === 'gate-e' ? 'fail' : 'warn'
   pushCheck(
     'remote-manifest-asset',
     hasManifest ? 'pass' : manifestMissingStatus,
     hasManifest
-      ? 'Remote manifest asset exists.'
-      : 'Remote manifest asset is missing (`tuff-release-manifest.json`).',
-    { hasManifest, assetCount: assets.length }
+      ? 'GitHub release manifest asset exists.'
+      : 'GitHub release manifest asset is missing (`tuff-release-manifest.json`).',
+    { hasManifest, githubReleaseUrl, githubManifestStatus, nexusAssetCount: assets.length }
   )
 
   const missingIntegrity = assets.filter((item) => !item?.sha256 || !item?.signatureUrl)

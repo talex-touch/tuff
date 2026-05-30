@@ -18,7 +18,7 @@
 | Release 元数据 | `GET /api/releases/{tag}?assets=true` | Release Owner | `tag/version/channel/status/notes` 符合第 1 节全部约束 |
 | Assets 矩阵 | `GET /api/releases/{tag}/assets` | Release Owner + Build Owner | `TARGET_MATRIX` 每个 `platform/arch` 至少 1 个有效资产，且无重复冲突 |
 | Signature | `GET /api/releases/{tag}/signature/{platform}/{arch}` | Security Owner | 签名可获取（200）且与资产一一对应（不允许豁免） |
-| Manifest | `scripts/update-validate-release-manifest.mjs` + `tuff-release-manifest.json` | Build Owner | 脚本校验通过，manifest 字段与发布信息一致 |
+| Manifest | GitHub Release `tuff-release-manifest.json` + `scripts/update-validate-release-manifest.mjs` | Build Owner | GitHub Release 资产存在，脚本校验通过，manifest 字段与发布信息一致；不要用 fake platform/arch 把 manifest 挂到 Nexus 下载矩阵 |
 | 下载链路 | `GET /api/releases/latest` + `GET /api/releases/{tag}/download/{platform}/{arch}` | Release Owner | latest 命中当前发布，download 返回可下载结果（直链或 302） |
 | 发布前门禁 | `docs/plan-prd/TODO.md`（Gate C~E） | Tech Lead | Gate C 通过且本清单第 1~5 节全部打勾，才可进入 Gate E |
 
@@ -62,9 +62,10 @@ curl -I "${BASE_URL}/api/releases/${TAG}/signature/darwin/arm64"
 
 ## 4. Manifest 核对
 
-- [ ] Release 资产包含 `tuff-release-manifest.json`。
+- [ ] GitHub Release 资产包含 `tuff-release-manifest.json`。
+- [ ] Nexus assets 只包含可下载安装包平台矩阵，不包含 `latest*.yml`、`builder-debug.yml` 或 fake platform/arch manifest 资产。
 - [ ] manifest 中 `release.version/channel/tag` 与当前发布一致。
-- [ ] `artifacts[*].sha256`、`coreRange`（renderer/extensions）齐全。
+- [ ] `artifacts[*].sha256`、`coreRange`（renderer/extensions，如本次发布包含对应组件）齐全。
 - [ ] 通过仓库脚本校验：
 
 ```bash
