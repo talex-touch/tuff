@@ -68,6 +68,16 @@ export type IndexedSourceAdmissionReason =
   | "persistent-source-must-be-clearable"
   | "watch-capability-requires-reconcile";
 
+export type IndexedSourceLifecycleIssue =
+  | "missing-scan-handler"
+  | "open-capability-missing-handler"
+  | "clear-capability-missing-handler"
+  | "watch-capability-missing-handler"
+  | "reconcile-capability-missing-handler"
+  | "search-capability-missing-handler"
+  | "reset-capability-missing-handler"
+  | "handler-provided-without-capability";
+
 export type IndexedSourceTaskKind = "scan" | "watch" | "reconcile";
 
 export type IndexedSourceTaskSkipReason =
@@ -169,6 +179,8 @@ export interface IndexedSourceCapabilities {
   scan: boolean;
   watch: boolean;
   reconcile: boolean;
+  search?: boolean;
+  reset?: boolean;
   clear: boolean;
   open: boolean;
 }
@@ -735,6 +747,7 @@ export interface IndexedSourceDiagnostics {
   health: IndexedSourceHealth;
   roots: IndexedSourceRoot[];
   evidence?: IndexedSourceEvidence[];
+  lifecycleIssues?: IndexedSourceLifecycleIssue[];
   recentTasks?: IndexedSourceTaskHistoryEntry[];
   lastScan?: {
     startedAt: number;
@@ -1100,6 +1113,76 @@ export function isIndexedSourceAdmissionReady(
   descriptor: IndexedSourceDescriptor,
 ): boolean {
   return getIndexedSourceAdmissionIssues(descriptor).length === 0;
+}
+
+function hasIndexedSourceCapabilityHandler(
+  source: IndexedSource,
+  capability: keyof IndexedSourceCapabilities,
+): boolean {
+  switch (capability) {
+    case "scan":
+      return typeof source.scan === "function";
+    case "watch":
+      return typeof source.handleWatchEvent === "function";
+    case "reconcile":
+      return typeof source.reconcile === "function";
+    case "search":
+      return typeof source.search === "function";
+    case "reset":
+      return typeof source.resetIndex === "function";
+    case "clear":
+      return typeof source.clearIndex === "function";
+    case "open":
+      return typeof source.open === "function";
+  }
+}
+
+export function getIndexedSourceLifecycleIssues(
+  source: IndexedSource,
+): IndexedSourceLifecycleIssue[] {
+  const issues: IndexedSourceLifecycleIssue[] = [];
+  const { capabilities } = source.descriptor;
+
+  if (!hasIndexedSourceCapabilityHandler(source, "scan")) {
+    issues.push("missing-scan-handler");
+  }
+
+  const capabilityChecks: Array<{
+    capability: keyof IndexedSourceCapabilities;
+    issue: IndexedSourceLifecycleIssue;
+  }> = [
+    { capability: "watch", issue: "watch-capability-missing-handler" },
+    { capability: "reconcile", issue: "reconcile-capability-missing-handler" },
+    { capability: "search", issue: "search-capability-missing-handler" },
+    { capability: "reset", issue: "reset-capability-missing-handler" },
+    { capability: "clear", issue: "clear-capability-missing-handler" },
+    { capability: "open", issue: "open-capability-missing-handler" },
+  ];
+
+  for (const check of capabilityChecks) {
+    if (
+      capabilities[check.capability] === true &&
+      !hasIndexedSourceCapabilityHandler(source, check.capability)
+    ) {
+      issues.push(check.issue);
+    }
+  }
+
+  for (const check of capabilityChecks) {
+    if (
+      capabilities[check.capability] !== true &&
+      hasIndexedSourceCapabilityHandler(source, check.capability)
+    ) {
+      issues.push("handler-provided-without-capability");
+      break;
+    }
+  }
+
+  return Array.from(new Set(issues));
+}
+
+export function isIndexedSourceLifecycleReady(source: IndexedSource): boolean {
+  return getIndexedSourceLifecycleIssues(source).length === 0;
 }
 
 export function normalizeSearchProviderUserConfigs(

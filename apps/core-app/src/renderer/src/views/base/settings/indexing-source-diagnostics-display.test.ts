@@ -5,6 +5,7 @@ import {
   formatIndexingSourceTimestamp,
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
+  resolveIndexingSourceLifecycleIssueChips,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
@@ -75,6 +76,14 @@ describe('indexing source diagnostics display helpers', () => {
         buildSource({ health: { ...buildSource().health, lastError: 'worker failed' } })
       )
     ).toBe('lastError')
+    expect(
+      resolveIndexingSourceDetailKey(
+        buildSource({
+          lifecycleIssues: ['watch-capability-missing-handler'],
+          health: { ...buildSource().health, reason: 'backend degraded' }
+        })
+      )
+    ).toBe('lifecycleIssue')
   })
 
   it('summarizes roots without expanding long lists in settings rows', () => {
@@ -97,9 +106,13 @@ describe('indexing source diagnostics display helpers', () => {
         buildSource({ health: { ...buildSource().health, status: 'ready' } }),
         buildSource({ health: { ...buildSource().health, status: 'warming' } }),
         buildSource({ health: { ...buildSource().health, status: 'degraded' } }),
-        buildSource({ health: { ...buildSource().health, status: 'error' } })
+        buildSource({ health: { ...buildSource().health, status: 'error' } }),
+        buildSource({
+          health: { ...buildSource().health, status: 'ready' },
+          lifecycleIssues: ['open-capability-missing-handler']
+        })
       ])
-    ).toBe(2)
+    ).toBe(3)
   })
 
   it('formats invalid timestamps as an empty marker', () => {
@@ -317,5 +330,37 @@ describe('indexing source diagnostics display helpers', () => {
         orphanedKeywordsRemoved: 0
       }
     })
+  })
+
+  it('builds bounded lifecycle issue chips from source diagnostics', () => {
+    const chips = resolveIndexingSourceLifecycleIssueChips(
+      buildSource({
+        lifecycleIssues: [
+          'watch-capability-missing-handler',
+          'open-capability-missing-handler',
+          'handler-provided-without-capability'
+        ]
+      })
+    )
+
+    expect(chips).toHaveLength(2)
+    expect(chips).toEqual([
+      {
+        id: 'watch-capability-missing-handler:0',
+        tone: 'warning',
+        labelKey: 'settings.settingFileIndex.sourceLifecycleIssue.watch-capability-missing-handler',
+        values: {
+          issue: 'watch-capability-missing-handler'
+        }
+      },
+      {
+        id: 'open-capability-missing-handler:1',
+        tone: 'warning',
+        labelKey: 'settings.settingFileIndex.sourceLifecycleIssue.open-capability-missing-handler',
+        values: {
+          issue: 'open-capability-missing-handler'
+        }
+      }
+    ])
   })
 })

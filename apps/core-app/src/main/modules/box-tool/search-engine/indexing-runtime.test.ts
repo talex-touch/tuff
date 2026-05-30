@@ -16,13 +16,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IndexingRootPolicy } from './indexing-root-policy'
 import { IndexingRuntime } from './indexing-runtime'
 
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  debug: vi.fn(),
+  error: vi.fn()
+}))
+
 vi.mock('@talex-touch/utils/common/logger', () => ({
-  getLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    debug: vi.fn(),
-    error: vi.fn()
-  })
+  getLogger: () => loggerMock
 }))
 
 const descriptor: IndexedSourceDescriptor = {
@@ -95,6 +97,7 @@ describe('indexingRuntime', () => {
   }
 
   beforeEach(() => {
+    vi.clearAllMocks()
     store = {
       applyBatch: vi.fn(async () => {}),
       applyDelta: vi.fn(async () => {}),
@@ -109,6 +112,20 @@ describe('indexingRuntime', () => {
     expect(runtime.registerSource(source)).toBe(true)
     expect(runtime.registerSource(source)).toBe(false)
     expect(runtime.listDescriptors()).toEqual([descriptor])
+  })
+
+  it('warns when descriptor capabilities do not match source handlers', () => {
+    runtime.registerSource(buildSource())
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      "Indexed source 'test-source' has lifecycle contract issues",
+      {
+        meta: {
+          issues:
+            'watch-capability-missing-handler, reconcile-capability-missing-handler, clear-capability-missing-handler, open-capability-missing-handler'
+        }
+      }
+    )
   })
 
   it('aggregates source health diagnostics', async () => {
@@ -136,6 +153,12 @@ describe('indexingRuntime', () => {
     expect(diagnostics.sources.map((source) => source.descriptor.id)).toEqual([
       'test-source',
       'browser-bookmarks'
+    ])
+    expect(diagnostics.sources[0].lifecycleIssues).toEqual([
+      'watch-capability-missing-handler',
+      'reconcile-capability-missing-handler',
+      'clear-capability-missing-handler',
+      'open-capability-missing-handler'
     ])
   })
 

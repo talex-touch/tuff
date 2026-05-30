@@ -2394,6 +2394,17 @@
           "skipped": "重置跳过 · {summary} · {jobId}"
         }
       },
+      "sourceLifecycleIssues": "合同",
+      "sourceLifecycleIssue": {
+        "missing-scan-handler": "缺少扫描入口",
+        "open-capability-missing-handler": "声明了打开能力但缺少入口",
+        "clear-capability-missing-handler": "声明了清理能力但缺少入口",
+        "watch-capability-missing-handler": "声明了监听能力但缺少入口",
+        "reconcile-capability-missing-handler": "声明了补漏能力但缺少入口",
+        "search-capability-missing-handler": "声明了搜索能力但缺少入口",
+        "reset-capability-missing-handler": "声明了重置能力但缺少入口",
+        "handler-provided-without-capability": "存在入口但未声明对应能力"
+      },
       "sourceEvidence": "证据",
       "sourceEvidenceChip": {
         "generic": "{label} · {status} · {count} · {reason}",
@@ -2424,6 +2435,7 @@
       },
       "sourceDetail": {
         "lastError": "最近错误：{error}",
+        "lifecycleIssue": "合同问题：{issue}",
         "reason": "原因：{reason}",
         "lastIndexedAt": "最近索引：{time}",
         "roots": "监听根：{roots}",

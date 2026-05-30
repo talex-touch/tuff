@@ -2398,6 +2398,17 @@
           "skipped": "Reset skipped · {summary} · {jobId}"
         }
       },
+      "sourceLifecycleIssues": "Contract",
+      "sourceLifecycleIssue": {
+        "missing-scan-handler": "Missing scan handler",
+        "open-capability-missing-handler": "Open capability has no handler",
+        "clear-capability-missing-handler": "Clear capability has no handler",
+        "watch-capability-missing-handler": "Watch capability has no handler",
+        "reconcile-capability-missing-handler": "Reconcile capability has no handler",
+        "search-capability-missing-handler": "Search capability has no handler",
+        "reset-capability-missing-handler": "Reset capability has no handler",
+        "handler-provided-without-capability": "Handler exists without capability"
+      },
       "sourceEvidence": "Evidence",
       "sourceEvidenceChip": {
         "generic": "{label} · {status} · {count} · {reason}",
@@ -2428,6 +2439,7 @@
       },
       "sourceDetail": {
         "lastError": "Last error: {error}",
+        "lifecycleIssue": "Contract issue: {issue}",
         "reason": "Reason: {reason}",
         "lastIndexedAt": "Last indexed: {time}",
         "roots": "Roots: {roots}",

@@ -35,6 +35,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import {
   appendIndexedSourceTaskHistory,
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
+  getIndexedSourceLifecycleIssues,
   IndexedSourceResetReasons,
   resolveIndexedSourceTaskEligibility
 } from '@talex-touch/utils/search'
@@ -104,6 +105,15 @@ export class IndexingRuntime {
     if (this.sources.has(sourceId)) {
       indexingRuntimeLog.warn(`Indexed source '${sourceId}' is already registered`)
       return false
+    }
+
+    const lifecycleIssues = getIndexedSourceLifecycleIssues(source)
+    if (lifecycleIssues.length > 0) {
+      indexingRuntimeLog.warn(`Indexed source '${sourceId}' has lifecycle contract issues`, {
+        meta: {
+          issues: lifecycleIssues.join(', ')
+        }
+      })
     }
 
     this.sources.set(sourceId, source)
