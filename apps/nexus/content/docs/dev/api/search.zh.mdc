@@ -160,7 +160,7 @@ CoreApp 还提供 `IndexedWriteFlushRuntimeService` 作为通用 write flush run
 
 CoreApp 还提供 `IndexedWriteSideEffectService` 作为通用 post-write side-effect dispatcher。它会异步执行 extension processing，并立即调度 indexing；extension processing 失败只进入日志，不阻塞后续 index worker 调度。FileProvider 只保留命名适配，后续 source 不应再复制这段副作用调度。
 
-CoreApp 还提供 `IndexedWorkerSchedulerService` 作为通用 worker scheduling primitive。它负责 worker context gate、chunk dispatch、deferred dispatch 与 failure isolation；FileProvider 只保留文件行到 worker payload 的映射、大文件 background-content 策略和 File 专属日志文案。
+`@talex-touch/utils/search` 也暴露 `IndexedWorkerSchedulerService` 作为通用 worker scheduling primitive。它负责 worker context gate、chunk dispatch、deferred dispatch 与 failure isolation，且不依赖 CoreApp worker 类型。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK scheduler，并只保留文件行到 worker payload 的映射、大文件 background-content 策略和 File 专属日志文案。
 
 Runtime batch scan/reconcile 和 watch route 会在调度层调用 `resolveIndexedSourceTaskEligibility()` 执行 admission 与 health guard：admission issue 非空、缺少对应 capability、health 为 disabled / unsupported / permission-required / error、或 permissionState 为 denied / promptable 的 source 会被跳过。Root-based watch route 还会校验命中的 `IndexedSourceRoot.permissionState`，denied / promptable root 只返回 `root-permission:*` skipped evidence，不会进入 source handler。Batch/route result 会返回 skipped source 数和原因，diagnostics 的 `lastScan` / `lastWatch` / `lastReconcile` 也会记录 `skipped:*`，让 Settings 和 trace 能解释“为什么没有维护或响应这个 source”。高隐私 Browser Data source 因此不能只靠 adapter 返回空，而会被统一 runtime guard 拦住。
 
