@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-30
+> 更新时间：2026-05-31
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -10,6 +10,26 @@
 - [2026-02 历史归档](./archive/changes/CHANGES-2026-02.md)
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
+
+## 2026-05-31
+
+### feat(search): add plugin indexed source manifest metadata
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `packages/utils/plugin/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `plugins/touch-browser-data/manifest.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added metadata-only `manifest.indexedSources` parsing through `resolveIndexedSourceManifestDescriptors()`, including admission validation and scope-to-manifest-permission mapping.
+  - Extended Browser Data admission so `browser-bookmark` / `browser-history` sources must be official-plugin owned in addition to high privacy and browser-data scoped.
+  - Exposed valid indexed source declarations on CoreApp plugin state and recorded `INDEXED_SOURCE_*` loader diagnostics without registering runtime sources or reading browser files.
+  - Declared `touch-browser-data` `browser-bookmarks` lifecycle intent with `fs.read` / `fs.index` / `search.root-results` permission boundaries while keeping the current plugin as an immediate, consent-gated push provider.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-loaders.test.ts"` 通过。
 
 ## 2026-05-30
 
