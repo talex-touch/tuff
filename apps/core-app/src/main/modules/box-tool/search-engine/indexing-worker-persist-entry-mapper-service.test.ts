@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { IndexedWorkerPersistEntryMapperService as SdkIndexedWorkerPersistEntryMapperService } from '@talex-touch/utils/search'
 import { IndexedWorkerPersistEntryMapperService } from './indexing-worker-persist-entry-mapper-service'
 
 describe('indexing-worker-persist-entry-mapper-service', () => {
+  it('re-exports the public SDK worker persist mapper for legacy CoreApp imports', () => {
+    expect(IndexedWorkerPersistEntryMapperService).toBe(SdkIndexedWorkerPersistEntryMapperService)
+  })
+
   it('normalizes worker file updates and progress into persist entries', () => {
     const mapper = new IndexedWorkerPersistEntryMapperService()
     const embeddingWithProvider = {
