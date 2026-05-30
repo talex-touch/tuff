@@ -3,6 +3,7 @@ export {
   formatIndexingSourceTimestamp,
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
+  resolveIndexingSourceLifecycleIssueChips,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
@@ -14,6 +15,7 @@ export {
 
 export type {
   IndexingSourceEvidenceChip,
+  IndexingSourceLifecycleIssueChip,
   IndexingSourceRecentTaskChip,
   IndexingSourceTaskChip,
   IndexingSourceTone

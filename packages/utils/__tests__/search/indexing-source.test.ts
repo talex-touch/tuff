@@ -9,6 +9,7 @@ import {
   deriveSearchProvidersFromPushFeatures,
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
   getIndexedSourceAdmissionIssues,
+  getIndexedSourceLifecycleIssues,
   createSearchProviderDescriptorFromManifest,
   getSearchProviderManifestCoverage,
   getSearchProviderIdsForIndexedSource,
@@ -16,6 +17,7 @@ import {
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   isIndexedSourceAdmissionReady,
+  isIndexedSourceLifecycleReady,
   createSystemSettingsIndexedSourceDescriptor,
   normalizeSearchProviderUserConfigs,
   isIndexedSourceEnabledByProviderConfig,
@@ -223,6 +225,105 @@ describe("indexedSource admission", () => {
 
     expect(getIndexedSourceAdmissionIssues(descriptor)).toEqual([]);
     expect(isIndexedSourceAdmissionReady(descriptor)).toBe(true);
+  });
+
+  it("validates source lifecycle handlers against declared capabilities", () => {
+    const source = {
+      descriptor: buildDescriptor({
+        capabilities: {
+          scan: true,
+          watch: true,
+          reconcile: true,
+          search: true,
+          reset: true,
+          clear: true,
+          open: true,
+        },
+      }),
+      getHealth: async () => ({
+        status: "ready" as const,
+        permissionState: "granted" as const,
+        itemCount: 1,
+        watchState: "active" as const,
+        reconcileState: "idle" as const,
+      }),
+      getRoots: async () => [],
+      async *scan () {
+        yield { sourceId: "quicklink", records: [], done: true };
+      },
+      reconcile: async () => ({
+        sourceId: "quicklink",
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0,
+        startedAt: 1,
+        completedAt: 2,
+      }),
+      handleWatchEvent: async () => [],
+      search: async () => ({ sourceId: "quicklink", records: [] }),
+      resetIndex: async () => ({
+        sourceId: "quicklink",
+        reason: "manual-rebuild" as const,
+        clearedSearchIndex: false,
+        clearedScanProgress: false,
+        startedAt: 1,
+        completedAt: 2,
+      }),
+      clearIndex: async () => {},
+      open: async () => ({ status: "started" as const }),
+    };
+
+    expect(getIndexedSourceLifecycleIssues(source)).toEqual([]);
+    expect(isIndexedSourceLifecycleReady(source)).toBe(true);
+  });
+
+  it("reports lifecycle capability declarations without matching handlers", () => {
+    const source = {
+      descriptor: buildDescriptor({
+        capabilities: {
+          scan: true,
+          watch: true,
+          reconcile: false,
+          search: true,
+          reset: true,
+          clear: true,
+          open: true,
+        },
+      }),
+      getHealth: async () => ({
+        status: "ready" as const,
+        permissionState: "granted" as const,
+        itemCount: 1,
+        watchState: "active" as const,
+        reconcileState: "idle" as const,
+      }),
+      getRoots: async () => [],
+      async *scan () {
+        yield { sourceId: "quicklink", records: [], done: true };
+      },
+      reconcile: async () => ({
+        sourceId: "quicklink",
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0,
+        startedAt: 1,
+        completedAt: 2,
+      }),
+    };
+
+    expect(getIndexedSourceLifecycleIssues(source)).toEqual([
+      "watch-capability-missing-handler",
+      "search-capability-missing-handler",
+      "reset-capability-missing-handler",
+      "clear-capability-missing-handler",
+      "open-capability-missing-handler",
+      "handler-provided-without-capability",
+    ]);
+    expect(isIndexedSourceLifecycleReady(source)).toBe(false);
   });
 
   it("requires browser data sources to be high privacy and scoped", () => {

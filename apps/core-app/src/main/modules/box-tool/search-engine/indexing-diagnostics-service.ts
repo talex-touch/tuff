@@ -8,6 +8,7 @@ import type {
   IndexedSourceRoot
 } from '@talex-touch/utils/search'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { getIndexedSourceLifecycleIssues } from '@talex-touch/utils/search'
 
 const diagnosticsLog = getLogger('indexing-diagnostics')
 
@@ -66,7 +67,8 @@ export class SourceDiagnosticsService {
           descriptor: source.descriptor,
           health,
           roots,
-          evidence
+          evidence,
+          lifecycleIssues: getIndexedSourceLifecycleIssues(source)
         }
       })
     )

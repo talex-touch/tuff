@@ -50,6 +50,7 @@ import {
   formatIndexingSourceTimestamp,
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
+  resolveIndexingSourceLifecycleIssueChips,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
@@ -1145,6 +1146,7 @@ async function triggerRebuild() {
         t(`settings.settingFileIndex.sourceDetail.${resolveIndexingSourceDetailKey(source)}`, {
           error: source.health.lastError,
           reason: source.health.reason,
+          issue: source.lifecycleIssues?.[0] ?? '',
           time: formatIndexingSourceTimestamp(source.health.lastIndexedAt),
           roots: summarizeIndexingSourceRoots(source)
         })
@@ -1184,6 +1186,22 @@ async function triggerRebuild() {
             :class="`source-diagnostic-task-chip--${task.tone}`"
           >
             {{ t(task.labelKey, task.values) }}
+          </span>
+        </div>
+        <div
+          v-if="resolveIndexingSourceLifecycleIssueChips(source).length > 0"
+          class="source-history-row"
+        >
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.sourceLifecycleIssues') }}
+          </span>
+          <span
+            v-for="issue in resolveIndexingSourceLifecycleIssueChips(source)"
+            :key="issue.id"
+            class="source-diagnostic-chip source-history-chip"
+            :class="`source-diagnostic-task-chip--${issue.tone}`"
+          >
+            {{ t(issue.labelKey, issue.values) }}
           </span>
         </div>
         <div

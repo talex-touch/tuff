@@ -51,7 +51,7 @@
 
 已落地：
 
-- SDK 层：`IndexedSource*` 类型、source admission、task eligibility、watch root routing、Search Provider descriptor/config/manifest resolver 已进入 `@talex-touch/utils`；Quicklinks、Browser Bookmarks、Browser History、System Settings 已有 descriptor template。
+- SDK 层：`IndexedSource*` 类型、source admission、lifecycle contract issue、task eligibility、watch root routing、Search Provider descriptor/config/manifest resolver 已进入 `@talex-touch/utils`；Quicklinks、Browser Bookmarks、Browser History、System Settings 已有 descriptor template。
 - Runtime 层：CoreApp 已新增 `IndexingRuntime`、scan/watch/reconcile task 统计、root policy、diagnostics typed transport、Settings maintenance SDK 与 `SearchIndexStoreAdapter` 最小写入边界。
 - Provider 层：App/File/Everything 已作为 thin indexed-source adapter 接入统一 diagnostics 与 runtime lifecycle；Everything path filtering 改读 runtime root policy，避免绕过 File source roots。
 - File 层：watch delta queue、write plan、insert/update/delete executor、flush retry/runtime/snapshot/buffer、worker scheduler、worker persist mapper、post-write side-effect、progress ETA/stream 已抽成通用 primitive 或薄适配。
