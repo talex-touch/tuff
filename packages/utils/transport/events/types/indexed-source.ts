@@ -6,6 +6,7 @@ import type {
   IndexedSourceResetResult,
   IndexedSourceScanReason,
   SearchProviderDescriptor,
+  SearchProviderRegistryIssue,
   SearchProviderRuntimeConfig,
   SearchProviderUserConfig
 } from '../../../search'
@@ -50,6 +51,7 @@ export interface SearchProviderConfigResponse {
   providers: SearchProviderRuntimeConfig[]
   availableProviders?: SearchProviderDescriptor[]
   sourceLinks?: SearchProviderSourceLink[]
+  issues?: SearchProviderRegistryIssue[]
 }
 
 export interface SearchProviderSourceLink {
