@@ -1211,7 +1211,7 @@ jobs:
 
           manifest_url=$(jq -r '.assets[] | select(.name=="tuff-release-manifest.json") | .browser_download_url' /tmp/github-release.json)
           if [ -n "${manifest_url}" ] && [ "${manifest_url}" != "null" ]; then
-            curl -sS -f \
+            curl -sSL -f \
               -H "Authorization: Bearer ${GITHUB_TOKEN}" \
               -H "Accept: application/octet-stream" \
               "${manifest_url}" \
@@ -1226,7 +1226,7 @@ jobs:
             url=$(echo "${item}" | jq -r '.browser_download_url')
             size=$(echo "${item}" | jq -r '.size')
 
-            if [[ "${name}" == "tuff-release-manifest.json" ]] || [[ "${name}" == latest*.yml ]] || [[ "${name}" == "builder-debug.yml" ]]; then
+            if [[ "${name}" == "tuff-release-manifest.json" ]] || [[ "${name}" == *.yml ]] || [[ "${name}" == *.yaml ]]; then
               continue
             fi
 
@@ -1313,8 +1313,7 @@ jobs:
             assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}" '.asset.id? and .asset.platform? and .asset.arch?'
           done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
 
-      - name: Backfill Nexus asset metadata from GitHub manifest (v2.4.7 only)
-        if: env.TAG == 'v2.4.7'
+      - name: Backfill Nexus asset metadata from GitHub manifest
         run: |
           set -euo pipefail
           source /tmp/nexus-sync-helpers.sh

@@ -28,7 +28,7 @@
    node scripts/update-validate-release-manifest.mjs \
      --manifest /path/to/tuff-release-manifest.json
    ```
-3. 确认 `tuff-release-manifest.json` 中包含 core/renderer/extensions，并补齐 sha256/coreRange。
+3. 确认 `tuff-release-manifest.json` 中包含本次发布涉及的 core/renderer/extensions 资产，并补齐 sha256/coreRange；若本次只发布 core 安装包，manifest 至少必须覆盖所有 core 平台资产。
 
 ### 1.2 应用内验证（分平台）
 - Windows：
@@ -48,6 +48,7 @@
 - 更新提示与错误日志可追踪
 - renderer override 生效/回退日志
 - extensions 安装/回滚日志
+- Nexus latest、download endpoint、GitHub manifest asset 与 Gate D remote checks 状态；`tuff-release-manifest.json` 保持为 GitHub Release metadata asset，不作为 Nexus fake platform/arch 下载资产。
 
 ---
 

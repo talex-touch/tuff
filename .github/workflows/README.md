@@ -17,6 +17,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Creates releases and uploads artifacts
   - Generates `tuff-release-manifest.json` for updater validation
   - Syncs Release metadata/assets to Nexus APIs (tag push only)
+  - Follows the GitHub manifest asset redirect, skips updater/debug YAML metadata from the Nexus platform asset matrix, and backfills sha256 from `tuff-release-manifest.json` for all tags
   - Supports explicit `beta`, `snapshot`, and `release` manual build types; `v*-beta*` tags are published as pre-releases with BETA runtime metadata and snapshot packaging policy
   - Uploads only release assets and updater metadata from each platform job, not the full unpacked `dist`
   - Generates concise GitHub release notes from the previous same-channel tag range, including merged PR metadata and bilingual summaries
@@ -24,6 +25,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - 若配置 `NEXUS_SYNC_BASE_URL` 或 `ADMIN_CF_ACCESS_CLIENT_ID` / `ADMIN_CF_ACCESS_CLIENT_SECRET`，则仍会正常执行完整 Nexus 同步链路
   - `sync-nexus-release` 仅在 `POST /api/releases` 返回精确的重复 tag 错误时才转 `PATCH`；其余非 2xx 会按真实错误失败
   - Nexus `create / patch / get / link-github / publish` 成功响应会额外校验最小 JSON 结构，避免 HTML 错页或错误代理页被误判为成功
+  - Gate D remote manifest check validates `tuff-release-manifest.json` on the GitHub Release; Nexus assets remain the downloadable platform matrix and should not use fake platform/arch slots for metadata
 
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content

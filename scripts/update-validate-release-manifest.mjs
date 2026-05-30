@@ -72,11 +72,19 @@ for (const [index, artifact] of artifacts.entries()) {
     requireField(arch === 'x64' || arch === 'arm64', `${label}.arch is required`)
 
     if (typeof name === 'string' && typeof version === 'string') {
-      const corePattern = new RegExp(
-        `^tuff-core-${version}-(win32|darwin|linux)-(x64|arm64)(-setup)?\\.(exe|dmg|AppImage|deb|zip)$`,
+      const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const canonicalCorePattern = new RegExp(
+        `^tuff-core-${escapedVersion}-(win32|darwin|linux)-(x64|arm64)(-setup)?\\.(exe|dmg|AppImage|deb|zip)$`,
         'i'
       )
-      requireField(corePattern.test(name), `${label}.name does not match core naming spec`)
+      const releaseWorkflowCorePattern = new RegExp(
+        `^(windows|macos|ubuntu)-latest-(beta|snapshot|release)-tuff(?:-${escapedVersion}|-${escapedVersion.replace(/-beta\\\./i, '-SNAPSHOT\\.')})?(?:\\.app)?(?:-setup)?\\.(exe|dmg|AppImage|deb|zip)$`,
+        'i'
+      )
+      requireField(
+        canonicalCorePattern.test(name) || releaseWorkflowCorePattern.test(name),
+        `${label}.name does not match core naming spec`
+      )
     }
   }
 

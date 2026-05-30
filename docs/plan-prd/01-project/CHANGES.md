@@ -1,6 +1,6 @@
 # 变更日志
 
-> 更新时间：2026-05-29
+> 更新时间：2026-05-30
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 历史归档
@@ -11,7 +11,101 @@
 - [2025-11 历史归档](./archive/changes/CHANGES-2025-11.md)
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
+## 2026-05-30
+
+### docs(search): define Indexing Runtime V1 and source SDK contract
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `packages/utils/search/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/{app-provider,app-provider.test}.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{app-indexed-source,app-indexed-source.test,indexing-diagnostics-service}.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{browser-bookmarks-indexed-source,browser-bookmarks-indexed-source.test,indexing-runtime,indexing-runtime.test,indexing-root-policy,everything-indexed-source,everything-indexed-source.test,search-core}.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{indexing-store-adapter,indexing-store-adapter.test}.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/{everything-provider,everything-provider.test}.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/{README.md,TODO.md}`
+- `docs/INDEX.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+- `apps/nexus/content/docs/dev/architecture/search-engine.{zh,en}.mdc`
+- `apps/nexus/app/data/tuffSdkItems.ts`
+  - Added a shared `IndexedSource*` type contract under `@talex-touch/utils/search` for local-first search sources, covering descriptor, health, roots, records, scan/watch/reconcile/search/open lifecycle types, and source storage/priority/privacy taxonomy.
+  - Added the `IndexedSourceAdmission` SDK contract plus `getIndexedSourceAdmissionIssues()` / `isIndexedSourceAdmissionReady()` helpers so new CoreApp, official-plugin, and third-party-plugin search sources declare owner, permission scopes, default state, user consent, clearability, and rebuildability before entering the runtime.
+  - Added admission metadata to App/File/Everything indexed-source descriptors, including the external-fast guard for Everything and file-system scope for File source.
+  - Added the Indexing Runtime V1 plan to separate data source lifecycle from SearchProvider behavior without rewriting SearchEngineCore in the first slice.
+  - Added the CoreApp `IndexingRuntime` skeleton with source registry, diagnostics aggregation, health failure isolation, root-based watch event routing, focused unit coverage, and SearchEngineCore lifecycle ownership.
+  - Registered App/File/Everything as thin core indexed-source adapters that map existing provider diagnostics into unified source health and roots without migrating scan/search behavior yet.
+  - Exposed the unified indexing diagnostics snapshot through the typed `CoreBoxEvents.search.indexingDiagnostics` transport event so Settings/CoreBox can consume source health without provider-private APIs.
+  - Added an Advanced Settings / File Index Search Source Diagnostics section that reads the typed diagnostics snapshot and surfaces source status, item count, watch/reconcile state, and roots/error/reason summaries for App/File/Everything.
+  - Wired CoreBox no-result empty states to the same typed diagnostics snapshot, showing compact degraded / permission-required / error / warming source summaries with retry and File Index settings recovery actions.
+  - Split the IndexingRuntime task model into SourceDiagnosticsService, WatchEventRouter, ScanScheduler, ReconcileEngine, and IndexStoreAdapter so future App/File/Browser Data migration can plug into shared scan/watch/reconcile paths instead of expanding provider-private loops.
+  - Added ScanScheduler batch scan result stats and source-level failure isolation so one source scan failure no longer aborts the whole batch scan.
+  - Added ReconcileEngine batch reconcile result stats and source-level failure isolation so one source reconcile failure no longer aborts the whole batch reconcile.
+  - Added a minimal `ReconcileScheduler` between `IndexingRuntime` and `ReconcileEngine` to assign reconcile job ids, record queued timestamps/root counts, and guard concurrent same-source reconcile runs before the future durable job history layer.
+  - Added WatchEventRouter route result stats and failure isolation so one source handler or store delta failure no longer aborts the entire watcher route.
+  - Added optional IndexedSourceEvidence diagnostics and App source evidence for Windows Start Menu/UWP/Registry/App Paths/Steam, macOS mdfind/mdls, Linux desktop entries, and watch roots.
+  - Added an AppIndexedSource adapter and AppProvider lifecycle methods so startup backfill/manual rebuild run through source scan, full sync plus macOS mdls repair run through source reconcile, and app path watcher events route through source watch handling.
+  - Added a Windows app scanner `getAppsBySource()` entry that separates Start Menu, UWP/Get-StartApps, Uninstall Registry, App Paths Registry, and Steam manifest records as first-class source scan results while keeping legacy `getApps()` flattening and dedupe behavior compatible.
+  - Updated AppProvider Windows source evidence to prefer the scanner grouped results, including per-source empty/error reasons, with DB metadata inference retained only as a fallback.
+  - Updated AppProvider scan lifecycle to return `IndexedSourceRecordBatch` records mapped from `ScannedAppInfo`, and `AppIndexedSource.scan()` now yields those batches so the runtime ScanScheduler can write app records through SearchIndexStoreAdapter.
+  - Updated AppProvider reconcile lifecycle to return real added/changed/deleted/skipped/errors counts from full sync and macOS mdls repair instead of fixed zero counters.
+  - Updated AppProvider watch lifecycle so add/change events return `IndexedSourceDelta.record` and delete events return `stableKey/path`, and moved App watcher event routing into SearchEngineCore's indexing runtime bridge for Windows/Linux file events plus macOS app directory events.
+  - Added a FileIndexedSource adapter and FileProvider lifecycle methods so manual rebuild/worker scan, reconciliation, incremental watch updates, and clear/rebuild semantics are reachable through the shared indexed-source runtime.
+  - Updated FileProvider scan lifecycle to map full-scan and reconciliation inserted file rows into `IndexedSourceRecordBatch`, and `FileIndexedSource.scan()` now yields those batches to the runtime ScanScheduler/store boundary.
+  - Updated FileProvider watch lifecycle so add/change events return `IndexedSourceDelta.record` and delete events return `stableKey/path`, allowing WatchEventRouter plus SearchIndexStoreAdapter to apply real file deltas instead of path-only placeholders.
+  - Moved global file watcher event routing for the File source into SearchEngineCore's indexing runtime bridge, so `FILE_ADDED` / `FILE_CHANGED` / `FILE_UNLINKED` events now enter `IndexingRuntime.routeWatchEventWithResult()` instead of FileProvider directly subscribing to the event bus.
+  - Updated FileProvider reconcile lifecycle to return real added/changed/deleted/skipped/errors counts from full scan, reconciliation diff, and stale watch-root cleanup instead of fixed zero counters.
+  - Extended `IndexedSourceReconcileResult` with optional reconcile `deltas`, `appliedDeltas`, `failedDeltas`, and `deltaErrors`, and wired ReconcileEngine to apply those deltas through the runtime store adapter so補漏 can repair the shared index instead of only reporting stats.
+  - Updated FileProvider reconciliation to emit runtime deltas for added, changed, and deleted file rows while preserving the existing internal files table, keyword/icon/content indexing pipeline, and incremental queue during the migration.
+  - Extracted `FileProviderIncrementalQueueService` for incremental path coalescing, delete precedence, manual flag preservation, and serial flush scheduling, leaving the actual incremental DB/keyword/icon/content writes in FileProvider for the next migration slice.
+  - Extracted `FileProviderIncrementalWritePlannerService` for incremental add/change insert-vs-update planning, unchanged detection with timestamp tolerance, and manual accepted/inserted/updated/unchanged summaries while keeping actual DB/keyword/icon/content writes in FileProvider for the next migration slice.
+  - Extracted `FileProviderWriteSideEffectService` so post-write keyword/icon extension processing and content-index worker scheduling share one non-blocking dispatch path across incremental insert, file update, full scan, and reconciliation insert flows.
+  - Extracted `FileProviderIndexSchedulerService` for file-row to index-worker payload mapping, large-file background-content deferral, chunked worker dispatch, and worker failure logging, leaving DB persistence and index-worker result persistence as the remaining FileProvider-owned write boundaries.
+  - Extracted `FileProviderIndexPersistEntryMapperService` for index-worker result to `PersistEntry` mapping, including parser file updates, embedding vectors, progress normalization, and SearchIndex item handoff before `FileProviderIndexRuntimeService` flushes entries through the SearchIndex worker.
+  - Extracted `FileProviderIndexFlushRetryService` for index-worker flush delay, backlog delay, sqlite-busy exponential retry, and retry reason decisions while leaving actual flush execution, commit/rollback, and DB backpressure in `FileProviderIndexRuntimeService`.
+  - Added `IndexedWriteFlushExecutorService` as a runtime/store-level flush primitive for readiness gating, DB write backpressure, persistence, commit/rollback, duration recording, and source-agnostic `reason` / `error` / `metadata` results; `FileProviderIndexFlushExecutorService` now adapts FileProvider-specific result metadata and logging on top of it.
+  - Added `IndexedWriteBufferService` as a runtime/store-level pending-inflight buffer primitive for enqueue, take, commit, rollback, and size accounting; `FileProviderIndexFlushBufferService` now only adapts file worker results by `fileId`.
+  - Added FileProvider index-flush snapshots and `file-provider:index-flush` evidence so unified indexing diagnostics can show the latest flushed / worker-not-ready / failed state, pending/inflight counts, retry reason, error, and duration for the file content index worker.
+  - Added File watch-root pending permission diagnostics: FileProvider now exposes FileSystemWatcher pending paths through `FileIndexedSource` roots as `permissionState: "promptable"` with `file-index-watch-root-pending-permission`, and scan-progress evidence records pending permission roots for Settings/CoreBox diagnostics.
+  - Added `IndexedSource.shouldHandleWatchEvent()` as a source ownership hook and wired WatchEventRouter to record `source-watch-filtered` when a source rejects a watch path.
+  - Added `FILE_WATCH_ROOT_RECOVERED` and routed recovered FileProvider watch roots through `IndexingRuntime.reconcileSource("file-provider", { roots })`, so permission recovery enters runtime reconcile diagnostics instead of staying inside FileSystemWatcher.
+  - Added `IndexedSourceReconcileRequest.reason` plus `lastReconcile.reason/rootCount` diagnostics, and wired File watch-root recovery to record `file-watch-root-recovered` in Settings/CoreBox task chips.
+  - Extended `lastReconcile` diagnostics with scheduler `jobId` and `queuedAt`, so Settings/trace can distinguish reconcile execution records from raw reconcile results.
+  - Added File source evidence for `scan-progress` and `integrity`, exposing scan_progress pending/failed/completed summaries plus FTS/files row-count mismatch resets through unified indexing diagnostics instead of FileProvider-only logs; scan_progress evidence reads, completed-root strategy reads, stale path deletes, and completed-path upserts now live in `FileProviderScanProgressService`.
+  - Extracted `FileProviderIntegrityService` for FTS/files row-count checks, integrity-triggered runtime reset, orphan `keyword_mappings` cleanup, and integrity diagnostics snapshots, leaving only runtime task scheduling as the next boundary to migrate.
+  - Consolidated FileProvider manual rebuild, schema-migration, and integrity mismatch reset paths into `FileProviderRuntimeResetService`, so scan_progress and provider-index resets now share reason/count reporting behind a focused service before becoming full runtime tasks.
+  - Added `IndexedSourceResetRequest` / `IndexedSourceResetResult` and optional `IndexedSource.resetIndex()`, plus `IndexingRuntime.resetSourceRuntimeState()` with `lastReset` diagnostics; FileIndexedSource now exposes FileProvider runtime reset without overloading user-facing `clearIndex()`.
+  - Injected an indexed-source reset delegate from SearchEngineCore into FileProvider, so manual rebuild, schema migration, and integrity mismatch repair now route through `IndexingRuntime.resetSourceRuntimeState("file-provider", { reason })` without making FileProvider import the runtime singleton.
+  - Added IndexingRootPolicy and EverythingIndexedSource so Windows Everything path filtering now mirrors File source roots from runtime diagnostics instead of reading FileProvider private watch roots directly, while still failing closed when no authorized roots are available.
+  - Added a BrowserBookmarksIndexedSource runtime skeleton with high-privacy admission metadata and disabled/pending-migration diagnostics, making the `touch-browser-data` gap visible in unified source diagnostics before migrating Chromium Bookmarks JSON into SQLite-backed scan/watch/reconcile.
+  - Extracted a pure CoreApp Chromium Bookmarks scanner from the plugin path, covering Chrome/Edge/Brave/Arc profile discovery, `Bookmarks` parsing, http(s)-only filtering, URL dedupe, scanner diagnostics, browser roots, and explicit-enabled `browser-bookmark` record batches while keeping the default registered source disabled/pending migration until settings, clear/rebuild, and watch refresh are wired.
+  - Added SearchIndexStoreAdapter so runtime scan batches and watch deltas can write through the existing SQLite/SearchIndexService `indexItems`, `removeItems`, and `removeByProvider` boundary instead of remaining no-op.
+  - Added runtime task state to diagnostics snapshots, exposing latest scan/watch/reconcile results per source for Settings and trace evidence without persisting provider-private task state.
+  - Added the shared `resolveIndexedSourceTaskEligibility()` SDK helper and wired CoreApp batch scan/reconcile plus watch routing to it, so admission-invalid, disabled, unsupported, permission-required, error, denied, promptable, or root-permission-blocked sources are skipped with explicit batch/route and diagnostics `skipped:*` evidence instead of relying on adapter-local empty scans or watch handlers.
+  - Updated Advanced Settings source diagnostics to render compact recent task chips for scan/watch/reconcile counts and failures, making runtime task state visible instead of leaving it as transport-only data.
+  - Synced project and Nexus docs so App/File/Everything/Browser Data/Quicklinks future work points to unified source health, diagnostics, and phased App/File/Browser Data migration instead of duplicating per-provider indexing loops.
+
 ## 2026-05-29
+
+### ci(release): publish beta.6 and tighten release gate sync
+
+- `.github/workflows/build-and-release.yml`
+- `scripts/update-validate-release-manifest.mjs`
+- `scripts/backfill-release-assets-from-github.mjs`
+- `scripts/check-release-gates/remote-checks.mjs`
+- `notes/update_2.4.11-beta.6.{zh,en}.md`
+- `.github/workflows/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/{README,TODO}.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/{PRD-QUALITY-BASELINE,NEXUS-RELEASE-ASSETS-CHECKLIST}.md`
+- `docs/plan-prd/03-features/download-update/{github-release-asset-spec,pre-release-validation}.md`
+  - Published `v2.4.11-beta.6` through the GitHub Actions Build and Release matrix; Windows/macOS/Linux builds, GitHub prerelease creation, and Nexus BETA latest sync completed successfully.
+  - Added committed bilingual beta.6 notes so local Gate D checks do not rely only on generated workflow artifacts.
+  - Updated release manifest validation to accept both the canonical `tuff-core-*` naming contract and the current workflow-produced platform-prefixed core asset names while preserving sha256/platform/arch validation.
+  - Fixed the Nexus sync path to follow the GitHub manifest asset redirect, skip updater/debug YAML metadata before asset linking, and run GitHub-manifest sha256 backfill for all tags instead of only `v2.4.7`.
+  - Updated remote release gate checks to validate the manifest asset on GitHub Release and keep Nexus assets as the platform download matrix, avoiding a fake platform/arch slot for metadata.
+  - Verified `v2.4.11-beta.6` with `check-release-gates --stage gate-d --strict`; remaining remote sha256/signature warnings are tracked release integrity debt and do not mean the beta release failed.
 
 ### docs(plan): add post-slice UI compatibility review
 
@@ -2365,7 +2459,6 @@
   - Extracted shared snippet pack normalization/import helpers under `packages/utils/cloud-share` so CoreApp install uses the same merge and sensitive-filter semantics as `touch-snippets`.
   - Installation count is synced through the public CloudShare install API after local import succeeds; unsupported target/format, missing target plugin, network sync, and storage write failures return explicit error codes.
   - Validation: `pnpm -C "packages/utils" exec vitest run "__tests__/cloud-share-sdk.test.ts" "__tests__/cloud-share-snippet-pack.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/plugin-content-installer.test.ts" "src/renderer/src/composables/store/usePluginContentPackages.test.ts" "src/renderer/src/composables/store/store-rating-error-utils.test.ts"` passed.
-
 
 ### fix(core-app): stabilize Windows CoreBox first-show and result list layout
 

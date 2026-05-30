@@ -215,7 +215,12 @@ function normalizeGitHubCandidates(assets, manifestArtifactsMap) {
     if (!filename || !downloadUrl)
       continue
 
-    if (filename === 'tuff-release-manifest.json' || filename.startsWith('latest') && filename.endsWith('.yml') || filename === 'builder-debug.yml') {
+    if (
+      filename === 'tuff-release-manifest.json'
+      || /(^|-)latest[^/]*\.ya?ml$/i.test(filename)
+      || /(^|-)builder-debug\.ya?ml$/i.test(filename)
+      || /\.ya?ml$/i.test(filename)
+    ) {
       skipped.push({ filename, reason: 'meta-file' })
       continue
     }
@@ -331,77 +336,8 @@ function buildBackfillPlan({ nexusAssets, ghCandidates, manifestMeta }) {
     })
   }
 
-  if (manifestMeta?.asset) {
-    const existingManifest = nexusAssets.find(item => item.filename === 'tuff-release-manifest.json')
-    const manifestSha = manifestMeta.sha256 || parseShaFromDigest(manifestMeta.asset.digest)
-    const manifestSize = Number(manifestMeta.asset.size || manifestMeta.size || 0)
-    const manifestContentType = typeof manifestMeta.asset.content_type === 'string' && manifestMeta.asset.content_type
-      ? manifestMeta.asset.content_type
-      : 'application/json'
-
-    if (existingManifest) {
-      const previousDownloadUrl = normalizeUrl(existingManifest.fallbackDownloadUrl || existingManifest.downloadUrl)
-      const changedFields = []
-
-      if (normalizeUrl(previousDownloadUrl) !== normalizeUrl(manifestMeta.asset.browser_download_url))
-        changedFields.push('downloadUrl')
-      if (Number(existingManifest.size || 0) !== manifestSize)
-        changedFields.push('size')
-      if (normalizeSha(existingManifest.sha256) !== normalizeSha(manifestSha))
-        changedFields.push('sha256')
-      if ((existingManifest.contentType || '') !== manifestContentType)
-        changedFields.push('contentType')
-      if (existingManifest.sourceType !== 'github')
-        changedFields.push('sourceType')
-
-      if (changedFields.length > 0) {
-        updates.push({
-          platform: existingManifest.platform,
-          arch: existingManifest.arch,
-          filename: 'tuff-release-manifest.json',
-          downloadUrl: manifestMeta.asset.browser_download_url,
-          size: manifestSize,
-          sha256: manifestSha,
-          contentType: manifestContentType,
-          changedFields,
-          reason: 'manifest-update'
-        })
-      }
-    }
-    else {
-      const usedPairs = new Set(nexusAssets.map(item => pairKey(item.platform, item.arch)))
-      const reservePairs = [
-        ['darwin', 'universal'],
-        ['darwin', 'arm64'],
-        ['linux', 'arm64'],
-        ['linux', 'universal'],
-        ['win32', 'arm64'],
-        ['win32', 'universal'],
-      ]
-
-      const selectedPair = reservePairs.find(([platform, arch]) => !usedPairs.has(pairKey(platform, arch)))
-
-      if (!selectedPair) {
-        warnings.push('未找到空闲 platform/arch 来挂载 manifest 资产，请手工指定。')
-      }
-      else {
-        const [platform, arch] = selectedPair
-        updates.push({
-          platform,
-          arch,
-          filename: 'tuff-release-manifest.json',
-          downloadUrl: manifestMeta.asset.browser_download_url,
-          size: manifestSize,
-          sha256: manifestSha,
-          contentType: manifestContentType,
-          changedFields: ['create-manifest-asset'],
-          reason: 'manifest-create'
-        })
-      }
-    }
-  }
-  else {
-    warnings.push('GitHub release 未找到 tuff-release-manifest.json，无法回填 manifest。')
+  if (!manifestMeta?.asset) {
+    warnings.push('GitHub release 未找到 tuff-release-manifest.json，无法回填资产 sha256。')
   }
 
   return { updates, warnings }
