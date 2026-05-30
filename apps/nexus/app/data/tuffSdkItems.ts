@@ -81,6 +81,14 @@ export const tuffSdkItems: TuffSdkItem[] = [
     icon: 'i-carbon-search',
   },
   {
+    id: 'indexed-source-sdk',
+    title: 'Indexed Source SDK',
+    description: 'Search source lifecycle contracts.',
+    tag: 'IndexedSource',
+    color: '#06b6d4',
+    icon: 'i-carbon-data-vis-2',
+  },
+  {
     id: 'divisionbox-sdk',
     title: 'DivisionBox SDK',
     description: 'Independent window control.',

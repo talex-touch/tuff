@@ -16,6 +16,79 @@ CoreBox 搜索系统提供强大的搜索匹配能力，支持：
 ## 介绍
 搜索匹配由 Feature 的标题、描述、关键词与剪贴板输入组合生成，适合用于构建自定义搜索与高亮 UI。
 
+## Indexed Source 类型
+
+`@talex-touch/utils/search` 同时暴露本地索引型搜索源的共享类型。它们用于描述 App、File、Everything、Browser Data、Quicklinks 等 source 的生命周期，不直接替代 CoreBox Feature 搜索。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import type {
+    IndexedSource,
+    IndexedSourceDescriptor,
+    IndexedSourceEvidence,
+    IndexedSourceHealth,
+    IndexedSourceRecord,
+  } from '@talex-touch/utils/search'
+---
+:::
+
+首版合同覆盖：
+
+- source descriptor：平台、优先级、storage mode、隐私级别与能力。
+- source health：ready/degraded/unsupported、权限、itemCount、watch 与 reconcile 状态。
+- source evidence：平台子来源、root 数、itemCount、最近检查时间与失败原因。
+- records：稳定 ID、标题、路径或 URI、关键词、tags 与 metadata。
+- lifecycle：scan、watch event、reconcile、search、open、clearIndex。
+
+插件或 CoreApp source 后续接入长期索引时，应优先复用这些类型，避免自定义不可观测的 scan/watch/rebuild 状态。
+
+`IndexedSourceDescriptor.admission` 用于新增 source 准入：声明 `owner`（core / official-plugin / third-party-plugin）、`permissionScopes`、`defaultState`、`requiresUserConsent`、`clearable` 与 `rebuildable`。`getIndexedSourceAdmissionIssues()` 和 `isIndexedSourceAdmissionReady()` 是纯 SDK 校验函数，当前会拦截 high privacy source 静默默认启用、Browser Data 缺 high privacy 或 browser-data scope、external-fast source 缺 external-tool scope、third-party external-fast source、sqlite-index source 不可清理、以及 watch source 不支持 reconcile。`resolveIndexedSourceTaskEligibility()` 会进一步结合 descriptor、health 与 `task: "scan" | "watch" | "reconcile"` 返回 `{ eligible, reason }`，用于运行时调度前判断 source 是否应参与维护或响应 watch 事件。
+
+`IndexedSourceReconcileReasons` 是 SDK 级标准补漏原因码，当前包含 scheduled、manual-repair、watch-gap、watch-recovery、file-watch-root-recovered、health-repair、schema-migration、external-refresh 与 reconcile-not-supported。`IndexedSourceReconcileRequest.reason` 优先使用这些标准值；类型仍允许 source-specific 字符串，避免 CoreApp provider 和官方插件在迁移期间丢失更细的诊断原因。
+
+`IndexedSourceScanReasons` 是 SDK 级标准扫描原因码，当前包含 startup、manual-rebuild、scheduled、watch-recovery、schema-migration 与 health-repair。`IndexedSourceScanRequest.reason` 优先使用这些标准值，避免 App/File/Everything/Browser Data source 在 runtime 迁移期间继续散落硬编码 reason。
+
+`IndexedSourceResetReasons` 是 SDK 级标准运行时 reset 原因码，当前包含 manual-rebuild、schema-migration、integrity-repair、health-repair 与 user-clear。`IndexedSourceResetRequest.reason` 优先使用这些标准值，让 runtime `lastReset` diagnostics 与 FileProvider reset helper 共享同一组稳定原因。
+
+`IndexedSource.resetIndex()` 是运行时 reset 入口，参数/结果由 `IndexedSourceResetRequest` 与 `IndexedSourceResetResult` 描述。它用于清理 source 运行时索引状态（例如 `scan_progress`、provider search index）并让后续 scan/reconcile 修复，不等价于用户级 `clearIndex()`。CoreApp 的 `IndexingRuntime.resetSourceRuntimeState()` 会调用该入口并把结果记录到 diagnostics `lastReset`，让 Settings/trace 能看到 reset reason、是否清理 search index、是否清理 scan_progress 与相关行数。
+
+CoreApp 的 Windows App scanner 已开始按子来源返回分组 scan result：Start Menu、UWP/Get-StartApps、Uninstall Registry、App Paths Registry 与 Steam manifest。旧应用搜索入口仍会 flatten + dedupe 这些分组结果；AppProvider Windows evidence 会优先消费这些分组结果并暴露每个子来源的 empty / error reason，分组信息主要服务 diagnostics、source evidence 与后续 runtime store 迁移。
+
+App source 的 `scan()` 已开始返回 `IndexedSourceRecordBatch`：CoreApp 会把 `ScannedAppInfo` 映射成 `IndexedSourceRecord`，再由 runtime `ScanScheduler` 与 `SearchIndexStoreAdapter` 写入现有搜索索引。插件或官方 source 接入时应沿用同一 record batch 口径，而不是在 provider 内部自建不可观测的索引写入路径。
+
+File source 的 `scan()` 也开始返回 `IndexedSourceRecordBatch`：FileProvider 会把 full scan / reconciliation 期间已插入的文件 rows 映射为 `kind: "file"` 的 `IndexedSourceRecord`，再由 `FileIndexedSource.scan()` yield 给 runtime store boundary。当前 FileProvider 内部 worker 写入仍保留，后续会继续拆到统一 store 边界。
+
+App 与 File source 的 watch delta 都开始返回可被 runtime store 直接消费的增量：add/change 会尝试返回 `IndexedSourceDelta.record`，delete 会返回 `stableKey/path`。全局 `FILE_ADDED` / `FILE_CHANGED` / `FILE_UNLINKED` 事件，以及 macOS App 的目录新增/删除事件，已由 SearchEngineCore 统一桥接到 `IndexingRuntime.routeWatchEventWithResult()`。FileProvider 的 incremental queue 已拆出 `FileProviderIncrementalQueueService` 承接 path 合并、delete 覆盖、manual 标记保留与串行 flush 调度；增量 add/change 的 insert/update/unchanged/manual summary 规划已拆到 `FileProviderIncrementalWritePlannerService`；写入后的 keyword/icon extension 处理与 content indexing 调度已集中到 `FileProviderWriteSideEffectService`；file row 到 index worker payload 的映射、chunk dispatch 与 large-file deferred scheduling 已拆到 `FileProviderIndexSchedulerService`；index worker result 到 `PersistEntry` 的映射已拆到 `FileProviderIndexPersistEntryMapperService`；index worker flush 的 backlog delay、sqlite-busy retry 与失败 retry reason 决策已拆到 `FileProviderIndexFlushRetryService`；flush 执行、worker readiness gate、DB backpressure、`persistAndIndex`、commit/rollback 与 duration 记录已抽到通用 `IndexedWriteFlushExecutorService`，并开始返回 source-agnostic `reason` / `error` / `metadata`；`FileProviderIndexFlushExecutorService` 只保留 FileProvider 返回语义与日志适配；pending/inflight enqueue、take、commit、rollback 与 size 统计已抽到通用 `IndexedWriteBufferService`，`FileProviderIndexFlushBufferService` 只保留 fileId 适配；`FileProviderIndexRuntimeService` 记录最近一次 flush snapshot，`file-provider:index-flush` evidence 会暴露 flushed / worker-not-ready / failed、pending/inflight、retry reason、error 与 duration；内部文件表 persist、flush trace 与 FTS 写入语义仍在 FileProvider / SearchIndex worker 边界，后续继续迁移。
+
+`WatchEventRouter` 会隔离单个 source handler 与 store delta 写入失败，并返回 route result 统计：matched sources、handled/failed sources、applied/failed deltas 与 error 摘要。`IndexedSource.shouldHandleWatchEvent()` 可用于 source 自己判断某个 watch/recovery path 是否属于自己；返回 false 时 runtime 会记录 `source-watch-filtered` skipped reason，而不是调用 source handler。现有 `routeWatchEvent()` 仍保留返回 deltas 的兼容入口。
+
+`ScanScheduler` 的批量扫描也提供 failure isolation：`scanSourcesWithResult()` 会返回成功 source、失败 source、batches、records 与 error 摘要，单个 source 扫描失败不会拖垮整批扫描；单 source `scanSource()` 仍保留显式失败语义。
+
+`ReconcileScheduler` 是 `IndexingRuntime` 与 `ReconcileEngine` 之间的最小补漏任务入口。它目前负责同一 source 的 running guard、job id、queuedAt、reason 与 rootCount 记录，为后续 retry、debounce、durable job history 预留边界，但不改变 source 的 reconcile 算法。`ReconcileEngine` 的批量补漏同样提供 failure isolation：`reconcileSourcesWithResult()` 会返回成功 source、失败 source、增改删跳过/error 汇总与 failure 摘要，单个 source 补漏失败不会拖垮整批补漏；单 source `reconcileSource()` 仍保留显式失败语义。Source 可在 `IndexedSourceReconcileResult.deltas` 中返回补漏产生的 add/change/delete 变更，runtime 会通过同一个 store adapter 应用这些 delta，并把 `appliedDeltas` / `failedDeltas` / `deltaErrors` 写回结果与 diagnostics。`IndexedSourceReconcileRequest.reason` 用于记录触发原因；runtime `lastReconcile` 会保留 `reason`、`rootCount`、`jobId` 与 `queuedAt`，让 Settings/CoreBox 可以区分 scheduled、manual repair、watch-root recovery 等补漏来源。
+
+`IndexedSourceDiagnostics` 可携带最近一次 runtime task 状态：`lastScan`、`lastWatch`、`lastReconcile`。这些字段来自运行时内存，用于 Settings / trace 展示 source-level task evidence，不是持久数据源，也不替代 source 自身 health。
+
+Runtime batch scan/reconcile 和 watch route 会在调度层调用 `resolveIndexedSourceTaskEligibility()` 执行 admission 与 health guard：admission issue 非空、缺少对应 capability、health 为 disabled / unsupported / permission-required / error、或 permissionState 为 denied / promptable 的 source 会被跳过。Root-based watch route 还会校验命中的 `IndexedSourceRoot.permissionState`，denied / promptable root 只返回 `root-permission:*` skipped evidence，不会进入 source handler。Batch/route result 会返回 skipped source 数和原因，diagnostics 的 `lastScan` / `lastWatch` / `lastReconcile` 也会记录 `skipped:*`，让 Settings 和 trace 能解释“为什么没有维护或响应这个 source”。高隐私 Browser Data source 因此不能只靠 adapter 返回空，而会被统一 runtime guard 拦住。
+
+File source roots 会把 `FileSystemWatcher` 中属于 FileProvider watch roots 的 pending paths 映射为 `permissionState: "promptable"`，并带 `file-index-watch-root-pending-permission` reason。只要存在 pending permission root，File source health 会变成 `permission-required`，watchState 会变成 `pending-permission`。这样未授权目录不会伪装成可监听 root，runtime root guard 也能用同一套 `root-permission:*` skipped 语义跳过这些路径。
+
+当 `FileSystemWatcher` 发现 pending path 恢复可访问时，会发出 `FILE_WATCH_ROOT_RECOVERED`。SearchEngineCore 会先通过 File source 的 `shouldHandleWatchEvent()` 做 ownership 过滤，只对 FileProvider watch roots 触发 `IndexingRuntime.reconcileSource("file-provider", { reason: "file-watch-root-recovered", roots: [recoveredRoot] })`。这让权限恢复后的补漏进入 runtime `lastReconcile.reason/rootCount` diagnostics，而不是停留在 watcher 模块内部。
+
+App source 的 `reconcile()` 也已返回真实 `IndexedSourceReconcileResult` 统计，`added` / `changed` / `deleted` / `skipped` / `errors` 来自 full sync diff 与 macOS mdls repair，不再使用固定 0 计数。新 source 接入时应按同一统计语义报告补漏结果。
+
+File source 的 `reconcile()` 也开始透传真实统计：新 root full scan 会计入 `added`，existing root reconciliation 会计入 `added` / `changed` / `deleted` / `skipped`，watch root stale cleanup 会计入 `deleted`。Existing root reconciliation 的新增、更新、删除会同时映射为 `IndexedSourceDelta` 交给 runtime store adapter 应用，使补漏可以修复共享 search index，而不是只更新 FileProvider 内部表或返回统计。File worker 与内部写入队列仍在 FileProvider 内部，后续再逐步迁到 runtime store 边界。
+
+File source evidence 还会暴露 `file-provider:scan-progress`、`file-provider:integrity` 与 `file-provider:index-flush`。`FileProviderScanProgressService` 统一负责 scan_progress evidence、completed-root strategy 读取、stale path 删除与 completed-path upsert；evidence 会汇总 watch roots、pending roots、pending permission roots、completed / failed / skipped file index progress 与 embedding 计数。`FileProviderIntegrityService` 统一负责 FTS/files row-count 检查、integrity-triggered runtime reset、orphan `keyword_mappings` cleanup 与 integrity snapshot；Integrity evidence 记录最近一次 FTS rows、files rows、是否触发 full re-scan、是否清理 stale FTS 或 scan_progress、以及清理了多少 orphan keywords。Index-flush evidence 记录最近一次 content index worker flush 的状态、entries、pending/inflight、retry reason、error 与 duration。这样 Settings/CoreBox diagnostics 可以解释“为什么 source 正在 warming、等待目录权限、被 integrity repair 触发重扫，或 worker flush 没有把内容写进 search index”，而不是只能依赖 FileProvider 日志。
+
+FileProvider 内部的 reset 动作也开始收束：manual rebuild、schema migration 与 integrity mismatch 都通过 `FileProviderRuntimeResetService` 清理 `scan_progress` 或 provider search index，并统一返回 reset reason、scan_progress rows、是否清理 search index 与 scan_progress。当前这仍由 FileProvider 注入依赖执行，但 reset 语义已经不再散落在各分支，后续可提升为 runtime task。
+
+FileIndexedSource 已接入 `resetIndex()`，CoreApp 可通过 `IndexingRuntime.resetSourceRuntimeState("file-provider", ...)` 触发同一套 FileProvider reset helper。该路径用于 runtime 维护，不替代设置页的手动 rebuild，也不会绕过后续 scan/reconcile。
+
+SearchEngineCore 初始化 indexed runtime 后会向 FileProvider 注入 reset delegate。FileProvider 的 manual rebuild、schema migration 与 integrity mismatch repair 会优先通过该 delegate 进入 `IndexingRuntime.resetSourceRuntimeState("file-provider", { reason })`，再由 FileIndexedSource 调回 FileProvider reset helper；未注入 delegate 时才 fallback 到内部 helper。这样避免 FileProvider 直接依赖 runtime singleton，同时让这些 reset 动作进入 `lastReset` diagnostics。
+
+Browser Bookmarks 已有 runtime skeleton：`browser-bookmarks` descriptor 使用 `privacy: "high"`、`owner: "official-plugin"`、`defaultState: "disabled"`、`permissionScopes: ["browser-data", "file-system"]`。CoreApp 已抽出纯 Chromium Bookmarks scanner，覆盖 Chrome / Edge / Brave / Arc profile discovery、`Bookmarks` JSON 解析、非 http(s) URL 过滤、URL 去重、read-failed/not-found/unsupported diagnostics，并可在显式 enabled path 下把书签映射为 `kind: "browser-bookmark"` 的 `IndexedSourceRecordBatch`。默认注册仍保持 disabled/pending migration，表示 `touch-browser-data` 仍是即时只读插件入口；用户设置、持久化 rebuild、clear 与 Bookmarks 文件 watch 小全量刷新尚未完成。
+
 ## 搜索令牌 (Search Tokens)
 
 插件 Feature 在注册时会自动生成搜索令牌，包括：

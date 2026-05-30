@@ -42,6 +42,9 @@
   - Added ScanScheduler batch scan result stats and source-level failure isolation so one source scan failure no longer aborts the whole batch scan.
   - Added ReconcileEngine batch reconcile result stats and source-level failure isolation so one source reconcile failure no longer aborts the whole batch reconcile.
   - Added a minimal `ReconcileScheduler` between `IndexingRuntime` and `ReconcileEngine` to assign reconcile job ids, record queued timestamps/root counts, and guard concurrent same-source reconcile runs before the future durable job history layer.
+  - Added SDK-level `IndexedSourceReconcileReasons` / `IndexedSourceReconcileReason` so scheduled, manual repair, watch gap/recovery, watch-root recovery, health repair, schema migration, external refresh, and unsupported reconcile reasons share stable codes while still allowing source-specific detail strings.
+  - Added SDK-level `IndexedSourceScanReasons` / `IndexedSourceScanReason` so startup, manual rebuild, scheduled, watch recovery, schema migration, and health repair scan triggers share stable codes across CoreApp runtime and indexed-source tests.
+  - Added SDK-level `IndexedSourceResetReasons` / `IndexedSourceResetReason` so manual rebuild, schema migration, integrity repair, health repair, and user clear runtime resets share stable diagnostics codes.
   - Added WatchEventRouter route result stats and failure isolation so one source handler or store delta failure no longer aborts the entire watcher route.
   - Added optional IndexedSourceEvidence diagnostics and App source evidence for Windows Start Menu/UWP/Registry/App Paths/Steam, macOS mdfind/mdls, Linux desktop entries, and watch roots.
   - Added an AppIndexedSource adapter and AppProvider lifecycle methods so startup backfill/manual rebuild run through source scan, full sync plus macOS mdls repair run through source reconcile, and app path watcher events route through source watch handling.

@@ -16,6 +16,79 @@ The CoreBox search system provides powerful matching capabilities:
 ## Introduction
 Search matching combines Feature metadata, keywords, and clipboard inputs to drive ranking and highlights in CoreBox.
 
+## Indexed Source Types
+
+`@talex-touch/utils/search` also exports shared types for local indexed search sources. They describe the lifecycle of App, File, Everything, Browser Data, Quicklinks, and similar sources; they do not replace CoreBox Feature matching.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import type {
+    IndexedSource,
+    IndexedSourceDescriptor,
+    IndexedSourceEvidence,
+    IndexedSourceHealth,
+    IndexedSourceRecord,
+  } from '@talex-touch/utils/search'
+---
+:::
+
+The first contract covers:
+
+- source descriptor: platform, priority, storage mode, privacy level, and capabilities.
+- source health: ready/degraded/unsupported, permission, itemCount, watch state, and reconcile state.
+- source evidence: platform sub-source, root count, itemCount, last check time, and failure reason.
+- records: stable ID, title, path or URI, keywords, tags, and metadata.
+- lifecycle: scan, watch event, reconcile, search, open, and clearIndex.
+
+Plugins or CoreApp sources that need long-lived indexing should reuse these types before adding custom scan/watch/rebuild state.
+
+`IndexedSourceDescriptor.admission` defines source admission: `owner` (core / official-plugin / third-party-plugin), `permissionScopes`, `defaultState`, `requiresUserConsent`, `clearable`, and `rebuildable`. `getIndexedSourceAdmissionIssues()` and `isIndexedSourceAdmissionReady()` are pure SDK validators. They currently catch high-privacy sources that silently default-enable, Browser Data sources without high privacy or browser-data scope, external-fast sources without external-tool scope, third-party external-fast sources, non-clearable sqlite-index sources, and watch sources that lack reconcile support. `resolveIndexedSourceTaskEligibility()` further combines descriptor, health, and `task: "scan" | "watch" | "reconcile"` into an `{ eligible, reason }` result for pre-scheduling source maintenance or watch handling.
+
+`IndexedSourceReconcileReasons` defines SDK-level standard reconcile reason codes: scheduled, manual-repair, watch-gap, watch-recovery, file-watch-root-recovered, health-repair, schema-migration, external-refresh, and reconcile-not-supported. `IndexedSourceReconcileRequest.reason` should prefer these standard values; the type still accepts source-specific strings so CoreApp providers and official plugins can preserve detailed diagnostics during migration.
+
+`IndexedSourceScanReasons` defines SDK-level standard scan reason codes: startup, manual-rebuild, scheduled, watch-recovery, schema-migration, and health-repair. `IndexedSourceScanRequest.reason` should prefer these standard values so App/File/Everything/Browser Data sources do not keep spreading hard-coded reason strings during the runtime migration.
+
+`IndexedSourceResetReasons` defines SDK-level standard runtime reset reason codes: manual-rebuild, schema-migration, integrity-repair, health-repair, and user-clear. `IndexedSourceResetRequest.reason` should prefer these standard values so runtime `lastReset` diagnostics and FileProvider reset helpers share one stable reason set.
+
+`IndexedSource.resetIndex()` is the runtime reset entry, described by `IndexedSourceResetRequest` and `IndexedSourceResetResult`. It clears source runtime index state, such as `scan_progress` or a provider search index, so later scan/reconcile can repair the source. It is not the same as user-facing `clearIndex()`. CoreApp's `IndexingRuntime.resetSourceRuntimeState()` calls this entry and records diagnostics `lastReset`, including the reset reason, whether the search index was cleared, whether scan_progress was cleared, and related row counts.
+
+CoreApp's Windows App scanner now returns grouped scan results by sub-source: Start Menu, UWP/Get-StartApps, Uninstall Registry, App Paths Registry, and Steam manifests. The legacy app search path still flattens and deduplicates those grouped results; AppProvider Windows evidence prefers those grouped results and surfaces each sub-source empty / error reason. The grouping mainly serves diagnostics, source evidence, and the future runtime store migration.
+
+The App source `scan()` path now returns `IndexedSourceRecordBatch`: CoreApp maps `ScannedAppInfo` into `IndexedSourceRecord`, then lets the runtime `ScanScheduler` and `SearchIndexStoreAdapter` write into the existing search index. Plugins or official sources should follow the same record batch contract instead of creating provider-private, unobservable index write paths.
+
+The File source `scan()` path now also returns `IndexedSourceRecordBatch`: FileProvider maps file rows inserted during full scan and reconciliation into `kind: "file"` `IndexedSourceRecord` values, then `FileIndexedSource.scan()` yields them to the runtime store boundary. FileProvider's internal worker writes remain in place for now and will keep migrating toward the shared store boundary in later slices.
+
+App and File source watch deltas now return increments that the runtime store can consume directly: add/change attempts to return `IndexedSourceDelta.record`, while delete returns `stableKey/path`. Global `FILE_ADDED` / `FILE_CHANGED` / `FILE_UNLINKED` events, plus macOS App directory add/delete events, are now bridged by SearchEngineCore into `IndexingRuntime.routeWatchEventWithResult()`. FileProvider's incremental queue now uses `FileProviderIncrementalQueueService` for path coalescing, delete precedence, manual flag preservation, and serial flush scheduling; incremental add/change insert/update/unchanged/manual-summary planning now lives in `FileProviderIncrementalWritePlannerService`; post-write keyword/icon extension processing and content-index scheduling now share `FileProviderWriteSideEffectService`; file-row to index-worker payload mapping, chunk dispatch, and large-file deferred scheduling now live in `FileProviderIndexSchedulerService`; index-worker result to `PersistEntry` mapping now lives in `FileProviderIndexPersistEntryMapperService`; index-worker flush backlog delay, sqlite-busy retry, and failure retry reason decisions now live in `FileProviderIndexFlushRetryService`; flush execution, worker readiness gating, DB backpressure, `persistAndIndex`, commit/rollback, and duration recording now live in the generic `IndexedWriteFlushExecutorService`, which now returns source-agnostic `reason` / `error` / `metadata`; `FileProviderIndexFlushExecutorService` only adapts FileProvider-specific result metadata and logging; pending/inflight enqueue, take, commit, rollback, and size accounting now live in the generic `IndexedWriteBufferService`, while `FileProviderIndexFlushBufferService` only adapts file worker results by `fileId`; `FileProviderIndexRuntimeService` records the latest flush snapshot, and `file-provider:index-flush` evidence exposes flushed / worker-not-ready / failed state, pending/inflight counts, retry reason, error, and duration; actual files-table persistence, flush trace wiring, and FTS write semantics still live at the FileProvider / SearchIndex worker boundary for the next migration slice.
+
+`WatchEventRouter` isolates single-source handler failures and store delta write failures, and returns route result stats: matched sources, handled/failed sources, applied/failed deltas, and error summaries. `IndexedSource.shouldHandleWatchEvent()` lets a source decide whether a watch/recovery path belongs to it; when it returns false, the runtime records a `source-watch-filtered` skipped reason instead of calling the source handler. The existing `routeWatchEvent()` compatibility entry still returns deltas.
+
+Batch scans also have failure isolation in `ScanScheduler`: `scanSourcesWithResult()` returns successful sources, failed sources, batches, records, and error summaries, so one source scan failure does not fail the whole batch. Single-source `scanSource()` keeps explicit failure semantics.
+
+`ReconcileScheduler` is the minimal reconcile task entry between `IndexingRuntime` and `ReconcileEngine`. It currently owns same-source running guards, job ids, queuedAt, reason, and rootCount recording, leaving a boundary for later retry, debounce, and durable job history without changing source reconcile algorithms. Batch reconciliation still has failure isolation in `ReconcileEngine`: `reconcileSourcesWithResult()` returns successful sources, failed sources, added/changed/deleted/skipped/error totals, and failure summaries, so one source reconcile failure does not fail the whole batch. Single-source `reconcileSource()` keeps explicit failure semantics. A source can now return add/change/delete repairs in `IndexedSourceReconcileResult.deltas`; the runtime applies them through the same store adapter and writes `appliedDeltas`, `failedDeltas`, and `deltaErrors` back into the result and diagnostics. `IndexedSourceReconcileRequest.reason` records the trigger reason; runtime `lastReconcile` keeps `reason`, `rootCount`, `jobId`, and `queuedAt` so Settings/CoreBox can distinguish scheduled, manual repair, and watch-root recovery reconciles.
+
+`IndexedSourceDiagnostics` can carry the latest runtime task state: `lastScan`, `lastWatch`, and `lastReconcile`. These fields come from runtime memory and are meant for Settings / trace source-level task evidence; they are not persistent source data and do not replace source health.
+
+Runtime batch scan/reconcile and watch route now call `resolveIndexedSourceTaskEligibility()` before scheduling work or handling events. Sources are skipped when admission issues exist, when the matching capability is absent, when health is disabled / unsupported / permission-required / error, or when permissionState is denied / promptable. Root-based watch routing also checks the matched `IndexedSourceRoot.permissionState`; denied / promptable roots only return `root-permission:*` skipped evidence and do not enter the source handler. Batch/route results include skipped source counts and reasons, and diagnostics `lastScan` / `lastWatch` / `lastReconcile` records `skipped:*` so Settings and trace can explain why a source was not maintained or did not respond. High-privacy Browser Data sources therefore rely on one runtime guard instead of adapter-local empty scans.
+
+File source roots now map FileSystemWatcher pending paths owned by FileProvider watch roots to `permissionState: "promptable"` with the `file-index-watch-root-pending-permission` reason. When any such root exists, File source health becomes `permission-required` and watchState becomes `pending-permission`. This prevents unauthorized directories from looking like active watch roots and lets the runtime root guard skip them with the same `root-permission:*` semantics.
+
+When `FileSystemWatcher` sees a pending path become accessible again, it emits `FILE_WATCH_ROOT_RECOVERED`. SearchEngineCore first applies the File source `shouldHandleWatchEvent()` ownership filter, then triggers `IndexingRuntime.reconcileSource("file-provider", { reason: "file-watch-root-recovered", roots: [recoveredRoot] })` only for FileProvider watch roots. Permission recovery therefore becomes runtime `lastReconcile.reason/rootCount` diagnostics instead of remaining internal watcher state.
+
+The App source `reconcile()` path now returns real `IndexedSourceReconcileResult` stats. `added`, `changed`, `deleted`, `skipped`, and `errors` come from full sync diffing and macOS mdls repair instead of fixed zero counters. New sources should report reconciliation results with the same semantics.
+
+The File source `reconcile()` path now also reports real stats: new-root full scans count `added`, existing-root reconciliation counts `added`, `changed`, `deleted`, and `skipped`, and stale watch-root cleanup counts `deleted`. Existing-root reconciliation also maps added, changed, and deleted file rows into `IndexedSourceDelta` values for the runtime store adapter, so reconcile can repair the shared search index instead of only updating FileProvider's internal table or reporting counters. File workers and internal write queues still live inside FileProvider and will migrate toward the runtime store boundary in later slices.
+
+File source evidence also exposes `file-provider:scan-progress`, `file-provider:integrity`, and `file-provider:index-flush`. `FileProviderScanProgressService` owns scan_progress evidence, completed-root strategy reads, stale path deletes, and completed-path upserts; the evidence summarizes watch roots, pending roots, pending permission roots, completed / failed / skipped file index progress, and embedding counts. `FileProviderIntegrityService` owns FTS/files row-count checks, integrity-triggered runtime reset, orphan `keyword_mappings` cleanup, and the integrity snapshot. The integrity evidence records the latest FTS rows, files rows, whether a full re-scan was scheduled, whether stale FTS rows or scan_progress were cleared, and how many orphan keywords were removed. Index-flush evidence records the latest content index worker flush status, entries, pending/inflight counts, retry reason, error, and duration. Settings/CoreBox diagnostics can therefore explain why the source is warming, waiting for directory permission, why integrity repair triggered a re-scan, or why worker flush has not written content into the search index without depending on FileProvider-only logs.
+
+FileProvider reset actions are also being consolidated. Manual rebuild, schema migration, and integrity mismatch now go through `FileProviderRuntimeResetService` when clearing `scan_progress` or the provider search index, returning one reset reason, scan_progress row count, and flags for search-index and scan_progress cleanup. FileProvider still injects the dependencies for now, but the reset semantics are no longer scattered across branches and can become a runtime task in a later slice.
+
+FileIndexedSource now exposes `resetIndex()`, so CoreApp can call `IndexingRuntime.resetSourceRuntimeState("file-provider", ...)` and reach the same FileProvider reset helper. This path is for runtime maintenance; it does not replace Settings manual rebuild and still relies on later scan/reconcile to repair the index.
+
+After SearchEngineCore initializes the indexed runtime, it injects a reset delegate into FileProvider. FileProvider manual rebuild, schema migration, and integrity mismatch repair prefer that delegate and enter `IndexingRuntime.resetSourceRuntimeState("file-provider", { reason })`; FileIndexedSource then calls back into the FileProvider reset helper. Without a delegate they fall back to the internal helper. This avoids a direct FileProvider dependency on the runtime singleton while making those reset actions visible in `lastReset` diagnostics.
+
+Browser Bookmarks now has a runtime skeleton: the `browser-bookmarks` descriptor uses `privacy: "high"`, `owner: "official-plugin"`, `defaultState: "disabled"`, and `permissionScopes: ["browser-data", "file-system"]`. CoreApp now has a pure Chromium Bookmarks scanner for Chrome / Edge / Brave / Arc profile discovery, `Bookmarks` JSON parsing, non-http(s) URL filtering, URL dedupe, read-failed/not-found/unsupported diagnostics, and explicit-enabled mapping into `kind: "browser-bookmark"` `IndexedSourceRecordBatch` values. The default registered source still reports disabled/pending migration, meaning `touch-browser-data` remains the immediate read-only plugin entry; user settings, persistent rebuild, clear, and Bookmarks-file watch refresh are not complete yet.
+
 ## Search Tokens
 
 Plugin Features automatically generate search tokens upon registration, including:
