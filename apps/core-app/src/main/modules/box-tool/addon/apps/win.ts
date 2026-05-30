@@ -12,6 +12,20 @@ import { expandWindowsEnvironmentVariables } from './app-provider-path-utils'
 import { createLogger } from '../../../../utils/logger'
 
 type AppInfo = ScannedAppInfo
+export type WindowsAppSourceId =
+  | 'windows-start-menu'
+  | 'windows-uwp'
+  | 'windows-registry'
+  | 'windows-app-paths'
+  | 'windows-steam'
+
+export interface WindowsAppSourceScanResult {
+  sourceId: WindowsAppSourceId
+  label: string
+  apps: AppInfo[]
+  error?: string
+}
+
 type StartAppRecord = {
   name?: string
   Name?: string
@@ -44,6 +58,13 @@ export const START_MENU_PATHS = [
 ]
 const WINDOWS_STORE_DISPLAY_PATH = 'Windows Store'
 const WINDOWS_DESKTOP_APP_EXTENSIONS = new Set(['.lnk', '.exe', '.appref-ms'])
+const WINDOWS_APP_SOURCE_LABELS: Record<WindowsAppSourceId, string> = {
+  'windows-start-menu': 'Windows Start Menu',
+  'windows-uwp': 'Windows UWP / Get-StartApps',
+  'windows-registry': 'Windows Uninstall Registry',
+  'windows-app-paths': 'Windows App Paths Registry',
+  'windows-steam': 'Steam app manifests'
+}
 const REGISTRY_DISPLAY_ICON_EXE_PATTERN = /"([^"]+\.exe)"|([^",]+\.exe)/i
 const REGISTRY_EXE_PRIORITY = ['app', 'launcher', 'client', 'desktop']
 const KNOWN_FOLDER_GUID_PATH_PATTERN = /^\{([0-9a-f-]{36})\}[\\/](.+)$/i
@@ -900,24 +921,35 @@ async function fileDisplay(filePath: string): Promise<AppInfo[]> {
   return results
 }
 
-export async function getApps(): Promise<AppInfo[]> {
-  const allAppsPromises = [
-    ...START_MENU_PATHS.map((item) => fileDisplay(item)),
-    listWindowsStoreApps(),
-    listRegistryApps(),
-    listAppPathRegistryApps(),
-    getSteamApps()
-  ]
+function buildWindowsAppSourceResult(
+  sourceId: WindowsAppSourceId,
+  apps: AppInfo[],
+  error?: unknown
+): WindowsAppSourceScanResult {
+  return {
+    sourceId,
+    label: WINDOWS_APP_SOURCE_LABELS[sourceId],
+    apps,
+    error: error instanceof Error ? error.message : error ? String(error) : undefined
+  }
+}
 
-  const results = await Promise.allSettled(allAppsPromises)
-  let allApps: AppInfo[] = []
+async function scanWindowsAppSource(
+  sourceId: WindowsAppSourceId,
+  scan: () => Promise<AppInfo[]>
+): Promise<WindowsAppSourceScanResult> {
+  try {
+    return buildWindowsAppSourceResult(sourceId, await scan())
+  } catch (error) {
+    windowsAppLog.warn('Windows app source scan failed', {
+      error,
+      meta: { sourceId }
+    })
+    return buildWindowsAppSourceResult(sourceId, [], error)
+  }
+}
 
-  results.forEach((result) => {
-    if (result.status === 'fulfilled') {
-      allApps = allApps.concat(result.value)
-    }
-  })
-
+function dedupeWindowsApps(allApps: AppInfo[]): AppInfo[] {
   const uniqueByStableId = new Map<string, AppInfo>()
   const claimedLaunchTargets = new Set<string>()
 
@@ -943,9 +975,27 @@ export async function getApps(): Promise<AppInfo[]> {
     }
   }
 
-  const uniqueApps = Array.from(uniqueByStableId.values())
+  return Array.from(uniqueByStableId.values())
+}
 
-  return uniqueApps
+export async function getAppsBySource(): Promise<WindowsAppSourceScanResult[]> {
+  const sourceScans: Array<Promise<WindowsAppSourceScanResult>> = [
+    scanWindowsAppSource('windows-start-menu', async () => {
+      const results = await Promise.allSettled(START_MENU_PATHS.map((item) => fileDisplay(item)))
+      return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    }),
+    scanWindowsAppSource('windows-uwp', listWindowsStoreApps),
+    scanWindowsAppSource('windows-registry', listRegistryApps),
+    scanWindowsAppSource('windows-app-paths', listAppPathRegistryApps),
+    scanWindowsAppSource('windows-steam', getSteamApps)
+  ]
+
+  return await Promise.all(sourceScans)
+}
+
+export async function getApps(): Promise<AppInfo[]> {
+  const results = await getAppsBySource()
+  return dedupeWindowsApps(results.flatMap((result) => result.apps))
 }
 
 export async function getAppInfo(filePath: string): Promise<AppInfo | null> {

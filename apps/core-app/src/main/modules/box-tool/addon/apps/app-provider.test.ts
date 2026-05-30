@@ -10,6 +10,7 @@ import {
   createDeferred,
   flushPromises,
   getAppInfoByPathMock,
+  getAppsBySourceMock,
   getAppsMock,
   getMainConfigMock,
   getWatchPathsMock,
@@ -66,6 +67,7 @@ describe('appProvider rebuild maintenance', () => {
     addWatchPathMock.mockResolvedValue(undefined)
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
+    getAppsBySourceMock.mockResolvedValue(null)
     spawnSafeMock.mockReturnValue({ unref: vi.fn() })
     runMdlsUpdateScanMock.mockResolvedValue({
       updatedApps: [],
@@ -96,9 +98,18 @@ describe('appProvider rebuild maintenance', () => {
         searchIndex: { indexItems: vi.fn() }
       } as unknown as Parameters<typeof appProvider.onLoad>[0])
 
-      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
-      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
-      expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_UNLINKED, expect.any(Function))
+      expect(touchEventBus.on).not.toHaveBeenCalledWith(
+        TalexEvents.FILE_ADDED,
+        expect.any(Function)
+      )
+      expect(touchEventBus.on).not.toHaveBeenCalledWith(
+        TalexEvents.FILE_CHANGED,
+        expect.any(Function)
+      )
+      expect(touchEventBus.on).not.toHaveBeenCalledWith(
+        TalexEvents.FILE_UNLINKED,
+        expect.any(Function)
+      )
       expect(addWatchPathMock).toHaveBeenCalledWith(watchPaths[0], 4)
       expect(addWatchPathMock).toHaveBeenCalledWith(watchPaths[1], 4)
     })
@@ -142,27 +153,96 @@ describe('appProvider rebuild maintenance', () => {
         getDb: () => ({
           insert: vi.fn(() => ({
             values: valuesMock
+          })),
+          delete: vi.fn(() => ({
+            where: vi.fn(async () => undefined)
+          })),
+          select: vi.fn(() => ({
+            from: vi.fn(() => ({
+              where: vi.fn(async () => [])
+            }))
           }))
         }),
         addFileExtensions: vi.fn(async () => undefined)
       }
       privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+      privateProvider._syncKeywordsForApp = vi.fn(async () => undefined)
 
-      const processResult = await privateProvider.handleItemAddedOrChanged({
-        filePath: shortcutPath
+      await privateProvider.handleIndexedSourceWatchEvent({
+        sourceId: 'app-provider',
+        action: 'change',
+        path: shortcutPath,
+        occurredAt: 1700000000000
       })
-      await processResult
 
       expect(getAppInfoByPathMock).toHaveBeenCalledWith(shortcutPath)
       expect(valuesMock).toHaveBeenCalled()
 
       getAppInfoByPathMock.mockClear()
-      await privateProvider.handleItemAddedOrChanged({
-        filePath:
-          'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\note.txt'
+      await privateProvider.handleIndexedSourceWatchEvent({
+        sourceId: 'app-provider',
+        action: 'change',
+        path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\note.txt',
+        occurredAt: 1700000000001
       })
 
       expect(getAppInfoByPathMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('returns concrete app watch records for runtime store updates', async () => {
+    await withPlatform('win32', async () => {
+      vi.resetModules()
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const shortcutPath =
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Runtime App.lnk'
+      const watchRoot =
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+      const appInfo = {
+        name: 'Runtime App',
+        displayName: 'Runtime App',
+        path: shortcutPath,
+        icon: '',
+        bundleId: '',
+        uniqueId: 'shortcut:c:\\program files\\runtime app\\runtime.exe|',
+        stableId: 'shortcut:c:\\program files\\runtime app\\runtime.exe|',
+        launchKind: 'shortcut' as const,
+        launchTarget: 'C:\\Program Files\\Runtime App\\Runtime.exe',
+        lastModified: new Date('2026-05-30T00:00:00.000Z')
+      }
+      getWatchPathsMock.mockReturnValue([watchRoot])
+      privateProvider.processAppPath = vi.fn(async () => ({
+        success: true,
+        status: 'added',
+        path: shortcutPath,
+        appInfo
+      }))
+
+      const watchDeltas = await privateProvider.handleIndexedSourceWatchEvent({
+        sourceId: 'app-provider',
+        action: 'change',
+        path: shortcutPath,
+        occurredAt: 1700000000000
+      })
+
+      expect(privateProvider.processAppPath).toHaveBeenCalledWith(shortcutPath)
+      expect(watchDeltas).toEqual([
+        {
+          sourceId: 'app-provider',
+          action: 'change',
+          record: expect.objectContaining({
+            sourceId: 'app-provider',
+            recordId: appInfo.stableId,
+            stableKey: appInfo.stableId,
+            kind: 'app',
+            title: 'Runtime App',
+            path: shortcutPath
+          }),
+          path: shortcutPath,
+          reason: 'app-provider-watch-event'
+        }
+      ])
     })
   })
 
@@ -211,8 +291,11 @@ describe('appProvider rebuild maintenance', () => {
       }
       privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
 
-      await privateProvider.handleItemAddedOrChanged({
-        filePath: apprefPath
+      await privateProvider.handleIndexedSourceWatchEvent({
+        sourceId: 'app-provider',
+        action: 'change',
+        path: apprefPath,
+        occurredAt: 1700000000000
       })
 
       expect(getAppInfoByPathMock).toHaveBeenCalledWith(apprefPath)
@@ -1394,12 +1477,20 @@ describe('appProvider rebuild maintenance', () => {
     privateProvider._processAppsForDeletion = vi.fn(async () => [])
     privateProvider.searchIndex = { indexItems: indexItemsMock }
 
+    let stats: unknown
     try {
-      await privateProvider._initialize({ forceRefresh: true })
+      stats = await privateProvider._initialize({ forceRefresh: true })
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true })
     }
 
+    expect(stats).toMatchObject({
+      added: 0,
+      changed: 1,
+      deleted: 0,
+      skipped: 0,
+      errors: 0
+    })
     expect(addFileExtensionsMock).toHaveBeenCalledWith(
       expect.arrayContaining([{ fileId: 91, key: 'icon', value: nextIconPath }])
     )
@@ -1815,6 +1906,335 @@ describe('appProvider rebuild maintenance', () => {
       success: false,
       status: 'invalid',
       reason: 'path-conflicts-with-scanned-app'
+    })
+  })
+
+  it('exposes indexed source scan, reconcile, and watch lifecycle hooks', async () => {
+    await withPlatform('darwin', async () => {
+      vi.resetModules()
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+
+      privateProvider._runStartupBackfill = vi.fn(async () => undefined)
+      privateProvider._runFullSync = vi.fn(async () => ({
+        added: 2,
+        changed: 3,
+        deleted: 1,
+        skipped: 4,
+        errors: 0
+      }))
+      privateProvider._runMdlsUpdateScan = vi.fn(async () => ({
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0
+      }))
+      privateProvider.handleItemUnlinked = vi.fn(async () => undefined)
+      const appInfo = {
+        name: 'Example',
+        displayName: 'Example',
+        path: '/Applications/Example.app',
+        icon: '',
+        bundleId: 'com.example.app',
+        uniqueId: 'com.example.app',
+        stableId: 'com.example.app',
+        launchKind: 'bundle' as const,
+        launchTarget: '/Applications/Example.app',
+        lastModified: new Date('2026-05-30T00:00:00.000Z')
+      }
+      getAppInfoByPathMock.mockResolvedValue(appInfo)
+      privateProvider._waitForItemStable = vi.fn(async () => true)
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => null),
+        getDb: () => ({
+          insert: vi.fn(() => ({
+            values: vi.fn(() => ({
+              returning: vi.fn(async () => [
+                {
+                  id: 48,
+                  path: appInfo.path,
+                  name: 'Example',
+                  displayName: 'Example',
+                  type: 'app',
+                  mtime: appInfo.lastModified,
+                  ctime: appInfo.lastModified
+                }
+              ])
+            }))
+          })),
+          delete: vi.fn(() => ({
+            where: vi.fn(async () => undefined)
+          })),
+          select: vi.fn(() => ({
+            from: vi.fn(() => ({
+              where: vi.fn(async () => [])
+            }))
+          }))
+        }),
+        addFileExtensions: vi.fn(async () => undefined)
+      }
+      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+      privateProvider._syncKeywordsForApp = vi.fn(async () => undefined)
+
+      await privateProvider.scanIndexedSource({
+        sourceId: 'app-provider',
+        reason: 'startup'
+      })
+
+      expect(privateProvider._runStartupBackfill).toHaveBeenCalledTimes(1)
+
+      const reconcileResult = await privateProvider.reconcileIndexedSource({
+        sourceId: 'app-provider'
+      })
+
+      expect(privateProvider._runFullSync).toHaveBeenCalledWith(true)
+      expect(reconcileResult).toMatchObject({
+        sourceId: 'app-provider',
+        added: 2,
+        changed: 3,
+        deleted: 1,
+        skipped: 4,
+        errors: 0,
+        reason: 'full-sync+mdls-update-scan'
+      })
+
+      await expect(
+        privateProvider.handleIndexedSourceWatchEvent({
+          sourceId: 'app-provider',
+          action: 'change',
+          path: '/Applications/Example.app',
+          occurredAt: 1700000000000
+        })
+      ).resolves.toEqual([
+        {
+          sourceId: 'app-provider',
+          action: 'change',
+          record: expect.objectContaining({
+            sourceId: 'app-provider',
+            recordId: appInfo.stableId,
+            stableKey: appInfo.stableId,
+            kind: 'app',
+            title: 'Example',
+            path: '/Applications/Example.app'
+          }),
+          path: '/Applications/Example.app',
+          reason: 'app-provider-watch-event'
+        }
+      ])
+      await privateProvider.handleIndexedSourceWatchEvent({
+        sourceId: 'app-provider',
+        action: 'delete',
+        path: '/Applications/Example.app',
+        occurredAt: 1700000000001
+      })
+
+      expect(privateProvider.handleItemUnlinked).toHaveBeenCalledWith({
+        filePath: '/Applications/Example.app'
+      })
+    })
+  })
+
+  it('exposes app indexed source evidence by platform sub-source', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const watchPaths = [
+        'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs',
+        'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+      ]
+      getWatchPathsMock.mockReturnValue(watchPaths)
+      const now = new Date()
+      const appRows = [
+        { id: 1, path: 'C:\\Start\\Foo.lnk', name: 'Foo' },
+        { id: 2, path: 'shell:AppsFolder\\Pkg!App', name: 'Store App' },
+        { id: 3, path: 'C:\\Program Files\\Reg\\Reg.exe', name: 'Reg' },
+        { id: 4, path: 'C:\\Program Files\\AppPath\\App.exe', name: 'AppPath' },
+        { id: 5, path: 'steam://rungameid/123', name: 'Steam Game' }
+      ].map((row) => ({
+        ...row,
+        displayName: row.name,
+        extension: null,
+        size: null,
+        mtime: now,
+        ctime: now,
+        lastIndexedAt: now,
+        isDir: false,
+        type: 'app',
+        content: null,
+        embeddingStatus: 'pending' as const
+      }))
+
+      privateProvider.dbUtils = {
+        getFilesByType: vi.fn(async () => [...appRows]),
+        getDb: () => ({
+          select: vi.fn(() => ({
+            from: vi.fn(() => ({
+              where: vi.fn(async () => [
+                { fileId: 1, key: 'identityKind', value: 'windows-shortcut' },
+                { fileId: 1, key: 'displayPath', value: 'C:\\Start\\Foo.lnk' },
+                { fileId: 2, key: 'identityKind', value: 'windows-uwp' },
+                { fileId: 2, key: 'launchKind', value: 'uwp' },
+                { fileId: 3, key: 'displayNameSource', value: 'registry display name' },
+                { fileId: 4, key: 'displayNameSource', value: 'App Paths registry' },
+                { fileId: 5, key: 'launchKind', value: 'protocol' },
+                { fileId: 5, key: 'launchTarget', value: 'steam://rungameid/123' }
+              ])
+            }))
+          }))
+        })
+      } as unknown
+
+      const evidence = await appProvider.getIndexedSourceEvidence()
+
+      expect(evidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'app-provider:watch-roots', rootCount: 2 }),
+          expect.objectContaining({ id: 'app-provider:windows-start-menu', itemCount: 1 }),
+          expect.objectContaining({ id: 'app-provider:windows-uwp', itemCount: 1 }),
+          expect.objectContaining({ id: 'app-provider:windows-registry', itemCount: 1 }),
+          expect.objectContaining({ id: 'app-provider:windows-app-paths', itemCount: 1 }),
+          expect.objectContaining({ id: 'app-provider:windows-steam', itemCount: 1 })
+        ])
+      )
+    })
+  })
+
+  it('prefers Windows scanner grouped source evidence over indexed metadata inference', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+
+      getWatchPathsMock.mockReturnValue([
+        'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+      ])
+      getAppsBySourceMock.mockResolvedValue([
+        {
+          sourceId: 'windows-start-menu',
+          label: 'Windows Start Menu',
+          apps: [{ name: 'Start App' }]
+        },
+        {
+          sourceId: 'windows-uwp',
+          label: 'Windows UWP / Get-StartApps',
+          apps: [{ name: 'Store App' }]
+        },
+        {
+          sourceId: 'windows-registry',
+          label: 'Windows Uninstall Registry',
+          apps: [],
+          error: 'registry-denied'
+        },
+        {
+          sourceId: 'windows-app-paths',
+          label: 'Windows App Paths Registry',
+          apps: [{ name: 'App Path A' }, { name: 'App Path B' }]
+        },
+        {
+          sourceId: 'windows-steam',
+          label: 'Steam app manifests',
+          apps: []
+        }
+      ])
+      privateProvider.dbUtils = {
+        getFilesByType: vi.fn(async () => {
+          throw new Error('db metadata fallback should not be used')
+        })
+      } as unknown
+
+      const evidence = await appProvider.getIndexedSourceEvidence()
+
+      expect(getAppsBySourceMock).toHaveBeenCalled()
+      expect(evidence).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'app-provider:windows-start-menu',
+            itemCount: 1,
+            status: 'ready',
+            metadata: expect.objectContaining({ evidenceSource: 'scanner' })
+          }),
+          expect.objectContaining({
+            id: 'app-provider:windows-registry',
+            itemCount: 0,
+            status: 'degraded',
+            reason: 'registry-denied'
+          }),
+          expect.objectContaining({
+            id: 'app-provider:windows-app-paths',
+            itemCount: 2,
+            status: 'ready'
+          }),
+          expect.objectContaining({
+            id: 'app-provider:windows-steam',
+            itemCount: 0,
+            status: 'degraded',
+            reason: 'windows-steam-empty'
+          }),
+          expect.objectContaining({
+            id: 'app-provider:manual',
+            reason: 'manual-app-entries-not-scanned'
+          })
+        ])
+      )
+    })
+  })
+
+  it('returns indexed source record batches from app scans', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      privateProvider._runStartupBackfill = vi.fn(async () => undefined)
+      vi.spyOn(privateProvider as never, '_setLastBackfillTime').mockResolvedValue(undefined)
+      getAppsMock.mockResolvedValue([
+        {
+          name: 'Example App',
+          displayName: 'Example App',
+          fileName: 'Example App.lnk',
+          path: 'C:\\Start\\Example App.lnk',
+          icon: 'data:image/png;base64,AQID',
+          bundleId: '',
+          uniqueId: 'shortcut:c:\\program files\\example\\example.exe|',
+          stableId: 'shortcut:c:\\program files\\example\\example.exe|',
+          launchKind: 'shortcut',
+          launchTarget: 'C:\\Program Files\\Example\\Example.exe',
+          displayPath: 'C:\\Program Files\\Example\\Example.exe',
+          alternateNames: ['Example'],
+          identityKind: 'windows-shortcut',
+          displayNameSource: 'shortcut',
+          displayNameQuality: 'system',
+          lastModified: new Date('2026-05-30T00:00:00.000Z')
+        }
+      ])
+
+      const batch = await appProvider.scanIndexedSource({
+        sourceId: 'app-provider',
+        reason: 'startup'
+      })
+
+      expect(batch).toEqual(
+        expect.objectContaining({
+          sourceId: 'app-provider',
+          done: true,
+          records: [
+            expect.objectContaining({
+              sourceId: 'app-provider',
+              recordId: 'shortcut:c:\\program files\\example\\example.exe|',
+              stableKey: 'shortcut:c:\\program files\\example\\example.exe|',
+              kind: 'app',
+              title: 'Example App',
+              path: 'C:\\Start\\Example App.lnk',
+              mtime: new Date('2026-05-30T00:00:00.000Z').getTime(),
+              keywords: expect.arrayContaining(['Example App', 'Example App.lnk', 'Example']),
+              metadata: expect.objectContaining({
+                extension: '.exe',
+                launchKind: 'shortcut',
+                launchTarget: 'C:\\Program Files\\Example\\Example.exe',
+                identityKind: 'windows-shortcut'
+              })
+            })
+          ]
+        })
+      )
     })
   })
 })

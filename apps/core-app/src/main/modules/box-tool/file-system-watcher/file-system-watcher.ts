@@ -9,6 +9,7 @@ import {
   DirectoryUnlinkedEvent,
   FileAddedEvent,
   FileChangedEvent,
+  FileWatchRootRecoveredEvent,
   FileUnlinkedEvent,
   TalexEvents,
   touchEventBus
@@ -148,6 +149,10 @@ export class FileSystemWatcherModule extends BaseModule {
           await this.addPathInternal(path, pending.depth)
           this.pendingPaths.delete(path)
           recovered.push(path)
+          touchEventBus.emit(
+            TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+            new FileWatchRootRecoveredEvent(path)
+          )
           fileSystemWatcherLog.info(`Successfully added pending path: ${path}`)
         } catch {
           fileSystemWatcherLog.info(`Pending path still unavailable: ${path}`)

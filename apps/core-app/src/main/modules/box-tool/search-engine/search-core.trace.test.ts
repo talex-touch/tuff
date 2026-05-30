@@ -1,14 +1,20 @@
 import type { TuffQuery } from '@talex-touch/utils'
-import { TuffInputType } from '@talex-touch/utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { IndexedSourceReconcileReasons, TuffInputType } from '@talex-touch/utils'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
-const { infoSpy, warnSpy } = vi.hoisted(() => ({
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
+import { SearchEngineCore } from './search-core'
+
+const { fileProviderSetResetDelegateSpy, infoSpy, warnSpy, transportOnSpy } = vi.hoisted(() => ({
+  fileProviderSetResetDelegateSpy: vi.fn(),
   infoSpy: vi.fn(),
-  warnSpy: vi.fn()
+  warnSpy: vi.fn(),
+  transportOnSpy: vi.fn()
 }))
 
-type SearchCoreTraceHarness = {
-  logSearchTrace(params: {
+interface SearchCoreTraceHarness {
+  logSearchTrace: (params: {
     event: string
     sessionId: string
     query: TuffQuery
@@ -16,8 +22,8 @@ type SearchCoreTraceHarness = {
     result: Record<string, number>
     sourceStats: Array<Record<string, unknown>>
     includeDetails: boolean
-  }): void
-  _recordSearchMetrics(params: {
+  }) => void
+  _recordSearchMetrics: (params: {
     sessionId: string
     query: TuffQuery
     totalDuration: number
@@ -30,7 +36,7 @@ type SearchCoreTraceHarness = {
     sourceStats: Array<Record<string, unknown>>
     resultCount: number
     providerFilter?: string
-  }): void
+  }) => void
 }
 
 const sentryServiceMock = vi.hoisted(() => ({
@@ -71,7 +77,14 @@ vi.mock('../../../utils/perf-context', () => ({
 }))
 
 vi.mock('../../../core/eventbus/touch-event', () => ({
-  TalexEvents: {},
+  TalexEvents: {
+    FILE_ADDED: 'file-system/file-added',
+    FILE_CHANGED: 'file-system/file-changed',
+    FILE_UNLINKED: 'file-system/file-unlinked',
+    DIRECTORY_ADDED: 'file-system/directory-added',
+    DIRECTORY_UNLINKED: 'file-system/directory-unlinked',
+    FILE_WATCH_ROOT_RECOVERED: 'file-system/watch-root-recovered'
+  },
   touchEventBus: {
     on: vi.fn(),
     off: vi.fn(),
@@ -108,7 +121,10 @@ vi.mock('../../../utils/perf-monitor', () => ({
 }))
 
 vi.mock('../../database', () => ({
-  databaseModule: {}
+  databaseModule: {
+    getDb: vi.fn(() => ({})),
+    getAuxDb: vi.fn(() => ({}))
+  }
 }))
 
 vi.mock('../../plugin/adapters/plugin-features-adapter', () => ({
@@ -137,7 +153,12 @@ vi.mock('../addon/files/everything-provider', () => ({
   everythingProvider: { id: 'everything-provider', type: 'file', onSearch: vi.fn() }
 }))
 vi.mock('../addon/files/file-provider', () => ({
-  fileProvider: { id: 'file-provider', type: 'file', onSearch: vi.fn() }
+  fileProvider: {
+    id: 'file-provider',
+    type: 'file',
+    onSearch: vi.fn(),
+    setIndexedSourceRuntimeResetDelegate: fileProviderSetResetDelegateSpy
+  }
 }))
 vi.mock('../addon/preview', () => ({
   previewProvider: { id: 'preview-provider', type: 'preview', onSearch: vi.fn() }
@@ -168,7 +189,10 @@ vi.mock('./search-gather', () => ({
 }))
 
 vi.mock('./search-index-service', () => ({
-  SearchIndexService: class {}
+  SearchIndexService: class {
+    warmup = vi.fn(async () => {})
+    preloadPinyin = vi.fn()
+  }
 }))
 
 vi.mock('./search-logger', () => ({
@@ -196,17 +220,17 @@ vi.mock('./usage-stats-queue', () => ({
 }))
 
 vi.mock('./usage-summary-service', () => ({
-  UsageSummaryService: class {}
+  UsageSummaryService: class {
+    stop = vi.fn()
+  }
 }))
 
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     sendToWindow: vi.fn(),
-    on: vi.fn()
+    on: transportOnSpy
   }))
 }))
-
-import { SearchEngineCore } from './search-core'
 
 describe('search-core search-trace', () => {
   beforeEach(() => {
@@ -216,6 +240,118 @@ describe('search-core search-trace', () => {
     sentryServiceMock.isEnabled.mockReturnValue(false)
     sentryServiceMock.queueNexusTelemetry.mockClear()
     sentryServiceMock.recordSearchMetrics.mockClear()
+    transportOnSpy.mockClear()
+    fileProviderSetResetDelegateSpy.mockClear()
+    vi.mocked(touchEventBus.on).mockClear()
+    vi.mocked(touchEventBus.off).mockClear()
+  })
+
+  it('routes file system events through the indexed source runtime bridge', async () => {
+    const getSource = vi.fn(() => ({
+      shouldHandleWatchEvent: vi.fn(() => true)
+    }))
+    const reconcileSource = vi.fn(async () => ({
+      sourceId: 'file-provider',
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      errors: 0,
+      startedAt: 1,
+      completedAt: 2
+    }))
+    const routeWatchEventWithResult = vi.fn(async () => ({
+      deltas: [],
+      matchedSources: 1,
+      handledSources: 1,
+      failedSources: 0,
+      appliedDeltas: 0,
+      failedDeltas: 0,
+      errors: []
+    }))
+    const core = SearchEngineCore.getInstance() as unknown as {
+      indexingRuntime: {
+        routeWatchEventWithResult: typeof routeWatchEventWithResult
+        getSource: typeof getSource
+        reconcileSource: typeof reconcileSource
+        clear: () => void
+      }
+      subscribeIndexedSourceFsBridge: () => void
+      destroy: () => void
+    }
+    core.indexingRuntime = { routeWatchEventWithResult, getSource, reconcileSource, clear: vi.fn() }
+
+    core.subscribeIndexedSourceFsBridge()
+
+    expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
+    expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
+    expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_UNLINKED, expect.any(Function))
+    expect(touchEventBus.on).toHaveBeenCalledWith(
+      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+      expect.any(Function)
+    )
+
+    const changedHandlers = vi
+      .mocked(touchEventBus.on)
+      .mock.calls.filter(([event]) => event === TalexEvents.FILE_CHANGED)
+      .map(([, handler]) => handler)
+    for (const changedHandler of changedHandlers) {
+      changedHandler?.({
+        name: TalexEvents.FILE_CHANGED,
+        filePath: '/tmp/a.md'
+      } as unknown as Parameters<typeof changedHandler>[0])
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(routeWatchEventWithResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'file-provider',
+        action: 'change',
+        path: '/tmp/a.md'
+      })
+    )
+    expect(routeWatchEventWithResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'app-provider',
+        action: 'change',
+        path: '/tmp/a.md'
+      })
+    )
+
+    const recoveredHandler = vi
+      .mocked(touchEventBus.on)
+      .mock.calls.find(([event]) => event === TalexEvents.FILE_WATCH_ROOT_RECOVERED)?.[1]
+    recoveredHandler?.({
+      name: TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+      filePath: '/tmp/recovered'
+    } as unknown as Parameters<NonNullable<typeof recoveredHandler>>[0])
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(getSource).toHaveBeenCalledWith('file-provider')
+    expect(reconcileSource).toHaveBeenCalledWith(
+      'file-provider',
+      expect.objectContaining({
+        reason: IndexedSourceReconcileReasons.WatchRootRecovered,
+        roots: [
+          expect.objectContaining({
+            sourceId: 'file-provider',
+            path: '/tmp/recovered',
+            permissionState: 'granted',
+            reason: IndexedSourceReconcileReasons.WatchRootRecovered
+          })
+        ]
+      })
+    )
+
+    core.destroy()
+    expect(fileProviderSetResetDelegateSpy).toHaveBeenCalledWith(null)
+    expect(touchEventBus.off).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
+    expect(touchEventBus.off).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
+    expect(touchEventBus.off).toHaveBeenCalledWith(TalexEvents.FILE_UNLINKED, expect.any(Function))
+    expect(touchEventBus.off).toHaveBeenCalledWith(
+      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+      expect.any(Function)
+    )
   })
 
   it('结构化日志不输出 query 明文并包含争用快照字段', () => {
@@ -315,5 +451,34 @@ describe('search-core search-trace', () => {
         }
       }
     })
+  })
+
+  it('注册统一 indexing diagnostics transport handler', async () => {
+    const core = SearchEngineCore.getInstance()
+    core.init({
+      app: {
+        channel: {
+          keyManager: {}
+        }
+      }
+    } as never)
+
+    const eventName = CoreBoxEvents.search.indexingDiagnostics.toEventName()
+    const handler = transportOnSpy.mock.calls.find(
+      (call) => call[0].toEventName() === eventName
+    )?.[1]
+
+    expect(handler).toBeTypeOf('function')
+    expect(fileProviderSetResetDelegateSpy).toHaveBeenCalledWith(expect.any(Function))
+
+    const diagnostics = await handler()
+
+    expect(diagnostics.summary.total).toBe(4)
+    expect(diagnostics.sources.map((source) => source.descriptor.id)).toEqual([
+      'app-provider',
+      'file-provider',
+      'everything-provider',
+      'browser-bookmarks'
+    ])
   })
 })

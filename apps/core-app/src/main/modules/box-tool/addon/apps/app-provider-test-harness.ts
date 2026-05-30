@@ -3,6 +3,7 @@ import { vi } from 'vitest'
 const appProviderMocks = vi.hoisted(() => ({
   addWatchPathMock: vi.fn(),
   getAppsMock: vi.fn(),
+  getAppsBySourceMock: vi.fn(),
   getAppInfoByPathMock: vi.fn(),
   getLoggerMock: vi.fn(() => ({
     info: vi.fn(),
@@ -34,6 +35,7 @@ const appProviderMocks = vi.hoisted(() => ({
 
 export const addWatchPathMock = appProviderMocks.addWatchPathMock
 export const getAppsMock = appProviderMocks.getAppsMock
+export const getAppsBySourceMock = appProviderMocks.getAppsBySourceMock
 export const getAppInfoByPathMock = appProviderMocks.getAppInfoByPathMock
 export const getLoggerMock = appProviderMocks.getLoggerMock
 export const getMainConfigMock = appProviderMocks.getMainConfigMock
@@ -196,6 +198,7 @@ vi.mock('../../search-engine/search-core', () => ({
 vi.mock('./app-scanner', () => ({
   appScanner: {
     getApps: getAppsMock,
+    getAppsBySource: getAppsBySourceMock,
     getAppInfoByPath: getAppInfoByPathMock,
     getWatchPaths: getWatchPathsMock,
     runMdlsUpdateScan: runMdlsUpdateScanMock
@@ -400,11 +403,52 @@ export type AppProviderPrivate = {
   fetchExtensionsForFiles: (files: unknown[]) => Promise<unknown[]>
   loadScannedApps: (options?: { forceRefresh?: boolean }) => Promise<unknown[]>
   _clearPendingDeletions: () => Promise<void>
-  _initialize: (options?: { forceRefresh?: boolean }) => Promise<void>
+  _initialize: (options?: { forceRefresh?: boolean }) => Promise<unknown>
   _waitForItemStable: (path: string) => Promise<boolean>
-  handleItemAddedOrChanged: (event: { filePath: string }) => Promise<void> | Promise<Promise<void>>
+  processAppPath: (path: string) => Promise<{
+    success: boolean
+    status: string
+    path?: string
+    appInfo?: {
+      name: string
+      displayName?: string
+      path: string
+      icon?: string
+      bundleId?: string
+      uniqueId?: string
+      stableId?: string
+      launchKind: string
+      launchTarget: string
+      lastModified?: Date
+    }
+  }>
+  handleItemUnlinked: (event: { filePath: string }) => Promise<void> | Promise<Promise<void>>
+  scanIndexedSource: (request: { sourceId: string; reason: string }) => Promise<void>
+  reconcileIndexedSource: (request: { sourceId: string }) => Promise<unknown>
+  handleIndexedSourceWatchEvent: (event: {
+    sourceId?: string
+    action: 'add' | 'change' | 'delete'
+    path: string
+    occurredAt: number
+  }) => Promise<
+    Array<{
+      sourceId: string
+      action: 'add' | 'change' | 'delete'
+      record?: {
+        sourceId: string
+        recordId: string
+        stableKey: string
+        kind: string
+        title: string
+        path?: string
+      }
+      stableKey?: string
+      path?: string
+      reason?: string
+    }>
+  >
   _processAppsForDeletion: (apps: unknown[]) => Promise<number[]>
-  _performFullSync: (forced: boolean) => Promise<void>
+  _performFullSync: (forced: boolean) => Promise<unknown>
   _generateKeywordsForApp: (app: {
     alternateNames?: string[]
     bundleId?: string
@@ -441,13 +485,13 @@ export type AppProviderPrivate = {
     mode?: 'keywords' | 'scan'
     force?: boolean
   }) => Promise<unknown>
-  _performMdlsUpdateScan: () => Promise<void>
+  _performMdlsUpdateScan: () => Promise<unknown>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
   reindexManagedEntries: () => Promise<void>
   _recordMissingIconApps: (apps: unknown[]) => Promise<void>
-  _runFullSync: (forced: boolean) => Promise<void>
-  _runMdlsUpdateScan: () => Promise<void>
+  _runFullSync: (forced: boolean) => Promise<unknown>
+  _runMdlsUpdateScan: () => Promise<unknown>
   _runStartupBackfill: () => Promise<void>
   _setLastFullSyncTime: (timestamp: number) => Promise<void>
   _mapDbAppToScannedInfo: (app: {

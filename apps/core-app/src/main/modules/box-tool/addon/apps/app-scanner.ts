@@ -9,6 +9,9 @@ import { createLogger } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { formatLog, LogStyle } from './app-utils'
 import type { ScannedAppInfo } from './app-types'
+import type { WindowsAppSourceScanResult } from './win'
+
+export type AppScannerSourceScanResult = WindowsAppSourceScanResult
 
 const appScannerLog = createLogger('AppScanner')
 const WINDOWS_START_MENU_PATHS = [
@@ -83,6 +86,23 @@ export class AppScanner {
     } finally {
       this.scanPromise = null
     }
+  }
+
+  async getAppsBySource(options?: {
+    forceRefresh?: boolean
+  }): Promise<AppScannerSourceScanResult[] | null> {
+    if (process.platform !== 'win32') return null
+
+    const forceRefresh = Boolean(options?.forceRefresh)
+    const { getAppsBySource } = await import('./win')
+    const results = await getAppsBySource()
+
+    if (forceRefresh) {
+      this.cachedApps = results.flatMap((result) => result.apps)
+      this.cachedAt = Date.now()
+    }
+
+    return results
   }
 
   private async scanApps(): Promise<ScannedAppInfo[]> {
