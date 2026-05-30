@@ -2,6 +2,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { FileProviderRuntimeResetResult } from './file-provider-runtime-reset-service'
 import { performance } from 'node:perf_hooks'
+import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
 import { files as filesSchema } from '../../../../../db/schema'
 
@@ -74,7 +75,7 @@ export class FileProviderIntegrityService {
       )
 
       resetResult = await this.resetRuntimeState({
-        reason: 'integrity-repair',
+        reason: IndexedSourceResetReasons.IntegrityRepair,
         clearSearchIndex: ftsCount > 0,
         clearScanProgress: true
       })

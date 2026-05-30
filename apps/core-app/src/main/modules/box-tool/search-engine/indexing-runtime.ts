@@ -30,7 +30,10 @@ import type {
 import type { IndexStoreAdapter } from './indexing-store-adapter'
 import type { WatchEventRouteResult } from './indexing-watch-router'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { resolveIndexedSourceTaskEligibility } from '@talex-touch/utils/search'
+import {
+  IndexedSourceResetReasons,
+  resolveIndexedSourceTaskEligibility
+} from '@talex-touch/utils/search'
 import { SourceDiagnosticsService } from './indexing-diagnostics-service'
 import { ReconcileEngine } from './indexing-reconcile-engine'
 import { ReconcileScheduler as DefaultReconcileScheduler } from './indexing-reconcile-scheduler'
@@ -252,7 +255,7 @@ export class IndexingRuntime {
   ): Promise<IndexedSourceResetResult> {
     const source = this.requireSource(sourceId)
     const startedAt = Date.now()
-    const reason = request.reason ?? 'health-repair'
+    const reason = request.reason ?? IndexedSourceResetReasons.HealthRepair
     if (!source.resetIndex) {
       const result: IndexedSourceResetResult = {
         sourceId,

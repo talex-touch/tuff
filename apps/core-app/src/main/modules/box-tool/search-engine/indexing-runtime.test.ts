@@ -7,7 +7,11 @@ import type {
   IndexedSourceRoot
 } from '@talex-touch/utils/search'
 import type { IndexStoreAdapter } from './indexing-store-adapter'
-import { IndexedSourceReconcileReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
+import {
+  IndexedSourceReconcileReasons,
+  IndexedSourceResetReasons,
+  IndexedSourceScanReasons
+} from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IndexingRootPolicy } from './indexing-root-policy'
 import { IndexingRuntime } from './indexing-runtime'
@@ -1001,7 +1005,7 @@ describe('indexingRuntime', () => {
   it('runs source runtime reset and exposes reset state in diagnostics', async () => {
     const resetIndex = vi.fn(async () => ({
       sourceId: 'test-source',
-      reason: 'health-repair' as const,
+      reason: IndexedSourceResetReasons.HealthRepair,
       clearedSearchIndex: false,
       clearedScanProgress: true,
       scanProgressRows: 3,
@@ -1011,13 +1015,13 @@ describe('indexingRuntime', () => {
     runtime.registerSource(buildSource({ resetIndex }))
 
     const result = await runtime.resetSourceRuntimeState('test-source', {
-      reason: 'health-repair',
+      reason: IndexedSourceResetReasons.HealthRepair,
       clearScanProgress: true
     })
 
     expect(resetIndex).toHaveBeenCalledWith({
       sourceId: 'test-source',
-      reason: 'health-repair',
+      reason: IndexedSourceResetReasons.HealthRepair,
       clearScanProgress: true
     })
     expect(result).toMatchObject({
@@ -1029,7 +1033,7 @@ describe('indexingRuntime', () => {
     const diagnostics = await runtime.getDiagnostics()
     expect(diagnostics.sources[0]).toMatchObject({
       lastReset: {
-        reason: 'health-repair',
+        reason: IndexedSourceResetReasons.HealthRepair,
         clearedSearchIndex: false,
         clearedScanProgress: true,
         scanProgressRows: 3
@@ -1041,12 +1045,12 @@ describe('indexingRuntime', () => {
     runtime.registerSource(buildSource())
 
     const result = await runtime.resetSourceRuntimeState('test-source', {
-      reason: 'health-repair'
+      reason: IndexedSourceResetReasons.HealthRepair
     })
 
     expect(result).toMatchObject({
       sourceId: 'test-source',
-      reason: 'health-repair',
+      reason: IndexedSourceResetReasons.HealthRepair,
       clearedSearchIndex: false,
       clearedScanProgress: false,
       error: 'reset-not-supported'
