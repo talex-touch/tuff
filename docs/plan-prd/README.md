@@ -28,6 +28,7 @@
 2. 聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片，不再做泛化 placeholder 扫描。
 3. 补齐 Windows/macOS 阻塞级人工回归；Linux 仅记录 best-effort smoke 与桌面环境限制。
 4. 推进 `2.5.0` AI 桌面入口小切片，但 Stable 范围保持文本 + OCR。
+5. 按 2026-05-30 UI/兼容/占位自动化增量审计推进真实 evidence、Indexing Runtime 写入边界迁移、UI 语义债务与 cloud preset fail-closed placeholder 收口。
 
 详见：[TODO](./TODO.md)。
 
@@ -87,6 +88,7 @@
 - [跨平台兼容、占位实现、UI 适配与架构健壮性审计](./report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-25.md)
 - [跨平台兼容、占位实现、UI 适配与架构健壮性增量审计](./report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-29.md)
 - [UI/兼容/占位与架构健壮性后续复核](./report/cross-platform-compat-placeholder-ui-architecture-post-slice-review-2026-05-29.md)
+- [跨平台兼容、占位实现、UI 适配与架构健壮性自动化增量审计](./report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-30.md)
 - [CoreApp 性能基线与优化执行计划](./04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md)
 - [CoreApp 启动异步化与首屏卡顿分析](./report/coreapp-startup-async-blocking-analysis-2026-05-13.md)
 - [Nexus 设备授权风控实施方案](./04-implementation/NexusDeviceAuthRiskControl-260316.md)

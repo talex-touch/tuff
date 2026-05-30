@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-05-29
+> 更新时间：2026-05-30
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -131,6 +131,32 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Epic 插件先澄清 Epic 指向；若是 Unreal 本地项目，优先 `.uproject` 与最近项目。
 - Everything 收口明确 SDK vs CLI 策略、路径授权过滤、diagnostic evidence 与 Windows 真机回归。
 - 非目标：不包含更新系统 Nexus Hard-Cut；不做跨 App 写回、账号同步或未授权扫描。
+
+**Indexing Runtime V1 当前批次状态（2026-05-30）**：
+
+已落地：
+
+- SDK 合同：`IndexedSource*`、source admission、task eligibility、watch root routing、Search Provider descriptor/config/manifest resolver、Quicklinks / Browser Bookmarks / Browser History / System Settings descriptor templates。
+- Core runtime：`IndexingRuntime`、`ScanScheduler`、`WatchEventRouter`、`ReconcileScheduler` / `ReconcileEngine`、`IndexingRootPolicy`、`SearchIndexStoreAdapter`、diagnostics typed transport 与 Settings maintenance SDK。
+- Source adapters：App/File/Everything 已接入统一 diagnostics 与 runtime lifecycle；Everything path filtering 改读 runtime root policy；Browser Bookmarks 已有 disabled-by-default high-privacy skeleton，只有显式 provider enable 后才读取 scanner。
+- File provider 拆分：watch delta queue、write plan/insert/update/delete、flush retry/runtime/snapshot/buffer、worker scheduler、worker persist mapper、post-write side-effect、progress ETA/stream 已抽成通用 primitive 或薄适配。
+- Settings / Provider：Settings 已展示 source diagnostics、provider enable/order、source-to-provider link；插件 `manifest.searchProviders` 和 `search.root-results` 权限校验已接入，仓库 push 插件已补显式 provider。
+
+未闭环：
+
+- FileProvider 内部 SQLite/FTS 真实写入、scan worker、index worker flush trace、scan_progress/integrity reset 调度仍未完全迁到 runtime task/store 边界。
+- Browser Bookmarks 仍是 CoreApp skeleton + scanner 样板，真正 indexed source、watch root 注册、persistent rebuild、clear/disable UI 仍需迁到官方 browser-data 插件并受用户同意约束。
+- Browser History、Quicklinks、System Settings、Obsidian、VSCode 目前只有 SDK descriptor/admission 或计划，尚未实现完整 source lifecycle。
+- Everything SDK/CLI 最终策略、registry PATH 探测、Windows 真机性能/evidence 仍未闭环。
+- Durable job history、跨 source retry/debounce、source health 用户恢复动作、真实平台手工回归仍需补证。
+
+建议提交批次：
+
+1. `feat(utils): formalize indexed source and search provider sdk`
+2. `feat(core-app): add indexing runtime diagnostics and provider settings`
+3. `refactor(core-app): migrate file indexing primitives toward runtime`
+4. `feat(core-app): add browser bookmarks indexed-source skeleton`
+5. `docs(search): sync indexing runtime roadmap and nexus api docs`
 
 ### 2.5.8 - ASR Provider Runtime
 

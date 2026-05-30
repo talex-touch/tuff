@@ -53,6 +53,9 @@ code: |
 | | `storage.sqlite` | 中 | 访问插件本地 SQLite 数据库 |
 | **窗口** | `window.create` | 低 | 创建窗口（自动授予） |
 | | `window.capture` | 高 | 屏幕截图 |
+| **搜索** | `search.root-results` | 高 | 向 CoreBox 根结果推送或更新搜索项 |
+
+`search.root-results` 是 Search Provider 的根结果写入权限。任何插件只要通过 push feature 或 `boxItems.push()` / `plugin.feature.pushItems()` 把内容写入 CoreBox 根结果，都必须在 `manifest.json` 中声明并获得授权；删除或清理自己插件已有结果不需要该权限，以免权限状态异常时留下 stale items。
 
 **3. 风险等级说明**
 
