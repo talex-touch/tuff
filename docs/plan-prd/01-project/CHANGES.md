@@ -13,6 +13,21 @@
 
 ## 2026-05-31
 
+### feat(core-app): render indexed source progress diagnostics
+
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.css`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.{ts,test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added Settings rendering for `IndexedSourceDiagnostics.progress` as a source-level progress chip, including shared tone mapping for estimated, stabilizing, stalled, complete, and failed states.
+  - Surfaced stage, percent, current/total, remaining time, ETA, throughput, sample count, estimate basis, and reason without adding FileProvider-specific progress UI.
+  - Updated roadmap/TODO/Nexus search API docs so source progress diagnostics are marked as consumed by Settings while FileProvider store-boundary migration and Browser Data plugin lifecycle remain open.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"` 通过。
+
 ### feat(search): expose indexed source progress diagnostics
 
 - `packages/utils/search/indexing-source.ts`
