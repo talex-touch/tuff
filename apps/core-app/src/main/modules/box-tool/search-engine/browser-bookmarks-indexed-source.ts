@@ -1,15 +1,23 @@
 import type {
   IndexedSource,
+  IndexedSourceDelta,
   IndexedSourceDescriptor,
   IndexedSourceEvidence,
   IndexedSourceHealth,
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
   IndexedSourceRecordBatch,
+  IndexedSourceResetRequest,
+  IndexedSourceResetResult,
   IndexedSourceRoot,
-  IndexedSourceScanRequest
+  IndexedSourceScanRequest,
+  IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
 import type { BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
+import {
+  createBrowserBookmarksIndexedSourceDescriptor,
+  IndexedSourceReconcileReasons
+} from '@talex-touch/utils/search'
 import {
   mapBrowserBookmarkToIndexedSourceRecord,
   scanBrowserBookmarks
@@ -19,47 +27,101 @@ export const BROWSER_BOOKMARKS_INDEXED_SOURCE_ID = 'browser-bookmarks'
 
 export interface BrowserBookmarksIndexedSourceOptions {
   enabled?: boolean
+  isEnabled?: () => boolean | Promise<boolean>
   scannerOptions?: BrowserBookmarkScanOptions
 }
 
 export function buildBrowserBookmarksIndexedSourceDescriptor(): IndexedSourceDescriptor {
-  return {
+  return createBrowserBookmarksIndexedSourceDescriptor({
     id: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
-    kind: 'browser-bookmark',
-    displayName: 'Browser Bookmarks',
-    platforms: ['darwin', 'win32', 'linux'],
-    priority: 'deferred',
-    storage: 'sqlite-index',
-    privacy: 'high',
-    capabilities: {
-      scan: true,
-      watch: true,
-      reconcile: true,
-      clear: true,
-      open: true
-    },
     admission: {
-      owner: 'official-plugin',
-      permissionScopes: ['browser-data', 'file-system'],
-      defaultState: 'disabled',
-      requiresUserConsent: true,
-      clearable: true,
-      rebuildable: true,
       notes:
         'Chromium Bookmarks JSON currently lives in touch-browser-data and must migrate into runtime-backed scan/watch/reconcile before default enablement.'
     }
+  })
+}
+
+function readBrowserBookmarksSnapshot(
+  sourceId: string,
+  scannerOptions?: BrowserBookmarkScanOptions
+): {
+  result: ReturnType<typeof scanBrowserBookmarks>
+  batch: IndexedSourceRecordBatch
+  roots: IndexedSourceRoot[]
+  evidence: IndexedSourceEvidence[]
+} {
+  const result = scanBrowserBookmarks(scannerOptions)
+  const records = result.items.map((item) =>
+    mapBrowserBookmarkToIndexedSourceRecord(sourceId, item)
+  )
+  const roots = result.diagnostics
+    .filter((diagnostic) => Boolean(diagnostic.root) && diagnostic.status !== 'unsupported')
+    .map((diagnostic) => ({
+      sourceId,
+      path: diagnostic.root,
+      permissionState: 'granted' as const,
+      watchDepth: 2,
+      reason: diagnostic.reason || undefined
+    }))
+  const evidence = result.diagnostics.map(
+    (diagnostic): IndexedSourceEvidence => ({
+      id: `${sourceId}:${diagnostic.browserId}`,
+      label: `${diagnostic.browserName} Bookmarks`,
+      status:
+        diagnostic.status === 'available'
+          ? 'ready'
+          : diagnostic.status === 'read-failed'
+            ? 'error'
+            : diagnostic.status === 'unsupported'
+              ? 'unsupported'
+              : 'degraded',
+      itemCount: result.items.filter((item) => item.browserId === diagnostic.browserId).length,
+      rootCount: diagnostic.root ? 1 : 0,
+      roots: diagnostic.root ? [diagnostic.root] : [],
+      reason: diagnostic.reason || undefined,
+      metadata: {
+        profileCount: diagnostic.profileCount,
+        failedProfile: diagnostic.failedProfile,
+        lastError: diagnostic.lastError,
+        scannerOwner: 'core-runtime'
+      }
+    })
+  )
+
+  return {
+    result,
+    batch: {
+      sourceId,
+      records,
+      done: true
+    },
+    roots,
+    evidence
   }
 }
 
-function buildBrowserBookmarksHealth(enabled: boolean, itemCount = 0): IndexedSourceHealth {
+function buildBrowserBookmarksHealth(
+  enabled: boolean,
+  snapshot?: ReturnType<typeof readBrowserBookmarksSnapshot>
+): IndexedSourceHealth {
   if (enabled) {
+    const hasErrors = snapshot?.result.diagnostics.some(
+      (diagnostic) => diagnostic.status === 'read-failed'
+    )
+    const itemCount = snapshot?.result.items.length ?? 0
+
     return {
-      status: 'warming',
+      status: hasErrors ? 'degraded' : itemCount > 0 ? 'ready' : 'degraded',
       permissionState: 'granted',
       itemCount,
-      watchState: 'unavailable',
+      watchState: snapshot?.roots.length ? 'active' : 'unavailable',
       reconcileState: 'idle',
-      reason: 'browser-bookmarks-runtime-scanner-ready-awaiting-settings'
+      reason:
+        itemCount > 0
+          ? undefined
+          : hasErrors
+            ? 'browser-bookmarks-read-failed'
+            : 'browser-bookmarks-empty'
     }
   }
 
@@ -97,33 +159,10 @@ function buildBrowserBookmarksEvidence(
     return [buildPendingMigrationEvidence()]
   }
 
-  const result = scanBrowserBookmarks(scannerOptions)
-  const evidence = result.diagnostics.map(
-    (diagnostic): IndexedSourceEvidence => ({
-      id: `${BROWSER_BOOKMARKS_INDEXED_SOURCE_ID}:${diagnostic.browserId}`,
-      label: `${diagnostic.browserName} Bookmarks`,
-      status:
-        diagnostic.status === 'available'
-          ? 'ready'
-          : diagnostic.status === 'read-failed'
-            ? 'error'
-            : diagnostic.status === 'unsupported'
-              ? 'unsupported'
-              : 'degraded',
-      itemCount: result.items.filter((item) => item.browserId === diagnostic.browserId).length,
-      rootCount: diagnostic.root ? 1 : 0,
-      roots: diagnostic.root ? [diagnostic.root] : [],
-      reason: diagnostic.reason || undefined,
-      metadata: {
-        profileCount: diagnostic.profileCount,
-        failedProfile: diagnostic.failedProfile,
-        lastError: diagnostic.lastError,
-        scannerOwner: 'core-runtime'
-      }
-    })
-  )
-
-  return [...evidence, buildPendingMigrationEvidence()]
+  return [
+    ...readBrowserBookmarksSnapshot(BROWSER_BOOKMARKS_INDEXED_SOURCE_ID, scannerOptions).evidence,
+    buildPendingMigrationEvidence()
+  ]
 }
 
 function buildBrowserBookmarksRoots(
@@ -134,16 +173,7 @@ function buildBrowserBookmarksRoots(
     return []
   }
 
-  const result = scanBrowserBookmarks(scannerOptions)
-  return result.diagnostics
-    .filter((diagnostic) => Boolean(diagnostic.root) && diagnostic.status !== 'unsupported')
-    .map((diagnostic) => ({
-      sourceId: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
-      path: diagnostic.root,
-      permissionState: 'granted',
-      watchDepth: 2,
-      reason: diagnostic.reason || undefined
-    }))
+  return readBrowserBookmarksSnapshot(BROWSER_BOOKMARKS_INDEXED_SOURCE_ID, scannerOptions).roots
 }
 
 async function* emptyScan(
@@ -154,18 +184,25 @@ async function* scanBrowserBookmarksSource(
   request: IndexedSourceScanRequest,
   scannerOptions?: BrowserBookmarkScanOptions
 ): AsyncIterable<IndexedSourceRecordBatch> {
-  const result = scanBrowserBookmarks(scannerOptions)
-  const records = result.items.map((item) =>
-    mapBrowserBookmarkToIndexedSourceRecord(request.sourceId, item)
-  )
+  const { batch } = readBrowserBookmarksSnapshot(request.sourceId, scannerOptions)
 
-  if (records.length > 0) {
-    yield {
-      sourceId: request.sourceId,
-      records,
-      done: true
-    }
+  if (batch.records.length > 0) {
+    yield batch
   }
+}
+
+function buildBrowserBookmarksDeltas(
+  sourceId: string,
+  scannerOptions: BrowserBookmarkScanOptions | undefined,
+  reason: string
+): IndexedSourceDelta[] {
+  return readBrowserBookmarksSnapshot(sourceId, scannerOptions).batch.records.map((record) => ({
+    sourceId,
+    action: 'change',
+    record,
+    path: record.path ?? record.uri,
+    reason
+  }))
 }
 
 function buildUnsupportedReconcileResult(sourceId: string): IndexedSourceReconcileResult {
@@ -183,27 +220,100 @@ function buildUnsupportedReconcileResult(sourceId: string): IndexedSourceReconci
   }
 }
 
+function buildBrowserBookmarksReconcileResult(
+  sourceId: string,
+  scannerOptions: BrowserBookmarkScanOptions | undefined,
+  request: IndexedSourceReconcileRequest
+): IndexedSourceReconcileResult {
+  const startedAt = Date.now()
+  const snapshot = readBrowserBookmarksSnapshot(sourceId, scannerOptions)
+  const errors = snapshot.result.diagnostics.filter(
+    (diagnostic) => diagnostic.status === 'read-failed'
+  ).length
+  const deltas = snapshot.batch.records.map((record) => ({
+    sourceId,
+    action: 'change' as const,
+    record,
+    path: record.path ?? record.uri,
+    reason: request.reason ?? IndexedSourceReconcileReasons.ExternalRefresh
+  }))
+
+  return {
+    sourceId,
+    added: 0,
+    changed: snapshot.batch.records.length,
+    deleted: 0,
+    skipped: snapshot.batch.records.length > 0 ? 0 : 1,
+    errors,
+    deltas,
+    startedAt,
+    completedAt: Date.now(),
+    reason: request.reason ?? IndexedSourceReconcileReasons.ExternalRefresh
+  }
+}
+
+function buildBrowserBookmarksResetResult(
+  request: IndexedSourceResetRequest
+): IndexedSourceResetResult {
+  const startedAt = Date.now()
+  return {
+    sourceId: request.sourceId,
+    reason: request.reason,
+    clearedSearchIndex: false,
+    clearedScanProgress: false,
+    scanProgressRows: 0,
+    startedAt,
+    completedAt: Date.now()
+  }
+}
+
 export function buildBrowserBookmarksIndexedSource(
   options: BrowserBookmarksIndexedSourceOptions = {}
 ): IndexedSource {
   const descriptor = buildBrowserBookmarksIndexedSourceDescriptor()
-  const enabled = options.enabled === true
+  const resolveEnabled = async () =>
+    options.isEnabled ? Boolean(await options.isEnabled()) : options.enabled === true
 
   return {
     descriptor,
-    getHealth: async () => buildBrowserBookmarksHealth(enabled),
-    getRoots: async (): Promise<IndexedSourceRoot[]> =>
-      buildBrowserBookmarksRoots(enabled, options.scannerOptions),
-    getEvidence: async () => buildBrowserBookmarksEvidence(enabled, options.scannerOptions),
-    scan: enabled
-      ? async function* browserBookmarksScan(request: IndexedSourceScanRequest) {
-          yield* scanBrowserBookmarksSource(request, options.scannerOptions)
-        }
-      : emptyScan,
+    getHealth: async () => {
+      const enabled = await resolveEnabled()
+      return buildBrowserBookmarksHealth(
+        enabled,
+        enabled ? readBrowserBookmarksSnapshot(descriptor.id, options.scannerOptions) : undefined
+      )
+    },
+    getRoots: async (): Promise<IndexedSourceRoot[]> => {
+      const enabled = await resolveEnabled()
+      return buildBrowserBookmarksRoots(enabled, options.scannerOptions)
+    },
+    getEvidence: async () =>
+      buildBrowserBookmarksEvidence(await resolveEnabled(), options.scannerOptions),
+    scan: async function* browserBookmarksScan(request: IndexedSourceScanRequest) {
+      if (await resolveEnabled()) {
+        yield* scanBrowserBookmarksSource(request, options.scannerOptions)
+      } else {
+        yield* emptyScan(request)
+      }
+    },
     reconcile: async (
-      _request: IndexedSourceReconcileRequest
-    ): Promise<IndexedSourceReconcileResult> => buildUnsupportedReconcileResult(descriptor.id),
-    handleWatchEvent: async () => [],
-    clearIndex: async () => {}
+      request: IndexedSourceReconcileRequest
+    ): Promise<IndexedSourceReconcileResult> =>
+      (await resolveEnabled())
+        ? buildBrowserBookmarksReconcileResult(descriptor.id, options.scannerOptions, request)
+        : buildUnsupportedReconcileResult(descriptor.id),
+    handleWatchEvent: async (_event: IndexedSourceWatchEvent): Promise<IndexedSourceDelta[]> =>
+      (await resolveEnabled())
+        ? buildBrowserBookmarksDeltas(
+            descriptor.id,
+            options.scannerOptions,
+            'browser-bookmarks-watch-refresh'
+          )
+        : [],
+    resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> =>
+      buildBrowserBookmarksResetResult(request),
+    clearIndex: async () => {
+      throw new Error('browser-bookmarks-clear-requires-runtime-reset')
+    }
   }
 }
