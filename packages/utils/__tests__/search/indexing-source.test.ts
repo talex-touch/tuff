@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getIndexedSourceAdmissionIssues,
   IndexedSourceReconcileReasons,
+  IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   isIndexedSourceAdmissionReady,
   resolveIndexedSourceTaskEligibility,
@@ -56,6 +57,16 @@ describe("indexedSource admission", () => {
       WatchRecovery: "watch-recovery",
       SchemaMigration: "schema-migration",
       HealthRepair: "health-repair",
+    });
+  });
+
+  it("exports standard reset reason codes", () => {
+    expect(IndexedSourceResetReasons).toMatchObject({
+      ManualRebuild: "manual-rebuild",
+      SchemaMigration: "schema-migration",
+      IntegrityRepair: "integrity-repair",
+      HealthRepair: "health-repair",
+      UserClear: "user-clear",
     });
   });
 

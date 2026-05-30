@@ -130,12 +130,16 @@ export type IndexedSourceScanReason =
 
 export type IndexedSourceDeltaAction = "add" | "change" | "delete";
 
+export const IndexedSourceResetReasons = {
+  ManualRebuild: "manual-rebuild",
+  SchemaMigration: "schema-migration",
+  IntegrityRepair: "integrity-repair",
+  HealthRepair: "health-repair",
+  UserClear: "user-clear",
+} as const;
+
 export type IndexedSourceResetReason =
-  | "manual-rebuild"
-  | "schema-migration"
-  | "integrity-repair"
-  | "health-repair"
-  | "user-clear";
+  (typeof IndexedSourceResetReasons)[keyof typeof IndexedSourceResetReasons];
 
 export interface IndexedSourceCapabilities {
   scan: boolean;

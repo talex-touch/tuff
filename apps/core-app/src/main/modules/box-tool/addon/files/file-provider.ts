@@ -54,7 +54,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { IndexedSourceScanReasons } from '@talex-touch/utils/search'
+import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
 import { app, shell } from 'electron'
@@ -1605,7 +1605,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (this.dbUtils) {
       await this.resetFileIndexRuntimeStateViaIndexedRuntime({
         sourceId: this.id,
-        reason: 'manual-rebuild',
+        reason: IndexedSourceResetReasons.ManualRebuild,
         clearScanProgress: true
       })
     }
@@ -2528,7 +2528,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logInfo('FTS5 table was migrated — clearing scan_progress for full re-index')
       await this.resetFileIndexRuntimeStateViaIndexedRuntime({
         sourceId: this.id,
-        reason: 'schema-migration',
+        reason: IndexedSourceResetReasons.SchemaMigration,
         clearScanProgress: true
       })
     }
