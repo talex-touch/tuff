@@ -13,6 +13,22 @@
 
 ## 2026-05-31
 
+### feat(search): expose indexed source progress diagnostics
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-diagnostics-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/file-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/file-indexed-source.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added source-level `IndexedSourceProgress` / `IndexedSource.getProgress()` and `IndexedSourceDiagnostics.progress` so runtime diagnostics can expose progress/ETA without FileProvider-specific payloads.
+  - Wired `SourceDiagnosticsService` to collect optional source progress while isolating progress collection failures.
+  - Adapted File indexed source progress from FileProvider indexing status, including stage, current/total, percentage, estimated remaining time, estimated completion time, throughput, sample count, and estimate basis.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/file-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### feat(search): add plugin indexed source manifest metadata
 
 - `packages/utils/search/indexing-source.ts`
