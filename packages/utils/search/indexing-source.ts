@@ -64,6 +64,7 @@ export type IndexedSourceAdmissionReason =
   | "missing-permission-scope"
   | "high-privacy-requires-explicit-enable"
   | "browser-data-requires-high-privacy"
+  | "browser-data-requires-official-plugin"
   | "external-fast-requires-external-tool-permission"
   | "external-fast-cannot-be-third-party"
   | "persistent-source-must-be-clearable"
@@ -232,6 +233,45 @@ export interface SearchProviderUserConfig {
   updatedAt?: number;
 }
 
+export interface IndexedSourceManifestDescriptor
+  extends CreateIndexedSourceDescriptorOptions {
+  id: string;
+  template?: IndexedSourceDescriptorTemplate;
+  kind?: IndexedSourceKind;
+}
+
+export interface IndexedSourceManifestDefaults {
+  pluginName: string;
+  owner?: IndexedSourceOwner;
+}
+
+export type IndexedSourceManifestResolutionIssueCode =
+  | "INDEXED_SOURCE_INVALID"
+  | "INDEXED_SOURCE_ADMISSION_BLOCKED"
+  | "INDEXED_SOURCE_PERMISSION_MISSING";
+
+export interface IndexedSourceManifestResolutionIssue {
+  type: "warning" | "error";
+  code: IndexedSourceManifestResolutionIssueCode;
+  message: string;
+  sourceId?: string;
+  index?: number;
+  admissionIssues?: IndexedSourceAdmissionReason[];
+  missingPermissionIds?: string[];
+  permissionScopes?: IndexedSourcePermissionScope[];
+}
+
+export interface IndexedSourceManifestResolutionInput {
+  manifestSources?: unknown;
+  defaults: IndexedSourceManifestDefaults;
+  declaredPermissionIds?: string[];
+}
+
+export interface IndexedSourceManifestResolution {
+  descriptors: IndexedSourceDescriptor[];
+  issues: IndexedSourceManifestResolutionIssue[];
+}
+
 export interface SearchProviderRegistrationPolicy {
   owner: SearchProviderOwner;
   mode: SearchProviderMode;
@@ -361,6 +401,30 @@ export function resolveSearchProviderPermissionIds(
     switch (scope) {
       case "root-results":
         return ["search.root-results"];
+      case "file-system":
+        return ["fs.index"];
+      case "browser-data":
+        return ["fs.read"];
+      case "network":
+        return ["network.internet"];
+      case "account":
+        return ["storage.shared"];
+      case "external-tool":
+      case "system-index":
+      case "none":
+      default:
+        return [];
+    }
+  });
+
+  return Array.from(new Set(permissionIds));
+}
+
+export function resolveIndexedSourcePermissionIds(
+  scopes: IndexedSourcePermissionScope[] = [],
+): string[] {
+  const permissionIds = scopes.flatMap((scope) => {
+    switch (scope) {
       case "file-system":
         return ["fs.index"];
       case "browser-data":
@@ -1063,6 +1127,166 @@ export function createIndexedSourceDescriptorTemplate(
   return createSystemSettingsIndexedSourceDescriptor(options);
 }
 
+function isIndexedSourceManifestDescriptor(
+  value: unknown,
+): value is IndexedSourceManifestDescriptor {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const source = value as Partial<IndexedSourceManifestDescriptor>;
+  return typeof source.id === "string" && source.id.trim().length > 0;
+}
+
+function createIndexedSourceDescriptorFromManifest(
+  manifestSource: IndexedSourceManifestDescriptor,
+  defaults: IndexedSourceManifestDefaults,
+): IndexedSourceDescriptor | null {
+  const sourceId = manifestSource.id.trim();
+  const admission = {
+    ...manifestSource.admission,
+    owner:
+      manifestSource.admission?.owner ??
+      defaults.owner ??
+      "third-party-plugin",
+  };
+
+  if (manifestSource.template) {
+    return createIndexedSourceDescriptorTemplate(manifestSource.template, {
+      ...manifestSource,
+      id: sourceId,
+      admission,
+    });
+  }
+
+  if (!manifestSource.kind) {
+    return null;
+  }
+
+  return {
+    id: sourceId,
+    kind: manifestSource.kind,
+    displayName: manifestSource.displayName ?? sourceId,
+    platforms: manifestSource.platforms ?? [...ALL_INDEXED_SOURCE_PLATFORMS],
+    priority: manifestSource.priority ?? "deferred",
+    storage: manifestSource.storage ?? "sqlite-index",
+    privacy: manifestSource.privacy ?? "high",
+    capabilities: mergeCapabilities(
+      {
+        scan: true,
+        watch: false,
+        reconcile: true,
+        clear: true,
+        open: true,
+      },
+      manifestSource.capabilities,
+    ),
+    admission: mergeAdmission(
+      {
+        owner: admission.owner,
+        permissionScopes: ["none"],
+        defaultState: "ask",
+        requiresUserConsent: true,
+        clearable: true,
+        rebuildable: true,
+      },
+      admission,
+    ),
+  };
+}
+
+export function resolveIndexedSourceManifestDescriptors(
+  input: IndexedSourceManifestResolutionInput,
+): IndexedSourceManifestResolution {
+  const issues: IndexedSourceManifestResolutionIssue[] = [];
+
+  if (
+    input.manifestSources !== undefined &&
+    !Array.isArray(input.manifestSources)
+  ) {
+    return {
+      descriptors: [],
+      issues: [
+        {
+          type: "warning",
+          code: "INDEXED_SOURCE_INVALID",
+          message: 'Invalid "indexedSources" in manifest.json (expected array).',
+        },
+      ],
+    };
+  }
+
+  const manifestSources = Array.isArray(input.manifestSources)
+    ? input.manifestSources
+    : [];
+  const declaredPermissionIds = new Set(input.declaredPermissionIds ?? []);
+  const descriptors: IndexedSourceDescriptor[] = [];
+
+  manifestSources.forEach((source, index) => {
+    if (!isIndexedSourceManifestDescriptor(source)) {
+      issues.push({
+        type: "warning",
+        code: "INDEXED_SOURCE_INVALID",
+        message: `Invalid indexed source declaration at index ${index}: missing source id`,
+        index,
+      });
+      return;
+    }
+
+    const descriptor = createIndexedSourceDescriptorFromManifest(
+      source,
+      input.defaults,
+    );
+
+    if (!descriptor) {
+      issues.push({
+        type: "warning",
+        code: "INDEXED_SOURCE_INVALID",
+        message: `Invalid indexed source declaration '${source.id}': missing template or kind`,
+        sourceId: source.id,
+        index,
+      });
+      return;
+    }
+
+    const admissionIssues = getIndexedSourceAdmissionIssues(descriptor);
+    const permissionScopes = descriptor.admission?.permissionScopes ?? [];
+    const requiredPermissionIds = resolveIndexedSourcePermissionIds(
+      permissionScopes,
+    );
+    const missingPermissionIds = requiredPermissionIds.filter(
+      (permissionId) => !declaredPermissionIds.has(permissionId),
+    );
+
+    if (admissionIssues.length > 0) {
+      issues.push({
+        type: "error",
+        code: "INDEXED_SOURCE_ADMISSION_BLOCKED",
+        message: `Indexed source '${descriptor.id}' failed admission policy: ${admissionIssues.join(", ")}`,
+        sourceId: descriptor.id,
+        admissionIssues,
+      });
+    }
+
+    if (missingPermissionIds.length > 0) {
+      issues.push({
+        type: "error",
+        code: "INDEXED_SOURCE_PERMISSION_MISSING",
+        message: `Indexed source '${descriptor.id}' requires manifest permissions: ${missingPermissionIds.join(", ")}`,
+        sourceId: descriptor.id,
+        missingPermissionIds,
+        permissionScopes,
+      });
+    }
+
+    if (admissionIssues.length === 0 && missingPermissionIds.length === 0) {
+      descriptors.push(descriptor);
+    }
+  });
+
+  return { descriptors, issues };
+}
+
 function hasPermissionScope(
   descriptor: IndexedSourceDescriptor,
   scope: IndexedSourcePermissionScope,
@@ -1106,6 +1330,14 @@ export function getIndexedSourceAdmissionIssues(
     !hasPermissionScope(descriptor, "browser-data")
   ) {
     issues.push("missing-permission-scope");
+  }
+
+  if (
+    (descriptor.kind === "browser-bookmark" ||
+      descriptor.kind === "browser-history") &&
+    admission?.owner !== "official-plugin"
+  ) {
+    issues.push("browser-data-requires-official-plugin");
   }
 
   if (

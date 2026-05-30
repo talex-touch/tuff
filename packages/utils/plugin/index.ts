@@ -3,7 +3,12 @@ import type {
   ManifestPermissionReasons,
   ManifestPermissions,
 } from '../permission/types'
-import type { SearchProviderDescriptor, SearchProviderManifestDescriptor } from '../search'
+import type {
+  IndexedSourceDescriptor,
+  IndexedSourceManifestDescriptor,
+  SearchProviderDescriptor,
+  SearchProviderManifestDescriptor,
+} from '../search'
 import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
@@ -119,6 +124,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   build?: IPluginBuildInfo
   features: IPluginFeature[]
   searchProviders?: SearchProviderDescriptor[]
+  indexedSources?: IndexedSourceDescriptor[]
   issues: PluginIssue[]
   divisionBoxConfig?: import('../types/division-box').ManifestDivisionBoxConfig
   /**
@@ -588,6 +594,11 @@ export interface IManifest {
    * Optional Search Provider declarations exposed by this plugin.
    */
   searchProviders?: SearchProviderManifestDescriptor[]
+  /**
+   * Optional indexed source lifecycle declarations exposed by this plugin.
+   * This is manifest metadata only; runtime registration still requires an explicit host bridge.
+   */
+  indexedSources?: IndexedSourceManifestDescriptor[]
   /**
    * Optional permission declarations.
    */

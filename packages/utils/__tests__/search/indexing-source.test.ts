@@ -27,6 +27,8 @@ import {
   resolveIndexedSourceRootSkipReason,
   resolveSearchProviderManifestDescriptors,
   resolveSearchProviderPermissionIds,
+  resolveIndexedSourceManifestDescriptors,
+  resolveIndexedSourcePermissionIds,
   resolveSearchProviderRegistrationDecision,
   resolveIndexedSourceTaskEligibility,
   resolveIndexedSourceWatchRootRoute,
@@ -1190,5 +1192,102 @@ describe("search provider sdk contracts", () => {
       getSearchProviderIdsForIndexedSource("browser-bookmarks", descriptors),
     ).toEqual(["browser-bookmarks", "touch-browser-data.browser-bookmarks"]);
     expect(getSearchProviderIdsForIndexedSource("", descriptors)).toEqual([]);
+  });
+});
+
+describe("indexed source manifest sdk contracts", () => {
+  it("maps indexed source scopes to manifest permissions", () => {
+    expect(
+      resolveIndexedSourcePermissionIds([
+        "browser-data",
+        "file-system",
+        "browser-data",
+        "network",
+      ]),
+    ).toEqual(["fs.read", "fs.index", "network.internet"]);
+  });
+
+  it("resolves official browser-data indexed source manifest declarations", () => {
+    const result = resolveIndexedSourceManifestDescriptors({
+      manifestSources: [
+        {
+          id: "browser-bookmarks",
+          template: "browser-bookmarks",
+          displayName: "Browser Bookmarks",
+          admission: {
+            owner: "official-plugin",
+          },
+        },
+      ],
+      defaults: {
+        pluginName: "touch-browser-data",
+        owner: "official-plugin",
+      },
+      declaredPermissionIds: ["fs.read", "fs.index"],
+    });
+
+    expect(result.issues).toEqual([]);
+    expect(result.descriptors).toHaveLength(1);
+    expect(result.descriptors[0]).toMatchObject({
+      id: "browser-bookmarks",
+      kind: "browser-bookmark",
+      privacy: "high",
+      admission: {
+        owner: "official-plugin",
+        permissionScopes: ["browser-data", "file-system"],
+        defaultState: "disabled",
+        requiresUserConsent: true,
+      },
+    });
+  });
+
+  it("blocks unsafe indexed source manifest declarations before runtime registration", () => {
+    const result = resolveIndexedSourceManifestDescriptors({
+      manifestSources: [
+        {
+          id: "browser-bookmarks",
+          template: "browser-bookmarks",
+          admission: {
+            owner: "third-party-plugin",
+          },
+        },
+      ],
+      defaults: {
+        pluginName: "third-party-browser-data",
+      },
+      declaredPermissionIds: ["fs.read"],
+    });
+
+    expect(result.descriptors).toEqual([]);
+    expect(result.issues).toMatchObject([
+      {
+        type: "error",
+        code: "INDEXED_SOURCE_ADMISSION_BLOCKED",
+        sourceId: "browser-bookmarks",
+        admissionIssues: ["browser-data-requires-official-plugin"],
+      },
+      {
+        type: "error",
+        code: "INDEXED_SOURCE_PERMISSION_MISSING",
+        sourceId: "browser-bookmarks",
+        missingPermissionIds: ["fs.index"],
+      },
+    ]);
+  });
+
+  it("reports invalid indexed source manifest shapes without throwing", () => {
+    const result = resolveIndexedSourceManifestDescriptors({
+      manifestSources: [{ id: "" }],
+      defaults: { pluginName: "plugin" },
+    });
+
+    expect(result.descriptors).toEqual([]);
+    expect(result.issues).toMatchObject([
+      {
+        type: "warning",
+        code: "INDEXED_SOURCE_INVALID",
+        index: 0,
+      },
+    ]);
   });
 });
