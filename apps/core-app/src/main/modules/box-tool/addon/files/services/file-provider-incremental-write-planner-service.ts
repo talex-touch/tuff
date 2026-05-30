@@ -3,8 +3,8 @@ import type {
   IndexedWriteIncomingRecord,
   IndexedWritePlanServiceOptions,
   IndexedWriteUpdateRecord
-} from '../../../search-engine/indexing-write-plan-service'
-import { IndexedWritePlanService } from '../../../search-engine/indexing-write-plan-service'
+} from '@talex-touch/utils/search'
+import { IndexedWritePlanService } from '@talex-touch/utils/search'
 
 export type FileProviderIncrementalFileRecord = IndexedWriteIncomingRecord & {
   lastIndexedAt?: Date | number | string | null

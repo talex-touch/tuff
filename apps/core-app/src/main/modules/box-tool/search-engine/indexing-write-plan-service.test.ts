@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { IndexedWritePlanService as SdkIndexedWritePlanService } from '@talex-touch/utils/search'
 import { IndexedWritePlanService } from './indexing-write-plan-service'
 
 function createPlanner(): IndexedWritePlanService<
@@ -20,6 +21,10 @@ function createPlanner(): IndexedWritePlanService<
 }
 
 describe('IndexedWritePlanService', () => {
+  it('re-exports the public SDK write plan service for legacy CoreApp imports', () => {
+    expect(IndexedWritePlanService).toBe(SdkIndexedWritePlanService)
+  })
+
   it('splits incoming records into inserts, updates, and unchanged records', () => {
     const planner = createPlanner()
     const now = new Date('2026-05-30T00:00:00.000Z')
