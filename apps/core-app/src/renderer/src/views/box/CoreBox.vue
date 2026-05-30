@@ -1,6 +1,7 @@
 <script setup lang="ts" name="CoreBox">
 // import EmptySearchStatus from '~/assets/svg/EmptySearchStatus.svg'
 import type { IProviderActivate, ITuffIcon, TuffItem } from '@talex-touch/utils'
+import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
@@ -204,6 +205,25 @@ const shouldShowInput = computed(() => {
   return activeActivations.value.some((a) => a.showInput === true)
 })
 const activeActivationsList = computed<IProviderActivate[]>(() => activeActivations.value ?? [])
+const sourceDiagnostics = ref<CoreBoxIndexingDiagnosticsResponse | null>(null)
+const sourceDiagnosticsLoading = ref(false)
+let sourceDiagnosticsLoadedAt = 0
+
+async function refreshSourceDiagnostics(force = false): Promise<void> {
+  const now = Date.now()
+  if (!force && now - sourceDiagnosticsLoadedAt < 5000) return
+  if (sourceDiagnosticsLoading.value) return
+
+  sourceDiagnosticsLoading.value = true
+  try {
+    sourceDiagnostics.value = await transport.send(CoreBoxEvents.search.indexingDiagnostics)
+    sourceDiagnosticsLoadedAt = now
+  } catch (error) {
+    logDebug('[CoreBox] Failed to refresh source diagnostics:', error)
+  } finally {
+    sourceDiagnosticsLoading.value = false
+  }
+}
 
 // DivisionBox mode computed properties
 const isDivisionBox = computed(() => isDivisionBoxMode())
@@ -549,11 +569,27 @@ const searchState = computed(() =>
     resultCount: res.value.length,
     loading: loading.value,
     recommendationPending: recommendationPending.value,
-    mode: boxOptions.mode
+    mode: boxOptions.mode,
+    sourceDiagnostics: sourceDiagnostics.value
   })
 )
 const shouldShowResultArea = computed(
   () => !isUIMode.value && (res.value.length > 0 || !!searchState.value)
+)
+
+watch(
+  () => ({
+    query: searchVal.value.trim(),
+    resultCount: res.value.length,
+    loading: loading.value,
+    mode: boxOptions.mode
+  }),
+  (state) => {
+    if (!state.query || state.resultCount > 0 || state.loading || state.mode === BoxMode.FEATURE) {
+      return
+    }
+    void refreshSourceDiagnostics()
+  }
 )
 
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
@@ -783,6 +819,55 @@ async function handleSearchStateAction(actionId: string): Promise<void> {
                   </div>
                   <div class="CoreBoxSearchState-Detail">
                     {{ t(searchState.detailKey, searchState.detailFallback) }}
+                  </div>
+                  <div
+                    v-if="searchState.sourceSummary"
+                    class="CoreBoxSearchState-Sources"
+                    :class="`CoreBoxSearchState-Sources--${searchState.sourceSummary.tone}`"
+                  >
+                    <div class="CoreBoxSearchState-SourcesHeader">
+                      <span>
+                        {{
+                          t(
+                            searchState.sourceSummary.titleKey,
+                            searchState.sourceSummary.titleFallback
+                          )
+                        }}
+                      </span>
+                      <small>
+                        {{
+                          t(
+                            searchState.sourceSummary.detailKey,
+                            searchState.sourceSummary.detailFallback
+                          )
+                        }}
+                      </small>
+                    </div>
+                    <div class="CoreBoxSearchState-SourceList">
+                      <div
+                        v-for="source in searchState.sourceSummary.sources"
+                        :key="source.id"
+                        class="CoreBoxSearchState-Source"
+                        :class="`CoreBoxSearchState-Source--${source.status}`"
+                      >
+                        <span class="CoreBoxSearchState-SourceName">{{ source.name }}</span>
+                        <span class="CoreBoxSearchState-SourceStatus">
+                          {{ t(source.statusKey, source.statusFallback) }}
+                        </span>
+                        <span class="CoreBoxSearchState-SourceCount">
+                          {{
+                            t('coreBox.searchState.sourceItemCount', { count: source.itemCount })
+                          }}
+                        </span>
+                        <span
+                          v-if="source.reason"
+                          class="CoreBoxSearchState-SourceReason"
+                          :title="source.reason"
+                        >
+                          {{ source.reason }}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   <div v-if="searchState.actions.length" class="CoreBoxSearchState-Actions">
                     <button
@@ -1133,6 +1218,80 @@ div.CoreBoxRes.CoreBoxRes--widget {
   font-size: 12px;
   line-height: 17px;
   color: var(--tx-text-color-secondary);
+}
+
+.CoreBoxSearchState-Sources {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tx-bg-color) 88%, var(--tx-fill-color-light));
+}
+
+.CoreBoxSearchState-Sources--warning {
+  border-color: color-mix(in srgb, var(--tx-color-warning) 36%, var(--tx-border-color));
+  background: color-mix(in srgb, var(--tx-color-warning) 8%, var(--tx-bg-color));
+}
+
+.CoreBoxSearchState-SourcesHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--tx-text-color-primary);
+}
+
+.CoreBoxSearchState-SourcesHeader small {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--tx-text-color-secondary);
+}
+
+.CoreBoxSearchState-SourceList {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.CoreBoxSearchState-Source {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--tx-text-color-regular);
+}
+
+.CoreBoxSearchState-SourceName,
+.CoreBoxSearchState-SourceReason {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CoreBoxSearchState-SourceStatus,
+.CoreBoxSearchState-SourceCount {
+  color: var(--tx-text-color-secondary);
+  white-space: nowrap;
+}
+
+.CoreBoxSearchState-SourceReason {
+  grid-column: 1 / -1;
+  color: var(--tx-text-color-secondary);
+}
+
+.CoreBoxSearchState-Source--degraded .CoreBoxSearchState-SourceStatus,
+.CoreBoxSearchState-Source--permission-required .CoreBoxSearchState-SourceStatus {
+  color: var(--tx-color-warning);
+}
+
+.CoreBoxSearchState-Source--error .CoreBoxSearchState-SourceStatus {
+  color: var(--tx-color-danger);
 }
 
 .CoreBoxSearchState-Actions {

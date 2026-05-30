@@ -1562,6 +1562,10 @@
       "searchingDetail": "Checking apps, files, commands, and providers.",
       "noResultsTitle": "No results",
       "noResultsDetail": "Try a broader query, or check whether indexing and providers are available.",
+      "sourceSummaryTitle": "Search source status",
+      "sourceSummaryAttentionDetail": "Some search sources are degraded or unavailable.",
+      "sourceSummaryWarmingDetail": "Some search sources are still warming up.",
+      "sourceItemCount": "{count} items",
       "retrySearch": "Retry search",
       "openIndexSettings": "Open index settings"
     },
@@ -2316,6 +2320,51 @@
       "diagnosticLastChecked": "Last {time}",
       "diagnosticRefresh": "Refresh",
       "deviceIdleDiagnosticLoadFailed": "Failed to load idle policy diagnostic",
+      "sourceDiagnosticsGroupTitle": "Search Source Diagnostics",
+      "sourceDiagnosticsGroupDesc": "Inspect unified health for App, File, Everything, and other indexed sources",
+      "sourceDiagnosticsSummaryTitle": "Source Health Summary",
+      "sourceDiagnosticsChecking": "Reading unified search source status",
+      "sourceDiagnosticsSummary": "{total} sources, {ready} ready, {degraded} degraded, {unavailable} unavailable, {attention} need attention",
+      "sourceDiagnosticsLoadFailed": "Failed to load search source diagnostics",
+      "sourceItems": "{count} items",
+      "sourceWatch": "Watch: {state}",
+      "sourceReconcile": "Reconcile: {state}",
+      "sourceTask": {
+        "scanDone": "Scan {records} records",
+        "scanFailed": "Scan failed: {error}",
+        "watchDone": "Watch {action} {applied}/{deltas}",
+        "watchFailed": "Watch failed {failed}/{deltas}",
+        "reconcileDone": "Reconcile +{added} ~{changed} -{deleted} · {reason} · roots {rootCount}",
+        "reconcileFailed": "Reconcile errors: {errors} · {reason}"
+      },
+      "sourceStatus": {
+        "ready": "Ready",
+        "warming": "Warming",
+        "degraded": "Degraded",
+        "disabled": "Disabled",
+        "unsupported": "Unsupported",
+        "permission-required": "Needs Permission",
+        "error": "Error"
+      },
+      "sourceWatchState": {
+        "active": "Active",
+        "pending-permission": "Pending permission",
+        "unavailable": "Unavailable",
+        "not-supported": "Not supported"
+      },
+      "sourceReconcileState": {
+        "idle": "Idle",
+        "scheduled": "Scheduled",
+        "running": "Running",
+        "failed": "Failed"
+      },
+      "sourceDetail": {
+        "lastError": "Last error: {error}",
+        "reason": "Reason: {reason}",
+        "lastIndexedAt": "Last indexed: {time}",
+        "roots": "Roots: {roots}",
+        "emptyRoots": "No watch roots"
+      },
       "appIndexGroupTitle": "App Index Scheduling",
       "appIndexGroupDesc": "Configure startup backfill and periodic full sync",
       "hideNoisySystemAppsTitle": "Hide Noisy System Apps",
@@ -3525,15 +3574,7 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-      ]
+      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     },
     "audit": {
       "title": "Audit Settings",
