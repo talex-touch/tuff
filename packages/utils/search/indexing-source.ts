@@ -663,6 +663,40 @@ export interface IndexedSourceHealth {
   lastError?: string;
 }
 
+export type IndexedSourceProgressStatus =
+  | "unknown"
+  | "idle"
+  | "running"
+  | "stabilizing"
+  | "estimated"
+  | "stalled"
+  | "complete"
+  | "failed";
+
+export type IndexedSourceProgressEstimateBasis =
+  | "none"
+  | "stage-speed"
+  | "elapsed-progress"
+  | "stalled"
+  | "complete";
+
+export interface IndexedSourceProgress {
+  sourceId: string;
+  stage: string;
+  status: IndexedSourceProgressStatus;
+  current: number;
+  total: number;
+  progress: number;
+  startedAt?: number | null;
+  updatedAt?: number;
+  estimatedRemainingMs?: number | null;
+  estimatedCompletionAt?: number | null;
+  averageItemsPerSecond?: number;
+  speedSampleCount?: number;
+  estimateBasis?: IndexedSourceProgressEstimateBasis | (string & {});
+  reason?: string;
+}
+
 export interface IndexedSourceRoot {
   sourceId: string;
   path: string;
@@ -828,6 +862,7 @@ export interface IndexedSourceDiagnostics {
   health: IndexedSourceHealth;
   roots: IndexedSourceRoot[];
   evidence?: IndexedSourceEvidence[];
+  progress?: IndexedSourceProgress | null;
   admissionIssues?: IndexedSourceAdmissionReason[];
   lifecycleIssues?: IndexedSourceLifecycleIssue[];
   recentTasks?: IndexedSourceTaskHistoryEntry[];
@@ -916,6 +951,7 @@ export interface IndexedSource {
   getHealth: () => Promise<IndexedSourceHealth>;
   getRoots: () => Promise<IndexedSourceRoot[]>;
   getEvidence?: () => Promise<IndexedSourceEvidence[]>;
+  getProgress?: () => Promise<IndexedSourceProgress | null>;
   scan: (
     request: IndexedSourceScanRequest,
   ) => AsyncIterable<IndexedSourceRecordBatch>;

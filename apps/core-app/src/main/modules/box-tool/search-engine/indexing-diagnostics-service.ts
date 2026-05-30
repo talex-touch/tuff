@@ -5,6 +5,7 @@ import type {
   IndexedSourceDiagnosticsSnapshot,
   IndexedSourceEvidence,
   IndexedSourceHealth,
+  IndexedSourceProgress,
   IndexedSourceRoot
 } from '@talex-touch/utils/search'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -17,6 +18,7 @@ export interface IndexingRuntimeSourceDiagnostics extends IndexedSourceDiagnosti
   health: IndexedSourceHealth
   roots: IndexedSourceRoot[]
   evidence?: IndexedSourceEvidence[]
+  progress?: IndexedSourceProgress | null
 }
 
 export interface IndexingRuntimeDiagnostics extends IndexedSourceDiagnosticsSnapshot {
@@ -42,7 +44,7 @@ export class SourceDiagnosticsService {
   async getDiagnostics(sources: IndexedSource[]): Promise<IndexingRuntimeDiagnostics> {
     const diagnostics = await Promise.all(
       sources.map(async (source): Promise<IndexingRuntimeSourceDiagnostics> => {
-        const [health, roots, evidence] = await Promise.all([
+        const [health, roots, evidence, progress] = await Promise.all([
           source.getHealth().catch((error) => {
             diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' health failed`, {
               error
@@ -60,7 +62,13 @@ export class SourceDiagnosticsService {
               error
             })
             return [] as IndexedSourceEvidence[]
-          }) ?? Promise.resolve([] as IndexedSourceEvidence[])
+          }) ?? Promise.resolve([] as IndexedSourceEvidence[]),
+          source.getProgress?.().catch((error) => {
+            diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' progress failed`, {
+              error
+            })
+            return null as IndexedSourceProgress | null
+          }) ?? Promise.resolve(null as IndexedSourceProgress | null)
         ])
 
         const contractIssues = getIndexedSourceContractIssues(source)
@@ -70,6 +78,7 @@ export class SourceDiagnosticsService {
           health,
           roots,
           evidence,
+          progress,
           admissionIssues: contractIssues.admission,
           lifecycleIssues: contractIssues.lifecycle
         }

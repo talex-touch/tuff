@@ -1,4 +1,7 @@
-import type { IndexedSourceDescriptor } from "../../search";
+import type {
+  IndexedSourceDescriptor,
+  IndexedSourceDiagnostics,
+} from "../../search";
 import { describe, expect, it } from "vitest";
 import {
   appendIndexedSourceTaskHistory,
@@ -695,6 +698,42 @@ describe("indexedSource admission", () => {
         0,
       ),
     ).toEqual([]);
+  });
+
+  it("allows diagnostics to carry source-level progress and ETA", () => {
+    const diagnostics: IndexedSourceDiagnostics = {
+      descriptor: buildDescriptor(),
+      health: {
+        status: "warming",
+        permissionState: "granted",
+        itemCount: 12,
+        watchState: "active",
+        reconcileState: "running",
+      },
+      roots: [],
+      progress: {
+        sourceId: "quicklink",
+        stage: "indexing",
+        status: "estimated",
+        current: 20,
+        total: 100,
+        progress: 20,
+        startedAt: 1,
+        updatedAt: 2,
+        estimatedRemainingMs: 4000,
+        estimatedCompletionAt: 6000,
+        averageItemsPerSecond: 20,
+        speedSampleCount: 2,
+        estimateBasis: "stage-speed",
+      },
+    };
+
+    expect(diagnostics.progress).toMatchObject({
+      sourceId: "quicklink",
+      status: "estimated",
+      estimatedRemainingMs: 4000,
+      estimateBasis: "stage-speed",
+    });
   });
 });
 
