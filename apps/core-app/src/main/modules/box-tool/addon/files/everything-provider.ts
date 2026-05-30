@@ -38,6 +38,7 @@ import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { appTaskGate } from '../../../../service/app-task-gate'
+import { indexingRootPolicy } from '../../search-engine/indexing-root-policy'
 import { searchLogger } from '../../search-engine/search-logger'
 import { EverythingDiagnosticsTracker, toEverythingResultSample } from './everything-diagnostics'
 import {
@@ -882,14 +883,14 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private filterAuthorizedResults(results: EverythingSearchResult[]): EverythingSearchResult[] {
     let roots: string[]
     try {
-      roots = fileProvider.getWatchedPaths()
+      roots = indexingRootPolicy.resolveFileSearchRoots().roots.map((root) => root.path)
     } catch (error) {
-      this.logWarn('Everything path filtering could not read File Index watch roots', error)
+      this.logWarn('Everything path filtering could not read runtime file search roots', error)
       this.updatePathFilteringStatus({
         allowedRootCount: 0,
         rawCount: results.length,
         filteredCount: 0,
-        reason: 'file-index-watch-roots-unavailable'
+        reason: 'indexing-root-policy-file-roots-unavailable'
       })
       return []
     }
@@ -900,7 +901,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
         allowedRootCount: 0,
         rawCount: results.length,
         filteredCount: 0,
-        reason: 'no-file-index-watch-roots'
+        reason: 'indexing-root-policy-file-roots-empty'
       })
       return []
     }
@@ -910,7 +911,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       allowedRootCount: usableRoots.length,
       rawCount: results.length,
       filteredCount: filtered.length,
-      reason: filtered.length === results.length ? null : 'outside-file-index-watch-roots'
+      reason: filtered.length === results.length ? null : 'outside-indexing-root-policy-file-roots'
     })
 
     return filtered

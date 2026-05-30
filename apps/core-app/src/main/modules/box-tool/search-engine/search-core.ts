@@ -3,6 +3,7 @@ import type {
   IProviderActivate,
   ISearchEngine,
   ISearchProvider,
+  ITouchEvent,
   TalexTouch,
   TuffQuery,
   TuffSearchResult
@@ -15,6 +16,7 @@ import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import {
+  IndexedSourceReconcileReasons,
   StorageList,
   TuffInputType,
   TuffSearchResultBuilder,
@@ -41,6 +43,8 @@ import { getMainConfig, storageModule, subscribeMainConfig } from '../../storage
 import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
+import { FILE_INDEXED_SOURCE_ID } from './file-indexed-source'
 import {
   linuxNativeFileProvider,
   macSpotlightFileProvider
@@ -51,6 +55,9 @@ import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
 import { resolveClipboardInputs } from './utils/resolve-clipboard-inputs'
 import { windowManager } from '../core-box/window'
+import { indexingRuntime, type IndexingRuntime } from './indexing-runtime'
+import { registerCoreIndexedSources } from './indexing-runtime-sources'
+import { SearchIndexStoreAdapter } from './indexing-store-adapter'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
@@ -152,6 +159,7 @@ export class SearchEngineCore
   private usageStatsQueue: UsageStatsQueue | null = null
   private recommendationEngine: RecommendationEngine | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
+  private indexingRuntime: IndexingRuntime | null = null
   private latestSessionId: string | null = null // 跟踪最新的搜索 session，防止竞态条件
   private searchSessionStartTimes = new Map<string, number>()
   private pinnedCache: { fetchedAt: number; pinnedSet: Set<string> } | null = null
@@ -169,6 +177,7 @@ export class SearchEngineCore
   private providerLoadPromise: Promise<void> | null = null
   private startupServicesStarted = false
   private onboardingReadyUnsubscribe: (() => void) | null = null
+  private indexedSourceFsBridgeSubscribed = false
 
   private cacheSearchResult(
     query: TuffQuery,
@@ -191,6 +200,158 @@ export class SearchEngineCore
     }
 
     this.searchCache.set(cacheKey, { result, timestamp: Date.now() })
+  }
+
+  private subscribeIndexedSourceFsBridge(): void {
+    if (this.indexedSourceFsBridgeSubscribed) {
+      return
+    }
+
+    touchEventBus.on(TalexEvents.FILE_ADDED, this.handleIndexedSourceFileAddedOrChanged)
+    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleIndexedSourceFileAddedOrChanged)
+    touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceFileUnlinked)
+    touchEventBus.on(
+      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+      this.handleIndexedSourceFileWatchRootRecovered
+    )
+    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleIndexedSourceAppAddedOrChanged)
+    touchEventBus.on(TalexEvents.FILE_ADDED, this.handleIndexedSourceAppAddedOrChanged)
+    touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceAppUnlinked)
+
+    if (process.platform === 'darwin') {
+      touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleIndexedSourceAppAddedOrChanged)
+      touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleIndexedSourceAppUnlinked)
+    }
+
+    this.indexedSourceFsBridgeSubscribed = true
+  }
+
+  private unsubscribeIndexedSourceFsBridge(): void {
+    if (!this.indexedSourceFsBridgeSubscribed) {
+      return
+    }
+
+    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleIndexedSourceFileAddedOrChanged)
+    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleIndexedSourceFileAddedOrChanged)
+    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceFileUnlinked)
+    touchEventBus.off(
+      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+      this.handleIndexedSourceFileWatchRootRecovered
+    )
+    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleIndexedSourceAppAddedOrChanged)
+    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleIndexedSourceAppAddedOrChanged)
+    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleIndexedSourceAppUnlinked)
+    touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleIndexedSourceAppAddedOrChanged)
+    touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleIndexedSourceAppUnlinked)
+    this.indexedSourceFsBridgeSubscribed = false
+  }
+
+  private readonly handleIndexedSourceFileAddedOrChanged = (event: ITouchEvent): void => {
+    const filePath = this.resolveFsEventPath(event)
+    if (!filePath) return
+
+    const action = event.name === TalexEvents.FILE_ADDED ? 'add' : 'change'
+    void this.routeIndexedSourceFsEvent(FILE_INDEXED_SOURCE_ID, filePath, action)
+  }
+
+  private readonly handleIndexedSourceFileUnlinked = (event: ITouchEvent): void => {
+    const filePath = this.resolveFsEventPath(event)
+    if (!filePath) return
+
+    void this.routeIndexedSourceFsEvent(FILE_INDEXED_SOURCE_ID, filePath, 'delete')
+  }
+
+  private readonly handleIndexedSourceFileWatchRootRecovered = (event: ITouchEvent): void => {
+    const filePath = this.resolveFsEventPath(event)
+    if (!filePath) return
+
+    void this.reconcileRecoveredFileWatchRoot(filePath)
+  }
+
+  private readonly handleIndexedSourceAppAddedOrChanged = (event: ITouchEvent): void => {
+    const filePath = this.resolveFsEventPath(event)
+    if (!filePath) return
+
+    const action =
+      event.name === TalexEvents.FILE_ADDED || event.name === TalexEvents.DIRECTORY_ADDED
+        ? 'add'
+        : 'change'
+    void this.routeIndexedSourceFsEvent(APP_INDEXED_SOURCE_ID, filePath, action)
+  }
+
+  private readonly handleIndexedSourceAppUnlinked = (event: ITouchEvent): void => {
+    const filePath = this.resolveFsEventPath(event)
+    if (!filePath) return
+
+    void this.routeIndexedSourceFsEvent(APP_INDEXED_SOURCE_ID, filePath, 'delete')
+  }
+
+  private resolveFsEventPath(event: ITouchEvent): string | null {
+    const filePath = (event as ITouchEvent & { filePath?: unknown }).filePath
+    return typeof filePath === 'string' && filePath.length > 0 ? filePath : null
+  }
+
+  private async routeIndexedSourceFsEvent(
+    sourceId: string,
+    filePath: string,
+    action: 'add' | 'change' | 'delete'
+  ): Promise<void> {
+    if (!this.indexingRuntime) {
+      return
+    }
+
+    try {
+      await this.indexingRuntime.routeWatchEventWithResult({
+        sourceId,
+        action,
+        path: filePath,
+        occurredAt: Date.now()
+      })
+    } catch (error) {
+      searchEngineLog.warn('Indexed source fs event route failed', {
+        error,
+        sourceId,
+        path: filePath,
+        action
+      })
+    }
+  }
+
+  private async reconcileRecoveredFileWatchRoot(filePath: string): Promise<void> {
+    if (!this.indexingRuntime) {
+      return
+    }
+
+    const source = this.indexingRuntime.getSource(FILE_INDEXED_SOURCE_ID)
+    const event = {
+      sourceId: FILE_INDEXED_SOURCE_ID,
+      action: 'change' as const,
+      path: filePath,
+      rootPath: filePath,
+      occurredAt: Date.now()
+    }
+    if (source?.shouldHandleWatchEvent && !source.shouldHandleWatchEvent(event)) {
+      return
+    }
+
+    try {
+      await this.indexingRuntime.reconcileSource(FILE_INDEXED_SOURCE_ID, {
+        reason: IndexedSourceReconcileReasons.WatchRootRecovered,
+        roots: [
+          {
+            sourceId: FILE_INDEXED_SOURCE_ID,
+            path: filePath,
+            permissionState: 'granted',
+            reason: IndexedSourceReconcileReasons.WatchRootRecovered
+          }
+        ]
+      })
+    } catch (error) {
+      searchEngineLog.warn('Recovered file watch root reconcile failed', {
+        error,
+        path: filePath
+      })
+    }
   }
 
   constructor() {
@@ -2316,6 +2477,7 @@ export class SearchEngineCore
       searchEngineLog.warn('Search index warmup failed', { error })
     })
     instance.searchIndexService.preloadPinyin()
+    indexingRuntime.setStore(new SearchIndexStoreAdapter(instance.searchIndexService))
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, {
@@ -2327,6 +2489,13 @@ export class SearchEngineCore
     searchEngineLog.debug('Initializing RecommendationEngine')
     instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
+    instance.indexingRuntime = indexingRuntime
+    registerCoreIndexedSources(instance.indexingRuntime)
+    fileProvider.setIndexedSourceRuntimeResetDelegate(
+      async (request) =>
+        await instance.indexingRuntime!.resetSourceRuntimeState(FILE_INDEXED_SOURCE_ID, request)
+    )
+    instance.subscribeIndexedSourceFsBridge()
 
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
@@ -2348,6 +2517,10 @@ export class SearchEngineCore
     // NOTE: 'core-box:query' is registered in core-box/ipc.ts via coreBoxManager.search()
     // Do NOT register it here to avoid duplicate handlers causing race conditions
     const transport = this.getTransport()
+
+    transport.on(CoreBoxEvents.search.indexingDiagnostics, async () => {
+      return await instance.indexingRuntime!.getDiagnostics()
+    })
 
     transport.on(CoreBoxEvents.item.execute, async (payload) => {
       const { item, searchResult } = payload as {
@@ -2477,6 +2650,10 @@ export class SearchEngineCore
     // 停止汇总服务
     this.usageSummaryService?.stop()
     this.stopMaintenance()
+    this.unsubscribeIndexedSourceFsBridge()
+    fileProvider.setIndexedSourceRuntimeResetDelegate(null)
+    this.indexingRuntime?.clear()
+    this.indexingRuntime = null
 
     // 强制刷新队列
     this.usageStatsQueue?.forceFlush().catch((error) => {

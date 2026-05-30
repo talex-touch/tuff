@@ -1,5 +1,17 @@
 import type { TimingLogLevel, TimingMeta, TimingOptions } from '@talex-touch/utils'
 import type {
+  IndexedSourceDelta,
+  IndexedSourceEvidence,
+  IndexedSourceHealth,
+  IndexedSourceRecord,
+  IndexedSourceRecordBatch,
+  IndexedSourceReconcileRequest,
+  IndexedSourceReconcileResult,
+  IndexedSourceRoot,
+  IndexedSourceScanRequest,
+  IndexedSourceWatchEvent
+} from '@talex-touch/utils/search'
+import type {
   IExecuteArgs,
   IProviderActivate,
   ISearchProvider,
@@ -38,18 +50,17 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
+import { IndexedSourceScanReasons } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
 import { app, BrowserWindow } from 'electron'
-import {
+import type {
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent,
   FileAddedEvent,
   FileChangedEvent,
-  FileUnlinkedEvent,
-  TalexEvents,
-  touchEventBus
+  FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
 import {
   config as configSchema,
@@ -66,7 +77,7 @@ import { deviceIdleService } from '../../../../service/device-idle-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
-import { appScanner } from './app-scanner'
+import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import {
@@ -77,11 +88,16 @@ import {
 } from './display-name-sync-utils'
 import {
   APP_ALTERNATE_NAMES_EXTENSION_KEY,
+  APP_DISPLAY_PATH_EXTENSION_KEY,
   APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY,
   APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY,
   APP_ENTRY_ENABLED_EXTENSION_KEY,
+  APP_ENTRY_SOURCE_EXTENSION_KEY,
   APP_ENTRY_SOURCE_MANUAL,
   APP_IDENTIFIER_EXTENSION_KEYS,
+  APP_IDENTITY_KIND_EXTENSION_KEY,
+  APP_LAUNCH_KIND_EXTENSION_KEY,
+  APP_LAUNCH_TARGET_EXTENSION_KEY,
   APP_SCANNED_OPTIONAL_EXTENSION_KEYS,
   buildAppExtensions,
   buildManagedEntryExtensions,
@@ -169,12 +185,45 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
+type AppIndexSyncStats = {
+  added: number
+  changed: number
+  deleted: number
+  skipped: number
+  errors: number
+}
+type AppSourceEvidenceKey =
+  | 'watch-roots'
+  | 'manual'
+  | 'windows-start-menu'
+  | 'windows-uwp'
+  | 'windows-registry'
+  | 'windows-app-paths'
+  | 'windows-steam'
+  | 'macos-mdfind'
+  | 'macos-mdls'
+  | 'linux-desktop'
+  | 'unknown'
 type FileSystemPathEvent =
   | FileAddedEvent
   | FileChangedEvent
   | FileUnlinkedEvent
   | DirectoryAddedEvent
   | DirectoryUnlinkedEvent
+
+const APP_SOURCE_EVIDENCE_LABELS: Record<AppSourceEvidenceKey, string> = {
+  'watch-roots': 'Watch roots',
+  manual: 'Manual app entries',
+  'windows-start-menu': 'Windows Start Menu shortcuts',
+  'windows-uwp': 'Windows UWP apps',
+  'windows-registry': 'Windows uninstall registry',
+  'windows-app-paths': 'Windows App Paths registry',
+  'windows-steam': 'Steam apps',
+  'macos-mdfind': 'macOS mdfind applications',
+  'macos-mdls': 'macOS mdls metadata repair',
+  'linux-desktop': 'Linux desktop entries',
+  unknown: 'Unclassified app records'
+}
 
 function logApp(
   message: string,
@@ -304,6 +353,10 @@ export interface AppIndexRebuildResult {
   error?: string
 }
 
+type AppIndexProcessPathResult = AppIndexAddPathResult & {
+  appInfo?: ScannedAppInfo
+}
+
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   hideNoisySystemApps: true,
   startupBackfillEnabled: true,
@@ -384,8 +437,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this._scheduleFullSync()
     this._scheduleStartupIndexHealthCheck()
 
-    // 注意：补漏/全量同步会在后台触发关键词同步
-    this._subscribeToFSEvents()
+    // 注意：补漏/全量同步会在后台触发关键词同步；实时事件由 IndexingRuntime 统一路由
     this._registerWatchPaths()
     this._scheduleMdlsUpdateScan()
 
@@ -477,7 +529,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onDestroy(): Promise<void> {
     logApp('Unloading AppProvider service', LogStyle.process)
-    this._unsubscribeFromFSEvents()
     logApp('AppProvider service unloaded', LogStyle.success)
   }
 
@@ -519,11 +570,217 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (!appPath) {
       return { success: false, status: 'invalid', reason: 'invalid-path' }
     }
-    return this.processAppPath(appPath, { managedEntry: true })
+    const { appInfo: _appInfo, ...result } = await this.processAppPath(appPath, {
+      managedEntry: true
+    })
+    return result
   }
 
   public async diagnoseAppSearch(request: AppIndexDiagnoseRequest) {
     return diagnoseAppSearch(this.createDiagnosticsContext(), request)
+  }
+
+  public async getIndexedSourceHealth(): Promise<IndexedSourceHealth> {
+    const health = await this.getAppSearchIndexHealth()
+    const isWarming = this.isInitializing !== null || this.startupBackfillStarted
+
+    return {
+      status: health.healthy ? 'ready' : isWarming ? 'warming' : 'degraded',
+      permissionState: 'not-required',
+      itemCount: health.appCount,
+      watchState: 'active',
+      reconcileState: this.fullSyncRegistered ? 'scheduled' : 'idle',
+      reason: health.healthy
+        ? undefined
+        : `App index rows=${health.appCount}, searchIndexRows=${health.indexedItemCount}`,
+      lastIndexedAt: this.volatileLastFullSyncTime ?? undefined
+    }
+  }
+
+  public getIndexedSourceRoots(): IndexedSourceRoot[] {
+    return appScanner.getWatchPaths().map((watchPath) => ({
+      sourceId: this.id,
+      path: watchPath,
+      permissionState: 'not-required',
+      watchDepth: this.resolveWatchDepthForPath(watchPath)
+    }))
+  }
+
+  public async getIndexedSourceEvidence(): Promise<IndexedSourceEvidence[]> {
+    const watchRoots = this.getIndexedSourceRoots()
+    const evidence: IndexedSourceEvidence[] = [
+      {
+        id: 'app-provider:watch-roots',
+        label: APP_SOURCE_EVIDENCE_LABELS['watch-roots'],
+        status: watchRoots.length > 0 ? 'ready' : 'degraded',
+        rootCount: watchRoots.length,
+        roots: watchRoots.map((root) => root.path),
+        lastCheckedAt: Date.now(),
+        reason: watchRoots.length > 0 ? undefined : 'app-watch-roots-empty'
+      }
+    ]
+
+    const appEvidence = await this.getIndexedAppRecordEvidence()
+    return [...evidence, ...appEvidence]
+  }
+
+  public async scanIndexedSource(
+    request: IndexedSourceScanRequest
+  ): Promise<IndexedSourceRecordBatch | null> {
+    if (
+      request.reason === IndexedSourceScanReasons.ManualRebuild ||
+      request.reason === IndexedSourceScanReasons.SchemaMigration
+    ) {
+      await this._runManualRebuild()
+      return await this.buildIndexedSourceRecordBatch(request.sourceId, { forceRefresh: true })
+    }
+
+    const task = this._runStartupBackfill()
+    this.isInitializing = task
+    try {
+      await task
+      await this._setLastBackfillTime(Date.now())
+    } finally {
+      if (this.isInitializing === task) {
+        this.isInitializing = null
+      }
+    }
+    return await this.buildIndexedSourceRecordBatch(request.sourceId)
+  }
+
+  public async reconcileIndexedSource(
+    _request: IndexedSourceReconcileRequest
+  ): Promise<IndexedSourceReconcileResult> {
+    const startedAt = Date.now()
+    const syncStats = await this._runFullSync(true)
+    let mdlsStats: AppIndexSyncStats = this.createEmptySyncStats()
+    if (process.platform === 'darwin') {
+      mdlsStats = await this._runMdlsUpdateScan()
+    }
+    const stats = this.mergeSyncStats(syncStats, mdlsStats)
+
+    return {
+      sourceId: this.id,
+      added: stats.added,
+      changed: stats.changed,
+      deleted: stats.deleted,
+      skipped: stats.skipped,
+      errors: stats.errors,
+      startedAt,
+      completedAt: Date.now(),
+      reason: process.platform === 'darwin' ? 'full-sync+mdls-update-scan' : 'full-sync'
+    }
+  }
+
+  public async handleIndexedSourceWatchEvent(
+    event: IndexedSourceWatchEvent
+  ): Promise<IndexedSourceDelta[]> {
+    const fsEvent = { filePath: event.path }
+
+    if (event.action === 'delete') {
+      await this.handleItemUnlinked(fsEvent)
+      return [
+        {
+          sourceId: this.id,
+          action: 'delete',
+          stableKey: event.path,
+          path: event.path,
+          reason: 'app-provider-watch-delete'
+        }
+      ]
+    }
+
+    const appPath = this.resolveAppPath(event.path, { logIgnore: true })
+    if (!appPath) {
+      return []
+    }
+
+    const result = await this.processAppPath(appPath)
+    if (!result.success || !result.appInfo) {
+      return []
+    }
+
+    return [
+      {
+        sourceId: this.id,
+        action: event.action,
+        record: this.mapScannedAppToIndexedSourceRecord(this.id, result.appInfo),
+        path: result.appInfo.path,
+        reason: 'app-provider-watch-event'
+      }
+    ]
+  }
+
+  private resolveWatchDepthForPath(watchPath: string): number {
+    return this.isMac && (watchPath === '/Applications' || watchPath.endsWith('/Applications'))
+      ? 1
+      : 4
+  }
+
+  private async buildIndexedSourceRecordBatch(
+    sourceId: string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<IndexedSourceRecordBatch> {
+    const apps = await this.loadScannedApps({ forceRefresh: options.forceRefresh === true })
+    return {
+      sourceId,
+      records: apps.map((app) => this.mapScannedAppToIndexedSourceRecord(sourceId, app)),
+      done: true
+    }
+  }
+
+  private mapScannedAppToIndexedSourceRecord(
+    sourceId: string,
+    appInfo: ScannedAppInfo
+  ): IndexedSourceRecord {
+    const stableKey = resolveAppItemId(appInfo)
+    const launchTarget = appInfo.launchTarget || appInfo.path
+    const extension =
+      appInfo.launchKind === 'uwp'
+        ? '.uwp'
+        : appInfo.launchKind === 'protocol'
+          ? '.protocol'
+          : path.extname(launchTarget).toLowerCase() || undefined
+
+    return {
+      sourceId,
+      recordId: stableKey,
+      stableKey,
+      kind: 'app',
+      title: resolveScannedDisplayName(appInfo) || appInfo.name,
+      subtitle: appInfo.description || appInfo.displayPath || launchTarget,
+      path: appInfo.path,
+      uri:
+        appInfo.launchKind === 'protocol' || appInfo.launchKind === 'uwp'
+          ? launchTarget
+          : undefined,
+      icon: appInfo.icon,
+      mtime: appInfo.lastModified?.getTime(),
+      keywords: normalizeStringList([
+        appInfo.name,
+        appInfo.displayName,
+        appInfo.fileName,
+        ...(appInfo.alternateNames ?? [])
+      ]),
+      tags: normalizeStringList([
+        appInfo.bundleId,
+        appInfo.stableId,
+        appInfo.uniqueId,
+        appInfo.path,
+        launchTarget
+      ]),
+      metadata: {
+        extension,
+        launchKind: appInfo.launchKind,
+        launchTarget,
+        launchArgs: appInfo.launchArgs,
+        workingDirectory: appInfo.workingDirectory,
+        identityKind: appInfo.identityKind,
+        displayNameSource: appInfo.displayNameSource,
+        displayNameQuality: appInfo.displayNameQuality,
+        displayPath: appInfo.displayPath
+      }
+    }
   }
 
   public async reindexAppSearchTarget(request: AppIndexReindexRequest) {
@@ -1024,6 +1281,184 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private async getIndexedAppRecordEvidence(): Promise<IndexedSourceEvidence[]> {
+    const scannerEvidence = await this.getScannerAppSourceEvidence()
+    if (scannerEvidence) {
+      return scannerEvidence
+    }
+
+    if (!this.dbUtils) {
+      return [
+        this.buildAppSourceEvidence('unknown', 0, {
+          status: 'degraded',
+          reason: 'app-db-unavailable'
+        })
+      ]
+    }
+
+    const apps = await this.dbUtils.getFilesByType('app')
+    const appsWithExtensions = await this.fetchExtensionsForFiles(apps)
+    const counts = new Map<AppSourceEvidenceKey, number>()
+
+    for (const app of appsWithExtensions) {
+      const key = this.resolveAppSourceEvidenceKey(app)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+
+    return this.getPlatformEvidenceKeys()
+      .filter((key) => key === 'manual' || key === 'macos-mdls' || (counts.get(key) ?? 0) > 0)
+      .map((key) =>
+        this.buildAppSourceEvidence(key, counts.get(key) ?? 0, {
+          status:
+            key === 'macos-mdls' ? 'ready' : (counts.get(key) ?? 0) > 0 ? 'ready' : 'degraded',
+          reason:
+            key === 'manual' && (counts.get(key) ?? 0) === 0
+              ? 'manual-app-entries-empty'
+              : undefined
+        })
+      )
+  }
+
+  private async getScannerAppSourceEvidence(): Promise<IndexedSourceEvidence[] | null> {
+    if (process.platform !== 'win32') return null
+
+    try {
+      const results = await appScanner.getAppsBySource()
+      if (!results) return null
+
+      return this.buildWindowsScannerEvidence(results)
+    } catch (error) {
+      return [
+        this.buildAppSourceEvidence('unknown', 0, {
+          status: 'degraded',
+          reason: `windows-scanner-source-evidence-failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          metadata: {
+            evidenceSource: 'scanner'
+          }
+        })
+      ]
+    }
+  }
+
+  private buildWindowsScannerEvidence(
+    results: AppScannerSourceScanResult[]
+  ): IndexedSourceEvidence[] {
+    const bySourceId = new Map<AppSourceEvidenceKey, AppScannerSourceScanResult>()
+    for (const result of results) {
+      bySourceId.set(result.sourceId, result)
+    }
+
+    return this.getPlatformEvidenceKeys()
+      .filter((key) => key !== 'unknown')
+      .map((key) => {
+        if (key === 'manual') {
+          return this.buildAppSourceEvidence(key, 0, {
+            status: 'degraded',
+            reason: 'manual-app-entries-not-scanned',
+            metadata: {
+              evidenceSource: 'scanner'
+            }
+          })
+        }
+
+        const result = bySourceId.get(key)
+        const itemCount = result?.apps.length ?? 0
+        return this.buildAppSourceEvidence(key, itemCount, {
+          status: result?.error ? 'degraded' : itemCount > 0 ? 'ready' : 'degraded',
+          reason: result?.error || (itemCount === 0 ? `${key}-empty` : undefined),
+          metadata: {
+            evidenceSource: 'scanner',
+            sourceLabel: result?.label
+          }
+        })
+      })
+  }
+
+  private buildAppSourceEvidence(
+    key: AppSourceEvidenceKey,
+    itemCount: number,
+    options: {
+      status?: IndexedSourceEvidence['status']
+      reason?: string
+      metadata?: Record<string, unknown>
+    } = {}
+  ): IndexedSourceEvidence {
+    return {
+      id: `app-provider:${key}`,
+      label: APP_SOURCE_EVIDENCE_LABELS[key],
+      status: options.status ?? (itemCount > 0 ? 'ready' : 'degraded'),
+      itemCount,
+      lastCheckedAt: Date.now(),
+      reason: options.reason,
+      metadata: {
+        platform: process.platform,
+        ...options.metadata
+      }
+    }
+  }
+
+  private getPlatformEvidenceKeys(): AppSourceEvidenceKey[] {
+    if (process.platform === 'win32') {
+      return [
+        'windows-start-menu',
+        'windows-uwp',
+        'windows-registry',
+        'windows-app-paths',
+        'windows-steam',
+        'manual',
+        'unknown'
+      ]
+    }
+
+    if (process.platform === 'darwin') {
+      return ['macos-mdfind', 'macos-mdls', 'manual', 'unknown']
+    }
+
+    if (process.platform === 'linux') {
+      return ['linux-desktop', 'manual', 'unknown']
+    }
+
+    return ['manual', 'unknown']
+  }
+
+  private resolveAppSourceEvidenceKey(app: DbAppWithExtensions): AppSourceEvidenceKey {
+    if (app.extensions[APP_ENTRY_SOURCE_EXTENSION_KEY] === APP_ENTRY_SOURCE_MANUAL) {
+      return 'manual'
+    }
+
+    const identityKind = app.extensions[APP_IDENTITY_KIND_EXTENSION_KEY]
+    const launchKind = app.extensions[APP_LAUNCH_KIND_EXTENSION_KEY]
+    const displayNameSource = (
+      app.extensions[APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY] ?? ''
+    ).toLowerCase()
+    const displayPath = (
+      app.extensions[APP_DISPLAY_PATH_EXTENSION_KEY] ??
+      app.path ??
+      ''
+    ).toLowerCase()
+    const launchTarget = (app.extensions[APP_LAUNCH_TARGET_EXTENSION_KEY] ?? '').toLowerCase()
+
+    if (identityKind === 'windows-uwp' || launchKind === 'uwp') return 'windows-uwp'
+    if (launchKind === 'protocol' && launchTarget.startsWith('steam://')) return 'windows-steam'
+    if (displayNameSource.includes('app paths')) return 'windows-app-paths'
+    if (displayNameSource.includes('registry')) return 'windows-registry'
+    if (identityKind === 'windows-shortcut' || displayPath.endsWith('.lnk')) {
+      return 'windows-start-menu'
+    }
+    if (identityKind === 'linux-desktop' || displayPath.endsWith('.desktop')) return 'linux-desktop'
+    if (
+      identityKind === 'macos-bundle' ||
+      identityKind === 'macos-path' ||
+      app.path.endsWith('.app')
+    ) {
+      return 'macos-mdfind'
+    }
+
+    return 'unknown'
+  }
+
   private _scheduleStartupIndexHealthCheck(): void {
     if (this.startupIndexHealthCheckStarted) return
     this.startupIndexHealthCheckStarted = true
@@ -1484,23 +1919,27 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this._runFullSync(decision.forced === true)
   }
 
-  private _runFullSync(forced: boolean): Promise<void> {
+  private _runFullSync(forced: boolean): Promise<AppIndexSyncStats> {
     return this.runMaintenanceTask('full-sync', async () => {
-      await this._performFullSync(forced)
+      return await this._performFullSync(forced)
     })
   }
 
-  private async _performFullSync(forced: boolean): Promise<void> {
+  private async _performFullSync(forced: boolean): Promise<AppIndexSyncStats> {
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping full sync', LogStyle.error)
-      return
+      return {
+        ...this.createEmptySyncStats(),
+        skipped: 1,
+        errors: 1
+      }
     }
 
     const syncStart = startTiming()
     logApp(forced ? 'Starting forced full sync...' : 'Starting full sync...', LogStyle.process)
 
     try {
-      await this._initialize({ forceRefresh: true })
+      const stats = await this._initialize({ forceRefresh: true })
       await this._setLastFullSyncTime(Date.now())
       logAppDuration('FullSync', syncStart, {
         label: forced ? 'Forced full sync complete' : 'Full sync complete',
@@ -1508,10 +1947,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         unit: 's',
         precision: 2
       })
+      return stats
     } catch (error) {
       logApp('Full sync failed', LogStyle.error, {
         error: error instanceof Error ? error.message : String(error)
       })
+      return {
+        ...this.createEmptySyncStats(),
+        errors: 1
+      }
     }
   }
 
@@ -1773,7 +2217,30 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       .toLowerCase()
   }
 
-  private async _initialize(options?: { forceRefresh?: boolean }): Promise<void> {
+  private createEmptySyncStats(): AppIndexSyncStats {
+    return {
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      errors: 0
+    }
+  }
+
+  private mergeSyncStats(...statsList: AppIndexSyncStats[]): AppIndexSyncStats {
+    return statsList.reduce<AppIndexSyncStats>(
+      (merged, stats) => ({
+        added: merged.added + stats.added,
+        changed: merged.changed + stats.changed,
+        deleted: merged.deleted + stats.deleted,
+        skipped: merged.skipped + stats.skipped,
+        errors: merged.errors + stats.errors
+      }),
+      this.createEmptySyncStats()
+    )
+  }
+
+  private async _initialize(options?: { forceRefresh?: boolean }): Promise<AppIndexSyncStats> {
     const initStart = startTiming()
     logApp('Initializing app data...', LogStyle.process)
 
@@ -2068,6 +2535,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       unit: 's',
       precision: 2
     })
+
+    return {
+      added: toAdd.length,
+      changed: toUpdate.length,
+      deleted: toDeleteIds.length,
+      skipped: missingApps.length - toDeleteIds.length,
+      errors: 0
+    }
   }
 
   private resolveAppPath(
@@ -2196,7 +2671,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async processAppPath(
     appPath: string,
     options: { managedEntry?: boolean } = {}
-  ): Promise<AppIndexAddPathResult> {
+  ): Promise<AppIndexProcessPathResult> {
     if (this.processingPaths.has(appPath)) {
       return { success: false, status: 'invalid', reason: 'processing' }
     }
@@ -2221,7 +2696,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
 
       const status = await this.upsertAppInfo(appInfo, options)
-      return { success: true, status, path: appInfo.path }
+      return { success: true, status, path: appInfo.path, appInfo }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       logApp(`Error processing app change: ${chalk.red(message)}`, LogStyle.error)
@@ -2229,17 +2704,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     } finally {
       this.processingPaths.delete(appPath)
     }
-  }
-
-  private handleItemAddedOrChanged = async (event: unknown): Promise<void> => {
-    const fsEvent = event as FileSystemPathEvent
-    if (!fsEvent || !fsEvent.filePath || this.processingPaths.has(fsEvent.filePath)) return
-
-    const appPath = this.resolveAppPath(fsEvent.filePath, { logIgnore: true })
-    if (!appPath) return
-
-    logApp(`App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
-    await this.processAppPath(appPath)
   }
 
   private handleItemUnlinked = async (event: unknown): Promise<void> => {
@@ -2699,36 +3163,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return limitedTokens.join(' ')
   }
 
-  private _subscribeToFSEvents(): void {
-    logApp('Subscribing to file system events', LogStyle.info)
-
-    if (this.isMac) {
-      touchEventBus.on(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
-      touchEventBus.on(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
-    } else {
-      touchEventBus.on(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
-      touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
-    }
-
-    touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
-  }
-
-  private _unsubscribeFromFSEvents(): void {
-    logApp('Unsubscribing from file system events', LogStyle.info)
-
-    touchEventBus.off(TalexEvents.DIRECTORY_ADDED, this.handleItemAddedOrChanged)
-    touchEventBus.off(TalexEvents.DIRECTORY_UNLINKED, this.handleItemUnlinked)
-    touchEventBus.off(TalexEvents.FILE_ADDED, this.handleItemAddedOrChanged)
-    touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleItemUnlinked)
-    touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleItemAddedOrChanged)
-  }
-
   private _registerWatchPaths(): void {
     const watchPaths = appScanner.getWatchPaths()
     logApp(`Registering watch paths: ${chalk.cyan(watchPaths.join(', '))}`, LogStyle.info)
 
     for (const p of watchPaths) {
-      const depth = this.isMac && (p === '/Applications' || p.endsWith('/Applications')) ? 1 : 4
+      const depth = this.resolveWatchDepthForPath(p)
       FileSystemWatcher.addPath(p, depth)
     }
   }
@@ -3112,21 +3552,25 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this._setConfigValue(MISSING_ICON_CONFIG_KEY, serializedIds)
   }
 
-  private _runMdlsUpdateScan(): Promise<void> {
+  private _runMdlsUpdateScan(): Promise<AppIndexSyncStats> {
     return this.runMaintenanceTask('mdls-update-scan', async () => {
-      await this._performMdlsUpdateScan()
+      return await this._performMdlsUpdateScan()
     })
   }
 
-  private async _performMdlsUpdateScan(): Promise<void> {
+  private async _performMdlsUpdateScan(): Promise<AppIndexSyncStats> {
     if (process.platform !== 'darwin') {
       logApp('Not on macOS, skipping mdls scan', LogStyle.info)
-      return
+      return this.createEmptySyncStats()
     }
 
     if (!this.dbUtils) {
       logApp('Database not initialized, cannot run mdls scan', LogStyle.error)
-      return
+      return {
+        ...this.createEmptySyncStats(),
+        skipped: 1,
+        errors: 1
+      }
     }
 
     const dbUtils = this.dbUtils
@@ -3138,7 +3582,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const t1 = performance.now()
     if (allDbApps.length === 0) {
       logApp('No apps in DB, skipping mdls scan', LogStyle.info)
-      return
+      return this.createEmptySyncStats()
     }
 
     await new Promise<void>((resolve) => setImmediate(resolve))
@@ -3149,7 +3593,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     if (dbScannedAppsWithExtensions.length === 0) {
       logApp('No scanned apps in DB, skipping mdls scan', LogStyle.info)
-      return
+      return this.createEmptySyncStats()
     }
 
     await new Promise<void>((resolve) => setImmediate(resolve))
@@ -3299,6 +3743,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       `mdlsUpdateScan timing: dbQuery=${Math.round(t1 - t0)}ms fetchExt=${Math.round(t2 - t1)}ms scan=${Math.round(t3 - t2)}ms(${appsNeedingMdls.length}mdls+${appsWithDisplayName.length}skip) dbUpdate=${Math.round(t4 - t3)}ms(${updatedCount}upd) dbDelete=${Math.round(t5 - t4)}ms(${deletedApps.length}del) total=${Math.round(t5 - t0)}ms`,
       LogStyle.info
     )
+
+    return {
+      added: 0,
+      changed: updatedCount,
+      deleted: deletedApps.length,
+      skipped: appsWithDisplayName.length,
+      errors: 0
+    }
   }
 
   private async _getPendingDeletions(): Promise<Map<string, PendingDeletionEntry>> {

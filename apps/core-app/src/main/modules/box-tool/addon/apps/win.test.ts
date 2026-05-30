@@ -8,6 +8,7 @@ const {
   readdirMock,
   readFileMock,
   statMock,
+  getSteamAppsMock,
   tmpdirMock,
   writeFileMock
 } = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const {
   readdirMock: vi.fn(),
   readFileMock: vi.fn(),
   statMock: vi.fn(),
+  getSteamAppsMock: vi.fn(),
   tmpdirMock: vi.fn(() => 'C:\\Temp'),
   writeFileMock: vi.fn()
 }))
@@ -77,6 +79,14 @@ vi.mock('extract-file-icon', () => ({
   default: vi.fn(() => Buffer.from([1, 2, 3]))
 }))
 
+vi.mock('./steam-provider', async () => {
+  const actual = await vi.importActual<typeof import('./steam-provider')>('./steam-provider')
+  return {
+    ...actual,
+    getSteamApps: getSteamAppsMock
+  }
+})
+
 function createFileStat(mtime = new Date('2026-01-01T00:00:00.000Z')) {
   return {
     isDirectory: () => false,
@@ -85,13 +95,20 @@ function createFileStat(mtime = new Date('2026-01-01T00:00:00.000Z')) {
   }
 }
 
-function mockPowerShellOutputs(options: { startApps?: unknown; registryApps?: unknown }): void {
+function mockPowerShellOutputs(options: {
+  startApps?: unknown
+  registryApps?: unknown
+  appPathApps?: unknown
+}): void {
   execFileSafeMock.mockImplementation(async (_command: string, args: string[]) => {
     const script = args[args.length - 1] || ''
     if (script.includes('Get-StartApps')) {
       return { stdout: JSON.stringify(options.startApps ?? []), stderr: '' }
     }
-    if (script.includes('Get-ItemProperty')) {
+    if (script.includes('CurrentVersion\\App Paths')) {
+      return { stdout: JSON.stringify(options.appPathApps ?? []), stderr: '' }
+    }
+    if (script.includes('CurrentVersion\\Uninstall') || script.includes('Get-ItemProperty')) {
       return { stdout: JSON.stringify(options.registryApps ?? []), stderr: '' }
     }
     return { stdout: '[]', stderr: '' }
@@ -106,6 +123,7 @@ describe('win app scanner', () => {
     accessMock.mockRejectedValue(new Error('ENOENT'))
     readFileMock.mockResolvedValue(Buffer.from([1, 2, 3]))
     writeFileMock.mockResolvedValue(undefined)
+    getSteamAppsMock.mockResolvedValue([])
   })
 
   it('preserves shortcut args and working directory in scanned apps', async () => {
@@ -626,5 +644,116 @@ describe('win app scanner', () => {
       launchTarget: targetPath,
       stableId: 'shortcut:c:\\program files\\foo\\foo.exe|'
     })
+  })
+
+  it('separates Windows app scanner results by source', async () => {
+    const startMenuPath = 'C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'
+    const userStartMenuPath =
+      'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs'
+    const shortcutPath = `${startMenuPath}\\Start Tool.lnk`
+    const shortcutTarget = 'C:\\Program Files\\StartTool\\StartTool.exe'
+    const registryTarget = 'C:\\Program Files\\RegistryTool\\RegistryTool.exe'
+    const appPathTarget = 'C:\\Program Files\\AppPathTool\\AppPathTool.exe'
+
+    readdirMock.mockImplementation(async (dir: string) => {
+      if (dir === startMenuPath) return ['Start Tool.lnk']
+      if (dir === userStartMenuPath) return []
+      return []
+    })
+    statMock.mockImplementation(async (target: string) => {
+      if ([shortcutPath, shortcutTarget, registryTarget, appPathTarget].includes(target)) {
+        return createFileStat()
+      }
+      throw new Error(`Unexpected stat path: ${target}`)
+    })
+    readShortcutLinkMock.mockReturnValue({
+      target: shortcutTarget,
+      args: '',
+      cwd: 'C:\\Program Files\\StartTool'
+    })
+    getSteamAppsMock.mockResolvedValue([
+      {
+        name: 'Steam Tool',
+        displayName: 'Steam Tool',
+        displayNameSource: 'Steam appmanifest',
+        displayNameQuality: 'manifest',
+        identityKind: 'windows-protocol',
+        path: 'steam://rungameid/123',
+        icon: '',
+        bundleId: 'steam:123',
+        uniqueId: 'steam:123',
+        stableId: 'steam:123',
+        launchKind: 'protocol',
+        launchTarget: 'steam://rungameid/123',
+        displayPath: 'Steam',
+        lastModified: new Date(0)
+      }
+    ])
+    mockPowerShellOutputs({
+      startApps: [
+        {
+          Name: 'Calculator',
+          AppId: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
+          PackageFamilyName: 'Microsoft.WindowsCalculator_8wekyb3d8bbwe'
+        }
+      ],
+      registryApps: [
+        {
+          displayName: 'Registry Tool',
+          displayIcon: `${registryTarget},0`,
+          publisher: 'Registry Inc.',
+          systemComponent: 0
+        }
+      ],
+      appPathApps: [
+        {
+          name: 'AppPathTool.exe',
+          executablePath: appPathTarget,
+          pathValue: 'C:\\Program Files\\AppPathTool'
+        }
+      ]
+    })
+
+    const { getApps, getAppsBySource } = await import('./win')
+    const results = await getAppsBySource()
+
+    expect(results.map((result) => result.sourceId)).toEqual([
+      'windows-start-menu',
+      'windows-uwp',
+      'windows-registry',
+      'windows-app-paths',
+      'windows-steam'
+    ])
+    expect(results.map((result) => result.error)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    ])
+    expect(results.find((result) => result.sourceId === 'windows-start-menu')?.apps).toHaveLength(1)
+    expect(results.find((result) => result.sourceId === 'windows-uwp')?.apps[0]).toMatchObject({
+      name: 'Calculator',
+      launchKind: 'uwp'
+    })
+    expect(results.find((result) => result.sourceId === 'windows-registry')?.apps[0]).toMatchObject(
+      {
+        name: 'Registry Tool',
+        launchTarget: registryTarget
+      }
+    )
+    expect(
+      results.find((result) => result.sourceId === 'windows-app-paths')?.apps[0]
+    ).toMatchObject({
+      name: 'AppPathTool',
+      launchTarget: appPathTarget
+    })
+    expect(results.find((result) => result.sourceId === 'windows-steam')?.apps[0]).toMatchObject({
+      name: 'Steam Tool',
+      launchTarget: 'steam://rungameid/123'
+    })
+
+    const flattenedApps = await getApps()
+    expect(flattenedApps).toHaveLength(5)
   })
 })

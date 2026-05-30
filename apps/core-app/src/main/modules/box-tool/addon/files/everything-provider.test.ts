@@ -1,20 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  transportOn,
-  appTaskWaitForIdle,
-  iconWorkerExtract,
-  execFileMock,
-  fileProviderOnSearch,
-  fileProviderGetWatchedPaths
-} = vi.hoisted(() => ({
-  transportOn: vi.fn(),
-  appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
-  iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
-  execFileMock: vi.fn(),
-  fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> })),
-  fileProviderGetWatchedPaths: vi.fn(() => ['C:\\'])
-}))
+const { transportOn, appTaskWaitForIdle, iconWorkerExtract, execFileMock, fileProviderOnSearch } =
+  vi.hoisted(() => ({
+    transportOn: vi.fn(),
+    appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
+    iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
+    execFileMock: vi.fn(),
+    fileProviderOnSearch: vi.fn(() => Promise.resolve({ items: [] as Array<unknown> }))
+  }))
 
 vi.mock('electron', () => ({
   shell: {
@@ -68,12 +61,12 @@ vi.mock('./workers/icon-worker-client', () => ({
 
 vi.mock('./file-provider', () => ({
   fileProvider: {
-    onSearch: fileProviderOnSearch,
-    getWatchedPaths: fileProviderGetWatchedPaths
+    onSearch: fileProviderOnSearch
   }
 }))
 
 import { everythingProvider } from './everything-provider'
+import { indexingRootPolicy } from '../../search-engine/indexing-root-policy'
 import {
   everythingSetCliPathEvent,
   everythingStatusEvent,
@@ -228,8 +221,14 @@ afterEach(() => {
   execFileMock.mockReset()
   fileProviderOnSearch.mockReset()
   fileProviderOnSearch.mockResolvedValue({ items: [] as Array<unknown> })
-  fileProviderGetWatchedPaths.mockReset()
-  fileProviderGetWatchedPaths.mockReturnValue(['C:\\'])
+  indexingRootPolicy.clear()
+  indexingRootPolicy.setSourceRoots('file-provider', [
+    {
+      sourceId: 'file-provider',
+      path: 'C:\\',
+      permissionState: 'granted'
+    }
+  ])
   vi.restoreAllMocks()
 })
 
@@ -377,7 +376,13 @@ describe('everything-provider fallback chain', () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
-    fileProviderGetWatchedPaths.mockReturnValue(['C:\\Users\\demo\\Documents'])
+    indexingRootPolicy.setSourceRoots('file-provider', [
+      {
+        sourceId: 'file-provider',
+        path: 'C:\\Users\\demo\\Documents',
+        permissionState: 'granted'
+      }
+    ])
 
     const allowed = buildResult('C:\\Users\\demo\\Documents\\allowed.txt')
     const dropped = buildResult('C:\\Windows\\secret.txt')
@@ -393,7 +398,7 @@ describe('everything-provider fallback chain', () => {
         lastRawResultCount: 2,
         lastFilteredResultCount: 1,
         lastDroppedResultCount: 1,
-        reason: 'outside-file-index-watch-roots'
+        reason: 'outside-indexing-root-policy-file-roots'
       })
     )
     expect(provider.pathFilteringStatus.lastChecked).toEqual(expect.any(Number))
@@ -403,7 +408,7 @@ describe('everything-provider fallback chain', () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
-    fileProviderGetWatchedPaths.mockReturnValue([])
+    indexingRootPolicy.setSourceRoots('file-provider', [])
 
     const result = buildResult('C:\\Users\\demo\\Documents\\allowed.txt')
     vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([result])
@@ -416,7 +421,7 @@ describe('everything-provider fallback chain', () => {
         lastRawResultCount: 1,
         lastFilteredResultCount: 0,
         lastDroppedResultCount: 1,
-        reason: 'no-file-index-watch-roots'
+        reason: 'indexing-root-policy-file-roots-empty'
       })
     )
   })
@@ -425,7 +430,13 @@ describe('everything-provider fallback chain', () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'
     provider.isAvailable = true
-    fileProviderGetWatchedPaths.mockReturnValue(['C:\\Users\\demo\\Documents'])
+    indexingRootPolicy.setSourceRoots('file-provider', [
+      {
+        sourceId: 'file-provider',
+        path: 'C:\\Users\\demo\\Documents',
+        permissionState: 'granted'
+      }
+    ])
 
     vi.spyOn(provider, 'searchEverythingWithCli').mockResolvedValue([
       buildResult('C:\\Users\\demo\\Documents\\allowed.txt'),
@@ -441,7 +452,7 @@ describe('everything-provider fallback chain', () => {
         lastRawResultCount: 2,
         lastFilteredResultCount: 1,
         lastDroppedResultCount: 1,
-        reason: 'outside-file-index-watch-roots'
+        reason: 'outside-indexing-root-policy-file-roots'
       })
     )
   })
