@@ -111,6 +111,16 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     expect(persistAndIndex).toHaveBeenCalledTimes(1)
     expect(pending.size).toBe(0)
     expect(inflight.size).toBe(0)
+    expect(service.getFlushSnapshot()).toMatchObject({
+      status: 'flushed',
+      entries: 1,
+      pending: 0,
+      inflight: 0,
+      reason: 'persisted',
+      metadata: {
+        withContent: 1
+      }
+    })
   })
 
   it('rolls back the flush batch when worker readiness fails', async () => {
@@ -133,5 +143,56 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
       undefined,
       expect.objectContaining({ pending: 1, inflight: 0 })
     )
+    expect(service.getFlushSnapshot()).toMatchObject({
+      status: 'worker-not-ready',
+      entries: 1,
+      pending: 1,
+      inflight: 0,
+      reason: 'not-ready',
+      metadata: {
+        withContent: 1
+      }
+    })
+  })
+
+  it('records failed flush snapshot with retry metadata', async () => {
+    vi.useFakeTimers()
+    const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
+    const inflight = new Map<number, IndexWorkerFileResult>()
+    const { service, logWarn } = createService({
+      pending,
+      inflight,
+      ensureSearchIndexWorkerReady: vi.fn(async () => true),
+      persistAndIndex: async () => {
+        throw new Error('persist exploded')
+      }
+    })
+
+    await service.flush()
+
+    expect(pending.has(1)).toBe(true)
+    expect(inflight.size).toBe(0)
+    expect(logWarn).toHaveBeenCalledWith(
+      'Index worker flush failed, scheduling retry',
+      expect.any(Error),
+      expect.objectContaining({
+        isBusy: false,
+        pending: 1,
+        inflight: 0
+      })
+    )
+    expect(service.getFlushSnapshot()).toMatchObject({
+      status: 'failed',
+      entries: 1,
+      pending: 1,
+      inflight: 0,
+      reason: 'persist-failed',
+      error: 'persist exploded',
+      metadata: {
+        withContent: 1,
+        isBusy: false,
+        retryReason: 'flush-failed'
+      }
+    })
   })
 })

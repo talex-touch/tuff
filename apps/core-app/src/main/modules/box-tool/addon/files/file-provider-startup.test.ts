@@ -190,6 +190,129 @@ interface MutableFileProvider {
   } | null
 }
 
+interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
+  ensureFileSystemWatchers: () => Promise<void>
+  startIndexing: (source: 'auto' | 'manual') => Promise<{
+    added: number
+    changed: number
+    deleted: number
+    skipped: number
+    errors: number
+  }>
+  reconcileIndexedSource: (request: { sourceId: string }) => Promise<{
+    sourceId: string
+    added: number
+    changed: number
+    deleted: number
+    skipped: number
+    errors: number
+    startedAt: number
+    completedAt: number
+    reason?: string
+  }>
+  rebuildIndex: (request?: { force?: boolean }) => Promise<{
+    success: boolean
+    reason?: string
+    error?: string
+  }>
+  isInitializing: Promise<unknown> | null
+  initializationContext: {
+    databaseManager: { getDb: () => unknown; filePath: string }
+    searchIndex: unknown
+    touchApp: { channel: unknown }
+  } | null
+  dbUtils: unknown | null
+  getBatteryLevel: () => Promise<null>
+  setIndexedSourceRuntimeResetDelegate: (
+    delegate:
+      | null
+      | ((request: {
+          sourceId: string
+          reason: 'manual-rebuild' | 'schema-migration' | 'integrity-repair'
+          clearSearchIndex?: boolean
+          clearScanProgress?: boolean
+        }) => Promise<{
+          sourceId: string
+          reason: 'manual-rebuild' | 'schema-migration' | 'integrity-repair'
+          clearedSearchIndex: boolean
+          clearedScanProgress: boolean
+          scanProgressRows?: number
+          startedAt: number
+          completedAt: number
+        }>)
+  ) => void
+  runIntegrityCheck: (db: {
+    select: (selection: unknown) => {
+      from: (table: unknown) => {
+        where: (condition: unknown) => Promise<Array<{ cnt: number }>>
+      }
+    }
+    all: (query: unknown) => Promise<Array<{ cnt: number }>>
+  }) => Promise<void>
+  countSearchIndexByProvider: (providerId: string, reason: string) => Promise<number>
+  lastIntegritySnapshot: {
+    needsRebuild: boolean
+    clearedSearchIndex: boolean
+    clearedScanProgress: boolean
+    resetReason?: string | null
+    resetScanProgressRows?: number
+  } | null
+  mapFileToIndexedSourceRecord: (file: {
+    path: string
+    name: string
+    displayName?: string | null
+    extension?: string | null
+    size?: number | null
+    mtime: Date | number | string
+    type: string
+    isDir: boolean
+  }) => {
+    sourceId: string
+    recordId: string
+    stableKey: string
+    kind: string
+    title: string
+    subtitle?: string
+    path?: string
+    mtime?: number
+    size?: number
+    metadata?: Record<string, unknown>
+  }
+  isWithinWatchRoots: (rawPath: string) => boolean
+  enqueueIncrementalUpdate: (
+    rawPath: string,
+    action: 'add' | 'change' | 'delete',
+    options?: { manual?: boolean }
+  ) => void
+  buildFileRecord: (rawPath: string) => Promise<{
+    path: string
+    name: string
+    displayName?: string | null
+    extension?: string | null
+    size?: number | null
+    mtime: Date | number | string
+    ctime: Date | number | string
+    lastIndexedAt?: Date | number | string
+    type: string
+    isDir: boolean
+  } | null>
+  handleIndexedSourceWatchEvent: (event: {
+    sourceId?: string
+    action: 'add' | 'change' | 'delete'
+    path: string
+    occurredAt: number
+  }) => Promise<
+    Array<{
+      sourceId: string
+      action: 'add' | 'change' | 'delete'
+      record?: unknown
+      stableKey?: string
+      path?: string
+      reason?: string
+    }>
+  >
+}
+
 function createContext() {
   return {
     touchApp: { channel: {} },
@@ -218,7 +341,7 @@ afterEach(() => {
 })
 
 describe('file-provider startup readiness', () => {
-  it('registers channels without blocking on search-index worker or filesystem watchers', async () => {
+  it('registers channels without blocking on search-index worker or filesystem watcher roots', async () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)
 
@@ -251,6 +374,7 @@ describe('file-provider startup readiness', () => {
     expect(searchIndexWorkerInit).toHaveBeenCalledWith('/tmp/tuff-file-provider-db/database.db')
     expect(watchServiceInitialize).toHaveBeenCalledTimes(1)
     expect(watchServiceEnsure).toHaveBeenCalledTimes(1)
+    expect(transportOn).toHaveBeenCalledTimes(2)
     expect(provider.getIndexingStatus()).toEqual(
       expect.objectContaining({
         startupReady: true,
@@ -258,6 +382,279 @@ describe('file-provider startup readiness', () => {
         startupError: null
       })
     )
+  })
+
+  it('reports reconcile stats from the indexing run', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalEnsureFileSystemWatchers = provider.ensureFileSystemWatchers
+    const originalStartIndexing = provider.startIndexing
+
+    provider.ensureFileSystemWatchers = vi.fn(async () => undefined)
+    provider.startIndexing = vi.fn(async () => ({
+      added: 3,
+      changed: 2,
+      deleted: 1,
+      skipped: 5,
+      errors: 0
+    }))
+
+    try {
+      const result = await provider.reconcileIndexedSource({ sourceId: 'file-provider' })
+
+      expect(provider.ensureFileSystemWatchers).toHaveBeenCalledTimes(1)
+      expect(provider.startIndexing).toHaveBeenCalledWith(
+        'auto',
+        expect.objectContaining({
+          onDelta: expect.any(Function)
+        })
+      )
+      expect(result).toMatchObject({
+        sourceId: 'file-provider',
+        added: 3,
+        changed: 2,
+        deleted: 1,
+        skipped: 5,
+        errors: 0,
+        deltas: [],
+        reason: 'file-index-reconciliation'
+      })
+      expect(result.completedAt).toBeGreaterThanOrEqual(result.startedAt)
+    } finally {
+      provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
+      provider.startIndexing = originalStartIndexing
+    }
+  })
+
+  it('routes integrity mismatch reset through the indexed runtime delegate', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalCountSearchIndexByProvider = provider.countSearchIndexByProvider
+    const resetDelegate = vi.fn(async () => ({
+      sourceId: 'file-provider',
+      reason: 'integrity-repair' as const,
+      clearedSearchIndex: true,
+      clearedScanProgress: true,
+      scanProgressRows: 2,
+      startedAt: 1,
+      completedAt: 2
+    }))
+    const db = {
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
+          where: vi.fn(async () => [{ cnt: 10 }])
+        }))
+      })),
+      all: vi.fn(async () => [])
+    }
+
+    provider.countSearchIndexByProvider = vi.fn(async () => 1)
+    provider.setIndexedSourceRuntimeResetDelegate(resetDelegate)
+
+    try {
+      await provider.runIntegrityCheck(db)
+
+      expect(resetDelegate).toHaveBeenCalledWith({
+        sourceId: 'file-provider',
+        reason: 'integrity-repair',
+        clearSearchIndex: true,
+        clearScanProgress: true
+      })
+      expect(provider.lastIntegritySnapshot).toMatchObject({
+        needsRebuild: true,
+        clearedSearchIndex: true,
+        clearedScanProgress: true,
+        resetReason: 'integrity-repair',
+        resetScanProgressRows: 2
+      })
+    } finally {
+      provider.countSearchIndexByProvider = originalCountSearchIndexByProvider
+      provider.setIndexedSourceRuntimeResetDelegate(null)
+    }
+  })
+
+  it('routes manual rebuild reset through the indexed runtime delegate', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalIsInitializing = provider.isInitializing
+    const originalInitializationContext = provider.initializationContext
+    const originalDbUtils = provider.dbUtils
+    const originalGetBatteryLevel = provider.getBatteryLevel
+    const originalEnsureFileSystemWatchers = provider.ensureFileSystemWatchers
+    const originalStartIndexing = provider.startIndexing
+    const resetDelegate = vi.fn(async () => ({
+      sourceId: 'file-provider',
+      reason: 'manual-rebuild' as const,
+      clearedSearchIndex: false,
+      clearedScanProgress: true,
+      scanProgressRows: 2,
+      startedAt: 1,
+      completedAt: 2
+    }))
+
+    provider.isInitializing = null
+    provider.initializationContext = createContext()
+    provider.dbUtils = {
+      getDb: () => ({})
+    }
+    provider.getBatteryLevel = vi.fn(async () => null)
+    provider.ensureFileSystemWatchers = vi.fn(async () => undefined)
+    provider.startIndexing = vi.fn(async () => ({
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      errors: 0
+    }))
+    provider.setIndexedSourceRuntimeResetDelegate(resetDelegate)
+
+    try {
+      await expect(provider.rebuildIndex({ force: true })).resolves.toMatchObject({
+        success: true
+      })
+
+      expect(resetDelegate).toHaveBeenCalledWith({
+        sourceId: 'file-provider',
+        reason: 'manual-rebuild',
+        clearScanProgress: true
+      })
+      expect(provider.startIndexing).toHaveBeenCalledWith('manual')
+    } finally {
+      provider.isInitializing = originalIsInitializing
+      provider.initializationContext = originalInitializationContext
+      provider.dbUtils = originalDbUtils
+      provider.getBatteryLevel = originalGetBatteryLevel
+      provider.ensureFileSystemWatchers = originalEnsureFileSystemWatchers
+      provider.startIndexing = originalStartIndexing
+      provider.setIndexedSourceRuntimeResetDelegate(null)
+    }
+  })
+
+  it('maps file rows into indexed source records', () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const mtime = new Date('2026-05-30T00:00:00.000Z')
+
+    expect(
+      provider.mapFileToIndexedSourceRecord({
+        path: '/Users/demo/Documents/a.md',
+        name: 'a.md',
+        displayName: null,
+        extension: '.md',
+        size: 128,
+        mtime,
+        type: 'file',
+        isDir: false
+      })
+    ).toEqual({
+      sourceId: 'file-provider',
+      recordId: '/Users/demo/Documents/a.md',
+      stableKey: '/Users/demo/Documents/a.md',
+      kind: 'file',
+      title: 'a.md',
+      subtitle: '/Users/demo/Documents/a.md',
+      path: '/Users/demo/Documents/a.md',
+      mtime: mtime.getTime(),
+      size: 128,
+      metadata: {
+        extension: '.md',
+        type: 'file',
+        isDir: false
+      }
+    })
+  })
+
+  it('returns concrete watch deltas for runtime store updates', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalIsWithinWatchRoots = provider.isWithinWatchRoots
+    const originalEnqueueIncrementalUpdate = provider.enqueueIncrementalUpdate
+    const originalBuildFileRecord = provider.buildFileRecord
+    const mtime = new Date('2026-05-30T00:00:00.000Z')
+
+    provider.isWithinWatchRoots = vi.fn(() => true)
+    provider.enqueueIncrementalUpdate = vi.fn()
+    provider.buildFileRecord = vi.fn(async () => ({
+      path: '/Users/demo/Documents/a.md',
+      name: 'a.md',
+      displayName: null,
+      extension: '.md',
+      size: 128,
+      mtime,
+      ctime: mtime,
+      lastIndexedAt: mtime,
+      type: 'file',
+      isDir: false
+    }))
+
+    try {
+      await expect(
+        provider.handleIndexedSourceWatchEvent({
+          sourceId: 'file-provider',
+          action: 'delete',
+          path: '/Users/demo/Documents/a.md',
+          occurredAt: 1700000000000
+        })
+      ).resolves.toEqual([
+        {
+          sourceId: 'file-provider',
+          action: 'delete',
+          stableKey: '/Users/demo/Documents/a.md',
+          path: '/Users/demo/Documents/a.md',
+          reason: 'file-provider-watch-delete'
+        }
+      ])
+
+      await expect(
+        provider.handleIndexedSourceWatchEvent({
+          sourceId: 'file-provider',
+          action: 'change',
+          path: '/Users/demo/Documents/a.md',
+          occurredAt: 1700000000000
+        })
+      ).resolves.toEqual([
+        {
+          sourceId: 'file-provider',
+          action: 'change',
+          record: expect.objectContaining({
+            sourceId: 'file-provider',
+            recordId: '/Users/demo/Documents/a.md',
+            kind: 'file',
+            title: 'a.md'
+          }),
+          path: '/Users/demo/Documents/a.md',
+          reason: 'file-provider-watch-event'
+        }
+      ])
+      expect(provider.enqueueIncrementalUpdate).toHaveBeenCalledWith(
+        '/Users/demo/Documents/a.md',
+        'change',
+        { manual: false }
+      )
+    } finally {
+      provider.isWithinWatchRoots = originalIsWithinWatchRoots
+      provider.enqueueIncrementalUpdate = originalEnqueueIncrementalUpdate
+      provider.buildFileRecord = originalBuildFileRecord
+    }
+  })
+
+  it('ignores watch events outside configured roots', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const originalIsWithinWatchRoots = provider.isWithinWatchRoots
+    const originalEnqueueIncrementalUpdate = provider.enqueueIncrementalUpdate
+
+    provider.isWithinWatchRoots = vi.fn(() => false)
+    provider.enqueueIncrementalUpdate = vi.fn()
+
+    try {
+      await expect(
+        provider.handleIndexedSourceWatchEvent({
+          sourceId: 'file-provider',
+          action: 'change',
+          path: '/tmp/outside.md',
+          occurredAt: 1700000000000
+        })
+      ).resolves.toEqual([])
+      expect(provider.enqueueIncrementalUpdate).not.toHaveBeenCalled()
+    } finally {
+      provider.isWithinWatchRoots = originalIsWithinWatchRoots
+      provider.enqueueIncrementalUpdate = originalEnqueueIncrementalUpdate
+    }
   })
 
   it('keeps startup degraded when the search-index worker cannot initialize', async () => {
