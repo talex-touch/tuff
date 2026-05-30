@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
+import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
 
 const {
   transportOn,
@@ -228,12 +230,22 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
       | null
       | ((request: {
           sourceId: string
-          reason: 'manual-rebuild' | 'schema-migration' | 'integrity-repair'
+          reason: Extract<
+            IndexedSourceResetReason,
+            | typeof IndexedSourceResetReasons.ManualRebuild
+            | typeof IndexedSourceResetReasons.SchemaMigration
+            | typeof IndexedSourceResetReasons.IntegrityRepair
+          >
           clearSearchIndex?: boolean
           clearScanProgress?: boolean
         }) => Promise<{
           sourceId: string
-          reason: 'manual-rebuild' | 'schema-migration' | 'integrity-repair'
+          reason: Extract<
+            IndexedSourceResetReason,
+            | typeof IndexedSourceResetReasons.ManualRebuild
+            | typeof IndexedSourceResetReasons.SchemaMigration
+            | typeof IndexedSourceResetReasons.IntegrityRepair
+          >
           clearedSearchIndex: boolean
           clearedScanProgress: boolean
           scanProgressRows?: number
@@ -430,7 +442,7 @@ describe('file-provider startup readiness', () => {
     const originalCountSearchIndexByProvider = provider.countSearchIndexByProvider
     const resetDelegate = vi.fn(async () => ({
       sourceId: 'file-provider',
-      reason: 'integrity-repair' as const,
+      reason: IndexedSourceResetReasons.IntegrityRepair,
       clearedSearchIndex: true,
       clearedScanProgress: true,
       scanProgressRows: 2,
@@ -454,7 +466,7 @@ describe('file-provider startup readiness', () => {
 
       expect(resetDelegate).toHaveBeenCalledWith({
         sourceId: 'file-provider',
-        reason: 'integrity-repair',
+        reason: IndexedSourceResetReasons.IntegrityRepair,
         clearSearchIndex: true,
         clearScanProgress: true
       })
@@ -462,7 +474,7 @@ describe('file-provider startup readiness', () => {
         needsRebuild: true,
         clearedSearchIndex: true,
         clearedScanProgress: true,
-        resetReason: 'integrity-repair',
+        resetReason: IndexedSourceResetReasons.IntegrityRepair,
         resetScanProgressRows: 2
       })
     } finally {
@@ -481,7 +493,7 @@ describe('file-provider startup readiness', () => {
     const originalStartIndexing = provider.startIndexing
     const resetDelegate = vi.fn(async () => ({
       sourceId: 'file-provider',
-      reason: 'manual-rebuild' as const,
+      reason: IndexedSourceResetReasons.ManualRebuild,
       clearedSearchIndex: false,
       clearedScanProgress: true,
       scanProgressRows: 2,
@@ -512,7 +524,7 @@ describe('file-provider startup readiness', () => {
 
       expect(resetDelegate).toHaveBeenCalledWith({
         sourceId: 'file-provider',
-        reason: 'manual-rebuild',
+        reason: IndexedSourceResetReasons.ManualRebuild,
         clearScanProgress: true
       })
       expect(provider.startIndexing).toHaveBeenCalledWith('manual')
