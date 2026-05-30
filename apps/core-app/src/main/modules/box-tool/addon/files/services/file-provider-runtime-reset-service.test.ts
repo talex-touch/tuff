@@ -56,8 +56,12 @@ describe('file-provider-runtime-reset-service', () => {
     const { service, removeSearchIndexByProvider } = createService({})
 
     const result = await service.reset({
-      reason: 'file-index.manual-rebuild',
-      clearSearchIndex: true
+      request: {
+        sourceId: 'file-provider',
+        reason: 'manual-rebuild',
+        clearSearchIndex: true
+      },
+      operationReasonPrefix: 'file-index.manual-rebuild'
     })
 
     expect(removeSearchIndexByProvider).toHaveBeenCalledWith(
@@ -67,6 +71,10 @@ describe('file-provider-runtime-reset-service', () => {
     expect(result.clearedSearchIndex).toBe(true)
     expect(result.clearedScanProgress).toBe(false)
     expect(result.scanProgressRows).toBe(0)
+    expect(result).toMatchObject({
+      sourceId: 'file-provider',
+      reason: 'manual-rebuild'
+    })
   })
 
   it('deletes scan progress rows when reset finds pending progress', async () => {
@@ -74,7 +82,11 @@ describe('file-provider-runtime-reset-service', () => {
     const { service, withDbWrite } = createService({ dbUtils })
 
     const result = await service.reset({
-      reason: 'file-index.integrity-repair'
+      request: {
+        sourceId: 'file-provider',
+        reason: 'integrity-repair'
+      },
+      operationReasonPrefix: 'file-index.integrity-repair'
     })
 
     expect(from).toHaveBeenCalledWith(scanProgress)
@@ -92,8 +104,12 @@ describe('file-provider-runtime-reset-service', () => {
     const { service, withDbWrite } = createService({ dbUtils })
 
     const result = await service.reset({
-      reason: 'file-index.schema-migration',
-      clearScanProgress: false
+      request: {
+        sourceId: 'file-provider',
+        reason: 'schema-migration',
+        clearScanProgress: false
+      },
+      operationReasonPrefix: 'file-index.schema-migration'
     })
 
     expect(from).not.toHaveBeenCalled()
@@ -107,7 +123,11 @@ describe('file-provider-runtime-reset-service', () => {
     const { service, withDbWrite } = createService({})
 
     const result = await service.reset({
-      reason: 'file-index.health-repair'
+      request: {
+        sourceId: 'file-provider',
+        reason: 'health-repair'
+      },
+      operationReasonPrefix: 'file-index.health-repair'
     })
 
     expect(withDbWrite).not.toHaveBeenCalled()

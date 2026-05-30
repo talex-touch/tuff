@@ -1,4 +1,5 @@
 import type { IndexWorkerFile } from '../workers/file-index-worker-client'
+import { IndexedWorkerSchedulerService } from '../../../search-engine/indexing-worker-scheduler-service'
 
 export interface FileProviderIndexSchedulerFile {
   id?: number | null
@@ -34,20 +35,30 @@ export class FileProviderIndexSchedulerService {
   private readonly getProviderId: FileProviderIndexSchedulerDeps['getProviderId']
   private readonly getProviderType: FileProviderIndexSchedulerDeps['getProviderType']
   private readonly indexFiles: FileProviderIndexSchedulerDeps['indexFiles']
-  private readonly logWarn: FileProviderIndexSchedulerDeps['logWarn']
   private readonly config: Required<NonNullable<FileProviderIndexSchedulerDeps['config']>>
+  private readonly scheduler: IndexedWorkerSchedulerService<IndexWorkerFile>
 
   constructor(deps: FileProviderIndexSchedulerDeps) {
     this.getDatabaseFilePath = deps.getDatabaseFilePath
     this.getProviderId = deps.getProviderId
     this.getProviderType = deps.getProviderType
     this.indexFiles = deps.indexFiles
-    this.logWarn = deps.logWarn
     this.config = {
       backgroundContentMinBytes: deps.config?.backgroundContentMinBytes ?? 5 * 1024 * 1024,
       backgroundDelayMs: deps.config?.backgroundDelayMs ?? 5_000,
       chunkSize: deps.config?.chunkSize ?? 30
     }
+    this.scheduler = new IndexedWorkerSchedulerService({
+      getWorkerContext: () => this.getDatabaseFilePath(),
+      dispatch: (dbPath, files) =>
+        this.indexFiles(dbPath, this.getProviderId(), this.getProviderType(), files),
+      logWarn: (message, error, meta) =>
+        deps.logWarn(this.mapWorkerFailureMessage(message), error, meta),
+      config: {
+        chunkSize: this.config.chunkSize,
+        deferredDelayMs: this.config.backgroundDelayMs
+      }
+    })
   }
 
   schedule(files: FileProviderIndexSchedulerFile[], reason: string): void {
@@ -71,31 +82,14 @@ export class FileProviderIndexSchedulerService {
     }
 
     if (deferred.length > 0) {
-      setTimeout(() => {
-        this.scheduleChunks(deferred, `${reason}:background-content`)
-      }, this.config.backgroundDelayMs)
-    }
-
-    this.scheduleChunks(immediate, reason)
-  }
-
-  private scheduleChunks(payload: IndexWorkerFile[], reason: string): void {
-    const dbPath = this.getDatabaseFilePath()
-    if (!dbPath || payload.length === 0) {
-      return
-    }
-
-    const providerId = this.getProviderId()
-    const providerType = this.getProviderType()
-    for (let i = 0; i < payload.length; i += this.config.chunkSize) {
-      const chunk = payload.slice(i, i + this.config.chunkSize)
-      void this.indexFiles(dbPath, providerId, providerType, chunk).catch((error) => {
-        this.logWarn('File index worker failed', error, {
-          reason,
-          size: chunk.length
-        })
+      this.scheduler.schedule({
+        payload: deferred,
+        reason: `${reason}:background-content`,
+        deferred: true
       })
     }
+
+    this.scheduler.schedule({ payload: immediate, reason })
   }
 
   private toIndexWorkerFile(file: FileProviderIndexSchedulerFile): IndexWorkerFile | null {
@@ -113,6 +107,10 @@ export class FileProviderIndexSchedulerService {
       mtime: toTimestamp(file.mtime) ?? Date.now(),
       ctime: toTimestamp(file.ctime) ?? Date.now()
     }
+  }
+
+  private mapWorkerFailureMessage(message: string): string {
+    return message === 'Index worker failed' ? 'File index worker failed' : message
   }
 }
 

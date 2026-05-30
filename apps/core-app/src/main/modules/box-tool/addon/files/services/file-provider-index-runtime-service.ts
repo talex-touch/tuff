@@ -1,22 +1,20 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
+import type { IndexedWriteFlushSnapshot } from '../../../search-engine/indexing-write-flush-snapshot-service'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
+import { IndexedWriteFlushRuntimeService } from '../../../search-engine/indexing-write-flush-runtime-service'
+import { IndexedWriteFlushSnapshotService } from '../../../search-engine/indexing-write-flush-snapshot-service'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 import {
   FileProviderIndexFlushExecutorService,
   type FileProviderIndexFlushExecutorResult
 } from './file-provider-index-flush-executor-service'
-import { FileProviderIndexFlushRetryService } from './file-provider-index-flush-retry-service'
+import {
+  type FileProviderIndexFlushFailureDecision,
+  FileProviderIndexFlushRetryService
+} from './file-provider-index-flush-retry-service'
 
-export interface FileProviderIndexFlushSnapshot {
+export type FileProviderIndexFlushSnapshot = Omit<IndexedWriteFlushSnapshot, 'status'> & {
   status: 'idle' | 'flushed' | 'worker-not-ready' | 'failed'
-  entries: number
-  pending: number
-  inflight: number
-  reason?: string
-  error?: string
-  metadata?: Record<string, unknown>
-  durationMs?: number
-  checkedAt: number
 }
 
 export interface FileProviderIndexRuntimeServiceDeps {
@@ -55,11 +53,14 @@ export class FileProviderIndexRuntimeService {
   private readonly bufferService: FileProviderIndexFlushBufferService
   private readonly retryService: FileProviderIndexFlushRetryService
   private readonly flushExecutor: FileProviderIndexFlushExecutorService
+  private readonly flushRuntime: IndexedWriteFlushRuntimeService<
+    FileProviderIndexFlushExecutorResult,
+    FileProviderIndexFlushFailureDecision['reason'],
+    FileProviderIndexFlushFailureDecision
+  >
 
-  private indexWorkerFlushTimer: NodeJS.Timeout | null = null
-  private indexWorkerFlushing = false
-  private indexWorkerFlushBusyRetryCount = 0
-  private lastFlushSnapshot: FileProviderIndexFlushSnapshot | null = null
+  private readonly flushSnapshotService =
+    new IndexedWriteFlushSnapshotService<FileProviderIndexFlushSnapshot>()
 
   constructor(deps: FileProviderIndexRuntimeServiceDeps) {
     this.flushBatchScheduler = deps.flushBatchScheduler
@@ -101,6 +102,38 @@ export class FileProviderIndexRuntimeService {
         dbBackpressureMaxQueued: this.config.dbBackpressureMaxQueued
       }
     })
+    this.flushRuntime = new IndexedWriteFlushRuntimeService({
+      getPendingSize: () => this.bufferService.pendingSize,
+      getInflightSize: () => this.bufferService.inflightSize,
+      isAvailable: () => Boolean(this.getDbUtils() && this.getSearchIndex()),
+      executeFlush: () => this.executeFlush(),
+      recordIdle: (input) =>
+        this.recordFlushSnapshot({
+          status: 'idle',
+          entries: 0,
+          pending: input.pending,
+          inflight: input.inflight,
+          reason: input.reason
+        }),
+      getFlushDelay: (pendingSize) => this.retryService.getFlushDelay(pendingSize),
+      resolveFailure: (input) =>
+        this.retryService.resolveFailure({
+          error: input.error,
+          pendingSize: input.pendingSize,
+          retryCount: input.retryCount
+        }),
+      handleFailure: ({ error, decision }) => this.handleFlushFailure(error, decision),
+      shouldRescheduleAfterResult: (result) =>
+        result.status === 'worker-not-ready'
+          ? { delayMs: this.config.backlogDelayMs, reason: 'worker-not-ready' }
+          : null,
+      onUnexpectedFlushError: (error, reason) => {
+        this.logWarn('flushIndexWorkerResults rejected unexpectedly', error, { reason })
+      },
+      config: {
+        flushDeferMs: this.config.flushDeferMs
+      }
+    })
   }
 
   async initWorker(): Promise<void> {
@@ -117,96 +150,22 @@ export class FileProviderIndexRuntimeService {
   }
 
   getFlushSnapshot(): FileProviderIndexFlushSnapshot | null {
-    return this.lastFlushSnapshot
+    return this.flushSnapshotService.getSnapshot()
   }
 
   scheduleFlush(delayMs: number, reason: string): void {
-    if (this.indexWorkerFlushTimer) {
-      return
-    }
-    const safeDelay = Math.max(0, Math.round(delayMs))
-    this.indexWorkerFlushTimer = setTimeout(() => {
-      this.indexWorkerFlushTimer = null
-      void this.flush().catch((error) => {
-        this.logWarn('flushIndexWorkerResults rejected unexpectedly', error, { reason })
-      })
-    }, safeDelay)
+    this.flushRuntime.scheduleFlush(delayMs, reason)
   }
 
   async flush(): Promise<void> {
-    if (!this.getDbUtils() || !this.getSearchIndex()) {
-      this.recordFlushSnapshot({
-        status: 'idle',
-        entries: 0,
-        pending: this.bufferService.pendingSize,
-        inflight: this.bufferService.inflightSize,
-        reason: 'unavailable'
-      })
-      return
-    }
-
-    if (this.bufferService.pendingSize === 0) {
-      this.recordFlushSnapshot({
-        status: 'idle',
-        entries: 0,
-        pending: 0,
-        inflight: this.bufferService.inflightSize,
-        reason: 'no-pending'
-      })
-      return
-    }
-
-    if (this.indexWorkerFlushing) {
-      this.recordFlushSnapshot({
-        status: 'idle',
-        entries: 0,
-        pending: this.bufferService.pendingSize,
-        inflight: this.bufferService.inflightSize,
-        reason: 'flush-in-progress'
-      })
-      this.scheduleFlush(this.config.flushDeferMs, 'flush-in-progress')
-      return
-    }
-
-    this.indexWorkerFlushing = true
-    let flushSucceeded = false
-    try {
-      await this.doFlush()
-      this.indexWorkerFlushBusyRetryCount = 0
-      flushSucceeded = true
-    } catch (error) {
-      const decision = this.retryService.resolveFailure({
-        error,
-        pendingSize: this.bufferService.pendingSize,
-        retryCount: this.indexWorkerFlushBusyRetryCount
-      })
-      this.indexWorkerFlushBusyRetryCount = decision.nextRetryCount
-
-      this.logWarn('Index worker flush failed, scheduling retry', error, {
-        isBusy: decision.isBusy,
-        delayMs: decision.delayMs,
-        pending: this.bufferService.pendingSize,
-        inflight: this.bufferService.inflightSize
-      })
-      this.recordFlushFailure(error, {
-        isBusy: decision.isBusy,
-        delayMs: decision.delayMs,
-        retryReason: decision.reason
-      })
-      this.scheduleFlush(decision.delayMs, decision.reason)
-    } finally {
-      this.indexWorkerFlushing = false
-    }
-
-    if (flushSucceeded && this.bufferService.pendingSize > 0) {
-      this.scheduleFlush(
-        this.retryService.getFlushDelay(this.bufferService.pendingSize),
-        'drain-remaining'
-      )
-    }
+    await this.flushRuntime.flush()
   }
 
   async doFlush(): Promise<void> {
+    await this.executeFlush()
+  }
+
+  private async executeFlush(): Promise<FileProviderIndexFlushExecutorResult> {
     const result = await this.flushExecutor.execute()
     this.recordFlushExecutorResult(result)
     if (result.status === 'worker-not-ready') {
@@ -214,8 +173,8 @@ export class FileProviderIndexRuntimeService {
         pending: result.pending,
         inflight: result.inflight
       })
-      this.scheduleFlush(this.config.backlogDelayMs, 'worker-not-ready')
     }
+    return result
   }
 
   private recordFlushExecutorResult(result: FileProviderIndexFlushExecutorResult): void {
@@ -248,11 +207,25 @@ export class FileProviderIndexRuntimeService {
     })
   }
 
+  private handleFlushFailure(
+    error: unknown,
+    decision: FileProviderIndexFlushFailureDecision
+  ): void {
+    this.logWarn('Index worker flush failed, scheduling retry', error, {
+      isBusy: decision.isBusy,
+      delayMs: decision.delayMs,
+      pending: this.bufferService.pendingSize,
+      inflight: this.bufferService.inflightSize
+    })
+    this.recordFlushFailure(error, {
+      isBusy: decision.isBusy,
+      delayMs: decision.delayMs,
+      retryReason: decision.reason
+    })
+  }
+
   private recordFlushSnapshot(snapshot: Omit<FileProviderIndexFlushSnapshot, 'checkedAt'>): void {
-    this.lastFlushSnapshot = {
-      ...snapshot,
-      checkedAt: Date.now()
-    }
+    this.flushSnapshotService.record(snapshot)
   }
 
   private getFlushResultFromError(error: unknown): FileProviderIndexFlushExecutorResult | null {

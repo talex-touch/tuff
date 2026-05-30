@@ -1,3 +1,8 @@
+import {
+  IndexedWriteSideEffectService,
+  type IndexedWriteSideEffectOptions
+} from '../../../search-engine/indexing-write-side-effect-service'
+
 export interface FileProviderWriteSideEffectOptions {
   extensionContext: string
   indexReason: string
@@ -10,24 +15,17 @@ export interface FileProviderWriteSideEffectServiceDeps<TFile> {
 }
 
 export class FileProviderWriteSideEffectService<TFile> {
-  private readonly processFileExtensions: FileProviderWriteSideEffectServiceDeps<TFile>['processFileExtensions']
-  private readonly scheduleIndexing: FileProviderWriteSideEffectServiceDeps<TFile>['scheduleIndexing']
-  private readonly logWarn: FileProviderWriteSideEffectServiceDeps<TFile>['logWarn']
+  private readonly dispatcher: IndexedWriteSideEffectService<TFile>
 
   constructor(deps: FileProviderWriteSideEffectServiceDeps<TFile>) {
-    this.processFileExtensions = deps.processFileExtensions
-    this.scheduleIndexing = deps.scheduleIndexing
-    this.logWarn = deps.logWarn
+    this.dispatcher = new IndexedWriteSideEffectService({
+      processExtensions: deps.processFileExtensions,
+      scheduleIndexing: deps.scheduleIndexing,
+      logWarn: deps.logWarn
+    })
   }
 
   dispatch(files: TFile[], options: FileProviderWriteSideEffectOptions): void {
-    if (files.length === 0) {
-      return
-    }
-
-    void this.processFileExtensions(files).catch((error) =>
-      this.logWarn(`processFileExtensions failed (${options.extensionContext})`, error)
-    )
-    this.scheduleIndexing(files, options.indexReason)
+    this.dispatcher.dispatch(files, options satisfies IndexedWriteSideEffectOptions)
   }
 }

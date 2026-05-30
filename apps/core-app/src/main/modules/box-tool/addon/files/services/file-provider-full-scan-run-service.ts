@@ -1,0 +1,109 @@
+import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
+import type { ScannedFileInfo } from '../types'
+
+export interface FileProviderFullScanRunResult {
+  added: number
+  completedPaths: string[]
+}
+
+export interface FileProviderFullScanRunDeps<TContext> {
+  enterPerfContext: (label: string, metadata: Record<string, unknown>) => () => void
+  scanDirectory: (rootPath: string, excludePathsSet?: Set<string>) => Promise<ScannedFileInfo[]>
+  insertRecords: (
+    rootPath: string,
+    records: UpsertFileRecord[],
+    context: TContext
+  ) => Promise<{ insertedCount: number }>
+  emitProgress: (current: number, total: number) => void
+  yieldAfterScan: () => Promise<void>
+  now: () => number
+  formatDuration: (durationMs: number) => string
+  logDebug: (message: string, meta?: Record<string, unknown>) => void
+}
+
+export class FileProviderFullScanRunService<TContext> {
+  private readonly enterPerfContext: FileProviderFullScanRunDeps<TContext>['enterPerfContext']
+  private readonly scanDirectory: FileProviderFullScanRunDeps<TContext>['scanDirectory']
+  private readonly insertRecords: FileProviderFullScanRunDeps<TContext>['insertRecords']
+  private readonly emitProgress: FileProviderFullScanRunDeps<TContext>['emitProgress']
+  private readonly yieldAfterScan: FileProviderFullScanRunDeps<TContext>['yieldAfterScan']
+  private readonly now: FileProviderFullScanRunDeps<TContext>['now']
+  private readonly formatDuration: FileProviderFullScanRunDeps<TContext>['formatDuration']
+  private readonly logDebug: FileProviderFullScanRunDeps<TContext>['logDebug']
+
+  constructor(deps: FileProviderFullScanRunDeps<TContext>) {
+    this.enterPerfContext = deps.enterPerfContext
+    this.scanDirectory = deps.scanDirectory
+    this.insertRecords = deps.insertRecords
+    this.emitProgress = deps.emitProgress
+    this.yieldAfterScan = deps.yieldAfterScan
+    this.now = deps.now
+    this.formatDuration = deps.formatDuration
+    this.logDebug = deps.logDebug
+  }
+
+  async execute(
+    paths: string[],
+    context: TContext,
+    options?: { excludePathsSet?: Set<string> }
+  ): Promise<FileProviderFullScanRunResult> {
+    if (paths.length === 0) {
+      return { added: 0, completedPaths: [] }
+    }
+
+    const finishPerfContext = this.enterPerfContext('FileProvider.fullScan', {
+      paths: paths.length
+    })
+    try {
+      this.logDebug('Starting full scan for new paths', {
+        count: paths.length,
+        sample: paths.slice(0, 3).join(', ')
+      })
+      this.emitProgress(0, paths.length)
+
+      let scannedPaths = 0
+      let added = 0
+      const completedPaths: string[] = []
+      for (const rootPath of paths) {
+        const pathScanStart = this.now()
+        this.logDebug('Scanning new path', { path: rootPath })
+        const diskFiles = await this.scanDirectory(rootPath, options?.excludePathsSet)
+        this.logDebug('Directory scan completed', {
+          path: rootPath,
+          files: diskFiles.length,
+          duration: this.formatDuration(this.now() - pathScanStart)
+        })
+
+        scannedPaths += 1
+        this.emitProgress(scannedPaths, paths.length)
+        await this.yieldAfterScan()
+
+        const records = this.toUpsertRecords(diskFiles)
+        if (records.length > 0) {
+          const insertResult = await this.insertRecords(rootPath, records, context)
+          added += insertResult.insertedCount
+        }
+        completedPaths.push(rootPath)
+      }
+
+      return { added, completedPaths }
+    } finally {
+      finishPerfContext()
+    }
+  }
+
+  private toUpsertRecords(files: ScannedFileInfo[]): UpsertFileRecord[] {
+    const lastIndexedAt = new Date()
+    return files.map((file) => ({
+      path: file.path,
+      name: file.name,
+      extension: file.extension,
+      size: file.size,
+      mtime: file.mtime,
+      ctime: file.ctime,
+      lastIndexedAt,
+      isDir: false,
+      type: 'file'
+    }))
+  }
+}

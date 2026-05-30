@@ -1,5 +1,9 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import { IndexedWriteBufferService } from '../../../search-engine/indexing-write-buffer-service'
+import {
+  getIndexedWriteFlushDelay,
+  getIndexedWriteFlushExponentialRetryDelay
+} from '../../../search-engine/indexing-write-flush-retry-service'
 
 export interface IndexWorkerBusyRetryOptions {
   baseDelayMs?: number
@@ -11,29 +15,14 @@ export function getIndexWorkerFlushDelay(
   pendingSize: number,
   options: { baseDelayMs?: number; backlogDelayMs?: number; backlogThreshold?: number } = {}
 ): number {
-  const baseDelayMs = options.baseDelayMs ?? 250
-  const backlogDelayMs = options.backlogDelayMs ?? 500
-  const backlogThreshold = options.backlogThreshold ?? 30
-  return pendingSize > backlogThreshold ? backlogDelayMs : baseDelayMs
+  return getIndexedWriteFlushDelay(pendingSize, options)
 }
 
 export function getIndexWorkerBusyRetryDelay(
   retryCount: number,
   options: IndexWorkerBusyRetryOptions = {}
 ): { delayMs: number; nextRetryCount: number } {
-  const baseDelayMs = options.baseDelayMs ?? 250
-  const maxDelayMs = options.maxDelayMs ?? 5000
-  const random = options.random ?? Math.random
-
-  const exponent = Math.min(Math.max(0, retryCount), 6)
-  const base = Math.min(maxDelayMs, baseDelayMs * 2 ** exponent)
-  const jitterRange = Math.max(1, Math.round(base * 0.2))
-  const jitter = Math.round((random() * 2 - 1) * jitterRange)
-
-  return {
-    delayMs: Math.max(baseDelayMs, base + jitter),
-    nextRetryCount: retryCount + 1
-  }
+  return getIndexedWriteFlushExponentialRetryDelay(retryCount, options)
 }
 
 export function takeIndexWorkerFlushBatch(

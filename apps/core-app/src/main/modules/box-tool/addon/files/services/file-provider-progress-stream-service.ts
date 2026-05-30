@@ -1,64 +1,43 @@
 import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
+import type { IndexingProgressStreamThrottleConfig } from '../../../search-engine/indexing-progress-stream-service'
+import {
+  getIndexingProgressStreamFlushDelayMs,
+  INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG,
+  shouldEmitIndexingProgressStreamImmediately
+} from '../../../search-engine/indexing-progress-stream-service'
 
-export interface FileProviderProgressStreamThrottleConfig {
-  minEmitIntervalMs: number
-  maxSilenceMs: number
-  currentStep: number
-}
+export type FileProviderProgressStreamThrottleConfig = Omit<
+  IndexingProgressStreamThrottleConfig,
+  'terminalStages'
+>
 
 export const FILE_PROVIDER_PROGRESS_STREAM_DEFAULT_CONFIG: FileProviderProgressStreamThrottleConfig =
   {
-    minEmitIntervalMs: 160,
-    maxSilenceMs: 1000,
-    currentStep: 25
+    minEmitIntervalMs: INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG.minEmitIntervalMs,
+    maxSilenceMs: INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG.maxSilenceMs,
+    currentStep: INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG.currentStep
   }
 
-interface EmitImmediatelyInput {
+function toSharedConfig(
+  config: FileProviderProgressStreamThrottleConfig = FILE_PROVIDER_PROGRESS_STREAM_DEFAULT_CONFIG
+): IndexingProgressStreamThrottleConfig {
+  return {
+    ...config,
+    terminalStages: ['completed', 'idle']
+  }
+}
+
+export function shouldEmitProgressStreamImmediately(input: {
   previous: FileIndexProgressPayload | null
   next: FileIndexProgressPayload
   now: number
   lastEmitAt: number
   config?: FileProviderProgressStreamThrottleConfig
-}
-
-export function shouldEmitProgressStreamImmediately({
-  previous,
-  next,
-  now,
-  lastEmitAt,
-  config = FILE_PROVIDER_PROGRESS_STREAM_DEFAULT_CONFIG
-}: EmitImmediatelyInput): boolean {
-  if (!previous) {
-    return true
-  }
-
-  if (next.stage !== previous.stage) {
-    return true
-  }
-
-  if (next.stage === 'completed' || next.stage === 'idle') {
-    return true
-  }
-
-  const elapsed = now - lastEmitAt
-  if (elapsed >= config.maxSilenceMs) {
-    return true
-  }
-
-  if (elapsed < config.minEmitIntervalMs) {
-    return false
-  }
-
-  if (next.progress !== previous.progress) {
-    return true
-  }
-  if (Math.abs(next.current - previous.current) >= config.currentStep) {
-    return true
-  }
-  if (next.total !== previous.total) {
-    return true
-  }
-  return false
+}): boolean {
+  return shouldEmitIndexingProgressStreamImmediately({
+    ...input,
+    config: toSharedConfig(input.config)
+  })
 }
 
 export function getProgressStreamFlushDelayMs(
@@ -66,6 +45,5 @@ export function getProgressStreamFlushDelayMs(
   lastEmitAt: number,
   config: FileProviderProgressStreamThrottleConfig = FILE_PROVIDER_PROGRESS_STREAM_DEFAULT_CONFIG
 ): number {
-  const elapsed = now - lastEmitAt
-  return Math.max(0, config.minEmitIntervalMs - elapsed)
+  return getIndexingProgressStreamFlushDelayMs(now, lastEmitAt, toSharedConfig(config))
 }

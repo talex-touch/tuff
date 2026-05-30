@@ -1,7 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
-import type { FileProviderRuntimeResetResult } from './file-provider-runtime-reset-service'
-import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
+import type { IndexedSourceResetReason, IndexedSourceResetResult } from '@talex-touch/utils/search'
 import { performance } from 'node:perf_hooks'
 import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
@@ -27,7 +26,7 @@ export interface FileProviderIntegrityServiceDeps {
     reason: Extract<IndexedSourceResetReason, typeof IndexedSourceResetReasons.IntegrityRepair>
     clearSearchIndex: boolean
     clearScanProgress: boolean
-  }) => Promise<FileProviderRuntimeResetResult>
+  }) => Promise<IndexedSourceResetResult>
   withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
   logInfo: (message: string, meta?: Record<string, unknown>) => void
 }
@@ -67,7 +66,7 @@ export class FileProviderIntegrityService {
     })
 
     const needsRebuild = filesCount > 0 && (ftsCount === 0 || ftsCount < filesCount * 0.8)
-    let resetResult: FileProviderRuntimeResetResult | null = null
+    let resetResult: IndexedSourceResetResult | null = null
     let orphanedKeywordsRemoved = 0
 
     if (needsRebuild) {
