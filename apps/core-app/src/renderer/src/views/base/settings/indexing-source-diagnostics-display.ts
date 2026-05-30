@@ -5,6 +5,7 @@ export {
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
+  resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
@@ -18,6 +19,7 @@ export type {
   IndexingSourceAdmissionIssueChip,
   IndexingSourceEvidenceChip,
   IndexingSourceLifecycleIssueChip,
+  IndexingSourceProgressChip,
   IndexingSourceRecentTaskChip,
   IndexingSourceTaskChip,
   IndexingSourceTone

@@ -2425,6 +2425,17 @@
         "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
         "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · orphan {orphanedKeywordsRemoved}"
       },
+      "sourceProgress": "进度",
+      "sourceProgressChip": {
+        "unknown": "{stage} · {percent}% · {current}/{total} · 暂无 ETA",
+        "idle": "{stage} · 空闲 · {percent}% · {current}/{total}",
+        "running": "{stage} · {percent}% · {current}/{total} · {speed}/s · ETA {eta}",
+        "stabilizing": "{stage} · 稳定采样 · {percent}% · {current}/{total} · samples {samples}",
+        "estimated": "{stage} · 剩余 {remaining} · {percent}% · {current}/{total} · {speed}/s · {basis}",
+        "stalled": "{stage} · 停滞 · {percent}% · {current}/{total} · {reason}",
+        "complete": "{stage} · 完成 · {current}/{total}",
+        "failed": "{stage} · 失败 · {reason}"
+      },
       "sourceStatus": {
         "ready": "就绪",
         "warming": "预热中",

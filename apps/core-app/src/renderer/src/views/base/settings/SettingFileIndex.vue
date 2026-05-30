@@ -53,6 +53,7 @@ import {
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
+  resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
@@ -724,6 +725,15 @@ function getSourceMaintenanceButtonIcon(action: 'scan' | 'reconcile' | 'reset'):
   return 'i-carbon-reset'
 }
 
+function formatSourceProgress(source: IndexedSourceDiagnostics): string | null {
+  const chip = resolveIndexingSourceProgressChip(source)
+  return chip ? t(chip.labelKey, chip.values) : null
+}
+
+function getSourceProgressTone(source: IndexedSourceDiagnostics): string {
+  return resolveIndexingSourceProgressChip(source)?.tone ?? 'muted'
+}
+
 const deviceIdleDuration = computed(() =>
   formatDeviceIdleDuration(deviceIdleDiagnostic.value?.snapshot.idleMs ?? null)
 )
@@ -1224,6 +1234,17 @@ async function triggerRebuild() {
             :class="`source-diagnostic-task-chip--${task.tone}`"
           >
             {{ t(task.labelKey, task.values) }}
+          </span>
+        </div>
+        <div v-if="resolveIndexingSourceProgressChip(source)" class="source-history-row">
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.sourceProgress') }}
+          </span>
+          <span
+            class="source-diagnostic-chip source-progress-chip"
+            :class="`source-status-pill--${getSourceProgressTone(source)}`"
+          >
+            {{ formatSourceProgress(source) }}
           </span>
         </div>
         <div

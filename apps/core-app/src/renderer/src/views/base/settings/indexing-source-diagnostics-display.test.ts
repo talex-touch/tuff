@@ -7,6 +7,7 @@ import {
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
+  resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
@@ -342,6 +343,122 @@ describe('indexing source diagnostics display helpers', () => {
         filesRows: 12,
         needsRebuild: 'no',
         orphanedKeywordsRemoved: 0
+      }
+    })
+  })
+
+  it('returns null when source progress diagnostics are unavailable', () => {
+    expect(resolveIndexingSourceProgressChip(buildSource())).toBeNull()
+  })
+
+  it('builds an estimated progress chip with bounded percentage and ETA values', () => {
+    const chip = resolveIndexingSourceProgressChip(
+      buildSource({
+        progress: {
+          sourceId: 'file-provider',
+          stage: 'scan',
+          status: 'estimated',
+          current: 42,
+          total: 100,
+          progress: 42.4,
+          estimatedRemainingMs: 125000,
+          estimatedCompletionAt: 1700000125000,
+          averageItemsPerSecond: 3.42,
+          speedSampleCount: 4,
+          estimateBasis: 'stage-speed'
+        }
+      })
+    )
+
+    expect(chip).toMatchObject({
+      id: 'file-provider:progress',
+      tone: 'info',
+      labelKey: 'settings.settingFileIndex.sourceProgressChip.estimated',
+      values: {
+        stage: 'scan',
+        status: 'estimated',
+        percent: 42,
+        current: 42,
+        total: 100,
+        remaining: '3m',
+        speed: '3.4',
+        samples: 4,
+        basis: 'stage-speed'
+      }
+    })
+    expect(chip?.values.eta).not.toBe('-')
+  })
+
+  it('maps stabilizing, stalled, failed, and complete progress status to product tones', () => {
+    expect(
+      resolveIndexingSourceProgressChip(
+        buildSource({
+          progress: {
+            sourceId: 'file-provider',
+            stage: 'scan',
+            status: 'stabilizing',
+            current: 2,
+            total: 100,
+            progress: 2,
+            speedSampleCount: 1
+          }
+        })
+      )?.tone
+    ).toBe('warning')
+    expect(
+      resolveIndexingSourceProgressChip(
+        buildSource({
+          progress: {
+            sourceId: 'file-provider',
+            stage: 'scan',
+            status: 'stalled',
+            current: 2,
+            total: 100,
+            progress: 2,
+            reason: 'no-progress'
+          }
+        })
+      )
+    ).toMatchObject({
+      tone: 'danger',
+      labelKey: 'settings.settingFileIndex.sourceProgressChip.stalled',
+      values: {
+        reason: 'no-progress'
+      }
+    })
+    expect(
+      resolveIndexingSourceProgressChip(
+        buildSource({
+          progress: {
+            sourceId: 'file-provider',
+            stage: 'completed',
+            status: 'complete',
+            current: 100,
+            total: 100,
+            progress: 100
+          }
+        })
+      )?.tone
+    ).toBe('success')
+    expect(
+      resolveIndexingSourceProgressChip(
+        buildSource({
+          progress: {
+            sourceId: 'file-provider',
+            stage: 'scan',
+            status: 'failed',
+            current: 12,
+            total: 100,
+            progress: 12,
+            reason: 'worker-failed'
+          }
+        })
+      )
+    ).toMatchObject({
+      tone: 'danger',
+      labelKey: 'settings.settingFileIndex.sourceProgressChip.failed',
+      values: {
+        reason: 'worker-failed'
       }
     })
   })
