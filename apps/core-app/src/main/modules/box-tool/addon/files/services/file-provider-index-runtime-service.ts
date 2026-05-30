@@ -1,7 +1,7 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
-import { IndexedWriteFlushRuntimeService } from '../../../search-engine/indexing-write-flush-runtime-service'
 import {
+  IndexedWriteFlushRuntimeService,
   IndexedWriteFlushSnapshotService,
   type IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { IndexedWriteFlushRuntimeService as SdkIndexedWriteFlushRuntimeService } from '@talex-touch/utils/search'
 import { IndexedWriteFlushRuntimeService } from './indexing-write-flush-runtime-service'
 
 function createRuntime(options: {
@@ -41,6 +42,10 @@ describe('indexing-write-flush-runtime-service', () => {
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it('re-exports the public SDK runtime for legacy CoreApp imports', () => {
+    expect(IndexedWriteFlushRuntimeService).toBe(SdkIndexedWriteFlushRuntimeService)
   })
 
   it('records idle when dependencies are unavailable', async () => {

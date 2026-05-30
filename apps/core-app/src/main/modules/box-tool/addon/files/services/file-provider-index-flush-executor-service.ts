@@ -2,7 +2,7 @@ import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
 import { performance } from 'node:perf_hooks'
 import { dbWriteScheduler } from '../../../../../db/db-write-scheduler'
-import { IndexedWriteFlushExecutorService } from '../../../search-engine/indexing-write-flush-executor-service'
+import { IndexedWriteFlushExecutorService } from '@talex-touch/utils/search'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 
 export type FileProviderIndexFlushExecutorStatus = 'idle' | 'flushed' | 'worker-not-ready'

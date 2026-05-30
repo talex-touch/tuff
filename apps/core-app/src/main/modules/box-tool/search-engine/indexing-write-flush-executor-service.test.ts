@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { IndexedWriteFlushExecutorService as SdkIndexedWriteFlushExecutorService } from '@talex-touch/utils/search'
 import { IndexedWriteBufferService } from './indexing-write-buffer-service'
 import { IndexedWriteFlushExecutorService } from './indexing-write-flush-executor-service'
 
@@ -43,6 +44,10 @@ function createExecutor(options: {
 }
 
 describe('indexing-write-flush-executor-service', () => {
+  it('re-exports the public SDK executor for legacy CoreApp imports', () => {
+    expect(IndexedWriteFlushExecutorService).toBe(SdkIndexedWriteFlushExecutorService)
+  })
+
   it('persists a batch and commits inflight entries', async () => {
     const pending = new Map<number, string>([
       [1, 'one'],
