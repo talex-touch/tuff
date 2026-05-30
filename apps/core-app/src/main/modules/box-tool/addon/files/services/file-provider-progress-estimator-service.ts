@@ -1,6 +1,6 @@
 import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
-import type { IndexingProgressEstimate } from '../../../search-engine/indexing-progress-estimator-service'
-import { IndexingProgressEstimatorService } from '../../../search-engine/indexing-progress-estimator-service'
+import type { IndexingProgressEstimate } from '@talex-touch/utils/search'
+import { IndexingProgressEstimatorService } from '@talex-touch/utils/search'
 
 export type FileProviderProgressEstimate = IndexingProgressEstimate
 

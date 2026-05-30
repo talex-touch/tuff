@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { IndexingWatchDeltaQueueService as SdkIndexingWatchDeltaQueueService } from '@talex-touch/utils/search'
 import { IndexingWatchDeltaQueueService } from './indexing-watch-delta-queue-service'
 
 interface TestDeltaPayload {
@@ -42,6 +43,10 @@ async function settleTaskChain(): Promise<void> {
 describe('indexing-watch-delta-queue-service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('re-exports the public SDK watch delta queue for legacy CoreApp imports', () => {
+    expect(IndexingWatchDeltaQueueService).toBe(SdkIndexingWatchDeltaQueueService)
   })
 
   it('ignores rejected paths', async () => {

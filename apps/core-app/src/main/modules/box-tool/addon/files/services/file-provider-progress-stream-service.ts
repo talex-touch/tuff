@@ -1,10 +1,10 @@
 import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
-import type { IndexingProgressStreamThrottleConfig } from '../../../search-engine/indexing-progress-stream-service'
+import type { IndexingProgressStreamThrottleConfig } from '@talex-touch/utils/search'
 import {
   getIndexingProgressStreamFlushDelayMs,
   INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG,
   shouldEmitIndexingProgressStreamImmediately
-} from '../../../search-engine/indexing-progress-stream-service'
+} from '@talex-touch/utils/search'
 
 export type FileProviderProgressStreamThrottleConfig = Omit<
   IndexingProgressStreamThrottleConfig,
