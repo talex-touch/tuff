@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   getIndexingProgressStreamFlushDelayMs,
+  getIndexingProgressStreamFlushDelayMs as sdkGetIndexingProgressStreamFlushDelayMs,
+  shouldEmitIndexingProgressStreamImmediately as sdkShouldEmitIndexingProgressStreamImmediately,
   shouldEmitIndexingProgressStreamImmediately
+} from '@talex-touch/utils/search'
+import {
+  getIndexingProgressStreamFlushDelayMs as localGetIndexingProgressStreamFlushDelayMs,
+  shouldEmitIndexingProgressStreamImmediately as localShouldEmitIndexingProgressStreamImmediately
 } from './indexing-progress-stream-service'
 
 function createPayload(
@@ -22,6 +28,15 @@ function createPayload(
 }
 
 describe('indexing-progress-stream-service', () => {
+  it('re-exports public SDK progress stream helpers for legacy CoreApp imports', () => {
+    expect(localShouldEmitIndexingProgressStreamImmediately).toBe(
+      sdkShouldEmitIndexingProgressStreamImmediately
+    )
+    expect(localGetIndexingProgressStreamFlushDelayMs).toBe(
+      sdkGetIndexingProgressStreamFlushDelayMs
+    )
+  })
+
   it('emits immediately when there is no previous payload', () => {
     const next = createPayload()
     expect(

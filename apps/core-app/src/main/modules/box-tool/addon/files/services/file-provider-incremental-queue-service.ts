@@ -2,7 +2,7 @@ import {
   coalesceIndexingWatchDelta,
   IndexingWatchDeltaQueueService,
   type IndexingWatchDeltaEntry
-} from '../../../search-engine/indexing-watch-delta-queue-service'
+} from '@talex-touch/utils/search'
 
 export type FileProviderIncrementalAction = 'add' | 'change' | 'delete'
 
