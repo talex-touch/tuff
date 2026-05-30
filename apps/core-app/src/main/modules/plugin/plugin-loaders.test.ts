@@ -46,6 +46,7 @@ vi.mock('./plugin', () => ({
     issues: Array<Record<string, unknown>>
     features: unknown[]
     searchProviders?: unknown[]
+    indexedSources?: unknown[]
     loadState: string
     loadError?: { code: string; message: string }
     creationOptions?: { skipDataInit?: boolean }
@@ -397,6 +398,104 @@ describe('createPluginLoader', () => {
     expect(plugin.issues.some((issue) => issue.code === 'SEARCH_PROVIDER_PERMISSION_MISSING')).toBe(
       false
     )
+  })
+
+  it('keeps official browser-data indexed source declarations as manifest metadata only', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['fs.read', 'fs.index', 'search.root-results'],
+        optional: []
+      },
+      indexedSources: [
+        {
+          id: 'browser-bookmarks',
+          template: 'browser-bookmarks',
+          displayName: 'Browser Bookmarks',
+          admission: {
+            owner: 'official-plugin'
+          }
+        }
+      ],
+      searchProviders: [
+        {
+          id: 'touch-translation.browser-bookmarks',
+          displayName: 'Browser Bookmarks',
+          kind: 'browser-bookmark',
+          owner: 'official-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results', 'browser-data'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true,
+          indexedSourceId: 'browser-bookmarks'
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(plugin.indexedSources).toHaveLength(1)
+    expect(plugin.indexedSources?.[0]).toMatchObject({
+      id: 'browser-bookmarks',
+      kind: 'browser-bookmark',
+      privacy: 'high',
+      admission: {
+        owner: 'official-plugin',
+        permissionScopes: ['browser-data', 'file-system'],
+        defaultState: 'disabled',
+        requiresUserConsent: true
+      }
+    })
+    expect(plugin.issues.some((issue) => issue.code === 'INDEXED_SOURCE_PERMISSION_MISSING')).toBe(
+      false
+    )
+    expect(plugin.issues.some((issue) => issue.code === 'INDEXED_SOURCE_ADMISSION_BLOCKED')).toBe(
+      false
+    )
+  })
+
+  it('reports indexed source manifest permission gaps without registering the source', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['fs.read'],
+        optional: []
+      },
+      indexedSources: [
+        {
+          id: 'browser-bookmarks',
+          template: 'browser-bookmarks',
+          admission: {
+            owner: 'official-plugin'
+          }
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+    const issue = plugin.issues.find((item) => item.code === 'INDEXED_SOURCE_PERMISSION_MISSING')
+
+    expect(plugin.indexedSources).toHaveLength(0)
+    expect(issue).toMatchObject({
+      type: 'error',
+      source: 'indexedSource:browser-bookmarks',
+      meta: {
+        missingPermissionIds: ['fs.index']
+      }
+    })
   })
 
   it('reports manifest permission gaps for root-result search providers', async () => {

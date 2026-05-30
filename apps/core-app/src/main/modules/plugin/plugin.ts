@@ -18,7 +18,7 @@ import type {
   PluginIssue,
   PluginMeta
 } from '@talex-touch/utils/plugin'
-import type { SearchProviderDescriptor } from '@talex-touch/utils/search'
+import type { IndexedSourceDescriptor, SearchProviderDescriptor } from '@talex-touch/utils/search'
 import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
 import type {
   PluginChannelClient,
@@ -356,6 +356,7 @@ export class TouchPlugin implements ITouchPlugin {
   meta?: PluginMeta
   build?: IPluginBuildInfo
   searchProviders?: SearchProviderDescriptor[]
+  indexedSources?: IndexedSourceDescriptor[]
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
@@ -434,6 +435,19 @@ export class TouchPlugin implements ITouchPlugin {
               ...provider.policy,
               permissionScopes: [...provider.policy.permissionScopes]
             }
+          }))
+        : undefined,
+      indexedSources: this.indexedSources
+        ? this.indexedSources.map((source) => ({
+            ...source,
+            platforms: [...source.platforms],
+            capabilities: { ...source.capabilities },
+            admission: source.admission
+              ? {
+                  ...source.admission,
+                  permissionScopes: [...source.admission.permissionScopes]
+                }
+              : undefined
           }))
         : undefined,
       icon: {
