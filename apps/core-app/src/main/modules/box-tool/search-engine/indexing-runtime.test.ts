@@ -216,7 +216,8 @@ describe('indexingRuntime', () => {
     const diagnostics = await runtime.getDiagnostics()
 
     expect(diagnostics.sources[0].admissionIssues).toEqual([
-      'high-privacy-requires-explicit-enable'
+      'high-privacy-requires-explicit-enable',
+      'browser-data-requires-official-plugin'
     ])
   })
 
@@ -242,6 +243,39 @@ describe('indexingRuntime', () => {
         itemCount: 3
       })
     ])
+  })
+
+  it('aggregates optional source progress diagnostics', async () => {
+    runtime.registerSource(
+      buildSource({
+        getProgress: async () => ({
+          sourceId: 'test-source',
+          stage: 'indexing',
+          status: 'estimated',
+          current: 20,
+          total: 100,
+          progress: 20,
+          startedAt: 1,
+          updatedAt: 2,
+          estimatedRemainingMs: 4000,
+          estimatedCompletionAt: 6000,
+          averageItemsPerSecond: 20,
+          speedSampleCount: 2,
+          estimateBasis: 'stage-speed'
+        })
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+
+    expect(diagnostics.sources[0].progress).toMatchObject({
+      sourceId: 'test-source',
+      stage: 'indexing',
+      status: 'estimated',
+      progress: 20,
+      estimatedRemainingMs: 4000,
+      estimateBasis: 'stage-speed'
+    })
   })
 
   it('updates root policy from source diagnostics', async () => {

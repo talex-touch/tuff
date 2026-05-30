@@ -36,8 +36,16 @@ describe('fileIndexedSource', () => {
       error: null,
       startupError: null,
       startTime: 1700000000000,
+      estimatedCompletion: 1700000005000,
+      estimatedRemainingMs: 5000,
+      averageItemsPerSecond: 2,
+      estimateStatus: 'estimated',
+      speedSampleCount: 2,
+      estimateBasis: 'stage-speed',
       progress: {
-        stage: 'idle'
+        stage: 'idle',
+        current: 0,
+        total: 0
       }
     })
     fileProviderMock.getIndexStats.mockResolvedValue({
@@ -133,6 +141,45 @@ describe('fileIndexedSource', () => {
         itemCount: 12
       })
     ])
+  })
+
+  it('exposes FileProvider progress through indexed source diagnostics progress', async () => {
+    fileProviderMock.getIndexingStatus.mockReturnValue({
+      isInitializing: true,
+      startupPending: false,
+      startupReady: true,
+      initializationFailed: false,
+      error: null,
+      startupError: null,
+      startTime: 1700000000000,
+      estimatedCompletion: 1700000010000,
+      estimatedRemainingMs: 10000,
+      averageItemsPerSecond: 10,
+      estimateStatus: 'estimated',
+      speedSampleCount: 3,
+      estimateBasis: 'stage-speed',
+      progress: {
+        stage: 'indexing',
+        current: 40,
+        total: 100
+      }
+    })
+    const source = buildFileIndexedSource()
+
+    await expect(source.getProgress?.()).resolves.toMatchObject({
+      sourceId: 'file-provider',
+      stage: 'indexing',
+      status: 'estimated',
+      current: 40,
+      total: 100,
+      progress: 40,
+      startedAt: 1700000000000,
+      estimatedRemainingMs: 10000,
+      estimatedCompletionAt: 1700000010000,
+      averageItemsPerSecond: 10,
+      speedSampleCount: 3,
+      estimateBasis: 'stage-speed'
+    })
   })
 
   it('maps pending watch permission paths into source health and roots', async () => {
