@@ -1,8 +1,7 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { IndexedSourceResetReason, IndexedSourceResetResult } from '@talex-touch/utils/search'
-import { performance } from 'node:perf_hooks'
-import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
+import { IndexedSourceIntegrityService, IndexedSourceResetReasons } from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
 import { files as filesSchema } from '../../../../../db/schema'
 
@@ -47,7 +46,6 @@ export class FileProviderIntegrityService {
   }
 
   async check(db: LibSQLDatabase<typeof schema>): Promise<FileProviderIntegritySnapshot> {
-    const start = performance.now()
     this.logInfo('Running cross-table integrity check')
 
     const ftsCount = await this.countSearchIndexByProvider(this.sourceId, 'integrity.count')
@@ -65,46 +63,49 @@ export class FileProviderIntegrityService {
       filesRows: filesCount
     })
 
-    const needsRebuild = filesCount > 0 && (ftsCount === 0 || ftsCount < filesCount * 0.8)
-    let resetResult: IndexedSourceResetResult | null = null
-    let orphanedKeywordsRemoved = 0
+    const integrity = new IndexedSourceIntegrityService({
+      resetRuntimeState: async (request) => {
+        this.logInfo(
+          `FTS5 index inconsistency detected (fts=${ftsCount}, files=${filesCount}) — clearing scan_progress for full re-scan`
+        )
+        return this.resetRuntimeState({
+          reason: IndexedSourceResetReasons.IntegrityRepair,
+          clearSearchIndex: request.clearSearchIndex,
+          clearScanProgress: request.clearScanProgress
+        })
+      },
+      cleanupOrphanedRecords: () => this.removeOrphanedKeywords(db),
+      now: () => Date.now()
+    })
+    const snapshot = await integrity.check({
+      sourceId: this.sourceId,
+      indexedRows: ftsCount,
+      sourceRows: filesCount,
+      resetReason: IndexedSourceResetReasons.IntegrityRepair
+    })
 
-    if (needsRebuild) {
-      this.logInfo(
-        `FTS5 index inconsistency detected (fts=${ftsCount}, files=${filesCount}) — clearing scan_progress for full re-scan`
-      )
-
-      resetResult = await this.resetRuntimeState({
-        reason: IndexedSourceResetReasons.IntegrityRepair,
-        clearSearchIndex: ftsCount > 0,
-        clearScanProgress: true
-      })
-    } else if (ftsCount > 0) {
-      orphanedKeywordsRemoved = await this.removeOrphanedKeywords(db)
-    }
-
-    const snapshot = {
-      checkedAt: Date.now(),
+    const fileSnapshot = {
+      checkedAt: snapshot.checkedAt,
       ftsRows: ftsCount,
       filesRows: filesCount,
-      needsRebuild,
-      clearedSearchIndex: resetResult?.clearedSearchIndex ?? false,
-      clearedScanProgress: resetResult?.clearedScanProgress ?? false,
-      orphanedKeywordsRemoved,
-      resetReason: resetResult?.reason ?? null,
-      resetScanProgressRows: resetResult?.scanProgressRows ?? 0,
-      durationMs: performance.now() - start
+      needsRebuild: snapshot.needsRebuild,
+      clearedSearchIndex: snapshot.clearedSearchIndex,
+      clearedScanProgress: snapshot.clearedScanProgress,
+      orphanedKeywordsRemoved: snapshot.orphanedRecordsRemoved,
+      resetReason: snapshot.resetReason,
+      resetScanProgressRows: snapshot.resetScanProgressRows,
+      durationMs: snapshot.durationMs
     }
 
     this.logInfo('Integrity check completed', {
-      durationMs: snapshot.durationMs,
-      needsRebuild,
-      clearedSearchIndex: snapshot.clearedSearchIndex,
-      clearedScanProgress: snapshot.clearedScanProgress,
-      orphanedKeywordsRemoved
+      durationMs: fileSnapshot.durationMs,
+      needsRebuild: fileSnapshot.needsRebuild,
+      clearedSearchIndex: fileSnapshot.clearedSearchIndex,
+      clearedScanProgress: fileSnapshot.clearedScanProgress,
+      orphanedKeywordsRemoved: fileSnapshot.orphanedKeywordsRemoved
     })
 
-    return snapshot
+    return fileSnapshot
   }
 
   private async removeOrphanedKeywords(db: LibSQLDatabase<typeof schema>): Promise<number> {
