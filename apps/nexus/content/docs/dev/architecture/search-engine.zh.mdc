@@ -26,6 +26,7 @@
 **索引/补全**：
 - `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
 - `apps/core-app/src/main/modules/box-tool/search-engine/query-completion-service.ts`
+- `packages/utils/search/indexing-source.ts`
 
 **排序/聚合**：
 - `apps/core-app/src/main/modules/box-tool/search-engine/sort/index.ts`
@@ -45,6 +46,59 @@
 - 文件检索配套：`apps/core-app/src/main/modules/box-tool/addon/files/`（`types.ts`、`constants.ts`、`utils.ts`、`workers/`）
 - 应用检索配套：`apps/core-app/src/main/modules/box-tool/addon/apps/`（`app-scanner.ts`、`search-processing-service.ts`、`highlighting-service.ts` 等）
 - 文件系统监听：`apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+
+## 3.1 Indexing Runtime V1 方向
+
+SearchProvider 负责 CoreBox 查询协议、分层返回与结果映射；IndexedSource 负责数据源生命周期。后续 App/File/Everything/Browser Data/Quicklinks 不应各自复制扫描、监听、补漏和诊断循环，而应逐步迁入统一 runtime。
+
+当前共享类型入口：
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import type {
+    IndexedSource,
+    IndexedSourceDescriptor,
+    IndexedSourceDiagnosticsSnapshot,
+    IndexedSourceHealth,
+    IndexedSourceRecord,
+  } from '@talex-touch/utils/search'
+---
+:::
+
+统一 source health 至少包含：
+
+- `status`: ready / warming / degraded / disabled / unsupported / permission-required / error
+- `permissionState`
+- `itemCount`
+- `watchState`
+- `reconcileState`
+- `lastIndexedAt`
+- `lastError`
+
+CoreApp 已通过 `CoreBoxEvents.search.indexingDiagnostics` 暴露 `IndexedSourceDiagnosticsSnapshot`，Advanced Settings 的 File Index 页面已读取该 typed event 展示 source status、item count、watch/reconcile state 与 roots/error/reason 摘要。Diagnostics snapshot 也开始合并 runtime memory task state，每个 source 可带最近一次 `lastScan`、`lastWatch`、`lastReconcile` 结果；Settings 会把这些结果显示为最近任务 chip，用于定位 scan/watch/reconcile 哪一段失败或补漏数量异常。CoreBox no-result 空态也消费同一个 typed event，展示 degraded / permission-required / error / warming source 摘要，避免读取各 provider 的私有 diagnostics。Runtime task model 已拆出 `SourceDiagnosticsService`、`WatchEventRouter`、`ScanScheduler`、`ReconcileScheduler`、`ReconcileEngine`、`IndexStoreAdapter` 与 `IndexingRootPolicy`。ScanScheduler 已补 batch scan result 统计与 source-level failure isolation，批量扫描不会因单个 source 失败而整体失败；ReconcileScheduler 已作为最小任务入口负责 same-source running guard、jobId、queuedAt、reason/rootCount 记录，为后续 retry/debounce/durable job history 留边界；ReconcileEngine 已补 batch reconcile result 统计、source-level failure isolation 与 reconcile delta store 应用，批量补漏不会因单个 source 或单个 delta 写入失败而整体失败；WatchEventRouter 已补 source handler / store delta failure isolation 与 route result 统计，单个 source 失败不会拖垮整次 watcher route。SearchIndexStoreAdapter 已接入现有 SQLite/SearchIndexService 写入边界，runtime scan batches、watch deltas 与 reconcile deltas 可以映射为 `indexItems`、`removeItems` 和 `removeByProvider`。AppIndexedSource 已接入 startup backfill/manual rebuild scan、full sync + macOS mdls reconcile 与 app path watch lifecycle，并开始 yield `IndexedSourceRecordBatch`，让 app scan 结果进入 runtime store boundary；App watch delta 已开始返回 add/change `record` 与 delete `stableKey/path`，且 App watcher 入口已迁到 SearchEngineCore runtime bridge；App reconcile 已使用 full sync / macOS mdls repair 的真实 added/changed/deleted/skipped/errors 填充 `IndexedSourceReconcileResult`；FileIndexedSource 已接入 manual rebuild/worker scan、reconcile、incremental watch updates 与 clear/rebuild lifecycle，File scan 也开始 yield full scan / reconciliation 插入结果的 `IndexedSourceRecordBatch`，File watch delta 也开始返回 add/change `record` 与 delete `stableKey/path`，全局 file watcher 事件已从 FileProvider 私有订阅迁到 SearchEngineCore runtime bridge；FileProvider incremental queue 的 path coalescing、delete precedence、manual flag 与串行 flush 调度已拆到 `FileProviderIncrementalQueueService`，增量 add/change 的 insert/update/unchanged/manual summary 规划已拆到 `FileProviderIncrementalWritePlannerService`，写入后的 keyword/icon extension 处理与 content indexing 调度已集中到 `FileProviderWriteSideEffectService`，file row 到 index worker payload 的映射、chunk dispatch 与 large-file deferred scheduling 已拆到 `FileProviderIndexSchedulerService`，index worker result 到 `PersistEntry` 的映射已拆到 `FileProviderIndexPersistEntryMapperService`，index worker flush 的 backlog delay、sqlite-busy retry 与失败 retry reason 决策已拆到 `FileProviderIndexFlushRetryService`，index worker flush 执行、worker readiness gate、DB backpressure、`persistAndIndex`、commit/rollback 与 duration 记录已拆到 `FileProviderIndexFlushExecutorService`，pending/inflight enqueue、take、commit、rollback 与 size 统计已抽到通用 `IndexedWriteBufferService`，`FileProviderIndexFlushBufferService` 只保留 fileId 适配，内部文件表 persist、通用 flush executor interface 与 FTS 写入语义仍留在 FileProvider / SearchIndex worker 边界作为下一步迁移；File reconcile 开始透传 full scan / reconciliation / stale cleanup 的真实补漏统计，并把 existing root reconciliation 的 add/change/delete 映射为 runtime store 可应用 delta；EverythingIndexedSource 已把 Windows Everything path filtering 改为读取 runtime root policy，而不是直接读取 FileProvider 私有 watch roots；后续 Browser Data source 应接入同样的共享 scan/watch/reconcile 入口。
+
+File source evidence 已把 FileProvider 内部 `scan_progress`、watch root pending permission、FTS/files integrity repair 和 index worker flush 变成 runtime diagnostics 可见的事实：`FileProviderScanProgressService` 负责生成 `file-provider:scan-progress`，并承接 completed-root strategy 读取、stale path 删除与 completed-path upsert；scan-progress evidence 汇总 watch roots、pending roots、pending permission roots、失败/跳过/完成文件数与 embedding 计数；File source roots 会把属于 FileProvider watch roots 的 `FileSystemWatcher` pending paths 映射为 `permissionState: "promptable"` 和 `file-index-watch-root-pending-permission` reason；`FileProviderIntegrityService` 负责 FTS/files row-count 检查、integrity-triggered runtime reset、orphan `keyword_mappings` cleanup 与 integrity snapshot；`file-provider:integrity` 记录最近一次 FTS rows、files rows、是否触发 full re-scan、是否清理 stale FTS 或 scan_progress，以及清理了多少 orphan keywords；`file-provider:index-flush` 记录最近一次 content index worker flush 的 flushed / worker-not-ready / failed 状态、entries、pending/inflight、retry reason、error 与 duration。该层仍不替代 FileProvider 内部 worker pipeline，但先解决“补漏/权限等待/重扫/内容写入失败原因只在日志里”的可解释性问题。
+
+Watcher permission recovery 也已进入 runtime 边界：`FileSystemWatcher` 在 pending path 重新可访问时发出 `FILE_WATCH_ROOT_RECOVERED`，SearchEngineCore 通过 File source 的 `shouldHandleWatchEvent()` 做 root ownership 过滤，只对 FileProvider watch roots 触发 `IndexingRuntime.reconcileSource("file-provider", { reason: "file-watch-root-recovered", roots: [recoveredRoot] })`。`IndexedSourceReconcileRequest.reason` 与 diagnostics `lastReconcile.reason/rootCount` 会把这类恢复补漏显示到 Settings/CoreBox 最近任务 chip，而不是只留在 watcher 日志里。这个小 SDK hook 也被 `WatchEventRouter` 复用，source 可以用 `source-watch-filtered` skipped reason 明确拒绝不属于自己的 watch path。
+
+Index worker flush 的执行边界也开始从 FileProvider 专用实现迁到 runtime/store 基础件：`IndexedWriteFlushExecutorService` 负责 readiness gate、backpressure、persist、commit/rollback、duration 记录，并返回通用 `reason` / `error` / `metadata` 观测字段；`FileProviderIndexFlushExecutorService` 只保留 FileProvider 的 `withContent` 统计、`worker-not-ready` 状态映射与日志文本；`FileProviderIndexRuntimeService` 缓存最近一次 flush snapshot 并输出到 source evidence。后续 Browser Bookmarks、Obsidian、VSCode 等 sqlite-index source 应优先复用这条通用写入执行路径，而不是再复制 FileProvider 私有 flush loop。
+
+FileProvider reset 语义也已开始集中：manual rebuild、schema migration 与 integrity mismatch 不再各自直接删除 `scan_progress` 或清理 provider index，而是进入 `FileProviderRuntimeResetService` 统一生成 reason、scan_progress rows、search-index cleanup 与 scan_progress cleanup 结果。FileProvider 仍注入 DB/search-index 依赖，但 reset 边界已经从 provider 主体拆出，可继续迁到 IndexingRuntime 统一调度。
+
+IndexingRuntime 已新增 `resetSourceRuntimeState()`，对接 SDK 的 `IndexedSource.resetIndex()`，并把结果合并到 diagnostics `lastReset`。这把“运行时状态 reset”从 `clearIndex()` 中拆出来：reset 只表达维护动作和后续 scan/reconcile 修复意图，clear 仍保留为用户级清空/重建语义。FileIndexedSource 是第一个接入该入口的 source。
+
+为了避免 FileProvider 反向 import runtime singleton，SearchEngineCore 在注册 indexed sources 后注入 reset delegate。FileProvider manual rebuild、schema migration 与 integrity repair 通过 delegate 进入 `IndexingRuntime.resetSourceRuntimeState()`，再由 FileIndexedSource 转到 FileProvider reset helper；destroy 时 delegate 会被清空。这样 reset 行为进入 runtime diagnostics，同时保持 provider 与 runtime 的依赖方向可控。
+
+Batch scan/reconcile 与 watch route 在 runtime 层统一调用 `@talex-touch/utils/search` 的 `resolveIndexedSourceTaskEligibility()` 执行 admission 与 health guard：admission invalid、缺能力、disabled、unsupported、permission-required、error、permission denied/promptable 的 source 不会进入调度或 watch handler。Root-based watch route 还会校验命中的 `IndexedSourceRoot.permissionState`，denied/promptable root 只产生 `root-permission:*` skipped evidence。Batch/route result 会带 skipped source 统计和原因，diagnostics 最近任务也会写入 `skipped:*`。这让 Browser Bookmarks / Browser History / Obsidian 这类高隐私或需授权 source 的默认不参与维护和事件响应成为 SDK/runtime 规则，而不是散落在各 adapter 的局部判断。
+
+AppIndexedSource 还会输出 source evidence：Windows 下区分 Start Menu shortcuts、UWP、Registry、App Paths registry 与 Steam；macOS 下区分 mdfind 与 mdls metadata repair；Linux 下区分 desktop entries。Windows scanner 已新增 `getAppsBySource()`，把这些 Windows 子来源作为一等 scan result 分组，旧 `getApps()` 仍基于分组结果 flatten + dedupe，保持现有搜索行为兼容；AppProvider 的 Windows evidence 已优先消费 grouped scan result，并把每个子来源的 empty / error reason 暴露到 diagnostics，DB metadata 推断只作为 fallback。Evidence 只用于 diagnostics / release evidence，不替代搜索结果排序。
+
+新增 IndexedSource 接入前也必须补 `admission` 元数据：Core source、官方插件 source 与第三方插件 source 需要显式声明 owner、权限 scope、默认启用策略、用户同意、clear/rebuild 能力。Browser Data 默认按 high privacy + ask/disabled 处理；external-fast 只允许可信 core source 并必须声明 external-tool scope；sqlite-index source 必须支持 clear，watch source 必须支持 reconcile。
+
+BrowserBookmarksIndexedSource 已注册到 CoreApp runtime diagnostics，但默认仍保持 disabled/pending migration，evidence 指向 `touch-browser-data` 插件扫描器。CoreApp 侧已经抽出纯 Chromium Bookmarks scanner，可在显式 enabled/test path 下发现 Chrome / Edge / Brave / Arc profile、解析 `Bookmarks` JSON、输出 browser root/evidence，并 yield `browser-bookmark` records 给 runtime store boundary。这样 Settings/CoreBox 可以看到 Browser Bookmarks source 的准入和缺口，同时不会误把未授权的即时 JSON 扫描伪装成已完成的持久索引；用户设置、clear/rebuild 和 Bookmarks 文件 watch 小全量刷新仍是后续迁移项。
+
+迁移顺序：先建立 diagnostics adapter、Settings 与 CoreBox 可见化，再拆 runtime task model 与 root policy；然后继续迁 App/File 内部 store 边界，最后把 Browser Data 升级为 indexed source。
 
 ## 4. 推荐系统（Recommendation）
 
@@ -74,3 +128,4 @@ code: |
 
 - CoreBox 窗口与 UI 行为：`apps/nexus/content/docs/dev/architecture/corebox-and-views.zh.mdc`
 - 核心模块总览：`apps/nexus/content/docs/dev/architecture/module-map.zh.mdc`
+- Indexing Runtime V1：`docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
