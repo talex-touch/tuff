@@ -4,6 +4,8 @@ import type {
   IndexedSourceEvidence,
   IndexedSourceHealthStatus,
   IndexedSourceLifecycleIssue,
+  IndexedSourceProgress,
+  IndexedSourceProgressStatus,
   IndexedSourceReconcileState,
   IndexedSourceTaskHistoryEntry,
   IndexedSourceTaskHistoryKind,
@@ -28,6 +30,13 @@ export interface IndexingSourceRecentTaskChip {
 }
 
 export interface IndexingSourceEvidenceChip {
+  id: string
+  tone: IndexingSourceTone
+  labelKey: string
+  values: Record<string, string | number>
+}
+
+export interface IndexingSourceProgressChip {
   id: string
   tone: IndexingSourceTone
   labelKey: string
@@ -128,6 +137,51 @@ function resolveTaskTone(error?: string): IndexingSourceTone {
 
 function resolveEvidenceTone(status: IndexedSourceHealthStatus): IndexingSourceTone {
   return resolveIndexingSourceTone(status)
+}
+
+function resolveProgressTone(status: IndexedSourceProgressStatus): IndexingSourceTone {
+  if (status === 'complete') return 'success'
+  if (status === 'failed' || status === 'stalled') return 'danger'
+  if (status === 'stabilizing') return 'warning'
+  if (status === 'running' || status === 'estimated') return 'info'
+  return 'muted'
+}
+
+function clampProgressPercent(progress: IndexedSourceProgress): number {
+  const raw =
+    typeof progress.progress === 'number' && Number.isFinite(progress.progress)
+      ? progress.progress
+      : progress.total > 0
+        ? (progress.current / progress.total) * 100
+        : 0
+
+  return Math.max(0, Math.min(100, Math.round(raw)))
+}
+
+function formatProgressDuration(value?: number | null): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '-'
+  if (value < 1000) return '<1s'
+
+  const totalSeconds = Math.ceil(value / 1000)
+  if (totalSeconds < 60) return `${totalSeconds}s`
+
+  const totalMinutes = Math.ceil(totalSeconds / 60)
+  if (totalMinutes < 60) return `${totalMinutes}m`
+
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+}
+
+function formatProgressSpeed(value?: number): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '-'
+  if (value < 1) return value.toFixed(2)
+  if (value < 10) return value.toFixed(1)
+  return String(Math.round(value))
+}
+
+function resolveProgressLabelKey(status: IndexedSourceProgressStatus): string {
+  return `settings.settingFileIndex.sourceProgressChip.${status}`
 }
 
 function resolveEvidencePriority(evidence: IndexedSourceEvidence): number {
@@ -372,6 +426,32 @@ export function resolveIndexingSourceEvidenceChips(
       labelKey: resolveEvidenceChipLabelKey(evidence),
       values: resolveEvidenceChipValues(evidence)
     }))
+}
+
+export function resolveIndexingSourceProgressChip(
+  source: IndexedSourceDiagnostics
+): IndexingSourceProgressChip | null {
+  const progress = source.progress
+  if (!progress) return null
+
+  return {
+    id: `${source.descriptor.id}:progress`,
+    tone: resolveProgressTone(progress.status),
+    labelKey: resolveProgressLabelKey(progress.status),
+    values: {
+      stage: progress.stage || '-',
+      status: progress.status,
+      percent: clampProgressPercent(progress),
+      current: progress.current,
+      total: progress.total,
+      remaining: formatProgressDuration(progress.estimatedRemainingMs),
+      eta: formatIndexingSourceTimestamp(progress.estimatedCompletionAt ?? undefined),
+      speed: formatProgressSpeed(progress.averageItemsPerSecond),
+      samples: progress.speedSampleCount ?? 0,
+      basis: progress.estimateBasis ?? 'none',
+      reason: progress.reason ?? ''
+    }
+  }
 }
 
 function resolveLifecycleIssueLabelKey(issue: IndexedSourceLifecycleIssue): string {

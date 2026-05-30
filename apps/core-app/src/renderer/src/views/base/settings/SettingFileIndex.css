@@ -383,6 +383,17 @@
   max-width: 220px;
 }
 
+.source-progress-chip {
+  max-width: 260px;
+  color: var(--source-status-color, var(--tx-text-color-secondary));
+  background: color-mix(in srgb, var(--source-status-color, var(--tx-fill-color)) 10%, transparent);
+  border-color: color-mix(
+    in srgb,
+    var(--source-status-color, var(--tx-border-color)) 24%,
+    transparent
+  );
+}
+
 .source-diagnostic-task-chip--warning {
   color: #ff9500;
   background: color-mix(in srgb, #ff9500 10%, transparent);

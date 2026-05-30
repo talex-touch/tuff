@@ -2429,6 +2429,17 @@
         "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
         "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · orphan {orphanedKeywordsRemoved}"
       },
+      "sourceProgress": "Progress",
+      "sourceProgressChip": {
+        "unknown": "{stage} · {percent}% · {current}/{total} · no ETA",
+        "idle": "{stage} · idle · {percent}% · {current}/{total}",
+        "running": "{stage} · {percent}% · {current}/{total} · {speed}/s · ETA {eta}",
+        "stabilizing": "{stage} · stabilizing · {percent}% · {current}/{total} · samples {samples}",
+        "estimated": "{stage} · {remaining} left · {percent}% · {current}/{total} · {speed}/s · {basis}",
+        "stalled": "{stage} · stalled · {percent}% · {current}/{total} · {reason}",
+        "complete": "{stage} · complete · {current}/{total}",
+        "failed": "{stage} · failed · {reason}"
+      },
       "sourceStatus": {
         "ready": "Ready",
         "warming": "Warming",
