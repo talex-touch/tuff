@@ -1,7 +1,7 @@
 import {
   IndexedWriteSideEffectService,
   type IndexedWriteSideEffectOptions
-} from '../../../search-engine/indexing-write-side-effect-service'
+} from '@talex-touch/utils/search'
 
 export interface FileProviderWriteSideEffectOptions {
   extensionContext: string
@@ -21,7 +21,8 @@ export class FileProviderWriteSideEffectService<TFile> {
     this.dispatcher = new IndexedWriteSideEffectService({
       processExtensions: deps.processFileExtensions,
       scheduleIndexing: deps.scheduleIndexing,
-      logWarn: deps.logWarn
+      logWarn: deps.logWarn,
+      formatExtensionFailureMessage: (context) => `processFileExtensions failed (${context})`
     })
   }
 
