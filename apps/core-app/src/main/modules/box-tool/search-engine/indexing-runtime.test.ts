@@ -128,6 +128,36 @@ describe('indexingRuntime', () => {
     )
   })
 
+  it('warns when descriptor admission policy is not ready', () => {
+    runtime.registerSource(
+      buildSource({
+        descriptor: {
+          ...descriptor,
+          id: 'unsafe-browser-bookmarks',
+          kind: 'browser-bookmark',
+          privacy: 'high',
+          admission: {
+            owner: 'official-plugin',
+            permissionScopes: ['browser-data', 'file-system'],
+            defaultState: 'enabled',
+            requiresUserConsent: false,
+            clearable: true,
+            rebuildable: true
+          }
+        }
+      })
+    )
+
+    expect(loggerMock.warn).toHaveBeenCalledWith(
+      "Indexed source 'unsafe-browser-bookmarks' has admission contract issues",
+      {
+        meta: {
+          issues: 'high-privacy-requires-explicit-enable'
+        }
+      }
+    )
+  })
+
   it('aggregates source health diagnostics', async () => {
     runtime.registerSource(buildSource())
     runtime.registerSource(
@@ -159,6 +189,34 @@ describe('indexingRuntime', () => {
       'reconcile-capability-missing-handler',
       'clear-capability-missing-handler',
       'open-capability-missing-handler'
+    ])
+    expect(diagnostics.sources[0].admissionIssues).toEqual([])
+  })
+
+  it('exposes source admission issues in diagnostics', async () => {
+    runtime.registerSource(
+      buildSource({
+        descriptor: {
+          ...descriptor,
+          id: 'unsafe-browser-bookmarks',
+          kind: 'browser-bookmark',
+          privacy: 'high',
+          admission: {
+            owner: 'third-party-plugin',
+            permissionScopes: ['browser-data'],
+            defaultState: 'enabled',
+            requiresUserConsent: false,
+            clearable: true,
+            rebuildable: true
+          }
+        }
+      })
+    )
+
+    const diagnostics = await runtime.getDiagnostics()
+
+    expect(diagnostics.sources[0].admissionIssues).toEqual([
+      'high-privacy-requires-explicit-enable'
     ])
   })
 

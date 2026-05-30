@@ -10,6 +10,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type {
   IndexedSourceDiagnostics,
+  SearchProviderRegistryIssue,
   SearchProviderRuntimeConfig,
   SearchProviderUserConfig
 } from '@talex-touch/utils/search'
@@ -48,6 +49,7 @@ import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
 import {
   countIndexingSourcesNeedingAttention,
   formatIndexingSourceTimestamp,
+  resolveIndexingSourceAdmissionIssueChips,
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
@@ -95,6 +97,7 @@ const sourceMaintenanceAction = ref<Record<string, 'scan' | 'reconcile' | 'reset
 const sourceMaintenanceActions = ['scan', 'reconcile', 'reset'] as const
 const searchProviderConfigs = ref<SearchProviderRuntimeConfig[]>([])
 const searchProviderSourceLinks = ref<SearchProviderSourceLink[]>([])
+const searchProviderIssues = ref<SearchProviderRegistryIssue[]>([])
 const searchProviderConfigLoading = ref(false)
 const searchProviderConfigSaving = ref(false)
 const defaultMinBattery = 60
@@ -232,9 +235,11 @@ async function loadSearchProviderConfig() {
     const response = await settingsSdk.indexedSource.getProviderConfig()
     searchProviderConfigs.value = response.providers
     searchProviderSourceLinks.value = response.sourceLinks ?? []
+    searchProviderIssues.value = response.issues ?? []
   } catch (error) {
     settingFileIndexLog.error('Failed to load search provider config', error)
     searchProviderConfigs.value = []
+    searchProviderIssues.value = []
     toast.error(t('settings.settingFileIndex.providerConfigLoadFailed'))
   } finally {
     searchProviderConfigLoading.value = false
@@ -261,6 +266,7 @@ async function saveSearchProviderConfig(providers = searchProviderConfigs.value)
     })
     searchProviderConfigs.value = response.providers
     searchProviderSourceLinks.value = response.sourceLinks ?? []
+    searchProviderIssues.value = response.issues ?? []
     toast.success(t('settings.settingFileIndex.providerConfigSaved'))
   } catch (error) {
     settingFileIndexLog.error('Failed to save search provider config', error)
@@ -288,6 +294,15 @@ async function moveSearchProvider(providerId: string, direction: -1 | 1) {
   current.splice(targetIndex, 0, entry)
   searchProviderConfigs.value = current
   await saveSearchProviderConfig(current)
+}
+
+function formatSearchProviderIssue(issue: SearchProviderRegistryIssue): string {
+  const provider = issue.providerId || issue.pluginName || issue.source || issue.code
+  return t('settings.settingFileIndex.providerConfigIssue', {
+    provider,
+    code: issue.code,
+    message: issue.message
+  })
 }
 
 function getSearchProviderSource(provider: SearchProviderRuntimeConfig) {
@@ -1085,9 +1100,32 @@ async function triggerRebuild() {
       :active="searchProviderConfigLoading || searchProviderConfigSaving"
     >
       <div class="provider-config-list">
-        <span v-if="searchProviderConfigs.length === 0" class="provider-config-empty">
+        <span
+          v-if="searchProviderConfigs.length === 0 && searchProviderIssues.length === 0"
+          class="provider-config-empty"
+        >
           {{ t('settings.settingFileIndex.providerConfigEmpty') }}
         </span>
+        <div
+          v-if="searchProviderIssues.length > 0"
+          class="source-history-row provider-config-issues"
+        >
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.providerConfigIssues') }}
+          </span>
+          <span
+            v-for="issue in searchProviderIssues"
+            :key="`${issue.pluginName ?? 'core'}:${issue.providerId ?? issue.code}:${issue.source ?? ''}`"
+            class="source-diagnostic-chip source-history-chip"
+            :class="
+              issue.type === 'error'
+                ? 'source-diagnostic-task-chip--error'
+                : 'source-diagnostic-task-chip--warning'
+            "
+          >
+            {{ formatSearchProviderIssue(issue) }}
+          </span>
+        </div>
         <div
           v-for="(provider, index) in searchProviderConfigs"
           :key="provider.providerId"
@@ -1146,7 +1184,7 @@ async function triggerRebuild() {
         t(`settings.settingFileIndex.sourceDetail.${resolveIndexingSourceDetailKey(source)}`, {
           error: source.health.lastError,
           reason: source.health.reason,
-          issue: source.lifecycleIssues?.[0] ?? '',
+          issue: source.admissionIssues?.[0] ?? source.lifecycleIssues?.[0] ?? '',
           time: formatIndexingSourceTimestamp(source.health.lastIndexedAt),
           roots: summarizeIndexingSourceRoots(source)
         })
@@ -1186,6 +1224,22 @@ async function triggerRebuild() {
             :class="`source-diagnostic-task-chip--${task.tone}`"
           >
             {{ t(task.labelKey, task.values) }}
+          </span>
+        </div>
+        <div
+          v-if="resolveIndexingSourceAdmissionIssueChips(source).length > 0"
+          class="source-history-row"
+        >
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.sourceAdmissionIssues') }}
+          </span>
+          <span
+            v-for="issue in resolveIndexingSourceAdmissionIssueChips(source)"
+            :key="issue.id"
+            class="source-diagnostic-chip source-history-chip"
+            :class="`source-diagnostic-task-chip--${issue.tone}`"
+          >
+            {{ t(issue.labelKey, issue.values) }}
           </span>
         </div>
         <div

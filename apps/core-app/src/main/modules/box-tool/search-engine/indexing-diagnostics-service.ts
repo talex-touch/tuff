@@ -8,7 +8,7 @@ import type {
   IndexedSourceRoot
 } from '@talex-touch/utils/search'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { getIndexedSourceLifecycleIssues } from '@talex-touch/utils/search'
+import { getIndexedSourceContractIssues } from '@talex-touch/utils/search'
 
 const diagnosticsLog = getLogger('indexing-diagnostics')
 
@@ -63,12 +63,15 @@ export class SourceDiagnosticsService {
           }) ?? Promise.resolve([] as IndexedSourceEvidence[])
         ])
 
+        const contractIssues = getIndexedSourceContractIssues(source)
+
         return {
           descriptor: source.descriptor,
           health,
           roots,
           evidence,
-          lifecycleIssues: getIndexedSourceLifecycleIssues(source)
+          admissionIssues: contractIssues.admission,
+          lifecycleIssues: contractIssues.lifecycle
         }
       })
     )

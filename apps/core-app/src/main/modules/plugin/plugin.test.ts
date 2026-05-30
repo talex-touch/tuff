@@ -351,7 +351,69 @@ describe('TouchPlugin.triggerFeature', () => {
     expect(boxItemManagerMock.clear).toHaveBeenCalledWith('test-plugin')
   })
 
+  it('blocks root result pushes for ask-state plugin providers until explicitly enabled', async () => {
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.searchProviders = [
+      {
+        id: 'test-plugin.root-results',
+        displayName: 'Test Plugin Results',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 100,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      }
+    ]
+    plugin.status = PluginStatus.ENABLED
+
+    await plugin.getFeatureUtil().boxItems.push({
+      id: 'blocked-ask-provider',
+      source: { type: 'plugin', id: 'custom', name: 'custom' },
+      render: { mode: 'default' }
+    } satisfies TuffItem)
+
+    expect(permissionModuleMock.checkPermission).toHaveBeenCalled()
+    expect(boxItemManagerMock.upsert).not.toHaveBeenCalled()
+  })
+
   it('tags pushed root result items with the plugin search provider id', async () => {
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [{ providerId: 'test-plugin.root-results', enabled: true, order: 10 }]
+      }
+    }
+
     const transport = {
       broadcast: vi.fn(),
       invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),

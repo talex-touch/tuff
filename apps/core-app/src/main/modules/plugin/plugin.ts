@@ -32,6 +32,7 @@ import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import { isSearchProviderEnabledByConfig } from '@talex-touch/utils/search'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import {
   createBoxSDK,
@@ -61,7 +62,7 @@ import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
-import { getSearchProviderConfigMap } from '../box-tool/search-engine/search-provider-config'
+import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-provider-config'
 import { getNetworkService } from '../network'
 import { getPermissionModule } from '../permission'
 import { deviceIdleService } from '../../service/device-idle-service'
@@ -823,21 +824,24 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private isRootResultsProviderEnabled(item?: TuffItem): boolean {
-    const providerIds =
-      this.searchProviders
-        ?.filter((provider) => provider.mode === 'push' && provider.policy.pushesToRootResults)
-        .map((provider) => provider.id) ?? []
-    if (providerIds.length === 0) return true
+    const providers =
+      this.searchProviders?.filter(
+        (provider) => provider.mode === 'push' && provider.policy.pushesToRootResults
+      ) ?? []
+    if (providers.length === 0) return true
 
     const itemProviderId =
       typeof item?.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
         ? item.meta.searchProviderId.trim()
         : undefined
-    const targetProviderIds = itemProviderId ? [itemProviderId] : providerIds
+    const targetProviderIds = itemProviderId
+      ? [itemProviderId]
+      : providers.map((provider) => provider.id)
+    const configs = getSearchProviderUserConfigs()
 
-    const configById = getSearchProviderConfigMap()
-
-    return targetProviderIds.every((providerId) => configById.get(providerId)?.enabled !== false)
+    return targetProviderIds.every((providerId) =>
+      isSearchProviderEnabledByConfig(providerId, providers, configs)
+    )
   }
 
   private ensureRootResultsProviderEnabled(method: string, item?: TuffItem): boolean {

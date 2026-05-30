@@ -2351,6 +2351,8 @@
       "providerConfigDesc": "控制可进入根搜索结果的索引源；浏览器数据仍需插件权限与用户授权后才会启用",
       "providerConfigEmpty": "暂无可配置搜索源",
       "providerConfigMeta": "{mode} · {owner}",
+      "providerConfigIssues": "注册问题",
+      "providerConfigIssue": "{provider} · {code} · {message}",
       "providerConfigLoadFailed": "读取搜索源配置失败",
       "providerConfigSaved": "搜索源配置已保存",
       "providerConfigSaveFailed": "保存搜索源配置失败",
@@ -2394,6 +2396,17 @@
           "skipped": "重置跳过 · {summary} · {jobId}"
         }
       },
+      "sourceAdmissionIssues": "准入",
+      "sourceAdmissionIssue": {
+        "missing-owner": "缺少来源归属",
+        "missing-permission-scope": "缺少权限范围",
+        "high-privacy-requires-explicit-enable": "高隐私源不能默认启用",
+        "browser-data-requires-high-privacy": "浏览器数据源必须标记为高隐私",
+        "external-fast-requires-external-tool-permission": "外部快速源缺少外部工具权限",
+        "external-fast-cannot-be-third-party": "第三方插件不能提供外部快速源",
+        "persistent-source-must-be-clearable": "持久索引源必须支持清理",
+        "watch-capability-requires-reconcile": "监听源必须支持补漏"
+      },
       "sourceLifecycleIssues": "合同",
       "sourceLifecycleIssue": {
         "missing-scan-handler": "缺少扫描入口",
@@ -2435,6 +2448,7 @@
       },
       "sourceDetail": {
         "lastError": "最近错误：{error}",
+        "admissionIssue": "准入问题：{issue}",
         "lifecycleIssue": "合同问题：{issue}",
         "reason": "原因：{reason}",
         "lastIndexedAt": "最近索引：{time}",

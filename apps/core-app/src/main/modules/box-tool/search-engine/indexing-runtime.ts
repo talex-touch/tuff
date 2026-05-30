@@ -35,7 +35,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import {
   appendIndexedSourceTaskHistory,
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
-  getIndexedSourceLifecycleIssues,
+  getIndexedSourceContractIssues,
   IndexedSourceResetReasons,
   resolveIndexedSourceTaskEligibility
 } from '@talex-touch/utils/search'
@@ -107,11 +107,19 @@ export class IndexingRuntime {
       return false
     }
 
-    const lifecycleIssues = getIndexedSourceLifecycleIssues(source)
-    if (lifecycleIssues.length > 0) {
+    const contractIssues = getIndexedSourceContractIssues(source)
+    if (contractIssues.admission.length > 0) {
+      indexingRuntimeLog.warn(`Indexed source '${sourceId}' has admission contract issues`, {
+        meta: {
+          issues: contractIssues.admission.join(', ')
+        }
+      })
+    }
+
+    if (contractIssues.lifecycle.length > 0) {
       indexingRuntimeLog.warn(`Indexed source '${sourceId}' has lifecycle contract issues`, {
         meta: {
-          issues: lifecycleIssues.join(', ')
+          issues: contractIssues.lifecycle.join(', ')
         }
       })
     }

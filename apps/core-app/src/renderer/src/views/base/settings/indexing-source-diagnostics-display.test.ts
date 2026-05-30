@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   countIndexingSourcesNeedingAttention,
   formatIndexingSourceTimestamp,
+  resolveIndexingSourceAdmissionIssueChips,
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
@@ -79,6 +80,15 @@ describe('indexing source diagnostics display helpers', () => {
     expect(
       resolveIndexingSourceDetailKey(
         buildSource({
+          admissionIssues: ['high-privacy-requires-explicit-enable'],
+          lifecycleIssues: ['watch-capability-missing-handler'],
+          health: { ...buildSource().health, reason: 'backend degraded' }
+        })
+      )
+    ).toBe('admissionIssue')
+    expect(
+      resolveIndexingSourceDetailKey(
+        buildSource({
           lifecycleIssues: ['watch-capability-missing-handler'],
           health: { ...buildSource().health, reason: 'backend degraded' }
         })
@@ -109,10 +119,14 @@ describe('indexing source diagnostics display helpers', () => {
         buildSource({ health: { ...buildSource().health, status: 'error' } }),
         buildSource({
           health: { ...buildSource().health, status: 'ready' },
+          admissionIssues: ['persistent-source-must-be-clearable']
+        }),
+        buildSource({
+          health: { ...buildSource().health, status: 'ready' },
           lifecycleIssues: ['open-capability-missing-handler']
         })
       ])
-    ).toBe(3)
+    ).toBe(4)
   })
 
   it('formats invalid timestamps as an empty marker', () => {
@@ -359,6 +373,40 @@ describe('indexing source diagnostics display helpers', () => {
         labelKey: 'settings.settingFileIndex.sourceLifecycleIssue.open-capability-missing-handler',
         values: {
           issue: 'open-capability-missing-handler'
+        }
+      }
+    ])
+  })
+
+  it('builds bounded admission issue chips from source diagnostics', () => {
+    const chips = resolveIndexingSourceAdmissionIssueChips(
+      buildSource({
+        admissionIssues: [
+          'high-privacy-requires-explicit-enable',
+          'browser-data-requires-high-privacy',
+          'persistent-source-must-be-clearable'
+        ]
+      })
+    )
+
+    expect(chips).toHaveLength(2)
+    expect(chips).toEqual([
+      {
+        id: 'high-privacy-requires-explicit-enable:0',
+        tone: 'danger',
+        labelKey:
+          'settings.settingFileIndex.sourceAdmissionIssue.high-privacy-requires-explicit-enable',
+        values: {
+          issue: 'high-privacy-requires-explicit-enable'
+        }
+      },
+      {
+        id: 'browser-data-requires-high-privacy:1',
+        tone: 'danger',
+        labelKey:
+          'settings.settingFileIndex.sourceAdmissionIssue.browser-data-requires-high-privacy',
+        values: {
+          issue: 'browser-data-requires-high-privacy'
         }
       }
     ])
