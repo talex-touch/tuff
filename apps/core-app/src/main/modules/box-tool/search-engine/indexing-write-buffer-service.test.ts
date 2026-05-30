@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { IndexedWriteBufferService as SdkIndexedWriteBufferService } from '@talex-touch/utils/search'
 import { IndexedWriteBufferService } from './indexing-write-buffer-service'
 
 describe('indexing-write-buffer-service', () => {
+  it('re-exports the public SDK write buffer for legacy CoreApp imports', () => {
+    expect(IndexedWriteBufferService).toBe(SdkIndexedWriteBufferService)
+  })
+
   it('tracks pending and inflight entries across enqueue, take, commit, and rollback', () => {
     const pending = new Map<number, string>()
     const inflight = new Map<number, string>()
