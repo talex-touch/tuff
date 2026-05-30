@@ -13,6 +13,21 @@
 
 ## 2026-05-31
 
+### refactor(search): lift indexed source integrity policy
+
+- `packages/utils/search/indexing-source-integrity.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-integrity.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedSourceIntegrityService` for source-row versus indexed-row ratio policy, runtime reset decision, SearchIndex clear flag, orphan cleanup call, duration, and snapshot mapping.
+  - Rewired FileProvider integrity checks to inject FTS/files row counts, runtime reset, and orphan `keyword_mappings` cleanup while delegating source-agnostic policy to the SDK primitive.
+  - Kept actual DB/FTS querying, SearchIndex table semantics, and File-specific keyword cleanup in the FileProvider boundary; this does not claim full FileProvider store migration is complete.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-integrity.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.test.ts"` 通过。
+
 ### feat(core-app): render indexed source progress diagnostics
 
 - `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
