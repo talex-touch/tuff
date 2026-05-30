@@ -4,6 +4,7 @@
  */
 
 import type { IProviderActivate, TuffItem, TuffQuery, TuffQueryInput } from '../../../core-box/tuff/tuff-dsl'
+import type { IndexedSourceDiagnosticsSnapshot } from '../../../search'
 
 // ============================================================================
 // UI Types
@@ -203,6 +204,8 @@ export interface CoreBoxSearchEndPayload {
 export interface CoreBoxNoResultsPayload {
   shouldShrink?: boolean
 }
+
+export type CoreBoxIndexingDiagnosticsResponse = IndexedSourceDiagnosticsSnapshot
 
 export interface CoreBoxClearItemsPayload {
   pluginName?: string
