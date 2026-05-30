@@ -33,6 +33,9 @@ export * from './download'
 // File index domain types
 export * from './file-index'
 
+// Indexed source runtime domain types
+export * from './indexed-source'
+
 // Flow domain types
 export * from './flow'
 

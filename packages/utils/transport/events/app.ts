@@ -79,6 +79,20 @@ import type {
   FileIndexStatus,
 } from "./types/file-index";
 
+import type {
+  IndexedSourceDiagnosticsRequest,
+  IndexedSourceDiagnosticsResponse,
+  IndexedSourceReconcileRuntimeRequest,
+  IndexedSourceReconcileRuntimeResult,
+  IndexedSourceResetRuntimeRequest,
+  IndexedSourceResetRuntimeResult,
+  IndexedSourceScanRuntimeRequest,
+  IndexedSourceScanRuntimeResult,
+  SearchProviderConfigResponse,
+  SearchProviderConfigUpdateRequest,
+  SearchProviderConfigUpdateResult,
+} from "./types/indexed-source";
+
 /**
  * Application-level events for window management, system info, and analytics.
  */
@@ -380,6 +394,59 @@ export const AppEvents = {
       .module("file-index")
       .event("add-path")
       .define<FileIndexAddPathRequest, FileIndexAddPathResult>(),
+  },
+
+  /**
+   * Generic indexed source runtime maintenance events.
+   */
+  indexedSource: {
+    /**
+     * Get unified source diagnostics, optionally filtered by source ID.
+     */
+    diagnostics: defineEvent("app")
+      .module("indexed-source")
+      .event("diagnostics")
+      .define<IndexedSourceDiagnosticsRequest | void, IndexedSourceDiagnosticsResponse>(),
+
+    /**
+     * Reset source runtime state and record reset diagnostics.
+     */
+    reset: defineEvent("app")
+      .module("indexed-source")
+      .event("reset")
+      .define<IndexedSourceResetRuntimeRequest, IndexedSourceResetRuntimeResult>(),
+
+    /**
+     * Run a source-level reconcile task.
+     */
+    reconcile: defineEvent("app")
+      .module("indexed-source")
+      .event("reconcile")
+      .define<IndexedSourceReconcileRuntimeRequest, IndexedSourceReconcileRuntimeResult>(),
+
+    /**
+     * Run a source-level scan task.
+     */
+    scan: defineEvent("app")
+      .module("indexed-source")
+      .event("scan")
+      .define<IndexedSourceScanRuntimeRequest, IndexedSourceScanRuntimeResult>(),
+
+    /**
+     * Get user-facing provider enable/order config.
+     */
+    providerConfigGet: defineEvent("app")
+      .module("indexed-source")
+      .event("provider-config.get")
+      .define<void, SearchProviderConfigResponse>(),
+
+    /**
+     * Update user-facing provider enable/order config.
+     */
+    providerConfigUpdate: defineEvent("app")
+      .module("indexed-source")
+      .event("provider-config.update")
+      .define<SearchProviderConfigUpdateRequest, SearchProviderConfigUpdateResult>(),
   },
 
   /**

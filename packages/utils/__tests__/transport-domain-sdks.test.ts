@@ -100,6 +100,72 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('settings sdk maps indexed source maintenance through typed transport events', async () => {
+    const transport = createTransportMock()
+    const sdk = createSettingsSdk(transport as any)
+
+    await sdk.indexedSource.getDiagnostics({ sourceId: 'browser-bookmarks' })
+    await sdk.indexedSource.reset({
+      sourceId: 'browser-bookmarks',
+      reason: 'user-clear',
+      clearSearchIndex: true
+    })
+    await sdk.indexedSource.reconcile({
+      sourceId: 'browser-bookmarks',
+      reason: 'manual-repair'
+    })
+    await sdk.indexedSource.scan({
+      sourceId: 'browser-bookmarks',
+      reason: 'manual-rebuild'
+    })
+    await sdk.indexedSource.getProviderConfig()
+    await sdk.indexedSource.updateProviderConfig({
+      providers: [{ providerId: 'file-provider', enabled: true, order: 20 }]
+    })
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      AppEvents.indexedSource.diagnostics,
+      { sourceId: 'browser-bookmarks' }
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AppEvents.indexedSource.reset,
+      {
+        sourceId: 'browser-bookmarks',
+        reason: 'user-clear',
+        clearSearchIndex: true
+      }
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      AppEvents.indexedSource.reconcile,
+      {
+        sourceId: 'browser-bookmarks',
+        reason: 'manual-repair'
+      }
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      4,
+      AppEvents.indexedSource.scan,
+      {
+        sourceId: 'browser-bookmarks',
+        reason: 'manual-rebuild'
+      }
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      5,
+      AppEvents.indexedSource.providerConfigGet
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      6,
+      AppEvents.indexedSource.providerConfigUpdate,
+      {
+        providers: [{ providerId: 'file-provider', enabled: true, order: 20 }]
+      }
+    )
+  })
+
   it('assistant events use typed transport metadata without changing event names', () => {
     expect(AssistantEvents.floatingBall.getRuntimeConfig.toEventName()).toBe(
       'assistant:floating-ball:get-runtime-config',

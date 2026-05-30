@@ -44,6 +44,19 @@ import type {
   FileIndexStatus,
 } from "../../events/types/file-index";
 import type {
+  IndexedSourceDiagnosticsRequest,
+  IndexedSourceDiagnosticsResponse,
+  IndexedSourceReconcileRuntimeRequest,
+  IndexedSourceReconcileRuntimeResult,
+  IndexedSourceResetRuntimeRequest,
+  IndexedSourceResetRuntimeResult,
+  IndexedSourceScanRuntimeRequest,
+  IndexedSourceScanRuntimeResult,
+  SearchProviderConfigResponse,
+  SearchProviderConfigUpdateRequest,
+  SearchProviderConfigUpdateResult,
+} from "../../events/types/indexed-source";
+import type {
   ITuffTransport,
   StreamController,
   StreamOptions,
@@ -73,6 +86,24 @@ export interface SettingsSdk {
     addPath: (
       payload: FileIndexAddPathRequest,
     ) => Promise<FileIndexAddPathResult>;
+  };
+  indexedSource: {
+    getDiagnostics: (
+      request?: IndexedSourceDiagnosticsRequest,
+    ) => Promise<IndexedSourceDiagnosticsResponse>;
+    reset: (
+      request: IndexedSourceResetRuntimeRequest,
+    ) => Promise<IndexedSourceResetRuntimeResult>;
+    reconcile: (
+      request: IndexedSourceReconcileRuntimeRequest,
+    ) => Promise<IndexedSourceReconcileRuntimeResult>;
+    scan: (
+      request: IndexedSourceScanRuntimeRequest,
+    ) => Promise<IndexedSourceScanRuntimeResult>;
+    getProviderConfig: () => Promise<SearchProviderConfigResponse>;
+    updateProviderConfig: (
+      request: SearchProviderConfigUpdateRequest,
+    ) => Promise<SearchProviderConfigUpdateResult>;
   };
   deviceIdle: {
     getSettings: () => Promise<DeviceIdleSettings>;
@@ -147,6 +178,19 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       getFailedFiles: () => transport.send(AppEvents.fileIndex.failedFiles),
       addPath: (payload) =>
         transport.send(AppEvents.fileIndex.addPath, payload),
+    },
+    indexedSource: {
+      getDiagnostics: (request) =>
+        transport.send(AppEvents.indexedSource.diagnostics, request),
+      reset: (request) =>
+        transport.send(AppEvents.indexedSource.reset, request),
+      reconcile: (request) =>
+        transport.send(AppEvents.indexedSource.reconcile, request),
+      scan: (request) => transport.send(AppEvents.indexedSource.scan, request),
+      getProviderConfig: () =>
+        transport.send(AppEvents.indexedSource.providerConfigGet),
+      updateProviderConfig: (request) =>
+        transport.send(AppEvents.indexedSource.providerConfigUpdate, request),
     },
     deviceIdle: {
       getSettings: () => transport.send(AppEvents.deviceIdle.getSettings),

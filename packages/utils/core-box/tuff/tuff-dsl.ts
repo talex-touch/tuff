@@ -918,6 +918,12 @@ export interface TuffMeta {
   featureId?: string
 
   /**
+   * For plugin-pushed root results, this identifies the Search Provider that owns the item.
+   * @description Used by CoreBox provider enablement and ordering.
+   */
+  searchProviderId?: string
+
+  /**
    * For plugin feature items, this holds the interaction configuration.
    * @description Defines how the feature should be rendered (widget, webcontent, or index).
    */
