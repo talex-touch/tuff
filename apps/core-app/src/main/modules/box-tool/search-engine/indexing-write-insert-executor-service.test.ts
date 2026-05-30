@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { IndexedWriteInsertExecutorService as SdkIndexedWriteInsertExecutorService } from '@talex-touch/utils/search'
 import { IndexedWriteInsertExecutorService } from './indexing-write-insert-executor-service'
 
 interface TestInsertRecord {
@@ -6,6 +7,10 @@ interface TestInsertRecord {
 }
 
 describe('indexing-write-insert-executor-service', () => {
+  it('re-exports the public SDK write insert executor for legacy CoreApp imports', () => {
+    expect(IndexedWriteInsertExecutorService).toBe(SdkIndexedWriteInsertExecutorService)
+  })
+
   it('persists records, dispatches inserted rows, and logs inserted count', async () => {
     const records: TestInsertRecord[] = [{ path: '/tmp/a.txt' }, { path: '/tmp/b.txt' }]
     const inserted = records.map((record, index) => ({ ...record, id: index + 1 }))
