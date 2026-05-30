@@ -48,6 +48,7 @@
 - `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-25.md` - 跨平台兼容、占位实现、UI 适配与架构健壮性审计。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-29.md` - 跨平台兼容、占位实现、UI 适配与架构健壮性增量审计。
 - `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-post-slice-review-2026-05-29.md` - UI/兼容/占位与架构健壮性后续复核。
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-30.md` - 跨平台兼容、占位实现、UI 适配与架构健壮性自动化增量审计。
 - `docs/plan-prd/04-implementation/performance/CoreAppPerformanceBaseline-2026-05-28.md` - CoreApp 启动、CoreBox 搜索、常驻 CPU/内存、构建与包体第一轮性能基线与优化门槛。
 - `docs/plan-prd/report/coreapp-startup-async-blocking-analysis-2026-05-13.md` - CoreApp 启动异步化与首屏卡顿分析。
 - `docs/plan-prd/04-implementation/ActiveGoalClosure-2026-05-23.md` - 当前 2.4.11 稳定化、插件 capability 与后续 Intelligence 小切片执行顺序。

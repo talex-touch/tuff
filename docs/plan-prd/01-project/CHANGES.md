@@ -13,6 +13,205 @@
 
 ## 2026-05-30
 
+### refactor(utils): expose indexed source watch root routing helpers
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-watch-router.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added SDK helpers for normalized watch path matching, root permission skip decisions, and source root route resolution.
+  - Rewired CoreApp `WatchEventRouter` to use the public SDK helper for root matching and `root-permission:*` skipped reasons.
+  - Kept platform-sensitive matching behavior: Linux remains case-sensitive by default, while Windows/macOS matching remains case-insensitive.
+
+### feat(utils): add Browser History indexed source descriptor template
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added `createBrowserHistoryIndexedSourceDescriptor()` and `browser-history` support in `createIndexedSourceDescriptorTemplate()`.
+  - Standardized Browser History admission as official-plugin owned, high privacy, disabled by default, explicit-consent required, browser-data + file-system scoped, sqlite-index backed, clearable, and rebuildable.
+  - Kept this as a descriptor/admission SDK contract only; it does not register a runtime source or read browser History SQLite files.
+
+### feat(utils): add Browser Bookmarks indexed source descriptor template
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added `createBrowserBookmarksIndexedSourceDescriptor()` and `browser-bookmarks` support in `createIndexedSourceDescriptorTemplate()`.
+  - Standardized Browser Bookmarks admission as official-plugin owned, high privacy, disabled by default, explicit-consent required, browser-data + file-system scoped, sqlite-index backed, clearable, and rebuildable.
+  - Rewired CoreApp `BrowserBookmarksIndexedSource` descriptor construction through the public SDK factory while keeping the runtime source disabled unless provider config explicitly enables it.
+
+### fix(core-app): stabilize file index progress ETA
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-progress-estimator-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-progress-estimator-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `packages/utils/transport/events/types/file-index.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useEstimatedCompletion.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added `estimateStatus` and `speedSampleCount` to File Index progress/status payloads as optional compatibility fields.
+  - Made the shared `IndexingProgressEstimatorService` wait for multiple speed samples before showing ETA and report `stabilizing`, `estimated`, `stalled`, `complete`, or `unknown` state.
+  - Suppressed stale ETA after prolonged no-progress intervals so Settings shows estimating/waiting states instead of misleading remaining time.
+
+### refactor(core-app): lift worker scheduler primitive
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-worker-scheduler-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-worker-scheduler-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added shared `IndexedWorkerSchedulerService` for worker context gating, chunked dispatch, deferred dispatch, and worker failure isolation.
+  - Rewired `FileProviderIndexSchedulerService` to keep File row to worker-payload mapping plus large-file/background-content policy while delegating chunk scheduling to the shared primitive.
+  - Preserved FileProvider failure log wording and worker dispatch arguments, keeping existing behavior compatible.
+
+### refactor(core-app): lift write side-effect dispatcher
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-write-side-effect-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-write-side-effect-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-write-side-effect-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-write-side-effect-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added shared `IndexedWriteSideEffectService` for post-write extension processing and indexing scheduling dispatch.
+  - Kept extension processing asynchronous and failure-isolated while still scheduling worker indexing immediately, preserving FileProvider behavior.
+  - Rewired `FileProviderWriteSideEffectService` as a thin adapter so future indexed sources can reuse the same non-blocking side-effect dispatch path.
+
+### refactor(core-app): lift worker persist entry mapper
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-worker-persist-entry-mapper-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-worker-persist-entry-mapper-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-persist-entry-mapper-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-persist-entry-mapper-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added shared `IndexedWorkerPersistEntryMapperService` for normalizing worker results into SearchIndex worker `PersistEntry` payloads.
+  - Centralized progress null-normalization, file-update content hash defaults, embedding vector/model projection, and SearchIndex item passthrough in the search-engine layer.
+  - Rewired `FileProviderIndexPersistEntryMapperService` as a thin adapter over the shared mapper so future indexed-source workers do not duplicate FileProvider-private persist-entry mapping.
+
+### refactor(core-app): lift write flush runtime scheduler
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-write-flush-runtime-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-write-flush-runtime-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added shared `IndexedWriteFlushRuntimeService` for source-agnostic flush timer ownership, availability/no-pending idle snapshots, in-progress deferral, retry scheduling, and drain-remaining scheduling.
+  - Rewired `FileProviderIndexRuntimeService` to delegate scheduling to the shared runtime primitive while keeping File-specific flush executor result mapping, SQLite busy retry metadata, worker-not-ready logging, and `file-provider:index-flush` evidence semantics.
+  - Kept DB persistence, SearchIndex worker writes, flush trace wiring, and FTS semantics outside the runtime scheduler so this slice only moves reusable orchestration.
+
+### refactor(core-app): lift watch delta queue primitive
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-watch-delta-queue-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-watch-delta-queue-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-incremental-queue-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-incremental-queue-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added shared `IndexingWatchDeltaQueueService` for watcher delta admission, normalized-key coalescing, delete dominance, prepare-flush gating, and serialized flush processing.
+  - Kept source-specific metadata merge behind an injectable `coalesce` hook so FileProvider can preserve `manual` semantics while future Browser Bookmarks, Quicklinks, Obsidian, or VSCode sources can attach their own metadata without duplicating queue scheduling.
+  - Rewired `FileProviderIncrementalQueueService` as a thin adapter over the shared primitive, preserving the existing public class, payload shape, delete behavior, manual flag preservation, and process-entry contract.
+
+### refactor(core-app): lift indexing progress ETA estimator
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-progress-estimator-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-progress-estimator-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-progress-stream-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-progress-stream-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-progress-estimator-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-progress-estimator-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-progress-stream-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-progress-stream-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Moved the stage-local smoothed throughput ETA logic from FileProvider into shared `IndexingProgressEstimatorService`, including terminal-stage handling, stage-switch reset, progress-regression reset, cold-start hiding, low-progress hiding, and max ETA clamping.
+  - Moved progress stream throttling into shared `IndexingProgressStreamService` helpers, covering first payloads, stage changes, terminal stages, max silence, min interval, and progress/current/total step guards.
+  - Kept `FileProviderProgressEstimatorService` as a thin adapter for `FileIndexStage` idle/completed terminal semantics so current File Index progress behavior stays compatible.
+  - Kept `file-provider-progress-stream-service` as a thin adapter for `FileIndexProgress` payloads and FileProvider terminal stages.
+  - This prepares Browser Bookmarks, Quicklinks, Obsidian, VSCode, and future indexed source progress UI to reuse one ETA rule set instead of each source inventing its own remaining-time logic.
+
+### refactor(core-app): lift write flush retry policy
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-write-flush-retry-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-write-flush-retry-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-retry-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-retry-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added shared `IndexedWriteFlushRetryService` plus delay/backoff helpers for pending backlog delay, backlog threshold, exponential retry, jitter, max retry delay, and retry count progression.
+  - Rewired FileProvider index-worker flush retry to use the shared service while keeping SQLite busy detection and `sqlite-busy-retry` / `flush-failed` reason mapping in the FileProvider adapter.
+  - Kept legacy FileProvider helper exports (`getIndexWorkerFlushDelay`, `getIndexWorkerBusyRetryDelay`) delegating to the shared helpers so existing call sites and tests remain compatible.
+
+### feat(utils): add indexed source descriptor templates
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added SDK descriptor factories for future Quicklinks and System Settings indexed sources, plus a named `createIndexedSourceDescriptorTemplate()` helper.
+  - Quicklinks template now standardizes official-plugin ownership, low privacy, sqlite-index storage, fast priority, clear/rebuild support, and no extra permission scope.
+  - System Settings template now standardizes core ownership, low privacy, ephemeral storage, fast priority, `system-index` scope, rebuild support, and no clear operation.
+  - This is an admission/descriptor template only: it does not register runtime sources, read data, or claim Quicklinks/System Settings indexing is implemented.
+
+### feat(core-app): format indexed source evidence metadata in Settings
+
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Updated Settings source evidence chips to render source-specific summaries for `file-provider:scan-progress`, `file-provider:index-flush`, and `file-provider:integrity` instead of only showing label/status/count/reason.
+  - Scan progress chips now surface completed/total, failed count, and pending-permission roots; index-flush chips surface pending/inflight/entries/duration/reason; integrity chips surface FTS/files row counts, rebuild flag, and orphan keyword cleanup count.
+  - Kept this as a renderer helper and i18n change only: no runtime protocol change, no new FileProvider-private settings panel, and no JSON persistence of diagnostics metadata.
+
+### feat(search): link official browser-data provider to runtime source ids
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `plugins/touch-browser-data/manifest.json`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-provider-registry.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/{browser-bookmarks-indexed-source,browser-bookmarks-source-config,indexing-runtime-sources}.ts`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+  - Added `SearchProviderRegistrationPolicy.indexedSourceId` / `manifest.searchProviders[].indexedSourceId` so official plugin providers can declare which runtime indexed source they correspond to without embedding source implementation details in the provider descriptor.
+  - Linked `touch-browser-data.browser-bookmarks` to the disabled `browser-bookmarks` runtime skeleton while keeping it consent-gated and official-plugin-owned.
+  - Added SDK policy coverage that blocks third-party providers from claiming Browser Bookmarks / History runtime source ids, preserving the high-privacy Browser Data boundary before the persistent official-plugin indexed source is implemented.
+  - Added registry coverage so plugin provider descriptors keep their `policy.indexedSourceId` when aggregated for Settings.
+  - Added `SearchProviderConfigResponse.sourceLinks` so Settings can consume source-to-provider associations as structured transport data instead of reconstructing them from descriptor policy fields only.
+  - Updated Advanced Settings provider config rows to show linked runtime source id and current source diagnostics status when a provider declares `indexedSourceId`, without changing the persisted `enabled/order` config shape.
+  - Added SDK helper `isIndexedSourceEnabledByProviderConfig()` so runtime sources can share one explicit linked-provider enablement rule instead of each source reading `SearchProviderUserConfig` differently.
+  - Added SDK helper `getSearchProviderIdsForIndexedSource()` plus a CoreApp registry wrapper so `indexedSourceId` can be queried in reverse as source-to-provider links instead of hardcoding linked provider ids per source.
+  - Added a lightweight Browser Bookmarks source enable resolver that reads unified provider config for `browser-bookmarks` / `touch-browser-data.browser-bookmarks` through those SDK helpers; the runtime source still defaults to disabled and only scans when the user explicitly enables the linked provider config.
+
+### docs(audit): add UI compatibility automation follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-30.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the 2026-05-30 automation follow-up for UI adaptation, compatibility debt, placeholder/fake implementation risk, and architecture robustness.
+  - Reconfirmed no new P0 production fixed fake-success was found in the sampled live tree.
+  - Recorded current UI scores and next-step priorities: real Windows/TuffEx visual evidence, FileProvider-to-IndexingRuntime store migration, semantic clickable cleanup, UI preference storage facade, and cloud preset fail-closed placeholder retirement.
+
+### fix(tuffex): support dynamic TxTabs slot fragments
+
+- `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`
+- `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts`
+- `apps/nexus/app/plugins/tuffex.ts`
+- `packages/tuffex/CHANGELOG.md`
+  - Updated `TxTabs` slot normalization to expand Vue `Fragment` nodes generated by `v-for`, ignore comment nodes, and reuse the same normalization for `TxTabItemGroup` children.
+  - Preserved exported component names on Nexus async Tuffex registrations so parent components such as `TxTabs` can still identify slot children like `TxTabItem` after lazy loading.
+  - Added regression coverage for top-level, grouped, and named async-wrapper dynamic `TxTabItem` children so active content no longer falls back to `No tab selected`.
+
 ### docs(search): define Indexing Runtime V1 and source SDK contract
 
 - `packages/utils/search/indexing-source.ts`
@@ -61,31 +260,72 @@
   - Extended `IndexedSourceReconcileResult` with optional reconcile `deltas`, `appliedDeltas`, `failedDeltas`, and `deltaErrors`, and wired ReconcileEngine to apply those deltas through the runtime store adapter so補漏 can repair the shared index instead of only reporting stats.
   - Updated FileProvider reconciliation to emit runtime deltas for added, changed, and deleted file rows while preserving the existing internal files table, keyword/icon/content indexing pipeline, and incremental queue during the migration.
   - Extracted `FileProviderIncrementalQueueService` for incremental path coalescing, delete precedence, manual flag preservation, and serial flush scheduling, leaving the actual incremental DB/keyword/icon/content writes in FileProvider for the next migration slice.
-  - Extracted `FileProviderIncrementalWritePlannerService` for incremental add/change insert-vs-update planning, unchanged detection with timestamp tolerance, and manual accepted/inserted/updated/unchanged summaries while keeping actual DB/keyword/icon/content writes in FileProvider for the next migration slice.
+  - Added `IndexedWritePlanService` as a runtime/store-level write planning primitive for incoming/existing record diffing, timestamp-tolerant unchanged detection, and manual accepted/inserted/updated/unchanged summaries; `FileProviderIncrementalWritePlannerService` now only adapts File rows into update records while actual DB persistence, keyword/icon/content writes, flush trace wiring, and FTS semantics remain in FileProvider/SearchIndex worker boundaries for the next migration slice.
+  - Added `FileProviderIncrementalWriteService` to own incremental add/change write orchestration, including build-record calls, existing-row lookup, write-plan execution, insert/update delegation, unchanged logging, and manual summary logging. The service keeps SQL persistence and side-effect dispatch injectable so the next migration can move those boundaries without growing `FileProvider` again.
+  - Added `IndexedWriteDeleteExecutorService` as a runtime/store-level delete primitive for path normalization, existing-row lookup, resolved-record deletes, DB delete delegation, SearchIndex removal delegation, and success logging; FileProvider incremental deletes and reconciliation deletes now inject the existing files-table delete, embedding cleanup, chunking, and SearchIndex remove callbacks while keeping reconcile delta emission in the source layer.
+  - Added `FileProviderReconciliationInsertService` to own reconciliation add orchestration, including chunked upsert, side-effect dispatch, runtime record batch emission, add delta emission, and progress updates while keeping `upsertSearchIndexFiles()` and source-level delta mapping injected by FileProvider.
+  - Added `FileProviderReconciliationDeleteService` and `FileProviderReconciliationUpdateService` so reconciliation delete/update now own source-level delta emission and changed/deleted result reporting, while `FileProvider` only injects the existing SQL/update/delete executors and record mapper.
+  - Added `FileProviderReconciliationDiffService` so worker-based reconciliation and main-thread fallback diff share one service boundary for added/updated/deleted calculation, removing the fallback diff algorithm from `FileProvider`.
+  - Added `FileProviderReconciliationRunService` so existing-root reconciliation DB row reads, directory scans, diff orchestration, delete/update/insert delegation, progress, stats, and completed-path reporting are no longer embedded in `FileProvider._initialize()`.
+  - Added `FileProviderCleanupDeleteService` so stale watch-root cleanup now reuses the shared delete executor shape for files-table rows, embedding cleanup, `scan_progress` cleanup, SearchIndex removal, progress events, and deleted-count reporting instead of keeping another private delete loop in `FileProvider._initialize()`.
+  - Added `FileProviderFullScanRunService` so full-scan root scanning, scan progress, event-loop yield, file-row payload mapping, insert delegation, and completed-path reporting are no longer embedded in `FileProvider._initialize()`.
+  - Added `FileProviderFullScanInsertService` to own full-scan insert/upsert orchestration, including AIMD batch sizing, idle pacing, side-effect dispatch, runtime record batch emission, progress updates, and inserted-count reporting while keeping files-table upsert and SearchIndex semantics injected.
+  - Added `IndexedWriteInsertExecutorService` as a runtime/store-level insert/upsert primitive for persist callback execution, inserted-row side-effect dispatch, and success logging; FileProvider now injects the existing files-table upsert SQL without changing conflict handling or FTS semantics.
+  - Added `IndexedWriteUpdateExecutorService` as a runtime/store-level chunked update primitive for idle/capacity waits, per-record update delegation, refreshed-row reads, side-effect dispatch, and progress logging; FileProvider now injects its existing SQL update/read callbacks so update scheduling is reusable without changing files-table or FTS semantics.
   - Extracted `FileProviderWriteSideEffectService` so post-write keyword/icon extension processing and content-index worker scheduling share one non-blocking dispatch path across incremental insert, file update, full scan, and reconciliation insert flows.
   - Extracted `FileProviderIndexSchedulerService` for file-row to index-worker payload mapping, large-file background-content deferral, chunked worker dispatch, and worker failure logging, leaving DB persistence and index-worker result persistence as the remaining FileProvider-owned write boundaries.
   - Extracted `FileProviderIndexPersistEntryMapperService` for index-worker result to `PersistEntry` mapping, including parser file updates, embedding vectors, progress normalization, and SearchIndex item handoff before `FileProviderIndexRuntimeService` flushes entries through the SearchIndex worker.
   - Extracted `FileProviderIndexFlushRetryService` for index-worker flush delay, backlog delay, sqlite-busy exponential retry, and retry reason decisions while leaving actual flush execution, commit/rollback, and DB backpressure in `FileProviderIndexRuntimeService`.
   - Added `IndexedWriteFlushExecutorService` as a runtime/store-level flush primitive for readiness gating, DB write backpressure, persistence, commit/rollback, duration recording, and source-agnostic `reason` / `error` / `metadata` results; `FileProviderIndexFlushExecutorService` now adapts FileProvider-specific result metadata and logging on top of it.
   - Added `IndexedWriteBufferService` as a runtime/store-level pending-inflight buffer primitive for enqueue, take, commit, rollback, and size accounting; `FileProviderIndexFlushBufferService` now only adapts file worker results by `fileId`.
+  - Added `IndexedWriteFlushSnapshotService` as a runtime/store-level latest-flush snapshot recorder, moving FileProvider index-flush checkedAt/status storage out of `FileProviderIndexRuntimeService` while preserving existing `file-provider:index-flush` evidence semantics.
+  - Added `FileProviderProgressEstimatorService` so File Index progress ETA is based on stage-local smoothed throughput with cold-start and stage-change guards instead of raw current/total linear extrapolation.
   - Added FileProvider index-flush snapshots and `file-provider:index-flush` evidence so unified indexing diagnostics can show the latest flushed / worker-not-ready / failed state, pending/inflight counts, retry reason, error, and duration for the file content index worker.
   - Added File watch-root pending permission diagnostics: FileProvider now exposes FileSystemWatcher pending paths through `FileIndexedSource` roots as `permissionState: "promptable"` with `file-index-watch-root-pending-permission`, and scan-progress evidence records pending permission roots for Settings/CoreBox diagnostics.
   - Added `IndexedSource.shouldHandleWatchEvent()` as a source ownership hook and wired WatchEventRouter to record `source-watch-filtered` when a source rejects a watch path.
   - Added `FILE_WATCH_ROOT_RECOVERED` and routed recovered FileProvider watch roots through `IndexingRuntime.reconcileSource("file-provider", { roots })`, so permission recovery enters runtime reconcile diagnostics instead of staying inside FileSystemWatcher.
   - Added `IndexedSourceReconcileRequest.reason` plus `lastReconcile.reason/rootCount` diagnostics, and wired File watch-root recovery to record `file-watch-root-recovered` in Settings/CoreBox task chips.
   - Extended `lastReconcile` diagnostics with scheduler `jobId` and `queuedAt`, so Settings/trace can distinguish reconcile execution records from raw reconcile results.
+  - Extended `lastScan` diagnostics with runtime scan `jobId` and `queuedAt`, covering single-source scans, batch scan failures, and skipped sources so Settings/trace can distinguish scan task executions from raw scan counters.
+  - Added `IndexedSourceRuntimeTaskJobFactory` and wired scan, watch, reconcile, and reset maintenance entries to the same in-memory task job identity generator, keeping job id / queuedAt semantics shared without introducing a durable queue yet.
   - Added File source evidence for `scan-progress` and `integrity`, exposing scan_progress pending/failed/completed summaries plus FTS/files row-count mismatch resets through unified indexing diagnostics instead of FileProvider-only logs; scan_progress evidence reads, completed-root strategy reads, stale path deletes, and completed-path upserts now live in `FileProviderScanProgressService`.
+  - Added `FileProviderScanStrategyService` so scan_progress completed-root reads, event-loop yield, new full-scan path selection, reconciliation path selection, and strategy logging are no longer embedded in `FileProvider._initialize()`.
   - Extracted `FileProviderIntegrityService` for FTS/files row-count checks, integrity-triggered runtime reset, orphan `keyword_mappings` cleanup, and integrity diagnostics snapshots, leaving only runtime task scheduling as the next boundary to migrate.
-  - Consolidated FileProvider manual rebuild, schema-migration, and integrity mismatch reset paths into `FileProviderRuntimeResetService`, so scan_progress and provider-index resets now share reason/count reporting behind a focused service before becoming full runtime tasks.
+  - Consolidated FileProvider manual rebuild, schema-migration, and integrity mismatch reset paths into `FileProviderRuntimeResetService`, so scan_progress and provider-index resets now share reason/count reporting behind a focused service before becoming full runtime tasks. The service now accepts `IndexedSourceResetRequest` and returns the SDK-standard `IndexedSourceResetResult`, removing a FileProvider-private reset result shape from the runtime reset path.
   - Added `IndexedSourceResetRequest` / `IndexedSourceResetResult` and optional `IndexedSource.resetIndex()`, plus `IndexingRuntime.resetSourceRuntimeState()` with `lastReset` diagnostics; FileIndexedSource now exposes FileProvider runtime reset without overloading user-facing `clearIndex()`.
+  - Extended `lastReset` diagnostics with runtime reset `jobId` and `queuedAt`, so Settings/trace can distinguish reset task executions from raw reset results just like reconcile diagnostics.
+  - Extended `lastWatch` diagnostics with runtime watch `jobId` and `queuedAt`, covering applied deltas, handler/store failures, and skipped sources so watcher routes now share the same task identity model as scan/reconcile/reset.
+  - Moved `clearSearchIndex` handling into `IndexingRuntime.resetSourceRuntimeState()` so runtime resets clear the shared SearchIndex through `IndexStoreAdapter.clearSource(sourceId)` before invoking source-local `resetIndex()` with `clearSearchIndex: false`, keeping future indexed sources from duplicating SearchIndexService wiring.
+  - Added a generic `settings.indexedSource` typed SDK and `AppEvents.indexedSource.diagnostics/reset/reconcile/scan` transport handlers, so Settings and future source-management UI can maintain any runtime indexed source by `sourceId` instead of adding provider-specific IPC.
   - Injected an indexed-source reset delegate from SearchEngineCore into FileProvider, so manual rebuild, schema migration, and integrity mismatch repair now route through `IndexingRuntime.resetSourceRuntimeState("file-provider", { reason })` without making FileProvider import the runtime singleton.
   - Added IndexingRootPolicy and EverythingIndexedSource so Windows Everything path filtering now mirrors File source roots from runtime diagnostics instead of reading FileProvider private watch roots directly, while still failing closed when no authorized roots are available.
   - Added a BrowserBookmarksIndexedSource runtime skeleton with high-privacy admission metadata and disabled/pending-migration diagnostics, making the `touch-browser-data` gap visible in unified source diagnostics before migrating Chromium Bookmarks JSON into SQLite-backed scan/watch/reconcile.
-  - Extracted a pure CoreApp Chromium Bookmarks scanner from the plugin path, covering Chrome/Edge/Brave/Arc profile discovery, `Bookmarks` parsing, http(s)-only filtering, URL dedupe, scanner diagnostics, browser roots, and explicit-enabled `browser-bookmark` record batches while keeping the default registered source disabled/pending migration until settings, clear/rebuild, and watch refresh are wired.
+  - Extracted a pure CoreApp Chromium Bookmarks scanner from the plugin path, covering Chrome/Edge/Brave/Arc profile discovery, `Bookmarks` parsing, http(s)-only filtering, URL dedupe, scanner diagnostics, browser roots, and explicit-enabled `browser-bookmark` record batches while keeping the default registered source disabled/pending migration until settings and clear/rebuild are wired.
+  - Updated explicit-enabled `BrowserBookmarksIndexedSource` lifecycle so scan returns record batches, health/evidence/roots reflect scanner output, reconcile emits small-full-refresh deltas through the runtime store boundary, and Bookmarks watch events reuse the same refresh delta path.
+  - Added BrowserBookmarksIndexedSource `resetIndex()` diagnostics for source-level runtime resets while keeping user-facing clear/rebuild blocked until explicit browser-data settings and consent are wired.
   - Added SearchIndexStoreAdapter so runtime scan batches and watch deltas can write through the existing SQLite/SearchIndexService `indexItems`, `removeItems`, and `removeByProvider` boundary instead of remaining no-op.
   - Added runtime task state to diagnostics snapshots, exposing latest scan/watch/reconcile results per source for Settings and trace evidence without persisting provider-private task state.
+  - Added bounded in-memory `IndexedSourceDiagnostics.recentTasks` history for scan/watch/reconcile/reset, preserving recent task kind/status/jobId/queuedAt/error/summary as source-level evidence without introducing a durable queue or JSON sync payload.
+  - Added SDK helper `appendIndexedSourceTaskHistory()` and `DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT` so CoreApp and future official plugin indexed sources share the same newest-first bounded task-history rule.
   - Added the shared `resolveIndexedSourceTaskEligibility()` SDK helper and wired CoreApp batch scan/reconcile plus watch routing to it, so admission-invalid, disabled, unsupported, permission-required, error, denied, promptable, or root-permission-blocked sources are skipped with explicit batch/route and diagnostics `skipped:*` evidence instead of relying on adapter-local empty scans or watch handlers.
   - Updated Advanced Settings source diagnostics to render compact recent task chips for scan/watch/reconcile counts and failures, making runtime task state visible instead of leaving it as transport-only data.
+  - Updated Advanced Settings source diagnostics to render bounded `recentTasks` history chips, so scan/watch/reconcile/reset task history becomes visible with shared status tone mapping instead of only latest-task chips.
+  - Added shared Settings summary formatting for `recentTasks.summary`, surfacing scan records/batches, watch delta/action, reconcile add/change/delete/skipped, and reset clear flags in recent task chips.
+  - Updated Advanced Settings source diagnostics to render prioritized source evidence chips, making File scan-progress / integrity / index-flush evidence such as flush backlog, retry reason, worker-not-ready, and duration visible without adding FileProvider-specific UI.
+  - Added public search provider SDK contracts for root-result providers: `SearchProviderDescriptor`, user `enabled/order` config, provider registration policy, config normalization, and registration decision helpers. Third-party push providers now have an explicit `root-results` permission boundary in the SDK contract, and third-party indexed providers require explicit consent.
+  - Added SDK helpers for search provider manifest migration: `getSearchProviderManifestCoverage()` audits push-feature explicit provider coverage, `deriveSearchProvidersFromPushFeatures()` centralizes legacy `push: true` compatibility provider derivation, and `resolveSearchProviderManifestDescriptors()` resolves manifest provider descriptors with policy decisions and missing-permission diagnostics in one pass. CoreApp plugin loading now reuses this SDK resolver instead of maintaining private derivation and validation logic.
+  - Added the runtime `search.root-results` plugin permission and mapped Search Provider `root-results` scope to that manifest permission. CoreApp now checks this permission before plugin `boxItems.push()` / `plugin.feature.pushItems()` writes to CoreBox root results, while plugin-owned delete/clear remains allowed for stale item cleanup; official push-feature plugin manifests now declare `search.root-results`.
+  - Added plugin `manifest.searchProviders` loading support: explicit provider declarations are converted to runtime `SearchProviderDescriptor` values after policy and manifest-permission checks, while legacy `push: true` features derive a temporary compatibility provider with a migration warning. Providers missing required search permissions or blocked by registration policy are diagnosed but not exposed for provider registry aggregation.
+  - Added a Search Provider Registry helper that aggregates Core indexed sources and loaded plugin `searchProviders` for Settings provider-config responses. Disabling a push-mode plugin provider now blocks future writes only for that provider while keeping other enabled providers from the same plugin active and keeping `remove` / `clear` available for stale-item cleanup; plugin-pushed items carry `meta.searchProviderId`, and BoxItemManager filters disabled providers plus orders existing push results by provider config during sync/batch upsert. Provider config updates now refresh root-item sync so Settings changes apply to existing push results.
+  - Extended `SearchProviderDescriptor` with `featureId` and updated legacy push-feature compatibility so every `push: true` feature derives a distinct provider descriptor. Plugin root-result pushes now map `meta.featureId` to `meta.searchProviderId`, and `boxItems.update()` reads the existing item provider id before applying provider guards, allowing Settings provider toggles to work at feature/provider granularity instead of blocking a whole plugin.
+  - Added explicit `manifest.searchProviders` declarations for the official `touch-browser-data` browser-bookmarks push provider and the `touch-browser-bookmarks` Quicklinks-style push provider, so both appear in Settings provider enablement/order controls without relying on legacy push-feature provider derivation.
+  - Added explicit `manifest.searchProviders` declarations for multi-push official plugins `touch-browser-open`, `touch-snippets`, and `touch-translation`, mapping browser open/web search, snippets search/save/manage, and translation/multi-source translation features to separate provider ids for Settings-level ordering and enablement.
+  - Completed explicit `manifest.searchProviders` coverage for all 18 current push plugins, including system/window actions, Snipaste, batch rename, developer utilities, emoji/symbols, text tools, clipboard history, intelligence, and workspace scripts. `pnpm plugins:validate` now reports 18/18 search provider coverage with no migration warnings for repository plugins.
+  - Updated `plugins:validate` to recognize `search.root-results` / `fs.index`, validate provider scope-to-manifest permission mappings, and emit non-blocking migration warnings plus coverage for push plugins that still rely on compatibility-derived search providers.
+  - Added `settings.indexedSource` provider-config transport entries and Settings UI controls for indexed provider enablement and ordering.
+  - Wired saved search provider config into SearchEngineCore's default provider pool: disabled providers are skipped, enabled providers are ordered by user config, active provider mode remains unchanged, and cache keys now include a provider-config signature so setting changes do not return stale provider results.
+  - Connected Settings source diagnostics to `settings.indexedSource` runtime maintenance actions, allowing per-source scan, reconcile, and reset from Advanced Settings through the typed SDK instead of private provider IPC.
+  - Clarified Browser Bookmarks ownership: the CoreApp `BrowserBookmarksIndexedSource` remains a disabled runtime skeleton for migration diagnostics, while the product target is an official browser-data plugin provider gated by plugin permissions and user consent.
   - Synced project and Nexus docs so App/File/Everything/Browser Data/Quicklinks future work points to unified source health, diagnostics, and phased App/File/Browser Data migration instead of duplicating per-provider indexing loops.
 
 ## 2026-05-29

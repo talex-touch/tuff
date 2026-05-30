@@ -53,6 +53,9 @@ code: |
 |  | `storage.sqlite` | Medium | Plugin local SQLite database access |
 | **Window** | `window.create` | Low | Create windows (auto-granted) |
 |  | `window.capture` | High | Screen capture |
+| **Search** | `search.root-results` | High | Push or update items in CoreBox root results |
+
+`search.root-results` is the root-result write permission for Search Providers. Any plugin that uses push features or `boxItems.push()` / `plugin.feature.pushItems()` to write content into CoreBox root results must declare and be granted this permission in `manifest.json`; deleting or clearing the plugin's own existing items does not require it, so permission problems do not leave stale results behind.
 
 **3. Risk Level Explanation**
 
