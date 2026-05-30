@@ -13,6 +13,20 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed worker status snapshot
+
+- `packages/utils/search/indexing-worker-status.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-worker-status.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-worker-status-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedWorkerStatusSnapshotService` for worker state summary, short TTL caching, concurrent snapshot load dedupe, and failed-load cache skipping.
+  - Rewired `FileProviderWorkerStatusService` into a thin compatibility adapter that injects the real File worker status loader while delegating source-agnostic snapshot behavior to the SDK primitive.
+  - Kept worker readiness, real worker IPC/status loading, SearchIndex worker behavior, and FTS/SearchIndex semantics inside the CoreApp/FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-worker-status.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-worker-status.test.ts"` 通过。
+
 ### ref(search): lift indexed source progress store
 
 - `packages/utils/search/indexing-source-progress-store.ts`
