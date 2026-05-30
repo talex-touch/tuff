@@ -158,7 +158,7 @@ CoreApp 还提供 `IndexedWriteFlushRuntimeService` 作为通用 write flush run
 
 `@talex-touch/utils/search` 也暴露 `IndexedWorkerPersistEntryMapperService` 作为通用 worker result 到 persist payload 的映射 primitive。它统一处理 progress null-normalization、fileUpdate contentHash 默认值、embedding model/vector 投影与泛型 `indexItem` 透传，不依赖 CoreApp SearchIndex worker 类型。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK mapper，且只负责把自己的 index worker result 交给该 mapper。
 
-CoreApp 还提供 `IndexedWriteSideEffectService` 作为通用 post-write side-effect dispatcher。它会异步执行 extension processing，并立即调度 indexing；extension processing 失败只进入日志，不阻塞后续 index worker 调度。FileProvider 只保留命名适配，后续 source 不应再复制这段副作用调度。
+`@talex-touch/utils/search` 也暴露 `IndexedWriteSideEffectService` 作为通用 post-write side-effect dispatcher。它会异步执行 extension processing，并立即调度 indexing；extension processing 失败只进入日志，不阻塞后续 index worker 调度，source-specific failure 文案可注入。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK dispatcher，并只保留 File extension processing、index scheduling 与 File 专属日志文案。
 
 `@talex-touch/utils/search` 也暴露 `IndexedWorkerSchedulerService` 作为通用 worker scheduling primitive。它负责 worker context gate、chunk dispatch、deferred dispatch 与 failure isolation，且不依赖 CoreApp worker 类型。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK scheduler，并只保留文件行到 worker payload 的映射、大文件 background-content 策略和 File 专属日志文案。
 
