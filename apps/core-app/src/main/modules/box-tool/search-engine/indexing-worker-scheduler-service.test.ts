@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IndexedWorkerSchedulerService as SdkIndexedWorkerSchedulerService } from '@talex-touch/utils/search'
 import { IndexedWorkerSchedulerService } from './indexing-worker-scheduler-service'
 
 function createService(options: { context?: string | null } = {}) {
@@ -31,6 +32,10 @@ describe('indexing-worker-scheduler-service', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('re-exports the public SDK worker scheduler for legacy CoreApp imports', () => {
+    expect(IndexedWorkerSchedulerService).toBe(SdkIndexedWorkerSchedulerService)
   })
 
   it('skips scheduling when context is unavailable', () => {

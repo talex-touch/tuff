@@ -1,5 +1,5 @@
 import type { IndexWorkerFile } from '../workers/file-index-worker-client'
-import { IndexedWorkerSchedulerService } from '../../../search-engine/indexing-worker-scheduler-service'
+import { IndexedWorkerSchedulerService } from '@talex-touch/utils/search'
 
 export interface FileProviderIndexSchedulerFile {
   id?: number | null
