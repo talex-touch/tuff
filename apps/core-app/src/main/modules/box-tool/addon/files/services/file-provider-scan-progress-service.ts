@@ -2,7 +2,10 @@ import type { IndexedSourceEvidence } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { DbUtils } from '../../../../../db/utils'
-import { IndexedSourceProgressEvidenceService } from '@talex-touch/utils/search'
+import {
+  IndexedSourceProgressEvidenceService,
+  IndexedSourceProgressStoreService
+} from '@talex-touch/utils/search'
 import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 
@@ -42,15 +45,23 @@ export class FileProviderScanProgressService {
   private readonly ensureSearchIndexWorkerReady: FileProviderScanProgressServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderScanProgressServiceDeps['getSearchIndexWorker']
   private readonly evidenceService = new IndexedSourceProgressEvidenceService()
+  private readonly progressStore: IndexedSourceProgressStoreService
 
   constructor(deps: FileProviderScanProgressServiceDeps) {
     this.getDbUtils = deps.getDbUtils
     this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
     this.getSearchIndexWorker = deps.getSearchIndexWorker
+    this.progressStore = new IndexedSourceProgressStoreService({
+      loadCompletedPaths: () => this.loadCompletedPaths(),
+      deleteCompletedPaths: (paths) => this.deleteCompletedPaths(paths),
+      ensureReadyForUpsert: (reason) => this.ensureSearchIndexWorkerReady(reason),
+      upsertCompletedPaths: (paths, completedAt) =>
+        this.getSearchIndexWorker().upsertScanProgress(paths, completedAt)
+    })
   }
 
   async getSummary(watchPaths: string[]): Promise<FileProviderScanProgressSummary> {
-    const completedPaths = await this.getCompletedPaths()
+    const completedPaths = await this.progressStore.getCompletedPaths()
     if (completedPaths.size === 0 && !this.getDbUtils()) {
       return {
         totalRoots: 0,
@@ -58,15 +69,14 @@ export class FileProviderScanProgressService {
       }
     }
 
-    const pendingRoots = watchPaths.filter((path) => !completedPaths.has(path)).length
-
-    return {
-      totalRoots: completedPaths.size,
-      pendingRoots
-    }
+    return this.progressStore.summarizeRoots(watchPaths, completedPaths)
   }
 
   async getCompletedPaths(): Promise<Set<string>> {
+    return this.progressStore.getCompletedPaths()
+  }
+
+  private async loadCompletedPaths(): Promise<Set<string>> {
     const dbUtils = this.getDbUtils()
     if (!dbUtils) {
       return new Set()
@@ -78,22 +88,13 @@ export class FileProviderScanProgressService {
   }
 
   async deletePaths(db: LibSQLDatabase<typeof schema>, paths: string[]): Promise<void> {
-    if (paths.length === 0) {
-      return
-    }
-
-    await db.delete(scanProgress).where(inArray(scanProgress.path, paths))
+    await this.progressStore.deletePaths(paths, (pathsToDelete) =>
+      this.deleteCompletedPaths(pathsToDelete, db)
+    )
   }
 
   async upsertCompletedPaths(paths: string[], lastScanned: string, reason: string): Promise<void> {
-    if (paths.length === 0) {
-      return
-    }
-    if (!(await this.ensureSearchIndexWorkerReady(reason))) {
-      return
-    }
-
-    await this.getSearchIndexWorker().upsertScanProgress(paths, lastScanned)
+    await this.progressStore.upsertPaths(paths, lastScanned, reason)
   }
 
   async buildEvidence(
@@ -129,5 +130,21 @@ export class FileProviderScanProgressService {
         embeddingRows: input.stats.embeddingRows
       }
     })
+  }
+
+  private async deleteCompletedPaths(
+    paths: string[],
+    db?: LibSQLDatabase<typeof schema>
+  ): Promise<void> {
+    if (paths.length === 0) {
+      return
+    }
+
+    const targetDb = db ?? this.getDbUtils()?.getDb()
+    if (!targetDb) {
+      return
+    }
+
+    await targetDb.delete(scanProgress).where(inArray(scanProgress.path, paths))
   }
 }
