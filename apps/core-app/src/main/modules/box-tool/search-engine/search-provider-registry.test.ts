@@ -69,7 +69,8 @@ describe('search provider registry', () => {
       plugins: [
         {
           name: 'touch-translation',
-          searchProviders: [createPluginProvider('touch-translation.results')]
+          searchProviders: [createPluginProvider('touch-translation.results')],
+          issues: []
         }
       ],
       userConfigs: [
@@ -108,7 +109,8 @@ describe('search provider registry', () => {
       plugins: [
         {
           name: 'bad-plugin',
-          searchProviders: [createPluginProvider('file-provider')]
+          searchProviders: [createPluginProvider('file-provider')],
+          issues: []
         }
       ]
     })
@@ -118,6 +120,68 @@ describe('search provider registry', () => {
       id: 'file-provider',
       owner: 'core'
     })
+    expect(snapshot.issues).toEqual([
+      {
+        type: 'error',
+        code: 'SEARCH_PROVIDER_ID_COLLISION',
+        message:
+          "Search provider 'file-provider' was ignored because the provider id is already registered.",
+        providerId: 'file-provider',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        meta: {
+          displayName: 'Plugin Results'
+        }
+      }
+    ])
+  })
+
+  it('collects plugin search provider registration issues for settings diagnostics', () => {
+    const snapshot = buildSearchProviderRegistrySnapshot({
+      indexedSources: [],
+      plugins: [
+        {
+          name: 'bad-plugin',
+          searchProviders: [],
+          issues: [
+            {
+              type: 'error',
+              code: 'SEARCH_PROVIDER_PERMISSION_MISSING',
+              message:
+                "Search provider 'bad-plugin.results' requires manifest permissions: search.root-results",
+              source: 'searchProvider:bad-plugin.results',
+              meta: {
+                providerId: 'bad-plugin.results',
+                missingPermissionIds: ['search.root-results'],
+                permissionScopes: ['root-results']
+              }
+            },
+            {
+              type: 'warning',
+              code: 'ICON_LOAD_FAILED',
+              message: 'Icon failed'
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(snapshot.issues).toEqual([
+      {
+        type: 'error',
+        code: 'SEARCH_PROVIDER_PERMISSION_MISSING',
+        message:
+          "Search provider 'bad-plugin.results' requires manifest permissions: search.root-results",
+        pluginName: 'bad-plugin',
+        providerId: 'bad-plugin.results',
+        source: 'searchProvider:bad-plugin.results',
+        meta: {
+          providerId: 'bad-plugin.results',
+          missingPermissionIds: ['search.root-results'],
+          permissionScopes: ['root-results']
+        }
+      }
+    ])
   })
 
   it('preserves plugin provider links to runtime indexed source ids', () => {
@@ -139,7 +203,8 @@ describe('search provider registry', () => {
       plugins: [
         {
           name: 'touch-browser-data',
-          searchProviders: [browserProvider]
+          searchProviders: [browserProvider],
+          issues: []
         }
       ]
     })
@@ -184,7 +249,8 @@ describe('search provider registry', () => {
         plugins: [
           {
             name: 'touch-browser-data',
-            searchProviders: [browserProvider, createPluginProvider('touch-translation.results')]
+            searchProviders: [browserProvider, createPluginProvider('touch-translation.results')],
+            issues: []
           }
         ]
       })

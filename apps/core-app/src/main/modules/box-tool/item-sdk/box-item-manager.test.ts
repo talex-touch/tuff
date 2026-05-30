@@ -96,10 +96,17 @@ describe('BoxItemManager', () => {
       createItem('a', 'touch-a', 'touch-a', 'touch-a.results'),
       createItem('hidden', 'touch-hidden', 'touch-hidden', 'touch-hidden.results'),
       createItem('b', 'touch-b', 'touch-b', 'touch-b.results'),
+      createItem('ask-state', 'touch-ask', 'touch-ask', 'touch-ask.results'),
       createItem('legacy', 'touch-legacy', 'touch-legacy')
     ])
 
-    expect(manager.getAll().map((item) => item.id)).toEqual(['a', 'hidden', 'b', 'legacy'])
+    expect(manager.getAll().map((item) => item.id)).toEqual([
+      'a',
+      'hidden',
+      'b',
+      'ask-state',
+      'legacy'
+    ])
     expect(manager.getVisibleItems().map((item) => item.id)).toEqual(['b', 'a', 'legacy'])
   })
 })

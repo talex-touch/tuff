@@ -2355,6 +2355,8 @@
       "providerConfigDesc": "Control indexed sources that can enter root search results; browser data still requires plugin permissions and user consent",
       "providerConfigEmpty": "No configurable search sources",
       "providerConfigMeta": "{mode} · {owner}",
+      "providerConfigIssues": "Registration issues",
+      "providerConfigIssue": "{provider} · {code} · {message}",
       "providerConfigLoadFailed": "Failed to load search source config",
       "providerConfigSaved": "Search source config saved",
       "providerConfigSaveFailed": "Failed to save search source config",
@@ -2398,6 +2400,17 @@
           "skipped": "Reset skipped · {summary} · {jobId}"
         }
       },
+      "sourceAdmissionIssues": "Admission",
+      "sourceAdmissionIssue": {
+        "missing-owner": "Missing owner",
+        "missing-permission-scope": "Missing permission scope",
+        "high-privacy-requires-explicit-enable": "High privacy source cannot default-enable",
+        "browser-data-requires-high-privacy": "Browser data source must be high privacy",
+        "external-fast-requires-external-tool-permission": "External fast source lacks external tool scope",
+        "external-fast-cannot-be-third-party": "Third-party plugin cannot provide external fast source",
+        "persistent-source-must-be-clearable": "Persistent indexed source must be clearable",
+        "watch-capability-requires-reconcile": "Watch source must support reconcile"
+      },
       "sourceLifecycleIssues": "Contract",
       "sourceLifecycleIssue": {
         "missing-scan-handler": "Missing scan handler",
@@ -2439,6 +2452,7 @@
       },
       "sourceDetail": {
         "lastError": "Last error: {error}",
+        "admissionIssue": "Admission issue: {issue}",
         "lifecycleIssue": "Contract issue: {issue}",
         "reason": "Reason: {reason}",
         "lastIndexedAt": "Last indexed: {time}",

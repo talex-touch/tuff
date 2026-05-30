@@ -23,11 +23,22 @@ import type {
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
+  IndexedSourceDiagnosticsRequest,
+  IndexedSourceDiagnosticsResponse,
+  IndexedSourceReconcileRuntimeRequest,
+  IndexedSourceReconcileRuntimeResult,
+  IndexedSourceResetRuntimeRequest,
+  IndexedSourceResetRuntimeResult,
+  IndexedSourceScanRuntimeRequest,
+  IndexedSourceScanRuntimeResult,
   PlatformCapabilityListRequest,
   ReadFileRequest,
   SecureStoreHealthResponse,
   SecureValueGetRequest,
   SecureValueSetRequest,
+  SearchProviderConfigResponse,
+  SearchProviderConfigUpdateRequest,
+  SearchProviderConfigUpdateResult,
   StartupRequest,
   StartupResponse,
   TraySettingsGetResponse,
@@ -49,6 +60,7 @@ import { StorageList, isLocalhostUrl } from '@talex-touch/utils'
 import { isSupportedWallpaperImagePath } from '@talex-touch/utils/common/wallpaper'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { IndexedSourceResetReasons, type SearchProviderUserConfig } from '@talex-touch/utils/search'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
@@ -71,8 +83,17 @@ import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
 import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
+import { getBoxItemManager } from '../modules/box-tool/item-sdk'
+import { indexingRuntime } from '../modules/box-tool/search-engine/indexing-runtime'
+import {
+  SEARCH_PROVIDER_CONFIG_KEY,
+  getSearchProviderUserConfigs,
+  normalizeSearchProviderConfigEntry
+} from '../modules/box-tool/search-engine/search-provider-config'
+import { buildSearchProviderRegistrySnapshot } from '../modules/box-tool/search-engine/search-provider-registry'
 import { buildVerificationModule } from '../modules/build-verification'
 import { databaseModule } from '../modules/database'
+import { pluginModule } from '../modules/plugin/plugin-module'
 import { createDbUtils } from '../db/utils'
 import {
   applyCapabilityRuntimePatch,
@@ -569,6 +590,46 @@ function getOptionalBooleanProp(value: unknown, key: string): boolean | undefine
   if (!isRecord(value)) return undefined
   const prop = value[key]
   return typeof prop === 'boolean' ? prop : undefined
+}
+
+function getRequiredSourceId(payload: unknown): string | null {
+  const sourceId = getOptionalStringProp(payload, 'sourceId')?.trim()
+  return sourceId || null
+}
+
+async function getSearchProviderConfigResponse(): Promise<SearchProviderConfigResponse> {
+  const diagnostics = await indexingRuntime.getDiagnostics()
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  return buildSearchProviderRegistrySnapshot({
+    indexedSources: diagnostics.sources,
+    plugins: pluginModule.pluginManager?.plugins.values(),
+    userConfigs: getSearchProviderUserConfigs(appSettings)
+  })
+}
+
+async function updateSearchProviderConfig(
+  payload: SearchProviderConfigUpdateRequest | undefined
+): Promise<SearchProviderConfigUpdateResult> {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  const now = Date.now()
+  const normalized = (payload?.providers ?? [])
+    .map((entry) =>
+      normalizeSearchProviderConfigEntry({ ...entry, updatedAt: entry.updatedAt ?? now })
+    )
+    .filter((entry): entry is SearchProviderUserConfig => entry !== null)
+    .sort(
+      (left, right) => left.order - right.order || left.providerId.localeCompare(right.providerId)
+    )
+
+  appSettings[SEARCH_PROVIDER_CONFIG_KEY] = {
+    ...(isRecord(appSettings[SEARCH_PROVIDER_CONFIG_KEY])
+      ? appSettings[SEARCH_PROVIDER_CONFIG_KEY]
+      : {}),
+    providers: normalized
+  }
+  saveMainConfig(StorageList.APP_SETTING, appSettings)
+  getBoxItemManager().handleSyncRequest()
+  return getSearchProviderConfigResponse()
 }
 
 function normalizeCapabilityQuery(payload: unknown): PlatformCapabilityListRequest {
@@ -1525,6 +1586,121 @@ export class CommonChannelModule extends BaseModule {
           return { success: false, error: message }
         }
       }),
+      transport.on<IndexedSourceDiagnosticsRequest | void, IndexedSourceDiagnosticsResponse>(
+        AppEvents.indexedSource.diagnostics,
+        async (payload) => {
+          const diagnostics = await indexingRuntime.getDiagnostics()
+          const sourceId = getOptionalStringProp(payload, 'sourceId')?.trim()
+          if (!sourceId) {
+            return diagnostics
+          }
+          const sources = diagnostics.sources.filter((source) => source.descriptor.id === sourceId)
+          const ready = sources.filter((source) => source.health.status === 'ready').length
+          const degraded = sources.filter((source) => source.health.status === 'degraded').length
+
+          return {
+            ...diagnostics,
+            summary: {
+              total: sources.length,
+              byStatus: sources.reduce<Record<string, number>>((summary, source) => {
+                summary[source.health.status] = (summary[source.health.status] ?? 0) + 1
+                return summary
+              }, {}),
+              ready,
+              degraded,
+              unavailable: sources.length - ready - degraded
+            },
+            sources
+          }
+        }
+      ),
+      transport.on<IndexedSourceResetRuntimeRequest, IndexedSourceResetRuntimeResult>(
+        AppEvents.indexedSource.reset,
+        async (payload) => {
+          const sourceId = getRequiredSourceId(payload)
+          if (!sourceId) {
+            const now = Date.now()
+            return {
+              sourceId: '',
+              reason: IndexedSourceResetReasons.HealthRepair,
+              clearedSearchIndex: false,
+              clearedScanProgress: false,
+              startedAt: now,
+              completedAt: now,
+              error: 'source-id-empty'
+            }
+          }
+
+          return await indexingRuntime.resetSourceRuntimeState(sourceId, {
+            reason: getOptionalStringProp(payload, 'reason') as never,
+            clearSearchIndex: getOptionalBooleanProp(payload, 'clearSearchIndex'),
+            clearScanProgress: getOptionalBooleanProp(payload, 'clearScanProgress')
+          })
+        }
+      ),
+      transport.on<IndexedSourceReconcileRuntimeRequest, IndexedSourceReconcileRuntimeResult>(
+        AppEvents.indexedSource.reconcile,
+        async (payload) => {
+          const sourceId = getRequiredSourceId(payload)
+          if (!sourceId) {
+            const now = Date.now()
+            return {
+              sourceId: '',
+              added: 0,
+              changed: 0,
+              deleted: 0,
+              skipped: 1,
+              errors: 1,
+              startedAt: now,
+              completedAt: now,
+              reason: 'source-id-empty'
+            }
+          }
+
+          return await indexingRuntime.reconcileSource(sourceId, {
+            reason: getOptionalStringProp(payload, 'reason') as never
+          })
+        }
+      ),
+      transport.on<IndexedSourceScanRuntimeRequest, IndexedSourceScanRuntimeResult>(
+        AppEvents.indexedSource.scan,
+        async (payload) => {
+          const sourceId = getRequiredSourceId(payload)
+          const reason = getOptionalStringProp(payload, 'reason')
+          if (!sourceId) {
+            const now = Date.now()
+            return {
+              sourceId: '',
+              batches: 0,
+              records: 0,
+              startedAt: now,
+              completedAt: now,
+              error: 'source-id-empty'
+            }
+          }
+          if (!reason) {
+            const now = Date.now()
+            return {
+              sourceId,
+              batches: 0,
+              records: 0,
+              startedAt: now,
+              completedAt: now,
+              error: 'reason-empty'
+            }
+          }
+
+          return await indexingRuntime.scanSource(sourceId, reason as never)
+        }
+      ),
+      transport.on<void, SearchProviderConfigResponse>(
+        AppEvents.indexedSource.providerConfigGet,
+        async () => getSearchProviderConfigResponse()
+      ),
+      transport.on<SearchProviderConfigUpdateRequest, SearchProviderConfigUpdateResult>(
+        AppEvents.indexedSource.providerConfigUpdate,
+        async (payload) => updateSearchProviderConfig(payload)
+      ),
       transport.on(AppEvents.deviceIdle.getSettings, () => deviceIdleService.getSettings()),
       transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
         deviceIdleService.updateSettings(payload ?? {})

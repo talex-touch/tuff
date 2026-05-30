@@ -1,6 +1,7 @@
 export {
   countIndexingSourcesNeedingAttention,
   formatIndexingSourceTimestamp,
+  resolveIndexingSourceAdmissionIssueChips,
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
@@ -14,6 +15,7 @@ export {
 } from '../../../modules/search/indexing-source-diagnostics-display'
 
 export type {
+  IndexingSourceAdmissionIssueChip,
   IndexingSourceEvidenceChip,
   IndexingSourceLifecycleIssueChip,
   IndexingSourceRecentTaskChip,

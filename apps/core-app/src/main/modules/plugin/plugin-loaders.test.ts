@@ -437,6 +437,45 @@ describe('createPluginLoader', () => {
     })
   })
 
+  it('blocks third-party push search providers without explicit user consent', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['search.root-results'],
+        optional: []
+      },
+      searchProviders: [
+        {
+          id: 'touch-translation.results',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'enabled',
+          requiresUserConsent: false,
+          pushesToRootResults: true
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+    const issue = plugin.issues.find((item) => item.code === 'SEARCH_PROVIDER_POLICY_BLOCKED')
+
+    expect(plugin.searchProviders).toHaveLength(0)
+    expect(issue).toMatchObject({
+      type: 'error',
+      source: 'searchProvider:touch-translation.results',
+      meta: {
+        providerId: 'touch-translation.results',
+        issues: ['third-party-push-requires-explicit-consent']
+      }
+    })
+  })
+
   it('derives a compatibility search provider for legacy push features', async () => {
     const pluginPath = await createPluginDir({
       name: 'touch-translation',

@@ -67,7 +67,7 @@ export function filterAndSortRootItemsByProviderConfig(
     .filter((item) => {
       const providerId = resolveTuffItemSearchProviderId(item)
       if (!providerId) return true
-      return configById.get(providerId)?.enabled !== false
+      return configById.get(providerId)?.enabled === true
     })
     .sort((left, right) => {
       const leftProviderId = resolveTuffItemSearchProviderId(left)

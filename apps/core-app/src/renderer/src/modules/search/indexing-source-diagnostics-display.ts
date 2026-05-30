@@ -1,4 +1,5 @@
 import type {
+  IndexedSourceAdmissionReason,
   IndexedSourceDiagnostics,
   IndexedSourceEvidence,
   IndexedSourceHealthStatus,
@@ -40,6 +41,13 @@ export interface IndexingSourceLifecycleIssueChip {
   values: Record<string, string | number>
 }
 
+export interface IndexingSourceAdmissionIssueChip {
+  id: string
+  tone: IndexingSourceTone
+  labelKey: string
+  values: Record<string, string | number>
+}
+
 const STATUS_TONE_MAP: Record<IndexedSourceHealthStatus, IndexingSourceTone> = {
   ready: 'success',
   warming: 'info',
@@ -68,8 +76,16 @@ export function resolveIndexingSourceReconcileStateKey(state: IndexedSourceRecon
 
 export function resolveIndexingSourceDetailKey(
   source: IndexedSourceDiagnostics
-): 'lastError' | 'lifecycleIssue' | 'reason' | 'lastIndexedAt' | 'roots' | 'emptyRoots' {
+):
+  | 'lastError'
+  | 'admissionIssue'
+  | 'lifecycleIssue'
+  | 'reason'
+  | 'lastIndexedAt'
+  | 'roots'
+  | 'emptyRoots' {
   if (source.health.lastError) return 'lastError'
+  if ((source.admissionIssues?.length ?? 0) > 0) return 'admissionIssue'
   if ((source.lifecycleIssues?.length ?? 0) > 0) return 'lifecycleIssue'
   if (source.health.reason) return 'reason'
   if (typeof source.health.lastIndexedAt === 'number') return 'lastIndexedAt'
@@ -101,6 +117,7 @@ export function countIndexingSourcesNeedingAttention(sources: IndexedSourceDiagn
   return sources.filter(
     (source) =>
       ['degraded', 'permission-required', 'error'].includes(source.health.status) ||
+      (source.admissionIssues?.length ?? 0) > 0 ||
       (source.lifecycleIssues?.length ?? 0) > 0
   ).length
 }
@@ -324,6 +341,20 @@ export function resolveIndexingSourceLifecycleIssueChips(
   }))
 }
 
+export function resolveIndexingSourceAdmissionIssueChips(
+  source: IndexedSourceDiagnostics,
+  limit = 2
+): IndexingSourceAdmissionIssueChip[] {
+  return (source.admissionIssues ?? []).slice(0, limit).map((issue, index) => ({
+    id: `${issue}:${index}`,
+    tone: 'danger',
+    labelKey: resolveAdmissionIssueLabelKey(issue),
+    values: {
+      issue
+    }
+  }))
+}
+
 export function resolveIndexingSourceEvidenceChips(
   source: IndexedSourceDiagnostics,
   limit = 2
@@ -345,4 +376,8 @@ export function resolveIndexingSourceEvidenceChips(
 
 function resolveLifecycleIssueLabelKey(issue: IndexedSourceLifecycleIssue): string {
   return `settings.settingFileIndex.sourceLifecycleIssue.${issue}`
+}
+
+function resolveAdmissionIssueLabelKey(issue: IndexedSourceAdmissionReason): string {
+  return `settings.settingFileIndex.sourceAdmissionIssue.${issue}`
 }

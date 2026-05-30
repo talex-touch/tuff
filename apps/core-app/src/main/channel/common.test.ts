@@ -22,6 +22,12 @@ const {
   getPermissionDeepLinkCapabilityPatchMock,
   getEverythingCapabilityPatchMock,
   getTuffCliCapabilityPatchMock,
+  indexedRuntimeGetDiagnosticsMock,
+  indexedRuntimeResetSourceRuntimeStateMock,
+  indexedRuntimeReconcileSourceMock,
+  indexedRuntimeScanSourceMock,
+  pluginManagerPluginsMock,
+  boxItemManagerHandleSyncRequestMock,
   setLocaleMock,
   touchEventBusEmitMock
 } = vi.hoisted(() => ({
@@ -55,7 +61,13 @@ const {
   getNativeShareCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
   getPermissionDeepLinkCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'best_effort' })),
   getEverythingCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
-  getTuffCliCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' }))
+  getTuffCliCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
+  indexedRuntimeGetDiagnosticsMock: vi.fn(),
+  indexedRuntimeResetSourceRuntimeStateMock: vi.fn(),
+  indexedRuntimeReconcileSourceMock: vi.fn(),
+  indexedRuntimeScanSourceMock: vi.fn(),
+  pluginManagerPluginsMock: new Map<string, Record<string, unknown>>(),
+  boxItemManagerHandleSyncRequestMock: vi.fn()
 }))
 
 vi.mock('@talex-touch/utils', async (importOriginal) => {
@@ -270,9 +282,32 @@ vi.mock('../modules/box-tool/addon/files/file-provider', () => ({
   }
 }))
 
+vi.mock('../modules/box-tool/search-engine/indexing-runtime', () => ({
+  indexingRuntime: {
+    getDiagnostics: indexedRuntimeGetDiagnosticsMock,
+    resetSourceRuntimeState: indexedRuntimeResetSourceRuntimeStateMock,
+    reconcileSource: indexedRuntimeReconcileSourceMock,
+    scanSource: indexedRuntimeScanSourceMock
+  }
+}))
+
+vi.mock('../modules/box-tool/item-sdk', () => ({
+  getBoxItemManager: () => ({
+    handleSyncRequest: boxItemManagerHandleSyncRequestMock
+  })
+}))
+
 vi.mock('../modules/build-verification', () => ({
   buildVerificationModule: {
     getStatus: vi.fn()
+  }
+}))
+
+vi.mock('../modules/plugin/plugin-module', () => ({
+  pluginModule: {
+    pluginManager: {
+      plugins: pluginManagerPluginsMock
+    }
   }
 }))
 
@@ -470,6 +505,8 @@ type CommonChannelModuleTestInstance = {
 
 afterEach(() => {
   vi.clearAllMocks()
+  pluginManagerPluginsMock.clear()
+  boxItemManagerHandleSyncRequestMock.mockClear()
 })
 
 describe('CommonChannelModule private helpers', () => {
@@ -663,6 +700,201 @@ describe('CommonChannelModule private helpers', () => {
       'language/changed',
       expect.objectContaining({ language: 'en-US' })
     )
+  })
+
+  it('includes plugin search providers in indexed source provider config response', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    indexedRuntimeGetDiagnosticsMock.mockResolvedValue({
+      generatedAt: 1,
+      summary: {
+        total: 1,
+        byStatus: { ready: 1 },
+        ready: 1,
+        degraded: 0,
+        unavailable: 0
+      },
+      sources: [
+        {
+          descriptor: {
+            id: 'file-provider',
+            kind: 'file',
+            displayName: 'Files',
+            platforms: ['darwin', 'win32', 'linux'],
+            priority: 'deferred',
+            storage: 'sqlite-index',
+            privacy: 'medium',
+            capabilities: {
+              scan: true,
+              watch: true,
+              reconcile: true,
+              clear: true,
+              open: true
+            },
+            admission: {
+              owner: 'core',
+              permissionScopes: ['file-system'],
+              defaultState: 'enabled',
+              clearable: true,
+              rebuildable: true
+            }
+          },
+          health: {
+            status: 'ready',
+            permissionState: 'granted',
+            itemCount: 1,
+            watchState: 'active',
+            reconcileState: 'idle'
+          },
+          roots: []
+        }
+      ]
+    })
+    pluginManagerPluginsMock.set('touch-translation', {
+      name: 'touch-translation',
+      searchProviders: [
+        {
+          id: 'touch-translation.results',
+          displayName: 'Translation Results',
+          kind: 'plugin',
+          owner: 'third-party-plugin',
+          mode: 'push',
+          priority: 'fast',
+          defaultOrder: 100,
+          policy: {
+            owner: 'third-party-plugin',
+            mode: 'push',
+            permissionScopes: ['root-results'],
+            defaultState: 'ask',
+            requiresUserConsent: true,
+            pushesToRootResults: true
+          }
+        }
+      ],
+      issues: [
+        {
+          type: 'error',
+          code: 'SEARCH_PROVIDER_PERMISSION_MISSING',
+          message:
+            "Search provider 'touch-translation.blocked' requires manifest permissions: search.root-results",
+          source: 'searchProvider:touch-translation.blocked',
+          meta: {
+            providerId: 'touch-translation.blocked',
+            missingPermissionIds: ['search.root-results']
+          }
+        }
+      ]
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const getConfigHandler = handlers.get(AppEvents.indexedSource.providerConfigGet.toEventName())
+    expect(getConfigHandler).toBeTypeOf('function')
+
+    const response = (await getConfigHandler?.({}, {})) as {
+      providers: Array<{ providerId: string; enabled: boolean }>
+      availableProviders: Array<{ id: string }>
+      sourceLinks: Array<{ sourceId: string; providerIds: string[] }>
+      issues: Array<{ code: string; providerId?: string; pluginName?: string }>
+    }
+
+    expect(response.availableProviders.map((provider) => provider.id)).toEqual([
+      'file-provider',
+      'touch-translation.results'
+    ])
+    expect(response.sourceLinks).toEqual([
+      {
+        sourceId: 'file-provider',
+        providerIds: ['file-provider']
+      }
+    ])
+    expect(response.providers.map((provider) => provider.providerId)).toEqual([
+      'file-provider',
+      'touch-translation.results'
+    ])
+    expect(
+      response.providers.find((provider) => provider.providerId === 'touch-translation.results')
+        ?.enabled
+    ).toBe(false)
+    expect(response.issues).toEqual([
+      expect.objectContaining({
+        code: 'SEARCH_PROVIDER_PERMISSION_MISSING',
+        pluginName: 'touch-translation',
+        providerId: 'touch-translation.blocked'
+      })
+    ])
+  })
+
+  it('refreshes pushed root items after provider config updates', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    indexedRuntimeGetDiagnosticsMock.mockResolvedValue({
+      generatedAt: 1,
+      summary: {
+        total: 0,
+        byStatus: {},
+        ready: 0,
+        degraded: 0,
+        unavailable: 0
+      },
+      sources: []
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const updateConfigHandler = handlers.get(
+      AppEvents.indexedSource.providerConfigUpdate.toEventName()
+    )
+    expect(updateConfigHandler).toBeTypeOf('function')
+
+    await updateConfigHandler?.(
+      {
+        providers: [{ providerId: 'touch-translation.results', enabled: false, order: 1 }]
+      },
+      {}
+    )
+
+    expect(boxItemManagerHandleSyncRequestMock).toHaveBeenCalledTimes(1)
   })
 
   it('registers device idle diagnostic transport handler', async () => {
@@ -1165,5 +1397,139 @@ describe('CommonChannelModule private helpers', () => {
     })
     expect(appProvider.diagnoseAppSearch).toHaveBeenNthCalledWith(2, { target: '' })
     expect(appProvider.reindexAppSearchTarget).toHaveBeenNthCalledWith(2, { target: '' })
+  })
+
+  it('routes indexed source runtime maintenance handlers', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    indexedRuntimeGetDiagnosticsMock.mockResolvedValue({
+      generatedAt: 1700000000000,
+      summary: {
+        total: 2,
+        byStatus: { ready: 1, disabled: 1 },
+        ready: 1,
+        degraded: 0,
+        unavailable: 1
+      },
+      sources: [
+        {
+          descriptor: { id: 'file-provider' },
+          health: { status: 'ready' },
+          roots: []
+        },
+        {
+          descriptor: { id: 'browser-bookmarks' },
+          health: { status: 'disabled' },
+          roots: []
+        }
+      ]
+    })
+    indexedRuntimeResetSourceRuntimeStateMock.mockResolvedValue({
+      sourceId: 'browser-bookmarks',
+      reason: 'user-clear',
+      clearedSearchIndex: true,
+      clearedScanProgress: false,
+      startedAt: 1,
+      completedAt: 2
+    })
+    indexedRuntimeReconcileSourceMock.mockResolvedValue({
+      sourceId: 'browser-bookmarks',
+      added: 0,
+      changed: 1,
+      deleted: 0,
+      skipped: 0,
+      errors: 0,
+      startedAt: 3,
+      completedAt: 4
+    })
+    indexedRuntimeScanSourceMock.mockResolvedValue({
+      sourceId: 'browser-bookmarks',
+      batches: 1,
+      records: 8,
+      startedAt: 5,
+      completedAt: 6
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const diagnosticsHandler = handlers.get(AppEvents.indexedSource.diagnostics.toEventName())
+    const resetHandler = handlers.get(AppEvents.indexedSource.reset.toEventName())
+    const reconcileHandler = handlers.get(AppEvents.indexedSource.reconcile.toEventName())
+    const scanHandler = handlers.get(AppEvents.indexedSource.scan.toEventName())
+
+    await expect(
+      diagnosticsHandler?.({ sourceId: 'browser-bookmarks' }, {})
+    ).resolves.toMatchObject({
+      summary: {
+        total: 1,
+        ready: 0,
+        degraded: 0,
+        unavailable: 1
+      },
+      sources: [{ descriptor: { id: 'browser-bookmarks' } }]
+    })
+    await expect(
+      resetHandler?.(
+        {
+          sourceId: 'browser-bookmarks',
+          reason: 'user-clear',
+          clearSearchIndex: true
+        },
+        {}
+      )
+    ).resolves.toMatchObject({
+      sourceId: 'browser-bookmarks',
+      clearedSearchIndex: true
+    })
+    await expect(
+      reconcileHandler?.({ sourceId: 'browser-bookmarks', reason: 'manual-repair' }, {})
+    ).resolves.toMatchObject({
+      sourceId: 'browser-bookmarks',
+      changed: 1
+    })
+    await expect(
+      scanHandler?.({ sourceId: 'browser-bookmarks', reason: 'manual-rebuild' }, {})
+    ).resolves.toMatchObject({
+      sourceId: 'browser-bookmarks',
+      records: 8
+    })
+    await expect(resetHandler?.({ sourceId: '' }, {})).resolves.toMatchObject({
+      sourceId: '',
+      error: 'source-id-empty'
+    })
+    await expect(scanHandler?.({ sourceId: 'browser-bookmarks' }, {})).resolves.toMatchObject({
+      sourceId: 'browser-bookmarks',
+      error: 'reason-empty'
+    })
+
+    expect(indexedRuntimeResetSourceRuntimeStateMock).toHaveBeenCalledWith('browser-bookmarks', {
+      reason: 'user-clear',
+      clearSearchIndex: true,
+      clearScanProgress: undefined
+    })
+    expect(indexedRuntimeReconcileSourceMock).toHaveBeenCalledWith('browser-bookmarks', {
+      reason: 'manual-repair'
+    })
+    expect(indexedRuntimeScanSourceMock).toHaveBeenCalledWith('browser-bookmarks', 'manual-rebuild')
   })
 })

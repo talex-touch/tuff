@@ -1,6 +1,7 @@
 import type {
   IndexedSourceDiagnostics,
   SearchProviderDescriptor,
+  SearchProviderRegistryIssue,
   SearchProviderUserConfig
 } from '@talex-touch/utils/search'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
@@ -11,7 +12,7 @@ import {
 
 export interface SearchProviderRegistrySnapshotInput {
   indexedSources: IndexedSourceDiagnostics[]
-  plugins?: Iterable<Pick<ITouchPlugin, 'name' | 'searchProviders'>>
+  plugins?: Iterable<Pick<ITouchPlugin, 'name' | 'searchProviders' | 'issues'>>
   userConfigs?: SearchProviderUserConfig[]
 }
 
@@ -62,28 +63,79 @@ export function collectPluginSearchProviderDescriptors(
   return descriptors
 }
 
+export function collectPluginSearchProviderIssues(
+  plugins: Iterable<Pick<ITouchPlugin, 'name' | 'issues'>> = []
+): SearchProviderRegistryIssue[] {
+  const issues: SearchProviderRegistryIssue[] = []
+
+  for (const plugin of plugins) {
+    for (const issue of plugin.issues ?? []) {
+      if (typeof issue.code !== 'string' || !issue.code.startsWith('SEARCH_PROVIDER_')) {
+        continue
+      }
+
+      issues.push({
+        type: issue.type,
+        code: issue.code as SearchProviderRegistryIssue['code'],
+        message: issue.message,
+        pluginName: plugin.name,
+        providerId: typeof issue.meta?.providerId === 'string' ? issue.meta.providerId : undefined,
+        source: issue.source,
+        meta: isRecord(issue.meta) ? { ...issue.meta } : undefined
+      })
+    }
+  }
+
+  return issues
+}
+
 export function collectSearchProviderDescriptors(
   input: Pick<SearchProviderRegistrySnapshotInput, 'indexedSources' | 'plugins'>
-): SearchProviderDescriptor[] {
+): { descriptors: SearchProviderDescriptor[]; issues: SearchProviderRegistryIssue[] } {
   const descriptors = [
     ...input.indexedSources.map(toIndexedSearchProviderDescriptor),
     ...collectPluginSearchProviderDescriptors(input.plugins)
   ]
   const seen = new Set<string>()
+  const issues: SearchProviderRegistryIssue[] = []
 
-  return descriptors.filter((descriptor) => {
-    if (seen.has(descriptor.id)) return false
+  const uniqueDescriptors = descriptors.filter((descriptor) => {
+    if (seen.has(descriptor.id)) {
+      issues.push({
+        type: 'error',
+        code: 'SEARCH_PROVIDER_ID_COLLISION',
+        message: `Search provider '${descriptor.id}' was ignored because the provider id is already registered.`,
+        providerId: descriptor.id,
+        owner: descriptor.owner,
+        mode: descriptor.mode,
+        meta: {
+          displayName: descriptor.displayName
+        }
+      })
+      return false
+    }
     seen.add(descriptor.id)
     return true
   })
+
+  return {
+    descriptors: uniqueDescriptors,
+    issues
+  }
 }
 
 export function buildSearchProviderRegistrySnapshot(input: SearchProviderRegistrySnapshotInput) {
-  const availableProviders = collectSearchProviderDescriptors(input)
+  const plugins = [...(input.plugins ?? [])]
+  const collected = collectSearchProviderDescriptors({
+    indexedSources: input.indexedSources,
+    plugins
+  })
+  const availableProviders = collected.descriptors
   return {
     providers: normalizeSearchProviderUserConfigs(availableProviders, input.userConfigs),
     availableProviders,
-    sourceLinks: collectSearchProviderSourceLinks(input, availableProviders)
+    sourceLinks: collectSearchProviderSourceLinks(input, availableProviders),
+    issues: [...collectPluginSearchProviderIssues(plugins), ...collected.issues]
   }
 }
 
@@ -91,7 +143,10 @@ export function collectSearchProviderIdsForIndexedSource(
   sourceId: string,
   input: Pick<SearchProviderRegistrySnapshotInput, 'indexedSources' | 'plugins'>
 ): string[] {
-  return getSearchProviderIdsForIndexedSource(sourceId, collectSearchProviderDescriptors(input))
+  return getSearchProviderIdsForIndexedSource(
+    sourceId,
+    collectSearchProviderDescriptors(input).descriptors
+  )
 }
 
 export function collectSearchProviderSourceLinks(
@@ -102,4 +157,8 @@ export function collectSearchProviderSourceLinks(
     sourceId: source.descriptor.id,
     providerIds: getSearchProviderIdsForIndexedSource(source.descriptor.id, descriptors)
   }))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
