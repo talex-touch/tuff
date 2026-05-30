@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
+import { IndexedWriteDeleteExecutorService as SdkIndexedWriteDeleteExecutorService } from '@talex-touch/utils/search'
 import { IndexedWriteDeleteExecutorService } from './indexing-write-delete-executor-service'
 
 describe('indexing-write-delete-executor-service', () => {
+  it('keeps a CoreApp compatibility wrapper around the public SDK delete executor', () => {
+    expect(IndexedWriteDeleteExecutorService).not.toBe(SdkIndexedWriteDeleteExecutorService)
+  })
+
   it('normalizes paths, deletes existing records, removes search index items, and logs count', async () => {
     const existing = [
       { id: 1, path: '/tmp/a.txt' },

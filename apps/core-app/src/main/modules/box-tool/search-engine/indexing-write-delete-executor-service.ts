@@ -1,13 +1,10 @@
-export interface IndexedWriteDeleteRecord {
-  id: number
-  path: string
-}
+import {
+  IndexedWriteDeleteExecutorService as SdkIndexedWriteDeleteExecutorService,
+  type IndexedWriteDeleteExecutorResult,
+  type IndexedWriteDeleteRecord
+} from '@talex-touch/utils/search'
 
-export interface IndexedWriteDeleteExecutorResult<TRecord extends IndexedWriteDeleteRecord> {
-  deleted: TRecord[]
-  deletedIds: number[]
-  deletedPaths: string[]
-}
+export type { IndexedWriteDeleteExecutorResult, IndexedWriteDeleteRecord }
 
 export interface IndexedWriteDeleteExecutorDeps<TRecord extends IndexedWriteDeleteRecord> {
   normalizePath: (rawPath: string) => string
@@ -19,58 +16,24 @@ export interface IndexedWriteDeleteExecutorDeps<TRecord extends IndexedWriteDele
 }
 
 export class IndexedWriteDeleteExecutorService<TRecord extends IndexedWriteDeleteRecord> {
-  private readonly normalizePath: IndexedWriteDeleteExecutorDeps<TRecord>['normalizePath']
-  private readonly findExisting: IndexedWriteDeleteExecutorDeps<TRecord>['findExisting']
-  private readonly deleteRecords: IndexedWriteDeleteExecutorDeps<TRecord>['deleteRecords']
-  private readonly removeSearchIndexItems: IndexedWriteDeleteExecutorDeps<TRecord>['removeSearchIndexItems']
-  private readonly logDebug: IndexedWriteDeleteExecutorDeps<TRecord>['logDebug']
-  private readonly successMessage: string
+  private readonly executor: SdkIndexedWriteDeleteExecutorService<TRecord>
 
   constructor(deps: IndexedWriteDeleteExecutorDeps<TRecord>) {
-    this.normalizePath = deps.normalizePath
-    this.findExisting = deps.findExisting
-    this.deleteRecords = deps.deleteRecords
-    this.removeSearchIndexItems = deps.removeSearchIndexItems
-    this.logDebug = deps.logDebug
-    this.successMessage = deps.successMessage ?? 'Indexed write delete completed'
+    this.executor = new SdkIndexedWriteDeleteExecutorService({
+      normalizePath: deps.normalizePath,
+      findExisting: deps.findExisting,
+      deleteRecords: deps.deleteRecords,
+      removeIndexedArtifacts: deps.removeSearchIndexItems,
+      logDebug: deps.logDebug,
+      successMessage: deps.successMessage
+    })
   }
 
   async execute(rawPaths: string[]): Promise<IndexedWriteDeleteExecutorResult<TRecord>> {
-    const normalized = this.normalizeUniquePaths(rawPaths)
-    if (normalized.length === 0) {
-      return this.emptyResult()
-    }
-
-    const existing = await this.findExisting(normalized)
-    return await this.executeExisting(existing)
+    return await this.executor.execute(rawPaths)
   }
 
   async executeExisting(existing: TRecord[]): Promise<IndexedWriteDeleteExecutorResult<TRecord>> {
-    if (existing.length === 0) {
-      return this.emptyResult()
-    }
-
-    await this.deleteRecords(existing)
-    const deletedPaths = existing.map((record) => record.path)
-    await this.removeSearchIndexItems(deletedPaths)
-
-    this.logDebug(this.successMessage, { removed: existing.length })
-    return {
-      deleted: existing,
-      deletedIds: existing.map((record) => record.id),
-      deletedPaths
-    }
-  }
-
-  private normalizeUniquePaths(rawPaths: string[]): string[] {
-    return Array.from(new Set(rawPaths.map((rawPath) => this.normalizePath(rawPath))))
-  }
-
-  private emptyResult(): IndexedWriteDeleteExecutorResult<TRecord> {
-    return {
-      deleted: [],
-      deletedIds: [],
-      deletedPaths: []
-    }
+    return await this.executor.executeExisting(existing)
   }
 }
