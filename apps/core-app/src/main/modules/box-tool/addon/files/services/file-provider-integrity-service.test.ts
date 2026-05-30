@@ -32,10 +32,12 @@ function createService(options: {
   const resetRuntimeState = vi.fn(
     options.resetRuntimeState ??
       (async () => ({
+        sourceId: 'file-provider',
         reason: IndexedSourceResetReasons.IntegrityRepair,
         clearedSearchIndex: true,
         clearedScanProgress: true,
         scanProgressRows: 2,
+        startedAt: 100,
         completedAt: 123
       }))
   )

@@ -11,6 +11,8 @@ import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   FileIndexAddPathResult,
   FileIndexBatteryStatus,
+  FileIndexEstimateBasis,
+  FileIndexEstimateStatus,
   FileIndexProgress as FileIndexProgressPayload,
   FileIndexRebuildRequest,
   FileIndexRebuildResult
@@ -36,7 +38,6 @@ import type { ProviderContext } from '../../search-engine/types'
 import type { FileTypeTag } from './constants'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
-import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -105,6 +106,13 @@ import {
 } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
+  IndexedWriteDeleteExecutorService,
+  type IndexedWriteDeleteExecutorResult,
+  type IndexedWriteDeleteRecord
+} from '../../search-engine/indexing-write-delete-executor-service'
+import { IndexedWriteInsertExecutorService } from '../../search-engine/indexing-write-insert-executor-service'
+import { IndexedWriteUpdateExecutorService } from '../../search-engine/indexing-write-update-executor-service'
+import {
   SearchIndexWorkerClient,
   type UpsertFileRecord
 } from '../../search-engine/workers/search-index-worker-client'
@@ -112,6 +120,7 @@ import {
   getProgressStreamFlushDelayMs,
   shouldEmitProgressStreamImmediately
 } from './services/file-provider-progress-stream-service'
+import { FileProviderProgressEstimatorService } from './services/file-provider-progress-estimator-service'
 import {
   FileProviderWorkerStatusService,
   type FileProviderWorkerStatusSnapshot
@@ -141,6 +150,10 @@ import {
   type FileProviderIncrementalEntry
 } from './services/file-provider-incremental-queue-service'
 import { FileProviderIncrementalWritePlannerService } from './services/file-provider-incremental-write-planner-service'
+import {
+  FileProviderIncrementalWriteService,
+  type FileProviderIncrementalChangeEntry
+} from './services/file-provider-incremental-write-service'
 import { FileProviderIndexRuntimeService } from './services/file-provider-index-runtime-service'
 import {
   FileProviderIntegrityService,
@@ -151,6 +164,18 @@ import { FileProviderRuntimeResetService } from './services/file-provider-runtim
 import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
 import { FileProviderIndexSchedulerService } from './services/file-provider-index-scheduler-service'
 import { FileProviderIndexPersistEntryMapperService } from './services/file-provider-index-persist-entry-mapper-service'
+import { FileProviderReconciliationInsertService } from './services/file-provider-reconciliation-insert-service'
+import { FileProviderCleanupDeleteService } from './services/file-provider-cleanup-delete-service'
+import { FileProviderFullScanInsertService } from './services/file-provider-full-scan-insert-service'
+import { FileProviderFullScanRunService } from './services/file-provider-full-scan-run-service'
+import { FileProviderReconciliationDeleteService } from './services/file-provider-reconciliation-delete-service'
+import { FileProviderReconciliationDiffService } from './services/file-provider-reconciliation-diff-service'
+import {
+  FileProviderReconciliationRunService,
+  type FileProviderReconciliationDbRecord
+} from './services/file-provider-reconciliation-run-service'
+import { FileProviderReconciliationUpdateService } from './services/file-provider-reconciliation-update-service'
+import { FileProviderScanStrategyService } from './services/file-provider-scan-strategy-service'
 import FileSystemWatcher from '../../file-system-watcher'
 
 const fileProviderLog = getLogger('file-provider')
@@ -174,6 +199,15 @@ function isValidBase64DataUrl(value: string): boolean {
     return false
   }
   return BASE64_PAYLOAD_PATTERN.test(payload)
+}
+
+function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+  const safeChunkSize = Math.max(1, Math.floor(chunkSize))
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += safeChunkSize) {
+    chunks.push(items.slice(i, i + safeChunkSize))
+  }
+  return chunks
 }
 
 interface IconCacheEntry {
@@ -410,8 +444,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     processedItems: 0,
     startTime: 0,
     lastUpdateTime: 0,
-    averageItemsPerSecond: 0
+    averageItemsPerSecond: 0,
+    estimateStatus: 'unknown' as FileIndexEstimateStatus,
+    speedSampleCount: 0,
+    estimateBasis: 'none' as FileIndexEstimateBasis
   }
+  private readonly progressEstimator = new FileProviderProgressEstimatorService()
 
   private readonly enableFileIconExtraction =
     (process.env.TALEX_FILE_PROVIDER_EXTRACT_ICONS ?? 'true').toLowerCase() !== 'false'
@@ -421,10 +459,51 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly integrityService: FileProviderIntegrityService
   private readonly runtimeResetService: FileProviderRuntimeResetService
   private readonly scanProgressService: FileProviderScanProgressService
+  private readonly scanStrategyService: FileProviderScanStrategyService
   private readonly incrementalQueueService: FileProviderIncrementalQueueService
   private readonly incrementalWritePlanner: FileProviderIncrementalWritePlannerService
+  private readonly incrementalWriteService: FileProviderIncrementalWriteService<
+    typeof filesSchema.$inferInsert,
+    typeof filesSchema.$inferSelect,
+    typeof filesSchema.$inferSelect,
+    typeof filesSchema.$inferSelect
+  >
   private readonly writeSideEffectService: FileProviderWriteSideEffectService<
     typeof filesSchema.$inferSelect
+  >
+  private readonly fileUpdateExecutor: IndexedWriteUpdateExecutorService<
+    FileUpdateRecord,
+    typeof filesSchema.$inferSelect
+  >
+  private readonly incrementalInsertExecutor: IndexedWriteInsertExecutorService<
+    typeof filesSchema.$inferInsert,
+    typeof filesSchema.$inferSelect
+  >
+  private readonly incrementalDeleteExecutor: IndexedWriteDeleteExecutorService<IndexedWriteDeleteRecord>
+  private readonly cleanupDeleteService: FileProviderCleanupDeleteService<IndexedWriteDeleteRecord>
+  private readonly fullScanRunService: FileProviderFullScanRunService<
+    FileIndexRunOptions | undefined
+  >
+  private readonly fullScanInsertService: FileProviderFullScanInsertService<
+    typeof filesSchema.$inferSelect,
+    FileIndexRunOptions | undefined
+  >
+  private readonly reconciliationDeleteService: FileProviderReconciliationDeleteService<
+    IndexedWriteDeleteRecord,
+    FileIndexRunOptions | undefined
+  >
+  private readonly reconciliationDiffService: FileProviderReconciliationDiffService
+  private readonly reconciliationUpdateService: FileProviderReconciliationUpdateService<
+    FileUpdateRecord,
+    typeof filesSchema.$inferSelect,
+    FileIndexRunOptions | undefined
+  >
+  private readonly reconciliationInsertService: FileProviderReconciliationInsertService<
+    typeof filesSchema.$inferSelect,
+    FileIndexRunOptions | undefined
+  >
+  private readonly reconciliationRunService: FileProviderReconciliationRunService<
+    FileIndexRunOptions | undefined
   >
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
   private readonly indexPersistEntryMapper: FileProviderIndexPersistEntryMapperService
@@ -493,19 +572,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       countSearchIndexByProvider: (providerId, reason) =>
         this.countSearchIndexByProvider(providerId, reason),
       resetRuntimeState: async (request) => {
-        const result = await this.resetFileIndexRuntimeStateViaIndexedRuntime({
+        return await this.resetFileIndexRuntimeStateViaIndexedRuntime({
           sourceId: this.id,
           reason: request.reason,
           clearSearchIndex: request.clearSearchIndex,
           clearScanProgress: request.clearScanProgress
         })
-        return {
-          reason: result.reason,
-          clearedSearchIndex: result.clearedSearchIndex,
-          clearedScanProgress: result.clearedScanProgress,
-          scanProgressRows: result.scanProgressRows ?? 0,
-          completedAt: result.completedAt
-        }
       },
       withDbWrite: (label, operation) => this.withDbWrite(label, operation),
       logInfo: (message, meta) => this.logInfo(message, meta)
@@ -514,6 +586,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       ensureSearchIndexWorkerReady: (reason) => this.ensureSearchIndexWorkerReady(reason),
       getSearchIndexWorker: () => this.searchIndexWorker
+    })
+    this.scanStrategyService = new FileProviderScanStrategyService({
+      getCompletedPaths: () => this.scanProgressService.getCompletedPaths(),
+      yieldAfterRead: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      },
+      now: () => performance.now(),
+      formatDuration,
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      logInfo: (message, meta) => this.logInfo(message, meta)
     })
     this.incrementalQueueService = new FileProviderIncrementalQueueService({
       normalizePath: (rawPath) => this.normalizePath(rawPath),
@@ -526,10 +608,190 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       normalizePath: (filePath) => this.normalizePath(filePath),
       timestampToleranceMs: this.timestampToleranceMs
     })
+    this.incrementalWriteService = new FileProviderIncrementalWriteService({
+      planner: this.incrementalWritePlanner,
+      normalizePath: (filePath) => this.normalizePath(filePath),
+      buildRecord: (rawPath, options) => this.buildFileRecord(rawPath, options),
+      getExistingRows: async (paths) => {
+        if (!this.dbUtils || paths.length === 0) return []
+        return await this.dbUtils
+          .getDb()
+          .select()
+          .from(filesSchema)
+          .where(inArray(filesSchema.path, paths))
+      },
+      insertRecords: (records) => this.insertIncrementalRecords(records),
+      updateRecords: (records) => this._processFileUpdates(records),
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      logInfo: (message, meta) => this.logInfo(message, meta)
+    })
     this.writeSideEffectService = new FileProviderWriteSideEffectService({
       processFileExtensions: (files) => this.processFileExtensions(files),
       scheduleIndexing: (files, reason) => this.scheduleIndexing(files, reason),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
+    })
+    this.fileUpdateExecutor = new IndexedWriteUpdateExecutorService({
+      waitBeforeChunk: async () => {
+        await appTaskGate.waitForIdle()
+        await dbWriteScheduler.waitForCapacity(4)
+      },
+      updateOne: (record) => this.updateFileRecord(record),
+      refreshUpdated: (records) => this.refreshFileUpdateRecords(records),
+      dispatchUpdated: (records) => {
+        this.writeSideEffectService.dispatch(records, {
+          extensionContext: 'file-update',
+          indexReason: 'file-update'
+        })
+      },
+      runQueue: (chunks, handler, options) => runAdaptiveTaskQueue(chunks, handler, options),
+      now: () => performance.now(),
+      formatDuration,
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      label: 'FileProvider::processFileUpdates'
+    })
+    this.incrementalInsertExecutor = new IndexedWriteInsertExecutorService({
+      persist: (records) => this.persistIncrementalRecords(records),
+      dispatchInserted: (records) => {
+        this.writeSideEffectService.dispatch(records, {
+          extensionContext: 'incremental',
+          indexReason: 'incremental-insert'
+        })
+      },
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      successMessage: 'Incremental index completed'
+    })
+    this.incrementalDeleteExecutor = new IndexedWriteDeleteExecutorService({
+      normalizePath: (rawPath) => path.normalize(rawPath),
+      findExisting: (paths) => this.findIncrementalDeleteRecords(paths),
+      deleteRecords: (records) => this.deleteIncrementalRecords(records),
+      removeSearchIndexItems: (paths) => this.removeSearchIndexItems(paths, 'incremental.delete'),
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      successMessage: 'Incremental remove completed'
+    })
+    this.cleanupDeleteService = new FileProviderCleanupDeleteService({
+      getAllIndexedFileRecords: async () => {
+        if (!this.dbUtils) return []
+        return await this.dbUtils
+          .getDb()
+          .select({ path: filesSchema.path, id: filesSchema.id })
+          .from(filesSchema)
+          .where(eq(filesSchema.type, 'file'))
+      },
+      isWithinWatchRoots: (filePath) =>
+        this.watchPaths.some((watchPath) => filePath.startsWith(watchPath)),
+      yieldAfterRead: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      },
+      deleteRecords: (records) => this.deleteCleanupRecords(records),
+      removeSearchIndexItems: (paths) => this.removeCleanupSearchIndexItems(paths),
+      emitProgress: (current, total) => this.emitIndexingProgress('cleanup', current, total),
+      now: () => performance.now(),
+      formatDuration,
+      logInfo: (message, meta) => this.logInfo(message, meta),
+      logDebug: (message, meta) => this.logDebug(message, meta)
+    })
+    this.fullScanRunService = new FileProviderFullScanRunService({
+      enterPerfContext: (label, metadata) => enterPerfContext(label, metadata),
+      scanDirectory: (rootPath, currentExcludePathsSet) =>
+        this.scanDirectoryWithWorker(rootPath, currentExcludePathsSet),
+      insertRecords: (rootPath, records, runOptions) =>
+        this.fullScanInsertService.execute(rootPath, records, runOptions),
+      emitProgress: (current, total) => this.emitIndexingProgress('scanning', current, total),
+      yieldAfterScan: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      },
+      now: () => performance.now(),
+      formatDuration,
+      logDebug: (message, meta) => this.logDebug(message, meta)
+    })
+    this.fullScanInsertService = new FileProviderFullScanInsertService({
+      getBatchSize: () => this.upsertBatchScheduler.currentSize,
+      recordBatchDuration: (durationMs) => this.upsertBatchScheduler.recordDuration(durationMs),
+      waitForIdle: async () => {
+        await appTaskGate.waitForIdle()
+      },
+      upsertFiles: (records, reason) => this.upsertSearchIndexFiles(records, reason),
+      dispatchSideEffects: (records) => {
+        this.writeSideEffectService.dispatch(records, {
+          extensionContext: 'full-scan',
+          indexReason: 'full-scan'
+        })
+      },
+      emitRecordBatch: (records, runOptions) =>
+        this.emitIndexedSourceRecordBatch(records, runOptions),
+      emitProgress: (current, total) => this.emitIndexingProgress('indexing', current, total),
+      sleep: async (durationMs) => {
+        await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
+      },
+      now: () => performance.now(),
+      formatDuration,
+      logInfo: (message, meta) => this.logInfo(message, meta),
+      logDebug: (message, meta) => this.logDebug(message, meta)
+    })
+    this.reconciliationDeleteService = new FileProviderReconciliationDeleteService({
+      sourceId: this.id,
+      deleteRecords: (records) => this.deleteReconciledRecords(records),
+      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions)
+    })
+    this.reconciliationDiffService = new FileProviderReconciliationDiffService({
+      reconcileWithWorker: (diskFiles, dbFiles, reconciliationPaths) =>
+        this.reconcileWorker.reconcile(diskFiles, dbFiles, reconciliationPaths),
+      logWarn: (message, error, meta) => this.logWarn(message, error, meta)
+    })
+    this.reconciliationUpdateService = new FileProviderReconciliationUpdateService({
+      sourceId: this.id,
+      updateRecords: (records) => this._processFileUpdates(records),
+      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
+      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record)
+    })
+    this.reconciliationInsertService = new FileProviderReconciliationInsertService({
+      sourceId: this.id,
+      waitForIdle: async () => {
+        await appTaskGate.waitForIdle()
+      },
+      runQueue: (chunks, handler, options) => runAdaptiveTaskQueue(chunks, handler, options),
+      upsertFiles: (records, reason) => this.upsertSearchIndexFiles(records, reason),
+      dispatchSideEffects: (records) => {
+        this.writeSideEffectService.dispatch(records, {
+          extensionContext: 'reconciliation',
+          indexReason: 'reconciliation-insert'
+        })
+      },
+      emitRecordBatch: (records, runOptions) =>
+        this.emitIndexedSourceRecordBatch(records, runOptions),
+      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
+      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
+      emitProgress: (current, total) => this.emitIndexingProgress('indexing', current, total),
+      now: () => performance.now(),
+      formatDuration,
+      logDebug: (message, meta) => this.logDebug(message, meta)
+    })
+    this.reconciliationRunService = new FileProviderReconciliationRunService({
+      enterPerfContext: (label, metadata) => enterPerfContext(label, metadata),
+      waitForIdle: async () => {
+        await appTaskGate.waitForIdle()
+      },
+      getDbFiles: (paths) => this.getReconciliationDbFiles(paths),
+      scanDirectory: (rootPath, currentExcludePathsSet) =>
+        this.scanDirectoryWithWorker(rootPath, currentExcludePathsSet),
+      reconcile: (diskFiles, dbFiles, paths) =>
+        this.reconciliationDiffService.reconcile(diskFiles, dbFiles, paths),
+      deleteRecords: (records, runOptions) =>
+        this.reconciliationDeleteService.execute(records, runOptions),
+      updateRecords: (records, runOptions) =>
+        this.reconciliationUpdateService.execute(records, runOptions),
+      insertRecords: (records, runOptions) =>
+        this.reconciliationInsertService.execute(records, runOptions),
+      emitProgress: (current, total) => this.emitIndexingProgress('reconciliation', current, total),
+      yieldAfterDbRead: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      },
+      yieldAfterPathScan: async () => {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      },
+      now: () => performance.now(),
+      formatDuration,
+      logDebug: (message, meta) => this.logDebug(message, meta)
     })
     this.indexSchedulerService = new FileProviderIndexSchedulerService({
       getDatabaseFilePath: () => this.databaseFilePath,
@@ -770,21 +1032,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async resetIndexedSourceRuntimeState(
     request: IndexedSourceResetRequest
   ): Promise<IndexedSourceResetResult> {
-    const startedAt = Date.now()
     const result = await this.runtimeResetService.reset({
-      reason: `file-index.${request.reason}`,
-      clearSearchIndex: request.clearSearchIndex,
-      clearScanProgress: request.clearScanProgress
+      request,
+      operationReasonPrefix: `file-index.${request.reason}`
     })
 
     return {
-      sourceId: this.id,
-      reason: request.reason,
+      ...result,
       clearedSearchIndex: result.clearedSearchIndex,
       clearedScanProgress: result.clearedScanProgress,
-      scanProgressRows: result.scanProgressRows,
-      startedAt,
-      completedAt: result.completedAt
+      scanProgressRows: result.scanProgressRows ?? 0
     }
   }
 
@@ -1339,14 +1596,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     let estimatedCompletion: number | null = null
     let estimatedRemainingMs: number | null = null
 
-    if (isIndexing && this.indexingStartTime && this.indexingProgress.total > 0) {
-      const elapsed = now - this.indexingStartTime
-      const progress = this.indexingProgress.current / this.indexingProgress.total
-
-      if (progress > 0.01) {
-        // Only estimate if we have at least 1% progress
-        const estimatedTotalTime = elapsed / progress
-        estimatedRemainingMs = Math.max(0, estimatedTotalTime - elapsed)
+    if (isIndexing && this.indexingStartTime) {
+      const estimate = this.progressEstimator.getEstimate()
+      estimatedRemainingMs = estimate.estimatedRemainingMs
+      this.indexingStats.averageItemsPerSecond = estimate.averageItemsPerSecond
+      this.indexingStats.estimateStatus = estimate.status
+      this.indexingStats.speedSampleCount = estimate.speedSampleCount
+      this.indexingStats.estimateBasis = estimate.estimateBasis
+      if (estimatedRemainingMs != null) {
         estimatedCompletion = now + estimatedRemainingMs
       }
     } else if (!isIndexing) {
@@ -1365,7 +1622,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       startTime: this.indexingStartTime,
       estimatedCompletion,
       estimatedRemainingMs,
-      averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
+      averageItemsPerSecond: this.indexingStats.averageItemsPerSecond,
+      estimateStatus: this.indexingStats.estimateStatus,
+      speedSampleCount: this.indexingStats.speedSampleCount,
+      estimateBasis: this.indexingStats.estimateBasis
     }
   }
 
@@ -1844,49 +2104,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private computeReconciliationDiff(
-    diskFiles: ReconcileDiskFile[],
-    dbFiles: ReconcileDbFile[],
+  private async getReconciliationDbFiles(
     reconciliationPaths: string[]
-  ): {
-    filesToAdd: ReconcileDiskFile[]
-    filesToUpdate: Array<ReconcileDiskFile & { id: number }>
-    deletedIds: number[]
-  } {
-    const dbMap = new Map<string, ReconcileDbFile>()
-    for (const dbFile of dbFiles) {
-      dbMap.set(dbFile.path, dbFile)
-    }
+  ): Promise<FileProviderReconciliationDbRecord[]> {
+    if (!this.dbUtils) return []
+    const db = this.dbUtils.getDb()
+    const pathFilters = reconciliationPaths.map(
+      (targetPath) => sql`${filesSchema.path} LIKE ${`${targetPath}%`}`
+    )
+    const pathWhere = pathFilters.length > 0 ? or(...pathFilters) : undefined
 
-    const filesToAdd: ReconcileDiskFile[] = []
-    const filesToUpdate: Array<ReconcileDiskFile & { id: number }> = []
-    const seenDiskPaths = new Set<string>()
-
-    for (const diskFile of diskFiles) {
-      if (seenDiskPaths.has(diskFile.path)) {
-        continue
-      }
-      seenDiskPaths.add(diskFile.path)
-
-      const dbFile = dbMap.get(diskFile.path)
-      if (!dbFile) {
-        filesToAdd.push(diskFile)
-      } else if (diskFile.mtime > dbFile.mtime) {
-        filesToUpdate.push({ ...diskFile, id: dbFile.id })
-      }
-      dbMap.delete(diskFile.path)
-    }
-
-    const deletedIds: number[] = []
-    if (reconciliationPaths.length > 0) {
-      for (const [path, dbFile] of dbMap.entries()) {
-        if (reconciliationPaths.some((prefix) => path.startsWith(prefix))) {
-          deletedIds.push(dbFile.id)
-        }
-      }
-    }
-
-    return { filesToAdd, filesToUpdate, deletedIds }
+    return await db
+      .select({
+        id: filesSchema.id,
+        path: filesSchema.path,
+        mtime: filesSchema.mtime
+      })
+      .from(filesSchema)
+      .where(
+        pathWhere ? and(eq(filesSchema.type, 'file'), pathWhere) : eq(filesSchema.type, 'file')
+      )
   }
 
   private scheduleIndexing(files: (typeof filesSchema.$inferSelect)[], reason: string): void {
@@ -2237,127 +2474,119 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async handleIncrementalDeletes(paths: string[]): Promise<void> {
-    if (!this.dbUtils || paths.length === 0) return
-    const db = this.dbUtils.getDb()
-    const normalized = Array.from(new Set(paths.map((p) => path.normalize(p))))
-    const existing = await db
+    if (!this.dbUtils) return
+    await this.incrementalDeleteExecutor.execute(paths)
+  }
+
+  private async findIncrementalDeleteRecords(paths: string[]): Promise<IndexedWriteDeleteRecord[]> {
+    if (!this.dbUtils || paths.length === 0) return []
+    return await this.dbUtils
+      .getDb()
       .select({ id: filesSchema.id, path: filesSchema.path })
       .from(filesSchema)
-      .where(inArray(filesSchema.path, normalized))
+      .where(inArray(filesSchema.path, paths))
+  }
 
-    if (existing.length === 0) {
-      return
-    }
-
-    const idsToDelete = existing.map((file) => file.id)
-    const pathsToDelete = existing.map((file) => file.path)
+  private async deleteIncrementalRecords(records: IndexedWriteDeleteRecord[]): Promise<void> {
+    if (!this.dbUtils || records.length === 0) return
+    const db = this.dbUtils.getDb()
+    const idsToDelete = records.map((file) => file.id)
     await this.withDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
     })
-    // Remove from FTS5 via worker thread to avoid blocking main thread
-    await this.removeSearchIndexItems(pathsToDelete, 'incremental.delete')
-    this.logDebug('Incremental remove completed', {
-      removed: existing.length
+  }
+
+  private async deleteCleanupRecords(records: IndexedWriteDeleteRecord[]): Promise<void> {
+    if (!this.dbUtils || records.length === 0) return
+    const db = this.dbUtils.getDb()
+    const idsToDelete = records.map((file) => file.id)
+    const pathsToDelete = records.map((file) => file.path)
+    await this.withDbWrite('file-index.cleanup.delete', async () => {
+      await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+      await this.deleteEmbeddingsByFileIds(db, idsToDelete)
+      await this.scanProgressService.deletePaths(db, pathsToDelete)
     })
+  }
+
+  private async removeCleanupSearchIndexItems(paths: string[]): Promise<void> {
+    const pathChunks = chunkArray(paths, 50)
+    for (const chunk of pathChunks) {
+      await this.removeSearchIndexItems(chunk, 'cleanup.remove-stale')
+    }
+  }
+
+  private async deleteReconciledRecords(
+    records: IndexedWriteDeleteRecord[]
+  ): Promise<IndexedWriteDeleteExecutorResult<IndexedWriteDeleteRecord>> {
+    if (!this.dbUtils || records.length === 0) {
+      return { deleted: [], deletedIds: [], deletedPaths: [] }
+    }
+
+    return await new IndexedWriteDeleteExecutorService<IndexedWriteDeleteRecord>({
+      normalizePath: (rawPath) => path.normalize(rawPath),
+      findExisting: async () => [],
+      deleteRecords: async (resolvedRecords) => {
+        const db = this.dbUtils!.getDb()
+        const idsToDelete = resolvedRecords.map((file) => file.id)
+        const deleteChunks = chunkArray(idsToDelete, 50)
+        for (const chunk of deleteChunks) {
+          await appTaskGate.waitForIdle()
+          await dbWriteScheduler.waitForCapacity(4)
+          await this.withDbWrite('file-index.reconcile.delete', async () => {
+            await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
+            await this.deleteEmbeddingsByFileIds(db, chunk)
+          })
+        }
+      },
+      removeSearchIndexItems: async (paths) => {
+        const pathChunks = chunkArray(paths, 100)
+        for (const chunk of pathChunks) {
+          await appTaskGate.waitForIdle()
+          await this.removeSearchIndexItems(chunk, 'reconciliation.remove-deleted')
+        }
+      },
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      successMessage: 'Reconciliation remove completed'
+    }).executeExisting(records)
   }
 
   private async handleIncrementalAddsOrChanges(
     entries: Array<[string, { action: 'add' | 'change'; rawPath: string; manual?: boolean }]>
   ): Promise<void> {
     if (!this.dbUtils) return
+
+    await this.incrementalWriteService.execute(entries as FileProviderIncrementalChangeEntry[])
+  }
+
+  private async insertIncrementalRecords(
+    records: Array<typeof filesSchema.$inferInsert>
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    return await this.incrementalInsertExecutor.execute(records)
+  }
+
+  private async persistIncrementalRecords(
+    records: Array<typeof filesSchema.$inferInsert>
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    if (!this.dbUtils || records.length === 0) return []
     const db = this.dbUtils.getDb()
-    const manualEntries = entries.filter(([, payload]) => payload.manual === true)
-    const manualPaths = new Set(
-      manualEntries.map(([, payload]) => this.normalizePath(payload.rawPath))
-    )
-
-    const recordMap = new Map<string, typeof filesSchema.$inferInsert>()
-    for (const [, payload] of entries) {
-      const record = await this.buildFileRecord(payload.rawPath, {
-        manualForce: payload.manual === true
-      })
-      if (record) {
-        recordMap.set(record.path, record)
-      }
-    }
-
-    if (recordMap.size === 0) {
-      if (manualEntries.length > 0) {
-        this.logInfo('Incremental manual summary', {
-          total: manualEntries.length,
-          accepted: 0,
-          inserted: 0,
-          updated: 0,
-          unchanged: 0
+    return await this.withDbWrite('file-index.incremental.insert', () =>
+      db
+        .insert(filesSchema)
+        .values(records)
+        .onConflictDoUpdate({
+          target: filesSchema.path,
+          set: {
+            name: sql`excluded.name`,
+            extension: sql`excluded.extension`,
+            size: sql`excluded.size`,
+            mtime: sql`excluded.mtime`,
+            ctime: sql`excluded.ctime`,
+            lastIndexedAt: sql`excluded.last_indexed_at`
+          }
         })
-      }
-      return
-    }
-
-    const targetPaths = Array.from(recordMap.keys())
-    const existingRows = await db
-      .select()
-      .from(filesSchema)
-      .where(inArray(filesSchema.path, targetPaths))
-    const writePlan = this.incrementalWritePlanner.plan({
-      records: Array.from(recordMap.values()),
-      existingRows,
-      manualPaths,
-      manualTotal: manualEntries.length
-    })
-    const filesToInsert = writePlan.filesToInsert as (typeof filesSchema.$inferInsert)[]
-    const filesToUpdate = writePlan.filesToUpdate as (typeof filesSchema.$inferSelect)[]
-    const unchangedCount = writePlan.unchangedCount
-
-    if (filesToInsert.length > 0) {
-      const inserted = await this.withDbWrite('file-index.incremental.insert', () =>
-        db
-          .insert(filesSchema)
-          .values(filesToInsert)
-          .onConflictDoUpdate({
-            target: filesSchema.path,
-            set: {
-              name: sql`excluded.name`,
-              extension: sql`excluded.extension`,
-              size: sql`excluded.size`,
-              mtime: sql`excluded.mtime`,
-              ctime: sql`excluded.ctime`,
-              lastIndexedAt: sql`excluded.last_indexed_at`
-            }
-          })
-          .returning()
-      )
-
-      this.writeSideEffectService.dispatch(inserted, {
-        extensionContext: 'incremental',
-        indexReason: 'incremental-insert'
-      })
-      this.logDebug('Incremental index completed', {
-        inserted: inserted.length
-      })
-    }
-
-    if (filesToUpdate.length > 0) {
-      await this._processFileUpdates(filesToUpdate)
-      this.logDebug('Incremental update completed', {
-        updated: filesToUpdate.length
-      })
-    }
-
-    if (unchangedCount > 0) {
-      this.logDebug(`Skipped ${unchangedCount} unchanged file(s) during incremental sync.`)
-    }
-
-    if (manualEntries.length > 0) {
-      this.logInfo('Incremental manual summary', {
-        total: writePlan.manual.total,
-        accepted: writePlan.manual.accepted,
-        inserted: writePlan.manual.inserted,
-        updated: writePlan.manual.updated,
-        unchanged: writePlan.manual.unchanged
-      })
-    }
+        .returning()
+    )
   }
 
   private async buildFileRecord(
@@ -2460,22 +2689,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         processedItems: 0,
         startTime: 0,
         lastUpdateTime: 0,
-        averageItemsPerSecond: 0
+        averageItemsPerSecond: 0,
+        estimateStatus: stage === 'completed' ? 'complete' : 'unknown',
+        speedSampleCount: 0,
+        estimateBasis: stage === 'completed' ? 'complete' : 'none'
       }
+      this.progressEstimator.reset()
     }
 
     this.indexingProgress = { stage, current, total }
 
-    // Calculate estimated completion
-    let estimatedRemainingMs: number | null = null
-    if (this.indexingStartTime && total > 0 && current > 0) {
-      const elapsed = now - this.indexingStartTime
-      const progress = current / total
-      if (progress > 0.01) {
-        const estimatedTotalTime = elapsed / progress
-        estimatedRemainingMs = estimatedTotalTime - elapsed
-      }
-    }
+    const estimate = this.progressEstimator.update({
+      stage,
+      current,
+      total,
+      now
+    })
+    this.indexingStats.averageItemsPerSecond = estimate.averageItemsPerSecond
+    this.indexingStats.estimateStatus = estimate.status
+    this.indexingStats.speedSampleCount = estimate.speedSampleCount
+    this.indexingStats.estimateBasis = estimate.estimateBasis
 
     const payload = {
       stage,
@@ -2483,8 +2716,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       total,
       progress: total > 0 ? Math.round((current / total) * 100) : 0,
       startTime: this.indexingStartTime,
-      estimatedRemainingMs,
-      averageItemsPerSecond: this.indexingStats.averageItemsPerSecond
+      estimatedRemainingMs: estimate.estimatedRemainingMs,
+      averageItemsPerSecond: this.indexingStats.averageItemsPerSecond,
+      estimateStatus: estimate.status,
+      speedSampleCount: estimate.speedSampleCount,
+      estimateBasis: estimate.estimateBasis
     }
 
     this.emitProgressStream(payload)
@@ -2544,414 +2780,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     // --- 1. Index Cleanup (FR-IX-4) ---
-    const cleanupStart = performance.now()
-    this.logInfo('Cleaning stale index entries from removed watch paths')
-    this.emitIndexingProgress('cleanup', 0, 1)
-    const allDbFilePaths = await db
-      .select({ path: filesSchema.path, id: filesSchema.id })
-      .from(filesSchema)
-      .where(eq(filesSchema.type, 'file'))
-    // Yield after heavy SELECT on files table
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    const filesToDelete = allDbFilePaths.filter(
-      (file) => !this.watchPaths.some((watchPath) => file.path.startsWith(watchPath))
-    )
-
-    if (filesToDelete.length > 0) {
-      const idsToDelete = filesToDelete.map((f) => f.id)
-      this.logInfo('Removing stale database entries', {
-        removed: idsToDelete.length
-      })
-
-      // Delete files + embeddings in the scheduler
-      await this.withDbWrite('file-index.cleanup.delete', async () => {
-        await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-        await this.deleteEmbeddingsByFileIds(db, idsToDelete)
-        const pathsToDelete = filesToDelete.map((f) => f.path)
-        await this.scanProgressService.deletePaths(db, pathsToDelete)
-      })
-
-      // Remove from FTS5 index via worker thread — no longer blocks main event loop
-      const pathsToRemove = filesToDelete.map((f) => f.path)
-      if (pathsToRemove.length > 0) {
-        const removeChunkSize = 50
-        for (let i = 0; i < pathsToRemove.length; i += removeChunkSize) {
-          const chunk = pathsToRemove.slice(i, i + removeChunkSize)
-          await this.removeSearchIndexItems(chunk, 'cleanup.remove-stale')
-        }
-      }
-      stats.deleted += filesToDelete.length
-    }
-    this.emitIndexingProgress('cleanup', 1, 1)
-    this.logDebug('Cleanup stage finished', {
-      duration: formatDuration(performance.now() - cleanupStart),
-      removed: filesToDelete.length
-    })
+    const cleanupResult = await this.cleanupDeleteService.execute()
+    stats.deleted += cleanupResult.deletedCount
 
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
-    const strategyStart = performance.now()
-    const completedScanPaths = await this.scanProgressService.getCompletedPaths()
-    // Yield after scan_progress read
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    const newPathsToScan = this.watchPaths.filter((p) => !completedScanPaths.has(p))
-    const reconciliationPaths = this.watchPaths.filter((p) => completedScanPaths.has(p))
-
-    this.logDebug('File indexing scan strategy', {
-      totalWatchPaths: this.watchPaths.length,
-      watchPaths: JSON.stringify(this.watchPaths),
-      completedScansCount: completedScanPaths.size,
-      completedPaths: JSON.stringify(Array.from(completedScanPaths)),
-      newPathsCount: newPathsToScan.length,
-      newPaths: JSON.stringify(newPathsToScan),
-      reconciliationCount: reconciliationPaths.length,
-      reconciliationPaths: JSON.stringify(reconciliationPaths)
-    })
-
-    this.logInfo('Scan strategy prepared', {
-      newPaths: newPathsToScan.length,
-      reconciliationPaths: reconciliationPaths.length,
-      duration: formatDuration(performance.now() - strategyStart)
-    })
+    const { newPathsToScan, reconciliationPaths } = await this.scanStrategyService.resolve(
+      this.watchPaths
+    )
     const completedScanProgressPaths = new Set<string>()
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
-      const fullScanContext = enterPerfContext('FileProvider.fullScan', {
-        paths: newPathsToScan.length
+      const fullScanResult = await this.fullScanRunService.execute(newPathsToScan, options, {
+        excludePathsSet
       })
-      try {
-        this.logDebug('Starting full scan for new paths', {
-          count: newPathsToScan.length,
-          sample: newPathsToScan.slice(0, 3).join(', ')
-        })
-        this.emitIndexingProgress('scanning', 0, newPathsToScan.length)
-        let scannedPaths = 0
-        for (const newPath of newPathsToScan) {
-          const pathScanStart = performance.now()
-          this.logDebug('Scanning new path', { path: newPath })
-          const diskFiles = await this.scanDirectoryWithWorker(newPath, excludePathsSet)
-          this.logDebug('Directory scan completed', {
-            path: newPath,
-            files: diskFiles.length,
-            duration: formatDuration(performance.now() - pathScanStart)
-          })
-
-          scannedPaths++
-          this.emitIndexingProgress('scanning', scannedPaths, newPathsToScan.length)
-
-          // Yield after scan completes — the worker result deserialization and
-          // the subsequent .map() below are synchronous and can stall the event loop
-          // for large directories (7000+ files).
-          await new Promise<void>((resolve) => setImmediate(resolve))
-
-          const lastIndexedAt = new Date()
-          const newFileRecords = diskFiles.map((file) => ({
-            path: file.path,
-            name: file.name,
-            extension: file.extension,
-            size: file.size,
-            mtime: file.mtime,
-            ctime: file.ctime,
-            lastIndexedAt,
-            isDir: false,
-            type: 'file'
-          }))
-
-          if (newFileRecords.length > 0) {
-            this.logInfo('Preparing to index full-scan results', {
-              path: newPath,
-              files: newFileRecords.length
-            })
-            // Adaptive chunking: use AIMD scheduler to size upsert batches
-            // based on real-time transaction duration feedback.
-            let indexedFiles = 0
-            this.emitIndexingProgress('indexing', 0, newFileRecords.length)
-            let recordOffset = 0
-            while (recordOffset < newFileRecords.length) {
-              const chunkSize = this.upsertBatchScheduler.currentSize
-              const chunk = newFileRecords.slice(recordOffset, recordOffset + chunkSize)
-              recordOffset += chunk.length
-
-              await appTaskGate.waitForIdle()
-              const chunkStart = performance.now()
-              const inserted = await this.upsertSearchIndexFiles(
-                chunk as UpsertFileRecord[],
-                'full-scan.upsert'
-              )
-              this.upsertBatchScheduler.recordDuration(performance.now() - chunkStart)
-              this.logDebug('Full scan chunk inserted', {
-                path: newPath,
-                chunk: `batch(${chunkSize})`,
-                size: chunk.length,
-                duration: formatDuration(performance.now() - chunkStart)
-              })
-              this.writeSideEffectService.dispatch(inserted, {
-                extensionContext: 'full-scan',
-                indexReason: 'full-scan'
-              })
-              await this.emitIndexedSourceRecordBatch(inserted, options)
-              stats.added += inserted.length
-              indexedFiles += chunk.length
-              this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
-              // Pacing delay: sleep proportional to batch duration to avoid
-              // flooding the serial DbWriteScheduler queue with cascading writes.
-              // This mirrors TCP pacing — we space out packets (batches) so the
-              // downstream pipeline (indexWorker → flush → FTS5) can drain.
-              const batchMs = performance.now() - chunkStart
-              await new Promise<void>((resolve) =>
-                setTimeout(resolve, Math.max(100, Math.round(batchMs)))
-              )
-            }
-          }
-        }
-      } finally {
-        fullScanContext()
-      }
-      for (const scannedPath of newPathsToScan) {
+      stats.added += fullScanResult.added
+      for (const scannedPath of fullScanResult.completedPaths) {
         completedScanProgressPaths.add(scannedPath)
       }
     }
 
     // --- 4. Reconciliation Scan for Existing Paths (FR-IX-2) ---
     if (reconciliationPaths.length > 0) {
-      const reconciliationContext = enterPerfContext('FileProvider.reconciliation', {
-        paths: reconciliationPaths.length
-      })
-      const reconciliationStart = performance.now()
-      try {
-        this.logDebug('Starting reconciliation scan', {
-          count: reconciliationPaths.length,
-          sample: reconciliationPaths.slice(0, 3).join(', ')
-        })
-
-        this.emitIndexingProgress('reconciliation', 0, reconciliationPaths.length)
-        await appTaskGate.waitForIdle()
-
-        const pathFilters = reconciliationPaths.map(
-          (targetPath) => sql`${filesSchema.path} LIKE ${`${targetPath}%`}`
-        )
-        const pathWhere = pathFilters.length > 0 ? or(...pathFilters) : undefined
-
-        const dbFiles = await db
-          .select({
-            id: filesSchema.id,
-            path: filesSchema.path,
-            mtime: filesSchema.mtime
-          })
-          .from(filesSchema)
-          .where(
-            pathWhere ? and(eq(filesSchema.type, 'file'), pathWhere) : eq(filesSchema.type, 'file')
-          )
-
-        // Yield after heavy SELECT to let pending microtasks/IO run
-        await new Promise<void>((resolve) => setImmediate(resolve))
-
-        const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
-
-        const diskFiles: ScannedFileInfo[] = []
-        let reconciledPaths = 0
-        for (const dir of reconciliationPaths) {
-          await appTaskGate.waitForIdle()
-          const scanned = await this.scanDirectoryWithWorker(dir, excludePathsSet)
-          for (const scannedFile of scanned) {
-            diskFiles.push(scannedFile)
-          }
-          await yieldToEventLoop()
-          reconciledPaths++
-          this.emitIndexingProgress('reconciliation', reconciledPaths, reconciliationPaths.length)
+      const reconciliationResult = await this.reconciliationRunService.execute(
+        reconciliationPaths,
+        options,
+        {
+          excludePathsSet
         }
-
-        const diskPayload: ReconcileDiskFile[] = diskFiles.map((file) => ({
-          path: file.path,
-          name: file.name,
-          extension: file.extension,
-          size: file.size,
-          mtime: this.toTimestamp(file.mtime) ?? 0,
-          ctime: this.toTimestamp(file.ctime) ?? 0
-        }))
-
-        const dbPayload: ReconcileDbFile[] = dbFiles.map((file) => ({
-          id: file.id,
-          path: file.path,
-          mtime: this.toTimestamp(file.mtime) ?? 0
-        }))
-
-        let reconcileResult: {
-          filesToAdd: ReconcileDiskFile[]
-          filesToUpdate: Array<ReconcileDiskFile & { id: number }>
-          deletedIds: number[]
-        }
-        try {
-          reconcileResult = await this.reconcileWorker.reconcile(
-            diskPayload,
-            dbPayload,
-            reconciliationPaths
-          )
-        } catch (error) {
-          this.logWarn('File reconcile worker failed, falling back to main-thread diff', error, {
-            files: diskPayload.length
-          })
-          reconcileResult = this.computeReconciliationDiff(
-            diskPayload,
-            dbPayload,
-            reconciliationPaths
-          )
-        }
-
-        const filesToAdd = reconcileResult.filesToAdd
-        const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
-          id: file.id,
-          path: file.path,
-          name: file.name,
-          extension: file.extension,
-          size: file.size,
-          mtime: new Date(file.mtime),
-          ctime: new Date(file.ctime),
-          type: 'file',
-          isDir: false
-        }))
-        const deletedFileIds = reconcileResult.deletedIds
-
-        if (deletedFileIds.length > 0) {
-          const deleteChunks: number[][] = []
-          const deleteChunkSize = 50
-          for (let i = 0; i < deletedFileIds.length; i += deleteChunkSize) {
-            deleteChunks.push(deletedFileIds.slice(i, i + deleteChunkSize))
-          }
-
-          for (const chunk of deleteChunks) {
-            await appTaskGate.waitForIdle()
-            await dbWriteScheduler.waitForCapacity(4)
-            await this.withDbWrite('file-index.reconcile.delete', async () => {
-              await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
-              await this.deleteEmbeddingsByFileIds(db, chunk)
-            })
-          }
-
-          const deletedIdSet = new Set(deletedFileIds)
-          const removedPaths = dbFiles
-            .filter((file) => deletedIdSet.has(file.id))
-            .map((file) => file.path)
-
-          if (removedPaths.length > 0) {
-            const pathChunks: string[][] = []
-            const pathChunkSize = 100
-            for (let i = 0; i < removedPaths.length; i += pathChunkSize) {
-              pathChunks.push(removedPaths.slice(i, i + pathChunkSize))
-            }
-            for (const chunk of pathChunks) {
-              await appTaskGate.waitForIdle()
-              await this.removeSearchIndexItems(chunk, 'reconciliation.remove-deleted')
-            }
-          }
-
-          for (const removedPath of removedPaths) {
-            await this.emitIndexedSourceDelta(
-              {
-                sourceId: this.id,
-                action: 'delete',
-                stableKey: removedPath,
-                path: removedPath,
-                reason: 'file-provider-reconciliation-delete'
-              },
-              options
-            )
-          }
-        }
-        stats.deleted += deletedFileIds.length
-
-        if (filesToUpdate.length > 0) {
-          const updated = await this._processFileUpdates(filesToUpdate)
-          for (const file of updated) {
-            await this.emitIndexedSourceDelta(
-              {
-                sourceId: this.id,
-                action: 'change',
-                record: this.mapFileToIndexedSourceRecord(file),
-                path: file.path,
-                reason: 'file-provider-reconciliation-update'
-              },
-              options
-            )
-          }
-          stats.changed += filesToUpdate.length
-        }
-
-        if (filesToAdd.length > 0) {
-          const newFileRecords = filesToAdd.map((file) => ({
-            path: file.path,
-            name: file.name,
-            extension: file.extension,
-            size: file.size,
-            mtime: new Date(file.mtime),
-            ctime: new Date(file.ctime),
-            lastIndexedAt: new Date(),
-            isDir: false,
-            type: 'file'
-          }))
-
-          const chunkSize = 20
-          const chunks: (typeof newFileRecords)[] = []
-          for (let i = 0; i < newFileRecords.length; i += chunkSize) {
-            chunks.push(newFileRecords.slice(i, i + chunkSize))
-          }
-
-          let reconciledFiles = 0
-          this.emitIndexingProgress('indexing', 0, filesToAdd.length)
-          await runAdaptiveTaskQueue(
-            chunks,
-            async (chunk, chunkIndex) => {
-              await appTaskGate.waitForIdle()
-              const chunkStart = performance.now()
-              const inserted = await this.upsertSearchIndexFiles(
-                chunk as UpsertFileRecord[],
-                'reconciliation.upsert'
-              )
-              this.logDebug('Reconciliation chunk inserted', {
-                chunk: `${chunkIndex + 1}/${chunks.length}`,
-                size: chunk.length,
-                duration: formatDuration(performance.now() - chunkStart)
-              })
-              this.writeSideEffectService.dispatch(inserted, {
-                extensionContext: 'reconciliation',
-                indexReason: 'reconciliation-insert'
-              })
-              await this.emitIndexedSourceRecordBatch(inserted, options)
-              for (const file of inserted) {
-                await this.emitIndexedSourceDelta(
-                  {
-                    sourceId: this.id,
-                    action: 'add',
-                    record: this.mapFileToIndexedSourceRecord(file),
-                    path: file.path,
-                    reason: 'file-provider-reconciliation-add'
-                  },
-                  options
-                )
-              }
-              stats.added += inserted.length
-              reconciledFiles += chunk.length
-              this.emitIndexingProgress('indexing', reconciledFiles, filesToAdd.length)
-            },
-            {
-              estimatedTaskTimeMs: 20,
-              label: 'FileProvider::reconciliationInsert'
-            }
-          )
-        }
-
-        this.logDebug('Reconciliation completed', {
-          duration: formatDuration(performance.now() - reconciliationStart),
-          added: filesToAdd.length,
-          updated: filesToUpdate.length,
-          deleted: deletedFileIds.length
-        })
-        stats.skipped += Math.max(0, diskPayload.length - filesToAdd.length - filesToUpdate.length)
-      } finally {
-        reconciliationContext()
-      }
-      for (const reconciledPath of reconciliationPaths) {
+      )
+      stats.added += reconciliationResult.added
+      stats.changed += reconciliationResult.changed
+      stats.deleted += reconciliationResult.deleted
+      stats.skipped += reconciliationResult.skipped
+      for (const reconciledPath of reconciliationResult.completedPaths) {
         completedScanProgressPaths.add(reconciledPath)
       }
     }
@@ -2974,80 +2836,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     void this.generateMissingThumbnails()
     return stats
   }
-
   private async _processFileUpdates(
     filesToUpdate: FileUpdateRecord[],
     chunkSize = 10
   ): Promise<Array<typeof filesSchema.$inferSelect>> {
     if (!this.dbUtils) return []
+    return await this.fileUpdateExecutor.execute(filesToUpdate, chunkSize)
+  }
+
+  private async updateFileRecord(file: FileUpdateRecord): Promise<void> {
+    if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
-    const updatedFiles: Array<typeof filesSchema.$inferSelect> = []
-
-    const chunks: FileUpdateRecord[][] = []
-    for (let i = 0; i < filesToUpdate.length; i += chunkSize) {
-      chunks.push(filesToUpdate.slice(i, i + chunkSize))
-    }
-
-    let processedCount = 0
-    const logInterval = 200
-    const processStart = performance.now()
-
-    await runAdaptiveTaskQueue(
-      chunks,
-      async (chunk) => {
-        await appTaskGate.waitForIdle()
-        await dbWriteScheduler.waitForCapacity(4)
-        const chunkStart = performance.now()
-
-        // Run each UPDATE as a separate scheduled task so the scheduler
-        // can yield between them. Do NOT batch them in a single withDbWrite
-        // — that blocks the event loop for the entire chunk duration.
-        for (const file of chunk) {
-          await this.withDbWrite('file-index.file-update.single', () =>
-            db
-              .update(filesSchema)
-              .set({
-                extension: file.extension,
-                size: file.size,
-                ctime: file.ctime,
-                mtime: file.mtime,
-                name: file.name,
-                type: file.type,
-                isDir: file.isDir,
-                lastIndexedAt: new Date()
-              })
-              .where(eq(filesSchema.id, file.id))
-          )
-        }
-        const ids = chunk.map((file) => file.id)
-        const refreshed = await db.select().from(filesSchema).where(inArray(filesSchema.id, ids))
-        updatedFiles.push(...refreshed)
-
-        this.writeSideEffectService.dispatch(refreshed, {
-          extensionContext: 'file-update',
-          indexReason: 'file-update'
+    await this.withDbWrite('file-index.file-update.single', () =>
+      db
+        .update(filesSchema)
+        .set({
+          extension: file.extension,
+          size: file.size,
+          ctime: file.ctime,
+          mtime: file.mtime,
+          name: file.name,
+          type: file.type,
+          isDir: file.isDir,
+          lastIndexedAt: new Date()
         })
-
-        processedCount += chunk.length
-        if (processedCount % logInterval === 0 || processedCount === filesToUpdate.length) {
-          const chunkDuration = performance.now() - chunkStart
-          const totalDuration = performance.now() - processStart
-          const averagePerFile = processedCount > 0 ? totalDuration / processedCount : totalDuration
-          this.logDebug('File update chunk processed', {
-            processed: processedCount,
-            total: filesToUpdate.length,
-            duration: formatDuration(chunkDuration),
-            averageDuration: formatDuration(averagePerFile)
-          })
-        }
-      },
-      {
-        estimatedTaskTimeMs: 20,
-        label: 'FileProvider::processFileUpdates'
-      }
+        .where(eq(filesSchema.id, file.id))
     )
+  }
 
-    return updatedFiles
+  private async refreshFileUpdateRecords(
+    files: FileUpdateRecord[]
+  ): Promise<Array<typeof filesSchema.$inferSelect>> {
+    if (!this.dbUtils || files.length === 0) return []
+    const ids = files.map((file) => file.id)
+    return await this.dbUtils.getDb().select().from(filesSchema).where(inArray(filesSchema.id, ids))
   }
 
   private buildFtsQuery(terms: string[]): string {

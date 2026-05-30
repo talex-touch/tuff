@@ -1,3 +1,9 @@
+import {
+  coalesceIndexingWatchDelta,
+  IndexingWatchDeltaQueueService,
+  type IndexingWatchDeltaEntry
+} from '../../../search-engine/indexing-watch-delta-queue-service'
+
 export type FileProviderIncrementalAction = 'add' | 'change' | 'delete'
 
 export interface FileProviderIncrementalPayload {
@@ -6,7 +12,7 @@ export interface FileProviderIncrementalPayload {
   manual?: boolean
 }
 
-export type FileProviderIncrementalEntry = [string, FileProviderIncrementalPayload]
+export type FileProviderIncrementalEntry = IndexingWatchDeltaEntry<FileProviderIncrementalPayload>
 
 export interface FileProviderIncrementalQueueServiceDeps {
   normalizePath: (rawPath: string) => string
@@ -17,24 +23,30 @@ export interface FileProviderIncrementalQueueServiceDeps {
 }
 
 export class FileProviderIncrementalQueueService {
-  private readonly normalizePath: FileProviderIncrementalQueueServiceDeps['normalizePath']
-  private readonly isWithinWatchRoots: FileProviderIncrementalQueueServiceDeps['isWithinWatchRoots']
-  private readonly prepareFlush: FileProviderIncrementalQueueServiceDeps['prepareFlush']
-  private readonly processEntries: FileProviderIncrementalQueueServiceDeps['processEntries']
-  private readonly logError: FileProviderIncrementalQueueServiceDeps['logError']
-  private taskChain: Promise<void> = Promise.resolve()
-  private readonly pending = new Map<string, FileProviderIncrementalPayload>()
+  private readonly queue: IndexingWatchDeltaQueueService<FileProviderIncrementalPayload>
 
   constructor(deps: FileProviderIncrementalQueueServiceDeps) {
-    this.normalizePath = deps.normalizePath
-    this.isWithinWatchRoots = deps.isWithinWatchRoots
-    this.prepareFlush = deps.prepareFlush
-    this.processEntries = deps.processEntries
-    this.logError = deps.logError
+    this.queue = new IndexingWatchDeltaQueueService<FileProviderIncrementalPayload>({
+      normalizeKey: deps.normalizePath,
+      shouldAccept: deps.isWithinWatchRoots,
+      prepareFlush: deps.prepareFlush,
+      processEntries: deps.processEntries,
+      logError: deps.logError,
+      coalesce: ({ previous, next }) => {
+        const coalesced = coalesceIndexingWatchDelta(previous, next)
+        if (coalesced.action === 'delete') {
+          return coalesced
+        }
+        return {
+          ...coalesced,
+          manual: previous?.manual === true || next.manual === true
+        }
+      }
+    })
   }
 
   getPendingSize(): number {
-    return this.pending.size
+    return this.queue.getPendingSize()
   }
 
   enqueue(
@@ -42,56 +54,14 @@ export class FileProviderIncrementalQueueService {
     action: FileProviderIncrementalAction,
     options?: { manual?: boolean }
   ): void {
-    if (!this.isWithinWatchRoots(rawPath)) {
-      return
-    }
-
-    const manual = options?.manual === true
-    const normalizedPath = this.normalizePath(rawPath)
-    const prev = this.pending.get(normalizedPath)
-
-    if (action === 'delete') {
-      this.pending.set(normalizedPath, { action, rawPath })
-    } else if (!prev || prev.action !== 'delete') {
-      const nextAction: 'add' | 'change' = prev?.action === 'add' ? 'add' : action
-      const nextRawPath = action === 'add' ? rawPath : (prev?.rawPath ?? rawPath)
-      this.pending.set(normalizedPath, {
-        action: nextAction,
-        rawPath: nextRawPath,
-        manual: prev?.manual === true || manual
-      })
-    }
-
-    this.schedule()
+    this.queue.enqueue(
+      rawPath,
+      action,
+      action === 'delete' ? undefined : { manual: options?.manual === true }
+    )
   }
 
   flushSoon(): void {
-    this.schedule()
-  }
-
-  private schedule(): void {
-    if (this.pending.size === 0) {
-      return
-    }
-
-    this.taskChain = this.taskChain
-      .then(() => this.flush())
-      .catch((error) => {
-        this.logError('Failed to process incremental updates.', error)
-      })
-  }
-
-  private async flush(): Promise<void> {
-    if (this.pending.size === 0) {
-      return
-    }
-
-    if (!(await this.prepareFlush())) {
-      return
-    }
-
-    const entries = Array.from(this.pending.entries())
-    this.pending.clear()
-    await this.processEntries(entries)
+    this.queue.flushSoon()
   }
 }

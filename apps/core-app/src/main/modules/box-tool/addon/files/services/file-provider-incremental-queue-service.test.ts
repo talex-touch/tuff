@@ -32,19 +32,7 @@ describe('file-provider-incremental-queue-service', () => {
     vi.clearAllMocks()
   })
 
-  it('ignores paths outside watch roots', async () => {
-    const { processEntries, service } = createService({
-      isWithinWatchRoots: () => false
-    })
-
-    service.enqueue('/tmp/a.txt', 'add')
-    await settleQueue()
-
-    expect(service.getPendingSize()).toBe(0)
-    expect(processEntries).not.toHaveBeenCalled()
-  })
-
-  it('coalesces add and change for the same normalized path', async () => {
+  it('keeps file add/change coalescing compatible with the shared queue', async () => {
     const { processEntries, service } = createService()
 
     service.enqueue('/Tmp/A.txt', 'add')
@@ -56,7 +44,7 @@ describe('file-provider-incremental-queue-service', () => {
     ])
   })
 
-  it('keeps delete as the final action for a pending path', async () => {
+  it('keeps file delete dominance compatible with the shared queue', async () => {
     const { processEntries, service } = createService()
 
     service.enqueue('/tmp/a.txt', 'add')
@@ -69,7 +57,7 @@ describe('file-provider-incremental-queue-service', () => {
     ])
   })
 
-  it('preserves manual state across coalesced changes', async () => {
+  it('preserves file manual state across coalesced changes', async () => {
     const { processEntries, service } = createService()
 
     service.enqueue('/tmp/a.txt', 'change', { manual: true })
@@ -79,17 +67,5 @@ describe('file-provider-incremental-queue-service', () => {
     expect(processEntries).toHaveBeenCalledWith([
       ['/tmp/a.txt', { action: 'change', rawPath: '/tmp/a.txt', manual: true }]
     ])
-  })
-
-  it('keeps pending entries when flush preparation is not ready', async () => {
-    const { processEntries, service } = createService({
-      prepareFlush: async () => false
-    })
-
-    service.enqueue('/tmp/a.txt', 'add')
-    await settleQueue()
-
-    expect(service.getPendingSize()).toBe(1)
-    expect(processEntries).not.toHaveBeenCalled()
   })
 })

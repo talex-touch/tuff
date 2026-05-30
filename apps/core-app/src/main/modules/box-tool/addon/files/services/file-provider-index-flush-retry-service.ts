@@ -1,8 +1,5 @@
 import { isSqliteBusyError } from '../../../../../db/sqlite-retry'
-import {
-  getIndexWorkerBusyRetryDelay,
-  getIndexWorkerFlushDelay
-} from './file-provider-index-flush-service'
+import { IndexedWriteFlushRetryService } from '../../../search-engine/indexing-write-flush-retry-service'
 
 export interface FileProviderIndexFlushRetryConfig {
   baseDelayMs?: number
@@ -19,22 +16,19 @@ export interface FileProviderIndexFlushFailureDecision {
 }
 
 export class FileProviderIndexFlushRetryService {
-  private readonly config: Required<FileProviderIndexFlushRetryConfig>
+  private readonly retryService: IndexedWriteFlushRetryService
 
   constructor(config: FileProviderIndexFlushRetryConfig = {}) {
-    this.config = {
+    this.retryService = new IndexedWriteFlushRetryService({
       baseDelayMs: config.baseDelayMs ?? 250,
       backlogDelayMs: config.backlogDelayMs ?? 500,
-      busyRetryBaseMs: config.busyRetryBaseMs ?? 250,
-      busyRetryMaxMs: config.busyRetryMaxMs ?? 5000
-    }
+      retryBaseMs: config.busyRetryBaseMs ?? 250,
+      retryMaxMs: config.busyRetryMaxMs ?? 5000
+    })
   }
 
   getFlushDelay(pendingSize: number): number {
-    return getIndexWorkerFlushDelay(pendingSize, {
-      baseDelayMs: this.config.baseDelayMs,
-      backlogDelayMs: this.config.backlogDelayMs
-    })
+    return this.retryService.getFlushDelay(pendingSize)
   }
 
   resolveFailure(input: {
@@ -43,24 +37,18 @@ export class FileProviderIndexFlushRetryService {
     retryCount: number
   }): FileProviderIndexFlushFailureDecision {
     const isBusy = isSqliteBusyError(input.error)
-    if (isBusy) {
-      const retry = getIndexWorkerBusyRetryDelay(input.retryCount, {
-        baseDelayMs: this.config.busyRetryBaseMs,
-        maxDelayMs: this.config.busyRetryMaxMs
-      })
-      return {
-        isBusy,
-        delayMs: retry.delayMs,
-        nextRetryCount: retry.nextRetryCount,
-        reason: 'sqlite-busy-retry'
-      }
-    }
-
+    const decision = this.retryService.resolveFailure({
+      pendingSize: input.pendingSize,
+      retryCount: input.retryCount,
+      retryable: isBusy,
+      retryableReason: 'sqlite-busy-retry',
+      fallbackReason: 'flush-failed'
+    })
     return {
       isBusy,
-      delayMs: this.getFlushDelay(input.pendingSize),
-      nextRetryCount: input.retryCount,
-      reason: 'flush-failed'
+      delayMs: decision.delayMs,
+      nextRetryCount: decision.nextRetryCount,
+      reason: decision.reason
     }
   }
 }
