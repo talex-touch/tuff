@@ -156,6 +156,8 @@ Settings 的 File Index 诊断区会把 `recentTasks` 渲染成最近任务 chip
 
 CoreApp 还提供 `IndexedWriteFlushRuntimeService` 作为通用 write flush runtime scheduler。它负责 flush timer、unavailable/no-pending/flush-in-progress idle snapshot、in-progress defer、失败 retry scheduling 与成功后的 drain remaining；source 只需要注入 flush executor、retry decision 和 evidence/snapshot 映射。FileProvider 仍保留 SQLite busy metadata、worker-not-ready 日志与 `file-provider:index-flush` evidence 语义。
 
+`@talex-touch/utils/search` 也暴露 `IndexedWritePlanService` 作为 path-record write planning primitive。它负责把 incoming path records 拆成 insert/update/unchanged，应用 timestamp tolerance，计算 normalized manual summary，并允许注入 update-record shaping。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK planner，并只适配 File row update 字段。这个 primitive 面向 File、Obsidian、VSCode 这类路径型 indexed source；Browser Bookmarks 等非路径 source 应保留自己的 record diff 形状。
+
 `@talex-touch/utils/search` 也暴露 `IndexedWorkerPersistEntryMapperService` 作为通用 worker result 到 persist payload 的映射 primitive。它统一处理 progress null-normalization、fileUpdate contentHash 默认值、embedding model/vector 投影与泛型 `indexItem` 透传，不依赖 CoreApp SearchIndex worker 类型。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK mapper，且只负责把自己的 index worker result 交给该 mapper。
 
 `@talex-touch/utils/search` 也暴露 `IndexedWriteSideEffectService` 作为通用 post-write side-effect dispatcher。它会异步执行 extension processing，并立即调度 indexing；extension processing 失败只进入日志，不阻塞后续 index worker 调度，source-specific failure 文案可注入。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK dispatcher，并只保留 File extension processing、index scheduling 与 File 专属日志文案。
