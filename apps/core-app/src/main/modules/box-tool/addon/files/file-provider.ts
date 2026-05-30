@@ -110,8 +110,10 @@ import {
   type IndexedWriteDeleteExecutorResult,
   type IndexedWriteDeleteRecord
 } from '../../search-engine/indexing-write-delete-executor-service'
-import { IndexedWriteUpdateExecutorService } from '../../search-engine/indexing-write-update-executor-service'
-import { IndexedWriteInsertExecutorService } from '@talex-touch/utils/search'
+import {
+  IndexedWriteInsertExecutorService,
+  IndexedWriteUpdateExecutorService
+} from '@talex-touch/utils/search'
 import {
   SearchIndexWorkerClient,
   type UpsertFileRecord

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { IndexedWriteUpdateExecutorService as SdkIndexedWriteUpdateExecutorService } from '@talex-touch/utils/search'
 import { IndexedWriteUpdateExecutorService } from './indexing-write-update-executor-service'
 
 interface TestUpdateRecord {
@@ -7,6 +8,10 @@ interface TestUpdateRecord {
 }
 
 describe('indexing-write-update-executor-service', () => {
+  it('re-exports the public SDK write update executor for legacy CoreApp imports', () => {
+    expect(IndexedWriteUpdateExecutorService).toBe(SdkIndexedWriteUpdateExecutorService)
+  })
+
   it('updates records in chunks, refreshes updated rows, and dispatches side effects', async () => {
     const updates: TestUpdateRecord[] = [
       { id: 1, value: 'a' },
