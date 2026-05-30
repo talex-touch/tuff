@@ -168,7 +168,7 @@ CoreApp 已新增最小 `IndexingRuntime` 骨架：
 - Write flush runtime scheduler 也开始有通用 primitive：`IndexedWriteFlushRuntimeService` 统一处理 flush timer、unavailable/no-pending/flush-in-progress idle 记录、in-progress defer、失败 retry 调度与成功后的 drain remaining。FileProvider 的 `FileProviderIndexRuntimeService` 现在只保留 File flush executor result、SQLite busy metadata、worker-not-ready 日志与 evidence 映射，DB persist / SearchIndex worker / FTS 语义仍留在既有边界。
 - Worker result 到 persist payload 的映射已下沉到 `@talex-touch/utils/search` 的公共 `IndexedWorkerPersistEntryMapperService` SDK primitive：统一处理 progress null-normalization、fileUpdate contentHash 默认值、embedding model/vector 投影与泛型 `indexItem` 透传，不依赖 CoreApp SearchIndex worker 类型。CoreApp 仅保留兼容 re-export；FileProvider 的 `FileProviderIndexPersistEntryMapperService` 现在只是 File worker result 的薄适配，后续 source worker 可以复用同一 persist-entry 映射规则。
 - Post-write side-effect dispatch 也开始有通用 primitive：`IndexedWriteSideEffectService` 统一处理写入后的 extension processing 与 indexing scheduling，extension 处理异步失败不会阻塞 index worker 调度。FileProvider 的 `FileProviderWriteSideEffectService` 现在只是 File 命名适配，后续 source 可复用同一非阻塞副作用路径。
-- Worker dispatch scheduling 也开始有通用 primitive：`IndexedWorkerSchedulerService` 统一处理 worker context gate、chunk dispatch、deferred dispatch 与 worker failure isolation。FileProvider 的 `FileProviderIndexSchedulerService` 现在只保留 File row 到 worker payload 的映射和 large-file background-content 策略。
+- Worker dispatch scheduling 已下沉到 `@talex-touch/utils/search` 的公共 `IndexedWorkerSchedulerService` SDK primitive：统一处理 worker context gate、chunk dispatch、deferred dispatch 与 worker failure isolation，不依赖 CoreApp worker 类型。CoreApp 仅保留兼容 re-export；FileProvider 的 `FileProviderIndexSchedulerService` 现在只保留 File row 到 worker payload 的映射和 large-file background-content 策略。
 
 当前限制：
 
