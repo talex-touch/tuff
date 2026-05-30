@@ -1,5 +1,6 @@
 import type { DbUtils } from '../../../../../db/utils'
 import type { IndexedSourceResetRequest, IndexedSourceResetResult } from '@talex-touch/utils/search'
+import { IndexedSourceResetExecutorService } from '@talex-touch/utils/search'
 import { sql } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 
@@ -24,6 +25,7 @@ export class FileProviderRuntimeResetService {
   private readonly removeSearchIndexByProvider: FileProviderRuntimeResetServiceDeps['removeSearchIndexByProvider']
   private readonly withDbWrite: FileProviderRuntimeResetServiceDeps['withDbWrite']
   private readonly logInfo: FileProviderRuntimeResetServiceDeps['logInfo']
+  private readonly executor: IndexedSourceResetExecutorService
 
   constructor(deps: FileProviderRuntimeResetServiceDeps) {
     this.sourceId = deps.sourceId
@@ -31,50 +33,34 @@ export class FileProviderRuntimeResetService {
     this.removeSearchIndexByProvider = deps.removeSearchIndexByProvider
     this.withDbWrite = deps.withDbWrite
     this.logInfo = deps.logInfo
+    this.executor = new IndexedSourceResetExecutorService({
+      sourceId: this.sourceId,
+      clearSearchIndex: (reason) => this.removeSearchIndexByProvider(this.sourceId, reason),
+      clearScanProgress: (reason) => this.clearScanProgress(reason)
+    })
   }
 
   async reset(input: FileProviderRuntimeResetRequest): Promise<IndexedSourceResetResult> {
-    const startedAt = Date.now()
-    const request = input.request
-    const operationReasonPrefix = input.operationReasonPrefix ?? `file-index.${request.reason}`
-    const clearSearchIndex = input.clearSearchIndex ?? request.clearSearchIndex
-    const clearScanProgress = input.clearScanProgress ?? request.clearScanProgress
-    let clearedSearchIndex = false
-    let clearedScanProgress = false
-    let scanProgressRows = 0
+    const result = await this.executor.reset(input)
 
-    if (clearSearchIndex) {
-      await this.removeSearchIndexByProvider(
-        this.sourceId,
-        `${operationReasonPrefix}.remove-by-provider`
-      )
-      clearedSearchIndex = true
-    }
-
-    const dbUtils = this.getDbUtils()
-    if (clearScanProgress !== false && dbUtils) {
-      const db = dbUtils.getDb()
-      const scanProgressCount = await db.select({ cnt: sql<number>`count(*)` }).from(scanProgress)
-      scanProgressRows = scanProgressCount[0]?.cnt ?? 0
-      if (scanProgressRows > 0) {
-        await this.withDbWrite(`${operationReasonPrefix}.scan-progress-reset`, () =>
-          db.delete(scanProgress)
-        )
-        clearedScanProgress = true
-      }
-    }
-
-    const result = {
-      sourceId: request.sourceId,
-      reason: request.reason,
-      clearedSearchIndex,
-      clearedScanProgress,
-      scanProgressRows,
-      startedAt,
-      completedAt: Date.now()
-    }
-
-    this.logInfo('File index runtime state reset completed', result)
+    this.logInfo('File index runtime state reset completed', { ...result })
     return result
+  }
+
+  private async clearScanProgress(reason: string): Promise<{ cleared: boolean; rows: number }> {
+    const dbUtils = this.getDbUtils()
+    if (!dbUtils) {
+      return { cleared: false, rows: 0 }
+    }
+
+    const db = dbUtils.getDb()
+    const scanProgressCount = await db.select({ cnt: sql<number>`count(*)` }).from(scanProgress)
+    const rows = scanProgressCount[0]?.cnt ?? 0
+    if (rows === 0) {
+      return { cleared: false, rows }
+    }
+
+    await this.withDbWrite(reason, () => db.delete(scanProgress))
+    return { cleared: true, rows }
   }
 }
