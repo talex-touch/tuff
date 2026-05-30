@@ -45,6 +45,7 @@ vi.mock('./plugin', () => ({
     pluginPath: string
     issues: Array<Record<string, unknown>>
     features: unknown[]
+    searchProviders?: unknown[]
     loadState: string
     loadError?: { code: string; message: string }
     creationOptions?: { skipDataInit?: boolean }
@@ -292,6 +293,254 @@ describe('createPluginLoader', () => {
       ]
     })
     expect(plugin.build).not.toHaveProperty('internalOnly')
+  })
+
+  it('keeps valid manifest search provider descriptors on plugin state', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['search.root-results'],
+        optional: []
+      },
+      searchProviders: [
+        {
+          id: 'touch-translation.results',
+          displayName: 'Translation Results',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(plugin.searchProviders).toHaveLength(1)
+    expect(plugin.searchProviders?.[0]).toMatchObject({
+      id: 'touch-translation.results',
+      owner: 'third-party-plugin',
+      mode: 'push',
+      policy: {
+        permissionScopes: ['root-results']
+      }
+    })
+    expect(plugin.issues.some((issue) => issue.code === 'SEARCH_PROVIDER_PERMISSION_MISSING')).toBe(
+      false
+    )
+  })
+
+  it('keeps explicit official browser-data search providers without legacy derivation', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['fs.read', 'search.root-results'],
+        optional: []
+      },
+      searchProviders: [
+        {
+          id: 'touch-translation.browser-bookmarks',
+          displayName: 'Browser Bookmarks',
+          kind: 'browser-bookmark',
+          owner: 'official-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results', 'browser-data'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      ],
+      features: [
+        {
+          id: 'browser-data',
+          name: 'Browser Data',
+          desc: 'Search local browser bookmarks',
+          icon: { type: 'emoji', value: 'x' },
+          keywords: ['browser', 'bookmarks'],
+          push: true,
+          platform: { darwin: true, win32: true, linux: true },
+          commands: []
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(plugin.searchProviders).toHaveLength(1)
+    expect(plugin.searchProviders?.[0]).toMatchObject({
+      id: 'touch-translation.browser-bookmarks',
+      owner: 'official-plugin',
+      kind: 'browser-bookmark',
+      mode: 'push',
+      policy: {
+        permissionScopes: ['root-results', 'browser-data'],
+        requiresUserConsent: true,
+        pushesToRootResults: true
+      }
+    })
+    expect(
+      plugin.issues.some((issue) => issue.code === 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE')
+    ).toBe(false)
+    expect(plugin.issues.some((issue) => issue.code === 'SEARCH_PROVIDER_PERMISSION_MISSING')).toBe(
+      false
+    )
+  })
+
+  it('reports manifest permission gaps for root-result search providers', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: [],
+        optional: []
+      },
+      searchProviders: [
+        {
+          id: 'touch-translation.results',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+    const issue = plugin.issues.find((item) => item.code === 'SEARCH_PROVIDER_PERMISSION_MISSING')
+
+    expect(plugin.searchProviders).toHaveLength(0)
+    expect(issue).toMatchObject({
+      type: 'error',
+      source: 'searchProvider:touch-translation.results',
+      meta: {
+        missingPermissionIds: ['search.root-results']
+      }
+    })
+  })
+
+  it('derives a compatibility search provider for legacy push features', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['search.root-results'],
+        optional: []
+      },
+      features: [
+        {
+          id: 'translate',
+          name: 'Translate',
+          desc: 'Translate text',
+          icon: { type: 'emoji', value: 'x' },
+          keywords: ['translate'],
+          push: true,
+          platform: { darwin: true, win32: true, linux: true },
+          commands: []
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(plugin.searchProviders).toHaveLength(1)
+    expect(plugin.searchProviders?.[0]).toMatchObject({
+      id: 'touch-translation.root-results',
+      displayName: 'Translate',
+      mode: 'push',
+      policy: {
+        permissionScopes: ['root-results'],
+        requiresUserConsent: true,
+        pushesToRootResults: true
+      }
+    })
+    expect(
+      plugin.issues.some((issue) => issue.code === 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE')
+    ).toBe(true)
+    expect(plugin.issues.some((issue) => issue.code === 'SEARCH_PROVIDER_PERMISSION_MISSING')).toBe(
+      false
+    )
+  })
+
+  it('derives compatibility search providers for every legacy push feature', async () => {
+    const pluginPath = await createPluginDir({
+      name: 'touch-translation',
+      version: '1.0.0',
+      description: 'test',
+      icon: { type: 'emoji', value: 'x' },
+      sdkapi: CURRENT_SDK_VERSION,
+      category: 'utilities',
+      permissions: {
+        required: ['search.root-results'],
+        optional: []
+      },
+      features: [
+        {
+          id: 'translate',
+          name: 'Translate',
+          desc: 'Translate text',
+          icon: { type: 'emoji', value: 'x' },
+          keywords: ['translate'],
+          push: true,
+          platform: { darwin: true, win32: true, linux: true },
+          commands: []
+        },
+        {
+          id: 'multi-translate',
+          name: 'Multi Translate',
+          desc: 'Translate text with multiple engines',
+          icon: { type: 'emoji', value: 'x' },
+          keywords: ['multi'],
+          push: true,
+          platform: { darwin: true, win32: true, linux: true },
+          commands: []
+        }
+      ]
+    })
+    createdPaths.push(pluginPath)
+
+    const plugin = await createPluginLoader('touch-translation', pluginPath).load()
+
+    expect(plugin.searchProviders).toHaveLength(2)
+    expect(plugin.searchProviders).toEqual([
+      expect.objectContaining({
+        id: 'touch-translation.translate',
+        displayName: 'Translate',
+        featureId: 'translate'
+      }),
+      expect.objectContaining({
+        id: 'touch-translation.multi-translate',
+        displayName: 'Multi Translate',
+        featureId: 'multi-translate'
+      })
+    ])
+    expect(
+      plugin.issues.find((issue) => issue.code === 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE')
+        ?.meta
+    ).toMatchObject({ featureIds: ['translate', 'multi-translate'] })
   })
 
   it('marks plugins below the enforced sdkapi floor as blocked load failures', async () => {

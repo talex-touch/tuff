@@ -12,14 +12,45 @@
   "description": "浏览器打开：默认浏览器与指定浏览器快速打开链接",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell"],
+    "required": ["system.shell", "search.root-results"],
     "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
     "system.shell": "调用系统命令打开浏览器",
+    "search.root-results": "将浏览器打开与网页搜索结果推送到 CoreBox 根搜索结果",
     "clipboard.write": "复制链接到剪贴板",
     "network.internet": "获取搜索引擎建议词"
   },
+  "searchProviders": [
+    {
+      "id": "touch-browser-open.browser-open",
+      "displayName": "浏览器打开",
+      "featureId": "browser-open",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 70,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-browser-open.web-search",
+      "displayName": "网页搜索",
+      "featureId": "web-search",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 71,
+      "permissionScopes": ["root-results", "network"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "browser-open",

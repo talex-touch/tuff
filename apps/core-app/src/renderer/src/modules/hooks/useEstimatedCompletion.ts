@@ -3,13 +3,24 @@ import { computed, unref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 type TimeSource = ComputedRef<number | null> | Ref<number | null>
+type EstimateStatusSource = ComputedRef<string | null | undefined> | Ref<string | null | undefined>
 
-export function useEstimatedCompletionText(source: TimeSource) {
+export function useEstimatedCompletionText(
+  source: TimeSource,
+  statusSource?: EstimateStatusSource
+) {
   const { t } = useI18n()
 
   return computed(() => {
+    const status = statusSource ? unref(statusSource) : undefined
     const rawValue = unref(source)
     if (rawValue == null) {
+      if (status === 'stabilizing') {
+        return t('settings.settingFileIndex.estimatedStabilizing')
+      }
+      if (status === 'stalled') {
+        return t('settings.settingFileIndex.estimatedStalled')
+      }
       return null
     }
 

@@ -1,14 +1,16 @@
 import type {
   IndexedSource,
   IndexedSourceDelta,
-  IndexedSourceRoot,
   IndexedSourceTaskSkipReason,
   IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
 import type { IndexingRuntimeDiagnostics } from './indexing-diagnostics-service'
 import type { IndexStoreAdapter } from './indexing-store-adapter'
 import process from 'node:process'
-import { resolveIndexedSourceTaskEligibility } from '@talex-touch/utils/search'
+import {
+  resolveIndexedSourceTaskEligibility,
+  resolveIndexedSourceWatchRootRoute
+} from '@talex-touch/utils/search'
 
 export interface WatchEventRouteError {
   sourceId?: string
@@ -31,17 +33,6 @@ export interface WatchEventRouteResult {
   failedDeltas: number
   errors: WatchEventRouteError[]
   skipped: WatchEventRouteSkippedSource[]
-}
-
-function normalizePathForMatch(value: string): string {
-  const normalized = value.replace(/\\/g, '/').replace(/\/+$/g, '')
-  return process.platform === 'linux' ? normalized : normalized.toLowerCase()
-}
-
-function isPathInsideRoot(targetPath: string, rootPath: string): boolean {
-  const target = normalizePathForMatch(targetPath)
-  const root = normalizePathForMatch(rootPath)
-  return target === root || target.startsWith(`${root}/`)
 }
 
 export class WatchEventRouter {
@@ -220,10 +211,10 @@ export class WatchEventRouter {
     const skipped: WatchEventRouteSkippedSource[] = []
 
     for (const sourceDiagnostics of diagnostics.sources) {
-      const matchedRoot = sourceDiagnostics.roots.find((root) =>
-        isPathInsideRoot(event.path, event.rootPath ?? root.path)
-      )
-      if (!matchedRoot) {
+      const route = resolveIndexedSourceWatchRootRoute(event, sourceDiagnostics.roots, {
+        platform: process.platform
+      })
+      if (!route) {
         continue
       }
 
@@ -232,11 +223,10 @@ export class WatchEventRouter {
         continue
       }
 
-      const rootSkipReason = this.resolveRootSkipReason(matchedRoot)
-      if (rootSkipReason) {
+      if (!route.eligible && route.reason) {
         skipped.push({
           sourceId: source.descriptor.id,
-          reason: rootSkipReason
+          reason: route.reason
         })
         continue
       }
@@ -248,13 +238,6 @@ export class WatchEventRouter {
       sources: matchedSources,
       skipped
     }
-  }
-
-  private resolveRootSkipReason(root: IndexedSourceRoot): IndexedSourceTaskSkipReason | null {
-    if (root.permissionState === 'denied' || root.permissionState === 'promptable') {
-      return `root-permission:${root.permissionState}`
-    }
-    return null
   }
 
   private stringifyError(error: unknown): string {

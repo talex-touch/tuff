@@ -12,14 +12,31 @@
   "description": "浏览器数据：只读搜索 Chrome、Edge、Brave、Arc 的本地书签",
   "main": "index.js",
   "permissions": {
-    "required": ["fs.read"],
+    "required": ["fs.read", "search.root-results"],
     "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
     "fs.read": "只读扫描本机浏览器 Bookmarks JSON 文件用于搜索书签",
+    "search.root-results": "将匹配到的浏览器书签推送到 CoreBox 根搜索结果",
     "clipboard.write": "复制书签 URL 到剪贴板",
     "network.internet": "使用默认浏览器打开本地浏览器书签 URL"
   },
+  "searchProviders": [
+    {
+      "id": "touch-browser-data.browser-bookmarks",
+      "displayName": "浏览器书签",
+      "kind": "browser-bookmark",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 60,
+      "permissionScopes": ["root-results", "browser-data"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true,
+      "indexedSourceId": "browser-bookmarks"
+    }
+  ],
   "features": [
     {
       "id": "browser-data",

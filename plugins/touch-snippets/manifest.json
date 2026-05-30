@@ -12,13 +12,58 @@
   "description": "统一片段库：搜索、保存并复制文本、代码与提示词模板",
   "main": "index.js",
   "permissions": {
-    "required": ["clipboard.write"],
+    "required": ["clipboard.write", "search.root-results"],
     "optional": ["clipboard.read"]
   },
   "permissionReasons": {
+    "search.root-results": "将片段搜索、保存与管理入口推送到 CoreBox 根搜索结果",
     "clipboard.write": "复制片段内容到剪贴板",
     "clipboard.read": "支持 {{clipboard}} 占位符与从剪贴板保存片段"
   },
+  "searchProviders": [
+    {
+      "id": "touch-snippets.search",
+      "displayName": "片段库",
+      "featureId": "snippets-search",
+      "kind": "plugin-data",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 80,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-snippets.save",
+      "displayName": "保存片段",
+      "featureId": "snippets-save",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 81,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-snippets.manage",
+      "displayName": "片段库管理",
+      "featureId": "snippets-manage",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 82,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "snippets-search",

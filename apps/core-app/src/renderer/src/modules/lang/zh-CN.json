@@ -1067,7 +1067,9 @@
         "system": "系统",
         "intelligence": "Intelligence 能力",
         "storage": "存储",
-        "window": "窗口"
+        "window": "窗口",
+        "search": "搜索",
+        "media": "媒体"
       },
       "shortcuts": {
         "title": "快捷键",
@@ -1175,6 +1177,18 @@
           "capture": {
             "name": "屏幕截图",
             "desc": "捕获屏幕内容"
+          }
+        },
+        "search": {
+          "root-results": {
+            "name": "推送根搜索结果",
+            "desc": "向 CoreBox 根结果列表推送或更新搜索项"
+          }
+        },
+        "media": {
+          "read": {
+            "name": "读取媒体",
+            "desc": "读取媒体元数据和缩略图"
           }
         }
       },
@@ -2250,6 +2264,8 @@
       "statusFailed": "失败",
       "statusNormal": "正常",
       "estimatedSoon": "将很快完成",
+      "estimatedStabilizing": "正在估算剩余时间",
+      "estimatedStalled": "等待新的索引进度",
       "estimatedSeconds": "预计 {seconds} 秒后完成",
       "estimatedMinutes": "预计 {minutes} 分钟后完成",
       "estimatedHours": "预计 {hours} 小时后完成",
@@ -2322,16 +2338,68 @@
       "sourceDiagnosticsChecking": "正在读取统一搜索源状态",
       "sourceDiagnosticsSummary": "共 {total} 个源，{ready} 个就绪，{degraded} 个降级，{unavailable} 个不可用，{attention} 个需处理",
       "sourceDiagnosticsLoadFailed": "读取搜索源诊断失败",
+      "sourceAction": {
+        "scan": "扫描",
+        "reconcile": "补漏",
+        "reset": "重置"
+      },
+      "sourceActionScanSuccess": "扫描完成：{records} 条",
+      "sourceActionReconcileSuccess": "补漏完成：变更 {changed}，删除 {deleted}",
+      "sourceActionResetSuccess": "索引源运行时状态已重置",
+      "sourceActionFailed": "{action}失败：{error}",
+      "providerConfigTitle": "搜索源启用与排序",
+      "providerConfigDesc": "控制可进入根搜索结果的索引源；浏览器数据仍需插件权限与用户授权后才会启用",
+      "providerConfigEmpty": "暂无可配置搜索源",
+      "providerConfigMeta": "{mode} · {owner}",
+      "providerConfigLoadFailed": "读取搜索源配置失败",
+      "providerConfigSaved": "搜索源配置已保存",
+      "providerConfigSaveFailed": "保存搜索源配置失败",
+      "providerMoveUp": "上移",
+      "providerMoveDown": "下移",
+      "providerEnabled": "启用",
+      "providerDisabled": "关闭",
+      "providerConfigSource": "源 {source} / {status}",
+      "providerConfigSourceUnknown": "未知状态",
       "sourceItems": "{count} 项",
       "sourceWatch": "监听：{state}",
       "sourceReconcile": "补漏：{state}",
       "sourceTask": {
-        "scanDone": "扫描 {records} 条",
-        "scanFailed": "扫描失败：{error}",
-        "watchDone": "监听 {action} {applied}/{deltas}",
-        "watchFailed": "监听失败 {failed}/{deltas}",
-        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · roots {rootCount}",
-        "reconcileFailed": "补漏错误：{errors} · {reason}"
+        "scanDone": "扫描 {records} 条 · {jobId}",
+        "scanFailed": "扫描失败：{error} · {jobId}",
+        "watchDone": "监听 {action} {applied}/{deltas} · {jobId}",
+        "watchFailed": "监听失败 {failed}/{deltas} · {jobId}",
+        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · roots {rootCount} · {jobId}",
+        "reconcileFailed": "补漏错误：{errors} · {reason} · {jobId}"
+      },
+      "sourceRecentTasks": "最近",
+      "sourceRecentTask": {
+        "scan": {
+          "succeeded": "扫描完成 · {summary} · {jobId}",
+          "failed": "扫描失败 · {summary} · {jobId}",
+          "skipped": "扫描跳过 · {summary} · {jobId}"
+        },
+        "watch": {
+          "succeeded": "监听完成 · {summary} · {jobId}",
+          "failed": "监听失败 · {summary} · {jobId}",
+          "skipped": "监听跳过 · {summary} · {jobId}"
+        },
+        "reconcile": {
+          "succeeded": "补漏完成 · {summary} · {jobId}",
+          "failed": "补漏失败 · {summary} · {jobId}",
+          "skipped": "补漏跳过 · {summary} · {jobId}"
+        },
+        "reset": {
+          "succeeded": "重置完成 · {summary} · {jobId}",
+          "failed": "重置失败 · {summary} · {jobId}",
+          "skipped": "重置跳过 · {summary} · {jobId}"
+        }
+      },
+      "sourceEvidence": "证据",
+      "sourceEvidenceChip": {
+        "generic": "{label} · {status} · {count} · {reason}",
+        "scanProgress": "{label} · {status} · {completed}/{total} · 失败 {failed} · 待授权 {pendingPermissionRoots}",
+        "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
+        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · orphan {orphanedKeywordsRemoved}"
       },
       "sourceStatus": {
         "ready": "就绪",

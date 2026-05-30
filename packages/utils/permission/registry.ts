@@ -202,6 +202,16 @@ export const PERMISSIONS: PermissionDefinition[] = [
     descKey: 'permission.media.read.desc',
     icon: 'Images',
   },
+
+  // Search permissions
+  {
+    id: 'search.root-results',
+    category: PermissionCategory.SEARCH,
+    risk: PermissionRiskLevel.HIGH,
+    nameKey: 'permission.search.rootResults.name',
+    descKey: 'permission.search.rootResults.desc',
+    icon: 'Search',
+  },
 ]
 
 export function normalizePermissionId(id: string): string {
@@ -312,6 +322,9 @@ export const PermissionIds = {
 
   // Media
   MEDIA_READ: 'media.read',
+
+  // Search
+  SEARCH_ROOT_RESULTS: 'search.root-results',
 } as const
 
 export type PermissionId = (typeof PermissionIds)[keyof typeof PermissionIds]

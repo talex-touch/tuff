@@ -12,12 +12,29 @@
   "description": "窗口预设：一键应用常用桌面布局",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell"],
+    "required": ["system.shell", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "system.shell": "查询窗口并执行贴边与置顶布局"
+    "system.shell": "查询窗口并执行贴边与置顶布局",
+    "search.root-results": "将窗口预设入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-window-presets.window-presets",
+      "displayName": "窗口预设",
+      "featureId": "window-presets",
+      "kind": "system-action",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 93,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "window-presets",

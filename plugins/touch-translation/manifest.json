@@ -32,7 +32,8 @@
       "network.internet",
       "intelligence.basic",
       "storage.plugin",
-      "window.create"
+      "window.create",
+      "search.root-results"
     ],
     "optional": ["clipboard.write"]
   },
@@ -42,8 +43,39 @@
     "intelligence.basic": "调用智能翻译服务",
     "storage.plugin": "保存翻译源配置与本地密钥引用",
     "window.create": "打开 DivisionBox 独立窗口展示图片翻译结果",
+    "search.root-results": "将翻译入口和多源翻译结果推送到 CoreBox 根搜索结果",
     "clipboard.write": "将翻译结果复制到剪贴板"
   },
+  "searchProviders": [
+    {
+      "id": "touch-translation.translate",
+      "displayName": "翻译",
+      "featureId": "touch-translate",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 50,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-translation.multi-source",
+      "displayName": "多源翻译",
+      "featureId": "multi-source-translate",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 51,
+      "permissionScopes": ["root-results", "network"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "touch-translate",

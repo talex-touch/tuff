@@ -6,6 +6,11 @@ import type {
   IPluginFeature,
   SdkApiVersion
 } from '@talex-touch/utils/plugin'
+import type {
+  SearchProviderDescriptor,
+  SearchProviderManifestResolutionIssue,
+  SearchProviderManifestDescriptor
+} from '@talex-touch/utils/search'
 import type { TuffIconType } from '@talex-touch/utils/types/icon'
 import path from 'node:path'
 import {
@@ -20,6 +25,7 @@ import {
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
+import { resolveSearchProviderManifestDescriptors } from '@talex-touch/utils/search'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
@@ -49,6 +55,7 @@ interface PluginManifest {
   build?: IPluginBuildInfo
   platforms?: Record<string, boolean>
   features?: IPluginFeature[]
+  searchProviders?: SearchProviderManifestDescriptor[]
   divisionBox?: ManifestDivisionBoxConfig
   /**
    * SDK API version for hard-cut runtime gating.
@@ -245,6 +252,12 @@ abstract class BasePluginLoader {
       reasons: { ...parsedPermissions.reasons }
     }
 
+    this.touchPlugin.searchProviders = this.resolveSearchProviders(
+      pluginInfo.searchProviders,
+      pluginInfo.features,
+      parsedPermissions
+    )
+
     // Generate permission status (granted permissions will be loaded by PermissionModule)
     if (!sdkBlocked) {
       const permissionStatus = getPluginPermissionStatus(
@@ -366,6 +379,93 @@ abstract class BasePluginLoader {
         }
       })
     }
+  }
+
+  private resolveSearchProviders(
+    manifestProviders: SearchProviderManifestDescriptor[] | undefined,
+    features: IPluginFeature[] | undefined,
+    parsedPermissions: { required: string[]; optional: string[] }
+  ): SearchProviderDescriptor[] | undefined {
+    const result = resolveSearchProviderManifestDescriptors({
+      manifestProviders,
+      features,
+      defaults: {
+        pluginName: this.touchPlugin.name,
+        displayName: this.touchPlugin.name,
+        owner: 'third-party-plugin',
+        defaultOrder: 100
+      },
+      declaredPermissionIds: [...parsedPermissions.required, ...parsedPermissions.optional]
+    })
+
+    result.issues.forEach((issue) => this.pushSearchProviderIssue(issue))
+    if (
+      result.coverage.hasExplicitProviders ||
+      result.derivedFromPushFeatures ||
+      result.issues.length > 0
+    ) {
+      return result.descriptors
+    }
+
+    return undefined
+  }
+
+  private pushSearchProviderIssue(issue: SearchProviderManifestResolutionIssue): void {
+    if (issue.code === 'SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE') {
+      this.touchPlugin.issues.push({
+        type: 'warning',
+        message: issue.message,
+        source: 'manifest.json',
+        code: issue.code,
+        suggestion:
+          'Declare manifest.searchProviders with mode "push" and permissionScopes ["root-results"].',
+        meta: { featureIds: issue.featureIds ?? [] },
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    if (issue.code === 'SEARCH_PROVIDER_PERMISSION_MISSING') {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: issue.message,
+        source: `searchProvider:${issue.providerId ?? '<unknown>'}`,
+        code: issue.code,
+        suggestion: 'Add the missing permissions to manifest.json permissions.required.',
+        meta: {
+          providerId: issue.providerId,
+          missingPermissionIds: issue.missingPermissionIds ?? [],
+          permissionScopes: issue.permissionScopes ?? []
+        },
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    if (issue.code === 'SEARCH_PROVIDER_POLICY_BLOCKED') {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: issue.message,
+        source: `searchProvider:${issue.providerId ?? '<unknown>'}`,
+        code: issue.code,
+        meta: {
+          providerId: issue.providerId,
+          status: issue.status,
+          issues: issue.issues ?? []
+        },
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    this.touchPlugin.issues.push({
+      type: issue.type,
+      message: issue.message,
+      source: 'manifest.json',
+      code: issue.code,
+      meta: { index: issue.index },
+      timestamp: Date.now()
+    })
   }
 }
 

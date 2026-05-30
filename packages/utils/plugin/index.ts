@@ -3,6 +3,7 @@ import type {
   ManifestPermissionReasons,
   ManifestPermissions,
 } from '../permission/types'
+import type { SearchProviderDescriptor, SearchProviderManifestDescriptor } from '../search'
 import type { ITuffIcon } from '../types/icon'
 import type { Arch, SupportOS } from './../base/index'
 
@@ -117,6 +118,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   meta?: PluginMeta
   build?: IPluginBuildInfo
   features: IPluginFeature[]
+  searchProviders?: SearchProviderDescriptor[]
   issues: PluginIssue[]
   divisionBoxConfig?: import('../types/division-box').ManifestDivisionBoxConfig
   /**
@@ -582,6 +584,10 @@ export interface IManifest {
    * Optional feature declarations exposed by the plugin runtime.
    */
   features?: IPluginFeature[]
+  /**
+   * Optional Search Provider declarations exposed by this plugin.
+   */
+  searchProviders?: SearchProviderManifestDescriptor[]
   /**
    * Optional permission declarations.
    */

@@ -16,6 +16,7 @@ export enum PermissionCategory {
   STORAGE = 'storage',
   WINDOW = 'window',
   MEDIA = 'media',
+  SEARCH = 'search',
 }
 
 /**

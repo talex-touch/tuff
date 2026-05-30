@@ -2,11 +2,13 @@ import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import { TuffInputType } from '@talex-touch/utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { everythingReadyMock, fileHasSearchFiltersMock, fileStartupNoticeMock } = vi.hoisted(() => ({
-  everythingReadyMock: vi.fn(() => false),
-  fileHasSearchFiltersMock: vi.fn(() => false),
-  fileStartupNoticeMock: vi.fn<() => TuffItem | null>(() => null)
-}))
+const { everythingReadyMock, fileHasSearchFiltersMock, fileStartupNoticeMock, appSettingsMock } =
+  vi.hoisted(() => ({
+    everythingReadyMock: vi.fn(() => false),
+    fileHasSearchFiltersMock: vi.fn(() => false),
+    fileStartupNoticeMock: vi.fn<() => TuffItem | null>(() => null),
+    appSettingsMock: { value: { beginner: { init: true } } as Record<string, unknown> }
+  }))
 
 vi.mock('../../../utils/perf-context', () => ({
   enterPerfContext: () => () => {}
@@ -63,7 +65,7 @@ vi.mock('../../sentry', () => ({
 
 vi.mock('../../storage', () => ({
   storageModule: {},
-  getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
+  getMainConfig: vi.fn(() => appSettingsMock.value),
   subscribeMainConfig: vi.fn(() => () => {})
 }))
 
@@ -293,6 +295,7 @@ afterEach(() => {
   everythingReadyMock.mockReset().mockReturnValue(false)
   fileHasSearchFiltersMock.mockReset().mockReturnValue(false)
   fileStartupNoticeMock.mockReset().mockReturnValue(null)
+  appSettingsMock.value = { beginner: { init: true } }
 })
 
 async function measureScenario(scenario: StageSample['scenario']): Promise<StageSample> {
@@ -394,6 +397,43 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
         'plugin-features'
       ])
     })
+  })
+
+  it('applies saved provider enablement and order to the default provider pool', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      registerProvider: (provider: (typeof MOCK_PROVIDERS)[number]) => void
+      unregisterProvider: (providerId: string) => void
+      getActiveProviders: () => Array<{ id: string }>
+    }
+    for (const provider of MOCK_PROVIDERS) {
+      core.registerProvider(provider)
+    }
+    appSettingsMock.value = {
+      beginner: { init: true },
+      searchProviders: {
+        providers: [
+          { providerId: 'plugin-features', enabled: true, order: 1 },
+          { providerId: 'file-provider', enabled: false, order: 2 },
+          { providerId: 'app-provider', enabled: true, order: 3 }
+        ]
+      }
+    }
+
+    try {
+      expect(
+        core
+          .getActiveProviders()
+          .map((provider) => provider.id)
+          .slice(0, 3)
+      ).toEqual(['plugin-features', 'app-provider', 'everything-provider'])
+      expect(core.getActiveProviders().map((provider) => provider.id)).not.toContain(
+        'file-provider'
+      )
+    } finally {
+      for (const provider of MOCK_PROVIDERS) {
+        core.unregisterProvider(provider.id)
+      }
+    }
   })
 
   it('routes Windows structured file search and Everything fallback to file-provider', async () => {
@@ -544,5 +584,30 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     } as TuffQuery)
 
     expect(new Set([textOnly.cacheKey, imageInput.cacheKey, fileInput.cacheKey]).size).toBe(3)
+  })
+
+  it('includes provider enablement in search cache keys', async () => {
+    const core = SearchEngineCore.getInstance() as unknown as {
+      orchestrateSearchQuery: (
+        query: TuffQuery
+      ) => Promise<{ providerFilter?: string; cacheKey: string; durationMs: number }>
+    }
+
+    const enabled = await core.orchestrateSearchQuery({
+      text: 'open settings',
+      inputs: []
+    } as TuffQuery)
+    appSettingsMock.value = {
+      beginner: { init: true },
+      searchProviders: {
+        providers: [{ providerId: 'app-provider', enabled: false, order: 1 }]
+      }
+    }
+    const disabled = await core.orchestrateSearchQuery({
+      text: 'open settings',
+      inputs: []
+    } as TuffQuery)
+
+    expect(enabled.cacheKey).not.toBe(disabled.cacheKey)
   })
 })

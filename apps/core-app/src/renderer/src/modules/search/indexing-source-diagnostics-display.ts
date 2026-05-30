@@ -1,7 +1,11 @@
 import type {
   IndexedSourceDiagnostics,
+  IndexedSourceEvidence,
   IndexedSourceHealthStatus,
   IndexedSourceReconcileState,
+  IndexedSourceTaskHistoryEntry,
+  IndexedSourceTaskHistoryKind,
+  IndexedSourceTaskHistoryStatus,
   IndexedSourceWatchState
 } from '@talex-touch/utils/search'
 
@@ -9,6 +13,20 @@ export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'mu
 
 export interface IndexingSourceTaskChip {
   id: 'scan' | 'watch' | 'reconcile'
+  tone: IndexingSourceTone
+  labelKey: string
+  values: Record<string, string | number>
+}
+
+export interface IndexingSourceRecentTaskChip {
+  id: string
+  tone: IndexingSourceTone
+  labelKey: string
+  values: Record<string, string | number>
+}
+
+export interface IndexingSourceEvidenceChip {
+  id: string
   tone: IndexingSourceTone
   labelKey: string
   values: Record<string, string | number>
@@ -80,6 +98,121 @@ function resolveTaskTone(error?: string): IndexingSourceTone {
   return error ? 'danger' : 'muted'
 }
 
+function resolveEvidenceTone(status: IndexedSourceHealthStatus): IndexingSourceTone {
+  return resolveIndexingSourceTone(status)
+}
+
+function resolveEvidencePriority(evidence: IndexedSourceEvidence): number {
+  if (['error', 'permission-required', 'degraded'].includes(evidence.status)) return 0
+  if (evidence.status === 'warming') return 1
+  return 2
+}
+
+function resolveEvidenceCount(evidence: IndexedSourceEvidence): number | string {
+  if (typeof evidence.itemCount === 'number') return evidence.itemCount
+  if (typeof evidence.rootCount === 'number') return evidence.rootCount
+  if (Array.isArray(evidence.roots)) return evidence.roots.length
+  return '-'
+}
+
+function toEvidenceNumber(value: unknown): number | string {
+  return typeof value === 'number' && Number.isFinite(value) ? value : '-'
+}
+
+function toEvidenceBoolean(value: unknown): string {
+  if (typeof value !== 'boolean') return '-'
+  return value ? 'yes' : 'no'
+}
+
+function formatEvidenceDuration(value: unknown): string {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '-'
+  if (value < 1000) return `${Math.round(value)}ms`
+  return `${(value / 1000).toFixed(1)}s`
+}
+
+function resolveEvidenceChipLabelKey(evidence: IndexedSourceEvidence): string {
+  if (evidence.id.endsWith(':scan-progress')) {
+    return 'settings.settingFileIndex.sourceEvidenceChip.scanProgress'
+  }
+
+  if (evidence.id.endsWith(':index-flush')) {
+    return 'settings.settingFileIndex.sourceEvidenceChip.indexFlush'
+  }
+
+  if (evidence.id.endsWith(':integrity')) {
+    return 'settings.settingFileIndex.sourceEvidenceChip.integrity'
+  }
+
+  return 'settings.settingFileIndex.sourceEvidenceChip.generic'
+}
+
+function resolveEvidenceChipValues(
+  evidence: IndexedSourceEvidence
+): Record<string, string | number> {
+  const metadata = evidence.metadata ?? {}
+
+  return {
+    label: evidence.label,
+    status: evidence.status,
+    count: resolveEvidenceCount(evidence),
+    reason: evidence.reason ?? '',
+    total: toEvidenceNumber(metadata.totalFiles),
+    completed: toEvidenceNumber(metadata.completedFiles ?? evidence.itemCount),
+    failed: toEvidenceNumber(metadata.failedFiles),
+    skipped: toEvidenceNumber(metadata.skippedFiles),
+    pendingRoots: toEvidenceNumber(metadata.pendingRoots),
+    pendingPermissionRoots: toEvidenceNumber(metadata.pendingPermissionRoots),
+    entries: toEvidenceNumber(metadata.entries),
+    pending: toEvidenceNumber(metadata.pending),
+    inflight: toEvidenceNumber(metadata.inflight),
+    withContent: toEvidenceNumber(metadata.withContent),
+    duration: formatEvidenceDuration(metadata.durationMs),
+    error: typeof metadata.error === 'string' ? metadata.error : '',
+    ftsRows: toEvidenceNumber(metadata.ftsRows),
+    filesRows: toEvidenceNumber(metadata.filesRows),
+    needsRebuild: toEvidenceBoolean(metadata.needsRebuild),
+    orphanedKeywordsRemoved: toEvidenceNumber(metadata.orphanedKeywordsRemoved)
+  }
+}
+
+function resolveRecentTaskTone(status: IndexedSourceTaskHistoryStatus): IndexingSourceTone {
+  if (status === 'failed') return 'danger'
+  if (status === 'skipped') return 'warning'
+  return 'muted'
+}
+
+function resolveRecentTaskLabelKey(
+  kind: IndexedSourceTaskHistoryKind,
+  status: IndexedSourceTaskHistoryStatus
+): string {
+  return `settings.settingFileIndex.sourceRecentTask.${kind}.${status}`
+}
+
+function toSummaryValue(value: unknown): string | number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) return value
+  if (typeof value === 'boolean') return value ? 'yes' : 'no'
+  return '-'
+}
+
+function resolveRecentTaskSummary(task: IndexedSourceTaskHistoryEntry): string {
+  const summary = task.summary ?? {}
+
+  if (task.kind === 'scan') {
+    return `records ${toSummaryValue(summary.records)} / batches ${toSummaryValue(summary.batches)}`
+  }
+
+  if (task.kind === 'watch') {
+    return `delta ${toSummaryValue(summary.appliedDeltas)}/${toSummaryValue(summary.deltas)} / action ${toSummaryValue(summary.action)}`
+  }
+
+  if (task.kind === 'reconcile') {
+    return `+${toSummaryValue(summary.added)} ~${toSummaryValue(summary.changed)} -${toSummaryValue(summary.deleted)} / skipped ${toSummaryValue(summary.skipped)}`
+  }
+
+  return `clear index ${toSummaryValue(summary.clearedSearchIndex)} / progress ${toSummaryValue(summary.clearedScanProgress)}`
+}
+
 export function resolveIndexingSourceTaskChips(
   source: IndexedSourceDiagnostics
 ): IndexingSourceTaskChip[] {
@@ -94,6 +227,7 @@ export function resolveIndexingSourceTaskChips(
         : 'settings.settingFileIndex.sourceTask.scanDone',
       values: {
         time: formatIndexingSourceTimestamp(source.lastScan.completedAt),
+        jobId: source.lastScan.jobId ?? '-',
         batches: source.lastScan.batches,
         records: source.lastScan.records,
         error: source.lastScan.error ?? ''
@@ -112,6 +246,7 @@ export function resolveIndexingSourceTaskChips(
           : 'settings.settingFileIndex.sourceTask.watchDone',
       values: {
         time: formatIndexingSourceTimestamp(source.lastWatch.completedAt),
+        jobId: source.lastWatch.jobId ?? '-',
         action: source.lastWatch.action,
         deltas: source.lastWatch.deltas,
         applied: source.lastWatch.appliedDeltas,
@@ -131,6 +266,7 @@ export function resolveIndexingSourceTaskChips(
         : 'settings.settingFileIndex.sourceTask.reconcileDone',
       values: {
         time: formatIndexingSourceTimestamp(source.lastReconcile.completedAt),
+        jobId: source.lastReconcile.jobId ?? '-',
         added: source.lastReconcile.added,
         changed: source.lastReconcile.changed,
         deleted: source.lastReconcile.deleted,
@@ -144,4 +280,40 @@ export function resolveIndexingSourceTaskChips(
   }
 
   return chips
+}
+
+export function resolveIndexingSourceRecentTaskChips(
+  source: IndexedSourceDiagnostics,
+  limit = 3
+): IndexingSourceRecentTaskChip[] {
+  return (source.recentTasks ?? []).slice(0, limit).map((task, index) => ({
+    id: `${task.kind}:${task.jobId ?? task.completedAt}:${index}`,
+    tone: resolveRecentTaskTone(task.status),
+    labelKey: resolveRecentTaskLabelKey(task.kind, task.status),
+    values: {
+      jobId: task.jobId ?? '-',
+      time: formatIndexingSourceTimestamp(task.completedAt),
+      summary: resolveRecentTaskSummary(task),
+      error: task.error ?? ''
+    }
+  }))
+}
+
+export function resolveIndexingSourceEvidenceChips(
+  source: IndexedSourceDiagnostics,
+  limit = 2
+): IndexingSourceEvidenceChip[] {
+  return [...(source.evidence ?? [])]
+    .sort(
+      (left, right) =>
+        resolveEvidencePriority(left) - resolveEvidencePriority(right) ||
+        left.label.localeCompare(right.label)
+    )
+    .slice(0, limit)
+    .map((evidence) => ({
+      id: evidence.id,
+      tone: resolveEvidenceTone(evidence.status),
+      labelKey: resolveEvidenceChipLabelKey(evidence),
+      values: resolveEvidenceChipValues(evidence)
+    }))
 }

@@ -1,9 +1,39 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import fse from 'fs-extra'
+
+const permissionModuleMock = vi.hoisted(() => ({
+  checkPermission: vi.fn<
+    (
+      pluginId: string,
+      apiName: string,
+      sdkapi?: number
+    ) => { allowed: boolean; permissionId: string; pluginId: string; reason?: string }
+  >(() => ({
+    allowed: true,
+    permissionId: 'search.root-results',
+    pluginId: 'test-plugin'
+  }))
+}))
+
+const appSettingsMock = vi.hoisted(() => ({
+  value: {} as Record<string, unknown>
+}))
+
+vi.mock('../permission', () => ({
+  getPermissionModule: () => permissionModuleMock
+}))
+
+vi.mock('../storage', () => ({
+  getMainConfig: vi.fn(() => appSettingsMock.value),
+  isMainStorageReady: vi.fn(() => true),
+  saveMainConfig: vi.fn(),
+  subscribeMainConfig: vi.fn(() => vi.fn())
+}))
 
 vi.mock('@talex-touch/utils/plugin/node', () => {
   class PluginLogger {
@@ -101,6 +131,7 @@ const boxItemManagerMock = vi.hoisted(() => ({
   batchUpsert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
+  get: vi.fn(),
   getBySource: vi.fn(() => [])
 }))
 
@@ -129,7 +160,16 @@ function clearBoxItemMocks(): void {
   boxItemManagerMock.batchUpsert.mockClear()
   boxItemManagerMock.update.mockClear()
   boxItemManagerMock.delete.mockClear()
+  boxItemManagerMock.get.mockClear()
+  boxItemManagerMock.get.mockReturnValue(undefined)
   boxItemManagerMock.getBySource.mockClear()
+  permissionModuleMock.checkPermission.mockReset()
+  permissionModuleMock.checkPermission.mockReturnValue({
+    allowed: true,
+    permissionId: 'search.root-results',
+    pluginId: 'test-plugin'
+  })
+  appSettingsMock.value = {}
 }
 
 describe('TouchPlugin.triggerFeature', () => {
@@ -187,6 +227,384 @@ describe('TouchPlugin.triggerFeature', () => {
     ])
 
     expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks root result pushes without search.root-results permission', async () => {
+    permissionModuleMock.checkPermission.mockReturnValue({
+      allowed: false,
+      permissionId: 'search.root-results',
+      pluginId: 'test-plugin',
+      reason: "Permission 'search.root-results' is not declared in plugin manifest"
+    })
+
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+
+    plugin.status = PluginStatus.ENABLED
+
+    await plugin.getFeatureUtil().boxItems.pushItems([
+      {
+        id: 'blocked-root-result',
+        source: { type: 'plugin', id: 'custom', name: 'custom' },
+        render: { mode: 'default' }
+      } satisfies TuffItem
+    ])
+
+    expect(permissionModuleMock.checkPermission).toHaveBeenCalledWith(
+      'test-plugin',
+      'search:root-results:push',
+      undefined
+    )
+    expect(boxItemManagerMock.batchUpsert).not.toHaveBeenCalled()
+  })
+
+  it('blocks root result pushes when the plugin search provider is disabled by settings', async () => {
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [{ providerId: 'test-plugin.root-results', enabled: false, order: 10 }]
+      }
+    }
+
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.searchProviders = [
+      {
+        id: 'test-plugin.root-results',
+        displayName: 'Test Plugin Results',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 100,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      }
+    ]
+    plugin.status = PluginStatus.ENABLED
+
+    const boxItems = plugin.getFeatureUtil().boxItems
+    await boxItems.pushItems([
+      {
+        id: 'blocked-disabled-provider',
+        source: { type: 'plugin', id: 'custom', name: 'custom' },
+        render: { mode: 'default' }
+      } satisfies TuffItem
+    ])
+    boxItems.update('blocked-disabled-provider', { meta: { updated: true } } as Partial<TuffItem>)
+    boxItems.remove('blocked-disabled-provider')
+    boxItems.clear()
+
+    expect(permissionModuleMock.checkPermission).toHaveBeenCalled()
+    expect(boxItemManagerMock.batchUpsert).not.toHaveBeenCalled()
+    expect(boxItemManagerMock.update).not.toHaveBeenCalled()
+    expect(boxItemManagerMock.delete).toHaveBeenCalledWith('blocked-disabled-provider')
+    expect(boxItemManagerMock.clear).toHaveBeenCalledWith('test-plugin')
+  })
+
+  it('tags pushed root result items with the plugin search provider id', async () => {
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.searchProviders = [
+      {
+        id: 'test-plugin.root-results',
+        displayName: 'Test Plugin Results',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 100,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      }
+    ]
+    plugin.status = PluginStatus.ENABLED
+
+    await plugin.getFeatureUtil().boxItems.push({
+      id: 'tagged-provider-item',
+      source: { type: 'plugin', id: 'custom', name: 'custom' },
+      render: { mode: 'default' }
+    } satisfies TuffItem)
+
+    expect(boxItemManagerMock.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'tagged-provider-item',
+        meta: expect.objectContaining({
+          pluginName: 'test-plugin',
+          searchProviderId: 'test-plugin.root-results'
+        })
+      })
+    )
+  })
+
+  it('routes multi-provider push items by feature id and filters only disabled providers', async () => {
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [
+          { providerId: 'test-plugin.search', enabled: true, order: 10 },
+          { providerId: 'test-plugin.manage', enabled: false, order: 20 }
+        ]
+      }
+    }
+
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.searchProviders = [
+      {
+        id: 'test-plugin.search',
+        displayName: 'Search',
+        featureId: 'search',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 100,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      },
+      {
+        id: 'test-plugin.manage',
+        displayName: 'Manage',
+        featureId: 'manage',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 101,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      }
+    ]
+    plugin.status = PluginStatus.ENABLED
+
+    await plugin.getFeatureUtil().boxItems.pushItems([
+      {
+        id: 'visible-search-item',
+        source: { type: 'plugin', id: 'custom', name: 'custom' },
+        meta: { featureId: 'search' },
+        render: { mode: 'default' }
+      } satisfies TuffItem,
+      {
+        id: 'hidden-manage-item',
+        source: { type: 'plugin', id: 'custom', name: 'custom' },
+        meta: { featureId: 'manage' },
+        render: { mode: 'default' }
+      } satisfies TuffItem
+    ])
+
+    expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'visible-search-item',
+        meta: expect.objectContaining({
+          featureId: 'search',
+          searchProviderId: 'test-plugin.search'
+        })
+      })
+    ])
+  })
+
+  it('allows updates for existing items from enabled providers in multi-provider plugins', () => {
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [
+          { providerId: 'test-plugin.search', enabled: true, order: 10 },
+          { providerId: 'test-plugin.manage', enabled: false, order: 20 }
+        ]
+      }
+    }
+
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue({ level: 100, charging: true }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.searchProviders = [
+      {
+        id: 'test-plugin.search',
+        displayName: 'Search',
+        featureId: 'search',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 100,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      },
+      {
+        id: 'test-plugin.manage',
+        displayName: 'Manage',
+        featureId: 'manage',
+        kind: 'plugin',
+        owner: 'third-party-plugin',
+        mode: 'push',
+        priority: 'fast',
+        defaultOrder: 101,
+        policy: {
+          owner: 'third-party-plugin',
+          mode: 'push',
+          permissionScopes: ['root-results'],
+          defaultState: 'ask',
+          requiresUserConsent: true,
+          pushesToRootResults: true
+        }
+      }
+    ]
+    plugin.status = PluginStatus.ENABLED
+
+    boxItemManagerMock.get.mockReturnValue({
+      id: 'existing-search-item',
+      source: { type: 'plugin', id: 'custom', name: 'custom' },
+      meta: {
+        featureId: 'search',
+        searchProviderId: 'test-plugin.search'
+      },
+      render: { mode: 'default' }
+    } satisfies TuffItem)
+
+    plugin.getFeatureUtil().boxItems.update('existing-search-item', {
+      meta: { updated: true }
+    } as Partial<TuffItem>)
+
+    expect(boxItemManagerMock.update).toHaveBeenCalledWith('existing-search-item', {
+      meta: { updated: true }
+    })
   })
 
   it('notifies CoreBox when widget registration fails', async () => {
@@ -437,4 +855,3 @@ describe('TouchPlugin.enable', () => {
     })
   })
 })
-import type { TuffItem } from '@talex-touch/utils'

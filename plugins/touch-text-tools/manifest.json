@@ -12,12 +12,29 @@
   "description": "文本转换工具：Base64/URL 编解码、JSON 美化、Hash",
   "main": "index.js",
   "permissions": {
-    "required": ["clipboard.write"],
+    "required": ["clipboard.write", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "clipboard.write": "将转换结果复制到剪贴板"
+    "clipboard.write": "将转换结果复制到剪贴板",
+    "search.root-results": "将文本工具入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-text-tools.text-tools-convert",
+      "displayName": "文本工具",
+      "featureId": "text-tools-convert",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 104,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "text-tools-convert",

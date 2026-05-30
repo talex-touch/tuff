@@ -34,7 +34,8 @@
       "intelligence": "Intelligence",
       "storage": "Storage",
       "window": "Window",
-      "media": "Media"
+      "media": "Media",
+      "search": "Search"
     },
     "risk": {
       "low": "Low Risk",
@@ -78,6 +79,9 @@
     },
     "media": {
       "read": { "name": "Read Media", "desc": "Read media metadata and thumbnails" }
+    },
+    "search": {
+      "rootResults": { "name": "Push Root Search Results", "desc": "Push or update items in the CoreBox root results list" }
     },
     "grant": "Grant",
     "revoke": "Revoke",
