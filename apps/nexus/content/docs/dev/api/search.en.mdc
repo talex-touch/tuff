@@ -57,6 +57,8 @@ Watch root routing should also use SDK helpers: `normalizeIndexedSourcePathForMa
 
 The SDK also provides source descriptor templates: `createQuicklinksIndexedSourceDescriptor()`, `createBrowserBookmarksIndexedSourceDescriptor()`, `createBrowserHistoryIndexedSourceDescriptor()`, `createSystemSettingsIndexedSourceDescriptor()`, and `createIndexedSourceDescriptorTemplate()`. The Quicklinks template is official-plugin owned, low privacy, sqlite-index backed, fast, clearable, and rebuildable. The Browser Bookmarks and Browser History templates are official-plugin owned, high privacy, sqlite-index backed, deferred, disabled by default, explicit-consent gated, browser-data + file-system scoped, clearable, and rebuildable. The System Settings template is core owned, low privacy, ephemeral, fast, uses the system-index scope, is not clearable, and is rebuildable. These helpers only standardize descriptor/admission defaults for later source implementations; they do not register runtime sources, read data, or claim that Quicklinks/Browser Data/System Settings are implemented.
 
+Plugins may also declare indexed source lifecycle intent through `manifest.indexedSources`. This field is parsed and validated as manifest metadata only: it does not auto-register a runtime source and does not read real files. The SDK helper `resolveIndexedSourceManifestDescriptors()` normalizes declarations into `IndexedSourceDescriptor` values and reuses admission policy plus permission mapping: `browser-data` requires `fs.read`, and `file-system` requires `fs.index`; Browser Data sources must be official-plugin owned, high privacy, disabled/ask by default, and explicitly consent-gated. CoreApp's loader exposes valid declarations on plugin state and records `INDEXED_SOURCE_*` issues in plugin diagnostics so Settings and developer tools can explain why a source has not entered runtime yet.
+
 Search Providers also have a public SDK boundary: `SearchProviderDescriptor` describes providers that can enter CoreBox root results, `SearchProviderUserConfig` stores user-facing `enabled/order`, and `normalizeSearchProviderUserConfigs()` merges descriptors with saved user config for Settings runtime display. Plugin provider registration should use `SearchProviderRegistrationPolicy` to express owner, mode, permission scopes, default state, and consent: third-party push providers must declare the `root-results` scope, `defaultState: "ask"`, and `requiresUserConsent: true`; third-party indexed providers require explicit user consent, and high-privacy providers cannot silently default-enable. Official plugin providers may declare `indexedSourceId` to link themselves to a runtime indexed source; Browser Data source ids such as `browser-bookmarks` / `browser-history` can only be claimed by official-plugin providers, preventing third-party providers from bypassing the high-privacy boundary. The SDK helper `getSearchProviderIdsForIndexedSource()` resolves source-to-provider links from provider descriptors; `isSearchProviderEnabledByConfig()` is the strict provider-level enablement guard and only returns true after descriptor defaults plus saved user config resolve to `enabled === true`; `isIndexedSourceEnabledByProviderConfig()` maps a source id plus linked provider ids to explicit user enablement and only treats `enabled === true` as enabled, so ask/default states cannot be mistaken for consent. The SDK helper `resolveSearchProviderPermissionIds()` maps `root-results` to the plugin manifest permission `search.root-results`; `getSearchProviderManifestCoverage()` audits whether push features have explicit provider declarations, `deriveSearchProvidersFromPushFeatures()` exposes the legacy `push: true` compatibility-provider derivation, and `resolveSearchProviderManifestDescriptors()` combines manifest provider normalization, policy decisions, missing-permission detection, and compatibility derivation in one SDK resolver. CoreApp's loader now reuses that resolver so plugin SDKs, runtime behavior, and validation tooling do not maintain separate rules. CoreApp also checks the permission on `plugin.feature.pushItems()` / `boxItems.push()` root-result write paths, so undeclared or ungranted plugins cannot push content into CoreBox root results.
 
 Plugins should explicitly declare `searchProviders` in `manifest.json` so CoreApp can validate policy and permissions during loading. A plugin may declare multiple push providers and connect each provider to a concrete feature with `featureId`; when pushed items carry `meta.featureId`, CoreApp automatically writes the matching `meta.searchProviderId` so Settings can enable or disable a single provider precisely. Legacy plugins that still use `push: true` features without explicit `searchProviders` get one derived compatibility provider descriptor per push feature and a `SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE` warning. That path is for migration only, not the recommended shape for new plugins. Providers missing `search.root-results` or blocked by registration policy are recorded as issues and are not exposed to the later provider registry.
@@ -85,15 +87,25 @@ code: |
 ---
 :::
 
-Official Browser Data plugins can link an immediate push provider with runtime source diagnostics by declaring `indexedSourceId`:
+Official Browser Data plugins can link an immediate push provider with runtime source diagnostics by declaring both `indexedSources` lifecycle intent and provider `indexedSourceId`:
 
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
     "permissions": {
-      "required": ["fs.read", "search.root-results"]
+      "required": ["fs.read", "fs.index", "search.root-results"]
     },
+    "indexedSources": [
+      {
+        "id": "browser-bookmarks",
+        "template": "browser-bookmarks",
+        "displayName": "Browser Bookmarks",
+        "admission": {
+          "owner": "official-plugin"
+        }
+      }
+    ],
     "searchProviders": [
       {
         "id": "touch-browser-data.browser-bookmarks",

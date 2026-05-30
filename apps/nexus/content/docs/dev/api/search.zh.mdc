@@ -57,6 +57,8 @@ Watch root routing 也应走 SDK helper：`normalizeIndexedSourcePathForMatch()`
 
 SDK 还提供 source descriptor 模板：`createQuicklinksIndexedSourceDescriptor()`、`createBrowserBookmarksIndexedSourceDescriptor()`、`createBrowserHistoryIndexedSourceDescriptor()`、`createSystemSettingsIndexedSourceDescriptor()` 与 `createIndexedSourceDescriptorTemplate()`。Quicklinks 模板固定为 official-plugin、low privacy、sqlite-index、fast、clearable/rebuildable；Browser Bookmarks 与 Browser History 模板固定为 official-plugin、high privacy、sqlite-index、deferred、默认 disabled、requiresUserConsent、browser-data + file-system scope、clearable/rebuildable；System Settings 模板固定为 core、low privacy、ephemeral、fast、system-index scope、不可 clear 但可 rebuild。这些 helper 只统一后续 source 的 descriptor/admission 口径，不注册 runtime source、不读取数据，也不代表 Quicklinks/Browser Data/System Settings 已经完成。
 
+插件也可以在 `manifest.indexedSources` 中声明 indexed source lifecycle intent。该字段只作为 manifest metadata 解析和校验，不会自动注册 runtime source，也不会读取真实文件。SDK 的 `resolveIndexedSourceManifestDescriptors()` 会把声明归一成 `IndexedSourceDescriptor`，并复用 admission policy 与权限映射：`browser-data` 需要 `fs.read`，`file-system` 需要 `fs.index`；Browser Data source 必须是 official-plugin、high privacy、默认 disabled/ask 且显式用户同意。CoreApp loader 会把通过校验的声明暴露到插件状态，同时把 `INDEXED_SOURCE_*` issue 记录到插件 diagnostics，供 Settings 和开发工具解释为什么某个 source 尚未进入 runtime。
+
 Search Provider 也有公开 SDK 边界：`SearchProviderDescriptor` 描述可进入 CoreBox 根结果的 provider，`SearchProviderUserConfig` 保存用户设置中的 `enabled/order`，`normalizeSearchProviderUserConfigs()` 负责把 descriptor 与用户配置归一成 Settings runtime config。插件注册 provider 时应使用 `SearchProviderRegistrationPolicy` 表达 owner、mode、permissionScopes、defaultState 与 consent：第三方 push provider 必须声明 `root-results` scope、`defaultState: "ask"` 与 `requiresUserConsent: true`，第三方 indexed provider 必须显式用户授权，高隐私 provider 不允许静默默认启用。官方插件 provider 可声明 `indexedSourceId` 关联 runtime indexed source；`browser-bookmarks` / `browser-history` 这类 Browser Data source id 只允许 official-plugin provider 声明，避免第三方 provider 绕过高隐私边界。SDK 的 `getSearchProviderIdsForIndexedSource()` 可从 provider descriptors 反查 source 关联的 provider ids；`isSearchProviderEnabledByConfig()` 是严格的 provider 级启用判定，只在 descriptor 默认值与用户配置归一后解析为 `enabled === true` 时返回 true；`isIndexedSourceEnabledByProviderConfig()` 可把 source id 与 linked provider ids 统一映射到显式用户启用状态，同样只认 `enabled === true`，避免 ask/default 状态被误当成用户同意。SDK 的 `resolveSearchProviderPermissionIds()` 会把 `root-results` 映射为插件 manifest 权限 `search.root-results`；`getSearchProviderManifestCoverage()` 可用于审计 push feature 是否已显式声明 provider，`deriveSearchProvidersFromPushFeatures()` 提供 legacy `push: true` 兼容 provider 派生逻辑，`resolveSearchProviderManifestDescriptors()` 则把 manifest provider 归一、policy decision、权限缺失检测与兼容派生合成一个 SDK resolver。CoreApp loader 已复用该 resolver，避免插件 SDK、运行时和校验脚本各写一套规则。CoreApp 运行时也会在 `plugin.feature.pushItems()` / `boxItems.push()` 等根结果写入路径校验该权限，未声明或未授权时不允许向 CoreBox 根结果推送内容。
 
 插件应在 `manifest.json` 中显式声明 `searchProviders`，让 CoreApp 能在加载阶段完成 policy 与权限校验。一个插件可以声明多个 push provider，并用 `featureId` 把 provider 关联到具体 feature；插件推送 item 时若带 `meta.featureId`，CoreApp 会自动写入对应的 `meta.searchProviderId`，Settings 的启停就能精确到单个 provider。未声明 `searchProviders` 但仍使用 `push: true` feature 的旧插件，会被 CoreApp 为每个 push feature 派生兼容 provider descriptor 并产生 `SEARCH_PROVIDER_DERIVED_FROM_PUSH_FEATURE` warning；这是迁移兼容路径，不应作为新插件写法。缺少 `search.root-results` 权限或违反注册 policy 的 provider 会记录 issue，且不会暴露给后续 provider registry。
@@ -85,15 +87,25 @@ code: |
 ---
 :::
 
-Browser Data 官方插件如果要把即时 push provider 与 runtime source 诊断关联起来，可以在 provider 上声明 `indexedSourceId`：
+Browser Data 官方插件如果要把即时 push provider 与 runtime source 诊断关联起来，可以同时声明 `indexedSources` lifecycle intent 与 provider `indexedSourceId`：
 
 :::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
     "permissions": {
-      "required": ["fs.read", "search.root-results"]
+      "required": ["fs.read", "fs.index", "search.root-results"]
     },
+    "indexedSources": [
+      {
+        "id": "browser-bookmarks",
+        "template": "browser-bookmarks",
+        "displayName": "浏览器书签",
+        "admission": {
+          "owner": "official-plugin"
+        }
+      }
+    ],
     "searchProviders": [
       {
         "id": "touch-browser-data.browser-bookmarks",

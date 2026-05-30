@@ -51,17 +51,17 @@
 
 已落地：
 
-- SDK 层：`IndexedSource*` 类型、source admission、lifecycle contract issue、contract summary、task eligibility、watch root routing、watch delta queue、source progress evidence、source reset executor、indexing progress ETA/stream helpers、worker persist-entry mapper、write flush retry/buffer/executor/runtime/snapshot、Search Provider descriptor/config/manifest resolver 已进入 `@talex-touch/utils`；Quicklinks、Browser Bookmarks、Browser History、System Settings 已有 descriptor template。
+- SDK 层：`IndexedSource*` 类型、source admission、lifecycle contract issue、contract summary、task eligibility、watch root routing、watch delta queue、source progress evidence、source reset executor、indexing progress ETA/stream helpers、worker persist-entry mapper、write flush retry/buffer/executor/runtime/snapshot、Search Provider descriptor/config/manifest resolver、`manifest.indexedSources` metadata resolver 已进入 `@talex-touch/utils`；Quicklinks、Browser Bookmarks、Browser History、System Settings 已有 descriptor template。
 - Runtime 层：CoreApp 已新增 `IndexingRuntime`、scan/watch/reconcile task 统计、root policy、diagnostics typed transport、source admission/lifecycle contract diagnostics、Settings maintenance SDK 与 `SearchIndexStoreAdapter` 最小写入边界。
 - Provider 层：App/File/Everything 已作为 thin indexed-source adapter 接入统一 diagnostics 与 runtime lifecycle；Everything path filtering 改读 runtime root policy，避免绕过 File source roots；Provider registry 已把 plugin registration issue / provider id collision 作为 `SearchProviderConfigResponse.issues` 暴露给 Settings，补齐插件 provider 权限阻断的用户可见诊断。
 - File 层：watch delta queue、source progress evidence、source reset executor、progress ETA/stream、path-record write plan、insert/update/delete executor、worker scheduler、worker persist-entry mapper、write flush retry/buffer/executor/runtime/snapshot、post-write side-effect 已下沉到 `@talex-touch/utils/search` SDK；DB persist、scan_progress 读写、worker readiness 与 SearchIndex/FTS 语义继续留在 FileProvider adapter / SearchIndex worker 边界等待下一批迁移。
-- Settings / 插件层：Settings 已支持 source diagnostics、provider enable/order、source-to-provider link；插件可声明 `manifest.searchProviders`，第三方 push provider 需 `root-results` + `defaultState: "ask"` + `requiresUserConsent: true` 才能通过 loader policy；向 root results push/update 已同时受 `search.root-results` 权限 gate 与 provider `enabled === true` 用户配置约束；CoreBox root-result store 对已有 provider-tagged items 也按严格 enabled 过滤，避免旧 push 结果残留。
-- Browser Bookmarks：已新增 high-privacy runtime skeleton，默认 disabled/pending migration；只有显式启用 `browser-bookmarks` 或 `touch-browser-data.browser-bookmarks` provider 后才允许 scanner-backed 读取。
+- Settings / 插件层：Settings 已支持 source diagnostics、provider enable/order、source-to-provider link；插件可声明 `manifest.searchProviders`，第三方 push provider 需 `root-results` + `defaultState: "ask"` + `requiresUserConsent: true` 才能通过 loader policy；插件也可声明 metadata-only `manifest.indexedSources` lifecycle intent，CoreApp loader 会校验 admission/permission 并暴露 `INDEXED_SOURCE_*` diagnostics，但不会自动注册 runtime source；向 root results push/update 已同时受 `search.root-results` 权限 gate 与 provider `enabled === true` 用户配置约束；CoreBox root-result store 对已有 provider-tagged items 也按严格 enabled 过滤，避免旧 push 结果残留。
+- Browser Bookmarks：已新增 high-privacy runtime skeleton，默认 disabled/pending migration；只有显式启用 `browser-bookmarks` 或 `touch-browser-data.browser-bookmarks` provider 后才允许 scanner-backed 读取；`touch-browser-data` 已声明 `browser-bookmarks` indexed source intent 和 `fs.read` / `fs.index` / `search.root-results` 权限边界，但仍未自动读取或注册真实 indexed source。
 
 未闭环：
 
 - FileProvider 的 SQLite/FTS 真实写入、scan worker、index worker flush trace、`scan_progress` 与 integrity reset 调度仍未完全迁到 runtime task/store 边界。
-- Browser Bookmarks 仍需迁到官方 `touch-browser-data` 插件 indexed source，补 watch root 注册、persistent rebuild、clear/disable UI 与用户同意 evidence。
+- Browser Bookmarks 仍需把 metadata-only `manifest.indexedSources` 升级为官方 `touch-browser-data` 插件 runtime indexed source，补 watch root 注册、persistent rebuild、clear/disable UI 与用户同意 evidence。
 - Browser History、Quicklinks、System Settings、Obsidian、VSCode 仍停留在 descriptor/admission 或计划阶段，尚未形成完整 source lifecycle。
 - Everything 仍需 SDK/CLI 最终策略、registry PATH 探测、Windows 真机性能/evidence 与 fail-closed 诊断验收。
 - Durable job history、跨 source retry/debounce、source health 恢复动作、Windows/macOS 手工回归与跨平台截图证据仍需补齐。
@@ -69,7 +69,7 @@
 下一批执行顺序：
 
 1. File write/store boundary：把 FileProvider 写入、progress、integrity reset 继续收敛到 runtime store/task，不改变现有搜索行为。
-2. Browser Bookmarks official plugin lifecycle：把 CoreApp skeleton 迁到 `touch-browser-data` 插件 owned source，补显式 consent、clear/disable/rebuild。
+2. Browser Bookmarks official plugin lifecycle：把 CoreApp skeleton 迁到 `touch-browser-data` 插件 owned runtime source，把 metadata-only intent 接到真实注册、显式 consent、clear/disable/rebuild。
 3. Everything productionization：定 SDK/CLI 策略，补 registry PATH 探测、Windows 真机 evidence 和性能基线。
 4. Quicklinks source：先做低隐私、手动/固定链接源，验证 provider enable/order、root results push 与 Settings 控制闭环。
 5. Browser History source：高隐私、默认关闭，只在显式授权后进入 SQLite-backed scan/search。
@@ -77,11 +77,9 @@
 
 建议分批提交：
 
-1. `feat(utils): formalize indexed source and search provider sdk`：SDK 类型、transport event 类型、provider descriptor/config resolver 与相关测试。
-2. `feat(core-app): add indexing runtime diagnostics and provider settings`：runtime skeleton、diagnostics transport、provider registry/config、Settings enable/order/source diagnostics 与权限 gate。
-3. `refactor(core-app): migrate file indexing primitives toward runtime`：FileProvider primitive 拆分、progress ETA、watch/write/flush/reconcile 薄适配与 focused tests。
-4. `feat(core-app): add browser bookmarks indexed-source skeleton`：Browser Bookmarks source config、disabled-by-default skeleton、scanner-backed 显式启用口径与 tests。
-5. `docs(search): sync indexing runtime roadmap and nexus api docs`：Roadmap、TODO、CHANGES、README、docs index 与 Nexus search/permission API 文档同步。
+1. `feat(utils): expose indexed source manifest sdk`：`manifest.indexedSources` metadata resolver、source permission mapping、Browser Data official-plugin admission gate 与 tests。
+2. `feat(core-app): parse plugin indexed source metadata`：CoreApp loader 解析插件 indexed source intent，暴露插件状态和 `INDEXED_SOURCE_*` diagnostics，不注册 runtime source。
+3. `docs(search): sync indexed source manifest roadmap`：Roadmap、TODO、Nexus search API 文档同步 Browser Data 官方插件 lifecycle intent 与剩余缺口。
 
 ## 已完成/历史不再重复开发
 
