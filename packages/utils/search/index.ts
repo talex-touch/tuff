@@ -6,6 +6,9 @@
 
 export * from './feature-matcher'
 export * from './fuzzy-match'
+export * from './indexing-progress-estimator'
+export * from './indexing-progress-stream'
 export * from './indexing-source'
+export * from './indexing-watch-delta-queue'
 export * from './levenshtein-utils'
 export * from './types'
