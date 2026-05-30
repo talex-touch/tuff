@@ -12,6 +12,22 @@ export type FileIndexStage
     | 'completed'
     | string
 
+export type FileIndexEstimateStatus =
+  | 'unknown'
+  | 'stabilizing'
+  | 'estimated'
+  | 'stalled'
+  | 'complete'
+  | string
+
+export type FileIndexEstimateBasis =
+  | 'none'
+  | 'stage-speed'
+  | 'elapsed-progress'
+  | 'stalled'
+  | 'complete'
+  | string
+
 export interface FileIndexProgress {
   stage: FileIndexStage
   current: number
@@ -20,6 +36,9 @@ export interface FileIndexProgress {
   startTime: number | null
   estimatedRemainingMs: number | null
   averageItemsPerSecond: number
+  estimateStatus?: FileIndexEstimateStatus
+  speedSampleCount?: number
+  estimateBasis?: FileIndexEstimateBasis
 }
 
 export interface FileIndexStatus {
@@ -38,6 +57,9 @@ export interface FileIndexStatus {
   estimatedCompletion: number | null
   estimatedRemainingMs: number | null
   averageItemsPerSecond: number
+  estimateStatus?: FileIndexEstimateStatus
+  speedSampleCount?: number
+  estimateBasis?: FileIndexEstimateBasis
 }
 
 export interface FileIndexStats {
