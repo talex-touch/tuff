@@ -13,6 +13,20 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed source progress store
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedSourceProgressStoreService` for completed-root summary, empty delete/upsert skips, upsert readiness gating, and upsert result reporting.
+  - Rewired FileProvider scan progress handling to inject `scan_progress` select/delete, worker readiness, and `upsertScanProgress` while delegating source-agnostic progress store behavior to the SDK primitive.
+  - Kept the real `scan_progress` table schema, Drizzle queries, SearchIndex worker, and File metadata mapping inside the CoreApp/FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts"` 通过。
+
 ### refactor(search): lift indexed source integrity policy
 
 - `packages/utils/search/indexing-source-integrity.ts`
