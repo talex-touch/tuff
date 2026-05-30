@@ -13,10 +13,13 @@ import {
   createSearchProviderDescriptorFromManifest,
   getSearchProviderManifestCoverage,
   getSearchProviderIdsForIndexedSource,
+  getIndexedSourceContractIssues,
   IndexedSourceReconcileReasons,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
+  isSearchProviderEnabledByConfig,
   isIndexedSourceAdmissionReady,
+  isIndexedSourceContractReady,
   isIndexedSourceLifecycleReady,
   createSystemSettingsIndexedSourceDescriptor,
   normalizeSearchProviderUserConfigs,
@@ -277,6 +280,12 @@ describe("indexedSource admission", () => {
 
     expect(getIndexedSourceLifecycleIssues(source)).toEqual([]);
     expect(isIndexedSourceLifecycleReady(source)).toBe(true);
+    expect(getIndexedSourceContractIssues(source)).toEqual({
+      admission: [],
+      lifecycle: [],
+      ready: true,
+    });
+    expect(isIndexedSourceContractReady(source)).toBe(true);
   });
 
   it("reports lifecycle capability declarations without matching handlers", () => {
@@ -324,6 +333,55 @@ describe("indexedSource admission", () => {
       "handler-provided-without-capability",
     ]);
     expect(isIndexedSourceLifecycleReady(source)).toBe(false);
+    expect(getIndexedSourceContractIssues(source)).toMatchObject({
+      admission: ["watch-capability-requires-reconcile"],
+      ready: false,
+    });
+  });
+
+  it("summarizes admission and lifecycle contract issues together", () => {
+    const source = {
+      descriptor: buildDescriptor({
+        privacy: "high",
+        capabilities: {
+          scan: true,
+          watch: true,
+          reconcile: true,
+          clear: true,
+          open: true,
+        },
+        admission: {
+          owner: "official-plugin",
+          permissionScopes: ["file-system"],
+          defaultState: "enabled",
+          clearable: true,
+          rebuildable: true,
+        },
+      }),
+      getHealth: async () => ({
+        status: "ready" as const,
+        permissionState: "granted" as const,
+        itemCount: 1,
+        watchState: "active" as const,
+        reconcileState: "idle" as const,
+      }),
+      getRoots: async () => [],
+      async *scan () {
+        yield { sourceId: "quicklink", records: [], done: true };
+      },
+    };
+
+    expect(getIndexedSourceContractIssues(source)).toEqual({
+      admission: ["high-privacy-requires-explicit-enable"],
+      lifecycle: [
+        "watch-capability-missing-handler",
+        "reconcile-capability-missing-handler",
+        "clear-capability-missing-handler",
+        "open-capability-missing-handler",
+      ],
+      ready: false,
+    });
+    expect(isIndexedSourceContractReady(source)).toBe(false);
   });
 
   it("requires browser data sources to be high privacy and scoped", () => {
@@ -693,6 +751,48 @@ describe("search provider sdk contracts", () => {
     });
   });
 
+  it("resolves provider enablement through normalized sdk config", () => {
+    const descriptors = [
+      createSearchProviderDescriptorFromManifest(
+        {
+          id: "plugin.ask",
+          mode: "push",
+          permissionScopes: ["root-results"],
+          defaultState: "ask",
+          requiresUserConsent: true,
+        },
+        { pluginName: "plugin" },
+      ),
+      createSearchProviderDescriptorFromManifest(
+        {
+          id: "plugin.default-on",
+          mode: "push",
+          permissionScopes: ["root-results"],
+          defaultState: "enabled",
+        },
+        { pluginName: "plugin" },
+      ),
+    ];
+
+    expect(isSearchProviderEnabledByConfig("plugin.ask", descriptors)).toBe(
+      false,
+    );
+    expect(
+      isSearchProviderEnabledByConfig("plugin.default-on", descriptors),
+    ).toBe(true);
+    expect(
+      isSearchProviderEnabledByConfig("plugin.ask", descriptors, [
+        { providerId: "plugin.ask", enabled: true, order: 1 },
+      ]),
+    ).toBe(true);
+    expect(
+      isSearchProviderEnabledByConfig("plugin.default-on", descriptors, [
+        { providerId: "plugin.default-on", enabled: false, order: 1 },
+      ]),
+    ).toBe(false);
+    expect(isSearchProviderEnabledByConfig("missing", descriptors)).toBe(false);
+  });
+
   it("requires explicit root-result permission for third-party push providers", () => {
     expect(
       resolveSearchProviderRegistrationDecision({
@@ -715,6 +815,31 @@ describe("search provider sdk contracts", () => {
     ).toEqual({
       status: "blocked",
       issues: ["third-party-push-requires-root-results"],
+    });
+  });
+
+  it("requires explicit consent for third-party push providers", () => {
+    expect(
+      resolveSearchProviderRegistrationDecision({
+        id: "plugin.quicklinks",
+        displayName: "Quicklinks",
+        kind: "quicklink",
+        owner: "third-party-plugin",
+        mode: "push",
+        priority: "fast",
+        defaultOrder: 20,
+        policy: {
+          owner: "third-party-plugin",
+          mode: "push",
+          permissionScopes: ["root-results"],
+          defaultState: "enabled",
+          pushesToRootResults: true,
+          requiresUserConsent: false,
+        },
+      }),
+    ).toEqual({
+      status: "blocked",
+      issues: ["third-party-push-requires-explicit-consent"],
     });
   });
 

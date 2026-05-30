@@ -54,6 +54,7 @@ export type SearchProviderRegistrationIssue =
   | "missing-owner"
   | "missing-permission-scope"
   | "third-party-push-requires-root-results"
+  | "third-party-push-requires-explicit-consent"
   | "third-party-indexed-requires-explicit-consent"
   | "high-privacy-requires-explicit-consent"
   | "browser-data-requires-official-plugin";
@@ -330,6 +331,22 @@ export interface SearchProviderManifestResolution {
 
 export interface SearchProviderRuntimeConfig extends SearchProviderUserConfig {
   descriptor: SearchProviderDescriptor;
+}
+
+export type SearchProviderRegistryIssueCode =
+  | SearchProviderManifestResolutionIssueCode
+  | "SEARCH_PROVIDER_ID_COLLISION";
+
+export interface SearchProviderRegistryIssue {
+  type: "warning" | "error";
+  code: SearchProviderRegistryIssueCode;
+  message: string;
+  pluginName?: string;
+  providerId?: string;
+  source?: string;
+  owner?: SearchProviderOwner;
+  mode?: SearchProviderMode;
+  meta?: Record<string, unknown>;
 }
 
 export interface SearchProviderRegistrationDecision {
@@ -747,6 +764,7 @@ export interface IndexedSourceDiagnostics {
   health: IndexedSourceHealth;
   roots: IndexedSourceRoot[];
   evidence?: IndexedSourceEvidence[];
+  admissionIssues?: IndexedSourceAdmissionReason[];
   lifecycleIssues?: IndexedSourceLifecycleIssue[];
   recentTasks?: IndexedSourceTaskHistoryEntry[];
   lastScan?: {
@@ -810,6 +828,12 @@ export interface IndexedSourceDiagnosticsSnapshot {
     unavailable: number;
   };
   sources: IndexedSourceDiagnostics[];
+}
+
+export interface IndexedSourceContractIssues {
+  admission: IndexedSourceAdmissionReason[];
+  lifecycle: IndexedSourceLifecycleIssue[];
+  ready: boolean;
 }
 
 export interface IndexedSourceOpenAction {
@@ -1185,6 +1209,23 @@ export function isIndexedSourceLifecycleReady(source: IndexedSource): boolean {
   return getIndexedSourceLifecycleIssues(source).length === 0;
 }
 
+export function getIndexedSourceContractIssues(
+  source: IndexedSource,
+): IndexedSourceContractIssues {
+  const admission = getIndexedSourceAdmissionIssues(source.descriptor);
+  const lifecycle = getIndexedSourceLifecycleIssues(source);
+
+  return {
+    admission,
+    lifecycle,
+    ready: admission.length === 0 && lifecycle.length === 0,
+  };
+}
+
+export function isIndexedSourceContractReady(source: IndexedSource): boolean {
+  return getIndexedSourceContractIssues(source).ready;
+}
+
 export function normalizeSearchProviderUserConfigs(
   descriptors: SearchProviderDescriptor[],
   configs: SearchProviderUserConfig[] = [],
@@ -1216,6 +1257,23 @@ export function normalizeSearchProviderUserConfigs(
         left.descriptor.defaultOrder - right.descriptor.defaultOrder ||
         left.descriptor.displayName.localeCompare(right.descriptor.displayName),
     );
+}
+
+export function isSearchProviderEnabledByConfig(
+  providerId: string,
+  descriptors: SearchProviderDescriptor[],
+  configs: SearchProviderUserConfig[] = [],
+): boolean {
+  const normalizedProviderId = providerId.trim();
+  if (!normalizedProviderId) {
+    return false;
+  }
+
+  return (
+    normalizeSearchProviderUserConfigs(descriptors, configs).find(
+      (config) => config.providerId === normalizedProviderId,
+    )?.enabled === true
+  );
 }
 
 export function getSearchProviderUserConfigSignature(
@@ -1299,6 +1357,14 @@ export function resolveSearchProviderRegistrationDecision(
     !policy.permissionScopes.includes("root-results")
   ) {
     issues.push("third-party-push-requires-root-results");
+  }
+
+  if (
+    policy.owner === "third-party-plugin" &&
+    policy.mode === "push" &&
+    (policy.defaultState !== "ask" || policy.requiresUserConsent !== true)
+  ) {
+    issues.push("third-party-push-requires-explicit-consent");
   }
 
   if (
