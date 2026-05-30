@@ -2,6 +2,7 @@ import type { IndexedSourceEvidence } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { DbUtils } from '../../../../../db/utils'
+import { IndexedSourceProgressEvidenceService } from '@talex-touch/utils/search'
 import { inArray } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 
@@ -40,6 +41,7 @@ export class FileProviderScanProgressService {
   private readonly getDbUtils: FileProviderScanProgressServiceDeps['getDbUtils']
   private readonly ensureSearchIndexWorkerReady: FileProviderScanProgressServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderScanProgressServiceDeps['getSearchIndexWorker']
+  private readonly evidenceService = new IndexedSourceProgressEvidenceService()
 
   constructor(deps: FileProviderScanProgressServiceDeps) {
     this.getDbUtils = deps.getDbUtils
@@ -100,76 +102,32 @@ export class FileProviderScanProgressService {
     const summary = await this.getSummary(input.watchPaths)
     const pendingPermissionPaths = input.pendingPermissionPaths ?? []
 
-    return {
+    return this.evidenceService.build({
       id: `${input.sourceId}:scan-progress`,
       label: 'File scan progress',
-      status: this.resolveEvidenceStatus(
-        input.stats,
-        summary.pendingRoots,
-        input.isIndexingActive,
-        pendingPermissionPaths.length
-      ),
-      itemCount: input.stats.completedFiles,
-      rootCount: input.watchPaths.length,
       roots: input.watchPaths,
-      lastCheckedAt: input.checkedAt ?? Date.now(),
-      reason: this.resolveEvidenceReason(
-        input.stats,
-        summary.pendingRoots,
-        input.isIndexingActive,
-        pendingPermissionPaths.length
-      ),
+      itemCount: input.stats.completedFiles,
+      totalRoots: summary.totalRoots,
+      pendingRoots: summary.pendingRoots,
+      failedItems: input.stats.failedFiles,
+      isActive: input.isIndexingActive,
+      checkedAt: input.checkedAt,
+      pendingPermissionPaths,
+      reasons: {
+        pendingPermission: 'file-index-watch-root-pending-permission',
+        failed: 'file-index-progress-has-failed-files',
+        pendingRoots: 'file-index-progress-has-pending-roots',
+        running: 'file-index-progress-running',
+        ready: 'file-index-progress-ready'
+      },
       metadata: {
         totalFiles: input.stats.totalFiles,
         completedFiles: input.stats.completedFiles,
         failedFiles: input.stats.failedFiles,
         skippedFiles: input.stats.skippedFiles,
         embeddingCompletedFiles: input.stats.embeddingCompletedFiles,
-        embeddingRows: input.stats.embeddingRows,
-        totalRoots: summary.totalRoots,
-        pendingRoots: summary.pendingRoots,
-        pendingPermissionRoots: pendingPermissionPaths.length,
-        pendingPermissionPaths
+        embeddingRows: input.stats.embeddingRows
       }
-    }
-  }
-
-  private resolveEvidenceStatus(
-    stats: FileProviderIndexStatsForEvidence,
-    pendingRoots: number,
-    isIndexingActive: boolean,
-    pendingPermissionRoots: number
-  ): IndexedSourceEvidence['status'] {
-    if (pendingPermissionRoots > 0) {
-      return 'permission-required'
-    }
-    if (stats.failedFiles > 0) {
-      return 'degraded'
-    }
-    if (pendingRoots > 0 || isIndexingActive) {
-      return 'warming'
-    }
-    return 'ready'
-  }
-
-  private resolveEvidenceReason(
-    stats: FileProviderIndexStatsForEvidence,
-    pendingRoots: number,
-    isIndexingActive: boolean,
-    pendingPermissionRoots: number
-  ): string {
-    if (pendingPermissionRoots > 0) {
-      return 'file-index-watch-root-pending-permission'
-    }
-    if (stats.failedFiles > 0) {
-      return 'file-index-progress-has-failed-files'
-    }
-    if (pendingRoots > 0) {
-      return 'file-index-progress-has-pending-roots'
-    }
-    if (isIndexingActive) {
-      return 'file-index-progress-running'
-    }
-    return 'file-index-progress-ready'
+    })
   }
 }
