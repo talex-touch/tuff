@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
 import { FileProviderIntegrityService } from './file-provider-integrity-service'
 
 function createDb(options: { filesRows: number; orphanedKeywords?: number }) {
@@ -31,7 +32,7 @@ function createService(options: {
   const resetRuntimeState = vi.fn(
     options.resetRuntimeState ??
       (async () => ({
-        reason: 'integrity-repair',
+        reason: IndexedSourceResetReasons.IntegrityRepair,
         clearedSearchIndex: true,
         clearedScanProgress: true,
         scanProgressRows: 2,
@@ -72,7 +73,7 @@ describe('file-provider-integrity-service', () => {
     const snapshot = await service.check(db as never)
 
     expect(resetRuntimeState).toHaveBeenCalledWith({
-      reason: 'integrity-repair',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
       clearSearchIndex: false,
       clearScanProgress: true
     })
@@ -82,7 +83,7 @@ describe('file-provider-integrity-service', () => {
       needsRebuild: true,
       clearedSearchIndex: true,
       clearedScanProgress: true,
-      resetReason: 'integrity-repair',
+      resetReason: IndexedSourceResetReasons.IntegrityRepair,
       resetScanProgressRows: 2
     })
   })
@@ -94,7 +95,7 @@ describe('file-provider-integrity-service', () => {
     await service.check(db as never)
 
     expect(resetRuntimeState).toHaveBeenCalledWith({
-      reason: 'integrity-repair',
+      reason: IndexedSourceResetReasons.IntegrityRepair,
       clearSearchIndex: true,
       clearScanProgress: true
     })
