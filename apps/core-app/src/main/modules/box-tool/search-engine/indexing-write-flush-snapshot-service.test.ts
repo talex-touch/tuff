@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { IndexedWriteFlushSnapshotService as SdkIndexedWriteFlushSnapshotService } from '@talex-touch/utils/search'
 import { IndexedWriteFlushSnapshotService } from './indexing-write-flush-snapshot-service'
 
 describe('IndexedWriteFlushSnapshotService', () => {
@@ -7,6 +8,8 @@ describe('IndexedWriteFlushSnapshotService', () => {
   })
 
   it('records the latest flush snapshot with checkedAt', () => {
+    expect(IndexedWriteFlushSnapshotService).toBe(SdkIndexedWriteFlushSnapshotService)
+
     vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
     const service = new IndexedWriteFlushSnapshotService()
 
