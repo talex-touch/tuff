@@ -162,6 +162,8 @@ CoreApp 还提供 `IndexedWriteFlushRuntimeService` 作为通用 write flush run
 
 `@talex-touch/utils/search` 也暴露 `IndexedWriteDeleteExecutorService` 作为 path-record delete executor。它负责 normalize/dedupe raw paths、解析 existing records、委托 records 删除、调用注入的 `removeIndexedArtifacts` cleanup hook，并返回 deleted ids/paths。SDK 表面不暴露 SearchIndex 命名；CoreApp 保留兼容 wrapper 适配旧 `removeSearchIndexItems` deps，FileProvider 与 cleanup/reconciliation delete flows 继续保留现有 File 专属 cleanup wiring。
 
+`@talex-touch/utils/search` 也暴露 `IndexedWriteUpdateExecutorService` 作为 injected-queue update executor。它负责 update records 分块、chunk 前等待、委托逐条更新、刷新 updated rows、派发 side effects，并通过注入的 clock/formatter 记录 chunk duration。SDK 只定义 `runQueue(chunks, handler, options)` 协议；CoreApp 仍注入自己的 adaptive queue 与 File 专属 backpressure 策略。
+
 `@talex-touch/utils/search` 也暴露 `IndexedWorkerPersistEntryMapperService` 作为通用 worker result 到 persist payload 的映射 primitive。它统一处理 progress null-normalization、fileUpdate contentHash 默认值、embedding model/vector 投影与泛型 `indexItem` 透传，不依赖 CoreApp SearchIndex worker 类型。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK mapper，且只负责把自己的 index worker result 交给该 mapper。
 
 `@talex-touch/utils/search` 也暴露 `IndexedWriteSideEffectService` 作为通用 post-write side-effect dispatcher。它会异步执行 extension processing，并立即调度 indexing；extension processing 失败只进入日志，不阻塞后续 index worker 调度，source-specific failure 文案可注入。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK dispatcher，并只保留 File extension processing、index scheduling 与 File 专属日志文案。
