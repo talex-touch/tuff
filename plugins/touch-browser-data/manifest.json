@@ -12,15 +12,27 @@
   "description": "浏览器数据：只读搜索 Chrome、Edge、Brave、Arc 的本地书签",
   "main": "index.js",
   "permissions": {
-    "required": ["fs.read", "search.root-results"],
+    "required": ["fs.read", "fs.index", "search.root-results"],
     "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
     "fs.read": "只读扫描本机浏览器 Bookmarks JSON 文件用于搜索书签",
+    "fs.index": "声明浏览器书签后续进入统一 indexed source lifecycle 的本地索引维护边界",
     "search.root-results": "将匹配到的浏览器书签推送到 CoreBox 根搜索结果",
     "clipboard.write": "复制书签 URL 到剪贴板",
     "network.internet": "使用默认浏览器打开本地浏览器书签 URL"
   },
+  "indexedSources": [
+    {
+      "id": "browser-bookmarks",
+      "template": "browser-bookmarks",
+      "displayName": "浏览器书签",
+      "admission": {
+        "owner": "official-plugin",
+        "notes": "Browser bookmarks remain disabled until the user enables the linked provider; this manifest declaration does not read browser files by itself."
+      }
+    }
+  ],
   "searchProviders": [
     {
       "id": "touch-browser-data.browser-bookmarks",

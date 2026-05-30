@@ -7,6 +7,9 @@ import type {
   SdkApiVersion
 } from '@talex-touch/utils/plugin'
 import type {
+  IndexedSourceDescriptor,
+  IndexedSourceManifestDescriptor,
+  IndexedSourceManifestResolutionIssue,
   SearchProviderDescriptor,
   SearchProviderManifestResolutionIssue,
   SearchProviderManifestDescriptor
@@ -25,7 +28,10 @@ import {
   OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
-import { resolveSearchProviderManifestDescriptors } from '@talex-touch/utils/search'
+import {
+  resolveIndexedSourceManifestDescriptors,
+  resolveSearchProviderManifestDescriptors
+} from '@talex-touch/utils/search'
 import { app } from 'electron'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
@@ -56,6 +62,7 @@ interface PluginManifest {
   platforms?: Record<string, boolean>
   features?: IPluginFeature[]
   searchProviders?: SearchProviderManifestDescriptor[]
+  indexedSources?: IndexedSourceManifestDescriptor[]
   divisionBox?: ManifestDivisionBoxConfig
   /**
    * SDK API version for hard-cut runtime gating.
@@ -255,6 +262,10 @@ abstract class BasePluginLoader {
     this.touchPlugin.searchProviders = this.resolveSearchProviders(
       pluginInfo.searchProviders,
       pluginInfo.features,
+      parsedPermissions
+    )
+    this.touchPlugin.indexedSources = this.resolveIndexedSources(
+      pluginInfo.indexedSources,
       parsedPermissions
     )
 
@@ -464,6 +475,70 @@ abstract class BasePluginLoader {
       source: 'manifest.json',
       code: issue.code,
       meta: { index: issue.index },
+      timestamp: Date.now()
+    })
+  }
+
+  private resolveIndexedSources(
+    manifestSources: IndexedSourceManifestDescriptor[] | undefined,
+    parsedPermissions: { required: string[]; optional: string[] }
+  ): IndexedSourceDescriptor[] | undefined {
+    const result = resolveIndexedSourceManifestDescriptors({
+      manifestSources,
+      defaults: {
+        pluginName: this.touchPlugin.name,
+        owner: 'third-party-plugin'
+      },
+      declaredPermissionIds: [...parsedPermissions.required, ...parsedPermissions.optional]
+    })
+
+    result.issues.forEach((issue) => this.pushIndexedSourceIssue(issue))
+    if (manifestSources !== undefined || result.issues.length > 0) {
+      return result.descriptors
+    }
+
+    return undefined
+  }
+
+  private pushIndexedSourceIssue(issue: IndexedSourceManifestResolutionIssue): void {
+    if (issue.code === 'INDEXED_SOURCE_PERMISSION_MISSING') {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: issue.message,
+        source: `indexedSource:${issue.sourceId ?? '<unknown>'}`,
+        code: issue.code,
+        suggestion: 'Add the missing permissions to manifest.json permissions.required.',
+        meta: {
+          sourceId: issue.sourceId,
+          missingPermissionIds: issue.missingPermissionIds ?? [],
+          permissionScopes: issue.permissionScopes ?? []
+        },
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    if (issue.code === 'INDEXED_SOURCE_ADMISSION_BLOCKED') {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: issue.message,
+        source: `indexedSource:${issue.sourceId ?? '<unknown>'}`,
+        code: issue.code,
+        meta: {
+          sourceId: issue.sourceId,
+          admissionIssues: issue.admissionIssues ?? []
+        },
+        timestamp: Date.now()
+      })
+      return
+    }
+
+    this.touchPlugin.issues.push({
+      type: issue.type,
+      message: issue.message,
+      source: 'manifest.json',
+      code: issue.code,
+      meta: { index: issue.index, sourceId: issue.sourceId },
       timestamp: Date.now()
     })
   }
