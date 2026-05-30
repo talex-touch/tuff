@@ -196,6 +196,85 @@
   white-space: nowrap;
 }
 
+.source-diagnostics-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.source-diagnostics-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+  max-width: min(520px, 52vw);
+  overflow: hidden;
+}
+
+.source-status-pill,
+.source-diagnostic-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.source-status-pill {
+  color: var(--source-status-color);
+  background: color-mix(in srgb, var(--source-status-color) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--source-status-color) 25%, transparent);
+}
+
+.source-status-pill--success {
+  --source-status-color: #34c759;
+}
+
+.source-status-pill--info {
+  --source-status-color: #007aff;
+}
+
+.source-status-pill--warning {
+  --source-status-color: #ff9500;
+}
+
+.source-status-pill--danger {
+  --source-status-color: #ff3b30;
+}
+
+.source-status-pill--muted {
+  --source-status-color: #8e8e93;
+}
+
+.source-diagnostic-chip {
+  color: var(--tx-text-color-secondary);
+  background: color-mix(in srgb, var(--tx-fill-color) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 70%, transparent);
+}
+
+.source-diagnostic-chip {
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-diagnostic-task-chip {
+  max-width: 180px;
+}
+
+.source-diagnostic-task-chip--danger {
+  color: #ff3b30;
+  background: color-mix(in srgb, #ff3b30 10%, transparent);
+  border-color: color-mix(in srgb, #ff3b30 24%, transparent);
+}
+
 .app-index-manager-dialog {
   display: flex;
   flex-direction: column;

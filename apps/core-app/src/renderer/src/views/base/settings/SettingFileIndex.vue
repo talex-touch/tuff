@@ -9,6 +9,9 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton, TxInput, TxPopover } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -33,6 +36,17 @@ import {
   getDeviceIdleReasonKey
 } from './device-idle-diagnostics'
 import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
+import {
+  countIndexingSourcesNeedingAttention,
+  formatIndexingSourceTimestamp,
+  resolveIndexingSourceDetailKey,
+  resolveIndexingSourceReconcileStateKey,
+  resolveIndexingSourceStatusKey,
+  resolveIndexingSourceTaskChips,
+  resolveIndexingSourceTone,
+  resolveIndexingSourceWatchStateKey,
+  summarizeIndexingSourceRoots
+} from './indexing-source-diagnostics-display'
 
 const props = withDefaults(
   defineProps<{
@@ -54,6 +68,7 @@ const {
 const settingFileIndexLog = createRendererLogger('SettingFileIndex')
 const { t, te } = useI18n()
 const settingsSdk = useSettingsSdk()
+const transport = useTuffTransport()
 
 const indexStatus = ref<FileIndexStatus | null>(null)
 const isRebuilding = ref(false)
@@ -61,6 +76,9 @@ const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
 const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
 const indexStats = ref<FileIndexStats | null>(null)
+const sourceDiagnostics = ref<CoreBoxIndexingDiagnosticsResponse | null>(null)
+const sourceDiagnosticsLoading = ref(false)
+const sourceDiagnosticsCheckedAt = ref<Date | null>(null)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
@@ -157,6 +175,22 @@ async function checkStatus() {
     }
   } catch (error) {
     settingFileIndexLog.error('Failed to get status', error)
+  }
+}
+
+async function loadSourceDiagnostics() {
+  if (sourceDiagnosticsLoading.value) return
+
+  sourceDiagnosticsLoading.value = true
+  try {
+    sourceDiagnostics.value = await transport.send(CoreBoxEvents.search.indexingDiagnostics)
+    sourceDiagnosticsCheckedAt.value = new Date()
+  } catch (error) {
+    settingFileIndexLog.error('Failed to load indexing source diagnostics', error)
+    sourceDiagnostics.value = null
+    toast.error(t('settings.settingFileIndex.sourceDiagnosticsLoadFailed'))
+  } finally {
+    sourceDiagnosticsLoading.value = false
   }
 }
 
@@ -353,6 +387,7 @@ let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   checkStatus()
+  loadSourceDiagnostics()
   loadDeviceIdleSettings()
   loadDeviceIdleDiagnostic()
   loadAppIndexSettings()
@@ -360,9 +395,13 @@ onMounted(() => {
   unsubscribeProgress = onProgressUpdate((progress) => {
     estimatedTimeRemaining.value = progress?.estimatedRemainingMs ?? null
     checkStatus()
+    loadSourceDiagnostics()
   })
 
-  statusCheckInterval = setInterval(checkStatus, 30000)
+  statusCheckInterval = setInterval(() => {
+    checkStatus()
+    loadSourceDiagnostics()
+  }, 30000)
 })
 
 onUnmounted(() => {
@@ -444,6 +483,25 @@ function openFailedFilesDialog() {
 }
 
 const failedFilesCount = computed(() => indexStats.value?.failedFiles ?? 0)
+
+const sourceDiagnosticsSummary = computed(() => sourceDiagnostics.value?.summary ?? null)
+
+const sourceDiagnosticsAttentionCount = computed(() =>
+  countIndexingSourcesNeedingAttention(sourceDiagnostics.value?.sources ?? [])
+)
+
+const sourceDiagnosticsSummaryText = computed(() => {
+  const summary = sourceDiagnosticsSummary.value
+  if (!summary) return t('settings.settingFileIndex.sourceDiagnosticsChecking')
+
+  return t('settings.settingFileIndex.sourceDiagnosticsSummary', {
+    total: summary.total,
+    ready: summary.ready,
+    degraded: summary.degraded,
+    unavailable: summary.unavailable,
+    attention: sourceDiagnosticsAttentionCount.value
+  })
+})
 
 const deviceIdleDuration = computed(() =>
   formatDeviceIdleDuration(deviceIdleDiagnostic.value?.snapshot.idleMs ?? null)
@@ -774,6 +832,92 @@ async function triggerRebuild() {
     >
       <div class="time-text">
         {{ lastChecked.toLocaleTimeString() }}
+      </div>
+    </TuffBlockSlot>
+  </TuffGroupBlock>
+
+  <TuffGroupBlock
+    v-if="showAdvancedSettings"
+    :name="t('settings.settingFileIndex.sourceDiagnosticsGroupTitle')"
+    :description="t('settings.settingFileIndex.sourceDiagnosticsGroupDesc')"
+    default-icon="i-carbon-data-vis-2"
+    active-icon="i-carbon-data-vis-2"
+    memory-name="setting-indexing-source-diagnostics"
+  >
+    <TuffBlockSlot
+      :title="t('settings.settingFileIndex.sourceDiagnosticsSummaryTitle')"
+      :description="sourceDiagnosticsSummaryText"
+      default-icon="i-carbon-ai-status"
+      active-icon="i-carbon-ai-status-in-progress"
+      :active="sourceDiagnosticsLoading"
+    >
+      <div class="source-diagnostics-actions">
+        <span v-if="sourceDiagnosticsCheckedAt" class="diagnostic-time">
+          {{
+            t('settings.settingFileIndex.diagnosticLastChecked', {
+              time: sourceDiagnosticsCheckedAt.toLocaleTimeString()
+            })
+          }}
+        </span>
+        <TxButton
+          variant="flat"
+          size="sm"
+          :disabled="sourceDiagnosticsLoading"
+          @click="loadSourceDiagnostics"
+        >
+          <div class="i-carbon-renew text-12px" />
+          <span>{{ t('settings.settingFileIndex.diagnosticRefresh') }}</span>
+        </TxButton>
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-for="source in sourceDiagnostics?.sources ?? []"
+      :key="source.descriptor.id"
+      :title="source.descriptor.displayName"
+      :description="
+        t(`settings.settingFileIndex.sourceDetail.${resolveIndexingSourceDetailKey(source)}`, {
+          error: source.health.lastError,
+          reason: source.health.reason,
+          time: formatIndexingSourceTimestamp(source.health.lastIndexedAt),
+          roots: summarizeIndexingSourceRoots(source)
+        })
+      "
+      default-icon="i-carbon-data-base"
+      active-icon="i-carbon-data-base"
+    >
+      <div class="source-diagnostics-row">
+        <span
+          class="source-status-pill"
+          :class="`source-status-pill--${resolveIndexingSourceTone(source.health.status)}`"
+        >
+          {{ t(resolveIndexingSourceStatusKey(source.health.status)) }}
+        </span>
+        <span class="source-diagnostic-chip">
+          {{ t('settings.settingFileIndex.sourceItems', { count: source.health.itemCount }) }}
+        </span>
+        <span class="source-diagnostic-chip">
+          {{
+            t('settings.settingFileIndex.sourceWatch', {
+              state: t(resolveIndexingSourceWatchStateKey(source.health.watchState))
+            })
+          }}
+        </span>
+        <span class="source-diagnostic-chip">
+          {{
+            t('settings.settingFileIndex.sourceReconcile', {
+              state: t(resolveIndexingSourceReconcileStateKey(source.health.reconcileState))
+            })
+          }}
+        </span>
+        <span
+          v-for="task in resolveIndexingSourceTaskChips(source)"
+          :key="task.id"
+          class="source-diagnostic-chip source-diagnostic-task-chip"
+          :class="`source-diagnostic-task-chip--${task.tone}`"
+        >
+          {{ t(task.labelKey, task.values) }}
+        </span>
       </div>
     </TuffBlockSlot>
   </TuffGroupBlock>

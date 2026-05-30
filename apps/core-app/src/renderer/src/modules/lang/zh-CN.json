@@ -1562,6 +1562,10 @@
       "searchingDetail": "正在检查应用、文件、命令和 Provider。",
       "noResultsTitle": "没有结果",
       "noResultsDetail": "换个更宽泛的关键词，或检查索引和 Provider 是否可用。",
+      "sourceSummaryTitle": "搜索源状态",
+      "sourceSummaryAttentionDetail": "部分搜索源处于降级或不可用状态。",
+      "sourceSummaryWarmingDetail": "部分搜索源仍在预热。",
+      "sourceItemCount": "{count} 项",
       "retrySearch": "重试搜索",
       "openIndexSettings": "打开索引设置"
     },
@@ -2312,6 +2316,51 @@
       "diagnosticLastChecked": "上次 {time}",
       "diagnosticRefresh": "刷新",
       "deviceIdleDiagnosticLoadFailed": "读取空闲策略诊断失败",
+      "sourceDiagnosticsGroupTitle": "搜索源诊断",
+      "sourceDiagnosticsGroupDesc": "统一查看 App、File、Everything 等索引源的健康状态",
+      "sourceDiagnosticsSummaryTitle": "源健康总览",
+      "sourceDiagnosticsChecking": "正在读取统一搜索源状态",
+      "sourceDiagnosticsSummary": "共 {total} 个源，{ready} 个就绪，{degraded} 个降级，{unavailable} 个不可用，{attention} 个需处理",
+      "sourceDiagnosticsLoadFailed": "读取搜索源诊断失败",
+      "sourceItems": "{count} 项",
+      "sourceWatch": "监听：{state}",
+      "sourceReconcile": "补漏：{state}",
+      "sourceTask": {
+        "scanDone": "扫描 {records} 条",
+        "scanFailed": "扫描失败：{error}",
+        "watchDone": "监听 {action} {applied}/{deltas}",
+        "watchFailed": "监听失败 {failed}/{deltas}",
+        "reconcileDone": "补漏 +{added} ~{changed} -{deleted} · {reason} · roots {rootCount}",
+        "reconcileFailed": "补漏错误：{errors} · {reason}"
+      },
+      "sourceStatus": {
+        "ready": "就绪",
+        "warming": "预热中",
+        "degraded": "降级",
+        "disabled": "已关闭",
+        "unsupported": "不支持",
+        "permission-required": "需授权",
+        "error": "异常"
+      },
+      "sourceWatchState": {
+        "active": "运行中",
+        "pending-permission": "等待授权",
+        "unavailable": "不可用",
+        "not-supported": "不支持"
+      },
+      "sourceReconcileState": {
+        "idle": "空闲",
+        "scheduled": "已计划",
+        "running": "运行中",
+        "failed": "失败"
+      },
+      "sourceDetail": {
+        "lastError": "最近错误：{error}",
+        "reason": "原因：{reason}",
+        "lastIndexedAt": "最近索引：{time}",
+        "roots": "监听根：{roots}",
+        "emptyRoots": "暂无监听根"
+      },
       "appIndexGroupTitle": "应用索引调度",
       "appIndexGroupDesc": "控制启动补漏与周期性全量同步",
       "hideNoisySystemAppsTitle": "过滤系统噪音应用",
@@ -3517,15 +3566,7 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": [
-        "日",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六"
-      ]
+      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
     },
     "audit": {
       "title": "审计设置",
