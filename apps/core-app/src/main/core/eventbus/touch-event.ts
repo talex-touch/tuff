@@ -34,6 +34,7 @@ export enum TalexEvents {
   FILE_UNLINKED = 'file-system/file-unlinked',
   DIRECTORY_ADDED = 'file-system/directory-added',
   DIRECTORY_UNLINKED = 'file-system/directory-unlinked',
+  FILE_WATCH_ROOT_RECOVERED = 'file-system/watch-root-recovered',
 
   // Plugin Log Event
   PLUGIN_LOG_APPEND = 'plugin/log-append',
@@ -408,6 +409,15 @@ export class DirectoryAddedEvent implements ITouchEvent<TalexEvents> {
 
 export class DirectoryUnlinkedEvent implements ITouchEvent<TalexEvents> {
   name: TalexEvents = TalexEvents.DIRECTORY_UNLINKED
+  filePath: string
+
+  constructor(filePath: string) {
+    this.filePath = filePath
+  }
+}
+
+export class FileWatchRootRecoveredEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.FILE_WATCH_ROOT_RECOVERED
   filePath: string
 
   constructor(filePath: string) {

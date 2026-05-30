@@ -96,6 +96,7 @@ import type {
   CoreBoxClearItemsPayload,
   CoreBoxExecuteRequest,
   CoreBoxInputChangeRequest,
+  CoreBoxIndexingDiagnosticsResponse,
   CoreBoxLayoutUpdateRequest,
   CoreBoxNoResultsPayload,
   CoreBoxSearchEndPayload,
@@ -1119,6 +1120,13 @@ export const CoreBoxEvents = {
      */
     noResults: defineRawEvent<CoreBoxNoResultsPayload, void>(
       "core-box:no-results",
+    ),
+
+    /**
+     * Read unified indexed source health for Settings/CoreBox diagnostics.
+     */
+    indexingDiagnostics: defineRawEvent<void, CoreBoxIndexingDiagnosticsResponse>(
+      "core-box:indexing-diagnostics",
     ),
   },
 
