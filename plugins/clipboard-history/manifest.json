@@ -27,13 +27,30 @@
     }
   },
   "permissions": {
-    "required": ["clipboard.read", "clipboard.write"],
+    "required": ["clipboard.read", "clipboard.write", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
     "clipboard.read": "读取剪贴板历史记录并展示详情",
-    "clipboard.write": "将选中的剪贴记录重新写回系统剪贴板"
+    "clipboard.write": "将选中的剪贴记录重新写回系统剪贴板",
+    "search.root-results": "将剪贴板历史入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "clipboard-history.clipboard-history",
+      "displayName": "剪贴板历史记录",
+      "featureId": "clipboard-history",
+      "kind": "plugin-data",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 105,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "clipboard-history",

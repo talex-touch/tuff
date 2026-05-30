@@ -12,12 +12,29 @@
   "description": "Snipaste 快捷控制：截图、贴图、取色",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell"],
+    "required": ["system.shell", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "system.shell": "通过 spawn 启动 Snipaste 程序执行截图、贴图等命令"
+    "system.shell": "通过 spawn 启动 Snipaste 程序执行截图、贴图等命令",
+    "search.root-results": "将 Snipaste 快捷控制入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-snipaste.snipaste-quick",
+      "displayName": "Snipaste",
+      "featureId": "snipaste-quick",
+      "kind": "system-action",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 94,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "snipaste-quick",

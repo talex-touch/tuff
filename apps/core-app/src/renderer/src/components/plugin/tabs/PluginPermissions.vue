@@ -207,7 +207,9 @@ const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
   system: { nameKey: 'plugin.permissions.categories.system', icon: 'i-carbon-terminal' },
   intelligence: { nameKey: 'plugin.permissions.categories.intelligence', icon: 'i-carbon-bot' },
   storage: { nameKey: 'plugin.permissions.categories.storage', icon: 'i-carbon-data-base' },
-  window: { nameKey: 'plugin.permissions.categories.window', icon: 'i-carbon-application' }
+  window: { nameKey: 'plugin.permissions.categories.window', icon: 'i-carbon-application' },
+  search: { nameKey: 'plugin.permissions.categories.search', icon: 'i-carbon-search' },
+  media: { nameKey: 'plugin.permissions.categories.media', icon: 'i-carbon-image' }
 }
 
 // Group permissions by category
@@ -237,7 +239,8 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
     'system.shell',
     'intelligence.agents',
     'intelligence.admin',
-    'window.capture'
+    'window.capture',
+    'search.root-results'
   ]
   const mediumRisk = [
     'fs.read',
@@ -274,7 +277,9 @@ function getPermissionIcon(permissionId: string): string {
     'storage.plugin': 'i-carbon-data-base',
     'storage.shared': 'i-carbon-share',
     'window.create': 'i-carbon-application',
-    'window.capture': 'i-carbon-screen'
+    'window.capture': 'i-carbon-screen',
+    'search.root-results': 'i-carbon-search',
+    'media.read': 'i-carbon-image'
   }
   return icons[permissionId] || 'i-carbon-checkmark'
 }

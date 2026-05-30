@@ -133,7 +133,8 @@ function hashCachePart(value: unknown): string {
 export function buildSearchCacheKey(
   query: TuffQuery,
   providerFilter: string | undefined,
-  activatedProviders: Map<string, IProviderActivate> | null
+  activatedProviders: Map<string, IProviderActivate> | null,
+  options: { providerConfigSignature?: string } = {}
 ): string {
   const rawQuery = query as unknown as Record<string, unknown>
   const queryExtras: Record<string, unknown> = {}
@@ -156,6 +157,7 @@ export function buildSearchCacheKey(
   return hashCachePart({
     text: query.text || '',
     providerFilter: providerFilter || '',
+    providerConfigSignature: options.providerConfigSignature || '',
     activatedProviders: activatedProviders ? Array.from(activatedProviders.keys()).sort() : [],
     inputs,
     extras: queryExtras

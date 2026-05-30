@@ -12,13 +12,29 @@
   "description": "浏览器收藏：收藏网址、最近访问、快速打开",
   "main": "index.js",
   "permissions": {
-    "required": [],
+    "required": ["search.root-results"],
     "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
+    "search.root-results": "将收藏网址与最近访问推送到 CoreBox 根搜索结果",
     "clipboard.write": "复制网址到剪贴板",
     "network.internet": "使用默认浏览器打开收藏或最近访问网址"
   },
+  "searchProviders": [
+    {
+      "id": "touch-browser-bookmarks.quicklinks",
+      "displayName": "浏览器收藏",
+      "kind": "quicklink",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 65,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "browser-bookmarks",

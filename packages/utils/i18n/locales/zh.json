@@ -34,7 +34,8 @@
       "intelligence": "Intelligence 能力",
       "storage": "存储",
       "window": "窗口",
-      "media": "媒体"
+      "media": "媒体",
+      "search": "搜索"
     },
     "risk": {
       "low": "低风险",
@@ -78,6 +79,9 @@
     },
     "media": {
       "read": { "name": "读取媒体", "desc": "读取媒体元数据和缩略图" }
+    },
+    "search": {
+      "rootResults": { "name": "推送根搜索结果", "desc": "向 CoreBox 根结果列表推送或更新搜索项" }
     },
     "grant": "授予",
     "revoke": "撤销",

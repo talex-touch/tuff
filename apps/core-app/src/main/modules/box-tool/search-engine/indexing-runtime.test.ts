@@ -325,6 +325,8 @@ describe('indexingRuntime', () => {
       lastWatch: {
         action: 'change',
         path: '/browser/Default/Bookmarks',
+        jobId: 'disabled-browser-bookmarks:watch:1',
+        queuedAt: expect.any(Number),
         deltas: 0,
         appliedDeltas: 0,
         failedDeltas: 0,
@@ -411,6 +413,8 @@ describe('indexingRuntime', () => {
     ).toMatchObject({
       lastWatch: {
         path: '/restricted/report.md',
+        jobId: 'restricted-files:watch:1',
+        queuedAt: expect.any(Number),
         error: 'skipped:root-permission:denied'
       }
     })
@@ -560,6 +564,13 @@ describe('indexingRuntime', () => {
       records: 1
     })
     expect(store.applyBatch).toHaveBeenCalledWith(batch)
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastScan).toMatchObject({
+      jobId: 'test-source:scan:1',
+      queuedAt: expect.any(Number),
+      batches: 1,
+      records: 1
+    })
   })
 
   it('isolates failing source scans in batch scan results', async () => {
@@ -689,6 +700,8 @@ describe('indexingRuntime', () => {
       diagnostics.sources.find((source) => source.descriptor.id === 'disabled-browser-bookmarks')
     ).toMatchObject({
       lastScan: {
+        jobId: 'disabled-browser-bookmarks:scan:2',
+        queuedAt: expect.any(Number),
         batches: 0,
         records: 0,
         error: 'skipped:health:disabled'
@@ -1022,6 +1035,7 @@ describe('indexingRuntime', () => {
     expect(resetIndex).toHaveBeenCalledWith({
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.HealthRepair,
+      clearSearchIndex: false,
       clearScanProgress: true
     })
     expect(result).toMatchObject({
@@ -1034,10 +1048,66 @@ describe('indexingRuntime', () => {
     expect(diagnostics.sources[0]).toMatchObject({
       lastReset: {
         reason: IndexedSourceResetReasons.HealthRepair,
+        jobId: 'test-source:reset:1',
+        queuedAt: expect.any(Number),
         clearedSearchIndex: false,
         clearedScanProgress: true,
         scanProgressRows: 3
       }
+    })
+  })
+
+  it('clears source search index at runtime reset boundary', async () => {
+    const resetIndex = vi.fn(async () => ({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearedSearchIndex: false,
+      clearedScanProgress: false,
+      startedAt: 1700000000000,
+      completedAt: 1700000000100
+    }))
+    runtime.registerSource(buildSource({ resetIndex }))
+
+    const result = await runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true
+    })
+
+    expect(store.clearSource).toHaveBeenCalledWith('test-source')
+    expect(resetIndex).toHaveBeenCalledWith({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: false
+    })
+    expect(result).toMatchObject({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearedSearchIndex: true,
+      clearedScanProgress: false
+    })
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].lastReset).toMatchObject({
+      jobId: 'test-source:reset:1',
+      queuedAt: expect.any(Number)
+    })
+  })
+
+  it('supports search-index-only reset for sources without local reset hook', async () => {
+    runtime.registerSource(buildSource())
+
+    const result = await runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true
+    })
+
+    expect(store.clearSource).toHaveBeenCalledWith('test-source')
+    expect(result).toMatchObject({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearedSearchIndex: true,
+      clearedScanProgress: false,
+      error: undefined
     })
   })
 
@@ -1107,11 +1177,15 @@ describe('indexingRuntime', () => {
     const diagnostics = await runtime.getDiagnostics()
     expect(diagnostics.sources[0]).toMatchObject({
       lastScan: {
+        jobId: 'test-source:scan:1',
+        queuedAt: expect.any(Number),
         batches: 1,
         records: 1
       },
       lastWatch: {
         occurredAt: 1700000000200,
+        jobId: 'test-source:watch:1',
+        queuedAt: expect.any(Number),
         action: 'change',
         path: '/tmp/tuff-source/a.txt',
         deltas: 1,
@@ -1125,6 +1199,55 @@ describe('indexingRuntime', () => {
         skipped: 4,
         errors: 0
       }
+    })
+    expect(diagnostics.sources[0].recentTasks).toMatchObject([
+      {
+        kind: 'reconcile',
+        status: 'succeeded',
+        summary: {
+          added: 1,
+          changed: 2,
+          deleted: 3
+        }
+      },
+      {
+        kind: 'watch',
+        status: 'succeeded',
+        jobId: 'test-source:watch:1',
+        summary: {
+          action: 'change',
+          appliedDeltas: 1,
+          failedDeltas: 0
+        }
+      },
+      {
+        kind: 'scan',
+        status: 'succeeded',
+        jobId: 'test-source:scan:1',
+        summary: {
+          batches: 1,
+          records: 1
+        }
+      }
+    ])
+  })
+
+  it('keeps bounded recent runtime task history per source', async () => {
+    runtime.registerSource(buildSource())
+
+    for (let index = 0; index < 10; index += 1) {
+      await runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    }
+
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0].recentTasks).toHaveLength(8)
+    expect(diagnostics.sources[0].recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      jobId: 'test-source:scan:10'
+    })
+    expect(diagnostics.sources[0].recentTasks?.[7]).toMatchObject({
+      kind: 'scan',
+      jobId: 'test-source:scan:3'
     })
   })
 
@@ -1229,6 +1352,8 @@ describe('indexingRuntime', () => {
     const diagnostics = await runtime.getDiagnostics()
     expect(diagnostics.sources[0]).toMatchObject({
       lastScan: {
+        jobId: 'broken:scan:1',
+        queuedAt: expect.any(Number),
         batches: 0,
         records: 0,
         error: 'scan failed'

@@ -18,6 +18,7 @@ import type {
   PluginIssue,
   PluginMeta
 } from '@talex-touch/utils/plugin'
+import type { SearchProviderDescriptor } from '@talex-touch/utils/search'
 import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
 import type {
   PluginChannelClient,
@@ -60,7 +61,9 @@ import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
+import { getSearchProviderConfigMap } from '../box-tool/search-engine/search-provider-config'
 import { getNetworkService } from '../network'
+import { getPermissionModule } from '../permission'
 import { deviceIdleService } from '../../service/device-idle-service'
 import {
   loadPluginFeatureContext,
@@ -351,6 +354,7 @@ export class TouchPlugin implements ITouchPlugin {
   category?: string
   meta?: PluginMeta
   build?: IPluginBuildInfo
+  searchProviders?: SearchProviderDescriptor[]
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
@@ -422,6 +426,15 @@ export class TouchPlugin implements ITouchPlugin {
       category: this.category,
       meta: this.meta,
       build: this.build,
+      searchProviders: this.searchProviders
+        ? this.searchProviders.map((provider) => ({
+            ...provider,
+            policy: {
+              ...provider.policy,
+              permissionScopes: [...provider.policy.permissionScopes]
+            }
+          }))
+        : undefined,
       icon: {
         type: this.icon.type,
         value: this.icon.value,
@@ -746,6 +759,30 @@ export class TouchPlugin implements ITouchPlugin {
    * @returns 注入源信息后的 item
    */
   private enrichItemWithSource(item: TuffItem): TuffItem {
+    const pushProviderIds =
+      this.searchProviders
+        ?.filter((provider) => provider.mode === 'push' && provider.policy.pushesToRootResults)
+        .map((provider) => provider.id) ?? []
+    const itemFeatureId =
+      typeof item.meta?.featureId === 'string' && item.meta.featureId.trim()
+        ? item.meta.featureId.trim()
+        : undefined
+    const matchedFeatureProviderId = itemFeatureId
+      ? this.searchProviders?.find(
+          (provider) =>
+            provider.mode === 'push' &&
+            provider.policy.pushesToRootResults &&
+            provider.featureId === itemFeatureId
+        )?.id
+      : undefined
+    const declaredSearchProviderId =
+      typeof item.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
+        ? item.meta.searchProviderId.trim()
+        : undefined
+    const fallbackSearchProviderId = pushProviderIds.length === 1 ? pushProviderIds[0] : undefined
+    const searchProviderId =
+      declaredSearchProviderId || matchedFeatureProviderId || fallbackSearchProviderId
+
     return {
       ...item,
       source: {
@@ -754,8 +791,60 @@ export class TouchPlugin implements ITouchPlugin {
         id: item.source?.id || this.name,
         name: item.source?.name || this.name,
         version: this.version
+      },
+      meta: {
+        ...item.meta,
+        pluginName: item.meta?.pluginName || this.name,
+        ...(searchProviderId ? { searchProviderId } : {})
       }
     }
+  }
+
+  private ensureRootResultsPermission(method: string): boolean {
+    const permissionModule = getPermissionModule()
+    if (!permissionModule) {
+      this.logger.warn(
+        `[Feature SDK] Ignored boxItems.${method} because permission module is unavailable.`
+      )
+      return false
+    }
+
+    const result = permissionModule.checkPermission(
+      this.name,
+      'search:root-results:push',
+      this.sdkapi
+    )
+    if (result.allowed) return true
+
+    this.logger.warn(
+      `[Feature SDK] Ignored boxItems.${method}: ${result.reason || 'search.root-results denied'}`
+    )
+    return false
+  }
+
+  private isRootResultsProviderEnabled(item?: TuffItem): boolean {
+    const providerIds =
+      this.searchProviders
+        ?.filter((provider) => provider.mode === 'push' && provider.policy.pushesToRootResults)
+        .map((provider) => provider.id) ?? []
+    if (providerIds.length === 0) return true
+
+    const itemProviderId =
+      typeof item?.meta?.searchProviderId === 'string' && item.meta.searchProviderId.trim()
+        ? item.meta.searchProviderId.trim()
+        : undefined
+    const targetProviderIds = itemProviderId ? [itemProviderId] : providerIds
+
+    const configById = getSearchProviderConfigMap()
+
+    return targetProviderIds.every((providerId) => configById.get(providerId)?.enabled !== false)
+  }
+
+  private ensureRootResultsProviderEnabled(method: string, item?: TuffItem): boolean {
+    if (this.isRootResultsProviderEnabled(item)) return true
+
+    this.logger.warn(`[Feature SDK] Ignored boxItems.${method}: search provider is disabled.`)
+    return false
   }
 
   constructor(
@@ -1694,9 +1783,12 @@ export class TouchPlugin implements ITouchPlugin {
        */
       push: async (item: TuffItem) => {
         if (!ensureBoxItemsActive('push')) return
+        if (!this.ensureRootResultsPermission('push')) return
         const processed = await processItemIcon(item)
         if (!ensureBoxItemsActive('push')) return
+        if (!this.ensureRootResultsPermission('push')) return
         const enriched = this.enrichItemWithSource(processed)
+        if (!this.ensureRootResultsProviderEnabled('push', enriched)) return
         boxItemManager.upsert(enriched)
       },
 
@@ -1706,9 +1798,17 @@ export class TouchPlugin implements ITouchPlugin {
        */
       pushItems: async (items: TuffItem[]) => {
         if (!ensureBoxItemsActive('pushItems')) return
+        if (!this.ensureRootResultsPermission('pushItems')) return
         const processed = await Promise.all(items.map(processItemIcon))
         if (!ensureBoxItemsActive('pushItems')) return
-        const enriched = processed.map((item) => this.enrichItemWithSource(item))
+        if (!this.ensureRootResultsPermission('pushItems')) return
+        const enriched = processed
+          .map((item) => this.enrichItemWithSource(item))
+          .filter((item) => this.isRootResultsProviderEnabled(item))
+        if (enriched.length === 0) {
+          this.logger.warn('[Feature SDK] Ignored boxItems.pushItems: search provider is disabled.')
+          return
+        }
         boxItemManager.batchUpsert(enriched)
       },
 
@@ -1719,6 +1819,20 @@ export class TouchPlugin implements ITouchPlugin {
        */
       update: (id: string, updates: Partial<TuffItem>) => {
         if (!ensureBoxItemsActive('update')) return
+        if (!this.ensureRootResultsPermission('update')) return
+        const existing = boxItemManager.get(id)
+        const providerGuardItem =
+          existing && updates
+            ? this.enrichItemWithSource({
+                ...existing,
+                ...updates,
+                meta: {
+                  ...existing.meta,
+                  ...updates.meta
+                }
+              })
+            : this.enrichItemWithSource({ ...(updates as TuffItem), id })
+        if (!this.ensureRootResultsProviderEnabled('update', providerGuardItem)) return
         boxItemManager.update(id, updates)
       },
 

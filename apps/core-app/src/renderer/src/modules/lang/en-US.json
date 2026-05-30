@@ -1067,7 +1067,9 @@
         "system": "System",
         "intelligence": "Intelligence",
         "storage": "Storage",
-        "window": "Window"
+        "window": "Window",
+        "search": "Search",
+        "media": "Media"
       },
       "shortcuts": {
         "title": "Shortcuts",
@@ -1175,6 +1177,18 @@
           "capture": {
             "name": "Screen Capture",
             "desc": "Capture screen content"
+          }
+        },
+        "search": {
+          "root-results": {
+            "name": "Push Root Search Results",
+            "desc": "Push or update items in the CoreBox root results list"
+          }
+        },
+        "media": {
+          "read": {
+            "name": "Read Media",
+            "desc": "Read media metadata and thumbnails"
           }
         }
       },
@@ -2254,6 +2268,8 @@
       "statusFailed": "Failed",
       "statusNormal": "Healthy",
       "estimatedSoon": "Should finish shortly",
+      "estimatedStabilizing": "Estimating remaining time",
+      "estimatedStalled": "Waiting for new indexing progress",
       "estimatedSeconds": "Expected to finish in {seconds} seconds",
       "estimatedMinutes": "Expected to finish in {minutes} minutes",
       "estimatedHours": "Expected to finish in {hours} hours",
@@ -2326,16 +2342,68 @@
       "sourceDiagnosticsChecking": "Reading unified search source status",
       "sourceDiagnosticsSummary": "{total} sources, {ready} ready, {degraded} degraded, {unavailable} unavailable, {attention} need attention",
       "sourceDiagnosticsLoadFailed": "Failed to load search source diagnostics",
+      "sourceAction": {
+        "scan": "Scan",
+        "reconcile": "Repair",
+        "reset": "Reset"
+      },
+      "sourceActionScanSuccess": "Scan completed: {records} records",
+      "sourceActionReconcileSuccess": "Repair completed: {changed} changed, {deleted} deleted",
+      "sourceActionResetSuccess": "Source runtime state reset",
+      "sourceActionFailed": "{action} failed: {error}",
+      "providerConfigTitle": "Search Source Enablement and Order",
+      "providerConfigDesc": "Control indexed sources that can enter root search results; browser data still requires plugin permissions and user consent",
+      "providerConfigEmpty": "No configurable search sources",
+      "providerConfigMeta": "{mode} · {owner}",
+      "providerConfigLoadFailed": "Failed to load search source config",
+      "providerConfigSaved": "Search source config saved",
+      "providerConfigSaveFailed": "Failed to save search source config",
+      "providerMoveUp": "Move up",
+      "providerMoveDown": "Move down",
+      "providerEnabled": "Enabled",
+      "providerDisabled": "Off",
+      "providerConfigSource": "source {source} / {status}",
+      "providerConfigSourceUnknown": "unknown",
       "sourceItems": "{count} items",
       "sourceWatch": "Watch: {state}",
       "sourceReconcile": "Reconcile: {state}",
       "sourceTask": {
-        "scanDone": "Scan {records} records",
-        "scanFailed": "Scan failed: {error}",
-        "watchDone": "Watch {action} {applied}/{deltas}",
-        "watchFailed": "Watch failed {failed}/{deltas}",
-        "reconcileDone": "Reconcile +{added} ~{changed} -{deleted} · {reason} · roots {rootCount}",
-        "reconcileFailed": "Reconcile errors: {errors} · {reason}"
+        "scanDone": "Scan {records} records · {jobId}",
+        "scanFailed": "Scan failed: {error} · {jobId}",
+        "watchDone": "Watch {action} {applied}/{deltas} · {jobId}",
+        "watchFailed": "Watch failed {failed}/{deltas} · {jobId}",
+        "reconcileDone": "Reconcile +{added} ~{changed} -{deleted} · {reason} · roots {rootCount} · {jobId}",
+        "reconcileFailed": "Reconcile errors: {errors} · {reason} · {jobId}"
+      },
+      "sourceRecentTasks": "Recent",
+      "sourceRecentTask": {
+        "scan": {
+          "succeeded": "Scan done · {summary} · {jobId}",
+          "failed": "Scan failed · {summary} · {jobId}",
+          "skipped": "Scan skipped · {summary} · {jobId}"
+        },
+        "watch": {
+          "succeeded": "Watch done · {summary} · {jobId}",
+          "failed": "Watch failed · {summary} · {jobId}",
+          "skipped": "Watch skipped · {summary} · {jobId}"
+        },
+        "reconcile": {
+          "succeeded": "Reconcile done · {summary} · {jobId}",
+          "failed": "Reconcile failed · {summary} · {jobId}",
+          "skipped": "Reconcile skipped · {summary} · {jobId}"
+        },
+        "reset": {
+          "succeeded": "Reset done · {summary} · {jobId}",
+          "failed": "Reset failed · {summary} · {jobId}",
+          "skipped": "Reset skipped · {summary} · {jobId}"
+        }
+      },
+      "sourceEvidence": "Evidence",
+      "sourceEvidenceChip": {
+        "generic": "{label} · {status} · {count} · {reason}",
+        "scanProgress": "{label} · {status} · {completed}/{total} · failed {failed} · permission {pendingPermissionRoots}",
+        "indexFlush": "{label} · {status} · pending {pending} · inflight {inflight} · entries {entries} · {duration} · {reason}",
+        "integrity": "{label} · {status} · FTS {ftsRows}/{filesRows} · rebuild {needsRebuild} · orphan {orphanedKeywordsRemoved}"
       },
       "sourceStatus": {
         "ready": "Ready",

@@ -12,13 +12,30 @@
   "description": "文件批量重命名：前后缀、编号、正则替换",
   "main": "index.js",
   "permissions": {
-    "required": ["fs.read", "fs.write"],
+    "required": ["fs.read", "fs.write", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
     "fs.read": "读取选中文件信息用于生成重命名计划",
-    "fs.write": "执行文件重命名操作"
+    "fs.write": "执行文件重命名操作",
+    "search.root-results": "将批量重命名入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-batch-rename.batch-rename",
+      "displayName": "批量重命名",
+      "featureId": "batch-rename",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 100,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "batch-rename",

@@ -64,6 +64,7 @@ export const PermissionKeys = {
   CATEGORY_INTELLIGENCE: 'permission.category.intelligence',
   CATEGORY_STORAGE: 'permission.category.storage',
   CATEGORY_WINDOW: 'permission.category.window',
+  CATEGORY_SEARCH: 'permission.category.search',
 
   // Risk levels
   RISK_LOW: 'permission.risk.low',
@@ -129,6 +130,10 @@ export const PermissionKeys = {
   // Media permissions
   MEDIA_READ_NAME: 'permission.media.read.name',
   MEDIA_READ_DESC: 'permission.media.read.desc',
+
+  // Search permissions
+  SEARCH_ROOT_RESULTS_NAME: 'permission.search.rootResults.name',
+  SEARCH_ROOT_RESULTS_DESC: 'permission.search.rootResults.desc',
 
   // UI messages
   GRANT: 'permission.grant',

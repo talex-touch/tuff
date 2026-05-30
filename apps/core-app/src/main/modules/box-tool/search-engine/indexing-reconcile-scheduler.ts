@@ -4,13 +4,15 @@ import type {
   IndexedSourceReconcileResult
 } from '@talex-touch/utils/search'
 import type { ReconcileEngine, ReconcileEngineBatchResult } from './indexing-reconcile-engine'
+import type {
+  IndexedSourceRuntimeTaskJob,
+  IndexedSourceRuntimeTaskJobFactory
+} from './indexing-runtime-task-job'
+import { IndexedSourceRuntimeTaskJobFactory as DefaultRuntimeTaskJobFactory } from './indexing-runtime-task-job'
 
-export interface ReconcileSchedulerJob {
-  id: string
-  sourceId: string
+export interface ReconcileSchedulerJob extends IndexedSourceRuntimeTaskJob {
   reason?: string
   rootCount: number
-  queuedAt: number
   startedAt?: number
   completedAt?: number
   status: 'queued' | 'running' | 'completed' | 'failed'
@@ -24,9 +26,11 @@ export interface ReconcileSchedulerResult {
 
 export class ReconcileScheduler {
   private readonly runningSources = new Set<string>()
-  private jobSequence = 0
 
-  constructor(private readonly engine: ReconcileEngine) {}
+  constructor(
+    private readonly engine: ReconcileEngine,
+    private readonly jobFactory: IndexedSourceRuntimeTaskJobFactory = new DefaultRuntimeTaskJobFactory()
+  ) {}
 
   isRunning(sourceId: string): boolean {
     return this.runningSources.has(sourceId)
@@ -42,11 +46,9 @@ export class ReconcileScheduler {
     }
 
     const job: ReconcileSchedulerJob = {
-      id: this.nextJobId(sourceId),
-      sourceId,
+      ...this.jobFactory.create(sourceId, 'reconcile'),
       reason: request.reason,
       rootCount: request.roots?.length ?? 0,
-      queuedAt: Date.now(),
       status: 'queued'
     }
 
@@ -117,11 +119,6 @@ export class ReconcileScheduler {
       startedAt,
       completedAt: Date.now()
     }
-  }
-
-  private nextJobId(sourceId: string): string {
-    this.jobSequence += 1
-    return `${sourceId}:reconcile:${this.jobSequence}`
   }
 
   private stringifyError(error: unknown): string {

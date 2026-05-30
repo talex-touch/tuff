@@ -1,6 +1,10 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const appSettingsMock = vi.hoisted(() => ({
+  value: {} as Record<string, unknown>
+}))
+
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: () => ({
     on: vi.fn(),
@@ -18,9 +22,18 @@ vi.mock('../core-box', () => ({
   getCoreBoxWindow: () => null
 }))
 
+vi.mock('../../storage', () => ({
+  getMainConfig: vi.fn(() => appSettingsMock.value)
+}))
+
 import { BoxItemManager } from './box-item-manager'
 
-function createItem(id: string, sourceId: string, pluginName?: string): TuffItem {
+function createItem(
+  id: string,
+  sourceId: string,
+  pluginName?: string,
+  searchProviderId?: string
+): TuffItem {
   return {
     id,
     source: {
@@ -34,12 +47,19 @@ function createItem(id: string, sourceId: string, pluginName?: string): TuffItem
         title: id
       }
     },
-    meta: pluginName ? { pluginName } : undefined
+    meta:
+      pluginName || searchProviderId
+        ? {
+            ...(pluginName ? { pluginName } : {}),
+            ...(searchProviderId ? { searchProviderId } : {})
+          }
+        : undefined
   } as TuffItem
 }
 
 describe('BoxItemManager', () => {
   afterEach(() => {
+    appSettingsMock.value = {}
     vi.restoreAllMocks()
   })
 
@@ -58,5 +78,28 @@ describe('BoxItemManager', () => {
     expect(manager.get('owned-source')).toBeUndefined()
     expect(manager.get('translation')).toBeDefined()
     expect(manager.getBySource('touch-translation')).toHaveLength(1)
+  })
+
+  it('filters and sorts visible plugin root items by provider config', () => {
+    appSettingsMock.value = {
+      searchProviders: {
+        providers: [
+          { providerId: 'touch-b.results', enabled: true, order: 1 },
+          { providerId: 'touch-a.results', enabled: true, order: 2 },
+          { providerId: 'touch-hidden.results', enabled: false, order: 3 }
+        ]
+      }
+    }
+    const manager = new BoxItemManager()
+
+    manager.batchUpsert([
+      createItem('a', 'touch-a', 'touch-a', 'touch-a.results'),
+      createItem('hidden', 'touch-hidden', 'touch-hidden', 'touch-hidden.results'),
+      createItem('b', 'touch-b', 'touch-b', 'touch-b.results'),
+      createItem('legacy', 'touch-legacy', 'touch-legacy')
+    ])
+
+    expect(manager.getAll().map((item) => item.id)).toEqual(['a', 'hidden', 'b', 'legacy'])
+    expect(manager.getVisibleItems().map((item) => item.id)).toEqual(['b', 'a', 'legacy'])
   })
 })

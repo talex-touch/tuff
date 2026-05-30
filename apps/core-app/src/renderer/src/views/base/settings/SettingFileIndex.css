@@ -204,14 +204,22 @@
   flex-wrap: wrap;
 }
 
+.source-diagnostics-panel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: min(760px, 62vw);
+}
+
 .source-diagnostics-row {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  flex-wrap: nowrap;
-  max-width: min(520px, 52vw);
-  overflow: hidden;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .source-status-pill,
@@ -259,6 +267,88 @@
   border: 1px solid color-mix(in srgb, var(--tx-border-color) 70%, transparent);
 }
 
+.source-diagnostics-maintenance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.source-maintenance-button {
+  min-width: 58px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.provider-config-list {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: min(560px, 58vw);
+}
+
+.provider-config-empty {
+  font-size: 12px;
+  color: var(--tx-text-color-placeholder);
+  text-align: right;
+}
+
+.provider-config-item {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(120px, auto) 24px 24px auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--tx-fill-color) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 58%, transparent);
+}
+
+.provider-config-item--disabled {
+  opacity: 0.68;
+}
+
+.provider-config-name {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-config-meta {
+  min-width: 0;
+  max-width: 260px;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.provider-config-icon-button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.provider-config-toggle {
+  min-width: 54px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .source-diagnostic-chip {
   max-width: 148px;
   overflow: hidden;
@@ -267,6 +357,36 @@
 
 .source-diagnostic-task-chip {
   max-width: 180px;
+}
+
+.source-history-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.source-history-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tx-text-color-secondary);
+  white-space: nowrap;
+}
+
+.source-history-chip {
+  max-width: 180px;
+}
+
+.source-evidence-chip {
+  max-width: 220px;
+}
+
+.source-diagnostic-task-chip--warning {
+  color: #ff9500;
+  background: color-mix(in srgb, #ff9500 10%, transparent);
+  border-color: color-mix(in srgb, #ff9500 24%, transparent);
 }
 
 .source-diagnostic-task-chip--danger {

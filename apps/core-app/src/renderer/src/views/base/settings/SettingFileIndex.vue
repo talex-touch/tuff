@@ -5,12 +5,21 @@ import type {
   DeviceIdleSettings,
   FileIndexStatus,
   FileIndexBatteryStatus,
-  FileIndexStats
+  FileIndexStats,
+  SearchProviderSourceLink
 } from '@talex-touch/utils/transport/events/types'
+import type {
+  IndexedSourceDiagnostics,
+  SearchProviderRuntimeConfig,
+  SearchProviderUserConfig
+} from '@talex-touch/utils/search'
+import {
+  IndexedSourceReconcileReasons,
+  IndexedSourceResetReasons,
+  IndexedSourceScanReasons
+} from '@talex-touch/utils/search'
 import { TxButton, TxInput, TxPopover } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -40,7 +49,9 @@ import {
   countIndexingSourcesNeedingAttention,
   formatIndexingSourceTimestamp,
   resolveIndexingSourceDetailKey,
+  resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceReconcileStateKey,
+  resolveIndexingSourceRecentTaskChips,
   resolveIndexingSourceStatusKey,
   resolveIndexingSourceTaskChips,
   resolveIndexingSourceTone,
@@ -68,23 +79,40 @@ const {
 const settingFileIndexLog = createRendererLogger('SettingFileIndex')
 const { t, te } = useI18n()
 const settingsSdk = useSettingsSdk()
-const transport = useTuffTransport()
 
 const indexStatus = ref<FileIndexStatus | null>(null)
 const isRebuilding = ref(false)
 const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
-const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
+const estimatedTimeStatus = ref<string | null>(null)
+const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining, estimatedTimeStatus)
 const indexStats = ref<FileIndexStats | null>(null)
 const sourceDiagnostics = ref<CoreBoxIndexingDiagnosticsResponse | null>(null)
 const sourceDiagnosticsLoading = ref(false)
 const sourceDiagnosticsCheckedAt = ref<Date | null>(null)
+const sourceMaintenanceAction = ref<Record<string, 'scan' | 'reconcile' | 'reset' | undefined>>({})
+const sourceMaintenanceActions = ['scan', 'reconcile', 'reset'] as const
+const searchProviderConfigs = ref<SearchProviderRuntimeConfig[]>([])
+const searchProviderSourceLinks = ref<SearchProviderSourceLink[]>([])
+const searchProviderConfigLoading = ref(false)
+const searchProviderConfigSaving = ref(false)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
 const showAdvancedSettings = computed(() =>
   Boolean(props.forceAdvancedSettings || appSetting?.dev?.advancedSettings)
 )
+const indexedSourceDiagnosticsById = computed(() => {
+  return new Map(
+    (sourceDiagnostics.value?.sources ?? []).map((source) => [source.descriptor.id, source])
+  )
+})
+const searchProviderSourceIdByProviderId = computed(() => {
+  const entries = searchProviderSourceLinks.value.flatMap((link) =>
+    link.providerIds.map((providerId) => [providerId, link.sourceId] as const)
+  )
+  return new Map(entries)
+})
 
 const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
   idleThresholdMs: 60 * 60 * 1000,
@@ -168,6 +196,7 @@ async function checkStatus() {
     indexStatus.value = await getIndexStatus()
     lastChecked.value = new Date()
     estimatedTimeRemaining.value = indexStatus.value?.estimatedRemainingMs ?? null
+    estimatedTimeStatus.value = indexStatus.value?.estimateStatus ?? null
     // 获取统计信息
     const stats = await getIndexStats()
     if (stats) {
@@ -183,7 +212,7 @@ async function loadSourceDiagnostics() {
 
   sourceDiagnosticsLoading.value = true
   try {
-    sourceDiagnostics.value = await transport.send(CoreBoxEvents.search.indexingDiagnostics)
+    sourceDiagnostics.value = await settingsSdk.indexedSource.getDiagnostics()
     sourceDiagnosticsCheckedAt.value = new Date()
   } catch (error) {
     settingFileIndexLog.error('Failed to load indexing source diagnostics', error)
@@ -191,6 +220,174 @@ async function loadSourceDiagnostics() {
     toast.error(t('settings.settingFileIndex.sourceDiagnosticsLoadFailed'))
   } finally {
     sourceDiagnosticsLoading.value = false
+  }
+}
+
+async function loadSearchProviderConfig() {
+  if (searchProviderConfigLoading.value) return
+
+  searchProviderConfigLoading.value = true
+  try {
+    const response = await settingsSdk.indexedSource.getProviderConfig()
+    searchProviderConfigs.value = response.providers
+    searchProviderSourceLinks.value = response.sourceLinks ?? []
+  } catch (error) {
+    settingFileIndexLog.error('Failed to load search provider config', error)
+    searchProviderConfigs.value = []
+    toast.error(t('settings.settingFileIndex.providerConfigLoadFailed'))
+  } finally {
+    searchProviderConfigLoading.value = false
+  }
+}
+
+function toSearchProviderUserConfigs(
+  providers = searchProviderConfigs.value
+): SearchProviderUserConfig[] {
+  return providers.map((provider, index) => ({
+    providerId: provider.providerId,
+    enabled: provider.enabled,
+    order: index + 1,
+    updatedAt: Date.now()
+  }))
+}
+
+async function saveSearchProviderConfig(providers = searchProviderConfigs.value) {
+  if (searchProviderConfigSaving.value) return
+  searchProviderConfigSaving.value = true
+  try {
+    const response = await settingsSdk.indexedSource.updateProviderConfig({
+      providers: toSearchProviderUserConfigs(providers)
+    })
+    searchProviderConfigs.value = response.providers
+    searchProviderSourceLinks.value = response.sourceLinks ?? []
+    toast.success(t('settings.settingFileIndex.providerConfigSaved'))
+  } catch (error) {
+    settingFileIndexLog.error('Failed to save search provider config', error)
+    toast.error(t('settings.settingFileIndex.providerConfigSaveFailed'))
+    await loadSearchProviderConfig()
+  } finally {
+    searchProviderConfigSaving.value = false
+  }
+}
+
+async function toggleSearchProvider(providerId: string, enabled: boolean) {
+  const next = searchProviderConfigs.value.map((provider) =>
+    provider.providerId === providerId ? { ...provider, enabled } : provider
+  )
+  searchProviderConfigs.value = next
+  await saveSearchProviderConfig(next)
+}
+
+async function moveSearchProvider(providerId: string, direction: -1 | 1) {
+  const current = [...searchProviderConfigs.value]
+  const index = current.findIndex((provider) => provider.providerId === providerId)
+  const targetIndex = index + direction
+  if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return
+  const [entry] = current.splice(index, 1)
+  current.splice(targetIndex, 0, entry)
+  searchProviderConfigs.value = current
+  await saveSearchProviderConfig(current)
+}
+
+function getSearchProviderSource(provider: SearchProviderRuntimeConfig) {
+  const sourceId =
+    searchProviderSourceIdByProviderId.value.get(provider.providerId) ??
+    provider.descriptor.policy.indexedSourceId ??
+    provider.descriptor.policy.indexedSource?.id
+  if (!sourceId) return null
+
+  return {
+    sourceId,
+    diagnostics: indexedSourceDiagnosticsById.value.get(sourceId)
+  }
+}
+
+function formatSearchProviderMeta(provider: SearchProviderRuntimeConfig): string {
+  const base = t('settings.settingFileIndex.providerConfigMeta', {
+    mode: provider.descriptor.mode,
+    owner: provider.descriptor.owner
+  })
+  const source = getSearchProviderSource(provider)
+  if (!source) return base
+
+  const status = source.diagnostics
+    ? t(resolveIndexingSourceStatusKey(source.diagnostics.health.status))
+    : t('settings.settingFileIndex.providerConfigSourceUnknown')
+
+  return `${base} · ${t('settings.settingFileIndex.providerConfigSource', {
+    source: source.sourceId,
+    status
+  })}`
+}
+
+function isSourceMaintenanceRunning(sourceId: string): boolean {
+  return Boolean(sourceMaintenanceAction.value[sourceId])
+}
+
+async function runSourceMaintenance(
+  source: IndexedSourceDiagnostics,
+  action: 'scan' | 'reconcile' | 'reset'
+) {
+  const sourceId = source.descriptor.id
+  if (!sourceId || isSourceMaintenanceRunning(sourceId)) return
+
+  sourceMaintenanceAction.value = {
+    ...sourceMaintenanceAction.value,
+    [sourceId]: action
+  }
+
+  try {
+    if (action === 'scan') {
+      const result = await settingsSdk.indexedSource.scan({
+        sourceId,
+        reason: IndexedSourceScanReasons.ManualRebuild
+      })
+      if (result.error) throw new Error(result.error)
+      toast.success(
+        t('settings.settingFileIndex.sourceActionScanSuccess', {
+          records: result.records
+        })
+      )
+    } else if (action === 'reconcile') {
+      const result = await settingsSdk.indexedSource.reconcile({
+        sourceId,
+        reason: IndexedSourceReconcileReasons.ManualRepair
+      })
+      if (result.errors > 0) {
+        throw new Error(result.reason || 'reconcile-failed')
+      }
+      toast.success(
+        t('settings.settingFileIndex.sourceActionReconcileSuccess', {
+          changed: result.changed,
+          deleted: result.deleted
+        })
+      )
+    } else {
+      const result = await settingsSdk.indexedSource.reset({
+        sourceId,
+        reason: IndexedSourceResetReasons.UserClear,
+        clearSearchIndex: true,
+        clearScanProgress: true
+      })
+      if (result.error) throw new Error(result.error)
+      toast.success(t('settings.settingFileIndex.sourceActionResetSuccess'))
+    }
+
+    await loadSourceDiagnostics()
+  } catch (error) {
+    settingFileIndexLog.error(`Indexed source ${action} failed`, error, { sourceId })
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    toast.error(
+      t('settings.settingFileIndex.sourceActionFailed', {
+        action: t(`settings.settingFileIndex.sourceAction.${action}`),
+        error: errorMsg
+      })
+    )
+  } finally {
+    sourceMaintenanceAction.value = {
+      ...sourceMaintenanceAction.value,
+      [sourceId]: undefined
+    }
   }
 }
 
@@ -388,12 +585,14 @@ let statusCheckInterval: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   checkStatus()
   loadSourceDiagnostics()
+  loadSearchProviderConfig()
   loadDeviceIdleSettings()
   loadDeviceIdleDiagnostic()
   loadAppIndexSettings()
 
   unsubscribeProgress = onProgressUpdate((progress) => {
     estimatedTimeRemaining.value = progress?.estimatedRemainingMs ?? null
+    estimatedTimeStatus.value = progress?.estimateStatus ?? null
     checkStatus()
     loadSourceDiagnostics()
   })
@@ -502,6 +701,12 @@ const sourceDiagnosticsSummaryText = computed(() => {
     attention: sourceDiagnosticsAttentionCount.value
   })
 })
+
+function getSourceMaintenanceButtonIcon(action: 'scan' | 'reconcile' | 'reset'): string {
+  if (action === 'scan') return 'i-carbon-search'
+  if (action === 'reconcile') return 'i-carbon-renew'
+  return 'i-carbon-reset'
+}
 
 const deviceIdleDuration = computed(() =>
   formatDeviceIdleDuration(deviceIdleDiagnostic.value?.snapshot.idleMs ?? null)
@@ -872,6 +1077,67 @@ async function triggerRebuild() {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      :title="t('settings.settingFileIndex.providerConfigTitle')"
+      :description="t('settings.settingFileIndex.providerConfigDesc')"
+      default-icon="i-carbon-list-boxes"
+      active-icon="i-carbon-list-boxes"
+      :active="searchProviderConfigLoading || searchProviderConfigSaving"
+    >
+      <div class="provider-config-list">
+        <span v-if="searchProviderConfigs.length === 0" class="provider-config-empty">
+          {{ t('settings.settingFileIndex.providerConfigEmpty') }}
+        </span>
+        <div
+          v-for="(provider, index) in searchProviderConfigs"
+          :key="provider.providerId"
+          class="provider-config-item"
+          :class="{ 'provider-config-item--disabled': !provider.enabled }"
+        >
+          <span class="provider-config-name">{{ provider.descriptor.displayName }}</span>
+          <span class="provider-config-meta">
+            {{ formatSearchProviderMeta(provider) }}
+          </span>
+          <TxButton
+            variant="ghost"
+            size="sm"
+            :border="false"
+            class="provider-config-icon-button"
+            :disabled="index === 0 || searchProviderConfigSaving"
+            :title="t('settings.settingFileIndex.providerMoveUp')"
+            @click="moveSearchProvider(provider.providerId, -1)"
+          >
+            <span class="i-carbon-chevron-up text-12px" />
+          </TxButton>
+          <TxButton
+            variant="ghost"
+            size="sm"
+            :border="false"
+            class="provider-config-icon-button"
+            :disabled="index === searchProviderConfigs.length - 1 || searchProviderConfigSaving"
+            :title="t('settings.settingFileIndex.providerMoveDown')"
+            @click="moveSearchProvider(provider.providerId, 1)"
+          >
+            <span class="i-carbon-chevron-down text-12px" />
+          </TxButton>
+          <TxButton
+            variant="flat"
+            size="sm"
+            class="provider-config-toggle"
+            :type="provider.enabled ? 'primary' : undefined"
+            :disabled="searchProviderConfigSaving"
+            @click="toggleSearchProvider(provider.providerId, !provider.enabled)"
+          >
+            {{
+              provider.enabled
+                ? t('settings.settingFileIndex.providerEnabled')
+                : t('settings.settingFileIndex.providerDisabled')
+            }}
+          </TxButton>
+        </div>
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
       v-for="source in sourceDiagnostics?.sources ?? []"
       :key="source.descriptor.id"
       :title="source.descriptor.displayName"
@@ -886,38 +1152,92 @@ async function triggerRebuild() {
       default-icon="i-carbon-data-base"
       active-icon="i-carbon-data-base"
     >
-      <div class="source-diagnostics-row">
-        <span
-          class="source-status-pill"
-          :class="`source-status-pill--${resolveIndexingSourceTone(source.health.status)}`"
+      <div class="source-diagnostics-panel">
+        <div class="source-diagnostics-row">
+          <span
+            class="source-status-pill"
+            :class="`source-status-pill--${resolveIndexingSourceTone(source.health.status)}`"
+          >
+            {{ t(resolveIndexingSourceStatusKey(source.health.status)) }}
+          </span>
+          <span class="source-diagnostic-chip">
+            {{ t('settings.settingFileIndex.sourceItems', { count: source.health.itemCount }) }}
+          </span>
+          <span class="source-diagnostic-chip">
+            {{
+              t('settings.settingFileIndex.sourceWatch', {
+                state: t(resolveIndexingSourceWatchStateKey(source.health.watchState))
+              })
+            }}
+          </span>
+          <span class="source-diagnostic-chip">
+            {{
+              t('settings.settingFileIndex.sourceReconcile', {
+                state: t(resolveIndexingSourceReconcileStateKey(source.health.reconcileState))
+              })
+            }}
+          </span>
+          <span
+            v-for="task in resolveIndexingSourceTaskChips(source)"
+            :key="task.id"
+            class="source-diagnostic-chip source-diagnostic-task-chip"
+            :class="`source-diagnostic-task-chip--${task.tone}`"
+          >
+            {{ t(task.labelKey, task.values) }}
+          </span>
+        </div>
+        <div
+          v-if="resolveIndexingSourceEvidenceChips(source).length > 0"
+          class="source-history-row"
         >
-          {{ t(resolveIndexingSourceStatusKey(source.health.status)) }}
-        </span>
-        <span class="source-diagnostic-chip">
-          {{ t('settings.settingFileIndex.sourceItems', { count: source.health.itemCount }) }}
-        </span>
-        <span class="source-diagnostic-chip">
-          {{
-            t('settings.settingFileIndex.sourceWatch', {
-              state: t(resolveIndexingSourceWatchStateKey(source.health.watchState))
-            })
-          }}
-        </span>
-        <span class="source-diagnostic-chip">
-          {{
-            t('settings.settingFileIndex.sourceReconcile', {
-              state: t(resolveIndexingSourceReconcileStateKey(source.health.reconcileState))
-            })
-          }}
-        </span>
-        <span
-          v-for="task in resolveIndexingSourceTaskChips(source)"
-          :key="task.id"
-          class="source-diagnostic-chip source-diagnostic-task-chip"
-          :class="`source-diagnostic-task-chip--${task.tone}`"
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.sourceEvidence') }}
+          </span>
+          <span
+            v-for="evidence in resolveIndexingSourceEvidenceChips(source)"
+            :key="evidence.id"
+            class="source-diagnostic-chip source-evidence-chip"
+            :class="`source-status-pill--${evidence.tone}`"
+          >
+            {{ t(evidence.labelKey, evidence.values) }}
+          </span>
+        </div>
+        <div
+          v-if="resolveIndexingSourceRecentTaskChips(source).length > 0"
+          class="source-history-row"
         >
-          {{ t(task.labelKey, task.values) }}
-        </span>
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.sourceRecentTasks') }}
+          </span>
+          <span
+            v-for="task in resolveIndexingSourceRecentTaskChips(source)"
+            :key="task.id"
+            class="source-diagnostic-chip source-history-chip"
+            :class="`source-diagnostic-task-chip--${task.tone}`"
+          >
+            {{ t(task.labelKey, task.values) }}
+          </span>
+        </div>
+        <div class="source-diagnostics-maintenance">
+          <TxButton
+            v-for="action in sourceMaintenanceActions"
+            :key="action"
+            variant="ghost"
+            size="sm"
+            :border="false"
+            class="source-maintenance-button"
+            :disabled="isSourceMaintenanceRunning(source.descriptor.id)"
+            :title="t(`settings.settingFileIndex.sourceAction.${action}`)"
+            @click="runSourceMaintenance(source, action)"
+          >
+            <span
+              v-if="sourceMaintenanceAction[source.descriptor.id] === action"
+              class="i-ri-loader-4-line text-12px animate-spin"
+            />
+            <span v-else class="text-12px" :class="getSourceMaintenanceButtonIcon(action)" />
+            <span>{{ t(`settings.settingFileIndex.sourceAction.${action}`) }}</span>
+          </TxButton>
+        </div>
       </div>
     </TuffBlockSlot>
   </TuffGroupBlock>

@@ -12,13 +12,30 @@
   "description": "工作区脚本：读取 package.json 脚本并一键执行",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell", "fs.read"],
+    "required": ["system.shell", "fs.read", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
     "system.shell": "执行用户确认后的开发命令",
-    "fs.read": "读取 workspace 的 package.json 脚本列表"
+    "fs.read": "读取 workspace 的 package.json 脚本列表",
+    "search.root-results": "将工作区脚本入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-workspace-scripts.workspace-scripts",
+      "displayName": "工作区脚本",
+      "featureId": "workspace-scripts",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 107,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "workspace-scripts",

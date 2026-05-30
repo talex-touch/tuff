@@ -20,6 +20,7 @@ import {
   StorageList,
   TuffInputType,
   TuffSearchResultBuilder,
+  getSearchProviderUserConfigSignature,
   type TuffItem
 } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -62,6 +63,7 @@ import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
 import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
+import { getSearchProviderUserConfigs } from './search-provider-config'
 import { SearchIndexService } from './search-index-service'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
@@ -116,6 +118,7 @@ interface SearchPipelineStageDurations {
 interface QueryOrchestrationResult {
   providerFilter?: string
   cacheKey: string
+  providerConfigSignature: string
 }
 
 interface SearchFirstResultMetrics {
@@ -182,9 +185,12 @@ export class SearchEngineCore
   private cacheSearchResult(
     query: TuffQuery,
     providerFilter: string | undefined,
-    result: TuffSearchResult
+    result: TuffSearchResult,
+    providerConfigSignature = this.getSearchProviderConfigSignature()
   ): void {
-    const cacheKey = buildSearchCacheKey(query, providerFilter, this.activatedProviders)
+    const cacheKey = buildSearchCacheKey(query, providerFilter, this.activatedProviders, {
+      providerConfigSignature
+    })
 
     // Evict oldest entries if cache is full
     if (this.searchCache.size >= SEARCH_CACHE_MAX_SIZE) {
@@ -200,6 +206,37 @@ export class SearchEngineCore
     }
 
     this.searchCache.set(cacheKey, { result, timestamp: Date.now() })
+  }
+
+  private getSearchProviderUserConfigs() {
+    const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting | undefined
+    return getSearchProviderUserConfigs(appSettings)
+  }
+
+  private getSearchProviderConfigSignature(): string {
+    return getSearchProviderUserConfigSignature(this.getSearchProviderUserConfigs())
+  }
+
+  private applySearchProviderUserConfig(
+    providers: ISearchProvider<ProviderContext>[]
+  ): ISearchProvider<ProviderContext>[] {
+    if (this.activatedProviders?.size) {
+      return providers
+    }
+
+    const configs = this.getSearchProviderUserConfigs()
+    if (configs.length === 0) {
+      return providers
+    }
+
+    const configById = new Map(configs.map((config) => [config.providerId, config]))
+    return providers
+      .filter((provider) => configById.get(provider.id)?.enabled !== false)
+      .sort((left, right) => {
+        const leftOrder = configById.get(left.id)?.order ?? Number.MAX_SAFE_INTEGER
+        const rightOrder = configById.get(right.id)?.order ?? Number.MAX_SAFE_INTEGER
+        return leftOrder - rightOrder
+      })
   }
 
   private subscribeIndexedSourceFsBridge(): void {
@@ -625,7 +662,7 @@ export class SearchEngineCore
 
   getActiveProviders(): ISearchProvider<ProviderContext>[] {
     if (!this.activatedProviders) {
-      return Array.from(this.providers.values())
+      return this.applySearchProviderUserConfig(Array.from(this.providers.values()))
     }
     // Get unique provider IDs from the activation keys
     const providerIds = new Set(
@@ -826,9 +863,13 @@ export class SearchEngineCore
         })
       }
 
+      const providerConfigSignature = this.getSearchProviderConfigSignature()
       return {
         providerFilter,
-        cacheKey: buildSearchCacheKey(query, providerFilter, this.activatedProviders),
+        providerConfigSignature,
+        cacheKey: buildSearchCacheKey(query, providerFilter, this.activatedProviders, {
+          providerConfigSignature
+        }),
         durationMs: performance.now() - startedAt
       }
     } finally {
@@ -1173,7 +1214,8 @@ export class SearchEngineCore
       providerAggregationDuration: 0,
       mergeRankDuration: 0
     }
-    const { providerFilter, cacheKey, durationMs } = await this.orchestrateSearchQuery(query)
+    const { providerFilter, cacheKey, durationMs, providerConfigSignature } =
+      await this.orchestrateSearchQuery(query)
     pipelineDurations.parseDuration = durationMs
 
     const cachedEntry = this.searchCache.get(cacheKey)
@@ -1563,7 +1605,12 @@ export class SearchEngineCore
                   staleResult.sessionId = sessionId
                   resolve(staleResult)
                 } else {
-                  this.cacheSearchResult(query, providerFilter, initialResult)
+                  this.cacheSearchResult(
+                    query,
+                    providerFilter,
+                    initialResult,
+                    providerConfigSignature
+                  )
                   resolve(initialResult)
                 }
               } else {
@@ -1727,7 +1774,7 @@ export class SearchEngineCore
               return
             }
 
-            this.cacheSearchResult(query, providerFilter, initialResult)
+            this.cacheSearchResult(query, providerFilter, initialResult, providerConfigSignature)
             resolve(initialResult)
             didResolveInitial = true
           } else if (update.newResults.length > 0) {

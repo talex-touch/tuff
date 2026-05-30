@@ -12,10 +12,28 @@
   "description": "开发工具箱：常用链接导航",
   "main": "index.js",
   "permissions": {
-    "required": [],
+    "required": ["search.root-results"],
     "optional": []
   },
-  "permissionReasons": {},
+  "permissionReasons": {
+    "search.root-results": "将开发工具箱入口推送到 CoreBox 根搜索结果"
+  },
+  "searchProviders": [
+    {
+      "id": "touch-dev-toolbox.dev-toolbox",
+      "displayName": "开发工具箱",
+      "featureId": "dev-toolbox",
+      "kind": "quicklink",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 101,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "dev-toolbox",

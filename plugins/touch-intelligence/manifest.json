@@ -22,13 +22,30 @@
     }
   },
   "permissions": {
-    "required": ["intelligence.basic"],
+    "required": ["intelligence.basic", "search.root-results"],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
     "intelligence.basic": "调用智能能力完成问答",
-    "clipboard.write": "复制回答到剪贴板"
+    "clipboard.write": "复制回答到剪贴板",
+    "search.root-results": "将智能问答入口与回答状态推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-intelligence.intelligence-ask",
+      "displayName": "智能问答",
+      "featureId": "intelligence-ask",
+      "kind": "ai",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 106,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "intelligence-ask",

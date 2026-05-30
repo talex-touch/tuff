@@ -12,12 +12,29 @@
   "description": "程序员工具：UUID、时间戳、JWT、命名转换、Query String 与字符串转义",
   "main": "index.js",
   "permissions": {
-    "required": ["clipboard.write"],
+    "required": ["clipboard.write", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "clipboard.write": "将开发工具结果复制到剪贴板"
+    "clipboard.write": "将开发工具结果复制到剪贴板",
+    "search.root-results": "将程序员工具入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-dev-utils.dev-utils",
+      "displayName": "程序员工具",
+      "featureId": "dev-utils",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 102,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "dev-utils",

@@ -104,6 +104,9 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'native:file:*', permissions: ['fs.read'] },
   { pattern: 'native:media:*', permissions: ['media.read'] },
 
+  // Search APIs
+  { pattern: 'search:root-results:*', permissions: ['search.root-results'] },
+
   // Flow Transfer APIs
   { pattern: 'flow:native:*', permissions: ['network.internet'] },
   { pattern: 'flow:*', permissions: ['storage.shared'] },

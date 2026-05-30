@@ -12,12 +12,29 @@
   "description": "桌面窗口调度：激活、关闭、贴边、置顶、启动",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell"],
+    "required": ["system.shell", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "system.shell": "调用系统脚本管理应用窗口"
+    "system.shell": "调用系统脚本管理应用窗口",
+    "search.root-results": "将窗口管理入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-window-manager.window-app",
+      "displayName": "窗口管理",
+      "featureId": "window-app",
+      "kind": "system-action",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 92,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "window-app",

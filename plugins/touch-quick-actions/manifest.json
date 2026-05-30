@@ -12,12 +12,29 @@
   "description": "系统快捷动作：锁屏、静音与常用设置入口",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell"],
+    "required": ["system.shell", "search.root-results"],
     "optional": []
   },
   "permissionReasons": {
-    "system.shell": "执行系统快捷动作和打开系统设置"
+    "system.shell": "执行系统快捷动作和打开系统设置",
+    "search.root-results": "将系统快捷动作入口推送到 CoreBox 根搜索结果"
   },
+  "searchProviders": [
+    {
+      "id": "touch-quick-actions.quick-actions",
+      "displayName": "系统快捷动作",
+      "featureId": "quick-actions",
+      "kind": "system-action",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 91,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "quick-actions",

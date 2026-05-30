@@ -20,6 +20,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from '../core-box'
+import { filterAndSortRootItemsByProviderConfig } from '../search-engine/search-provider-config'
 import { BOX_ITEM_CHANNELS } from './channels'
 
 const boxItemManagerLog = createLogger('BoxItemManager')
@@ -117,7 +118,12 @@ export class BoxItemManager {
     }
 
     this.items.set(id, updated)
-    this.emitToRenderer<BoxItemUpdateEvent>(BOX_ITEM_EVENTS.UPDATE, { id, updates })
+    const visible = filterAndSortRootItemsByProviderConfig([updated])
+    if (visible.length > 0) {
+      this.emitToRenderer<BoxItemUpdateEvent>(BOX_ITEM_EVENTS.UPDATE, { id, updates })
+    } else {
+      this.emitToRenderer<BoxItemDeleteEvent>(BOX_ITEM_EVENTS.DELETE, { id })
+    }
     this.log(`Updated item: ${id}`)
   }
 
@@ -147,9 +153,15 @@ export class BoxItemManager {
       this.items.set(item.id, item)
     }
 
-    this.emitToRenderer<BoxItemUpsertEvent>(BOX_ITEM_EVENTS.UPSERT, {
-      item: this.items.get(item.id)!
-    })
+    const storedItem = this.items.get(item.id)!
+    const visible = filterAndSortRootItemsByProviderConfig([storedItem])
+    if (visible.length > 0) {
+      this.emitToRenderer<BoxItemUpsertEvent>(BOX_ITEM_EVENTS.UPSERT, {
+        item: storedItem
+      })
+    } else {
+      this.emitToRenderer<BoxItemDeleteEvent>(BOX_ITEM_EVENTS.DELETE, { id: item.id })
+    }
     this.log(`Upserted item: ${item.id} (${exists ? 'updated' : 'created'})`)
   }
 
@@ -206,9 +218,19 @@ export class BoxItemManager {
       }
     })
 
-    this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_EVENTS.BATCH_UPSERT, {
-      items: validItems.map((item) => this.items.get(item.id)!)
-    })
+    const storedItems = validItems.map((item) => this.items.get(item.id)!)
+    const visibleItems = filterAndSortRootItemsByProviderConfig(storedItems)
+    const hiddenIds = storedItems
+      .filter((item) => !visibleItems.some((visible) => visible.id === item.id))
+      .map((item) => item.id)
+    if (visibleItems.length > 0) {
+      this.emitToRenderer<BoxItemBatchUpsertEvent>(BOX_ITEM_EVENTS.BATCH_UPSERT, {
+        items: visibleItems
+      })
+    }
+    if (hiddenIds.length > 0) {
+      this.emitToRenderer<BoxItemBatchDeleteEvent>(BOX_ITEM_EVENTS.BATCH_DELETE, { ids: hiddenIds })
+    }
     if (this.options.enableLogging) {
       this.log(`Batch upserted ${validItems.length} items`)
     }
@@ -253,6 +275,13 @@ export class BoxItemManager {
    */
   getAll(): TuffItem[] {
     return Array.from(this.items.values())
+  }
+
+  /**
+   * 获取根据 provider 配置过滤和排序后的可见 items。
+   */
+  getVisibleItems(): TuffItem[] {
+    return filterAndSortRootItemsByProviderConfig(this.getAll())
   }
 
   /**
@@ -307,7 +336,7 @@ export class BoxItemManager {
    * 返回所有当前 items
    */
   handleSyncRequest(): void {
-    const items = this.getAll()
+    const items = this.getVisibleItems()
     this.emitToRenderer<BoxItemSyncResponseEvent>(BOX_ITEM_EVENTS.SYNC_RESPONSE, { items })
     this.log(`Synced ${items.length} items to renderer`)
   }
