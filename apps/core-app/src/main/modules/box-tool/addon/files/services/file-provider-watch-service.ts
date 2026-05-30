@@ -115,6 +115,21 @@ export class FileProviderWatchService {
     return [...this.normalizedWatchPaths]
   }
 
+  getPendingPermissionPaths(): string[] {
+    const pendingPaths =
+      typeof FileSystemWatcher.getPendingPaths === 'function'
+        ? FileSystemWatcher.getPendingPaths()
+        : []
+    const normalizedWatchSet = new Set(this.normalizedWatchPaths)
+    return pendingPaths.filter((pendingPath) =>
+      normalizedWatchSet.has(this.normalizePath(pendingPath))
+    )
+  }
+
+  ownsWatchPath(rawPath: string): boolean {
+    return this.normalizedWatchPaths.includes(this.normalizePath(rawPath))
+  }
+
   isWatchPathRegistered(): boolean {
     return this.watchPathsRegistered
   }

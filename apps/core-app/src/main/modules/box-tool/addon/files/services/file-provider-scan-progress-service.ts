@@ -1,0 +1,175 @@
+import type { IndexedSourceEvidence } from '@talex-touch/utils/search'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type * as schema from '../../../../../db/schema'
+import type { DbUtils } from '../../../../../db/utils'
+import { inArray } from 'drizzle-orm'
+import { scanProgress } from '../../../../../db/schema'
+
+export interface FileProviderIndexStatsForEvidence {
+  totalFiles: number
+  failedFiles: number
+  skippedFiles: number
+  completedFiles: number
+  embeddingCompletedFiles: number
+  embeddingRows: number
+}
+
+export interface FileProviderScanProgressSummary {
+  totalRoots: number
+  pendingRoots: number
+}
+
+export interface FileProviderScanProgressEvidenceInput {
+  sourceId: string
+  watchPaths: string[]
+  pendingPermissionPaths?: string[]
+  stats: FileProviderIndexStatsForEvidence
+  isIndexingActive: boolean
+  checkedAt?: number
+}
+
+export interface FileProviderScanProgressServiceDeps {
+  getDbUtils: () => DbUtils | null
+  ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
+  getSearchIndexWorker: () => {
+    upsertScanProgress: (paths: string[], lastScanned: string) => Promise<void>
+  }
+}
+
+export class FileProviderScanProgressService {
+  private readonly getDbUtils: FileProviderScanProgressServiceDeps['getDbUtils']
+  private readonly ensureSearchIndexWorkerReady: FileProviderScanProgressServiceDeps['ensureSearchIndexWorkerReady']
+  private readonly getSearchIndexWorker: FileProviderScanProgressServiceDeps['getSearchIndexWorker']
+
+  constructor(deps: FileProviderScanProgressServiceDeps) {
+    this.getDbUtils = deps.getDbUtils
+    this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
+    this.getSearchIndexWorker = deps.getSearchIndexWorker
+  }
+
+  async getSummary(watchPaths: string[]): Promise<FileProviderScanProgressSummary> {
+    const completedPaths = await this.getCompletedPaths()
+    if (completedPaths.size === 0 && !this.getDbUtils()) {
+      return {
+        totalRoots: 0,
+        pendingRoots: watchPaths.length
+      }
+    }
+
+    const pendingRoots = watchPaths.filter((path) => !completedPaths.has(path)).length
+
+    return {
+      totalRoots: completedPaths.size,
+      pendingRoots
+    }
+  }
+
+  async getCompletedPaths(): Promise<Set<string>> {
+    const dbUtils = this.getDbUtils()
+    if (!dbUtils) {
+      return new Set()
+    }
+
+    const db = dbUtils.getDb()
+    const completedScans = await db.select({ path: scanProgress.path }).from(scanProgress)
+    return new Set(completedScans.map((row) => row.path))
+  }
+
+  async deletePaths(db: LibSQLDatabase<typeof schema>, paths: string[]): Promise<void> {
+    if (paths.length === 0) {
+      return
+    }
+
+    await db.delete(scanProgress).where(inArray(scanProgress.path, paths))
+  }
+
+  async upsertCompletedPaths(paths: string[], lastScanned: string, reason: string): Promise<void> {
+    if (paths.length === 0) {
+      return
+    }
+    if (!(await this.ensureSearchIndexWorkerReady(reason))) {
+      return
+    }
+
+    await this.getSearchIndexWorker().upsertScanProgress(paths, lastScanned)
+  }
+
+  async buildEvidence(
+    input: FileProviderScanProgressEvidenceInput
+  ): Promise<IndexedSourceEvidence> {
+    const summary = await this.getSummary(input.watchPaths)
+    const pendingPermissionPaths = input.pendingPermissionPaths ?? []
+
+    return {
+      id: `${input.sourceId}:scan-progress`,
+      label: 'File scan progress',
+      status: this.resolveEvidenceStatus(
+        input.stats,
+        summary.pendingRoots,
+        input.isIndexingActive,
+        pendingPermissionPaths.length
+      ),
+      itemCount: input.stats.completedFiles,
+      rootCount: input.watchPaths.length,
+      roots: input.watchPaths,
+      lastCheckedAt: input.checkedAt ?? Date.now(),
+      reason: this.resolveEvidenceReason(
+        input.stats,
+        summary.pendingRoots,
+        input.isIndexingActive,
+        pendingPermissionPaths.length
+      ),
+      metadata: {
+        totalFiles: input.stats.totalFiles,
+        completedFiles: input.stats.completedFiles,
+        failedFiles: input.stats.failedFiles,
+        skippedFiles: input.stats.skippedFiles,
+        embeddingCompletedFiles: input.stats.embeddingCompletedFiles,
+        embeddingRows: input.stats.embeddingRows,
+        totalRoots: summary.totalRoots,
+        pendingRoots: summary.pendingRoots,
+        pendingPermissionRoots: pendingPermissionPaths.length,
+        pendingPermissionPaths
+      }
+    }
+  }
+
+  private resolveEvidenceStatus(
+    stats: FileProviderIndexStatsForEvidence,
+    pendingRoots: number,
+    isIndexingActive: boolean,
+    pendingPermissionRoots: number
+  ): IndexedSourceEvidence['status'] {
+    if (pendingPermissionRoots > 0) {
+      return 'permission-required'
+    }
+    if (stats.failedFiles > 0) {
+      return 'degraded'
+    }
+    if (pendingRoots > 0 || isIndexingActive) {
+      return 'warming'
+    }
+    return 'ready'
+  }
+
+  private resolveEvidenceReason(
+    stats: FileProviderIndexStatsForEvidence,
+    pendingRoots: number,
+    isIndexingActive: boolean,
+    pendingPermissionRoots: number
+  ): string {
+    if (pendingPermissionRoots > 0) {
+      return 'file-index-watch-root-pending-permission'
+    }
+    if (stats.failedFiles > 0) {
+      return 'file-index-progress-has-failed-files'
+    }
+    if (pendingRoots > 0) {
+      return 'file-index-progress-has-pending-roots'
+    }
+    if (isIndexingActive) {
+      return 'file-index-progress-running'
+    }
+    return 'file-index-progress-ready'
+  }
+}

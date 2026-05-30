@@ -1,4 +1,5 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
+import { IndexedWriteBufferService } from '../../../search-engine/indexing-write-buffer-service'
 
 export interface IndexWorkerBusyRetryOptions {
   baseDelayMs?: number
@@ -40,29 +41,14 @@ export function takeIndexWorkerFlushBatch(
   inflight: Map<number, IndexWorkerFileResult>,
   maxEntries: number
 ): { entries: IndexWorkerFileResult[]; keys: number[] } {
-  const entries: IndexWorkerFileResult[] = []
-  const keys: number[] = []
-
-  for (const [key, value] of pending) {
-    entries.push(value)
-    keys.push(key)
-    pending.delete(key)
-    inflight.set(key, value)
-    if (entries.length >= maxEntries) {
-      break
-    }
-  }
-
-  return { entries, keys }
+  return new IndexedWriteBufferService(pending, inflight).take(maxEntries)
 }
 
 export function commitIndexWorkerFlushBatch(
   inflight: Map<number, IndexWorkerFileResult>,
   keys: number[]
 ): void {
-  for (const key of keys) {
-    inflight.delete(key)
-  }
+  new IndexedWriteBufferService(new Map<number, IndexWorkerFileResult>(), inflight).commit(keys)
 }
 
 export function rollbackIndexWorkerFlushBatch(
@@ -70,14 +56,40 @@ export function rollbackIndexWorkerFlushBatch(
   inflight: Map<number, IndexWorkerFileResult>,
   keys: number[]
 ): void {
-  for (const key of keys) {
-    const inflightValue = inflight.get(key)
-    if (!inflightValue) {
-      continue
-    }
-    if (!pending.has(key)) {
-      pending.set(key, inflightValue)
-    }
-    inflight.delete(key)
+  new IndexedWriteBufferService(pending, inflight).rollback(keys)
+}
+
+export class FileProviderIndexFlushBufferService {
+  private readonly buffer: IndexedWriteBufferService<number, IndexWorkerFileResult>
+
+  constructor(
+    pending: Map<number, IndexWorkerFileResult>,
+    inflight: Map<number, IndexWorkerFileResult>
+  ) {
+    this.buffer = new IndexedWriteBufferService(pending, inflight)
+  }
+
+  get pendingSize(): number {
+    return this.buffer.pendingSize
+  }
+
+  get inflightSize(): number {
+    return this.buffer.inflightSize
+  }
+
+  enqueue(payload: IndexWorkerFileResult): number {
+    return this.buffer.enqueue(payload.fileId, payload)
+  }
+
+  take(maxEntries: number): { entries: IndexWorkerFileResult[]; keys: number[] } {
+    return this.buffer.take(maxEntries)
+  }
+
+  commit(keys: number[]): void {
+    this.buffer.commit(keys)
+  }
+
+  rollback(keys: number[]): void {
+    this.buffer.rollback(keys)
   }
 }

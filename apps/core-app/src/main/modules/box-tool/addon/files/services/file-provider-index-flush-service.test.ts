@@ -1,6 +1,7 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import { describe, expect, it } from 'vitest'
 import {
+  FileProviderIndexFlushBufferService,
   commitIndexWorkerFlushBatch,
   getIndexWorkerBusyRetryDelay,
   getIndexWorkerFlushDelay,
@@ -37,6 +38,30 @@ function createResult(fileId: number, content: string): IndexWorkerFileResult {
 }
 
 describe('file-provider-index-flush-service', () => {
+  it('buffer service 封装 enqueue/take/commit/rollback 与 size 统计', () => {
+    const pending = new Map<number, IndexWorkerFileResult>()
+    const inflight = new Map<number, IndexWorkerFileResult>()
+    const buffer = new FileProviderIndexFlushBufferService(pending, inflight)
+
+    expect(buffer.enqueue(createResult(1, 'file-1'))).toBe(1)
+    expect(buffer.enqueue(createResult(2, 'file-2'))).toBe(2)
+    expect(buffer.pendingSize).toBe(2)
+
+    const batch = buffer.take(1)
+    expect(batch.entries.map((entry) => entry.fileId)).toEqual([1])
+    expect(buffer.pendingSize).toBe(1)
+    expect(buffer.inflightSize).toBe(1)
+
+    buffer.rollback(batch.keys)
+    expect(buffer.pendingSize).toBe(2)
+    expect(buffer.inflightSize).toBe(0)
+
+    const retryBatch = buffer.take(2)
+    buffer.commit(retryBatch.keys)
+    expect(buffer.pendingSize).toBe(0)
+    expect(buffer.inflightSize).toBe(0)
+  })
+
   it('失败回补时保留 pending 中更“新”的 payload', () => {
     const pending = new Map<number, IndexWorkerFileResult>([
       [1, createResult(1, 'old-content')],

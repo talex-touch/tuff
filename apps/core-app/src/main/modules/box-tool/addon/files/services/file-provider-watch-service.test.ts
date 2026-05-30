@@ -11,7 +11,8 @@ vi.mock('@talex-touch/utils', () => ({
 
 vi.mock('../../../file-system-watcher', () => ({
   default: {
-    addPath: vi.fn(async () => undefined)
+    addPath: vi.fn(async () => undefined),
+    getPendingPaths: vi.fn(() => [])
   }
 }))
 
@@ -154,5 +155,22 @@ describe('file-provider-watch-service', () => {
 
     expect(FileSystemWatcher.addPath).toHaveBeenCalledTimes(2)
     expect(subscribeToFileSystemEvents).toHaveBeenCalledTimes(1)
+  })
+
+  it('exposes only pending permission paths owned by the file watch roots', () => {
+    vi.mocked(FileSystemWatcher.getPendingPaths).mockReturnValue([
+      '/tmp/tuff-index-a',
+      '/Applications'
+    ])
+    const service = createService()
+
+    expect(service.getPendingPermissionPaths()).toEqual(['/tmp/tuff-index-a'])
+  })
+
+  it('checks ownership of file watch roots', () => {
+    const service = createService()
+
+    expect(service.ownsWatchPath('/tmp/tuff-index-a')).toBe(true)
+    expect(service.ownsWatchPath('/Applications')).toBe(false)
   })
 })
