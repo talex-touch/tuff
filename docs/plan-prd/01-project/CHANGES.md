@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed scan strategy policy
+
+- `packages/utils/search/indexing-scan-strategy.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-scan-strategy.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `resolveIndexedScanStrategy()` for splitting watch roots into first-time full-scan roots and existing-root reconciliation roots from completed path state.
+  - Rewired `FileProviderScanStrategyService` to keep completed-path loading, yield, timing, and logging in CoreApp while delegating source-agnostic scan strategy to the SDK primitive.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-scan-strategy.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-strategy-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### ref(search): lift indexed scan eligibility policy
 
 - `packages/utils/search/indexing-scan-eligibility.ts`
