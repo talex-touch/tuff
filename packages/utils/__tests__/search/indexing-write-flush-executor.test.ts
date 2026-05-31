@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { IndexedWriteBufferService, IndexedWriteFlushExecutorService } from '../../search'
+import {
+  IndexedWriteBufferService,
+  IndexedWriteFlushExecutorService,
+  mapIndexedWriteFlushExecutorResult
+} from '../../search'
 
 function createExecutor(options: {
   pending: Map<number, string>
@@ -131,5 +135,40 @@ describe('IndexedWriteFlushExecutorService', () => {
       reason: 'unavailable'
     })
     expect(persist).not.toHaveBeenCalled()
+  })
+
+  it('maps executor results to adapter-specific status and numeric metadata fields', () => {
+    const result = mapIndexedWriteFlushExecutorResult(
+      {
+        status: 'not-ready',
+        entries: 2,
+        pending: 2,
+        inflight: 0,
+        reason: 'not-ready',
+        metadata: {
+          withContent: 1,
+          textOnly: 'ignored'
+        }
+      },
+      {
+        statusMap: {
+          idle: 'idle',
+          flushed: 'flushed',
+          'not-ready': 'worker-not-ready'
+        },
+        numericMetadataKeys: ['withContent', 'missing']
+      }
+    )
+
+    expect(result).toMatchObject({
+      status: 'worker-not-ready',
+      entries: 2,
+      withContent: 1,
+      missing: 0,
+      metadata: {
+        withContent: 1,
+        textOnly: 'ignored'
+      }
+    })
   })
 })

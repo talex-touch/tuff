@@ -2,7 +2,10 @@ import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
 import { performance } from 'node:perf_hooks'
 import { dbWriteScheduler } from '../../../../../db/db-write-scheduler'
-import { IndexedWriteFlushExecutorService } from '@talex-touch/utils/search'
+import {
+  IndexedWriteFlushExecutorService,
+  mapIndexedWriteFlushExecutorResult
+} from '@talex-touch/utils/search'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
 
 export type FileProviderIndexFlushExecutorStatus = 'idle' | 'flushed' | 'worker-not-ready'
@@ -87,18 +90,14 @@ export class FileProviderIndexFlushExecutorService {
 
   async execute(): Promise<FileProviderIndexFlushExecutorResult> {
     const result = await this.executor.execute()
-    return {
-      status: result.status === 'not-ready' ? 'worker-not-ready' : result.status,
-      entries: result.entries,
-      withContent:
-        typeof result.metadata?.withContent === 'number' ? result.metadata.withContent : 0,
-      pending: result.pending,
-      inflight: result.inflight,
-      reason: result.reason,
-      error: result.error,
-      metadata: result.metadata,
-      durationMs: result.durationMs
-    }
+    return mapIndexedWriteFlushExecutorResult(result, {
+      statusMap: {
+        idle: 'idle',
+        flushed: 'flushed',
+        'not-ready': 'worker-not-ready'
+      },
+      numericMetadataKeys: ['withContent'] as const
+    })
   }
 
   private logBatchTaken(entries: IndexWorkerFileResult[]): void {
