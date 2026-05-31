@@ -4,6 +4,7 @@ import type {
   IndexedSourceDescriptor,
   IndexedSourceEvidence,
   IndexedSourceHealth,
+  IndexedSourceProfileDiagnostic,
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
   IndexedSourceRecordBatch,
@@ -16,6 +17,7 @@ import type {
 import type { BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
 import {
   createBrowserBookmarksIndexedSourceDescriptor,
+  IndexedSourceProfileDiagnosticsService,
   IndexedSourceReconcileReasons
 } from '@talex-touch/utils/search'
 import {
@@ -24,6 +26,8 @@ import {
 } from './browser-bookmarks-scanner'
 
 export const BROWSER_BOOKMARKS_INDEXED_SOURCE_ID = 'browser-bookmarks'
+
+const browserProfileDiagnosticsService = new IndexedSourceProfileDiagnosticsService()
 
 export interface BrowserBookmarksIndexedSourceOptions {
   enabled?: boolean
@@ -54,18 +58,13 @@ function readBrowserBookmarksSnapshot(
   const records = result.items.map((item) =>
     mapBrowserBookmarkToIndexedSourceRecord(sourceId, item)
   )
-  const roots = result.diagnostics
-    .filter((diagnostic) => Boolean(diagnostic.root) && diagnostic.status !== 'unsupported')
-    .map((diagnostic) => ({
-      sourceId,
-      path: diagnostic.root,
-      permissionState: 'granted' as const,
-      watchDepth: 2,
-      reason: diagnostic.reason || undefined
-    }))
-  const evidence = result.diagnostics.map(
-    (diagnostic): IndexedSourceEvidence => ({
-      id: `${sourceId}:${diagnostic.browserId}`,
+  const itemCountsByBrowserId = new Map<string, number>()
+  for (const item of result.items) {
+    itemCountsByBrowserId.set(item.browserId, (itemCountsByBrowserId.get(item.browserId) ?? 0) + 1)
+  }
+  const profileDiagnostics: IndexedSourceProfileDiagnostic[] = result.diagnostics.map(
+    (diagnostic) => ({
+      key: diagnostic.browserId,
       label: `${diagnostic.browserName} Bookmarks`,
       status:
         diagnostic.status === 'available'
@@ -75,18 +74,28 @@ function readBrowserBookmarksSnapshot(
             : diagnostic.status === 'unsupported'
               ? 'unsupported'
               : 'degraded',
-      itemCount: result.items.filter((item) => item.browserId === diagnostic.browserId).length,
-      rootCount: diagnostic.root ? 1 : 0,
-      roots: diagnostic.root ? [diagnostic.root] : [],
+      root: diagnostic.root || undefined,
+      itemCount: itemCountsByBrowserId.get(diagnostic.browserId) ?? 0,
       reason: diagnostic.reason || undefined,
       metadata: {
         profileCount: diagnostic.profileCount,
         failedProfile: diagnostic.failedProfile,
-        lastError: diagnostic.lastError,
-        scannerOwner: 'core-runtime'
+        lastError: diagnostic.lastError
       }
     })
   )
+  const roots = browserProfileDiagnosticsService.buildRoots({
+    sourceId,
+    diagnostics: profileDiagnostics,
+    rootWatchDepth: 2
+  })
+  const evidence = browserProfileDiagnosticsService.buildEvidence({
+    sourceId,
+    diagnostics: profileDiagnostics,
+    metadata: {
+      scannerOwner: 'core-runtime'
+    }
+  })
 
   return {
     result,
