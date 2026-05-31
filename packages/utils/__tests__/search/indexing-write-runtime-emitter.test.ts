@@ -75,6 +75,26 @@ describe('IndexedWriteRuntimeEmitterService', () => {
     )
   })
 
+  it('builds add/change deltas without requiring an emit sink', () => {
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
+      sourceId: 'test-source',
+      mapRecord
+    })
+
+    expect(
+      service.buildDelta({ id: '1', path: '/tmp/a.txt', title: 'A' }, {
+        action: 'change',
+        reason: 'watch-event'
+      })
+    ).toEqual({
+      sourceId: 'test-source',
+      action: 'change',
+      record: expect.objectContaining({ recordId: '1', stableKey: '/tmp/a.txt' }),
+      path: '/tmp/a.txt',
+      reason: 'watch-event'
+    })
+  })
+
   it('skips optional sinks for empty batches and emits progress snapshots', async () => {
     const emitRecordBatch = vi.fn()
     const emitDelta = vi.fn()
@@ -95,6 +115,20 @@ describe('IndexedWriteRuntimeEmitterService', () => {
     expect(emitRecordBatch).not.toHaveBeenCalled()
     expect(emitDelta).not.toHaveBeenCalled()
     expect(emitProgress).toHaveBeenCalledWith(3, 5)
+  })
+
+  it('builds delete deltas without requiring mapped records or emit sinks', () => {
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
+      sourceId: 'test-source'
+    })
+
+    expect(service.buildDeleteDelta('/tmp/a.txt', { reason: 'watch-delete' })).toEqual({
+      sourceId: 'test-source',
+      action: 'delete',
+      stableKey: '/tmp/a.txt',
+      path: '/tmp/a.txt',
+      reason: 'watch-delete'
+    })
   })
 
   it('emits delete deltas from removed paths without requiring mapped records', async () => {
