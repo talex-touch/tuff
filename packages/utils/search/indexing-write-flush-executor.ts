@@ -13,6 +13,60 @@ export interface IndexedWriteFlushExecutorResult {
   durationMs?: number
 }
 
+export interface IndexedWriteFlushExecutorResultMapOptions<
+  TStatus extends string,
+  TMetric extends string = never
+> {
+  statusMap?: Record<IndexedWriteFlushExecutorStatus, TStatus>
+  numericMetadataKeys?: readonly TMetric[]
+}
+
+export type IndexedWriteFlushExecutorMappedResult<
+  TStatus extends string,
+  TMetric extends string = never
+> =
+  IndexedWriteFlushExecutorResult & {
+    status: TStatus
+  } & Record<TMetric, number>
+
+export function mapIndexedWriteFlushExecutorResult<TMetric extends string = never>(
+  result: IndexedWriteFlushExecutorResult,
+  options?: {
+    numericMetadataKeys?: readonly TMetric[]
+  }
+): IndexedWriteFlushExecutorMappedResult<IndexedWriteFlushExecutorStatus, TMetric>
+export function mapIndexedWriteFlushExecutorResult<
+  TStatus extends string,
+  TMetric extends string = never
+>(
+  result: IndexedWriteFlushExecutorResult,
+  options: {
+    statusMap: Record<IndexedWriteFlushExecutorStatus, TStatus>
+    numericMetadataKeys?: readonly TMetric[]
+  }
+): IndexedWriteFlushExecutorMappedResult<TStatus, TMetric>
+export function mapIndexedWriteFlushExecutorResult<
+  TStatus extends string,
+  TMetric extends string = never
+>(
+  result: IndexedWriteFlushExecutorResult,
+  options: IndexedWriteFlushExecutorResultMapOptions<TStatus, TMetric> = {}
+): IndexedWriteFlushExecutorMappedResult<TStatus | IndexedWriteFlushExecutorStatus, TMetric> {
+  const mappedStatus = options.statusMap?.[result.status] ?? result.status
+  const numericMetadata = Object.fromEntries(
+    (options.numericMetadataKeys ?? []).map((key) => [
+      key,
+      typeof result.metadata?.[key] === 'number' ? result.metadata[key] : 0
+    ])
+  )
+
+  return {
+    ...result,
+    ...numericMetadata,
+    status: mappedStatus
+  } as IndexedWriteFlushExecutorMappedResult<TStatus | IndexedWriteFlushExecutorStatus, TMetric>
+}
+
 export interface IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry> {
   buffer: IndexedWriteFlushBuffer<TKey, TEntry>
   getBatchSize: () => number
