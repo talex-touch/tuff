@@ -13,6 +13,18 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed write flush failure snapshot helper
+
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `buildIndexedWriteFlushFailureSnapshot()` and `getIndexedWriteFlushResultFromError()` so source adapters can convert thrown flush errors plus retry metadata into failed snapshots without duplicating fallback pending/inflight/error metadata logic.
+  - Rewired `FileProviderIndexRuntimeService` to use the SDK failure snapshot helper while keeping retry decisions, SQLite busy classification, worker readiness, DB persist, SearchIndex worker, and FTS semantics at the FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-snapshot.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed write flush evidence mapper
 
 - `packages/utils/search/indexing-write-flush-evidence.ts`
