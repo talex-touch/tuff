@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source error health helper
+
+- `packages/utils/search/indexing-source-error-health.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-error-health.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-diagnostics-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `getIndexedSourceErrorMessage()` and `buildIndexedSourceErrorHealth()` so runtimes and official plugin adapters can map thrown health errors into the same `IndexedSourceHealth` error shape without duplicating fallback status/watch/reconcile fields.
+  - Rewired CoreApp `SourceDiagnosticsService` to use the SDK helper while keeping diagnostics logging and aggregation in the runtime boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-error-health.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" -t "converts health failures into source-level error diagnostics"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed source root evidence helper
 
 - `packages/utils/search/indexing-source-root-evidence.ts`

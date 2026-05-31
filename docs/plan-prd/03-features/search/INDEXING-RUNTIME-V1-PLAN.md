@@ -77,6 +77,8 @@ SearchEngineCore
 - `IndexedSourceAdmission`
 - `getIndexedSourceAdmissionIssues()`
 - `isIndexedSourceAdmissionReady()`
+- `getIndexedSourceErrorMessage()`
+- `buildIndexedSourceErrorHealth()`
 - `resolveIndexedSourceTaskEligibility()`
 - `SearchProviderDescriptor`
 - `SearchProviderUserConfig`
@@ -100,6 +102,8 @@ SearchEngineCore
 准入校验会覆盖高隐私 source 不得静默默认启用、Browser Data 必须标记 high privacy 与 browser-data scope、external-fast source 必须声明 external-tool 且不能由 third-party plugin 直接提供、sqlite-index source 必须 clearable、watch source 必须支持 reconcile。`resolveIndexedSourceTaskEligibility()` 进一步把 admission、capability、health 与 permissionState 组合成统一 scan/watch/reconcile 调度资格判断，返回 `{ eligible, reason }`，供 CoreApp runtime 与后续官方插件 source 复用。`resolveIndexedSourceMaintenanceActions()` 会在 diagnostics 层把 scan / reconcile / reset 三类维护动作统一解析为 enabled / blocked reason，Settings、no-result recovery 与未来官方插件设置页应复用该 SDK policy，而不是各自根据按钮文案或 provider 类型判断可操作性。`IndexedSourceTaskRunGate` 是 source/kind 级运行准入 primitive，当前由 CoreApp `IndexingRuntime` 统一持有并注入 scan/reconcile scheduler，同时覆盖 reset，避免同一 source 的 reset 与清索引动作并发重复执行；它仍是内存态 guard，不是 durable queue、retry scheduler 或自动恢复执行器。`resolveIndexedSourceRecoveryRecommendation()` 则把 admission/lifecycle issue、permission/disabled、progress failed/stalled、最近 failed/skipped task 与 health degraded/error 统一映射为只读恢复建议（wait / grant-permission / enable-provider / scan / reconcile / reset / inspect-*），不自动执行维护动作，也不替代 durable job scheduler。App/File/Everything core descriptors 已补 admission metadata，作为 Browser Data / Quicklinks / Obsidian / VSCode source 后续接入模板。
 
 Source contract 已补一层 SDK summary：`getIndexedSourceContractIssues()` / `isIndexedSourceContractReady()` 会把 admission 与 lifecycle issue 合并成 `{ admission, lifecycle, ready }`，供 runtime 注册 warning、Settings diagnostics 与后续插件校验工具复用，避免多个入口重复拼规则。
+
+Source health 失败兜底也进入 SDK：`getIndexedSourceErrorMessage()` / `buildIndexedSourceErrorHealth()` 会把 thrown error 或非 Error 值转换成统一 `IndexedSourceHealth`，默认 status 为 `error`、watch 为 `unavailable`、reconcile 为 `failed`，并允许 source adapter 注入权限、watch/reconcile 与 reason 上下文。CoreApp `SourceDiagnosticsService` 现在复用该 helper，避免 runtime、插件工具和后续官方 source 各自手写 error health 形状。
 
 Watch root routing 也开始有 SDK 边界：`normalizeIndexedSourcePathForMatch()`、`isIndexedSourcePathInsideRoot()`、`resolveIndexedSourceRootSkipReason()` 与 `resolveIndexedSourceWatchRootRoute()` 统一处理 root path 命中、Windows/macOS case-insensitive 匹配、Linux 默认 case-sensitive 匹配，以及 denied/promptable root 到 `root-permission:*` skip reason 的映射。CoreApp `WatchEventRouter` 已改为复用这些 helper，后续官方插件 source 不需要复制路径归一化和 root permission guard。路径型 source 的 watch path policy 也开始下沉：`normalizeIndexedWatchPath()` 与 `getIndexedWatchDepthForPath()` 统一 watch path normalize、case sensitivity 与 macOS/Windows/Linux 默认 watch depth；`resolveIndexedWatchRootSet()`、`isIndexedWatchPathOwned()` 与 `filterIndexedWatchPendingPermissionPaths()` 统一 watch roots 合并去重、root/child ownership 判断与 pending permission root 过滤；FileProvider 只保留平台适配、真实 watcher 注册和权限状态读取。
 
@@ -137,7 +141,7 @@ CoreApp 已新增最小 `IndexingRuntime` 骨架：
 - register/unregister/list indexed sources。
 - 聚合 `IndexedSourceHealth` 与 roots 为统一 diagnostics。
 - 聚合 source evidence，用于解释平台子来源、root 数、itemCount 与失败原因。
-- 将 source health 读取失败转换为 source-level `error`，避免整条 diagnostics 链路失败。
+- 将 source health 读取失败通过 SDK `buildIndexedSourceErrorHealth()` 转换为 source-level `error`，避免整条 diagnostics 链路失败。
 - 按 `sourceId` 或 source roots 路由 watch event。
 - Runtime task model 已拆出 `SourceDiagnosticsService`、`WatchEventRouter`、`ScanScheduler`、`ReconcileScheduler`、`ReconcileEngine`、`IndexStoreAdapter`、`IndexingRootPolicy` 与最小 `IndexedSourceRuntimeTaskJobFactory`，`IndexingRuntime` 只保留 registry 与编排入口。
 - `ScanScheduler` 支持 source-level scan task 与 batch 写入 store adapter，并已新增 batch scan result 统计与 failure isolation，避免单个 source scan 失败拖垮整批扫描；`IndexingRuntime` 已为 single/batch scan 成功、失败与 skipped source 写入 `lastScan.jobId/queuedAt` diagnostics；`WatchEventRouter` 将 watch delta 写入 store adapter，并已新增 route result 统计与 failure isolation，避免单个 source watch handler 或 store delta 写入失败拖垮整次 watcher route，同时 `lastWatch` 也会为 applied delta、handler/store failure 与 skipped source 写入 `jobId/queuedAt`；scan/watch/reconcile/reset 四类维护任务因此复用同一个 `IndexedSourceRuntimeTaskJobFactory` runtime task identity，为后续 durable job history / retry / debounce 做边界；`IndexingRuntime` 持有共享 SDK `IndexedSourceTaskRunGate`，并注入 `ScanScheduler` 与 `ReconcileScheduler`，reset 入口也复用同一个 gate：同 source reset 运行中会记录 `reset-already-running` result，不再重复清 shared SearchIndex 或 source-local reset；`IndexingRuntime.clear()` 会清理该内存态 gate，避免 runtime teardown 后残留 running state；当前仍保持 running 时拒绝的既有行为；`ReconcileScheduler` 已作为 `IndexingRuntime` 与 `ReconcileEngine` 之间的最小任务入口，负责 job id、queuedAt、reason/rootCount 记录；`ReconcileEngine` 支持 source-level reconcile 入口与 unsupported 结果，并已新增 batch reconcile result 统计与 failure isolation。
