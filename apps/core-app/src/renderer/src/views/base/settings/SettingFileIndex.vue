@@ -10,6 +10,8 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type {
   IndexedSourceDiagnostics,
+  IndexedSourceMaintenanceAction,
+  IndexedSourceMaintenanceActionState,
   SearchProviderRegistryIssue,
   SearchProviderRuntimeConfig,
   SearchProviderUserConfig
@@ -53,6 +55,7 @@ import {
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
+  resolveIndexingSourceMaintenanceActions,
   resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
@@ -94,8 +97,8 @@ const indexStats = ref<FileIndexStats | null>(null)
 const sourceDiagnostics = ref<CoreBoxIndexingDiagnosticsResponse | null>(null)
 const sourceDiagnosticsLoading = ref(false)
 const sourceDiagnosticsCheckedAt = ref<Date | null>(null)
-const sourceMaintenanceAction = ref<Record<string, 'scan' | 'reconcile' | 'reset' | undefined>>({})
-const sourceMaintenanceActions = ['scan', 'reconcile', 'reset'] as const
+const sourceMaintenanceAction = ref<Record<string, IndexedSourceMaintenanceAction | undefined>>({})
+const sourceMaintenanceActions: IndexedSourceMaintenanceAction[] = ['scan', 'reconcile', 'reset']
 const searchProviderConfigs = ref<SearchProviderRuntimeConfig[]>([])
 const searchProviderSourceLinks = ref<SearchProviderSourceLink[]>([])
 const searchProviderIssues = ref<SearchProviderRegistryIssue[]>([])
@@ -343,7 +346,7 @@ function isSourceMaintenanceRunning(sourceId: string): boolean {
 
 async function runSourceMaintenance(
   source: IndexedSourceDiagnostics,
-  action: 'scan' | 'reconcile' | 'reset'
+  action: IndexedSourceMaintenanceAction
 ) {
   const sourceId = source.descriptor.id
   if (!sourceId || isSourceMaintenanceRunning(sourceId)) return
@@ -719,10 +722,33 @@ const sourceDiagnosticsSummaryText = computed(() => {
   })
 })
 
-function getSourceMaintenanceButtonIcon(action: 'scan' | 'reconcile' | 'reset'): string {
+function getSourceMaintenanceButtonIcon(action: IndexedSourceMaintenanceAction): string {
   if (action === 'scan') return 'i-carbon-search'
   if (action === 'reconcile') return 'i-carbon-renew'
   return 'i-carbon-reset'
+}
+
+function resolveSourceMaintenanceActions(
+  source: IndexedSourceDiagnostics
+): IndexedSourceMaintenanceActionState[] {
+  const states = resolveIndexingSourceMaintenanceActions(source)
+  return sourceMaintenanceActions.map(
+    (action) =>
+      states.find((state) => state.action === action) ?? {
+        action,
+        enabled: false,
+        reason: 'diagnostics:unavailable'
+      }
+  )
+}
+
+function getSourceMaintenanceButtonTitle(action: IndexedSourceMaintenanceActionState): string {
+  const label = t(`settings.settingFileIndex.sourceAction.${action.action}`)
+  if (action.enabled) return label
+  return t('settings.settingFileIndex.sourceActionUnavailable', {
+    action: label,
+    reason: action.reason ?? 'unknown'
+  })
 }
 
 function formatSourceProgress(source: IndexedSourceDiagnostics): string | null {
@@ -1313,22 +1339,22 @@ async function triggerRebuild() {
         </div>
         <div class="source-diagnostics-maintenance">
           <TxButton
-            v-for="action in sourceMaintenanceActions"
-            :key="action"
+            v-for="action in resolveSourceMaintenanceActions(source)"
+            :key="action.action"
             variant="ghost"
             size="sm"
             :border="false"
             class="source-maintenance-button"
-            :disabled="isSourceMaintenanceRunning(source.descriptor.id)"
-            :title="t(`settings.settingFileIndex.sourceAction.${action}`)"
-            @click="runSourceMaintenance(source, action)"
+            :disabled="isSourceMaintenanceRunning(source.descriptor.id) || !action.enabled"
+            :title="getSourceMaintenanceButtonTitle(action)"
+            @click="runSourceMaintenance(source, action.action)"
           >
             <span
-              v-if="sourceMaintenanceAction[source.descriptor.id] === action"
+              v-if="sourceMaintenanceAction[source.descriptor.id] === action.action"
               class="i-ri-loader-4-line text-12px animate-spin"
             />
-            <span v-else class="text-12px" :class="getSourceMaintenanceButtonIcon(action)" />
-            <span>{{ t(`settings.settingFileIndex.sourceAction.${action}`) }}</span>
+            <span v-else class="text-12px" :class="getSourceMaintenanceButtonIcon(action.action)" />
+            <span>{{ t(`settings.settingFileIndex.sourceAction.${action.action}`) }}</span>
           </TxButton>
         </div>
       </div>

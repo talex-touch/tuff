@@ -7,6 +7,7 @@ import {
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
+  resolveIndexingSourceMaintenanceActions,
   resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
@@ -31,8 +32,16 @@ function buildSource(overrides: Partial<IndexedSourceDiagnostics> = {}): Indexed
         scan: true,
         watch: true,
         reconcile: true,
+        reset: true,
         clear: true,
         open: true
+      },
+      admission: {
+        owner: 'core',
+        permissionScopes: ['file-system'],
+        defaultState: 'enabled',
+        clearable: true,
+        rebuildable: true
       }
     },
     health: {
@@ -526,6 +535,24 @@ describe('indexing source diagnostics display helpers', () => {
           issue: 'browser-data-requires-high-privacy'
         }
       }
+    ])
+  })
+
+  it('resolves maintenance actions through the shared SDK policy', () => {
+    expect(
+      resolveIndexingSourceMaintenanceActions(
+        buildSource({
+          health: {
+            ...buildSource().health,
+            status: 'permission-required',
+            permissionState: 'denied'
+          }
+        })
+      )
+    ).toEqual([
+      { action: 'scan', enabled: false, reason: 'health:permission-required' },
+      { action: 'reconcile', enabled: false, reason: 'health:permission-required' },
+      { action: 'reset', enabled: true }
     ])
   })
 })

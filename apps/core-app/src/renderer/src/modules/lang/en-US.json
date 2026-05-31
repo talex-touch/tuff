@@ -2347,6 +2347,7 @@
         "reconcile": "Repair",
         "reset": "Reset"
       },
+      "sourceActionUnavailable": "{action} unavailable: {reason}",
       "sourceActionScanSuccess": "Scan completed: {records} records",
       "sourceActionReconcileSuccess": "Repair completed: {changed} changed, {deleted} deleted",
       "sourceActionResetSuccess": "Source runtime state reset",

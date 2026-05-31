@@ -5,6 +5,7 @@ export {
   resolveIndexingSourceDetailKey,
   resolveIndexingSourceEvidenceChips,
   resolveIndexingSourceLifecycleIssueChips,
+  resolveIndexingSourceMaintenanceActions,
   resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,

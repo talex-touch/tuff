@@ -688,6 +688,39 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('skips single source scans when runtime eligibility blocks the source', async () => {
+    const scan = vi.fn(async function* () {})
+    runtime.registerSource(
+      buildSource({
+        health: {
+          status: 'disabled',
+          permissionState: 'promptable',
+          itemCount: 0,
+          watchState: 'pending-permission',
+          reconcileState: 'idle'
+        },
+        scan
+      })
+    )
+
+    const result = await runtime.scanSource('test-source', IndexedSourceScanReasons.ManualRebuild)
+
+    expect(scan).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      sourceId: 'test-source',
+      batches: 0,
+      records: 0
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0]).toMatchObject({
+      lastScan: {
+        batches: 0,
+        records: 0,
+        error: 'skipped:health:disabled'
+      }
+    })
+  })
+
   it('isolates failing source scans in batch scan results', async () => {
     const batch: IndexedSourceRecordBatch = {
       sourceId: 'healthy',
@@ -924,6 +957,54 @@ describe('indexingRuntime', () => {
     expect(result.changed).toBe(2)
     expect(result.appliedDeltas).toBe(1)
     expect(store.applyDelta).toHaveBeenCalledWith(delta)
+  })
+
+  it('skips single source reconcile when runtime eligibility blocks the source', async () => {
+    const reconcile = vi.fn(async () => ({
+      sourceId: 'test-source',
+      added: 0,
+      changed: 1,
+      deleted: 0,
+      skipped: 0,
+      errors: 0,
+      startedAt: 1700000000000,
+      completedAt: 1700000000100
+    }))
+    runtime.registerSource(
+      buildSource({
+        health: {
+          status: 'permission-required',
+          permissionState: 'denied',
+          itemCount: 0,
+          watchState: 'pending-permission',
+          reconcileState: 'idle'
+        },
+        reconcile
+      })
+    )
+
+    const result = await runtime.reconcileSource('test-source', {
+      reason: IndexedSourceReconcileReasons.ManualRepair
+    })
+
+    expect(reconcile).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      sourceId: 'test-source',
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 1,
+      errors: 0,
+      reason: 'health:permission-required'
+    })
+    const diagnostics = await runtime.getDiagnostics()
+    expect(diagnostics.sources[0]).toMatchObject({
+      lastReconcile: {
+        skipped: 1,
+        errors: 0,
+        error: 'skipped:health:permission-required'
+      }
+    })
   })
 
   it('keeps reconcile delta store failures isolated in diagnostics', async () => {
