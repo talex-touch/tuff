@@ -6,7 +6,7 @@ import {
   IndexedSourceScanReasons,
   isIndexedSourceAdmissionReady
 } from '@talex-touch/utils/search'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildBrowserBookmarksIndexedSource,
   buildBrowserBookmarksIndexedSourceDescriptor
@@ -179,6 +179,45 @@ describe('browserBookmarksIndexedSource', () => {
       watchState: 'active',
       reconcileState: 'idle'
     })
+  })
+
+  it('reuses one scanner snapshot across diagnostics reads', async () => {
+    const readFileSync = vi.fn(() =>
+      JSON.stringify({
+        roots: {
+          bookmark_bar: {
+            type: 'folder',
+            name: 'Bookmarks Bar',
+            children: [
+              {
+                type: 'url',
+                name: 'Docs',
+                url: 'https://example.com/docs'
+              }
+            ]
+          }
+        }
+      })
+    )
+    const source = buildBrowserBookmarksIndexedSource({
+      enabled: true,
+      scannerOptions: {
+        platform: 'linux',
+        fs: {
+          existsSync: (filePath) =>
+            filePath === '/browser' || filePath === '/browser/Default/Bookmarks',
+          readdirSync: () => [{ name: 'Default', isDirectory: () => true }],
+          readFileSync
+        },
+        definitions: [{ id: 'chrome', name: 'Chrome', root: '/browser' }]
+      }
+    })
+
+    await source.getHealth()
+    await source.getRoots()
+    await source.getEvidence?.()
+
+    expect(readFileSync).toHaveBeenCalledTimes(1)
   })
 
   it('re-evaluates runtime enablement before diagnostics and scans', async () => {
