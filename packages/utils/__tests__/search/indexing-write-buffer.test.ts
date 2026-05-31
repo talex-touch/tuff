@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IndexedWriteBufferService } from '../../search'
+import { IndexedEntryKeyedWriteBufferService, IndexedWriteBufferService } from '../../search'
 
 describe('indexing-write-buffer-service', () => {
   it('tracks pending and inflight entries across enqueue, take, commit, and rollback', () => {
@@ -40,6 +40,28 @@ describe('indexing-write-buffer-service', () => {
     buffer.rollback(batch.keys)
 
     expect(pending.get(1)).toBe('new')
+    expect(buffer.pendingSize).toBe(1)
+    expect(buffer.inflightSize).toBe(0)
+  })
+
+  it('supports entry-keyed enqueue for worker payload buffers', () => {
+    const pending = new Map<number, { id: number; value: string }>()
+    const inflight = new Map<number, { id: number; value: string }>()
+    const buffer = new IndexedEntryKeyedWriteBufferService(pending, inflight, (entry) => entry.id)
+
+    expect(buffer.enqueue({ id: 1, value: 'one' })).toBe(1)
+    expect(buffer.enqueue({ id: 1, value: 'newer-one' })).toBe(1)
+    expect(buffer.enqueue({ id: 2, value: 'two' })).toBe(2)
+
+    const batch = buffer.take(2)
+    expect(batch.keys).toEqual([1, 2])
+    expect(batch.entries.map((entry) => entry.value)).toEqual(['newer-one', 'two'])
+
+    buffer.rollback([1])
+    expect(pending.get(1)?.value).toBe('newer-one')
+    expect(inflight.has(2)).toBe(true)
+
+    buffer.commit([2])
     expect(buffer.pendingSize).toBe(1)
     expect(buffer.inflightSize).toBe(0)
   })
