@@ -19,6 +19,11 @@ import { getMainConfig, saveMainConfig } from '../../../../storage'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
 import type { FileIndexSettings } from '../types'
+import {
+  filterIndexedWatchPendingPermissionPaths,
+  isIndexedWatchPathOwned,
+  resolveIndexedWatchRootSet
+} from '@talex-touch/utils/search'
 
 const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanEnabled: true,
@@ -99,8 +104,12 @@ export class FileProviderWatchService {
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
     this.logError = deps.logError
-    this.watchPaths = [...deps.baseWatchPaths]
-    this.normalizedWatchPaths = deps.baseWatchPaths.map((p) => deps.normalizePath(p))
+    const rootSet = resolveIndexedWatchRootSet({
+      basePaths: deps.baseWatchPaths,
+      normalizePath: deps.normalizePath
+    })
+    this.watchPaths = rootSet.paths
+    this.normalizedWatchPaths = rootSet.normalizedPaths
   }
 
   getCurrentSettings(): FileIndexSettings {
@@ -120,14 +129,20 @@ export class FileProviderWatchService {
       typeof FileSystemWatcher.getPendingPaths === 'function'
         ? FileSystemWatcher.getPendingPaths()
         : []
-    const normalizedWatchSet = new Set(this.normalizedWatchPaths)
-    return pendingPaths.filter((pendingPath) =>
-      normalizedWatchSet.has(this.normalizePath(pendingPath))
-    )
+    return filterIndexedWatchPendingPermissionPaths({
+      pendingPaths,
+      normalizedWatchPaths: this.normalizedWatchPaths,
+      normalizePath: this.normalizePath
+    })
   }
 
   ownsWatchPath(rawPath: string): boolean {
-    return this.normalizedWatchPaths.includes(this.normalizePath(rawPath))
+    return isIndexedWatchPathOwned({
+      rawPath,
+      normalizedWatchPaths: this.normalizedWatchPaths,
+      normalizePath: this.normalizePath,
+      pathSeparator: path.sep
+    })
   }
 
   isWatchPathRegistered(): boolean {
@@ -199,19 +214,13 @@ export class FileProviderWatchService {
   }
 
   applyWatchPaths(extraPaths: string[]): void {
-    const next: string[] = []
-    const seen = new Set<string>()
-
-    for (const candidate of [...this.baseWatchPaths, ...extraPaths]) {
-      if (!candidate) continue
-      const normalized = this.normalizePath(candidate)
-      if (seen.has(normalized)) continue
-      seen.add(normalized)
-      next.push(candidate)
-    }
-
-    this.watchPaths = next
-    this.normalizedWatchPaths = next.map((p) => this.normalizePath(p))
+    const rootSet = resolveIndexedWatchRootSet({
+      basePaths: this.baseWatchPaths,
+      extraPaths,
+      normalizePath: this.normalizePath
+    })
+    this.watchPaths = rootSet.paths
+    this.normalizedWatchPaths = rootSet.normalizedPaths
   }
 
   loadFileIndexSettings(): void {
