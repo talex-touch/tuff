@@ -14,9 +14,10 @@ import type {
   IndexedSourceScanRequest,
   IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
-import type { BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
+import type { BrowserBookmarkItem, BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
 import {
   createBrowserBookmarksIndexedSourceDescriptor,
+  IndexedWriteRuntimeEmitterService,
   IndexedSourceProfileDiagnosticsService,
   IndexedSourceReconcileReasons,
   IndexedSourceSnapshotCacheService
@@ -29,6 +30,14 @@ import {
 export const BROWSER_BOOKMARKS_INDEXED_SOURCE_ID = 'browser-bookmarks'
 
 const browserProfileDiagnosticsService = new IndexedSourceProfileDiagnosticsService()
+
+function createBrowserBookmarksRuntimeEmitter(sourceId: string) {
+  return new IndexedWriteRuntimeEmitterService<BrowserBookmarkItem>({
+    sourceId,
+    mapRecord: (bookmark) => mapBrowserBookmarkToIndexedSourceRecord(sourceId, bookmark),
+    getPath: (bookmark) => bookmark.url
+  })
+}
 
 export interface BrowserBookmarksIndexedSourceOptions {
   enabled?: boolean
@@ -56,9 +65,7 @@ function readBrowserBookmarksSnapshot(
   evidence: IndexedSourceEvidence[]
 } {
   const result = scanBrowserBookmarks(scannerOptions)
-  const records = result.items.map((item) =>
-    mapBrowserBookmarkToIndexedSourceRecord(sourceId, item)
-  )
+  const runtimeEmitter = createBrowserBookmarksRuntimeEmitter(sourceId)
   const itemCountsByBrowserId = new Map<string, number>()
   for (const item of result.items) {
     itemCountsByBrowserId.set(item.browserId, (itemCountsByBrowserId.get(item.browserId) ?? 0) + 1)
@@ -100,11 +107,7 @@ function readBrowserBookmarksSnapshot(
 
   return {
     result,
-    batch: {
-      sourceId,
-      records,
-      done: true
-    },
+    batch: runtimeEmitter.buildBatch(result.items, { done: true }),
     roots,
     evidence
   }
@@ -203,13 +206,14 @@ function buildBrowserBookmarksDeltas(
   scannerOptions: BrowserBookmarkScanOptions | undefined,
   reason: string
 ): IndexedSourceDelta[] {
-  return readBrowserBookmarksSnapshot(sourceId, scannerOptions).batch.records.map((record) => ({
-    sourceId,
-    action: 'change',
-    record,
-    path: record.path ?? record.uri,
-    reason
-  }))
+  const snapshot = readBrowserBookmarksSnapshot(sourceId, scannerOptions)
+  const runtimeEmitter = createBrowserBookmarksRuntimeEmitter(sourceId)
+  return snapshot.result.items.map((item) =>
+    runtimeEmitter.buildDelta(item, {
+      action: 'change',
+      reason
+    })
+  )
 }
 
 function buildUnsupportedReconcileResult(sourceId: string): IndexedSourceReconcileResult {
@@ -237,13 +241,14 @@ function buildBrowserBookmarksReconcileResult(
   const errors = snapshot.result.diagnostics.filter(
     (diagnostic) => diagnostic.status === 'read-failed'
   ).length
-  const deltas = snapshot.batch.records.map((record) => ({
-    sourceId,
-    action: 'change' as const,
-    record,
-    path: record.path ?? record.uri,
-    reason: request.reason ?? IndexedSourceReconcileReasons.ExternalRefresh
-  }))
+  const reason = request.reason ?? IndexedSourceReconcileReasons.ExternalRefresh
+  const runtimeEmitter = createBrowserBookmarksRuntimeEmitter(sourceId)
+  const deltas = snapshot.result.items.map((item) =>
+    runtimeEmitter.buildDelta(item, {
+      action: 'change',
+      reason
+    })
+  )
 
   return {
     sourceId,
@@ -255,7 +260,7 @@ function buildBrowserBookmarksReconcileResult(
     deltas,
     startedAt,
     completedAt: Date.now(),
-    reason: request.reason ?? IndexedSourceReconcileReasons.ExternalRefresh
+    reason
   }
 }
 
