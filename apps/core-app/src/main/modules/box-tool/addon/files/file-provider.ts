@@ -712,6 +712,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       logDebug: (message, meta) => this.logDebug(message, meta)
     })
     this.fullScanInsertService = new FileProviderFullScanInsertService({
+      sourceId: this.id,
       getBatchSize: () => this.upsertBatchScheduler.currentSize,
       recordBatchDuration: (durationMs) => this.upsertBatchScheduler.recordDuration(durationMs),
       waitForIdle: async () => {
@@ -724,8 +725,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           indexReason: 'full-scan'
         })
       },
-      emitRecordBatch: (records, runOptions) =>
-        this.emitIndexedSourceRecordBatch(records, runOptions),
+      emitRecordBatch: (batch, runOptions) =>
+        this.emitIndexedSourceRecordBatchFromBatch(batch, runOptions),
+      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
       emitProgress: (current, total) => this.emitIndexingProgress('indexing', current, total),
       sleep: async (durationMs) => {
         await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
@@ -1085,20 +1087,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         isDir: file.isDir ?? false
       }
     }
-  }
-
-  private async emitIndexedSourceRecordBatch(
-    files: Array<typeof filesSchema.$inferSelect>,
-    options?: FileIndexRunOptions
-  ): Promise<void> {
-    if (!options?.onRecordBatch || files.length === 0) {
-      return
-    }
-
-    await options.onRecordBatch({
-      sourceId: this.id,
-      records: files.map((file) => this.mapFileToIndexedSourceRecord(file))
-    })
   }
 
   private async emitIndexedSourceRecordBatchFromBatch(
