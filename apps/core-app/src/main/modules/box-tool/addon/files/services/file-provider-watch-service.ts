@@ -22,6 +22,7 @@ import type { FileIndexSettings } from '../types'
 import {
   filterIndexedWatchPendingPermissionPaths,
   isIndexedWatchPathOwned,
+  resolveIndexedScanEligibility,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 
@@ -31,19 +32,6 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanIdleThresholdMs: 60 * 60 * 1000,
   autoScanCheckIntervalMs: 5 * 60 * 1000,
   extraPaths: []
-}
-
-function toTimestamp(value: unknown): number | null {
-  const timestamp =
-    value instanceof Date
-      ? value.getTime()
-      : typeof value === 'number'
-        ? value
-        : typeof value === 'string'
-          ? Date.parse(value)
-          : null
-
-  return timestamp !== null && Number.isFinite(timestamp) ? timestamp : null
 }
 
 export interface FileProviderWatchServiceDeps {
@@ -308,32 +296,11 @@ export class FileProviderWatchService {
 
     const db = dbUtils.getDb()
     const completedScans = await db.select().from(scanProgress)
-    const completedMap = new Map<string, number>()
-    let lastScannedAt: number | null = null
-
-    for (const scan of completedScans) {
-      const timestamp = toTimestamp(scan?.lastScanned)
-      if (timestamp !== null) {
-        completedMap.set(scan.path, timestamp)
-        if (lastScannedAt === null || timestamp > lastScannedAt) {
-          lastScannedAt = timestamp
-        }
-      }
-    }
-
-    const newPaths = this.watchPaths.filter((watchPath) => !completedMap.has(watchPath))
-    const intervalMs = this.fileIndexSettings.autoScanIntervalMs
-    const now = Date.now()
-    const stalePaths =
-      intervalMs <= 0
-        ? Array.from(completedMap.keys()).filter((watchPath) => this.watchPaths.includes(watchPath))
-        : this.watchPaths.filter((watchPath) => {
-            const last = completedMap.get(watchPath)
-            if (!last) return false
-            return now - last >= intervalMs
-          })
-
-    return { newPaths, stalePaths, lastScannedAt }
+    return resolveIndexedScanEligibility({
+      watchPaths: this.watchPaths,
+      completedScans,
+      intervalMs: this.fileIndexSettings.autoScanIntervalMs
+    })
   }
 
   async shouldRunAutoIndexing(input: {
