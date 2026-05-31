@@ -79,6 +79,8 @@ SearchEngineCore
 - `isIndexedSourceAdmissionReady()`
 - `getIndexedSourceErrorMessage()`
 - `buildIndexedSourceErrorHealth()`
+- `summarizeIndexedSourceHealth()`
+- `buildIndexedSourceDiagnosticsSummary()`
 - `resolveIndexedSourceTaskEligibility()`
 - `SearchProviderDescriptor`
 - `SearchProviderUserConfig`
@@ -104,6 +106,8 @@ SearchEngineCore
 Source contract 已补一层 SDK summary：`getIndexedSourceContractIssues()` / `isIndexedSourceContractReady()` 会把 admission 与 lifecycle issue 合并成 `{ admission, lifecycle, ready }`，供 runtime 注册 warning、Settings diagnostics 与后续插件校验工具复用，避免多个入口重复拼规则。
 
 Source health 失败兜底也进入 SDK：`getIndexedSourceErrorMessage()` / `buildIndexedSourceErrorHealth()` 会把 thrown error 或非 Error 值转换成统一 `IndexedSourceHealth`，默认 status 为 `error`、watch 为 `unavailable`、reconcile 为 `failed`，并允许 source adapter 注入权限、watch/reconcile 与 reason 上下文。CoreApp `SourceDiagnosticsService` 现在复用该 helper，避免 runtime、插件工具和后续官方 source 各自手写 error health 形状。
+
+Diagnostics summary 聚合也进入 SDK：`summarizeIndexedSourceHealth()` / `buildIndexedSourceDiagnosticsSummary()` 会统一计算 `total`、`byStatus`、`ready`、`degraded` 与 `unavailable`，其中 unavailable 固定包含 disabled、unsupported、permission-required 与 error。CoreApp `SourceDiagnosticsService` 现在只负责读取 source diagnostics 和记录失败日志，summary 口径交给 SDK，后续插件 runtime 或官方 source 工具应复用同一聚合规则。
 
 Watch root routing 也开始有 SDK 边界：`normalizeIndexedSourcePathForMatch()`、`isIndexedSourcePathInsideRoot()`、`resolveIndexedSourceRootSkipReason()` 与 `resolveIndexedSourceWatchRootRoute()` 统一处理 root path 命中、Windows/macOS case-insensitive 匹配、Linux 默认 case-sensitive 匹配，以及 denied/promptable root 到 `root-permission:*` skip reason 的映射。CoreApp `WatchEventRouter` 已改为复用这些 helper，后续官方插件 source 不需要复制路径归一化和 root permission guard。路径型 source 的 watch path policy 也开始下沉：`normalizeIndexedWatchPath()` 与 `getIndexedWatchDepthForPath()` 统一 watch path normalize、case sensitivity 与 macOS/Windows/Linux 默认 watch depth；`resolveIndexedWatchRootSet()`、`isIndexedWatchPathOwned()` 与 `filterIndexedWatchPendingPermissionPaths()` 统一 watch roots 合并去重、root/child ownership 判断与 pending permission root 过滤；FileProvider 只保留平台适配、真实 watcher 注册和权限状态读取。
 
@@ -140,6 +144,7 @@ CoreApp 已新增最小 `IndexingRuntime` 骨架：
 
 - register/unregister/list indexed sources。
 - 聚合 `IndexedSourceHealth` 与 roots 为统一 diagnostics。
+- 通过 SDK `buildIndexedSourceDiagnosticsSummary()` 聚合 source health summary。
 - 聚合 source evidence，用于解释平台子来源、root 数、itemCount 与失败原因。
 - 将 source health 读取失败通过 SDK `buildIndexedSourceErrorHealth()` 转换为 source-level `error`，避免整条 diagnostics 链路失败。
 - 按 `sourceId` 或 source roots 路由 watch event。
