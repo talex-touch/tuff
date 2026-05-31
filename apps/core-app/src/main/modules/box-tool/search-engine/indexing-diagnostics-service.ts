@@ -9,7 +9,10 @@ import type {
   IndexedSourceRoot
 } from '@talex-touch/utils/search'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { getIndexedSourceContractIssues } from '@talex-touch/utils/search'
+import {
+  buildIndexedSourceErrorHealth,
+  getIndexedSourceContractIssues
+} from '@talex-touch/utils/search'
 
 const diagnosticsLog = getLogger('indexing-diagnostics')
 
@@ -25,21 +28,6 @@ export interface IndexingRuntimeDiagnostics extends IndexedSourceDiagnosticsSnap
   sources: IndexingRuntimeSourceDiagnostics[]
 }
 
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error ?? 'unknown')
-}
-
-function buildErrorHealth(error: unknown): IndexedSourceHealth {
-  return {
-    status: 'error',
-    permissionState: 'not-required',
-    itemCount: 0,
-    watchState: 'unavailable',
-    reconcileState: 'failed',
-    lastError: toErrorMessage(error)
-  }
-}
-
 export class SourceDiagnosticsService {
   async getDiagnostics(sources: IndexedSource[]): Promise<IndexingRuntimeDiagnostics> {
     const diagnostics = await Promise.all(
@@ -49,7 +37,7 @@ export class SourceDiagnosticsService {
             diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' health failed`, {
               error
             })
-            return buildErrorHealth(error)
+            return buildIndexedSourceErrorHealth(error)
           }),
           source.getRoots().catch((error) => {
             diagnosticsLog.warn(`Indexed source '${source.descriptor.id}' roots failed`, {
