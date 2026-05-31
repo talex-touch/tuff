@@ -18,7 +18,8 @@ import type { BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
 import {
   createBrowserBookmarksIndexedSourceDescriptor,
   IndexedSourceProfileDiagnosticsService,
-  IndexedSourceReconcileReasons
+  IndexedSourceReconcileReasons,
+  IndexedSourceSnapshotCacheService
 } from '@talex-touch/utils/search'
 import {
   mapBrowserBookmarkToIndexedSourceRecord,
@@ -162,27 +163,24 @@ function buildPendingMigrationEvidence(): IndexedSourceEvidence {
 
 function buildBrowserBookmarksEvidence(
   enabled: boolean,
-  scannerOptions?: BrowserBookmarkScanOptions
+  snapshot?: ReturnType<typeof readBrowserBookmarksSnapshot>
 ): IndexedSourceEvidence[] {
   if (!enabled) {
     return [buildPendingMigrationEvidence()]
   }
 
-  return [
-    ...readBrowserBookmarksSnapshot(BROWSER_BOOKMARKS_INDEXED_SOURCE_ID, scannerOptions).evidence,
-    buildPendingMigrationEvidence()
-  ]
+  return [...(snapshot?.evidence ?? []), buildPendingMigrationEvidence()]
 }
 
 function buildBrowserBookmarksRoots(
   enabled: boolean,
-  scannerOptions?: BrowserBookmarkScanOptions
+  snapshot?: ReturnType<typeof readBrowserBookmarksSnapshot>
 ): IndexedSourceRoot[] {
   if (!enabled) {
     return []
   }
 
-  return readBrowserBookmarksSnapshot(BROWSER_BOOKMARKS_INDEXED_SOURCE_ID, scannerOptions).roots
+  return snapshot?.roots ?? []
 }
 
 async function* emptyScan(
@@ -280,26 +278,33 @@ export function buildBrowserBookmarksIndexedSource(
   options: BrowserBookmarksIndexedSourceOptions = {}
 ): IndexedSource {
   const descriptor = buildBrowserBookmarksIndexedSourceDescriptor()
+  const snapshotCache = new IndexedSourceSnapshotCacheService<
+    ReturnType<typeof readBrowserBookmarksSnapshot>
+  >()
   const resolveEnabled = async () =>
     options.isEnabled ? Boolean(await options.isEnabled()) : options.enabled === true
+  const getCachedSnapshot = async () =>
+    await snapshotCache.getSnapshot(() =>
+      readBrowserBookmarksSnapshot(descriptor.id, options.scannerOptions)
+    )
 
   return {
     descriptor,
     getHealth: async () => {
       const enabled = await resolveEnabled()
-      return buildBrowserBookmarksHealth(
-        enabled,
-        enabled ? readBrowserBookmarksSnapshot(descriptor.id, options.scannerOptions) : undefined
-      )
+      return buildBrowserBookmarksHealth(enabled, enabled ? await getCachedSnapshot() : undefined)
     },
     getRoots: async (): Promise<IndexedSourceRoot[]> => {
       const enabled = await resolveEnabled()
-      return buildBrowserBookmarksRoots(enabled, options.scannerOptions)
+      return buildBrowserBookmarksRoots(enabled, enabled ? await getCachedSnapshot() : undefined)
     },
-    getEvidence: async () =>
-      buildBrowserBookmarksEvidence(await resolveEnabled(), options.scannerOptions),
+    getEvidence: async () => {
+      const enabled = await resolveEnabled()
+      return buildBrowserBookmarksEvidence(enabled, enabled ? await getCachedSnapshot() : undefined)
+    },
     scan: async function* browserBookmarksScan(request: IndexedSourceScanRequest) {
       if (await resolveEnabled()) {
+        snapshotCache.clear()
         yield* scanBrowserBookmarksSource(request, options.scannerOptions)
       } else {
         yield* emptyScan(request)
@@ -307,20 +312,30 @@ export function buildBrowserBookmarksIndexedSource(
     },
     reconcile: async (
       request: IndexedSourceReconcileRequest
-    ): Promise<IndexedSourceReconcileResult> =>
-      (await resolveEnabled())
-        ? buildBrowserBookmarksReconcileResult(descriptor.id, options.scannerOptions, request)
-        : buildUnsupportedReconcileResult(descriptor.id),
-    handleWatchEvent: async (_event: IndexedSourceWatchEvent): Promise<IndexedSourceDelta[]> =>
-      (await resolveEnabled())
-        ? buildBrowserBookmarksDeltas(
-            descriptor.id,
-            options.scannerOptions,
-            'browser-bookmarks-watch-refresh'
-          )
-        : [],
-    resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> =>
-      buildBrowserBookmarksResetResult(request),
+    ): Promise<IndexedSourceReconcileResult> => {
+      if (!(await resolveEnabled())) {
+        return buildUnsupportedReconcileResult(descriptor.id)
+      }
+
+      snapshotCache.clear()
+      return buildBrowserBookmarksReconcileResult(descriptor.id, options.scannerOptions, request)
+    },
+    handleWatchEvent: async (_event: IndexedSourceWatchEvent): Promise<IndexedSourceDelta[]> => {
+      if (!(await resolveEnabled())) {
+        return []
+      }
+
+      snapshotCache.clear()
+      return buildBrowserBookmarksDeltas(
+        descriptor.id,
+        options.scannerOptions,
+        'browser-bookmarks-watch-refresh'
+      )
+    },
+    resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
+      snapshotCache.clear()
+      return buildBrowserBookmarksResetResult(request)
+    },
     clearIndex: async () => {
       throw new Error('browser-bookmarks-clear-requires-runtime-reset')
     }
