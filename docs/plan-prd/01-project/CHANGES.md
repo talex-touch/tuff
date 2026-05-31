@@ -13,6 +13,22 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed watch root policy
+
+- `packages/utils/search/indexing-watch-root-policy.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-watch-root-policy.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `resolveIndexedWatchRootSet()`, `isIndexedWatchPathOwned()`, and `filterIndexedWatchPendingPermissionPaths()` for path-based indexed source root de-duplication, root/child ownership checks, shared-prefix false-positive protection, and pending-permission root filtering.
+  - Rewired `FileProviderWatchService` and FileProvider root checks to delegate source-agnostic root ownership to the SDK while keeping real watcher registration, settings persistence, and `FileSystemWatcher` pending path reads inside CoreApp.
+  - Fixed File watch ownership to accept child paths under a watched root instead of only exact root paths.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-watch-root-policy.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### ref(search): lift indexed watch path policy
 
 - `packages/utils/search/indexing-watch-path-policy.ts`
