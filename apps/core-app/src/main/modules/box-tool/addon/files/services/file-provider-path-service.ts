@@ -1,21 +1,21 @@
-import path from 'node:path'
 import process from 'node:process'
+import {
+  getIndexedWatchDepthForPath,
+  normalizeIndexedWatchPath,
+  type IndexedWatchPathPlatform
+} from '@talex-touch/utils/search'
 
 export function getWatchDepthForPath(watchPath: string): number {
-  const lower = watchPath.toLowerCase()
-  if (process.platform === 'darwin') {
-    if (lower.endsWith('/applications') || lower.endsWith('/downloads')) {
-      return 1
-    }
-    return 2
-  }
-  if (process.platform === 'win32') {
-    return 4
-  }
-  return 3
+  return getIndexedWatchDepthForPath({
+    platform: resolveIndexedWatchPathPlatform(process.platform),
+    watchPath
+  })
 }
 
 export function normalizeWatchPath(rawPath: string, isCaseInsensitiveFs: boolean): string {
-  const normalized = path.normalize(rawPath)
-  return isCaseInsensitiveFs ? normalized.toLowerCase() : normalized
+  return normalizeIndexedWatchPath(rawPath, isCaseInsensitiveFs)
+}
+
+function resolveIndexedWatchPathPlatform(platform: NodeJS.Platform): IndexedWatchPathPlatform {
+  return platform === 'darwin' || platform === 'win32' || platform === 'linux' ? platform : 'linux'
 }
