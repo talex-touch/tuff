@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source diagnostics summary helper
+
+- `packages/utils/search/indexing-source-diagnostics-summary.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-diagnostics-summary.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-diagnostics-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `summarizeIndexedSourceHealth()` and `buildIndexedSourceDiagnosticsSummary()` so runtimes and official plugin tooling share the same `total` / `byStatus` / `ready` / `degraded` / `unavailable` diagnostics summary rules.
+  - Rewired CoreApp `SourceDiagnosticsService` to delegate health summary aggregation to the SDK while keeping source reads, logging and diagnostics shape in the runtime boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-diagnostics-summary.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" -t "aggregates source health diagnostics|converts health failures into source-level error diagnostics"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed source error health helper
 
 - `packages/utils/search/indexing-source-error-health.ts`
