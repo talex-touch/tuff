@@ -171,6 +171,27 @@ describe('file-provider-watch-service', () => {
     const service = createService()
 
     expect(service.ownsWatchPath('/tmp/tuff-index-a')).toBe(true)
+    expect(service.ownsWatchPath('/tmp/tuff-index-a/report.md')).toBe(true)
+    expect(service.ownsWatchPath('/tmp/tuff-index-old/report.md')).toBe(false)
     expect(service.ownsWatchPath('/Applications')).toBe(false)
+  })
+
+  it('deduplicates extra watch paths through normalized roots', () => {
+    const service = new FileProviderWatchService({
+      baseWatchPaths: ['/tmp/tuff-index-a'],
+      getDbUtils: () => null,
+      getWatchDepthForPath: () => 1,
+      normalizePath: (rawPath) => rawPath.toLowerCase(),
+      enqueueIncrementalUpdate: vi.fn(),
+      runAutoIndexing: vi.fn(async () => undefined),
+      logDebug: vi.fn(),
+      logWarn: vi.fn(),
+      logError: vi.fn()
+    })
+
+    service.applyWatchPaths(['/TMP/TUFF-INDEX-A', '/tmp/tuff-index-b'])
+
+    expect(service.getWatchPaths()).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+    expect(service.getNormalizedWatchPaths()).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
   })
 })

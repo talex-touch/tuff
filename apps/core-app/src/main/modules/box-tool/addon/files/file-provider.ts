@@ -55,7 +55,11 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
+import {
+  IndexedSourceResetReasons,
+  IndexedSourceScanReasons,
+  isIndexedWatchPathOwned
+} from '@talex-touch/utils/search'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
 import { app, shell } from 'electron'
@@ -679,8 +683,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .from(filesSchema)
           .where(eq(filesSchema.type, 'file'))
       },
-      isWithinWatchRoots: (filePath) =>
-        this.watchPaths.some((watchPath) => filePath.startsWith(watchPath)),
+      isWithinWatchRoots: (filePath) => this.isWithinWatchRoots(filePath),
       yieldAfterRead: async () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
       },
@@ -2419,16 +2422,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private isWithinWatchRoots(rawPath: string): boolean {
-    if (!rawPath) return false
-    const normalizedPath = this.normalizePath(rawPath)
-    for (const watchRoot of this.normalizedWatchPaths) {
-      if (normalizedPath === watchRoot) return true
-      const withSeparator = watchRoot.endsWith(path.sep) ? watchRoot : `${watchRoot}${path.sep}`
-      if (normalizedPath.startsWith(withSeparator)) {
-        return true
-      }
-    }
-    return false
+    return isIndexedWatchPathOwned({
+      rawPath,
+      normalizedWatchPaths: this.normalizedWatchPaths,
+      normalizePath: (path) => this.normalizePath(path),
+      pathSeparator: path.sep
+    })
   }
 
   private enqueueIncrementalUpdate(
