@@ -10,6 +10,7 @@ import type {
 } from '@talex-touch/utils/search'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
+  buildIndexedSourceDiagnosticsSummary,
   buildIndexedSourceErrorHealth,
   getIndexedSourceContractIssues
 } from '@talex-touch/utils/search'
@@ -73,25 +74,9 @@ export class SourceDiagnosticsService {
       })
     )
 
-    const byStatus: Partial<Record<IndexedSourceHealth['status'], number>> = {}
-    for (const source of diagnostics) {
-      const status = source.health.status
-      byStatus[status] = (byStatus[status] ?? 0) + 1
-    }
-
     return {
       generatedAt: Date.now(),
-      summary: {
-        total: diagnostics.length,
-        byStatus,
-        ready: byStatus.ready ?? 0,
-        degraded: byStatus.degraded ?? 0,
-        unavailable:
-          (byStatus.disabled ?? 0) +
-          (byStatus.unsupported ?? 0) +
-          (byStatus['permission-required'] ?? 0) +
-          (byStatus.error ?? 0)
-      },
+      summary: buildIndexedSourceDiagnosticsSummary(diagnostics),
       sources: diagnostics
     }
   }
