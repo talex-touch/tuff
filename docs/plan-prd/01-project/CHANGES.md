@@ -13,6 +13,23 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source recovery recommendation policy
+
+- `packages/utils/search/indexing-source-recovery-policy.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-recovery-policy.test.ts`
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.{ts,test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `resolveIndexedSourceRecoveryRecommendation()` to map admission/lifecycle issues, permission/disabled states, failed or stalled progress, recent failed/skipped tasks, and degraded/error health into one read-only recovery recommendation.
+  - Updated Advanced Settings source diagnostics to show a recovery chip while keeping actual scan/reconcile/reset availability under `resolveIndexedSourceMaintenanceActions()` and runtime eligibility guards.
+  - Documented that recovery recommendation is diagnostic guidance only and not a durable job scheduler or automatic recovery executor.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-recovery-policy.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"` 通过。
+
 ### ref(search): add indexed source maintenance action policy
 
 - `packages/utils/search/indexing-source-maintenance-action.ts`
