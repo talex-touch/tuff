@@ -1,4 +1,9 @@
-import type { IndexedSourceDelta, IndexedSourceRecord } from '@talex-touch/utils/search'
+import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
+import type {
+  IndexedSourceDelta,
+  IndexedSourceRecord,
+  IndexedSourceRecordBatch
+} from '@talex-touch/utils/search'
 import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
 
 export interface FileProviderReconciliationDiskFile {
@@ -28,7 +33,7 @@ export interface FileProviderReconciliationInsertDeps<
   ) => Promise<void>
   upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
   dispatchSideEffects: (records: TInserted[]) => void
-  emitRecordBatch: (records: TInserted[], context: TContext) => Promise<void>
+  emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitDelta: (delta: IndexedSourceDelta, context: TContext) => Promise<void>
   mapRecord: (record: TInserted) => IndexedSourceRecord
   emitProgress: (current: number, total: number) => void
@@ -38,7 +43,6 @@ export interface FileProviderReconciliationInsertDeps<
 }
 
 export class FileProviderReconciliationInsertService<TInserted extends { path: string }, TContext> {
-  private readonly sourceId: string
   private readonly waitForIdle: FileProviderReconciliationInsertDeps<
     TInserted,
     TContext
@@ -52,12 +56,6 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
     TInserted,
     TContext
   >['dispatchSideEffects']
-  private readonly emitRecordBatch: FileProviderReconciliationInsertDeps<
-    TInserted,
-    TContext
-  >['emitRecordBatch']
-  private readonly emitDelta: FileProviderReconciliationInsertDeps<TInserted, TContext>['emitDelta']
-  private readonly mapRecord: FileProviderReconciliationInsertDeps<TInserted, TContext>['mapRecord']
   private readonly emitProgress: FileProviderReconciliationInsertDeps<
     TInserted,
     TContext
@@ -68,20 +66,24 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
     TContext
   >['formatDuration']
   private readonly logDebug: FileProviderReconciliationInsertDeps<TInserted, TContext>['logDebug']
+  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TInserted, TContext>
 
   constructor(deps: FileProviderReconciliationInsertDeps<TInserted, TContext>) {
-    this.sourceId = deps.sourceId
     this.waitForIdle = deps.waitForIdle
     this.runQueue = deps.runQueue
     this.upsertFiles = deps.upsertFiles
     this.dispatchSideEffects = deps.dispatchSideEffects
-    this.emitRecordBatch = deps.emitRecordBatch
-    this.emitDelta = deps.emitDelta
-    this.mapRecord = deps.mapRecord
     this.emitProgress = deps.emitProgress
     this.now = deps.now
     this.formatDuration = deps.formatDuration
     this.logDebug = deps.logDebug
+    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
+      sourceId: deps.sourceId,
+      mapRecord: deps.mapRecord,
+      emitRecordBatch: deps.emitRecordBatch,
+      emitDelta: deps.emitDelta,
+      emitProgress: deps.emitProgress
+    })
   }
 
   async execute(
@@ -111,21 +113,16 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
           duration: this.formatDuration(this.now() - chunkStart)
         })
         this.dispatchSideEffects(inserted)
-        await this.emitRecordBatch(inserted, context)
-        for (const file of inserted) {
-          await this.emitDelta(
-            {
-              sourceId: this.sourceId,
-              action: 'add',
-              record: this.mapRecord(file),
-              path: file.path,
-              reason: 'file-provider-reconciliation-add'
-            },
-            context
-          )
-        }
+        await this.runtimeEmitter.emitBatch(inserted, context)
+        await this.runtimeEmitter.emitDeltas(inserted, context, {
+          action: 'add',
+          reason: 'file-provider-reconciliation-add'
+        })
         reconciledFiles += chunk.length
-        this.emitProgress(reconciledFiles, filesToAdd.length)
+        this.runtimeEmitter.emitProgressSnapshot({
+          current: reconciledFiles,
+          total: filesToAdd.length
+        })
       },
       {
         estimatedTaskTimeMs: 20,

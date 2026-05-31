@@ -76,7 +76,16 @@ describe('file-provider-reconciliation-insert-service', () => {
     )
     expect(upsertFiles).toHaveBeenCalledWith(expect.any(Array), 'reconciliation.upsert')
     expect(dispatchSideEffects).toHaveBeenCalledWith(inserted)
-    expect(emitRecordBatch).toHaveBeenCalledWith(inserted, context)
+    expect(emitRecordBatch).toHaveBeenCalledWith(
+      {
+        sourceId: 'file-provider',
+        records: [
+          expect.objectContaining({ recordId: '/tmp/a.txt', stableKey: '/tmp/a.txt' }),
+          expect.objectContaining({ recordId: '/tmp/b.txt', stableKey: '/tmp/b.txt' })
+        ]
+      },
+      context
+    )
     expect(emitDelta).toHaveBeenCalledTimes(2)
     expect(emitDelta).toHaveBeenCalledWith(
       expect.objectContaining({

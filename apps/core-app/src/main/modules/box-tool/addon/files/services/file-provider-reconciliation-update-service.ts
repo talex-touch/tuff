@@ -1,3 +1,4 @@
+import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
 import type { IndexedSourceDelta, IndexedSourceRecord } from '@talex-touch/utils/search'
 
 export interface FileProviderReconciliationUpdateResult<TUpdated> {
@@ -26,23 +27,15 @@ export class FileProviderReconciliationUpdateService<
     TUpdated,
     TContext
   >['updateRecords']
-  private readonly emitDelta: FileProviderReconciliationUpdateDeps<
-    TUpdate,
-    TUpdated,
-    TContext
-  >['emitDelta']
-  private readonly mapRecord: FileProviderReconciliationUpdateDeps<
-    TUpdate,
-    TUpdated,
-    TContext
-  >['mapRecord']
-  private readonly sourceId: string
+  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TUpdated, TContext>
 
   constructor(deps: FileProviderReconciliationUpdateDeps<TUpdate, TUpdated, TContext>) {
     this.updateRecords = deps.updateRecords
-    this.emitDelta = deps.emitDelta
-    this.mapRecord = deps.mapRecord
-    this.sourceId = deps.sourceId
+    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
+      sourceId: deps.sourceId,
+      mapRecord: deps.mapRecord,
+      emitDelta: deps.emitDelta
+    })
   }
 
   async execute(
@@ -54,18 +47,10 @@ export class FileProviderReconciliationUpdateService<
     }
 
     const updated = await this.updateRecords(records)
-    for (const file of updated) {
-      await this.emitDelta(
-        {
-          sourceId: this.sourceId,
-          action: 'change',
-          record: this.mapRecord(file),
-          path: file.path,
-          reason: 'file-provider-reconciliation-update'
-        },
-        context
-      )
-    }
+    await this.runtimeEmitter.emitDeltas(updated, context, {
+      action: 'change',
+      reason: 'file-provider-reconciliation-update'
+    })
 
     return {
       updated,
