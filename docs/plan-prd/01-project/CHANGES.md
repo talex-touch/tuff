@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed source task state helper
+
+- `packages/utils/search/indexing-source-task-state.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-task-state.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `updateIndexedSourceTaskState()` so runtime task state updates share the same newest-first bounded `recentTasks` rule as `appendIndexedSourceTaskHistory()`.
+  - Rewired `IndexingRuntime` scan/watch/reconcile/reset diagnostics to update last* task state and history through the SDK helper instead of mutating local task state directly.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-state.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### ref(search): lift indexed auto scan preflight policy
 
 - `packages/utils/search/indexing-auto-scan-policy.ts`
