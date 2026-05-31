@@ -18,6 +18,7 @@
 - `packages/utils/search/indexing-write-runtime-emitter.ts`
 - `packages/utils/search/index.ts`
 - `packages/utils/__tests__/search/indexing-write-runtime-emitter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
@@ -25,8 +26,8 @@
 - `docs/plan-prd/TODO.md`
 - `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
   - Added public `IndexedWriteRuntimeEmitterService` so source adapters can map persisted records into `IndexedSourceRecordBatch`, add/change deltas and progress snapshots without duplicating runtime output plumbing.
-  - Rewired FileProvider reconciliation insert/update services to use the SDK emitter while keeping File row mapping, DB upsert/update, source-specific reasons and runtime callback wiring in the FileProvider boundary.
-  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+  - Rewired FileProvider full-scan insert and reconciliation insert/update services to use the SDK emitter while keeping File row mapping, DB upsert/update, source-specific reasons and runtime callback wiring in the FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
 
 ### ref(search): add indexed source snapshot cache helper
 
