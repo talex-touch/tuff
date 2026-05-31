@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source root evidence helper
+
+- `packages/utils/search/indexing-source-root-evidence.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-root-evidence.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedSourceRootEvidenceService` so source adapters can map root lists into `IndexedSourceEvidence` with consistent rootCount, roots, ready/degraded state, checkedAt, and empty reason.
+  - Rewired AppProvider watch-roots evidence to use the SDK root evidence helper while keeping watch-root path reading in the AppProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-root-evidence.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "exposes app indexed source evidence"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed source grouped evidence helper
 
 - `packages/utils/search/indexing-source-grouped-evidence.ts`
