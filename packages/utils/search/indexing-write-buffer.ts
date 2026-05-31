@@ -15,6 +15,11 @@ export interface IndexedWriteBuffer<TKey, TEntry> extends IndexedWriteFlushBuffe
   enqueue: (key: TKey, entry: TEntry) => number
 }
 
+export interface IndexedEntryKeyedWriteBuffer<TKey, TEntry>
+  extends IndexedWriteFlushBuffer<TKey, TEntry> {
+  enqueue: (entry: TEntry) => number
+}
+
 export class IndexedWriteBufferService<TKey, TEntry> implements IndexedWriteBuffer<TKey, TEntry> {
   constructor(
     private readonly pending: Map<TKey, TEntry>,
@@ -68,5 +73,43 @@ export class IndexedWriteBufferService<TKey, TEntry> implements IndexedWriteBuff
       }
       this.inflight.delete(key)
     }
+  }
+}
+
+export class IndexedEntryKeyedWriteBufferService<TKey, TEntry>
+  implements IndexedEntryKeyedWriteBuffer<TKey, TEntry>
+{
+  private readonly buffer: IndexedWriteBufferService<TKey, TEntry>
+
+  constructor(
+    pending: Map<TKey, TEntry>,
+    inflight: Map<TKey, TEntry>,
+    private readonly getKey: (entry: TEntry) => TKey
+  ) {
+    this.buffer = new IndexedWriteBufferService(pending, inflight)
+  }
+
+  get pendingSize(): number {
+    return this.buffer.pendingSize
+  }
+
+  get inflightSize(): number {
+    return this.buffer.inflightSize
+  }
+
+  enqueue(entry: TEntry): number {
+    return this.buffer.enqueue(this.getKey(entry), entry)
+  }
+
+  take(maxEntries: number): IndexedWriteBufferBatch<TKey, TEntry> {
+    return this.buffer.take(maxEntries)
+  }
+
+  commit(keys: TKey[]): void {
+    this.buffer.commit(keys)
+  }
+
+  rollback(keys: TKey[]): void {
+    this.buffer.rollback(keys)
   }
 }

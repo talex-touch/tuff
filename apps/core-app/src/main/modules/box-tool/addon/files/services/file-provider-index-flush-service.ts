@@ -1,5 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import { IndexedWriteBufferService } from '@talex-touch/utils/search'
+import {
+  IndexedEntryKeyedWriteBufferService,
+  IndexedWriteBufferService
+} from '@talex-touch/utils/search'
 import {
   getIndexedWriteFlushDelay,
   getIndexedWriteFlushExponentialRetryDelay
@@ -49,13 +52,17 @@ export function rollbackIndexWorkerFlushBatch(
 }
 
 export class FileProviderIndexFlushBufferService {
-  private readonly buffer: IndexedWriteBufferService<number, IndexWorkerFileResult>
+  private readonly buffer: IndexedEntryKeyedWriteBufferService<number, IndexWorkerFileResult>
 
   constructor(
     pending: Map<number, IndexWorkerFileResult>,
     inflight: Map<number, IndexWorkerFileResult>
   ) {
-    this.buffer = new IndexedWriteBufferService(pending, inflight)
+    this.buffer = new IndexedEntryKeyedWriteBufferService(
+      pending,
+      inflight,
+      (entry) => entry.fileId
+    )
   }
 
   get pendingSize(): number {
@@ -67,7 +74,7 @@ export class FileProviderIndexFlushBufferService {
   }
 
   enqueue(payload: IndexWorkerFileResult): number {
-    return this.buffer.enqueue(payload.fileId, payload)
+    return this.buffer.enqueue(payload)
   }
 
   take(maxEntries: number): { entries: IndexWorkerFileResult[]; keys: number[] } {
