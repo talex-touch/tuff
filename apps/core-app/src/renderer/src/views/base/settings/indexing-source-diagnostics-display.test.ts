@@ -11,6 +11,7 @@ import {
   resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
+  resolveIndexingSourceRecoveryChip,
   resolveIndexingSourceStatusKey,
   resolveIndexingSourceTaskChips,
   resolveIndexingSourceTone,
@@ -554,5 +555,33 @@ describe('indexing source diagnostics display helpers', () => {
       { action: 'reconcile', enabled: false, reason: 'health:permission-required' },
       { action: 'reset', enabled: true }
     ])
+  })
+
+  it('builds recovery chips through the shared SDK policy', () => {
+    expect(
+      resolveIndexingSourceRecoveryChip(
+        buildSource({
+          progress: {
+            sourceId: 'file-provider',
+            stage: 'scan',
+            status: 'stalled',
+            current: 2,
+            total: 100,
+            progress: 2,
+            reason: 'no-progress'
+          }
+        })
+      )
+    ).toMatchObject({
+      id: 'file-provider:recovery:reset',
+      tone: 'danger',
+      labelKey: 'settings.settingFileIndex.sourceRecoveryChip.reset',
+      values: {
+        reason: 'no-progress',
+        maintenanceAction: 'reset'
+      }
+    })
+
+    expect(resolveIndexingSourceRecoveryChip(buildSource())).toBeNull()
   })
 })

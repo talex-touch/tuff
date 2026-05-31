@@ -2437,6 +2437,17 @@
         "complete": "{stage} · 完成 · {current}/{total}",
         "failed": "{stage} · 失败 · {reason}"
       },
+      "sourceRecovery": "恢复",
+      "sourceRecoveryChip": {
+        "wait": "等待运行时恢复 · {reason}",
+        "grant-permission": "需要授权 · {reason}",
+        "enable-provider": "需要启用 Provider · {reason}",
+        "scan": "建议扫描 · {reason}",
+        "reconcile": "建议补漏 · {reason}",
+        "reset": "建议重置 · {reason}",
+        "inspect-contract": "检查 Source 合同 · {reason}",
+        "inspect-source": "检查 Source 状态 · {reason} · {blockedReason}"
+      },
       "sourceStatus": {
         "ready": "就绪",
         "warming": "预热中",
