@@ -56,6 +56,7 @@ import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
+  IndexedWriteFlushEvidenceService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   isIndexedWatchPathOwned
@@ -194,6 +195,7 @@ const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
+const indexFlushEvidenceService = new IndexedWriteFlushEvidenceService()
 
 function isValidBase64DataUrl(value: string): boolean {
   const markerIndex = value.indexOf(BASE64_MARKER)
@@ -1739,26 +1741,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const flushSnapshot = this.indexRuntimeService.getFlushSnapshot()
     if (flushSnapshot) {
-      evidence.push({
-        id: `${this.id}:index-flush`,
-        label: 'File index flush',
-        status:
-          flushSnapshot.status === 'failed' || flushSnapshot.status === 'worker-not-ready'
-            ? 'degraded'
-            : 'ready',
-        itemCount: flushSnapshot.entries > 0 ? flushSnapshot.entries : flushSnapshot.pending,
-        lastCheckedAt: flushSnapshot.checkedAt,
-        reason: flushSnapshot.reason,
-        metadata: {
-          ...flushSnapshot.metadata,
-          status: flushSnapshot.status,
-          entries: flushSnapshot.entries,
-          pending: flushSnapshot.pending,
-          inflight: flushSnapshot.inflight,
-          error: flushSnapshot.error,
-          durationMs: flushSnapshot.durationMs
-        }
-      })
+      evidence.push(
+        indexFlushEvidenceService.build({
+          id: `${this.id}:index-flush`,
+          label: 'File index flush',
+          snapshot: flushSnapshot
+        })
+      )
     }
 
     return evidence
