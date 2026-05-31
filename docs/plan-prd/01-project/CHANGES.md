@@ -13,6 +13,18 @@
 
 ## 2026-05-31
 
+### ref(search): centralize indexed source runtime run gate
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Moved shared `IndexedSourceTaskRunGate` ownership into `IndexingRuntime`, then injected the same gate into default scan and reconcile schedulers across constructor and `setStore()`.
+  - Rewired `resetSourceRuntimeState()` through the same source/kind running guard, returning structured `reset-already-running` diagnostics instead of duplicating shared SearchIndex cleanup or source-local reset work.
+  - Cleared the runtime-owned run gate from `IndexingRuntime.clear()` so teardown does not leave stale in-memory running state.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed source task run gate
 
 - `packages/utils/search/indexing-source-task-run-gate.ts`
