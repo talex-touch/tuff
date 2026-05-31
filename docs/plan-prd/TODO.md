@@ -58,12 +58,13 @@
 - File 层：watch path policy、watch root set/ownership policy、watch delta queue、auto-scan preflight、scan eligibility/strategy policy、source progress/evidence、source progress store、source reset executor、source integrity policy、progress ETA/stream、path-record write plan、insert/update/delete executor、worker scheduler、worker persist-entry mapper/status snapshot、write flush retry/buffer/entry-keyed buffer/executor/result mapper/runtime/snapshot/failure snapshot/evidence、write runtime emitter、post-write side-effect 已下沉到 `@talex-touch/utils/search` SDK；File indexed source 已把 FileProvider 私有 indexing status 适配为统一 diagnostics `progress`，包含 stage、current/total、百分比、estimatedRemainingMs、estimatedCompletionAt、averageItemsPerSecond、speedSampleCount 与 estimateBasis；FileProvider watch service 现在只保留 CoreApp watcher 注册、pending permission 读取、设置持久化、scan_progress 读取、idle/battery gate 与平台适配；FileProvider scan strategy service 只保留 completed path 读取、yield 与日志；FileProvider full scan insert、reconciliation add/update/delete 与 stale cleanup delete 已复用 `IndexedWriteRuntimeEmitterService` 输出 record batch、add/change/delete delta 与 progress，App scan batch 与 App/File watch delta 也复用同一 emitter 的 build helper，FileProvider 只注入 File row mapper、现有 upsert/update/delete 和 runtime callback；FileProvider worker status 现在只保留真实 worker status loader 注入；FileProvider index flush buffer 只保留 file worker result 的 `fileId` key selector 适配，flush executor 只保留 File status/withContent 映射，失败 snapshot 只注入 pending/inflight/retry metadata，index-flush evidence 只保留 source id/label 适配；FileProvider scan_progress store 现在只注入 completed path select/delete、worker readiness 与 upsert；FileProvider integrity check 现在只注入 FTS/files row count、runtime reset 与 orphan keyword cleanup；DB persist、scan_progress 表结构、worker readiness 与 SearchIndex/FTS 语义继续留在 FileProvider adapter / SearchIndex worker 边界等待下一批迁移。
 - Settings / 插件层：Settings 已支持 source diagnostics、source-level progress chip、source recovery chip、provider enable/order、source-to-provider link 与 SDK maintenance action policy；progress chip 消费 `IndexedSourceDiagnostics.progress`，统一显示阶段、百分比、剩余时间、ETA、吞吐、样本数、estimateBasis 与 stalled/failed/complete tone；recovery chip 消费 `resolveIndexedSourceRecoveryRecommendation()`，把 admission/lifecycle、permission/disabled、progress failed/stalled、recent task failed/skipped 与 health degraded/error 归一成只读恢复建议，不自动执行维护动作；maintenance buttons 只按 `resolveIndexedSourceMaintenanceActions()` 返回的 enabled 状态可点，后续 Browser Bookmarks、Quicklinks、Obsidian、VSCode source 只要实现 `getProgress()` 并提供 diagnostics 即可复用；插件可声明 `manifest.searchProviders`，第三方 push provider 需 `root-results` + `defaultState: "ask"` + `requiresUserConsent: true` 才能通过 loader policy；插件也可声明 metadata-only `manifest.indexedSources` lifecycle intent，CoreApp loader 会校验 admission/permission 并暴露 `INDEXED_SOURCE_*` diagnostics，但不会自动注册 runtime source；向 root results push/update 已同时受 `search.root-results` 权限 gate 与 provider `enabled === true` 用户配置约束；CoreBox root-result store 对已有 provider-tagged items 也按严格 enabled 过滤，避免旧 push 结果残留。
 - Browser Bookmarks：已新增 high-privacy runtime skeleton，默认 disabled/pending migration；只有显式启用 `browser-bookmarks` 或 `touch-browser-data.browser-bookmarks` provider 后才允许 scanner-backed 读取；diagnostics health/roots/evidence 已复用短 TTL `IndexedSourceSnapshotCacheService`，避免 Settings 同轮 diagnostics 重复读取 Bookmarks 文件，scan/reconcile/watch/reset 仍会清理 cache 并读取 fresh snapshot；profile/browser diagnostics 到 roots/evidence 的映射已下沉到 `IndexedSourceProfileDiagnosticsService`，后续 Browser History 可复用同一 rootCount/roots/status/metadata 口径；scanner-backed scan batch、reconcile delta 与 watch refresh delta 已复用 `IndexedWriteRuntimeEmitterService`，不再手写 Browser Bookmarks 专属 runtime 输出协议；`touch-browser-data` 已声明 `browser-bookmarks` indexed source intent 和 `fs.read` / `fs.index` / `search.root-results` 权限边界，但仍未自动读取或注册真实 indexed source。
+- Quicklinks：已新增 low-privacy `QuicklinksIndexedSource` runtime skeleton 并注册到 CoreApp runtime；它复用 Quicklinks descriptor template 与 `IndexedWriteRuntimeEmitterService`，支持可注入 quicklink snapshot 的 scan batch、reconcile/watch change delta、health/evidence、reset/open/clear handler contract；默认空源只报告 `quicklinks-empty` degraded diagnostics，不读取插件 storage，也不伪装已有内容。
 
 未闭环：
 
 - FileProvider 的 SQLite/FTS 真实写入、scan worker、index worker flush trace、`scan_progress` 表实现与 integrity-triggered reset durable job history 仍未完全迁到 runtime task/store 边界。
 - Browser Bookmarks 仍需把 metadata-only `manifest.indexedSources` 升级为官方 `touch-browser-data` 插件 runtime indexed source，补 watch root 注册、persistent rebuild、clear/disable UI 与用户同意 evidence。
-- Browser History、Quicklinks、System Settings、Obsidian、VSCode 仍停留在 descriptor/admission 或计划阶段，尚未形成完整 source lifecycle。
+- Quicklinks 仍需接官方插件持久 feed、provider enable/order 关联、用户级 clear/rebuild UI 与真实 Settings evidence；Browser History、System Settings、Obsidian、VSCode 仍停留在 descriptor/admission 或计划阶段，尚未形成完整 source lifecycle。
 - Everything 仍需 SDK/CLI 最终策略、registry PATH 探测、Windows 真机性能/evidence 与 fail-closed 诊断验收。
 - Durable job history、跨 source retry/debounce、source health 自动恢复动作、Windows/macOS 手工回归与跨平台截图证据仍需补齐；当前 run gate 已由 IndexingRuntime 统一持有并覆盖 scan/reconcile/reset，但仍只是内存态同源任务准入 primitive，recovery recommendation 只是 SDK 诊断 policy 和 Settings 只读提示，不是 durable job scheduler。
 
@@ -72,15 +73,15 @@
 1. File write/store boundary：把 FileProvider 写入、progress、integrity reset 继续收敛到 runtime store/task，不改变现有搜索行为。
 2. Browser Bookmarks official plugin lifecycle：把 CoreApp skeleton 迁到 `touch-browser-data` 插件 owned runtime source，把 metadata-only intent 接到真实注册、显式 consent、clear/disable/rebuild。
 3. Everything productionization：定 SDK/CLI 策略，补 registry PATH 探测、Windows 真机 evidence 和性能基线。
-4. Quicklinks source：先做低隐私、手动/固定链接源，验证 provider enable/order、root results push 与 Settings 控制闭环。
+4. Quicklinks source：在已注册 runtime skeleton 的基础上接官方插件持久 feed、provider enable/order、root results push 与 Settings 控制闭环。
 5. Browser History source：高隐私、默认关闭，只在显式授权后进入 SQLite-backed scan/search。
 6. System Settings / Obsidian / VSCode：按 descriptor admission 逐个接入 lifecycle，缺权限或平台能力时必须给出 reason，不做静默假成功。
 
 建议分批提交：
 
-1. `feat(utils): expose indexed source manifest sdk`：`manifest.indexedSources` metadata resolver、source permission mapping、Browser Data official-plugin admission gate 与 tests。
-2. `feat(core-app): parse plugin indexed source metadata`：CoreApp loader 解析插件 indexed source intent，暴露插件状态和 `INDEXED_SOURCE_*` diagnostics，不注册 runtime source。
-3. `docs(search): sync indexed source manifest roadmap`：Roadmap、TODO、Nexus search API 文档同步 Browser Data 官方插件 lifecycle intent 与剩余缺口。
+1. `feat(search): add quicklinks indexed source skeleton`：注册低隐私 Quicklinks runtime source，覆盖 scan/reconcile/watch/reset/open/clear contract 与 focused tests。
+2. `docs(search): document quicklinks runtime skeleton`：Roadmap、TODO、CHANGES、Nexus search API 文档同步已落地能力与剩余缺口。
+3. `feat(search): connect quicklinks plugin feed`：把官方插件持久 feed、provider enable/order 与用户级 clear/rebuild 接到 Quicklinks runtime source。
 
 ## 已完成/历史不再重复开发
 

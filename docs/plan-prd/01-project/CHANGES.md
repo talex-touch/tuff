@@ -3,6 +3,21 @@
 > 更新时间：2026-05-31
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-01
+
+### feat(search): add quicklinks indexed source skeleton
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-sources.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added a low-privacy `quicklinks` runtime source skeleton using the shared Quicklinks descriptor template and `IndexedWriteRuntimeEmitterService`.
+  - Supports injected quicklink snapshots for scan batches, reconcile/watch change deltas, source health/evidence, and reset/open/clear lifecycle contract validation while keeping real plugin storage out of this slice.
+  - Default empty source reports degraded `quicklinks-empty` diagnostics instead of pretending content exists.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ## 历史归档
 
 - [压缩前完整快照（截至 2026-05-14）](./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md)
