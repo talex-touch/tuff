@@ -764,8 +764,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           indexReason: 'reconciliation-insert'
         })
       },
-      emitRecordBatch: (records, runOptions) =>
-        this.emitIndexedSourceRecordBatch(records, runOptions),
+      emitRecordBatch: (batch, runOptions) =>
+        this.emitIndexedSourceRecordBatchFromBatch(batch, runOptions),
       emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
       mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
       emitProgress: (current, total) => this.emitIndexingProgress('indexing', current, total),
@@ -1099,6 +1099,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       sourceId: this.id,
       records: files.map((file) => this.mapFileToIndexedSourceRecord(file))
     })
+  }
+
+  private async emitIndexedSourceRecordBatchFromBatch(
+    batch: IndexedSourceRecordBatch,
+    options?: FileIndexRunOptions
+  ): Promise<void> {
+    if (!options?.onRecordBatch || batch.records.length === 0) {
+      return
+    }
+
+    await options.onRecordBatch(batch)
   }
 
   private async emitIndexedSourceDelta(
