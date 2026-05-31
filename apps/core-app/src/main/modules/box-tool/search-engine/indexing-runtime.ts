@@ -2,7 +2,6 @@ import type {
   IndexedSource,
   IndexedSourceDelta,
   IndexedSourceDescriptor,
-  IndexedSourceDiagnostics,
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
   IndexedSourceResetRequest,
@@ -11,6 +10,7 @@ import type {
   IndexedSourceScanRequest,
   IndexedSourceTaskHistoryEntry,
   IndexedSourceTaskKind,
+  IndexedSourceRuntimeTaskState,
   IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
 import type {
@@ -33,11 +33,11 @@ import type { IndexStoreAdapter } from './indexing-store-adapter'
 import type { WatchEventRouteResult } from './indexing-watch-router'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
-  appendIndexedSourceTaskHistory,
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
   getIndexedSourceContractIssues,
   IndexedSourceResetReasons,
-  resolveIndexedSourceTaskEligibility
+  resolveIndexedSourceTaskEligibility,
+  updateIndexedSourceTaskState
 } from '@talex-touch/utils/search'
 import { SourceDiagnosticsService } from './indexing-diagnostics-service'
 import { ReconcileEngine } from './indexing-reconcile-engine'
@@ -61,11 +61,6 @@ export interface IndexingRuntimeOptions {
 }
 
 export type { IndexingRuntimeDiagnostics, IndexingRuntimeSourceDiagnostics }
-
-type IndexedSourceRuntimeTaskState = Pick<
-  IndexedSourceDiagnostics,
-  'lastScan' | 'lastWatch' | 'lastReconcile' | 'lastReset' | 'recentTasks'
->
 
 interface RuntimeEligibleSources {
   sources: IndexedSource[]
@@ -501,6 +496,22 @@ export class IndexingRuntime {
     return next
   }
 
+  private updateTaskState<TKey extends Exclude<keyof IndexedSourceRuntimeTaskState, 'recentTasks'>>(
+    sourceId: string,
+    key: TKey,
+    value: NonNullable<IndexedSourceRuntimeTaskState[TKey]>,
+    historyEntry: IndexedSourceTaskHistoryEntry
+  ): void {
+    const next = updateIndexedSourceTaskState({
+      state: this.ensureTaskState(sourceId),
+      key,
+      value,
+      historyEntry,
+      historyLimit: DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
+    })
+    this.taskState.set(sourceId, next)
+  }
+
   private recordScanResult(result: ScanSchedulerResult, job?: IndexedSourceRuntimeTaskJob): void {
     const lastScan = {
       startedAt: result.startedAt,
@@ -510,9 +521,7 @@ export class IndexingRuntime {
       batches: result.batches,
       records: result.records
     }
-    const state = this.ensureTaskState(result.sourceId)
-    state.lastScan = lastScan
-    this.recordTaskHistory(result.sourceId, {
+    this.updateTaskState(result.sourceId, 'lastScan', lastScan, {
       kind: 'scan',
       status: 'succeeded',
       startedAt: result.startedAt,
@@ -542,9 +551,7 @@ export class IndexingRuntime {
       records: 0,
       error
     }
-    const state = this.ensureTaskState(sourceId)
-    state.lastScan = lastScan
-    this.recordTaskHistory(sourceId, {
+    this.updateTaskState(sourceId, 'lastScan', lastScan, {
       kind: 'scan',
       status: 'failed',
       startedAt,
@@ -572,9 +579,7 @@ export class IndexingRuntime {
       records: 0,
       error
     }
-    const state = this.ensureTaskState(sourceId)
-    state.lastScan = lastScan
-    this.recordTaskHistory(sourceId, {
+    this.updateTaskState(sourceId, 'lastScan', lastScan, {
       kind: 'scan',
       status: 'skipped',
       startedAt,
@@ -618,9 +623,7 @@ export class IndexingRuntime {
         appliedDeltas: result.failedDeltas > 0 ? 0 : deltas,
         failedDeltas: result.failedDeltas > 0 ? deltas : 0
       }
-      const state = this.ensureTaskState(sourceId)
-      state.lastWatch = lastWatch
-      this.recordTaskHistory(sourceId, {
+      this.updateTaskState(sourceId, 'lastWatch', lastWatch, {
         kind: 'watch',
         status: result.failedDeltas > 0 ? 'failed' : 'succeeded',
         occurredAt: event.occurredAt,
@@ -651,9 +654,7 @@ export class IndexingRuntime {
         failedDeltas: error.phase === 'store' ? 1 : 0,
         error: error.message
       }
-      const state = this.ensureTaskState(error.sourceId)
-      state.lastWatch = lastWatch
-      this.recordTaskHistory(error.sourceId, {
+      this.updateTaskState(error.sourceId, 'lastWatch', lastWatch, {
         kind: 'watch',
         status: 'failed',
         occurredAt: event.occurredAt,
@@ -684,9 +685,7 @@ export class IndexingRuntime {
         failedDeltas: 0,
         error: skipError
       }
-      const state = this.ensureTaskState(skipped.sourceId)
-      state.lastWatch = lastWatch
-      this.recordTaskHistory(skipped.sourceId, {
+      this.updateTaskState(skipped.sourceId, 'lastWatch', lastWatch, {
         kind: 'watch',
         status: 'skipped',
         occurredAt: event.occurredAt,
@@ -725,9 +724,7 @@ export class IndexingRuntime {
       failedDeltas: result.failedDeltas,
       error
     }
-    const state = this.ensureTaskState(result.sourceId)
-    state.lastReconcile = lastReconcile
-    this.recordTaskHistory(result.sourceId, {
+    this.updateTaskState(result.sourceId, 'lastReconcile', lastReconcile, {
       kind: 'reconcile',
       status,
       startedAt: result.startedAt,
@@ -763,9 +760,7 @@ export class IndexingRuntime {
       errors: 1,
       error
     }
-    const state = this.ensureTaskState(sourceId)
-    state.lastReconcile = lastReconcile
-    this.recordTaskHistory(sourceId, {
+    this.updateTaskState(sourceId, 'lastReconcile', lastReconcile, {
       kind: 'reconcile',
       status: 'failed',
       startedAt,
@@ -791,9 +786,7 @@ export class IndexingRuntime {
       errors: 0,
       error
     }
-    const state = this.ensureTaskState(sourceId)
-    state.lastReconcile = lastReconcile
-    this.recordTaskHistory(sourceId, {
+    this.updateTaskState(sourceId, 'lastReconcile', lastReconcile, {
       kind: 'reconcile',
       status: 'skipped',
       startedAt,
@@ -817,9 +810,7 @@ export class IndexingRuntime {
       scanProgressRows: result.scanProgressRows,
       error: result.error
     }
-    const state = this.ensureTaskState(result.sourceId)
-    state.lastReset = lastReset
-    this.recordTaskHistory(result.sourceId, {
+    this.updateTaskState(result.sourceId, 'lastReset', lastReset, {
       kind: 'reset',
       status: result.error ? 'failed' : 'succeeded',
       startedAt: result.startedAt,
@@ -834,15 +825,6 @@ export class IndexingRuntime {
         scanProgressRows: result.scanProgressRows
       }
     })
-  }
-
-  private recordTaskHistory(sourceId: string, entry: IndexedSourceTaskHistoryEntry): void {
-    const state = this.ensureTaskState(sourceId)
-    state.recentTasks = appendIndexedSourceTaskHistory(
-      state.recentTasks,
-      entry,
-      DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
-    )
   }
 }
 
