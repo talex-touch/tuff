@@ -1,6 +1,7 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
 import {
+  buildIndexedWriteFlushFailureSnapshot,
   IndexedWriteFlushRuntimeService,
   IndexedWriteFlushSnapshotService,
   type IndexedWriteFlushSnapshot
@@ -193,20 +194,14 @@ export class FileProviderIndexRuntimeService {
   }
 
   private recordFlushFailure(error: unknown, metadata: Record<string, unknown>): void {
-    const flushResult = this.getFlushResultFromError(error)
-    this.recordFlushSnapshot({
-      status: 'failed',
-      entries: flushResult?.entries ?? 0,
-      pending: flushResult?.pending ?? this.bufferService.pendingSize,
-      inflight: flushResult?.inflight ?? this.bufferService.inflightSize,
-      reason: flushResult?.reason ?? 'flush-failed',
-      error: flushResult?.error ?? this.stringifyError(error),
-      metadata: {
-        ...(flushResult?.metadata ?? {}),
-        ...metadata
-      },
-      durationMs: flushResult?.durationMs
-    })
+    this.recordFlushSnapshot(
+      buildIndexedWriteFlushFailureSnapshot<FileProviderIndexFlushSnapshot>({
+        error,
+        pendingSize: this.bufferService.pendingSize,
+        inflightSize: this.bufferService.inflightSize,
+        metadata
+      })
+    )
   }
 
   private handleFlushFailure(
@@ -228,20 +223,5 @@ export class FileProviderIndexRuntimeService {
 
   private recordFlushSnapshot(snapshot: Omit<FileProviderIndexFlushSnapshot, 'checkedAt'>): void {
     this.flushSnapshotService.record(snapshot)
-  }
-
-  private getFlushResultFromError(error: unknown): FileProviderIndexFlushExecutorResult | null {
-    if (!error || typeof error !== 'object' || !('flushResult' in error)) {
-      return null
-    }
-    const result = (error as { flushResult?: unknown }).flushResult
-    if (!result || typeof result !== 'object') {
-      return null
-    }
-    return result as FileProviderIndexFlushExecutorResult
-  }
-
-  private stringifyError(error: unknown): string {
-    return error instanceof Error ? error.message : String(error)
   }
 }
