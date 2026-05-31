@@ -1,3 +1,5 @@
+import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
+import type { IndexedSourceRecord, IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
 
 export interface FileProviderFullScanInsertResult<TInserted> {
@@ -6,12 +8,14 @@ export interface FileProviderFullScanInsertResult<TInserted> {
 }
 
 export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
+  sourceId: string
+  mapRecord: (record: TInserted) => IndexedSourceRecord
   getBatchSize: () => number
   recordBatchDuration: (durationMs: number) => void
   waitForIdle: () => Promise<void>
   upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
   dispatchSideEffects: (records: TInserted[]) => void
-  emitRecordBatch: (records: TInserted[], context: TContext) => Promise<void>
+  emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitProgress: (current: number, total: number) => void
   sleep: (durationMs: number) => Promise<void>
   now: () => number
@@ -32,11 +36,6 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
     TInserted,
     TContext
   >['dispatchSideEffects']
-  private readonly emitRecordBatch: FileProviderFullScanInsertDeps<
-    TInserted,
-    TContext
-  >['emitRecordBatch']
-  private readonly emitProgress: FileProviderFullScanInsertDeps<TInserted, TContext>['emitProgress']
   private readonly sleep: FileProviderFullScanInsertDeps<TInserted, TContext>['sleep']
   private readonly now: FileProviderFullScanInsertDeps<TInserted, TContext>['now']
   private readonly formatDuration: FileProviderFullScanInsertDeps<
@@ -45,6 +44,7 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
   >['formatDuration']
   private readonly logInfo: FileProviderFullScanInsertDeps<TInserted, TContext>['logInfo']
   private readonly logDebug: FileProviderFullScanInsertDeps<TInserted, TContext>['logDebug']
+  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TInserted, TContext>
 
   constructor(deps: FileProviderFullScanInsertDeps<TInserted, TContext>) {
     this.getBatchSize = deps.getBatchSize
@@ -52,13 +52,17 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
     this.waitForIdle = deps.waitForIdle
     this.upsertFiles = deps.upsertFiles
     this.dispatchSideEffects = deps.dispatchSideEffects
-    this.emitRecordBatch = deps.emitRecordBatch
-    this.emitProgress = deps.emitProgress
     this.sleep = deps.sleep
     this.now = deps.now
     this.formatDuration = deps.formatDuration
     this.logInfo = deps.logInfo
     this.logDebug = deps.logDebug
+    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
+      sourceId: deps.sourceId,
+      mapRecord: deps.mapRecord,
+      emitRecordBatch: deps.emitRecordBatch,
+      emitProgress: deps.emitProgress
+    })
   }
 
   async execute(
@@ -78,7 +82,10 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
     const insertedRecords: TInserted[] = []
     let indexedFiles = 0
     let recordOffset = 0
-    this.emitProgress(0, records.length)
+    this.runtimeEmitter.emitProgressSnapshot({
+      current: 0,
+      total: records.length
+    })
 
     while (recordOffset < records.length) {
       const chunkSize = this.getBatchSize()
@@ -100,9 +107,12 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
       })
 
       this.dispatchSideEffects(inserted)
-      await this.emitRecordBatch(inserted, context)
+      await this.runtimeEmitter.emitBatch(inserted, context)
       indexedFiles += chunk.length
-      this.emitProgress(indexedFiles, records.length)
+      this.runtimeEmitter.emitProgressSnapshot({
+        current: indexedFiles,
+        total: records.length
+      })
       await this.sleep(Math.max(100, Math.round(batchMs)))
     }
 

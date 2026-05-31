@@ -38,12 +38,21 @@ describe('file-provider-full-scan-insert-service', () => {
     const recordBatchDuration = vi.fn()
     let now = 0
     const service = new FileProviderFullScanInsertService({
+      sourceId: 'file-provider',
       getBatchSize: () => 1,
       recordBatchDuration,
       waitForIdle: vi.fn(async () => {}),
       upsertFiles,
       dispatchSideEffects,
       emitRecordBatch,
+      mapRecord: (record) => ({
+        sourceId: 'file-provider',
+        recordId: record.path,
+        stableKey: record.path,
+        kind: 'file',
+        title: record.name,
+        path: record.path
+      }),
       emitProgress,
       sleep,
       now: () => {
@@ -62,8 +71,22 @@ describe('file-provider-full-scan-insert-service', () => {
     expect(upsertFiles).toHaveBeenNthCalledWith(2, [records[1]], 'full-scan.upsert')
     expect(recordBatchDuration).toHaveBeenCalledWith(30)
     expect(dispatchSideEffects).toHaveBeenCalledTimes(2)
-    expect(emitRecordBatch).toHaveBeenNthCalledWith(1, [inserted[0]], context)
-    expect(emitRecordBatch).toHaveBeenNthCalledWith(2, [inserted[1]], context)
+    expect(emitRecordBatch).toHaveBeenNthCalledWith(
+      1,
+      {
+        sourceId: 'file-provider',
+        records: [expect.objectContaining({ recordId: '/tmp/a.txt', stableKey: '/tmp/a.txt' })]
+      },
+      context
+    )
+    expect(emitRecordBatch).toHaveBeenNthCalledWith(
+      2,
+      {
+        sourceId: 'file-provider',
+        records: [expect.objectContaining({ recordId: '/tmp/b.txt', stableKey: '/tmp/b.txt' })]
+      },
+      context
+    )
     expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 2)
     expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
     expect(sleep).toHaveBeenCalledWith(100)
@@ -76,12 +99,14 @@ describe('file-provider-full-scan-insert-service', () => {
   it('returns empty result without work for empty input', async () => {
     const upsertFiles = vi.fn()
     const service = new FileProviderFullScanInsertService({
+      sourceId: 'file-provider',
       getBatchSize: () => 1,
       recordBatchDuration: vi.fn(),
       waitForIdle: vi.fn(),
       upsertFiles,
       dispatchSideEffects: vi.fn(),
       emitRecordBatch: vi.fn(),
+      mapRecord: vi.fn(),
       emitProgress: vi.fn(),
       sleep: vi.fn(),
       now: () => 0,
