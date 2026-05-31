@@ -1,3 +1,5 @@
+import { resolveIndexedScanStrategy } from '@talex-touch/utils/search'
+
 export interface FileProviderScanStrategyResult {
   completedScanPaths: Set<string>
   newPathsToScan: string[]
@@ -34,9 +36,10 @@ export class FileProviderScanStrategyService {
     const strategyStart = this.now()
     const completedScanPaths = await this.getCompletedPaths()
     await this.yieldAfterRead()
-
-    const newPathsToScan = watchPaths.filter((path) => !completedScanPaths.has(path))
-    const reconciliationPaths = watchPaths.filter((path) => completedScanPaths.has(path))
+    const { newPathsToScan, reconciliationPaths } = resolveIndexedScanStrategy({
+      watchPaths,
+      completedScanPaths
+    })
 
     this.logDebug('File indexing scan strategy', {
       totalWatchPaths: watchPaths.length,
