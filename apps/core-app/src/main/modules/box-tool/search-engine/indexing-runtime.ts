@@ -36,6 +36,7 @@ import {
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
   getIndexedSourceContractIssues,
   IndexedSourceResetReasons,
+  IndexedSourceTaskRunGate,
   resolveIndexedSourceTaskEligibility,
   updateIndexedSourceTaskState
 } from '@talex-touch/utils/search'
@@ -57,6 +58,7 @@ export interface IndexingRuntimeOptions {
   reconcileEngine?: ReconcileEngine
   reconcileScheduler?: ReconcileScheduler
   jobFactory?: IndexedSourceRuntimeTaskJobFactory
+  runGate?: IndexedSourceTaskRunGate
   rootPolicy?: IndexingRootPolicy
 }
 
@@ -80,18 +82,20 @@ export class IndexingRuntime {
   private reconcileEngine: ReconcileEngine
   private reconcileScheduler: ReconcileScheduler
   private readonly jobFactory: IndexedSourceRuntimeTaskJobFactory
+  private readonly runGate: IndexedSourceTaskRunGate
   private readonly rootPolicy: IndexingRootPolicy
 
   constructor(options: IndexingRuntimeOptions = {}) {
     this.jobFactory = options.jobFactory ?? new IndexedSourceRuntimeTaskJobFactory()
+    this.runGate = options.runGate ?? new IndexedSourceTaskRunGate()
     this.store = options.store ?? new NoopIndexStoreAdapter()
     this.diagnosticsService = options.diagnosticsService ?? new SourceDiagnosticsService()
     this.watchRouter = options.watchRouter ?? new WatchEventRouter(this.store)
-    this.scanScheduler = options.scanScheduler ?? new ScanScheduler(this.store)
+    this.scanScheduler = options.scanScheduler ?? new ScanScheduler(this.store, this.runGate)
     this.reconcileEngine = options.reconcileEngine ?? new ReconcileEngine(this.store)
     this.reconcileScheduler =
       options.reconcileScheduler ??
-      new DefaultReconcileScheduler(this.reconcileEngine, this.jobFactory)
+      new DefaultReconcileScheduler(this.reconcileEngine, this.jobFactory, this.runGate)
     this.rootPolicy = options.rootPolicy ?? indexingRootPolicy
   }
 
@@ -155,9 +159,13 @@ export class IndexingRuntime {
   setStore(store: IndexStoreAdapter): void {
     this.store = store
     this.watchRouter = new WatchEventRouter(this.store)
-    this.scanScheduler = new ScanScheduler(this.store)
+    this.scanScheduler = new ScanScheduler(this.store, this.runGate)
     this.reconcileEngine = new ReconcileEngine(this.store)
-    this.reconcileScheduler = new DefaultReconcileScheduler(this.reconcileEngine, this.jobFactory)
+    this.reconcileScheduler = new DefaultReconcileScheduler(
+      this.reconcileEngine,
+      this.jobFactory,
+      this.runGate
+    )
   }
 
   async getDiagnostics(): Promise<IndexingRuntimeDiagnostics> {
@@ -344,20 +352,37 @@ export class IndexingRuntime {
     const startedAt = Date.now()
     const reason = request.reason ?? IndexedSourceResetReasons.HealthRepair
     const job = this.createTaskJob(sourceId, 'reset')
-    const shouldClearSearchIndex = request.clearSearchIndex === true
-    let clearedSearchIndex = false
-
-    const clearSearchIndex = async (): Promise<void> => {
-      if (shouldClearSearchIndex) {
-        await this.store.clearSource(sourceId)
-        clearedSearchIndex = true
+    const decision = this.runGate.canStart(sourceId, 'reset')
+    if (!decision.allowed) {
+      const completedAt = Date.now()
+      const result: IndexedSourceResetResult = {
+        sourceId,
+        reason,
+        clearedSearchIndex: false,
+        clearedScanProgress: false,
+        startedAt,
+        completedAt,
+        error: `reset-${decision.reason}`
       }
+      this.recordResetResult(result, job)
+      return result
     }
 
-    if (!source.resetIndex) {
-      try {
+    const shouldClearSearchIndex = request.clearSearchIndex === true
+    let clearedSearchIndex = false
+    this.runGate.start(sourceId, 'reset', startedAt)
+
+    try {
+      const clearSearchIndex = async (): Promise<void> => {
+        if (shouldClearSearchIndex) {
+          await this.store.clearSource(sourceId)
+          clearedSearchIndex = true
+        }
+      }
+
+      if (!source.resetIndex) {
         await clearSearchIndex()
-      } catch (error) {
+
         const result: IndexedSourceResetResult = {
           sourceId,
           reason,
@@ -365,26 +390,12 @@ export class IndexingRuntime {
           clearedScanProgress: false,
           startedAt,
           completedAt: Date.now(),
-          error: error instanceof Error ? error.message : String(error)
+          error: shouldClearSearchIndex ? undefined : 'reset-not-supported'
         }
         this.recordResetResult(result, job)
         return result
       }
 
-      const result: IndexedSourceResetResult = {
-        sourceId,
-        reason,
-        clearedSearchIndex,
-        clearedScanProgress: false,
-        startedAt,
-        completedAt: Date.now(),
-        error: shouldClearSearchIndex ? undefined : 'reset-not-supported'
-      }
-      this.recordResetResult(result, job)
-      return result
-    }
-
-    try {
       await clearSearchIndex()
       const result = await source.resetIndex({
         ...request,
@@ -410,6 +421,8 @@ export class IndexingRuntime {
       }
       this.recordResetResult(result, job)
       return result
+    } finally {
+      this.runGate.complete(sourceId, 'reset')
     }
   }
 
@@ -516,6 +529,7 @@ export class IndexingRuntime {
   clear(): void {
     this.sources.clear()
     this.taskState.clear()
+    this.runGate.clear()
     this.rootPolicy.clear()
   }
 
