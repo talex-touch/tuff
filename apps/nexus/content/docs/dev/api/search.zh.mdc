@@ -194,7 +194,7 @@ Settings 的 File Index 诊断区会把 `recentTasks` 渲染成最近任务 chip
 
 `@talex-touch/utils/search` 也暴露 `IndexedWriteUpdateExecutorService` 作为 injected-queue update executor。它负责 update records 分块、chunk 前等待、委托逐条更新、刷新 updated rows、派发 side effects，并通过注入的 clock/formatter 记录 chunk duration。SDK 只定义 `runQueue(chunks, handler, options)` 协议；CoreApp 仍注入自己的 adaptive queue 与 File 专属 backpressure 策略。
 
-`@talex-touch/utils/search` 也暴露 `IndexedWriteRuntimeEmitterService` 作为 runtime 输出 primitive。它负责把已写入 records 统一映射为 `IndexedSourceRecordBatch`、add/change `IndexedSourceDelta` 与 progress snapshot，不依赖 SQLite、SearchIndex、File row 或 worker 类型。FileProvider reconciliation insert/update 已复用该 helper，自己只注入 File row mapper、现有 upsert/update、runtime callback 与 source-specific reason；后续 Browser Bookmarks、Quicklinks、Obsidian 或 VSCode 的补漏写入不应再复制 record batch / delta / progress 输出协议。
+`@talex-touch/utils/search` 也暴露 `IndexedWriteRuntimeEmitterService` 作为 runtime 输出 primitive。它负责把已写入 records 统一映射为 `IndexedSourceRecordBatch`、add/change `IndexedSourceDelta` 与 progress snapshot，不依赖 SQLite、SearchIndex、File row 或 worker 类型。FileProvider full scan insert 与 reconciliation insert/update 已复用该 helper，自己只注入 File row mapper、现有 upsert/update、runtime callback 与 source-specific reason；后续 Browser Bookmarks、Quicklinks、Obsidian 或 VSCode 的补漏写入不应再复制 record batch / delta / progress 输出协议。
 
 `@talex-touch/utils/search` 也暴露 `IndexedWorkerPersistEntryMapperService` 作为通用 worker result 到 persist payload 的映射 primitive。它统一处理 progress null-normalization、fileUpdate contentHash 默认值、embedding model/vector 投影与泛型 `indexItem` 透传，不依赖 CoreApp SearchIndex worker 类型。CoreApp 保留兼容 re-export，FileProvider 现在直接消费 SDK mapper，且只负责把自己的 index worker result 交给该 mapper。
 
