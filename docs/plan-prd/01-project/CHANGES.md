@@ -43,6 +43,16 @@
   - Rewired AppProvider scan batches to use the runtime emitter builder and reject unexpected source ids instead of hand-writing batch mapping in the provider.
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "returns indexed source record batches from app scans" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
 
+### ref(search): emit browser bookmark runtime records through emitter
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Rewired Browser Bookmarks scanner-backed scan batches, reconcile refresh deltas, and watch refresh deltas to reuse `IndexedWriteRuntimeEmitterService` instead of hand-writing source-specific runtime output objects.
+  - Kept high-privacy enablement unchanged: real browser bookmark files are still read only when `browser-bookmarks` or `touch-browser-data.browser-bookmarks` is explicitly enabled through provider config.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### ref(search): add indexed source snapshot cache helper
 
 - `packages/utils/search/indexing-source-snapshot-cache.ts`
