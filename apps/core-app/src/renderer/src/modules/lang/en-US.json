@@ -2441,6 +2441,17 @@
         "complete": "{stage} · complete · {current}/{total}",
         "failed": "{stage} · failed · {reason}"
       },
+      "sourceRecovery": "Recovery",
+      "sourceRecoveryChip": {
+        "wait": "Wait for runtime recovery · {reason}",
+        "grant-permission": "Grant permission · {reason}",
+        "enable-provider": "Enable provider · {reason}",
+        "scan": "Run scan · {reason}",
+        "reconcile": "Run reconcile · {reason}",
+        "reset": "Reset index · {reason}",
+        "inspect-contract": "Inspect source contract · {reason}",
+        "inspect-source": "Inspect source state · {reason} · {blockedReason}"
+      },
       "sourceStatus": {
         "ready": "Ready",
         "warming": "Warming",

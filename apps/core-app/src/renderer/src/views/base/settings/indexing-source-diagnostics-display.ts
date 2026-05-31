@@ -9,6 +9,7 @@ export {
   resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
+  resolveIndexingSourceRecoveryChip,
   resolveIndexingSourceStatusKey,
   resolveIndexingSourceTaskChips,
   resolveIndexingSourceTone,
@@ -22,6 +23,7 @@ export type {
   IndexingSourceLifecycleIssueChip,
   IndexingSourceProgressChip,
   IndexingSourceRecentTaskChip,
+  IndexingSourceRecoveryChip,
   IndexingSourceTaskChip,
   IndexingSourceTone
 } from '../../../modules/search/indexing-source-diagnostics-display'

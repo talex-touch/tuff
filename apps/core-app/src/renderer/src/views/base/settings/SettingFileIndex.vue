@@ -59,6 +59,7 @@ import {
   resolveIndexingSourceProgressChip,
   resolveIndexingSourceReconcileStateKey,
   resolveIndexingSourceRecentTaskChips,
+  resolveIndexingSourceRecoveryChip,
   resolveIndexingSourceStatusKey,
   resolveIndexingSourceTaskChips,
   resolveIndexingSourceTone,
@@ -760,6 +761,15 @@ function getSourceProgressTone(source: IndexedSourceDiagnostics): string {
   return resolveIndexingSourceProgressChip(source)?.tone ?? 'muted'
 }
 
+function formatSourceRecovery(source: IndexedSourceDiagnostics): string | null {
+  const chip = resolveIndexingSourceRecoveryChip(source)
+  return chip ? t(chip.labelKey, chip.values) : null
+}
+
+function getSourceRecoveryTone(source: IndexedSourceDiagnostics): string {
+  return resolveIndexingSourceRecoveryChip(source)?.tone ?? 'muted'
+}
+
 const deviceIdleDuration = computed(() =>
   formatDeviceIdleDuration(deviceIdleDiagnostic.value?.snapshot.idleMs ?? null)
 )
@@ -1271,6 +1281,17 @@ async function triggerRebuild() {
             :class="`source-status-pill--${getSourceProgressTone(source)}`"
           >
             {{ formatSourceProgress(source) }}
+          </span>
+        </div>
+        <div v-if="resolveIndexingSourceRecoveryChip(source)" class="source-history-row">
+          <span class="source-history-label">
+            {{ t('settings.settingFileIndex.sourceRecovery') }}
+          </span>
+          <span
+            class="source-diagnostic-chip source-recovery-chip"
+            :class="`source-status-pill--${getSourceRecoveryTone(source)}`"
+          >
+            {{ formatSourceRecovery(source) }}
           </span>
         </div>
         <div

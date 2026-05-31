@@ -7,13 +7,17 @@ import type {
   IndexedSourceMaintenanceActionState,
   IndexedSourceProgress,
   IndexedSourceProgressStatus,
+  IndexedSourceRecoveryRecommendation,
   IndexedSourceReconcileState,
   IndexedSourceTaskHistoryEntry,
   IndexedSourceTaskHistoryKind,
   IndexedSourceTaskHistoryStatus,
   IndexedSourceWatchState
 } from '@talex-touch/utils/search'
-import { resolveIndexedSourceMaintenanceActions } from '@talex-touch/utils/search'
+import {
+  resolveIndexedSourceMaintenanceActions,
+  resolveIndexedSourceRecoveryRecommendation
+} from '@talex-touch/utils/search'
 
 export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'muted'
 
@@ -45,6 +49,13 @@ export interface IndexingSourceProgressChip {
   values: Record<string, string | number>
 }
 
+export interface IndexingSourceRecoveryChip {
+  id: string
+  tone: IndexingSourceTone
+  labelKey: string
+  values: Record<string, string | number>
+}
+
 export interface IndexingSourceLifecycleIssueChip {
   id: string
   tone: IndexingSourceTone
@@ -63,6 +74,24 @@ export function resolveIndexingSourceMaintenanceActions(
   source: IndexedSourceDiagnostics
 ): IndexedSourceMaintenanceActionState[] {
   return resolveIndexedSourceMaintenanceActions(source)
+}
+
+export function resolveIndexingSourceRecoveryChip(
+  source: IndexedSourceDiagnostics
+): IndexingSourceRecoveryChip | null {
+  const recommendation = resolveIndexedSourceRecoveryRecommendation(source)
+  if (recommendation.action === 'none') return null
+
+  return {
+    id: `${source.descriptor.id}:recovery:${recommendation.action}`,
+    tone: resolveRecoveryTone(recommendation),
+    labelKey: `settings.settingFileIndex.sourceRecoveryChip.${recommendation.action}`,
+    values: {
+      reason: recommendation.reason ?? '',
+      maintenanceAction: recommendation.maintenanceAction ?? '',
+      blockedReason: recommendation.blockedReason ?? ''
+    }
+  }
 }
 
 const STATUS_TONE_MAP: Record<IndexedSourceHealthStatus, IndexingSourceTone> = {
@@ -152,6 +181,15 @@ function resolveProgressTone(status: IndexedSourceProgressStatus): IndexingSourc
   if (status === 'failed' || status === 'stalled') return 'danger'
   if (status === 'stabilizing') return 'warning'
   if (status === 'running' || status === 'estimated') return 'info'
+  return 'muted'
+}
+
+function resolveRecoveryTone(
+  recommendation: IndexedSourceRecoveryRecommendation
+): IndexingSourceTone {
+  if (recommendation.priority === 'high') return 'danger'
+  if (recommendation.priority === 'medium') return 'warning'
+  if (recommendation.priority === 'low') return 'info'
   return 'muted'
 }
 
