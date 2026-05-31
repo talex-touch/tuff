@@ -1,3 +1,4 @@
+import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
 import type { IndexedSourceDelta } from '@talex-touch/utils/search'
 import type {
   IndexedWriteDeleteExecutorResult,
@@ -23,17 +24,18 @@ export class FileProviderReconciliationDeleteService<
   TRecord extends IndexedWriteDeleteRecord,
   TContext
 > {
-  private readonly sourceId: string
   private readonly deleteRecords: FileProviderReconciliationDeleteDeps<
     TRecord,
     TContext
   >['deleteRecords']
-  private readonly emitDelta: FileProviderReconciliationDeleteDeps<TRecord, TContext>['emitDelta']
+  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TRecord, TContext>
 
   constructor(deps: FileProviderReconciliationDeleteDeps<TRecord, TContext>) {
-    this.sourceId = deps.sourceId
     this.deleteRecords = deps.deleteRecords
-    this.emitDelta = deps.emitDelta
+    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
+      sourceId: deps.sourceId,
+      emitDelta: deps.emitDelta
+    })
   }
 
   async execute(
@@ -45,18 +47,9 @@ export class FileProviderReconciliationDeleteService<
     }
 
     const deleteResult = await this.deleteRecords(records)
-    for (const removedPath of deleteResult.deletedPaths) {
-      await this.emitDelta(
-        {
-          sourceId: this.sourceId,
-          action: 'delete',
-          stableKey: removedPath,
-          path: removedPath,
-          reason: 'file-provider-reconciliation-delete'
-        },
-        context
-      )
-    }
+    await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context, {
+      reason: 'file-provider-reconciliation-delete'
+    })
 
     return {
       deleted: deleteResult.deleted,
