@@ -89,10 +89,37 @@ describe('IndexedWriteRuntimeEmitterService', () => {
 
     await service.emitBatch([], undefined)
     await service.emitDeltas([], undefined, { action: 'change' })
+    await service.emitDeleteDeltas([], undefined)
     service.emitProgressSnapshot({ current: 3, total: 5 })
 
     expect(emitRecordBatch).not.toHaveBeenCalled()
     expect(emitDelta).not.toHaveBeenCalled()
     expect(emitProgress).toHaveBeenCalledWith(3, 5)
+  })
+
+  it('emits delete deltas from removed paths without requiring mapped records', async () => {
+    const emitDelta = vi.fn(async () => {})
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord, { runId: string }>({
+      sourceId: 'test-source',
+      emitDelta
+    })
+    const context = { runId: 'reconcile' }
+
+    await service.emitDeleteDeltas(['/tmp/a.txt', '/tmp/b.txt'], context, {
+      reason: 'test-reconcile-delete'
+    })
+
+    expect(emitDelta).toHaveBeenCalledTimes(2)
+    expect(emitDelta).toHaveBeenNthCalledWith(
+      1,
+      {
+        sourceId: 'test-source',
+        action: 'delete',
+        stableKey: '/tmp/a.txt',
+        path: '/tmp/a.txt',
+        reason: 'test-reconcile-delete'
+      },
+      context
+    )
   })
 })

@@ -7,7 +7,7 @@ import type {
 
 export interface IndexedWriteRuntimeEmitterDeps<TRecord, TContext> {
   sourceId: string
-  mapRecord: (record: TRecord) => IndexedSourceRecord
+  mapRecord?: (record: TRecord) => IndexedSourceRecord
   getPath?: (record: TRecord) => string | undefined
   emitRecordBatch?: (
     batch: IndexedSourceRecordBatch,
@@ -22,6 +22,10 @@ export interface IndexedWriteRuntimeEmitterDeltaOptions {
   reason?: string
 }
 
+export interface IndexedWriteRuntimeEmitterDeleteOptions {
+  reason?: string
+}
+
 export interface IndexedWriteRuntimeEmitterProgressOptions {
   current: number
   total: number
@@ -29,7 +33,7 @@ export interface IndexedWriteRuntimeEmitterProgressOptions {
 
 export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
   private readonly sourceId: string
-  private readonly mapRecord: IndexedWriteRuntimeEmitterDeps<
+  private readonly mapRecord?: IndexedWriteRuntimeEmitterDeps<
     TRecord,
     TContext
   >['mapRecord']
@@ -71,7 +75,7 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
     await this.emitRecordBatch(
       {
         sourceId: this.sourceId,
-        records: records.map((record) => this.mapRecord(record))
+        records: records.map((record) => this.mapIndexedRecord(record))
       },
       context
     )
@@ -87,7 +91,7 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
     }
 
     for (const record of records) {
-      const indexedRecord = this.mapRecord(record)
+      const indexedRecord = this.mapIndexedRecord(record)
       await this.emitDelta(
         {
           sourceId: this.sourceId,
@@ -101,7 +105,38 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
     }
   }
 
+  async emitDeleteDeltas(
+    paths: string[],
+    context: TContext,
+    options: IndexedWriteRuntimeEmitterDeleteOptions = {}
+  ): Promise<void> {
+    if (!this.emitDelta || paths.length === 0) {
+      return
+    }
+
+    for (const removedPath of paths) {
+      await this.emitDelta(
+        {
+          sourceId: this.sourceId,
+          action: 'delete',
+          stableKey: removedPath,
+          path: removedPath,
+          reason: options.reason
+        },
+        context
+      )
+    }
+  }
+
   emitProgressSnapshot(options: IndexedWriteRuntimeEmitterProgressOptions): void {
     this.emitProgress?.(options.current, options.total)
+  }
+
+  private mapIndexedRecord(record: TRecord): IndexedSourceRecord {
+    if (!this.mapRecord) {
+      throw new Error('IndexedWriteRuntimeEmitterService requires mapRecord for record emission')
+    }
+
+    return this.mapRecord(record)
   }
 }
