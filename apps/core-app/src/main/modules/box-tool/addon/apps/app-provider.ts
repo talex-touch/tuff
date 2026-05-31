@@ -50,7 +50,10 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
-import { IndexedSourceScanReasons } from '@talex-touch/utils/search'
+import {
+  IndexedSourceGroupedEvidenceService,
+  IndexedSourceScanReasons
+} from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
@@ -224,6 +227,7 @@ const APP_SOURCE_EVIDENCE_LABELS: Record<AppSourceEvidenceKey, string> = {
   'linux-desktop': 'Linux desktop entries',
   unknown: 'Unclassified app records'
 }
+const appGroupedEvidenceService = new IndexedSourceGroupedEvidenceService()
 
 function logApp(
   message: string,
@@ -1345,35 +1349,34 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private buildWindowsScannerEvidence(
     results: AppScannerSourceScanResult[]
   ): IndexedSourceEvidence[] {
-    const bySourceId = new Map<AppSourceEvidenceKey, AppScannerSourceScanResult>()
-    for (const result of results) {
-      bySourceId.set(result.sourceId, result)
-    }
-
-    return this.getPlatformEvidenceKeys()
-      .filter((key) => key !== 'unknown')
-      .map((key) => {
-        if (key === 'manual') {
-          return this.buildAppSourceEvidence(key, 0, {
-            status: 'degraded',
-            reason: 'manual-app-entries-not-scanned',
-            metadata: {
-              evidenceSource: 'scanner'
-            }
-          })
-        }
-
-        const result = bySourceId.get(key)
-        const itemCount = result?.apps.length ?? 0
-        return this.buildAppSourceEvidence(key, itemCount, {
-          status: result?.error ? 'degraded' : itemCount > 0 ? 'ready' : 'degraded',
-          reason: result?.error || (itemCount === 0 ? `${key}-empty` : undefined),
+    return appGroupedEvidenceService.build({
+      sourceId: this.id,
+      keys: this.getPlatformEvidenceKeys().filter((key) => key !== 'unknown'),
+      labels: APP_SOURCE_EVIDENCE_LABELS,
+      results: results.map((result) => ({
+        sourceId: result.sourceId,
+        label: result.label,
+        itemCount: result.apps.length,
+        error: result.error
+      })),
+      metadata: {
+        platform: process.platform
+      },
+      resultMetadata: {
+        evidenceSource: 'scanner'
+      },
+      emptyReason: (key) => `${key}-empty`,
+      overrides: {
+        manual: {
+          itemCount: 0,
+          status: 'degraded',
+          reason: 'manual-app-entries-not-scanned',
           metadata: {
-            evidenceSource: 'scanner',
-            sourceLabel: result?.label
+            evidenceSource: 'scanner'
           }
-        })
-      })
+        }
+      }
+    })
   }
 
   private buildAppSourceEvidence(
