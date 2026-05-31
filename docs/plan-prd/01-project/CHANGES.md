@@ -31,6 +31,18 @@
   - Rewired FileProvider full-scan insert, cleanup delete, reconciliation insert/update/delete, and App/File watch delta builders to use the SDK emitter while keeping File/App row mapping, DB upsert/update/delete, source-specific reasons and runtime callback wiring in the provider boundary.
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-cleanup-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts" "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "watch|handleIndexedSourceWatchEvent|delete"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
 
+### ref(search): build runtime record batches with emitter
+
+- `packages/utils/search/indexing-write-runtime-emitter.ts`
+- `packages/utils/__tests__/search/indexing-write-runtime-emitter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added `IndexedWriteRuntimeEmitterService.buildBatch()` so sources can construct `IndexedSourceRecordBatch` through the same mapper used by `emitBatch()` without requiring an emit sink.
+  - Rewired AppProvider scan batches to use the runtime emitter builder and reject unexpected source ids instead of hand-writing batch mapping in the provider.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "returns indexed source record batches from app scans" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed source snapshot cache helper
 
 - `packages/utils/search/indexing-source-snapshot-cache.ts`
