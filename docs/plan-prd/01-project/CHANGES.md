@@ -13,6 +13,20 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source snapshot cache helper
+
+- `packages/utils/search/indexing-source-snapshot-cache.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-snapshot-cache.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedSourceSnapshotCacheService` for short-TTL source diagnostics snapshots with concurrent load de-duplication, failed-load non-caching and explicit clear semantics.
+  - Rewired Browser Bookmarks diagnostics health/roots/evidence reads to share one scanner snapshot per diagnostics refresh while clearing the cache before scan/reconcile/watch/reset maintenance paths.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-snapshot-cache.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed source profile diagnostics helper
 
 - `packages/utils/search/indexing-source-profile-diagnostics.ts`
