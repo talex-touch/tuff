@@ -18,16 +18,18 @@
 - `packages/utils/search/indexing-write-runtime-emitter.ts`
 - `packages/utils/search/index.ts`
 - `packages/utils/__tests__/search/indexing-write-runtime-emitter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-cleanup-delete-service.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
 - `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
 - `docs/plan-prd/TODO.md`
 - `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
-  - Added public `IndexedWriteRuntimeEmitterService` so source adapters can map persisted records into `IndexedSourceRecordBatch`, add/change deltas and progress snapshots without duplicating runtime output plumbing.
-  - Rewired FileProvider full-scan insert, reconciliation insert/update, and reconciliation delete services to use the SDK emitter while keeping File row mapping, DB upsert/update/delete, source-specific reasons and runtime callback wiring in the FileProvider boundary.
-  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+  - Added public `IndexedWriteRuntimeEmitterService` so source adapters can map persisted records into `IndexedSourceRecordBatch`, add/change/delete deltas and progress snapshots without duplicating runtime output plumbing.
+  - Rewired FileProvider full-scan insert, cleanup delete, reconciliation insert/update/delete, and App/File watch delta builders to use the SDK emitter while keeping File/App row mapping, DB upsert/update/delete, source-specific reasons and runtime callback wiring in the provider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-cleanup-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts" "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "watch|handleIndexedSourceWatchEvent|delete"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
 
 ### ref(search): add indexed source snapshot cache helper
 
