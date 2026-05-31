@@ -59,6 +59,7 @@ import {
   IndexedWriteFlushEvidenceService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
+  IndexedWriteRuntimeEmitterService,
   isIndexedWatchPathOwned
 } from '@talex-touch/utils/search'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
@@ -488,7 +489,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     typeof filesSchema.$inferSelect
   >
   private readonly incrementalDeleteExecutor: IndexedWriteDeleteExecutorService<IndexedWriteDeleteRecord>
-  private readonly cleanupDeleteService: FileProviderCleanupDeleteService<IndexedWriteDeleteRecord>
+  private readonly cleanupDeleteService: FileProviderCleanupDeleteService<
+    IndexedWriteDeleteRecord,
+    FileIndexRunOptions | undefined
+  >
   private readonly fullScanRunService: FileProviderFullScanRunService<
     FileIndexRunOptions | undefined
   >
@@ -515,6 +519,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   >
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
   private readonly indexPersistEntryMapper: FileProviderIndexPersistEntryMapperService
+  private readonly watchRuntimeEmitter =
+    new IndexedWriteRuntimeEmitterService<FileIndexedSourceRecordRow>({
+      sourceId: this.id,
+      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
+      getPath: (record) => record.path
+    })
 
   constructor() {
     const pathNames: ('documents' | 'downloads' | 'desktop' | 'music' | 'pictures' | 'videos')[] = [
@@ -677,6 +687,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       successMessage: 'Incremental remove completed'
     })
     this.cleanupDeleteService = new FileProviderCleanupDeleteService({
+      sourceId: this.id,
       getAllIndexedFileRecords: async () => {
         if (!this.dbUtils) return []
         return await this.dbUtils
@@ -691,6 +702,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       },
       deleteRecords: (records) => this.deleteCleanupRecords(records),
       removeSearchIndexItems: (paths) => this.removeCleanupSearchIndexItems(paths),
+      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
       emitProgress: (current, total) => this.emitIndexingProgress('cleanup', current, total),
       now: () => performance.now(),
       formatDuration,
@@ -1382,13 +1394,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (event.action === 'delete') {
       return [
-        {
-          sourceId: this.id,
-          action: 'delete',
-          stableKey: event.path,
-          path: event.path,
+        this.watchRuntimeEmitter.buildDeleteDelta(event.path, {
           reason: 'file-provider-watch-delete'
-        }
+        })
       ]
     }
 
@@ -1398,13 +1406,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return [
-      {
-        sourceId: this.id,
+      this.watchRuntimeEmitter.buildDelta(record, {
         action: event.action,
-        record: this.mapFileToIndexedSourceRecord(record),
-        path: event.path,
         reason: 'file-provider-watch-event'
-      }
+      })
     ]
   }
 
@@ -2769,7 +2774,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await new Promise<void>((resolve) => setImmediate(resolve))
 
     // --- 1. Index Cleanup (FR-IX-4) ---
-    const cleanupResult = await this.cleanupDeleteService.execute()
+    const cleanupResult = await this.cleanupDeleteService.execute(options)
     stats.deleted += cleanupResult.deletedCount
 
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---

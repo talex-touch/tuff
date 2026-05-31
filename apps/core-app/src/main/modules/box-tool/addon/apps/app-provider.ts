@@ -53,7 +53,8 @@ import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-
 import {
   IndexedSourceGroupedEvidenceService,
   IndexedSourceRootEvidenceService,
-  IndexedSourceScanReasons
+  IndexedSourceScanReasons,
+  IndexedWriteRuntimeEmitterService
 } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -406,6 +407,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private volatileLastFullSyncTime: number | null = null
   private maintenanceTaskQueue: Promise<void> = Promise.resolve()
   private maintenanceTaskMap = new Map<string, Promise<unknown>>()
+  private readonly runtimeEmitter = new IndexedWriteRuntimeEmitterService<ScannedAppInfo>({
+    sourceId: this.id,
+    mapRecord: (record) => this.mapScannedAppToIndexedSourceRecord(this.id, record),
+    getPath: (record) => record.path
+  })
   private readonly sourceScanner = new AppProviderSourceScanner({
     resolveScannedAppKey: (app) => this.resolveScannedAppKey(app),
     isManagedEntry: (extensions) => isManagedEntryExtensionMap(extensions),
@@ -683,13 +689,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (event.action === 'delete') {
       await this.handleItemUnlinked(fsEvent)
       return [
-        {
-          sourceId: this.id,
-          action: 'delete',
-          stableKey: event.path,
-          path: event.path,
+        this.runtimeEmitter.buildDeleteDelta(event.path, {
           reason: 'app-provider-watch-delete'
-        }
+        })
       ]
     }
 
@@ -704,13 +706,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     return [
-      {
-        sourceId: this.id,
+      this.runtimeEmitter.buildDelta(result.appInfo, {
         action: event.action,
-        record: this.mapScannedAppToIndexedSourceRecord(this.id, result.appInfo),
-        path: result.appInfo.path,
         reason: 'app-provider-watch-event'
-      }
+      })
     ]
   }
 

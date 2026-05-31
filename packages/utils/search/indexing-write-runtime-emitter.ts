@@ -91,17 +91,21 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
     }
 
     for (const record of records) {
-      const indexedRecord = this.mapIndexedRecord(record)
-      await this.emitDelta(
-        {
-          sourceId: this.sourceId,
-          action: options.action,
-          record: indexedRecord,
-          path: this.getPath(record) ?? indexedRecord.path,
-          reason: options.reason
-        },
-        context
-      )
+      await this.emitDelta(this.buildDelta(record, options), context)
+    }
+  }
+
+  buildDelta(
+    record: TRecord,
+    options: IndexedWriteRuntimeEmitterDeltaOptions
+  ): IndexedSourceDelta {
+    const indexedRecord = this.mapIndexedRecord(record)
+    return {
+      sourceId: this.sourceId,
+      action: options.action,
+      record: indexedRecord,
+      path: this.getPath(record) ?? indexedRecord.path,
+      reason: options.reason
     }
   }
 
@@ -115,16 +119,20 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
     }
 
     for (const removedPath of paths) {
-      await this.emitDelta(
-        {
-          sourceId: this.sourceId,
-          action: 'delete',
-          stableKey: removedPath,
-          path: removedPath,
-          reason: options.reason
-        },
-        context
-      )
+      await this.emitDelta(this.buildDeleteDelta(removedPath, options), context)
+    }
+  }
+
+  buildDeleteDelta(
+    path: string,
+    options: IndexedWriteRuntimeEmitterDeleteOptions = {}
+  ): IndexedSourceDelta {
+    return {
+      sourceId: this.sourceId,
+      action: 'delete',
+      stableKey: path,
+      path,
+      reason: options.reason
     }
   }
 
