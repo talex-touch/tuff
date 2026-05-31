@@ -13,6 +13,18 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed write flush result mapper
+
+- `packages/utils/search/indexing-write-flush-executor.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-executor.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `mapIndexedWriteFlushExecutorResult()` so source adapters can map SDK executor statuses and numeric metadata fields without reimplementing result-shape plumbing.
+  - Rewired `FileProviderIndexFlushExecutorService` to use the SDK result mapper for `not-ready` to `worker-not-ready` and `withContent` extraction, keeping SQLite persist, worker readiness, and evidence semantics in the FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-executor.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add entry-keyed indexed write buffer
 
 - `packages/utils/search/indexing-write-buffer.ts`
