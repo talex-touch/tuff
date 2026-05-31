@@ -13,6 +13,23 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source task run gate
+
+- `packages/utils/search/indexing-source-task-run-gate.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-task-run-gate.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-scan-scheduler.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-scan-scheduler.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-reconcile-scheduler.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-reconcile-scheduler.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedSourceTaskRunGate` for source/kind running and debounce admission decisions.
+  - Rewired ScanScheduler and ReconcileScheduler to share the SDK run gate while preserving the existing same-source running rejection behavior.
+  - Documented that this is still an in-memory run gate and not durable job history, retry, or automatic recovery.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-task-run-gate.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-scan-scheduler.test.ts" "src/main/modules/box-tool/search-engine/indexing-reconcile-scheduler.test.ts"` 通过。
+
 ### ref(search): add indexed source recovery recommendation policy
 
 - `packages/utils/search/indexing-source-recovery-policy.ts`
