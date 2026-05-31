@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed write flush evidence mapper
+
+- `packages/utils/search/indexing-write-flush-evidence.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-evidence.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedWriteFlushEvidenceService` so source adapters can map latest flush snapshots into `IndexedSourceEvidence` without hand-rolling ready/degraded status, itemCount, and metadata plumbing.
+  - Rewired FileProvider `file-provider:index-flush` evidence to keep only the File source id/label adapter boundary; DB persist, worker readiness, SearchIndex worker, and FTS semantics remain at the existing FileProvider/SearchIndex worker boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-evidence.test.ts" "__tests__/search/indexing-source-progress-evidence.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed write flush result mapper
 
 - `packages/utils/search/indexing-write-flush-executor.ts`
