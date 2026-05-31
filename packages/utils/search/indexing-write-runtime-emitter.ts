@@ -31,6 +31,10 @@ export interface IndexedWriteRuntimeEmitterProgressOptions {
   total: number
 }
 
+export interface IndexedWriteRuntimeEmitterBatchOptions {
+  done?: boolean
+}
+
 export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
   private readonly sourceId: string
   private readonly mapRecord?: IndexedWriteRuntimeEmitterDeps<
@@ -72,13 +76,23 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
       return
     }
 
-    await this.emitRecordBatch(
-      {
-        sourceId: this.sourceId,
-        records: records.map((record) => this.mapIndexedRecord(record))
-      },
-      context
-    )
+    await this.emitRecordBatch(this.buildBatch(records), context)
+  }
+
+  buildBatch(
+    records: TRecord[],
+    options: IndexedWriteRuntimeEmitterBatchOptions = {}
+  ): IndexedSourceRecordBatch {
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: this.sourceId,
+      records: records.map((record) => this.mapIndexedRecord(record))
+    }
+
+    if (options.done !== undefined) {
+      batch.done = options.done
+    }
+
+    return batch
   }
 
   async emitDeltas(

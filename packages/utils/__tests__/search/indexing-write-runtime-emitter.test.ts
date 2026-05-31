@@ -17,6 +17,27 @@ const mapRecord = (record: TestRecord) => ({
 })
 
 describe('IndexedWriteRuntimeEmitterService', () => {
+  it('builds mapped record batches without requiring an emit sink', () => {
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
+      sourceId: 'test-source',
+      mapRecord
+    })
+
+    expect(
+      service.buildBatch([{ id: '1', path: '/tmp/a.txt', title: 'A' }], { done: true })
+    ).toEqual({
+      sourceId: 'test-source',
+      records: [
+        expect.objectContaining({
+          recordId: '1',
+          stableKey: '/tmp/a.txt',
+          title: 'A'
+        })
+      ],
+      done: true
+    })
+  })
+
   it('emits mapped record batches for runtime store adapters', async () => {
     const emitRecordBatch = vi.fn(async () => {})
     const service = new IndexedWriteRuntimeEmitterService<TestRecord, { runId: string }>({

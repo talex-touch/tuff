@@ -723,12 +723,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     sourceId: string,
     options: { forceRefresh?: boolean } = {}
   ): Promise<IndexedSourceRecordBatch> {
-    const apps = await this.loadScannedApps({ forceRefresh: options.forceRefresh === true })
-    return {
-      sourceId,
-      records: apps.map((app) => this.mapScannedAppToIndexedSourceRecord(sourceId, app)),
-      done: true
+    if (sourceId !== this.id) {
+      throw new Error(`Unsupported app index source: ${sourceId}`)
     }
+
+    const apps = await this.loadScannedApps({ forceRefresh: options.forceRefresh === true })
+    return this.runtimeEmitter.buildBatch(apps, { done: true })
   }
 
   private mapScannedAppToIndexedSourceRecord(
