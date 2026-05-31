@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileProviderWatchService } from './file-provider-watch-service'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { scanProgress } from '../../../../../db/schema'
+import { appTaskGate } from '../../../../../service/app-task-gate'
+import { deviceIdleService } from '../../../../../service/device-idle-service'
+import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
 
 vi.mock('@talex-touch/utils', () => ({
   StorageList: {
@@ -133,6 +136,74 @@ describe('file-provider-watch-service', () => {
     expect(eligibility.newPaths).toEqual([])
     expect(eligibility.stalePaths).toEqual(['/tmp/tuff-index-a'])
     expect(eligibility.lastScannedAt).toBe(freshTimestamp)
+  })
+
+  it('does not read scan progress when auto indexing is initializing', async () => {
+    const { dbUtils, from } = createDbUtils([])
+    const service = createService({ dbUtils })
+
+    await expect(
+      service.shouldRunAutoIndexing({
+        isInitializing: true,
+        hasInitializationContext: true
+      })
+    ).resolves.toEqual({ allowed: false, reason: 'initializing' })
+    expect(from).not.toHaveBeenCalled()
+    expect(deviceIdleService.canRun).not.toHaveBeenCalled()
+  })
+
+  it('skips auto indexing when no path is eligible by interval', async () => {
+    const freshTimestamp = Date.now()
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: freshTimestamp },
+      { path: '/tmp/tuff-index-b', lastScanned: freshTimestamp }
+    ])
+    const service = createService({ dbUtils })
+
+    await expect(
+      service.shouldRunAutoIndexing({
+        isInitializing: false,
+        hasInitializationContext: true
+      })
+    ).resolves.toEqual({ allowed: false, reason: 'interval' })
+    expect(deviceIdleService.canRun).not.toHaveBeenCalled()
+  })
+
+  it('runs idle gate when auto indexing preflight and interval pass', async () => {
+    const staleTimestamp = Date.now() - 25 * 60 * 60 * 1000
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: staleTimestamp },
+      { path: '/tmp/tuff-index-b', lastScanned: staleTimestamp }
+    ])
+    const service = createService({ dbUtils })
+
+    await expect(
+      service.shouldRunAutoIndexing({
+        isInitializing: false,
+        hasInitializationContext: true
+      })
+    ).resolves.toEqual({ allowed: true, battery: null })
+    expect(deviceIdleService.canRun).toHaveBeenCalledWith({ idleThresholdMs: 60 * 60 * 1000 })
+  })
+
+  it('uses shared auto scan preflight for app busy and search active reasons', async () => {
+    vi.mocked(appTaskGate.isActive).mockReturnValueOnce(true)
+    const service = createService({ dbUtils: createDbUtils([]).dbUtils })
+
+    await expect(
+      service.shouldRunAutoIndexing({
+        isInitializing: false,
+        hasInitializationContext: true
+      })
+    ).resolves.toEqual({ allowed: false, reason: 'app-busy' })
+
+    vi.mocked(isSearchRecentlyActive).mockReturnValueOnce(true)
+    await expect(
+      service.shouldRunAutoIndexing({
+        isInitializing: false,
+        hasInitializationContext: true
+      })
+    ).resolves.toEqual({ allowed: false, reason: 'search-active' })
   })
 
   it('marks file system events subscribed after watcher registration', async () => {

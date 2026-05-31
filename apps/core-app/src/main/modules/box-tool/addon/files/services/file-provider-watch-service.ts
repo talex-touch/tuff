@@ -22,6 +22,7 @@ import type { FileIndexSettings } from '../types'
 import {
   filterIndexedWatchPendingPermissionPaths,
   isIndexedWatchPathOwned,
+  resolveIndexedAutoScanPreflight,
   resolveIndexedScanEligibility,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
@@ -311,33 +312,29 @@ export class FileProviderWatchService {
     reason?: string
     battery?: FileIndexBatteryStatus | null
   }> {
-    if (!this.fileIndexSettings.autoScanEnabled) {
-      return { allowed: false, reason: 'disabled' }
+    const dbUtils = this.getDbUtils()
+    const basePreflightInput = {
+      autoScanEnabled: this.fileIndexSettings.autoScanEnabled,
+      isInitializing: input.isInitializing,
+      hasDbContext: Boolean(dbUtils),
+      hasInitializationContext: input.hasInitializationContext,
+      watchPathCount: this.watchPaths.length,
+      appBusy: appTaskGate.isActive(),
+      searchActive: isSearchRecentlyActive(2000)
     }
-
-    if (input.isInitializing) {
-      return { allowed: false, reason: 'initializing' }
-    }
-
-    if (!this.getDbUtils() || !input.hasInitializationContext) {
-      return { allowed: false, reason: 'missing-context' }
-    }
-
-    if (this.watchPaths.length === 0) {
-      return { allowed: false, reason: 'no-paths' }
-    }
-
-    if (appTaskGate.isActive()) {
-      return { allowed: false, reason: 'app-busy' }
-    }
-
-    if (isSearchRecentlyActive(2000)) {
-      return { allowed: false, reason: 'search-active' }
+    const earlyPreflight = resolveIndexedAutoScanPreflight(basePreflightInput)
+    if (!earlyPreflight.allowed) {
+      return earlyPreflight
     }
 
     const eligibility = await this.getScanEligibility()
-    if (eligibility.newPaths.length === 0 && eligibility.stalePaths.length === 0) {
-      return { allowed: false, reason: 'interval' }
+    const preflight = resolveIndexedAutoScanPreflight({
+      ...basePreflightInput,
+      hasEligiblePaths: eligibility.newPaths.length > 0 || eligibility.stalePaths.length > 0
+    })
+
+    if (!preflight.allowed) {
+      return preflight
     }
 
     const decision = await deviceIdleService.canRun({
