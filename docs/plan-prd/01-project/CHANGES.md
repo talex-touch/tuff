@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): add entry-keyed indexed write buffer
+
+- `packages/utils/search/indexing-write-buffer.ts`
+- `packages/utils/__tests__/search/indexing-write-buffer.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedEntryKeyedWriteBufferService` so worker payload buffers can derive their key from the payload while reusing the shared pending/inflight enqueue, take, commit, rollback, and size semantics.
+  - Rewired `FileProviderIndexFlushBufferService` to use the SDK entry-keyed buffer and keep only the File worker `fileId` key selector in the FileProvider adapter.
+  - Documented that this continues moving index-worker flush buffering toward source-agnostic SDK primitives without moving SQLite persist, SearchIndex worker, or FTS semantics yet.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-buffer.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): centralize indexed source runtime run gate
 
 - `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
