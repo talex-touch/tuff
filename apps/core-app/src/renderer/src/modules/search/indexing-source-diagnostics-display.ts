@@ -4,6 +4,7 @@ import type {
   IndexedSourceEvidence,
   IndexedSourceHealthStatus,
   IndexedSourceLifecycleIssue,
+  IndexedSourceMaintenanceActionState,
   IndexedSourceProgress,
   IndexedSourceProgressStatus,
   IndexedSourceReconcileState,
@@ -12,6 +13,7 @@ import type {
   IndexedSourceTaskHistoryStatus,
   IndexedSourceWatchState
 } from '@talex-touch/utils/search'
+import { resolveIndexedSourceMaintenanceActions } from '@talex-touch/utils/search'
 
 export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'muted'
 
@@ -55,6 +57,12 @@ export interface IndexingSourceAdmissionIssueChip {
   tone: IndexingSourceTone
   labelKey: string
   values: Record<string, string | number>
+}
+
+export function resolveIndexingSourceMaintenanceActions(
+  source: IndexedSourceDiagnostics
+): IndexedSourceMaintenanceActionState[] {
+  return resolveIndexedSourceMaintenanceActions(source)
 }
 
 const STATUS_TONE_MAP: Record<IndexedSourceHealthStatus, IndexingSourceTone> = {

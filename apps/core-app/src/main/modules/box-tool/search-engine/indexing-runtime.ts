@@ -192,6 +192,25 @@ export class IndexingRuntime {
   ): Promise<ScanSchedulerResult> {
     const source = this.requireSource(sourceId)
     const job = this.createScanJob(sourceId)
+    const diagnostics = await this.getSourceDiagnostics(sourceId)
+    const eligibility = resolveIndexedSourceTaskEligibility({
+      descriptor: source.descriptor,
+      health: diagnostics?.health,
+      task: 'scan'
+    })
+    if (!eligibility.eligible) {
+      const timestamp = Date.now()
+      const reason = eligibility.reason ?? 'diagnostics:unavailable'
+      this.recordScanSkipped(sourceId, job.queuedAt, timestamp, reason, job)
+      return {
+        sourceId,
+        batches: 0,
+        records: 0,
+        startedAt: job.queuedAt,
+        completedAt: timestamp
+      }
+    }
+
     try {
       const result = await this.scanScheduler.scanSource(source, reason, request)
       this.recordScanResult(result, job)
@@ -252,6 +271,29 @@ export class IndexingRuntime {
     request: Partial<IndexedSourceReconcileRequest> = {}
   ): Promise<IndexedSourceReconcileResult> {
     const source = this.requireSource(sourceId)
+    const diagnostics = await this.getSourceDiagnostics(sourceId)
+    const eligibility = resolveIndexedSourceTaskEligibility({
+      descriptor: source.descriptor,
+      health: diagnostics?.health,
+      task: 'reconcile'
+    })
+    if (!eligibility.eligible) {
+      const timestamp = Date.now()
+      const reason = eligibility.reason ?? 'diagnostics:unavailable'
+      this.recordReconcileSkipped(sourceId, timestamp, timestamp, reason)
+      return {
+        sourceId,
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 1,
+        errors: 0,
+        startedAt: timestamp,
+        completedAt: timestamp,
+        reason
+      }
+    }
+
     const { job, result } = await this.reconcileScheduler.reconcileSource(source, request)
     this.recordReconcileResult(result, request, job)
     return result
@@ -389,6 +431,13 @@ export class IndexingRuntime {
       throw new Error(`Indexed source '${sourceId}' is not registered`)
     }
     return source
+  }
+
+  private async getSourceDiagnostics(
+    sourceId: string
+  ): Promise<IndexingRuntimeSourceDiagnostics | undefined> {
+    const diagnostics = await this.getDiagnostics()
+    return diagnostics.sources.find((source) => source.descriptor.id === sourceId)
   }
 
   private getEligibleSources(

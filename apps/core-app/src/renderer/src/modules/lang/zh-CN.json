@@ -2343,6 +2343,7 @@
         "reconcile": "补漏",
         "reset": "重置"
       },
+      "sourceActionUnavailable": "{action}不可用：{reason}",
       "sourceActionScanSuccess": "扫描完成：{records} 条",
       "sourceActionReconcileSuccess": "补漏完成：变更 {changed}，删除 {deleted}",
       "sourceActionResetSuccess": "索引源运行时状态已重置",
