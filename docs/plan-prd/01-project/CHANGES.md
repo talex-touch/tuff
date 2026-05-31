@@ -13,6 +13,20 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed watch path policy
+
+- `packages/utils/search/indexing-watch-path-policy.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-watch-path-policy.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-path-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `normalizeIndexedWatchPath()` and `getIndexedWatchDepthForPath()` for path-based indexed source watch path normalization, case sensitivity, and macOS/Windows/Linux default watch depth.
+  - Rewired FileProvider path helpers into a thin adapter that only narrows CoreApp platform typing while delegating source-agnostic watch path policy to the SDK primitive.
+  - Kept real watcher registration, pending permission handling, and FileSystemWatcher lifecycle inside the CoreApp/FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-watch-path-policy.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-path-service.test.ts"` 通过。
+
 ### ref(search): lift indexed worker status snapshot
 
 - `packages/utils/search/indexing-worker-status.ts`
