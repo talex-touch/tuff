@@ -13,6 +13,19 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source grouped evidence helper
+
+- `packages/utils/search/indexing-source-grouped-evidence.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-grouped-evidence.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `IndexedSourceGroupedEvidenceService` so multi-sub-source adapters can map grouped scanner results into `IndexedSourceEvidence` with consistent ready/degraded, empty/error reason, itemCount, sourceLabel, and metadata behavior.
+  - Rewired AppProvider Windows scanner evidence to use the SDK grouped evidence helper while keeping platform key/label mapping, the manual synthetic row, and DB metadata fallback in the AppProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-grouped-evidence.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/apps/app-provider.test.ts" -t "prefers Windows scanner grouped source evidence|exposes app indexed source evidence"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
 ### ref(search): add indexed write flush failure snapshot helper
 
 - `packages/utils/search/indexing-write-flush-snapshot.ts`
