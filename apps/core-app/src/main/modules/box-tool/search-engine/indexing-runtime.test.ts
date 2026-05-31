@@ -1323,6 +1323,52 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('guards concurrent reset tasks for the same source', async () => {
+    let releaseReset!: () => void
+    const blocked = new Promise<void>((resolve) => {
+      releaseReset = resolve
+    })
+    const resetIndex = vi.fn(async () => {
+      await blocked
+      return {
+        sourceId: 'test-source',
+        reason: IndexedSourceResetReasons.HealthRepair,
+        clearedSearchIndex: false,
+        clearedScanProgress: true,
+        scanProgressRows: 1,
+        startedAt: 1700000000000,
+        completedAt: 1700000000100
+      }
+    })
+    runtime.registerSource(buildSource({ resetIndex }))
+
+    const first = runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.HealthRepair,
+      clearScanProgress: true
+    })
+    const second = await runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true
+    })
+
+    expect(second).toMatchObject({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.UserClear,
+      clearedSearchIndex: false,
+      clearedScanProgress: false,
+      error: 'reset-already-running'
+    })
+
+    releaseReset()
+    await expect(first).resolves.toMatchObject({
+      sourceId: 'test-source',
+      reason: IndexedSourceResetReasons.HealthRepair,
+      clearedScanProgress: true
+    })
+    expect(resetIndex).toHaveBeenCalledTimes(1)
+    expect(store.clearSource).not.toHaveBeenCalledWith('test-source')
+  })
+
   it('exposes latest scan, watch, and reconcile task state in diagnostics', async () => {
     const batch: IndexedSourceRecordBatch = {
       sourceId: 'test-source',
