@@ -13,6 +13,20 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed scan eligibility policy
+
+- `packages/utils/search/indexing-scan-eligibility.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-scan-eligibility.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `resolveIndexedScanEligibility()` and `toIndexedScanTimestamp()` for source-agnostic auto-scan new root, stale root, and latest scan timestamp calculation.
+  - Rewired `FileProviderWatchService.getScanEligibility()` to read `scan_progress` in CoreApp but delegate eligibility calculation to the SDK primitive.
+  - Kept Drizzle/SQLite table shape, auto-scan settings persistence, idle/battery gating, and background task registration inside the CoreApp/FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-scan-eligibility.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### ref(search): lift indexed watch root policy
 
 - `packages/utils/search/indexing-watch-root-policy.ts`
