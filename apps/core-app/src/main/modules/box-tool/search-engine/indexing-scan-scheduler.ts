@@ -5,6 +5,7 @@ import type {
   IndexedSourceScanRequest
 } from '@talex-touch/utils/search'
 import type { IndexStoreAdapter } from './indexing-store-adapter'
+import { IndexedSourceTaskRunGate } from '@talex-touch/utils/search'
 
 export interface ScanSchedulerResult {
   sourceId: string
@@ -39,12 +40,17 @@ export interface ScanSchedulerBatchResult {
 }
 
 export class ScanScheduler {
-  private readonly runningSources = new Set<string>()
+  private readonly runGate: IndexedSourceTaskRunGate
 
-  constructor(private readonly store: IndexStoreAdapter) {}
+  constructor(
+    private readonly store: IndexStoreAdapter,
+    runGate?: IndexedSourceTaskRunGate
+  ) {
+    this.runGate = runGate ?? new IndexedSourceTaskRunGate()
+  }
 
   isRunning(sourceId: string): boolean {
-    return this.runningSources.has(sourceId)
+    return this.runGate.isRunning(sourceId, 'scan')
   }
 
   async scanSource(
@@ -53,7 +59,8 @@ export class ScanScheduler {
     request: Partial<IndexedSourceScanRequest> = {}
   ): Promise<ScanSchedulerResult> {
     const sourceId = source.descriptor.id
-    if (this.runningSources.has(sourceId)) {
+    const decision = this.runGate.canStart(sourceId, 'scan')
+    if (!decision.allowed) {
       throw new Error(`Indexed source '${sourceId}' scan is already running`)
     }
 
@@ -61,7 +68,7 @@ export class ScanScheduler {
     let batches = 0
     let records = 0
 
-    this.runningSources.add(sourceId)
+    this.runGate.start(sourceId, 'scan', startedAt)
     try {
       for await (const batch of source.scan({
         ...request,
@@ -73,7 +80,7 @@ export class ScanScheduler {
         records += batch.records.length
       }
     } finally {
-      this.runningSources.delete(sourceId)
+      this.runGate.complete(sourceId, 'scan')
     }
 
     return {
