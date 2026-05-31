@@ -8,6 +8,7 @@ import type {
   IndexedSourceRuntimeTaskJob,
   IndexedSourceRuntimeTaskJobFactory
 } from './indexing-runtime-task-job'
+import { IndexedSourceTaskRunGate } from '@talex-touch/utils/search'
 import { IndexedSourceRuntimeTaskJobFactory as DefaultRuntimeTaskJobFactory } from './indexing-runtime-task-job'
 
 export interface ReconcileSchedulerJob extends IndexedSourceRuntimeTaskJob {
@@ -25,15 +26,18 @@ export interface ReconcileSchedulerResult {
 }
 
 export class ReconcileScheduler {
-  private readonly runningSources = new Set<string>()
+  private readonly runGate: IndexedSourceTaskRunGate
 
   constructor(
     private readonly engine: ReconcileEngine,
-    private readonly jobFactory: IndexedSourceRuntimeTaskJobFactory = new DefaultRuntimeTaskJobFactory()
-  ) {}
+    private readonly jobFactory: IndexedSourceRuntimeTaskJobFactory = new DefaultRuntimeTaskJobFactory(),
+    runGate?: IndexedSourceTaskRunGate
+  ) {
+    this.runGate = runGate ?? new IndexedSourceTaskRunGate()
+  }
 
   isRunning(sourceId: string): boolean {
-    return this.runningSources.has(sourceId)
+    return this.runGate.isRunning(sourceId, 'reconcile')
   }
 
   async reconcileSource(
@@ -41,7 +45,8 @@ export class ReconcileScheduler {
     request: Partial<IndexedSourceReconcileRequest> = {}
   ): Promise<ReconcileSchedulerResult> {
     const sourceId = source.descriptor.id
-    if (this.runningSources.has(sourceId)) {
+    const decision = this.runGate.canStart(sourceId, 'reconcile')
+    if (!decision.allowed) {
       throw new Error(`Indexed source '${sourceId}' reconcile is already running`)
     }
 
@@ -52,9 +57,9 @@ export class ReconcileScheduler {
       status: 'queued'
     }
 
-    this.runningSources.add(sourceId)
     job.status = 'running'
     job.startedAt = Date.now()
+    this.runGate.start(sourceId, 'reconcile', job.startedAt)
 
     try {
       const result = await this.engine.reconcileSource(source, request)
@@ -67,7 +72,7 @@ export class ReconcileScheduler {
       job.error = this.stringifyError(error)
       throw error
     } finally {
-      this.runningSources.delete(sourceId)
+      this.runGate.complete(sourceId, 'reconcile')
     }
   }
 
