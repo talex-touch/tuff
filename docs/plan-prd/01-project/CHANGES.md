@@ -13,6 +13,25 @@
 
 ## 2026-05-31
 
+### ref(search): add indexed source maintenance action policy
+
+- `packages/utils/search/indexing-source-maintenance-action.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-source-maintenance-action.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.test.ts`
+- `apps/core-app/src/renderer/src/modules/search/indexing-source-diagnostics-display.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/indexing-source-diagnostics-display.{ts,test.ts}`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `resolveIndexedSourceMaintenanceActions()` so Settings, no-result recovery, and future official plugin settings share one scan/reconcile/reset action policy with blocked reasons.
+  - Rewired CoreApp single-source `scanSource()` / `reconcileSource()` to run the same runtime eligibility guard used by batch maintenance and record skipped diagnostics instead of invoking disabled, permission-required, unsupported, or admission-invalid sources.
+  - Updated Advanced Settings source diagnostics to disable unavailable maintenance buttons through the shared SDK policy.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-maintenance-action.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/views/base/settings/indexing-source-diagnostics-display.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`pnpm -C "apps/core-app" run typecheck:web` 命令退出码 0，但 TuffEx build 阶段仍打印既有 `TxDrawer.vue` dts TS7022/TS7024 诊断。
+
 ### ref(search): lift indexed source task state helper
 
 - `packages/utils/search/indexing-source-task-state.ts`
