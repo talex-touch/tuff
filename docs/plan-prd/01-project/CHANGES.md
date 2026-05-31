@@ -13,6 +13,21 @@
 
 ## 2026-05-31
 
+### ref(search): lift indexed auto scan preflight policy
+
+- `packages/utils/search/indexing-auto-scan-policy.ts`
+- `packages/utils/search/index.ts`
+- `packages/utils/__tests__/search/indexing-auto-scan-policy.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added public `resolveIndexedAutoScanPreflight()` for source-agnostic auto-scan skip reason priority across disabled, initializing, missing-context, no-paths, app-busy, search-active, and interval gates.
+  - Rewired `FileProviderWatchService.shouldRunAutoIndexing()` to run early SDK preflight before reading `scan_progress`, then reuse the same SDK decision after scan eligibility is known.
+  - Kept real `appTaskGate`, search activity, idle/battery checks, DB reads, and background task registration inside the CoreApp/FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-auto-scan-policy.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-watch-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
 ### ref(search): lift indexed scan strategy policy
 
 - `packages/utils/search/indexing-scan-strategy.ts`
