@@ -52,6 +52,7 @@ import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import {
   IndexedSourceGroupedEvidenceService,
+  IndexedSourceRootEvidenceService,
   IndexedSourceScanReasons
 } from '@talex-touch/utils/search'
 import chalk from 'chalk'
@@ -228,6 +229,7 @@ const APP_SOURCE_EVIDENCE_LABELS: Record<AppSourceEvidenceKey, string> = {
   unknown: 'Unclassified app records'
 }
 const appGroupedEvidenceService = new IndexedSourceGroupedEvidenceService()
+const appRootEvidenceService = new IndexedSourceRootEvidenceService()
 
 function logApp(
   message: string,
@@ -613,15 +615,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   public async getIndexedSourceEvidence(): Promise<IndexedSourceEvidence[]> {
     const watchRoots = this.getIndexedSourceRoots()
     const evidence: IndexedSourceEvidence[] = [
-      {
+      appRootEvidenceService.build({
         id: 'app-provider:watch-roots',
         label: APP_SOURCE_EVIDENCE_LABELS['watch-roots'],
-        status: watchRoots.length > 0 ? 'ready' : 'degraded',
-        rootCount: watchRoots.length,
         roots: watchRoots.map((root) => root.path),
-        lastCheckedAt: Date.now(),
-        reason: watchRoots.length > 0 ? undefined : 'app-watch-roots-empty'
-      }
+        emptyReason: 'app-watch-roots-empty'
+      })
     ]
 
     const appEvidence = await this.getIndexedAppRecordEvidence()
