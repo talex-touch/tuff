@@ -66,6 +66,7 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
     this.logDebug = deps.logDebug
     this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
       sourceId: deps.sourceId,
+      defaultDeltaReason: 'file-provider-cleanup-delete',
       emitDelta: deps.emitDelta
     })
   }
@@ -92,9 +93,7 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
         logDebug: (message, meta) => this.logDebug(message, meta),
         successMessage: 'Cleanup remove completed'
       }).executeExisting(filesToDelete)
-      await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context, {
-        reason: 'file-provider-cleanup-delete'
-      })
+      await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context)
     }
 
     this.emitProgress(1, 1)
