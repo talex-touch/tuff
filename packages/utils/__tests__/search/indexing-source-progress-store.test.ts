@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { IndexedSourceProgressStoreService } from '../../search'
+import {
+  IndexedSourceProgressStoreService,
+  resolveIndexedSourceProgressStoreClearDecision
+} from '../../search'
 
 function createStore(options: {
   completedPaths?: string[]
@@ -31,6 +34,17 @@ describe('IndexedSourceProgressStoreService', () => {
     await expect(service.summarizeRoots(['/a', '/b'])).resolves.toEqual({
       totalRoots: 1,
       pendingRoots: 1
+    })
+  })
+
+  it('marks all roots pending when the completed path store is unavailable', async () => {
+    const { service } = createStore()
+
+    await expect(
+      service.summarizeRoots(['/a', '/b'], new Set(), { isStoreAvailable: false })
+    ).resolves.toEqual({
+      totalRoots: 0,
+      pendingRoots: 2
     })
   })
 
@@ -90,5 +104,44 @@ describe('IndexedSourceProgressStoreService', () => {
     })
     expect(ensureReadyForUpsert).toHaveBeenCalledWith('progress.upsert')
     expect(upsertCompletedPaths).toHaveBeenCalledWith(['/a'], '2026-05-31T00:00:00.000Z')
+  })
+})
+
+describe('resolveIndexedSourceProgressStoreClearDecision', () => {
+  it('requests cleanup when completed progress rows exist', () => {
+    expect(resolveIndexedSourceProgressStoreClearDecision(3)).toEqual({
+      shouldClear: true,
+      result: {
+        cleared: true,
+        rows: 3
+      }
+    })
+  })
+
+  it('returns a stable no-op reset result when no rows exist', () => {
+    expect(resolveIndexedSourceProgressStoreClearDecision(0)).toEqual({
+      shouldClear: false,
+      result: {
+        cleared: false,
+        rows: 0
+      }
+    })
+  })
+
+  it('normalizes invalid row counts to a no-op reset result', () => {
+    expect(resolveIndexedSourceProgressStoreClearDecision(undefined)).toEqual({
+      shouldClear: false,
+      result: {
+        cleared: false,
+        rows: 0
+      }
+    })
+    expect(resolveIndexedSourceProgressStoreClearDecision(-1)).toEqual({
+      shouldClear: false,
+      result: {
+        cleared: false,
+        rows: 0
+      }
+    })
   })
 })

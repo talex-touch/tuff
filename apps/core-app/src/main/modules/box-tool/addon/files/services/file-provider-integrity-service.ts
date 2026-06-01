@@ -1,7 +1,12 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { IndexedSourceResetReason, IndexedSourceResetResult } from '@talex-touch/utils/search'
-import { IndexedSourceIntegrityService, IndexedSourceResetReasons } from '@talex-touch/utils/search'
+import {
+  IndexedSourceIntegrityService,
+  IndexedSourceResetReasons,
+  mapIndexedSourceIntegritySnapshot,
+  renameIndexedSourceIntegrityAdapterSnapshotFields
+} from '@talex-touch/utils/search'
 import { eq, sql } from 'drizzle-orm'
 import { files as filesSchema } from '../../../../../db/schema'
 
@@ -84,18 +89,14 @@ export class FileProviderIntegrityService {
       resetReason: IndexedSourceResetReasons.IntegrityRepair
     })
 
-    const fileSnapshot = {
-      checkedAt: snapshot.checkedAt,
-      ftsRows: ftsCount,
-      filesRows: filesCount,
-      needsRebuild: snapshot.needsRebuild,
-      clearedSearchIndex: snapshot.clearedSearchIndex,
-      clearedScanProgress: snapshot.clearedScanProgress,
-      orphanedKeywordsRemoved: snapshot.orphanedRecordsRemoved,
-      resetReason: snapshot.resetReason,
-      resetScanProgressRows: snapshot.resetScanProgressRows,
-      durationMs: snapshot.durationMs
-    }
+    const fileSnapshot = renameIndexedSourceIntegrityAdapterSnapshotFields(
+      mapIndexedSourceIntegritySnapshot(snapshot),
+      {
+        indexedRows: 'ftsRows',
+        sourceRows: 'filesRows',
+        orphanedRecordsRemoved: 'orphanedKeywordsRemoved'
+      }
+    )
 
     this.logInfo('Integrity check completed', {
       durationMs: fileSnapshot.durationMs,

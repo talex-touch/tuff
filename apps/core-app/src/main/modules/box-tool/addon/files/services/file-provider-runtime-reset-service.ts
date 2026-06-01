@@ -1,6 +1,9 @@
 import type { DbUtils } from '../../../../../db/utils'
 import type { IndexedSourceResetRequest, IndexedSourceResetResult } from '@talex-touch/utils/search'
-import { IndexedSourceResetExecutorService } from '@talex-touch/utils/search'
+import {
+  IndexedSourceResetExecutorService,
+  resolveIndexedSourceProgressStoreClearDecision
+} from '@talex-touch/utils/search'
 import { sql } from 'drizzle-orm'
 import { scanProgress } from '../../../../../db/schema'
 
@@ -35,6 +38,7 @@ export class FileProviderRuntimeResetService {
     this.logInfo = deps.logInfo
     this.executor = new IndexedSourceResetExecutorService({
       sourceId: this.sourceId,
+      operationReasonNamespace: 'file-index',
       clearSearchIndex: (reason) => this.removeSearchIndexByProvider(this.sourceId, reason),
       clearScanProgress: (reason) => this.clearScanProgress(reason)
     })
@@ -55,12 +59,12 @@ export class FileProviderRuntimeResetService {
 
     const db = dbUtils.getDb()
     const scanProgressCount = await db.select({ cnt: sql<number>`count(*)` }).from(scanProgress)
-    const rows = scanProgressCount[0]?.cnt ?? 0
-    if (rows === 0) {
-      return { cleared: false, rows }
+    const clearDecision = resolveIndexedSourceProgressStoreClearDecision(scanProgressCount[0]?.cnt)
+    if (!clearDecision.shouldClear) {
+      return clearDecision.result
     }
 
     await this.withDbWrite(reason, () => db.delete(scanProgress))
-    return { cleared: true, rows }
+    return clearDecision.result
   }
 }

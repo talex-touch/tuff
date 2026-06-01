@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  IndexedSourceIntegrityEvidenceService,
   IndexedSourceIntegrityService,
-  IndexedSourceResetReasons
+  IndexedSourceResetReasons,
+  mapIndexedSourceIntegritySnapshot,
+  renameIndexedSourceIntegrityAdapterSnapshotFields
 } from '../../search'
 
 function createService(options: {
@@ -131,6 +134,155 @@ describe('IndexedSourceIntegrityService', () => {
       indexedRows: 0,
       sourceRows: 0,
       needsRebuild: false
+    })
+  })
+
+  it('maps integrity snapshots to adapter-safe fields', async () => {
+    const { service } = createService()
+
+    const snapshot = await service.check({
+      sourceId: 'test-source',
+      indexedRows: 12,
+      sourceRows: 12,
+      resetReason: IndexedSourceResetReasons.IntegrityRepair
+    })
+
+    expect(mapIndexedSourceIntegritySnapshot(snapshot)).toEqual({
+      checkedAt: snapshot.checkedAt,
+      indexedRows: 12,
+      sourceRows: 12,
+      needsRebuild: false,
+      clearedSearchIndex: false,
+      clearedScanProgress: false,
+      orphanedRecordsRemoved: 0,
+      resetReason: null,
+      resetScanProgressRows: 0,
+      durationMs: 50
+    })
+  })
+
+  it('renames adapter snapshot row fields for source-specific adapters', () => {
+    expect(
+      renameIndexedSourceIntegrityAdapterSnapshotFields(
+        {
+          checkedAt: 123,
+          indexedRows: 10,
+          sourceRows: 12,
+          needsRebuild: true,
+          clearedSearchIndex: true,
+          clearedScanProgress: true,
+          orphanedRecordsRemoved: 3,
+          resetReason: IndexedSourceResetReasons.IntegrityRepair,
+          resetScanProgressRows: 2,
+          durationMs: 50
+        },
+        {
+          indexedRows: 'ftsRows',
+          sourceRows: 'filesRows',
+          orphanedRecordsRemoved: 'orphanedKeywordsRemoved'
+        }
+      )
+    ).toEqual({
+      checkedAt: 123,
+      ftsRows: 10,
+      filesRows: 12,
+      needsRebuild: true,
+      clearedSearchIndex: true,
+      clearedScanProgress: true,
+      orphanedKeywordsRemoved: 3,
+      resetReason: IndexedSourceResetReasons.IntegrityRepair,
+      resetScanProgressRows: 2,
+      durationMs: 50
+    })
+  })
+})
+
+describe('IndexedSourceIntegrityEvidenceService', () => {
+  const service = new IndexedSourceIntegrityEvidenceService()
+
+  it('builds ready evidence from an aligned integrity snapshot', () => {
+    expect(
+      service.build({
+        id: 'source:integrity',
+        label: 'Source integrity',
+        snapshot: {
+          checkedAt: 123,
+          indexedRows: 10,
+          sourceRows: 10,
+          needsRebuild: false,
+          clearedSearchIndex: false,
+          clearedScanProgress: false,
+          orphanedRecordsRemoved: 0,
+          resetReason: null,
+          resetScanProgressRows: 0,
+          durationMs: 4
+        }
+      })
+    ).toEqual({
+      id: 'source:integrity',
+      label: 'Source integrity',
+      status: 'ready',
+      itemCount: 10,
+      lastCheckedAt: 123,
+      reason: 'indexed-source-integrity-aligned',
+      metadata: {
+        checkedAt: 123,
+        indexedRows: 10,
+        sourceRows: 10,
+        needsRebuild: false,
+        clearedSearchIndex: false,
+        clearedScanProgress: false,
+        orphanedRecordsRemoved: 0,
+        resetReason: null,
+        resetScanProgressRows: 0,
+        durationMs: 4
+      }
+    })
+  })
+
+  it('builds degraded evidence when rebuild is scheduled', () => {
+    expect(
+      service.build({
+        id: 'source:integrity',
+        label: 'Source integrity',
+        snapshot: {
+          checkedAt: 456,
+          indexedRows: 2,
+          needsRebuild: true
+        }
+      })
+    ).toMatchObject({
+      status: 'degraded',
+      itemCount: 2,
+      lastCheckedAt: 456,
+      reason: 'indexed-source-integrity-rebuild-scheduled'
+    })
+  })
+
+  it('supports caller reasons and metadata', () => {
+    expect(
+      service.build({
+        id: 'source:integrity',
+        label: 'Source integrity',
+        snapshot: {
+          checkedAt: 789,
+          indexedRows: 3,
+          needsRebuild: true
+        },
+        reasons: {
+          rebuildScheduled: 'source-integrity-rebuild'
+        },
+        metadata: {
+          indexedRowsLabel: 'ftsRows',
+          indexedRows: 3
+        }
+      })
+    ).toMatchObject({
+      reason: 'source-integrity-rebuild',
+      metadata: {
+        indexedRowsLabel: 'ftsRows',
+        indexedRows: 3
+      }
     })
   })
 })

@@ -62,14 +62,9 @@ export class FileProviderScanProgressService {
 
   async getSummary(watchPaths: string[]): Promise<FileProviderScanProgressSummary> {
     const completedPaths = await this.progressStore.getCompletedPaths()
-    if (completedPaths.size === 0 && !this.getDbUtils()) {
-      return {
-        totalRoots: 0,
-        pendingRoots: watchPaths.length
-      }
-    }
-
-    return this.progressStore.summarizeRoots(watchPaths, completedPaths)
+    return this.progressStore.summarizeRoots(watchPaths, completedPaths, {
+      isStoreAvailable: Boolean(this.getDbUtils())
+    })
   }
 
   async getCompletedPaths(): Promise<Set<string>> {
