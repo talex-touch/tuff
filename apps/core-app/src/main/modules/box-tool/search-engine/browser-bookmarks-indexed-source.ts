@@ -12,7 +12,9 @@ import type {
   IndexedSourceResetResult,
   IndexedSourceRoot,
   IndexedSourceScanRequest,
-  IndexedSourceWatchEvent
+  IndexedSourceWatchEvent,
+  IndexedSourceProviderConfigEnablement,
+  SearchProviderDescriptor
 } from '@talex-touch/utils/search'
 import type { BrowserBookmarkItem, BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
 import {
@@ -20,7 +22,8 @@ import {
   IndexedWriteRuntimeEmitterService,
   IndexedSourceProfileDiagnosticsService,
   IndexedSourceReconcileReasons,
-  IndexedSourceSnapshotCacheService
+  IndexedSourceSnapshotCacheService,
+  isIndexedWatchPathBasename
 } from '@talex-touch/utils/search'
 import {
   mapBrowserBookmarkToIndexedSourceRecord,
@@ -28,6 +31,11 @@ import {
 } from './browser-bookmarks-scanner'
 
 export const BROWSER_BOOKMARKS_INDEXED_SOURCE_ID = 'browser-bookmarks'
+export const BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID = 'touch-browser-data.browser-bookmarks'
+export const BROWSER_BOOKMARKS_DISABLED_REASON =
+  'browser-bookmarks-official-provider-consent-required'
+export const BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON =
+  'browser-bookmarks-runtime-bridge-awaiting-plugin-owned-persistence'
 
 const browserProfileDiagnosticsService = new IndexedSourceProfileDiagnosticsService()
 
@@ -42,6 +50,9 @@ function createBrowserBookmarksRuntimeEmitter(sourceId: string) {
 export interface BrowserBookmarksIndexedSourceOptions {
   enabled?: boolean
   isEnabled?: () => boolean | Promise<boolean>
+  getEnablement?: () =>
+    | IndexedSourceProviderConfigEnablement
+    | Promise<IndexedSourceProviderConfigEnablement>
   scannerOptions?: BrowserBookmarkScanOptions
 }
 
@@ -50,9 +61,30 @@ export function buildBrowserBookmarksIndexedSourceDescriptor(): IndexedSourceDes
     id: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
     admission: {
       notes:
-        'Chromium Bookmarks JSON currently lives in touch-browser-data and must migrate into runtime-backed scan/watch/reconcile before default enablement.'
+        'Chromium Bookmarks JSON is gated by the official touch-browser-data provider; persistent plugin-owned indexing remains a follow-up.'
     }
   })
+}
+
+export function buildBrowserBookmarksOfficialProviderDescriptor(): SearchProviderDescriptor {
+  return {
+    id: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+    displayName: 'Browser Bookmarks',
+    kind: 'browser-bookmark',
+    owner: 'official-plugin',
+    mode: 'push',
+    priority: 'fast',
+    defaultOrder: 60,
+    policy: {
+      owner: 'official-plugin',
+      mode: 'push',
+      permissionScopes: ['root-results', 'browser-data'],
+      defaultState: 'ask',
+      requiresUserConsent: true,
+      pushesToRootResults: true,
+      indexedSourceId: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID
+    }
+  }
 }
 
 function readBrowserBookmarksSnapshot(
@@ -101,7 +133,9 @@ function readBrowserBookmarksSnapshot(
     sourceId,
     diagnostics: profileDiagnostics,
     metadata: {
-      scannerOwner: 'core-runtime'
+      scannerOwner: 'touch-browser-data',
+      providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+      runtimeBridge: true
     }
   })
 
@@ -144,35 +178,47 @@ function buildBrowserBookmarksHealth(
     itemCount: 0,
     watchState: 'pending-permission',
     reconcileState: 'idle',
-    reason: 'browser-bookmarks-runtime-source-pending-migration'
+    reason: BROWSER_BOOKMARKS_DISABLED_REASON
   }
 }
 
-function buildPendingMigrationEvidence(): IndexedSourceEvidence {
+function buildProviderLifecycleEvidence(
+  enablement: IndexedSourceProviderConfigEnablement
+): IndexedSourceEvidence {
+  const enabled = enablement.enabled
   return {
     id: `${BROWSER_BOOKMARKS_INDEXED_SOURCE_ID}:touch-browser-data`,
-    label: 'touch-browser-data plugin scanner',
-    status: 'disabled',
+    label: 'touch-browser-data provider lifecycle',
+    status: enabled ? 'warming' : 'disabled',
     itemCount: 0,
     rootCount: 0,
-    reason: 'chromium-bookmarks-json-plugin-scanner-not-yet-runtime-indexed',
+    reason: enabled ? BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON : BROWSER_BOOKMARKS_DISABLED_REASON,
     metadata: {
+      providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
       currentOwner: 'touch-browser-data',
+      runtimeBridge: enabled,
       plannedStorage: 'sqlite-index',
-      plannedPrivacy: 'high'
+      plannedPrivacy: 'high',
+      persistentPluginIndexing: false,
+      enablementReason: enablement.reason,
+      linkedProviderIds: enablement.providerIds,
+      configuredProviderIds: enablement.configuredProviderIds,
+      enabledProviderIds: enablement.enabledProviderIds,
+      disabledProviderIds: enablement.disabledProviderIds
     }
   }
 }
 
 function buildBrowserBookmarksEvidence(
-  enabled: boolean,
+  enablement: IndexedSourceProviderConfigEnablement,
   snapshot?: ReturnType<typeof readBrowserBookmarksSnapshot>
 ): IndexedSourceEvidence[] {
+  const enabled = enablement.enabled
   if (!enabled) {
-    return [buildPendingMigrationEvidence()]
+    return [buildProviderLifecycleEvidence(enablement)]
   }
 
-  return [...(snapshot?.evidence ?? []), buildPendingMigrationEvidence()]
+  return [...(snapshot?.evidence ?? []), buildProviderLifecycleEvidence(enablement)]
 }
 
 function buildBrowserBookmarksRoots(
@@ -184,6 +230,13 @@ function buildBrowserBookmarksRoots(
   }
 
   return snapshot?.roots ?? []
+}
+
+function isBrowserBookmarksWatchEvent(event: IndexedSourceWatchEvent): boolean {
+  return isIndexedWatchPathBasename({
+    rawPath: event.path,
+    basename: 'Bookmarks'
+  })
 }
 
 async function* emptyScan(
@@ -227,7 +280,7 @@ function buildUnsupportedReconcileResult(sourceId: string): IndexedSourceReconci
     errors: 0,
     startedAt: now,
     completedAt: now,
-    reason: 'browser-bookmarks-runtime-source-pending-migration'
+    reason: BROWSER_BOOKMARKS_DISABLED_REASON
   }
 }
 
@@ -279,6 +332,18 @@ function buildBrowserBookmarksResetResult(
   }
 }
 
+function buildStaticEnablement(enabled: boolean): IndexedSourceProviderConfigEnablement {
+  return {
+    sourceId: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
+    providerIds: [BROWSER_BOOKMARKS_INDEXED_SOURCE_ID, BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID],
+    configuredProviderIds: [],
+    enabledProviderIds: enabled ? [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID] : [],
+    disabledProviderIds: [],
+    enabled,
+    reason: enabled ? 'explicitly-enabled' : 'not-configured'
+  }
+}
+
 export function buildBrowserBookmarksIndexedSource(
   options: BrowserBookmarksIndexedSourceOptions = {}
 ): IndexedSource {
@@ -286,8 +351,15 @@ export function buildBrowserBookmarksIndexedSource(
   const snapshotCache = new IndexedSourceSnapshotCacheService<
     ReturnType<typeof readBrowserBookmarksSnapshot>
   >()
-  const resolveEnabled = async () =>
-    options.isEnabled ? Boolean(await options.isEnabled()) : options.enabled === true
+  const resolveEnablement = async (): Promise<IndexedSourceProviderConfigEnablement> => {
+    if (options.getEnablement) {
+      return await options.getEnablement()
+    }
+
+    return buildStaticEnablement(
+      options.isEnabled ? Boolean(await options.isEnabled()) : options.enabled === true
+    )
+  }
   const getCachedSnapshot = async () =>
     await snapshotCache.getSnapshot(() =>
       readBrowserBookmarksSnapshot(descriptor.id, options.scannerOptions)
@@ -296,19 +368,28 @@ export function buildBrowserBookmarksIndexedSource(
   return {
     descriptor,
     getHealth: async () => {
-      const enabled = await resolveEnabled()
-      return buildBrowserBookmarksHealth(enabled, enabled ? await getCachedSnapshot() : undefined)
+      const enablement = await resolveEnablement()
+      return buildBrowserBookmarksHealth(
+        enablement.enabled,
+        enablement.enabled ? await getCachedSnapshot() : undefined
+      )
     },
     getRoots: async (): Promise<IndexedSourceRoot[]> => {
-      const enabled = await resolveEnabled()
-      return buildBrowserBookmarksRoots(enabled, enabled ? await getCachedSnapshot() : undefined)
+      const enablement = await resolveEnablement()
+      return buildBrowserBookmarksRoots(
+        enablement.enabled,
+        enablement.enabled ? await getCachedSnapshot() : undefined
+      )
     },
     getEvidence: async () => {
-      const enabled = await resolveEnabled()
-      return buildBrowserBookmarksEvidence(enabled, enabled ? await getCachedSnapshot() : undefined)
+      const enablement = await resolveEnablement()
+      return buildBrowserBookmarksEvidence(
+        enablement,
+        enablement.enabled ? await getCachedSnapshot() : undefined
+      )
     },
     scan: async function* browserBookmarksScan(request: IndexedSourceScanRequest) {
-      if (await resolveEnabled()) {
+      if ((await resolveEnablement()).enabled) {
         snapshotCache.clear()
         yield* scanBrowserBookmarksSource(request, options.scannerOptions)
       } else {
@@ -318,7 +399,7 @@ export function buildBrowserBookmarksIndexedSource(
     reconcile: async (
       request: IndexedSourceReconcileRequest
     ): Promise<IndexedSourceReconcileResult> => {
-      if (!(await resolveEnabled())) {
+      if (!(await resolveEnablement()).enabled) {
         return buildUnsupportedReconcileResult(descriptor.id)
       }
 
@@ -326,7 +407,7 @@ export function buildBrowserBookmarksIndexedSource(
       return buildBrowserBookmarksReconcileResult(descriptor.id, options.scannerOptions, request)
     },
     handleWatchEvent: async (_event: IndexedSourceWatchEvent): Promise<IndexedSourceDelta[]> => {
-      if (!(await resolveEnabled())) {
+      if (!(await resolveEnablement()).enabled) {
         return []
       }
 
@@ -337,6 +418,7 @@ export function buildBrowserBookmarksIndexedSource(
         'browser-bookmarks-watch-refresh'
       )
     },
+    shouldHandleWatchEvent: isBrowserBookmarksWatchEvent,
     resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
       snapshotCache.clear()
       return buildBrowserBookmarksResetResult(request)

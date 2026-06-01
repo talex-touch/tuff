@@ -1,5 +1,6 @@
 import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import type { BrowserBookmarkFs } from './browser-bookmarks-scanner'
+import { readFileSync } from 'node:fs'
 import {
   IndexedSourceReconcileReasons,
   IndexedSourceResetReasons,
@@ -8,9 +9,54 @@ import {
 } from '@talex-touch/utils/search'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  BROWSER_BOOKMARKS_DISABLED_REASON,
+  BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
+  BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+  BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON,
   buildBrowserBookmarksIndexedSource,
-  buildBrowserBookmarksIndexedSourceDescriptor
+  buildBrowserBookmarksIndexedSourceDescriptor,
+  buildBrowserBookmarksOfficialProviderDescriptor
 } from './browser-bookmarks-indexed-source'
+
+interface BrowserDataManifestProvider {
+  id: string
+  kind?: string
+  owner?: string
+  mode?: string
+  priority?: string
+  defaultOrder?: number
+  permissionScopes?: string[]
+  defaultState?: string
+  requiresUserConsent?: boolean
+  pushesToRootResults?: boolean
+  indexedSourceId?: string
+}
+
+interface BrowserDataManifestIndexedSource {
+  id: string
+  template?: string
+  admission?: {
+    owner?: string
+    notes?: string
+  }
+}
+
+interface BrowserDataManifest {
+  permissions?: {
+    required?: string[]
+  }
+  indexedSources?: BrowserDataManifestIndexedSource[]
+  searchProviders?: BrowserDataManifestProvider[]
+}
+
+function readBrowserDataManifest(): BrowserDataManifest {
+  return JSON.parse(
+    readFileSync(
+      new URL('../../../../../../../plugins/touch-browser-data/manifest.json', import.meta.url),
+      'utf8'
+    )
+  ) as BrowserDataManifest
+}
 
 function createFs(
   files: Record<string, string>,
@@ -76,7 +122,7 @@ describe('browserBookmarksIndexedSource', () => {
     const descriptor = buildBrowserBookmarksIndexedSourceDescriptor()
 
     expect(descriptor).toMatchObject({
-      id: 'browser-bookmarks',
+      id: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
       kind: 'browser-bookmark',
       storage: 'sqlite-index',
       privacy: 'high',
@@ -92,21 +138,87 @@ describe('browserBookmarksIndexedSource', () => {
     expect(isIndexedSourceAdmissionReady(descriptor)).toBe(true)
   })
 
-  it('reports pending migration diagnostics without changing plugin search behavior', async () => {
+  it('describes the official touch-browser-data provider lifecycle link', () => {
+    expect(buildBrowserBookmarksOfficialProviderDescriptor()).toMatchObject({
+      id: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+      kind: 'browser-bookmark',
+      owner: 'official-plugin',
+      mode: 'push',
+      priority: 'fast',
+      policy: {
+        owner: 'official-plugin',
+        mode: 'push',
+        permissionScopes: ['root-results', 'browser-data'],
+        defaultState: 'ask',
+        requiresUserConsent: true,
+        pushesToRootResults: true,
+        indexedSourceId: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID
+      }
+    })
+  })
+
+  it('keeps the touch-browser-data manifest aligned with the official provider contract', () => {
+    const manifest = readBrowserDataManifest()
+    const descriptor = buildBrowserBookmarksOfficialProviderDescriptor()
+    const manifestProvider = manifest.searchProviders?.find(
+      (provider) => provider.id === descriptor.id
+    )
+    const manifestSource = manifest.indexedSources?.find(
+      (source) => source.id === BROWSER_BOOKMARKS_INDEXED_SOURCE_ID
+    )
+
+    expect(manifest.permissions?.required).toEqual(
+      expect.arrayContaining(['fs.read', 'fs.index', 'search.root-results'])
+    )
+    expect(manifestProvider).toMatchObject({
+      id: descriptor.id,
+      kind: descriptor.kind,
+      owner: descriptor.owner,
+      mode: descriptor.mode,
+      priority: descriptor.priority,
+      defaultOrder: descriptor.defaultOrder,
+      permissionScopes: descriptor.policy.permissionScopes,
+      defaultState: descriptor.policy.defaultState,
+      requiresUserConsent: descriptor.policy.requiresUserConsent,
+      pushesToRootResults: descriptor.policy.pushesToRootResults,
+      indexedSourceId: descriptor.policy.indexedSourceId
+    })
+    expect(manifestSource).toMatchObject({
+      id: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
+      template: 'browser-bookmarks',
+      admission: {
+        owner: 'official-plugin'
+      }
+    })
+    expect(manifestSource?.admission?.notes).toContain('does not read browser files by itself')
+  })
+
+  it('reports consent-gated diagnostics without changing plugin search behavior', async () => {
     const source = buildBrowserBookmarksIndexedSource()
 
     await expect(source.getHealth()).resolves.toMatchObject({
       status: 'disabled',
       permissionState: 'promptable',
       watchState: 'pending-permission',
-      reason: 'browser-bookmarks-runtime-source-pending-migration'
+      reason: BROWSER_BOOKMARKS_DISABLED_REASON
     })
     await expect(source.getRoots()).resolves.toEqual([])
     await expect(source.getEvidence?.()).resolves.toEqual([
       expect.objectContaining({
         id: 'browser-bookmarks:touch-browser-data',
         status: 'disabled',
-        reason: 'chromium-bookmarks-json-plugin-scanner-not-yet-runtime-indexed'
+        reason: BROWSER_BOOKMARKS_DISABLED_REASON,
+        metadata: expect.objectContaining({
+          providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+          runtimeBridge: false,
+          persistentPluginIndexing: false,
+          enablementReason: 'not-configured',
+          linkedProviderIds: [
+            BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
+            BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID
+          ],
+          configuredProviderIds: []
+        })
       })
     ])
   })
@@ -127,8 +239,48 @@ describe('browserBookmarksIndexedSource', () => {
       sourceId: 'browser-bookmarks',
       skipped: 1,
       errors: 0,
-      reason: 'browser-bookmarks-runtime-source-pending-migration'
+      reason: BROWSER_BOOKMARKS_DISABLED_REASON
     })
+  })
+
+  it('does not read browser bookmark files while disabled', async () => {
+    const readFileSync = vi.fn(() => {
+      throw new Error('should-not-read-bookmarks')
+    })
+    const source = buildBrowserBookmarksIndexedSource({
+      scannerOptions: {
+        platform: 'linux',
+        fs: {
+          existsSync: (filePath) =>
+            filePath === '/browser' || filePath === '/browser/Default/Bookmarks',
+          readdirSync: () => [{ name: 'Default', isDirectory: () => true }],
+          readFileSync
+        },
+        definitions: [{ id: 'chrome', name: 'Chrome', root: '/browser' }]
+      }
+    })
+
+    await source.getHealth()
+    await source.getRoots()
+    await source.getEvidence?.()
+
+    const batches: IndexedSourceRecordBatch[] = []
+    for await (const batch of source.scan({
+      sourceId: source.descriptor.id,
+      reason: IndexedSourceScanReasons.Scheduled
+    })) {
+      batches.push(batch)
+    }
+
+    await expect(source.handleWatchEvent?.({
+      sourceId: source.descriptor.id,
+      action: 'change',
+      path: '/browser/Default/Bookmarks',
+      occurredAt: 1700000000000
+    })).resolves.toEqual([])
+
+    expect(batches).toEqual([])
+    expect(readFileSync).not.toHaveBeenCalled()
   })
 
   it('can scan Chromium bookmarks when explicitly enabled by runtime settings', async () => {
@@ -161,7 +313,24 @@ describe('browserBookmarksIndexedSource', () => {
         expect.objectContaining({
           id: 'browser-bookmarks:chrome',
           status: 'ready',
-          itemCount: 1
+          itemCount: 1,
+          metadata: expect.objectContaining({
+            scannerOwner: 'touch-browser-data',
+            providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+            runtimeBridge: true
+          })
+        }),
+        expect.objectContaining({
+          id: 'browser-bookmarks:touch-browser-data',
+          status: 'warming',
+          reason: BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON,
+          metadata: expect.objectContaining({
+            providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
+            runtimeBridge: true,
+            persistentPluginIndexing: false,
+            enablementReason: 'explicitly-enabled',
+            enabledProviderIds: [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID]
+          })
         })
       ])
     )
@@ -220,6 +389,32 @@ describe('browserBookmarksIndexedSource', () => {
     expect(readFileSync).toHaveBeenCalledTimes(1)
   })
 
+  it('reports explicit provider disablement in lifecycle evidence', async () => {
+    const source = buildBrowserBookmarksIndexedSource({
+      getEnablement: () => ({
+        sourceId: 'browser-bookmarks',
+        providerIds: [BROWSER_BOOKMARKS_INDEXED_SOURCE_ID, BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID],
+        configuredProviderIds: [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID],
+        enabledProviderIds: [],
+        disabledProviderIds: [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID],
+        enabled: false,
+        reason: 'explicitly-disabled'
+      })
+    })
+
+    await expect(source.getEvidence?.()).resolves.toEqual([
+      expect.objectContaining({
+        status: 'disabled',
+        reason: BROWSER_BOOKMARKS_DISABLED_REASON,
+        metadata: expect.objectContaining({
+          enablementReason: 'explicitly-disabled',
+          configuredProviderIds: [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID],
+          disabledProviderIds: [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID]
+        })
+      })
+    ])
+  })
+
   it('re-evaluates runtime enablement before diagnostics and scans', async () => {
     let enabled = false
     const source = buildBrowserBookmarksIndexedSource({
@@ -252,7 +447,7 @@ describe('browserBookmarksIndexedSource', () => {
 
     await expect(source.getHealth()).resolves.toMatchObject({
       status: 'disabled',
-      reason: 'browser-bookmarks-runtime-source-pending-migration'
+      reason: BROWSER_BOOKMARKS_DISABLED_REASON
     })
 
     enabled = true
@@ -309,6 +504,23 @@ describe('browserBookmarksIndexedSource', () => {
   it('turns bookmark file watch events into refresh deltas when enabled', async () => {
     const source = buildEnabledSource()
 
+    expect(
+      source.shouldHandleWatchEvent?.({
+        sourceId: source.descriptor.id,
+        action: 'change',
+        path: '/browser/Default/Bookmarks',
+        occurredAt: 1700000000000
+      })
+    ).toBe(true)
+    expect(
+      source.shouldHandleWatchEvent?.({
+        sourceId: source.descriptor.id,
+        action: 'change',
+        path: 'C:\\Users\\demo\\Default\\Bookmarks',
+        occurredAt: 1700000000000
+      })
+    ).toBe(true)
+
     await expect(
       source.handleWatchEvent?.({
         sourceId: source.descriptor.id,
@@ -328,6 +540,19 @@ describe('browserBookmarksIndexedSource', () => {
         })
       })
     ])
+  })
+
+  it('filters non-Bookmarks profile watch events after root routing', () => {
+    const source = buildEnabledSource()
+
+    expect(
+      source.shouldHandleWatchEvent?.({
+        sourceId: source.descriptor.id,
+        action: 'change',
+        path: '/browser/Default/Preferences',
+        occurredAt: 1700000000000
+      })
+    ).toBe(false)
   })
 
   it('reports runtime reset state and rejects direct clear without runtime boundary', async () => {

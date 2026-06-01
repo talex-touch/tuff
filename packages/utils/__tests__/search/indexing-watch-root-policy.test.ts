@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterIndexedWatchPendingPermissionPaths,
+  getIndexedWatchPathBasename,
+  isIndexedWatchPathBasename,
   isIndexedWatchPathOwned,
   resolveIndexedWatchRootSet
 } from '../../search'
@@ -98,6 +100,43 @@ describe('indexing watch root policy', () => {
         normalizedWatchPaths: rootSet.normalizedPaths,
         normalizePath: normalizeCaseInsensitive,
         pathSeparator: '\\'
+      })
+    ).toBe(true)
+  })
+
+  it('extracts watch path basenames across platform separators', () => {
+    expect(getIndexedWatchPathBasename('/browser/Default/Bookmarks')).toBe('Bookmarks')
+    expect(getIndexedWatchPathBasename('C:\\Users\\demo\\Default\\Bookmarks')).toBe('Bookmarks')
+    expect(getIndexedWatchPathBasename('/browser/Default/Bookmarks/')).toBe('Bookmarks')
+  })
+
+  it('matches watch path basenames case-sensitively by default', () => {
+    expect(
+      isIndexedWatchPathBasename({
+        rawPath: '/browser/Default/Bookmarks',
+        basename: 'Bookmarks'
+      })
+    ).toBe(true)
+    expect(
+      isIndexedWatchPathBasename({
+        rawPath: '/browser/Default/Preferences',
+        basename: 'Bookmarks'
+      })
+    ).toBe(false)
+    expect(
+      isIndexedWatchPathBasename({
+        rawPath: '/browser/Default/bookmarks',
+        basename: 'Bookmarks'
+      })
+    ).toBe(false)
+  })
+
+  it('can match watch path basenames case-insensitively', () => {
+    expect(
+      isIndexedWatchPathBasename({
+        rawPath: '/browser/Default/bookmarks',
+        basename: 'Bookmarks',
+        caseSensitive: false
       })
     ).toBe(true)
   })
