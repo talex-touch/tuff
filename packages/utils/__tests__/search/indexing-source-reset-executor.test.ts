@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { IndexedSourceResetExecutorService, IndexedSourceResetReasons } from '../../search'
+import {
+  buildIndexedSourceResetOperationReason,
+  buildIndexedSourceResetOperationReasonPrefix,
+  IndexedSourceResetExecutorService,
+  IndexedSourceResetReasons
+} from '../../search'
 
 function createExecutor(options: {
   clearSearchIndex?: (reason: string) => Promise<void>
   clearScanProgress?: (reason: string) => Promise<{ cleared: boolean; rows?: number }>
+  operationReasonNamespace?: string
   nowValues?: number[]
 } = {}) {
   const nowValues = options.nowValues ?? [100, 150]
@@ -20,6 +26,7 @@ function createExecutor(options: {
       sourceId: 'test-source',
       clearSearchIndex,
       clearScanProgress,
+      operationReasonNamespace: options.operationReasonNamespace,
       now
     }),
     now
@@ -96,5 +103,72 @@ describe('IndexedSourceResetExecutorService', () => {
       clearedScanProgress: false,
       scanProgressRows: 0
     })
+  })
+
+  it('builds operation reasons from the constructor namespace by default', async () => {
+    const { clearSearchIndex, clearScanProgress, executor } = createExecutor({
+      operationReasonNamespace: 'file-index'
+    })
+
+    const result = await executor.reset({
+      request: {
+        sourceId: 'test-source',
+        reason: IndexedSourceResetReasons.ManualRebuild,
+        clearSearchIndex: true,
+        clearScanProgress: true
+      }
+    })
+
+    expect(clearSearchIndex).toHaveBeenCalledWith('file-index.manual-rebuild.remove-by-provider')
+    expect(clearScanProgress).toHaveBeenCalledWith('file-index.manual-rebuild.scan-progress-reset')
+    expect(result.reason).toBe(IndexedSourceResetReasons.ManualRebuild)
+  })
+
+  it('lets reset input override the constructor operation reason namespace', async () => {
+    const { clearSearchIndex, executor } = createExecutor({
+      operationReasonNamespace: 'file-index'
+    })
+
+    await executor.reset({
+      request: {
+        sourceId: 'test-source',
+        reason: IndexedSourceResetReasons.UserClear,
+        clearSearchIndex: true,
+        clearScanProgress: false
+      },
+      operationReasonNamespace: 'custom-index'
+    })
+
+    expect(clearSearchIndex).toHaveBeenCalledWith('custom-index.user-clear.remove-by-provider')
+  })
+})
+
+describe('indexed source reset operation reason helpers', () => {
+  it('build reset operation reason prefixes and operation labels', () => {
+    expect(
+      buildIndexedSourceResetOperationReasonPrefix({
+        reason: IndexedSourceResetReasons.HealthRepair
+      })
+    ).toBe('indexed-source.health-repair')
+    expect(
+      buildIndexedSourceResetOperationReasonPrefix({
+        reason: IndexedSourceResetReasons.UserClear,
+        namespace: 'file-index'
+      })
+    ).toBe('file-index.user-clear')
+    expect(
+      buildIndexedSourceResetOperationReason({
+        reason: IndexedSourceResetReasons.UserClear,
+        namespace: 'file-index',
+        operation: 'scan-progress-reset'
+      })
+    ).toBe('file-index.user-clear.scan-progress-reset')
+    expect(
+      buildIndexedSourceResetOperationReason({
+        reason: IndexedSourceResetReasons.UserClear,
+        prefix: 'custom.reset',
+        operation: 'remove-by-provider'
+      })
+    ).toBe('custom.reset.remove-by-provider')
   })
 })

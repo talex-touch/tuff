@@ -134,4 +134,32 @@ describe('file-provider-runtime-reset-service', () => {
     expect(result.clearedScanProgress).toBe(false)
     expect(result.scanProgressRows).toBe(0)
   })
+
+  it('builds FileProvider reset operation reasons from its adapter namespace', async () => {
+    const { dbUtils } = createDbUtils(2)
+    const { service, removeSearchIndexByProvider, withDbWrite } = createService({ dbUtils })
+
+    const result = await service.reset({
+      request: {
+        sourceId: 'file-provider',
+        reason: 'manual-rebuild',
+        clearSearchIndex: true,
+        clearScanProgress: true
+      }
+    })
+
+    expect(removeSearchIndexByProvider).toHaveBeenCalledWith(
+      'file-provider',
+      'file-index.manual-rebuild.remove-by-provider'
+    )
+    expect(withDbWrite).toHaveBeenCalledWith(
+      'file-index.manual-rebuild.scan-progress-reset',
+      expect.any(Function)
+    )
+    expect(result).toMatchObject({
+      clearedSearchIndex: true,
+      clearedScanProgress: true,
+      scanProgressRows: 2
+    })
+  })
 })

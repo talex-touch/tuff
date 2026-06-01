@@ -1,4 +1,8 @@
-import type { IndexedSourceResetReason, IndexedSourceResetResult } from './indexing-source'
+import type {
+  IndexedSourceEvidence,
+  IndexedSourceResetReason,
+  IndexedSourceResetResult
+} from './indexing-source'
 
 export interface IndexedSourceIntegrityResetRequest {
   reason: IndexedSourceResetReason
@@ -20,6 +24,37 @@ export interface IndexedSourceIntegritySnapshot {
   durationMs: number
 }
 
+export interface IndexedSourceIntegrityAdapterSnapshot {
+  checkedAt: number
+  indexedRows: number
+  sourceRows: number
+  needsRebuild: boolean
+  clearedSearchIndex: boolean
+  clearedScanProgress: boolean
+  orphanedRecordsRemoved: number
+  resetReason?: string | null
+  resetScanProgressRows?: number
+  durationMs: number
+}
+
+export interface IndexedSourceIntegrityEvidenceReasons {
+  aligned: string
+  rebuildScheduled: string
+}
+
+export interface IndexedSourceIntegrityEvidenceInput<
+  TSnapshot extends Pick<
+    IndexedSourceIntegrityAdapterSnapshot,
+    'checkedAt' | 'indexedRows' | 'needsRebuild'
+  > = IndexedSourceIntegrityAdapterSnapshot
+> {
+  id: string
+  label: string
+  snapshot: TSnapshot
+  reasons?: Partial<IndexedSourceIntegrityEvidenceReasons>
+  metadata?: Record<string, unknown>
+}
+
 export interface IndexedSourceIntegrityCheckInput {
   sourceId: string
   indexedRows: number
@@ -35,7 +70,33 @@ export interface IndexedSourceIntegrityServiceDeps {
   now?: () => number
 }
 
+export interface IndexedSourceIntegrityAdapterFieldNames<
+  TIndexedRowsKey extends string = string,
+  TSourceRowsKey extends string = string,
+  TOrphanedRecordsRemovedKey extends string = string
+> {
+  indexedRows: TIndexedRowsKey
+  sourceRows: TSourceRowsKey
+  orphanedRecordsRemoved: TOrphanedRecordsRemovedKey
+}
+
+export type IndexedSourceIntegrityRenamedAdapterSnapshot<
+  TIndexedRowsKey extends string,
+  TSourceRowsKey extends string,
+  TOrphanedRecordsRemovedKey extends string
+> = Omit<
+  IndexedSourceIntegrityAdapterSnapshot,
+  'indexedRows' | 'sourceRows' | 'orphanedRecordsRemoved'
+> &
+  Record<TIndexedRowsKey, number> &
+  Record<TSourceRowsKey, number> &
+  Record<TOrphanedRecordsRemovedKey, number>
+
 const DEFAULT_MIN_INDEXED_ROW_RATIO = 0.8
+const DEFAULT_INTEGRITY_EVIDENCE_REASONS: IndexedSourceIntegrityEvidenceReasons = {
+  aligned: 'indexed-source-integrity-aligned',
+  rebuildScheduled: 'indexed-source-integrity-rebuild-scheduled'
+}
 
 export class IndexedSourceIntegrityService {
   private readonly resetRuntimeState: IndexedSourceIntegrityServiceDeps['resetRuntimeState']
@@ -82,6 +143,79 @@ export class IndexedSourceIntegrityService {
       resetReason: resetResult?.reason ?? null,
       resetScanProgressRows: resetResult?.scanProgressRows ?? 0,
       durationMs: Math.max(0, completedAt - startedAt)
+    }
+  }
+}
+
+export function mapIndexedSourceIntegritySnapshot(
+  snapshot: IndexedSourceIntegritySnapshot
+): IndexedSourceIntegrityAdapterSnapshot {
+  return {
+    checkedAt: snapshot.checkedAt,
+    indexedRows: snapshot.indexedRows,
+    sourceRows: snapshot.sourceRows,
+    needsRebuild: snapshot.needsRebuild,
+    clearedSearchIndex: snapshot.clearedSearchIndex,
+    clearedScanProgress: snapshot.clearedScanProgress,
+    orphanedRecordsRemoved: snapshot.orphanedRecordsRemoved,
+    resetReason: snapshot.resetReason,
+    resetScanProgressRows: snapshot.resetScanProgressRows,
+    durationMs: snapshot.durationMs
+  }
+}
+
+export function renameIndexedSourceIntegrityAdapterSnapshotFields<
+  TIndexedRowsKey extends string,
+  TSourceRowsKey extends string,
+  TOrphanedRecordsRemovedKey extends string
+>(
+  snapshot: IndexedSourceIntegrityAdapterSnapshot,
+  fieldNames: IndexedSourceIntegrityAdapterFieldNames<
+    TIndexedRowsKey,
+    TSourceRowsKey,
+    TOrphanedRecordsRemovedKey
+  >
+): IndexedSourceIntegrityRenamedAdapterSnapshot<
+  TIndexedRowsKey,
+  TSourceRowsKey,
+  TOrphanedRecordsRemovedKey
+> {
+  const { indexedRows, sourceRows, orphanedRecordsRemoved, ...rest } = snapshot
+
+  return {
+    ...rest,
+    [fieldNames.indexedRows]: indexedRows,
+    [fieldNames.sourceRows]: sourceRows,
+    [fieldNames.orphanedRecordsRemoved]: orphanedRecordsRemoved
+  } as IndexedSourceIntegrityRenamedAdapterSnapshot<
+    TIndexedRowsKey,
+    TSourceRowsKey,
+    TOrphanedRecordsRemovedKey
+  >
+}
+
+export class IndexedSourceIntegrityEvidenceService {
+  build<
+    TSnapshot extends Pick<
+      IndexedSourceIntegrityAdapterSnapshot,
+      'checkedAt' | 'indexedRows' | 'needsRebuild'
+    >
+  >(input: IndexedSourceIntegrityEvidenceInput<TSnapshot>): IndexedSourceEvidence {
+    const reasons = {
+      ...DEFAULT_INTEGRITY_EVIDENCE_REASONS,
+      ...(input.reasons ?? {})
+    }
+
+    return {
+      id: input.id,
+      label: input.label,
+      status: input.snapshot.needsRebuild ? 'degraded' : 'ready',
+      itemCount: input.snapshot.indexedRows,
+      lastCheckedAt: input.snapshot.checkedAt,
+      reason: input.snapshot.needsRebuild ? reasons.rebuildScheduled : reasons.aligned,
+      metadata: input.metadata ?? {
+        ...input.snapshot
+      }
     }
   }
 }

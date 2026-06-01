@@ -9,11 +9,40 @@ export interface IndexedSourceProgressStoreUpsertResult {
   upserted: number
 }
 
+export interface IndexedSourceProgressStoreClearResult {
+  cleared: boolean
+  rows: number
+}
+
+export interface IndexedSourceProgressStoreClearDecision {
+  shouldClear: boolean
+  result: IndexedSourceProgressStoreClearResult
+}
+
+export interface IndexedSourceProgressStoreSummaryOptions {
+  isStoreAvailable?: boolean
+}
+
 export interface IndexedSourceProgressStoreDeps {
   loadCompletedPaths: () => Promise<Set<string>>
   deleteCompletedPaths: (paths: string[]) => Promise<void>
   ensureReadyForUpsert: (reason: string) => Promise<boolean>
   upsertCompletedPaths: (paths: string[], completedAt: string) => Promise<void>
+}
+
+export function resolveIndexedSourceProgressStoreClearDecision(
+  rows: number | null | undefined
+): IndexedSourceProgressStoreClearDecision {
+  const resolvedRows = Math.max(0, Math.trunc(Number.isFinite(rows) ? Number(rows) : 0))
+  const shouldClear = resolvedRows > 0
+
+  return {
+    shouldClear,
+    result: {
+      cleared: shouldClear,
+      rows: resolvedRows
+    }
+  }
 }
 
 export class IndexedSourceProgressStoreService {
@@ -35,9 +64,17 @@ export class IndexedSourceProgressStoreService {
 
   async summarizeRoots(
     watchPaths: string[],
-    completedPaths?: Set<string>
+    completedPaths?: Set<string>,
+    options: IndexedSourceProgressStoreSummaryOptions = {}
   ): Promise<IndexedSourceProgressStoreSummary> {
     const resolvedCompletedPaths = completedPaths ?? (await this.getCompletedPaths())
+    if (options.isStoreAvailable === false && resolvedCompletedPaths.size === 0) {
+      return {
+        totalRoots: 0,
+        pendingRoots: watchPaths.length
+      }
+    }
+
     const pendingRoots = watchPaths.filter((path) => !resolvedCompletedPaths.has(path)).length
 
     return {
