@@ -1,27 +1,5 @@
-export type IndexedSourceRuntimeTaskKind = 'scan' | 'watch' | 'reconcile' | 'reset'
-
-export interface IndexedSourceRuntimeTaskJob {
-  id: string
-  sourceId: string
-  kind: IndexedSourceRuntimeTaskKind
-  queuedAt: number
-}
-
-export class IndexedSourceRuntimeTaskJobFactory {
-  private readonly sequences = new Map<IndexedSourceRuntimeTaskKind, number>()
-
-  create(
-    sourceId: string,
-    kind: IndexedSourceRuntimeTaskKind,
-    queuedAt = Date.now()
-  ): IndexedSourceRuntimeTaskJob {
-    const sequence = (this.sequences.get(kind) ?? 0) + 1
-    this.sequences.set(kind, sequence)
-    return {
-      id: `${sourceId}:${kind}:${sequence}`,
-      sourceId,
-      kind,
-      queuedAt
-    }
-  }
-}
+export type {
+  IndexedSourceRuntimeTaskJob,
+  IndexedSourceRuntimeTaskKind
+} from '@talex-touch/utils/search'
+export { IndexedSourceRuntimeTaskJobFactory } from '@talex-touch/utils/search'

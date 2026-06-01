@@ -34,6 +34,10 @@ import type { WatchEventRouteResult } from './indexing-watch-router'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
+  buildIndexedSourceReconcileTaskState,
+  buildIndexedSourceResetTaskState,
+  buildIndexedSourceScanTaskState,
+  buildIndexedSourceWatchTaskState,
   getIndexedSourceContractIssues,
   IndexedSourceResetReasons,
   IndexedSourceTaskRunGate,
@@ -576,26 +580,15 @@ export class IndexingRuntime {
   }
 
   private recordScanResult(result: ScanSchedulerResult, job?: IndexedSourceRuntimeTaskJob): void {
-    const lastScan = {
+    const taskState = buildIndexedSourceScanTaskState({
+      sourceId: result.sourceId,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
       batches: result.batches,
-      records: result.records
-    }
-    this.updateTaskState(result.sourceId, 'lastScan', lastScan, {
-      kind: 'scan',
-      status: 'succeeded',
-      startedAt: result.startedAt,
-      completedAt: result.completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
-      summary: {
-        batches: result.batches,
-        records: result.records
-      }
+      records: result.records,
+      job
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 
   private recordScanFailure(
@@ -605,24 +598,15 @@ export class IndexingRuntime {
     error: string,
     job?: IndexedSourceRuntimeTaskJob
   ): void {
-    const lastScan = {
+    const taskState = buildIndexedSourceScanTaskState({
+      sourceId,
       startedAt,
       completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
-      batches: 0,
-      records: 0,
-      error
-    }
-    this.updateTaskState(sourceId, 'lastScan', lastScan, {
-      kind: 'scan',
       status: 'failed',
-      startedAt,
-      completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
-      error
+      error,
+      job
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 
   private recordScanSkipped(
@@ -632,25 +616,15 @@ export class IndexingRuntime {
     reason: string,
     job?: IndexedSourceRuntimeTaskJob
   ): void {
-    const error = `skipped:${reason}`
-    const lastScan = {
+    const taskState = buildIndexedSourceScanTaskState({
+      sourceId,
       startedAt,
       completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
-      batches: 0,
-      records: 0,
-      error
-    }
-    this.updateTaskState(sourceId, 'lastScan', lastScan, {
-      kind: 'scan',
       status: 'skipped',
-      startedAt,
-      completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
-      error
+      skipReason: reason,
+      job
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 
   private recordWatchResult(
@@ -675,91 +649,88 @@ export class IndexingRuntime {
 
     for (const [sourceId, deltas] of deltasBySource) {
       const job = getWatchJob(sourceId)
-      const lastWatch = {
+      const appliedDeltas = result.failedDeltas > 0 ? 0 : deltas
+      const failedDeltas = result.failedDeltas > 0 ? deltas : 0
+      const taskState = buildIndexedSourceWatchTaskState({
+        sourceId,
         occurredAt: event.occurredAt,
         completedAt,
-        jobId: job.id,
-        queuedAt: job.queuedAt,
         action: event.action,
         path: event.path,
         deltas,
-        appliedDeltas: result.failedDeltas > 0 ? 0 : deltas,
-        failedDeltas: result.failedDeltas > 0 ? deltas : 0
-      }
-      this.updateTaskState(sourceId, 'lastWatch', lastWatch, {
-        kind: 'watch',
+        appliedDeltas,
+        failedDeltas,
         status: result.failedDeltas > 0 ? 'failed' : 'succeeded',
-        occurredAt: event.occurredAt,
-        completedAt,
-        jobId: job.id,
-        queuedAt: job.queuedAt,
+        job,
         summary: {
           action: event.action,
           deltas,
-          appliedDeltas: lastWatch.appliedDeltas,
-          failedDeltas: lastWatch.failedDeltas
+          appliedDeltas,
+          failedDeltas
         }
       })
+      this.updateTaskState(
+        taskState.sourceId,
+        taskState.key,
+        taskState.value,
+        taskState.historyEntry
+      )
     }
 
     for (const error of result.errors) {
       if (!error.sourceId) continue
       const job = getWatchJob(error.sourceId)
-      const lastWatch = {
+      const failedDeltas = error.phase === 'store' ? 1 : 0
+      const taskState = buildIndexedSourceWatchTaskState({
+        sourceId: error.sourceId,
         occurredAt: event.occurredAt,
         completedAt,
-        jobId: job.id,
-        queuedAt: job.queuedAt,
         action: event.action,
         path: event.path,
         deltas: 0,
         appliedDeltas: 0,
-        failedDeltas: error.phase === 'store' ? 1 : 0,
-        error: error.message
-      }
-      this.updateTaskState(error.sourceId, 'lastWatch', lastWatch, {
-        kind: 'watch',
+        failedDeltas,
         status: 'failed',
-        occurredAt: event.occurredAt,
-        completedAt,
-        jobId: job.id,
-        queuedAt: job.queuedAt,
         error: error.message,
+        job,
         summary: {
           phase: error.phase,
           action: event.action,
-          failedDeltas: lastWatch.failedDeltas
+          failedDeltas
         }
       })
+      this.updateTaskState(
+        taskState.sourceId,
+        taskState.key,
+        taskState.value,
+        taskState.historyEntry
+      )
     }
 
     for (const skipped of result.skipped) {
       const job = getWatchJob(skipped.sourceId)
-      const skipError = `skipped:${skipped.reason}`
-      const lastWatch = {
+      const taskState = buildIndexedSourceWatchTaskState({
+        sourceId: skipped.sourceId,
         occurredAt: event.occurredAt,
         completedAt,
-        jobId: job.id,
-        queuedAt: job.queuedAt,
         action: event.action,
         path: event.path,
         deltas: 0,
         appliedDeltas: 0,
         failedDeltas: 0,
-        error: skipError
-      }
-      this.updateTaskState(skipped.sourceId, 'lastWatch', lastWatch, {
-        kind: 'watch',
         status: 'skipped',
-        occurredAt: event.occurredAt,
-        completedAt,
-        jobId: job.id,
-        queuedAt: job.queuedAt,
-        error: skipError,
+        skipReason: skipped.reason,
+        job,
         summary: {
           action: event.action
         }
       })
+      this.updateTaskState(
+        taskState.sourceId,
+        taskState.key,
+        taskState.value,
+        taskState.historyEntry
+      )
     }
   }
 
@@ -770,7 +741,8 @@ export class IndexingRuntime {
   ): void {
     const error = result.deltaErrors?.join('; ')
     const status = Boolean(error) || result.errors > 0 ? 'failed' : 'succeeded'
-    const lastReconcile = {
+    const taskState = buildIndexedSourceReconcileTaskState({
+      sourceId: result.sourceId,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
       added: result.added,
@@ -780,20 +752,11 @@ export class IndexingRuntime {
       errors: result.errors,
       reason: result.reason ?? request.reason,
       rootCount: request.roots?.length,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
+      job,
       deltas: result.deltas?.length,
       appliedDeltas: result.appliedDeltas,
       failedDeltas: result.failedDeltas,
-      error
-    }
-    this.updateTaskState(result.sourceId, 'lastReconcile', lastReconcile, {
-      kind: 'reconcile',
       status,
-      startedAt: result.startedAt,
-      completedAt: result.completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
       error,
       summary: {
         added: result.added,
@@ -805,6 +768,7 @@ export class IndexingRuntime {
         rootCount: request.roots?.length
       }
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 
   private recordReconcileFailure(
@@ -813,23 +777,15 @@ export class IndexingRuntime {
     completedAt: number,
     error: string
   ): void {
-    const lastReconcile = {
+    const taskState = buildIndexedSourceReconcileTaskState({
+      sourceId,
       startedAt,
       completedAt,
-      added: 0,
-      changed: 0,
-      deleted: 0,
-      skipped: 0,
       errors: 1,
-      error
-    }
-    this.updateTaskState(sourceId, 'lastReconcile', lastReconcile, {
-      kind: 'reconcile',
       status: 'failed',
-      startedAt,
-      completedAt,
       error
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 
   private recordReconcileSkipped(
@@ -838,56 +794,33 @@ export class IndexingRuntime {
     completedAt: number,
     reason: string
   ): void {
-    const error = `skipped:${reason}`
-    const lastReconcile = {
+    const taskState = buildIndexedSourceReconcileTaskState({
+      sourceId,
       startedAt,
       completedAt,
-      added: 0,
-      changed: 0,
-      deleted: 0,
       skipped: 1,
-      errors: 0,
-      error
-    }
-    this.updateTaskState(sourceId, 'lastReconcile', lastReconcile, {
-      kind: 'reconcile',
       status: 'skipped',
-      startedAt,
-      completedAt,
-      error
+      skipReason: reason
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 
   private recordResetResult(
     result: IndexedSourceResetResult,
     job?: IndexedSourceRuntimeTaskJob
   ): void {
-    const lastReset = {
+    const taskState = buildIndexedSourceResetTaskState({
+      sourceId: result.sourceId,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
       reason: result.reason,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
       clearedSearchIndex: result.clearedSearchIndex,
       clearedScanProgress: result.clearedScanProgress,
       scanProgressRows: result.scanProgressRows,
-      error: result.error
-    }
-    this.updateTaskState(result.sourceId, 'lastReset', lastReset, {
-      kind: 'reset',
-      status: result.error ? 'failed' : 'succeeded',
-      startedAt: result.startedAt,
-      completedAt: result.completedAt,
-      jobId: job?.id,
-      queuedAt: job?.queuedAt,
       error: result.error,
-      summary: {
-        reason: result.reason,
-        clearedSearchIndex: result.clearedSearchIndex,
-        clearedScanProgress: result.clearedScanProgress,
-        scanProgressRows: result.scanProgressRows
-      }
+      job
     })
+    this.updateTaskState(taskState.sourceId, taskState.key, taskState.value, taskState.historyEntry)
   }
 }
 
