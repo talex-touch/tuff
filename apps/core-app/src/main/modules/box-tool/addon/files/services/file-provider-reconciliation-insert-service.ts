@@ -1,4 +1,8 @@
-import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
+import {
+  chunkIndexedWriteRecords,
+  IndexedWriteRuntimeEmitterService,
+  mapIndexedWriteReconciliationUpsertRecords
+} from '@talex-touch/utils/search'
 import type {
   IndexedSourceDelta,
   IndexedSourceRecord,
@@ -80,6 +84,7 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
     this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
       sourceId: deps.sourceId,
       mapRecord: deps.mapRecord,
+      defaultDeltaReason: 'file-provider-reconciliation-add',
       emitRecordBatch: deps.emitRecordBatch,
       emitDelta: deps.emitDelta,
       emitProgress: deps.emitProgress
@@ -94,8 +99,10 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
       return { inserted: [], insertedCount: 0 }
     }
 
-    const records = filesToAdd.map((file) => this.toUpsertRecord(file))
-    const chunks = chunkArray(records, 20)
+    const records = mapIndexedWriteReconciliationUpsertRecords(filesToAdd, {
+      lastIndexedAt: new Date()
+    })
+    const chunks = chunkIndexedWriteRecords(records, 20)
     const insertedRecords: TInserted[] = []
     let reconciledFiles = 0
     this.emitProgress(0, filesToAdd.length)
@@ -115,8 +122,7 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
         this.dispatchSideEffects(inserted)
         await this.runtimeEmitter.emitBatch(inserted, context)
         await this.runtimeEmitter.emitDeltas(inserted, context, {
-          action: 'add',
-          reason: 'file-provider-reconciliation-add'
+          action: 'add'
         })
         reconciledFiles += chunk.length
         this.runtimeEmitter.emitProgressSnapshot({
@@ -136,26 +142,4 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
     }
   }
 
-  private toUpsertRecord(file: FileProviderReconciliationDiskFile): UpsertFileRecord {
-    return {
-      path: file.path,
-      name: file.name,
-      extension: file.extension,
-      size: file.size,
-      mtime: new Date(file.mtime),
-      ctime: new Date(file.ctime),
-      lastIndexedAt: new Date(),
-      isDir: false,
-      type: 'file'
-    }
-  }
-}
-
-function chunkArray<T>(items: T[], chunkSize: number): T[][] {
-  const safeChunkSize = Math.max(1, Math.floor(chunkSize))
-  const chunks: T[][] = []
-  for (let i = 0; i < items.length; i += safeChunkSize) {
-    chunks.push(items.slice(i, i + safeChunkSize))
-  }
-  return chunks
 }

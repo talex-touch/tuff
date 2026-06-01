@@ -1,3 +1,5 @@
+import { chunkIndexedWriteRecords } from './indexing-write-plan'
+
 export interface IndexedWriteUpdateExecutorQueueOptions {
   estimatedTaskTimeMs: number
   label: string
@@ -66,7 +68,7 @@ export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
     }
 
     const updated: TUpdated[] = []
-    const chunks = this.createChunks(records, chunkSize)
+    const chunks = chunkIndexedWriteRecords(records, chunkSize)
     let processedCount = 0
     const processStart = this.now()
 
@@ -105,14 +107,5 @@ export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
     )
 
     return updated
-  }
-
-  private createChunks(records: TUpdate[], chunkSize: number): TUpdate[][] {
-    const safeChunkSize = Math.max(1, Math.floor(chunkSize))
-    const chunks: TUpdate[][] = []
-    for (let i = 0; i < records.length; i += safeChunkSize) {
-      chunks.push(records.slice(i, i + safeChunkSize))
-    }
-    return chunks
   }
 }

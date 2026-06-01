@@ -4,6 +4,10 @@ import type {
   FileProviderIncrementalUpdateRecord,
   FileProviderIncrementalWritePlannerService
 } from './file-provider-incremental-write-planner-service'
+import {
+  buildEmptyIndexedWriteManualSummary,
+  buildIndexedWriteManualContext
+} from '@talex-touch/utils/search'
 
 export type FileProviderIncrementalChangeEntry = [
   string,
@@ -110,10 +114,7 @@ export class FileProviderIncrementalWriteService<
   async execute(
     entries: FileProviderIncrementalChangeEntry[]
   ): Promise<FileProviderIncrementalWriteResult<TInserted, TUpdated>> {
-    const manualEntries = entries.filter(([, payload]) => payload.manual === true)
-    const manualPaths = new Set(
-      manualEntries.map(([, payload]) => this.normalizePath(payload.rawPath))
-    )
+    const manualContext = buildIndexedWriteManualContext(entries, this.normalizePath)
 
     const recordMap = new Map<string, TRecord>()
     for (const [, payload] of entries) {
@@ -126,13 +127,7 @@ export class FileProviderIncrementalWriteService<
     }
 
     if (recordMap.size === 0) {
-      const manual = {
-        total: manualEntries.length,
-        accepted: 0,
-        inserted: 0,
-        updated: 0,
-        unchanged: 0
-      }
+      const manual = buildEmptyIndexedWriteManualSummary(manualContext.manualTotal)
       this.logManualSummary(manual)
       return { inserted: [], updated: [], unchangedCount: 0, manual }
     }
@@ -142,8 +137,8 @@ export class FileProviderIncrementalWriteService<
     const writePlan = this.planner.plan({
       records: Array.from(recordMap.values()),
       existingRows,
-      manualPaths,
-      manualTotal: manualEntries.length
+      manualPaths: manualContext.manualPaths,
+      manualTotal: manualContext.manualTotal
     })
 
     const inserted =

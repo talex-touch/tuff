@@ -1,3 +1,8 @@
+import {
+  mapIndexedWriteReconciliationDbPayload,
+  mapIndexedWriteReconciliationDiskPayload,
+  toIndexedWriteDate
+} from '@talex-touch/utils/search'
 import type { IndexedWriteDeleteRecord } from '../../../search-engine/indexing-write-delete-executor-service'
 import type {
   ReconcileDbFile,
@@ -128,8 +133,8 @@ export class FileProviderReconciliationRunService<TContext> {
         this.emitProgress(reconciledPaths, paths.length)
       }
 
-      const diskPayload = this.toDiskPayload(diskFiles)
-      const dbPayload = this.toDbPayload(dbFiles)
+      const diskPayload = mapIndexedWriteReconciliationDiskPayload(diskFiles)
+      const dbPayload = mapIndexedWriteReconciliationDbPayload(dbFiles)
       const reconcileResult = await this.reconcile(diskPayload, dbPayload, paths)
 
       const filesToAdd = reconcileResult.filesToAdd
@@ -139,8 +144,8 @@ export class FileProviderReconciliationRunService<TContext> {
         name: file.name,
         extension: file.extension,
         size: file.size,
-        mtime: new Date(file.mtime),
-        ctime: new Date(file.ctime),
+        mtime: toIndexedWriteDate(file.mtime),
+        ctime: toIndexedWriteDate(file.ctime),
         type: 'file' as const,
         isDir: false as const
       }))
@@ -178,38 +183,5 @@ export class FileProviderReconciliationRunService<TContext> {
     } finally {
       finishPerfContext()
     }
-  }
-
-  private toDiskPayload(files: ScannedFileInfo[]): ReconcileDiskFile[] {
-    return files.map((file) => ({
-      path: file.path,
-      name: file.name,
-      extension: file.extension,
-      size: file.size,
-      mtime: this.toTimestamp(file.mtime) ?? 0,
-      ctime: this.toTimestamp(file.ctime) ?? 0
-    }))
-  }
-
-  private toDbPayload(files: FileProviderReconciliationDbRecord[]): ReconcileDbFile[] {
-    return files.map((file) => ({
-      id: file.id,
-      path: file.path,
-      mtime: this.toTimestamp(file.mtime) ?? 0
-    }))
-  }
-
-  private toTimestamp(value: Date | number | string | null | undefined): number | null {
-    if (value == null) {
-      return null
-    }
-    if (value instanceof Date) {
-      return value.getTime()
-    }
-    if (typeof value === 'number') {
-      return Number.isFinite(value) ? value : null
-    }
-    const timestamp = new Date(value).getTime()
-    return Number.isNaN(timestamp) ? null : timestamp
   }
 }

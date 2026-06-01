@@ -1,5 +1,8 @@
 import type { IndexWorkerFile } from '../workers/file-index-worker-client'
-import { IndexedWorkerSchedulerService } from '@talex-touch/utils/search'
+import {
+  IndexedWorkerSchedulerService,
+  mapIndexedWriteWorkerFilePayload
+} from '@talex-touch/utils/search'
 
 export interface FileProviderIndexSchedulerFile {
   id?: number | null
@@ -93,38 +96,10 @@ export class FileProviderIndexSchedulerService {
   }
 
   private toIndexWorkerFile(file: FileProviderIndexSchedulerFile): IndexWorkerFile | null {
-    if (typeof file.id !== 'number') {
-      return null
-    }
-
-    return {
-      id: file.id,
-      path: file.path,
-      name: file.name,
-      displayName: file.displayName ?? null,
-      extension: file.extension ?? null,
-      size: typeof file.size === 'number' ? file.size : null,
-      mtime: toTimestamp(file.mtime) ?? Date.now(),
-      ctime: toTimestamp(file.ctime) ?? Date.now()
-    }
+    return mapIndexedWriteWorkerFilePayload(file, { fallbackTimestamp: Date.now() })
   }
 
   private mapWorkerFailureMessage(message: string): string {
     return message === 'Index worker failed' ? 'File index worker failed' : message
   }
-}
-
-function toTimestamp(value: Date | number | string | null | undefined): number | null {
-  if (!value) {
-    return null
-  }
-  if (value instanceof Date) {
-    return value.getTime()
-  }
-  if (typeof value === 'number') {
-    return value
-  }
-  const parsed = new Date(value)
-  const time = parsed.getTime()
-  return Number.isNaN(time) ? null : time
 }

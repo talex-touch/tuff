@@ -3,6 +3,7 @@ import type {
   ReconcileDiskFile,
   ReconcileResult
 } from '../workers/file-reconcile-worker-client'
+import { resolveIndexedWriteReconciliationDiff } from '@talex-touch/utils/search'
 
 export interface FileProviderReconciliationDiffDeps {
   reconcileWithWorker: (
@@ -42,48 +43,6 @@ export class FileProviderReconciliationDiffService {
     dbFiles: ReconcileDbFile[],
     reconciliationPaths: string[]
   ): ReconcileResult {
-    const dbMap = new Map<string, ReconcileDbFile>()
-    for (const dbFile of dbFiles) {
-      dbMap.set(dbFile.path, dbFile)
-    }
-
-    const filesToAdd: ReconcileDiskFile[] = []
-    const filesToUpdate: Array<ReconcileDiskFile & { id: number }> = []
-    const seenDiskPaths = new Set<string>()
-
-    for (const diskFile of diskFiles) {
-      if (seenDiskPaths.has(diskFile.path)) {
-        continue
-      }
-      seenDiskPaths.add(diskFile.path)
-
-      const dbFile = dbMap.get(diskFile.path)
-      if (!dbFile) {
-        filesToAdd.push(diskFile)
-      } else if (diskFile.mtime > dbFile.mtime) {
-        filesToUpdate.push({ ...diskFile, id: dbFile.id })
-      }
-      dbMap.delete(diskFile.path)
-    }
-
-    const deletedIds: number[] = []
-    if (reconciliationPaths.length > 0) {
-      for (const [filePath, dbFile] of dbMap.entries()) {
-        if (this.matchesReconciliationPath(reconciliationPaths, filePath)) {
-          deletedIds.push(dbFile.id)
-        }
-      }
-    }
-
-    return { filesToAdd, filesToUpdate, deletedIds }
-  }
-
-  private matchesReconciliationPath(paths: string[], targetPath: string): boolean {
-    for (const prefix of paths) {
-      if (targetPath.startsWith(prefix)) {
-        return true
-      }
-    }
-    return false
+    return resolveIndexedWriteReconciliationDiff(diskFiles, dbFiles, reconciliationPaths)
   }
 }

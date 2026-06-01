@@ -1,4 +1,7 @@
-import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
+import {
+  IndexedWriteRuntimeEmitterService,
+  takeIndexedWriteRecordChunk
+} from '@talex-touch/utils/search'
 import type { IndexedSourceRecord, IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
 
@@ -88,9 +91,12 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
     })
 
     while (recordOffset < records.length) {
-      const chunkSize = this.getBatchSize()
-      const chunk = records.slice(recordOffset, recordOffset + chunkSize)
-      recordOffset += chunk.length
+      const { chunk, chunkSize, nextOffset } = takeIndexedWriteRecordChunk(
+        records,
+        recordOffset,
+        this.getBatchSize()
+      )
+      recordOffset = nextOffset
 
       await this.waitForIdle()
       const chunkStart = this.now()
