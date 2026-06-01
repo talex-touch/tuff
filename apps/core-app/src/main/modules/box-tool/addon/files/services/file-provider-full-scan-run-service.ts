@@ -1,5 +1,6 @@
 import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
 import type { ScannedFileInfo } from '../types'
+import { mapIndexedWriteFullScanUpsertRecords } from '@talex-touch/utils/search'
 
 export interface FileProviderFullScanRunResult {
   added: number
@@ -78,7 +79,9 @@ export class FileProviderFullScanRunService<TContext> {
         this.emitProgress(scannedPaths, paths.length)
         await this.yieldAfterScan()
 
-        const records = this.toUpsertRecords(diskFiles)
+        const records = mapIndexedWriteFullScanUpsertRecords(diskFiles, {
+          lastIndexedAt: new Date()
+        })
         if (records.length > 0) {
           const insertResult = await this.insertRecords(rootPath, records, context)
           added += insertResult.insertedCount
@@ -92,18 +95,4 @@ export class FileProviderFullScanRunService<TContext> {
     }
   }
 
-  private toUpsertRecords(files: ScannedFileInfo[]): UpsertFileRecord[] {
-    const lastIndexedAt = new Date()
-    return files.map((file) => ({
-      path: file.path,
-      name: file.name,
-      extension: file.extension,
-      size: file.size,
-      mtime: file.mtime,
-      ctime: file.ctime,
-      lastIndexedAt,
-      isDir: false,
-      type: 'file'
-    }))
-  }
 }

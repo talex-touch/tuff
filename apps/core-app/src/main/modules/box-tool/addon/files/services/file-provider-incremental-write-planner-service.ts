@@ -4,7 +4,10 @@ import type {
   IndexedWritePlanServiceOptions,
   IndexedWriteUpdateRecord
 } from '@talex-touch/utils/search'
-import { IndexedWritePlanService } from '@talex-touch/utils/search'
+import {
+  IndexedWritePlanService,
+  mapIndexedWritePathUpdateRecord
+} from '@talex-touch/utils/search'
 
 export type FileProviderIncrementalFileRecord = IndexedWriteIncomingRecord & {
   lastIndexedAt?: Date | number | string | null
@@ -76,29 +79,6 @@ export class FileProviderIncrementalWritePlannerService {
     record: FileProviderIncrementalFileRecord,
     existing: FileProviderIncrementalExistingFileRecord
   ): FileProviderIncrementalUpdateRecord {
-    return {
-      id: existing.id,
-      path: existing.path,
-      name: record.name ?? '',
-      extension: record.extension || null,
-      size: record.size || null,
-      ctime: toDate(record.ctime),
-      mtime: toDate(record.mtime),
-      type: existing.type || 'file',
-      isDir: false
-    }
+    return mapIndexedWritePathUpdateRecord(record, existing)
   }
-}
-
-function toDate(value: Date | number | string | null | undefined): Date {
-  if (value instanceof Date) {
-    return value
-  }
-  if (typeof value === 'number' || typeof value === 'string') {
-    const date = new Date(value)
-    if (!Number.isNaN(date.getTime())) {
-      return date
-    }
-  }
-  return new Date(0)
 }
