@@ -91,4 +91,56 @@ describe('indexing-write-flush-retry-service', () => {
       reason: 'flush-failed'
     })
   })
+
+  it('resolves classified retryable failures through the shared retry policy', () => {
+    const service = new IndexedWriteFlushRetryService({
+      retryBaseMs: 200,
+      retryMaxMs: 1000,
+      random: () => 0.5
+    })
+
+    expect(
+      service.resolveClassifiedFailure({
+        error: new Error('SQLITE_BUSY: database is locked'),
+        pendingSize: 5,
+        retryCount: 1,
+        classify: (error) =>
+          error instanceof Error && error.message.includes('SQLITE_BUSY') ? 'sqlite-busy' : null,
+        retryableClassifications: ['sqlite-busy'],
+        retryableReason: 'sqlite-busy-retry',
+        fallbackReason: 'flush-failed'
+      })
+    ).toEqual({
+      retryable: true,
+      classification: 'sqlite-busy',
+      delayMs: 400,
+      nextRetryCount: 2,
+      reason: 'sqlite-busy-retry'
+    })
+  })
+
+  it('resolves unclassified failures with the fallback retry policy', () => {
+    const service = new IndexedWriteFlushRetryService({
+      baseDelayMs: 100,
+      backlogDelayMs: 300
+    })
+
+    expect(
+      service.resolveClassifiedFailure({
+        error: new Error('worker failed'),
+        pendingSize: 40,
+        retryCount: 2,
+        classify: () => null,
+        retryableClassifications: ['sqlite-busy'],
+        retryableReason: 'sqlite-busy-retry',
+        fallbackReason: 'flush-failed'
+      })
+    ).toEqual({
+      retryable: false,
+      classification: null,
+      delayMs: 300,
+      nextRetryCount: 2,
+      reason: 'flush-failed'
+    })
+  })
 })

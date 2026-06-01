@@ -26,6 +26,30 @@ export interface IndexedWriteFlushFailureDecision<TReason extends string = strin
   reason: TReason
 }
 
+export type IndexedWriteFlushFailureClassifier<TClassification extends string = string> = (
+  error: unknown
+) => TClassification | null
+
+export interface IndexedWriteFlushClassifiedFailureDecision<
+  TReason extends string = string,
+  TClassification extends string = string
+> extends IndexedWriteFlushFailureDecision<TReason> {
+  classification: TClassification | null
+}
+
+export interface IndexedWriteFlushClassifiedFailureInput<
+  TReason extends string = string,
+  TClassification extends string = string
+> {
+  error: unknown
+  pendingSize: number
+  retryCount: number
+  classify: IndexedWriteFlushFailureClassifier<TClassification>
+  retryableClassifications: readonly TClassification[]
+  retryableReason: TReason
+  fallbackReason: TReason
+}
+
 export function getIndexedWriteFlushDelay(
   pendingSize: number,
   options: IndexedWriteFlushDelayOptions = {}
@@ -105,6 +129,26 @@ export class IndexedWriteFlushRetryService {
       delayMs: this.getFlushDelay(input.pendingSize),
       nextRetryCount: input.retryCount,
       reason: input.fallbackReason
+    }
+  }
+
+  resolveClassifiedFailure<TReason extends string, TClassification extends string>(
+    input: IndexedWriteFlushClassifiedFailureInput<TReason, TClassification>
+  ): IndexedWriteFlushClassifiedFailureDecision<TReason, TClassification> {
+    const classification = input.classify(input.error)
+    const decision = this.resolveFailure({
+      pendingSize: input.pendingSize,
+      retryCount: input.retryCount,
+      retryable: Boolean(
+        classification && input.retryableClassifications.includes(classification)
+      ),
+      retryableReason: input.retryableReason,
+      fallbackReason: input.fallbackReason
+    })
+
+    return {
+      ...decision,
+      classification
     }
   }
 }

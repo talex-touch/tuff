@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  buildIndexedWriteFlushBatchMetrics,
   IndexedWriteBufferService,
   IndexedWriteFlushExecutorService,
   mapIndexedWriteFlushExecutorResult
@@ -169,6 +170,31 @@ describe('IndexedWriteFlushExecutorService', () => {
         withContent: 1,
         textOnly: 'ignored'
       }
+    })
+  })
+
+  it('builds numeric metadata from batch metrics', () => {
+    const result = buildIndexedWriteFlushBatchMetrics(
+      [
+        { content: 'one' },
+        { content: '' },
+        { content: 'three' }
+      ],
+      [
+        {
+          key: 'withContent',
+          count: (entry) => entry.content.length > 0
+        },
+        {
+          key: 'empty',
+          count: (entry) => entry.content.length === 0
+        }
+      ]
+    )
+
+    expect(result).toEqual({
+      withContent: 2,
+      empty: 1
     })
   })
 })

@@ -36,16 +36,17 @@ export class FileProviderIndexFlushRetryService {
     pendingSize: number
     retryCount: number
   }): FileProviderIndexFlushFailureDecision {
-    const isBusy = isSqliteBusyError(input.error)
-    const decision = this.retryService.resolveFailure({
+    const decision = this.retryService.resolveClassifiedFailure({
+      error: input.error,
       pendingSize: input.pendingSize,
       retryCount: input.retryCount,
-      retryable: isBusy,
+      classify: (error) => (isSqliteBusyError(error) ? 'sqlite-busy' : null),
+      retryableClassifications: ['sqlite-busy'],
       retryableReason: 'sqlite-busy-retry',
       fallbackReason: 'flush-failed'
     })
     return {
-      isBusy,
+      isBusy: decision.classification === 'sqlite-busy',
       delayMs: decision.delayMs,
       nextRetryCount: decision.nextRetryCount,
       reason: decision.reason

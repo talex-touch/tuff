@@ -3,6 +3,7 @@ import type { PersistEntry } from '../../../search-engine/workers/search-index-w
 import { performance } from 'node:perf_hooks'
 import { dbWriteScheduler } from '../../../../../db/db-write-scheduler'
 import {
+  buildIndexedWriteFlushBatchMetrics,
   IndexedWriteFlushExecutorService,
   mapIndexedWriteFlushExecutorResult
 } from '@talex-touch/utils/search'
@@ -101,22 +102,18 @@ export class FileProviderIndexFlushExecutorService {
   }
 
   private logBatchTaken(entries: IndexWorkerFileResult[]): void {
-    const withContent = this.countEntriesWithContent(entries)
+    const { withContent } = this.resolveBatchMetadata(entries)
     if (withContent > 0) {
       this.logDebug(`Flushing ${entries.length} worker results (${withContent} with content)`)
     }
   }
 
-  private resolveBatchMetadata(entries: IndexWorkerFileResult[]): Record<string, unknown> {
-    return {
-      withContent: this.countEntriesWithContent(entries)
-    }
-  }
-
-  private countEntriesWithContent(entries: IndexWorkerFileResult[]): number {
-    const withContent = entries.filter(
-      (entry) => entry.indexItem.content && entry.indexItem.content.length > 0
-    ).length
-    return withContent
+  private resolveBatchMetadata(entries: IndexWorkerFileResult[]): { withContent: number } {
+    return buildIndexedWriteFlushBatchMetrics(entries, [
+      {
+        key: 'withContent',
+        count: (entry) => Boolean(entry.indexItem.content && entry.indexItem.content.length > 0)
+      }
+    ])
   }
 }

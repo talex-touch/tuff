@@ -2,8 +2,12 @@ import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
 import {
   buildIndexedWriteFlushFailureSnapshot,
+  buildIndexedWriteFlushFailureRetryMetadata,
+  buildIndexedWriteFlushIdleSnapshot,
+  buildIndexedWriteFlushResultSnapshot,
   IndexedWriteFlushRuntimeService,
   IndexedWriteFlushSnapshotService,
+  resolveIndexedWriteFlushRuntimeConfig,
   type IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
@@ -78,13 +82,21 @@ export class FileProviderIndexRuntimeService {
       deps.getPendingResults(),
       deps.getInflightResults()
     )
+    const config = resolveIndexedWriteFlushRuntimeConfig({
+      baseDelayMs: deps.config?.baseDelayMs,
+      backlogDelayMs: deps.config?.backlogDelayMs,
+      flushDeferMs: deps.config?.flushDeferMs,
+      backpressureMaxQueued: deps.config?.dbBackpressureMaxQueued,
+      retryBaseMs: deps.config?.busyRetryBaseMs,
+      retryMaxMs: deps.config?.busyRetryMaxMs
+    })
     this.config = {
-      baseDelayMs: deps.config?.baseDelayMs ?? 250,
-      backlogDelayMs: deps.config?.backlogDelayMs ?? 500,
-      flushDeferMs: deps.config?.flushDeferMs ?? 300,
-      dbBackpressureMaxQueued: deps.config?.dbBackpressureMaxQueued ?? 10,
-      busyRetryBaseMs: deps.config?.busyRetryBaseMs ?? 250,
-      busyRetryMaxMs: deps.config?.busyRetryMaxMs ?? 5000
+      baseDelayMs: config.baseDelayMs,
+      backlogDelayMs: config.backlogDelayMs,
+      flushDeferMs: config.flushDeferMs,
+      dbBackpressureMaxQueued: config.backpressureMaxQueued,
+      busyRetryBaseMs: config.retryBaseMs,
+      busyRetryMaxMs: config.retryMaxMs
     }
     this.retryService = new FileProviderIndexFlushRetryService({
       baseDelayMs: this.config.baseDelayMs,
@@ -110,14 +122,7 @@ export class FileProviderIndexRuntimeService {
       getInflightSize: () => this.bufferService.inflightSize,
       isAvailable: () => Boolean(this.getDbUtils() && this.getSearchIndex()),
       executeFlush: () => this.executeFlush(),
-      recordIdle: (input) =>
-        this.recordFlushSnapshot({
-          status: 'idle',
-          entries: 0,
-          pending: input.pending,
-          inflight: input.inflight,
-          reason: input.reason
-        }),
+      recordIdle: (input) => this.recordFlushSnapshot(buildIndexedWriteFlushIdleSnapshot(input)),
       getFlushDelay: (pendingSize) => this.retryService.getFlushDelay(pendingSize),
       resolveFailure: (input) =>
         this.retryService.resolveFailure({
@@ -181,16 +186,7 @@ export class FileProviderIndexRuntimeService {
   }
 
   private recordFlushExecutorResult(result: FileProviderIndexFlushExecutorResult): void {
-    this.recordFlushSnapshot({
-      status: result.status,
-      entries: result.entries,
-      pending: result.pending,
-      inflight: result.inflight,
-      reason: result.reason,
-      error: result.error,
-      metadata: result.metadata,
-      durationMs: result.durationMs
-    })
+    this.recordFlushSnapshot(buildIndexedWriteFlushResultSnapshot(result))
   }
 
   private recordFlushFailure(error: unknown, metadata: Record<string, unknown>): void {
@@ -215,9 +211,13 @@ export class FileProviderIndexRuntimeService {
       inflight: this.bufferService.inflightSize
     })
     this.recordFlushFailure(error, {
-      isBusy: decision.isBusy,
-      delayMs: decision.delayMs,
-      retryReason: decision.reason
+      ...buildIndexedWriteFlushFailureRetryMetadata({
+        delayMs: decision.delayMs,
+        retryReason: decision.reason,
+        extra: {
+          isBusy: decision.isBusy
+        }
+      })
     })
   }
 

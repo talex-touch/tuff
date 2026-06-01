@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { IndexedWriteFlushRuntimeService } from '../../search'
+import { IndexedWriteFlushRuntimeService, resolveIndexedWriteFlushRuntimeConfig } from '../../search'
 
 function createRuntime(options: {
   pendingSize?: () => number
@@ -165,5 +165,38 @@ describe('IndexedWriteFlushRuntimeService', () => {
     await service.flush()
 
     expect(vi.getTimerCount()).toBe(1)
+  })
+})
+
+describe('resolveIndexedWriteFlushRuntimeConfig', () => {
+  it('keeps shared defaults for write flush runtime adapters', () => {
+    expect(resolveIndexedWriteFlushRuntimeConfig()).toEqual({
+      baseDelayMs: 250,
+      backlogDelayMs: 500,
+      flushDeferMs: 300,
+      backpressureMaxQueued: 10,
+      retryBaseMs: 250,
+      retryMaxMs: 5000
+    })
+  })
+
+  it('preserves explicit zero values for tests and adapter overrides', () => {
+    expect(
+      resolveIndexedWriteFlushRuntimeConfig({
+        baseDelayMs: 0,
+        backlogDelayMs: 0,
+        flushDeferMs: 0,
+        backpressureMaxQueued: 0,
+        retryBaseMs: 0,
+        retryMaxMs: 0
+      })
+    ).toEqual({
+      baseDelayMs: 0,
+      backlogDelayMs: 0,
+      flushDeferMs: 0,
+      backpressureMaxQueued: 0,
+      retryBaseMs: 0,
+      retryMaxMs: 0
+    })
   })
 })
