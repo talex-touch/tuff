@@ -96,6 +96,26 @@ describe('IndexedWriteRuntimeEmitterService', () => {
     )
   })
 
+  it('uses constructor default reasons for add/change deltas', () => {
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
+      sourceId: 'test-source',
+      mapRecord,
+      defaultDeltaReason: 'default-change'
+    })
+
+    expect(
+      service.buildDelta({ id: '1', path: '/tmp/a.txt', title: 'A' }, {
+        action: 'change'
+      })
+    ).toEqual({
+      sourceId: 'test-source',
+      action: 'change',
+      record: expect.objectContaining({ recordId: '1', stableKey: '/tmp/a.txt' }),
+      path: '/tmp/a.txt',
+      reason: 'default-change'
+    })
+  })
+
   it('builds add/change deltas without requiring an emit sink', () => {
     const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
       sourceId: 'test-source',
@@ -149,6 +169,20 @@ describe('IndexedWriteRuntimeEmitterService', () => {
       stableKey: '/tmp/a.txt',
       path: '/tmp/a.txt',
       reason: 'watch-delete'
+    })
+  })
+
+  it('uses constructor default reasons for delete deltas and allows explicit overrides', () => {
+    const service = new IndexedWriteRuntimeEmitterService<TestRecord>({
+      sourceId: 'test-source',
+      defaultDeltaReason: 'default-delete'
+    })
+
+    expect(service.buildDeleteDelta('/tmp/a.txt')).toMatchObject({
+      reason: 'default-delete'
+    })
+    expect(service.buildDeleteDelta('/tmp/a.txt', { reason: 'explicit-delete' })).toMatchObject({
+      reason: 'explicit-delete'
     })
   })
 

@@ -34,6 +34,7 @@ export class FileProviderReconciliationUpdateService<
     this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
       sourceId: deps.sourceId,
       mapRecord: deps.mapRecord,
+      defaultDeltaReason: 'file-provider-reconciliation-update',
       emitDelta: deps.emitDelta
     })
   }
@@ -48,8 +49,7 @@ export class FileProviderReconciliationUpdateService<
 
     const updated = await this.updateRecords(records)
     await this.runtimeEmitter.emitDeltas(updated, context, {
-      action: 'change',
-      reason: 'file-provider-reconciliation-update'
+      action: 'change'
     })
 
     return {

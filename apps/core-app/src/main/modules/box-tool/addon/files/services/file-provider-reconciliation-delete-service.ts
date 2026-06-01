@@ -34,6 +34,7 @@ export class FileProviderReconciliationDeleteService<
     this.deleteRecords = deps.deleteRecords
     this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
       sourceId: deps.sourceId,
+      defaultDeltaReason: 'file-provider-reconciliation-delete',
       emitDelta: deps.emitDelta
     })
   }
@@ -47,9 +48,7 @@ export class FileProviderReconciliationDeleteService<
     }
 
     const deleteResult = await this.deleteRecords(records)
-    await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context, {
-      reason: 'file-provider-reconciliation-delete'
-    })
+    await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context)
 
     return {
       deleted: deleteResult.deleted,

@@ -9,6 +9,7 @@ export interface IndexedWriteRuntimeEmitterDeps<TRecord, TContext> {
   sourceId: string
   mapRecord?: (record: TRecord) => IndexedSourceRecord
   getPath?: (record: TRecord) => string | undefined
+  defaultDeltaReason?: string
   emitRecordBatch?: (
     batch: IndexedSourceRecordBatch,
     context: TContext
@@ -44,6 +45,10 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
   private readonly getPath: NonNullable<
     IndexedWriteRuntimeEmitterDeps<TRecord, TContext>['getPath']
   >
+  private readonly defaultDeltaReason: IndexedWriteRuntimeEmitterDeps<
+    TRecord,
+    TContext
+  >['defaultDeltaReason']
   private readonly emitRecordBatch?: IndexedWriteRuntimeEmitterDeps<
     TRecord,
     TContext
@@ -66,6 +71,7 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
         const value = (record as { path?: unknown }).path
         return typeof value === 'string' ? value : undefined
       })
+    this.defaultDeltaReason = deps.defaultDeltaReason
     this.emitRecordBatch = deps.emitRecordBatch
     this.emitDelta = deps.emitDelta
     this.emitProgress = deps.emitProgress
@@ -119,7 +125,7 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
       action: options.action,
       record: indexedRecord,
       path: this.getPath(record) ?? indexedRecord.path,
-      reason: options.reason
+      reason: options.reason ?? this.defaultDeltaReason
     }
   }
 
@@ -146,7 +152,7 @@ export class IndexedWriteRuntimeEmitterService<TRecord, TContext = unknown> {
       action: 'delete',
       stableKey: path,
       path,
-      reason: options.reason
+      reason: options.reason ?? this.defaultDeltaReason
     }
   }
 
