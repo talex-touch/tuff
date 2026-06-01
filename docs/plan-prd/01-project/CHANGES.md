@@ -18,6 +18,26 @@
   - Default empty source reports degraded `quicklinks-empty` diagnostics instead of pretending content exists.
   - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
 
+
+### feat(search): link quicklinks providers to indexed source enablement
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-source-config.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-sources.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-sources.test.ts`
+- `plugins/touch-browser-bookmarks/manifest.json`
+- `plugins/touch-dev-toolbox/manifest.json`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added a default-enabled option to the SDK provider-to-source enablement helper so low-privacy sources can stay available while still honoring explicit source disable and linked provider enablement.
+  - Linked the official browser-bookmarks quicklinks provider and dev-toolbox provider to the `quicklinks` runtime source through `indexedSourceId: "quicklinks"`.
+  - Added CoreApp `quicklinks-source-config` and wired `QuicklinksIndexedSource` to provider config, including disabled health/evidence/reconcile/open behavior through `quicklinks-provider-disabled`.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime-sources.test.ts" --testTimeout 15000` 通过。
+
 ## 历史归档
 
 - [压缩前完整快照（截至 2026-05-14）](./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md)
