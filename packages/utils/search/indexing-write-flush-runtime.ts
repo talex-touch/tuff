@@ -12,6 +12,24 @@ export interface IndexedWriteFlushRuntimeRetryInput {
   retryCount: number
 }
 
+export interface IndexedWriteFlushRuntimeConfig {
+  baseDelayMs?: number | undefined
+  backlogDelayMs?: number | undefined
+  flushDeferMs?: number | undefined
+  backpressureMaxQueued?: number | undefined
+  retryBaseMs?: number | undefined
+  retryMaxMs?: number | undefined
+}
+
+export interface ResolvedIndexedWriteFlushRuntimeConfig {
+  baseDelayMs: number
+  backlogDelayMs: number
+  flushDeferMs: number
+  backpressureMaxQueued: number
+  retryBaseMs: number
+  retryMaxMs: number
+}
+
 export interface IndexedWriteFlushRuntimeRescheduleDecision {
   delayMs: number
   reason: string
@@ -41,6 +59,19 @@ export interface IndexedWriteFlushRuntimeServiceDeps<
   onUnexpectedFlushError?: (error: unknown, reason: string) => void
   config?: {
     flushDeferMs?: number
+  }
+}
+
+export function resolveIndexedWriteFlushRuntimeConfig(
+  config: IndexedWriteFlushRuntimeConfig = {}
+): ResolvedIndexedWriteFlushRuntimeConfig {
+  return {
+    baseDelayMs: config.baseDelayMs ?? 250,
+    backlogDelayMs: config.backlogDelayMs ?? 500,
+    flushDeferMs: config.flushDeferMs ?? 300,
+    backpressureMaxQueued: config.backpressureMaxQueued ?? 10,
+    retryBaseMs: config.retryBaseMs ?? 250,
+    retryMaxMs: config.retryMaxMs ?? 5000
   }
 }
 

@@ -21,6 +21,11 @@ export interface IndexedWriteFlushExecutorResultMapOptions<
   numericMetadataKeys?: readonly TMetric[]
 }
 
+export interface IndexedWriteFlushBatchMetric<TEntry> {
+  key: string
+  count: (entry: TEntry) => boolean
+}
+
 export type IndexedWriteFlushExecutorMappedResult<
   TStatus extends string,
   TMetric extends string = never
@@ -65,6 +70,18 @@ export function mapIndexedWriteFlushExecutorResult<
     ...numericMetadata,
     status: mappedStatus
   } as IndexedWriteFlushExecutorMappedResult<TStatus | IndexedWriteFlushExecutorStatus, TMetric>
+}
+
+export function buildIndexedWriteFlushBatchMetrics<TEntry, TMetric extends string>(
+  entries: TEntry[],
+  metrics: readonly (IndexedWriteFlushBatchMetric<TEntry> & { key: TMetric })[]
+): Record<TMetric, number> {
+  return Object.fromEntries(
+    metrics.map((metric) => [
+      metric.key,
+      entries.reduce((count, entry) => count + (metric.count(entry) ? 1 : 0), 0)
+    ])
+  ) as Record<TMetric, number>
 }
 
 export interface IndexedWriteFlushExecutorDeps<TKey, TEntry, TPersistEntry> {

@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildIndexedWriteFlushFailureSnapshot,
+  buildIndexedWriteFlushFailureRetryMetadata,
+  buildIndexedWriteFlushIdleSnapshot,
+  buildIndexedWriteFlushResultSnapshot,
   getIndexedWriteFlushResultFromError,
   IndexedWriteFlushSnapshotService
 } from '../../search'
@@ -24,6 +27,49 @@ describe('IndexedWriteFlushSnapshotService', () => {
     expect(service.getSnapshot()).toMatchObject({
       status: 'flushed',
       checkedAt: 1700000000000
+    })
+  })
+
+  it('builds an adapter-safe snapshot from a flush result', () => {
+    expect(
+      buildIndexedWriteFlushResultSnapshot({
+        status: 'worker-not-ready',
+        entries: 3,
+        pending: 4,
+        inflight: 5,
+        reason: 'not-ready',
+        metadata: {
+          withContent: 2
+        },
+        durationMs: 12
+      })
+    ).toEqual({
+      status: 'worker-not-ready',
+      entries: 3,
+      pending: 4,
+      inflight: 5,
+      reason: 'not-ready',
+      error: undefined,
+      metadata: {
+        withContent: 2
+      },
+      durationMs: 12
+    })
+  })
+
+  it('builds an idle snapshot from runtime idle state', () => {
+    expect(
+      buildIndexedWriteFlushIdleSnapshot({
+        pending: 4,
+        inflight: 5,
+        reason: 'flush-in-progress'
+      })
+    ).toEqual({
+      status: 'idle',
+      entries: 0,
+      pending: 4,
+      inflight: 5,
+      reason: 'flush-in-progress'
     })
   })
 
@@ -64,6 +110,22 @@ describe('IndexedWriteFlushSnapshotService', () => {
         retryReason: 'flush-failed'
       },
       durationMs: 12
+    })
+  })
+
+  it('builds retry metadata for failed flush snapshots', () => {
+    expect(
+      buildIndexedWriteFlushFailureRetryMetadata({
+        delayMs: 400,
+        retryReason: 'sqlite-busy-retry',
+        extra: {
+          isBusy: true
+        }
+      })
+    ).toEqual({
+      isBusy: true,
+      delayMs: 400,
+      retryReason: 'sqlite-busy-retry'
     })
   })
 

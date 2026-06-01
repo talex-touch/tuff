@@ -1,7 +1,10 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { FileProviderIndexRuntimeService } from './file-provider-index-runtime-service'
+import {
+  FileProviderIndexRuntimeService,
+  type FileProviderIndexRuntimeServiceDeps
+} from './file-provider-index-runtime-service'
 
 function createResult(fileId: number): IndexWorkerFileResult {
   return {
@@ -50,6 +53,7 @@ function createService(options: {
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   persistAndIndex?: (entries: PersistEntry[]) => Promise<void>
   logWarn?: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
+  config?: FileProviderIndexRuntimeServiceDeps['config']
 }) {
   const persistAndIndex = vi.fn(options.persistAndIndex ?? (async () => undefined))
   const logWarn = vi.fn(options.logWarn ?? (() => undefined))
@@ -72,7 +76,8 @@ function createService(options: {
       logDebug: vi.fn(),
       logWarn,
       config: {
-        backlogDelayMs: 1_000
+        backlogDelayMs: 1_000,
+        ...options.config
       }
     })
   }
@@ -120,6 +125,29 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
       metadata: {
         withContent: 1
       }
+    })
+  })
+
+  it('records idle flush snapshot when no pending worker results exist', async () => {
+    const pending = new Map<number, IndexWorkerFileResult>()
+    const inflight = new Map<number, IndexWorkerFileResult>()
+    const ensureSearchIndexWorkerReady = vi.fn(async () => true)
+    const { service, persistAndIndex } = createService({
+      pending,
+      inflight,
+      ensureSearchIndexWorkerReady
+    })
+
+    await service.flush()
+
+    expect(ensureSearchIndexWorkerReady).not.toHaveBeenCalled()
+    expect(persistAndIndex).not.toHaveBeenCalled()
+    expect(service.getFlushSnapshot()).toMatchObject({
+      status: 'idle',
+      entries: 0,
+      pending: 0,
+      inflight: 0,
+      reason: 'no-pending'
     })
   })
 
@@ -194,5 +222,24 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
         retryReason: 'flush-failed'
       }
     })
+  })
+
+  it('uses shared flush runtime config without losing explicit adapter overrides', () => {
+    vi.useFakeTimers()
+    const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
+    const inflight = new Map<number, IndexWorkerFileResult>()
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+    const { service } = createService({
+      pending,
+      inflight,
+      ensureSearchIndexWorkerReady: vi.fn(async () => true),
+      config: {
+        baseDelayMs: 0
+      }
+    })
+
+    service.handleIndexWorkerFile(createResult(2))
+
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 0)
   })
 })
