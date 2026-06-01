@@ -16,6 +16,15 @@
   - Reaffirmed remaining execution order: File write/store boundary, Browser Bookmarks official plugin-owned lifecycle, Everything productionization, Quicklinks persistent feed/UI evidence, then Browser History / System Settings / Obsidian / VSCode.
   - 验证：documentation-only update; no runtime behavior changed.
 
+### ref(search): share indexed source task state builders
+
+- `packages/utils/search/indexing-source-runtime-task-job.ts`
+- `packages/utils/search/indexing-source-task-state.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+  - Moved runtime task job identity and scan/watch/reconcile/reset task-state builders into `@talex-touch/utils/search`.
+  - Rewired CoreApp IndexingRuntime to consume SDK builders for `lastScan`, `lastWatch`, `lastReconcile`, `lastReset` and recent task history while keeping the existing CoreApp compatibility re-export.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-runtime-task-job.test.ts" "__tests__/search/indexing-source-task-state.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime-task-job.test.ts" --testTimeout 15000` 通过。
+
 ### docs(project): align roadmap, TODO and quality baseline
 
 - `docs/plan-prd/TODO.md`
