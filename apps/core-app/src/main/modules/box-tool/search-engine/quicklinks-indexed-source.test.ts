@@ -103,6 +103,49 @@ describe('quicklinksIndexedSource', () => {
     ])
   })
 
+  it('reports disabled diagnostics when provider config disables the source', async () => {
+    const source = buildQuicklinksIndexedSource({ enabled: false, items: [quicklink] })
+    const batches: IndexedSourceRecordBatch[] = []
+
+    await expect(source.getHealth()).resolves.toMatchObject({
+      status: 'disabled',
+      permissionState: 'not-required',
+      itemCount: 0,
+      watchState: 'not-supported',
+      reconcileState: 'idle',
+      reason: 'quicklinks-provider-disabled'
+    })
+    await expect(source.getRoots()).resolves.toEqual([])
+    await expect(source.getEvidence?.()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'quicklinks:official-plugin-feed',
+        status: 'disabled',
+        itemCount: 0,
+        reason: 'quicklinks-provider-disabled'
+      })
+    ])
+
+    for await (const batch of source.scan({
+      sourceId: source.descriptor.id,
+      reason: IndexedSourceScanReasons.Startup
+    })) {
+      batches.push(batch)
+    }
+
+    expect(batches).toEqual([])
+    await expect(
+      source.reconcile?.({
+        sourceId: source.descriptor.id,
+        reason: IndexedSourceReconcileReasons.ExternalRefresh
+      })
+    ).resolves.toMatchObject({
+      sourceId: 'quicklinks',
+      changed: 0,
+      skipped: 1,
+      reason: 'quicklinks-provider-disabled'
+    })
+  })
+
   it('returns runtime record batches from injected quicklink snapshots', async () => {
     const source = buildQuicklinksIndexedSource({ items: [quicklink] })
     const batches: IndexedSourceRecordBatch[] = []

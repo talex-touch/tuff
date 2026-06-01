@@ -44,6 +44,8 @@ export interface QuicklinksIndexedSourceSnapshot {
 }
 
 export interface QuicklinksIndexedSourceOptions {
+  enabled?: boolean
+  isEnabled?: () => boolean | Promise<boolean>
   items?: QuicklinkIndexedSourceItem[]
   loadSnapshot?: () => QuicklinksIndexedSourceSnapshot | Promise<QuicklinksIndexedSourceSnapshot>
   openUrl?: (
@@ -120,6 +122,17 @@ function buildQuicklinksHealth(snapshot: QuicklinksIndexedSourceSnapshot): Index
   }
 }
 
+function buildDisabledQuicklinksHealth(): IndexedSourceHealth {
+  return {
+    status: 'disabled',
+    permissionState: 'not-required',
+    itemCount: 0,
+    watchState: 'not-supported',
+    reconcileState: 'idle',
+    reason: 'quicklinks-provider-disabled'
+  }
+}
+
 function buildQuicklinksEvidence(
   sourceId: string,
   snapshot: QuicklinksIndexedSourceSnapshot
@@ -144,6 +157,22 @@ function buildQuicklinksEvidence(
   ]
 }
 
+function buildDisabledQuicklinksEvidence(sourceId: string): IndexedSourceEvidence[] {
+  return [
+    {
+      id: `${sourceId}:official-plugin-feed`,
+      label: 'Official plugin quicklinks',
+      status: 'disabled',
+      itemCount: 0,
+      rootCount: 0,
+      reason: 'quicklinks-provider-disabled',
+      metadata: {
+        storage: 'runtime-feed'
+      }
+    }
+  ]
+}
+
 async function buildSnapshot(
   options: QuicklinksIndexedSourceOptions
 ): Promise<QuicklinksIndexedSourceSnapshot> {
@@ -157,6 +186,21 @@ async function buildSnapshot(
   }
 
   return buildDefaultSnapshot(options.items)
+}
+
+function buildUnsupportedQuicklinksReconcileResult(sourceId: string): IndexedSourceReconcileResult {
+  const now = Date.now()
+  return {
+    sourceId,
+    added: 0,
+    changed: 0,
+    deleted: 0,
+    skipped: 1,
+    errors: 0,
+    startedAt: now,
+    completedAt: now,
+    reason: 'quicklinks-provider-disabled'
+  }
 }
 
 function buildQuicklinksReconcileResult(
@@ -205,18 +249,40 @@ export function buildQuicklinksIndexedSource(
   options: QuicklinksIndexedSourceOptions = {}
 ): IndexedSource {
   const descriptor = buildQuicklinksIndexedSourceDescriptor()
+  const resolveEnabled = async () =>
+    options.isEnabled ? Boolean(await options.isEnabled()) : options.enabled !== false
 
   return {
     descriptor,
-    getHealth: async () => buildQuicklinksHealth(await buildSnapshot(options)),
+    getHealth: async () => {
+      if (!(await resolveEnabled())) {
+        return buildDisabledQuicklinksHealth()
+      }
+
+      return buildQuicklinksHealth(await buildSnapshot(options))
+    },
     getRoots: async (): Promise<IndexedSourceRoot[]> => {
+      if (!(await resolveEnabled())) {
+        return []
+      }
+
       const snapshot = await buildSnapshot(options)
       return snapshot.roots ?? []
     },
-    getEvidence: async () => buildQuicklinksEvidence(descriptor.id, await buildSnapshot(options)),
+    getEvidence: async () => {
+      if (!(await resolveEnabled())) {
+        return buildDisabledQuicklinksEvidence(descriptor.id)
+      }
+
+      return buildQuicklinksEvidence(descriptor.id, await buildSnapshot(options))
+    },
     scan: async function* quicklinksScan(
       _request: IndexedSourceScanRequest
     ): AsyncIterable<IndexedSourceRecordBatch> {
+      if (!(await resolveEnabled())) {
+        return
+      }
+
       const snapshot = await buildSnapshot(options)
       const batch = createQuicklinksRuntimeEmitter(descriptor.id).buildBatch(snapshot.items, {
         done: true
@@ -229,9 +295,17 @@ export function buildQuicklinksIndexedSource(
     reconcile: async (
       request: IndexedSourceReconcileRequest
     ): Promise<IndexedSourceReconcileResult> => {
+      if (!(await resolveEnabled())) {
+        return buildUnsupportedQuicklinksReconcileResult(descriptor.id)
+      }
+
       return buildQuicklinksReconcileResult(descriptor.id, await buildSnapshot(options), request)
     },
     handleWatchEvent: async (_event: IndexedSourceWatchEvent): Promise<IndexedSourceDelta[]> => {
+      if (!(await resolveEnabled())) {
+        return []
+      }
+
       const snapshot = await buildSnapshot(options)
       const runtimeEmitter = createQuicklinksRuntimeEmitter(descriptor.id)
       return snapshot.items.map((item) =>
@@ -245,12 +319,23 @@ export function buildQuicklinksIndexedSource(
       return buildQuicklinksResetResult(request)
     },
     clearIndex: async () => {
+      if (!(await resolveEnabled())) {
+        return
+      }
+
       await options.clear?.()
     },
     open: async (
       record: IndexedSourceRecord,
       action: IndexedSourceOpenAction
     ): Promise<IndexedSourceOpenResult> => {
+      if (!(await resolveEnabled())) {
+        return {
+          status: 'blocked',
+          reason: 'quicklinks-provider-disabled'
+        }
+      }
+
       if (!record.uri) {
         return {
           status: 'blocked',
