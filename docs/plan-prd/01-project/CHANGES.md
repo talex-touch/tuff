@@ -5,6 +5,18 @@
 
 ## 2026-06-01
 
+### docs(audit): add 2026-06-01 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-01.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the 2026-06-01 UI/compatibility/placeholder/architecture audit follow-up.
+  - Reconfirmed no new production-path P0 fixed fake-success, mock payment URL, fake empty payload or consumable placeholder response in the reviewed live tree.
+  - Recorded that TuffEx composition visual smoke now has 30/30 screenshot/JSON evidence, while Windows App indexing / Everything registry PATH / CoreBox function key / manual indexing notification still require Windows device evidence.
+  - Promoted the next high-signal cleanup list: default-sanitize shared Markdown rendering, Update release notes Markdown renderer unification, preload loading overlay HTML construction, Nexus `deviceId` / privacy settings localStorage semantics, CoreApp UI preference facade, semantic clickable controls, and cloud preset capability unavailable contract.
+  - 验证：documentation-only update; no runtime behavior changed.
+
 ### docs(project): record current indexing goal progress
 
 - `docs/plan-prd/README.md`
