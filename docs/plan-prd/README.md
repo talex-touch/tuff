@@ -24,6 +24,13 @@
 - 当前工作区口径：2026-06-01 本地 `master` 领先 `origin/master` 44 个提交，未跟踪文件清单仍包含 report、TuffEx 与 utils 新文件；dirty 范围覆盖 Indexing Runtime/File/Browser Bookmarks/Quicklinks、TuffEx/Nexus、renderer 与 `intelligence-uikit` 等并行切片。后续提交必须按 related-only 分批，先收口已完成 focused tests 与 typecheck 证据，再继续 P1-APP-DATA。
 - AI 现实口径：AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但仍缺 packaged Electron 文本/OCR成功与失败路径证据，不能标记为体验闭环。`2.5.3` 本地知识检索、`2.5.5` 本地模型 runtime、`2.5.8` ASR 只保持 PRD 锁方向，当前稳定窗口不提前实现。
 
+## 当前 Goal / Progress Snapshot
+
+- 当前 goal：继续把 Search Provider / Indexed Source / Indexing Runtime 收敛为可开放 SDK 的统一抽象，优先保证 provider enable/order、插件 provider 权限、root results push gate、source diagnostics、progress ETA 与维护动作在 Settings/CoreBox 中同一口径展示。
+- 已落地进度：Search Provider SDK 边界、插件 provider manifest policy、`search.root-results` 权限 gate、Settings provider enable/order、source-to-provider link、File progress ETA diagnostics、Browser Bookmarks consent-gated skeleton 与 Quicklinks linked provider enablement 已进入当前基线。
+- 当前第一批剩余：File write/store boundary、`scan_progress` / integrity reset durable job history、Browser Bookmarks 官方 `touch-browser-data` 插件 owned runtime source、Quicklinks 官方插件持久 feed + clear/rebuild UI、Everything SDK/CLI 最终策略与 Windows 真机 evidence。
+- 提交策略：当前 worktree 仍有多条并行脏改动，后续继续按 related-only 小批提交；文档更新、Quicklinks/Browser Bookmarks、File write boundary、TuffEx/Nexus 视觉与 renderer/i18n 清理不得混成同一个提交。
+
 ## 当前主线（2 周）
 
 1. 继续收敛 `2.4.11` legacy/compat/size 债务，不新增 legacy/raw channel/旧 storage/旧 SDK bypass；旧自动清册不再作为 live SoT。

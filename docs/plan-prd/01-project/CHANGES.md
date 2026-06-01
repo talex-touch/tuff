@@ -5,6 +5,17 @@
 
 ## 2026-06-01
 
+### docs(project): record current indexing goal progress
+
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Recorded the current P1-APP-DATA goal: unify cross-platform indexing apps, realtime watch routing, search recovery and provider settings behind the Search Provider / Indexed Source / Indexing Runtime SDK boundary.
+  - Captured current progress: provider SDK, plugin provider registration policy, `search.root-results` permission gate, Settings provider enable/order, source-to-provider links, File progress ETA diagnostics, Browser Bookmarks consent-gated skeleton and Quicklinks linked provider enablement are in baseline.
+  - Reaffirmed remaining execution order: File write/store boundary, Browser Bookmarks official plugin-owned lifecycle, Everything productionization, Quicklinks persistent feed/UI evidence, then Browser History / System Settings / Obsidian / VSCode.
+  - 验证：documentation-only update; no runtime behavior changed.
+
 ### docs(project): align roadmap, TODO and quality baseline
 
 - `docs/plan-prd/TODO.md`
