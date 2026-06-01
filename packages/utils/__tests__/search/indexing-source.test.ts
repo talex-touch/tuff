@@ -20,6 +20,7 @@ import {
   IndexedSourceReconcileReasons,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
+  mapIndexedFileSourceRecord,
   isSearchProviderEnabledByConfig,
   isIndexedSourceAdmissionReady,
   isIndexedSourceContractReady,
@@ -28,6 +29,7 @@ import {
   normalizeSearchProviderUserConfigs,
   isIndexedSourceEnabledByProviderConfig,
   resolveIndexedSourceRootSkipReason,
+  resolveIndexedSourceProviderConfigEnablement,
   resolveSearchProviderManifestDescriptors,
   resolveSearchProviderPermissionIds,
   resolveIndexedSourceManifestDescriptors,
@@ -35,6 +37,7 @@ import {
   resolveSearchProviderRegistrationDecision,
   resolveIndexedSourceTaskEligibility,
   resolveIndexedSourceWatchRootRoute,
+  toIndexedSourceRecordTimestamp,
 } from "../../search";
 
 function buildDescriptor(
@@ -737,6 +740,79 @@ describe("indexedSource admission", () => {
   });
 });
 
+describe("indexed file source record mapping", () => {
+  it("maps file rows into reusable indexed source records", () => {
+    expect(
+      mapIndexedFileSourceRecord(
+        {
+          path: "/Users/boss/Documents/spec.md",
+          name: "spec.md",
+          displayName: "Product Spec",
+          extension: ".md",
+          size: 1024,
+          mtime: new Date(2000),
+          type: "document",
+          isDir: false,
+        },
+        { sourceId: "file-provider" },
+      ),
+    ).toEqual({
+      sourceId: "file-provider",
+      recordId: "/Users/boss/Documents/spec.md",
+      stableKey: "/Users/boss/Documents/spec.md",
+      kind: "file",
+      title: "Product Spec",
+      subtitle: "/Users/boss/Documents/spec.md",
+      path: "/Users/boss/Documents/spec.md",
+      mtime: 2000,
+      size: 1024,
+      metadata: {
+        extension: ".md",
+        type: "document",
+        isDir: false,
+      },
+    });
+  });
+
+  it("normalizes optional file row fields without leaking null metadata values", () => {
+    expect(
+      mapIndexedFileSourceRecord(
+        {
+          path: "/Users/boss/Downloads/archive",
+          name: "archive",
+          displayName: null,
+          extension: null,
+          size: null,
+          mtime: "not-a-date",
+          type: null,
+          isDir: null,
+        },
+        { sourceId: "file-provider" },
+      ),
+    ).toMatchObject({
+      title: "archive",
+      mtime: undefined,
+      size: undefined,
+      metadata: {
+        extension: undefined,
+        type: "file",
+        isDir: false,
+      },
+    });
+  });
+
+  it("converts valid timestamp inputs and drops invalid timestamp values", () => {
+    expect(toIndexedSourceRecordTimestamp(new Date(1000))).toBe(1000);
+    expect(toIndexedSourceRecordTimestamp(2000)).toBe(2000);
+    expect(toIndexedSourceRecordTimestamp("1970-01-01T00:00:03.000Z")).toBe(
+      3000,
+    );
+    expect(toIndexedSourceRecordTimestamp("")).toBeUndefined();
+    expect(toIndexedSourceRecordTimestamp("invalid")).toBeUndefined();
+    expect(toIndexedSourceRecordTimestamp(null)).toBeUndefined();
+  });
+});
+
 describe("search provider sdk contracts", () => {
   it("normalizes provider enabled state and ordering from descriptors plus user config", () => {
     const configs = normalizeSearchProviderUserConfigs(
@@ -1233,6 +1309,78 @@ describe("search provider sdk contracts", () => {
         { defaultEnabled: true },
       ),
     ).toBe(true);
+  });
+
+  it("resolves indexed source enablement details from linked provider config", () => {
+    expect(
+      resolveIndexedSourceProviderConfigEnablement(
+        "browser-bookmarks",
+        ["touch-browser-data.browser-bookmarks"],
+        [
+          {
+            providerId: "touch-browser-data.browser-bookmarks",
+            enabled: true,
+            order: 1,
+          },
+        ],
+      ),
+    ).toEqual({
+      sourceId: "browser-bookmarks",
+      providerIds: ["browser-bookmarks", "touch-browser-data.browser-bookmarks"],
+      configuredProviderIds: ["touch-browser-data.browser-bookmarks"],
+      enabledProviderIds: ["touch-browser-data.browser-bookmarks"],
+      disabledProviderIds: [],
+      enabled: true,
+      reason: "explicitly-enabled",
+    });
+
+    expect(
+      resolveIndexedSourceProviderConfigEnablement(
+        "browser-bookmarks",
+        ["touch-browser-data.browser-bookmarks"],
+        [
+          {
+            providerId: "touch-browser-data.browser-bookmarks",
+            enabled: false,
+            order: 1,
+          },
+        ],
+      ),
+    ).toMatchObject({
+      configuredProviderIds: ["touch-browser-data.browser-bookmarks"],
+      enabledProviderIds: [],
+      disabledProviderIds: ["touch-browser-data.browser-bookmarks"],
+      enabled: false,
+      reason: "explicitly-disabled",
+    });
+  });
+
+  it("reports default indexed source enablement without masking explicit source disable", () => {
+    expect(
+      resolveIndexedSourceProviderConfigEnablement("quicklinks", [], [], {
+        defaultEnabled: true,
+      }),
+    ).toMatchObject({
+      enabled: true,
+      reason: "default-enabled",
+    });
+
+    expect(
+      resolveIndexedSourceProviderConfigEnablement(
+        "quicklinks",
+        ["touch-dev-toolbox.dev-toolbox"],
+        [
+          { providerId: "quicklinks", enabled: false, order: 1 },
+          { providerId: "touch-dev-toolbox.dev-toolbox", enabled: false, order: 2 },
+        ],
+        { defaultEnabled: true },
+      ),
+    ).toMatchObject({
+      configuredProviderIds: ["quicklinks", "touch-dev-toolbox.dev-toolbox"],
+      disabledProviderIds: ["quicklinks", "touch-dev-toolbox.dev-toolbox"],
+      enabled: false,
+      reason: "explicitly-disabled",
+    });
   });
 
   it("resolves provider ids linked to an indexed source", () => {

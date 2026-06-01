@@ -18,6 +18,7 @@ import type {
   FileIndexRebuildResult
 } from '@talex-touch/utils/transport/events/types'
 import type {
+  IndexedFileSourceRecordRow,
   IndexedSourceDelta,
   IndexedSourceEvidence,
   IndexedSourceRecord,
@@ -56,11 +57,13 @@ import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
+  IndexedSourceIntegrityEvidenceService,
   IndexedWriteFlushEvidenceService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   IndexedWriteRuntimeEmitterService,
-  isIndexedWatchPathOwned
+  isIndexedWatchPathOwned,
+  mapIndexedFileSourceRecord
 } from '@talex-touch/utils/search'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
@@ -196,6 +199,7 @@ const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
 const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
+const fileIntegrityEvidenceService = new IndexedSourceIntegrityEvidenceService()
 const indexFlushEvidenceService = new IndexedWriteFlushEvidenceService()
 
 function isValidBase64DataUrl(value: string): boolean {
@@ -329,17 +333,6 @@ interface FileIndexedSourceScanResult {
   batches: IndexedSourceRecordBatch[]
 }
 
-interface FileIndexedSourceRecordRow {
-  path: string
-  name: string
-  displayName?: string | null
-  extension?: string | null
-  size?: number | null
-  mtime: Date | number | string
-  type?: string | null
-  isDir?: boolean | null
-}
-
 type FileIndexedSourceRuntimeResetDelegate = (
   request: IndexedSourceResetRequest
 ) => Promise<IndexedSourceResetResult>
@@ -352,14 +345,6 @@ function createFileIndexSyncStats(): FileIndexSyncStats {
     skipped: 0,
     errors: 0
   }
-}
-
-function toRecordTimestamp(value: Date | number | string | null | undefined): number | undefined {
-  if (!value) {
-    return undefined
-  }
-  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime()
-  return Number.isNaN(timestamp) ? undefined : timestamp
 }
 
 class FileProvider implements ISearchProvider<ProviderContext> {
@@ -520,7 +505,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly indexSchedulerService: FileProviderIndexSchedulerService
   private readonly indexPersistEntryMapper: FileProviderIndexPersistEntryMapperService
   private readonly watchRuntimeEmitter =
-    new IndexedWriteRuntimeEmitterService<FileIndexedSourceRecordRow>({
+    new IndexedWriteRuntimeEmitterService<IndexedFileSourceRecordRow>({
       sourceId: this.id,
       mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
       getPath: (record) => record.path
@@ -1053,10 +1038,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async resetIndexedSourceRuntimeState(
     request: IndexedSourceResetRequest
   ): Promise<IndexedSourceResetResult> {
-    const result = await this.runtimeResetService.reset({
-      request,
-      operationReasonPrefix: `file-index.${request.reason}`
-    })
+    const result = await this.runtimeResetService.reset({ request })
 
     return {
       ...result,
@@ -1082,23 +1064,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     >
   }
 
-  private mapFileToIndexedSourceRecord(file: FileIndexedSourceRecordRow): IndexedSourceRecord {
-    return {
-      sourceId: this.id,
-      recordId: file.path,
-      stableKey: file.path,
-      kind: 'file',
-      title: file.displayName || file.name,
-      subtitle: file.path,
-      path: file.path,
-      mtime: toRecordTimestamp(file.mtime),
-      size: file.size ?? undefined,
-      metadata: {
-        extension: file.extension ?? undefined,
-        type: file.type ?? 'file',
-        isDir: file.isDir ?? false
-      }
-    }
+  private mapFileToIndexedSourceRecord(file: IndexedFileSourceRecordRow): IndexedSourceRecord {
+    return mapIndexedFileSourceRecord(file, { sourceId: this.id })
   }
 
   private async emitIndexedSourceRecordBatchFromBatch(
@@ -1728,19 +1695,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     ]
 
     if (this.lastIntegritySnapshot) {
-      evidence.push({
-        id: `${this.id}:integrity`,
-        label: 'File index integrity',
-        status: this.lastIntegritySnapshot.needsRebuild ? 'degraded' : 'ready',
-        itemCount: this.lastIntegritySnapshot.ftsRows,
-        lastCheckedAt: this.lastIntegritySnapshot.checkedAt,
-        reason: this.lastIntegritySnapshot.needsRebuild
-          ? 'fts-files-count-mismatch-rebuild-scheduled'
-          : 'fts-files-count-aligned',
-        metadata: {
-          ...this.lastIntegritySnapshot
-        }
-      })
+      evidence.push(
+        fileIntegrityEvidenceService.build({
+          id: `${this.id}:integrity`,
+          label: 'File index integrity',
+          snapshot: {
+            ...this.lastIntegritySnapshot,
+            indexedRows: this.lastIntegritySnapshot.ftsRows
+          },
+          reasons: {
+            rebuildScheduled: 'fts-files-count-mismatch-rebuild-scheduled',
+            aligned: 'fts-files-count-aligned'
+          },
+          metadata: {
+            ...this.lastIntegritySnapshot
+          }
+        })
+      )
     }
 
     const flushSnapshot = this.indexRuntimeService.getFlushSnapshot()
