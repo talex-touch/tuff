@@ -24,6 +24,12 @@ export interface FilterIndexedWatchPendingPermissionPathsInput {
   normalizePath: IndexedWatchPathNormalizer
 }
 
+export interface IndexedWatchPathBasenameMatchInput {
+  rawPath: string
+  basename: string | readonly string[]
+  caseSensitive?: boolean
+}
+
 export function resolveIndexedWatchRootSet(
   input: ResolveIndexedWatchRootSetInput
 ): IndexedWatchRootSet {
@@ -69,6 +75,40 @@ export function filterIndexedWatchPendingPermissionPaths(
   )
 }
 
+export function getIndexedWatchPathBasename(rawPath: string): string {
+  if (!rawPath) return ''
+
+  let endIndex = rawPath.length
+  while (endIndex > 0 && isIndexedWatchPathSeparator(rawPath[endIndex - 1])) {
+    endIndex -= 1
+  }
+
+  if (endIndex === 0) return ''
+
+  const lastForwardSlash = rawPath.lastIndexOf('/', endIndex - 1)
+  const lastBackSlash = rawPath.lastIndexOf('\\', endIndex - 1)
+  const startIndex = Math.max(lastForwardSlash, lastBackSlash) + 1
+
+  return rawPath.slice(startIndex, endIndex)
+}
+
+export function isIndexedWatchPathBasename(input: IndexedWatchPathBasenameMatchInput): boolean {
+  const actual = getIndexedWatchPathBasename(input.rawPath)
+  if (!actual) return false
+
+  const candidates = Array.isArray(input.basename) ? input.basename : [input.basename]
+  if (input.caseSensitive === false) {
+    const normalizedActual = actual.toLowerCase()
+    return candidates.some((candidate) => candidate.toLowerCase() === normalizedActual)
+  }
+
+  return candidates.some((candidate) => candidate === actual)
+}
+
 function inferIndexedWatchPathSeparator(normalizedPath: string): string {
   return normalizedPath.includes('\\') && !normalizedPath.includes('/') ? '\\' : '/'
+}
+
+function isIndexedWatchPathSeparator(char: string | undefined): boolean {
+  return char === '/' || char === '\\'
 }
