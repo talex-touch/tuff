@@ -237,6 +237,22 @@ export interface IndexedSourceProviderConfigEnablementOptions {
   defaultEnabled?: boolean;
 }
 
+export type IndexedSourceProviderConfigEnablementReason =
+  | "explicitly-enabled"
+  | "explicitly-disabled"
+  | "default-enabled"
+  | "not-configured";
+
+export interface IndexedSourceProviderConfigEnablement {
+  sourceId: string;
+  providerIds: string[];
+  configuredProviderIds: string[];
+  enabledProviderIds: string[];
+  disabledProviderIds: string[];
+  enabled: boolean;
+  reason: IndexedSourceProviderConfigEnablementReason;
+}
+
 export interface IndexedSourceManifestDescriptor
   extends CreateIndexedSourceDescriptorOptions {
   id: string;
@@ -738,6 +754,54 @@ export interface IndexedSourceRecord {
   keywords?: string[];
   tags?: string[];
   metadata?: Record<string, unknown>;
+}
+
+export interface IndexedFileSourceRecordRow {
+  path: string;
+  name: string;
+  displayName?: string | null;
+  extension?: string | null;
+  size?: number | null;
+  mtime?: Date | number | string | null;
+  type?: string | null;
+  isDir?: boolean | null;
+}
+
+export interface MapIndexedFileSourceRecordOptions {
+  sourceId: string;
+}
+
+export function toIndexedSourceRecordTimestamp(
+  value: Date | number | string | null | undefined,
+): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
+export function mapIndexedFileSourceRecord(
+  file: IndexedFileSourceRecordRow,
+  options: MapIndexedFileSourceRecordOptions,
+): IndexedSourceRecord {
+  return {
+    sourceId: options.sourceId,
+    recordId: file.path,
+    stableKey: file.path,
+    kind: "file",
+    title: file.displayName || file.name,
+    subtitle: file.path,
+    path: file.path,
+    mtime: toIndexedSourceRecordTimestamp(file.mtime),
+    size: file.size ?? undefined,
+    metadata: {
+      extension: file.extension ?? undefined,
+      type: file.type ?? "file",
+      isDir: file.isDir ?? false,
+    },
+  };
 }
 
 export interface IndexedSourceRecordBatch {
@@ -1575,29 +1639,83 @@ export function isIndexedSourceEnabledByProviderConfig(
   configs: SearchProviderUserConfig[] = [],
   options: IndexedSourceProviderConfigEnablementOptions = {},
 ): boolean {
+  return resolveIndexedSourceProviderConfigEnablement(
+    sourceId,
+    providerIds,
+    configs,
+    options,
+  ).enabled;
+}
+
+export function resolveIndexedSourceProviderConfigEnablement(
+  sourceId: string,
+  providerIds: string[] = [],
+  configs: SearchProviderUserConfig[] = [],
+  options: IndexedSourceProviderConfigEnablementOptions = {},
+): IndexedSourceProviderConfigEnablement {
   const normalizedSourceId = sourceId.trim();
-  const linkedProviderIds = new Set(
+  const linkedProviderIdSet = new Set(
     [normalizedSourceId, ...providerIds]
       .map((providerId) => providerId.trim())
       .filter(Boolean),
   );
+  const linkedProviderIds = [...linkedProviderIdSet];
 
-  if (linkedProviderIds.size === 0) {
-    return false;
+  if (linkedProviderIds.length === 0) {
+    return {
+      sourceId: normalizedSourceId,
+      providerIds: [],
+      configuredProviderIds: [],
+      enabledProviderIds: [],
+      disabledProviderIds: [],
+      enabled: false,
+      reason: "not-configured",
+    };
   }
 
-  const explicitlyEnabled = configs.some(
+  const linkedConfigs = configs.filter((config) =>
+    linkedProviderIdSet.has(config.providerId),
+  );
+  const configuredProviderIds = linkedConfigs.map((config) => config.providerId);
+  const enabledProviderIds = linkedConfigs
+    .filter((config) => config.enabled === true)
+    .map((config) => config.providerId);
+  const disabledProviderIds = linkedConfigs
+    .filter((config) => config.enabled === false)
+    .map((config) => config.providerId);
+
+  if (enabledProviderIds.length > 0) {
+    return {
+      sourceId: normalizedSourceId,
+      providerIds: linkedProviderIds,
+      configuredProviderIds,
+      enabledProviderIds,
+      disabledProviderIds,
+      enabled: true,
+      reason: "explicitly-enabled",
+    };
+  }
+
+  const sourceDisabled = linkedConfigs.some(
     (config) =>
-      config.enabled === true && linkedProviderIds.has(config.providerId),
+      config.providerId === normalizedSourceId && config.enabled === false,
   );
-  if (explicitlyEnabled) {
-    return true;
-  }
+  const hasExplicitDisable = disabledProviderIds.length > 0;
+  const defaultEnabled = options.defaultEnabled === true && !sourceDisabled;
 
-  const sourceConfig = configs.find(
-    (config) => config.providerId === normalizedSourceId,
-  );
-  return options.defaultEnabled === true && sourceConfig?.enabled !== false;
+  return {
+    sourceId: normalizedSourceId,
+    providerIds: linkedProviderIds,
+    configuredProviderIds,
+    enabledProviderIds,
+    disabledProviderIds,
+    enabled: defaultEnabled,
+    reason: defaultEnabled
+      ? "default-enabled"
+      : hasExplicitDisable
+        ? "explicitly-disabled"
+        : "not-configured",
+  };
 }
 
 export function getSearchProviderIdsForIndexedSource(

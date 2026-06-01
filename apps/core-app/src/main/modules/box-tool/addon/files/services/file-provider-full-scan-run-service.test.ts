@@ -49,6 +49,8 @@ describe('file-provider-full-scan-run-service', () => {
       [
         expect.objectContaining({
           path: '/a/one.txt',
+          mtime: new Date(2000),
+          ctime: new Date(1000),
           lastIndexedAt: expect.any(Date),
           isDir: false,
           type: 'file'

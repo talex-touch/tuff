@@ -112,6 +112,33 @@ describe('file-provider-index-scheduler-service', () => {
     ])
   })
 
+  it('falls back to current time for invalid worker timestamps', () => {
+    vi.setSystemTime(new Date('2026-06-01T00:00:00.000Z'))
+    const { indexFiles, service } = createService()
+
+    service.schedule(
+      [
+        {
+          id: 1,
+          path: '/tmp/invalid.txt',
+          name: 'invalid.txt',
+          size: 1,
+          mtime: Number.NaN,
+          ctime: 'invalid'
+        }
+      ],
+      'invalid-timestamp'
+    )
+
+    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
+      expect.objectContaining({
+        id: 1,
+        mtime: Date.parse('2026-06-01T00:00:00.000Z'),
+        ctime: Date.parse('2026-06-01T00:00:00.000Z')
+      })
+    ])
+  })
+
   it('defers large file content indexing with background reason suffix', async () => {
     const { indexFiles, service } = createService()
 
