@@ -12,6 +12,10 @@ import {
   getBrowserBookmarksLinkedProviderIds,
   isBrowserBookmarksSourceEnabled
 } from './browser-bookmarks-source-config'
+import {
+  getQuicklinksLinkedProviderIds,
+  isQuicklinksSourceEnabled
+} from './quicklinks-source-config'
 
 function setProviderConfig(
   providers: Array<{ providerId: string; enabled: boolean; order: number }>
@@ -78,5 +82,49 @@ describe('indexing runtime sources', () => {
         }
       ])
     ).toEqual(['browser-bookmarks', 'custom.browser-bookmarks'])
+  })
+
+  it('keeps quicklinks enabled by default for low-privacy runtime diagnostics', () => {
+    setProviderConfig([])
+
+    expect(isQuicklinksSourceEnabled()).toBe(true)
+  })
+
+  it('allows the core quicklinks provider config to disable the quicklinks source', () => {
+    setProviderConfig([{ providerId: 'quicklinks', enabled: false, order: 1 }])
+
+    expect(isQuicklinksSourceEnabled()).toBe(false)
+  })
+
+  it('enables quicklinks when an official linked quicklink provider is explicitly enabled', () => {
+    setProviderConfig([
+      { providerId: 'quicklinks', enabled: false, order: 1 },
+      { providerId: 'touch-dev-toolbox.dev-toolbox', enabled: true, order: 2 }
+    ])
+
+    expect(isQuicklinksSourceEnabled()).toBe(true)
+  })
+
+  it('resolves quicklinks linked provider ids from descriptors', () => {
+    expect(
+      getQuicklinksLinkedProviderIds([
+        {
+          id: 'custom.quicklinks',
+          displayName: 'Custom Quicklinks',
+          kind: 'quicklink',
+          owner: 'official-plugin',
+          mode: 'push',
+          priority: 'fast',
+          defaultOrder: 1,
+          policy: {
+            owner: 'official-plugin',
+            mode: 'push',
+            permissionScopes: ['root-results'],
+            defaultState: 'ask',
+            indexedSourceId: 'quicklinks'
+          }
+        }
+      ])
+    ).toEqual(['quicklinks', 'custom.quicklinks'])
   })
 })

@@ -233,6 +233,10 @@ export interface SearchProviderUserConfig {
   updatedAt?: number;
 }
 
+export interface IndexedSourceProviderConfigEnablementOptions {
+  defaultEnabled?: boolean;
+}
+
 export interface IndexedSourceManifestDescriptor
   extends CreateIndexedSourceDescriptorOptions {
   id: string;
@@ -1569,9 +1573,11 @@ export function isIndexedSourceEnabledByProviderConfig(
   sourceId: string,
   providerIds: string[] = [],
   configs: SearchProviderUserConfig[] = [],
+  options: IndexedSourceProviderConfigEnablementOptions = {},
 ): boolean {
+  const normalizedSourceId = sourceId.trim();
   const linkedProviderIds = new Set(
-    [sourceId, ...providerIds]
+    [normalizedSourceId, ...providerIds]
       .map((providerId) => providerId.trim())
       .filter(Boolean),
   );
@@ -1580,10 +1586,18 @@ export function isIndexedSourceEnabledByProviderConfig(
     return false;
   }
 
-  return configs.some(
+  const explicitlyEnabled = configs.some(
     (config) =>
       config.enabled === true && linkedProviderIds.has(config.providerId),
   );
+  if (explicitlyEnabled) {
+    return true;
+  }
+
+  const sourceConfig = configs.find(
+    (config) => config.providerId === normalizedSourceId,
+  );
+  return options.defaultEnabled === true && sourceConfig?.enabled !== false;
 }
 
 export function getSearchProviderIdsForIndexedSource(

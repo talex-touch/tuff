@@ -32,7 +32,8 @@
       "permissionScopes": ["root-results"],
       "defaultState": "ask",
       "requiresUserConsent": true,
-      "pushesToRootResults": true
+      "pushesToRootResults": true,
+      "indexedSourceId": "quicklinks"
     }
   ],
   "features": [

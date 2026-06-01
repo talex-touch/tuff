@@ -1203,6 +1203,38 @@ describe("search provider sdk contracts", () => {
     ).toBe(true);
   });
 
+  it("allows low-privacy sources to keep default enablement while honoring explicit source disable", () => {
+    expect(
+      isIndexedSourceEnabledByProviderConfig(
+        "quicklinks",
+        ["touch-dev-toolbox.dev-toolbox"],
+        [],
+        { defaultEnabled: true },
+      ),
+    ).toBe(true);
+
+    expect(
+      isIndexedSourceEnabledByProviderConfig(
+        "quicklinks",
+        ["touch-dev-toolbox.dev-toolbox"],
+        [
+          { providerId: "quicklinks", enabled: false, order: 1 },
+          { providerId: "touch-dev-toolbox.dev-toolbox", enabled: false, order: 2 },
+        ],
+        { defaultEnabled: true },
+      ),
+    ).toBe(false);
+
+    expect(
+      isIndexedSourceEnabledByProviderConfig(
+        "quicklinks",
+        ["touch-dev-toolbox.dev-toolbox"],
+        [{ providerId: "touch-dev-toolbox.dev-toolbox", enabled: true, order: 2 }],
+        { defaultEnabled: true },
+      ),
+    ).toBe(true);
+  });
+
   it("resolves provider ids linked to an indexed source", () => {
     const descriptors = [
       createSearchProviderDescriptorFromManifest(
