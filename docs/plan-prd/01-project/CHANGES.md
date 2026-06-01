@@ -1,23 +1,251 @@
 # 变更日志
 
-> 更新时间：2026-05-31
+> 更新时间：2026-06-01
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
 ## 2026-06-01
 
-### feat(search): add quicklinks indexed source skeleton
+### docs(project): align roadmap, TODO and quality baseline
 
-- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.ts`
-- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts`
-- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-sources.ts`
-- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
 - `docs/plan-prd/TODO.md`
-- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
-  - Added a low-privacy `quicklinks` runtime source skeleton using the shared Quicklinks descriptor template and `IndexedWriteRuntimeEmitterService`.
-  - Supports injected quicklink snapshots for scan batches, reconcile/watch change deltas, source health/evidence, and reset/open/clear lifecycle contract validation while keeping real plugin storage out of this slice.
-  - Default empty source reports degraded `quicklinks-empty` diagnostics instead of pretending content exists.
-  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Captured the current post-`2.4.11-beta.6` stabilization state: Gate D strict has passed, while Windows/macOS blocking regression, release integrity debt, npm package publishing, real platform evidence and `quality:release` replacement evidence remain open.
+  - Recorded the current worktree policy: the repository contains multiple dirty slices and report/TuffEx/utils untracked files, so commits must stay related-only; current first step is to close the verified Indexing Runtime / Browser Bookmarks / TuffEx focused fixes with untracked-file ownership checks and recent focused test/typecheck evidence.
+  - Reaffirmed P1-APP-DATA priority order: File write/store boundary first, Browser Bookmarks official `touch-browser-data` runtime source lifecycle second, then Everything/Windows App evidence, Quicklinks feed/UI evidence and broader source lifecycle work.
+  - Clarified the AI scope: AI has real CoreApp/Nexus/OmniPanel/Assistant runtime pieces, but it is not experience-complete; `2.5.0` Stable remains text + OCR only, with Workflow/Skills/Automation Beta and Assistant/voice/multimodal generation Experimental. `2.5.3` / `2.5.5` / `2.5.8` stay PRD-locked and must not be pulled into the current stabilization window.
+  - 验证：documentation-only update; no runtime behavior changed.
 
+### ref(search): default write runtime delta reasons
+
+- `packages/utils/search/indexing-write-runtime-emitter.ts`
+- `packages/utils/__tests__/search/indexing-write-runtime-emitter.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-cleanup-delete-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-delete-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.ts`
+  - Added `defaultDeltaReason` to `IndexedWriteRuntimeEmitterService` so source adapters can declare stable delta reason metadata once at construction while preserving per-call explicit reason overrides.
+  - Rewired FileProvider cleanup delete and reconciliation add/update/delete adapters to declare their File-specific delta reasons at the runtime emitter boundary instead of repeating them on every emit call.
+  - Kept emitted delta payloads, DB delete/update wiring, SearchIndex artifact cleanup, runtime callbacks and SearchIndex/FTS semantics unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-runtime-emitter.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-update-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-delete-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-cleanup-delete-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): default reset operation reason namespace
+
+- `packages/utils/search/indexing-source-reset-executor.ts`
+- `packages/utils/__tests__/search/indexing-source-reset-executor.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts`
+  - Added a constructor-level `operationReasonNamespace` default to `IndexedSourceResetExecutorService`, while keeping per-reset namespace/prefix overrides available for source adapters that need them.
+  - Rewired `FileProviderRuntimeResetService` to declare the `file-index` namespace once at the adapter boundary so FileProvider reset call sites no longer repeat reset operation reason policy.
+  - Kept `scan_progress` row counting/deletion, SearchIndex provider cleanup, reset result shape, DB writes and SearchIndex/FTS semantics unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-reset-executor.test.ts" "__tests__/search/indexing-source-progress-store.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share write flush runtime config defaults
+
+- `packages/utils/search/indexing-write-flush-runtime.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-runtime.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts`
+  - Added `resolveIndexedWriteFlushRuntimeConfig()` to the shared write flush runtime SDK so source adapters share base/backlog delay, defer delay, backpressure queue and retry backoff default normalization.
+  - Rewired `FileProviderIndexRuntimeService` to consume the SDK-resolved config while keeping File-specific `dbBackpressureMaxQueued` and `busyRetry*` field names as adapter aliases.
+  - Kept worker readiness, SQLite busy classification, retry/backoff behavior, DB backpressure, `persistAndIndex`, SearchIndex worker, DB writes and FTS semantics unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-runtime.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts" --testTimeout 15000` 通过。
+
+### ref(search): share indexed write chunking policy
+
+- `packages/utils/search/indexing-write-plan.ts`
+- `packages/utils/search/indexing-write-update-executor.ts`
+- `packages/utils/__tests__/search/indexing-write-plan.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.ts`
+  - Added `chunkIndexedWriteRecords()` to the shared indexed write plan SDK so write adapters share the same safe positive chunk-size normalization and record splitting.
+  - Added `takeIndexedWriteRecordChunk()` so dynamic batch adapters can share offset/chunk-size normalization without hand-slicing windows in CoreApp.
+  - Added `buildIndexedWriteManualContext()` and `buildEmptyIndexedWriteManualSummary()` so incremental write adapters share manual trigger path normalization and empty manual summary semantics.
+  - Rewired the shared update executor, FileProvider incremental write path, FileProvider reconciliation insert path and FileProvider full-scan insert path to use the SDK helpers instead of keeping local chunk/window/manual-context helpers in each adapter.
+  - Kept incremental insert/update planning, full-scan and reconciliation upsert record shaping, queue label/timing, `full-scan.upsert` / `reconciliation.upsert` reasons, side-effect dispatch, runtime batch/delta/progress emission, DB writes and SearchIndex/FTS behavior unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts" "__tests__/search/indexing-write-update-executor.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-planner-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-full-scan-insert-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): centralize browser bookmarks provider contract
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-source-config.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts`
+  - Exported the Browser Bookmarks official provider id, consent-gated reason and runtime-bridge reason from the indexed source contract, and added `buildBrowserBookmarksOfficialProviderDescriptor()` so source diagnostics and provider enablement share one official lifecycle descriptor.
+  - Rewired `browser-bookmarks-source-config` to use the shared descriptor instead of duplicating `touch-browser-data.browser-bookmarks` policy fields.
+  - Added direct coverage that disabled Browser Bookmarks diagnostics, scan and watch handling do not read Chromium `Bookmarks` files, preserving the high-privacy default until explicit provider enablement.
+  - Added a direct `touch-browser-data` manifest consistency test so the official search provider id, indexedSourceId, permission scopes, consent/default-state policy and metadata-only indexed source intent stay aligned with the CoreApp Browser Bookmarks provider contract.
+  - Kept scanner-backed reads, runtime batch/delta emission, provider enablement semantics, persistent plugin-owned indexing status and `touch-browser-data` manifest behavior unchanged.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime-sources.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share reconciliation fallback diff
+
+- `packages/utils/search/indexing-write-plan.ts`
+- `packages/utils/__tests__/search/indexing-write-plan.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-diff-service.ts`
+  - Added `resolveIndexedWriteReconciliationDiff()` to the shared indexed write plan SDK so path-record source adapters can reuse the same add/update/delete diff semantics used by File reconciliation fallback.
+  - Rewired `FileProviderReconciliationDiffService.compute()` to delegate main-thread fallback diffing to the SDK helper while keeping worker invocation, fallback logging and File worker payload contracts in CoreApp.
+  - Kept duplicate disk path handling, `mtime > db.mtime` update detection, reconciliation-path scoped deletion, DB writes, SearchIndex/FTS behavior and worker-first execution unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-diff-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share indexed path update record mapping
+
+- `packages/utils/search/indexing-write-plan.ts`
+- `packages/utils/__tests__/search/indexing-write-plan.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-planner-service.ts`
+  - Added `mapIndexedWritePathUpdateRecord()` to the shared indexed write plan SDK so path-record adapters share existing-row identity, name/extension/size, ctime/mtime and file type/isDir update shaping.
+  - Rewired FileProvider incremental write planning to keep diffing, timestamp tolerance, manual summary and File row type aliases in CoreApp while delegating update record shaping to the SDK helper.
+  - Kept insert/update/unchanged decisions, invalid timestamp `Date(0)` fallback, DB persistence, SearchIndex/FTS behavior and side-effect scheduling unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-planner-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share indexed worker file payload mapping
+
+- `packages/utils/search/indexing-write-plan.ts`
+- `packages/utils/__tests__/search/indexing-write-plan.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.ts`
+  - Added `mapIndexedWriteWorkerFilePayload()` to the shared indexed write plan SDK so path-record source adapters share id/path/name/displayName/extension/size/ctime/mtime worker payload shaping.
+  - Rewired FileProvider index worker scheduling to keep database context checks, immediate/deferred large-file split, worker dispatch and reason suffixing in CoreApp while delegating worker payload shaping and timestamp fallback to the SDK helper.
+  - Kept invalid timestamp current-time fallback, large-file `:background-content` reason semantics, chunking, worker dispatch failure handling, SearchIndex/FTS behavior and DB writes unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share indexed file source record mapping
+
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+  - Added `IndexedFileSourceRecordRow`, `toIndexedSourceRecordTimestamp()` and `mapIndexedFileSourceRecord()` to the shared indexed source SDK so path-like file source adapters share File row to `IndexedSourceRecord` mapping.
+  - Rewired FileProvider to keep only source id injection while delegating recordId/stableKey/title/path/mtime/size/metadata shaping to the SDK helper.
+  - Kept FileProvider DB writes, FTS/SearchIndex semantics, worker scheduling, runtime emission callbacks, and timestamp invalid-value fallback behavior unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/file-provider-startup.test.ts" -t "maps file rows into indexed source records" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share indexed write date normalization
+
+- `packages/utils/search/indexing-write-plan.ts`
+- `packages/utils/__tests__/search/indexing-write-plan.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-planner-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-full-scan-run-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-full-scan-run-service.test.ts`
+  - Added `toIndexedWriteDate()` to the shared indexed write plan SDK so path-record source adapters reuse the same Date / timestamp / invalid-value normalization used by default write update records.
+  - Added `mapIndexedWriteFullScanUpsertRecords()` so full-scan path-record adapters share name/extension/size/ctime/mtime/lastIndexedAt/isDir/type upsert payload shaping while CoreApp still injects the current full-scan batch time.
+  - Rewired FileProvider incremental write planning to keep only File row field adaptation while delegating ctime/mtime normalization to the SDK helper.
+  - Rewired FileProvider full scan run to keep directory scanning, progress, insert delegation and completed-path reporting in CoreApp while delegating upsert record shaping to the SDK helper.
+  - Kept insert/update/unchanged splitting, timestamp tolerance, manual summary counts, DB persist, SearchIndex/FTS semantics, and worker scheduling unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-planner-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-incremental-write-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-full-scan-run-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share indexed write timestamp normalization
+
+- `packages/utils/search/indexing-write-plan.ts`
+- `packages/utils/__tests__/search/indexing-write-plan.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts`
+  - Added `toIndexedWriteTimestamp()` to the shared indexed write plan SDK so worker payload adapters reuse the same Date / number / string parsing and invalid-value rejection policy.
+  - Added `mapIndexedWriteReconciliationDiskPayload()` and `mapIndexedWriteReconciliationDbPayload()` so File reconciliation worker disk/db diff payloads share path/name/extension/size/ctime/mtime/id shaping, with invalid timestamps falling back to `0` and worker string/number fields retaining `''` / `0` fallbacks.
+  - Added `mapIndexedWriteReconciliationUpsertRecords()` so reconciliation add paths share upsert record shaping for path/name/extension/size/ctime/mtime/lastIndexedAt/isDir/type while CoreApp still injects the current reconciliation batch time.
+  - Rewired FileProvider index worker scheduling to keep only File row to worker payload mapping, current-time fallback, and large-file background dispatch in CoreApp.
+  - Rewired FileProvider reconciliation run to keep directory scanning, DB reads, diff delegation and write operation orchestration in CoreApp while delegating worker diff payload shaping to the SDK helper.
+  - Rewired FileProvider reconciliation insert to keep chunked upsert, side-effect dispatch, runtime batch/delta/progress emission and source-specific reason wiring in CoreApp while delegating add upsert record shaping to the SDK helper.
+  - Kept index worker scheduling, reconciliation diffing, worker dispatch, SearchIndex/FTS writes, content indexing behavior, and large-file deferred reason semantics unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-scheduler-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): reuse indexed write dates in reconciliation writes
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts`
+  - Rewired FileProvider reconciliation insert/update record shaping to reuse `toIndexedWriteDate()` for `ctime` / `mtime`, so invalid timestamp fallback stays consistent with the shared path-record write plan boundary.
+  - Kept `lastIndexedAt` current-time semantics, reconciliation diffing, DB upsert/update/delete, SearchIndex/FTS writes, side effects, and runtime delta emission unchanged.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-insert-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-reconciliation-run-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-plan.test.ts"` 通过。
+
+### ref(search): filter browser bookmarks watch events to Bookmarks files
+
+- `packages/utils/search/indexing-watch-root-policy.ts`
+- `packages/utils/__tests__/search/indexing-watch-root-policy.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts`
+  - Added shared SDK helpers for extracting and matching watch path basenames across Unix and Windows separators, so source adapters do not need Node `path.basename()` for filename-only watch filters.
+  - Rewired the Browser Bookmarks source-level watch filter through the SDK helper so runtime root routing only refreshes the source for `Bookmarks` file changes, not every file under a browser profile root.
+  - Kept the existing high-privacy enablement gate unchanged and did not add persistent plugin-owned indexing or new OS watcher registration in this slice.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-watch-root-policy.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过；`node --test "plugins/touch-browser-data/index.test.cjs"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): align browser bookmarks lifecycle evidence with touch-browser-data consent
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-source-config.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts`
+- `packages/utils/search/indexing-source.ts`
+- `packages/utils/__tests__/search/indexing-source.test.ts`
+  - Changed disabled Browser Bookmarks runtime diagnostics from generic pending migration to explicit `touch-browser-data.browser-bookmarks` official-provider consent required.
+  - Marked enabled Browser Bookmarks scanner evidence as a `touch-browser-data` runtime bridge with provider metadata while still reporting persistent plugin-owned indexing as incomplete.
+  - Added `resolveIndexedSourceProviderConfigEnablement()` so source adapters can expose linked provider ids, configured provider ids, enabled/disabled provider ids and enablement reason in diagnostics instead of collapsing provider lifecycle to a boolean.
+  - Kept the high-privacy default disabled behavior unchanged: real browser bookmark files are scanned only after the linked provider is explicitly enabled.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime-sources.test.ts" --testTimeout 15000` 通过；`node --test "plugins/touch-browser-data/index.test.cjs"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share classified write flush retry decisions
+
+- `packages/utils/search/indexing-write-flush-retry.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-retry.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-retry-service.ts`
+  - Added `IndexedWriteFlushRetryService.resolveClassifiedFailure()` so source adapters can inject failure classification while reusing the shared retry/backoff decision policy.
+  - Rewired FileProvider index flush retry to keep only SQLite busy classification and File-specific reason names while using the SDK helper for retryable vs fallback decisions.
+  - Kept retry delay/backoff defaults, SQLite busy detection, pending backlog delay, worker flush scheduling, and SearchIndex/FTS behavior unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-retry.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-retry-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share scan progress reset clear decision
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+  - Added `resolveIndexedSourceProgressStoreClearDecision()` so source adapters can convert completed progress row counts into a stable reset cleanup decision through the shared SDK progress-store boundary.
+  - Rewired FileProvider runtime reset to keep only `scan_progress` row count/delete wiring in CoreApp while using the SDK helper for the no-op vs cleared result shape.
+  - Kept Drizzle table access, DB write scheduling, SearchIndex cleanup, reset operation reasons, and FTS/search semantics unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts" "__tests__/search/indexing-source-reset-executor.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): share integrity adapter row field mapping
+
+- `packages/utils/search/indexing-source-integrity.ts`
+- `packages/utils/__tests__/search/indexing-source-integrity.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.ts`
+  - Added `renameIndexedSourceIntegrityAdapterSnapshotFields()` so source adapters can rename common `indexedRows` / `sourceRows` / `orphanedRecordsRemoved` integrity snapshot fields through a shared SDK helper.
+  - Rewired FileProvider integrity snapshots to use the SDK field mapper for `ftsRows`, `filesRows`, and `orphanedKeywordsRemoved` while keeping FTS/files row counting, runtime reset, and keyword orphan cleanup unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-integrity.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.test.ts" --testTimeout 15000` 通过。
+
+### ref(search): share write flush failure retry metadata
+
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+  - Added `buildIndexedWriteFlushFailureRetryMetadata()` so source adapters can attach retry delay/reason metadata to failed flush snapshots through a shared SDK helper.
+  - Rewired FileProvider index runtime failure snapshot recording to keep only SQLite busy classification in the adapter while using the SDK helper for retry metadata shape.
+  - Kept `persistAndIndex`, worker readiness, retry scheduling, DB backpressure, buffer rollback, and SearchIndex/FTS behavior unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-snapshot.test.ts" "__tests__/search/indexing-write-flush-executor.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts" --testTimeout 15000` 通过。
+
+### ref(search): share write flush batch metric metadata
+
+- `packages/utils/search/indexing-write-flush-executor.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-executor.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.ts`
+  - Added `buildIndexedWriteFlushBatchMetrics()` so source adapters can derive numeric flush batch metadata through a shared SDK helper instead of hand-counting metrics in each adapter.
+  - Rewired FileProvider index flush `withContent` metadata to use the SDK helper while keeping `persistAndIndex`, worker readiness, DB backpressure, buffer commit/rollback, and SearchIndex/FTS behavior unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-executor.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-flush-executor-service.test.ts" "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts" --testTimeout 15000` 通过。
+
+### ref(search): share indexed source reset operation reason builders
+
+- `packages/utils/search/indexing-source-reset-executor.ts`
+- `packages/utils/__tests__/search/indexing-source-reset-executor.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts`
+  - Added SDK helpers for reset operation reason prefixes and operation labels so source adapters no longer hand-build `remove-by-provider` and `scan-progress-reset` reason strings.
+  - Rewired FileProvider runtime reset to pass the `file-index` namespace into the SDK executor while keeping DB scan_progress deletion, SearchIndex worker cleanup, worker readiness, and reset result semantics unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-reset-executor.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-runtime-reset-service.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过。
 
 ### feat(search): link quicklinks providers to indexed source enablement
 
@@ -38,6 +266,129 @@
   - Added CoreApp `quicklinks-source-config` and wired `QuicklinksIndexedSource` to provider config, including disabled health/evidence/reconcile/open behavior through `quicklinks-provider-disabled`.
   - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime-sources.test.ts" --testTimeout 15000` 通过。
 
+### ref(search): move runtime task job ids into SDK
+
+- `packages/utils/search/indexing-source-runtime-task-job.ts`
+- `packages/utils/__tests__/search/indexing-source-runtime-task-job.test.ts`
+- `packages/utils/search/indexing-source-task-state.ts`
+- `packages/utils/__tests__/search/indexing-source-task-state.test.ts`
+- `packages/utils/search/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-task-job.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-task-job.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime.ts`
+  - Moved `IndexedSourceRuntimeTaskJobFactory` to `@talex-touch/utils/search` so scan/watch/reconcile/reset job id and queuedAt generation use a shared SDK primitive instead of a CoreApp-private helper.
+  - Added `buildIndexedSourceScanTaskState()` so scan `lastScan` and `recentTasks` history entries are built through the SDK task-state boundary instead of being hand-assembled inside `IndexingRuntime`.
+  - Added `buildIndexedSourceWatchTaskState()`, `buildIndexedSourceReconcileTaskState()` and `buildIndexedSourceResetTaskState()` so watch applied delta, handler/store failure, reconcile results/failures/skips, reset results and their `last*` / `recentTasks` history entries use the shared SDK task-state builder.
+  - Kept the CoreApp `indexing-runtime-task-job` entry as a compatibility re-export, preserving existing imports and job id format while preparing the task history boundary for durable job history.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-runtime-task-job.test.ts" "__tests__/search/indexing-source-task-state.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime-task-job.test.ts" "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): map flush idle/result snapshots through SDK helper
+
+- `packages/utils/search/indexing-write-flush-snapshot.ts`
+- `packages/utils/__tests__/search/indexing-write-flush-snapshot.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.ts`
+  - Added `buildIndexedWriteFlushIdleSnapshot()` so source adapters can record unavailable, no-pending and in-progress idle trace snapshots without hand-mapping status, zero entries, pending/inflight counts and reason fields.
+  - Added `buildIndexedWriteFlushResultSnapshot()` so source adapters can record flush trace snapshots from executor results without hand-mapping status, counts, metadata and duration fields.
+  - Rewired FileProvider index runtime flush trace recording to use the SDK snapshot builders while keeping SQLite persist, worker readiness, retry scheduling and SearchIndex/FTS behavior unchanged.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-write-flush-snapshot.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-index-runtime-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(tuffex): add base style entry and lazy heavy component loading
+
+- `packages/tuffex/package.json`
+- `packages/tuffex/packages/script/build/index.ts`
+- `packages/tuffex/packages/components/src/scroll/src/TxScroll.vue`
+- `packages/tuffex/packages/components/src/scroll/src/better-scroll-pull-plugins.ts`
+- `packages/tuffex/packages/components/src/scroll/src/scroll-wheel.ts`
+- `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditor.vue`
+- `packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue`
+- `packages/tuffex/packages/components/src/code-editor/__tests__/code-editor.test.ts`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/base-anchor/src/base-anchor-motion.ts`
+- `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-motion.ts`
+- `packages/tuffex/packages/components/src/radio/src/TxRadioGroup.vue`
+- `packages/tuffex/packages/components/src/radio/src/radio-group-indicator.ts`
+- `packages/tuffex/packages/components/src/radio/src/radio-group-model.ts`
+- `packages/tuffex/packages/components/src/radio/__tests__/radio.test.ts`
+- `packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue`
+- `packages/tuffex/packages/components/src/base-surface/src/base-surface-math.ts`
+- `packages/tuffex/packages/components/src/base-surface/src/base-surface-motion.ts`
+- `packages/tuffex/packages/components/src/base-surface/__tests__/base-surface.test.ts`
+- `packages/tuffex/scripts/audit-package-exports.mjs`
+- `packages/tuffex/scripts/audit-package-size.mjs`
+- `packages/tuffex/packages/script/build/component-styles.ts`
+- `packages/tuffex/README.md`
+- `packages/tuffex/README_ZHCN.md`
+- `packages/tuffex/CHANGELOG.md`
+- `docs/plan-prd/TODO.md`
+  - Added `@talex-touch/tuffex/base.css` as a stable basic style entry for shared tokens and global utilities, while keeping `@talex-touch/tuffex/style.css` as the full stylesheet compatibility entry.
+  - Extended `audit:size` with a `base.css` budget so the new on-demand style baseline cannot silently grow.
+  - Changed `TxScroll` to load BetterScroll `pull-down` / `pull-up` plugins only when `pullDownRefresh` / `pullUpLoad` is enabled, avoiding static plugin pulls for the default scroll path.
+  - Moved the pull plugin install state into a small scroll helper and added `scroll` to the on-demand import graph audit so the default scroll entry is pinned to the `scroll` component directory.
+  - Moved `TxScroll` wheel / bounce guard / RAF apply runtime into `useScrollWheel`, reducing the SFC from 887 lines to 613 lines while keeping native fallback, BetterScroll setup, public expose methods and template bindings intact.
+  - Changed `TxCodeEditor` to a lightweight async wrapper and moved CodeMirror/YAML runtime implementation into `TxCodeEditorRuntime`, so the default `code-editor` entry only loads the heavy editor stack when the component is rendered.
+  - Extended `audit:size` to forbid static `@codemirror/*`, `@lezer/*`, and `yaml` imports from the default `code-editor` entry.
+  - Changed empty-state wrapper style entries (`blank-slate`, `empty`, `error-state`, `guide-state`, `loading-state`, `no-data`, `no-selection`, `offline-state`, `permission-state`, `search-empty`) to lightweight imports of `empty-state/style.css` instead of duplicating the full EmptyState CSS in every wrapper entry.
+  - Extended `audit:size` with a 128-byte budget for those style aliases so wrapper styles cannot silently grow back to copied EmptyState CSS.
+  - Moved `TxBaseAnchor` GSAP animation state/timeline handling into `useBaseAnchorMotion`, leaving the SFC focused on anchoring, floating positioning, events and rendering.
+  - Changed BaseAnchor GSAP loading to dynamic import and extended `audit:size` so default `base-anchor`, `button` and `select` on-demand static graphs cannot pull `gsap` back in.
+  - Moved `TxFlipOverlay` GSAP tween/stack-card motion handling into `useFlipOverlayMotion`, leaving the SFC focused on overlay state, source resolution, body lock, close guards and rendering.
+  - Changed FlipOverlay GSAP loading to dynamic import and extended `audit:size` so the default `flip-overlay` on-demand static graph cannot pull `gsap` back in.
+  - Moved `TxRadioGroup` delayed v-model commit logic into `useRadioGroupModel` and button indicator motion, drag, dark-mode sync and keyboard navigation into `useRadioGroupIndicator`, reducing the SFC from 1150 lines to 326 lines without changing public props, events, template classes or exports.
+  - Extended `audit:size` with a `radio` on-demand graph budget so the default `radio` entry stays pinned to `radio` and `glass-surface` component dirs.
+  - Moved `TxBaseSurface` finite value parsing helpers into `base-surface-math` and auto-detect / settle / refraction recovery RAF lifecycle into `useBaseSurfaceMotion`, reducing the SFC from 1150 lines to 725 lines while preserving root classes, CSS variables, props and rendered layer structure.
+  - Extended `audit:size` with a `base-surface` on-demand graph budget so the default `base-surface` entry stays pinned to `base-surface` and `glass-surface` component dirs.
+  - 验证：`pnpm -C "packages/tuffex" run build` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/base-anchor/src/TxBaseAnchor.vue" "packages/components/src/base-anchor/src/base-anchor-motion.ts" "packages/components/src/base-anchor/__tests__/base-anchor.test.ts" "packages/components/src/scroll/src/TxScroll.vue" "packages/components/src/scroll/src/better-scroll-pull-plugins.ts" "packages/components/src/scroll/src/scroll-wheel.ts" "packages/script/build/index.ts" "packages/script/build/component-styles.ts" "scripts/audit-package-exports.mjs" "scripts/audit-package-size.mjs"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/flip-overlay/src/TxFlipOverlay.vue" "packages/components/src/flip-overlay/src/flip-overlay-motion.ts" "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts" "scripts/audit-package-size.mjs"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/radio/src/TxRadioGroup.vue" "packages/components/src/radio/src/radio-group-indicator.ts" "packages/components/src/radio/src/radio-group-model.ts" "packages/components/src/radio/__tests__/radio.test.ts" "scripts/audit-package-size.mjs"` 通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/base-surface/src/TxBaseSurface.vue" "packages/components/src/base-surface/src/base-surface-motion.ts" "packages/components/src/base-surface/src/base-surface-math.ts" "packages/components/src/base-surface/__tests__/base-surface.test.ts" "scripts/audit-package-size.mjs"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/base-anchor/__tests__/base-anchor.test.ts"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/scroll/__tests__/scroll.test.ts" "packages/components/src/scroll/__tests__/scroll-export.test.ts"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/code-editor/__tests__/code-editor.test.ts" "packages/components/src/code-editor/__tests__/code-editor-toolbar.test.ts"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/empty-state/__tests__/empty-state.test.ts" "packages/components/src/empty-state/__tests__/empty-state-wrappers.test.ts"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/radio/__tests__/radio.test.ts"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/base-surface/__tests__/base-surface.test.ts"` 通过；`pnpm -C "packages/tuffex" run audit:exports` 通过；`pnpm -C "packages/tuffex" run audit:types` 通过；`pnpm -C "packages/tuffex" run audit:size` 通过。
+
+### ref(search): map File integrity snapshots and evidence through SDK helpers
+
+- `packages/utils/search/indexing-source-integrity.ts`
+- `packages/utils/__tests__/search/indexing-source-integrity.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.ts`
+  - Added `mapIndexedSourceIntegritySnapshot()` so source adapters can consume SDK-standard integrity snapshots without each adapter re-mapping the common reset/duration/orphan-cleanup fields by hand.
+  - Added `IndexedSourceIntegrityEvidenceService()` so source adapters can expose integrity diagnostics evidence without hand-mapping ready/degraded status, itemCount, checkedAt, reason and metadata fields.
+  - Rewired FileProvider integrity checks to keep only File-specific FTS/files row naming and orphan keyword cleanup while reusing the SDK snapshot adapter mapping.
+  - Rewired FileProvider `file-provider:integrity` evidence to keep only File-specific evidence id/label/reason and `ftsRows` / `filesRows` metadata naming while reusing the SDK evidence builder.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-integrity.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-integrity-service.test.ts"` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过；`git diff --check` 通过。
+
+### ref(search): move scan progress unavailable-store summary into SDK
+
+- `packages/utils/search/indexing-source-progress-store.ts`
+- `packages/utils/__tests__/search/indexing-source-progress-store.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.ts`
+  - Extended `IndexedSourceProgressStoreService.summarizeRoots()` with an explicit `isStoreAvailable` option, so source adapters can treat all watch roots as pending when completed-root storage is unavailable and no completed paths were loaded.
+  - Rewired FileProvider scan progress summary to pass only store availability into the SDK primitive while keeping Drizzle `scan_progress` select/delete, worker readiness and `upsertScanProgress` injection in the FileProvider boundary.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/search/indexing-source-progress-store.test.ts" "__tests__/search/indexing-source-progress-evidence.test.ts"` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/files/services/file-provider-scan-progress-service.test.ts" --testTimeout 15000` 通过。
+
+### feat(search): add quicklinks indexed source skeleton
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/indexing-runtime-sources.ts`
+- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md`
+- `docs/plan-prd/TODO.md`
+- `apps/nexus/content/docs/dev/api/search.{zh,en}.mdc`
+  - Added a low-privacy `quicklinks` runtime source skeleton using the shared Quicklinks descriptor template and `IndexedWriteRuntimeEmitterService`.
+  - Supports injected quicklink snapshots for scan batches, reconcile/watch change deltas, source health/evidence, and reset/open/clear lifecycle contract validation while keeping real plugin storage out of this slice.
+  - Default empty source reports degraded `quicklinks-empty` diagnostics instead of pretending content exists.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/quicklinks-indexed-source.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/indexing-runtime.test.ts" --testTimeout 15000` 通过；`pnpm -C "apps/core-app" run typecheck:node` 通过。
+
+### fix(nexus): close TuffEx composition visual smoke evidence
+
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/components/LanguageToggle.vue`
+- `apps/nexus/scripts/tuffex-visual-smoke.mjs`
+- `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`
+- `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`
+  - Fixed Nexus docs mobile visual smoke overflow caused by fixed/page overlays resolving against the wider mobile layout viewport in CDP, plus hidden language floating content contributing to root scroll width.
+  - Hardened the TuffEx composition smoke retry path so transient Nuxt/CDP ready failures are captured as structured scenario results and retried once without hiding real overflow, console, page error, or bad-response failures.
+  - Kept the docs-page hydration guard and `useToast()` path so the composition page no longer mounts a private `vue-sonner` host during hydration.
+  - Evidence: `TUFFEX_CDP_URL="http://127.0.0.1:9222" NEXUS_VISUAL_SMOKE_URL="http://127.0.0.1:3201" pnpm -C "apps/nexus" run visual:smoke:tuffex` passed 30/30 scenarios; report at `output/playwright/tuffex-visual-smoke/2026-06-01/tuffex-composition-smoke-report.json`.
+  - 验证：`pnpm -C "apps/nexus" exec eslint "app/components/LanguageToggle.vue" "app/layouts/docs.vue" "app/pages/docs/[...slug].vue" "scripts/tuffex-visual-smoke.mjs"` 通过；`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/gradual-blur/__tests__/gradual-blur.test.ts" "packages/components/src/drawer/__tests__/drawer.test.ts" "packages/components/src/tabs/__tests__/tabs.test.ts"` 通过；`git diff --check` 通过。
+
 ## 历史归档
 
 - [压缩前完整快照（截至 2026-05-14）](./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md)
@@ -47,6 +398,54 @@
 - [Legacy full snapshot](./archive/changes/CHANGES-legacy-full-2026-03-16.md)
 
 ## 2026-05-31
+
+### ref(tuffex): add component subpath exports
+
+- `packages/tuffex/package.json`
+- `packages/tuffex/packages/components/vite.config.js`
+- `packages/tuffex/packages/script/build/component-styles.ts`
+- `packages/tuffex/packages/script/build/component-declarations.ts`
+- `packages/tuffex/packages/script/build/index.ts`
+- `packages/tuffex/scripts/audit-package-exports.mjs`
+- `packages/tuffex/scripts/audit-package-types.mjs`
+- `packages/tuffex/scripts/audit-package-size.mjs`
+- `packages/tuffex/packages/components/src/switch/index.ts`
+- `apps/core-app/src/renderer/src/modules/tuffex/index.ts`
+- `packages/tuff-business/src/components/TxPluginMetaHeader.vue`
+- `packages/intelligence-uikit/src/**/*`
+- `apps/nexus/app/components/ui/{Input,Switch,FlatButton,SearchInput}.vue`
+- `apps/nexus/app/components/{HeaderControls.vue,auth/*}`
+- `apps/nexus/app/pages/{forgot-password,reset-password,verify-waiting,device-auth}.vue`
+- `apps/nexus/app/pages/{auth/*,sign-in/**/*,team/join}.vue`
+- `apps/core-app/tsconfig.web.json`
+- `packages/tuffex/tsconfig.json`
+- `packages/tuffex/README.md`
+- `packages/tuffex/README_ZHCN.md`
+- `packages/tuffex/CHANGELOG.md`
+  - Added stable `@talex-touch/tuffex/<component>` exports backed by existing preserveModules output, plus generated `<component>/style.css` local stylesheet entrypoints for stricter style budgets.
+  - Added `src/utils/index.ts` as a build entry so `@talex-touch/tuffex/utils` is backed by real ES/CJS JS wrappers instead of a declaration-only path.
+  - Added declaration post-processing and `audit:types` so exported subpath declarations compile in an external TypeScript project with `skipLibCheck=false`, including dist-local utils declarations.
+  - Extended `audit:size` with representative on-demand runtime import graph checks for `button`, `input`, `select`, and `code-editor`, preventing subpath entries from reaching the root package entrypoints or unexpected component directories.
+  - Rewired Core App controlled TuffEx registration to lazy-load enabled components from subpath modules instead of dynamically importing the root package.
+  - Migrated Core App renderer TuffEx consumption from the root package to component subpaths, reducing renderer root TuffEx import files from 150 to 0 and tightening `audit:size` to keep that budget at 0.
+  - Migrated `tuff-business` and `intelligence-uikit` runtime imports to TuffEx subpaths, then tightened their root-import budgets to 0.
+  - Migrated Nexus app TuffEx consumption to component subpaths across wrappers, auth/sign-in flows, docs, store/search/dialog surfaces, dashboard/admin pages, provider/intelligence panels, asset create flow, and component demos, reducing Nexus app root TuffEx import files from 94 to 0 and tightening `audit:size` to keep that budget at 0.
+  - Added a TuffEx on-demand style Vite plugin for release/package consumption so component subpath imports can auto-inject matching `<component>/style.css`; Core App and Nexus dev aliases keep source SFC styles active and disable plugin injection in workspace-source mode to avoid duplicate CSS.
+  - Migrated Core App, Nexus, and `intelligence-uikit` app-level styles from `@talex-touch/tuffex/style.css` to `@talex-touch/tuffex/base.css` plus local component style imports, and extended `audit:size` to keep full-style imports at 0 for Core App renderer, Nexus app/config, `tuff-business`, and `intelligence-uikit`.
+  - Changed `TxButton` to lazy-load `v-wave` through a local directive wrapper, keeping the default `button` subpath free of static `v-wave` just like the existing GSAP and CodeMirror lazy-loading budgets.
+  - 验证：`pnpm -C "packages/tuffex" run build` 退出码 0；`pnpm -C "packages/tuffex" run audit:exports` 通过；`pnpm -C "packages/tuffex" run audit:types` 通过；`pnpm -C "packages/tuffex" run audit:size` 通过；`pnpm -C "apps/core-app" run typecheck:web` 退出码 0（会先触发同一 TuffEx build）；`pnpm -C "packages/intelligence-uikit" run typecheck` 通过；`pnpm -C "apps/core-app" exec eslint "src/renderer/src/modules/tuffex/index.ts"` 通过；Nexus changed-file ESLint for the migrated wrapper/auth/sign-in files passed. `pnpm -C "apps/nexus" exec vue-tsc --noEmit --skipLibCheck` remains blocked by pre-existing unrelated demo and `packages/utils/core-box/preview/abilities/*` strictness errors, with no errors in this migration slice.
+  - 2026-06-01 复核：`pnpm -C "packages/tuffex" run build` 通过且无 dts TypeScript error；`audit:size` / `audit:exports` / `audit:types` 均通过；`pnpm -C "packages/tuffex" exec eslint "packages/components/src/button/src/button.vue" "packages/script/build/on-demand-style-plugin.ts" "scripts/audit-package-size.mjs"` 通过；`pnpm -C "packages/intelligence-uikit" run typecheck` 通过。`pnpm -C "apps/core-app" exec vue-tsc --noEmit -p "tsconfig.web.json" --pretty false` 仍被既有 `@talex-touch/tuff-business` / `@talex-touch/tuff-intelligence` composite include 边界 TS6307 阻塞，TuffEx 子路径相关 TS6307 已清除。
+  - Remaining follow-up: retire global style reliance in app entrypoints where it materially improves chunking and continue splitting the remaining heavy components such as `TxBaseSurface` into focused helpers.
+
+### docs(audit): add 2026-05-31 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-05-31.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the 2026-05-31 UI/compatibility/placeholder/architecture audit follow-up.
+  - Confirmed no new production-path P0 fixed fake-success in this pass.
+  - Marked TuffEx Tabs Fragment / async component name validation, TuffEx visual smoke evidence, TuffEx subpath export audit, shared README Markdown sanitization, UI preference facade, semantic click cleanup, and cloud preset unavailable contract as the next P1 follow-up items.
 
 ### ref(search): add indexed write runtime emitter helper
 

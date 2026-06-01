@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-05-29
+> 更新时间：2026-06-01
 > 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
 
 ## 1. 适用范围
@@ -19,7 +19,7 @@
 - 当前基线：`2.4.10`。
 - `2.4.10` GitHub Release 与 Nexus release metadata sync 已完成；Windows acceptance evidence、release evidence 内容与公共 npm 子包补发仍按 TODO 跟踪，不把这些阻塞项视为全绿。当前质量主线转入 `2.4.11` 债务退场与 `2.5.0` AI scope 约束。
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务；Windows/macOS 为 release-blocking，Linux 为 documented best-effort。
-- `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。
+- `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。AI 已有 CoreApp Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但只有 packaged Electron 文本/OCR成功与失败路径证据补齐后才能宣称体验闭环。
 - `2.5.3` 本地知识检索方向已锁定：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 是增强项；MVP 不引入独立向量数据库服务。
 - `2.5.5` 本地模型运行时方向已锁定：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重不得进入安装包、同步载荷或普通日志。
 - `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
@@ -27,6 +27,7 @@
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
 - 质量入口：PR 使用 `pnpm quality:pr`，其中 lint 阶段只检查 PR 修改的 JS/TS/Vue 文件；`pnpm test:targeted` 的 Nexus sync route test 已指向当前 `apps/nexus/test/api/sync/sync-routes-410.test.ts` 路径；release/milestone 使用 `pnpm quality:release` 并保留全仓 lint；独立 OmniPanel Gate workflow 已于 2026-05-18 删除，不再作为 GitHub Actions 自动门禁；若既有失败阻断，必须记录失败项与最近路径替代验证。
 - 当前质量状态：`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` 已恢复完整 `fileProvider` 导出，`pnpm -C "apps/core-app" run typecheck:node` 已通过；2026-05-20 自动化审计未发现新的 P0 fixed fake-success，且本轮已收口 `touch-snipaste` shell capability、`touch-window-presets` 展示期 non-mutating permission check、Browser Data source-level diagnostics、Widget Runtime Safety 基线、CoreBox app launch immediate-hide handoff、MetaOverlay renderer action bridge、CoreApp secure-store `safeStorage` 优先后端与 Nexus retired intelligence endpoint HTTP `410` 合同测试；2026-05-21 focused tests 覆盖 Assistant 剪贴板图片翻译 typed event、推荐系统上下文信号、可选 AI embedding/rerank fail-open、壁纸状态归一化、TuffEx 基础组件与 Nexus storage governance telemetry；2026-05-22 Assistant 悬浮球/VoicePanel 可见入口、拖动持久化与空剪贴板图片恢复已有 dev 和 local unpacked packaged 证据，完成度审计仍要求补 provider-backed pin window、provider fallback、release-signed packaged 与平台手工回归证据；同日增量兼容审计确认当前 live tree 未发现新的 P0 fake-success，并把剩余高信号治理点收敛到 Credential Locker/libsecret、真实平台 evidence、widget runtime sandbox regression、裸 console、示例插件调试噪声与 SRP 大文件；2026-05-25 UI/兼容/占位/架构审计继续确认无新增 P0 fixed fake-success，并把 legacy retained aliases、旧 snippets placeholder 插件、Nexus memory fallback 证据分层、preload debug `innerHTML`、dialog `v-html` 与 TuffEx visual smoke 纳入近期质量治理；2026-05-26 已完成 preload debug panel 运行时日志文本化与同段 debug console 清理，并通过最近路径 ESLint/typecheck；2026-05-29 增量审计继续确认无新增 P0 fixed fake-success，Nexus/TuffEx composition demos 与 dashboard chart wrapper 提升 UI 完善度；同日已按 legacy alias hit telemetry、旧 snippets placeholder 退场、Nexus `source: memory` evidence source matrix、dialog message 文本/可信 HTML 分流与 TuffEx visual screenshot smoke 脚本完成小切片收口；同日 post-slice 复核继续确认无新增 P0 fixed fake-success，并把 Windows App indexing / Everything registry PATH 探测 / CoreBox function key hardening / 手动文件索引完成通知列为下一批需最近路径验证与 Windows 真机 evidence 的兼容/UI 小切片；visual smoke 先作为 focused evidence，不改变 `quality:pr` / `quality:release` 门禁，真实截图运行证据仍需单独采集；2026-05-28 已修复 `@talex-touch/tuffex@0.3.7` 发布链路的 lockfile specifier 阻断，并通过 `CI=true pnpm install --frozen-lockfile`、Tuffex build 与 publish manifest pack 校验；Tuffex CI/Publish 触发范围已覆盖 lockfile/workspace catalog 变更；2026-05-29 `v2.4.11-beta.6` 发布后 Gate D strict 已通过，提交态 notes 已补齐，release manifest validator 已兼容 canonical `tuff-core-*` 与当前 workflow 平台前缀资产命名，Nexus sync 已修正 manifest redirect、metadata YAML 跳过与全 tag sha256 backfill；Nexus 资产 sha256/signatureUrl 与 signature endpoint 缺口仍按 release integrity debt 记录，Gate E 前仍需收口；`quality:release` 仍保留全仓 lint，若既有失败阻断，必须记录失败项与最近路径替代验证；旧 compat registry / legacy allowlist / size allowlist 已不在 live tree，不能再作为当前门禁或事实来源引用；`v2.4.10` release workflow 成功不代表 npm 子包发布成功，当前公共子包缺失版本需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
+- 2026-06-01 工作区质量口径：当前本地 `master` 领先远端且工作区包含多条并行 dirty 切片，`git ls-files --others --exclude-standard` 仍列出 report、TuffEx 与 utils 新文件，提交必须按 related-only 组织。文档或代码提交前需重新确认未跟踪文件归属，已完成切片至少记录 IndexedSourceSnapshotCacheService、Browser Bookmarks、TuffEx Tabs focused tests、CoreApp node typecheck 或等价最近路径验证；TuffEx Tabs/Nexus async component name 体验修复不得和 AI 新切片混合扩大范围。
 
 ## 3. 活跃 PRD 必须包含
 
@@ -92,6 +93,22 @@
 - 不再维护旧 `compatibility-debt-registry.csv`、`legacy-boundary-allowlist.json` 或 `large-file-boundary-allowlist.json` 作为 live SoT；若要恢复自动债务门禁，必须重新立项并同步脚本、清册和入口文档。
 - 新增大文件或显著增长必须说明职责边界、拆分计划与验证命令。
 - 已完成拆分的模块不得回潮：Clipboard、AppProvider、SearchCore、UpdateSystem、OmniPanel、Provider Registry、Tuffex FlipOverlay 等继续按最近路径测试防回归。
+
+### 4.8 AI 稳定化与证据
+
+- `2.5.0` Stable 证据只覆盖文本 + OCR，必须有 CoreBox AI Ask、OmniPanel Writing Tools 与 Nexus invoke 最近路径证据。
+- 未登录、provider 不可用、quota 不足、model/capability 不支持、网络失败必须返回明确错误和用户可见恢复建议，不得返回空结果或伪成功。
+- Provider metadata chips 至少展示 capability/provider/model/latency/trace 中的可用字段；缺失字段必须有 pending/unavailable fallback，不能渲染空 footer。
+- Provider secret、API key、prompt/response 明文不得进入普通配置、localStorage、日志或同步 JSON；审计默认只记录 trace/provider/model/latency/usage/success/errorCode。
+- `2.5.3` / `2.5.5` / `2.5.8` 在当前稳定窗口只允许文档、schema 或小型 SDK 探索，不得把本地大模型、语音或多模态生成提前作为 `2.4.11` 或 `2.5.0 Stable` blocker。
+
+### 4.9 App Data / Indexing Runtime
+
+- File/App/Everything/Browser Data/Quicklinks source 必须通过 indexed source descriptor/admission 进入 runtime，不得新增绕过 Settings diagnostics 的私有扫描入口。
+- File write/store boundary 迁移必须保持 SQLite/FTS/SearchIndex worker 真实语义不变；SDK 化优先抽取纯 mapping、reason、summary、config、progress/evidence policy。
+- Browser Bookmarks/History 属于 high privacy source，默认 disabled/ask，必须由官方插件或受控 core bridge 在显式同意后读取；metadata-only `manifest.indexedSources` 不等于真实 runtime source 完成。
+- Everything productionization 必须补 SDK/CLI 策略、registry PATH 探测、Windows 真机性能/evidence 与 fail-closed 诊断。
+- Durable job history、跨 source retry/debounce、自动恢复动作未完成前，Settings recovery recommendation 只能作为只读建议，不得伪装为 durable scheduler。
 
 ## 5. PRD 验收模板
 

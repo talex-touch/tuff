@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-05-30
+> 更新时间：2026-06-01
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -21,12 +21,12 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 目标 | 说明 | 当前口径 |
 | --- | --- | --- |
 | 架构目标 | 完成 SDK Hard-Cut，renderer/main/plugin 跨层调用统一走 typed transport / domain SDK | legacy/raw channel 继续收口；retained aliases 分批迁移 |
-| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-25 UI/兼容/占位/架构审计未发现新的 P0 fixed fake-success，并把 legacy alias hard-cut、旧 snippets placeholder、memory fallback 证据分层、preload/dialog 安全收口与 TuffEx visual smoke 列为近期治理项；2026-05-26 已收口 preload debug 运行时日志文本化与同段 debug console 清理；2026-05-29 增量审计继续未发现新的 P0 fixed fake-success，确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度；同日已落地 legacy alias hit telemetry/hard-cut 判定记录、旧 snippets hidden/deprecated/replacedBy 退场、Nexus evidence source enum/UI 分层、dialog message 文本/可信 HTML 分流与 TuffEx visual smoke 脚本；同日 post-slice 复核继续未发现新的 P0 fixed fake-success，并将 Windows App indexing / Everything registry PATH 探测 / CoreBox function key hardening / 手动文件索引完成通知列为需最近路径验证和 Windows 真机 evidence 的下一批；2026-05-28 已修复 Tuffex 0.3.7 发布链路的 frozen lockfile 阻断，并让 Tuffex package workflows 覆盖 lockfile/workspace catalog 触发；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
+| 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-25 UI/兼容/占位/架构审计未发现新的 P0 fixed fake-success，并把 legacy alias hard-cut、旧 snippets placeholder、memory fallback 证据分层、preload/dialog 安全收口与 TuffEx visual smoke 列为近期治理项；2026-05-26 已收口 preload debug 运行时日志文本化与同段 debug console 清理；2026-05-29 增量审计继续未发现新的 P0 fixed fake-success，确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度；同日已落地 legacy alias hit telemetry/hard-cut 判定记录、旧 snippets hidden/deprecated/replacedBy 退场、Nexus evidence source enum/UI 分层、dialog message 文本/可信 HTML 分流与 TuffEx visual smoke 脚本；同日 post-slice 复核继续未发现新的 P0 fixed fake-success，并将 Windows App indexing / Everything registry PATH 探测 / CoreBox function key hardening / 手动文件索引完成通知列为需最近路径验证和 Windows 真机 evidence 的下一批；2026-06-01 当前工作区仍是多线 dirty 且存在 report、TuffEx、utils 未跟踪文件，提交必须按 related-only 分批并先收口 IndexedSourceSnapshotCacheService、Browser Bookmarks、TuffEx Tabs focused tests、CoreApp node typecheck 与未跟踪文件逐项归属；2026-05-28 已修复 Tuffex 0.3.7 发布链路的 frozen lockfile 阻断，并让 Tuffex package workflows 覆盖 lockfile/workspace catalog 触发；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
 | 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`v2.4.10` GitHub Release 与 Nexus release metadata sync 已成功；`v2.4.11-beta.6` GitHub prerelease 与 Nexus BETA latest sync 已成功，发布后 Gate D strict 通过；Nexus 资产 sha256/signatureUrl 与 signature endpoint 仍是 release integrity debt；`@talex-touch/tuffex@0.3.7` 补发链路已完成本地等价验证，push 后由包级 publish workflow 通过仓库 `NPM_TOKEN` 发布；其余公共 npm 子包补发仍需仓库 token 覆盖 `@talex-touch` scope |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
-| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | 2.5.0 Stable 只承诺文本 + OCR；2.5.3 / 2.5.5 / 2.5.8 拆分本地知识检索、本地模型运行时与 ASR |
-| Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场与高级策略 |
-| 插件数据源目标 | 官方插件扩展本地 App 数据搜索，并把 Windows Everything 收口到可诊断、可回归、可受控发布 | 已新增 App Data Plugins 与 Everything Roadmap；先推进 Browser Data、Obsidian、VSCode、macOS App Data、Epic 插件规划与 Everything SDK/CLI/路径过滤/evidence 收口 |
+| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但体验闭环仍缺 packaged Electron 文本/OCR成功与失败路径证据；2.5.0 Stable 只承诺文本 + OCR，2.5.3 / 2.5.5 / 2.5.8 保持本地知识检索、本地模型运行时与 ASR 的 PRD 锁方向，不抢 2.4.11 稳定化 |
+| Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场、高级策略与 Nexus invoke 未登录/provider 不可用/quota 不足/model 不支持的可见证据 |
+| 插件数据源目标 | 官方插件扩展本地 App 数据搜索，并把 Windows Everything 收口到可诊断、可回归、可受控发布 | 已新增 App Data Plugins 与 Everything Roadmap；当前第一优先级是 File write/store boundary 迁移，其次 Browser Bookmarks official `touch-browser-data` runtime source lifecycle，再补 Everything registry PATH、Windows App indexing、手动索引完成通知、Quicklinks feed/UI evidence |
 
 ## 3. 当前版本路线
 
@@ -93,6 +93,13 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - image/audio/video 生成编辑。
 - Nexus Scene runtime 全量 orchestration。
 
+**当前证据缺口**：
+
+- CoreBox AI Ask 文本与 OCR 场景仍需要 packaged Electron success/failure UI evidence。
+- OmniPanel Writing Tools 已有 dev 切片，但需要真实 provider-backed 运行、copy/retry/replace clipboard 与失败恢复证据。
+- Nexus invoke 需要覆盖未登录、provider 不可用、quota 不足、model 不支持的明确错误与 provider metadata chips。
+- Workflow/Skills/Automation 保持 Beta；Assistant、语音、多模态生成保持 Experimental，不进入当前稳定化承诺。
+
 ### 2.5.3 - 本地知识检索与上下文构建
 
 **目标**：把本地文档、网页摘录、插件知识与桌面上下文转换为可检索知识，由 Context Builder 只把最相关片段送入模型上下文。
@@ -145,10 +152,17 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 未闭环：
 
 - FileProvider 内部 SQLite/FTS 真实写入、scan worker、index worker flush trace、scan_progress/integrity reset 调度仍未完全迁到 runtime task/store 边界。
-- Browser Bookmarks 仍是 CoreApp skeleton + scanner 样板，真正 indexed source、watch root 注册、persistent rebuild、clear/disable UI 仍需迁到官方 browser-data 插件并受用户同意约束。
+- Browser Bookmarks 仍是 CoreApp skeleton + scanner 样板，真正 indexed source、watch root 注册、persistent rebuild、clear/disable UI 仍需迁到官方 `touch-browser-data` 插件并受用户同意约束。
 - Browser History、Quicklinks、System Settings、Obsidian、VSCode 目前只有 SDK descriptor/admission 或计划，尚未实现完整 source lifecycle。
 - Everything SDK/CLI 最终策略、registry PATH 探测、Windows 真机性能/evidence 仍未闭环。
 - Durable job history、跨 source retry/debounce、source health 用户恢复动作、真实平台手工回归仍需补证。
+
+下一批执行顺序：
+
+1. 先把当前工作区中已完成的 Indexing Runtime / Browser Bookmarks / TuffEx focused 修复按 related-only 收口，逐项处理未跟踪文件并记录 focused test / typecheck 证据。
+2. File write/store boundary：继续把 FileProvider 写入、progress、integrity reset 收敛到 runtime store/task，不改变 SQLite/FTS/SearchIndex worker 的真实语义。
+3. Browser Bookmarks official lifecycle：把 metadata-only `manifest.indexedSources` 接到官方 `touch-browser-data` runtime source 注册、显式 consent、watch root、persistent rebuild 与 clear/disable UI。
+4. Everything 与 Windows App evidence：补 registry PATH 探测、Windows 真机性能、手动文件索引完成通知与 fail-closed 诊断验收。
 
 建议提交批次：
 
