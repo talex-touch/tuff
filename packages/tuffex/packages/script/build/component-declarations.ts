@@ -13,6 +13,7 @@ const rootPath = resolve(__dirname, '../../..')
 const distEsPath = resolve(rootPath, 'dist/es')
 const utilsSourcePath = resolve(rootPath, 'packages/utils')
 const utilsTypesOutPath = resolve(distEsPath, 'packages/tuffex/packages/utils')
+const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 async function collectFiles(dir: string, predicate: (filePath: string) => boolean): Promise<string[]> {
   const dirents = await readdir(dir, { withFileTypes: true })
@@ -40,7 +41,7 @@ function toDistUtilsSpecifier(fromFile: string, subpath = '') {
 }
 
 async function emitUtilsDeclarations() {
-  await execFileAsync('pnpm', [
+  await execFileAsync(pnpmBin, [
     'exec',
     'tsc',
     '--declaration',
