@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { TuffInput, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
 import { ref, watch } from 'vue'
 
 defineOptions({

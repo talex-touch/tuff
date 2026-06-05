@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import type { ComputedRef } from 'vue'
 import type { Composer } from 'vue-i18n'
 import { useI18n } from 'vue-i18n'
 
@@ -30,10 +31,15 @@ export function resolveI18nLabel(value: unknown, t: Composer['t'], fallback = ''
  * Returns a computed that resolves the i18n key,
  * falling back to `fallback` when the key is missing (returned as-is by vue-i18n).
  */
-export function useSafeT() {
+export interface SafeTResult {
+  t: Composer['t']
+  safeT: (key: string, fallback: string) => ComputedRef<string>
+}
+
+export function useSafeT(): SafeTResult {
   const { t } = useI18n()
 
-  function safeT(key: string, fallback: string) {
+  function safeT(key: string, fallback: string): ComputedRef<string> {
     return computed(() => {
       const value = t(key)
       return value === key ? fallback : value

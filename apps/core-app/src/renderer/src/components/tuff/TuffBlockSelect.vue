@@ -3,7 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'
-import { TxSelect } from '@talex-touch/tuffex'
+import { TxSelect } from '@talex-touch/tuffex/select'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(

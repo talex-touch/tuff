@@ -1,6 +1,6 @@
 <script lang="ts" name="TPopperDialog" setup>
 import type { Component, VNodeChild } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
 import TouchScroll from '../TouchScroll.vue'

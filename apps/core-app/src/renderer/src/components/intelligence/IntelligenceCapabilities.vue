@@ -1,5 +1,5 @@
 <script setup name="IntelligenceCapabilities" lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

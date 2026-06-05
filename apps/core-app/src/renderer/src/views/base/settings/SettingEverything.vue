@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingEverything">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { toast } from 'vue-sonner'

@@ -1,5 +1,5 @@
 <script setup lang="ts" name="StoreCliBeta">
-import { TxTag } from '@talex-touch/tuffex'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'

@@ -12,6 +12,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import VueSetupExtend from 'vite-plugin-vue-setup-extend'
 import generatorInformation from './generator-information'
+import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -24,7 +25,8 @@ const tuffBusinessRoot = path.join(workspaceRoot, 'packages', 'tuff-business')
 const tuffIntelligenceRoot = path.join(workspaceRoot, 'packages', 'tuff-intelligence')
 const utilsRoot = path.join(workspaceRoot, 'packages', 'utils')
 const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
-const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
+const tuffexBaseStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
+const tuffexComponentStyleEntry = path.join(tuffexRoot, 'dist', 'es', '$1', 'style.css')
 const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
 const tuffBusinessSourceEntry = path.join(tuffBusinessRoot, 'src', 'index.ts')
 const tuffIntelligenceRendererEntry = path.join(tuffIntelligenceRoot, 'src', 'renderer.ts')
@@ -48,8 +50,16 @@ const uploadSentrySourcemaps =
 const tuffexAliases = isProduction
   ? []
   : [
-      { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
+      { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
+      {
+        find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/,
+        replacement: tuffexComponentStyleEntry
+      },
       { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
+      {
+        find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/,
+        replacement: path.join(tuffexRoot, 'packages', 'components', 'src', '$1', 'index.ts')
+      },
       { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry }
     ]
 const tuffBusinessAliases = [
@@ -245,6 +255,7 @@ export default defineConfig({
     },
     plugins: [
       ...tuffexDevPlugins,
+      tuffexOnDemandStylePlugin({ enabled: isProduction }),
       generatorInformation(),
       vue(),
       Unocss(),

@@ -1,6 +1,6 @@
 <script lang="ts" setup name="PluginPerfStatusBar">
-import type { StatusTone } from '@talex-touch/tuffex'
-import { TxStatusBadge } from '@talex-touch/tuffex'
+import type { StatusTone } from '@talex-touch/tuffex/status-badge'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed } from 'vue'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
 import { usePluginRuntimeStats } from '~/composables/usePluginRuntimeStats'

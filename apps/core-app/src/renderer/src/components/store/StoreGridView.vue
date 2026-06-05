@@ -1,6 +1,7 @@
 <script setup lang="ts" name="StoreGridView">
 import type { StorePluginListItem } from '~/composables/store/useStoreData'
-import { TxAutoSizer, TxSpinner } from '@talex-touch/tuffex'
+import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 /**
  * StoreGridView - Grid/List view for displaying store plugins
  *

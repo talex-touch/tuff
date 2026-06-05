@@ -1,17 +1,19 @@
+<script lang="ts">
+export type TuffAsideListBadgeVariant = 'default' | 'info' | 'success' | 'warning' | 'muted'
+
+export interface TuffAsideListBadgeInfo {
+  label?: string
+  variant?: TuffAsideListBadgeVariant
+}
+</script>
+
 <script
   setup
   lang="ts"
   name="TuffAsideList"
   generic="T extends Record<string, unknown> = Record<string, unknown>"
 >
-import { TxButton } from '@talex-touch/tuffex'
-
-type BadgeVariant = 'default' | 'info' | 'success' | 'warning' | 'muted'
-
-interface BadgeInfo {
-  label?: string
-  variant?: BadgeVariant
-}
+import { TxButton } from '@talex-touch/tuffex/button'
 
 const props = withDefaults(
   defineProps<{
@@ -20,7 +22,7 @@ const props = withDefaults(
     getId?: (item: T) => string | number
     getTitle?: (item: T) => string
     getDescription?: (item: T) => string | undefined
-    getBadge?: (item: T) => BadgeInfo
+    getBadge?: (item: T) => TuffAsideListBadgeInfo
     isDisabled?: (item: T) => boolean
     emptyText?: string
   }>(),
@@ -56,9 +58,9 @@ function resolveDescription(item: T): string | undefined {
     : (item as { description?: string }).description
 }
 
-function resolveBadge(item: T): BadgeInfo {
+function resolveBadge(item: T): TuffAsideListBadgeInfo {
   if (props.getBadge) return props.getBadge(item) ?? {}
-  const meta = item as { badgeLabel?: string; badgeVariant?: BadgeVariant }
+  const meta = item as { badgeLabel?: string; badgeVariant?: TuffAsideListBadgeVariant }
   return {
     label: meta.badgeLabel,
     variant: meta.badgeVariant

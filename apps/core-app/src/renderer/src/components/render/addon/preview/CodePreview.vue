@@ -1,13 +1,13 @@
 <script setup lang="ts" name="CodePreview">
 import type { TuffItem } from '@talex-touch/utils'
-import type { CodeEditorLanguage } from '@talex-touch/tuffex'
+import type { CodeEditorLanguage } from '@talex-touch/tuffex/code-editor'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { TxCodeEditor } from '@talex-touch/tuffex'
+import { TxCodeEditor } from '@talex-touch/tuffex/code-editor'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 

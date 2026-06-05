@@ -1,5 +1,5 @@
 <script setup lang="ts" name="IntelligenceAuditOverlay">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'

@@ -69,7 +69,7 @@ function resolvePreloadStartupContext(startupInfo: StartupInfo | null): StartupC
   }
 }
 
-const appLogoMarkup = appLogoSvgRaw
+const appLogoSrc = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(appLogoSvgRaw)}`
 // const appIcon = resolveAssetSource(appIconAsset)
 let startupContextSnapshot = hasWindow() ? resolvePreloadStartupContext(null) : null
 const startupContextPromise = requestStartupInfo().then((startupInfo) => {
@@ -243,7 +243,7 @@ function useLoading(options: LoadingOptions) {
   filter: drop-shadow(0 0 30px rgba(117, 245, 255, 0.22));
   animation: ${className}__brand-logo__animation 2.8s infinite cubic-bezier(0.22, 1, 0.36, 1);
 }
-.${className}__brand-logo > svg {
+.${className}__brand-logo > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -367,20 +367,35 @@ function useLoading(options: LoadingOptions) {
 
   const oStyle = document.createElement('style')
   oStyle.id = `${className}__styles`
-  oStyle.innerHTML = styleContent
+  oStyle.textContent = styleContent
 
   const container = document.createElement('div')
   container.className = className
-  container.innerHTML = `
-    <div class="${className}__brand" aria-hidden="true">
-      <div class="${className}__brand-logo" aria-hidden="true">${appLogoMarkup}</div>
-    </div>
-    <div class="${className}__progress" role="progressbar"></div>
-    <div class="${className}__message">Initializing Talex Touch...</div>
-  `
 
-  const progressBar = container.querySelector(`.${className}__progress`) as HTMLElement
-  const messageEl = container.querySelector(`.${className}__message`) as HTMLElement
+  const brand = document.createElement('div')
+  brand.className = `${className}__brand`
+  brand.setAttribute('aria-hidden', 'true')
+
+  const brandLogo = document.createElement('div')
+  brandLogo.className = `${className}__brand-logo`
+  brandLogo.setAttribute('aria-hidden', 'true')
+
+  const brandLogoImage = document.createElement('img')
+  brandLogoImage.src = appLogoSrc
+  brandLogoImage.alt = ''
+  brandLogoImage.draggable = false
+  brandLogo.appendChild(brandLogoImage)
+  brand.appendChild(brandLogo)
+
+  const progressBar = document.createElement('div')
+  progressBar.className = `${className}__progress`
+  progressBar.setAttribute('role', 'progressbar')
+
+  const messageEl = document.createElement('div')
+  messageEl.className = `${className}__message`
+  messageEl.textContent = 'Initializing Talex Touch...'
+
+  container.append(brand, progressBar, messageEl)
 
   let currentMode: LoadingMode = options.mode
 

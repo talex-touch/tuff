@@ -6,7 +6,9 @@ import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
  * Shows plugin icon, name, description and install button.
  * Delegates installation state logic to StoreInstallButton component.
  */
-import { TxPopover, TxStatusBadge, TxTag } from '@talex-touch/tuffex'
+import { TxPopover } from '@talex-touch/tuffex/popover'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

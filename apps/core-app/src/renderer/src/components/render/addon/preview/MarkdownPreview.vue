@@ -6,7 +6,7 @@ import { isElectronRenderer } from '@talex-touch/utils/env'
 import { networkClient } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { TxMarkdownView } from '@talex-touch/tuffex'
+import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
 

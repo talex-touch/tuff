@@ -1,5 +1,5 @@
 <script name="FlatButton" lang="ts" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 
 defineProps<{
   primary?: boolean

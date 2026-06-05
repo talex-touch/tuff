@@ -5,7 +5,7 @@ import type {
   PlatformCapabilitySupportLevel,
   PlatformCapabilityStatus
 } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

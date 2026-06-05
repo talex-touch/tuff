@@ -1,5 +1,5 @@
 <script name="PluginApplyInstall" lang="ts" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { sleep } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'

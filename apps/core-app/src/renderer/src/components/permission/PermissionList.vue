@@ -5,7 +5,10 @@
  * Displays a list of permissions with their grant status.
  */
 
-import { TuffSwitch, TxEmpty, TxTag, TxTooltip } from '@talex-touch/tuffex'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TuffSwitch } from '@talex-touch/tuffex/switch'
+import { TxTag } from '@talex-touch/tuffex/tag'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { computed } from 'vue'
 
 interface PermissionItem {

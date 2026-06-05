@@ -1,6 +1,5 @@
 <script lang="ts" name="TBottomDialog" setup>
-import type { TxButtonProps } from '@talex-touch/tuffex'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, type TxButtonProps } from '@talex-touch/tuffex/button'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 

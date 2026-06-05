@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
-import { TuffProgress, TxBottomDialog, TxButton, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TuffProgress } from '@talex-touch/tuffex/progress'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'

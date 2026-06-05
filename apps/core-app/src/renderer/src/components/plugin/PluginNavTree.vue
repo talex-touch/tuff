@@ -1,6 +1,7 @@
 <script lang="ts" name="PluginNavTree" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { TxButton, TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex/transition'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

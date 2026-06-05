@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { GitHubRelease } from '@talex-touch/utils'
 import { DownloadStatus } from '@talex-touch/utils'
-import { TxAlert, TxModal } from '@talex-touch/tuffex'
+import { renderMarkdownToSafeHtml } from '@talex-touch/utils/renderer'
+import { TxAlert } from '@talex-touch/tuffex/alert'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
@@ -81,48 +83,11 @@ const downloadSize = computed(() => {
 // Markdown rendering
 const renderedMarkdown = computed(() => {
   if (!props.release?.body) {
-    return `<p>${t('update.no_release_notes')}</p>`
+    return renderMarkdownToSafeHtml(t('update.no_release_notes'))
   }
 
-  // Simple markdown to HTML conversion
-  return convertMarkdownToHtml(props.release.body)
+  return renderMarkdownToSafeHtml(props.release.body)
 })
-
-function convertMarkdownToHtml(markdown: string): string {
-  let html = markdown
-
-  // Headers
-  html = html.replace(/^### (.*$)/gm, '<h3>$1</h3>')
-  html = html.replace(/^## (.*$)/gm, '<h2>$1</h2>')
-  html = html.replace(/^# (.*$)/gm, '<h1>$1</h1>')
-
-  // Bold
-  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/__(.*?)__/g, '<strong>$1</strong>')
-
-  // Italic
-  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>')
-  html = html.replace(/_(.*?)_/g, '<em>$1</em>')
-
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-
-  // Lists
-  html = html.replace(/^\* (.*$)/gm, '<li>$1</li>')
-  html = html.replace(/^- (.*$)/gm, '<li>$1</li>')
-  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-
-  // Line breaks
-  html = html.replace(/\n\n/g, '</p><p>')
-  html = html.replace(/\n/g, '<br>')
-
-  // Wrap in paragraph if not already wrapped
-  if (!html.startsWith('<')) {
-    html = `<p>${html}</p>`
-  }
-
-  return html
-}
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString)

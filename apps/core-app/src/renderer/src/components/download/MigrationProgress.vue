@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import type {
   DownloadMigrationProgressPayload,

@@ -1,5 +1,6 @@
 <script lang="ts" name="AppUpgradationView" setup>
-import { TxButton, TxScroll } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'

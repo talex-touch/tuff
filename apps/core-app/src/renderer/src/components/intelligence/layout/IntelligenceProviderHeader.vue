@@ -1,6 +1,8 @@
 <script lang="ts" name="IntelligenceProviderHeader" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxBottomDialog, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'

@@ -3,17 +3,12 @@ import type { ComponentPublicInstance } from 'vue'
 import { computed } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
-import {
-  TuffInput,
-  TuffSelect,
-  TuffSelectItem,
-  TuffSwitch,
-  TxButton,
-  TxSplitButton,
-  TxTabItem,
-  TxTabs,
-  type TxSelectValue
-} from '@talex-touch/tuffex'
+import { TxButton, TxSplitButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import type { TxSelectValue } from '@talex-touch/tuffex/select'
+import { TuffSwitch } from '@talex-touch/tuffex/switch'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'

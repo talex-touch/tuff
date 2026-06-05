@@ -1711,6 +1711,7 @@
     "searchedOnDevice": "{count} searched on this device.",
     "appsOnDevice": "{count} applications on this device.",
     "order": {
+      "change": "Change sort order",
       "default": "Default Order",
       "dicIn": "Dictionary In",
       "dicDe": "Dictionary De",

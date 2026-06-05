@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligenceAdvancedConfig" setup>
-import { TxSelectItem } from '@talex-touch/tuffex'
+import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'

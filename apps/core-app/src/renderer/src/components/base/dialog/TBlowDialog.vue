@@ -1,6 +1,6 @@
 <script lang="ts" name="TBlowDialog" setup>
 import type { Component, VNode } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { sleep } from '@talex-touch/utils/common'
 
 /**

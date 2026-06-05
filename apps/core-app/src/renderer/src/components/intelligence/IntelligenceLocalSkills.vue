@@ -4,7 +4,7 @@ import type {
   IntelligenceLocalSkillGateStatus,
   IntelligenceLocalSkillProviderSummary
 } from '@talex-touch/tuff-intelligence'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref } from 'vue'

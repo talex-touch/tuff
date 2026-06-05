@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligenceApiConfig" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'

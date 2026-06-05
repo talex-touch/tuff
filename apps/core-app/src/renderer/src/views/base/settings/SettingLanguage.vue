@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingLanguage">
-import { TxFlatRadioItem } from '@talex-touch/tuffex'
+import { TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
 import { useI18n } from 'vue-i18n'
 import TuffBlockFlatRadio from '~/components/tuff/TuffBlockFlatRadio.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'

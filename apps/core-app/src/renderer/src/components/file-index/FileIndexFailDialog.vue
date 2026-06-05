@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, ref } from 'vue'
 import TBottomDialog from '../base/dialog/TBottomDialog.vue'
 

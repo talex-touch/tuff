@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ShortcutRowView } from './shortcut-dialog.types'
 
-import { TxButton, TxTooltip } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 

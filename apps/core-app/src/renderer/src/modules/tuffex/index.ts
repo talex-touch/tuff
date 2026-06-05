@@ -14,6 +14,7 @@
  */
 
 import type { App } from 'vue'
+import type { Component, Plugin } from 'vue'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -38,14 +39,29 @@ const ENABLED_COMPONENTS = [
 
 export type EnabledComponent = (typeof ENABLED_COMPONENTS)[number]
 
+type InstallableComponent = Component & Partial<Plugin>
+type TuffexComponentModule = Record<string, InstallableComponent | undefined>
+
+const COMPONENT_IMPORTERS = {
+  TxButton: () => import('@talex-touch/tuffex/button'),
+  TxAvatar: () => import('@talex-touch/tuffex/avatar'),
+  TxCard: () => import('@talex-touch/tuffex/card'),
+  TxSwitch: () => import('@talex-touch/tuffex/switch'),
+  TxInput: () => import('@talex-touch/tuffex/input'),
+  TxSelect: () => import('@talex-touch/tuffex/select'),
+  TxSelectItem: () => import('@talex-touch/tuffex/select'),
+  TxFlatSelect: () => import('@talex-touch/tuffex/flat-select'),
+  TxFlatSelectItem: () => import('@talex-touch/tuffex/flat-select')
+} satisfies Record<EnabledComponent, () => Promise<TuffexComponentModule>>
+
 /**
  * Lazy import of Tuffex components to support tree-shaking.
  * Components are only loaded when actually used.
  */
 export async function loadTuffexComponent(name: EnabledComponent) {
   try {
-    const tuffex = await import('@talex-touch/tuffex')
-    return tuffex[name] || null
+    const module = await COMPONENT_IMPORTERS[name]()
+    return module[name] || null
   } catch (error) {
     tuffexLog.warn(`Failed to load component: ${name}`, error)
     return null
@@ -63,10 +79,8 @@ export async function registerTuffexComponents(
   components: EnabledComponent[] = [...ENABLED_COMPONENTS]
 ) {
   try {
-    const tuffex = await import('@talex-touch/tuffex')
-
     for (const name of components) {
-      const component = tuffex[name]
+      const component = await loadTuffexComponent(name)
       if (component && typeof component.install === 'function') {
         app.use(component)
       } else if (component) {
@@ -85,7 +99,7 @@ export async function registerTuffexComponents(
  */
 export async function isTuffexAvailable(): Promise<boolean> {
   try {
-    await import('@talex-touch/tuffex')
+    await COMPONENT_IMPORTERS.TxButton()
     return true
   } catch {
     return false

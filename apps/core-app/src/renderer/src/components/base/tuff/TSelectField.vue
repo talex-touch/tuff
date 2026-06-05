@@ -1,5 +1,5 @@
 <script lang="ts" name="TSelectField" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import { computed } from 'vue'
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
-import { TxBottomDialog, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

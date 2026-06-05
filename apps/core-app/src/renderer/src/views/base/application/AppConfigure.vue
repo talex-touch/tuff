@@ -1,6 +1,6 @@
 <script name="AppConfigure" setup lang="ts">
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'

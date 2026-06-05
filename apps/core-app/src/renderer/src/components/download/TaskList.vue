@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
-import { TxEmpty } from '@talex-touch/tuffex'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
 import { ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'
 import type { DraggableEvent } from 'vue-draggable-plus'

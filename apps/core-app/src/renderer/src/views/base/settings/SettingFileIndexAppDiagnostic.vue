@@ -5,7 +5,8 @@ import type {
   AppIndexReindexRequest,
   AppIndexReindexResult
 } from '@talex-touch/utils/transport/events/types'
-import { TxButton, TxInput } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

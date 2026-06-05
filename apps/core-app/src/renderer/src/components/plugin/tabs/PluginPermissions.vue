@@ -6,7 +6,9 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { TxButton, TxEmpty, TxTag } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { PERMISSION_ENFORCEMENT_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'

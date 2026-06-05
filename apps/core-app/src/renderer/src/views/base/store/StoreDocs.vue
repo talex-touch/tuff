@@ -1,5 +1,5 @@
 <script setup lang="ts" name="StoreDocs">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'

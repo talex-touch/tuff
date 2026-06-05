@@ -6,7 +6,7 @@
 -->
 <script setup lang="ts" name="SettingSetup">
 import type { AppIndexSettings } from '@talex-touch/utils/transport/events/types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useNotificationSdk, useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'

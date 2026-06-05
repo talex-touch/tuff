@@ -1,14 +1,11 @@
 <script name="ThemeStyle" lang="ts" setup>
-import {
-  TxButton,
-  TxRadio,
-  TxRadioGroup,
-  TxSelectItem,
-  TxSlider,
-  TxSpinner,
-  TxStatusBadge,
-  TxTooltip
-} from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
+import { TxSelectItem } from '@talex-touch/tuffex/select'
+import { TxSlider } from '@talex-touch/tuffex/slider'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { WALLPAPER_IMAGE_EXTENSIONS } from '@talex-touch/utils/common/wallpaper'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 

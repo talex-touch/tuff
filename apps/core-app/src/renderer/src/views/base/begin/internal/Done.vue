@@ -2,7 +2,7 @@
 import type { AnimationItem } from 'lottie-web'
 import type { Component } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import {

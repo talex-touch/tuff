@@ -1,7 +1,7 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
-import { TxLoadingOverlay } from '@talex-touch/tuffex'
+import { TxLoadingOverlay } from '@talex-touch/tuffex/loading-overlay'
 import { hasDocument } from '@talex-touch/utils/env'
 import { h, render } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'

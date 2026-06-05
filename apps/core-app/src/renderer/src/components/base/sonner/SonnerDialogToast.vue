@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
-import type { TxButtonProps } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import type { TxButtonProps } from '@talex-touch/tuffex/button'
 
 export interface SonnerDialogAction {
   label: string

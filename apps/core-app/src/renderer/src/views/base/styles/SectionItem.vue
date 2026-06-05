@@ -29,24 +29,34 @@ function goRouter() {
 <template>
   <div
     relative
-    cursor-pointer
     h-full
     flex
     items-center
     justify-center
     :class="{ disabled, active: value === title }"
     class="SectionItem-Container transition-cubic"
-    @click="handleClick"
   >
-    <div class="SectionItem-Display fake-background" :class="title">
-      <div v-shared-element:[`theme-preference-${title}-img`] />
-    </div>
-    <div class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2" @click.stop="goRouter">
+    <button
+      type="button"
+      class="SectionItem-Display SectionItem-Action fake-background"
+      :class="title"
+      :disabled="disabled"
+      :aria-pressed="value === title"
+      @click="handleClick"
+    >
+      <span v-shared-element:[`theme-preference-${title}-img`] />
+    </button>
+    <button
+      type="button"
+      class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2"
+      :disabled="disabled"
+      @click="goRouter"
+    >
       <div w-3 h-3 rounded-full class="bg-[var(--section-active-color)]" />
       <span v-shared-element:[`theme-preference-${title}`]>
         {{ label ?? title }}
       </span>
-    </div>
+    </button>
   </div>
 </template>
 
@@ -57,11 +67,19 @@ function goRouter() {
   width: 100%;
   height: 100%;
 
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+
   &::before {
     z-index: 1;
   }
 
-  div {
+  span {
+    display: block;
     position: relative;
 
     width: 100%;
@@ -88,6 +106,7 @@ function goRouter() {
   &.disabled {
     .SectionItem-Display {
       opacity: 0.25;
+      cursor: not-allowed;
     }
     cursor: not-allowed;
     border: 2px solid var(--tx-color-danger-light-3);
@@ -104,7 +123,17 @@ function goRouter() {
   --section-active-color: var(--tx-color-info);
 }
 
+.SectionItem-Action:focus-visible {
+  outline: 2px solid var(--tx-color-primary);
+  outline-offset: -3px;
+}
+
 .SectionItem-Bar {
+  appearance: none;
+  padding: 0 0.5rem;
+  border: 0;
+  color: inherit;
+  background: transparent;
   z-index: 100;
   position: absolute;
 
@@ -112,5 +141,10 @@ function goRouter() {
 
   height: 2rem;
   width: 100%;
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: -2px;
+  }
 }
 </style>

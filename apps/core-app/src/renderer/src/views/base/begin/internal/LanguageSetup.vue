@@ -1,7 +1,8 @@
 <script setup lang="ts" name="LanguageSetup">
 import type { Component } from 'vue'
 import type { SupportedLanguage } from '~/modules/lang'
-import { TxButton, TxCard } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HelloData from '~/assets/lotties/hello.json'

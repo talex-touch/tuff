@@ -1,7 +1,7 @@
 <script setup lang="ts" name="OptionMode">
 import type { Component } from 'vue'
 import type { Ref } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useI18n } from 'vue-i18n'
 import Done from './Done.vue'
 import Forbidden from './Forbidden.vue'

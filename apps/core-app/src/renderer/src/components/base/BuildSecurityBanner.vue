@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'

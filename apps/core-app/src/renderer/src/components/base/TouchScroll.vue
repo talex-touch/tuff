@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxScroll as TuffTouchScroll } from '@talex-touch/tuffex'
+import { TxScroll as TuffTouchScroll } from '@talex-touch/tuffex/scroll'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 
 defineOptions({

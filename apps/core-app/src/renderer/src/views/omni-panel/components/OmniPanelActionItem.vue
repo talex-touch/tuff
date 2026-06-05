@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OmniPanelFeatureItemPayload } from '../../../../../shared/events/omni-panel'
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffIcon from '~/components/base/TuffIcon.vue'

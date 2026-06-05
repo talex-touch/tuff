@@ -1,5 +1,5 @@
 <script setup lang="ts" name="SettingUser">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
