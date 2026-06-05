@@ -3,7 +3,6 @@ import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps } from './types'
 import type { Slots } from 'vue'
 import TxButton from '../../button/src/button.vue'
-import gsap from 'gsap'
 import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { hasWindow } from '../../../../utils/env'
@@ -23,11 +22,11 @@ import {
   STACK_LAYER_MAX_DEPTH,
   STACK_LAYER_OFFSET_Y,
   STACK_LAYER_SCALE_STEP,
-  STACK_STATE_EPSILON,
   subscribeOverlayStackChanged,
   upsertOverlayStackEntry,
   type FlipOverlayStackEntry,
 } from './flip-overlay-stack'
+import { useFlipOverlayMotion } from './flip-overlay-motion'
 
 defineOptions({
   name: 'TxFlipOverlay',
@@ -85,9 +84,6 @@ const unsubscribeStackChange = hasWindow()
       localStackVersion.value += 1
     })
   : () => {}
-let tween: gsap.core.Tween | null = null
-let stackTween: gsap.core.Tween | null = null
-let appliedStackState: { y: number, scale: number, opacity: number } | null = null
 let runId = 0
 let blockedCloseTimer: ReturnType<typeof setTimeout> | null = null
 let pageExitGuardBound = false
@@ -332,32 +328,6 @@ watch(expanded, value => emit('update:expanded', value))
 watch(animating, value => emit('update:animating', value))
 const bodyScrollLocked = ref(false)
 
-function clearTween(): void {
-  if (!tween)
-    return
-  tween.kill()
-  tween = null
-}
-
-function clearStackTween(): void {
-  if (!stackTween)
-    return
-  stackTween.kill()
-  stackTween = null
-}
-
-function isSameStackState(
-  current: { y: number, scale: number, opacity: number } | null,
-  next: { y: number, scale: number, opacity: number },
-): boolean {
-  if (!current)
-    return false
-
-  return Math.abs(current.y - next.y) <= STACK_STATE_EPSILON
-    && Math.abs(current.scale - next.scale) <= STACK_STATE_EPSILON
-    && Math.abs(current.opacity - next.opacity) <= STACK_STATE_EPSILON
-}
-
 function resolveCardSize(card: HTMLElement | null): { width: number, height: number } {
   if (!card)
     return { width: 0, height: 0 }
@@ -423,55 +393,6 @@ function removeStackEntry(): void {
   removeOverlayStackEntry(instanceId)
 }
 
-function applyStackCardState(forceImmediate = false): void {
-  const card = cardRef.value
-  if (!card)
-    return
-
-  if (!visible.value || !expanded.value || animating.value) {
-    clearStackTween()
-    appliedStackState = null
-    return
-  }
-
-  const { translateY, scale, opacity } = stackMeta.value
-  const nextState = {
-    y: translateY,
-    scale,
-    opacity,
-  }
-
-  if (!forceImmediate && isSameStackState(appliedStackState, nextState))
-    return
-
-  clearStackTween()
-
-  if (forceImmediate || stackMeta.value.depth === 0) {
-    gsap.set(card, {
-      y: translateY,
-      scaleX: scale,
-      scaleY: scale,
-      opacity,
-    })
-    appliedStackState = nextState
-    return
-  }
-
-  appliedStackState = nextState
-  stackTween = gsap.to(card, {
-    y: translateY,
-    scaleX: scale,
-    scaleY: scale,
-    opacity,
-    duration: 0.26,
-    ease: 'power2.out',
-    overwrite: 'auto',
-    onComplete: () => {
-      stackTween = null
-    },
-  })
-}
-
 function resolveSource(): void {
   if (!hasWindow()) {
     sourceRect.value = null
@@ -506,180 +427,29 @@ function resolveTilt(): void {
   tilt.value = { x: tiltX, y: tiltY }
 }
 
-function applySpeedBoost(): void {
-  if (!tween)
-    return
-  if (tween.progress() > props.speedBoostAt)
-    tween.timeScale(props.speedBoost)
-}
-
-function startOpenAnimation(currentRunId: number): void {
-  const card = cardRef.value
-  const from = sourceRect.value
-  if (!card || !hasWindow()) {
-    syncExpanded(true)
-    syncAnimating(false)
-    emit('opened')
-    return
-  }
-
-  if (!from) {
-    const visibleStackCount = getVisibleOverlayStackEntries().length
-    const isStackPushOpen = visibleStackCount > 1
-
-    if (isStackPushOpen) {
-      clearTween()
-      clearStackTween()
-      syncAnimating(true)
-      gsap.set(card, {
-        autoAlpha: 0,
-        xPercent: -50,
-        yPercent: -50,
-        x: 0,
-        y: 10,
-        scaleX: 0.985,
-        scaleY: 0.985,
-      })
-      syncExpanded(true)
-      tween = gsap.to(card, {
-        autoAlpha: 1,
-        y: 0,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 0.22,
-        ease: 'power2.out',
-        overwrite: true,
-        onComplete: () => {
-          if (currentRunId !== runId)
-            return
-          syncAnimating(false)
-          tween = null
-          emit('opened')
-        },
-      })
-      return
-    }
-
-    gsap.set(card, {
-      autoAlpha: 1,
-      xPercent: -50,
-      yPercent: -50,
-      x: 0,
-      y: 0,
-      scaleX: 1,
-      scaleY: 1,
-    })
-    syncExpanded(true)
-    syncAnimating(false)
-    emit('opened')
-    return
-  }
-
-  const fromCenterX = from.left + from.width / 2
-  const fromCenterY = from.top + from.height / 2
-  const viewportCenterX = window.innerWidth / 2
-  const viewportCenterY = window.innerHeight / 2
-  const translateX = fromCenterX - viewportCenterX
-  const translateY = fromCenterY - viewportCenterY
-  const to = card.getBoundingClientRect()
-  const scaleX = from.width / to.width
-  const scaleY = from.height / to.height
-  const targetRadius = getComputedStyle(card).borderRadius
-  const initialRadius = sourceRadius.value || targetRadius
-  const tiltValue = tilt.value
-
-  clearTween()
-  clearStackTween()
-  syncAnimating(true)
-  gsap.set(card, {
-    xPercent: -50,
-    yPercent: -50,
-    x: translateX,
-    y: translateY,
-    scaleX,
-    scaleY,
-    rotateX: tiltValue.x,
-    rotateY: tiltValue.y,
-    transformPerspective: props.perspective,
-    borderRadius: initialRadius,
-    autoAlpha: 1,
-  })
-  syncExpanded(true)
-  tween = gsap.to(card, {
-    x: 0,
-    y: 0,
-    scaleX: 1,
-    scaleY: 1,
-    rotateX: 0,
-    rotateY: 0,
-    borderRadius: targetRadius,
-    duration: props.duration / 1000,
-    ease: props.easeOut,
-    overwrite: true,
-    onUpdate: applySpeedBoost,
-    onComplete: () => {
-      if (currentRunId !== runId)
-        return
-      syncAnimating(false)
-      tween = null
-      emit('opened')
-    },
-  })
-  tween.timeScale(1)
-}
-
-function startCloseAnimation(currentRunId: number): void {
-  const card = cardRef.value
-  const from = sourceRect.value
-  if (!card || !hasWindow() || !from) {
-    visible.value = false
-    syncAnimating(false)
-    removeStackEntry()
-    if (props.modelValue)
-      emit('update:modelValue', false)
-    emit('closed')
-    return
-  }
-
-  const fromCenterX = from.left + from.width / 2
-  const fromCenterY = from.top + from.height / 2
-  const viewportCenterX = window.innerWidth / 2
-  const viewportCenterY = window.innerHeight / 2
-  const translateX = fromCenterX - viewportCenterX
-  const translateY = fromCenterY - viewportCenterY
-  const to = card.getBoundingClientRect()
-  const scaleX = from.width / to.width
-  const scaleY = from.height / to.height
-  const tiltValue = tilt.value
-
-  clearTween()
-  clearStackTween()
-  syncAnimating(true)
-  tween = gsap.to(card, {
-    x: translateX,
-    y: translateY,
-    scaleX,
-    scaleY,
-    rotateX: tiltValue.x,
-    rotateY: tiltValue.y,
-    borderRadius: sourceRadius.value || getComputedStyle(card).borderRadius,
-    duration: props.duration / 1000,
-    ease: props.easeIn,
-    overwrite: true,
-    onUpdate: applySpeedBoost,
-    onComplete: () => {
-      if (currentRunId !== runId)
-        return
-      visible.value = false
-      syncAnimating(false)
-      removeStackEntry()
-      tween = null
-      emit('update:modelValue', false)
-      emit('closed')
-    },
-  })
-  tween.timeScale(1)
-}
+const {
+  applyStackCardState,
+  clearStackTween,
+  clearTween,
+  startCloseAnimation,
+  startOpenAnimation,
+} = useFlipOverlayMotion({
+  props,
+  cardRef,
+  visible,
+  expanded,
+  animating,
+  sourceRect,
+  sourceRadius,
+  tilt,
+  stackMeta,
+  isCurrentRun: currentRunId => currentRunId === runId,
+  getVisibleStackCount: () => getVisibleOverlayStackEntries().length,
+  syncExpanded,
+  syncAnimating,
+  removeStackEntry,
+  emit,
+})
 
 function requestOpen(): void {
   zIndex.value = nextZIndex()

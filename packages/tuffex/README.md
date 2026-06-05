@@ -16,7 +16,37 @@ pnpm add @talex-touch/tuffex
 
 ## Usage
 
-### Full import
+### On-demand import
+
+Use subpath imports for new app and package integrations. This keeps the package root and full stylesheet out of business bundles by default.
+
+```ts
+import { createApp } from 'vue'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/button/style.css'
+import '@talex-touch/tuffex/card/style.css'
+import '@talex-touch/tuffex/drawer/style.css'
+
+const app = createApp(App)
+app.use(TxButton)
+app.use(TxCard)
+app.use(TxDrawer)
+```
+
+`@talex-touch/tuffex/base.css` contains shared tokens and global utilities. Keep `@talex-touch/tuffex/style.css` only for legacy full-style imports.
+
+For stricter style budgets, import only the matching component stylesheet:
+
+```ts
+import { TxButton } from '@talex-touch/tuffex/button'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/button/style.css'
+```
+
+### Legacy full import
 
 ```ts
 import { createApp } from 'vue'
@@ -27,18 +57,7 @@ const app = createApp(App)
 app.use(TuffEx)
 ```
 
-### On-demand import
-
-```ts
-import { createApp } from 'vue'
-import { TxButton, TxCard, TxDrawer } from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-app.use(TxButton)
-app.use(TxCard)
-app.use(TxDrawer)
-```
+The root entry is retained for compatibility and migration windows. Prefer component subpaths for new code.
 
 ### Utilities
 
@@ -80,6 +99,9 @@ Reference:
 pnpm install
 pnpm -C "packages/tuffex" run lint
 pnpm -C "packages/tuffex" run build
+pnpm -C "packages/tuffex" run audit:size
+pnpm -C "packages/tuffex" run audit:exports
+pnpm -C "packages/tuffex" run audit:types
 pnpm -C "packages/tuffex" run docs:build
 ```
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CSSProperties } from 'vue'
+import type { CSSProperties, Slots } from 'vue'
 import type { DrawerDirection, DrawerEmits, DrawerProps } from './types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useSlots, watch } from 'vue'
 import TxDivider from '../../divider/src/TxDivider.vue'
@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<DrawerProps>(), {
 })
 
 const emit = defineEmits<DrawerEmits>()
-const slots = useSlots()
+const slots: Slots = useSlots()
 
 const drawerRef = ref<HTMLElement | null>(null)
 const internalZIndex = ref(getZIndex())
@@ -55,10 +55,10 @@ const effectiveDirection = computed<DrawerDirection>(() => {
 const resolvedSize = computed(() => normalizeDrawerSize(props.full ? 'full' : props.size ?? props.width))
 const isHorizontalDirection = computed(() => effectiveDirection.value === 'left' || effectiveDirection.value === 'right')
 
-const shouldRenderHeader = computed(() => props.showHeader && (Boolean(slots.header) || Boolean(props.title) || props.showClose))
-const shouldRenderFooter = computed(() => props.showFooter && Boolean(slots.footer))
-const drawerAriaLabelledBy = computed(() => shouldRenderHeader.value ? titleId : undefined)
-const drawerAriaLabel = computed(() => shouldRenderHeader.value ? undefined : props.title || undefined)
+const shouldRenderHeader = computed<boolean>(() => props.showHeader && (Boolean(slots.header) || Boolean(props.title) || props.showClose))
+const shouldRenderFooter = computed<boolean>(() => props.showFooter && Boolean(slots.footer))
+const drawerAriaLabelledBy = computed<string | undefined>(() => shouldRenderHeader.value ? titleId : undefined)
+const drawerAriaLabel = computed<string | undefined>(() => shouldRenderHeader.value ? undefined : props.title || undefined)
 
 const drawerStyle = computed<CSSProperties>(() => ({
   '--tx-drawer-size': resolvedSize.value,
@@ -230,7 +230,11 @@ onUnmounted(() => {
   --tx-drawer-panel-background-transparent: color-mix(in srgb, var(--tx-drawer-panel-background) 78%, transparent);
 
   position: fixed;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100vw;
+  max-width: 100vw;
   z-index: var(--tx-drawer-z-index, 1998);
   pointer-events: none;
 

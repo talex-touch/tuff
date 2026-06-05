@@ -1,10 +1,22 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
 import TxCodeEditor from '../src/TxCodeEditor.vue'
+import { nextTick } from 'vue'
+
+async function mountCodeEditor(options: Parameters<typeof mount>[1]) {
+  const wrapper = mount(TxCodeEditor, options)
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  await nextTick()
+  await nextTick()
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  return wrapper
+}
 
 describe('txCodeEditor', () => {
   it('emits update on change', async () => {
-    const wrapper = mount(TxCodeEditor, {
+    const wrapper = await mountCodeEditor({
       props: {
         modelValue: '{"a":1}',
       },
@@ -17,8 +29,8 @@ describe('txCodeEditor', () => {
     expect(emitted?.[0][0]).toBe('{"a":2}')
   })
 
-  it('formats json', () => {
-    const wrapper = mount(TxCodeEditor, {
+  it('formats json', async () => {
+    const wrapper = await mountCodeEditor({
       props: {
         modelValue: '{"a":1,"b":2}',
       },
@@ -30,8 +42,8 @@ describe('txCodeEditor', () => {
     expect(emitted?.[emitted.length - 1][0]).toBe('{\n  \"a\": 1,\n  \"b\": 2\n}')
   })
 
-  it('formats yaml', () => {
-    const wrapper = mount(TxCodeEditor, {
+  it('formats yaml', async () => {
+    const wrapper = await mountCodeEditor({
       props: {
         modelValue: 'a: 1\nb: 2',
         language: 'yaml',
@@ -46,14 +58,14 @@ describe('txCodeEditor', () => {
     expect(value).toContain('b: 2')
   })
 
-  it('mounts toml and ini language modes with local stream parsers', () => {
-    const tomlWrapper = mount(TxCodeEditor, {
+  it('mounts toml and ini language modes with local stream parsers', async () => {
+    const tomlWrapper = await mountCodeEditor({
       props: {
         modelValue: '[server]\nport = 8080',
         language: 'toml',
       },
     })
-    const iniWrapper = mount(TxCodeEditor, {
+    const iniWrapper = await mountCodeEditor({
       props: {
         modelValue: '[server]\nport=8080',
         language: 'ini',

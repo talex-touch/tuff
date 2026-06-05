@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { ButtonEmits, ButtonProps } from './types'
-import type { VNode } from 'vue'
-import VWave from 'v-wave'
+import type { ObjectDirective, VNode } from 'vue'
 import { computed, nextTick, ref, useAttrs, useSlots, watch } from 'vue'
 import { useFlip } from '../../../../utils/animation/flip'
 import { useVibrate } from '../../../../utils/vibrate'
@@ -32,7 +31,29 @@ const props = withDefaults(defineProps<ButtonProps>(), {
 
 const emit = defineEmits<ButtonEmits>()
 
-const { vWave } = VWave.createLocalWaveDirective()
+type WaveDirectiveModule = typeof import('v-wave')
+
+let waveDirectivePromise: Promise<ObjectDirective<HTMLElement>> | null = null
+
+function loadWaveDirective() {
+  if (!waveDirectivePromise) {
+    waveDirectivePromise = import('v-wave').then((mod: WaveDirectiveModule) => {
+      return mod.default.createLocalWaveDirective().vWave as ObjectDirective<HTMLElement>
+    })
+  }
+  return waveDirectivePromise
+}
+
+const vWave: ObjectDirective<HTMLElement> = {
+  async mounted(el, binding, vnode, prevVnode) {
+    const directive = await loadWaveDirective()
+    directive.mounted?.(el, binding, vnode, prevVnode)
+  },
+  async updated(el, binding, vnode, prevVnode) {
+    const directive = await loadWaveDirective()
+    directive.updated?.(el, binding, vnode, prevVnode)
+  },
+}
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const innerRef = ref<HTMLElement | null>(null)

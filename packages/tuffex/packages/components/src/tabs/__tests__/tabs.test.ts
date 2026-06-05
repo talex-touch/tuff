@@ -1,5 +1,5 @@
-import { mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { flushPromises, mount } from '@vue/test-utils'
+import { Fragment, defineAsyncComponent, defineComponent, h, nextTick } from 'vue'
 import { describe, expect, it } from 'vitest'
 import TxTabHeader from '../src/TxTabHeader.vue'
 import TxTabItem from '../src/TxTabItem.vue'
@@ -121,6 +121,109 @@ describe('txTabs', () => {
     expect(wrapper.find('.active-header').text()).toBe('General')
     expect(wrapper.text()).toContain('General content')
     expect(wrapper.emitted('change')).toBeUndefined()
+  })
+
+  it('renders tab items generated inside fragments', async () => {
+    const tabs = [
+      { name: 'Overview', content: 'Overview content' },
+      { name: 'Details', content: 'Details content' },
+    ]
+
+    const wrapper = mount(TxTabs, {
+      props: {
+        modelValue: 'Details',
+      },
+      global: {
+        stubs: {
+          TxAutoSizer: AutoSizerStub,
+        },
+      },
+      slots: {
+        default: () => [
+          h(Fragment, null, tabs.map(tab => h(TxTabItem, { key: tab.name, name: tab.name }, {
+            default: () => tab.content,
+          }))),
+        ],
+      },
+    })
+
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Details content')
+    expect(wrapper.text()).not.toContain('No tab selected')
+    expect(wrapper.findAllComponents(TxTabItem)).toHaveLength(2)
+  })
+
+  it('renders tab items wrapped by named async components', async () => {
+    const AsyncTabItem = defineAsyncComponent(async () => TxTabItem)
+    Object.defineProperty(AsyncTabItem, 'name', {
+      value: 'TxTabItem',
+      configurable: true,
+    })
+
+    const wrapper = mount(TxTabs, {
+      props: {
+        modelValue: 'Account',
+      },
+      global: {
+        stubs: {
+          TxAutoSizer: AutoSizerStub,
+        },
+      },
+      slots: {
+        default: () => [
+          h(AsyncTabItem, { name: 'General', iconClass: 'i-general' }, {
+            default: () => 'General content',
+          }),
+          h(AsyncTabItem, { name: 'Account', iconClass: 'i-account' }, {
+            default: () => 'Account content',
+          }),
+        ],
+      },
+    })
+
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Account content')
+    expect(wrapper.text()).not.toContain('No tab selected')
+    expect(wrapper.findAllComponents(TxTabItem)).toHaveLength(2)
+  })
+
+  it('renders grouped tab items generated inside fragments', async () => {
+    const tabs = [
+      { name: 'Network', content: 'Network content' },
+      { name: 'Storage', content: 'Storage content' },
+    ]
+
+    const wrapper = mount(TxTabs, {
+      props: {
+        defaultValue: 'Storage',
+      },
+      global: {
+        stubs: {
+          TxAutoSizer: AutoSizerStub,
+        },
+      },
+      slots: {
+        default: () => [
+          h(TxTabItemGroup, { name: 'Advanced' }, {
+            default: () => [
+              h(Fragment, null, tabs.map(tab => h(TxTabItem, { key: tab.name, name: tab.name }, {
+                default: () => tab.content,
+              }))),
+            ],
+          }),
+        ],
+      },
+    })
+
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Advanced')
+    expect(wrapper.text()).toContain('Storage content')
+    expect(wrapper.text()).not.toContain('No tab selected')
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['Storage'])
   })
 
   it('normalizes invalid visual props and exposes AutoSizer methods', async () => {

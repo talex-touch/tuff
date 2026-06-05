@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### 🧩 组件导出
+
+- 新增 `@talex-touch/tuffex/<component>` 稳定子路径导出与 `<component>/style.css` 局部样式入口，保留根入口兼容但推荐新代码使用按需子路径导入。
+- 新增 `@talex-touch/tuffex/base.css` 基础样式入口，用于按需消费时单独加载共享 token 与全局 utility；`style.css` 继续保留为全量样式入口。
+- Core App 的 TuffEx 受控注册逻辑改为按组件子路径动态加载，避免集中注册单个组件时触发根入口全量导出。
+- 新增 Vite 按需样式注入插件，用于发布态按组件子路径消费时自动补齐 `<component>/style.css`；Core App 与 Nexus 开发态继续消费源码 SFC 样式，避免重复注入。
+- 修复 `@talex-touch/tuffex/utils` 发布入口缺少 JS wrapper 的问题，并新增 `pnpm -C "packages/tuffex" run audit:exports` 校验发布 exports 对应 dist 文件。
+
+### ⚡ 性能优化
+
+- `TxScroll` 的 BetterScroll `pull-down` / `pull-up` 插件改为功能开启时按需加载，避免默认滚动入口静态拉入未启用的下拉刷新/上拉加载插件。
+- `TxScroll` 的 pull 插件安装逻辑已抽到独立 helper，并新增 `scroll` 按需入口依赖图审计，防止默认滚动入口回退为静态拉入 pull 插件。
+- `TxScroll` 的 wheel/bounce guard/RAF apply 运行时已拆到 `useScrollWheel`，SFC 仅保留模式切换、BetterScroll 初始化、native fallback 和模板绑定。
+- `TxCodeEditor` 改为轻量 async wrapper，CodeMirror/YAML 运行时实现延后到真实渲染时加载，并在 `audit:size` 中禁止默认 `code-editor` 入口静态拉入 CodeMirror 依赖。
+- 空态 wrapper 组件的局部样式入口改为轻量引用 `empty-state/style.css`，避免 `blank-slate` / `no-data` / `permission-state` 等按需样式重复复制整份 EmptyState CSS，并由 `audit:size` 防回涨。
+- `TxBaseAnchor` 的 GSAP 动画运行时已抽到 `useBaseAnchorMotion` 并改为动态加载，默认 `base-anchor` / `button` / `select` 按需入口不再静态拉入 `gsap`，由 `audit:size` 防回涨。
+- `TxFlipOverlay` 的 GSAP 动画运行时已抽到 `useFlipOverlayMotion` 并改为动态加载，默认 `flip-overlay` 按需入口不再静态拉入 `gsap`，由 `audit:size` 防回涨。
+- `TxButton` 的 `v-wave` directive 改为首次挂载时动态加载，默认 `button` 按需入口不再静态拉入 `v-wave`，由 `audit:size` 防回涨。
+- `TxRadioGroup` 的 v-model 延迟提交与 button indicator 动画/拖拽/键盘逻辑已拆到内部 helper，SFC 仅保留组合、provide、模板和样式，并新增 `radio` 按需入口依赖图审计。
+- `TxBaseSurface` 的数值解析与 auto-detect / refraction recovery motion 状态机已拆到内部 helper，SFC 从 1150 行降到 725 行，并新增 `base-surface` 按需入口依赖图审计。
+- Core App、Nexus 与 `intelligence-uikit` 的应用级样式入口已迁到 `base.css` + 按需局部样式，`audit:size` 现在同时防止根入口和 `@talex-touch/tuffex/style.css` 在这些消费侧回涨。
+
+### 🐛 组件修复
+
+- 修复 `TxTabs` 无法识别 `v-for` 生成的 `TxTabItem` / `TxTabItemGroup` 子项，以及 Nexus 异步注册后子项组件名丢失的问题，避免动态/文档标签页内容显示 `No tab selected`。
+
 ## [0.3.8] - 2026-05-29
 
 ### 🧩 组件增强

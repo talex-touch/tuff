@@ -274,10 +274,12 @@ const containerStyle = computed((): StyleValue => {
 
   if (isVertical) {
     baseStyle.height = config.value.responsive ? responsiveHeight.value : config.value.height
-    baseStyle.width = (config.value.responsive ? responsiveWidth.value : config.value.width) || '100%'
+    baseStyle.width = (config.value.responsive ? responsiveWidth.value : config.value.width) || (isPageTarget ? '100vw' : '100%')
+    if (isPageTarget)
+      baseStyle.maxWidth = '100vw'
     baseStyle[config.value.position] = '0'
     baseStyle.left = '0'
-    baseStyle.right = '0'
+    baseStyle.right = isPageTarget ? 'auto' : '0'
   }
   else if (isHorizontal) {
     baseStyle.width = (config.value.responsive ? responsiveWidth.value : config.value.width) || config.value.height

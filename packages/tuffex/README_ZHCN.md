@@ -16,7 +16,37 @@ pnpm add @talex-touch/tuffex
 
 ## 使用方式
 
-### 完整引入
+### 按需引入
+
+新接入的应用和包优先使用子路径导入，默认避免业务 bundle 拉入包根入口和全量样式。
+
+```ts
+import { createApp } from 'vue'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/button/style.css'
+import '@talex-touch/tuffex/card/style.css'
+import '@talex-touch/tuffex/drawer/style.css'
+
+const app = createApp(App)
+app.use(TxButton)
+app.use(TxCard)
+app.use(TxDrawer)
+```
+
+`@talex-touch/tuffex/base.css` 只包含共享 token 和全局 utility。旧的 `@talex-touch/tuffex/style.css` 仅作为全量样式兼容入口保留。
+
+需要进一步控制样式体积时，也可以只引入对应组件样式：
+
+```ts
+import { TxButton } from '@talex-touch/tuffex/button'
+import '@talex-touch/tuffex/base.css'
+import '@talex-touch/tuffex/button/style.css'
+```
+
+### 兼容完整引入
 
 ```ts
 import { createApp } from 'vue'
@@ -27,18 +57,7 @@ const app = createApp(App)
 app.use(TuffEx)
 ```
 
-### 按需引入
-
-```ts
-import { createApp } from 'vue'
-import { TxButton, TxCard, TxDrawer } from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-app.use(TxButton)
-app.use(TxCard)
-app.use(TxDrawer)
-```
+根入口会继续保留以支持兼容和迁移窗口。新代码优先使用组件子路径。
 
 ### 工具函数
 
@@ -80,5 +99,8 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 pnpm install
 pnpm -C "packages/tuffex" run lint
 pnpm -C "packages/tuffex" run build
+pnpm -C "packages/tuffex" run audit:size
+pnpm -C "packages/tuffex" run audit:exports
+pnpm -C "packages/tuffex" run audit:types
 pnpm -C "packages/tuffex" run docs:build
 ```
