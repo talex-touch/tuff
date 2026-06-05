@@ -3,6 +3,18 @@
 > 更新时间：2026-06-05
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-05
+
+### ref(core-ui): move search provider settings into flip dialog
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.css`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - Moved Settings search provider enable/order controls from the inline file-index settings row into the existing CoreApp `FlipDialog` interaction.
+  - Kept the Settings row as a compact status summary plus manage entry; provider enable/order save flow, SDK calls, diagnostics loading and source-to-provider metadata remain unchanged.
+  - 验证：`git diff --check` passed; `pnpm -C "apps/core-app" run typecheck:web` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ## 2026-06-04
 
 ### chore(audit): complete Node 22 verification evidence
