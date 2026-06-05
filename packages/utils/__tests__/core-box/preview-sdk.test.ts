@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { PreviewAbility } from "../../core-box/preview";
 import {
   AdvancedExpressionAbility,
   BasicExpressionAbility,
@@ -9,7 +10,9 @@ import {
   TimeDeltaAbility,
   UnitConversionAbility,
   createPreviewSdk,
+  createStaticPreviewSafetyPolicy,
   evaluateBasicExpression,
+  runPreviewSdkBenchmark,
 } from "../../core-box/preview";
 
 function signal(): AbortSignal {
@@ -96,5 +99,146 @@ describe("PreviewSDK", () => {
     expect(advanced?.payload.primaryValue).toBe("4");
     expect(constant?.payload.title).toBe("真空光速");
     expect(time?.payload.subtitle).toBe("时长换算");
+  });
+
+  it("guards overlong input before ability matching", async () => {
+    const canHandle = vi.fn(() => true);
+    const sdk = createPreviewSdk({
+      maxInputLength: 4,
+      abilities: [
+        {
+          id: "preview.test",
+          priority: 1,
+          safety: createStaticPreviewSafetyPolicy("test", 4),
+          canHandle,
+          execute: vi.fn(async () => null),
+        },
+      ],
+    });
+
+    const output = await sdk.resolveWithDiagnostics({
+      query: { text: "12345", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(output.result).toBeNull();
+    expect(output.diagnostics).toEqual(
+      expect.objectContaining({
+        status: "input-too-long",
+        inputLength: 5,
+        maxInputLength: 4,
+        checkedAbilityCount: 0,
+        executedAbilityCount: 0,
+      }),
+    );
+    expect(canHandle).not.toHaveBeenCalled();
+  });
+
+  it("returns resolve diagnostics and enriches preview payload metadata", async () => {
+    let now = 0;
+    const ability: PreviewAbility = {
+      id: "preview.test",
+      priority: 1,
+      safety: createStaticPreviewSafetyPolicy("test", 20),
+      canHandle: () => true,
+      execute: async () => ({
+        abilityId: "preview.test",
+        confidence: 0.9,
+        payload: {
+          abilityId: "preview.test",
+          title: "test",
+          primaryValue: "ok",
+        },
+      }),
+    };
+    const sdk = createPreviewSdk({
+      abilities: [ability],
+      now: () => now++,
+    });
+
+    const output = await sdk.resolveWithDiagnostics({
+      query: { text: "test", inputs: [] },
+      signal: signal(),
+      budgetMs: 2,
+    });
+
+    expect(output.result?.durationMs).toBe(1);
+    expect(output.diagnostics).toEqual(
+      expect.objectContaining({
+        status: "success",
+        durationMs: 3,
+        checkedAbilityCount: 1,
+        executedAbilityCount: 1,
+        exceededBudget: true,
+        matchedAbilityId: "preview.test",
+      }),
+    );
+    expect(output.result?.payload.meta?.previewSdk).toEqual(
+      expect.objectContaining({
+        status: "success",
+        resolveDurationMs: 3,
+        abilityDurationMs: 1,
+        inputLength: 4,
+        checkedAbilityCount: 1,
+        executedAbilityCount: 1,
+        exceededBudget: true,
+      }),
+    );
+  });
+
+  it("runs deterministic PreviewSDK benchmark cases", async () => {
+    let now = 0;
+    const ability: PreviewAbility = {
+      id: "preview.benchmark",
+      priority: 1,
+      safety: createStaticPreviewSafetyPolicy("benchmark", 20),
+      canHandle: (query) => query.text === "hit",
+      execute: async () => ({
+        abilityId: "preview.benchmark",
+        confidence: 0.8,
+        payload: {
+          abilityId: "preview.benchmark",
+          title: "benchmark",
+          primaryValue: "ok",
+        },
+      }),
+    };
+    const sdk = createPreviewSdk({
+      abilities: [ability],
+      now: () => now++,
+    });
+
+    const result = await runPreviewSdkBenchmark(
+      sdk,
+      [
+        {
+          id: "hit",
+          query: { text: "hit", inputs: [] },
+          expectedAbilityId: "preview.benchmark",
+          budgetMs: 2,
+        },
+        {
+          id: "miss",
+          query: { text: "miss", inputs: [] },
+          expectNoResult: true,
+        },
+      ],
+      signal(),
+    );
+
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        total: 2,
+        matchedExpected: 2,
+        exceededBudget: 1,
+        p50DurationMs: 1,
+        p95DurationMs: 3,
+        maxDurationMs: 3,
+      }),
+    );
+    expect(result.cases.map((item) => item.matchedExpected)).toEqual([
+      true,
+      true,
+    ]);
   });
 });

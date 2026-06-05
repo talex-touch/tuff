@@ -92,15 +92,73 @@ export interface PreviewAbilityResult {
   durationMs?: number;
 }
 
+export type PreviewResolveStatus =
+  | "success"
+  | "input-too-long"
+  | "aborted"
+  | "no-match";
+
+export interface PreviewResolveDiagnostics {
+  status: PreviewResolveStatus;
+  durationMs: number;
+  inputLength: number;
+  maxInputLength: number;
+  checkedAbilityCount: number;
+  executedAbilityCount: number;
+  errorCount: number;
+  budgetMs?: number;
+  exceededBudget: boolean;
+  matchedAbilityId?: string;
+}
+
 export interface PreviewResolveOptions {
   query: TuffQuery;
   signal: AbortSignal;
+  budgetMs?: number;
+}
+
+export interface PreviewResolveOutput {
+  result: PreviewAbilityResult | null;
+  diagnostics: PreviewResolveDiagnostics;
+}
+
+export interface PreviewBenchmarkCase {
+  id: string;
+  query: TuffQuery;
+  expectedAbilityId?: string;
+  expectNoResult?: boolean;
+  budgetMs?: number;
+}
+
+export interface PreviewBenchmarkCaseResult {
+  id: string;
+  expectedAbilityId?: string;
+  actualAbilityId?: string;
+  matchedExpected: boolean;
+  diagnostics: PreviewResolveDiagnostics;
+}
+
+export interface PreviewBenchmarkSummary {
+  total: number;
+  matchedExpected: number;
+  exceededBudget: number;
+  p50DurationMs: number;
+  p95DurationMs: number;
+  maxDurationMs: number;
+}
+
+export interface PreviewBenchmarkResult {
+  cases: PreviewBenchmarkCaseResult[];
+  summary: PreviewBenchmarkSummary;
 }
 
 export interface PreviewSdk {
   register: (ability: PreviewAbility) => void;
   listAbilities: () => PreviewAbility[];
   listInventory: () => PreviewAbilityInventoryItem[];
+  resolveWithDiagnostics: (
+    options: PreviewResolveOptions,
+  ) => Promise<PreviewResolveOutput>;
   resolve: (
     options: PreviewResolveOptions,
   ) => Promise<PreviewAbilityResult | null>;
