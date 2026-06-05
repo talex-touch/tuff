@@ -1,9 +1,112 @@
 # 变更日志
 
-> 更新时间：2026-06-01
+> 更新时间：2026-06-05
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-04
+
+### chore(audit): complete Node 22 verification evidence
+
+- `apps/nexus/app/components/content/demos/ComponentsFeedbackTaskCenterDemo.vue`
+- `apps/nexus/app/components/content/demos/ComponentsReleasePolicyDemo.vue`
+- `apps/nexus/app/components/content/demos/PickerPickerDemo.vue`
+- `apps/nexus/app/components/content/TuffPropsTable.vue`
+- `packages/tuffex/packages/script/build/on-demand-style-plugin.ts`
+- `packages/tuffex/scripts/audit-package-types.mjs`
+- `packages/utils/core-box/preview/abilities/advanced-expression-ability.ts`
+- `packages/utils/core-box/preview/abilities/scientific-constants-ability.ts`
+- `packages/utils/core-box/preview/abilities/time-delta-ability.ts`
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-04.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Used a temporary ad-hoc signed Node `22.16.0` runtime in `/tmp/talex-touch-node22-adhoc` plus pnpm `10.32.1` to avoid macOS Team ID rejection of Rollup/OXC native bindings without modifying repo dependency artifacts.
+  - Fixed Nexus demo strict type errors, TuffEx on-demand style plugin regex capture guards, TuffEx external consumer type audit pnpm resolution, and PreviewSDK ability strict override / undefined boundaries.
+  - 验证：`pnpm -C "packages/tuffex" run build`、`audit:exports`、`audit:size`、`audit:types` passed; `pnpm -C "apps/nexus" run typecheck` and `pnpm -C "apps/nexus" run build` passed; `pnpm -C "packages/utils" exec vitest run "__tests__/core-box/preview-sdk.test.ts"` passed; scoped `git diff --check` passed.
+  - Nexus build completed with non-blocking warnings: UnoCSS web fonts timeout, browser externalized Node modules from shared utils, large chunks, missing `auth.*` / `pricing.*` en i18n keys, local D1 binding fallback, and OpenAI package ESM top-level `this` rewrite.
+  - Nexus visual smoke was not run because no CDP browser service was available on `127.0.0.1:9224` and no Nexus dev/preview server was listening on port `3200`.
+
+### docs(audit): add 2026-06-04 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-04.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `apps/nexus/content/docs/dev/tools/tuffex.en.mdc`
+- `apps/nexus/content/docs/dev/tools/tuffex.zh.mdc`
+- `apps/nexus/content/docs/dev/components/foundations.en.mdc`
+- `apps/nexus/content/docs/dev/components/foundations.zh.mdc`
+  - Added the 2026-06-04 UI/compatibility/placeholder/architecture audit follow-up.
+  - Reconfirmed no new production-path P0 fixed fake-success, mock payment URL, fake empty payload or consumable placeholder response in the reviewed live tree and dirty worktree.
+  - Updated the current worktree status: `master` and `origin/master` still have no ahead delta, while the dirty worktree contains 308 tracked changes and 25 untracked files after this docs/content sync; these files must be split by related UI/SDK slices.
+  - Changed Nexus TuffEx public docs so the recommended path is now `base.css` + component subpath imports + local `style.css`; the full `@talex-touch/tuffex/style.css` import is now documented only as a migration-compatible full import.
+  - Routed Nexus release notes `notesHtml` through shared `sanitizeMarkdownHtml()` before `v-html`.
+  - Recorded the remaining high-signal items: CoreApp/TuffEx dialog HTML boundary, Widget runtime sandbox evidence and Windows/macOS real-device evidence.
+  - 验证：TuffEx `audit:exports` / `audit:size` / `audit:types` passed with Node `22.16.0` + pnpm `10.32.1`; Node 22 sanitizer smoke passed; scoped `git diff --check` passed. 2026-06-05 follow-up then completed TuffEx build, Nexus typecheck/build and PreviewSDK focused test using the temporary ad-hoc Node 22 runtime.
+
+## 2026-06-03
+
+### docs(audit): add 2026-06-03 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-03.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the 2026-06-03 UI/compatibility/placeholder/architecture audit follow-up.
+  - Reconfirmed no new production-path P0 fixed fake-success, mock payment URL, fake empty payload or consumable placeholder response in the reviewed live tree and dirty worktree.
+  - Corrected the current worktree status: `master` and `origin/master` now have no ahead delta, but the dirty worktree still contains 304 tracked changes and 23 untracked files that must be split by related UI/SDK slices.
+  - Recorded that Markdown sanitizer, preload DOM construction, cloud preset fail-closed behavior and TuffEx README on-demand import guidance have entered the implementation slice, while Nexus content docs still retain old full `style.css` examples.
+  - Reaffirmed the next order: TuffEx build/audit first, Nexus docs/build/visual smoke second, CoreApp renderer web typecheck third, `intelligence-uikit` typecheck fourth, then return to File write/store boundary and Windows evidence.
+  - 验证：static scans only; current automation shell exposes Codex Node `v24.14.0` and no `pnpm` / `corepack`, so package build/audit/typecheck still need rerun under Volta Node `22.16.0` + `pnpm@10.32.1`.
+
+## 2026-06-02
+
+### ref(ui): close markdown, preference and placeholder slice
+
+- `packages/utils/renderer/shared/markdown-sanitizer.ts`
+- `packages/utils/renderer/shared/components/SharedPluginDetailReadme.vue`
+- `apps/core-app/src/renderer/src/components/download/UpdatePromptDialog.vue`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/modules/storage/ui-preference-storage.ts`
+- `apps/core-app/src/renderer/src/components/plugin/FeatureCard.vue`
+- `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/SectionItem.vue`
+- `apps/core-app/src/renderer/src/views/base/plugin/PluginNew.vue`
+- `packages/utils/common/storage/entity/preset-cloud-api.ts`
+- `apps/nexus/app/composables/useDeviceIdentity.ts`
+- `apps/nexus/app/pages/dashboard/privacy.vue`
+  - Added a shared Markdown sanitizer and made shared plugin README rendering plus update release notes use safe Markdown HTML by default.
+  - Rebuilt preload loading overlay DOM with `textContent` / `createElement` instead of static `innerHTML` string assembly.
+  - Added CoreApp `UiPreferenceStorage` for non-sensitive UI state and moved plugin widget preview size plus group block expand state behind that facade.
+  - Converted the first semantic UI slice to native buttons or explicit keyboard/focus semantics for feature cards, app list ordering/items, style section items and PluginNew back navigation.
+  - Replaced the public cloud preset coming-soon placeholder with a fail-closed unavailable service that exposes `reason: "not-shipped"` while retaining the deprecated alias.
+  - Clarified Nexus web `deviceId` as a local marker only and separated browser-local privacy preferences from server-backed security policy.
+  - Added focused tests for Markdown sanitizer, cloud preset unavailable contract, UI preference storage and the first semantic UI slice.
+  - 验证：`git diff --check` 通过；targeted Vitest commands were attempted but blocked by the current Codex Node `v24.14.0` / Rollup optional native module code-signature issue, so they still need rerun under Volta Node `22.16.0` + `pnpm@10.32.1`.
+
+### docs(audit): add 2026-06-02 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-02.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Added the 2026-06-02 UI/compatibility/placeholder/architecture audit follow-up.
+  - Reconfirmed no new production-path P0 fixed fake-success, mock payment URL, fake empty payload or consumable placeholder response in the reviewed live tree and dirty worktree.
+  - Recorded the current TuffEx migration risk: `base.css`, component subpath `style.css`, on-demand style injection and dev/prod alias behavior must be validated together before the TuffEx/Nexus/CoreApp/Intelligence UI slices are submitted.
+  - Recorded the automation environment limitation: current shell exposes Codex Node `v24.14.0` and no `pnpm` / `corepack`, while the repo expects Volta Node `22.16.0` and `pnpm@10.32.1`; `git diff --check` passed, but TuffEx build/audit/typecheck still need a normal dev environment.
+  - 验证：`git diff --check` 通过；`pnpm` unavailable in this automation shell, so package audits were not executed.
+
 ## 2026-06-01
+
+### docs(project): record next execution order
+
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+  - Updated the current worktree status after Search/Indexing Runtime and audit docs were committed as related-only batches.
+  - Recorded the next execution order: first close remaining TuffEx on-demand entry/audit, Nexus/TuffEx visual smoke/page adapters, CoreApp renderer/i18n/UI migration and `intelligence-uikit` consumption slices; then return to File write/store boundary, Browser Bookmarks official plugin lifecycle, Everything productionization and broader indexed source lifecycle.
+  - Reaffirmed that TuffEx/Nexus/renderer/Intelligence UI migration must not be mixed with the next File write boundary commit.
+  - 验证：documentation-only update; no runtime behavior changed.
 
 ### docs(audit): add 2026-06-01 UI compatibility follow-up
 
