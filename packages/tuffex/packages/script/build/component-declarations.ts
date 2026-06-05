@@ -1,10 +1,7 @@
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { promisify } from 'node:util'
-
-const execFileAsync = promisify(execFile)
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -13,7 +10,41 @@ const rootPath = resolve(__dirname, '../../..')
 const distEsPath = resolve(rootPath, 'dist/es')
 const utilsSourcePath = resolve(rootPath, 'packages/utils')
 const utilsTypesOutPath = resolve(distEsPath, 'packages/tuffex/packages/utils')
-const pnpmBin = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+
+function quoteWindowsShellArg(value: string) {
+  return /[\s"]/g.test(value)
+    ? `"${value.replace(/"/g, '\\"')}"`
+    : value
+}
+
+function runPnpm(args: string[]) {
+  return new Promise<void>((resolve, reject) => {
+    const child = process.platform === 'win32'
+      ? spawn('cmd.exe', ['/d', '/s', '/c', ['pnpm', ...args].map(quoteWindowsShellArg).join(' ')], {
+        cwd: rootPath,
+        shell: false,
+        stdio: 'inherit',
+      })
+      : spawn('pnpm', args, {
+        cwd: rootPath,
+        shell: false,
+        stdio: 'inherit',
+      })
+
+    child.on('error', reject)
+    child.on('close', (code, signal) => {
+      if (signal) {
+        reject(new Error(`pnpm exited by signal ${signal}`))
+        return
+      }
+      if (code) {
+        reject(new Error(`pnpm exited with code ${code}`))
+        return
+      }
+      resolve()
+    })
+  })
+}
 
 async function collectFiles(dir: string, predicate: (filePath: string) => boolean): Promise<string[]> {
   const dirents = await readdir(dir, { withFileTypes: true })
@@ -41,7 +72,7 @@ function toDistUtilsSpecifier(fromFile: string, subpath = '') {
 }
 
 async function emitUtilsDeclarations() {
-  await execFileAsync(pnpmBin, [
+  await runPnpm([
     'exec',
     'tsc',
     '--declaration',
