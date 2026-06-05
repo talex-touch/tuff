@@ -95,9 +95,7 @@ async function emitUtilsDeclarations() {
     '--lib',
     'DOM,DOM.Iterable,ESNext',
     resolve(utilsSourcePath, 'index.ts'),
-  ], {
-    cwd: rootPath,
-  })
+  ])
 }
 
 async function rewriteUtilsReferences() {
