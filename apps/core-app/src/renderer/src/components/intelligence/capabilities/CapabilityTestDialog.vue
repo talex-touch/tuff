@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'

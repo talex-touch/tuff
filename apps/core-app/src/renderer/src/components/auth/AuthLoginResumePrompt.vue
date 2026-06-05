@@ -1,5 +1,7 @@
 <script lang="ts" setup>
-import { TModal, TuffInput, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TModal } from '@talex-touch/tuffex/modal'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 

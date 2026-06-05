@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
-import { TxBottomDialog, TxButton, TxProgressBar, TxStatCard } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
+import { TxStatCard } from '@talex-touch/tuffex/stat-card'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, ref, watch } from 'vue'

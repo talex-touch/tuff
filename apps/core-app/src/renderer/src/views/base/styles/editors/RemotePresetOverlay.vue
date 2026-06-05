@@ -1,6 +1,8 @@
 <script setup lang="ts" name="RemotePresetOverlay">
 import type { RemotePresetSummary } from '~/modules/layout/preset/remote/useRemotePresets'
-import { TxButton, TxCard, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { toast } from 'vue-sonner'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

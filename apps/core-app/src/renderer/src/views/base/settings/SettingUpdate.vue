@@ -5,7 +5,8 @@ import type {
   DownloadTask,
   UpdateSettings
 } from '@talex-touch/utils'
-import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { AppPreviewChannel, DownloadModule } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref } from 'vue'

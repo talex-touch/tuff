@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { useDivisionBoxStore } from '../store/division-box'

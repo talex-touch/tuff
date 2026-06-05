@@ -1,6 +1,6 @@
 <script name="FileTree" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
-import { TxTree } from '@talex-touch/tuffex'
+import { TxTree } from '@talex-touch/tuffex/tree'
 import { computed, onMounted, reactive, ref } from 'vue'
 import IconButton from '~/components/base/button/IconButton.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'

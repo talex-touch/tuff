@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
-import { TxBottomDialog, TxEmpty, TxPagination, TxSkeleton } from '@talex-touch/tuffex'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TxPagination } from '@talex-touch/tuffex/pagination'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { DownloadModule } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

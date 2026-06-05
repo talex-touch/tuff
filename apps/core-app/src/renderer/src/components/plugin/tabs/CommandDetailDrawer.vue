@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { IFeatureCommand } from '@talex-touch/utils/plugin'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useI18n } from 'vue-i18n'
 
 interface CommandData {

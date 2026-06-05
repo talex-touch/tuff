@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceInfo" setup>
 // import IntelligenceTestResults from './IntelligenceTestResults.vue'
 import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/tuff-intelligence'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 /**
  * IntelligenceInfo Component

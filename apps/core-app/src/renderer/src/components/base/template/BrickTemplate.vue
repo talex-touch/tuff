@@ -1,6 +1,6 @@
 <script name="BrickTemplate" setup lang="ts">
 import type { Ref } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 
 const _disabled = inject<Ref<boolean>>('disabled')
 

@@ -16,7 +16,7 @@
  * ```
  */
 import type { PluginInstallProgressEvent } from '@talex-touch/utils/plugin'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 

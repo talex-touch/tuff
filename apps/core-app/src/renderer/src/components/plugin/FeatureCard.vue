@@ -18,7 +18,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'click', value: MouseEvent): void
+  (event: 'click', value: MouseEvent | KeyboardEvent): void
 }>()
 
 const platformMeta = [
@@ -84,14 +84,20 @@ function getPrimaryCommandLabel(): string {
   return getCommandName(primary).toUpperCase()
 }
 
-function handleClick(event: MouseEvent): void {
+function handleClick(event: MouseEvent | KeyboardEvent): void {
   if (props.active) return
   emit('click', event)
 }
 </script>
 
 <template>
-  <div class="FeatureCard element" :class="{ 'is-active': active }" @click="handleClick">
+  <button
+    type="button"
+    class="FeatureCard element"
+    :class="{ 'is-active': active }"
+    :aria-pressed="active"
+    @click="handleClick"
+  >
     <div class="FeatureCard-Content">
       <div class="FeatureCard-Header flex items-start justify-between">
         <div class="FeatureCard-HeaderMain flex items-center gap-4">
@@ -149,20 +155,29 @@ function handleClick(event: MouseEvent): void {
         </div>
       </div>
     </div>
-  </div>
+  </button>
 </template>
 
 <style lang="scss" scoped>
 .FeatureCard {
+  appearance: none;
   background: var(--tx-bg-color-overlay);
   backdrop-filter: blur(12px);
   border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem; // 20px
   padding: 1.5rem; // 24px
   cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   height: 100%;
   box-sizing: border-box;
   transition: opacity 180ms ease;
+}
+
+.FeatureCard:focus-visible {
+  outline: 2px solid var(--tx-color-primary);
+  outline-offset: 3px;
 }
 
 .FeatureCard.is-active {

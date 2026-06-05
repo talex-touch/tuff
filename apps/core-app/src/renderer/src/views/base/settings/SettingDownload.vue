@@ -6,7 +6,8 @@
 -->
 <script setup lang="ts" name="SettingDownload">
 import type { DownloadConfig } from '@talex-touch/utils'
-import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'

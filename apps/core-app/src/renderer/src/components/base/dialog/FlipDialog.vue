@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { FlipOverlayProps, TxFlipOverlayInstance } from '@talex-touch/tuffex'
-import { TxFlipOverlay } from '@talex-touch/tuffex'
+import type { FlipOverlayProps, TxFlipOverlayInstance } from '@talex-touch/tuffex/flip-overlay'
+import { TxFlipOverlay } from '@talex-touch/tuffex/flip-overlay'
 import {
   computed,
   getCurrentInstance,

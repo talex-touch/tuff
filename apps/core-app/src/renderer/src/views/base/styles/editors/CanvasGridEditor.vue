@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { CanvasAreaOption, CanvasConfig, CanvasItem } from './canvas-types'
-import { TxButton, TxSlider, TxStatusBadge } from '@talex-touch/tuffex'
-import { useFlip } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSlider } from '@talex-touch/tuffex/slider'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { useFlip } from '@talex-touch/tuffex/utils'
 import { computed, ref, watch, type Ref } from 'vue'
 import { moveItem, normalizeCanvasConfig } from './canvas-types'
 

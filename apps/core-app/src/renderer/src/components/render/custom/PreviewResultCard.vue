@@ -1,7 +1,7 @@
 <script setup lang="ts" name="PreviewResultCard">
 import type { TuffItem } from '@talex-touch/utils'
 import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 

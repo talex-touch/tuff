@@ -1,5 +1,5 @@
 <script lang="ts" name="View" setup>
-import { TxGradualBlur } from '@talex-touch/tuffex'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import TouchScroll from '../TouchScroll.vue'

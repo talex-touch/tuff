@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
-import { TxAlert, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
+import { TxAlert } from '@talex-touch/tuffex/alert'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/storage/app-storage'

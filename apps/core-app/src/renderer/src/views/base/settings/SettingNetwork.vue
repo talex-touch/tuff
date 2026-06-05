@@ -1,5 +1,7 @@
 <script setup lang="ts" name="SettingNetwork">
-import { TxButton, TxInput, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
+import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useNetworkSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

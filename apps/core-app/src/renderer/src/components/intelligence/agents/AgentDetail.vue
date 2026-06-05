@@ -1,7 +1,7 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
 import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
-import { TuffProgress } from '@talex-touch/tuffex'
+import { TuffProgress } from '@talex-touch/tuffex/progress'
 import { toast } from 'vue-sonner'
 import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

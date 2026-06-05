@@ -10,16 +10,12 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import {
-  TuffInput,
-  TuffSelect,
-  TuffSelectItem,
-  TxButton,
-  TxCollapse,
-  TxCollapseItem,
-  TxEmpty,
-  TxTag
-} from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCollapse, TxCollapseItem } from '@talex-touch/tuffex/collapse'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'

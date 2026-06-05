@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
-import { TxAlert, TxModal } from '@talex-touch/tuffex'
+import { TxAlert } from '@talex-touch/tuffex/alert'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 

@@ -1,7 +1,7 @@
 <script setup lang="ts" name="Beginner">
 import type { Component, Ref } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { appSetting, storageManager } from '~/modules/storage/app-storage'

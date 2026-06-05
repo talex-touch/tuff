@@ -1,5 +1,5 @@
 <script lang="ts" name="TButton" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 
 withDefaults(
   defineProps<{

@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginItem" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { TxPopover } from '@talex-touch/tuffex'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'

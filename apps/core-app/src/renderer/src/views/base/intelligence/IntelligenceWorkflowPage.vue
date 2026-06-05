@@ -1,6 +1,6 @@
 <script lang="ts" name="IntelligenceWorkflowPage" setup>
 import type { WorkflowStepKind } from '@talex-touch/tuff-intelligence'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'

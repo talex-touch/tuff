@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxInput } from '@talex-touch/tuffex'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { nextTick, ref } from 'vue'
 
 const props = defineProps<{

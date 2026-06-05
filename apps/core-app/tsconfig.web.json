@@ -17,16 +17,31 @@
       "@talex-touch/tuff-intelligence": ["../../packages/tuff-intelligence/src/index.ts"],
       "@talex-touch/tuff-intelligence/*": ["../../packages/tuff-intelligence/src/*"],
       "@talex-touch/tuffex": ["../../packages/tuffex/packages/components/src/index.ts"],
-      "@talex-touch/tuffex/style.css": ["../../packages/tuffex/packages/components/style/index.scss"],
-      "@talex-touch/tuffex/utils": ["../../packages/tuffex/packages/utils/index.ts"]
+      "@talex-touch/tuffex/base.css": ["../../packages/tuffex/packages/components/style/index.scss"],
+      "@talex-touch/tuffex/*/style.css": ["../../packages/tuffex/dist/es/*/style.css"],
+      "@talex-touch/tuffex/utils": ["../../packages/tuffex/packages/utils/index.ts"],
+      "@talex-touch/tuffex/*": ["../../packages/tuffex/packages/components/src/*/index.ts"]
     }
   },
   "include": [
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.vue",
+    "src/shared/**/*.ts",
     "src/preload/*.d.ts",
     "src/renderer/auto-imports.d.ts",
-    "src/renderer/components.d.ts"
+    "src/renderer/components.d.ts",
+    "../../packages/tuff-business/src/**/*.ts",
+    "../../packages/tuff-business/src/**/*.vue",
+    "../../packages/tuff-intelligence/src/**/*.ts",
+    "../../packages/tuffex/packages/components/src/**/*.ts",
+    "../../packages/tuffex/packages/components/src/**/*.vue",
+    "../../packages/tuffex/packages/utils/**/*.ts"
+  ],
+  "exclude": [
+    "../../packages/tuff-business/src/**/__tests__/**",
+    "../../packages/tuff-intelligence/src/**/__tests__/**",
+    "../../packages/tuffex/packages/components/src/**/__tests__/**",
+    "../../packages/tuffex/packages/utils/**/__tests__/**"
   ]
 }

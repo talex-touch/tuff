@@ -1,5 +1,6 @@
 <script name="Storagable" setup lang="ts">
-import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, ref } from 'vue'

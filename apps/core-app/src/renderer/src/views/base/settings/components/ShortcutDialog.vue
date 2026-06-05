@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ShortcutRowBase, ShortcutRowView } from './shortcut-dialog.types'
 
-import { TxButton, TxSearchInput } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'

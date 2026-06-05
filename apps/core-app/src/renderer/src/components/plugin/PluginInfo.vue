@@ -1,6 +1,7 @@
 <script lang="ts" name="PluginInfo" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { TxBottomDialog, TxSplitButton } from '@talex-touch/tuffex'
+import { TxSplitButton } from '@talex-touch/tuffex/button'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'

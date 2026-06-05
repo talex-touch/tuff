@@ -1,12 +1,9 @@
 <script lang="ts" name="IntelligencePromptSelector" setup>
-import {
-  TuffInput,
-  TuffSelect,
-  TuffSelectItem,
-  TxButton,
-  TxTag,
-  type TxSelectValue
-} from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import type { TxSelectValue } from '@talex-touch/tuffex/select'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'

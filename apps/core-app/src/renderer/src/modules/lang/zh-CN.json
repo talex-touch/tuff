@@ -1711,6 +1711,7 @@
     "searchedOnDevice": "在此设备上搜索到 {count} 个结果。",
     "appsOnDevice": "此设备上有 {count} 个应用。",
     "order": {
+      "change": "切换排序方式",
       "default": "默认排序",
       "dicIn": "字典升序",
       "dicDe": "字典降序",

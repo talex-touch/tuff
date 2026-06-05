@@ -1,7 +1,7 @@
 <script lang="ts" name="TuffBlockFlatSelect" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import type { TxFlatSelectValue } from '@talex-touch/tuffex'
-import { TxFlatSelect } from '@talex-touch/tuffex'
+import type { TxFlatSelectValue } from '@talex-touch/tuffex/flat-select'
+import { TxFlatSelect } from '@talex-touch/tuffex/flat-select'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'

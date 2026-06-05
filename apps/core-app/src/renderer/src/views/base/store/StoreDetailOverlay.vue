@@ -9,7 +9,8 @@ import type { StorePluginListItem } from '~/composables/store/useStoreData'
  * - Sidebar with plugin metadata
  */
 import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
-import { TxButton, TxRating } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxRating } from '@talex-touch/tuffex/rating'
 import { computed, onMounted, watch } from 'vue'
 import StoreInstallButton from '~/components/store/StoreInstallButton.vue'
 import { useI18n } from 'vue-i18n'

@@ -1,14 +1,10 @@
 <script lang="ts" name="LayoutAtomEditor" setup>
 import type { LayoutAtomConfig } from '@talex-touch/utils'
-import {
-  TuffInput,
-  TuffSelect,
-  TuffSelectItem,
-  TxButton,
-  TxCollapse,
-  TxCollapseItem,
-  TxSlider
-} from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCollapse, TxCollapseItem } from '@talex-touch/tuffex/collapse'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSlider } from '@talex-touch/tuffex/slider'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

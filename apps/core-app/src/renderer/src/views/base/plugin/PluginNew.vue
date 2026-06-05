@@ -1,7 +1,7 @@
 <script setup lang="ts" name="PluginNew">
 import type { IManifest } from '@talex-touch/utils/plugin'
 import type { PluginInstallSourceRequest } from '@talex-touch/utils/transport/events/types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -394,7 +394,14 @@ async function handleInstallDegit(): Promise<void> {
     <template #header>
       <div class="PluginNew-Header">
         <div class="PluginNew-HeaderRow">
-          <div i-ri-arrow-left-s-line class="PluginNew-Back" @click="emits('close')" />
+          <button
+            type="button"
+            class="PluginNew-Back"
+            :aria-label="t('common.back', 'Back')"
+            @click="emits('close')"
+          >
+            <span i-ri-arrow-left-s-line aria-hidden="true" />
+          </button>
           <p class="PluginNew-Title">{{ t('plugin.new.header.title') }}</p>
           <div class="PluginNew-TabGroup">
             <TxButton
@@ -702,12 +709,28 @@ async function handleInstallDegit(): Promise<void> {
 }
 
 .PluginNew-Back {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
   font-size: 24px;
   transition: opacity 0.25s;
 
   &:hover {
     opacity: 0.75;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 2px;
   }
 }
 

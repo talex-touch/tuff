@@ -1,5 +1,5 @@
 <script lang="ts" setup name="PluginPerfCharts">
-import { TxCard } from '@talex-touch/tuffex'
+import { TxCard } from '@talex-touch/tuffex/card'
 import { computed } from 'vue'
 import {
   formatBytesShort,

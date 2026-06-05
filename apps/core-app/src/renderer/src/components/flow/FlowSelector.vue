@@ -6,7 +6,7 @@
  * Used when dispatching a flow without a preferred target.
  */
 import type { FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'

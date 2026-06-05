@@ -6,7 +6,7 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'

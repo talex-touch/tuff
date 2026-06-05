@@ -1,5 +1,5 @@
 <script setup name="SettingHeader" lang="ts">
-import { TxTag } from '@talex-touch/tuffex'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnv } from '~/modules/hooks/env-hooks'

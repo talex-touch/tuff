@@ -21,7 +21,9 @@ import {
   IndexedSourceResetReasons,
   IndexedSourceScanReasons
 } from '@talex-touch/utils/search'
-import { TxButton, TxInput, TxPopover } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'

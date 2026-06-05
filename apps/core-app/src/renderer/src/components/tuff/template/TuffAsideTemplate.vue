@@ -1,5 +1,5 @@
 <script setup lang="ts" name="TuffAsideTemplate">
-import { TxGradualBlur } from '@talex-touch/tuffex'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffAsideSearchBar from './TuffAsideSearchBar.vue'
 

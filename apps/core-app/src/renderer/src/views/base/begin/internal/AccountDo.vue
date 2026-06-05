@@ -1,7 +1,7 @@
 <script setup lang="ts" name="AccountDo">
 import type { Ref } from 'vue'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, inject, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'

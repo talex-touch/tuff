@@ -22,7 +22,7 @@ import App from './App.vue'
 
 import '~/modules/plugin/widget-registry'
 import './assets/main.css'
-import '@talex-touch/tuffex/style.css'
+import '@talex-touch/tuffex/base.css'
 import '~/styles/index.scss'
 
 import '~/styles/accessibility.scss'

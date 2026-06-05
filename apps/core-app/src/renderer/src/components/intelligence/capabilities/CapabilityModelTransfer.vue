@@ -1,5 +1,5 @@
 <script lang="ts" setup name="CapabilityModelTransfer">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 

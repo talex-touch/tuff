@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Component, VNode, VNodeChild } from 'vue'
-import { TxGradualBlur } from '@talex-touch/tuffex'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { defineComponent, h, nextTick, onMounted, reactive, ref, useSlots } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'

@@ -4,7 +4,8 @@
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
-import { TxButton, TxTooltip } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'

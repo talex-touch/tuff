@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { useUiPreference } from '~/modules/storage/ui-preference-storage'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 import StatCard from '../../base/card/StatCard.vue'
@@ -55,6 +56,7 @@ const totalCommands = computed(() =>
 
 const { t } = useI18n()
 const pluginFeaturesLog = createRendererLogger('PluginFeatures')
+const uiPreference = useUiPreference()
 const isPluginDev = computed(() => Boolean(props.plugin?.dev?.enable))
 const isDevDisconnected = computed(() => props.plugin?.status === EPluginStatus.DEV_DISCONNECTED)
 const isOperationDisabled = computed(
@@ -195,28 +197,20 @@ const previewFrameSizeLabel = computed(
 
 function persistPreviewFrameSize(): void {
   if (!previewFrameStorageKey.value) return
-  try {
-    localStorage.setItem(previewFrameStorageKey.value, JSON.stringify(previewFrameSize.value))
-  } catch {
-    // ignore persistence errors
-  }
+  uiPreference.setJson(previewFrameStorageKey.value, previewFrameSize.value)
 }
 
 function loadPreviewFrameSize(): void {
   if (!previewFrameStorageKey.value) return
-  try {
-    const raw = localStorage.getItem(previewFrameStorageKey.value)
-    if (!raw) return
-    const parsed = JSON.parse(raw) as { width?: number; height?: number; preset?: string }
-    if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
-      previewFrameSize.value = {
-        width: parsed.width,
-        height: parsed.height,
-        preset: parsed.preset || 'custom'
-      }
+  const parsed = uiPreference.getJson<{ width?: number; height?: number; preset?: string }>(
+    previewFrameStorageKey.value
+  )
+  if (parsed && typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+    previewFrameSize.value = {
+      width: parsed.width,
+      height: parsed.height,
+      preset: parsed.preset || 'custom'
     }
-  } catch {
-    // ignore parse errors
   }
 }
 
@@ -224,11 +218,7 @@ function resetPreviewFrameSize(): void {
   const preset = previewSizePresets.find((item) => item.value === 'm') || previewSizePresets[0]
   previewFrameSize.value = { width: preset.width, height: preset.height, preset: preset.value }
   if (previewFrameStorageKey.value) {
-    try {
-      localStorage.removeItem(previewFrameStorageKey.value)
-    } catch {
-      // ignore
-    }
+    uiPreference.remove(previewFrameStorageKey.value)
   }
 }
 

@@ -1,5 +1,7 @@
 <script lang="ts" setup>
-import { TxButton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

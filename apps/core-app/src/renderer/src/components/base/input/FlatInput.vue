@@ -1,5 +1,5 @@
 <script lang="ts" name="FlatInput" setup>
-import { TxTag } from '@talex-touch/tuffex'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = withDefaults(

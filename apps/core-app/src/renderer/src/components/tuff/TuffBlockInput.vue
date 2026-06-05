@@ -1,6 +1,6 @@
 <script lang="ts" name="TuffBlockInput" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxInput } from '@talex-touch/tuffex'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
 import { computed, ref } from 'vue'

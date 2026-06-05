@@ -1,5 +1,5 @@
 <script setup lang="ts" name="TuffAsideSearchBar">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 

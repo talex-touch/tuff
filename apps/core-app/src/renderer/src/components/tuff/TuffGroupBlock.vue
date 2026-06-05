@@ -1,9 +1,8 @@
 <script lang="ts" name="TuffGroupBlock" setup>
-import { hasWindow } from '@talex-touch/utils/env'
 import gsap from 'gsap'
 import { computed, onMounted, ref, watch } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import { createRendererLogger } from '~/utils/renderer-log'
+import { useUiPreference } from '~/modules/storage/ui-preference-storage'
 import { type IconValue, toIcon } from './tuff-icon-utils'
 const props = withDefaults(
   defineProps<{
@@ -31,7 +30,7 @@ const emits = defineEmits<{
 }>()
 
 const STORAGE_PREFIX = 'tuff-block-storage-'
-const tuffGroupBlockLog = createRendererLogger('TuffGroupBlock')
+const uiPreference = useUiPreference()
 
 function resolveDefaultExpand(): boolean {
   if (typeof props.defaultExpand === 'boolean') return props.defaultExpand
@@ -42,15 +41,9 @@ const defaultIcon = computed(() => toIcon(props.defaultIcon))
 const activeIcon = computed(() => toIcon(props.activeIcon))
 
 function readStoredExpand(): boolean | null {
-  if (!hasWindow() || !props.memoryName) return null
-  try {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}${props.memoryName}`)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (typeof parsed?.expand === 'boolean') return parsed.expand
-  } catch (error) {
-    tuffGroupBlockLog.warn('Failed to read stored expand state', error)
-  }
+  if (!props.memoryName) return null
+  const parsed = uiPreference.getJson<{ expand?: boolean }>(`${STORAGE_PREFIX}${props.memoryName}`)
+  if (typeof parsed?.expand === 'boolean') return parsed.expand
   return null
 }
 
@@ -68,13 +61,9 @@ const headerIcon = computed(() => {
 })
 
 function persistState(state: boolean) {
-  if (!hasWindow() || !props.memoryName) return
-  try {
-    localStorage.setItem(`${STORAGE_PREFIX}${props.memoryName}`, JSON.stringify({ expand: state }))
-    storedExpand.value = state
-  } catch (error) {
-    tuffGroupBlockLog.warn('Failed to persist expand state', error)
-  }
+  if (!props.memoryName) return
+  uiPreference.setJson(`${STORAGE_PREFIX}${props.memoryName}`, { expand: state })
+  storedExpand.value = state
 }
 
 function applyImmediate(state: boolean) {

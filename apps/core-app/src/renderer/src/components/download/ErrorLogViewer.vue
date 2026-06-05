@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { TxBottomDialog, TxCard, TxEmpty, TxModal } from '@talex-touch/tuffex'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref, watch } from 'vue'

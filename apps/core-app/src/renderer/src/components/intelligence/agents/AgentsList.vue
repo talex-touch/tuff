@@ -1,6 +1,6 @@
 <script lang="ts" name="AgentsList" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
-import { TxSkeleton } from '@talex-touch/tuffex'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AgentItem from './AgentItem.vue'

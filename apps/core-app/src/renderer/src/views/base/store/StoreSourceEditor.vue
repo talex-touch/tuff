@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { StoreProviderType } from '@talex-touch/utils/store'
-import { TuffSwitch, TxButton, TxInput, TxSelect, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
+import { TxSelect, TxSelectItem } from '@talex-touch/tuffex/select'
+import { TuffSwitch } from '@talex-touch/tuffex/switch'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { vDraggable } from 'vue-draggable-plus'

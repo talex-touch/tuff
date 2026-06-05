@@ -1,6 +1,9 @@
 <script lang="ts" name="LayoutSection" setup>
 import type { Component } from 'vue'
-import { TxButton, TxCard, TxScroll, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxScroll } from '@talex-touch/tuffex/scroll'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { toast } from 'vue-sonner'
 import { computed, markRaw, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

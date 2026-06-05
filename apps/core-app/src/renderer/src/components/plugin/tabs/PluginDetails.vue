@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
-import { TxButton, TxCodeEditor, TxEmpty, TxTag } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCodeEditor } from '@talex-touch/tuffex/code-editor'
+import { TxEmpty } from '@talex-touch/tuffex/empty'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { toast } from 'vue-sonner'
 import { onMounted, reactive, toRef, watch } from 'vue'

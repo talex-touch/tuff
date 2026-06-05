@@ -1,6 +1,6 @@
 <script setup name="DownloadProgressBar" lang="ts">
 import { DownloadStatus } from '@talex-touch/utils'
-import { TuffProgress } from '@talex-touch/tuffex'
+import { TuffProgress } from '@talex-touch/tuffex/progress'
 import { computed } from 'vue'
 
 interface Props {

@@ -1,5 +1,6 @@
 <script setup lang="ts" name="ThemePreference">
-import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'

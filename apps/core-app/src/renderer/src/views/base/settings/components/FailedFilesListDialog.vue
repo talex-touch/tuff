@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FileIndexFailedFile } from '@talex-touch/utils/transport/events/types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'

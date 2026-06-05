@@ -4,7 +4,8 @@ import type {
   AppIndexManagedEntry,
   AppIndexReindexRequest
 } from '@talex-touch/utils/transport/events/types'
-import { TxButton, TxInput } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'

@@ -1,5 +1,5 @@
 <script setup lang="ts" name="PluginFab">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { onBeforeUnmount, ref, watch } from 'vue'
 
 type PluginFabSeverity = 'warning' | 'error'

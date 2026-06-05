@@ -100,19 +100,30 @@ function handleClick(item: AppListItem, ind: number) {
       <div class="AppList-Toolbox">
         <FlatInput v-model="search" :placeholder="t('appList.searchPlaceholder')" :fetch="search" />
 
-        <span class="order-way" @click="handleOrderChange">
+        <button
+          type="button"
+          class="order-way"
+          :aria-label="t('appList.order.change')"
+          @click="handleOrderChange"
+        >
           <i v-if="orderWay === 0" class="i-ri-sort-desc" />
           <i v-if="orderWay === 1" class="i-ri-sort-alphabet-asc" />
           <i v-if="orderWay === 2" class="i-ri-sort-alphabet-desc" />
           <i v-if="orderWay === 3" class="i-ri-sort-number-asc" />
-        </span>
+        </button>
       </div>
       <li
         v-for="(item, ind) in _list"
-        :index="ind"
+        :key="`${item.name}-${ind}`"
+        :data-index="ind"
         class="fake-background"
         :class="{ active: index === ind }"
+        role="button"
+        tabindex="0"
+        :aria-selected="index === ind"
         @click="handleClick(item, ind)"
+        @keydown.enter.prevent="handleClick(item, ind)"
+        @keydown.space.prevent="handleClick(item, ind)"
       >
         <div class="AppList-IconContainer">
           <PluginIcon v-if="item.icon" :icon="item.icon" :alt="item.name" />
@@ -185,6 +196,9 @@ function handleClick(item: AppListItem, ind: number) {
 
 .AppList-Toolbox {
   .order-way {
+    appearance: none;
+    padding: 0;
+    border: 0;
     display: flex;
 
     align-items: center;
@@ -194,12 +208,18 @@ function handleClick(item: AppListItem, ind: number) {
     height: 32px;
 
     font-size: 1.25rem;
+    color: inherit;
     background-color: var(--tx-fill-color-dark);
     border-radius: 8px;
     cursor: pointer;
 
     &:hover {
       background-color: var(--tx-color-primary-light-5);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary);
+      outline-offset: 2px;
     }
   }
 
@@ -234,6 +254,11 @@ function handleClick(item: AppListItem, ind: number) {
   cursor: pointer;
   transition: 0.25s;
   border: 1px solid transparent;
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 2px;
+  }
 
   .AppList-IconContainer {
     width: 2rem;

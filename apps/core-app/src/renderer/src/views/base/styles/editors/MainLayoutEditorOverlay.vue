@@ -1,6 +1,7 @@
 <script setup lang="ts" name="MainLayoutEditorOverlay">
 import type { CanvasAreaOption, CanvasConfig } from './canvas-types'
-import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { appSettingOriginData } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

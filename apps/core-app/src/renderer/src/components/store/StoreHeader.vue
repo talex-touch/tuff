@@ -1,6 +1,8 @@
 <script setup lang="ts" name="StoreHeader">
 import type { StoreProviderResultMeta } from '@talex-touch/utils/store'
-import { TxButton, TxRadio, TxRadioGroup, TxSelect, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
+import { TxSelect, TxSelectItem } from '@talex-touch/tuffex/select'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'

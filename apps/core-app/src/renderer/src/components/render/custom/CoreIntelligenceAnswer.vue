@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TuffItem } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref, watch } from 'vue'
