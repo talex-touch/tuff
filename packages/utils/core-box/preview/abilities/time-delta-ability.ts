@@ -40,6 +40,12 @@ const UNIT_MAP: Record<string, number> = {
   weeks: 7 * 24 * 60 * 60 * 1000,
 };
 
+const SECOND_MS = 1000;
+const MINUTE_MS = 60 * SECOND_MS;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const WEEK_MS = 7 * DAY_MS;
+
 function parseRelative(value: string): number {
   let total = 0;
   const regex = /([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*([a-z]+)/gi;
@@ -48,8 +54,11 @@ function parseRelative(value: string): number {
     match !== null;
     match = regex.exec(value)
   ) {
-    const amount = Number(match[1]);
-    const unit = match[2].toLowerCase();
+    const amountRaw = match[1];
+    const unitRaw = match[2];
+    if (!amountRaw || !unitRaw) continue;
+    const amount = Number(amountRaw);
+    const unit = unitRaw.toLowerCase();
     const factor = UNIT_MAP[unit];
     if (!factor || Number.isNaN(amount)) continue;
     total += amount * factor;
@@ -58,14 +67,14 @@ function parseRelative(value: string): number {
 }
 
 const CN_UNIT_MAP: Record<string, number> = {
-  秒: UNIT_MAP.second,
-  分钟: UNIT_MAP.minute,
-  分: UNIT_MAP.minute,
-  小时: UNIT_MAP.hour,
-  时: UNIT_MAP.hour,
-  天: UNIT_MAP.day,
-  日: UNIT_MAP.day,
-  周: UNIT_MAP.week,
+  秒: SECOND_MS,
+  分钟: MINUTE_MS,
+  分: MINUTE_MS,
+  小时: HOUR_MS,
+  时: HOUR_MS,
+  天: DAY_MS,
+  日: DAY_MS,
+  周: WEEK_MS,
 };
 
 function parseChineseRelative(text: string): number | null {
@@ -74,6 +83,7 @@ function parseChineseRelative(text: string): number | null {
   );
   if (!match) return null;
   const [, amountRaw, unitRaw, direction] = match;
+  if (!amountRaw || !unitRaw) return null;
   const factor = CN_UNIT_MAP[unitRaw];
   if (!factor) return null;
   const amount = Number(amountRaw);
@@ -86,25 +96,31 @@ function parseNaturalRelative(text: string): number | null {
   const lower = text.trim().toLowerCase();
   if (!lower) return null;
 
-  if (lower === "tomorrow" || lower === "明天") return UNIT_MAP.day;
-  if (lower === "yesterday" || lower === "昨天") return -UNIT_MAP.day;
+  if (lower === "tomorrow" || lower === "明天") return DAY_MS;
+  if (lower === "yesterday" || lower === "昨天") return -DAY_MS;
   if (lower === "today" || lower === "now" || lower === "今天") return 0;
 
   const inMatch = lower.match(/^in\s+([\w\s.]+)$/);
   if (inMatch) {
-    const offset = parseRelative(inMatch[1]);
+    const expression = inMatch[1];
+    if (!expression) return null;
+    const offset = parseRelative(expression);
     return offset || null;
   }
 
   const agoMatch = lower.match(/^([\w\s.]+)\s+(ago|before)$/);
   if (agoMatch) {
-    const offset = parseRelative(agoMatch[1]);
+    const expression = agoMatch[1];
+    if (!expression) return null;
+    const offset = parseRelative(expression);
     return offset ? -offset : null;
   }
 
   const laterMatch = lower.match(/^([\w\s.]+)\s+(later|after|from now)$/);
   if (laterMatch) {
-    const offset = parseRelative(laterMatch[1]);
+    const expression = laterMatch[1];
+    if (!expression) return null;
+    const offset = parseRelative(expression);
     return offset || null;
   }
 
@@ -197,7 +213,9 @@ function parseAbsoluteDate(text: string): dayjs.Dayjs | null {
   };
 
   if (lower in naturalMap) {
-    return dayjs().add(naturalMap[lower], "day");
+    const offsetDays = naturalMap[lower];
+    if (offsetDays === undefined) return null;
+    return dayjs().add(offsetDays, "day");
   }
 
   return null;
@@ -215,7 +233,7 @@ function formatDuration(ms: number): string {
 
 export class TimeDeltaAbility extends BasePreviewAbility {
   readonly id = "preview.time";
-  readonly label = "Time Delta";
+  override readonly label = "Time Delta";
   readonly priority = 30;
   override readonly safety: PreviewAbilitySafetyPolicy = {
     input: {
@@ -242,7 +260,7 @@ export class TimeDeltaAbility extends BasePreviewAbility {
     );
   }
 
-  async execute(
+  override async execute(
     context: PreviewAbilityContext,
   ): Promise<PreviewAbilityResult | null> {
     const startedAt = Date.now();
@@ -252,6 +270,7 @@ export class TimeDeltaAbility extends BasePreviewAbility {
     const relativeMatch = text.match(RELATIVE_PATTERN);
     if (relativeMatch) {
       const [, operator, expression] = relativeMatch;
+      if (!operator || !expression) return null;
       const offset = parseRelative(expression);
       const sign = operator === "-" ? -1 : 1;
       const target = dayjs().add(sign * offset, "millisecond");
@@ -373,6 +392,7 @@ export class TimeDeltaAbility extends BasePreviewAbility {
     const rangeMatch = text.match(RANGE_PATTERN);
     if (!rangeMatch) return null;
     const [, startRaw, endRaw] = rangeMatch;
+    if (!startRaw || !endRaw) return null;
     const start = startRaw.toLowerCase() === "now" ? dayjs() : dayjs(startRaw);
     const end = endRaw.toLowerCase() === "now" ? dayjs() : dayjs(endRaw);
     if (!start.isValid() || !end.isValid()) return null;

@@ -70,9 +70,13 @@ export interface IPresetCloudService {
 /**
  * Cloud service status
  */
+export type PresetCloudUnavailableReason = 'not-shipped' | 'not-configured' | 'disabled'
+
 export interface PresetCloudStatus {
   /** Whether cloud service is available */
   available: boolean
+  /** Machine-readable unavailable reason. */
+  reason?: PresetCloudUnavailableReason
   /** Error message if unavailable */
   error?: string
   /** User authentication status */
@@ -80,11 +84,10 @@ export interface PresetCloudStatus {
 }
 
 /**
- * Placeholder cloud service (returns unavailable)
- * Will be replaced with actual implementation when cloud service is ready
+ * Fail-closed unavailable cloud service.
  */
-export class PresetCloudServicePlaceholder implements IPresetCloudService {
-  private readonly notAvailableError = new Error('Cloud preset service is not yet available')
+export class PresetCloudUnavailableService implements IPresetCloudService {
+  private readonly notAvailableError = new Error('Cloud preset service is not shipped')
 
   async listPresets(): Promise<CloudPresetListResponse> {
     throw this.notAvailableError
@@ -122,11 +125,14 @@ export class PresetCloudServicePlaceholder implements IPresetCloudService {
   getStatus(): PresetCloudStatus {
     return {
       available: false,
-      error: 'Cloud preset service is coming soon',
+      reason: 'not-shipped',
+      error: 'Cloud preset service is not shipped',
       authenticated: false
     }
   }
 }
 
-/** Singleton placeholder instance */
-export const presetCloudService = new PresetCloudServicePlaceholder()
+export const presetCloudService = new PresetCloudUnavailableService()
+
+/** @deprecated Use PresetCloudUnavailableService. */
+export class PresetCloudServicePlaceholder extends PresetCloudUnavailableService {}

@@ -15,6 +15,7 @@ async function getMathJs(): Promise<MathJsInstance | null> {
   if (!mathjs) {
     try {
       const m = await import("mathjs");
+      if (!m.all) return null;
       mathjs = m.create(m.all, { number: "BigNumber", precision: 64 });
     } catch {
       return null;
@@ -80,7 +81,7 @@ function normalizeExpression(expr: string): string {
 
 export class AdvancedExpressionAbility extends BasePreviewAbility {
   readonly id = "preview.expression.advanced";
-  readonly label = "Advanced Expression";
+  override readonly label = "Advanced Expression";
   readonly priority = 15;
   override readonly safety: PreviewAbilitySafetyPolicy = {
     input: {
@@ -116,7 +117,7 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
     return hasOperator || hasFunction || hasPower;
   }
 
-  async execute(
+  override async execute(
     context: PreviewAbilityContext,
   ): Promise<PreviewAbilityResult | null> {
     const startedAt = Date.now();
