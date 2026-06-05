@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import type { GlassSurfaceProps } from '../../glass-surface'
 import type { BaseSurfaceMode, BaseSurfaceProps } from './types'
-import { computed, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
-import { hasWindow } from '../../../../utils/env'
+import { computed, ref, useAttrs } from 'vue'
 import TxGlassSurface from '../../glass-surface/src/TxGlassSurface.vue'
+import { clamp, createSurfaceValueResolver, easeOutQuad, lerp, normalizeAngleDeg, smoothstep01 } from './base-surface-math'
+import {
+  REFRACTION_MASK_PEAK_OPACITY,
+  REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS,
+  REFRACTION_MASK_RELEASE_DURATION_MS,
+  REFRACTION_MASK_RELEASE_SLOWDOWN,
+  REFRACTION_MOVING_PARAM_FLOOR,
+  REFRACTION_PARAM_BLEND_DURATION_MS,
+  REFRACTION_RECOVERY_DURATION_FACTOR,
+  SURFACE_MOTION_DURATION_MS,
+  useBaseSurfaceMotion,
+} from './base-surface-motion'
 
 defineOptions({
   name: 'TxBaseSurface',
@@ -44,110 +55,46 @@ const props = withDefaults(defineProps<BaseSurfaceProps>(), {
 
 const rootRef = ref<HTMLElement | null>(null)
 const attrs = useAttrs()
-
-// --- 运动降级状态 ---
-const autoMoving = ref(false)
-const settling = ref(false)
-let settleTimer: ReturnType<typeof setTimeout> | undefined
-const refractionRecovering = ref(false)
-const refractionRecoveryProgress = ref(1)
-const refractionRecoveryElapsed = ref(0)
-
-const SURFACE_MOTION_DURATION_MS = 299
-const REFRACTION_PARAM_BLEND_DURATION_MS = 182
-const REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS = 100
-const REFRACTION_RECOVERY_DURATION_FACTOR = 0.7
-const REFRACTION_MASK_RELEASE_DURATION_MS = Math.round(650 * REFRACTION_RECOVERY_DURATION_FACTOR)
-const REFRACTION_MASK_PEAK_OPACITY = 0.95
-const REFRACTION_MASK_PEAK_RAMP_DURATION_MS = 180
-const REFRACTION_EDGE_REVEAL_DELAY_MS = 60
-const REFRACTION_EDGE_REVEAL_DURATION_MS = 220
-const REFRACTION_MASK_RELEASE_SLOWDOWN = 1.2
-const REFRACTION_MOVING_PARAM_FLOOR = 0.28
-
-let refractionRecoveryRaf: number | null = null
-let refractionMaskPeakRampRaf: number | null = null
-let refractionEdgeRevealRaf: number | null = null
-let refractionEdgeRevealTimer: ReturnType<typeof setTimeout> | null = null
-const refractionMaskPeakRampProgress = ref(1)
-const refractionEdgeRevealProgress = ref(1)
-
-const isMoving = computed(() => props.moving || autoMoving.value)
+const { toFinite, toEnum } = createSurfaceValueResolver(attrs as Record<string, unknown>)
 const settleDelayMs = computed(() => Math.max(toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS), toFinite(props.settleDelay, 150)))
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value))
-}
-
-function toNumber(value: unknown) {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed)) {
-      return parsed
-    }
-  }
-  return undefined
-}
-
-function readAttr(keys: string[]) {
-  const source = attrs as Record<string, unknown>
-  for (const key of keys) {
-    const value = source[key]
-    if (value != null) {
-      return value
-    }
-  }
-  return undefined
-}
-
-function toFinite(value: unknown, fallback: number, attrKeys: string[] = []) {
-  const direct = toNumber(value)
-  if (direct != null) {
-    return direct
-  }
-  const fromAttr = toNumber(readAttr(attrKeys))
-  if (fromAttr != null) {
-    return fromAttr
-  }
-  return fallback
-}
-
-function toEnum<T extends string>(value: unknown, allow: readonly T[], fallback: T, attrKeys: string[] = []) {
-  if (typeof value === 'string' && allow.includes(value as T)) {
-    return value as T
-  }
-  const fromAttr = readAttr(attrKeys)
-  if (typeof fromAttr === 'string' && allow.includes(fromAttr as T)) {
-    return fromAttr as T
-  }
-  return fallback
-}
-
-function lerp(from: number, to: number, t: number) {
-  return from + (to - from) * t
-}
-
-function smoothstep01(value: number) {
-  const t = clamp(value, 0, 1)
-  return t * t * (3 - 2 * t)
-}
-
-function normalizeAngleDeg(value: number) {
-  return ((value + 180) % 360 + 360) % 360 - 180
-}
-
-function easeOutQuad(value: number) {
-  const t = clamp(value, 0, 1)
-  return 1 - (1 - t) * (1 - t)
-}
 
 /** 需要降级的模式（blur / glass 在运动中降级） */
 const needsFallback = computed(() =>
   props.mode === 'blur' || props.mode === 'glass',
 )
+
+const refractionRecoveryBlendDurationMs = computed(() => {
+  const base = toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS)
+  return Math.max(REFRACTION_PARAM_BLEND_DURATION_MS, base * REFRACTION_RECOVERY_DURATION_FACTOR)
+})
+
+const refractionMaskReleaseDelayMs = computed(() => {
+  return REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS
+})
+
+const refractionRecoveryTotalDurationMs = computed(() => {
+  return Math.max(
+    refractionRecoveryBlendDurationMs.value,
+    refractionMaskReleaseDelayMs.value + REFRACTION_MASK_RELEASE_DURATION_MS,
+  )
+})
+
+const {
+  isMoving,
+  settling,
+  refractionRecovering,
+  refractionRecoveryProgress,
+  refractionRecoveryElapsed,
+  refractionMaskPeakRampProgress,
+  refractionEdgeRevealProgress,
+} = useBaseSurfaceMotion({
+  props,
+  rootRef,
+  needsFallback,
+  settleDelayMs,
+  refractionRecoveryBlendDurationMs,
+  refractionRecoveryTotalDurationMs,
+})
 
 const fallbackActive = computed(() =>
   needsFallback.value && (isMoving.value || settling.value),
@@ -448,22 +395,6 @@ const baseRefractionMaskOpacity = computed(() => {
   return clamp(base + blendedStrength * boost, 0, 0.62)
 })
 
-const refractionRecoveryBlendDurationMs = computed(() => {
-  const base = toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS)
-  return Math.max(REFRACTION_PARAM_BLEND_DURATION_MS, base * REFRACTION_RECOVERY_DURATION_FACTOR)
-})
-
-const refractionMaskReleaseDelayMs = computed(() => {
-  return REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS
-})
-
-const refractionRecoveryTotalDurationMs = computed(() => {
-  return Math.max(
-    refractionRecoveryBlendDurationMs.value,
-    refractionMaskReleaseDelayMs.value + REFRACTION_MASK_RELEASE_DURATION_MS,
-  )
-})
-
 const refractionMaskReleaseProgress = computed(() => {
   if (props.mode !== 'refraction' || !refractionRecovering.value) {
     return 1
@@ -762,362 +693,6 @@ const rootClasses = computed(() => {
   return classes
 })
 
-// --- 自动检测 transform 运动 ---
-let mutationObserver: MutationObserver | null = null
-let observedElements: HTMLElement[] = []
-
-function stopRefractionEdgeReveal(resetProgress = true) {
-  if (refractionEdgeRevealTimer != null) {
-    clearTimeout(refractionEdgeRevealTimer)
-    refractionEdgeRevealTimer = null
-  }
-  if (refractionEdgeRevealRaf != null) {
-    cancelAnimationFrame(refractionEdgeRevealRaf)
-    refractionEdgeRevealRaf = null
-  }
-  if (resetProgress) {
-    refractionEdgeRevealProgress.value = 1
-  }
-}
-
-function hideRefractionEdge() {
-  stopRefractionEdgeReveal(false)
-  refractionEdgeRevealProgress.value = 0
-}
-
-function startRefractionEdgeReveal() {
-  if (props.mode !== 'refraction') {
-    refractionEdgeRevealProgress.value = 1
-    return
-  }
-  if (!hasWindow()) {
-    refractionEdgeRevealProgress.value = 1
-    return
-  }
-
-  stopRefractionEdgeReveal(false)
-  refractionEdgeRevealProgress.value = 0
-  refractionEdgeRevealTimer = setTimeout(() => {
-    refractionEdgeRevealTimer = null
-    const total = Math.max(80, REFRACTION_EDGE_REVEAL_DURATION_MS)
-    let startedAt = 0
-    const tick = (timestamp: number) => {
-      if (!startedAt) {
-        startedAt = timestamp
-      }
-      const elapsed = timestamp - startedAt
-      const progress = clamp(elapsed / total, 0, 1)
-      refractionEdgeRevealProgress.value = smoothstep01(progress)
-      if (progress >= 1 || isMoving.value || refractionRecovering.value) {
-        if (isMoving.value || refractionRecovering.value) {
-          refractionEdgeRevealProgress.value = 0
-        }
-        else {
-          refractionEdgeRevealProgress.value = 1
-        }
-        refractionEdgeRevealRaf = null
-        return
-      }
-      refractionEdgeRevealRaf = requestAnimationFrame(tick)
-    }
-    refractionEdgeRevealRaf = requestAnimationFrame(tick)
-  }, Math.max(0, REFRACTION_EDGE_REVEAL_DELAY_MS))
-}
-
-function stopRefractionMaskPeakRamp(resetProgress = true) {
-  if (refractionMaskPeakRampRaf != null) {
-    cancelAnimationFrame(refractionMaskPeakRampRaf)
-    refractionMaskPeakRampRaf = null
-  }
-  if (resetProgress) {
-    refractionMaskPeakRampProgress.value = 1
-  }
-}
-
-function startRefractionMaskPeakRamp() {
-  if (props.mode !== 'refraction') {
-    refractionMaskPeakRampProgress.value = 1
-    return
-  }
-  if (!hasWindow()) {
-    refractionMaskPeakRampProgress.value = 1
-    return
-  }
-
-  stopRefractionMaskPeakRamp(false)
-  refractionMaskPeakRampProgress.value = 0
-
-  const total = Math.max(40, REFRACTION_MASK_PEAK_RAMP_DURATION_MS)
-  let startedAt = 0
-
-  const tick = (timestamp: number) => {
-    if (!startedAt) {
-      startedAt = timestamp
-    }
-    const elapsed = timestamp - startedAt
-    const progress = clamp(elapsed / total, 0, 1)
-    refractionMaskPeakRampProgress.value = smoothstep01(progress)
-    if (progress >= 1 || !isMoving.value) {
-      refractionMaskPeakRampProgress.value = 1
-      refractionMaskPeakRampRaf = null
-      return
-    }
-    refractionMaskPeakRampRaf = requestAnimationFrame(tick)
-  }
-
-  refractionMaskPeakRampRaf = requestAnimationFrame(tick)
-}
-
-function stopRefractionRecovery(resetProgress = true) {
-  if (refractionRecoveryRaf != null) {
-    cancelAnimationFrame(refractionRecoveryRaf)
-    refractionRecoveryRaf = null
-  }
-  refractionRecovering.value = false
-  refractionRecoveryElapsed.value = 0
-  if (resetProgress) {
-    refractionRecoveryProgress.value = 1
-  }
-}
-
-function startRefractionRecovery() {
-  if (props.mode !== 'refraction') {
-    return
-  }
-  if (isMoving.value) {
-    return
-  }
-  if (refractionRecovering.value) {
-    return
-  }
-  if (!hasWindow()) {
-    refractionRecovering.value = false
-    refractionRecoveryProgress.value = 1
-    refractionRecoveryElapsed.value = 0
-    return
-  }
-
-  stopRefractionRecovery(false)
-  refractionRecovering.value = true
-  refractionRecoveryProgress.value = 0
-  refractionRecoveryElapsed.value = 0
-
-  const blendTotal = refractionRecoveryBlendDurationMs.value
-  const total = refractionRecoveryTotalDurationMs.value
-  let startedAt = 0
-
-  const tick = (timestamp: number) => {
-    if (!startedAt) {
-      startedAt = timestamp
-    }
-
-    const elapsed = timestamp - startedAt
-    refractionRecoveryElapsed.value = elapsed
-
-    const progress = blendTotal <= 0
-      ? 1
-      : smoothstep01(elapsed / blendTotal)
-
-    refractionRecoveryProgress.value = clamp(progress, 0, 1)
-
-    if (elapsed >= total) {
-      refractionRecovering.value = false
-      refractionRecoveryProgress.value = 1
-      refractionRecoveryElapsed.value = total
-      refractionRecoveryRaf = null
-      return
-    }
-    refractionRecoveryRaf = requestAnimationFrame(tick)
-  }
-
-  refractionRecoveryRaf = requestAnimationFrame(tick)
-}
-
-function startSettleTimer() {
-  clearTimeout(settleTimer)
-  settling.value = true
-  settleTimer = setTimeout(() => {
-    settling.value = false
-  }, settleDelayMs.value)
-}
-
-function onTransformStart() {
-  autoMoving.value = true
-  clearTimeout(settleTimer)
-  settling.value = false
-  if (props.mode === 'refraction') {
-    stopRefractionRecovery(false)
-    refractionRecoveryProgress.value = 0
-    refractionRecoveryElapsed.value = 0
-  }
-}
-
-function onTransformEnd() {
-  autoMoving.value = false
-  if (props.mode === 'refraction') {
-    startRefractionRecovery()
-    return
-  }
-  startSettleTimer()
-}
-
-function handleTransitionStart(e: TransitionEvent) {
-  if (e.propertyName === 'transform' || e.propertyName === 'translate') {
-    onTransformStart()
-  }
-}
-
-function handleTransitionEnd(e: TransitionEvent) {
-  if (e.propertyName === 'transform' || e.propertyName === 'translate') {
-    onTransformEnd()
-  }
-}
-
-function hasTransformChanged(el: HTMLElement) {
-  const transform = el.style.transform || el.style.getPropertyValue('transform')
-  return transform && transform !== 'none' && transform !== ''
-}
-
-function setupAutoDetect() {
-  if (!props.autoDetect || !hasWindow() || !rootRef.value) {
-    return
-  }
-
-  const el = rootRef.value
-  const targets: HTMLElement[] = []
-  let current: HTMLElement | null = el
-  while (current) {
-    targets.push(current)
-    current = current.parentElement
-  }
-  observedElements = targets
-
-  for (const target of targets) {
-    target.addEventListener('transitionstart', handleTransitionStart as EventListener)
-    target.addEventListener('transitionend', handleTransitionEnd as EventListener)
-    target.addEventListener('transitioncancel', handleTransitionEnd as EventListener)
-  }
-
-  mutationObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-        const target = mutation.target as HTMLElement
-        if (hasTransformChanged(target)) {
-          onTransformStart()
-        }
-        else if (autoMoving.value) {
-          onTransformEnd()
-        }
-      }
-    }
-  })
-
-  for (const target of targets) {
-    mutationObserver.observe(target, { attributes: true, attributeFilter: ['style'] })
-  }
-}
-
-function teardownAutoDetect() {
-  for (const target of observedElements) {
-    target.removeEventListener('transitionstart', handleTransitionStart as EventListener)
-    target.removeEventListener('transitionend', handleTransitionEnd as EventListener)
-    target.removeEventListener('transitioncancel', handleTransitionEnd as EventListener)
-  }
-  observedElements = []
-  mutationObserver?.disconnect()
-  mutationObserver = null
-  clearTimeout(settleTimer)
-  stopRefractionEdgeReveal()
-  stopRefractionMaskPeakRamp()
-  stopRefractionRecovery()
-}
-
-watch(() => props.moving, (newVal, oldVal) => {
-  if (props.mode === 'refraction') {
-    if (newVal) {
-      stopRefractionRecovery(false)
-      refractionRecoveryProgress.value = 0
-      refractionRecoveryElapsed.value = 0
-      return
-    }
-    if (oldVal && !newVal) {
-      startRefractionRecovery()
-    }
-    return
-  }
-  if (oldVal && !newVal && needsFallback.value) {
-    startSettleTimer()
-  }
-})
-
-watch(isMoving, (moving, prevMoving) => {
-  if (props.mode !== 'refraction') {
-    stopRefractionMaskPeakRamp()
-    stopRefractionEdgeReveal()
-    return
-  }
-  if (moving && !prevMoving) {
-    hideRefractionEdge()
-    startRefractionMaskPeakRamp()
-    return
-  }
-  if (!moving) {
-    stopRefractionMaskPeakRamp()
-  }
-}, { flush: 'sync' })
-
-watch(
-  [isMoving, refractionRecovering, () => props.mode],
-  ([moving, recovering, mode], [prevMoving, prevRecovering, prevMode]) => {
-    if (mode !== 'refraction') {
-      stopRefractionEdgeReveal()
-      return
-    }
-    if (moving || recovering) {
-      hideRefractionEdge()
-      return
-    }
-    if (prevMode !== 'refraction' || prevMoving || prevRecovering) {
-      startRefractionEdgeReveal()
-    }
-  },
-  { flush: 'sync' },
-)
-
-watch(() => props.mode, (mode) => {
-  if (mode !== 'refraction') {
-    stopRefractionMaskPeakRamp()
-    stopRefractionEdgeReveal()
-    stopRefractionRecovery()
-    return
-  }
-  if (isMoving.value) {
-    hideRefractionEdge()
-    startRefractionMaskPeakRamp()
-    stopRefractionRecovery(false)
-    refractionRecoveryProgress.value = 0
-    refractionRecoveryElapsed.value = 0
-    return
-  }
-  startRefractionEdgeReveal()
-  stopRefractionMaskPeakRamp()
-  stopRefractionRecovery()
-})
-
-watch(() => props.autoDetect, (newVal) => {
-  teardownAutoDetect()
-  if (newVal) {
-    setupAutoDetect()
-  }
-})
-
-onMounted(() => {
-  setupAutoDetect()
-})
-
-onBeforeUnmount(() => {
-  teardownAutoDetect()
-})
 </script>
 
 <template>

@@ -165,6 +165,7 @@ describe('txBaseAnchor', () => {
 
     await boom.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
+    await vi.dynamicImportSettled()
 
     expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({
       scale: 1.12,
@@ -184,6 +185,7 @@ describe('txBaseAnchor', () => {
 
     await opacity.find('.tx-base-anchor__reference').trigger('click')
     await nextTick()
+    await vi.dynamicImportSettled()
 
     expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({ opacity: 0 }))
   })

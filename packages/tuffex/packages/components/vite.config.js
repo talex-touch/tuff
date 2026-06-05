@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
@@ -12,6 +12,11 @@ const externalDeps = Array.from(
     ...Object.keys(pkg.peerDependencies ?? {})
   ])
 )
+const componentEntries = Object.fromEntries(
+  readdirSync(new URL('./src', import.meta.url), { withFileTypes: true })
+    .filter(dirent => dirent.isDirectory() && dirent.name !== 'utils')
+    .map(dirent => [`${dirent.name}/index`, `./src/${dirent.name}/index.ts`])
+)
 
 export default defineConfig({
   build: {
@@ -21,7 +26,11 @@ export default defineConfig({
     minify: false,
     rollupOptions: {
       external: externalDeps,
-      input: ['./src/index.ts'],
+      input: {
+        index: './src/index.ts',
+        'utils/index': './src/utils/index.ts',
+        ...componentEntries,
+      },
       output: [
         {
           exports: 'named',

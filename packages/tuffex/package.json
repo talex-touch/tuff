@@ -25,12 +25,21 @@
       "require": "./dist/lib/index.js"
     },
     "./style.css": "./dist/es/components.css",
+    "./base.css": "./dist/es/base.css",
     "./utils": {
       "types": "./dist/es/utils/index.d.ts",
       "import": "./dist/es/utils/index.js",
       "require": "./dist/lib/utils/index.js"
     },
-    "./*": "./*"
+    "./*/style.css": {
+      "import": "./dist/es/*/style.css",
+      "require": "./dist/lib/*/style.css"
+    },
+    "./*": {
+      "types": "./dist/es/*/index.d.ts",
+      "import": "./dist/es/*/index.js",
+      "require": "./dist/lib/*/index.js"
+    }
   },
   "scripts": {
     "build": "node --loader ts-node/esm ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
@@ -42,7 +51,10 @@
     "lint:fix": "pnpm exec eslint --cache --fix .",
     "docs:dev": "vitepress dev docs --port 8000 --host",
     "docs:new": "esno ./utils/createVitepressComp/index.ts",
-    "docs:build": "vitepress build docs"
+    "docs:build": "vitepress build docs",
+    "audit:exports": "node ./scripts/audit-package-exports.mjs",
+    "audit:types": "node ./scripts/audit-package-types.mjs",
+    "audit:size": "node ./scripts/audit-package-size.mjs"
   },
   "files": [
     "dist"

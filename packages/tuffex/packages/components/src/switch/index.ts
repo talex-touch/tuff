@@ -6,5 +6,7 @@ TuffSwitch.install = (app: App) => {
   app.component(TuffSwitch.name || 'TuffSwitch', TuffSwitch)
 }
 
-export { TuffSwitch }
+const TxSwitch = TuffSwitch
+
+export { TuffSwitch, TxSwitch }
 export default TuffSwitch

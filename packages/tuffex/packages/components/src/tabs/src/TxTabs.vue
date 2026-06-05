@@ -1,11 +1,47 @@
 <script lang="ts">
 import type { PropType } from 'vue'
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { Comment, Fragment, computed, defineComponent, h, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
 
 const qualifiedName = ['TxTabItem', 'TxTabItemGroup', 'TxTabHeader']
+
+function getVNodeComponentName(vnode: any): string {
+  const type = vnode?.type
+  return type && typeof type === 'object' && 'name' in type
+    ? String(type.name ?? '')
+    : ''
+}
+
+function normalizeTabSlotNodes(nodes: any[]): any[] {
+  const normalized: any[] = []
+
+  function visit(node: any) {
+    if (!node || node.type === Comment)
+      return
+
+    if (node.type === Fragment) {
+      const children = Array.isArray(node.children) ? node.children : []
+      children.forEach(visit)
+      return
+    }
+
+    const name = getVNodeComponentName(node)
+    if (qualifiedName.includes(name))
+      normalized.push(node)
+  }
+
+  nodes.forEach(visit)
+  return normalized
+}
+
+function getDefaultChildren(vnode: any): any[] {
+  const children = vnode?.children
+  return children && typeof children === 'object' && 'default' in children && typeof children.default === 'function'
+    ? normalizeTabSlotNodes(children.default?.() ?? [])
+    : []
+}
 
 export default defineComponent({
   name: 'TxTabs',
@@ -377,11 +413,11 @@ export default defineComponent({
 
     function renderTabs(): any[] {
       let tabHeader: any = null
-      const nodes = slots.default?.() ?? []
+      const nodes = normalizeTabSlotNodes(slots.default?.() ?? [])
       const collectTabNodes = () => {
         const collected: any[] = []
         for (const child of nodes) {
-          const childName = (child?.type as any)?.name
+          const childName = getVNodeComponentName(child)
           if (childName === 'TxTabItem') {
             collected.push(child)
             continue
@@ -389,9 +425,8 @@ export default defineComponent({
           if (childName !== 'TxTabItemGroup')
             continue
 
-          const childNodes = child.children && typeof child.children === 'object' && 'default' in child.children && typeof child.children.default === 'function'
-            ? child.children.default?.() ?? []
-            : []
+          const childNodes = getDefaultChildren(child)
+            .filter(node => getVNodeComponentName(node) === 'TxTabItem')
           collected.push(...childNodes)
         }
         return collected
@@ -416,21 +451,16 @@ export default defineComponent({
       }
 
       const filtered = nodes
-        .filter((slot) => {
-          const type = slot?.type
-          return type && typeof type === 'object' && 'name' in type && type.name && qualifiedName.includes(type.name as string)
-        })
         .map((child) => {
-          const childName = (child?.type as any)?.name
+          const childName = getVNodeComponentName(child)
 
           if (childName === 'TxTabHeader') {
             tabHeader = child
             return null
           }
           if (childName === 'TxTabItemGroup') {
-            const childNodes = child.children && typeof child.children === 'object' && 'default' in child.children && typeof child.children.default === 'function'
-              ? child.children.default?.() ?? []
-              : []
+            const childNodes = getDefaultChildren(child)
+              .filter(node => getVNodeComponentName(node) === 'TxTabItem')
             return h('div', { class: 'tx-tabs__group' }, [
               h('div', { class: 'tx-tabs__group-name' }, child.props?.name),
               childNodes.map(createTab),
