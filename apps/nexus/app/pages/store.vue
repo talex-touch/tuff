@@ -12,7 +12,8 @@ import type {
   StorePluginReviewSubmitResponse,
   StorePluginSummary,
 } from '~/types/store'
-import { TxButton, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import {
   SharedPluginDetailReadme,
   SharedPluginDetailVersions,

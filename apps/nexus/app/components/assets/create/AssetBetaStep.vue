@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxStatusBadge } from '@talex-touch/tuffex'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 
 const props = defineProps<{
   title: string

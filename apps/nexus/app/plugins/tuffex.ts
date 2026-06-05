@@ -4,13 +4,18 @@ type TuffexModule = Record<string, unknown>
 type TuffexModuleLoader = () => Promise<TuffexModule>
 
 function asyncTuffexComponent(loader: TuffexModuleLoader, exportName: string) {
-  return defineAsyncComponent(async () => {
+  const component = defineAsyncComponent(async () => {
     const module = await loader()
     const component = module[exportName]
     if (!component)
       throw new Error(`Tuffex component export not found: ${exportName}`)
     return component as Component
   })
+  Object.defineProperty(component, 'name', {
+    value: exportName,
+    configurable: true,
+  })
+  return component
 }
 
 const fromAgents = () => import('@tuffex-components/agents')

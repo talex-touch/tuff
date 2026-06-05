@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxIcon } from '@talex-touch/tuffex'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 
 const props = withDefaults(defineProps<{
   size?: number

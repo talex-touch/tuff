@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxGradualBlur } from '@talex-touch/tuffex'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 </script>
 
 <template>

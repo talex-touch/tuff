@@ -4,7 +4,7 @@ import type {
   PluginChannel,
   DashboardPluginVersion as PluginVersion,
 } from '~/types/dashboard-plugin'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
 

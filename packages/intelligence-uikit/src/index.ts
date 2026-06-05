@@ -1,6 +1,5 @@
 import type { App } from 'vue'
 import * as components from './components'
-import '@talex-touch/tuffex/style.css'
 import './style/index.scss'
 
 export * from './components'

@@ -6,6 +6,7 @@ import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
 import { remarkMermaid } from './app/utils/remark-mermaid'
 import { createNexusPrerenderRoutes } from './build/nexus-prerender-routes'
+import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -22,6 +23,7 @@ const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-busines
 const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
+const tuffexComponentStyleEntry = resolve(currentDir, '../../packages/tuffex/dist/es/$1/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
@@ -121,7 +123,7 @@ export default defineNuxtConfig({
     },
   },
 
-  css: ['@talex-touch/tuffex/style.css', 'vue-sonner/style.css'],
+  css: ['@talex-touch/tuffex/base.css', 'vue-sonner/style.css'],
 
   colorMode: {
     classSuffix: '',
@@ -332,11 +334,14 @@ export default defineNuxtConfig({
         ...(useWorkspaceSource
           ? [
               { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
-              { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
+              { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexStyleEntry },
+              { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
+              { find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/, replacement: `${tuffexComponentsSourceRoot}/$1/index.ts` },
             ]
           : []),
       ],
     },
+    plugins: [tuffexOnDemandStylePlugin({ enabled: !useWorkspaceSource })],
     server: {
       fs: {
         allow: [workspaceRoot],
@@ -354,7 +359,8 @@ export default defineNuxtConfig({
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
           '@tuffex-components/*': [`${tuffexComponentsSourceRoot}/*`],
           '@talex-touch/tuffex': [tuffexSourceEntry],
-          '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
+          '@talex-touch/tuffex/base.css': [tuffexStyleEntry],
+          '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleEntry],
           '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
         },
       },

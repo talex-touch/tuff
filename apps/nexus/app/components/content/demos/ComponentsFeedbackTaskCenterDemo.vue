@@ -58,11 +58,13 @@ const labels = computed(() => {
   }
 })
 
+const progressValues = [72, 48, 96] as const
+
 const rows = computed(() => labels.value.tasks.map((task, index) => ({
   task,
   owner: labels.value.owners[index],
   state: labels.value.states[index],
-  progress: [72, 48, 96][index],
+  progress: progressValues[index] ?? 0,
 })))
 
 function showFeedbackToast() {

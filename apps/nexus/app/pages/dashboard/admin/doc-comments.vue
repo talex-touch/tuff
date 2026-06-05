@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TuffInput, TxButton, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({

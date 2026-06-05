@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PickerColumn, PickerValue } from '@talex-touch/tuffex'
+import type { PickerColumn, PickerValue } from '@talex-touch/tuffex/picker'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
@@ -26,12 +26,12 @@ const labels = computed(() => {
       cancel: '取消',
       inlineConfirm: '保存',
       inlineCancel: '重置',
-      plans: ['免费版', '专业版', '团队版'],
-      cycles: ['月付', '年付', '企业合同'],
-      priorities: ['低优先级', '高优先级', '冻结中'],
-      queues: ['收件箱', '分诊队列', '升级通道'],
-      regions: ['北美', '欧洲', '亚太'],
-      windows: ['15 分钟', '30 分钟', '60 分钟'],
+      plans: ['免费版', '专业版', '团队版'] as const,
+      cycles: ['月付', '年付', '企业合同'] as const,
+      priorities: ['低优先级', '高优先级', '冻结中'] as const,
+      queues: ['收件箱', '分诊队列', '升级通道'] as const,
+      regions: ['北美', '欧洲', '亚太'] as const,
+      windows: ['15 分钟', '30 分钟', '60 分钟'] as const,
     }
   }
 
@@ -50,12 +50,12 @@ const labels = computed(() => {
     cancel: 'Cancel',
     inlineConfirm: 'Save',
     inlineCancel: 'Reset',
-    plans: ['Free', 'Pro', 'Team'],
-    cycles: ['Monthly', 'Annual', 'Enterprise contract'],
-    priorities: ['Low priority', 'High priority', 'Frozen'],
-    queues: ['Inbox', 'Triage queue', 'Escalation path'],
-    regions: ['North America', 'Europe', 'Asia Pacific'],
-    windows: ['15 minutes', '30 minutes', '60 minutes'],
+    plans: ['Free', 'Pro', 'Team'] as const,
+    cycles: ['Monthly', 'Annual', 'Enterprise contract'] as const,
+    priorities: ['Low priority', 'High priority', 'Frozen'] as const,
+    queues: ['Inbox', 'Triage queue', 'Escalation path'] as const,
+    regions: ['North America', 'Europe', 'Asia Pacific'] as const,
+    windows: ['15 minutes', '30 minutes', '60 minutes'] as const,
   }
 })
 

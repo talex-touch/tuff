@@ -3,6 +3,12 @@ import { computed } from 'vue'
 const DEVICE_ID_KEY = 'tuff_device_id'
 const DEVICE_NAME_KEY = 'tuff_device_name'
 
+// Local web marker only; never use this value as secret or key material.
+interface LocalWebDeviceIdentity {
+  deviceId: string
+  deviceName: string
+}
+
 function resolvePlatform(): string {
   if (import.meta.server)
     return 'web'
@@ -41,9 +47,19 @@ export function useDeviceIdentity() {
       window.localStorage.setItem(DEVICE_NAME_KEY, name)
   }
 
+  const localIdentity = computed<LocalWebDeviceIdentity | null>(() => {
+    if (!deviceId.value || !deviceName.value)
+      return null
+    return {
+      deviceId: deviceId.value,
+      deviceName: deviceName.value,
+    }
+  })
+
   return {
     deviceId: computed(() => deviceId.value),
     deviceName: computed(() => deviceName.value),
+    localIdentity,
     platform: computed(() => platformState.value),
     setDeviceName,
   }

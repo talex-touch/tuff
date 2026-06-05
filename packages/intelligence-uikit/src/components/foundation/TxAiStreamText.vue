@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TxAiStreamTextProps } from '../../types'
 import { computed } from 'vue'
-import { TxTextTransformer } from '@talex-touch/tuffex'
+import { TxTextTransformer } from '@talex-touch/tuffex/text-transformer'
 
 defineOptions({
   name: 'TxAiStreamText',

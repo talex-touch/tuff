@@ -11,7 +11,7 @@ syncStatus: migrated
 This page mirrors the Tuffex variable system so Nexus docs render the same visual tokens.
 
 Source of truth: `packages/tuffex/packages/components/style/variables.scss`  
-Loaded by: `@talex-touch/tuffex/style.css`
+Loaded by: `@talex-touch/tuffex/base.css`; component styles are loaded from `@talex-touch/tuffex/<component>/style.css`. The full `@talex-touch/tuffex/style.css` entry is kept only for legacy migration compatibility.
 
 ## Typography
 

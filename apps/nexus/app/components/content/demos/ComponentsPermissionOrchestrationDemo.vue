@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { TimelineItemColor, TreeNode } from '@talex-touch/tuffex'
+import type { TimelineItemColor } from '@talex-touch/tuffex/timeline'
+import type { TreeNode } from '@talex-touch/tuffex/tree'
 import { computed, ref } from 'vue'
 
 interface TimelineStep {

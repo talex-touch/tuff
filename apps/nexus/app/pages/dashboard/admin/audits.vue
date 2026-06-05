@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import type { DataTableColumn } from '@talex-touch/tuffex'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { hasWindow } from '@talex-touch/utils/env'
 import { requestJson } from '~/utils/request'
 

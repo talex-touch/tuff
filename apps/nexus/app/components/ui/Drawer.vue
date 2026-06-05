@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxDrawer } from '@talex-touch/tuffex'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 
 const props = withDefaults(
   defineProps<{

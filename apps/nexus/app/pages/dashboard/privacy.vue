@@ -9,7 +9,8 @@ const toast = useToast()
 
 const loading = ref(false)
 const securityLoading = ref(false)
-const PRIVACY_STORAGE_KEY = 'tuff_privacy_settings'
+// Local browser preference only; account/server policy must use explicit APIs below.
+const LOCAL_PRIVACY_PREFERENCE_KEY = 'tuff_privacy_settings'
 
 const privacySettings = ref({
   analytics: true,
@@ -26,7 +27,7 @@ async function saveSettings() {
   loading.value = true
   try {
     if (import.meta.client) {
-      window.localStorage.setItem(PRIVACY_STORAGE_KEY, JSON.stringify(privacySettings.value))
+      window.localStorage.setItem(LOCAL_PRIVACY_PREFERENCE_KEY, JSON.stringify(privacySettings.value))
     }
   }
   catch (error) {
@@ -40,7 +41,7 @@ async function saveSettings() {
 async function loadSettings() {
   try {
     if (import.meta.client) {
-      const raw = window.localStorage.getItem(PRIVACY_STORAGE_KEY)
+      const raw = window.localStorage.getItem(LOCAL_PRIVACY_PREFERENCE_KEY)
       if (!raw)
         return
       const parsed = JSON.parse(raw)
@@ -122,10 +123,10 @@ onMounted(() => {
     <!-- Data Collection Settings -->
     <section class="apple-card-lg p-6">
       <h2 class="apple-heading-sm">
-        {{ t('dashboard.privacy.dataCollection', '数据收集') }}
+        {{ t('dashboard.privacy.localPreferences', '本地隐私偏好') }}
       </h2>
       <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.privacy.dataCollectionDesc', '选择您允许我们收集的数据类型') }}
+        {{ t('dashboard.privacy.localPreferencesDesc', '仅保存到当前浏览器；账号级隐私与安全策略以服务端设置为准。') }}
       </p>
 
       <div class="mt-6 space-y-4">

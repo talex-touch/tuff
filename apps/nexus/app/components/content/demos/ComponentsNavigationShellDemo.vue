@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StatusTone } from '@talex-touch/tuffex'
+import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import { computed, ref, watch } from 'vue'
 
 const { locale } = useI18n()

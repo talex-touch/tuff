@@ -31,7 +31,7 @@ code: |
 
 ## 快速开始
 
-**完整导入**
+**完整导入（迁移期兼容）**
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -46,18 +46,25 @@ code: |
 ---
 :::
 
+完整导入只适合已有页面仍依赖全量组件样式的迁移场景。新页面默认使用下面的按需子路径导入。
+
 **按需导入（推荐）**
 
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { createApp } from 'vue'
-  import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
-  import '@talex-touch/tuffex/style.css'
+  import TxButton from '@talex-touch/tuffex/button'
+  import TxSwitch from '@talex-touch/tuffex/switch'
+  import TuffFlatButton from '@talex-touch/tuffex/flat-button'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+  import '@talex-touch/tuffex/flat-button/style.css'
   
   const app = createApp(App)
-  app.use(TuffButton)
-  app.use(TuffSwitch)
+  app.use(TxButton)
+  app.use(TxSwitch)
   app.use(TuffFlatButton)
 ---
 :::

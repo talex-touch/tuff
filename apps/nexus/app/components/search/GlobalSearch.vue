@@ -2,8 +2,8 @@
 import { useDebounceFn } from '@vueuse/core'
 import { gsap } from 'gsap'
 import { computed, nextTick, watch } from 'vue'
-import { TxCommandPalette } from '@talex-touch/tuffex'
-import type { CommandPaletteItem } from '@talex-touch/tuffex'
+import { TxCommandPalette } from '@talex-touch/tuffex/command-palette'
+import type { CommandPaletteItem } from '@talex-touch/tuffex/command-palette'
 import { useGlobalSearch } from '~/composables/useGlobalSearch'
 
 type SearchCommandItem = CommandPaletteItem & {

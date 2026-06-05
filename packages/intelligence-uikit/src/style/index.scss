@@ -1,4 +1,11 @@
-@import '@talex-touch/tuffex/style.css';
+@import '@talex-touch/tuffex/base.css';
+@import '@talex-touch/tuffex/auto-sizer/style.css';
+@import '@talex-touch/tuffex/chat/style.css';
+@import '@talex-touch/tuffex/icon/style.css';
+@import '@talex-touch/tuffex/markdown-view/style.css';
+@import '@talex-touch/tuffex/stagger/style.css';
+@import '@talex-touch/tuffex/text-transformer/style.css';
+@import '@talex-touch/tuffex/transition/style.css';
 
 .tx-ai-reveal {
   --tx-ai-reveal-duration: 220ms;

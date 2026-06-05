@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { sanitizeMarkdownHtml } from '@talex-touch/utils/renderer'
 import { $fetch as rawFetch } from 'ofetch'
 import { computed } from 'vue'
 
@@ -58,7 +59,7 @@ const { data, pending, error } = await useAsyncData(
 )
 
 const note = computed(() => data.value?.note ?? null)
-const noteHtml = computed(() => resolveLocalizedText(note.value?.notesHtml))
+const noteHtml = computed(() => sanitizeMarkdownHtml(resolveLocalizedText(note.value?.notesHtml)))
 const noteText = computed(() => resolveLocalizedText(note.value?.notes))
 const publishedLabel = computed(() => {
   if (!note.value?.publishedAt)

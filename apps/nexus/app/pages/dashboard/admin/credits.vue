@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { TuffInput, TxButton, TxPagination, TxSkeleton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxPagination } from '@talex-touch/tuffex/pagination'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({

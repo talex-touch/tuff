@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 import type { DocAnalyticsResponse } from '~/types/docs-engagement'
 import { requestJson } from '~/utils/request'

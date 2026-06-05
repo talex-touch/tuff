@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { TuffInput, TxButton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, ref, watch } from 'vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 

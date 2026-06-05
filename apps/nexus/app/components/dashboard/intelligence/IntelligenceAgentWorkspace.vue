@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import type {
   IntelligencePromptBinding,
-  IntelligencePromptRecord,
   IntelligenceMessage,
+  IntelligencePromptRecord,
   TuffIntelligenceApprovalTicket,
 } from '@talex-touch/tuff-intelligence/light'
 import { networkClient } from '@talex-touch/utils/network'
-import { TuffInput, TxBaseSurface, TxButton, TxCard, TxCollapse, TxCollapseItem, TxGlowText, TxSkeleton, TxSpinner, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
+import { TxBaseSurface } from '@talex-touch/tuffex/base-surface'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxCollapse, TxCollapseItem } from '@talex-touch/tuffex/collapse'
+import { TxGlowText } from '@talex-touch/tuffex/glow-text'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxTimeline, TxTimelineItem } from '@talex-touch/tuffex/timeline'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson } from '~/utils/request'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TuffFlatButton } from '@talex-touch/tuffex'
+import { TuffFlatButton } from '@talex-touch/tuffex/flat-button'
 
 const props = withDefaults(
   defineProps<{

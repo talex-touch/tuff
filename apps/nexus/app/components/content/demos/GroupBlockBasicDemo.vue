@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxBlockLine, TxBlockSlot, TxBlockSwitch, TxGroupBlock } from '@talex-touch/tuffex'
+import { TxBlockLine, TxBlockSlot, TxBlockSwitch, TxGroupBlock } from '@talex-touch/tuffex/group-block'
 import { ref } from 'vue'
 
 const notifications = ref(true)

@@ -1,4 +1,4 @@
-import type { ChatComposerAttachment, ChatMessageModel } from '@talex-touch/tuffex'
+import type { ChatComposerAttachment, ChatMessageModel } from '@talex-touch/tuffex/chat'
 
 export type TxAiMotionPreset = 'none' | 'fade' | 'slide-fade' | 'rebound' | 'blur'
 export type TxAiTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger' | 'info'

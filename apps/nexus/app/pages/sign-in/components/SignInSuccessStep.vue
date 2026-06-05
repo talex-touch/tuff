@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxSpinner } from '@talex-touch/tuffex'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
 defineProps<{
   t: (key: string, fallback?: string) => string

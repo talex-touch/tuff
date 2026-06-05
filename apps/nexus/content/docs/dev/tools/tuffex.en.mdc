@@ -31,7 +31,7 @@ code: |
 
 ## Quick Start
 
-**Full Import**
+**Full Import (Legacy)**
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -46,18 +46,25 @@ code: |
 ---
 :::
 
+Use the full import only for migration work where the application already expects every component style to be present. New pages should prefer the on-demand subpath imports below.
+
 **On-Demand Import (Recommended)**
 
 :::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { createApp } from 'vue'
-  import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
-  import '@talex-touch/tuffex/style.css'
+  import TxButton from '@talex-touch/tuffex/button'
+  import TxSwitch from '@talex-touch/tuffex/switch'
+  import TuffFlatButton from '@talex-touch/tuffex/flat-button'
+  import '@talex-touch/tuffex/base.css'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/switch/style.css'
+  import '@talex-touch/tuffex/flat-button/style.css'
   
   const app = createApp(App)
-  app.use(TuffButton)
-  app.use(TuffSwitch)
+  app.use(TxButton)
+  app.use(TxSwitch)
   app.use(TuffFlatButton)
 ---
 :::

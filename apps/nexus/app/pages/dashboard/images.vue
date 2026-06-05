@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FileUploaderFile } from '@talex-touch/tuffex'
+import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import { computed, ref, watchEffect } from 'vue'
 import { useDashboardImagesData } from '~/composables/useDashboardData'
 import { requestJson } from '~/utils/request'

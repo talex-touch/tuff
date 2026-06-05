@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import type { FileUploaderFile } from '@talex-touch/tuffex'
-import { TuffInput, TxAutoSizer, TxButton, TxCard, TxFileUploader, TxTabItem, TxTabs, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
+import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxFileUploader, type FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
+import { TxTimeline, TxTimelineItem } from '@talex-touch/tuffex/timeline'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'

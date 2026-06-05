@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { networkClient } from '@talex-touch/utils/network'
-import { TxButton, TxMarkdownView, TxSearchInput, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed, nextTick, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 

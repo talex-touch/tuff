@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TuffInput } from '@talex-touch/tuffex'
+import { TuffInput } from '@talex-touch/tuffex/input'
 import { computed } from 'vue'
 
 const props = withDefaults(

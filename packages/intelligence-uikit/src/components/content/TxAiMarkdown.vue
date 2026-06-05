@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TxAiMarkdownProps } from '../../types'
 import { computed } from 'vue'
-import { TxMarkdownView } from '@talex-touch/tuffex'
+import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
 import TxAiReveal from '../foundation/TxAiReveal.vue'
 
 defineOptions({

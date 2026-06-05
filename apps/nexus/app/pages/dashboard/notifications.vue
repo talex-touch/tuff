@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TxButton, TxSpinner, TxTag } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { hasWindow } from '@talex-touch/utils/env'
 import { requestJson } from '~/utils/request'
 

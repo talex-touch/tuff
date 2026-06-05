@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TuffInput, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { AssetCreateType, AssetTypeOption } from './types'
-import { TxAutoSizer } from '@talex-touch/tuffex'
+import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AssetBetaStep from './AssetBetaStep.vue'

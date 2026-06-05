@@ -2,7 +2,7 @@
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { requestJson } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 
 definePageMeta({
   layout: false,

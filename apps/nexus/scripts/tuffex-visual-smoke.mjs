@@ -29,26 +29,31 @@ const demos = [
   {
     id: 'data-operations',
     title: 'Data operations panel',
+    titles: ['Data operations panel', '数据运维面板'],
     headings: ['Data Lists And Pagination', '数据运维面板'],
   },
   {
     id: 'navigation-shell',
     title: 'Dashboard navigation shell',
+    titles: ['Dashboard navigation shell', '后台导航配置壳层'],
     headings: ['Navigation And Configuration Shell', '后台导航配置壳层'],
   },
   {
     id: 'feedback-task-center',
     title: 'Dashboard task feedback center',
+    titles: ['Dashboard task feedback center', '后台任务反馈中心'],
     headings: ['Task Feedback Path', '后台任务反馈中心'],
   },
   {
     id: 'permission-orchestration',
     title: 'Permission orchestration panel',
+    titles: ['Permission orchestration panel', '权限编排面板'],
     headings: ['Permission Orchestration Path', '权限编排面板'],
   },
   {
     id: 'release-policy',
     title: 'Release policy configuration',
+    titles: ['Release policy configuration', '发布策略配置'],
     headings: ['Release Policy Configuration', '发布策略配置'],
   },
 ]
@@ -60,13 +65,22 @@ const viewports = [
 ]
 
 const themes = ['light', 'dark']
+const scenarioRetryDelayMs = 1_000
 
 function safeName(...parts) {
   return parts.join('-').replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()
 }
 
+async function warmNexusPage() {
+  await globalThis.fetch(compositionUrl, { cache: 'no-store' }).catch(() => undefined)
+}
+
 async function waitForNexusPage(client) {
-  await waitFor(client, `document.readyState === 'complete' && document.querySelector('#app')`, 10_000)
+  await waitFor(
+    client,
+    `document.readyState === 'complete' && (document.querySelector('#__nuxt') || document.querySelector('#app'))`,
+    10_000,
+  )
   await waitFor(client, `document.body.innerText.includes('Tuffex') || document.body.innerText.includes('TuffEx')`, 10_000)
   await delay(500)
 }
@@ -111,14 +125,15 @@ async function scrollToDemo(client, demo) {
 }
 
 async function collectMetrics(client, demo) {
-  const demoTitle = JSON.stringify(demo.title)
+  const demoTitles = JSON.stringify(demo.titles ?? [demo.title])
   return await evaluate(client, `(() => {
+    const demoTitles = ${demoTitles}
     const root = document.documentElement
     const body = document.body
-    const text = body.innerText || ''
+    const text = body?.innerText || ''
     const clientWidth = root.clientWidth
-    const scrollWidth = Math.max(root.scrollWidth, body.scrollWidth)
-    const visibleDemoText = text.includes(${demoTitle})
+    const scrollWidth = Math.max(root.scrollWidth, body?.scrollWidth || 0)
+    const visibleDemoText = demoTitles.some(title => text.includes(title))
     const unresolvedVue = Array.from(document.querySelectorAll('[class*="demo"], .vp-doc, main'))
       .flatMap(element => Array.from(element.querySelectorAll('*')))
       .map(element => element.tagName.toLowerCase())
@@ -132,7 +147,7 @@ async function collectMetrics(client, demo) {
     return {
       title: document.title,
       bodyLength: text.length,
-      hasApp: Boolean(document.querySelector('#app')),
+      hasApp: Boolean(document.querySelector('#__nuxt') || document.querySelector('#app')),
       visibleDemoText,
       scrollWidth,
       clientWidth,
@@ -146,7 +161,7 @@ async function collectMetrics(client, demo) {
 function failureReasons({ metrics, didScroll, consoleMessages, pageErrors, badResponses }) {
   const failures = []
   if (!metrics.hasApp)
-    failures.push('missing #app')
+    failures.push('missing Nuxt app root')
   if (!didScroll)
     failures.push('demo heading not found')
   if (!metrics.visibleDemoText)
@@ -166,6 +181,49 @@ function failureReasons({ metrics, didScroll, consoleMessages, pageErrors, badRe
   if (badResponses.length > 0)
     failures.push(`bad responses: ${badResponses.length}`)
   return failures
+}
+
+function fallbackMetrics() {
+  return {
+    title: '',
+    bodyLength: 0,
+    hasApp: false,
+    visibleDemoText: false,
+    scrollWidth: 0,
+    clientWidth: 0,
+    pageOverflow: false,
+    brokenImages: [],
+    unresolvedVue: [],
+  }
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function isRetryableWaitFailure(message) {
+  return message.includes('Timed out waiting for document.readyState')
+    || message.includes('Timed out waiting for document.body.innerText.includes')
+}
+
+function isRetryableDevServerFailure(result) {
+  const badResponses = result.badResponses ?? []
+  const consoleMessages = result.console ?? []
+  const failureText = [
+    ...(result.failureReasons ?? []),
+    result.error?.message,
+  ].filter(Boolean).join('\n')
+  const hasNuxtAssetGatewayTimeout = badResponses.some(response =>
+    response.status === 504 && response.url.includes('/_nuxt/'),
+  )
+  const hasDynamicImportFailure = consoleMessages.some(message =>
+    message.text.includes('Failed to fetch dynamically imported module'),
+  )
+  const hasNuxt500 = result.metrics?.title?.includes('500 - Internal Server Error')
+
+  return hasNuxtAssetGatewayTimeout
+    || (hasNuxt500 && hasDynamicImportFailure)
+    || isRetryableWaitFailure(failureText)
 }
 
 async function auditScenario({ demo, viewport, theme }) {
@@ -207,19 +265,59 @@ async function auditScenario({ demo, viewport, theme }) {
       badResponses,
     }
   }
+  catch (error) {
+    const message = errorMessage(error)
+    const metrics = await collectMetrics(client, demo).catch(() => fallbackMetrics())
+    const screenshotPath = await screenshot(client, `${screenshotName}-error`, screenshotDir).catch(() => null)
+
+    return {
+      demo: demo.id,
+      title: demo.title,
+      viewport: viewport.name,
+      width: viewport.width,
+      height: viewport.height,
+      theme,
+      reducedMotion: true,
+      url: compositionUrl,
+      status: 'FAIL',
+      failureReasons: [`scenario error: ${message}`],
+      screenshot: screenshotPath,
+      metrics,
+      console: consoleMessages,
+      pageErrors,
+      badResponses,
+      error: { message },
+    }
+  }
   finally {
     client.close()
     await closeTarget(target.id)
   }
 }
 
+async function auditScenarioWithRetry({ demo, viewport, theme }) {
+  const first = await auditScenario({ demo, viewport, theme })
+  if (first.status === 'PASS' || !isRetryableDevServerFailure(first))
+    return first
+
+  await warmNexusPage()
+  await delay(scenarioRetryDelayMs)
+  const retry = await auditScenario({ demo, viewport, theme })
+  return {
+    ...retry,
+    retried: true,
+    retryReason: first.failureReasons,
+  }
+}
+
 await mkdir(screenshotDir, { recursive: true })
+await warmNexusPage()
 
 const results = []
 for (const demo of demos) {
   for (const viewport of viewports) {
     for (const theme of themes) {
-      const result = await auditScenario({ demo, viewport, theme })
+      const result = await auditScenarioWithRetry({ demo, viewport, theme })
       results.push(result)
       const suffix = result.status === 'PASS' ? '' : ` ${result.failureReasons.join('; ')}`
       console.log(`${result.status} ${demo.id} ${viewport.width}px ${theme} reduced-motion${suffix}`)

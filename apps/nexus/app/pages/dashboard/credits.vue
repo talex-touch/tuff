@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { TxButton, TxStatCard, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxStatCard } from '@talex-touch/tuffex/stat-card'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { computed, ref } from 'vue'
 import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'
 import { useToast } from '~/composables/useToast'
