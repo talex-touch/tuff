@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SharedPluginReadme } from '../plugin-detail'
-import { marked } from 'marked'
 import { computed } from 'vue'
+import { renderMarkdownToSafeHtml } from '../markdown-sanitizer'
 
 interface Props {
   readme?: SharedPluginReadme
@@ -16,16 +16,10 @@ const props = withDefaults(defineProps<Props>(), {
   emptyText: 'No README'
 })
 
-marked.setOptions({
-  breaks: true,
-  gfm: true
-})
-
 const renderedReadme = computed(() => {
   const markdown = props.readme?.markdown?.trim()
   if (!markdown) return ''
-  // NOTE: Markdown is not sanitized; caller should ensure content is trusted or provide a safe renderer.
-  return props.renderMarkdown ? props.renderMarkdown(markdown) : marked.parse(markdown)
+  return props.renderMarkdown ? props.renderMarkdown(markdown) : renderMarkdownToSafeHtml(markdown)
 })
 </script>
 

@@ -42,7 +42,7 @@ function formatValue(value: string): {
 
 export class ScientificConstantsAbility extends BasePreviewAbility {
   readonly id = "preview.constants.scientific";
-  readonly label = "Scientific Constants";
+  override readonly label = "Scientific Constants";
   readonly priority = 22;
   override readonly safety: PreviewAbilitySafetyPolicy = {
     input: {
@@ -64,7 +64,7 @@ export class ScientificConstantsAbility extends BasePreviewAbility {
     return CONSTANT_KEYWORDS.test(query.text);
   }
 
-  async execute(
+  override async execute(
     context: PreviewAbilityContext,
   ): Promise<PreviewAbilityResult | null> {
     const startedAt = Date.now();
