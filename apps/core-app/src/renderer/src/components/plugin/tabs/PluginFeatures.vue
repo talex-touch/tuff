@@ -382,7 +382,10 @@ watch(
 )
 
 // Feature details management
-function showFeatureDetails(feature: PluginFeatureWithCommandsData, event?: MouseEvent): void {
+function showFeatureDetails(
+  feature: PluginFeatureWithCommandsData,
+  event?: MouseEvent | KeyboardEvent
+): void {
   if (showDetail.value || isDetailAnimating.value) return
   const target = event?.currentTarget as HTMLElement | null
   detailSourceEl.value = target
