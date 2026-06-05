@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import Drawer from '~/components/ui/Drawer.vue'
 import { requestJson } from '~/utils/request'
 

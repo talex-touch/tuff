@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { $fetch as rawFetch } from 'ofetch'
 import { computed, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 
 definePageMeta({
   requiresAuth: true,

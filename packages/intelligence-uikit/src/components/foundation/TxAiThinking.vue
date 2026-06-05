@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxAiThinkingProps } from '../../types'
-import { TxTypingIndicator } from '@talex-touch/tuffex'
+import { TxTypingIndicator } from '@talex-touch/tuffex/chat'
 
 defineOptions({
   name: 'TxAiThinking',

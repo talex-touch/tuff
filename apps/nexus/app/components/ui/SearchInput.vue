@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxSearchInput } from '@talex-touch/tuffex'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
 import { computed } from 'vue'
 
 const props = withDefaults(

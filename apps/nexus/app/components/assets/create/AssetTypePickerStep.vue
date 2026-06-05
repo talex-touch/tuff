@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AssetTypeOption } from './types'
-import { TxStatusBadge } from '@talex-touch/tuffex'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 
 const props = defineProps<{
   options: AssetTypeOption[]

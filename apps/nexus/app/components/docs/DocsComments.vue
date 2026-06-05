@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { TxButton, TxAvatar } from '@talex-touch/tuffex'
+import { TxAvatar } from '@talex-touch/tuffex/avatar'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { requestJson } from '~/utils/request'
 
 interface DocComment {

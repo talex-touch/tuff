@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxGradualBlur } from '@talex-touch/tuffex'
+import { TxGradualBlur } from '@talex-touch/tuffex/gradual-blur'
 import { computed, ref } from 'vue'
 import TuffexDocsHeroBackground from '~/components/docs/TuffexDocsHeroBackground.vue'
 import BackToTop from '~/components/ui/BackToTop.vue'
@@ -42,14 +42,14 @@ const isTuffexDocs = computed(() => {
       <TxGradualBlur exponential :div-count="10" position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TheHeader title="Tuff Docs" class="z-30" />
       <div class="docs-layout-foreground relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
-        <div class="max-w-[88rem] w-full flex gap-6 lg:gap-8">
+        <div class="min-w-0 max-w-[88rem] w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[230px] shrink-0 xl:block">
             <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
               <DocsSidebar />
             </div>
           </aside>
-          <main class="flex-1">
-            <div class="mx-auto max-w-[53rem] space-y-10">
+          <main class="min-w-0 flex-1">
+            <div class="mx-auto min-w-0 max-w-[53rem] w-full space-y-10">
               <div class="flex items-center gap-2 xl:hidden">
                 <TxButton variant="bare" size="small" native-type="button" class="inline-flex items-center gap-2 bg-white/80 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40" @click="sidebarVisible = true">
                   <span class="i-carbon-menu text-base" />

@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { EvidenceSource as PlatformGovernanceReportEvidenceStatus } from '~/types/docs-engagement'
 import { isFallbackEvidenceSource, isProductionEvidenceSource } from '~/types/docs-engagement'

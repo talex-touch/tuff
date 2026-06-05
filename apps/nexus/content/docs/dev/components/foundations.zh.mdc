@@ -11,7 +11,7 @@ syncStatus: migrated
 本页与 Tuffex 变量体系保持一致，确保 Nexus 文档渲染出来的视觉与 Tuffex 相同。
 
 单一来源：`packages/tuffex/packages/components/style/variables.scss`  
-加载入口：`@talex-touch/tuffex/style.css`
+加载入口：`@talex-touch/tuffex/base.css`；组件样式从 `@talex-touch/tuffex/<component>/style.css` 按需加载。完整的 `@talex-touch/tuffex/style.css` 只保留为迁移期兼容入口。
 
 ## 字体
 

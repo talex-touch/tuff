@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { $fetch as rawFetch } from 'ofetch'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 

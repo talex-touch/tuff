@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TxAiMessageProps } from '../../types'
 import { computed } from 'vue'
-import { TxChatMessage } from '@talex-touch/tuffex'
+import { TxChatMessage } from '@talex-touch/tuffex/chat'
 import { toTuffexChatMessage } from '../../types'
 import TxAiMarkdown from '../content/TxAiMarkdown.vue'
 import TxAiRichBlock from '../content/TxAiRichBlock.vue'

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { FileUploaderFile } from '@talex-touch/tuffex'
+import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'

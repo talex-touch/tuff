@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxModal } from '@talex-touch/tuffex'
+import { TxModal } from '@talex-touch/tuffex/modal'
 
 const props = withDefaults(
   defineProps<{

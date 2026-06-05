@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { $fetch as rawFetch } from 'ofetch'
-import { TxButton, TxLoadingState, TxTooltip } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxLoadingState } from '@talex-touch/tuffex/loading-state'
+import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { defineComponent, h, render } from 'vue'
-import { toast, Toaster } from 'vue-sonner'
 import DocHero from '~/components/docs/DocHero.vue'
 import DocsFeedback from '~/components/docs/DocsFeedback.vue'
 import type {
@@ -24,6 +25,7 @@ const nuxtApp = useNuxtApp()
 const { locale, t } = useI18n()
 const localePath = useLocalePath()
 const { deviceId } = useDeviceIdentity()
+const toast = useToast()
 
 const { user } = useAuthUser()
 const isAdmin = computed(() => user.value?.role === 'admin')
@@ -187,6 +189,7 @@ const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => locale.value)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
 
 watch(
@@ -1697,6 +1700,7 @@ async function fetchViewCount() {
 
 // Enhance code blocks on mount
 onMounted(() => {
+  docsClientPanelsMounted.value = true
   loadDocsAnalyticsOptions()
   docsAnalyticsOptionsReady.value = true
   clampDocsAnalyticsOptions()
@@ -1722,11 +1726,15 @@ watch(
     if (!import.meta.client)
       return
     shouldMountDocClientPanels.value = false
-    if (!ready)
+    if (!ready || !docsClientPanelsMounted.value)
       return
 
     await nextTick()
-    if (docKey !== currentDocRenderKey.value || !isDocsContentReady.value)
+    if (
+      docKey !== currentDocRenderKey.value
+      || !isDocsContentReady.value
+      || !docsClientPanelsMounted.value
+    )
       return
 
     shouldMountDocClientPanels.value = true
@@ -1739,6 +1747,15 @@ watch(
     scheduleDocsTrackerRefresh()
   },
   { immediate: true },
+)
+
+watch(
+  docsClientPanelsMounted,
+  (mounted) => {
+    if (!mounted || !isDocsContentReady.value)
+      return
+    shouldMountDocClientPanels.value = true
+  },
 )
 
 watch(
@@ -2194,9 +2211,6 @@ watch(
           </NuxtLink>
         </div>
     </div>
-    <ClientOnly>
-      <Toaster position="bottom-left" :offset="72" />
-    </ClientOnly>
   </div>
 </template>
 

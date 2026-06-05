@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxAiComposerProps } from '../../types'
-import { TxChatComposer } from '@talex-touch/tuffex'
+import { TxChatComposer } from '@talex-touch/tuffex/chat'
 
 defineOptions({
   name: 'TxAiComposer',

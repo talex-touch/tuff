@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { TxButton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { hasNavigator } from '@talex-touch/utils/env'
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { requestJson } from '~/utils/request'

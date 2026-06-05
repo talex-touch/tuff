@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { TxBadge, TxButton } from '@talex-touch/tuffex'
+import { TxBadge } from '@talex-touch/tuffex/badge'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import LinuxdoIcon from '~/components/icon/LinuxdoIcon.vue'
 import Input from '~/components/ui/Input.vue'

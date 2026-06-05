@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { $fetch as rawFetch } from 'ofetch'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import type { DataTableColumn } from '@talex-touch/tuffex'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxDataTable, TxSkeleton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({

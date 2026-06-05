@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TxRadioValue } from '@talex-touch/tuffex'
+import type { TxRadioValue } from '@talex-touch/tuffex/radio'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()

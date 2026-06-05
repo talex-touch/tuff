@@ -30,7 +30,7 @@ const labels = computed(() => {
 })
 
 const copiedKey = ref('')
-let copiedTimer: ReturnType<typeof setTimeout> | null = null
+let copiedTimer: number | null = null
 
 function stripWrappingBackticks(value: string) {
   const trimmed = value.trim()

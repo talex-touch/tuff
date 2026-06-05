@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { TxAutoSizer, TxButton } from '@talex-touch/tuffex'
+import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
+import { TxButton } from '@talex-touch/tuffex/button'
 
 interface Props {
   active: boolean

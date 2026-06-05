@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Toaster } from 'vue-sonner'
-import { TxSpinner, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import Logo from '~/components/icon/Logo.vue'
 import { useSignIn } from '~/composables/useSignIn'
 import SignInBindEmailStep from './components/SignInBindEmailStep.vue'

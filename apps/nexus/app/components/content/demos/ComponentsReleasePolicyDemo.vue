@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import type { CascaderNode, SegmentedSliderSegment, TxFlatSelectValue } from '@talex-touch/tuffex'
+import type { CascaderNode } from '@talex-touch/tuffex/cascader'
+import type { TxFlatSelectValue } from '@talex-touch/tuffex/flat-select'
+import type { SegmentedSliderSegment } from '@talex-touch/tuffex/segmented-slider'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
@@ -234,7 +236,7 @@ const rolloutText = computed(() => {
             :max="100"
             :step="5"
             show-value
-            :format-value="value => `${value }%`"
+            :format-value="(value: number) => `${value}%`"
             tooltip-trigger="always"
           />
         </label>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DataTableColumn } from '@talex-touch/tuffex'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
 import { computed, ref } from 'vue'
 
 interface OperationRow {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watchEffect } from 'vue'
-import { TxButton, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { toast } from 'vue-sonner'
 import Input from '~/components/ui/Input.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'

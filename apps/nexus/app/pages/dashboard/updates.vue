@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCardItem, TxSkeleton, TxSpinner, TxTag } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCardItem } from '@talex-touch/tuffex/card-item'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { useDashboardUpdatesData } from '~/composables/useDashboardData'
 import { useToast } from '~/composables/useToast'
 

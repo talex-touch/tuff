@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DashboardPlugin as Plugin, DashboardPluginVersion as PluginVersion } from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
-import { TxStatusBadge } from '@talex-touch/tuffex'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 
 interface Props {
   plugin: Plugin

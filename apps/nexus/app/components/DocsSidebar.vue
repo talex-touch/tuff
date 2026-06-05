@@ -100,6 +100,8 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/getting-started/index',
     '/docs/dev/getting-started/overview',
     '/docs/dev/getting-started/quickstart',
+    '/docs/dev/getting-started/tuffex-composition',
+    '/docs/dev/getting-started/plugin-workflow',
   ],
   '/docs/dev/api': [
     '/docs/dev/api/index',

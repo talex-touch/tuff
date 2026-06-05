@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { TxButton as TuffButton } from '@talex-touch/tuffex/button'
 import {
-  TxButton as TuffButton,
   TxDropdownItem as TuffDropdownItem,
   TxDropdownMenu as TuffDropdownMenu,
-} from '@talex-touch/tuffex'
+} from '@talex-touch/tuffex/dropdown-menu'
 
 const { locale } = useI18n()
 

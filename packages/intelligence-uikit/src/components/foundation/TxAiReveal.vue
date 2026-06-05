@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { TxAiRevealProps } from '../../types'
 import { computed } from 'vue'
-import { TxStagger, TxTransition } from '@talex-touch/tuffex'
+import { TxStagger } from '@talex-touch/tuffex/stagger'
+import { TxTransition } from '@talex-touch/tuffex/transition'
 
 defineOptions({
   name: 'TxAiReveal',

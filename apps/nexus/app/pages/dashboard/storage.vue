@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { DataTableColumn } from '@talex-touch/tuffex'
-import { TxButton, TxDataTable, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'

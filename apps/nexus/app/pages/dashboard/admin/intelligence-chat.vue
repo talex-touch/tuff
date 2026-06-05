@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { networkClient } from '@talex-touch/utils/network'
 import { computed, onMounted, ref, watch } from 'vue'
-import { TuffInput, TxBaseSurface, TxButton, TxSpinner } from '@talex-touch/tuffex'
+import { TxBaseSurface } from '@talex-touch/tuffex/base-surface'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 
 definePageMeta({
   pageTransition: {

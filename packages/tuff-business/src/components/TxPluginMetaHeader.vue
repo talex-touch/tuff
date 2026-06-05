@@ -1,5 +1,5 @@
 <script setup lang="ts" name="TxPluginMetaHeader">
-import { TxIcon } from '@talex-touch/tuffex'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 import { computed } from 'vue'
 
 interface Props {

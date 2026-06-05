@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxPopperDialog } from '@talex-touch/tuffex'
-import type { TxSelectValue } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
+import { TxPopperDialog } from '@talex-touch/tuffex/dialog'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSelect, TuffSelectItem, type TxSelectValue } from '@talex-touch/tuffex/select'
 import { defineComponent, h, inject } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { requestJson } from '~/utils/request'

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { TxAiRichBlockProps } from '../../types'
-import type { TxAutoSizerInstance } from '@talex-touch/tuffex'
+import type { TxAutoSizerInstance } from '@talex-touch/tuffex/auto-sizer'
 import { computed, ref, watch } from 'vue'
-import { TxAutoSizer, TxIcon } from '@talex-touch/tuffex'
+import { TxAutoSizer } from '@talex-touch/tuffex/auto-sizer'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 import TxAiLoadingHint from '../foundation/TxAiLoadingHint.vue'
 import TxAiStreamText from '../foundation/TxAiStreamText.vue'
 import TxAiCodeBlock from './TxAiCodeBlock.vue'

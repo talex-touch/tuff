@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import type { FileUploaderFile } from '@talex-touch/tuffex'
+import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import { computed, reactive } from 'vue'
 import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
-import { TuffInput, TuffSwitch, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TuffSwitch } from '@talex-touch/tuffex/switch'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 interface PluginCategoryOption {

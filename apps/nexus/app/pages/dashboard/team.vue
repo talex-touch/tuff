@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPagination, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxPagination } from '@talex-touch/tuffex/pagination'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { computed, reactive, ref, watch } from 'vue'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import DashboardSparklineChart from '~/components/dashboard/DashboardSparklineChart.client.vue'

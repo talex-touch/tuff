@@ -50,6 +50,7 @@ const { floatingStyles } = useFloating(reference, floating, {
 
 <style scoped>
 .LanguageToggle-Floating {
+  display: none;
   pointer-events: none;
 }
 
@@ -62,6 +63,7 @@ const { floatingStyles } = useFloating(reference, floating, {
 }
 
 .LanguageToggle-Floating.display {
+  display: block;
   pointer-events: auto;
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TxButton as TuffButton, TxStagger as TuffStagger } from '@talex-touch/tuffex'
+import { TxButton as TuffButton } from '@talex-touch/tuffex/button'
+import { TxStagger as TuffStagger } from '@talex-touch/tuffex/stagger'
 
 const { locale } = useI18n()
 

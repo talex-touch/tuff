@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { TxSpinner, TxButton } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { computed } from 'vue'
 
 const props = defineProps<{

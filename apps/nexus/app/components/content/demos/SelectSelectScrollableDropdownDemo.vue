@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TxSelectValue } from '@talex-touch/tuffex'
+import type { TxSelectValue } from '@talex-touch/tuffex/select'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
