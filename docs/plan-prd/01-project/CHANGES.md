@@ -5,6 +5,18 @@
 
 ## 2026-06-05
 
+### ref(search): add PreviewSDK diagnostics and benchmark guard
+
+- `packages/utils/core-box/preview/types.ts`
+- `packages/utils/core-box/preview/sdk/preview-registry.ts`
+- `packages/utils/core-box/preview/sdk/preview-runner.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/preview-provider.test.ts`
+  - Added `resolveWithDiagnostics()` to PreviewSDK while keeping the existing `resolve()` compatibility path.
+  - Added registry-level max input length gating, resolve diagnostics, budget exceed flags and payload `meta.previewSdk` instrumentation for successful preview results.
+  - Added `runPreviewSdkBenchmark()` with deterministic case summaries for expected ability matches, expected no-result cases, P50/P95/max duration and budget exceed counts.
+  - 验证：`pnpm -C "packages/utils" exec vitest run "__tests__/core-box/preview-sdk.test.ts"` passed; `pnpm -C "apps/core-app" exec vitest run "src/main/modules/box-tool/addon/preview/preview-provider.test.ts" --testTimeout 15000` passed; `pnpm -C "apps/core-app" run typecheck:node` passed; scoped ESLint passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### ref(core-ui): move search provider settings into flip dialog
 
 - `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`

@@ -27,6 +27,30 @@ function createSdk(): PreviewSdk {
     register: vi.fn(),
     listAbilities: vi.fn(() => []),
     listInventory: vi.fn(() => []),
+    resolveWithDiagnostics: vi.fn(async () => ({
+      result: {
+        abilityId: 'preview.expression.basic',
+        confidence: 0.6,
+        durationMs: 1,
+        payload: {
+          abilityId: 'preview.expression.basic',
+          title: '2 + 2',
+          primaryLabel: '结果',
+          primaryValue: '4'
+        }
+      },
+      diagnostics: {
+        status: 'success' as const,
+        durationMs: 1,
+        inputLength: 5,
+        maxInputLength: 500,
+        checkedAbilityCount: 1,
+        executedAbilityCount: 1,
+        errorCount: 0,
+        exceededBudget: false,
+        matchedAbilityId: 'preview.expression.basic'
+      }
+    })),
     resolve: vi.fn(async () => ({
       abilityId: 'preview.expression.basic',
       confidence: 0.6,
