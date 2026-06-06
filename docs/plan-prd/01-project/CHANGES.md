@@ -5,6 +5,18 @@
 
 ## 2026-06-06
 
+### feat(ai): clarify local skills provider gate hints
+
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`
+- `apps/core-app/src/renderer/src/modules/intelligence/local-skills-display.ts`
+- `apps/core-app/src/renderer/src/modules/intelligence/local-skills-display.test.ts`
+- `apps/core-app/src/renderer/src/modules/lang/{zh-CN,en-US}.json`
+- `docs/plan-prd/TODO.md`
+  - Added a focused display helper for Local Skills provider gate summaries so ready, approval-required, unavailable and installed high-risk provider counts are derived from one testable model.
+  - Kept missing gated providers out of the installed high-risk approval hint while preserving unavailable counts in the gate summary.
+  - Surfaced linked scene hints directly in Local Skills chips instead of only hiding them in the title tooltip.
+  - 验证：CoreApp Local Skills display focused Vitest, scoped CoreApp ESLint, CoreApp `typecheck:web` and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### ref(ai): use flip dialog for provider model config
 
 - `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue`
