@@ -1,7 +1,8 @@
 import type {
   WidgetFailurePayload,
   WidgetRegistrationPayload,
-  WidgetRuntime
+  WidgetRuntime,
+  WidgetSandboxEvidence
 } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
 import { WIDGET_ALLOWED_PACKAGES, WIDGET_RUNTIMES } from '@talex-touch/utils/plugin/widget'
@@ -22,12 +23,18 @@ import { devLog } from '../../utils/dev-log'
 import { createRendererLogger } from '../../utils/renderer-log'
 import {
   cacheWidgetRuntimeSource,
+  clearWidgetSandboxEvidence,
   clearWidgetFailure,
   clearWidgetRuntimeSource,
-  recordWidgetFailure
+  recordWidgetFailure,
+  recordWidgetSandboxEvidence
 } from './widget-diagnostics'
 
-export { getWidgetFailure, getWidgetRuntimeSnippet } from './widget-diagnostics'
+export {
+  getWidgetFailure,
+  getWidgetRuntimeSnippet,
+  getWidgetSandboxEvidence
+} from './widget-diagnostics'
 
 const widgetRegistryLog = createRendererLogger('WidgetRegistry')
 const injectedStyles = new Map<string, HTMLStyleElement>()
@@ -51,6 +58,20 @@ const WIDGET_STORAGE_SECURE_NAME_MAX = Math.max(
   8,
   WIDGET_STORAGE_SECURE_KEY_MAX - WIDGET_STORAGE_SECURE_PREFIX.length
 )
+const WIDGET_SANDBOX_INJECTED_GLOBALS = [
+  'require',
+  'module',
+  'exports',
+  'window',
+  'globalThis',
+  'localStorage',
+  'sessionStorage',
+  'document',
+  'indexedDB',
+  'BroadcastChannel',
+  'caches',
+  'self'
+] as const
 
 type WidgetStorageState = {
   local: Map<string, Map<string, string>>
@@ -602,6 +623,71 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/types': TalexUtilsTypes
 }
 
+function normalizeWidgetDependencies(dependencies?: string[]): string[] {
+  return Array.from(
+    new Set(
+      (dependencies ?? [])
+        .map((dependency) => dependency.trim())
+        .filter((dependency) => dependency.length > 0)
+    )
+  )
+}
+
+function isWidgetDependencyAvailable(dependency: string): boolean {
+  return ALLOWED_PACKAGES.includes(dependency) && dependency in preloadedModuleCache
+}
+
+function addUniqueDependency(target: string[], dependency: string): void {
+  if (!target.includes(dependency)) {
+    target.push(dependency)
+  }
+}
+
+export function buildWidgetSandboxEvidence(
+  payload: WidgetRegistrationPayload
+): WidgetSandboxEvidence {
+  const declaredDependencies = normalizeWidgetDependencies(payload.dependencies)
+  const allowedDependencies = declaredDependencies.filter(isWidgetDependencyAvailable)
+  const blockedDependencies = declaredDependencies.filter(
+    (dependency) => !isWidgetDependencyAvailable(dependency)
+  )
+
+  return {
+    widgetId: payload.widgetId,
+    pluginName: payload.pluginName,
+    featureId: payload.featureId,
+    filePath: payload.filePath,
+    runtime: payload.runtime,
+    runtimeStage: payload.runtimeStage,
+    sourceType: resolveWidgetSourceType(payload.filePath),
+    hash: payload.hash,
+    declaredDependencies,
+    allowedDependencies,
+    blockedDependencies,
+    undeclaredDependencies: [],
+    storageFacade: {
+      localStorage: 'secure-namespaced',
+      sessionStorage: 'memory-namespaced',
+      cookies: 'secure-namespaced',
+      indexedDB: 'plugin-namespaced',
+      caches: 'plugin-namespaced',
+      broadcastChannel: 'plugin-namespaced'
+    },
+    windowBoundary: {
+      opener: 'null',
+      top: 'sandbox-proxy',
+      parent: 'sandbox-proxy',
+      self: 'sandbox-proxy',
+      globalThis: 'sandbox-proxy',
+      documentDefaultView: 'sandbox-proxy'
+    },
+    dynamicExecution: {
+      mode: 'new-function',
+      injectedGlobals: [...WIDGET_SANDBOX_INJECTED_GLOBALS]
+    }
+  }
+}
+
 type PluginInjectedInstance = ComponentPublicInstance & { $plugin?: Record<string, unknown> }
 
 type WidgetSetup = (props: Record<string, unknown>, ctx: SetupContext) => unknown
@@ -1147,38 +1233,28 @@ function resolveWidgetComponent(exported: unknown, runtime?: WidgetRuntime): Com
 /**
  * Create a sandboxed require function for widgets
  * 为 widget 创建沙箱化的 require 函数
- * @param allowedDependencies - List of allowed module names
+ * @param evidence - Runtime evidence updated when widget code reaches require()
  * @returns Safe require function
  * @throws Error if any declared dependency is not available
  */
-function createSandboxRequire(allowedDependencies: string[]): (id: string) => unknown {
-  // Validate that all declared dependencies are available before creating the sandbox
-  const unavailableDeps = allowedDependencies.filter((dep) => {
-    if (!ALLOWED_PACKAGES.includes(dep)) {
-      return true // Not in allowed list
-    }
-    if (!(dep in preloadedModuleCache)) {
-      return true // Failed to preload
-    }
-    return false
-  })
-
-  if (unavailableDeps.length > 0) {
+function createSandboxRequire(evidence: WidgetSandboxEvidence): (id: string) => unknown {
+  if (evidence.blockedDependencies.length > 0) {
     throw new Error(
-      `[WidgetSandbox] Cannot create sandbox: dependencies not available: ${unavailableDeps.join(', ')}. ` +
+      `[WidgetSandbox] Cannot create sandbox: dependencies not available: ${evidence.blockedDependencies.join(', ')}. ` +
         `Allowed packages: ${ALLOWED_PACKAGES.join(', ')}`
     )
   }
 
   return function sandboxRequire(id: string) {
-    if (!allowedDependencies.includes(id)) {
+    const moduleName = String(id).trim()
+    if (!evidence.declaredDependencies.includes(moduleName)) {
+      addUniqueDependency(evidence.undeclaredDependencies, moduleName)
       throw new Error(
-        `[WidgetSandbox] Module "${id}" is not allowed. Available modules: ${allowedDependencies.join(', ')}`
+        `[WidgetSandbox] Module "${moduleName}" is not allowed. Available modules: ${evidence.declaredDependencies.join(', ')}`
       )
     }
 
-    // At this point, we've validated the module exists in preloadedModuleCache
-    return preloadedModuleCache[id]
+    return preloadedModuleCache[moduleName]
   }
 }
 
@@ -1191,7 +1267,7 @@ function createSandboxRequire(allowedDependencies: string[]): (id: string) => un
  */
 function evaluateWidgetComponent(
   code: string,
-  dependencies: string[] = [],
+  evidence: WidgetSandboxEvidence,
   debugLabel?: string,
   sandbox?: WidgetSandboxContext
 ): unknown {
@@ -1199,7 +1275,7 @@ function evaluateWidgetComponent(
     throw new Error('[WidgetRegistry] Widget sandbox is required to evaluate component')
   }
   const module: { exports: unknown } = { exports: {} }
-  const customRequire = createSandboxRequire(dependencies)
+  const customRequire = createSandboxRequire(evidence)
   const sandboxWindow = sandbox.window
   const sandboxGlobal = sandbox.globalThis
   const sandboxLocalStorage = sandbox.localStorage
@@ -1212,21 +1288,7 @@ function evaluateWidgetComponent(
 
   try {
     cacheWidgetRuntimeSource(debugLabel, code)
-    const executor = new Function(
-      'require',
-      'module',
-      'exports',
-      'window',
-      'globalThis',
-      'localStorage',
-      'sessionStorage',
-      'document',
-      'indexedDB',
-      'BroadcastChannel',
-      'caches',
-      'self',
-      code
-    )
+    const executor = new Function(...WIDGET_SANDBOX_INJECTED_GLOBALS, code)
     executor(
       customRequire,
       module,
@@ -1282,9 +1344,47 @@ function injectStyles(widgetId: string, styles: string): void {
   injectedStyles.set(widgetId, style)
 }
 
+function resolveErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function resolveErrorCause(error: unknown): string | undefined {
+  return error instanceof Error ? error.stack : undefined
+}
+
+function recordWidgetRuntimeFailure(
+  payload: WidgetRegistrationPayload,
+  error: unknown,
+  sandboxEvidence?: WidgetSandboxEvidence
+): void {
+  const failure: WidgetFailurePayload = {
+    widgetId: payload.widgetId,
+    pluginName: payload.pluginName,
+    featureId: payload.featureId,
+    runtime: payload.runtime,
+    runtimeStage: payload.runtimeStage,
+    code: 'WIDGET_RUNTIME_REGISTER_FAILED',
+    message: resolveErrorMessage(error),
+    filePath: payload.filePath,
+    hash: payload.hash
+  }
+  const cause = resolveErrorCause(error)
+  if (cause) {
+    failure.cause = cause
+  }
+  if (sandboxEvidence) {
+    failure.sandboxEvidence = sandboxEvidence
+  }
+  recordWidgetFailure(failure)
+}
+
 export async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
+  let sandboxEvidence: WidgetSandboxEvidence | undefined
   try {
     clearWidgetFailure(payload.widgetId)
+    clearWidgetSandboxEvidence(payload.widgetId)
+    sandboxEvidence = buildWidgetSandboxEvidence(payload)
+    recordWidgetSandboxEvidence(sandboxEvidence)
     if (isDev) {
       devLog(
         `[WidgetRegistry] register widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1302,7 +1402,7 @@ export async function handleWidgetRegister(payload: WidgetRegistrationPayload): 
     const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
     const exported = evaluateWidgetComponent(
       payload.code,
-      payload.dependencies || [],
+      sandboxEvidence,
       payload.widgetId,
       sandbox
     )
@@ -1324,14 +1424,22 @@ export async function handleWidgetRegister(payload: WidgetRegistrationPayload): 
       devLog(`[WidgetRegistry] registered widget ${payload.widgetId} (${componentName})`)
     }
   } catch (error) {
+    if (sandboxEvidence) {
+      recordWidgetSandboxEvidence(sandboxEvidence)
+    }
+    recordWidgetRuntimeFailure(payload, error, sandboxEvidence)
     widgetRegistryLog.error('Widget registration failed', error)
     throw error
   }
 }
 
 export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
+  let sandboxEvidence: WidgetSandboxEvidence | undefined
   try {
     clearWidgetFailure(payload.widgetId)
+    clearWidgetSandboxEvidence(payload.widgetId)
+    sandboxEvidence = buildWidgetSandboxEvidence(payload)
+    recordWidgetSandboxEvidence(sandboxEvidence)
     if (isDev) {
       devLog(
         `[WidgetRegistry] update widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
@@ -1349,7 +1457,7 @@ export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Pr
     const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
     const exported = evaluateWidgetComponent(
       payload.code,
-      payload.dependencies || [],
+      sandboxEvidence,
       payload.widgetId,
       sandbox
     )
@@ -1371,6 +1479,10 @@ export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Pr
       devLog(`[WidgetRegistry] updated widget ${payload.widgetId} (${componentName})`)
     }
   } catch (error) {
+    if (sandboxEvidence) {
+      recordWidgetSandboxEvidence(sandboxEvidence)
+    }
+    recordWidgetRuntimeFailure(payload, error, sandboxEvidence)
     widgetRegistryLog.error('Widget update failed', error)
     throw error
   }
@@ -1383,6 +1495,7 @@ export function handleWidgetUnregister({ widgetId }: { widgetId: string }): void
     }
     clearWidgetRuntimeSource(widgetId)
     clearWidgetFailure(widgetId)
+    clearWidgetSandboxEvidence(widgetId)
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)
     if (style) {
@@ -1397,6 +1510,10 @@ export function handleWidgetUnregister({ widgetId }: { widgetId: string }): void
 
 export function handleWidgetFailed(payload: WidgetFailurePayload): void {
   recordWidgetFailure(payload)
+  clearWidgetSandboxEvidence(payload.widgetId)
+  if (payload.sandboxEvidence) {
+    recordWidgetSandboxEvidence(payload.sandboxEvidence)
+  }
   clearWidgetRuntimeSource(payload.widgetId)
   unregisterCustomRenderer(payload.widgetId)
   if (isDev) {

@@ -1,7 +1,7 @@
 # Widget 沙箱隔离与持久化收口计划 (v1.0)
 
-> 状态: 历史计划 + 当前 Runtime Safety 基线（2026-05-20 追加）
-> 更新时间: 2026-05-20
+> 状态: 历史计划 + 当前 Runtime Safety 基线（2026-06-06 evidence 追加）
+> 更新时间: 2026-06-06
 > 适用范围: CoreBox widget（renderer）+ 插件运行时沙箱  
 > 替代入口: `docs/plan-prd/TODO.md`、`docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`、`docs/plan-prd/01-project/CHANGES.md`
 
@@ -66,6 +66,7 @@ Widget 运行在渲染进程中，若直接暴露浏览器全局能力（localSt
 - [x] 命名空间隔离：BroadcastChannel / indexedDB / caches。
 - [x] 窗口逃逸拦截：window/self/top/parent/opener/document.defaultView。
 - [x] Runtime Safety 基线：`new Function` 仅允许存在于 widget runtime sandbox 边界，并通过受控 facade 注入可用全局。
+- [x] Sandbox evidence：renderer 注册路径记录 `WidgetSandboxEvidence`，覆盖依赖 allowlist、未声明 require、storage facade、window boundary 与动态执行注入全局。
 - [ ] 扩展拦截：navigator.clipboard/storage、history、location、postMessage。
 - [ ] Worker 相关隔离：serviceWorker/sharedWorker 注册入口拦截。
 - [ ] 调用限额与审计：为高风险调用追加频控/计数，并记录 audit 入口。
@@ -84,6 +85,18 @@ Widget 运行在渲染进程中，若直接暴露浏览器全局能力（localSt
 - Failure reason：sandbox 缺失、dependency 不在 allowlist、组件导出无法解析、执行异常都必须返回可诊断错误，不得吞掉后渲染空白成功。
 
 本基线不是 VM 级隔离替代方案，也不改变当前 widget 执行架构。后续若要替换执行模型，需要单独 PRD、迁移策略与插件兼容验证。
+
+## 6.2 Sandbox Evidence（2026-06-06）
+
+当前 renderer 注册路径新增 `WidgetSandboxEvidence` 合同，用于把沙箱边界从“代码约定”变成可断言的诊断对象：
+
+- 依赖证据：记录 declared / allowed / blocked / undeclared dependencies；声明但不在 allowlist 或未 preload 的依赖会阻断 sandbox 创建，运行时 `require()` 未声明依赖会记录到 `undeclaredDependencies` 后抛错。
+- 存储证据：记录 localStorage、sessionStorage、cookie、indexedDB、caches、BroadcastChannel 均走 namespaced facade；localStorage 与 cookie 按插件/widget 进入 secure storage 持久化边界。
+- 窗口边界证据：记录 opener 为 null，top/parent/self/globalThis/document.defaultView 都返回 sandbox proxy，不暴露真实 window escape handle。
+- 动态执行证据：记录 `new Function` 只在 widget registry 内使用，并只注入 allowlisted `require/module/exports` 与 sandbox global/storage/document/indexedDB/BroadcastChannel/caches/self。
+- 失败诊断：renderer-side register/update 失败会写入 `WidgetFailurePayload.sandboxEvidence`，同时保留原有抛错行为，避免把失败伪装成空白成功。
+
+Focused tests 已覆盖 evidence shape、未声明 require、allowlist blocking、跨插件 storage/cookie isolation 与 window/document escape handles。该证据不等同于 VM 级隔离，也不覆盖 navigator/worker/postMessage 等后续高风险入口。
 
 ## 7. 风险与依赖
 

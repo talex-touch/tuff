@@ -1,8 +1,9 @@
-import type { WidgetFailurePayload } from '@talex-touch/utils/plugin/widget'
+import type { WidgetFailurePayload, WidgetSandboxEvidence } from '@talex-touch/utils/plugin/widget'
 import { shallowRef } from 'vue'
 
 const widgetRuntimeSources = new Map<string, string[]>()
 const widgetFailures = new Map<string, WidgetFailurePayload>()
+const widgetSandboxEvidence = new Map<string, WidgetSandboxEvidence>()
 const widgetFailureVersion = shallowRef(0)
 
 function touchWidgetFailureVersion(): void {
@@ -52,4 +53,19 @@ export function clearWidgetFailure(widgetId: string): void {
 export function recordWidgetFailure(payload: WidgetFailurePayload): void {
   widgetFailures.set(payload.widgetId, payload)
   touchWidgetFailureVersion()
+}
+
+export function getWidgetSandboxEvidence(
+  widgetId: string | undefined
+): WidgetSandboxEvidence | null {
+  if (!widgetId) return null
+  return widgetSandboxEvidence.get(widgetId) ?? null
+}
+
+export function recordWidgetSandboxEvidence(payload: WidgetSandboxEvidence): void {
+  widgetSandboxEvidence.set(payload.widgetId, payload)
+}
+
+export function clearWidgetSandboxEvidence(widgetId: string): void {
+  widgetSandboxEvidence.delete(widgetId)
 }
