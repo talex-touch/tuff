@@ -1,6 +1,6 @@
 # DatePicker 日期选择
 
-基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。
+基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`），支持移动滚轮、桌面字段日历和 `adaptive` 自适应模式。
 
 <script setup lang="ts">
 import DatePickerBasicDemo from '../.vitepress/theme/components/demos/DatePickerBasicDemo.vue'
@@ -24,7 +24,9 @@ import DatePickerBasicDemoSource from '../.vitepress/theme/components/demos/Date
 | `modelValue` | `string` | `''` | 当前值（`YYYY-MM-DD`） |
 | `visible` | `boolean` | `false` | 弹层显示（v-model:visible） |
 | `popup` | `boolean` | `true` | 是否使用底部弹层模式 |
+| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | 渲染形态；`picker` 为滚轮选择器，`field` 为字段日历，`adaptive` 按视口宽度自动切换 |
 | `title` | `string` | `'Select date'` | 标题 |
+| `placeholder` | `string` | `'Select date'` | 字段日历空值占位文本 |
 | `min` | `string` | - | 最小日期（`YYYY-MM-DD`） |
 | `max` | `string` | - | 最大日期（`YYYY-MM-DD`） |
 | `disabled` | `boolean` | `false` | 禁用 |
@@ -32,6 +34,8 @@ import DatePickerBasicDemoSource from '../.vitepress/theme/components/demos/Date
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `cancelText` | `string` | `'Cancel'` | 取消按钮文案 |
 | `closeOnClickMask` | `boolean` | `true` | 点击遮罩关闭 |
+| `adaptiveBreakpoint` | `number` | `768` | `adaptive` 切换为字段日历的最小视口宽度 |
+| `weekStartsOn` | `0 \| 1` | `0` | 字段日历周起始日，`0` 为周日，`1` 为周一 |
 
 ### Events
 

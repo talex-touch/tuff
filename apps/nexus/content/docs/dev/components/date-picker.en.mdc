@@ -7,13 +7,13 @@ verified: true
 ---
 # DatePicker
 
-`TxDatePicker` wraps `TxPicker` with year, month, and day columns and exposes a `YYYY-MM-DD` string model. Use it when the UI needs a compact date selector, bounded date range, or inline picker surface.
+`TxDatePicker` wraps `TxPicker` with year, month, and day columns and exposes a `YYYY-MM-DD` string model. It supports the mobile-first wheel picker, a desktop-friendly field calendar, and an `adaptive` variant that switches between both surfaces.
 
 ## Basic Usage
 
 ### Popup, Bounds, And Inline
 
-The demo shows the three common workflows: opening a popup from a form row, constraining selectable days with `min` / `max`, and embedding the picker inline with `popup="false"`.
+The demo shows four common workflows: opening a wheel popup from a form row, using `variant="adaptive"` for a desktop field calendar, constraining selectable days with `min` / `max`, and embedding the picker inline with `popup="false"`.
 
 :::TuffDemoWrapper{demo="DatePickerDatePickerDemo" code-lang="vue"}
 ---
@@ -23,6 +23,7 @@ code: |
 
   const popupValue = ref('2026-01-02')
   const popupVisible = ref(false)
+  const fieldValue = ref('2026-03-18')
   const boundedValue = ref('2026-05-20')
   const inlineValue = ref('2026-07-14')
   </script>
@@ -42,6 +43,16 @@ code: |
           max="2030-12-31"
           confirm-text="Apply"
           cancel-text="Cancel"
+        />
+      </section>
+
+      <section>
+        <TxDatePicker
+          v-model="fieldValue"
+          variant="adaptive"
+          placeholder="Select date"
+          min="2026-01-01"
+          max="2026-12-31"
         />
       </section>
 
@@ -74,7 +85,8 @@ code: |
 - The model is always emitted as `YYYY-MM-DD`.
 - Empty or invalid `modelValue` initializes from the current local date, then clamps to `min` / `max` when present.
 - `min` and `max` use `YYYY-MM-DD`; invalid bounds are ignored.
-- Popup mode uses `v-model:visible`; inline mode renders immediately when `popup` is `false`.
+- `variant="picker"` keeps the wheel picker, `variant="field"` renders an input-like calendar grid, and `variant="adaptive"` uses the field calendar on desktop width while keeping the wheel picker on narrow screens.
+- Popup mode uses `v-model:visible`; inline mode renders immediately when `popup` is `false`. The field calendar also syncs `update:visible`, `open`, and `close`.
 - `confirm` emits the formatted date and then closes through the underlying picker. Live column changes emit both `update:modelValue` and `change`.
 
 ## API
@@ -86,7 +98,9 @@ code: |
 | `modelValue` | `string` | `''` | Selected date in `YYYY-MM-DD` format. Invalid or empty values initialize from today and are clamped by `min` / `max` when provided. |
 | `visible` | `boolean` | `false` | Controls popup visibility via `v-model:visible`. |
 | `popup` | `boolean` | `true` | Renders through the picker popup surface when true; renders inline when false. |
+| `variant` | `'picker' \| 'field' \| 'adaptive'` | `'picker'` | Selects the surface. `picker` is the wheel picker, `field` is the calendar field, and `adaptive` switches by viewport width. |
 | `title` | `string` | `'Select date'` | Toolbar title forwarded to `TxPicker`. |
+| `placeholder` | `string` | `'Select date'` | Placeholder shown by the field calendar when the model is empty. |
 | `min` | `string` | - | Earliest selectable date in `YYYY-MM-DD` format. Earlier year/month/day options are disabled or clamped. |
 | `max` | `string` | - | Latest selectable date in `YYYY-MM-DD` format. Later year/month/day options are disabled or clamped. |
 | `disabled` | `boolean` | `false` | Disables picker interaction. |
@@ -94,6 +108,8 @@ code: |
 | `confirmText` | `string` | `'Confirm'` | Confirm button label forwarded to `TxPicker`. |
 | `cancelText` | `string` | `'Cancel'` | Cancel button label forwarded to `TxPicker`. |
 | `closeOnClickMask` | `boolean` | `true` | Allows the popup mask to close the picker when clicked. |
+| `adaptiveBreakpoint` | `number` | `768` | Minimum viewport width where the `adaptive` variant switches to the field calendar. |
+| `weekStartsOn` | `0 \| 1` | `0` | Week start for the field calendar, where `0` is Sunday and `1` is Monday. |
 
 ### Events
 
