@@ -4,6 +4,7 @@ import TxBottomDialog from '../src/TxBottomDialog.vue'
 import TxBlowDialog from '../src/TxBlowDialog.vue'
 import TxPopperDialog from '../src/TxPopperDialog.vue'
 import TxTouchTip from '../src/TxTouchTip.vue'
+import { asTrustedDialogHtml } from '../src/types'
 
 describe('dialog components', () => {
   beforeEach(() => {
@@ -135,7 +136,7 @@ describe('dialog components', () => {
     const wrapper = mount(TxTouchTip, {
       props: {
         title: 'Tip',
-        messageHtml: '<strong>Trusted</strong>',
+        messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
         close: vi.fn(),
         buttons: [],
       },
@@ -167,7 +168,7 @@ describe('dialog components', () => {
     const htmlWrapper = mount(TxPopperDialog, {
       props: {
         title: 'HTML',
-        messageHtml: '<strong>Trusted</strong>',
+        messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
         close: vi.fn(),
       },
       attachTo: document.body,
@@ -196,7 +197,7 @@ describe('dialog components', () => {
     const htmlWrapper = mount(TxBlowDialog, {
       props: {
         title: 'HTML',
-        messageHtml: '<em>Trusted</em>',
+        messageHtml: asTrustedDialogHtml('<em>Trusted</em>'),
         close: vi.fn(),
       },
       attachTo: document.body,

@@ -5,6 +5,19 @@
 
 ## 2026-06-06
 
+### ref(dialog): require trusted html marker for dialog html props
+
+- `packages/tuffex/packages/components/src/dialog/src/types.ts`
+- `packages/tuffex/packages/components/src/dialog/src/TxTouchTip.vue`
+- `packages/tuffex/packages/components/src/dialog/src/TxPopperDialog.vue`
+- `packages/tuffex/packages/components/src/dialog/src/TxBlowDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/*.vue`
+- `apps/core-app/vitest.config.ts`
+- `packages/tuffex/docs/components/dialog.md`
+  - Added the `TrustedDialogHtml` branded type and `asTrustedDialogHtml()` marker for dialog `messageHtml` props.
+  - Kept `message` as the default plain-text path while making TuffEx and CoreApp legacy dialog HTML rendering require an explicit trusted marker at TypeScript call sites.
+  - Added a CoreApp Vitest config for Vue renderer tests and extended focused dialog rendering tests plus TuffEx package type audit coverage for the trusted HTML boundary.
+
 ### docs(audit): add 2026-06-06 UI compatibility follow-up
 
 - `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-06.md`

@@ -225,7 +225,13 @@ function showRenderDialog() {
 
 ## API
 
-`message` 始终按纯文本渲染，并通过组件样式保留换行。需要展示 HTML 时，只能使用显式的 `messageHtml`，且调用点必须确保内容可信并已清洗。
+`message` 始终按纯文本渲染，并通过组件样式保留换行。需要展示 HTML 时，只能使用显式的 `messageHtml`，且调用点必须先通过 `asTrustedDialogHtml()` 标记已清洗或内部可信的内容。
+
+```ts
+import { asTrustedDialogHtml } from '@talex-touch/tuffex/dialog'
+
+const safeMessage = asTrustedDialogHtml('<strong>已清洗的内部 HTML</strong>')
+```
 
 ### TxBottomDialog 属性
 
@@ -257,7 +263,7 @@ interface DialogButton {
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 纯文本消息内容 |
-| `messageHtml` | `string` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
+| `messageHtml` | `TrustedDialogHtml` | `''` | 可信 HTML 消息，仅限 `asTrustedDialogHtml()` 标记后的内部调用点 |
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
@@ -269,7 +275,7 @@ interface DialogButton {
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 对话框标题 |
 | `message` | `string` | `''` | 纯文本消息内容 |
-| `messageHtml` | `string` | `''` | 可信 HTML 消息，仅限已清洗的内部调用点 |
+| `messageHtml` | `TrustedDialogHtml` | `''` | 可信 HTML 消息，仅限 `asTrustedDialogHtml()` 标记后的内部调用点 |
 | `confirmText` | `string` | `'Confirm'` | 确认按钮文案 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 | `comp` | `Component` | `undefined` | 自定义组件 |
@@ -281,7 +287,7 @@ interface DialogButton {
 |------|------|---------|-------------|
 | `title` | `string` | `''` | 标题 |
 | `message` | `string` | `''` | 文本内容 |
-| `messageHtml` | `string` | `''` | 可信 HTML 内容，仅限已清洗的内部调用点 |
+| `messageHtml` | `TrustedDialogHtml` | `''` | 可信 HTML 内容，仅限 `asTrustedDialogHtml()` 标记后的内部调用点 |
 | `buttons` | `TouchTipButton[]` | `[]` | 按钮配置 |
 | `close` | `() => void` | *必填* | 关闭回调 |
 

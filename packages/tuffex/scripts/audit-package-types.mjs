@@ -44,6 +44,7 @@ await writeFile(
 await writeFile(
   join(workspace, 'index.ts'),
   `import { TxButton, type TxButtonProps } from '@talex-touch/tuffex/button'
+import { asTrustedDialogHtml, type TouchTipProps, type TrustedDialogHtml } from '@talex-touch/tuffex/dialog'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSelect, type TxSelectValue } from '@talex-touch/tuffex/select'
 import { useVibrate, type VibrateType } from '@talex-touch/tuffex/utils'
@@ -51,9 +52,18 @@ import { useVibrate, type VibrateType } from '@talex-touch/tuffex/utils'
 const variant: TxButtonProps['variant'] = 'primary'
 const value: TxSelectValue = 'demo'
 const vibrateType: VibrateType = 'light'
+const trustedHtml: TrustedDialogHtml = asTrustedDialogHtml('<strong>trusted</strong>')
+const touchTipProps: TouchTipProps = {
+  messageHtml: trustedHtml,
+  buttons: [],
+  close: () => {},
+}
+
+// @ts-expect-error Dialog HTML must be explicitly marked trusted.
+const unsafeHtml: TrustedDialogHtml = '<strong>unsafe</strong>'
 
 useVibrate(vibrateType)
-console.log(Boolean(TxButton), Boolean(TxInput), Boolean(TxSelect), variant, value)
+console.log(Boolean(TxButton), Boolean(TxInput), Boolean(TxSelect), variant, value, touchTipProps, unsafeHtml)
 `,
 )
 

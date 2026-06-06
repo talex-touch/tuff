@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Component, PropType, VNode } from 'vue'
+import type { Component } from 'vue'
+import type { BlowDialogProps } from './types'
 /**
  * TxBlowDialog Component
  *
@@ -34,35 +35,13 @@ defineOptions({
   name: 'TxBlowDialog',
 })
 
-const props = defineProps({
-  close: {
-    type: Function as PropType<() => void>,
-    required: true,
-  },
-  title: {
-    type: String,
-    default: '',
-  },
-  message: {
-    type: String,
-    default: '',
-  },
-  messageHtml: {
-    type: String,
-    default: '',
-  },
-  confirmText: {
-    type: String,
-    default: 'Confirm',
-  },
-  comp: {
-    type: Object as PropType<Component>,
-    default: undefined,
-  },
-  render: {
-    type: Function as PropType<() => VNode>,
-    default: undefined,
-  },
+const props = withDefaults(defineProps<BlowDialogProps>(), {
+  title: '',
+  message: '',
+  messageHtml: '',
+  confirmText: 'Confirm',
+  comp: undefined,
+  render: undefined,
 })
 
 const isClosing = ref(false)
@@ -187,6 +166,7 @@ provide('destroy', destroy)
             {{ title }}
           </p>
           <div v-if="message || messageHtml" class="tx-blow-dialog__content">
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <span v-if="messageHtml" v-html="messageHtml" />
             <span v-else>{{ message }}</span>
           </div>

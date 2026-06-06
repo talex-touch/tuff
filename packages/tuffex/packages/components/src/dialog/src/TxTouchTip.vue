@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { PropType } from 'vue'
-import type { TouchTipButton } from './types'
+import type { TouchTipButton, TouchTipProps } from './types'
 import { onMounted, onUnmounted, ref, useId, watchEffect } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import { TxButton } from '../../button'
@@ -9,27 +8,11 @@ defineOptions({
   name: 'TxTouchTip',
 })
 
-const props = defineProps({
-  title: {
-    type: String,
-    default: '',
-  },
-  message: {
-    type: String,
-    default: '',
-  },
-  messageHtml: {
-    type: String,
-    default: '',
-  },
-  buttons: {
-    type: Array as PropType<TouchTipButton[]>,
-    default: () => [],
-  },
-  close: {
-    type: Function as PropType<() => void>,
-    required: true,
-  },
+const props = withDefaults(defineProps<TouchTipProps>(), {
+  title: '',
+  message: '',
+  messageHtml: '',
+  buttons: () => [],
 })
 
 interface ButtonState {
@@ -150,12 +133,14 @@ onUnmounted(() => {
       >
         <h1 v-if="title" :id="titleId" class="tx-touch-tip__title" v-text="title" />
 
+        <!-- eslint-disable vue/no-v-html -->
         <span
           v-if="messageHtml"
           :id="messageId"
           class="tx-touch-tip__content"
           v-html="messageHtml"
         />
+        <!-- eslint-enable vue/no-v-html -->
         <span
           v-else-if="message"
           :id="messageId"

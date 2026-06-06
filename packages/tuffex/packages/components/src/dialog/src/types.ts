@@ -1,5 +1,35 @@
 import type { Component, VNode } from 'vue'
 
+declare const trustedDialogHtmlBrand: unique symbol
+
+/**
+ * HTML that has been explicitly reviewed and marked safe by the caller.
+ *
+ * This type does not sanitize. It prevents accidental bare string usage on
+ * dialog HTML props while keeping the default `message` path plain text.
+ *
+ * @public
+ */
+export type TrustedDialogHtml = string & {
+  readonly [trustedDialogHtmlBrand]: true
+}
+
+/**
+ * Dialog HTML prop value. Empty string is allowed for Vue prop defaults.
+ *
+ * @public
+ */
+export type DialogMessageHtml = TrustedDialogHtml | ''
+
+/**
+ * Mark already-sanitized or otherwise trusted dialog HTML for explicit use.
+ *
+ * @public
+ */
+export function asTrustedDialogHtml(html: string): TrustedDialogHtml {
+  return html as TrustedDialogHtml
+}
+
 /**
  * Button type for visual styling.
  *
@@ -120,7 +150,7 @@ export interface BlowDialogProps {
    * Trusted HTML message content. Use only for sanitized internal call sites.
    * @default ''
    */
-  messageHtml?: string
+  messageHtml?: DialogMessageHtml
 
   /**
    * Confirm button text.
@@ -155,7 +185,7 @@ export interface PopperDialogProps {
   close: () => void
   title?: string
   message?: string
-  messageHtml?: string
+  messageHtml?: DialogMessageHtml
   confirmText?: string
   comp?: Component
   render?: () => VNode
@@ -171,7 +201,7 @@ export interface TouchTipButton {
 export interface TouchTipProps {
   title?: string
   message?: string
-  messageHtml?: string
+  messageHtml?: DialogMessageHtml
   buttons: TouchTipButton[]
   close: () => void
 }
