@@ -6,6 +6,7 @@ import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { defineComponent, h, render } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
 import DocsFeedback from '~/components/docs/DocsFeedback.vue'
+import { appDescription, appName } from '~/constants'
 import type {
   DocAnalyticsEvidenceSummary,
   DocAnalyticsResponse,
@@ -21,6 +22,7 @@ definePageMeta({
 })
 
 const route = useRoute()
+const requestUrl = useRequestURL()
 const nuxtApp = useNuxtApp()
 const { locale, t } = useI18n()
 const localePath = useLocalePath()
@@ -126,6 +128,21 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
     ...parsedMeta,
     ...record,
   }
+}
+
+function normalizePublicPath(path: string) {
+  if (!path)
+    return '/'
+  return path.startsWith('/') ? path : `/${path}`
+}
+
+function resolveAbsoluteUrl(path: string) {
+  const origin = requestUrl.origin.replace(/\/$/, '')
+  return new URL(normalizePublicPath(path), `${origin}/`).toString()
+}
+
+function serializeJsonLd(value: Record<string, unknown>) {
+  return JSON.stringify(value).replace(/</g, '\\u003C')
 }
 
 const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
@@ -608,6 +625,100 @@ const formattedLastUpdated = computed(() => {
     timeStyle: 'short',
   }).format(lastUpdatedDate.value)
 })
+
+const docSeoMeta = computed(() => coerceJsonRecord<Record<string, any>>(doc.value?.seo) ?? {})
+
+const docSeoTitleText = computed(() => {
+  const rawTitle = docSeoMeta.value.title ?? docDisplayTitle.value
+  return normalizeTitleForLocale(
+    rawTitle ? String(rawTitle) : '',
+    doc.value?.path ?? docPath.value,
+  )
+})
+
+const docSeoPageTitle = computed(() => {
+  const title = docSeoTitleText.value || (locale.value === 'zh' ? '文档' : 'Docs')
+  return `${title} | ${appName}`
+})
+
+const docSeoDescription = computed(() => {
+  const rawDescription = docSeoMeta.value.description ?? docDisplayDescription.value
+  const description = normalizeDescriptionForLocale(rawDescription ? String(rawDescription) : '')
+  if (description)
+    return description
+  return locale.value === 'zh'
+    ? 'Tuff 官方文档，涵盖桌面指令中心、插件扩展、组件与开发者 API。'
+    : appDescription
+})
+
+const docCanonicalPath = computed(() => normalizedDocPath.value || docPath.value || '/docs')
+const docCanonicalLocalePath = computed(() => localePath({ path: docCanonicalPath.value }))
+const docCanonicalUrl = computed(() => resolveAbsoluteUrl(docCanonicalLocalePath.value))
+
+const docStructuredData = computed<Record<string, unknown> | null>(() => {
+  if (!doc.value)
+    return null
+
+  const data: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: docSeoTitleText.value || docDisplayTitle.value,
+    description: docSeoDescription.value,
+    inLanguage: locale.value === 'zh' ? 'zh-CN' : 'en-US',
+    url: docCanonicalUrl.value,
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': docCanonicalUrl.value,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Tuff',
+      url: resolveAbsoluteUrl('/'),
+    },
+    isPartOf: {
+      '@type': 'CreativeWorkSeries',
+      name: appName,
+    },
+  }
+
+  if (lastUpdatedDate.value)
+    data.dateModified = lastUpdatedDate.value.toISOString()
+
+  return data
+})
+
+const docStructuredDataText = computed(() =>
+  docStructuredData.value ? serializeJsonLd(docStructuredData.value) : '',
+)
+
+useSeoMeta({
+  title: docSeoPageTitle,
+  description: docSeoDescription,
+  ogTitle: docSeoPageTitle,
+  ogDescription: docSeoDescription,
+  ogType: 'article',
+  ogUrl: docCanonicalUrl,
+  twitterCard: 'summary',
+  twitterTitle: docSeoPageTitle,
+  twitterDescription: docSeoDescription,
+})
+
+useHead(() => ({
+  link: [
+    {
+      rel: 'canonical',
+      href: docCanonicalUrl.value,
+    },
+  ],
+  script: docStructuredDataText.value
+    ? [
+        {
+          type: 'application/ld+json',
+          innerHTML: docStructuredDataText.value,
+        },
+      ]
+    : [],
+}))
 
 const pagerPrevPath = computed(() => {
   const entry = docPager.value.prev

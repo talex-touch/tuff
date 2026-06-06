@@ -5,6 +5,14 @@
 
 ## 2026-06-06
 
+### feat(nexus): add docs page SEO metadata
+
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added per-doc SEO title, description, canonical URL, Open Graph and Twitter metadata to Nexus docs pages using existing page metadata and runtime request origin.
+  - Added escaped `TechArticle` JSON-LD structured data for rendered docs pages, including canonical page URL, language and modified timestamp when available.
+  - 验证：`pnpm -C "apps/nexus" run typecheck`、scoped Nexus ESLint and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### feat(tuffex): add adaptive date picker field calendar
 
 - `packages/tuffex/packages/components/src/date-picker/src/TxDatePicker.vue`
