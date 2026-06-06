@@ -93,21 +93,34 @@ describe("PreviewSDK benchmark", () => {
       JSON.stringify(result.summary, null, 2),
     );
     console.table(
-      result.cases.map((item) => ({
-        id: item.id,
-        expected: item.expectedAbilityId ?? "no-result",
-        actual: item.actualAbilityId ?? "no-result",
-        status: item.diagnostics.status,
-        durationMs: item.diagnostics.durationMs,
-        checked: item.diagnostics.checkedAbilityCount,
-        executed: item.diagnostics.executedAbilityCount,
-        exceededBudget: item.diagnostics.exceededBudget,
-        matchedExpected: item.matchedExpected,
-      })),
+      result.failures.length > 0
+        ? result.failures.map((item) => ({
+            id: item.caseId,
+            kind: item.kind,
+            expected: item.expectNoResult
+              ? "no-result"
+              : item.expectedAbilityId ?? "any-result",
+            actual: item.actualAbilityId ?? "no-result",
+            status: item.status,
+            durationMs: item.durationMs,
+            budgetMs: item.budgetMs ?? "none",
+          }))
+        : result.cases.map((item) => ({
+            id: item.id,
+            expected: item.expectedAbilityId ?? "no-result",
+            actual: item.actualAbilityId ?? "no-result",
+            status: item.diagnostics.status,
+            durationMs: item.diagnostics.durationMs,
+            checked: item.diagnostics.checkedAbilityCount,
+            executed: item.diagnostics.executedAbilityCount,
+            exceededBudget: item.diagnostics.exceededBudget,
+            matchedExpected: item.matchedExpected,
+          })),
     );
 
     expect(result.summary.total).toBe(benchmarkCases.length);
     expect(result.summary.matchedExpected).toBe(benchmarkCases.length);
     expect(result.summary.exceededBudget).toBe(0);
+    expect(result.failures).toHaveLength(0);
   });
 });

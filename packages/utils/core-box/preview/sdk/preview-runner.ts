@@ -2,6 +2,7 @@ import type {
   PreviewAbility,
   PreviewBenchmarkCase,
   PreviewBenchmarkCaseResult,
+  PreviewBenchmarkFailure,
   PreviewBenchmarkResult,
   PreviewResolveOptions,
   PreviewSdk,
@@ -66,23 +67,65 @@ export async function runPreviewSdkBenchmark(
     });
   }
 
+  const failures = resolvePreviewBenchmarkFailures(cases, results);
   const durations = results
     .map((result) => result.diagnostics.durationMs)
     .sort((a, b) => a - b);
 
   return {
     cases: results,
+    failures,
     summary: {
       total: results.length,
       matchedExpected: results.filter((result) => result.matchedExpected).length,
+      mismatchedExpected: results.filter((result) => !result.matchedExpected)
+        .length,
       exceededBudget: results.filter(
         (result) => result.diagnostics.exceededBudget,
       ).length,
+      failed: failures.length,
       p50DurationMs: percentile(durations, 0.5),
       p95DurationMs: percentile(durations, 0.95),
       maxDurationMs: durations.at(-1) ?? 0,
     },
   };
+}
+
+function resolvePreviewBenchmarkFailures(
+  cases: PreviewBenchmarkCase[],
+  results: PreviewBenchmarkCaseResult[],
+): PreviewBenchmarkFailure[] {
+  const caseById = new Map(cases.map((benchmarkCase) => [benchmarkCase.id, benchmarkCase]));
+  const failures: PreviewBenchmarkFailure[] = [];
+
+  for (const result of results) {
+    const benchmarkCase = caseById.get(result.id);
+    const base = {
+      caseId: result.id,
+      expectedAbilityId: benchmarkCase?.expectedAbilityId,
+      expectNoResult: benchmarkCase?.expectNoResult,
+      actualAbilityId: result.actualAbilityId,
+      status: result.diagnostics.status,
+      durationMs: result.diagnostics.durationMs,
+      budgetMs: result.diagnostics.budgetMs,
+    };
+
+    if (!result.matchedExpected) {
+      failures.push({
+        ...base,
+        kind: "ability-mismatch",
+      });
+    }
+
+    if (result.diagnostics.exceededBudget) {
+      failures.push({
+        ...base,
+        kind: "budget-exceeded",
+      });
+    }
+  }
+
+  return failures;
 }
 
 function percentile(values: number[], ratio: number): number {

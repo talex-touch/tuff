@@ -138,10 +138,27 @@ export interface PreviewBenchmarkCaseResult {
   diagnostics: PreviewResolveDiagnostics;
 }
 
+export type PreviewBenchmarkFailureKind =
+  | "ability-mismatch"
+  | "budget-exceeded";
+
+export interface PreviewBenchmarkFailure {
+  kind: PreviewBenchmarkFailureKind;
+  caseId: string;
+  expectedAbilityId?: string;
+  expectNoResult?: boolean;
+  actualAbilityId?: string;
+  status: PreviewResolveStatus;
+  durationMs: number;
+  budgetMs?: number;
+}
+
 export interface PreviewBenchmarkSummary {
   total: number;
   matchedExpected: number;
+  mismatchedExpected: number;
   exceededBudget: number;
+  failed: number;
   p50DurationMs: number;
   p95DurationMs: number;
   maxDurationMs: number;
@@ -149,6 +166,7 @@ export interface PreviewBenchmarkSummary {
 
 export interface PreviewBenchmarkResult {
   cases: PreviewBenchmarkCaseResult[];
+  failures: PreviewBenchmarkFailure[];
   summary: PreviewBenchmarkSummary;
 }
 

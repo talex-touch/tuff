@@ -230,15 +230,80 @@ describe("PreviewSDK", () => {
       expect.objectContaining({
         total: 2,
         matchedExpected: 2,
+        mismatchedExpected: 0,
         exceededBudget: 1,
+        failed: 1,
         p50DurationMs: 1,
         p95DurationMs: 3,
         maxDurationMs: 3,
       }),
     );
+    expect(result.failures).toEqual([
+      expect.objectContaining({
+        kind: "budget-exceeded",
+        caseId: "hit",
+        expectedAbilityId: "preview.benchmark",
+        actualAbilityId: "preview.benchmark",
+        status: "success",
+      }),
+    ]);
     expect(result.cases.map((item) => item.matchedExpected)).toEqual([
       true,
       true,
+    ]);
+  });
+
+  it("surfaces benchmark ability mismatches as actionable failures", async () => {
+    const sdk = createPreviewSdk({
+      abilities: [
+        {
+          id: "preview.actual",
+          priority: 1,
+          safety: createStaticPreviewSafetyPolicy("benchmark", 20),
+          canHandle: () => true,
+          execute: async () => ({
+            abilityId: "preview.actual",
+            confidence: 0.8,
+            payload: {
+              abilityId: "preview.actual",
+              title: "benchmark",
+              primaryValue: "ok",
+            },
+          }),
+        },
+      ],
+    });
+
+    const result = await runPreviewSdkBenchmark(
+      sdk,
+      [
+        {
+          id: "wrong-ability",
+          query: { text: "hit", inputs: [] },
+          expectedAbilityId: "preview.expected",
+          budgetMs: 40,
+        },
+      ],
+      signal(),
+    );
+
+    expect(result.summary).toEqual(
+      expect.objectContaining({
+        total: 1,
+        matchedExpected: 0,
+        mismatchedExpected: 1,
+        exceededBudget: 0,
+        failed: 1,
+      }),
+    );
+    expect(result.failures).toEqual([
+      expect.objectContaining({
+        kind: "ability-mismatch",
+        caseId: "wrong-ability",
+        expectedAbilityId: "preview.expected",
+        actualAbilityId: "preview.actual",
+        status: "success",
+      }),
     ]);
   });
 });
