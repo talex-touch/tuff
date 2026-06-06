@@ -46,6 +46,7 @@
     "types"
   ],
   "scripts": {
+    "benchmark:preview": "vitest run \"__tests__/core-box/preview-sdk.benchmark.test.ts\" --reporter verbose",
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
     "test": "vitest run",
