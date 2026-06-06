@@ -193,6 +193,9 @@ const viewState = computed(() => {
   return 'not-found'
 })
 
+if (import.meta.server && viewState.value === 'not-found')
+  setResponseStatus(404)
+
 const { data: navigationTreePayload } = await useTypedFetch<unknown>(
   '/api/docs/navigation',
   {
@@ -654,6 +657,7 @@ const docSeoDescription = computed(() => {
 const docCanonicalPath = computed(() => normalizedDocPath.value || docPath.value || '/docs')
 const docCanonicalLocalePath = computed(() => localePath({ path: docCanonicalPath.value }))
 const docCanonicalUrl = computed(() => resolveAbsoluteUrl(docCanonicalLocalePath.value))
+const docRobotsContent = computed(() => viewState.value === 'content' ? 'index,follow' : 'noindex,nofollow')
 
 const docStructuredData = computed<Record<string, unknown> | null>(() => {
   if (!doc.value)
@@ -704,6 +708,12 @@ useSeoMeta({
 })
 
 useHead(() => ({
+  meta: [
+    {
+      name: 'robots',
+      content: docRobotsContent.value,
+    },
+  ],
   link: [
     {
       rel: 'canonical',
