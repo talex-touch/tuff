@@ -22,12 +22,32 @@ const PickerStub = defineComponent({
   template: '<div class="picker-stub"><slot /></div>',
 })
 
+const PopoverStub = defineComponent({
+  name: 'TxPopover',
+  props: {
+    modelValue: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false },
+  },
+  emits: ['update:modelValue'],
+  template: `
+    <div class="popover-stub" :data-open="modelValue">
+      <div class="popover-stub__reference">
+        <slot name="reference" />
+      </div>
+      <div class="popover-stub__content">
+        <slot />
+      </div>
+    </div>
+  `,
+})
+
 function mountDatePicker(props: Record<string, unknown> = {}) {
   return mount(TxDatePicker, {
     props,
     global: {
       stubs: {
         TxPicker: PickerStub,
+        TxPopover: PopoverStub,
       },
     },
   })
@@ -146,5 +166,63 @@ describe('txDatePicker', () => {
     expect(wrapper.emitted('cancel')).toHaveLength(1)
     expect(wrapper.emitted('open')).toHaveLength(1)
     expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('renders a field calendar variant for desktop forms', async () => {
+    const emptyWrapper = mountDatePicker({
+      variant: 'field',
+      modelValue: '',
+      placeholder: 'Pick a date',
+    })
+
+    expect(emptyWrapper.find('.tx-date-picker-field__value').text()).toBe('Pick a date')
+
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      modelValue: '2026-05-20',
+      min: '2026-05-10',
+      max: '2026-05-31',
+    })
+
+    expect(wrapper.find('.tx-date-picker-field__value').text()).toBe('2026-05-20')
+    expect(wrapper.find('.tx-date-picker-calendar__title').text()).toBe('2026-05')
+
+    const dayNine = wrapper.findAll('.tx-date-picker-calendar__cell')
+      .find(cell => cell.text() === '9' && !cell.classes('is-outside-month'))
+    const dayTwentyFive = wrapper.findAll('.tx-date-picker-calendar__cell')
+      .find(cell => cell.text() === '25' && !cell.classes('is-outside-month'))
+
+    expect(dayNine?.attributes('disabled')).toBeDefined()
+    expect(dayTwentyFive?.attributes('disabled')).toBeUndefined()
+
+    await dayTwentyFive?.trigger('click')
+    await nextTick()
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-05-25'])
+    expect(wrapper.emitted('change')?.[0]).toEqual(['2026-05-25'])
+  })
+
+  it('switches adaptive variant to field on desktop viewport', async () => {
+    const originalWidth = window.innerWidth
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1024,
+    })
+
+    const wrapper = mountDatePicker({
+      variant: 'adaptive',
+      modelValue: '2026-08-09',
+      adaptiveBreakpoint: 768,
+    })
+
+    await nextTick()
+
+    expect(wrapper.findComponent(PickerStub).exists()).toBe(false)
+    expect(wrapper.find('.tx-date-picker-field').exists()).toBe(true)
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalWidth,
+    })
   })
 })

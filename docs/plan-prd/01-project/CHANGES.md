@@ -1,7 +1,24 @@
 # 变更日志
 
-> 更新时间：2026-06-05
+> 更新时间：2026-06-06
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
+
+## 2026-06-06
+
+### feat(tuffex): add adaptive date picker field calendar
+
+- `packages/tuffex/packages/components/src/date-picker/src/TxDatePicker.vue`
+- `packages/tuffex/packages/components/src/date-picker/src/types.ts`
+- `packages/tuffex/packages/components/src/date-picker/__tests__/date-picker.test.ts`
+- `packages/tuffex/docs/components/date-picker.md`
+- `packages/tuffex/docs/.vitepress/theme/components/demos/DatePickerBasicDemo.vue`
+- `apps/nexus/app/components/content/demos/DatePickerDatePickerDemo.vue`
+- `apps/nexus/content/docs/dev/components/date-picker.zh.mdc`
+- `apps/nexus/content/docs/dev/components/date-picker.en.mdc`
+  - Added `variant="field"` and `variant="adaptive"` to `TxDatePicker`, keeping the default `picker` wheel behavior backward-compatible.
+  - Added a desktop-friendly calendar field surface with min/max disabled states, week-start control, responsive mobile width and adaptive viewport switching.
+  - Updated TuffEx and Nexus DatePicker demos/docs so PC field calendar and mobile picker usage are both documented.
+  - 验证：`pnpm -C "packages/tuffex" exec vitest run "packages/components/src/date-picker/__tests__/date-picker.test.ts"`、`pnpm -C "packages/tuffex" run build`、`audit:exports`、`audit:types`、`audit:size` and `pnpm -C "apps/nexus" run typecheck` passed with temporary Node `22.16.0` + pnpm `10.32.1`; scoped TuffEx/Nexus ESLint passed.
 
 ## 2026-06-05
 
