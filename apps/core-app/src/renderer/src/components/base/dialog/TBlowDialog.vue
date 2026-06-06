@@ -1,6 +1,7 @@
 <script lang="ts" name="TBlowDialog" setup>
 import type { Component, VNode } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
+import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common'
 
 /**
@@ -14,7 +15,7 @@ interface Props {
   /** Dialog message content */
   message?: string
   /** Trusted HTML dialog message content */
-  messageHtml?: string
+  messageHtml?: DialogMessageHtml
   /** Component to render */
   comp?: Component
   /** Render function */
@@ -165,6 +166,7 @@ provide('destroy', destroy)
           {{ title }}
         </p>
         <div v-if="message || messageHtml" class="TBlowDialog-Content">
+          <!-- eslint-disable-next-line vue/no-v-html -->
           <span v-if="messageHtml" style="position: relative; height: 100%" v-html="messageHtml" />
           <span v-else style="position: relative; height: 100%">
             {{ message }}

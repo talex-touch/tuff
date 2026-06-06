@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
+import { asTrustedDialogHtml } from '@talex-touch/tuffex/dialog'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import TBlowDialog from './TBlowDialog.vue'
 import TBottomDialog from './TBottomDialog.vue'
@@ -35,7 +36,7 @@ describe('base dialog message rendering', () => {
     const wrapper = mount(TouchTip, {
       props: {
         title: 'Tip',
-        messageHtml: '<strong>Trusted</strong>',
+        messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
         buttons: [],
         close: vi.fn()
       },
@@ -86,7 +87,7 @@ describe('base dialog message rendering', () => {
     const htmlWrapper = mount(TDialogMention, {
       props: {
         title: 'Mention',
-        messageHtml: '<strong>Trusted</strong>',
+        messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
         close: vi.fn()
       },
       attachTo: document.body
@@ -115,7 +116,7 @@ describe('base dialog message rendering', () => {
     const htmlWrapper = mount(TPopperDialog, {
       props: {
         title: 'HTML',
-        messageHtml: '<strong>Trusted</strong>',
+        messageHtml: asTrustedDialogHtml('<strong>Trusted</strong>'),
         close: vi.fn()
       },
       attachTo: document.body
@@ -144,7 +145,7 @@ describe('base dialog message rendering', () => {
     const htmlWrapper = mount(TBlowDialog, {
       props: {
         title: 'HTML',
-        messageHtml: '<em>Trusted</em>',
+        messageHtml: asTrustedDialogHtml('<em>Trusted</em>'),
         close: vi.fn()
       },
       attachTo: document.body

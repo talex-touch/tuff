@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Component, PropType, VNode } from 'vue'
+import type { Component, VNode } from 'vue'
+import type { PopperDialogProps } from './types'
 import {
 
   defineComponent,
@@ -17,35 +18,13 @@ defineOptions({
   name: 'TxPopperDialog',
 })
 
-const props = defineProps({
-  close: {
-    type: Function as PropType<() => void>,
-    required: true,
-  },
-  title: {
-    type: String,
-    default: '',
-  },
-  message: {
-    type: String,
-    default: '',
-  },
-  messageHtml: {
-    type: String,
-    default: '',
-  },
-  confirmText: {
-    type: String,
-    default: 'Confirm',
-  },
-  comp: {
-    type: Object as PropType<Component>,
-    default: undefined,
-  },
-  render: {
-    type: Function as PropType<() => VNode>,
-    default: undefined,
-  },
+const props = withDefaults(defineProps<PopperDialogProps>(), {
+  title: '',
+  message: '',
+  messageHtml: '',
+  confirmText: 'Confirm',
+  comp: undefined,
+  render: undefined,
 })
 
 const isClosing = ref(false)
@@ -118,6 +97,7 @@ provide('destroy', destroy)
             id="tx-popper-dialog-content"
             class="tx-popper-dialog__content"
           >
+            <!-- eslint-disable-next-line vue/no-v-html -->
             <span v-if="messageHtml" v-html="messageHtml" />
             <span v-else>{{ message }}</span>
           </div>

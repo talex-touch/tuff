@@ -1,5 +1,6 @@
 <script lang="ts" name="TouchTip" setup>
 import { TxButton, type TxButtonProps } from '@talex-touch/tuffex/button'
+import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
 
@@ -40,7 +41,7 @@ interface Props {
   /** Dialog message */
   message?: string
   /** Trusted HTML dialog message */
-  messageHtml?: string
+  messageHtml?: DialogMessageHtml
   /** Array of buttons */
   buttons?: Button[]
   /** Close callback function */
@@ -200,12 +201,14 @@ onUnmounted(() => {
       <!-- Dialog title -->
       <h1 id="dialog-title" v-text="title" />
 
+      <!-- eslint-disable vue/no-v-html -->
       <span
         v-if="messageHtml"
         id="dialog-message"
         class="TDialogTip-Content"
         v-html="messageHtml"
       />
+      <!-- eslint-enable vue/no-v-html -->
       <span v-else id="dialog-message" class="TDialogTip-Content">
         {{ message }}
       </span>

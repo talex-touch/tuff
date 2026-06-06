@@ -1,6 +1,7 @@
 <script lang="ts" name="TPopperDialog" setup>
 import type { Component, VNodeChild } from 'vue'
 import { TxButton } from '@talex-touch/tuffex/button'
+import type { DialogMessageHtml } from '@talex-touch/tuffex/dialog'
 import { sleep } from '@talex-touch/utils/common'
 import { defineComponent, onMounted, provide, ref } from 'vue'
 import TouchScroll from '../TouchScroll.vue'
@@ -9,7 +10,7 @@ interface Props {
   close: () => void
   title?: string
   message?: string
-  messageHtml?: string
+  messageHtml?: DialogMessageHtml
   comp?: Component
   render?: () => VNodeChild
 }
@@ -67,12 +68,14 @@ provide('destroy', destroy)
           no-padding
           class="TPopperDialog-Content relative mb-60px top-0 left-0 right-0 h-full max-h-300px box-border"
         >
+          <!-- eslint-disable vue/no-v-html -->
           <span
             v-if="messageHtml"
             class="w-full block text-center my-1rem leading-1.25rem"
             style="position: relative; height: 100%"
             v-html="messageHtml"
           />
+          <!-- eslint-enable vue/no-v-html -->
           <span
             v-else
             class="w-full block text-center my-1rem leading-1.25rem"

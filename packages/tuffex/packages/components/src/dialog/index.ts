@@ -1,18 +1,21 @@
-import type {
-  BlowDialogProps,
-  BottomDialogProps,
-  DialogButton,
-  DialogButtonType,
-  DialogEmits,
-  PopperDialogProps,
-  TouchTipButton,
-  TouchTipProps,
-} from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxBlowDialog from './src/TxBlowDialog.vue'
 import TxBottomDialog from './src/TxBottomDialog.vue'
 import TxPopperDialog from './src/TxPopperDialog.vue'
 import TxTouchTip from './src/TxTouchTip.vue'
+export { asTrustedDialogHtml } from './src/types'
+export type {
+  BlowDialogProps,
+  BottomDialogProps,
+  DialogButton,
+  DialogButtonType,
+  DialogEmits,
+  DialogMessageHtml,
+  PopperDialogProps,
+  TouchTipButton,
+  TouchTipProps,
+  TrustedDialogHtml,
+} from './src/types'
 
 /**
  * TxBottomDialog component with Vue plugin installation support.
@@ -38,17 +41,6 @@ export {
   TxBottomDialog,
   TxPopperDialog,
   TxTouchTip,
-}
-
-export type {
-  BlowDialogProps,
-  BottomDialogProps,
-  DialogButton,
-  DialogButtonType,
-  DialogEmits,
-  PopperDialogProps,
-  TouchTipButton,
-  TouchTipProps,
 }
 
 export type TxBottomDialogInstance = InstanceType<typeof TxBottomDialog>
