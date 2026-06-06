@@ -9,7 +9,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 
@@ -166,6 +166,9 @@ const defaultModelError = ref('')
 const showModelsDrawer = ref(false)
 const showDefaultModelDrawer = ref(false)
 const showInstructionsDrawer = ref(false)
+const modelsDialogSource = ref<HTMLElement | null>(null)
+const defaultModelDialogSource = ref<HTMLElement | null>(null)
+const instructionsDialogSource = ref<HTMLElement | null>(null)
 const isFetching = ref(false)
 
 const defaultModelSummary = computed(() => {
@@ -230,13 +233,25 @@ const defaultModelGroups = computed(() => {
   }))
 })
 
-function openDefaultModelDrawer() {
+function resolveDialogSource(event?: MouseEvent): HTMLElement | null {
+  return event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+}
+
+function openModelsDialog(event?: MouseEvent) {
+  if (props.disabled) return
+  modelsDialogSource.value = resolveDialogSource(event)
+  showModelsDrawer.value = true
+}
+
+function openDefaultModelDrawer(event?: MouseEvent) {
   if (props.disabled || localModels.value.length === 0) return
+  defaultModelDialogSource.value = resolveDialogSource(event)
   showDefaultModelDrawer.value = true
 }
 
-function openInstructionsDrawer() {
+function openInstructionsDrawer(event?: MouseEvent) {
   if (props.disabled) return
+  instructionsDialogSource.value = resolveDialogSource(event)
   showInstructionsDrawer.value = true
 }
 
@@ -364,7 +379,7 @@ watch(
       :active="localModels.length > 0"
       :disabled="disabled"
       guidance
-      @click="showModelsDrawer = true"
+      @click="openModelsDialog"
     >
       <div class="models-summary">
         <span class="text-sm op-70">
@@ -417,10 +432,14 @@ watch(
       </TxButton>
     </TuffBlockSlot>
 
-    <!-- Models Drawer -->
-    <TuffDrawer
-      v-model:visible="showModelsDrawer"
-      :title="t('intelligence.config.model.manageModels')"
+    <!-- Models Dialog -->
+    <FlipDialog
+      v-model="showModelsDrawer"
+      :reference="modelsDialogSource"
+      :header-title="t('intelligence.config.model.manageModels')"
+      :header-desc="t('intelligence.config.model.modelsHint')"
+      size="xl"
+      max-height="calc(86dvh - 24px)"
     >
       <div class="models-drawer-content">
         <p class="text-sm text-[var(--tx-text-color-secondary)] mb-4">
@@ -483,12 +502,15 @@ watch(
           {{ modelsError }}
         </p>
       </div>
-    </TuffDrawer>
+    </FlipDialog>
 
-    <!-- Default Model Drawer -->
-    <TuffDrawer
-      v-model:visible="showDefaultModelDrawer"
-      :title="t('intelligence.config.model.defaultModel')"
+    <!-- Default Model Dialog -->
+    <FlipDialog
+      v-model="showDefaultModelDrawer"
+      :reference="defaultModelDialogSource"
+      :header-title="t('intelligence.config.model.defaultModel')"
+      :header-desc="t('intelligence.config.model.defaultModelPlaceholder')"
+      size="md"
     >
       <p class="drawer-description">
         {{ t('intelligence.config.model.defaultModelPlaceholder') }}
@@ -530,12 +552,16 @@ watch(
           {{ defaultModelError }}
         </p>
       </div>
-    </TuffDrawer>
+    </FlipDialog>
 
-    <!-- Instructions Drawer -->
-    <TuffDrawer
-      v-model:visible="showInstructionsDrawer"
-      :title="t('intelligence.config.model.instructions')"
+    <!-- Instructions Dialog -->
+    <FlipDialog
+      v-model="showInstructionsDrawer"
+      :reference="instructionsDialogSource"
+      :header-title="t('intelligence.config.model.instructions')"
+      :header-desc="t('intelligence.config.model.instructionsHint')"
+      size="lg"
+      max-height="calc(86dvh - 24px)"
     >
       <p class="drawer-description">
         {{ t('intelligence.config.model.instructionsHint') }}
@@ -544,7 +570,7 @@ watch(
         v-model="localInstructions"
         @update:model-value="handleInstructionsChange"
       />
-    </TuffDrawer>
+    </FlipDialog>
   </div>
 </template>
 
