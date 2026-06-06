@@ -9,6 +9,7 @@ import {
   TextStatsAbility,
   TimeDeltaAbility,
   UnitConversionAbility,
+  createDefaultPurePreviewAbilities,
   createPreviewSdk,
   createStaticPreviewSafetyPolicy,
   evaluateBasicExpression,
@@ -99,6 +100,38 @@ describe("PreviewSDK", () => {
     expect(advanced?.payload.primaryValue).toBe("4");
     expect(constant?.payload.title).toBe("真空光速");
     expect(time?.payload.subtitle).toBe("时长换算");
+  });
+
+  it("keeps time, percentage and unit boundaries specific in default registry order", async () => {
+    const sdk = createPreviewSdk({
+      abilities: createDefaultPurePreviewAbilities(),
+    });
+
+    const chineseTime = await sdk.resolve({
+      query: { text: "1小时30分钟后", inputs: [] },
+      signal: signal(),
+    });
+    const chinesePercentage = await sdk.resolve({
+      query: { text: "100 增加 20%", inputs: [] },
+      signal: signal(),
+    });
+    const invalidRelativeTime = await sdk.resolveWithDiagnostics({
+      query: { text: "now + abc", inputs: [] },
+      signal: signal(),
+    });
+    const incompatibleUnit = await sdk.resolveWithDiagnostics({
+      query: { text: "10 kg to m", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(chineseTime?.abilityId).toBe("preview.time");
+    expect(chineseTime?.payload.subtitle).toBe("时间偏移");
+    expect(chinesePercentage?.abilityId).toBe("preview.percent");
+    expect(chinesePercentage?.payload.primaryValue).toBe("120");
+    expect(invalidRelativeTime.result).toBeNull();
+    expect(invalidRelativeTime.diagnostics.status).toBe("no-match");
+    expect(incompatibleUnit.result).toBeNull();
+    expect(incompatibleUnit.diagnostics.status).toBe("no-match");
   });
 
   it("guards overlong input before ability matching", async () => {

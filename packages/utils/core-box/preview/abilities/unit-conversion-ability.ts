@@ -34,7 +34,15 @@ export class UnitConversionAbility extends BasePreviewAbility {
   override canHandle(query: { text?: string }): boolean {
     if (!query.text || query.text.length > this.safety.input.maxLength)
       return false;
-    return parseUnitQuery(query.text) !== null;
+    const parsed = parseUnitQuery(query.text);
+    if (!parsed) return false;
+
+    const fromUnit = resolveUnit(parsed.fromUnit);
+    if (!fromUnit) return false;
+    if (!parsed.toUnit) return true;
+
+    const toUnit = resolveUnit(parsed.toUnit);
+    return Boolean(toUnit && fromUnit.category === toUnit.category);
   }
 
   override async execute(

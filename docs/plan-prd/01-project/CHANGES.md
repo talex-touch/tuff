@@ -5,6 +5,19 @@
 
 ## 2026-06-06
 
+### fix(search): tighten PreviewSDK parser boundaries
+
+- `packages/utils/core-box/preview/abilities/time-delta-ability.ts`
+- `packages/utils/core-box/preview/abilities/percentage-ability.ts`
+- `packages/utils/core-box/preview/abilities/unit-conversion-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Tightened TimeDelta parsing so invalid relative expressions such as `now + abc` no longer produce a fake-success current-time preview.
+  - Added composed Chinese duration parsing such as `1小时30分钟后` and Chinese percentage increase/decrease expressions such as `100 增加 20%`.
+  - Made UnitConversion `canHandle()` require known same-category units before claiming a query, so cross-category input such as `10 kg to m` remains a no-result boundary case.
+  - 验证：PreviewSDK focused Vitest and `benchmark:preview` passed with 14/14 matched, 0 budget exceeded, P50 ~0.37ms and P95/max ~0.69ms under temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### test(search): add PreviewSDK benchmark failure summary
 
 - `packages/utils/core-box/preview/types.ts`

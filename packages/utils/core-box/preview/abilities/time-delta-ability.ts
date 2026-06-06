@@ -12,7 +12,7 @@ import { BasePreviewAbility } from "../sdk";
 dayjs.extend(duration);
 dayjs.extend(relativeTime);
 
-const RELATIVE_PATTERN = /^now\s*([+-])\s*([\w\s.]+)$/i;
+const RELATIVE_PATTERN = /^now\s*([+-])\s*(.+)$/i;
 const RANGE_PATTERN =
   /^(\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)\s*-\s*(now|\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?)$/i;
 
@@ -46,23 +46,42 @@ const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 const WEEK_MS = 7 * DAY_MS;
 
-function parseRelative(value: string): number {
+function parseRelative(value: string): number | null {
+  const englishOffset = parseEnglishRelative(value);
+  if (englishOffset !== null) return englishOffset;
+  return parseChineseDurationSegments(value);
+}
+
+function parseEnglishRelative(value: string): number | null {
+  const source = value.trim().toLowerCase();
+  if (!source) return null;
+
   let total = 0;
   const regex = /([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*([a-z]+)/gi;
+  let matched = false;
+  let lastIndex = 0;
+  const unmatchedParts: string[] = [];
+
   for (
-    let match = regex.exec(value);
+    let match = regex.exec(source);
     match !== null;
-    match = regex.exec(value)
+    match = regex.exec(source)
   ) {
+    unmatchedParts.push(source.slice(lastIndex, match.index));
+    lastIndex = regex.lastIndex;
     const amountRaw = match[1];
     const unitRaw = match[2];
     if (!amountRaw || !unitRaw) continue;
     const amount = Number(amountRaw);
     const unit = unitRaw.toLowerCase();
     const factor = UNIT_MAP[unit];
-    if (!factor || Number.isNaN(amount)) continue;
+    if (!factor || Number.isNaN(amount)) return null;
     total += amount * factor;
+    matched = true;
   }
+
+  unmatchedParts.push(source.slice(lastIndex));
+  if (!matched || unmatchedParts.join("").trim().length > 0) return null;
   return total;
 }
 
@@ -77,19 +96,54 @@ const CN_UNIT_MAP: Record<string, number> = {
   周: WEEK_MS,
 };
 
+function parseChineseDurationSegments(text: string): number | null {
+  const source = text.trim();
+  if (!source) return null;
+
+  let total = 0;
+  const regex = /([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(秒|分钟|小时|[分时天日周])/g;
+  let matched = false;
+  let lastIndex = 0;
+  const unmatchedParts: string[] = [];
+
+  for (
+    let match = regex.exec(source);
+    match !== null;
+    match = regex.exec(source)
+  ) {
+    unmatchedParts.push(source.slice(lastIndex, match.index));
+    lastIndex = regex.lastIndex;
+    const amountRaw = match[1];
+    const unitRaw = match[2];
+    if (!amountRaw || !unitRaw) continue;
+    const factor = CN_UNIT_MAP[unitRaw];
+    if (!factor) return null;
+    const amount = Number(amountRaw);
+    if (Number.isNaN(amount)) return null;
+    total += amount * factor;
+    matched = true;
+  }
+
+  unmatchedParts.push(source.slice(lastIndex));
+  if (!matched || unmatchedParts.join("").trim().length > 0) return null;
+  return total;
+}
+
 function parseChineseRelative(text: string): number | null {
-  const match = text.match(
-    /^([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(秒|分钟|[分时天日周]|小时)(后|前)?$/,
-  );
-  if (!match) return null;
-  const [, amountRaw, unitRaw, direction] = match;
-  if (!amountRaw || !unitRaw) return null;
-  const factor = CN_UNIT_MAP[unitRaw];
-  if (!factor) return null;
-  const amount = Number(amountRaw);
-  if (Number.isNaN(amount)) return null;
-  const sign = direction === "前" ? -1 : 1;
-  return amount * factor * sign;
+  const trimmed = text.trim();
+  const direction = trimmed.endsWith("前")
+    ? "前"
+    : trimmed.endsWith("后")
+      ? "后"
+      : undefined;
+  const expression = direction ? trimmed.slice(0, -1).trim() : trimmed;
+  if (!expression) return null;
+
+  const offset = parseChineseDurationSegments(expression);
+  if (offset === null) return null;
+  if (direction === "前") return -Math.abs(offset);
+  if (direction === "后") return Math.abs(offset);
+  return offset;
 }
 
 function parseNaturalRelative(text: string): number | null {
@@ -105,7 +159,7 @@ function parseNaturalRelative(text: string): number | null {
     const expression = inMatch[1];
     if (!expression) return null;
     const offset = parseRelative(expression);
-    return offset || null;
+    return offset === null ? null : offset;
   }
 
   const agoMatch = lower.match(/^([\w\s.]+)\s+(ago|before)$/);
@@ -113,7 +167,7 @@ function parseNaturalRelative(text: string): number | null {
     const expression = agoMatch[1];
     if (!expression) return null;
     const offset = parseRelative(expression);
-    return offset ? -offset : null;
+    return offset === null ? null : -offset;
   }
 
   const laterMatch = lower.match(/^([\w\s.]+)\s+(later|after|from now)$/);
@@ -121,7 +175,7 @@ function parseNaturalRelative(text: string): number | null {
     const expression = laterMatch[1];
     if (!expression) return null;
     const offset = parseRelative(expression);
-    return offset || null;
+    return offset === null ? null : offset;
   }
 
   const cn = parseChineseRelative(text);
@@ -136,7 +190,7 @@ function parseDurationValue(text: string): number | null {
   const match = lower.match(regex);
   if (match) {
     const offset = parseRelative(lower);
-    if (offset) return Math.abs(offset);
+    if (offset !== null) return Math.abs(offset);
   }
 
   const cn = parseChineseRelative(text);
@@ -145,9 +199,10 @@ function parseDurationValue(text: string): number | null {
   }
 
   const multiMatch = /(\d+)\s+[a-z]+/i.test(lower);
-  if (multiMatch) {
+  const compactMultiMatch = /(\d+(?:\.\d+)?|\.\d+)\s*[a-z]+/i.test(lower);
+  if (multiMatch || compactMultiMatch) {
     const offset = parseRelative(lower);
-    if (offset) return Math.abs(offset);
+    if (offset !== null) return Math.abs(offset);
   }
 
   return null;
@@ -251,8 +306,11 @@ export class TimeDeltaAbility extends BasePreviewAbility {
   override canHandle(query: { text?: string }): boolean {
     if (!query.text || query.text.length > this.safety.input.maxLength)
       return false;
+    const relativeMatch = query.text.match(RELATIVE_PATTERN);
     return (
-      RELATIVE_PATTERN.test(query.text) ||
+      (relativeMatch
+        ? parseRelative(relativeMatch[2] ?? "") !== null
+        : false) ||
       RANGE_PATTERN.test(query.text) ||
       parseNaturalRelative(query.text) !== null ||
       parseDurationValue(query.text) !== null ||
@@ -272,6 +330,7 @@ export class TimeDeltaAbility extends BasePreviewAbility {
       const [, operator, expression] = relativeMatch;
       if (!operator || !expression) return null;
       const offset = parseRelative(expression);
+      if (offset === null) return null;
       const sign = operator === "-" ? -1 : 1;
       const target = dayjs().add(sign * offset, "millisecond");
       return {

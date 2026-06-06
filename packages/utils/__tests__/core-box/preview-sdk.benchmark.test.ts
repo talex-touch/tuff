@@ -51,9 +51,33 @@ const benchmarkCases: PreviewBenchmarkCase[] = [
     budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
   },
   {
+    id: "time-delta-cn-composed",
+    query: { text: "1小时30分钟后", inputs: [] },
+    expectedAbilityId: "preview.time",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "time-delta-invalid",
+    query: { text: "now + abc", inputs: [] },
+    expectNoResult: true,
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
     id: "percentage",
     query: { text: "80 的 20%", inputs: [] },
     expectedAbilityId: "preview.percent",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "percentage-cn-increase",
+    query: { text: "100 增加 20%", inputs: [] },
+    expectedAbilityId: "preview.percent",
+    budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
+  },
+  {
+    id: "unit-cross-category-no-result",
+    query: { text: "10 kg to m", inputs: [] },
+    expectNoResult: true,
     budgetMs: PREVIEW_BENCHMARK_BUDGET_MS,
   },
   {
