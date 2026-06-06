@@ -5,6 +5,20 @@
 
 ## 2026-06-06
 
+### docs(audit): add 2026-06-06 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-06.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added the 2026-06-06 UI/compatibility/placeholder/architecture audit follow-up.
+  - Reconfirmed no new production-path P0 fixed fake-success, mock payment URL, fake empty payload or consumable placeholder response in the reviewed live tree.
+  - Corrected the current worktree status: `master` and `origin/master` are synchronized, and the last pushed code baseline before this docs/audit slice is `ea0c2c93c test(search): add preview sdk benchmark command`.
+  - Reclassified current high-signal risks from dirty-slice cleanup to CoreApp/TuffEx dialog trusted HTML boundary, Widget runtime sandbox evidence, UI semantic controls, `touch-music` sample plugin cleanup and Windows/macOS device evidence.
+  - 验证：static scans and `git diff --check` only; no runtime code changed.
+
 ### test(search): add reproducible PreviewSDK benchmark command
 
 - `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
