@@ -2959,7 +2959,7 @@
           "approval_required": "Approval",
           "unavailable": "Missing"
         },
-        "gatedHint": "{count} high-risk providers are visible only and require approval before execution.",
+        "gatedHint": "{count} installed high-risk providers are visible only and require approval before execution.",
         "refreshFailed": "Failed to refresh local AI environment"
       },
       "landing": {

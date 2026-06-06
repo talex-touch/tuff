@@ -2951,7 +2951,7 @@
           "approval_required": "需审批",
           "unavailable": "未安装"
         },
-        "gatedHint": "{count} 个高风险 provider 默认仅展示，执行需审批。",
+        "gatedHint": "已安装的 {count} 个高风险 provider 默认仅展示，执行需审批。",
         "refreshFailed": "刷新本地 AI 环境失败"
       },
       "landing": {
