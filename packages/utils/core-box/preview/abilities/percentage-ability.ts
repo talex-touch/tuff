@@ -13,6 +13,8 @@ const PERCENT_PATTERNS = [
   /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:的|的?)+\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/,
   /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*% of\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*$/i,
   /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*([-+])\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/,
+  /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:增加|上涨|提高)\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/,
+  /^\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))\s*(?:减少|下降|降低)\s*([-+]?(?:\d+(?:\.\d+)?|\.\d+))%\s*$/,
 ];
 
 export class PercentageAbility extends BasePreviewAbility {
@@ -22,7 +24,8 @@ export class PercentageAbility extends BasePreviewAbility {
   override readonly safety: PreviewAbilitySafetyPolicy = {
     input: {
       maxLength: 120,
-      syntax: "percentage arithmetic patterns such as 100 + 20%, 20% of 80",
+      syntax:
+        "percentage arithmetic patterns such as 100 + 20%, 20% of 80, 100 增加 20%",
       notes: "Regex parser only; no dynamic execution.",
     },
     dependencies: ["parser"],
@@ -70,6 +73,14 @@ export class PercentageAbility extends BasePreviewAbility {
         base = Number(match[1]);
         percent = Number(match[2]);
         operation = "of";
+      } else if (regex === PERCENT_PATTERNS[6]) {
+        base = Number(match[1]);
+        percent = Number(match[2]);
+        operation = "add";
+      } else if (regex === PERCENT_PATTERNS[7]) {
+        base = Number(match[1]);
+        percent = Number(match[2]);
+        operation = "sub";
       } else {
         base = Number(match[1]);
         percent = Number(match[3]);
