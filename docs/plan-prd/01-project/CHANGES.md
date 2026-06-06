@@ -5,6 +5,14 @@
 
 ## 2026-06-06
 
+### fix(nexus): noindex missing docs pages
+
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `robots=noindex,nofollow` for Nexus docs pages that do not resolve to content, while keeping normal rendered docs as `index,follow`.
+  - Marked SSR docs misses with HTTP 404 status so missing documentation pages are not treated as valid indexable pages.
+  - 验证：`pnpm -C "apps/nexus" run typecheck`、scoped Nexus ESLint and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### feat(nexus): add docs page SEO metadata
 
 - `apps/nexus/app/pages/docs/[...slug].vue`
