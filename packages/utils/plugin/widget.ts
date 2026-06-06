@@ -91,6 +91,41 @@ export interface WidgetRegistrationPayload {
   dependencies?: string[]
 }
 
+export interface WidgetSandboxEvidence {
+  widgetId: string
+  pluginName: string
+  featureId: string
+  filePath?: string
+  runtime?: WidgetRuntime
+  runtimeStage?: WidgetRuntimeStage
+  sourceType: string
+  hash?: string
+  declaredDependencies: string[]
+  allowedDependencies: string[]
+  blockedDependencies: string[]
+  undeclaredDependencies: string[]
+  storageFacade: {
+    localStorage: 'secure-namespaced'
+    sessionStorage: 'memory-namespaced'
+    cookies: 'secure-namespaced'
+    indexedDB: 'plugin-namespaced'
+    caches: 'plugin-namespaced'
+    broadcastChannel: 'plugin-namespaced'
+  }
+  windowBoundary: {
+    opener: 'null'
+    top: 'sandbox-proxy'
+    parent: 'sandbox-proxy'
+    self: 'sandbox-proxy'
+    globalThis: 'sandbox-proxy'
+    documentDefaultView: 'sandbox-proxy'
+  }
+  dynamicExecution: {
+    mode: 'new-function'
+    injectedGlobals: string[]
+  }
+}
+
 export interface WidgetFailurePayload {
   widgetId: string
   pluginName: string
@@ -102,6 +137,7 @@ export interface WidgetFailurePayload {
   filePath?: string
   hash?: string
   cause?: string
+  sandboxEvidence?: WidgetSandboxEvidence
 }
 
 export function makeWidgetId(pluginName: string, featureId: string): string {

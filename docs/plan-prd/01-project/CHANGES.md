@@ -5,6 +5,19 @@
 
 ## 2026-06-06
 
+### ref(widget): add sandbox evidence diagnostics
+
+- `packages/utils/plugin/widget.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-diagnostics.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.test.ts`
+- `docs/plan-prd/04-implementation/WidgetSandboxIsolation260221.md`
+- `docs/plan-prd/TODO.md`
+  - Added a typed `WidgetSandboxEvidence` contract covering declared/allowed/blocked/undeclared dependencies, storage facades, window escape boundaries and the `new Function` injected-global boundary.
+  - Recorded renderer-side sandbox evidence for successful widget register/update and for runtime registration failures without changing the widget execution model.
+  - Extended focused widget registry tests for evidence shape, undeclared module blocking, allowlist blocking, storage/cookie isolation and sandbox window/document handles.
+  - 验证：CoreApp widget registry focused Vitest, CoreApp `typecheck:web`, CoreApp `typecheck:node`, scoped CoreApp/Utils ESLint and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### ref(dialog): require trusted html marker for dialog html props
 
 - `packages/tuffex/packages/components/src/dialog/src/types.ts`

@@ -9,6 +9,9 @@ const transportState = vi.hoisted(() => ({
   secureValues: new Map<string, string | null>()
 }))
 let handleWidgetRegister: typeof import('./widget-registry').handleWidgetRegister
+let buildWidgetSandboxEvidence: typeof import('./widget-registry').buildWidgetSandboxEvidence
+let getWidgetFailure: typeof import('./widget-registry').getWidgetFailure
+let getWidgetSandboxEvidence: typeof import('./widget-registry').getWidgetSandboxEvidence
 
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({
@@ -90,7 +93,12 @@ async function mountRenderer(component: Component, props: Record<string, unknown
 
 describe('widget-registry runtime hosts', () => {
   beforeAll(async () => {
-    ;({ handleWidgetRegister } = await import('./widget-registry'))
+    ;({
+      buildWidgetSandboxEvidence,
+      getWidgetFailure,
+      getWidgetSandboxEvidence,
+      handleWidgetRegister
+    } = await import('./widget-registry'))
   }, 10000)
 
   beforeEach(() => {
@@ -124,6 +132,182 @@ describe('widget-registry runtime hosts', () => {
     const renderer = await getRenderer(payload.widgetId)
     expect(renderer).toBeDefined()
     expect(renderer).toMatchObject({ name: 'VueWidget' })
+  })
+
+  it('builds widget sandbox evidence for the runtime boundary', () => {
+    const payload = makePayload(
+      'vue',
+      'const { h } = require("vue"); module.exports = { setup: () => () => h("span") }'
+    )
+
+    const evidence = buildWidgetSandboxEvidence(payload)
+
+    expect(evidence).toMatchObject({
+      widgetId: payload.widgetId,
+      pluginName: payload.pluginName,
+      featureId: payload.featureId,
+      runtime: 'vue',
+      runtimeStage: 'stable',
+      sourceType: 'js',
+      hash: payload.hash,
+      declaredDependencies: ['vue'],
+      allowedDependencies: ['vue'],
+      blockedDependencies: [],
+      undeclaredDependencies: [],
+      storageFacade: {
+        localStorage: 'secure-namespaced',
+        sessionStorage: 'memory-namespaced',
+        cookies: 'secure-namespaced',
+        indexedDB: 'plugin-namespaced',
+        caches: 'plugin-namespaced',
+        broadcastChannel: 'plugin-namespaced'
+      },
+      windowBoundary: {
+        opener: 'null',
+        top: 'sandbox-proxy',
+        parent: 'sandbox-proxy',
+        self: 'sandbox-proxy',
+        globalThis: 'sandbox-proxy',
+        documentDefaultView: 'sandbox-proxy'
+      },
+      dynamicExecution: {
+        mode: 'new-function'
+      }
+    })
+    expect(evidence.dynamicExecution.injectedGlobals).toEqual([
+      'require',
+      'module',
+      'exports',
+      'window',
+      'globalThis',
+      'localStorage',
+      'sessionStorage',
+      'document',
+      'indexedDB',
+      'BroadcastChannel',
+      'caches',
+      'self'
+    ])
+  })
+
+  it('records sandbox evidence when widget code requires an undeclared module', async () => {
+    const payload = {
+      ...makePayload(
+        'vue',
+        [
+          'require("@talex-touch/utils")',
+          'const { h } = require("vue")',
+          'module.exports = { setup: () => () => h("span", "unreachable") }'
+        ].join('\n')
+      ),
+      dependencies: ['vue']
+    }
+
+    await expect(handleWidgetRegister(payload)).rejects.toThrow(
+      'Module "@talex-touch/utils" is not allowed'
+    )
+
+    const evidence = getWidgetSandboxEvidence(payload.widgetId)
+    expect(evidence?.undeclaredDependencies).toEqual(['@talex-touch/utils'])
+    expect(getWidgetFailure(payload.widgetId)).toMatchObject({
+      code: 'WIDGET_RUNTIME_REGISTER_FAILED',
+      sandboxEvidence: {
+        undeclaredDependencies: ['@talex-touch/utils'],
+        allowedDependencies: ['vue']
+      }
+    })
+  })
+
+  it('blocks declared dependencies that are outside the widget allowlist', async () => {
+    const payload = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'module.exports = { setup: () => () => h("span", "unreachable") }'
+        ].join('\n')
+      ),
+      dependencies: ['vue', 'fs']
+    }
+
+    await expect(handleWidgetRegister(payload)).rejects.toThrow('dependencies not available: fs')
+
+    const evidence = getWidgetSandboxEvidence(payload.widgetId)
+    expect(evidence).toMatchObject({
+      declaredDependencies: ['vue', 'fs'],
+      allowedDependencies: ['vue'],
+      blockedDependencies: ['fs'],
+      undeclaredDependencies: []
+    })
+    expect(getWidgetFailure(payload.widgetId)?.sandboxEvidence?.blockedDependencies).toEqual(['fs'])
+  })
+
+  it('isolates storage and cookies per plugin/widget sandbox', async () => {
+    const writer = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'localStorage.setItem("token", "plugin-a-token")',
+          'document.cookie = "sid=plugin-a-cookie"',
+          'module.exports = { setup: () => () => h("span", "writer") }'
+        ].join('\n')
+      ),
+      pluginName: 'plugin-a',
+      widgetId: 'plugin-a::vue'
+    }
+    const reader = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'const seen = localStorage.getItem("token") || document.cookie || "isolated"',
+          'module.exports = { setup: () => () => h("span", seen) }'
+        ].join('\n')
+      ),
+      pluginName: 'plugin-b',
+      widgetId: 'plugin-b::vue'
+    }
+
+    await handleWidgetRegister(writer)
+    await handleWidgetRegister(reader)
+
+    expect(window.localStorage.getItem('token')).toBeNull()
+    expect(document.cookie).not.toContain('plugin-a-cookie')
+
+    const renderer = await getRenderer(reader.widgetId)
+    const { root } = await mountRenderer(renderer, { widgetId: reader.widgetId })
+
+    expect(root.textContent).toContain('isolated')
+  })
+
+  it('injects sandbox window and document boundaries instead of real escape handles', async () => {
+    const payload = await register(
+      'vue',
+      [
+        'const { h } = require("vue")',
+        'const isSandboxed = window.opener === null',
+        '  && window.top === window',
+        '  && window.parent === window',
+        '  && window.self === window',
+        '  && globalThis === window',
+        '  && document.defaultView === window',
+        'module.exports = { setup: () => () => h("span", isSandboxed ? "sandboxed" : "leaked") }'
+      ].join('\n')
+    )
+
+    const renderer = await getRenderer(payload.widgetId)
+    const { root } = await mountRenderer(renderer, { widgetId: payload.widgetId })
+
+    expect(root.textContent).toContain('sandboxed')
+    expect(getWidgetSandboxEvidence(payload.widgetId)?.windowBoundary).toMatchObject({
+      opener: 'null',
+      top: 'sandbox-proxy',
+      parent: 'sandbox-proxy',
+      self: 'sandbox-proxy',
+      globalThis: 'sandbox-proxy',
+      documentDefaultView: 'sandbox-proxy'
+    })
   })
 
   it('passes host props to WebComponent widgets as DOM properties and cleans up on unmount', async () => {
