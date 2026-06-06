@@ -5,6 +5,19 @@
 
 ## 2026-06-06
 
+### test(search): add PreviewSDK benchmark failure summary
+
+- `packages/utils/core-box/preview/types.ts`
+- `packages/utils/core-box/preview/sdk/preview-runner.ts`
+- `packages/utils/core-box/preview/abilities/advanced-expression-ability.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.test.ts`
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `docs/plan-prd/TODO.md`
+  - Added actionable PreviewSDK benchmark failures for ability mismatch and budget regression cases, including case id, expected/actual ability, status, duration and budget.
+  - Tightened AdvancedExpression boundaries so time and percentage queries are no longer stolen from the more specific TimeDelta and Percentage abilities.
+  - Added a static advanced-expression fast path for common whitelisted functions/constants/power expressions before falling back to `mathjs`, keeping the cold import out of the default benchmark path.
+  - 验证：`pnpm -C "packages/utils" run benchmark:preview`, focused PreviewSDK Vitest, scoped Utils ESLint and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### feat(ai): clarify local skills provider gate hints
 
 - `apps/core-app/src/renderer/src/components/intelligence/IntelligenceLocalSkills.vue`

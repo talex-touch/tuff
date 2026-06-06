@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import type { TuffQuery } from "../../tuff";
 import { BasePreviewAbility } from "../sdk";
+import { evaluateBasicExpression } from "./basic-expression-ability";
 
 type MathJsInstance = ReturnType<(typeof import("mathjs"))["create"]>;
 
@@ -53,9 +54,34 @@ const DANGEROUS_PATTERNS = [
   /\bprocess\b/i,
   /\bglobal\b/i,
 ];
+const ALLOWED_ALPHA_TOKENS = new Set([
+  "sqrt",
+  "sin",
+  "cos",
+  "tan",
+  "log",
+  "ln",
+  "abs",
+  "round",
+  "ceil",
+  "floor",
+  "pow",
+  "exp",
+  "pi",
+  "e",
+]);
 
 function isSafe(expr: string): boolean {
   return !DANGEROUS_PATTERNS.some((pattern) => pattern.test(expr));
+}
+
+function hasOnlyAllowedAlphaTokens(expr: string): boolean {
+  const tokens = expr.match(/[a-z]+/gi) ?? [];
+  return tokens.every((token) => ALLOWED_ALPHA_TOKENS.has(token.toLowerCase()));
+}
+
+function hasOnlyAllowedExpressionChars(expr: string): boolean {
+  return /^[\d+\-*/^×÷().,\sA-Za-z]+$/u.test(expr);
 }
 
 function normalizeExpression(expr: string): string {
@@ -77,6 +103,110 @@ function normalizeExpression(expr: string): string {
   );
 
   return normalized;
+}
+
+function splitTopLevel(input: string, delimiter: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    if (char === "(") depth += 1;
+    if (char === ")") depth -= 1;
+    if (char === delimiter && depth === 0) {
+      parts.push(input.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+
+  parts.push(input.slice(start).trim());
+  return parts;
+}
+
+function splitTopLevelPower(input: string): [string, string] | null {
+  let depth = 0;
+
+  for (let index = input.length - 1; index >= 0; index -= 1) {
+    const char = input[index];
+    if (char === ")") depth += 1;
+    if (char === "(") depth -= 1;
+    if (char === "^" && depth === 0) {
+      return [input.slice(0, index).trim(), input.slice(index + 1).trim()];
+    }
+  }
+
+  return null;
+}
+
+function evaluateStaticAdvancedExpression(expression: string): number | null {
+  const trimmed = expression.trim();
+  if (!trimmed) return null;
+
+  const functionMatch = /^([a-z]+)\((.*)\)$/i.exec(trimmed);
+  if (functionMatch) {
+    const name = functionMatch[1]!.toLowerCase();
+    const args = splitTopLevel(functionMatch[2]!, ",");
+
+    if (name === "pow" && args.length === 2) {
+      const base = evaluateStaticAdvancedExpression(args[0]!);
+      const exponent = evaluateStaticAdvancedExpression(args[1]!);
+      return typeof base === "number" && typeof exponent === "number"
+        ? base ** exponent
+        : null;
+    }
+
+    if (args.length === 1) {
+      const value = evaluateStaticAdvancedExpression(args[0]!);
+      if (typeof value !== "number") return null;
+
+      switch (name) {
+        case "sqrt":
+          return Math.sqrt(value);
+        case "sin":
+          return Math.sin(value);
+        case "cos":
+          return Math.cos(value);
+        case "tan":
+          return Math.tan(value);
+        case "log":
+          return Math.log10(value);
+        case "ln":
+          return Math.log(value);
+        case "abs":
+          return Math.abs(value);
+        case "round":
+          return Math.round(value);
+        case "ceil":
+          return Math.ceil(value);
+        case "floor":
+          return Math.floor(value);
+        case "exp":
+          return Math.exp(value);
+      }
+    }
+
+    return null;
+  }
+
+  const power = splitTopLevelPower(trimmed);
+  if (power) {
+    const base = evaluateStaticAdvancedExpression(power[0]);
+    const exponent = evaluateStaticAdvancedExpression(power[1]);
+    return typeof base === "number" && typeof exponent === "number"
+      ? base ** exponent
+      : null;
+  }
+
+  const expressionWithConstants = trimmed
+    .replace(/\bpi\b/gi, String(Math.PI))
+    .replace(/\be\b/gi, String(Math.E));
+
+  return evaluateBasicExpression(expressionWithConstants);
+}
+
+function isFiniteStaticResult(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 export class AdvancedExpressionAbility extends BasePreviewAbility {
@@ -104,7 +234,7 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
       return false;
     if (!/\d/.test(text)) return false;
 
-    const hasOperator = /[+\-*/%^×÷]/.test(text);
+    const hasOperator = /[+\-*/^×÷]/.test(text);
     const hasFunction =
       /\b(sqrt|sin|cos|tan|log|ln|abs|round|ceil|floor|pow|exp|pi|e)\s*\(/i.test(
         text,
@@ -113,6 +243,8 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
 
     if (/^[/~]/.test(text) || /^https?:\/\//i.test(text)) return false;
     if (/^\d+\.\d+\.\d+/.test(text)) return false;
+    if (!hasOnlyAllowedExpressionChars(text)) return false;
+    if (!hasOnlyAllowedAlphaTokens(text)) return false;
 
     return hasOperator || hasFunction || hasPower;
   }
@@ -125,14 +257,14 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
     if (!text || !this.isInputWithinLimit(context) || !isSafe(text))
       return null;
 
-    const math = await getMathJs();
-    if (!math) return null;
-
     this.throwIfAborted(context.signal);
 
     try {
       const normalized = normalizeExpression(text);
-      const result = math.evaluate(normalized);
+      const staticResult = evaluateStaticAdvancedExpression(normalized);
+      const result = isFiniteStaticResult(staticResult)
+        ? staticResult
+        : await this.evaluateWithMathJs(normalized);
 
       if (
         result === undefined ||
@@ -171,5 +303,10 @@ export class AdvancedExpressionAbility extends BasePreviewAbility {
     } catch {
       return null;
     }
+  }
+
+  private async evaluateWithMathJs(expression: string): Promise<unknown> {
+    const math = await getMathJs();
+    return math ? math.evaluate(expression) : null;
   }
 }
