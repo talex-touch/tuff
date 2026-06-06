@@ -5,6 +5,14 @@
 
 ## 2026-06-06
 
+### ref(ai): use flip dialog for provider model config
+
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue`
+- `docs/plan-prd/TODO.md`
+  - Moved Intelligence provider model management, default model selection and instruction prompt configuration from the legacy drawer surface to the shared CoreApp `FlipDialog`.
+  - Preserved provider settings data flow, model fetch/add/select handlers and `intelligenceSettings.updateProvider()` persistence behavior; this slice only changes the settings interaction surface.
+  - 验证：CoreApp scoped IntelligenceModelConfig ESLint, CoreApp `typecheck:web` and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### ref(widget): add sandbox evidence diagnostics
 
 - `packages/utils/plugin/widget.ts`
