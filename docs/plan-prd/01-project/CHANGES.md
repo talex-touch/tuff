@@ -5,6 +5,16 @@
 
 ## 2026-06-06
 
+### test(search): add reproducible PreviewSDK benchmark command
+
+- `packages/utils/__tests__/core-box/preview-sdk.benchmark.test.ts`
+- `packages/utils/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added `pnpm -C "packages/utils" run benchmark:preview` as a reproducible PreviewSDK benchmark entry using the existing `runPreviewSdkBenchmark()` helper.
+  - Covered default pure PreviewSDK abilities, expected no-result and overlong-input guard cases with expected ability matches, budget exceed checks and console summary output.
+  - Current benchmark result: 10/10 expected cases matched, 0 budget exceed; P50 was ~0.36ms, P95/max was ~318.79ms due to the advanced expression mathjs cold import path.
+  - 验证：`pnpm -C "packages/utils" run benchmark:preview`、`pnpm -C "packages/utils" exec vitest run "__tests__/core-box/preview-sdk.test.ts"`、scoped utils ESLint and `git diff --check` passed with temporary Node `22.16.0` + pnpm `10.32.1`.
+
 ### fix(nexus): noindex missing docs pages
 
 - `apps/nexus/app/pages/docs/[...slug].vue`
