@@ -47,6 +47,11 @@ files:
   # js-tiktoken ships dual ESM(.js)+CJS(.cjs); the CJS-only main process loads .cjs via require,
   # so the ~11MB of ESM duplicates never load (verified: .cjs are self-contained, no .cjs->.js deps).
   - '!**/node_modules/js-tiktoken/dist/**/*.js'
+  # tesseract.js is unused — OCR runs through the native module (@talex-touch/tuff-native,
+  # ocr-worker.ts recognizeImageText); no source references tesseract at all. Its ~29MB WASM
+  # core shipped for nothing. (Vestigial dep — ideally also drop tesseract.js from package.json.)
+  - '!**/node_modules/tesseract.js-core/**'
+  - '!**/node_modules/tesseract.js/**'
 extraFiles: []
 extraResources:
   - from: resources/icon.png
