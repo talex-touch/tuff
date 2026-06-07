@@ -12,6 +12,7 @@ import type { FileScanOptions } from './file-scan-constants'
 import { hasWindow } from '../env'
 import {
   BASE_BLACKLISTED_DIRS,
+  BLACKLISTED_BUNDLE_SUFFIXES,
   BLACKLISTED_EXTENSIONS,
   BLACKLISTED_FILE_PREFIXES,
   BLACKLISTED_FILE_SUFFIXES,
@@ -42,6 +43,19 @@ const path = (() => {
 
 // 重新导出类型
 export type { FileScanOptions }
+
+/**
+ * 判断某个路径段是否为应被整体跳过的媒体库 package（如 *.photoslibrary）。
+ * 大小写不敏感 —— 这正是旧 Photos Library 放行逻辑被绕过、导致衍生图/缓存被错误索引的根因。
+ */
+function hasBlacklistedBundleSuffix(segment: string): boolean {
+  const lower = segment.toLowerCase()
+  for (const suffix of BLACKLISTED_BUNDLE_SUFFIXES) {
+    if (lower.endsWith(suffix))
+      return true
+  }
+  return false
+}
 
 /**
  * 扫描文件信息接口
@@ -159,6 +173,9 @@ export function isIndexableFile(
     if (segment.startsWith('.'))
       return false
     if (blacklistedDirs.has(segment))
+      return false
+    // 跳过媒体库 package 内部（*.photoslibrary 等）：内部全是 UUID 衍生件，搜不到也没意义
+    if (hasBlacklistedBundleSuffix(segment))
       return false
   }
 
@@ -278,11 +295,80 @@ export async function scanDirectory(
   options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
   excludePaths?: Set<string>,
 ): Promise<ScannedFileInfo[]> {
+  // 选项只在入口合并一次，避免每层递归重复展开生成垃圾对象
   const opts = { ...DEFAULT_SCAN_OPTIONS, ...options }
+  const files: ScannedFileInfo[] = []
+  await scanDirectoryInto(dirPath, opts, excludePaths, 0, files)
+  return files
+}
+
+// ---- scanDirectory 内部实现与工具 ----
+
+/**
+ * 递归深度上限，防止异常深的目录树或软链环导致的栈/耗时失控
+ */
+const MAX_SCAN_DEPTH = 24
+
+/**
+ * 单个目录内并发 stat 文件的上限。文件是叶子操作（不再递归），
+ * 因此该并发不会与目录递归相互抢占而死锁
+ */
+const FILE_STAT_CONCURRENCY = 32
+
+/**
+ * 惰性并缓存 node:fs/promises 模块引用。
+ * 大规模扫描下避免“每个目录 + 每个文件”都重复执行一次动态 import 的微任务开销；
+ * 仍保持动态 import（而非顶层静态 import），因为本模块也会被打包到浏览器/渲染端，
+ * 那里没有 node:fs。
+ */
+let fsPromisesPromise: Promise<typeof import('node:fs/promises')> | null = null
+function getFsPromises(): Promise<typeof import('node:fs/promises')> {
+  if (!fsPromisesPromise) {
+    fsPromisesPromise = import('node:fs/promises')
+  }
+  return fsPromisesPromise
+}
+
+/**
+ * 以固定并发量遍历执行异步任务的轻量池（共享游标，无递归不会死锁）
+ */
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  if (items.length === 0) {
+    return
+  }
+  const limit = Math.max(1, Math.min(concurrency, items.length))
+  let cursor = 0
+  const workers = Array.from({ length: limit }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      await task(items[index])
+    }
+  })
+  await Promise.all(workers)
+}
+
+/**
+ * scanDirectory 的递归核心：命中文件直接 push 进共享的 out 数组，
+ * 避免 files.push(...subFiles) 这种展开累积（超大数组会触达参数个数上限并产生拷贝）
+ */
+async function scanDirectoryInto(
+  dirPath: string,
+  opts: FileScanOptions,
+  excludePaths: Set<string> | undefined,
+  depth: number,
+  out: ScannedFileInfo[],
+): Promise<void> {
+  if (depth > MAX_SCAN_DEPTH) {
+    return
+  }
 
   // 检查是否在排除路径中
   if (excludePaths?.has(dirPath)) {
-    return []
+    return
   }
 
   // 检查目录名是否在黑名单中
@@ -292,35 +378,34 @@ export async function scanDirectory(
     ...(opts.customBlacklistedDirs || []),
   ])
 
-  if (blacklistedDirs.has(dirName) || dirName.startsWith('.')) {
-    return []
+  if (blacklistedDirs.has(dirName) || dirName.startsWith('.') || hasBlacklistedBundleSuffix(dirName)) {
+    return
   }
 
   // 检查是否为系统/开发/缓存路径
   if (opts.enableSystemPathFilter && isSystemPath(dirPath)) {
-    return []
+    return
   }
 
   if (opts.enableDevPathFilter && isDevPath(dirPath)) {
-    return []
+    return
   }
 
   if (opts.enableCachePathFilter && isCachePath(dirPath)) {
-    return []
+    return
   }
 
-  // 读取目录
-  let entries: any[] = []
-  try {
-    const fs = await import('node:fs/promises')
-    entries = await fs.readdir(dirPath, { withFileTypes: true })
-  }
-  catch {
-    // 忽略权限错误等
-    return []
+  const fs = await getFsPromises()
+
+  // 读取目录（忽略权限错误等）。用字面量选项内联调用以命中 Dirent[] 重载，
+  // 避免 Awaited<ReturnType<...>> 丢失调用点重载解析而退化成 Dirent<Buffer>
+  const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => null)
+  if (!entries) {
+    return
   }
 
-  const files: ScannedFileInfo[] = []
+  const subDirs: string[] = []
+  const fileEntries: Array<{ fullPath: string, fileName: string, extension: string }> = []
 
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name)
@@ -330,9 +415,7 @@ export async function scanDirectory(
     }
 
     if (entry.isDirectory()) {
-      // 递归扫描子目录
-      const subFiles = await scanDirectory(fullPath, opts, excludePaths)
-      files.push(...subFiles)
+      subDirs.push(fullPath)
     }
     else if (entry.isFile()) {
       const fileName = entry.name
@@ -343,25 +426,33 @@ export async function scanDirectory(
         continue
       }
 
-      try {
-        const fs = await import('node:fs/promises')
-        const stats = await fs.stat(fullPath)
-        files.push({
-          path: fullPath,
-          name: fileName,
-          extension: fileExtension,
-          size: stats.size,
-          ctime: stats.birthtime ?? stats.ctime,
-          mtime: stats.mtime,
-        })
-      }
-      catch (error) {
-        console.error(`[FileScanUtils] Could not stat file ${fullPath}:`, error)
-      }
+      fileEntries.push({ fullPath, fileName, extension: fileExtension })
     }
   }
 
-  return files
+  // 同一目录内的可索引文件并发 stat（叶子操作，不会死锁）；
+  // 并发回调向 out push 在单线程下不会交错，安全
+  await mapWithConcurrency(fileEntries, FILE_STAT_CONCURRENCY, async ({ fullPath, fileName, extension }) => {
+    try {
+      const stats = await fs.stat(fullPath)
+      out.push({
+        path: fullPath,
+        name: fileName,
+        extension,
+        size: stats.size,
+        ctime: stats.birthtime ?? stats.ctime,
+        mtime: stats.mtime,
+      })
+    }
+    catch (error) {
+      console.error(`[FileScanUtils] Could not stat file ${fullPath}:`, error)
+    }
+  })
+
+  // 子目录串行递归：保持总并发有界，规避共享信号量在递归遍历中的死锁
+  for (const subDir of subDirs) {
+    await scanDirectoryInto(subDir, opts, excludePaths, depth + 1, out)
+  }
 }
 
 /**
