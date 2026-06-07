@@ -422,6 +422,14 @@ async function loadPublishModule() {
 }
 
 async function runPublishWithTracking(): Promise<void> {
+  const onboardingReady = await ensureOnboarding()
+  if (!onboardingReady)
+    return
+
+  const authenticated = await ensureAuthenticated({ reloginStrategy: 'oauth' })
+  if (!authenticated)
+    return
+
   await trackRepository('publish')
   await (await loadPublishModule()).runPublish()
 }
@@ -729,7 +737,11 @@ async function runDeviceAuthLogin(): Promise<boolean> {
   }
 }
 
-async function ensureAuthenticated(): Promise<boolean> {
+interface EnsureAuthenticatedOptions {
+  reloginStrategy?: 'prompt' | 'oauth'
+}
+
+async function ensureAuthenticated(options: EnsureAuthenticatedOptions = {}): Promise<boolean> {
   const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
   const authState = await readAuthState()
   if (authState?.token && authState.baseUrl) {
@@ -751,6 +763,12 @@ async function ensureAuthenticated(): Promise<boolean> {
     if (process.env.TUFF_NON_INTERACTIVE === '1')
       return false
 
+    if (options.reloginStrategy === 'oauth') {
+      await clearAuthToken()
+      printInfo(t('notice.authCleared'))
+      return await runDeviceAuthLogin()
+    }
+
     const relogin = await askConfirm(t('notice.authReloginConfirm'), true)
     if (!relogin)
       return false
@@ -767,6 +785,9 @@ async function ensureAuthenticated(): Promise<boolean> {
   }
 
   printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
+
+  if (options.reloginStrategy === 'oauth')
+    return await runDeviceAuthLogin()
 
   const loginMethod = await askSelect(t('onboarding.loginSelect'), [
     { label: t('onboarding.loginOptionToken'), value: 'token' },
