@@ -369,9 +369,12 @@ importers:
       talex-mica-electron:
         specifier: ^1.0.2
         version: 1.0.2
+      tesseract.js:
+        specifier: ^6.0.1
+        version: 6.0.1(encoding@0.1.13)
       vue-sonner:
         specifier: ^2.0.9
-        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d))
+        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46))
       xterm:
         specifier: ^5.3.0
         version: 5.3.0
@@ -604,10 +607,10 @@ importers:
         version: 0.3.17(@langchain/core@0.3.80(@opentelemetry/api@1.9.1)(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(openai@4.104.0(encoding@0.1.13)(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(zod@3.25.76))(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)))(encoding@0.1.13)(ws@8.20.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))
       '@sentry/nuxt':
         specifier: 'catalog:'
-        version: 10.50.0(@cloudflare/workers-types@4.20260426.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.33(typescript@5.9.3))
+        version: 10.50.0(@cloudflare/workers-types@4.20260426.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.33(typescript@5.9.3))
       '@sidebase/nuxt-auth':
         specifier: ^0.9.4
-        version: 0.9.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(magicast@0.5.1)(next-auth@4.24.14(@auth/core@0.34.3))
+        version: 0.9.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(next-auth@4.24.14(@auth/core@0.34.3))
       '@talex-touch/tuff-business':
         specifier: workspace:*
         version: link:../../packages/tuff-business
@@ -649,7 +652,7 @@ importers:
         version: 8.8.7
       vue-sonner:
         specifier: 'catalog:'
-        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))
+        version: 2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))
     devDependencies:
       '@antfu/eslint-config':
         specifier: catalog:dev
@@ -677,7 +680,7 @@ importers:
         version: 3.5.2(magicast@0.5.1)
       '@nuxtjs/i18n':
         specifier: catalog:build
-        version: 10.3.0(@emnapi/core@1.7.1)(@emnapi/runtime@1.10.0)(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(eslint@9.39.4(jiti@2.6.1))(ioredis@5.10.0)(magicast@0.5.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
+        version: 10.3.0(@emnapi/core@1.7.1)(@emnapi/runtime@1.10.0)(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(eslint@9.39.4(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
       '@pinia/nuxt':
         specifier: catalog:build
         version: 0.11.3(magicast@0.5.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))
@@ -698,7 +701,7 @@ importers:
         version: 14.2.1(vue@3.5.33(typescript@5.9.3))
       '@vueuse/nuxt':
         specifier: catalog:build
-        version: 13.9.0(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(vue@3.5.33(typescript@5.9.3))
+        version: 13.9.0(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(vue@3.5.33(typescript@5.9.3))
       baseline-browser-mapping:
         specifier: catalog:dev
         version: 2.10.23
@@ -716,7 +719,7 @@ importers:
         version: 0.2.2
       nuxt:
         specifier: ^4.4.2
-        version: 4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)
+        version: 4.4.2(ab646659e22157d424fe811c5f28e128)
       openapi-typescript:
         specifier: ^7.13.0
         version: 7.13.0(typescript@5.9.3)
@@ -1121,7 +1124,7 @@ importers:
         version: 4.5.4(@types/node@24.1.0)(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
       vitepress:
         specifier: ^1.6.4
-        version: 1.6.4(@algolia/client-search@5.46.0)(@types/node@24.1.0)(axios@1.15.2)(change-case@5.4.4)(fuse.js@7.3.0)(jiti@2.6.1)(postcss@8.5.12)(sass@1.99.0)(search-insights@2.17.3)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
+        version: 1.6.4(@algolia/client-search@5.46.0)(@types/node@24.1.0)(axios@1.15.2)(change-case@5.4.4)(fuse.js@7.3.0)(idb-keyval@6.2.2)(jiti@2.6.1)(postcss@8.5.12)(sass@1.99.0)(search-insights@2.17.3)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
       vue:
         specifier: ^3.5.33
         version: 3.5.33(typescript@5.9.3)
@@ -7862,6 +7865,9 @@ packages:
   blake3-wasm@2.1.5:
     resolution: {integrity: sha512-F1+K8EbfOZE49dtoPtmxUQrpXaBIl3ICvasLh+nJta0xkz+9kF/7uet9fLnwKqhDrmj6g+6K3Tw9yQPUg2ka5g==}
 
+  bmp-js@0.1.0:
+    resolution: {integrity: sha512-vHdS19CnY3hwiNdkaqk93DvjVLfbEcI8mys4UjuWrlX1haDmroo8o4xCzh4wD6DGV6HxRCyauwhHRqMTfERtjw==}
+
   body-parser@2.2.2:
     resolution: {integrity: sha512-oP5VkATKlNwcgvxi0vM0p/D3n2C3EReYVX+DNYs5TjZFn/oQt2j+4sVJtSMr18pdRr8wjTcBl6LoV+FUwzPmNA==}
     engines: {node: '>=18'}
@@ -10349,6 +10355,9 @@ packages:
     resolution: {integrity: sha512-im9DjEDQ55s9fL4EYzOAv0yMqmMBSZp6G0VvFyTMPKWxiSBHUj9NW/qqLmXUwXrrM7AvqSlTCfvqRb0cM8yYqw==}
     engines: {node: '>=0.10.0'}
 
+  idb-keyval@6.2.2:
+    resolution: {integrity: sha512-yjD9nARJ/jb1g+CvD0tlhUHOrJ9Sy0P8T9MF3YaLlHnSRpwPfpTX0XIvpmw3gAJUmEu3FiICLBDPXVwyEvrleg==}
+
   idb@7.1.1:
     resolution: {integrity: sha512-gchesWBzyvGHRO9W8tzUWFDycow5gwjvFKfyV9FF32Y7F50yZMp7mP+T2mJIWFx49zicqyC4uefHM17o6xKIVQ==}
 
@@ -10679,6 +10688,9 @@ packages:
   is-unicode-supported@0.1.0:
     resolution: {integrity: sha512-knxG2q4UC3u8stRGyAVJCOdxFmv5DZiRcdlIaAQXAbSfJya+OhopNotLQrstBhququ4ZpuKbDc/8S6mgXgPFPw==}
     engines: {node: '>=10'}
+
+  is-url@1.2.4:
+    resolution: {integrity: sha512-ITvGim8FhRiYe4IQ5uHSkj7pVaPDrCTkNd3yq3cV7iZAcJdHTUMPMEHcqSOy9xZ9qFenQCvi+2wjH9a1nXqHww==}
 
   is-valid-glob@1.0.0:
     resolution: {integrity: sha512-AhiROmoEFDSsjx8hW+5sGwgKVIORcXnrlAx/R0ZSeaPw70Vw0CqkGBBhHGL58Uox2eXnU1AnvXJl1XlyedO5bA==}
@@ -11926,6 +11938,10 @@ packages:
     peerDependencies:
       typescript: ^5.x
 
+  opencollective-postinstall@2.0.3:
+    resolution: {integrity: sha512-8AV/sCtuzUeTo8gQK5qDZzARrulB3egtLzFgteqB2tcT4Mw7B8Kt7JcDHmltjz6FOAHsvTevk70gZEbhM4ZS9Q==}
+    hasBin: true
+
   openid-client@5.7.1:
     resolution: {integrity: sha512-jDBPgSVfTnkIh71Hg9pRvtJc6wTwqjRkN88+gCFtYWrlP4Yx2Dsrow8uPi3qLr/aeymPF3o2+dS+wOpglK04ew==}
 
@@ -12707,6 +12723,9 @@ packages:
 
   regenerate@1.4.2:
     resolution: {integrity: sha512-zrceR/XhGYU/d/opr2EKO7aRHUeiBI8qjtfHqADTwZd6Szfy16la6kqD0MIUs5z5hx6AaKa+PixpPrR289+I0A==}
+
+  regenerator-runtime@0.13.11:
+    resolution: {integrity: sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==}
 
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
@@ -13560,6 +13579,12 @@ packages:
     resolution: {integrity: sha512-uxfo9fPcSgLDYob/w1FuL0c99MWiJDnv+5qXSQc5+Ki5NjVNsYi66INnMFBjf6uFz6OnX12piJQPF4IpjJTNTw==}
     engines: {node: '>=10'}
     hasBin: true
+
+  tesseract.js-core@6.0.0:
+    resolution: {integrity: sha512-1Qncm/9oKM7xgrQXZXNB+NRh19qiXGhxlrR8EwFbK5SaUbPZnS5OMtP/ghtqfd23hsr1ZvZbZjeuAGcMxd/ooA==}
+
+  tesseract.js@6.0.1:
+    resolution: {integrity: sha512-/sPvMvrCtgxnNRCjbTYbr7BRu0yfWDsMZQ2a/T5aN/L1t8wUQN6tTWv6p6FwzpoEBA0jrN2UD2SX4QQFRdoDbA==}
 
   test-exclude@7.0.1:
     resolution: {integrity: sha512-pFYqmTw68LXVjeWJMST4+borgQP2AyMNbg1BpZh9LbyhUeNkeaPF9gzfPGUAnSMV3qPYdWUwDIjjCLiSDOl7vg==}
@@ -14770,6 +14795,9 @@ packages:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
 
+  wasm-feature-detect@1.8.0:
+    resolution: {integrity: sha512-zksaLKM2fVlnB5jQQDqKXXwYHLQUVH9es+5TOOHwGOVJOCeRBCiPjwSg+3tN2AdTCzjgli4jijCH290kXb/zWQ==}
+
   watchpack@2.5.1:
     resolution: {integrity: sha512-Zn5uXdcFNIA1+1Ei5McRd+iRzfhENPCe7LeABkJtNulSxjma+l7ltNx55BWZkRlwRnpOgHqxnjyaDgJnNXnqzg==}
     engines: {node: '>=10.13.0'}
@@ -15104,6 +15132,9 @@ packages:
   zip-stream@6.0.1:
     resolution: {integrity: sha512-zK7YHHz4ZXpW89AHXUPbQVGKI7uvkd3hzusTdotCg1UxyaVtg0zFJSTfW/Dq5f7OBBVnq6cZIaC8Ti4hb6dtCA==}
     engines: {node: '>= 14'}
+
+  zlibjs@0.3.1:
+    resolution: {integrity: sha512-+J9RrgTKOmlxFSDHo0pI1xM6BLVUv+o0ZT9ANtCxGkjIVCCUdx9alUF8Gm+dGLKbkkkidWIHFDZHDMpfITt4+w==}
 
   zod-to-json-schema@3.25.0:
     resolution: {integrity: sha512-HvWtU2UG41LALjajJrML6uQejQhNJx+JBO9IflpSja4R03iNWfKXrj6W2h7ljuLyc1nKS+9yDyL/9tD1U/yBnQ==}
@@ -18210,7 +18241,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(typescript@5.9.3)':
+  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46))(typescript@5.9.3)':
     dependencies:
       '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
       '@nuxt/devalue': 2.0.2
@@ -18228,8 +18259,8 @@ snapshots:
       impound: 1.1.5
       klona: 2.0.6
       mocked-exports: 0.1.1
-      nitropack: 2.13.1(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)
-      nuxt: 4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)
+      nitropack: 2.13.1(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)
+      nuxt: 4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46)
       nypm: 0.6.5
       ohash: 2.0.11
       pathe: 2.0.3
@@ -18238,75 +18269,7 @@ snapshots:
       std-env: 4.0.0
       ufo: 1.6.3
       unctx: 2.5.0
-      unstorage: 1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0)
-      vue: 3.5.33(typescript@5.9.3)
-      vue-bundle-renderer: 2.2.0
-      vue-devtools-stub: 0.1.0
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@babel/core'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@planetscale/database'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - aws4fetch
-      - bare-abort-controller
-      - better-sqlite3
-      - db0
-      - drizzle-orm
-      - encoding
-      - idb-keyval
-      - ioredis
-      - magicast
-      - mysql2
-      - react-native-b4a
-      - rolldown
-      - sqlite3
-      - supports-color
-      - typescript
-      - uploadthing
-      - xml2js
-
-  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d))(typescript@5.9.3)':
-    dependencies:
-      '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
-      '@nuxt/devalue': 2.0.2
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@unhead/vue': 2.1.12(vue@3.5.33(typescript@5.9.3))
-      '@vue/shared': 3.5.30
-      consola: 3.4.2
-      defu: 6.1.5
-      destr: 2.0.5
-      devalue: 5.7.1
-      errx: 0.1.0
-      escape-string-regexp: 5.0.0
-      exsolve: 1.0.8
-      h3: 1.15.11
-      impound: 1.1.5
-      klona: 2.0.6
-      mocked-exports: 0.1.1
-      nitropack: 2.13.1(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)
-      nuxt: 4.4.2(310f9ce0e83c86228ffccc2068b6ea8d)
-      nypm: 0.6.5
-      ohash: 2.0.11
-      pathe: 2.0.3
-      pkg-types: 2.3.0
-      rou3: 0.8.1
-      std-env: 4.0.0
-      ufo: 1.6.3
-      unctx: 2.5.0
-      unstorage: 1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0)
+      unstorage: 1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       vue: 3.5.33(typescript@5.9.3)
       vue-bundle-renderer: 2.2.0
       vue-devtools-stub: 0.1.0
@@ -18346,6 +18309,74 @@ snapshots:
       - uploadthing
       - xml2js
     optional: true
+
+  '@nuxt/nitro-server@4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(typescript@5.9.3)':
+    dependencies:
+      '@babel/plugin-syntax-typescript': 7.28.6(@babel/core@7.29.0)
+      '@nuxt/devalue': 2.0.2
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@unhead/vue': 2.1.12(vue@3.5.33(typescript@5.9.3))
+      '@vue/shared': 3.5.30
+      consola: 3.4.2
+      defu: 6.1.5
+      destr: 2.0.5
+      devalue: 5.7.1
+      errx: 0.1.0
+      escape-string-regexp: 5.0.0
+      exsolve: 1.0.8
+      h3: 1.15.11
+      impound: 1.1.5
+      klona: 2.0.6
+      mocked-exports: 0.1.1
+      nitropack: 2.13.1(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)
+      nuxt: 4.4.2(ab646659e22157d424fe811c5f28e128)
+      nypm: 0.6.5
+      ohash: 2.0.11
+      pathe: 2.0.3
+      pkg-types: 2.3.0
+      rou3: 0.8.1
+      std-env: 4.0.0
+      ufo: 1.6.3
+      unctx: 2.5.0
+      unstorage: 1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0)
+      vue: 3.5.33(typescript@5.9.3)
+      vue-bundle-renderer: 2.2.0
+      vue-devtools-stub: 0.1.0
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@babel/core'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@planetscale/database'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - aws4fetch
+      - bare-abort-controller
+      - better-sqlite3
+      - db0
+      - drizzle-orm
+      - encoding
+      - idb-keyval
+      - ioredis
+      - magicast
+      - mysql2
+      - react-native-b4a
+      - rolldown
+      - sqlite3
+      - supports-color
+      - typescript
+      - uploadthing
+      - xml2js
 
   '@nuxt/schema@4.4.2':
     dependencies:
@@ -18364,7 +18395,7 @@ snapshots:
       rc9: 3.0.0
       std-env: 3.10.0
 
-  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)':
+  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@rollup/plugin-replace': 6.0.3(rollup@2.80.0)
@@ -18382,67 +18413,7 @@ snapshots:
       magic-string: 0.30.21
       mlly: 1.8.1
       mocked-exports: 0.1.1
-      nuxt: 4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)
-      nypm: 0.6.5
-      pathe: 2.0.3
-      pkg-types: 2.3.0
-      postcss: 8.5.12
-      seroval: 1.5.1
-      std-env: 4.0.0
-      ufo: 1.6.3
-      unenv: 2.0.0-rc.24
-      vite: 7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
-      vite-node: 5.3.0(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
-      vite-plugin-checker: 0.12.0(eslint@9.39.4(jiti@2.6.1))(optionator@0.9.4)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue-tsc@3.2.7(typescript@5.9.3))
-      vue: 3.5.33(typescript@5.9.3)
-      vue-bundle-renderer: 2.2.0
-    optionalDependencies:
-      '@babel/plugin-syntax-jsx': 7.27.1(@babel/core@7.29.0)
-      rollup-plugin-visualizer: 6.0.5(rollup@2.80.0)
-    transitivePeerDependencies:
-      - '@biomejs/biome'
-      - '@types/node'
-      - eslint
-      - less
-      - lightningcss
-      - magicast
-      - meow
-      - optionator
-      - oxlint
-      - rollup
-      - sass
-      - sass-embedded
-      - stylelint
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - typescript
-      - vls
-      - vti
-      - vue-tsc
-      - yaml
-
-  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)':
-    dependencies:
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@rollup/plugin-replace': 6.0.3(rollup@2.80.0)
-      '@vitejs/plugin-vue': 6.0.6(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
-      '@vitejs/plugin-vue-jsx': 5.1.5(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
-      autoprefixer: 10.4.27(postcss@8.5.12)
-      consola: 3.4.2
-      cssnano: 7.1.3(postcss@8.5.12)
-      defu: 6.1.5
-      escape-string-regexp: 5.0.0
-      exsolve: 1.0.8
-      get-port-please: 3.2.0
-      jiti: 2.6.1
-      knitwork: 1.3.0
-      magic-string: 0.30.21
-      mlly: 1.8.1
-      mocked-exports: 0.1.1
-      nuxt: 4.4.2(310f9ce0e83c86228ffccc2068b6ea8d)
+      nuxt: 4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46)
       nypm: 0.6.5
       pathe: 2.0.3
       pkg-types: 2.3.0
@@ -18485,6 +18456,66 @@ snapshots:
       - yaml
     optional: true
 
+  '@nuxt/vite-builder@4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)':
+    dependencies:
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@rollup/plugin-replace': 6.0.3(rollup@2.80.0)
+      '@vitejs/plugin-vue': 6.0.6(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
+      '@vitejs/plugin-vue-jsx': 5.1.5(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
+      autoprefixer: 10.4.27(postcss@8.5.12)
+      consola: 3.4.2
+      cssnano: 7.1.3(postcss@8.5.12)
+      defu: 6.1.5
+      escape-string-regexp: 5.0.0
+      exsolve: 1.0.8
+      get-port-please: 3.2.0
+      jiti: 2.6.1
+      knitwork: 1.3.0
+      magic-string: 0.30.21
+      mlly: 1.8.1
+      mocked-exports: 0.1.1
+      nuxt: 4.4.2(ab646659e22157d424fe811c5f28e128)
+      nypm: 0.6.5
+      pathe: 2.0.3
+      pkg-types: 2.3.0
+      postcss: 8.5.12
+      seroval: 1.5.1
+      std-env: 4.0.0
+      ufo: 1.6.3
+      unenv: 2.0.0-rc.24
+      vite: 7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
+      vite-node: 5.3.0(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
+      vite-plugin-checker: 0.12.0(eslint@9.39.4(jiti@2.6.1))(optionator@0.9.4)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue-tsc@3.2.7(typescript@5.9.3))
+      vue: 3.5.33(typescript@5.9.3)
+      vue-bundle-renderer: 2.2.0
+    optionalDependencies:
+      '@babel/plugin-syntax-jsx': 7.27.1(@babel/core@7.29.0)
+      rollup-plugin-visualizer: 6.0.5(rollup@2.80.0)
+    transitivePeerDependencies:
+      - '@biomejs/biome'
+      - '@types/node'
+      - eslint
+      - less
+      - lightningcss
+      - magicast
+      - meow
+      - optionator
+      - oxlint
+      - rollup
+      - sass
+      - sass-embedded
+      - stylelint
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - typescript
+      - vls
+      - vti
+      - vue-tsc
+      - yaml
+
   '@nuxtjs/color-mode@3.5.2(magicast@0.5.1)':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
@@ -18494,7 +18525,7 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@nuxtjs/i18n@10.3.0(@emnapi/core@1.7.1)(@emnapi/runtime@1.10.0)(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(eslint@9.39.4(jiti@2.6.1))(ioredis@5.10.0)(magicast@0.5.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))':
+  '@nuxtjs/i18n@10.3.0(@emnapi/core@1.7.1)(@emnapi/runtime@1.10.0)(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(eslint@9.39.4(jiti@2.6.1))(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(typescript@5.9.3)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))':
     dependencies:
       '@intlify/core': 11.4.0
       '@intlify/h3': 0.7.4
@@ -18519,7 +18550,7 @@ snapshots:
       ufo: 1.6.3
       unplugin: 2.3.11
       unrouting: 0.1.7
-      unstorage: 1.17.5(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0)
+      unstorage: 1.17.5(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       vue-i18n: 11.4.0(vue@3.5.33(typescript@5.9.3))
       vue-router: 5.0.6(@vue/compiler-sfc@3.5.33)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(vue@3.5.33(typescript@5.9.3))
     transitivePeerDependencies:
@@ -20040,7 +20071,7 @@ snapshots:
       - '@opentelemetry/exporter-trace-otlp-http'
       - supports-color
 
-  '@sentry/nuxt@10.50.0(@cloudflare/workers-types@4.20260426.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.33(typescript@5.9.3))':
+  '@sentry/nuxt@10.50.0(@cloudflare/workers-types@4.20260426.1)(@opentelemetry/api@1.9.1)(@opentelemetry/core@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/instrumentation@0.214.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.0(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.40.0)(encoding@0.1.13)(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(rollup@2.80.0)(vue@3.5.33(typescript@5.9.3))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@sentry/browser': 10.50.0
@@ -20052,7 +20083,7 @@ snapshots:
       '@sentry/vite-plugin': 5.2.0(encoding@0.1.13)(rollup@2.80.0)
       '@sentry/vue': 10.50.0(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(vue@3.5.33(typescript@5.9.3))
       local-pkg: 1.1.2
-      nuxt: 4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)
+      nuxt: 4.4.2(ab646659e22157d424fe811c5f28e128)
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -20203,14 +20234,14 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.0.2': {}
 
-  '@sidebase/nuxt-auth@0.9.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(magicast@0.5.1)(next-auth@4.24.14(@auth/core@0.34.3))':
+  '@sidebase/nuxt-auth@0.9.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(magicast@0.5.1)(next-auth@4.24.14(@auth/core@0.34.3))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       defu: 6.1.5
       h3: 1.15.11
       knitwork: 1.3.0
       next-auth: 4.24.14(@auth/core@0.34.3)
-      nitropack: 2.12.9(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)
+      nitropack: 2.12.9(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)
       requrl: 3.0.2
       scule: 1.3.0
       ufo: 1.6.1
@@ -21967,7 +21998,7 @@ snapshots:
       '@vueuse/shared': 14.2.1(vue@3.5.33(typescript@5.9.3))
       vue: 3.5.33(typescript@5.9.3)
 
-  '@vueuse/integrations@12.8.2(axios@1.15.2)(change-case@5.4.4)(focus-trap@7.6.6)(fuse.js@7.3.0)(typescript@5.9.3)':
+  '@vueuse/integrations@12.8.2(axios@1.15.2)(change-case@5.4.4)(focus-trap@7.6.6)(fuse.js@7.3.0)(idb-keyval@6.2.2)(typescript@5.9.3)':
     dependencies:
       '@vueuse/core': 12.8.2(typescript@5.9.3)
       '@vueuse/shared': 12.8.2(typescript@5.9.3)
@@ -21977,6 +22008,7 @@ snapshots:
       change-case: 5.4.4
       focus-trap: 7.6.6
       fuse.js: 7.3.0
+      idb-keyval: 6.2.2
     transitivePeerDependencies:
       - typescript
 
@@ -21986,13 +22018,13 @@ snapshots:
 
   '@vueuse/metadata@14.2.1': {}
 
-  '@vueuse/nuxt@13.9.0(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(vue@3.5.33(typescript@5.9.3))':
+  '@vueuse/nuxt@13.9.0(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(vue@3.5.33(typescript@5.9.3))':
     dependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@vueuse/core': 13.9.0(vue@3.5.33(typescript@5.9.3))
       '@vueuse/metadata': 13.9.0
       local-pkg: 1.1.2
-      nuxt: 4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)
+      nuxt: 4.4.2(ab646659e22157d424fe811c5f28e128)
       vue: 3.5.33(typescript@5.9.3)
     transitivePeerDependencies:
       - magicast
@@ -22519,6 +22551,8 @@ snapshots:
       readable-stream: 3.6.2
 
   blake3-wasm@2.1.5: {}
+
+  bmp-js@0.1.0: {}
 
   body-parser@2.2.2:
     dependencies:
@@ -25532,6 +25566,8 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
+  idb-keyval@6.2.2: {}
+
   idb@7.1.1: {}
 
   ieee754@1.2.1: {}
@@ -25831,6 +25867,8 @@ snapshots:
       unc-path-regex: 0.1.2
 
   is-unicode-supported@0.1.0: {}
+
+  is-url@1.2.4: {}
 
   is-valid-glob@1.0.0: {}
 
@@ -26998,7 +27036,7 @@ snapshots:
       mlly: 1.8.0
       pkg-types: 2.3.0
 
-  nitropack@2.12.9(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13):
+  nitropack@2.12.9(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.1
       '@rollup/plugin-alias': 5.1.1(rollup@4.59.0)
@@ -27065,7 +27103,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       unimport: 5.7.0
       unplugin-utils: 0.3.1
-      unstorage: 1.17.3(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0)
+      unstorage: 1.17.3(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       untyped: 2.0.0
       unwasm: 0.3.11
       youch: 4.1.0-beta.13
@@ -27100,7 +27138,7 @@ snapshots:
       - supports-color
       - uploadthing
 
-  nitropack@2.13.1(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13):
+  nitropack@2.13.1(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.4.2
       '@rollup/plugin-alias': 6.0.0(rollup@4.59.0)
@@ -27167,7 +27205,7 @@ snapshots:
       unenv: 2.0.0-rc.24
       unimport: 5.7.0
       unplugin-utils: 0.3.1
-      unstorage: 1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0)
+      unstorage: 1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0)
       untyped: 2.0.0
       unwasm: 0.5.3
       youch: 4.1.0-beta.13
@@ -27324,144 +27362,16 @@ snapshots:
 
   nuxt-define@1.0.0: {}
 
-  nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9):
+  nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46):
     dependencies:
       '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@5.9.3)
       '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.1)
       '@nuxt/devtools': 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(typescript@5.9.3)
+      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46))(typescript@5.9.3)
       '@nuxt/schema': 4.4.2
       '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
-      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)
-      '@unhead/vue': 2.1.12(vue@3.5.33(typescript@5.9.3))
-      '@vue/shared': 3.5.30
-      c12: 3.3.3(magicast@0.5.1)
-      chokidar: 5.0.0
-      compatx: 0.2.0
-      consola: 3.4.2
-      cookie-es: 2.0.0
-      defu: 6.1.5
-      devalue: 5.7.1
-      errx: 0.1.0
-      escape-string-regexp: 5.0.0
-      exsolve: 1.0.8
-      hookable: 6.0.1
-      ignore: 7.0.5
-      impound: 1.1.5
-      jiti: 2.6.1
-      klona: 2.0.6
-      knitwork: 1.3.0
-      magic-string: 0.30.21
-      mlly: 1.8.1
-      nanotar: 0.3.0
-      nypm: 0.6.5
-      ofetch: 1.5.1
-      ohash: 2.0.11
-      on-change: 6.0.2
-      oxc-minify: 0.117.0
-      oxc-parser: 0.117.0
-      oxc-transform: 0.117.0
-      oxc-walker: 0.7.0(oxc-parser@0.117.0)
-      pathe: 2.0.3
-      perfect-debounce: 2.1.0
-      picomatch: 4.0.4
-      pkg-types: 2.3.0
-      rou3: 0.8.1
-      scule: 1.3.0
-      semver: 7.7.3
-      std-env: 4.0.0
-      tinyglobby: 0.2.15
-      ufo: 1.6.3
-      ultrahtml: 1.6.0
-      uncrypto: 0.1.3
-      unctx: 2.5.0
-      unimport: 6.0.1
-      unplugin: 2.3.11
-      unrouting: 0.1.5
-      untyped: 2.0.0
-      vue: 3.5.33(typescript@5.9.3)
-      vue-router: 5.0.3(@vue/compiler-sfc@3.5.33)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(vue@3.5.33(typescript@5.9.3))
-    optionalDependencies:
-      '@parcel/watcher': 2.5.6
-      '@types/node': 24.1.0
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@babel/core'
-      - '@babel/plugin-proposal-decorators'
-      - '@babel/plugin-syntax-jsx'
-      - '@biomejs/biome'
-      - '@capacitor/preferences'
-      - '@deno/kv'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@netlify/blobs'
-      - '@pinia/colada'
-      - '@planetscale/database'
-      - '@rollup/plugin-babel'
-      - '@upstash/redis'
-      - '@vercel/blob'
-      - '@vercel/functions'
-      - '@vercel/kv'
-      - '@vue/compiler-sfc'
-      - aws4fetch
-      - bare-abort-controller
-      - better-sqlite3
-      - bufferutil
-      - cac
-      - commander
-      - db0
-      - drizzle-orm
-      - encoding
-      - eslint
-      - idb-keyval
-      - ioredis
-      - less
-      - lightningcss
-      - magicast
-      - meow
-      - mysql2
-      - optionator
-      - oxlint
-      - pinia
-      - react-native-b4a
-      - rolldown
-      - rollup
-      - rollup-plugin-visualizer
-      - sass
-      - sass-embedded
-      - sqlite3
-      - stylelint
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - typescript
-      - uploadthing
-      - utf-8-validate
-      - vite
-      - vls
-      - vti
-      - vue-tsc
-      - xml2js
-      - yaml
-
-  nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d):
-    dependencies:
-      '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@5.9.3)
-      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.1)
-      '@nuxt/devtools': 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
-      '@nuxt/kit': 4.4.2(magicast@0.5.1)
-      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d))(typescript@5.9.3)
-      '@nuxt/schema': 4.4.2
-      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
-      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)
+      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)
       '@unhead/vue': 2.1.12(vue@3.5.33(typescript@5.9.3))
       '@vue/shared': 3.5.30
       c12: 3.3.3(magicast@0.5.1)
@@ -27580,6 +27490,134 @@ snapshots:
       - xml2js
       - yaml
     optional: true
+
+  nuxt@4.4.2(ab646659e22157d424fe811c5f28e128):
+    dependencies:
+      '@dxup/nuxt': 0.4.0(magicast@0.5.1)(typescript@5.9.3)
+      '@nuxt/cli': 3.34.0(@nuxt/schema@4.4.2)(cac@6.7.14)(commander@14.0.3)(magicast@0.5.1)
+      '@nuxt/devtools': 2.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)(vite@7.3.2(@types/node@24.1.0)(jiti@2.6.1)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))(vue@3.5.33(typescript@5.9.3))
+      '@nuxt/kit': 4.4.2(magicast@0.5.1)
+      '@nuxt/nitro-server': 4.4.2(@babel/core@7.29.0)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))(encoding@0.1.13)(idb-keyval@6.2.2)(ioredis@5.10.0)(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(typescript@5.9.3)
+      '@nuxt/schema': 4.4.2
+      '@nuxt/telemetry': 2.7.0(@nuxt/kit@4.4.2(magicast@0.5.1))
+      '@nuxt/vite-builder': 4.4.2(@babel/plugin-syntax-jsx@7.27.1(@babel/core@7.29.0))(@types/node@24.1.0)(eslint@9.39.4(jiti@2.6.1))(magicast@0.5.1)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128))(optionator@0.9.4)(rollup-plugin-visualizer@6.0.5(rollup@2.80.0))(rollup@2.80.0)(sass@1.99.0)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(vue-tsc@3.2.7(typescript@5.9.3))(vue@3.5.33(typescript@5.9.3))(yaml@2.8.3)
+      '@unhead/vue': 2.1.12(vue@3.5.33(typescript@5.9.3))
+      '@vue/shared': 3.5.30
+      c12: 3.3.3(magicast@0.5.1)
+      chokidar: 5.0.0
+      compatx: 0.2.0
+      consola: 3.4.2
+      cookie-es: 2.0.0
+      defu: 6.1.5
+      devalue: 5.7.1
+      errx: 0.1.0
+      escape-string-regexp: 5.0.0
+      exsolve: 1.0.8
+      hookable: 6.0.1
+      ignore: 7.0.5
+      impound: 1.1.5
+      jiti: 2.6.1
+      klona: 2.0.6
+      knitwork: 1.3.0
+      magic-string: 0.30.21
+      mlly: 1.8.1
+      nanotar: 0.3.0
+      nypm: 0.6.5
+      ofetch: 1.5.1
+      ohash: 2.0.11
+      on-change: 6.0.2
+      oxc-minify: 0.117.0
+      oxc-parser: 0.117.0
+      oxc-transform: 0.117.0
+      oxc-walker: 0.7.0(oxc-parser@0.117.0)
+      pathe: 2.0.3
+      perfect-debounce: 2.1.0
+      picomatch: 4.0.4
+      pkg-types: 2.3.0
+      rou3: 0.8.1
+      scule: 1.3.0
+      semver: 7.7.3
+      std-env: 4.0.0
+      tinyglobby: 0.2.15
+      ufo: 1.6.3
+      ultrahtml: 1.6.0
+      uncrypto: 0.1.3
+      unctx: 2.5.0
+      unimport: 6.0.1
+      unplugin: 2.3.11
+      unrouting: 0.1.5
+      untyped: 2.0.0
+      vue: 3.5.33(typescript@5.9.3)
+      vue-router: 5.0.3(@vue/compiler-sfc@3.5.33)(pinia@3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3)))(vue@3.5.33(typescript@5.9.3))
+    optionalDependencies:
+      '@parcel/watcher': 2.5.6
+      '@types/node': 24.1.0
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@babel/core'
+      - '@babel/plugin-proposal-decorators'
+      - '@babel/plugin-syntax-jsx'
+      - '@biomejs/biome'
+      - '@capacitor/preferences'
+      - '@deno/kv'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@netlify/blobs'
+      - '@pinia/colada'
+      - '@planetscale/database'
+      - '@rollup/plugin-babel'
+      - '@upstash/redis'
+      - '@vercel/blob'
+      - '@vercel/functions'
+      - '@vercel/kv'
+      - '@vue/compiler-sfc'
+      - aws4fetch
+      - bare-abort-controller
+      - better-sqlite3
+      - bufferutil
+      - cac
+      - commander
+      - db0
+      - drizzle-orm
+      - encoding
+      - eslint
+      - idb-keyval
+      - ioredis
+      - less
+      - lightningcss
+      - magicast
+      - meow
+      - mysql2
+      - optionator
+      - oxlint
+      - pinia
+      - react-native-b4a
+      - rolldown
+      - rollup
+      - rollup-plugin-visualizer
+      - sass
+      - sass-embedded
+      - sqlite3
+      - stylelint
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - typescript
+      - uploadthing
+      - utf-8-validate
+      - vite
+      - vls
+      - vti
+      - vue-tsc
+      - xml2js
+      - yaml
 
   nwsapi@2.2.22: {}
 
@@ -27739,6 +27777,8 @@ snapshots:
       supports-color: 10.2.2
       typescript: 5.9.3
       yargs-parser: 21.1.1
+
+  opencollective-postinstall@2.0.3: {}
 
   openid-client@5.7.1:
     dependencies:
@@ -28687,6 +28727,8 @@ snapshots:
       regenerate: 1.4.2
 
   regenerate@1.4.2: {}
+
+  regenerator-runtime@0.13.11: {}
 
   regex-recursion@6.0.2:
     dependencies:
@@ -29805,6 +29847,22 @@ snapshots:
       commander: 2.20.3
       source-map-support: 0.5.21
 
+  tesseract.js-core@6.0.0: {}
+
+  tesseract.js@6.0.1(encoding@0.1.13):
+    dependencies:
+      bmp-js: 0.1.0
+      idb-keyval: 6.2.2
+      is-url: 1.2.4
+      node-fetch: 2.7.0(encoding@0.1.13)
+      opencollective-postinstall: 2.0.3
+      regenerator-runtime: 0.13.11
+      tesseract.js-core: 6.0.0
+      wasm-feature-detect: 1.8.0
+      zlibjs: 0.3.1
+    transitivePeerDependencies:
+      - encoding
+
   test-exclude@7.0.1:
     dependencies:
       '@istanbuljs/schema': 0.1.3
@@ -30587,7 +30645,7 @@ snapshots:
       '@unrs/resolver-binding-win32-ia32-msvc': 1.11.1
       '@unrs/resolver-binding-win32-x64-msvc': 1.11.1
 
-  unstorage@1.17.3(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0):
+  unstorage@1.17.3(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0):
     dependencies:
       anymatch: 3.1.3
       chokidar: 4.0.3
@@ -30599,9 +30657,10 @@ snapshots:
       ufo: 1.6.3
     optionalDependencies:
       db0: 0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))
+      idb-keyval: 6.2.2
       ioredis: 5.10.0
 
-  unstorage@1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0):
+  unstorage@1.17.4(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0):
     dependencies:
       anymatch: 3.1.3
       chokidar: 5.0.0
@@ -30613,9 +30672,10 @@ snapshots:
       ufo: 1.6.3
     optionalDependencies:
       db0: 0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))
+      idb-keyval: 6.2.2
       ioredis: 5.10.0
 
-  unstorage@1.17.5(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(ioredis@5.10.0):
+  unstorage@1.17.5(db0@0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)))(idb-keyval@6.2.2)(ioredis@5.10.0):
     dependencies:
       anymatch: 3.1.3
       chokidar: 5.0.0
@@ -30627,6 +30687,7 @@ snapshots:
       ufo: 1.6.3
     optionalDependencies:
       db0: 0.3.4(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(drizzle-orm@0.45.2(@cloudflare/workers-types@4.20260426.1)(@libsql/client@0.17.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))(@opentelemetry/api@1.9.1)(@types/pg@8.15.6))
+      idb-keyval: 6.2.2
       ioredis: 5.10.0
 
   untun@0.1.3:
@@ -30942,7 +31003,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.3
 
-  vitepress@1.6.4(@algolia/client-search@5.46.0)(@types/node@24.1.0)(axios@1.15.2)(change-case@5.4.4)(fuse.js@7.3.0)(jiti@2.6.1)(postcss@8.5.12)(sass@1.99.0)(search-insights@2.17.3)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3):
+  vitepress@1.6.4(@algolia/client-search@5.46.0)(@types/node@24.1.0)(axios@1.15.2)(change-case@5.4.4)(fuse.js@7.3.0)(idb-keyval@6.2.2)(jiti@2.6.1)(postcss@8.5.12)(sass@1.99.0)(search-insights@2.17.3)(terser@5.46.2)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3):
     dependencies:
       '@docsearch/css': 3.8.2
       '@docsearch/js': 3.8.2(@algolia/client-search@5.46.0)(search-insights@2.17.3)
@@ -30955,7 +31016,7 @@ snapshots:
       '@vue/devtools-api': 7.7.8
       '@vue/shared': 3.5.27
       '@vueuse/core': 12.8.2(typescript@5.9.3)
-      '@vueuse/integrations': 12.8.2(axios@1.15.2)(change-case@5.4.4)(focus-trap@7.6.6)(fuse.js@7.3.0)(typescript@5.9.3)
+      '@vueuse/integrations': 12.8.2(axios@1.15.2)(change-case@5.4.4)(focus-trap@7.6.6)(fuse.js@7.3.0)(idb-keyval@6.2.2)(typescript@5.9.3)
       focus-trap: 7.6.6
       mark.js: 8.11.1
       minisearch: 7.2.0
@@ -31167,17 +31228,17 @@ snapshots:
       '@vue/compiler-sfc': 3.5.33
       pinia: 3.0.4(typescript@5.9.3)(vue@3.5.33(typescript@5.9.3))
 
-  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)):
+  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46)):
     optionalDependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@nuxt/schema': 4.4.2
-      nuxt: 4.4.2(0b7d5a6f012430b6d5909c34baaf1ce9)
+      nuxt: 4.4.2(4e63ad499e02b5f7d7b26e30a76a4b46)
 
-  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(310f9ce0e83c86228ffccc2068b6ea8d)):
+  vue-sonner@2.0.9(@nuxt/kit@4.4.2(magicast@0.5.1))(@nuxt/schema@4.4.2)(nuxt@4.4.2(ab646659e22157d424fe811c5f28e128)):
     optionalDependencies:
       '@nuxt/kit': 4.4.2(magicast@0.5.1)
       '@nuxt/schema': 4.4.2
-      nuxt: 4.4.2(310f9ce0e83c86228ffccc2068b6ea8d)
+      nuxt: 4.4.2(ab646659e22157d424fe811c5f28e128)
 
   vue-tsc@3.2.7(typescript@5.9.3):
     dependencies:
@@ -31200,6 +31261,8 @@ snapshots:
   w3c-xmlserializer@5.0.0:
     dependencies:
       xml-name-validator: 5.0.0
+
+  wasm-feature-detect@1.8.0: {}
 
   watchpack@2.5.1:
     dependencies:
@@ -31693,6 +31756,8 @@ snapshots:
       archiver-utils: 5.0.2
       compress-commons: 6.0.2
       readable-stream: 4.7.0
+
+  zlibjs@0.3.1: {}
 
   zod-to-json-schema@3.25.0(zod@3.25.76):
     dependencies:

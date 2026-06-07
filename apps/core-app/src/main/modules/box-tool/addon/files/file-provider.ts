@@ -1835,7 +1835,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await this.resetFileIndexRuntimeStateViaIndexedRuntime({
         sourceId: this.id,
         reason: IndexedSourceResetReasons.ManualRebuild,
-        clearScanProgress: true
+        clearScanProgress: true,
+        // 手动/强制重建应产出全新索引：清空现有行，避免如今已越界的条目残留
+        // （例如旧版本错误索引的 *.photoslibrary bundle 内容），否则重扫不会主动删除它们。
+        clearSearchIndex: true
       })
     }
 
