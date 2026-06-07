@@ -1,6 +1,8 @@
+const fs = require('node:fs')
 const path = require('node:path')
 const plist = require('simple-plist')
 const {
+  findPackagedResourcesDir,
   syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
 } = require('./runtime-modules')
@@ -24,6 +26,116 @@ function ensureMacMainAppLsuiElement(context) {
   }
 }
 
+function dirSizeBytes(dir) {
+  let total = 0
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      total += dirSizeBytes(entryPath)
+    } else {
+      try {
+        total += fs.statSync(entryPath).size
+      } catch {
+        // ignore unreadable entry
+      }
+    }
+  }
+  return total
+}
+
+function safeRemoveDir(dir) {
+  try {
+    const size = dirSizeBytes(dir)
+    fs.rmSync(dir, { recursive: true, force: true })
+    return size
+  } catch (error) {
+    console.warn(`[afterPack] Failed to prune ${dir}: ${error.message}`)
+    return 0
+  }
+}
+
+// ffprobe-static ships binaries for every platform/arch (darwin|linux|win32 × x64|ia32|arm64).
+// Only the build target's binary is usable, so drop the rest to cut hundreds of MB per build.
+function resolveTargetArchNames(context) {
+  let archName
+  try {
+    const { Arch } = require('electron-builder')
+    archName = Arch[context.arch]
+  } catch {
+    archName = { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64', 4: 'universal' }[context.arch]
+  }
+  if (archName === 'universal') return ['x64', 'arm64']
+  if (archName === 'armv7l') return ['arm']
+  return archName ? [archName] : []
+}
+
+function pruneCrossPlatformFfprobeBinaries(context) {
+  const platformKey = context.electronPlatformName // 'darwin' | 'win32' | 'linux'
+  const keepArchs = new Set(resolveTargetArchNames(context))
+  if (!platformKey || keepArchs.size === 0) {
+    console.warn(
+      `[afterPack] Skip ffprobe-static prune: platform=${platformKey} arch=${context.arch}`
+    )
+    return
+  }
+
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir, '[afterPack]')
+  if (!resourcesDir) return
+
+  // ffprobe-static is copied both into app.asar.unpacked (asarUnpack) and Resources/node_modules
+  // (syncPackagedResourceModules); prune both.
+  const binDirs = [
+    path.join(resourcesDir, 'node_modules', 'ffprobe-static', 'bin'),
+    path.join(resourcesDir, 'app.asar.unpacked', 'node_modules', 'ffprobe-static', 'bin')
+  ]
+
+  let removedBytes = 0
+  for (const binDir of binDirs) {
+    if (!fs.existsSync(binDir)) continue
+    let platformEntries
+    try {
+      platformEntries = fs.readdirSync(binDir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const platformEntry of platformEntries) {
+      if (!platformEntry.isDirectory()) continue
+      const platformDir = path.join(binDir, platformEntry.name)
+      if (platformEntry.name !== platformKey) {
+        removedBytes += safeRemoveDir(platformDir)
+        continue
+      }
+      let archEntries
+      try {
+        archEntries = fs.readdirSync(platformDir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const archEntry of archEntries) {
+        if (archEntry.isDirectory() && !keepArchs.has(archEntry.name)) {
+          removedBytes += safeRemoveDir(path.join(platformDir, archEntry.name))
+        }
+      }
+    }
+  }
+
+  if (removedBytes > 0) {
+    console.log(
+      `[afterPack] Pruned cross-platform ffprobe-static binaries: freed ~${(
+        removedBytes /
+        1024 /
+        1024
+      ).toFixed(0)}MB (kept ${platformKey}/${[...keepArchs].join(',')})`
+    )
+  }
+}
+
 module.exports = async function afterPack(context) {
   ensureMacMainAppLsuiElement(context)
   syncPackagedResourceModules(context.appOutDir, {
@@ -32,4 +144,8 @@ module.exports = async function afterPack(context) {
   syncMissingPackagedRuntimeModules(context.appOutDir, {
     logPrefix: '[afterPack]'
   })
+  pruneCrossPlatformFfprobeBinaries(context)
 }
+
+// Exposed for testing the prune logic in isolation.
+module.exports.pruneCrossPlatformFfprobeBinaries = pruneCrossPlatformFfprobeBinaries

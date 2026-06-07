@@ -39,6 +39,14 @@ files:
   - '!build/**'
   - '!**/*.map'
   - '!patches/**'
+  # Exclude Rust/Cargo build cache from @talex-touch/tuff-native (~498MB of .rlib/.rmeta intermediates).
+  # Runtime only loads build/Release/*.node (native-loader.js); native-screenshot/target/ is build-only output.
+  - '!**/native-screenshot/target/**'
+  - '!**/*.rlib'
+  - '!**/*.rmeta'
+  # js-tiktoken ships dual ESM(.js)+CJS(.cjs); the CJS-only main process loads .cjs via require,
+  # so the ~11MB of ESM duplicates never load (verified: .cjs are self-contained, no .cjs->.js deps).
+  - '!**/node_modules/js-tiktoken/dist/**/*.js'
 extraFiles: []
 extraResources:
   - from: resources/icon.png
