@@ -152,6 +152,12 @@ export function useSearch(
 
   const searchResults = shallowRef<Array<TuffItem>>([])
 
+  // Hard cap on items handed to the UI. CoreBox renders every result as a
+  // component without windowing, and the backend already returns them in
+  // relevance order, so anything past this only adds render/patch cost for
+  // items a launcher user never scrolls to. Tune here if more are needed.
+  const MAX_RENDERED_RESULTS = 80
+
   const res = computed<Array<TuffItem>>(() => {
     const itemsMap = new Map<string, TuffItem>()
 
@@ -164,7 +170,7 @@ export function useSearch(
     })
 
     const result = Array.from(itemsMap.values())
-    return filterDetachedItems(result)
+    return filterDetachedItems(result).slice(0, MAX_RENDERED_RESULTS)
   })
 
   const searchResult = ref<TuffSearchResult | null>(null)
@@ -180,7 +186,14 @@ export function useSearch(
   const pendingSearchEndById = new Map<string, SearchEndData>()
   const pendingSearchUpdatesById = new Map<string, TuffItem[]>()
 
-  const SEARCH_DEBOUNCE_MS = 30
+  // Search-trigger debounce. Each "major" result change re-mounts the entire
+  // result list through <Transition mode="out-in"> in CoreBox.vue, so a higher
+  // value directly cuts the number of full list re-renders while typing. 80ms
+  // stays under the ~100ms perception threshold (still feels instant) while
+  // reducing worst-case search/render churn ~2.6x versus the previous 30ms.
+  // Tune here if it feels sluggish; backend search time is tracked separately
+  // via firstResultMs in the search-trace metrics.
+  const SEARCH_DEBOUNCE_MS = 80
   const INPUT_CHANGE_DEBOUNCE_MS = 25
   const inputTransport = createCoreBoxInputTransport(transport, INPUT_CHANGE_DEBOUNCE_MS)
 

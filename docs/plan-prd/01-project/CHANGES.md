@@ -5,6 +5,21 @@
 
 ## 2026-06-07
 
+### docs(audit): add 2026-06-07 UI compatibility follow-up
+
+- `docs/plan-prd/report/cross-platform-compat-placeholder-ui-architecture-audit-2026-06-07.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Added the 2026-06-07 UI/compatibility/placeholder/architecture audit follow-up.
+  - Reconfirmed no new production-path P0 fixed fake-success, mock payment URL, fake empty payload or consumable placeholder response in the reviewed live tree.
+  - Corrected current facts to `HEAD=686ec013e`, root/CoreApp `2.4.11-beta.7`, and `@talex-touch/tuff-cli@0.0.7`.
+  - Classified `tuffcli publish` stale-token browser OAuth refresh as a compatibility improvement while keeping non-interactive publish fail-closed.
+  - Recorded the next high-signal order: UI semantic controls, `touch-music`/`touch-image` sample plugin cleanup, CLI publish evidence, Windows/macOS device evidence, then File write/store boundary.
+  - 验证：static scans and `git diff --check` only; no runtime code changed in this docs/audit slice.
+
 ### fix(cli): refresh expired publish auth through browser OAuth
 
 - `packages/tuff-cli/package.json`

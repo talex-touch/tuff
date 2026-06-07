@@ -222,6 +222,13 @@ async function initBetterScroll() {
 
   const { optionsFromProps } = getWheelOptions()
 
+  // The dynamic imports / plugin installs above yield to the event loop. If the
+  // component unmounted (or its DOM was torn down) in that gap, wrapperRef is now
+  // null — bail before handing null to BScroll (whose later refresh() crashes on
+  // undefined content) and to setupWheel (addEventListener on null).
+  if (!wrapperRef.value)
+    return
+
   bs = new BScroll(wrapperRef.value, {
     scrollX: isScrollXEnabled.value,
     scrollY: isScrollYEnabled.value,

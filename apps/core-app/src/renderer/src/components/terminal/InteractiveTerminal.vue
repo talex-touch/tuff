@@ -1,5 +1,5 @@
 <script name="InteractiveTerminal" setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
@@ -21,20 +21,36 @@ defineExpose({
   getTerminal: () => terminal.value
 })
 
+let fitTimer = null
+let onResize = null
+
 onMounted(() => {
   const fitAddon = new FitAddon()
   term.loadAddon(fitAddon)
 
   term.open(terminal.value)
-  setTimeout(() => {
+  fitTimer = setTimeout(() => {
     fitAddon.fit()
   }, 1000)
   term.writeln('Hello from \x1B[1;3;31mxterm.js\x1B[0m $ ')
 
   term.focus()
-  window.addEventListener('resize', () => {
+  onResize = () => {
     fitAddon.fit()
-  })
+  }
+  window.addEventListener('resize', onResize)
+})
+
+onUnmounted(() => {
+  if (fitTimer) {
+    clearTimeout(fitTimer)
+    fitTimer = null
+  }
+  if (onResize) {
+    window.removeEventListener('resize', onResize)
+    onResize = null
+  }
+  term.dispose()
 })
 </script>
 

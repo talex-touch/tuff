@@ -136,6 +136,21 @@ export const BASE_BLACKLISTED_DIRS = new Set([
   ...TEMP_BLACKLISTED_DIRS,
 ])
 
+/**
+ * macOS 媒体库 package 后缀黑名单（小写，匹配时大小写不敏感）。
+ * 这类 bundle 内部全是 UUID 命名的衍生图/缓存/渲染件，按文件名搜索无意义，
+ * 整棵子树都不应进入文件索引（曾因 Photos Library 的大小写敏感放行逻辑被错误索引，
+ * 单库可达数万条，撑爆索引并淹没真实结果）。
+ */
+export const BLACKLISTED_BUNDLE_SUFFIXES = new Set([
+  '.photoslibrary',
+  '.tvlibrary',
+  '.theater',
+  '.imovielibrary',
+  '.musiclibrary',
+  '.aplibrary',
+])
+
 // ==================== 应用特定黑名单 ====================
 
 /** Photos Library 相关目录配置（仅 macOS） */
