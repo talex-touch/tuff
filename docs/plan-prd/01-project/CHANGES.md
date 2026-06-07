@@ -3,6 +3,19 @@
 > 更新时间：2026-06-06
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-07
+
+### fix(cli): refresh expired publish auth through browser OAuth
+
+- `packages/tuff-cli/package.json`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - `tuffcli publish` now runs onboarding and local auth validation before invoking the package publisher.
+  - When an existing CLI token is rejected and the CLI is interactive, publish clears the stale auth file and directly starts the existing browser OAuth device authorization flow; successful authorization continues into the original publish path.
+  - Non-interactive runs still fail closed instead of opening a browser, preserving CI behavior.
+  - Prepared `@talex-touch/tuff-cli@0.0.7` for npm publish via the existing package publish workflow.
+  - 验证：`pnpm -C "packages/tuff-cli" run lint` and `git diff --check` passed. Local `pnpm -C "packages/tuff-cli" run build` is blocked in the Codex desktop Node runtime by Rollup native module signature validation; CI uses Node `22.16.0`.
+
 ## 2026-06-06
 
 ### fix(search): tighten PreviewSDK parser boundaries
