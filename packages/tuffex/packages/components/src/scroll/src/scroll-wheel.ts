@@ -314,7 +314,9 @@ export function useScrollWheel(options: UseScrollWheelOptions) {
     requestWheelApply()
   }
 
-  function setupWheel(el: HTMLElement) {
+  function setupWheel(el: HTMLElement | null) {
+    if (!el)
+      return
     el.addEventListener('wheel', handleWheel, { passive: false })
     wheelCleanup = () => el.removeEventListener('wheel', handleWheel)
   }
