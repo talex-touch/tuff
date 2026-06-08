@@ -133,7 +133,8 @@ export default defineConfig({
       externalizeDepsPlugin({
         exclude: [
           '@talex-touch/utils', // workspace 包必须打包
-          '@talex-touch/tuff-intelligence' // 避免运行时直接加载 TS ESM 源码导致导入解析失败
+          '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
+          'mathjs' // 打包进 bundle 以启用 tree-shaking (mathjs/number 剔除 matrix/calculus)
         ]
       })
     ],
