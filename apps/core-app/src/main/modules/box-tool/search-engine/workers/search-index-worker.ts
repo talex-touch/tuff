@@ -18,7 +18,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { createClient } from '@libsql/client'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
@@ -509,16 +509,12 @@ async function handleRemoveFileExtensions(message: RemoveFileExtensionsMessage):
 
   const workerDb = db
   await withWorkerWriteRetry(async () => {
-    // Use inArray helper for type-safe IN clause
-    await workerDb.delete(schema.fileExtensions).where(
-      and(
-        eq(schema.fileExtensions.fileId, fileId),
-        sql`${schema.fileExtensions.key} IN (${sql.join(
-          keys.map((k) => sql.raw(`'${k}'`)),
-          sql.raw(', ')
-        )})`
+    // Use inArray helper for type-safe parameterized IN clause
+    await workerDb
+      .delete(schema.fileExtensions)
+      .where(
+        and(eq(schema.fileExtensions.fileId, fileId), inArray(schema.fileExtensions.key, keys))
       )
-    )
   }, 'worker.removeFileExtensions')
   searchIndexWorkerLog.debug('Removed file extensions', { meta: { fileId, keys: keys.join(',') } })
 }
