@@ -14,6 +14,18 @@ import type {
   WorkerMetricsRequest,
   WorkerMetricsResponse
 } from '../../addon/files/workers/worker-status'
+import type {
+  CleanupOrphanKeywordsMessage,
+  CountByProviderMessage,
+  IndexItemsMessage,
+  InitMessage,
+  RemoveByProviderMessage,
+  RemoveFileExtensionsMessage,
+  RemoveFileMessage,
+  RemoveItemsMessage,
+  WorkerErrorMessage,
+  WorkerResultMessage
+} from './search-index-worker-types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
@@ -37,57 +49,7 @@ export function withWorkerWriteRetry<T>(operation: () => Promise<T>, label: stri
   return withSqliteRetry(operation, { label })
 }
 
-// ---------- Message Types ----------
-
-interface InitMessage {
-  type: 'init'
-  taskId: string
-  dbPath: string
-}
-
-interface IndexItemsMessage {
-  type: 'indexItems'
-  taskId: string
-  items: SearchIndexItem[]
-}
-
-interface RemoveItemsMessage {
-  type: 'removeItems'
-  taskId: string
-  itemIds: string[]
-}
-
-interface RemoveByProviderMessage {
-  type: 'removeByProvider'
-  taskId: string
-  providerId: string
-}
-
-interface CountByProviderMessage {
-  type: 'countByProvider'
-  taskId: string
-  providerId: string
-}
-
-// Phase 1: Single-writer architecture — main thread delegates file-index writes to worker
-interface RemoveFileMessage {
-  type: 'removeFile'
-  taskId: string
-  path: string
-}
-
-interface RemoveFileExtensionsMessage {
-  type: 'removeFileExtensions'
-  taskId: string
-  fileId: number
-  keys: string[]
-}
-
-interface CleanupOrphanKeywordsMessage {
-  type: 'cleanupOrphanKeywords'
-  taskId: string
-  sourceId: string
-}
+// ---------- Internal Message Types (not in shared types) ----------
 
 interface PersistAndIndexEntry {
   fileId: number
@@ -154,18 +116,6 @@ type WorkerRequest =
   | CleanupOrphanKeywordsMessage
   | WorkerMetricsRequest
 
-interface DoneMessage {
-  type: 'done'
-  taskId: string
-  result?: unknown
-}
-
-interface ErrorMessage {
-  type: 'error'
-  taskId: string
-  error: string
-}
-
 // ---------- Worker State ----------
 
 let searchIndex: SearchIndexService | null = null
@@ -202,31 +152,31 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
     switch (message.type) {
       case 'init':
         await handleInit(message)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
 
       case 'indexItems':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
         await searchIndex.indexItems(message.items)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
 
       case 'removeItems':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
         await searchIndex.removeItems(message.itemIds)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
 
       case 'removeByProvider':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
         await searchIndex.removeByProvider(message.providerId)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
 
       case 'countByProvider': {
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
         const count = await searchIndex.countByProvider(message.providerId)
-        respond({ type: 'done', taskId, result: count })
+        respond({ type: 'result', taskId, result: count })
         break
       }
 
@@ -247,51 +197,54 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
             await new Promise<void>((resolve) => setTimeout(resolve, 30))
           }
         }
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
       }
 
       case 'upsertFiles': {
         if (!db) throw new Error('Worker not initialized — send init first')
         const rows = await handleUpsertFiles(message.records)
-        respond({ type: 'done', taskId, result: rows })
+        respond({ type: 'result', taskId, result: rows })
         break
       }
 
       case 'upsertScanProgress': {
         if (!db) throw new Error('Worker not initialized — send init first')
         await handleUpsertScanProgress(message.paths, message.lastScanned)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
       }
 
       case 'removeFile': {
         if (!db) throw new Error('Worker not initialized — send init first')
         await handleRemoveFile(message)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
       }
 
       case 'removeFileExtensions': {
         if (!db) throw new Error('Worker not initialized — send init first')
         await handleRemoveFileExtensions(message)
-        respond({ type: 'done', taskId })
+        respond({ type: 'result', taskId })
         break
       }
 
       case 'cleanupOrphanKeywords': {
         if (!db) throw new Error('Worker not initialized — send init first')
         const deletedCount = await handleCleanupOrphanKeywords(message)
-        respond({ type: 'done', taskId, result: deletedCount })
+        respond({ type: 'result', taskId, result: deletedCount })
         break
       }
 
       default:
-        respond({ type: 'error', taskId, error: `Unknown message type` })
+        respond({ type: 'error', taskId, error: { message: `Unknown message type` } })
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    respond({ type: 'error', taskId, error: errorMessage })
+    const errorObj =
+      error instanceof Error
+        ? { message: error.message, stack: error.stack }
+        : { message: String(error) }
+    respond({ type: 'error', taskId, error: errorObj })
   }
 }
 
@@ -547,7 +500,7 @@ async function handleCleanupOrphanKeywords(message: CleanupOrphanKeywordsMessage
 
 // ---------- Communication ----------
 
-function respond(message: DoneMessage | ErrorMessage): void {
+function respond(message: WorkerResultMessage | WorkerErrorMessage): void {
   parentPort?.postMessage(message)
 }
 

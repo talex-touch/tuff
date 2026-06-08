@@ -3,6 +3,7 @@
  * Main thread + worker both import from here to ensure type safety.
  */
 
+import type { SearchIndexItem } from '../search-index-service'
 import type { files } from '../../../../db/schema'
 
 // ============================================================================
@@ -17,12 +18,7 @@ export interface InitMessage {
 
 export interface IndexItemsMessage {
   type: 'indexItems'
-  items: Array<{
-    itemId: string
-    content: string
-    keywords: string[]
-    providerId: string
-  }>
+  items: SearchIndexItem[]
   taskId: string
 }
 
@@ -99,7 +95,7 @@ export type SearchIndexWorkerMessage =
 export interface WorkerResultMessage {
   type: 'result'
   taskId: string
-  result: unknown
+  result?: unknown
 }
 
 export interface WorkerErrorMessage {
