@@ -69,6 +69,26 @@ interface CountByProviderMessage {
   providerId: string
 }
 
+// Phase 1: Single-writer architecture — main thread delegates file-index writes to worker
+interface RemoveFileMessage {
+  type: 'removeFile'
+  taskId: string
+  path: string
+}
+
+interface RemoveFileExtensionsMessage {
+  type: 'removeFileExtensions'
+  taskId: string
+  fileId: number
+  keys: string[]
+}
+
+interface CleanupOrphanKeywordsMessage {
+  type: 'cleanupOrphanKeywords'
+  taskId: string
+  sourceId: string
+}
+
 interface PersistAndIndexEntry {
   fileId: number
   fileUpdate: {
@@ -129,6 +149,9 @@ type WorkerRequest =
   | PersistAndIndexMessage
   | UpsertFilesMessage
   | UpsertScanProgressMessage
+  | RemoveFileMessage
+  | RemoveFileExtensionsMessage
+  | CleanupOrphanKeywordsMessage
   | WorkerMetricsRequest
 
 interface DoneMessage {
@@ -239,6 +262,27 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         if (!db) throw new Error('Worker not initialized — send init first')
         await handleUpsertScanProgress(message.paths, message.lastScanned)
         respond({ type: 'done', taskId })
+        break
+      }
+
+      case 'removeFile': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        await handleRemoveFile(message)
+        respond({ type: 'done', taskId })
+        break
+      }
+
+      case 'removeFileExtensions': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        await handleRemoveFileExtensions(message)
+        respond({ type: 'done', taskId })
+        break
+      }
+
+      case 'cleanupOrphanKeywords': {
+        if (!db) throw new Error('Worker not initialized — send init first')
+        const deletedCount = await handleCleanupOrphanKeywords(message)
+        respond({ type: 'done', taskId, result: deletedCount })
         break
       }
 
@@ -438,6 +482,71 @@ async function handleUpsertScanProgress(paths: string[], lastScanned: string): P
         }),
     WORKER_RETRY_LABELS.upsertScanProgress
   )
+}
+
+/**
+ * Phase 1: Remove a file record from the files table.
+ * Main thread delegates this write to ensure worker is the single writer.
+ */
+async function handleRemoveFile(message: RemoveFileMessage): Promise<void> {
+  if (!db) throw new Error('Worker not initialized')
+  const { path } = message
+  const workerDb = db
+  await withWorkerWriteRetry(async () => {
+    await workerDb.delete(schema.files).where(eq(schema.files.path, path))
+  }, 'worker.removeFile')
+  searchIndexWorkerLog.debug('Removed file', { meta: { path } })
+}
+
+/**
+ * Phase 1: Remove specific file_extensions entries (stale asset cache cleanup).
+ * Main thread delegates thumbnail/icon cleanup writes to the worker.
+ */
+async function handleRemoveFileExtensions(message: RemoveFileExtensionsMessage): Promise<void> {
+  if (!db) throw new Error('Worker not initialized')
+  const { fileId, keys } = message
+  if (keys.length === 0) return
+
+  const workerDb = db
+  await withWorkerWriteRetry(async () => {
+    // Use inArray helper for type-safe IN clause
+    await workerDb.delete(schema.fileExtensions).where(
+      and(
+        eq(schema.fileExtensions.fileId, fileId),
+        sql`${schema.fileExtensions.key} IN (${sql.join(
+          keys.map((k) => sql.raw(`'${k}'`)),
+          sql.raw(', ')
+        )})`
+      )
+    )
+  }, 'worker.removeFileExtensions')
+  searchIndexWorkerLog.debug('Removed file extensions', { meta: { fileId, keys: keys.join(',') } })
+}
+
+/**
+ * Phase 1: Cleanup orphaned keyword_mappings (integrity check).
+ * Deletes keywords whose item_id no longer exists in search_index.
+ */
+async function handleCleanupOrphanKeywords(message: CleanupOrphanKeywordsMessage): Promise<number> {
+  if (!db) throw new Error('Worker not initialized')
+  const { sourceId } = message
+
+  const workerDb = db
+  const result = await withWorkerWriteRetry(async () => {
+    return await workerDb.run(sql`
+        DELETE FROM keyword_mappings
+        WHERE provider_id = ${sourceId}
+          AND item_id NOT IN (
+            SELECT item_id FROM search_index WHERE provider = ${sourceId}
+          )
+      `)
+  }, 'worker.cleanupOrphanKeywords')
+
+  const deletedCount = result.rowsAffected ?? 0
+  searchIndexWorkerLog.info('Cleaned orphan keywords', {
+    meta: { sourceId, deletedCount }
+  })
+  return deletedCount
 }
 
 // ---------- Communication ----------

@@ -77,6 +77,17 @@ function createDbUtilsInternal(
     async updateFile(path: string, data: Partial<typeof schema.files.$inferInsert>) {
       return db.update(schema.files).set(data).where(eq(schema.files.path, path)).returning()
     },
+    /**
+     * @deprecated Use SearchIndexWorkerClient.removeFile() instead.
+     *
+     * Direct main-thread writes to the files table bypass the single-writer
+     * architecture and can cause SQLITE_BUSY under contention. The worker is
+     * now the sole writer for file-index domain (files, file_extensions,
+     * keyword_mappings).
+     *
+     * Migration: replace `dbUtils.removeFile(path)` with
+     * `searchIndexWorker.removeFile(path)`.
+     */
     async removeFile(path: string) {
       return db.delete(schema.files).where(eq(schema.files.path, path))
     },
@@ -152,6 +163,16 @@ function createDbUtilsInternal(
     async getFileExtensions(fileId: number) {
       return db.select().from(schema.fileExtensions).where(eq(schema.fileExtensions.fileId, fileId))
     },
+    /**
+     * @deprecated Use SearchIndexWorkerClient.removeFileExtensions() instead.
+     *
+     * Direct main-thread writes to file_extensions bypass the single-writer
+     * architecture and can cause SQLITE_BUSY under contention. The worker is
+     * now the sole writer for file-index domain.
+     *
+     * Migration: replace `dbUtils.removeFileExtensions(fileId, keys)` with
+     * `searchIndexWorker.removeFileExtensions(fileId, keys)`.
+     */
     async removeFileExtensions(fileId: number, keys: string[]) {
       if (keys.length === 0) return
       return db
