@@ -78,7 +78,7 @@ import {
   fileIndexProgress,
   files as filesSchema
 } from '../../../../db/schema'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
+import { isSqliteBusyError, withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
@@ -582,8 +582,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           clearScanProgress: request.clearScanProgress
         })
       },
-      withDbWrite: (label, operation) => this.withDbWrite(label, operation),
-      logInfo: (message, meta) => this.logInfo(message, meta)
+      logInfo: (message, meta) => this.logInfo(message, meta),
+      searchIndexWorker: this.searchIndexWorker
     })
     this.scanProgressService = new FileProviderScanProgressService({
       getDbUtils: () => this.dbUtils,
@@ -920,12 +920,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
-    void this.withDbWrite(`file-index.${reason}.remove-file`, () =>
-      this.dbUtils!.removeFile(file.path)
-    )
-      .then(() => this.removeSearchIndexItems([file.path], `file-index.${reason}.remove-search`))
+    // Phase 2: Delegate file removal to worker (single-writer architecture)
+    void this.ensureSearchIndexWorkerReady(`file-index.${reason}.cleanup`)
+      .then((ready) => {
+        if (!ready) {
+          this.logDebug('Stale file result cleanup skipped: worker not ready', {
+            path: file.path,
+            reason
+          })
+          return
+        }
+        return this.searchIndexWorker
+          .removeFile(file.path)
+          .then(() =>
+            this.removeSearchIndexItems([file.path], `file-index.${reason}.remove-search`)
+          )
+      })
       .catch((error) => {
-        this.logWarn('Failed to cleanup stale file result', error, { path: file.path, reason })
+        // Best-effort cleanup. With single-writer architecture, SQLITE_BUSY should
+        // be rare, but kept for backwards compatibility during migration.
+        if (isSqliteBusyError(error)) {
+          this.logDebug('Stale file result cleanup deferred (db busy)', { path: file.path, reason })
+        } else {
+          this.logWarn('Failed to cleanup stale file result', error, { path: file.path, reason })
+        }
       })
   }
 
@@ -935,15 +953,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     reason: string
   ): void {
     if (typeof file.id !== 'number' || keys.length === 0) return
-    void this.withDbWrite(`file-index.${reason}.remove-asset-cache`, () =>
-      this.dbUtils!.removeFileExtensions(file.id as number, keys)
-    ).catch((error) => {
-      this.logWarn('Failed to cleanup stale file asset cache', error, {
-        path: file.path,
-        keys,
-        reason
+    // Phase 2: Delegate file_extensions removal to worker (single-writer architecture)
+    void this.ensureSearchIndexWorkerReady(`file-index.${reason}.cleanup-asset`)
+      .then((ready) => {
+        if (!ready) {
+          this.logDebug('Stale file asset cleanup skipped: worker not ready', {
+            path: file.path,
+            keys,
+            reason
+          })
+          return
+        }
+        return this.searchIndexWorker.removeFileExtensions(file.id as number, keys)
       })
-    })
+      .catch((error) => {
+        if (isSqliteBusyError(error)) {
+          this.logDebug('Stale file asset cache cleanup deferred (db busy)', {
+            path: file.path,
+            keys,
+            reason
+          })
+        } else {
+          this.logWarn('Failed to cleanup stale file asset cache', error, {
+            path: file.path,
+            keys,
+            reason
+          })
+        }
+      })
   }
 
   private inferAssetCacheKeys(

@@ -1,6 +1,7 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { IndexedSourceResetReason, IndexedSourceResetResult } from '@talex-touch/utils/search'
+import type { SearchIndexWorkerClient } from '../../../search-engine/workers/search-index-worker-client'
 import {
   IndexedSourceIntegrityService,
   IndexedSourceResetReasons,
@@ -31,23 +32,23 @@ export interface FileProviderIntegrityServiceDeps {
     clearSearchIndex: boolean
     clearScanProgress: boolean
   }) => Promise<IndexedSourceResetResult>
-  withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
   logInfo: (message: string, meta?: Record<string, unknown>) => void
+  searchIndexWorker: SearchIndexWorkerClient
 }
 
 export class FileProviderIntegrityService {
   private readonly sourceId: string
   private readonly countSearchIndexByProvider: FileProviderIntegrityServiceDeps['countSearchIndexByProvider']
   private readonly resetRuntimeState: FileProviderIntegrityServiceDeps['resetRuntimeState']
-  private readonly withDbWrite: FileProviderIntegrityServiceDeps['withDbWrite']
   private readonly logInfo: FileProviderIntegrityServiceDeps['logInfo']
+  private readonly searchIndexWorker: SearchIndexWorkerClient
 
   constructor(deps: FileProviderIntegrityServiceDeps) {
     this.sourceId = deps.sourceId
     this.countSearchIndexByProvider = deps.countSearchIndexByProvider
     this.resetRuntimeState = deps.resetRuntimeState
-    this.withDbWrite = deps.withDbWrite
     this.logInfo = deps.logInfo
+    this.searchIndexWorker = deps.searchIndexWorker
   }
 
   async check(db: LibSQLDatabase<typeof schema>): Promise<FileProviderIntegritySnapshot> {
@@ -125,17 +126,10 @@ export class FileProviderIntegrityService {
     }
 
     this.logInfo(`Removing ${orphanCount} orphaned keyword_mappings entries`)
-    await this.withDbWrite('file-index.integrity-keywords', () =>
-      db.run(sql`
-        DELETE FROM keyword_mappings
-        WHERE provider_id = ${this.sourceId}
-          AND item_id NOT IN (
-            SELECT item_id FROM search_index WHERE provider = ${this.sourceId}
-          )
-      `)
-    )
+    // Phase 3: Delegate keyword cleanup to worker (single-writer architecture)
+    const deletedCount = await this.searchIndexWorker.cleanupOrphanKeywords(this.sourceId)
 
-    return orphanCount
+    return deletedCount
   }
 }
 

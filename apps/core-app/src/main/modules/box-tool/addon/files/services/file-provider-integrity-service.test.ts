@@ -25,8 +25,8 @@ function createDb(options: { filesRows: number; orphanedKeywords?: number }) {
 
 function createService(options: {
   ftsRows: number
+  orphanedKeywords?: number
   resetRuntimeState?: FileProviderIntegrityServiceDepsForTest['resetRuntimeState']
-  withDbWrite?: FileProviderIntegrityServiceDepsForTest['withDbWrite']
 }) {
   const countSearchIndexByProvider = vi.fn(async () => options.ftsRows)
   const resetRuntimeState = vi.fn(
@@ -41,12 +41,11 @@ function createService(options: {
         completedAt: 123
       }))
   )
-  const withDbWriteSpy = vi.fn()
-  const withDbWrite = async <T>(label: string, operation: () => Promise<T>): Promise<T> => {
-    withDbWriteSpy(label, operation)
-    return options.withDbWrite ? options.withDbWrite(label, operation) : operation()
-  }
   const logInfo = vi.fn()
+  const cleanupOrphanKeywordsSpy = vi.fn().mockResolvedValue(options.orphanedKeywords ?? 0)
+  const searchIndexWorker = {
+    cleanupOrphanKeywords: cleanupOrphanKeywordsSpy
+  } as any
 
   return {
     countSearchIndexByProvider,
@@ -56,10 +55,10 @@ function createService(options: {
       sourceId: 'file-provider',
       countSearchIndexByProvider,
       resetRuntimeState,
-      withDbWrite,
-      logInfo
+      logInfo,
+      searchIndexWorker
     }),
-    withDbWrite: withDbWriteSpy
+    cleanupOrphanKeywords: cleanupOrphanKeywordsSpy
   }
 }
 
@@ -104,14 +103,16 @@ describe('file-provider-integrity-service', () => {
   })
 
   it('removes orphaned keyword mappings when FTS and files rows are aligned', async () => {
-    const { db, run } = createDb({ filesRows: 10, orphanedKeywords: 3 })
-    const { resetRuntimeState, service, withDbWrite } = createService({ ftsRows: 10 })
+    const { db } = createDb({ filesRows: 10, orphanedKeywords: 3 })
+    const { resetRuntimeState, service, cleanupOrphanKeywords } = createService({
+      ftsRows: 10,
+      orphanedKeywords: 3
+    })
 
     const snapshot = await service.check(db as never)
 
     expect(resetRuntimeState).not.toHaveBeenCalled()
-    expect(withDbWrite).toHaveBeenCalledWith('file-index.integrity-keywords', expect.any(Function))
-    expect(run).toHaveBeenCalledTimes(1)
+    expect(cleanupOrphanKeywords).toHaveBeenCalledWith('file-provider')
     expect(snapshot).toMatchObject({
       ftsRows: 10,
       filesRows: 10,
@@ -122,12 +123,12 @@ describe('file-provider-integrity-service', () => {
 
   it('returns a ready snapshot without cleanup when rows are aligned', async () => {
     const { db, run } = createDb({ filesRows: 10, orphanedKeywords: 0 })
-    const { resetRuntimeState, service, withDbWrite } = createService({ ftsRows: 10 })
+    const { resetRuntimeState, service, cleanupOrphanKeywords } = createService({ ftsRows: 10 })
 
     const snapshot = await service.check(db as never)
 
     expect(resetRuntimeState).not.toHaveBeenCalled()
-    expect(withDbWrite).not.toHaveBeenCalled()
+    expect(cleanupOrphanKeywords).not.toHaveBeenCalled()
     expect(run).not.toHaveBeenCalled()
     expect(snapshot).toMatchObject({
       ftsRows: 10,

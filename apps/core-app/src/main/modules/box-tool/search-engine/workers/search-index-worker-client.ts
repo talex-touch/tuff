@@ -217,6 +217,51 @@ export class SearchIndexWorkerClient {
     })
   }
 
+  /**
+   * Phase 1: Remove a file record (single-writer architecture).
+   * Main thread delegates file-index writes to the worker to eliminate SQLITE_BUSY.
+   */
+  async removeFile(path: string): Promise<void> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('removeFile')
+    await this.sendAndWait(taskId, {
+      type: 'removeFile',
+      taskId,
+      path
+    })
+  }
+
+  /**
+   * Phase 1: Remove file_extensions entries (stale asset cache cleanup).
+   * Delegates thumbnail/icon cleanup writes to the worker.
+   */
+  async removeFileExtensions(fileId: number, keys: string[]): Promise<void> {
+    if (keys.length === 0) return
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('removeFileExtensions')
+    await this.sendAndWait(taskId, {
+      type: 'removeFileExtensions',
+      taskId,
+      fileId,
+      keys
+    })
+  }
+
+  /**
+   * Phase 1: Cleanup orphaned keyword_mappings (integrity check).
+   * Returns the number of deleted rows.
+   */
+  async cleanupOrphanKeywords(sourceId: string): Promise<number> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('cleanupOrphanKeywords')
+    const result = await this.sendAndWaitWithResult<number>(taskId, {
+      type: 'cleanupOrphanKeywords',
+      taskId,
+      sourceId
+    })
+    return result ?? 0
+  }
+
   async getStatus(): Promise<WorkerStatusSnapshot> {
     this.idleShutdown.cancel()
     const worker = this.worker

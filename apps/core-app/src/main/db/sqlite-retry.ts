@@ -100,9 +100,9 @@ export async function withSqliteRetry<T>(
   operation: () => Promise<T>,
   options: SqliteRetryOptions = {}
 ): Promise<T> {
-  const retries = options.retries ?? 4
+  const retries = options.retries ?? 6
   const baseDelayMs = options.baseDelayMs ?? 200
-  const maxDelayMs = options.maxDelayMs ?? 2_000
+  const maxDelayMs = options.maxDelayMs ?? 3_000
   const jitterRatio = options.jitterRatio ?? 0.2
   const logThrottleMs = options.logThrottleMs ?? 30_000
   const label = options.label ?? 'sqlite'
