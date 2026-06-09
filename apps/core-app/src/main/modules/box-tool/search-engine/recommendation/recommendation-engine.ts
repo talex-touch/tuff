@@ -85,6 +85,16 @@ export class RecommendationEngine {
   private pluginProviders: Map<string, { pluginName: string; provider: RecommendProvider }> =
     new Map()
 
+  /**
+   * Semantic-AI circuit breaker. A missing/broken provider makes embedding &
+   * rerank invokes hang (~50s) and pile up across refreshes; after repeated
+   * failures we skip semantic AI for a cooldown instead of re-hammering it.
+   */
+  private semanticAiFailures = 0
+  private semanticAiCooldownUntil = 0
+  private static readonly SEMANTIC_AI_FAILURE_THRESHOLD = 3
+  private static readonly SEMANTIC_AI_COOLDOWN_MS = 5 * 60 * 1000
+
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
     this.itemRebuilder = new ItemRebuilder(dbUtils)
@@ -1406,12 +1416,40 @@ export class RecommendationEngine {
     return score
   }
 
+  private isSemanticAiInCooldown(): boolean {
+    if (this.semanticAiCooldownUntil === 0) return false
+    if (Date.now() < this.semanticAiCooldownUntil) return true
+    // cooldown elapsed — reset and allow a probe attempt
+    this.semanticAiCooldownUntil = 0
+    this.semanticAiFailures = 0
+    return false
+  }
+
+  private recordSemanticAiSuccess(): void {
+    this.semanticAiFailures = 0
+    this.semanticAiCooldownUntil = 0
+  }
+
+  private recordSemanticAiFailure(): void {
+    this.semanticAiFailures += 1
+    if (this.semanticAiFailures >= RecommendationEngine.SEMANTIC_AI_FAILURE_THRESHOLD) {
+      this.semanticAiCooldownUntil = Date.now() + RecommendationEngine.SEMANTIC_AI_COOLDOWN_MS
+      this.semanticAiFailures = 0
+      recommendationLog.debug('Semantic AI entering cooldown after repeated failures', {
+        meta: { cooldownMs: RecommendationEngine.SEMANTIC_AI_COOLDOWN_MS }
+      })
+    }
+  }
+
   private async applyAiEmbeddingScores(
     scored: ScoredItem[],
     semanticProfile: RecommendationSemanticProfile | null,
     semanticSettings: RecommendationSemanticSettings
   ): Promise<ScoredItem[]> {
     if (!semanticSettings.aiEmbeddingEnabled || !semanticProfile || scored.length === 0) {
+      return scored
+    }
+    if (this.isSemanticAiInCooldown()) {
       return scored
     }
 
@@ -1456,6 +1494,9 @@ export class RecommendationEngine {
         })
       )
 
+      // AI calls succeeded — reset the circuit breaker
+      this.recordSemanticAiSuccess()
+
       const scoreMap = new Map<string, number>()
       for (const embedding of embeddings) {
         if (!embedding) continue
@@ -1472,6 +1513,7 @@ export class RecommendationEngine {
         }))
         .sort((a, b) => b.score - a.score)
     } catch (error) {
+      this.recordSemanticAiFailure()
       recommendationLog.debug('AI embedding recommendation score skipped', {
         meta: toErrorMeta(error)
       })
@@ -1485,6 +1527,9 @@ export class RecommendationEngine {
     semanticSettings: RecommendationSemanticSettings
   ): Promise<ScoredItem[]> {
     if (!semanticSettings.aiRerankEnabled || !semanticProfile || scored.length === 0) {
+      return scored
+    }
+    if (this.isSemanticAiInCooldown()) {
       return scored
     }
 
@@ -1521,6 +1566,9 @@ export class RecommendationEngine {
         SEMANTIC_AI_TIMEOUT_MS
       )
 
+      // AI rerank succeeded — reset the circuit breaker
+      this.recordSemanticAiSuccess()
+
       const scoreMap = new Map<string, number>()
       const orderMap = new Map<string, number>()
       result.result.results.forEach((item, index) => {
@@ -1544,6 +1592,7 @@ export class RecommendationEngine {
         })
         .sort((a, b) => b.score - a.score)
     } catch (error) {
+      this.recordSemanticAiFailure()
       recommendationLog.debug('AI recommendation rerank skipped', {
         meta: toErrorMeta(error)
       })

@@ -1,5 +1,8 @@
 import type { MathJsInstance } from 'mathjs'
-import { all, create } from 'mathjs'
+// Use mathjs/number instead of mathjs/all to exclude matrix/statistics/calculus modules (~11MB savings)
+// mathjs/number includes: arithmetic, trigonometry, logarithms, BigNumber — everything needed for
+// expression evaluation, but without the heavy symbolic math, units, and data structures.
+import { create, all } from 'mathjs/number'
 
 const math: MathJsInstance = create(all, {
   number: 'BigNumber',
