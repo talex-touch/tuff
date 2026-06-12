@@ -5,6 +5,17 @@
 
 ## 2026-06-13
 
+### fix(core-app): harden CoreBox HTML and external URL boundaries
+
+- `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
+- `apps/core-app/src/renderer/src/components/render/highlight-html.ts`
+- `apps/core-app/src/main/utils/external-url-policy.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+  - Escaped CoreBox result titles before `v-html` rendering, including the no-highlight fallback path.
+  - Added a shared external URL policy for renderer/plugin `openExternal` requests so script/data/file-style protocols are blocked before reaching Electron shell.
+  - 验证：focused CoreApp Vitest and CoreApp node typecheck passed; CoreApp web typecheck is currently blocked by unrelated TuffEx markdown-editor compile errors.
+
 ### ref(plugins): remove starter leftovers from touch-music and touch-image
 
 - `plugins/touch-music/index.html`

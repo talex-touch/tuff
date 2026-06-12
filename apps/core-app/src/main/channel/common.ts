@@ -116,6 +116,7 @@ import { deviceIdleService } from '../service/device-idle-service'
 import { TalexTouch } from '../types'
 import { setLocale } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
+import { validateExternalUrl } from '../utils/external-url-policy'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
@@ -1475,11 +1476,17 @@ export class CommonChannelModule extends BaseModule {
         getSecureStoreHealth(this.getSecureStoreRootPath())
       ),
       transport.on(AppEvents.system.openExternal, (payload) => {
-        const url = typeof payload?.url === 'string' ? payload.url : ''
-        if (url) {
-          return shell.openExternal(url)
+        const decision = validateExternalUrl(payload?.url)
+        if (!decision.allowed) {
+          log.warn('Blocked external URL open request', {
+            meta: {
+              reason: decision.reason,
+              protocol: decision.protocol
+            }
+          })
+          return undefined
         }
-        return undefined
+        return shell.openExternal(decision.url)
       }),
       transport.on(AppEvents.system.showInFolder, (payload) => {
         const target = typeof payload?.path === 'string' ? payload.path : ''

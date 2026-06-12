@@ -55,6 +55,7 @@ import {
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { useSafeUserAgent } from '../../hooks/use-electron-guard'
+import { validateExternalUrl } from '../../utils/external-url-policy'
 import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
 import { getJs, getStyles } from '../../utils/plugin-injection'
@@ -113,8 +114,18 @@ function createSafePluginClipboardApi(): PluginClipboardApi {
 
 function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
   return async (url: string): Promise<void> => {
+    const decision = validateExternalUrl(url)
+    if (!decision.allowed) {
+      const error = new Error(`PLUGIN_OPEN_URL_BLOCKED:${decision.reason}`)
+      logger.warn(`[Plugin ${pluginName}] openUrl blocked`, {
+        reason: decision.reason,
+        protocol: decision.protocol
+      })
+      throw error
+    }
+
     try {
-      await shell.openExternal(url)
+      await shell.openExternal(decision.url)
     } catch (error) {
       logger.warn(`[Plugin ${pluginName}] openUrl failed`, {
         error: error instanceof Error ? error.message : String(error)

@@ -6,6 +6,7 @@ import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
+import { renderHighlightedTextHtml } from './highlight-html'
 import ItemSubtitle from './ItemSubtitle.vue'
 import { formatResultSignalReason, resolveResultSignal, resolveSourceMeta } from './sourceMeta'
 
@@ -66,86 +67,6 @@ const frequencyLabel = computed(() => clickCount.value.toString())
 
 const quickKeyLabel = computed(() => props.quickKey || '')
 const showQuickKey = computed(() => quickKeyLabel.value.length > 0)
-
-interface Range {
-  start: number
-  end: number
-}
-
-/**
- * Generate highlighted HTML from text and match ranges
- * Supports multiple non-overlapping ranges for proper fuzzy match highlighting
- */
-function getHighlightedHTML(
-  text: string,
-  matchedIndices?: Range[],
-  opts: {
-    className?: string
-    base?: 0 | 1
-    inclusiveEnd?: boolean
-  } = {}
-): string {
-  if (!matchedIndices?.length) return text
-
-  const { className = 'font-semibold text-red', base = 0, inclusiveEnd = false } = opts
-  const n = text.length
-
-  // Normalize and sort ranges
-  const normalizedRanges = matchedIndices
-    .map((range) => {
-      let s = base === 1 ? range.start - 1 : range.start
-      let e = base === 1 ? range.end - 1 : range.end
-      if (inclusiveEnd) e += 1
-      s = Math.max(0, Math.min(s, n))
-      e = Math.max(s, Math.min(e, n))
-      return { start: s, end: e }
-    })
-    .filter((r) => r.start < r.end)
-    .sort((a, b) => a.start - b.start)
-
-  if (normalizedRanges.length === 0) return text
-
-  // Merge overlapping ranges
-  const mergedRanges: Range[] = []
-  let current = { ...normalizedRanges[0] }
-
-  for (let i = 1; i < normalizedRanges.length; i++) {
-    const next = normalizedRanges[i]
-    if (next.start <= current.end) {
-      current.end = Math.max(current.end, next.end)
-    } else {
-      mergedRanges.push(current)
-      current = { ...next }
-    }
-  }
-  mergedRanges.push(current)
-
-  // Build HTML with all highlighted ranges
-  let result = ''
-  let lastEnd = 0
-
-  for (const range of mergedRanges) {
-    if (range.start > lastEnd) {
-      result += escapeHtml(text.slice(lastEnd, range.start))
-    }
-    result += `<span class="${className}">${escapeHtml(text.slice(range.start, range.end))}</span>`
-    lastEnd = range.end
-  }
-
-  if (lastEnd < n) {
-    result += escapeHtml(text.slice(lastEnd))
-  }
-
-  return result
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
 
 const sourceMeta = computed(() => resolveSourceMeta(props.item, t))
 const resultSignal = computed(() => resolveResultSignal(props.item, t))
@@ -220,7 +141,7 @@ const shouldShowNoticeReason = computed(
       <!-- eslint-disable vue/no-v-html -->
       <h5
         class="text-sm font-semibold truncate"
-        v-html="getHighlightedHTML(resolvedTitle, props.item.meta?.extension?.matchResult)"
+        v-html="renderHighlightedTextHtml(resolvedTitle, props.item.meta?.extension?.matchResult)"
       />
       <!-- eslint-enable vue/no-v-html -->
       <div v-if="isNoticeItem" class="BoxItemNoticeMeta">
