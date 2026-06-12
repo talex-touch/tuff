@@ -95,6 +95,9 @@ export function parsePublishArgs(args: string[]): PublishConfig {
   if (args.includes('--dry-run')) {
     options.dryRun = true
   }
+  if (args.includes('--non-interactive')) {
+    options.nonInteractive = true
+  }
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--tag' && args[i + 1]) {

@@ -27,7 +27,7 @@
 - 2026-06-03 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；确认 Markdown sanitizer、preload overlay DOM 构建、cloud preset fail-closed、TuffEx README 按需推荐已进入实现切片，但 Nexus content docs 仍残留旧 `@talex-touch/tuffex/style.css` 示例。当前 shell 仍只有 Codex Node `v24.14.0` 且无 `pnpm`/`corepack`，TuffEx build/audit/typecheck、Nexus build/visual smoke、CoreApp web typecheck 与 `intelligence-uikit` typecheck 必须在标准开发环境补跑。
 - 2026-06-04/05 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；Nexus TuffEx public docs 推荐用法已同步为 `base.css` + 组件子路径 + 局部 `style.css`，full `style.css` 只保留为迁移期兼容示例；Nexus release notes `notesHtml` 已接共享 `sanitizeMarkdownHtml()`。2026-06-05 使用临时 ad-hoc Node `22.16.0` + pnpm `10.32.1` 补齐 TuffEx `build` / `audit:exports` / `audit:size` / `audit:types`、Nexus `typecheck` / `build` 与 PreviewSDK focused test；Nexus visual smoke 因无 CDP 浏览器服务与 3200 dev/preview server 未执行。剩余高信号点是 CoreApp/TuffEx dialog HTML boundary、Widget runtime sandbox evidence 与 Windows/macOS 真机 evidence。
 - 2026-06-06 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；确认上一条已推送代码基线与远端同步，默认 automation shell 仍是 Codex Node `v24.14.0` 且无裸 `pnpm/corepack`，但 `/tmp/talex-touch-node22-adhoc` 仍有 Node `22.16.0` + pnpm `10.32.1` 临时验证入口。本轮静态分层确认 escaped highlight / safe Markdown / AI answer escape 不应误判为假实现；CoreApp/TuffEx dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片，后续优先收主路径语义控件、`touch-music` 示例插件全量样式入口与 Windows/macOS 真机 evidence。
-- 2026-06-07 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；确认当前 `HEAD=686ec013e`、root/CoreApp `2.4.11-beta.7`、`@talex-touch/tuff-cli@0.0.7`。`tuffcli publish` 交互式旧 token 刷新已走 browser OAuth device flow，非交互仍 fail-closed；当前长尾是补过期 app JWT、API key、`TUFF_NON_INTERACTIVE=1` publish evidence，并评估上传 POST 是否需要与 publisher probe 一致携带 device headers。UI 下一步仍优先语义控件、`touch-music`/`touch-image` starter asset 清理与平台真机 evidence。
+- 2026-06-07 UI/兼容/占位复核：新增增量审计报告，继续未发现生产路径 P0 fixed fake-success；确认当前 `HEAD=686ec013e`、root/CoreApp `2.4.11-beta.7`、`@talex-touch/tuff-cli@0.0.7`。`tuffcli publish` 现已补齐 focused evidence：过期 app JWT 会在交互式 publish 里自动走 browser OAuth device flow 刷新，API key 会在上传前预检 `plugin:read` + `plugin:publish` scopes，`TUFF_NON_INTERACTIVE=1` 继续 fail-closed；上传 POST 也已与 publisher probe 对齐携带 device headers，方便统一设备归因与审计。UI 下一步仍优先语义控件、`touch-music`/`touch-image` starter asset 清理与平台真机 evidence。
 - AI 现实口径：AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但仍缺 packaged Electron 文本/OCR成功与失败路径证据，不能标记为体验闭环。`2.5.3` 本地知识检索、`2.5.5` 本地模型 runtime、`2.5.8` ASR 只保持 PRD 锁方向，当前稳定窗口不提前实现。
 
 ## 当前 Goal / Progress Snapshot
@@ -42,7 +42,7 @@
 1. 继续收敛 `2.4.11` legacy/compat/size 债务，不新增 legacy/raw channel/旧 storage/旧 SDK bypass；旧自动清册不再作为 live SoT。
 2. 聚焦插件 shell capability、动态执行边界、secret backend 与 SRP 小切片，不再做泛化 placeholder 扫描。
 3. 补齐 Windows/macOS 阻塞级人工回归；Linux 仅记录 best-effort smoke 与桌面环境限制。
-4. 已推送代码基线与远端同步；CoreApp/TuffEx dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片，后续优先推进主路径 UI 语义控件、`touch-music`/`touch-image` 示例插件清理与 CLI publish evidence。
+4. 已推送代码基线与远端同步；CoreApp/TuffEx dialog trusted HTML boundary、Widget runtime sandbox evidence 与 CLI publish auth preflight evidence 已完成 focused 切片，后续优先推进主路径 UI 语义控件、`touch-music`/`touch-image` 示例插件清理与平台真机 evidence。
 5. 回到 P1-APP-DATA 第一优先级：File write/store boundary 迁移，其次 Browser Bookmarks 从 CoreApp skeleton 走向官方 `touch-browser-data` runtime source lifecycle。
 6. 推进 `2.5.0` AI 桌面入口证据小切片，但 Stable 范围保持文本 + OCR，优先补 CoreBox AI Ask、OmniPanel Writing Tools、Nexus invoke 失败路径与 packaged Electron UI evidence。
 7. 按 2026-06-01/2026-06-02 UI/兼容/占位自动化增量审计推进 Windows 真机 evidence、Indexing Runtime 写入边界迁移与剩余 UI 语义债务；Markdown/HTML 渲染边界、Nexus device identity/localStorage 口径、首批 UI 语义切片与 cloud preset unavailable contract 已完成首轮收口，TuffEx Tabs/visual smoke 已于 2026-06-01 补 30/30 focused evidence。
@@ -60,7 +60,7 @@
 - 插件 shell/OS/network capability 诊断统一：`touch-browser-bookmarks` 与 `touch-browser-data` 已完成 `network.internet` 展示期 metadata 与执行期 request/block。
 - Transport Wave A retained alias/hard-cut 继续推进。
 - CoreApp 启动异步化真机 benchmark 与长尾补证；2026-05-28 已新增性能基线执行计划，先采集启动、CoreBox、runtime 与 build/package 数据，不改变 release gate。
-- 公共 npm 子包补发：`@talex-touch/tuffex@0.3.7` 发布阻断已通过 lockfile/publish manifest 等价验证解除；`@talex-touch/tuff-cli@0.0.7` 已补 publish 旧 token 刷新体验并准备发布；其余公共子包补发仍需刷新具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 后补发。
+- 公共 npm 子包补发：`@talex-touch/tuffex@0.3.7` 发布阻断已通过 lockfile/publish manifest 等价验证解除；`@talex-touch/tuff-cli@0.0.7` 已补 publish 旧 token 刷新、API key scope preflight、非交互 fail-closed 与 upload device headers evidence，仍需具备 `@talex-touch` publish 权限的 `NPM_TOKEN` 才能完成实际补发；其余公共子包补发继续按同一发布链路口径推进。
 
 ### P1+
 

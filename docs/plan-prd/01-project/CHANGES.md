@@ -1,9 +1,52 @@
 # 变更日志
 
-> 更新时间：2026-06-06
+> 更新时间：2026-06-13
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-13
+
+### feat(tuffex): add markdown editor component
+
+- `packages/tuffex/packages/components/src/markdown-editor/*`
+- `packages/tuffex/packages/components/src/components.ts`
+- `packages/tuffex/docs/components/markdown-editor.md`
+- `packages/tuffex/docs/.vitepress/config.ts`
+  - Added `TxMarkdownEditor` / `MarkdownEditor` as an on-demand TuffEx component with WYSIWYG, source and preview modes.
+  - Kept Markdown rendering dependencies inside the component path via dynamic imports so package subpath imports remain tree-shaking friendly.
+  - Added focused tests for exports, sanitize rendering, source editing, mode switching and rich HTML to Markdown serialization.
+  - 验证：pending in current slice.
+
+### fix(core-app): keep auth secure storage default session-only
+
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/auth/index.test.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `docs/plan-prd/TODO.md`
+  - Aligned AuthModule, renderer auth bootstrap and user settings hydration with the shared app setting default `auth.useSecureStorage=false`.
+  - Removed the legacy migration that converted missing or default-disabled auth secure storage settings back to `true`, preventing startup from silently undoing the macOS Keychain prompt avoidance behavior.
+  - Kept explicit user re-enable behavior intact: when `useSecureStorage=true`, auth still loads/persists through the secure-store path and reports backend health.
+  - 验证：focused AuthModule Vitest, CoreApp node/web typecheck, scoped ESLint and `git diff --check` passed.
+
 ## 2026-06-07
+
+### test(cli): harden `tuffcli publish` auth preflight evidence
+
+- `packages/tuff-cli-core/src/publish.ts`
+- `packages/tuff-cli-core/src/types.ts`
+- `packages/tuff-cli-core/src/args.ts`
+- `packages/tuff-cli-core/src/__tests__/publish-smoke.test.ts`
+- `packages/tuff-cli/src/bin/tuff.ts`
+- `apps/nexus/server/api/dashboard/auth/publisher.get.ts`
+- `apps/nexus/test/api/dashboard/auth/publisher.api.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - `tuffcli publish` now performs a stricter publish preflight: expired app JWTs can auto-refresh through the existing browser device-auth flow when the CLI is interactive, API keys must prove `plugin:read` + `plugin:publish` scopes before upload, and `TUFF_NON_INTERACTIVE=1` stays fail-closed instead of opening a browser.
+  - Dashboard publisher auth now returns API key scopes so publish preflight can fail before package upload when scopes are incomplete.
+  - Upload POST now carries the same CLI device headers as publisher probe/get requests (`X-Device-Client` plus stored device metadata when available), keeping publish evidence and server-side device attribution consistent instead of only tagging preflight traffic.
+  - 验证：`pnpm -C "packages/tuff-cli-core" exec vitest run "src/__tests__/publish-smoke.test.ts"` and `pnpm -C "apps/nexus" exec vitest run "test/api/dashboard/auth/publisher.api.test.ts"` passed.
 
 ### docs(audit): add 2026-06-07 UI compatibility follow-up
 

@@ -431,7 +431,22 @@ async function runPublishWithTracking(): Promise<void> {
     return
 
   await trackRepository('publish')
-  await (await loadPublishModule()).runPublish()
+  const publishModule = await loadPublishModule()
+  await publishModule.publish(
+    await publishModule.resolvePublishConfig(process.cwd(), publishModule.parsePublishArgs(process.argv.slice(3))),
+    {
+      refreshAppJwt: async () => {
+        if (process.env.TUFF_NON_INTERACTIVE === '1')
+          return null
+        await clearAuthToken()
+        printInfo(t('notice.authCleared'))
+        const ok = await runDeviceAuthLogin()
+        if (!ok)
+          return null
+        return await getAuthToken()
+      },
+    },
+  )
 }
 
 async function runBuilder() {

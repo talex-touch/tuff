@@ -100,6 +100,12 @@ export interface PublishConfig {
    * Custom publish API URL
    */
   apiUrl?: string
+
+  /**
+   * Force non-interactive auth behavior.
+   * When true, publish must fail closed instead of attempting browser/device re-auth.
+   */
+  nonInteractive?: boolean
 }
 
 export interface TuffConfig extends BuildConfig {

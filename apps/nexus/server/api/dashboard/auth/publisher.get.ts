@@ -10,5 +10,6 @@ export default defineEventHandler(async (event) => {
     userId: auth.userId,
     authType: auth.authType,
     role: user?.role ?? null,
+    scopes: Array.isArray((auth as { scopes?: string[] }).scopes) ? (auth as { scopes?: string[] }).scopes : undefined,
   }
 })
