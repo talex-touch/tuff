@@ -20,7 +20,7 @@ code: |
     "name": "quick-note",
     "version": "0.1.0",
     "author": "Example",
-    "sdkapi": 260428,
+    "sdkapi": 260615,
     "category": "productivity",
     "description": "Save selected text as a quick note.",
     "main": "index.js",
