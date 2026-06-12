@@ -2,11 +2,14 @@
 import { computed, ref } from 'vue'
 
 type Motion = 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
+type ContentMotion = 'fade' | 'slide' | 'zoom' | 'blur' | 'scale' | 'none'
 type TabValue = 'A' | 'B' | 'C'
 
 const { locale } = useI18n()
 
 const motion = ref<Motion>('stretch')
+const contentMotion = ref<ContentMotion>('zoom')
+const showIndicator = ref(true)
 const active = ref<TabValue>('A')
 
 const variants = computed(() => {
@@ -29,10 +32,23 @@ const motionOptions = computed(() => {
   ] as const
 })
 
+const contentMotionOptions = computed(() => {
+  return [
+    { value: 'zoom', label: 'zoom' },
+    { value: 'fade', label: 'fade' },
+    { value: 'slide', label: 'slide' },
+    { value: 'blur', label: 'blur' },
+    { value: 'scale', label: 'scale' },
+    { value: 'none', label: 'none' },
+  ] as const
+})
+
 const labels = computed(() => {
   if (locale.value === 'zh') {
     return {
       motion: '动效',
+      content: '内容',
+      indicator: '指示器',
       auto: '自动',
       next: '下一项',
       active: '当前',
@@ -44,6 +60,8 @@ const labels = computed(() => {
 
   return {
     motion: 'motion',
+    content: 'content',
+    indicator: 'indicator',
     auto: 'auto',
     next: 'Next',
     active: 'active',
@@ -72,6 +90,25 @@ function next() {
               :label="option.label"
             />
           </TuffSelect>
+        </label>
+
+        <label class="tx-demo__row" style="gap: 8px;">
+          <span class="tx-demo__label">{{ labels.content }}</span>
+          <TuffSelect v-model="contentMotion" style="min-width: 150px;">
+            <TuffSelectItem
+              v-for="option in contentMotionOptions"
+              :key="option.value"
+              :value="option.value"
+              :label="option.label"
+            />
+          </TuffSelect>
+        </label>
+
+        <label class="tx-demo__row" style="gap: 8px;">
+          <span class="tx-demo__label">{{ labels.indicator }}</span>
+          <TxButton size="small" @click="showIndicator = !showIndicator">
+            {{ showIndicator ? 'on' : 'off' }}
+          </TxButton>
         </label>
 
         <label class="tx-demo__row" style="gap: 8px;">
@@ -104,9 +141,10 @@ function next() {
           v-model="active"
           placement="top"
           :content-scrollable="false"
+          :show-indicator="showIndicator"
           :indicator-variant="variant.value"
           :indicator-motion="motion"
-          :animation="{ indicator: { durationMs: 350 }, content: true }"
+          :animation="{ indicator: { durationMs: 350 }, content: { type: contentMotion, durationRatio: 0.5 } }"
         >
           <TxTabItem name="A" activation>
             {{ labels.overview }}

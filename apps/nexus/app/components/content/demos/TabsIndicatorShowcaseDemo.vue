@@ -2,10 +2,13 @@
 import { computed, ref } from 'vue'
 
 type Motion = 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
+type ContentMotion = 'fade' | 'slide' | 'zoom' | 'blur' | 'scale' | 'none'
 
 type TabValue = 'A' | 'B' | 'C'
 
 const motion = ref<Motion>('stretch')
+const contentMotion = ref<ContentMotion>('zoom')
+const showIndicator = ref(true)
 const active = ref<TabValue>('A')
 
 const variants = computed(() => {
@@ -26,6 +29,15 @@ const motionOptions = [
   { value: 'spring', label: 'spring' },
 ] as const
 
+const contentMotionOptions = [
+  { value: 'zoom', label: 'zoom' },
+  { value: 'fade', label: 'fade' },
+  { value: 'slide', label: 'slide' },
+  { value: 'blur', label: 'blur' },
+  { value: 'scale', label: 'scale' },
+  { value: 'none', label: 'none' },
+] as const
+
 function next() {
   active.value = active.value === 'A' ? 'B' : active.value === 'B' ? 'C' : 'A'
 }
@@ -40,6 +52,20 @@ function next() {
           <TuffSelect v-model="motion" style="min-width: 190px;">
             <TuffSelectItem v-for="opt in motionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
           </TuffSelect>
+        </label>
+
+        <label class="tx-demo__row" style="gap: 8px;">
+          <span class="tx-demo__label">content</span>
+          <TuffSelect v-model="contentMotion" style="min-width: 150px;">
+            <TuffSelectItem v-for="opt in contentMotionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+          </TuffSelect>
+        </label>
+
+        <label class="tx-demo__row" style="gap: 8px;">
+          <span class="tx-demo__label">indicator</span>
+          <TxButton size="small" @click="showIndicator = !showIndicator">
+            {{ showIndicator ? 'on' : 'off' }}
+          </TxButton>
         </label>
 
         <label class="tx-demo__row" style="gap: 8px;">
@@ -70,9 +96,10 @@ function next() {
           v-model="active"
           placement="top"
           :content-scrollable="false"
+          :show-indicator="showIndicator"
           :indicator-variant="v.value"
           :indicator-motion="motion"
-          :animation="{ indicator: { durationMs: 350 }, content: true }"
+          :animation="{ indicator: { durationMs: 350 }, content: { type: contentMotion, durationRatio: 0.5 } }"
         >
           <TxTabItem name="A" activation>
             Overview
