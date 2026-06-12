@@ -702,6 +702,43 @@ describe('CommonChannelModule private helpers', () => {
     )
   })
 
+  it('blocks unsafe renderer external URL requests before reaching Electron shell', async () => {
+    const { shell } = await import('electron')
+    const handlers = new Map<string, (payload: unknown, context: unknown) => unknown>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const openExternalHandler = handlers.get(AppEvents.system.openExternal.toEventName())
+    expect(openExternalHandler).toBeTypeOf('function')
+
+    openExternalHandler?.({ url: 'javascript:alert(1)' }, {})
+    expect(shell.openExternal).not.toHaveBeenCalled()
+
+    openExternalHandler?.({ url: 'https://example.com/docs' }, {})
+    expect(shell.openExternal).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
   it('includes plugin search providers in indexed source provider config response', async () => {
     const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
     const transport = {
