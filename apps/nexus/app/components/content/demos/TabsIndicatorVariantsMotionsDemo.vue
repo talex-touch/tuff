@@ -106,7 +106,7 @@ function next() {
           :content-scrollable="false"
           :indicator-variant="variant.value"
           :indicator-motion="motion"
-          :animation="{ indicator: { durationMs: 180 }, content: true }"
+          :animation="{ indicator: { durationMs: 350 }, content: true }"
         >
           <TxTabItem name="A" activation>
             {{ labels.overview }}

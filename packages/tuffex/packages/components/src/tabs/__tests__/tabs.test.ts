@@ -77,6 +77,8 @@ describe('txTabs', () => {
     expect(wrapper.classes()).toContain('tx-tabs--indicator-pill')
     expect(wrapper.classes()).toContain('tx-tabs--motion-warp')
     expect(wrapper.classes()).toContain('tx-tabs--borderless')
+    expect(wrapper.attributes('style')).toContain('--tx-tabs-indicator-duration: 350ms')
+    expect(wrapper.attributes('style')).toContain('--tx-tabs-indicator-easing: cubic-bezier(0.25, 0.46, 0.45, 0.94)')
     expect(wrapper.attributes('style')).toContain('--tx-tabs-indicator-strength: 0')
     expect(wrapper.find('.tx-tabs__group-name').text()).toBe('Advanced')
     expect(wrapper.find('.nav-action').exists()).toBe(true)
