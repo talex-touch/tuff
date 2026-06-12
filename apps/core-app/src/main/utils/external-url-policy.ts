@@ -4,6 +4,26 @@ export type ExternalUrlDecision =
 
 const ALLOWED_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:', 'tuff:'])
 
+export interface OpenExternalUrlOptions {
+  opener?: (url: string) => Promise<void>
+}
+
+export async function openValidatedExternalUrl(
+  rawUrl: unknown,
+  options: OpenExternalUrlOptions = {}
+): Promise<ExternalUrlDecision> {
+  const decision = validateExternalUrl(rawUrl)
+  if (!decision.allowed) return decision
+
+  const opener = options.opener ?? defaultExternalUrlOpener
+  await opener(decision.url)
+  return decision
+}
+
+function defaultExternalUrlOpener(_url: string): Promise<void> {
+  throw new Error('No external URL opener configured')
+}
+
 export function validateExternalUrl(rawUrl: unknown): ExternalUrlDecision {
   if (typeof rawUrl !== 'string') return { allowed: false, reason: 'empty-url' }
 

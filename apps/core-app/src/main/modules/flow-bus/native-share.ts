@@ -17,6 +17,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { shell } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { shareNotificationService } from './share-notification'
 
 async function runAppleScript(script: string): Promise<void> {
@@ -309,7 +310,9 @@ return item 1 of shareChoice
       } else {
         const subject = encodeURIComponent(title || '')
         const body = encodeURIComponent(normalizedBody)
-        await shell.openExternal(`mailto:?subject=${subject}&body=${body}`)
+        await openValidatedExternalUrl(`mailto:?subject=${subject}&body=${body}`, {
+          opener: shell.openExternal
+        })
       }
     } else {
       if (files?.length) {
@@ -320,7 +323,9 @@ return item 1 of shareChoice
       }
       const subject = encodeURIComponent(title || '')
       const body = encodeURIComponent(normalizedBody)
-      await shell.openExternal(`mailto:?subject=${subject}&body=${body}`)
+      await openValidatedExternalUrl(`mailto:?subject=${subject}&body=${body}`, {
+        opener: shell.openExternal
+      })
     }
 
     return { success: true, target: 'mail' }

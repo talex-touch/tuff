@@ -53,6 +53,7 @@ import { shortcutModule } from '../global-shortcon'
 import { extractTranslatedTextFromSceneRun, runNexusScene } from '../nexus/scene-client'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig, saveMainConfig } from '../storage'
+import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import {
   OMNI_PANEL_BUILTIN_FEATURE_DEFINITIONS,
   OMNI_PANEL_BUILTIN_FEATURE_MAP,
@@ -1196,7 +1197,7 @@ export class OmniPanelModule extends BaseModule {
       }
 
       const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(text)}&op=translate`
-      await shell.openExternal(url)
+      await openValidatedExternalUrl(url, { opener: shell.openExternal })
       return { success: true }
     }
 
@@ -1205,7 +1206,7 @@ export class OmniPanelModule extends BaseModule {
         return this.buildExecuteError('SELECTION_REQUIRED')
       }
       const url = `https://www.google.com/search?q=${encodeURIComponent(text)}`
-      await shell.openExternal(url)
+      await openValidatedExternalUrl(url, { opener: shell.openExternal })
       return { success: true }
     }
 

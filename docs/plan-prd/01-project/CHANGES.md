@@ -5,6 +5,28 @@
 
 ## 2026-06-13
 
+### fix(core-app): route dynamic external URL opens through policy
+
+- `apps/core-app/src/main/utils/external-url-policy.ts`
+- `apps/core-app/src/main/utils/external-url-policy.test.ts`
+- `apps/core-app/src/main/modules/ai/agents/tools/workflow-tools.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/flow-bus/native-share.ts`
+- `apps/core-app/src/main/modules/auth/index.ts`
+  - Added a shared validated external URL opener and routed dynamic AI browser, OmniPanel browser fallback, native mail share and auth URLs through the protocol allowlist.
+  - Kept fixed system setting protocols, app-launcher protocol launches, plugin `openUrl` and CommonChannel openExternal on their existing specialized guards.
+  - 验证：focused external-url, CommonChannel, OmniPanel, native-share and Auth Vitest, scoped ESLint and CoreApp node typecheck.
+
+### ref(core-app): observe plugin view security profiles
+
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-view-security-profile.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+  - Added an observation-only plugin view security profile resolver for the `260615` migration marker.
+  - Routed Plugin Window, CoreBox `attachUIView` and DivisionBox `attachUIView` through the resolver while keeping the effective runtime on `compat-plugin-view`.
+  - 验证：focused CoreApp plugin-view security/profile Vitest, scoped ESLint and CoreApp node typecheck.
+
 ### chore(sdkapi): introduce 260615 plugin SDK marker
 
 - `packages/utils/plugin/sdk-version.ts`

@@ -85,6 +85,7 @@ import {
 import { mergePackagedManifestMetadata } from './plugin-runtime-integrity'
 import { LocalPluginProvider } from './providers/local-provider'
 import { usePluginInjections } from './runtime/plugin-injections'
+import { resolvePluginViewSecurityProfile } from './runtime/plugin-view-security-profile'
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 import { getPluginSdkHardCutGate } from './sdkapi-hard-cut-gate'
@@ -273,6 +274,19 @@ interface WindowPropertyPayload {
 interface IndexCommunicatePayload {
   key?: string
   info?: unknown
+}
+
+function requiresLegacyWindowRuntime(webPreferences?: Electron.WebPreferences): boolean {
+  if (!webPreferences) return false
+
+  return (
+    webPreferences.nodeIntegration === true ||
+    webPreferences.nodeIntegrationInSubFrames === true ||
+    webPreferences.contextIsolation === false ||
+    webPreferences.sandbox === false ||
+    webPreferences.webSecurity === false ||
+    webPreferences.webviewTag === true
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1946,11 +1960,31 @@ export class PluginModule extends BaseModule {
           return { error: 'Failed to build plugin injections' }
         }
 
+        const windowPreload = obj._.preload ?? windowOptions.webPreferences?.preload
+        const securityProfile = resolvePluginViewSecurityProfile(touchPlugin, {
+          source: 'plugin-module:window:new',
+          injections: {
+            _: {
+              ...obj._,
+              preload: windowPreload
+            }
+          },
+          requiresLegacyRuntime: requiresLegacyWindowRuntime(windowOptions.webPreferences)
+        })
+        pluginIpcLog.info('Resolved plugin window security profile', {
+          meta: {
+            plugin: touchPlugin.name,
+            candidateProfile: securityProfile.candidateProfile,
+            effectiveProfile: securityProfile.effectiveProfile,
+            reason: securityProfile.reason
+          }
+        })
+
         const win = new TouchWindow({
           ...windowOptions,
-          webPreferences: buildWindowWebPreferences('compat-plugin-view', {
+          webPreferences: buildWindowWebPreferences(securityProfile.effectiveProfile, {
             ...(windowOptions.webPreferences ?? {}),
-            preload: obj._.preload ?? windowOptions.webPreferences?.preload
+            preload: windowPreload
           })
         })
         let webContents: Electron.WebContents

@@ -34,6 +34,7 @@ import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { withLegacyAliasTelemetry } from '../../utils/legacy-alias-telemetry'
+import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 
 const authLog = getLogger('auth')
 
@@ -263,7 +264,7 @@ async function openAuthUrlExternally(authorizeUrl: string): Promise<void> {
   if (shouldForceVisibleAuthBrowserOpenFailure()) {
     throw new Error('Visible auth evidence forced browser open failure')
   }
-  await shell.openExternal(authorizeUrl)
+  await openValidatedExternalUrl(authorizeUrl, { opener: shell.openExternal })
 }
 
 function normalizeBearerToken(token: string): string {
@@ -1410,7 +1411,7 @@ async function attestCurrentDevice(): Promise<boolean> {
 
 async function requestStepUp(): Promise<void> {
   const url = `${resolveAuthBaseUrl()}/auth/stepup-callback`
-  await shell.openExternal(url)
+  await openValidatedExternalUrl(url, { opener: shell.openExternal })
 }
 
 function setStepUpToken(token: string): void {
