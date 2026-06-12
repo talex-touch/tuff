@@ -16,6 +16,7 @@ import {
 } from 'vue'
 import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
 import { appSetting } from '../storage/app-storage'
 import { resolveAuthErrorMessage } from './auth-error-message'
@@ -155,27 +156,14 @@ const isLoggedIn = computed(() => authState.isSignedIn)
 
 function ensureAuthPreferenceSettings(): void {
   if (!appSetting.auth) {
-    appSetting.auth = {
-      deviceId: '',
-      deviceName: '',
-      devicePlatform: '',
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    }
+    appSetting.auth = { ...appSettingOriginData.auth }
     return
   }
   if (typeof appSetting.auth.secureStorageUserOverridden !== 'boolean') {
     appSetting.auth.secureStorageUserOverridden = false
   }
   if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = true
-  } else if (
-    appSetting.auth.useSecureStorage === false &&
-    appSetting.auth.secureStorageUserOverridden === false
-  ) {
-    appSetting.auth.useSecureStorage = true
+    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false

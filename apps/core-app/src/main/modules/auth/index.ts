@@ -401,15 +401,7 @@ function ensureSecuritySettings(appSettings: AppSetting): void {
 
 function ensureAuthSettings(appSettings: AppSetting): void {
   if (!appSettings.auth) {
-    appSettings.auth = {
-      deviceId: '',
-      deviceName: '',
-      devicePlatform: '',
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    }
+    appSettings.auth = { ...appSettingOriginData.auth }
     return
   }
 
@@ -424,12 +416,7 @@ function ensureAuthSettings(appSettings: AppSetting): void {
     authSettings.secureStorageUserOverridden = false
   }
   if (typeof authSettings.useSecureStorage !== 'boolean') {
-    authSettings.useSecureStorage = true
-  } else if (
-    authSettings.useSecureStorage === false &&
-    authSettings.secureStorageUserOverridden === false
-  ) {
-    authSettings.useSecureStorage = true
+    authSettings.useSecureStorage = appSettingOriginData.auth.useSecureStorage
   }
   if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
     authSettings.secureStorageReminderShown = false
