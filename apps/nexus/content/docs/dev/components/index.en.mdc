@@ -282,7 +282,7 @@ code: |
 - Task feedback paths should mount `TxToastHost` for notifications, use `TxTooltip` for action hints, `TxLoadingOverlay` for local blocking refreshes, and `TxSpinner` for inline waiting.
 - Permission orchestration paths should use `TxTree` for scope, `TxTreeSelect` for owner team, `TxTransfer` for resource grants, and `TxTimeline` for audit progress.
 - Release configuration paths should use `TxCascader` for release scope, `TxFlatSelect` for package and rollout choices, `TxSegmentedSlider` for risk tiers, `TxSlider` for traffic ramps, and `TxTagInput` for short metadata.
-- Use the grouped component list below for detail pages; reviewed pages are marked as `Verified` in the sidebar and sync dashboard.
+- Use the grouped component list below for detail pages; the sidebar only highlights migration states that still need attention, while reviewed pages are marked as `Verified` in the sync dashboard.
 - Dashboard pages should compose `TxDataTable`, `TxStatusBadge`, `TxProgressBar`, and chart components instead of hand-writing one-off SVG/status UI.
 
 ## Migration Dashboard

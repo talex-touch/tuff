@@ -532,7 +532,7 @@ function componentSyncBadge(item: any) {
     return null
 
   const status = resolveComponentItemStatus(item)
-  if (!status)
+  if (!status || status === 'verified')
     return null
 
   return {
