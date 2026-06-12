@@ -282,7 +282,7 @@ code: |
 - 任务反馈路径建议使用 `TxToastHost` 挂载通知、`TxTooltip` 解释动作、`TxLoadingOverlay` 阻断局部刷新、`TxSpinner` 表达行内等待。
 - 权限编排路径建议用 `TxTree` 选择权限域、`TxTreeSelect` 选择归属团队、`TxTransfer` 分配资源、`TxTimeline` 展示审计进度。
 - 发布配置路径建议用 `TxCascader` 选择发布范围、`TxFlatSelect` 选择包格式与发布模式、`TxSegmentedSlider` 表达风险档位、`TxSlider` 调整灰度比例、`TxTagInput` 记录短标签。
-- 组件细节按下方分组查阅；每个已审阅页面会在侧边栏与状态看板中显示 `已确认`。
+- 组件细节按下方分组查阅；侧边栏仅突出仍需关注的迁移状态，已审阅页面只在状态看板中显示 `已确认`。
 - 后台页优先使用 `TxDataTable`、`TxStatusBadge`、`TxProgressBar` 与图表组件组合，避免手写一次性 SVG 或重复状态 UI。
 
 ## 迁移状态看板
