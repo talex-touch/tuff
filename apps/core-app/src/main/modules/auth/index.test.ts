@@ -45,6 +45,15 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 
 vi.mock('@talex-touch/utils/common/storage/entity/app-settings', () => ({
   appSettingOriginData: {
+    auth: {
+      deviceId: '',
+      deviceName: '',
+      devicePlatform: '',
+      useSecureStorage: false,
+      secureStorageUserOverridden: false,
+      secureStorageReminderShown: false,
+      secureStorageUnavailable: false
+    },
     sync: {
       enabled: false,
       userOverridden: false,
@@ -111,6 +120,10 @@ vi.mock('../../utils/secure-store', () => ({
   setSecureStoreValue: setSecureStoreValueMock
 }))
 
+vi.mock('../../utils/legacy-alias-telemetry', () => ({
+  withLegacyAliasTelemetry: vi.fn((handler) => handler)
+}))
+
 vi.mock('../abstract-base-module', () => ({
   BaseModule: class BaseModule {
     constructor(..._args: unknown[]) {}
@@ -162,7 +175,7 @@ function createAppSetting(): MockAppSetting {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: true,
+      useSecureStorage: false,
       secureStorageUserOverridden: false,
       secureStorageReminderShown: false,
       secureStorageUnavailable: false
@@ -219,7 +232,7 @@ describe('auth secure storage preference', () => {
     delete process.env.TUFF_VISIBLE_EVIDENCE_AUTH_POLL_DELAY_MS
   })
 
-  it('defaults missing secure storage preference to persistent protection mode', async () => {
+  it('defaults missing secure storage preference to session-only mode', async () => {
     delete appSettingState.auth?.useSecureStorage
 
     const authModule = await import('./index')
@@ -228,15 +241,10 @@ describe('auth secure storage preference', () => {
 
     await authModule.__test__.loadAuthToken()
 
-    expect(getSecureStoreHealthMock).toHaveBeenCalledWith('/tmp/tuff')
-    expect(getSecureStoreValueMock).toHaveBeenCalledWith(
-      '/tmp/tuff',
-      'auth.token',
-      'auth-token',
-      expect.any(Function)
-    )
+    expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
+    expect(getSecureStoreValueMock).not.toHaveBeenCalled()
     expect(setSecureStoreValueMock).not.toHaveBeenCalled()
-    expect(appSettingState.auth?.useSecureStorage).toBe(true)
+    expect(appSettingState.auth?.useSecureStorage).toBe(false)
     expect(authModule.getAuthToken()).toBeNull()
   })
 
@@ -272,6 +280,7 @@ describe('auth secure storage preference', () => {
   })
 
   it('restores persisted auth token when secure storage stays enabled', async () => {
+    appSettingState.auth!.useSecureStorage = true
     getSecureStoreValueMock.mockResolvedValue('persisted-token')
 
     const authModule = await import('./index')
@@ -317,7 +326,7 @@ describe('auth secure storage preference', () => {
     expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
   })
 
-  it('migrates old default-disabled secure storage to persistent protection', async () => {
+  it('keeps old default-disabled secure storage in session-only mode', async () => {
     appSettingState.auth!.useSecureStorage = false
     appSettingState.auth!.secureStorageUserOverridden = false
     getSecureStoreValueMock.mockResolvedValue('migrated-token')
@@ -328,8 +337,10 @@ describe('auth secure storage preference', () => {
 
     await authModule.__test__.loadAuthToken()
 
-    expect(appSettingState.auth?.useSecureStorage).toBe(true)
-    expect(authModule.getAuthToken()).toBe('migrated-token')
+    expect(getSecureStoreHealthMock).not.toHaveBeenCalled()
+    expect(getSecureStoreValueMock).not.toHaveBeenCalled()
+    expect(appSettingState.auth?.useSecureStorage).toBe(false)
+    expect(authModule.getAuthToken()).toBeNull()
   })
 
   it('persists in-memory token when user explicitly re-enables secure storage', async () => {
@@ -381,6 +392,7 @@ describe('auth secure storage preference', () => {
   })
 
   it('keeps persistent auth token with local root secret storage', async () => {
+    appSettingState.auth!.useSecureStorage = true
     getSecureStoreHealthMock.mockResolvedValue({
       backend: 'local-secret',
       available: true,

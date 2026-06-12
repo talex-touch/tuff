@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SettingUser">
 import { TxButton } from '@talex-touch/tuffex/button'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, ClipboardEvents } from '@talex-touch/utils/transport/events'
@@ -56,15 +57,7 @@ function ensureSecuritySettings() {
 
 function ensureAuthSettings() {
   if (!appSetting.auth) {
-    appSetting.auth = {
-      deviceId: '',
-      deviceName: '',
-      devicePlatform: '',
-      useSecureStorage: true,
-      secureStorageUserOverridden: false,
-      secureStorageReminderShown: false,
-      secureStorageUnavailable: false
-    }
+    appSetting.auth = { ...appSettingOriginData.auth }
     return
   }
 
@@ -72,12 +65,7 @@ function ensureAuthSettings() {
     appSetting.auth.secureStorageUserOverridden = false
   }
   if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
-    appSetting.auth.useSecureStorage = true
-  } else if (
-    appSetting.auth.useSecureStorage === false &&
-    appSetting.auth.secureStorageUserOverridden === false
-  ) {
-    appSetting.auth.useSecureStorage = true
+    appSetting.auth.useSecureStorage = appSettingOriginData.auth.useSecureStorage
   }
   if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
     appSetting.auth.secureStorageReminderShown = false
