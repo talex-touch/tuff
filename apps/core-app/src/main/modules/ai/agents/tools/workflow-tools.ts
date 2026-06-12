@@ -2,6 +2,7 @@ import type { AgentPermission } from '@talex-touch/utils'
 import { network } from '@talex-touch/utils/network'
 import { clipboard } from 'electron'
 import { shell } from 'electron'
+import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
 import { activeAppService } from '../../../system/active-app'
 import { clipboardModule } from '../../../clipboard'
 import { intelligenceDesktopContextService } from '../../intelligence-desktop-context'
@@ -141,8 +142,10 @@ export function registerWorkflowTools(): void {
     },
     async (input: unknown) => {
       const { url } = input as { url: string }
-      await shell.openExternal(url)
-      return { success: true, url }
+      const decision = await openValidatedExternalUrl(url, { opener: shell.openExternal })
+      return decision.allowed
+        ? { success: true, url: decision.url }
+        : { success: false, url, error: decision.reason, protocol: decision.protocol }
     }
   )
 
@@ -178,7 +181,7 @@ export function registerWorkflowTools(): void {
           ? `https://www.bing.com/search?q=${encodeURIComponent(query)}`
           : `https://www.google.com/search?q=${encodeURIComponent(query)}`
       if (open) {
-        await shell.openExternal(url)
+        await openValidatedExternalUrl(url, { opener: shell.openExternal })
       }
       return { provider, query, url, opened: open }
     }

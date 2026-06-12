@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { validateExternalUrl } from './external-url-policy'
+import { describe, expect, it, vi } from 'vitest'
+import { openValidatedExternalUrl, validateExternalUrl } from './external-url-policy'
 
 describe('validateExternalUrl', () => {
   it('allows normalized public web URLs', () => {
@@ -42,5 +42,29 @@ describe('validateExternalUrl', () => {
   it('rejects empty and relative URLs', () => {
     expect(validateExternalUrl('')).toEqual({ allowed: false, reason: 'empty-url' })
     expect(validateExternalUrl('/settings')).toEqual({ allowed: false, reason: 'invalid-url' })
+  })
+
+  it('opens only validated external URLs through the provided opener', async () => {
+    const opener = vi.fn(async () => undefined)
+
+    await expect(openValidatedExternalUrl('https://example.com/docs', { opener })).resolves.toEqual(
+      {
+        allowed: true,
+        url: 'https://example.com/docs',
+        protocol: 'https:'
+      }
+    )
+    expect(opener).toHaveBeenCalledWith('https://example.com/docs')
+  })
+
+  it('does not call the opener for blocked URLs', async () => {
+    const opener = vi.fn(async () => undefined)
+
+    await expect(openValidatedExternalUrl('javascript:alert(1)', { opener })).resolves.toEqual({
+      allowed: false,
+      reason: 'blocked-protocol',
+      protocol: 'javascript:'
+    })
+    expect(opener).not.toHaveBeenCalled()
   })
 })

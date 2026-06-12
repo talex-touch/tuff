@@ -22,6 +22,7 @@ import { useAliveWebContents } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
+import { resolvePluginViewSecurityProfile } from '../plugin/runtime/plugin-view-security-profile'
 import { resolveDivisionBoxHeaderHeight } from './layout'
 
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
@@ -341,6 +342,19 @@ export class DivisionBoxSession {
     }
 
     const injections = usePluginInjections(plugin, 'division-box:attachUIView')
+    const securityProfile = resolvePluginViewSecurityProfile(plugin, {
+      source: 'division-box:attachUIView',
+      injections
+    })
+    divisionBoxSessionLog.info('Resolved plugin UI view security profile', {
+      meta: {
+        plugin: plugin?.name,
+        candidateProfile: securityProfile.candidateProfile,
+        effectiveProfile: securityProfile.effectiveProfile,
+        reason: securityProfile.reason
+      }
+    })
+
     let preloadPath = injections?._.preload
 
     // Create dynamic preload for plugin channel if available
@@ -370,7 +384,7 @@ export class DivisionBoxSession {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences = buildWindowWebPreferences('compat-plugin-view', {
+    const webPreferences = buildWindowWebPreferences(securityProfile.effectiveProfile, {
       preload: preloadPath || undefined,
       scrollBounce: true,
       transparent: true

@@ -37,6 +37,7 @@ import { createLogger } from '../../../utils/logger'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { pluginModule } from '../../plugin/plugin-module'
 import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
+import { resolvePluginViewSecurityProfile } from '../../plugin/runtime/plugin-view-security-profile'
 import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import { coreBoxManager } from './manager'
@@ -1207,6 +1208,18 @@ export class WindowManager {
     }
 
     const injections = usePluginInjections(plugin, 'core-box:attachUIView')
+    const securityProfile = resolvePluginViewSecurityProfile(plugin, {
+      source: 'core-box:attachUIView',
+      injections
+    })
+    coreBoxWindowLog.info('Resolved plugin UI view security profile', {
+      meta: {
+        plugin: plugin?.name,
+        candidateProfile: securityProfile.candidateProfile,
+        effectiveProfile: securityProfile.effectiveProfile,
+        reason: securityProfile.reason
+      }
+    })
 
     // Create dynamic preload script to inject plugin API and channel bridge before page scripts execute
     let preloadPath = injections?._.preload
@@ -1278,7 +1291,7 @@ export class WindowManager {
 
     metrics.preload = performance.now() - startTime
 
-    const webPreferences = buildWindowWebPreferences('compat-plugin-view', {
+    const webPreferences = buildWindowWebPreferences(securityProfile.effectiveProfile, {
       preload: preloadPath || undefined,
       scrollBounce: true,
       transparent: true
