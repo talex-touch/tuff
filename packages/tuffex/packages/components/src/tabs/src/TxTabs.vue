@@ -57,6 +57,7 @@ export default defineComponent({
     borderless: { type: Boolean, default: false },
     autoHeight: { type: Boolean, default: false },
     autoWidth: { type: Boolean, default: false },
+    showIndicator: { type: Boolean, default: true },
     indicatorVariant: { type: String, default: 'line' },
     indicatorMotion: { type: String, default: 'stretch' },
     indicatorMotionStrength: { type: Number, default: 1 },
@@ -179,11 +180,35 @@ export default defineComponent({
 
     const animationContent = computed(() => {
       const raw = props.animation?.content
-      if (typeof raw === 'boolean')
-        return { enabled: raw }
-      if (raw && typeof raw === 'object')
-        return { enabled: raw.enabled !== false }
-      return { enabled: true }
+      if (typeof raw === 'boolean') {
+        return {
+          enabled: raw,
+          type: raw ? 'zoom' : 'none',
+          durationMs: 180,
+          easing: 'ease',
+        }
+      }
+      if (raw && typeof raw === 'object') {
+        const type = raw.type === 'fade' || raw.type === 'slide' || raw.type === 'zoom' || raw.type === 'blur' || raw.type === 'scale' || raw.type === 'none'
+          ? raw.type
+          : 'zoom'
+        return {
+          enabled: raw.enabled !== false && type !== 'none',
+          type,
+          durationMs: typeof raw.durationMs === 'number'
+            ? raw.durationMs
+            : typeof raw.durationRatio === 'number'
+              ? Math.max(0, animationIndicator.value.durationMs * raw.durationRatio)
+              : 180,
+          easing: typeof raw.easing === 'string' ? raw.easing : 'ease',
+        }
+      }
+      return {
+        enabled: true,
+        type: 'zoom',
+        durationMs: 180,
+        easing: 'ease',
+      }
     })
 
     const widthAnimEnabled = computed(() => {
@@ -320,7 +345,7 @@ export default defineComponent({
       const pointerEl = pointerElRef.value
       const nodeEl = (vnodeOrEl?.el ?? vnodeOrEl) as HTMLElement | undefined
       const navInnerEl = navInnerElRef.value
-      if (!pointerEl || !nodeEl || !navInnerEl)
+      if (!props.showIndicator || !pointerEl || !nodeEl || !navInnerEl)
         return
 
       const nodeRect = nodeEl.getBoundingClientRect()
@@ -413,12 +438,12 @@ export default defineComponent({
           const el = slotWrapper.value?.el as HTMLElement | undefined
           if (el) {
             if (animationContent.value.enabled)
-              el.classList.remove('tx-tabs-zoom')
+              el.classList.remove('tx-tabs-content-enter')
             void runAutoHeight(() => setActive(vnode)).then(() => {
               nextTick(() => {
                 applyPointerFor(tab)
                 if (animationContent.value.enabled)
-                  el.classList.add('tx-tabs-zoom')
+                  el.classList.add('tx-tabs-content-enter')
               })
             })
           }
@@ -555,26 +580,28 @@ export default defineComponent({
 
       const navRightSlot = slots['nav-right']?.()
 
-      const pointer = h(
-        'div',
-        {
-          ref: pointerElRef,
-          class: 'tx-tabs__pointer',
-        },
-        [
-          h('div', {
-            ref: pointerInnerElRef,
-            class: 'tx-tabs__pointer-inner',
-          }),
-        ],
-      )
+      const pointer = props.showIndicator
+        ? h(
+            'div',
+            {
+              ref: pointerElRef,
+              class: 'tx-tabs__pointer',
+            },
+            [
+              h('div', {
+                ref: pointerInnerElRef,
+                class: 'tx-tabs__pointer-inner',
+              }),
+            ],
+          )
+        : null
 
       const selectSlot = h(
         'div',
         {
           ref: (el: any) => (contentRootElRef.value = el),
           key: activeName.value,
-          class: ['tx-tabs__select-slot', { 'tx-tabs-zoom': animationContent.value.enabled }],
+          class: ['tx-tabs__select-slot', { 'tx-tabs-content-enter': animationContent.value.enabled }],
         },
         renderContent(tabHeader, activeNode),
       )
@@ -626,7 +653,7 @@ export default defineComponent({
                   ref: (el: any) => (navInnerElRef.value = el),
                   class: 'tx-tabs__nav-inner',
                 },
-                [...tabs, pointer],
+                pointer ? [...tabs, pointer] : tabs,
               ),
               navRightSlot
                 ? h('div', { class: 'tx-tabs__nav-extra' }, navRightSlot)
@@ -656,11 +683,13 @@ export default defineComponent({
             `tx-tabs--${placement.value}`,
             `tx-tabs--indicator-${indicatorVariant.value}`,
             `tx-tabs--motion-${indicatorMotion.value}`,
+            `tx-tabs--content-${animationContent.value.type}`,
             {
               'tx-tabs--auto-height': heightAnimEnabled.value,
               'tx-tabs--auto-width': !!props.autoWidth,
               'tx-tabs--borderless': props.borderless,
-              'tx-tabs--indicator-anim': animationIndicator.value.enabled,
+              'tx-tabs--indicator-hidden': !props.showIndicator,
+              'tx-tabs--indicator-anim': props.showIndicator && animationIndicator.value.enabled,
               'tx-tabs--nav-anim': animationNav.value.enabled,
               'tx-tabs--content-anim': animationContent.value.enabled,
             },
@@ -669,6 +698,8 @@ export default defineComponent({
             '--tx-tabs-indicator-duration': `${animationIndicator.value.durationMs}ms`,
             '--tx-tabs-indicator-easing': animationIndicator.value.easing,
             '--tx-tabs-indicator-strength': `${indicatorMotionStrength.value}`,
+            '--tx-tabs-content-duration': `${animationContent.value.durationMs}ms`,
+            '--tx-tabs-content-easing': animationContent.value.easing,
             '--tx-tabs-nav-duration': `${animationNav.value.durationMs}ms`,
             '--tx-tabs-nav-easing': animationNav.value.easing,
           } as any,
@@ -860,8 +891,8 @@ export default defineComponent({
   border: 1.5px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
 }
 
-.tx-tabs--indicator-block .tx-tabs__nav-inner :deep(.tx-tab-item.is-active),
-.tx-tabs--indicator-outline .tx-tabs__nav-inner :deep(.tx-tab-item.is-active) {
+.tx-tabs--indicator-block:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active),
+.tx-tabs--indicator-outline:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active) {
   --fake-color: transparent;
   --fake-opacity: 0;
 }
@@ -1141,18 +1172,80 @@ export default defineComponent({
   color: var(--tx-text-color-secondary, #909399);
 }
 
-.tx-tabs-zoom {
-  animation: tx-tabs-zoom-in 0.18s ease;
+.tx-tabs-content-enter {
+  animation-duration: var(--tx-tabs-content-duration, 180ms);
+  animation-timing-function: var(--tx-tabs-content-easing, ease);
+  animation-fill-mode: both;
 }
 
-@keyframes tx-tabs-zoom-in {
+.tx-tabs--content-fade .tx-tabs-content-enter {
+  animation-name: tx-tabs-content-fade;
+}
+
+.tx-tabs--content-slide .tx-tabs-content-enter {
+  animation-name: tx-tabs-content-slide;
+}
+
+.tx-tabs--content-zoom .tx-tabs-content-enter {
+  animation-name: tx-tabs-content-zoom;
+}
+
+.tx-tabs--content-blur .tx-tabs-content-enter {
+  animation-name: tx-tabs-content-blur;
+}
+
+.tx-tabs--content-scale .tx-tabs-content-enter {
+  animation-name: tx-tabs-content-scale;
+}
+
+@keyframes tx-tabs-content-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tx-tabs-content-slide {
   from {
-    opacity: 0.7;
-    transform: translateY(6px);
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes tx-tabs-content-zoom {
+  from {
+    opacity: 0.7;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tx-tabs-content-blur {
+  from {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes tx-tabs-content-scale {
+  from {
+    opacity: 0.72;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 </style>
