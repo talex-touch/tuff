@@ -84,6 +84,17 @@ interface PublisherAuthResponse {
   userId?: string
   authType?: 'session' | 'app' | 'apiKey' | 'admin'
   role?: string | null
+  scopes?: string[]
+}
+
+export interface PublishAuthRuntime {
+  refreshAppJwt: () => Promise<string | null>
+  onAuthRefreshFailure?: (reason: string) => Promise<void> | void
+}
+
+interface ResolvedPublishAuth {
+  token: string
+  preflightPlugins: DashboardPluginsResponse | null
 }
 
 function getDashboardPluginsUrl(): string {
@@ -217,6 +228,48 @@ async function requestJsonWithAuth(token: string, url: string): Promise<NetworkR
   })
 }
 
+function isExpiredAppJwtDiagnostics(diagnostics: AuthTokenDiagnostics): boolean {
+  return diagnostics.kind === 'appJwt' && diagnostics.expired === true
+}
+
+function hasRequiredApiKeyScopes(response: PublisherAuthResponse): boolean {
+  if (response.authType !== 'apiKey')
+    return true
+  const scopes = Array.isArray(response.scopes) ? response.scopes : []
+  return scopes.includes('plugin:read') && scopes.includes('plugin:publish')
+}
+
+async function resolvePublisherAccess(
+  token: string,
+  options: PublishConfig,
+  runtime?: PublishAuthRuntime,
+): Promise<ResolvedPublishAuth> {
+  try {
+    const preflightPlugins = await preflightPublisherAccess(token)
+    return {
+      token,
+      preflightPlugins,
+    }
+  }
+  catch (error) {
+    const diagnostics = inspectAuthToken(token)
+    if (!runtime || options.nonInteractive || !isExpiredAppJwtDiagnostics(diagnostics))
+      throw error
+
+    const refreshedToken = await runtime.refreshAppJwt()
+    if (!refreshedToken) {
+      await runtime.onAuthRefreshFailure?.('refresh-returned-empty-token')
+      throw new Error('Publish authentication expired and automatic browser refresh did not produce a new token.')
+    }
+
+    const preflightPlugins = await preflightPublisherAccess(refreshedToken)
+    return {
+      token: refreshedToken,
+      preflightPlugins,
+    }
+  }
+}
+
 function throwPublisherAuthError(
   response: NetworkResponse<string>,
   diagnostics: AuthTokenDiagnostics,
@@ -246,7 +299,10 @@ async function preflightPublisherAccess(token: string): Promise<DashboardPlugins
   const response = await requestJsonWithAuth(token, url)
 
   if (response.status >= 200 && response.status < 300) {
-    parseJsonResponse<PublisherAuthResponse>(response, `Validate publisher access (${url})`)
+    const payload = parseJsonResponse<PublisherAuthResponse>(response, `Validate publisher access (${url})`)
+    if (!hasRequiredApiKeyScopes(payload)) {
+      throw new Error(`Publisher API key is missing required scopes (${url}). Expected plugin:read and plugin:publish.`)
+    }
     return null
   }
 
@@ -433,11 +489,13 @@ async function publishPackage(
   url: string,
   form: FormData,
 ): Promise<DashboardPublishedVersion> {
+  const deviceHeaders = await createDeviceHeaders()
   const publishRes = await networkClient.request<string>({
     method: 'POST',
     url,
     headers: {
       Authorization: `Bearer ${token}`,
+      ...deviceHeaders,
     },
     body: form as unknown as BodyInit,
     responseType: 'text',
@@ -497,7 +555,7 @@ export async function logout(): Promise<void> {
   }
 }
 
-export async function publish(options: PublishConfig = {}): Promise<void> {
+export async function publish(options: PublishConfig = {}, runtime?: PublishAuthRuntime): Promise<void> {
   console.log('\n📦 Tuff Plugin Publisher\n')
 
   const token = await getAuthToken()
@@ -584,9 +642,12 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
     return
   }
 
+  let authToken = token
   let preflightPlugins: DashboardPluginsResponse | null = null
   try {
-    preflightPlugins = await preflightPublisherAccess(token)
+    const resolved = await resolvePublisherAccess(token, options, runtime)
+    authToken = resolved.token
+    preflightPlugins = resolved.preflightPlugins
   }
   catch (error) {
     console.error(`❌ ${error instanceof Error ? error.message : error}`)
@@ -599,10 +660,10 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
   try {
     const publishUrl = options.apiUrl || (preflightPlugins
       ? resolveDashboardPublishUrlFromPlugins(preflightPlugins, dashboardSlug, manifest)
-      : await resolveDashboardPublishUrl(token, dashboardSlug, manifest))
+      : await resolveDashboardPublishUrl(authToken, dashboardSlug, manifest))
     const content = await fs.readFile(target.path)
     const form = createPublishForm(pkg, manifest, tag, channel, notes, target, content)
-    const version = await publishPackage(token, publishUrl, form)
+    const version = await publishPackage(authToken, publishUrl, form)
     const submitted = version.status === 'approved' ? 'published' : 'submitted'
 
     console.log(`\n✅ Plugin package ${submitted} successfully.`)
