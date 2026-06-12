@@ -84,6 +84,7 @@ export default defineConfig({
             { text: '数字输入 NumberInput', link: '/components/number-input' },
             { text: '扁平输入 FlatInput', link: '/components/flat-input' },
             { text: '代码编辑器 CodeEditor', link: '/components/code-editor' },
+            { text: 'Markdown编辑器 MarkdownEditor', link: '/components/markdown-editor' },
             { text: '搜索输入框 SearchInput', link: '/components/search-input' },
             { text: '搜索选择器 SearchSelect', link: '/components/search-select' },
             { text: '表单 Form', link: '/components/form' },
