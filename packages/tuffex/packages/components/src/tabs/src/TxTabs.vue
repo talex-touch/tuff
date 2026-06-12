@@ -136,21 +136,21 @@ export default defineComponent({
       if (typeof raw === 'boolean') {
         return {
           enabled: raw,
-          durationMs: 180,
-          easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+          durationMs: 350,
+          easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }
       }
       if (raw && typeof raw === 'object') {
         return {
           enabled: raw.enabled !== false,
-          durationMs: typeof raw.durationMs === 'number' ? raw.durationMs : 180,
-          easing: typeof raw.easing === 'string' ? raw.easing : 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+          durationMs: typeof raw.durationMs === 'number' ? raw.durationMs : 350,
+          easing: typeof raw.easing === 'string' ? raw.easing : 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         }
       }
       return {
         enabled: true,
-        durationMs: 180,
-        easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        durationMs: 350,
+        easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
       }
     })
 
@@ -257,6 +257,7 @@ export default defineComponent({
 
     let contentResizeObserver: ResizeObserver | null = null
     let pointerAnimTimer: number | null = null
+    let lastPointerPosition: { x: number, y: number } | null = null
 
     onBeforeUnmount(() => {
       if (pointerAnimTimer != null)
@@ -283,7 +284,7 @@ export default defineComponent({
       { immediate: true },
     )
 
-    function playPointerAnim() {
+    function playPointerAnim(direction: 'forward' | 'backward' = 'forward') {
       const el = pointerInnerElRef.value
       if (!el)
         return
@@ -293,10 +294,15 @@ export default defineComponent({
         el.classList.remove(`tx-tabs__pointer--motion-${m}-x`)
         el.classList.remove(`tx-tabs__pointer--motion-${m}-y`)
       }
+      el.classList.remove('tx-tabs__pointer--glow')
 
       const cls = isVertical.value
         ? `tx-tabs__pointer--motion-${indicatorMotion.value}-y`
         : `tx-tabs__pointer--motion-${indicatorMotion.value}-x`
+
+      el.style.transformOrigin = isVertical.value
+        ? direction === 'forward' ? 'center top' : 'center bottom'
+        : direction === 'forward' ? 'left center' : 'right center'
 
       void el.offsetWidth
       el.classList.add(cls)
@@ -305,8 +311,9 @@ export default defineComponent({
         window.clearTimeout(pointerAnimTimer)
       pointerAnimTimer = window.setTimeout(() => {
         el.classList.remove(cls)
+        el.classList.add('tx-tabs__pointer--glow')
         pointerAnimTimer = null
-      }, Math.max(120, (animationIndicator.value?.durationMs ?? 180) + 120))
+      }, Math.max(120, animationIndicator.value?.durationMs ?? 350))
     }
 
     function applyPointerFor(vnodeOrEl: any) {
@@ -326,6 +333,8 @@ export default defineComponent({
       pointerEl.style.height = ''
 
       const variant = indicatorVariant.value
+      let nextPointerX = 0
+      let nextPointerY = 0
 
       if (isVertical.value) {
         const topBase = nodeRect.top - navInnerRect.top + navInnerEl.scrollTop
@@ -334,22 +343,21 @@ export default defineComponent({
         const navInnerWidth = navInnerEl.clientWidth
 
         if (variant === 'block' || variant === 'outline') {
-          pointerEl.style.transform = `translate3d(${leftBase}px, ${topBase}px, 0)`
+          nextPointerX = leftBase
+          nextPointerY = topBase
           pointerEl.style.width = `${nodeRect.width}px`
           pointerEl.style.height = `${nodeRect.height}px`
         }
         else if (variant === 'dot') {
-          const top = topBase + nodeRect.height * 0.5 - 4
-          const x = placement.value === 'right' ? (navInnerWidth - 8 - 8) : 8
-          pointerEl.style.transform = `translate3d(${x}px, ${top}px, 0)`
+          nextPointerX = placement.value === 'right' ? (navInnerWidth - 8 - 8) : 8
+          nextPointerY = topBase + nodeRect.height * 0.5 - 4
           pointerEl.style.height = `8px`
           pointerEl.style.width = `8px`
         }
         else {
-          const top = topBase + nodeRect.height * 0.2 + diff
           const thickness = variant === 'pill' ? 6 : 3
-          const x = placement.value === 'right' ? (navInnerWidth - thickness) : 0
-          pointerEl.style.transform = `translate3d(${x}px, ${top}px, 0)`
+          nextPointerX = placement.value === 'right' ? (navInnerWidth - thickness) : 0
+          nextPointerY = topBase + nodeRect.height * 0.2 + diff
           pointerEl.style.width = `${thickness}px`
           pointerEl.style.height = `${nodeRect.height * 0.6}px`
         }
@@ -361,28 +369,37 @@ export default defineComponent({
         const navInnerHeight = navInnerEl.clientHeight
 
         if (variant === 'block' || variant === 'outline') {
-          pointerEl.style.transform = `translate3d(${leftBase}px, ${topBase}px, 0)`
+          nextPointerX = leftBase
+          nextPointerY = topBase
           pointerEl.style.width = `${nodeRect.width}px`
           pointerEl.style.height = `${nodeRect.height}px`
         }
         else if (variant === 'dot') {
-          const left = leftBase + nodeRect.width * 0.5 - 4
-          const y = placement.value === 'bottom' ? 8 : (navInnerHeight - 8 - 8)
-          pointerEl.style.transform = `translate3d(${left}px, ${y}px, 0)`
+          nextPointerX = leftBase + nodeRect.width * 0.5 - 4
+          nextPointerY = placement.value === 'bottom' ? 8 : (navInnerHeight - 8 - 8)
           pointerEl.style.width = `8px`
           pointerEl.style.height = `8px`
         }
         else {
-          const left = leftBase + nodeRect.width * 0.2 + diff
           const thickness = variant === 'pill' ? 6 : 3
-          const y = placement.value === 'bottom' ? 0 : (navInnerHeight - thickness)
-          pointerEl.style.transform = `translate3d(${left}px, ${y}px, 0)`
+          nextPointerX = leftBase + nodeRect.width * 0.2 + diff
+          nextPointerY = placement.value === 'bottom' ? 0 : (navInnerHeight - thickness)
           pointerEl.style.width = `${nodeRect.width * 0.6}px`
           pointerEl.style.height = `${thickness}px`
         }
       }
 
-      playPointerAnim()
+      pointerEl.style.transform = `translate3d(${nextPointerX}px, ${nextPointerY}px, 0)`
+
+      const previousPointerPosition = lastPointerPosition
+      const direction = previousPointerPosition
+        ? isVertical.value
+          ? nextPointerY >= previousPointerPosition.y ? 'forward' : 'backward'
+          : nextPointerX >= previousPointerPosition.x ? 'forward' : 'backward'
+        : 'forward'
+      lastPointerPosition = { x: nextPointerX, y: nextPointerY }
+
+      playPointerAnim(direction)
     }
 
     function createTab(vnode: any): any {
@@ -774,13 +791,34 @@ export default defineComponent({
 }
 
 .tx-tabs__pointer-inner {
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  background-color: var(--tx-color-primary, #409eff);
+  background: linear-gradient(180deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
+  box-shadow:
+    0 2px 8px color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
   transform: scale(1);
   transform-origin: center;
   will-change: transform, opacity;
+}
+
+.tx-tabs__pointer-inner::before {
+  content: '';
+  position: absolute;
+  inset: -16px -8px;
+  border-radius: 999px;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent) 0%, transparent 70%);
+  filter: blur(10px);
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity 1s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.tx-tabs__pointer-inner.tx-tabs__pointer--glow::before {
+  opacity: 0.42;
+  transform: scale(1);
 }
 
 .tx-tabs__nav-inner :deep(.tx-tab-item) {
@@ -822,15 +860,32 @@ export default defineComponent({
   border: 1.5px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
 }
 
+.tx-tabs--indicator-block .tx-tabs__nav-inner :deep(.tx-tab-item.is-active),
+.tx-tabs--indicator-outline .tx-tabs__nav-inner :deep(.tx-tab-item.is-active) {
+  --fake-color: transparent;
+  --fake-opacity: 0;
+}
+
+.tx-tabs--indicator-block .tx-tabs__pointer {
+  z-index: 0;
+}
+
+.tx-tabs--indicator-block .tx-tabs__pointer-inner {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent),
+    0 6px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
+}
+
 .tx-tabs__pointer-inner.tx-tabs__pointer--motion-stretch-x {
-  animation: tx-tabs-pointer-stretch-x calc(var(--tx-tabs-indicator-duration, 180ms) + 160ms)
-    cubic-bezier(0.34, 1.56, 0.64, 1)
+  animation: tx-tabs-pointer-stretch-x var(--tx-tabs-indicator-duration, 350ms)
+    cubic-bezier(0.25, 0.46, 0.45, 0.94)
     both;
 }
 
 .tx-tabs__pointer-inner.tx-tabs__pointer--motion-stretch-y {
-  animation: tx-tabs-pointer-stretch-y calc(var(--tx-tabs-indicator-duration, 180ms) + 160ms)
-    cubic-bezier(0.34, 1.56, 0.64, 1)
+  animation: tx-tabs-pointer-stretch-y var(--tx-tabs-indicator-duration, 350ms)
+    cubic-bezier(0.25, 0.46, 0.45, 0.94)
     both;
 }
 
@@ -883,16 +938,14 @@ export default defineComponent({
 }
 
 @keyframes tx-tabs-pointer-stretch-x {
-  0% { transform: scaleX(calc(1 + ((0.96 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  42% { transform: scaleX(calc(1 + ((1.26 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  72% { transform: scaleX(calc(1 + ((0.99 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
+  0% { transform: scaleX(1); }
+  42% { transform: scaleX(calc(1 + ((1.36 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
   100% { transform: scaleX(1); }
 }
 
 @keyframes tx-tabs-pointer-stretch-y {
-  0% { transform: scaleY(calc(1 + ((0.96 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  42% { transform: scaleY(calc(1 + ((1.26 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  72% { transform: scaleY(calc(1 + ((0.99 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
+  0% { transform: scaleY(1); }
+  42% { transform: scaleY(calc(1 + ((1.36 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
   100% { transform: scaleY(1); }
 }
 
@@ -951,10 +1004,10 @@ export default defineComponent({
 }
 
 .tx-tabs--indicator-anim .tx-tabs__pointer {
-  transition: opacity var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease),
-    transform var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease),
-    width var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease),
-    height var(--tx-tabs-indicator-duration, 180ms) var(--tx-tabs-indicator-easing, ease);
+  transition: opacity var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease),
+    transform var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease),
+    width var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease),
+    height var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease);
 }
 
 .tx-tabs--right {
