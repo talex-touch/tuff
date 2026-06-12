@@ -5,6 +5,33 @@
 
 ## 2026-06-13
 
+### ref(plugins): remove starter leftovers from touch-music and touch-image
+
+- `plugins/touch-music/index.html`
+- `plugins/touch-music/README.md`
+- `plugins/touch-music/src/main.js`
+- `plugins/touch-music/src/style.css`
+- `plugins/touch-music/public/vite.svg`
+- `plugins/touch-music/src/assets/vue.svg`
+- `plugins/touch-music/src/components/music/base/PlayProgressBar.old.old.vue`
+- `plugins/touch-music/src/components/music/particle/bg/WavingParticle.outdate.vue`
+- `plugins/touch-image/index.html`
+- `plugins/touch-image/README.md`
+- `plugins/touch-image/src/style.css`
+- `plugins/touch-image/public/vite.svg`
+- `plugins/touch-image/src/assets/vue.svg`
+- `plugins/touch-image/vite.config.ts.timestamp-1719106691581-0b90f1a019b44.mjs`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Removed unused Vite starter favicon, Vue logo, timestamped config residue and obsolete `.old/.outdate` sample files from `touch-music` and `touch-image`.
+  - Replaced `touch-music` full `@talex-touch/tuffex/style.css` import with `base.css` plus `input/scroll/slider` component style entries to match the current TuffEx quality guidance.
+  - Rewrote both plugin README files so they describe the actual sample-plugin purpose and current development entry points instead of generic Vite template text.
+  - Synced plan/index/quality docs so sample-plugin cleanup is recorded as completed work and the next quality focus returns to semantic controls, CLI publish evidence and device evidence.
+  - 验证：`pnpm -C "plugins/touch-music" run lint`、`pnpm -C "plugins/touch-image" run lint` 和 `git diff --check`。
+
 ### feat(tuffex): add markdown editor component
 
 - `packages/tuffex/packages/components/src/markdown-editor/*`
@@ -14,7 +41,7 @@
   - Added `TxMarkdownEditor` / `MarkdownEditor` as an on-demand TuffEx component with WYSIWYG, source and preview modes.
   - Kept Markdown rendering dependencies inside the component path via dynamic imports so package subpath imports remain tree-shaking friendly.
   - Added focused tests for exports, sanitize rendering, source editing, mode switching and rich HTML to Markdown serialization.
-  - 验证：pending in current slice.
+  - 验证：focused MarkdownEditor Vitest, TuffEx build, `audit:exports`, `audit:size`, external package type audit and `git diff --check` passed.
 
 ### fix(core-app): keep auth secure storage default session-only
 
@@ -26,7 +53,7 @@
   - Aligned AuthModule, renderer auth bootstrap and user settings hydration with the shared app setting default `auth.useSecureStorage=false`.
   - Removed the legacy migration that converted missing or default-disabled auth secure storage settings back to `true`, preventing startup from silently undoing the macOS Keychain prompt avoidance behavior.
   - Kept explicit user re-enable behavior intact: when `useSecureStorage=true`, auth still loads/persists through the secure-store path and reports backend health.
-  - 验证：focused AuthModule Vitest, CoreApp node/web typecheck, scoped ESLint and `git diff --check` passed.
+  - 验证：focused AuthModule Vitest, CoreApp node typecheck, scoped ESLint and `git diff --check` passed; CoreApp web typecheck is currently blocked by unrelated TuffEx markdown-editor compile errors.
 
 ## 2026-06-07
 

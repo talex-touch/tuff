@@ -1,7 +1,14 @@
-# Vue 3 + Vite
+# touch-music
 
-This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+`touch-music` 是仓库里的示例音乐插件，用来验证插件 UI、TuffEx 组件按需样式和基础音频交互。
 
-## Recommended IDE Setup
+## 开发入口
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur) + [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=Vue.vscode-typescript-vue-plugin).
+- 调试：`pnpm -C "plugins/touch-music" run music:dev`
+- 构建：`pnpm -C "plugins/touch-music" run build`
+- Lint：`pnpm -C "plugins/touch-music" run lint`
+
+## 当前约束
+
+- 只保留插件运行必需入口与示例资源，不再保留 Vite starter 资产。
+- TuffEx 使用 `base.css` + 组件子路径 `style.css`，避免继续依赖全量 `style.css`。
