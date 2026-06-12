@@ -228,6 +228,25 @@ describe('txTabs', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['Storage'])
   })
 
+  it('supports content animation variants and hidden indicator', async () => {
+    const wrapper = mountTabs({
+      showIndicator: false,
+      animation: {
+        indicator: { durationMs: 400 },
+        content: { type: 'slide', durationRatio: 0.5, easing: 'linear' },
+      },
+    })
+
+    await nextTick()
+
+    expect(wrapper.classes()).toContain('tx-tabs--indicator-hidden')
+    expect(wrapper.classes()).not.toContain('tx-tabs--indicator-anim')
+    expect(wrapper.classes()).toContain('tx-tabs--content-slide')
+    expect(wrapper.attributes('style')).toContain('--tx-tabs-content-duration: 200ms')
+    expect(wrapper.attributes('style')).toContain('--tx-tabs-content-easing: linear')
+    expect(wrapper.find('.tx-tabs__pointer').exists()).toBe(false)
+  })
+
   it('normalizes invalid visual props and exposes AutoSizer methods', async () => {
     const wrapper = mountTabs({
       placement: 'diagonal',
@@ -252,6 +271,7 @@ describe('txTabs', () => {
     expect(wrapper.classes()).not.toContain('tx-tabs--indicator-anim')
     expect(wrapper.classes()).not.toContain('tx-tabs--nav-anim')
     expect(wrapper.classes()).not.toContain('tx-tabs--content-anim')
+    expect(wrapper.classes()).toContain('tx-tabs--content-none')
     expect(wrapper.find('.tx-tabs__content-scroll').exists()).toBe(false)
 
     const autoSizer = wrapper.findComponent(AutoSizerStub)

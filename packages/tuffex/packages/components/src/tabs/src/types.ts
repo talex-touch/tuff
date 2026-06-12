@@ -10,6 +10,7 @@ export interface TabsProps {
   borderless?: boolean
   autoHeight?: boolean
   autoWidth?: boolean
+  showIndicator?: boolean
   indicatorVariant?: 'line' | 'pill' | 'block' | 'dot' | 'outline'
   indicatorMotion?: 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
   autoHeightDurationMs?: number
@@ -31,8 +32,17 @@ export interface TabsAnimationNav extends TabsAnimationOption {
   easing?: string
 }
 
+export type TabsContentAnimationType = 'fade' | 'slide' | 'zoom' | 'blur' | 'scale' | 'none'
+
 export interface TabsAnimationIndicator extends TabsAnimationOption {
   durationMs?: number
+  easing?: string
+}
+
+export interface TabsAnimationContent extends TabsAnimationOption {
+  type?: TabsContentAnimationType
+  durationMs?: number
+  durationRatio?: number
   easing?: string
 }
 
@@ -40,7 +50,7 @@ export interface TabsAnimation {
   size?: boolean | TabsAnimationSize
   nav?: boolean | TabsAnimationNav
   indicator?: boolean | TabsAnimationIndicator
-  content?: boolean | TabsAnimationOption
+  content?: boolean | TabsAnimationContent
 }
 
 export interface TabsEmits {
