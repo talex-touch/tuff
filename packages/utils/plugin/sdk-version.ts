@@ -11,7 +11,7 @@ import type { SdkApiVersion } from './index'
  * - >= 260215: plugin sqlite sdk is available
  * - >= 260225: OmniPanel declarative transfer is available
  * - >= 260228: plugin capability auth baseline is enabled
- * - >= 260428: current supported marker
+ * - >= 260615: current supported marker
  */
 export enum SdkApi {
   /**
@@ -39,10 +39,14 @@ export enum SdkApi {
    */
   V260228 = 260228,
   /**
-   * 2026-04-28: current supported marker.
-   * No additional runtime gate is introduced beyond existing baselines.
+   * 2026-04-28: supported marker without additional runtime gates.
    */
   V260428 = 260428,
+  /**
+   * 2026-06-15: current supported marker.
+   * No additional runtime gate is introduced beyond existing baselines.
+   */
+  V260615 = 260615,
 }
 
 /**
@@ -50,6 +54,7 @@ export enum SdkApi {
  * This list is the canonical allowlist for plugin-declared sdkapi markers.
  */
 export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
+  SdkApi.V260615,
   SdkApi.V260428,
   SdkApi.V260228,
   SdkApi.V260225,
@@ -63,7 +68,7 @@ export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
  * Current SDK API version.
  * Updated when a new supported plugin SDK marker is introduced.
  */
-export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260428
+export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260615
 
 /**
  * Minimum SDK version required for permission enforcement.

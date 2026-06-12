@@ -22,7 +22,7 @@ code: |
     "name": "my-plugin",
     "version": "0.1.0",
     "author": "Example",
-    "sdkapi": 260428,
+    "sdkapi": 260615,
     "category": "utilities",
     "description": "Return a copy action from CoreBox.",
     "main": "index.js",

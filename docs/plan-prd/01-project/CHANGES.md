@@ -5,6 +5,24 @@
 
 ## 2026-06-13
 
+### chore(sdkapi): introduce 260615 plugin SDK marker
+
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/utils/__tests__/sdk-version.test.ts`
+- `apps/nexus/content/docs/dev/reference/manifest.en.mdc`
+- `apps/nexus/content/docs/dev/reference/manifest.zh.mdc`
+- `apps/nexus/content/docs/dev/getting-started/quickstart.en.mdc`
+- `apps/nexus/content/docs/dev/getting-started/quickstart.zh.mdc`
+- `apps/nexus/content/docs/dev/getting-started/plugin-workflow.en.mdc`
+- `apps/nexus/content/docs/dev/getting-started/plugin-workflow.zh.mdc`
+- `apps/nexus/content/docs/dev/api/permission.en.mdc`
+- `apps/nexus/content/docs/dev/api/permission.zh.mdc`
+- `apps/nexus/content/docs/dev/api/storage.en.mdc`
+- `apps/nexus/content/docs/dev/api/storage.zh.mdc`
+  - Added `260615` as the current supported plugin `sdkapi` marker while keeping `260428` supported.
+  - Kept the marker as a compatibility/version declaration only; no additional runtime gate is introduced beyond existing baselines.
+  - 验证：focused SDK version Vitest.
+
 ### fix(core-app): harden CoreBox HTML and external URL boundaries
 
 - `apps/core-app/src/renderer/src/components/render/BoxItem.vue`
