@@ -86,19 +86,22 @@ const applyLabel = computed(() => {
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  width: auto;
-  flex: 0 0 auto;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   white-space: nowrap;
 }
 
 .footer-actions {
   display: inline-flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
   justify-content: flex-end;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
 }
 
@@ -107,8 +110,9 @@ const applyLabel = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 10px;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 60%, transparent);
   background: color-mix(in srgb, var(--clipboard-surface-strong) 90%, transparent);
@@ -151,8 +155,9 @@ const applyLabel = computed(() => {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  min-width: 120px;
-  padding: 6px 12px;
+  flex: 1 1 148px;
+  min-width: min(100%, 148px);
+  padding: 5px 10px;
   white-space: nowrap;
 }
 
@@ -161,22 +166,30 @@ const applyLabel = computed(() => {
   font-size: 0.78rem;
   color: var(--clipboard-text-secondary);
   line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .button-text {
   font-size: 0.82rem;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 720px) {
   .clipboard-action-bar {
-    flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
   .footer-actions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: stretch;
+  }
+
+  .footer-actions .surface-button,
+  .surface-button.with-shortcut {
+    flex: 1 1 0;
   }
 }
 </style>

@@ -338,10 +338,12 @@ watch(filter, async () => {
 .ClipboardManagerPage {
   position: relative;
   height: 100%;
+  min-height: 0;
 }
 
 .ClipboardPageHolder {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   color: var(--clipboard-text-primary);
@@ -429,13 +431,15 @@ watch(filter, async () => {
   bottom: 0;
   z-index: 10;
   width: 100%;
-  min-height: 54px;
-  padding: 10px 14px;
+  flex: 0 0 auto;
+  max-height: 136px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
   background: transparent;
+  overflow: hidden;
 }
 
 .ClipboardPageHolder-Footer::before {
@@ -461,9 +465,10 @@ watch(filter, async () => {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   width: 100%;
-  flex-wrap: nowrap;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .footer-left {
@@ -472,7 +477,8 @@ watch(filter, async () => {
 }
 
 .footer-right {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .footer-controls {
@@ -489,7 +495,7 @@ watch(filter, async () => {
 .footer-inline {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: nowrap;
   width: 100%;
   min-width: 0;
@@ -522,14 +528,21 @@ watch(filter, async () => {
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: nowrap;
   overflow: auto hidden;
+  min-width: 0;
+  scrollbar-width: none;
+}
+
+.filter-group::-webkit-scrollbar {
+  display: none;
 }
 
 .filter-chip {
-  min-height: 36px;
-  padding: 0 14px;
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--clipboard-border-color);
   border-radius: 999px;
   background: var(--clipboard-surface-subtle);
@@ -553,6 +566,10 @@ watch(filter, async () => {
   .ManagerFooterBar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .footer-right {
+    width: 100%;
   }
 }
 </style>

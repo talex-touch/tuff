@@ -1,7 +1,7 @@
 {
   "id": "com.tuffex.clipboard-history",
   "name": "clipboard-history",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "author": "TalexTouch Team",
   "sdkapi": 260428,
   "category": "utilities",
@@ -76,7 +76,9 @@
       ],
       "interaction": {
         "type": "webcontent",
-        "path": "/clipboard-manager"
+        "path": "/clipboard-manager",
+        "showInput": false,
+        "allowInput": false
       }
     }
   ]

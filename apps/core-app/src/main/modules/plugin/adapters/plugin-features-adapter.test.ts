@@ -6,6 +6,7 @@ import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginFeaturesAdapter } from './plugin-features-adapter'
 import searchEngineCore from '../../box-tool/search-engine/search-core'
 import { pluginModule } from '../plugin-module'
+import { PluginViewLoader } from '../view/plugin-view-loader'
 
 vi.mock('../../box-tool/search-engine/search-core', () => ({
   default: {
@@ -139,5 +140,49 @@ describe('plugin-features-adapter', () => {
     expect(triggerInputChanged).toHaveBeenCalledWith(pushFeature, query)
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
     vi.mocked(searchEngineCore.getActivationState).mockReturnValue(null)
+  })
+
+  it('honors explicit hidden input for webcontent features with accepted inputs', async () => {
+    const adapter = new PluginFeaturesAdapter()
+    const feature = {
+      ...createFeature(),
+      acceptedInputTypes: ['text'],
+      interaction: {
+        type: 'webcontent',
+        path: '/manager',
+        showInput: false,
+        allowInput: false
+      }
+    } as IPluginFeature
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      issues: [],
+      getFeature: vi.fn(() => feature)
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+    vi.mocked(PluginViewLoader.loadPluginView).mockResolvedValue(undefined)
+
+    const activation = await adapter.onExecute({
+      item: {
+        id: 'test-plugin/manager',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: {
+          pluginName: 'test-plugin',
+          featureId: feature.id
+        }
+      },
+      searchResult: {
+        query: { text: 'clipboard' },
+        items: []
+      }
+    } as never)
+
+    expect(activation?.showInput).toBe(false)
+    expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
+      expect.objectContaining({ showInput: false })
+    ])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 })

@@ -1317,6 +1317,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.TranslationWidget__query {
+  min-width: 0;
+  flex: 1 1 220px;
 }
 
 .TranslationWidget__query-label {
@@ -1329,6 +1336,8 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: var(--tx-text-color-primary);
   margin-top: 2px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .TranslationWidget__status {
@@ -1392,15 +1401,19 @@ onBeforeUnmount(() => {
 .TranslationWidget__provider-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 6px;
+  min-width: 0;
 }
 
 .TranslationWidget__provider-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+  min-width: 0;
 }
 
 .TranslationWidget__provider-name {
@@ -1588,13 +1601,20 @@ onBeforeUnmount(() => {
 @media (max-width: 640px) {
   .TranslationWidget {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .TranslationWidget__history {
+    max-height: 148px;
     border-right: none;
     padding-right: 0;
     border-bottom: 1px solid var(--tx-border-color);
     padding-bottom: 12px;
+  }
+
+  .TranslationWidget__provider-actions {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>
