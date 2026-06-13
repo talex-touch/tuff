@@ -33,9 +33,6 @@ import type {
   IndexedSourceScanRuntimeResult,
   PlatformCapabilityListRequest,
   ReadFileRequest,
-  SecureStoreHealthResponse,
-  SecureValueGetRequest,
-  SecureValueSetRequest,
   SearchProviderConfigResponse,
   SearchProviderConfigUpdateRequest,
   SearchProviderConfigUpdateResult,
@@ -124,13 +121,8 @@ import {
   type StorageUsageIncludeOptions,
   type StorageUsageReport
 } from '../utils/storage-usage'
-import {
-  getSecureStoreHealth,
-  getSecureStoreValue,
-  isSecureStoreAvailable,
-  setSecureStoreValue
-} from '../utils/secure-store'
 import { tempFileService } from '../service/temp-file.service'
+import { registerSystemSecureStoreHandlers } from './system-secure-store-handlers'
 import { registerSystemShellHandlers } from './system-shell-handlers'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
@@ -1452,29 +1444,10 @@ export class CommonChannelModule extends BaseModule {
           includeIcon: payload?.includeIcon === true
         })
       }),
-      transport.on<SecureValueGetRequest, string | null>(
-        AppEvents.system.getSecureValue,
-        async (payload) => {
-          const key = typeof payload?.key === 'string' ? payload.key : ''
-          if (!key) {
-            return null
-          }
-          return await this.getSecureValue(key)
-        }
-      ),
-      transport.on<SecureValueSetRequest, void>(
-        AppEvents.system.setSecureValue,
-        async (payload) => {
-          const key = typeof payload?.key === 'string' ? payload.key : ''
-          if (!key) {
-            throw new Error('Missing secure storage key')
-          }
-          await this.setSecureValue(key, payload?.value ?? null)
-        }
-      ),
-      transport.on<void, SecureStoreHealthResponse>(AppEvents.system.getSecureStoreHealth, () =>
-        getSecureStoreHealth(this.getSecureStoreRootPath())
-      ),
+      ...registerSystemSecureStoreHandlers(transport, {
+        rootPath: () => touchApp.rootPath,
+        logger: log
+      }),
       ...registerSystemShellHandlers(transport, {
         configRootPath: () => storageModule.filePath,
         logger: log,
@@ -1845,46 +1818,6 @@ export class CommonChannelModule extends BaseModule {
 
     readFileInflight.set(resolvedPath, task)
     return await task
-  }
-
-  private getSecureStoreRootPath(): string {
-    const touchApp = this.touchApp
-    if (!touchApp) {
-      throw new Error('App context is not ready')
-    }
-    return touchApp.rootPath
-  }
-
-  private async getSecureValue(rawKey: string): Promise<string | null> {
-    if (!isSecureStoreAvailable(this.getSecureStoreRootPath())) {
-      return null
-    }
-
-    return await getSecureStoreValue(this.getSecureStoreRootPath(), rawKey, (message, error) => {
-      log.warn(`[CommonChannel] ${message}`, {
-        error: toErrorMessage(error)
-      })
-    })
-  }
-
-  private async setSecureValue(rawKey: string, value: string | null): Promise<void> {
-    if (!isSecureStoreAvailable(this.getSecureStoreRootPath())) {
-      throw new Error('Secure storage is unavailable')
-    }
-
-    const persisted = await setSecureStoreValue(
-      this.getSecureStoreRootPath(),
-      rawKey,
-      value,
-      (message, error) => {
-        log.warn(`[CommonChannel] ${message}`, {
-          error: toErrorMessage(error)
-        })
-      }
-    )
-    if (!persisted) {
-      throw new Error('Secure storage is unavailable')
-    }
   }
 
   onDestroy(): MaybePromise<void> {

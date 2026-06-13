@@ -5,6 +5,15 @@
 
 ## 2026-06-13
 
+### ref(core-app): extract CommonChannel secure store handlers
+
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/channel/system-secure-store-handlers.ts`
+- `apps/core-app/src/main/channel/system-secure-store-handlers.test.ts`
+  - Extracted secure value get/set and secure-store health transport handlers from `CommonChannelModule` into a focused registration helper.
+  - Preserved existing missing-key, unavailable-store and warning-log behavior while reducing CommonChannel private helper surface.
+  - 验证：focused CommonChannel/system-secure-store Vitest, scoped ESLint and CoreApp node typecheck.
+
 ### ref(core-app): extract CommonChannel system shell handlers
 
 - `apps/core-app/src/main/channel/common.ts`
