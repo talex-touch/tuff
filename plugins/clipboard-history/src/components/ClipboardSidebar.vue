@@ -65,6 +65,7 @@ function onScroll(event: Event): void {
             <button
               class="ClipboardItem"
               :class="{ active: item.id === selectedId }"
+              :data-clipboard-id="item.id"
               type="button"
               @click="emit('select', item)"
             >
@@ -105,17 +106,17 @@ function onScroll(event: Event): void {
   min-width: 0;
   height: 100%;
   overflow-y: auto;
-  padding: 12px 10px 20px;
-  background: transparent;
+  padding: 6px 8px 12px;
+  background: var(--clipboard-surface-subtle);
 }
 
 .section + .section {
-  margin-top: 14px;
+  margin-top: 8px;
 }
 
 .section-list {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   margin: 0;
   padding: 0;
 }
@@ -142,8 +143,8 @@ function onScroll(event: Event): void {
   font-size: 1.3rem;
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--clipboard-surface-ghost, rgba(148, 163, 184, 0.12)) 60%, transparent),
-    color-mix(in srgb, var(--clipboard-surface-ghost, rgba(148, 163, 184, 0.12)) 90%, transparent)
+    color-mix(in srgb, var(--clipboard-surface-ghost) 60%, transparent),
+    color-mix(in srgb, var(--clipboard-surface-ghost) 90%, transparent)
   );
 }
 
@@ -151,8 +152,8 @@ function onScroll(event: Event): void {
   position: sticky;
   top: 0;
   z-index: 5;
-  margin-bottom: 6px;
-  padding: 6px 8px;
+  margin-bottom: 3px;
+  padding: 4px 8px;
   backdrop-filter: blur(18px) saturate(180%);
   background: color-mix(in srgb, var(--clipboard-surface-base) 72%, transparent);
 }
@@ -169,11 +170,12 @@ function onScroll(event: Event): void {
   width: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 10px 12px;
+  min-height: 46px;
+  padding: 5px 8px;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: 8px;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -190,18 +192,22 @@ function onScroll(event: Event): void {
 .ClipboardItem.active,
 .ClipboardItem.active:hover {
   border-color: var(--clipboard-border-strong);
-  background: color-mix(in srgb, var(--clipboard-color-accent, #6366f1) 14%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--clipboard-color-accent) 12%,
+    var(--clipboard-surface-base)
+  );
 }
 
 .ClipboardItem:focus-visible {
-  outline: 2px solid var(--clipboard-color-accent, #6366f1);
+  outline: 2px solid var(--clipboard-color-accent);
   outline-offset: 2px;
 }
 
 .item-icon {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -226,7 +232,7 @@ function onScroll(event: Event): void {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .item-preview {
@@ -235,7 +241,7 @@ function onScroll(event: Event): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 600;
   color: var(--clipboard-text-primary);
 }
@@ -245,7 +251,7 @@ function onScroll(event: Event): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--clipboard-text-muted);
 }
 

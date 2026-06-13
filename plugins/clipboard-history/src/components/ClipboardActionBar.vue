@@ -86,21 +86,21 @@ const applyLabel = computed(() => {
   z-index: 1;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
+  gap: 12px;
+  width: auto;
   min-width: 0;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   white-space: nowrap;
 }
 
 .footer-actions {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   justify-content: flex-end;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
   white-space: nowrap;
 }
@@ -110,10 +110,10 @@ const applyLabel = computed(() => {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 30px;
   min-width: 0;
   padding: 0 10px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--clipboard-border-color) 60%, transparent);
   background: color-mix(in srgb, var(--clipboard-surface-strong) 90%, transparent);
   color: var(--clipboard-text-primary);
@@ -128,7 +128,7 @@ const applyLabel = computed(() => {
 .surface-button:hover:enabled {
   background: color-mix(in srgb, currentColor 10%, transparent);
   border-color: color-mix(in srgb, currentColor 45%, var(--clipboard-border-color));
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--tx-box-shadow-lighter, none);
 }
 
 .surface-button:disabled {
@@ -137,33 +137,32 @@ const applyLabel = computed(() => {
 }
 
 .surface-button.primary {
-  border-color: color-mix(in srgb, var(--clipboard-color-accent, #6366f1) 70%, transparent);
-  background: color-mix(in srgb, var(--clipboard-color-accent, #6366f1) 12%, transparent);
-  color: var(--clipboard-color-accent-strong, var(--clipboard-color-accent, #6366f1));
+  border-color: color-mix(in srgb, var(--clipboard-color-accent) 70%, transparent);
+  background: color-mix(in srgb, var(--clipboard-color-accent) 12%, transparent);
+  color: var(--clipboard-color-accent-strong);
 }
 
 .surface-button.primary:hover:enabled {
-  border-color: var(--clipboard-color-accent, #6366f1);
-  color: var(--clipboard-color-accent-strong, var(--clipboard-color-accent, #6366f1));
+  border-color: var(--clipboard-color-accent);
+  color: var(--clipboard-color-accent-strong);
 }
 
 .surface-button.danger {
-  color: var(--clipboard-color-danger, #ef4444);
+  color: var(--clipboard-color-danger);
 }
 
 .surface-button.with-shortcut {
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  flex: 1 1 148px;
-  min-width: min(100%, 148px);
-  padding: 5px 10px;
+  min-width: 120px;
+  padding: 4px 10px;
   white-space: nowrap;
 }
 
 .button-shortcut {
   margin-left: 4px;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--clipboard-text-secondary);
   line-height: 1;
   overflow: hidden;
@@ -171,25 +170,21 @@ const applyLabel = computed(() => {
 }
 
 .button-text {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .clipboard-action-bar {
-    align-items: stretch;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .footer-actions {
     width: 100%;
-    justify-content: stretch;
-  }
-
-  .footer-actions .surface-button,
-  .surface-button.with-shortcut {
-    flex: 1 1 0;
+    justify-content: flex-start;
   }
 }
 </style>

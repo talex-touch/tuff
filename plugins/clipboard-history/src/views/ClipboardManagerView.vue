@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { PluginClipboardItem } from '@talex-touch/utils/plugin/sdk/types'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useBox } from '@talex-touch/utils/plugin/sdk/box-sdk'
 import { useClipboard } from '@talex-touch/utils/plugin/sdk/clipboard'
 import ClipboardActionBar from '~/components/ClipboardActionBar.vue'
 import ClipboardDetail from '~/components/ClipboardDetail.vue'
@@ -14,6 +15,7 @@ import {
 } from '~/utils/clipboard-items'
 
 const clipboard = useClipboard()
+const box = useBox()
 const filter = ref<ClipboardFilter>('all')
 const items = ref<PluginClipboardItem[]>([])
 const selectedId = ref<number | null>(null)
@@ -27,6 +29,9 @@ const copyPending = ref(false)
 const applyPending = ref(false)
 const favoritePending = ref(false)
 const deletePending = ref(false)
+const pageRoot = ref<HTMLElement | null>(null)
+const resolvedImageUrls = ref<Record<number, string>>({})
+const resolvingImageIds = ref<Record<number, boolean>>({})
 
 let unsubscribeClipboard: (() => void) | null = null
 
@@ -39,6 +44,14 @@ const selectedItem = computed<PluginClipboardItem | null>(() => {
   }
   return items.value.find(item => item.id === selectedId.value) ?? null
 })
+const selectedResolvedImageUrl = computed(() => {
+  const id = selectedItem.value?.id
+  return typeof id === 'number' ? (resolvedImageUrls.value[id] ?? null) : null
+})
+const resolvingSelectedImageUrl = computed(() => {
+  const id = selectedItem.value?.id
+  return typeof id === 'number' && resolvingImageIds.value[id] === true
+})
 
 const filterOptions: Array<{ key: ClipboardFilter; label: string }> = [
   { key: 'all', label: '全部内容' },
@@ -47,6 +60,15 @@ const filterOptions: Array<{ key: ClipboardFilter; label: string }> = [
   { key: 'files', label: '文件' },
   { key: 'favorite', label: '收藏' },
 ]
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName.toLowerCase()
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable
+}
 
 function normalizeIncomingItems(nextItems: PluginClipboardItem[]): PluginClipboardItem[] {
   return nextItems.filter((item): item is PluginClipboardItem => typeof item.id === 'number')
@@ -86,9 +108,93 @@ function mergePageItems(nextItems: PluginClipboardItem[]): void {
   })
 }
 
-function syncSelection(removedId?: number | null): void {
-  const nextId = selectNextClipboardItemId(items.value, selectedId.value, removedId)
+function syncSelection(removedId?: number | null, removedIndex?: number | null): void {
+  const nextId = selectNextClipboardItemId(items.value, selectedId.value, removedId, removedIndex)
   selectedId.value = Number.isFinite(nextId) ? nextId : null
+}
+
+function patchItemImageUrl(id: number, url: string): void {
+  items.value = items.value.map((item) => {
+    if (item.id !== id || item.type !== 'image') {
+      return item
+    }
+
+    return {
+      ...item,
+      meta: {
+        ...(item.meta ?? {}),
+        image_original_url: url,
+      },
+    }
+  })
+}
+
+async function resolveSelectedImageUrl(item: PluginClipboardItem | null): Promise<void> {
+  if (!item || item.type !== 'image' || typeof item.id !== 'number') {
+    return
+  }
+
+  if (resolvedImageUrls.value[item.id] || resolvingImageIds.value[item.id]) {
+    return
+  }
+
+  resolvingImageIds.value = {
+    ...resolvingImageIds.value,
+    [item.id]: true,
+  }
+
+  try {
+    const url = await clipboard.getHistoryImageUrl(item.id)
+    if (!url) {
+      return
+    }
+
+    resolvedImageUrls.value = {
+      ...resolvedImageUrls.value,
+      [item.id]: url,
+    }
+    patchItemImageUrl(item.id, url)
+  }
+  catch {
+    // Detail still falls back to the lightweight thumbnail.
+  }
+  finally {
+    const next = { ...resolvingImageIds.value }
+    delete next[item.id]
+    resolvingImageIds.value = next
+  }
+}
+
+function moveSelection(delta: 1 | -1): void {
+  const selectableItems = items.value.filter((item): item is PluginClipboardItem & { id: number } => typeof item.id === 'number')
+  if (selectableItems.length === 0) {
+    selectedId.value = null
+    return
+  }
+
+  const currentIndex = selectableItems.findIndex(item => item.id === selectedId.value)
+  const fallbackIndex = delta > 0 ? 0 : selectableItems.length - 1
+  const nextIndex = currentIndex < 0
+    ? fallbackIndex
+    : Math.min(selectableItems.length - 1, Math.max(0, currentIndex + delta))
+
+  selectedId.value = selectableItems[nextIndex]?.id ?? null
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) {
+    return
+  }
+  if (isEditableTarget(event.target)) {
+    return
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+  moveSelection(event.key === 'ArrowDown' ? 1 : -1)
 }
 
 async function loadHistory(options: { reset?: boolean } = {}): Promise<void> {
@@ -150,7 +256,7 @@ async function handleCopy(): Promise<void> {
 
   const payload = buildClipboardWritePayload(
     selectedItem.value,
-    resolveDetailImageSrc(selectedItem.value),
+    selectedResolvedImageUrl.value ?? resolveDetailImageSrc(selectedItem.value),
   )
   if (!payload) {
     return
@@ -162,6 +268,22 @@ async function handleCopy(): Promise<void> {
   }
   finally {
     copyPending.value = false
+  }
+}
+
+async function handleCopyText(value: string): Promise<void> {
+  if (!value) {
+    return
+  }
+
+  errorMessage.value = ''
+  try {
+    await clipboard.write({ text: value })
+  }
+  catch (error) {
+    errorMessage.value = error instanceof Error && error.message
+      ? error.message
+      : '复制文本失败'
   }
 }
 
@@ -200,9 +322,10 @@ async function handleToggleFavorite(): Promise<void> {
     })
 
     if (filter.value === 'favorite' && selectedItem.value.isFavorite) {
+      const removedIndex = items.value.findIndex(item => item.id === targetId)
       items.value = items.value.filter(item => item.id !== targetId)
       total.value = Math.max(0, total.value - 1)
-      syncSelection(targetId)
+      syncSelection(targetId, removedIndex)
       return
     }
 
@@ -227,12 +350,13 @@ async function handleDelete(): Promise<void> {
 
   deletePending.value = true
   const removedId = selectedItem.value.id
+  const removedIndex = items.value.findIndex(item => item.id === removedId)
 
   try {
     await clipboard.history.deleteItem({ id: removedId })
     items.value = items.value.filter(item => item.id !== removedId)
     total.value = Math.max(0, total.value - 1)
-    syncSelection(removedId)
+    syncSelection(removedId, removedIndex)
   }
   finally {
     deletePending.value = false
@@ -240,6 +364,8 @@ async function handleDelete(): Promise<void> {
 }
 
 onMounted(async () => {
+  document.addEventListener('keydown', handleKeydown, true)
+  void box.expand({ forceMax: true }).catch(() => {})
   await loadHistory({ reset: true })
 
   unsubscribeClipboard = clipboard.history.onDidChange(async () => {
@@ -248,6 +374,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown, true)
   unsubscribeClipboard?.()
 })
 
@@ -255,10 +382,26 @@ watch(filter, async () => {
   page.value = 1
   await loadHistory({ reset: true })
 })
+
+watch(selectedId, async (id) => {
+  if (id === null) {
+    return
+  }
+
+  await nextTick()
+  const selectedElement = pageRoot.value?.querySelector(`[data-clipboard-id="${id}"]`)
+  if (selectedElement instanceof HTMLElement && typeof selectedElement.scrollIntoView === 'function') {
+    selectedElement.scrollIntoView({ block: 'nearest' })
+  }
+})
+
+watch(selectedItem, (item) => {
+  void resolveSelectedImageUrl(item)
+}, { immediate: true })
 </script>
 
 <template>
-  <main class="ClipboardManagerPage">
+  <main ref="pageRoot" class="ClipboardManagerPage" tabindex="-1">
     <div class="ClipboardPageHolder manager-holder" :class="{ blurred: loading && hasItems }">
       <div v-if="hasItems" class="ClipboardPageHolder-Main">
         <aside class="holder-aside">
@@ -277,7 +420,12 @@ watch(filter, async () => {
           <div v-if="errorMessage" class="error-banner inline-error">
             {{ errorMessage }}
           </div>
-          <ClipboardDetail :item="selectedItem" />
+          <ClipboardDetail
+            :item="selectedItem"
+            :resolved-image-url="selectedResolvedImageUrl"
+            :resolving-image-url="resolvingSelectedImageUrl"
+            @copy-text="handleCopyText"
+          />
         </section>
       </div>
 
@@ -339,6 +487,8 @@ watch(filter, async () => {
   position: relative;
   height: 100%;
   min-height: 0;
+  background: var(--clipboard-surface-base);
+  color: var(--clipboard-text-primary);
 }
 
 .ClipboardPageHolder {
@@ -374,10 +524,12 @@ watch(filter, async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--clipboard-surface-base);
 }
 
 .holder-aside {
   border-right: 1px solid var(--clipboard-border-color);
+  background: var(--clipboard-surface-subtle);
 }
 
 .empty-canvas {
@@ -408,8 +560,8 @@ watch(filter, async () => {
   font-size: 2.4rem;
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--clipboard-surface-ghost, rgba(148, 163, 184, 0.12)) 60%, transparent),
-    color-mix(in srgb, var(--clipboard-surface-ghost, rgba(148, 163, 184, 0.12)) 90%, transparent)
+    color-mix(in srgb, var(--clipboard-surface-ghost) 60%, transparent),
+    color-mix(in srgb, var(--clipboard-surface-ghost) 90%, transparent)
   );
 }
 
@@ -432,14 +584,13 @@ watch(filter, async () => {
   z-index: 10;
   width: 100%;
   flex: 0 0 auto;
-  max-height: 136px;
-  padding: 8px 12px;
+  min-height: 42px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
   background: transparent;
-  overflow: hidden;
 }
 
 .ClipboardPageHolder-Footer::before {
@@ -468,7 +619,7 @@ watch(filter, async () => {
   gap: 10px;
   width: 100%;
   min-width: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .footer-left {
@@ -477,7 +628,7 @@ watch(filter, async () => {
 }
 
 .footer-right {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -505,9 +656,9 @@ watch(filter, async () => {
 .error-banner {
   padding: 14px 18px;
   border-radius: 16px;
-  color: color-mix(in srgb, var(--clipboard-color-danger, #ef4444) 92%, #7f1d1d);
+  color: var(--clipboard-color-danger);
   background: color-mix(in srgb, var(--clipboard-color-danger-soft-fallback) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--clipboard-color-danger, #ef4444) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--clipboard-color-danger) 20%, transparent);
 }
 
 .inline-error {
@@ -521,14 +672,14 @@ watch(filter, async () => {
 
 .record-count {
   color: var(--clipboard-text-secondary);
-  font-size: 0.92rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: nowrap;
   overflow: auto hidden;
   min-width: 0;
@@ -541,23 +692,24 @@ watch(filter, async () => {
 
 .filter-chip {
   flex: 0 0 auto;
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--clipboard-border-color);
   border-radius: 999px;
   background: var(--clipboard-surface-subtle);
   color: var(--clipboard-text-secondary);
   cursor: pointer;
+  font-size: 0.76rem;
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
 .filter-chip.active {
-  border-color: var(--clipboard-color-accent, #6366f1);
-  color: var(--clipboard-color-accent-strong, var(--clipboard-color-accent, #6366f1));
-  background: color-mix(in srgb, var(--clipboard-color-accent, #6366f1) 14%, transparent);
+  border-color: var(--clipboard-color-accent);
+  color: var(--clipboard-color-accent-strong);
+  background: color-mix(in srgb, var(--clipboard-color-accent) 14%, transparent);
 }
 
-@media (max-width: 980px) {
+@media (max-width: 640px) {
   .ClipboardPageHolder-Main {
     grid-template-columns: 1fr;
     grid-template-rows: 320px minmax(0, 1fr);

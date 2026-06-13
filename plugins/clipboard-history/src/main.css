@@ -1,48 +1,90 @@
 :root {
   color-scheme: light;
-  --clipboard-color-accent: var(--tuff-color-primary, var(--tuff-color-info, #6366f1));
-  --clipboard-color-accent-strong: var(
-    --tuff-color-primary-dark-2,
-    var(--clipboard-color-accent)
-  );
-  --clipboard-color-danger: var(--tuff-color-danger, #ef4444);
-  --clipboard-color-danger-soft-fallback: rgba(248, 113, 113, 0.12);
-  --clipboard-text-primary: var(--tuff-text-color-primary, #1f2937);
-  --clipboard-text-secondary: var(--tuff-text-color-secondary, #475569);
-  --clipboard-text-muted: var(--tuff-text-color-subtle, #94a3b8);
-  --clipboard-text-disabled: var(--tuff-text-color-disabled, #a1acc5);
-  --clipboard-surface-base: var(--tuff-bg-color, rgba(255, 255, 255, 0.92));
-  --clipboard-surface-elevated: color-mix(
-    in srgb,
-    var(--clipboard-surface-base) 92%,
-    rgba(255, 255, 255, 0.08)
-  );
-  --clipboard-surface-subtle: color-mix(
-    in srgb,
-    var(--clipboard-surface-base) 88%,
-    rgba(255, 255, 255, 0.12)
-  );
-  --clipboard-surface-ghost: color-mix(
-    in srgb,
-    var(--clipboard-surface-base) 84%,
-    rgba(148, 163, 184, 0.16)
-  );
-  --clipboard-surface-strong: color-mix(
-    in srgb,
-    var(--clipboard-surface-base) 94%,
-    rgba(15, 23, 42, 0.06)
-  );
-  --clipboard-border-color: var(--tuff-border-color, rgba(148, 163, 184, 0.24));
-  --clipboard-border-strong: var(--tuff-border-color-strong, rgba(148, 163, 184, 0.38));
-  font-family:
-    "SF Pro Text",
-    "PingFang SC",
-    "Microsoft YaHei",
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-  background: #f5f7fb;
-  color: #1b2330;
+
+  --tx-color-primary: var(--tuff-color-primary, #409eff);
+  --tx-color-primary-light-3: var(--tuff-color-primary-light-3, #79bbff);
+  --tx-color-primary-light-5: var(--tuff-color-primary-light-5, #a0cfff);
+  --tx-color-primary-light-7: var(--tuff-color-primary-light-7, #c6e2ff);
+  --tx-color-primary-light-9: var(--tuff-color-primary-light-9, #ecf5ff);
+  --tx-color-primary-dark-2: var(--tuff-color-primary-dark-2, #337ecc);
+  --tx-color-danger: var(--tuff-color-danger, #f56c6c);
+  --tx-color-danger-light-9: var(--tuff-color-danger-light-9, #fef0f0);
+  --tx-text-color-primary: var(--tuff-text-color-primary, #303133);
+  --tx-text-color-regular: var(--tuff-text-color-regular, #606266);
+  --tx-text-color-secondary: var(--tuff-text-color-secondary, #909399);
+  --tx-text-color-placeholder: var(--tuff-text-color-placeholder, #a8abb2);
+  --tx-text-color-disabled: var(--tuff-text-color-disabled, #c0c4cc);
+  --tx-border-color: var(--tuff-border-color, #dcdfe6);
+  --tx-border-color-light: var(--tuff-border-color-light, #e4e7ed);
+  --tx-border-color-lighter: var(--tuff-border-color-lighter, #ebeef5);
+  --tx-border-color-extra-light: var(--tuff-border-color-extra-light, #f2f6fc);
+  --tx-fill-color: var(--tuff-fill-color, #f0f2f5);
+  --tx-fill-color-light: var(--tuff-fill-color-light, #f5f7fa);
+  --tx-fill-color-lighter: var(--tuff-fill-color-lighter, #fafafa);
+  --tx-fill-color-blank: var(--tuff-fill-color-blank, #ffffff);
+  --tx-bg-color: var(--tuff-bg-color, #ffffff);
+  --tx-bg-color-page: var(--tuff-bg-color-page, #f2f3f5);
+  --tx-bg-color-overlay: var(--tuff-bg-color-overlay, #ffffff);
+  --tx-font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+
+  --clipboard-color-accent: var(--tx-color-primary);
+  --clipboard-color-accent-strong: var(--tx-color-primary-dark-2);
+  --clipboard-color-danger: var(--tx-color-danger);
+  --clipboard-color-danger-soft-fallback: var(--tx-color-danger-light-9);
+  --clipboard-text-primary: var(--tx-text-color-primary);
+  --clipboard-text-secondary: var(--tx-text-color-regular);
+  --clipboard-text-muted: var(--tx-text-color-secondary);
+  --clipboard-text-disabled: var(--tx-text-color-disabled);
+  --clipboard-surface-base: var(--tx-bg-color);
+  --clipboard-surface-elevated: var(--tx-bg-color-overlay);
+  --clipboard-surface-subtle: var(--tx-fill-color-light);
+  --clipboard-surface-ghost: var(--tx-fill-color);
+  --clipboard-surface-strong: var(--tx-fill-color-lighter);
+  --clipboard-border-color: var(--tx-border-color);
+  --clipboard-border-strong: var(--tx-border-color-dark, var(--tx-border-color));
+  font-family: var(--tx-font-family);
+  background: var(--tx-bg-color-page);
+  color: var(--tx-text-color-primary);
+}
+
+:root.dark,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --tx-color-primary-light-3: var(--tuff-color-primary-light-3, #3375b9);
+  --tx-color-primary-light-5: var(--tuff-color-primary-light-5, #2a598a);
+  --tx-color-primary-light-7: var(--tuff-color-primary-light-7, #213d5b);
+  --tx-color-primary-light-9: var(--tuff-color-primary-light-9, #18222c);
+  --tx-color-primary-dark-2: var(--tuff-color-primary-dark-2, #66b1ff);
+  --tx-color-danger-light-9: var(--tuff-color-danger-light-9, #4e1f1f);
+  --tx-text-color-primary: var(--tuff-text-color-primary, #e5eaf3);
+  --tx-text-color-regular: var(--tuff-text-color-regular, #cfd3dc);
+  --tx-text-color-secondary: var(--tuff-text-color-secondary, #a3a6ad);
+  --tx-text-color-placeholder: var(--tuff-text-color-placeholder, #8d9095);
+  --tx-text-color-disabled: var(--tuff-text-color-disabled, #6c6e72);
+  --tx-border-color: var(--tuff-border-color, #4c4d4f);
+  --tx-border-color-light: var(--tuff-border-color-light, #414243);
+  --tx-border-color-lighter: var(--tuff-border-color-lighter, #363637);
+  --tx-border-color-extra-light: var(--tuff-border-color-extra-light, #2b2b2c);
+  --tx-bg-color: var(--tuff-bg-color, #141414);
+  --tx-bg-color-page: var(--tuff-bg-color-page, #0a0a0a);
+  --tx-bg-color-overlay: var(--tuff-bg-color-overlay, #1d1e1f);
+  --tx-fill-color: var(--tuff-fill-color, #303030);
+  --tx-fill-color-light: var(--tuff-fill-color-light, #262727);
+  --tx-fill-color-lighter: var(--tuff-fill-color-lighter, #1d1d1d);
+  --tx-fill-color-blank: var(--tuff-fill-color-blank, transparent);
+  --clipboard-color-accent-strong: var(--tx-color-primary-dark-2);
+  --clipboard-text-primary: var(--tx-text-color-primary);
+  --clipboard-text-secondary: var(--tx-text-color-regular);
+  --clipboard-text-muted: var(--tx-text-color-secondary);
+  --clipboard-text-disabled: var(--tx-text-color-disabled);
+  --clipboard-surface-base: var(--tx-bg-color);
+  --clipboard-surface-elevated: var(--tx-bg-color-overlay);
+  --clipboard-surface-subtle: var(--tx-fill-color-light);
+  --clipboard-surface-ghost: var(--tx-fill-color);
+  --clipboard-surface-strong: var(--tx-fill-color-lighter);
+  --clipboard-border-color: var(--tx-border-color);
+  --clipboard-border-strong: var(--tx-border-color-dark, var(--tx-border-color));
 }
 
 html,
@@ -51,10 +93,12 @@ body,
   margin: 0;
   width: 100%;
   height: 100%;
+  background: var(--clipboard-surface-base);
+  color: var(--clipboard-text-primary);
 }
 
 body {
-  background: transparent;
+  background: var(--clipboard-surface-base);
   color: var(--clipboard-text-primary);
 }
 
