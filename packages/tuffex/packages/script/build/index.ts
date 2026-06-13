@@ -17,6 +17,7 @@ const __dirname = dirname(__filename)
 
 const distPath = resolve(__dirname, '../../../dist')
 const componentPath =resolve(__dirname, '../../components')
+const baseStyleSourcePath = resolve(componentPath, 'style/index.scss')
 
 export const removeDist = () => {
   return delPath(distPath);
@@ -44,9 +45,28 @@ export const buildComponent = async () => {
   return run("pnpm run build", componentPath);
 }
 
+async function readBaseStyle(): Promise<string> {
+  const generatedCandidates = [
+    resolve(distPath, 'es/index.css'),
+    resolve(distPath, 'es/base.css'),
+    resolve(distPath, 'lib/index.css'),
+    resolve(distPath, 'lib/base.css'),
+  ]
+
+  for (const candidate of generatedCandidates) {
+    try {
+      return await readFile(candidate, 'utf-8')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+
+  return sassLang.compile(baseStyleSourcePath).css
+}
+
 export const buildStyleEntry = async () => {
   await mkdir(distPath, { recursive: true })
-  const baseStyle = await readFile(resolve(distPath, 'es/index.css'), 'utf-8')
+  const baseStyle = await readBaseStyle()
   await Promise.all([
     writeFile(resolve(distPath, 'es/base.css'), baseStyle),
     writeFile(resolve(distPath, 'lib/base.css'), baseStyle),
