@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
+import { hasWindow } from '@talex-touch/utils/env'
 import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
@@ -46,8 +47,10 @@ const { data: componentDocsPayload, pending: componentDocsPending } = await useT
 )
 const route = useRoute()
 const { t, locale } = useI18n()
+const navRef = ref<HTMLElement | null>(null)
 const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
+let activeScrollFrame: number | null = null
 
 function stripCjk(value: string) {
   return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
@@ -630,6 +633,46 @@ function isSectionExpanded(item: any) {
   return expandedSections.value[key] ?? true
 }
 
+function findScrollableParent(element: HTMLElement) {
+  let current = element.parentElement
+  while (current && current !== document.body) {
+    const style = window.getComputedStyle(current)
+    const canScrollY = ['auto', 'scroll', 'overlay'].includes(style.overflowY)
+    if (canScrollY && current.scrollHeight > current.clientHeight)
+      return current
+    current = current.parentElement
+  }
+  return null
+}
+
+function scrollActiveLinkIntoView() {
+  if (!hasWindow() || !navRef.value)
+    return
+
+  if (activeScrollFrame !== null)
+    window.cancelAnimationFrame(activeScrollFrame)
+
+  activeScrollFrame = window.requestAnimationFrame(() => {
+    activeScrollFrame = null
+    const activeLink = navRef.value?.querySelector<HTMLElement>('.docs-nav-link.is-active')
+    if (!activeLink)
+      return
+
+    const scrollContainer = activeLink.closest<HTMLElement>('.docs-sidebar') ?? findScrollableParent(activeLink)
+    if (!scrollContainer) {
+      activeLink.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' })
+      return
+    }
+
+    const linkRect = activeLink.getBoundingClientRect()
+    const containerRect = scrollContainer.getBoundingClientRect()
+    const offsetTop = linkRect.top - containerRect.top
+    const targetTop = scrollContainer.scrollTop + offsetTop - scrollContainer.clientHeight / 2 + activeLink.clientHeight / 2
+
+    scrollContainer.scrollTo({ top: Math.max(0, targetTop), behavior: 'auto' })
+  })
+}
+
 // Initialize all sections as expanded by default
 watch(
   () => [sections.value, locale.value],
@@ -654,10 +697,26 @@ watch(
     }
   },
 )
+
+watch(
+  () => [normalizedRoutePath.value, sidebarPending.value, activeTopSection.value, sections.value],
+  async () => {
+    if (sidebarPending.value)
+      return
+    await nextTick()
+    scrollActiveLinkIntoView()
+  },
+  { immediate: true, flush: 'post' },
+)
+
+onBeforeUnmount(() => {
+  if (hasWindow() && activeScrollFrame !== null)
+    window.cancelAnimationFrame(activeScrollFrame)
+})
 </script>
 
 <template>
-  <nav class="docs-nav relative flex flex-col">
+  <nav ref="navRef" class="docs-nav relative flex flex-col">
     <!-- Top-level section tabs (sticky within sidebar) -->
     <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm">
       <div class="flex gap-1 rounded-xl p-1">
