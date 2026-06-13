@@ -9,9 +9,10 @@ const require = createRequire(import.meta.url)
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const appRoot = path.resolve(__dirname, '..')
-const markerVersion = 4
+const markerVersion = 5
 const defaultDevBundleIdentifier = 'com.tagzxia.app.tuff.dev'
 const defaultDevBundleName = 'Tuff Dev'
+const signArgs = ['--force', '--sign', '-', '--timestamp=none']
 
 function readNonEmptyEnv(name, fallback) {
   const value = process.env[name]?.trim()
@@ -134,12 +135,105 @@ function patchDevAppPlist(devApp, options) {
   }
 }
 
+function listChildPaths(root) {
+  if (!fs.existsSync(root)) return []
+
+  return fs.readdirSync(root).map((entry) => path.join(root, entry))
+}
+
+function findBundlePaths(root, extension) {
+  const pending = [root]
+  const results = []
+
+  while (pending.length > 0) {
+    const current = pending.pop()
+    if (!current || !fs.existsSync(current)) continue
+
+    const stat = fs.lstatSync(current)
+    if (!stat.isDirectory()) continue
+
+    if (current.endsWith(extension)) {
+      results.push(current)
+      continue
+    }
+
+    for (const child of listChildPaths(current)) {
+      if (fs.lstatSync(child).isDirectory()) pending.push(child)
+    }
+  }
+
+  return results
+}
+
+function replaceWithSymlink(targetPath, linkTarget) {
+  if (fs.existsSync(targetPath)) {
+    const stat = fs.lstatSync(targetPath)
+    if (stat.isSymbolicLink() && fs.readlinkSync(targetPath) === linkTarget) return
+    fs.rmSync(targetPath, { recursive: true, force: true })
+  }
+
+  fs.symlinkSync(linkTarget, targetPath)
+}
+
+function normalizeVersionedFramework(frameworkPath) {
+  const versionPath = path.join(frameworkPath, 'Versions', 'A')
+  if (!fs.existsSync(versionPath)) return
+
+  replaceWithSymlink(path.join(frameworkPath, 'Versions', 'Current'), 'A')
+
+  for (const versionEntry of fs.readdirSync(versionPath)) {
+    replaceWithSymlink(
+      path.join(frameworkPath, versionEntry),
+      path.join('Versions', 'Current', versionEntry)
+    )
+  }
+}
+
+function normalizeDevAppFrameworks(devApp) {
+  const frameworksRoot = path.join(devApp, 'Contents', 'Frameworks')
+  for (const frameworkPath of findBundlePaths(frameworksRoot, '.framework')) {
+    normalizeVersionedFramework(frameworkPath)
+  }
+}
+
+function signPath(targetPath) {
+  execFileSync('codesign', [...signArgs, targetPath], { stdio: 'pipe' })
+}
+
+function signBundlePaths(paths) {
+  const sortedPaths = [...new Set(paths)]
+    .filter((targetPath) => fs.existsSync(targetPath))
+    .sort((a, b) => b.length - a.length)
+
+  for (const targetPath of sortedPaths) {
+    signPath(targetPath)
+  }
+}
+
+function removeQuarantine(targetPath) {
+  try {
+    execFileSync('xattr', ['-dr', 'com.apple.quarantine', targetPath], { stdio: 'pipe' })
+  } catch {
+    // The attribute is optional; signing remains the source of truth for this bundle.
+  }
+}
+
 function signDevApp(devApp) {
   try {
-    execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', devApp], {
+    normalizeDevAppFrameworks(devApp)
+    removeQuarantine(devApp)
+
+    const frameworksRoot = path.join(devApp, 'Contents', 'Frameworks')
+    const helperApps = findBundlePaths(frameworksRoot, '.app')
+    const frameworkVersions = findBundlePaths(frameworksRoot, '.framework').map((frameworkPath) =>
+      path.join(frameworkPath, 'Versions', 'A')
+    )
+
+    signBundlePaths([...helperApps, ...frameworkVersions])
+    execFileSync('codesign', [...signArgs, devApp], {
       stdio: 'pipe'
     })
-    execFileSync('codesign', ['--verify', '--deep', '--strict', devApp], {
+    execFileSync('codesign', ['--verify', '--strict', devApp], {
       stdio: 'pipe'
     })
   } catch (error) {
