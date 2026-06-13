@@ -30,6 +30,7 @@ import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/tran
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { vDraggable } from 'vue-draggable-plus'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -110,6 +111,11 @@ const searchProviderConfigLoading = ref(false)
 const searchProviderConfigSaving = ref(false)
 const searchProviderConfigDialogVisible = ref(false)
 const searchProviderConfigDialogSource = ref<HTMLElement | null>(null)
+const sourceDiagnosticDialogVisible = ref(false)
+const sourceDiagnosticDialogSource = ref<HTMLElement | null>(null)
+const selectedSourceDiagnosticId = ref<string | null>(null)
+const BROWSER_BOOKMARKS_SOURCE_ID = 'browser-bookmarks'
+const BROWSER_BOOKMARKS_PROVIDER_ID = 'touch-browser-data.browser-bookmarks'
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
@@ -127,6 +133,56 @@ const searchProviderSourceIdByProviderId = computed(() => {
   )
   return new Map(entries)
 })
+const browserBookmarksSource = computed(() =>
+  indexedSourceDiagnosticsById.value.get(BROWSER_BOOKMARKS_SOURCE_ID)
+)
+const browserBookmarksProvider = computed(() =>
+  searchProviderConfigs.value.find(
+    (provider) => provider.providerId === BROWSER_BOOKMARKS_PROVIDER_ID
+  )
+)
+const browserBookmarksBusy = computed(
+  () =>
+    searchProviderConfigSaving.value ||
+    sourceMaintenanceAction.value[BROWSER_BOOKMARKS_SOURCE_ID] !== undefined
+)
+const browserBookmarksConsentAvailable = computed(() =>
+  Boolean(browserBookmarksProvider.value?.descriptor.policy.requiresUserConsent)
+)
+const browserBookmarksEnabled = computed(() => browserBookmarksProvider.value?.enabled === true)
+const browserBookmarksDescription = computed(() => {
+  const source = browserBookmarksSource.value
+  if (!source) return t('settings.settingFileIndex.browserBookmarksLoading')
+
+  return t('settings.settingFileIndex.browserBookmarksDesc', {
+    status: t(resolveIndexingSourceStatusKey(source.health.status)),
+    items: source.health.itemCount,
+    roots: source.roots.length,
+    evidence: source.evidence?.length ?? 0,
+    reason: source.health.reason || '-'
+  })
+})
+const browserBookmarksRootSummary = computed(() => {
+  const source = browserBookmarksSource.value
+  if (!source) return t('settings.settingFileIndex.providerConfigSourceUnknown')
+  return summarizeIndexingSourceRoots(source)
+})
+const browserBookmarksMaintenanceActions = computed(() =>
+  browserBookmarksSource.value ? resolveSourceMaintenanceActions(browserBookmarksSource.value) : []
+)
+const selectedSourceDiagnostic = computed(() => {
+  const selectedId = selectedSourceDiagnosticId.value
+  if (!selectedId) return null
+  return indexedSourceDiagnosticsById.value.get(selectedId) ?? null
+})
+const providerDraggableOptions = computed(() => ({
+  animation: 0,
+  handle: '.provider-config-drag-handle',
+  ghostClass: 'provider-config-ghost',
+  onEnd: () => {
+    void saveSearchProviderConfig()
+  }
+}))
 
 const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
   idleThresholdMs: 60 * 60 * 1000,
@@ -266,6 +322,13 @@ function openSearchProviderConfigDialog(event?: MouseEvent) {
   }
 }
 
+function openSourceDiagnosticDialog(source: IndexedSourceDiagnostics, event?: MouseEvent) {
+  selectedSourceDiagnosticId.value = source.descriptor.id
+  sourceDiagnosticDialogSource.value =
+    event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  sourceDiagnosticDialogVisible.value = true
+}
+
 function toSearchProviderUserConfigs(
   providers = searchProviderConfigs.value
 ): SearchProviderUserConfig[] {
@@ -305,15 +368,52 @@ async function toggleSearchProvider(providerId: string, enabled: boolean) {
   await saveSearchProviderConfig(next)
 }
 
-async function moveSearchProvider(providerId: string, direction: -1 | 1) {
-  const current = [...searchProviderConfigs.value]
-  const index = current.findIndex((provider) => provider.providerId === providerId)
-  const targetIndex = index + direction
-  if (index < 0 || targetIndex < 0 || targetIndex >= current.length) return
-  const [entry] = current.splice(index, 1)
-  current.splice(targetIndex, 0, entry)
-  searchProviderConfigs.value = current
-  await saveSearchProviderConfig(current)
+async function setBrowserBookmarksEnabled(enabled: boolean, options: { rebuild?: boolean } = {}) {
+  if (searchProviderConfigLoading.value || searchProviderConfigSaving.value) return
+
+  let provider = browserBookmarksProvider.value
+  if (!provider) {
+    await loadSearchProviderConfig()
+    provider = browserBookmarksProvider.value
+  }
+
+  if (!provider) {
+    toast.error(t('settings.settingFileIndex.browserBookmarksProviderMissing'))
+    return
+  }
+
+  await toggleSearchProvider(provider.providerId, enabled)
+  await loadSourceDiagnostics()
+
+  if (enabled && options.rebuild && browserBookmarksSource.value) {
+    await runSourceMaintenance(browserBookmarksSource.value, 'scan')
+  }
+}
+
+async function grantBrowserBookmarksConsent() {
+  await setBrowserBookmarksEnabled(true, { rebuild: true })
+}
+
+async function disableBrowserBookmarksRuntime() {
+  await setBrowserBookmarksEnabled(false)
+}
+
+async function rebuildBrowserBookmarksRuntime() {
+  if (!browserBookmarksSource.value) {
+    toast.error(t('settings.settingFileIndex.browserBookmarksSourceMissing'))
+    return
+  }
+
+  await runSourceMaintenance(browserBookmarksSource.value, 'scan')
+}
+
+async function clearBrowserBookmarksRuntime() {
+  if (!browserBookmarksSource.value) {
+    toast.error(t('settings.settingFileIndex.browserBookmarksSourceMissing'))
+    return
+  }
+
+  await runSourceMaintenance(browserBookmarksSource.value, 'reset')
 }
 
 function formatSearchProviderIssue(issue: SearchProviderRegistryIssue): string {
@@ -354,6 +454,16 @@ function formatSearchProviderMeta(provider: SearchProviderRuntimeConfig): string
     source: source.sourceId,
     status
   })}`
+}
+
+function formatSourceDiagnosticDescription(source: IndexedSourceDiagnostics): string {
+  return t(`settings.settingFileIndex.sourceDetail.${resolveIndexingSourceDetailKey(source)}`, {
+    error: source.health.lastError,
+    reason: source.health.reason,
+    issue: source.admissionIssues?.[0] ?? source.lifecycleIssues?.[0] ?? '',
+    time: formatIndexingSourceTimestamp(source.health.lastIndexedAt),
+    roots: summarizeIndexingSourceRoots(source)
+  })
 }
 
 function isSourceMaintenanceRunning(sourceId: string): boolean {
@@ -406,6 +516,9 @@ async function runSourceMaintenance(
         clearScanProgress: true
       })
       if (result.error) throw new Error(result.error)
+      if (!result.clearedSearchIndex && !result.clearedScanProgress) {
+        throw new Error('reset-cleared-nothing')
+      }
       toast.success(t('settings.settingFileIndex.sourceActionResetSuccess'))
     }
 
@@ -777,6 +890,13 @@ function getSourceMaintenanceButtonTitle(action: IndexedSourceMaintenanceActionS
     action: label,
     reason: action.reason ?? 'unknown'
   })
+}
+
+function isBrowserBookmarksMaintenanceEnabled(action: IndexedSourceMaintenanceAction): boolean {
+  return (
+    browserBookmarksMaintenanceActions.value.find((state) => state.action === action)?.enabled ===
+    true
+  )
 }
 
 function formatSourceProgress(source: IndexedSourceDiagnostics): string | null {
@@ -1189,164 +1309,354 @@ async function triggerRebuild() {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      :title="t('settings.settingFileIndex.browserBookmarksTitle')"
+      :description="browserBookmarksDescription"
+      default-icon="i-carbon-bookmark"
+      active-icon="i-carbon-bookmark"
+      :active="browserBookmarksBusy"
+    >
+      <TxButton
+        variant="flat"
+        size="sm"
+        class="source-diagnostic-detail-button"
+        :disabled="!browserBookmarksSource"
+        @click="
+          browserBookmarksSource && openSourceDiagnosticDialog(browserBookmarksSource, $event)
+        "
+      >
+        <span class="i-carbon-information text-12px" />
+        <span>{{ t('settings.settingFileIndex.sourceDetailAction') }}</span>
+      </TxButton>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
       v-for="source in sourceDiagnostics?.sources ?? []"
       :key="source.descriptor.id"
       :title="source.descriptor.displayName"
-      :description="
-        t(`settings.settingFileIndex.sourceDetail.${resolveIndexingSourceDetailKey(source)}`, {
-          error: source.health.lastError,
-          reason: source.health.reason,
-          issue: source.admissionIssues?.[0] ?? source.lifecycleIssues?.[0] ?? '',
-          time: formatIndexingSourceTimestamp(source.health.lastIndexedAt),
-          roots: summarizeIndexingSourceRoots(source)
-        })
-      "
+      :description="formatSourceDiagnosticDescription(source)"
       default-icon="i-carbon-data-base"
       active-icon="i-carbon-data-base"
     >
-      <div class="source-diagnostics-panel">
-        <div class="source-diagnostics-row">
-          <span
-            class="source-status-pill"
-            :class="`source-status-pill--${resolveIndexingSourceTone(source.health.status)}`"
-          >
-            {{ t(resolveIndexingSourceStatusKey(source.health.status)) }}
-          </span>
-          <span class="source-diagnostic-chip">
-            {{ t('settings.settingFileIndex.sourceItems', { count: source.health.itemCount }) }}
-          </span>
-          <span class="source-diagnostic-chip">
-            {{
-              t('settings.settingFileIndex.sourceWatch', {
-                state: t(resolveIndexingSourceWatchStateKey(source.health.watchState))
-              })
-            }}
-          </span>
-          <span class="source-diagnostic-chip">
-            {{
-              t('settings.settingFileIndex.sourceReconcile', {
-                state: t(resolveIndexingSourceReconcileStateKey(source.health.reconcileState))
-              })
-            }}
-          </span>
-          <span
-            v-for="task in resolveIndexingSourceTaskChips(source)"
-            :key="task.id"
-            class="source-diagnostic-chip source-diagnostic-task-chip"
-            :class="`source-diagnostic-task-chip--${task.tone}`"
-          >
-            {{ t(task.labelKey, task.values) }}
-          </span>
-        </div>
-        <div v-if="resolveIndexingSourceProgressChip(source)" class="source-history-row">
-          <span class="source-history-label">
-            {{ t('settings.settingFileIndex.sourceProgress') }}
-          </span>
-          <span
-            class="source-diagnostic-chip source-progress-chip"
-            :class="`source-status-pill--${getSourceProgressTone(source)}`"
-          >
-            {{ formatSourceProgress(source) }}
-          </span>
-        </div>
-        <div v-if="resolveIndexingSourceRecoveryChip(source)" class="source-history-row">
-          <span class="source-history-label">
-            {{ t('settings.settingFileIndex.sourceRecovery') }}
-          </span>
-          <span
-            class="source-diagnostic-chip source-recovery-chip"
-            :class="`source-status-pill--${getSourceRecoveryTone(source)}`"
-          >
-            {{ formatSourceRecovery(source) }}
-          </span>
-        </div>
-        <div
-          v-if="resolveIndexingSourceAdmissionIssueChips(source).length > 0"
-          class="source-history-row"
-        >
-          <span class="source-history-label">
-            {{ t('settings.settingFileIndex.sourceAdmissionIssues') }}
-          </span>
-          <span
-            v-for="issue in resolveIndexingSourceAdmissionIssueChips(source)"
-            :key="issue.id"
-            class="source-diagnostic-chip source-history-chip"
-            :class="`source-diagnostic-task-chip--${issue.tone}`"
-          >
-            {{ t(issue.labelKey, issue.values) }}
-          </span>
-        </div>
-        <div
-          v-if="resolveIndexingSourceLifecycleIssueChips(source).length > 0"
-          class="source-history-row"
-        >
-          <span class="source-history-label">
-            {{ t('settings.settingFileIndex.sourceLifecycleIssues') }}
-          </span>
-          <span
-            v-for="issue in resolveIndexingSourceLifecycleIssueChips(source)"
-            :key="issue.id"
-            class="source-diagnostic-chip source-history-chip"
-            :class="`source-diagnostic-task-chip--${issue.tone}`"
-          >
-            {{ t(issue.labelKey, issue.values) }}
-          </span>
-        </div>
-        <div
-          v-if="resolveIndexingSourceEvidenceChips(source).length > 0"
-          class="source-history-row"
-        >
-          <span class="source-history-label">
-            {{ t('settings.settingFileIndex.sourceEvidence') }}
-          </span>
-          <span
-            v-for="evidence in resolveIndexingSourceEvidenceChips(source)"
-            :key="evidence.id"
-            class="source-diagnostic-chip source-evidence-chip"
-            :class="`source-status-pill--${evidence.tone}`"
-          >
-            {{ t(evidence.labelKey, evidence.values) }}
-          </span>
-        </div>
-        <div
-          v-if="resolveIndexingSourceRecentTaskChips(source).length > 0"
-          class="source-history-row"
-        >
-          <span class="source-history-label">
-            {{ t('settings.settingFileIndex.sourceRecentTasks') }}
-          </span>
-          <span
-            v-for="task in resolveIndexingSourceRecentTaskChips(source)"
-            :key="task.id"
-            class="source-diagnostic-chip source-history-chip"
-            :class="`source-diagnostic-task-chip--${task.tone}`"
-          >
-            {{ t(task.labelKey, task.values) }}
-          </span>
-        </div>
-        <div class="source-diagnostics-maintenance">
-          <TxButton
-            v-for="action in resolveSourceMaintenanceActions(source)"
-            :key="action.action"
-            variant="ghost"
-            size="sm"
-            :border="false"
-            class="source-maintenance-button"
-            :disabled="isSourceMaintenanceRunning(source.descriptor.id) || !action.enabled"
-            :title="getSourceMaintenanceButtonTitle(action)"
-            @click="runSourceMaintenance(source, action.action)"
-          >
-            <span
-              v-if="sourceMaintenanceAction[source.descriptor.id] === action.action"
-              class="i-ri-loader-4-line text-12px animate-spin"
-            />
-            <span v-else class="text-12px" :class="getSourceMaintenanceButtonIcon(action.action)" />
-            <span>{{ t(`settings.settingFileIndex.sourceAction.${action.action}`) }}</span>
-          </TxButton>
-        </div>
-      </div>
+      <TxButton
+        variant="flat"
+        size="sm"
+        class="source-diagnostic-detail-button"
+        @click="openSourceDiagnosticDialog(source, $event)"
+      >
+        <span class="i-carbon-information text-12px" />
+        <span>{{ t('settings.settingFileIndex.sourceDetailAction') }}</span>
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
+
+  <FlipDialog
+    v-model="sourceDiagnosticDialogVisible"
+    :reference="sourceDiagnosticDialogSource"
+    :header-title="
+      selectedSourceDiagnostic?.descriptor.displayName ??
+      t('settings.settingFileIndex.sourceDiagnosticDetailTitle')
+    "
+    :header-desc="
+      selectedSourceDiagnostic
+        ? formatSourceDiagnosticDescription(selectedSourceDiagnostic)
+        : t('settings.settingFileIndex.sourceDiagnosticsChecking')
+    "
+    size="lg"
+  >
+    <template #header-actions>
+      <TxButton
+        variant="flat"
+        size="sm"
+        :disabled="sourceDiagnosticsLoading"
+        @click="loadSourceDiagnostics"
+      >
+        <div class="i-carbon-renew text-12px" />
+        <span>{{ t('settings.settingFileIndex.diagnosticRefresh') }}</span>
+      </TxButton>
+    </template>
+
+    <template #default>
+      <div v-if="selectedSourceDiagnostic" class="source-diagnostic-dialog">
+        <div
+          v-if="selectedSourceDiagnostic.descriptor.id === BROWSER_BOOKMARKS_SOURCE_ID"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.browserBookmarksTitle') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              v-if="browserBookmarksConsentAvailable"
+              class="source-diagnostic-chip"
+              :class="
+                browserBookmarksEnabled
+                  ? 'source-status-pill--success'
+                  : 'source-status-pill--warning'
+              "
+            >
+              {{
+                browserBookmarksEnabled
+                  ? t('settings.settingFileIndex.browserBookmarksConsentGranted')
+                  : t('settings.settingFileIndex.browserBookmarksConsentRequired')
+              }}
+            </span>
+            <span class="source-diagnostic-chip">
+              {{
+                t('settings.settingFileIndex.browserBookmarksWatchRoots', {
+                  roots: browserBookmarksRootSummary
+                })
+              }}
+            </span>
+          </div>
+          <div class="source-diagnostics-maintenance source-diagnostics-maintenance--dialog">
+            <TxButton
+              v-if="!browserBookmarksEnabled"
+              variant="flat"
+              size="sm"
+              :disabled="browserBookmarksBusy || !browserBookmarksProvider"
+              @click="grantBrowserBookmarksConsent"
+            >
+              <span class="i-carbon-checkmark-outline text-12px" />
+              <span>{{ t('settings.settingFileIndex.browserBookmarksConsentAction') }}</span>
+            </TxButton>
+            <TxButton
+              v-else
+              variant="flat"
+              size="sm"
+              :disabled="browserBookmarksBusy"
+              @click="disableBrowserBookmarksRuntime"
+            >
+              <span class="i-carbon-pause-outline text-12px" />
+              <span>{{ t('settings.settingFileIndex.browserBookmarksDisableAction') }}</span>
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="
+                browserBookmarksBusy ||
+                !browserBookmarksEnabled ||
+                !isBrowserBookmarksMaintenanceEnabled('scan')
+              "
+              @click="rebuildBrowserBookmarksRuntime"
+            >
+              <span
+                v-if="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] === 'scan'"
+                class="i-ri-loader-4-line text-12px animate-spin"
+              />
+              <span v-else class="i-carbon-renew text-12px" />
+              <span>{{ t('settings.settingFileIndex.browserBookmarksRebuildAction') }}</span>
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="
+                browserBookmarksBusy ||
+                !browserBookmarksSource ||
+                !isBrowserBookmarksMaintenanceEnabled('reset')
+              "
+              @click="clearBrowserBookmarksRuntime"
+            >
+              <span
+                v-if="sourceMaintenanceAction[BROWSER_BOOKMARKS_SOURCE_ID] === 'reset'"
+                class="i-ri-loader-4-line text-12px animate-spin"
+              />
+              <span v-else class="i-carbon-clean text-12px" />
+              <span>{{ t('settings.settingFileIndex.browserBookmarksClearAction') }}</span>
+            </TxButton>
+          </div>
+        </div>
+
+        <div class="source-diagnostic-dialog-section">
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceDiagnosticOverview') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              class="source-status-pill"
+              :class="`source-status-pill--${resolveIndexingSourceTone(selectedSourceDiagnostic.health.status)}`"
+            >
+              {{ t(resolveIndexingSourceStatusKey(selectedSourceDiagnostic.health.status)) }}
+            </span>
+            <span class="source-diagnostic-chip">
+              {{
+                t('settings.settingFileIndex.sourceItems', {
+                  count: selectedSourceDiagnostic.health.itemCount
+                })
+              }}
+            </span>
+            <span class="source-diagnostic-chip">
+              {{
+                t('settings.settingFileIndex.sourceWatch', {
+                  state: t(
+                    resolveIndexingSourceWatchStateKey(selectedSourceDiagnostic.health.watchState)
+                  )
+                })
+              }}
+            </span>
+            <span class="source-diagnostic-chip">
+              {{
+                t('settings.settingFileIndex.sourceReconcile', {
+                  state: t(
+                    resolveIndexingSourceReconcileStateKey(
+                      selectedSourceDiagnostic.health.reconcileState
+                    )
+                  )
+                })
+              }}
+            </span>
+            <span
+              v-for="task in resolveIndexingSourceTaskChips(selectedSourceDiagnostic)"
+              :key="task.id"
+              class="source-diagnostic-chip source-diagnostic-task-chip"
+              :class="`source-diagnostic-task-chip--${task.tone}`"
+            >
+              {{ t(task.labelKey, task.values) }}
+            </span>
+          </div>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceProgressChip(selectedSourceDiagnostic)"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceProgress') }}
+          </div>
+          <span
+            class="source-diagnostic-chip source-progress-chip"
+            :class="`source-status-pill--${getSourceProgressTone(selectedSourceDiagnostic)}`"
+          >
+            {{ formatSourceProgress(selectedSourceDiagnostic) }}
+          </span>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceRecoveryChip(selectedSourceDiagnostic)"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceRecovery') }}
+          </div>
+          <span
+            class="source-diagnostic-chip source-recovery-chip"
+            :class="`source-status-pill--${getSourceRecoveryTone(selectedSourceDiagnostic)}`"
+          >
+            {{ formatSourceRecovery(selectedSourceDiagnostic) }}
+          </span>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceAdmissionIssueChips(selectedSourceDiagnostic).length > 0"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceAdmissionIssues') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              v-for="issue in resolveIndexingSourceAdmissionIssueChips(selectedSourceDiagnostic)"
+              :key="issue.id"
+              class="source-diagnostic-chip source-history-chip"
+              :class="`source-diagnostic-task-chip--${issue.tone}`"
+            >
+              {{ t(issue.labelKey, issue.values) }}
+            </span>
+          </div>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceLifecycleIssueChips(selectedSourceDiagnostic).length > 0"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceLifecycleIssues') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              v-for="issue in resolveIndexingSourceLifecycleIssueChips(selectedSourceDiagnostic)"
+              :key="issue.id"
+              class="source-diagnostic-chip source-history-chip"
+              :class="`source-diagnostic-task-chip--${issue.tone}`"
+            >
+              {{ t(issue.labelKey, issue.values) }}
+            </span>
+          </div>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceEvidenceChips(selectedSourceDiagnostic).length > 0"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceEvidence') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              v-for="evidence in resolveIndexingSourceEvidenceChips(selectedSourceDiagnostic)"
+              :key="evidence.id"
+              class="source-diagnostic-chip source-evidence-chip"
+              :class="`source-status-pill--${evidence.tone}`"
+            >
+              {{ t(evidence.labelKey, evidence.values) }}
+            </span>
+          </div>
+        </div>
+
+        <div
+          v-if="resolveIndexingSourceRecentTaskChips(selectedSourceDiagnostic).length > 0"
+          class="source-diagnostic-dialog-section"
+        >
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceRecentTasks') }}
+          </div>
+          <div class="source-diagnostics-row source-diagnostics-row--dialog">
+            <span
+              v-for="task in resolveIndexingSourceRecentTaskChips(selectedSourceDiagnostic)"
+              :key="task.id"
+              class="source-diagnostic-chip source-history-chip"
+              :class="`source-diagnostic-task-chip--${task.tone}`"
+            >
+              {{ t(task.labelKey, task.values) }}
+            </span>
+          </div>
+        </div>
+
+        <div class="source-diagnostic-dialog-section">
+          <div class="source-diagnostic-section-title">
+            {{ t('settings.settingFileIndex.sourceDiagnosticActions') }}
+          </div>
+          <div class="source-diagnostics-maintenance source-diagnostics-maintenance--dialog">
+            <TxButton
+              v-for="action in resolveSourceMaintenanceActions(selectedSourceDiagnostic)"
+              :key="action.action"
+              variant="flat"
+              size="sm"
+              class="source-maintenance-button source-maintenance-button--dialog"
+              :disabled="
+                isSourceMaintenanceRunning(selectedSourceDiagnostic.descriptor.id) ||
+                !action.enabled
+              "
+              :title="getSourceMaintenanceButtonTitle(action)"
+              @click="runSourceMaintenance(selectedSourceDiagnostic, action.action)"
+            >
+              <span
+                v-if="
+                  sourceMaintenanceAction[selectedSourceDiagnostic.descriptor.id] === action.action
+                "
+                class="i-ri-loader-4-line text-12px animate-spin"
+              />
+              <span
+                v-else
+                class="text-12px"
+                :class="getSourceMaintenanceButtonIcon(action.action)"
+              />
+              <span>{{ t(`settings.settingFileIndex.sourceAction.${action.action}`) }}</span>
+            </TxButton>
+          </div>
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
 
   <TuffGroupBlock
     v-if="showAdvancedSettings"
@@ -1707,7 +2017,10 @@ async function triggerRebuild() {
 
     <template #default>
       <div class="provider-config-dialog">
-        <div class="provider-config-list provider-config-list--dialog">
+        <div
+          v-draggable="[searchProviderConfigs, providerDraggableOptions]"
+          class="provider-config-list provider-config-list--dialog"
+        >
           <span
             v-if="searchProviderConfigs.length === 0 && searchProviderIssues.length === 0"
             class="provider-config-empty"
@@ -1735,49 +2048,31 @@ async function triggerRebuild() {
             </span>
           </div>
           <div
-            v-for="(provider, index) in searchProviderConfigs"
+            v-for="provider in searchProviderConfigs"
             :key="provider.providerId"
             class="provider-config-item"
             :class="{ 'provider-config-item--disabled': !provider.enabled }"
           >
+            <div
+              class="provider-config-drag-handle"
+              :title="t('settings.settingFileIndex.providerDragHandle')"
+            />
             <span class="provider-config-name">{{ provider.descriptor.displayName }}</span>
             <span class="provider-config-meta">
               {{ formatSearchProviderMeta(provider) }}
             </span>
             <TxButton
-              variant="ghost"
-              size="sm"
-              :border="false"
-              class="provider-config-icon-button"
-              :disabled="index === 0 || searchProviderConfigSaving"
-              :title="t('settings.settingFileIndex.providerMoveUp')"
-              @click="moveSearchProvider(provider.providerId, -1)"
-            >
-              <span class="i-carbon-chevron-up text-12px" />
-            </TxButton>
-            <TxButton
-              variant="ghost"
-              size="sm"
-              :border="false"
-              class="provider-config-icon-button"
-              :disabled="index === searchProviderConfigs.length - 1 || searchProviderConfigSaving"
-              :title="t('settings.settingFileIndex.providerMoveDown')"
-              @click="moveSearchProvider(provider.providerId, 1)"
-            >
-              <span class="i-carbon-chevron-down text-12px" />
-            </TxButton>
-            <TxButton
               variant="flat"
               size="sm"
               class="provider-config-toggle"
-              :type="provider.enabled ? 'primary' : undefined"
+              :type="provider.enabled ? undefined : 'primary'"
               :disabled="searchProviderConfigSaving"
               @click="toggleSearchProvider(provider.providerId, !provider.enabled)"
             >
               {{
                 provider.enabled
-                  ? t('settings.settingFileIndex.providerEnabled')
-                  : t('settings.settingFileIndex.providerDisabled')
+                  ? t('settings.settingFileIndex.providerDisabled')
+                  : t('settings.settingFileIndex.providerEnabled')
               }}
             </TxButton>
           </div>
