@@ -535,7 +535,7 @@ async function compressPlugin(manifest: IManifest, buildDir: string, opts: Retur
   }
 
   // Generate file hashes and signature
-  const filesInBuild = globSync('**/*', { cwd: buildDir, nodir: true, absolute: true })
+  const filesInBuild = globSync('**/*', { cwd: buildDir, nodir: true, absolute: true, dot: true })
   const filesToHash = filesInBuild.filter(file => path.basename(file) !== 'manifest.json' && path.basename(file) !== 'key.talex')
 
   manifest._files = generateFilesSha256(filesToHash, buildDir)
