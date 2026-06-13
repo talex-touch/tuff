@@ -184,10 +184,12 @@ async function handleUninstallPlugin(): Promise<void> {
 
 type PrimaryAction = 'run' | 'stop' | 'reload' | 'reconnect' | 'none'
 
+const isPluginRunning = computed(() => props.plugin.status === EPluginStatus.ACTIVE)
+
 const primaryAction = computed(() => {
   const status = props.plugin.status
 
-  if (status === EPluginStatus.ENABLED) {
+  if (status === EPluginStatus.ACTIVE || status === EPluginStatus.ENABLED) {
     return {
       action: 'stop' as const,
       label: t('plugin.actions.stop'),
@@ -218,7 +220,6 @@ const primaryAction = computed(() => {
   }
 
   if (
-    status === EPluginStatus.ACTIVE ||
     status === EPluginStatus.LOADING ||
     status === EPluginStatus.DISABLING ||
     status === EPluginStatus.DEV_RECONNECTING
@@ -308,6 +309,10 @@ async function handlePrimaryAction(): Promise<void> {
               >
                 <i class="i-ri-code-line" />
                 {{ t('plugin.badges.dev') }}
+              </span>
+              <span v-if="isPluginRunning" class="PluginInfo-RunningBadge flex-shrink-0">
+                <i class="i-ri-loader-4-line animate-spin" />
+                {{ t('plugin.actions.running') }}
               </span>
             </div>
           </div>
@@ -497,11 +502,11 @@ async function handlePrimaryAction(): Promise<void> {
   }
 
   &.danger {
-    color: #dc2626;
+    color: var(--tx-color-danger);
   }
 
   &.danger:not(.disabled):hover {
-    background-color: rgba(220, 38, 38, 0.08);
+    background-color: color-mix(in srgb, var(--tx-color-danger) 8%, transparent);
   }
 
   i {
@@ -511,6 +516,24 @@ async function handlePrimaryAction(): Promise<void> {
 
   span {
     flex: 1;
+  }
+}
+
+.PluginInfo-RunningBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--tx-color-success) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-color-success) 10%, transparent);
+  color: var(--tx-color-success);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+
+  i {
+    font-size: 13px;
   }
 }
 

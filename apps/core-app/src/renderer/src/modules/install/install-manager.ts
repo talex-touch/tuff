@@ -9,6 +9,10 @@ import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin
 import { computed, reactive } from 'vue'
 import { useI18nText } from '~/modules/lang'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
+import {
+  PERMISSION_REQUEST_TIMEOUT_MS,
+  showPermissionRequestCard
+} from '~/modules/permission/permission-request-card'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 interface InstallTaskState extends PluginInstallProgressEvent {
@@ -144,57 +148,45 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
   if (confirmKind === 'permissions') {
     const required = request.permissions?.required || []
     const reasons = request.permissions?.reasons || {}
-    const permissionLines = required
-      .map((permissionId) => {
-        const reason = reasons[permissionId]
-        return reason ? `- ${permissionId} (${reason})` : `- ${permissionId}`
-      })
-      .join('\n')
 
-    await forTouchTip(
-      t('store.installation.permissionConfirmTitle'),
-      t('store.installation.permissionConfirmMessage', {
-        name,
-        permissions: permissionLines || '- (none)'
+    const { result } = showPermissionRequestCard({
+      title: t('plugin.permissions.startup.title'),
+      message: t('plugin.permissions.startup.requestMessage', { name }),
+      permissions: required.map((permissionId) => ({
+        id: permissionId,
+        reason: reasons[permissionId]
+      })),
+      timeoutText: t('plugin.permissions.startup.timeout', {
+        seconds: Math.floor(PERMISSION_REQUEST_TIMEOUT_MS / 1000)
       }),
-      [
-        {
-          content: t('store.installation.permissionAllowAlways'),
-          type: 'success',
-          onClick: async () => {
-            decisionMade = true
-            await sendDecision({
-              taskId: request.taskId,
-              decision: 'accept',
-              grantMode: 'always'
-            })
-            return true
-          }
-        },
-        {
-          content: t('store.installation.permissionAllowSession'),
-          type: 'default',
-          onClick: async () => {
-            decisionMade = true
-            await sendDecision({
-              taskId: request.taskId,
-              decision: 'accept',
-              grantMode: 'session'
-            })
-            return true
-          }
-        },
-        {
-          content: t('store.installation.permissionReject'),
-          type: 'warning',
-          onClick: async () => {
-            decisionMade = true
-            await sendDecision({ taskId: request.taskId, decision: 'reject' })
-            return true
-          }
-        }
-      ]
-    )
+      timeoutMs: PERMISSION_REQUEST_TIMEOUT_MS,
+      actionLabels: {
+        deny: t('plugin.permissions.startup.actions.deny'),
+        session: t('plugin.permissions.startup.actions.session'),
+        always: t('plugin.permissions.startup.actions.always')
+      },
+      t,
+      onDismiss: () => 'deny'
+    })
+
+    const decision = await result
+    decisionMade = true
+
+    if (decision === 'always') {
+      await sendDecision({
+        taskId: request.taskId,
+        decision: 'accept',
+        grantMode: 'always'
+      })
+    } else if (decision === 'session') {
+      await sendDecision({
+        taskId: request.taskId,
+        decision: 'accept',
+        grantMode: 'session'
+      })
+    } else {
+      await sendDecision({ taskId: request.taskId, decision: 'reject' })
+    }
   } else {
     await forTouchTip(
       t('store.installation.confirmTitle'),

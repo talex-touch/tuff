@@ -106,7 +106,13 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
   }
 
   &.tuff-status-size-sm {
-    padding: 2px 8px;
+    gap: 4px;
+    padding: 2px 7px;
+    font-size: 10px;
+
+    i {
+      font-size: 12px;
+    }
   }
 
   &.tuff-status-size-md {
