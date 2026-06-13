@@ -451,6 +451,7 @@ export class WidgetManager {
         hash: compiledCache.hash
       })
       this.pushFailureIssue(plugin, feature, failure)
+      await this.clearCachedWidgetRuntime(widgetId)
       await this.emitFailure(failure)
       return null
     }
@@ -472,6 +473,14 @@ export class WidgetManager {
     const isDev = plugin.dev?.enable && plugin.dev?.source
     const interactionPath = feature.interaction?.path
     const widgetId = makeWidgetId(plugin.name, feature.id)
+    const cachedRegistration = this.cache.get(widgetId)
+    if (cachedRegistration && !options?.emitAsUpdate && !canRuntimeCompileWidget(plugin)) {
+      await this.emitPayload('register', cachedRegistration)
+      if (isDev) {
+        plugin.logger.debug(`[WidgetManager] Widget cache hit for "${widgetId}"`)
+      }
+      return cachedRegistration
+    }
     if (isDev) {
       plugin.logger.info(
         `[WidgetManager] Try load widget for feature \"${feature.id}\" (${interactionPath || 'unknown'})`
@@ -538,6 +547,7 @@ export class WidgetManager {
           hash: precompiledFailure.hash,
           cause: precompiledFailure.cause
         })
+        await this.clearCachedWidgetRuntime(widgetId)
         await this.emitFailure(failure)
         return null
       }
@@ -551,16 +561,16 @@ export class WidgetManager {
       if (isDev) {
         plugin.logger.warn(`[WidgetManager] Widget source missing for feature \"${feature.id}\"`)
       }
-      await this.emitFailure(
-        this.buildAndPushFailure(plugin, feature, {
-          widgetId,
-          code: 'WIDGET_SOURCE_MISSING',
-          message: `Widget source missing for feature "${feature.id}".`,
-          filePath: interactionPath
-            ? resolveWidgetFilePath(plugin.pluginPath, interactionPath)
-            : undefined
-        })
-      )
+      const failure = this.buildAndPushFailure(plugin, feature, {
+        widgetId,
+        code: 'WIDGET_SOURCE_MISSING',
+        message: `Widget source missing for feature "${feature.id}".`,
+        filePath: interactionPath
+          ? resolveWidgetFilePath(plugin.pluginPath, interactionPath)
+          : undefined
+      })
+      await this.clearCachedWidgetRuntime(widgetId)
+      await this.emitFailure(failure)
       return null
     }
 
@@ -611,6 +621,7 @@ export class WidgetManager {
           hash: compiledCache.hash
         })
         this.pushFailureIssue(plugin, feature, failure)
+        await this.clearCachedWidgetRuntime(source.widgetId)
         await this.emitFailure(failure)
         return null
       }
@@ -628,6 +639,7 @@ export class WidgetManager {
     const failureCacheKey = this.getFailureCacheKey(source.widgetId, source.hash)
     const cachedFailure = this.getCachedFailure(failureCacheKey)
     if (cachedFailure) {
+      await this.clearCachedWidgetRuntime(source.widgetId)
       await this.emitFailure(cachedFailure)
       if (isDev) {
         plugin.logger.debug(
@@ -646,6 +658,7 @@ export class WidgetManager {
         hash: source.hash
       })
       this.cacheFailure(failureCacheKey, failure)
+      await this.clearCachedWidgetRuntime(source.widgetId)
       await this.emitFailure(failure)
       return null
     }
@@ -679,6 +692,7 @@ export class WidgetManager {
           })
           this.pushFailureIssue(plugin, feature, failure)
           this.cacheFailure(failureCacheKey, failure)
+          await this.clearCachedWidgetRuntime(source.widgetId)
           await this.emitFailure(failure)
           return null
         }
@@ -694,6 +708,7 @@ export class WidgetManager {
         })
         this.pushFailureIssue(plugin, feature, failure)
         this.cacheFailure(failureCacheKey, failure)
+        await this.clearCachedWidgetRuntime(source.widgetId)
         await this.emitFailure(failure)
         return null
       }
@@ -706,6 +721,7 @@ export class WidgetManager {
         hash: source.hash
       })
       this.cacheFailure(failureCacheKey, failure)
+      await this.clearCachedWidgetRuntime(source.widgetId)
       await this.emitFailure(failure)
       return null
     }
@@ -778,6 +794,7 @@ export class WidgetManager {
         hash: source.hash
       })
       this.pushFailureIssue(plugin, feature, failure)
+      await this.clearCachedWidgetRuntime(source.widgetId)
       await this.emitFailure(failure)
       return null
     }
@@ -842,6 +859,12 @@ export class WidgetManager {
     targets.forEach((windowId) => {
       this.transport.broadcastToWindow(windowId, pluginWidgetFailedEvent, payload)
     })
+  }
+
+  private async clearCachedWidgetRuntime(widgetId: string): Promise<void> {
+    const hadCachedRuntime = this.cache.delete(widgetId)
+    if (!hadCachedRuntime) return
+    await this.unregisterWidget(widgetId)
   }
 
   private getFailureCacheKey(widgetId: string, hash: string): string {

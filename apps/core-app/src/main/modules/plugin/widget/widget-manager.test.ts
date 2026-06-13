@@ -154,6 +154,45 @@ describe('WidgetManager failure cache', () => {
       }
     })
   })
+
+  it('unregisters a previously cached widget before reporting a newer compile failure', async () => {
+    const manager = new WidgetManager()
+    const plugin = createPlugin()
+    const feature = createFeature()
+    const firstSource = createSource()
+    const secondSource = {
+      ...createSource(),
+      hash: 'new-source-hash',
+      source: 'export default { broken: true }'
+    }
+
+    mocks.loadWidget.mockResolvedValueOnce(firstSource).mockResolvedValueOnce(secondSource)
+    mocks.compileWidgetSource
+      .mockResolvedValueOnce({
+        code: 'module.exports = {}',
+        dependencies: ['vue'],
+        runtime: 'vue',
+        styles: '.ok{}'
+      })
+      .mockRejectedValueOnce(new Error('compile failed'))
+
+    await manager.registerWidget(plugin, feature)
+    await manager.registerWidget(plugin, feature)
+
+    expect(mocks.compileWidgetSource).toHaveBeenCalledTimes(2)
+    expect(mocks.broadcastToWindow.mock.calls.map((call) => call[2])).toEqual([
+      expect.objectContaining({
+        hash: 'same-source-hash',
+        widgetId: 'test-plugin::test.widget'
+      }),
+      { widgetId: 'test-plugin::test.widget' },
+      expect.objectContaining({
+        code: 'WIDGET_COMPILE_FAILED',
+        hash: 'new-source-hash',
+        widgetId: 'test-plugin::test.widget'
+      })
+    ])
+  })
 })
 
 describe('WidgetManager precompiled widgets', () => {
@@ -216,6 +255,64 @@ describe('WidgetManager precompiled widgets', () => {
           widgetId: 'test-plugin::test.widget'
         })
       )
+    } finally {
+      await fs.remove(root)
+    }
+  })
+
+  it('reuses cached precompiled payload on repeated registration', async () => {
+    const root = await createPackagedPluginRoot()
+    try {
+      const manager = new WidgetManager()
+      const plugin = {
+        ...createPlugin(),
+        dev: { enable: false, address: '', source: false },
+        pluginPath: root,
+        build: {
+          widgets: [
+            {
+              compiledAt: Date.now(),
+              compiledPath: 'widgets/.compiled/test-plugin__test.widget.cjs',
+              dependencies: ['vue'],
+              featureId: 'test.widget',
+              hash: 'same-source-hash',
+              metaPath: 'widgets/.compiled/test-plugin__test.widget.meta.json',
+              sourcePath: 'widgets/panel.ts',
+              styles: '.panel{}',
+              widgetId: 'test-plugin::test.widget'
+            }
+          ]
+        }
+      } as ITouchPlugin
+      const feature = createFeature()
+      const compiledPath = path.join(root, 'widgets', '.compiled', 'test-plugin__test.widget.cjs')
+      const metaPath = path.join(root, 'widgets', '.compiled', 'test-plugin__test.widget.meta.json')
+
+      await fs.ensureDir(path.dirname(compiledPath))
+      await fs.writeFile(compiledPath, 'module.exports = {}', 'utf-8')
+      await fs.writeJson(metaPath, {
+        compiledAt: Date.now(),
+        compiledPath: 'widgets/.compiled/test-plugin__test.widget.cjs',
+        dependencies: ['vue'],
+        featureId: 'test.widget',
+        hash: 'same-source-hash',
+        sourcePath: 'widgets/panel.ts',
+        styles: '.panel{}',
+        widgetId: 'test-plugin::test.widget'
+      })
+
+      await manager.registerWidget(plugin, feature)
+      await fs.remove(compiledPath)
+      await manager.registerWidget(plugin, feature)
+
+      expect(mocks.loadWidget).not.toHaveBeenCalled()
+      expect(mocks.compileWidgetSource).not.toHaveBeenCalled()
+      expect(mocks.broadcastToWindow).toHaveBeenCalledTimes(2)
+      expect(mocks.broadcastToWindow.mock.calls[1]?.[2]).toMatchObject({
+        code: 'module.exports = {}',
+        featureId: 'test.widget',
+        widgetId: 'test-plugin::test.widget'
+      })
     } finally {
       await fs.remove(root)
     }

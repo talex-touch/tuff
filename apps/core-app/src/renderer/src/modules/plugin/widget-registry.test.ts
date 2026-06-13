@@ -9,6 +9,7 @@ const transportState = vi.hoisted(() => ({
   secureValues: new Map<string, string | null>()
 }))
 let handleWidgetRegister: typeof import('./widget-registry').handleWidgetRegister
+let handleWidgetFailed: typeof import('./widget-registry').handleWidgetFailed
 let buildWidgetSandboxEvidence: typeof import('./widget-registry').buildWidgetSandboxEvidence
 let getWidgetFailure: typeof import('./widget-registry').getWidgetFailure
 let getWidgetSandboxEvidence: typeof import('./widget-registry').getWidgetSandboxEvidence
@@ -32,6 +33,7 @@ vi.mock('@talex-touch/utils/transport', () => ({
 }))
 
 vi.mock('../box/custom-render', () => ({
+  getCustomRenderer: (name: string) => transportState.renderers.get(name),
   registerCustomRenderer: (name: string, component: Component) => {
     transportState.renderers.set(name, component)
   },
@@ -97,6 +99,7 @@ describe('widget-registry runtime hosts', () => {
       buildWidgetSandboxEvidence,
       getWidgetFailure,
       getWidgetSandboxEvidence,
+      handleWidgetFailed,
       handleWidgetRegister
     } = await import('./widget-registry'))
   }, 10000)
@@ -132,6 +135,67 @@ describe('widget-registry runtime hosts', () => {
     const renderer = await getRenderer(payload.widgetId)
     expect(renderer).toBeDefined()
     expect(renderer).toMatchObject({ name: 'VueWidget' })
+  })
+
+  it('skips duplicate widget registration for the same widget hash', async () => {
+    const payload = await register(
+      'vue',
+      [
+        'const { h } = require("vue")',
+        'module.exports = {',
+        '  name: "CachedVueWidget",',
+        '  setup() {',
+        '    return () => h("strong", "Vue cached")',
+        '  }',
+        '}'
+      ].join('\n')
+    )
+    const firstRenderer = await getRenderer(payload.widgetId)
+
+    await handleWidgetRegister(payload)
+
+    expect(await getRenderer(payload.widgetId)).toBe(firstRenderer)
+  })
+
+  it('removes stale renderer and styles when a registered widget later fails', async () => {
+    const payload = {
+      ...makePayload(
+        'vue',
+        [
+          'const { h } = require("vue")',
+          'module.exports = {',
+          '  name: "StaleWidget",',
+          '  setup() {',
+          '    return () => h("strong", "stale")',
+          '  }',
+          '}'
+        ].join('\n')
+      ),
+      styles: '.stale-widget { color: red; }'
+    }
+
+    await handleWidgetRegister(payload)
+    expect(await getRenderer(payload.widgetId)).toBeDefined()
+    expect(document.head.querySelector(`style[data-widget-id="${payload.widgetId}"]`)).toBeTruthy()
+
+    handleWidgetFailed({
+      widgetId: payload.widgetId,
+      pluginName: payload.pluginName,
+      featureId: payload.featureId,
+      runtime: payload.runtime,
+      runtimeStage: payload.runtimeStage,
+      code: 'WIDGET_COMPILE_FAILED',
+      message: 'compile failed',
+      filePath: payload.filePath,
+      hash: 'new-hash'
+    })
+
+    expect(transportState.renderers.has(payload.widgetId)).toBe(false)
+    expect(document.head.querySelector(`style[data-widget-id="${payload.widgetId}"]`)).toBeNull()
+    expect(getWidgetFailure(payload.widgetId)).toMatchObject({
+      code: 'WIDGET_COMPILE_FAILED',
+      hash: 'new-hash'
+    })
   })
 
   it('builds widget sandbox evidence for the runtime boundary', () => {
