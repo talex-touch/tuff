@@ -1482,6 +1482,10 @@ export interface IProviderActivate {
    * - false/undefined: Hide input in webcontent mode, show in push mode
    */
   showInput?: boolean
+  /**
+   * Whether the active provider should force CoreBox to its maximum height.
+   */
+  forceMax?: boolean
 }
 
 /**

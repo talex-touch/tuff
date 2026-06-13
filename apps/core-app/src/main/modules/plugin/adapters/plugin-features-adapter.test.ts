@@ -151,7 +151,8 @@ describe('plugin-features-adapter', () => {
         type: 'webcontent',
         path: '/manager',
         showInput: false,
-        allowInput: false
+        allowInput: false,
+        forceMax: true
       }
     } as IPluginFeature
     const plugin = {
@@ -180,8 +181,54 @@ describe('plugin-features-adapter', () => {
     } as never)
 
     expect(activation?.showInput).toBe(false)
+    expect(activation?.forceMax).toBe(true)
     expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
-      expect.objectContaining({ showInput: false })
+      expect.objectContaining({ showInput: false, forceMax: true })
+    ])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('propagates forceMax for push widget feature activations', async () => {
+    const adapter = new PluginFeaturesAdapter()
+    const feature = {
+      ...createFeature(),
+      push: true,
+      interaction: {
+        type: 'widget',
+        path: 'panel',
+        showInput: true,
+        allowInput: true,
+        forceMax: true
+      }
+    } as IPluginFeature
+    const triggerFeature = vi.fn(async () => true)
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeature: vi.fn(() => feature),
+      triggerFeature
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    const activation = await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: {
+          pluginName: 'test-plugin',
+          featureId: feature.id
+        }
+      },
+      searchResult: {
+        query: { text: 'hello' },
+        items: []
+      }
+    } as never)
+
+    expect(activation?.forceMax).toBe(true)
+    expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
+      expect.objectContaining({ forceMax: true, hideResults: false, showInput: true })
     ])
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
