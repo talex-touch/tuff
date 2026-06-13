@@ -255,23 +255,34 @@ export const COREAPP_VISIBLE_EXPERIENCE_SURFACES: readonly CoreAppVisibleExperie
     required: true,
     requiresVisualArtifact: true,
     collectionSteps: [
-      'Ask a text question from CoreBox and capture the answer preview.',
-      'Capture provider/model/latency/trace/input metadata in the preview footer.',
-      'Capture at least one recoverable failure state such as auth, quota, provider, or capability.'
+      'Ask a text question from CoreBox and capture the text.chat answer preview.',
+      'Ask with a clipboard image and capture the vision.ocr to text.chat answer preview.',
+      'Capture provider/model/latency/trace/input metadata in the preview footer for both success paths.',
+      'Capture recoverable failure states for logged-out, provider unavailable, quota exhausted, and model unsupported cases.'
     ],
     requiredEvidence: [
-      'Text answer preview is visible',
-      'Provider, model, latency, trace id, and input kind metadata are visible',
+      'CoreBox AI Ask text.chat success preview is visible',
+      'CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible',
+      'Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths',
       'Copy failure remains visible inside the preview',
-      'Auth/quota/provider/capability/permission failures show recovery hints'
+      'Logged-out failure shows a sign-in recovery hint',
+      'Provider unavailable failure shows a provider health or settings recovery hint',
+      'Quota exhausted failure shows a credits or team quota recovery hint',
+      'Model unsupported failure shows a supported model or capability recovery hint'
     ],
     recommendedArtifacts: [
-      'evidence/coreapp-visible/corebox-ai-answer.png',
-      'evidence/coreapp-visible/corebox-ai-recovery.png'
+      'evidence/coreapp-visible/corebox-ai-text-success.png',
+      'evidence/coreapp-visible/corebox-ai-ocr-success.png',
+      'evidence/coreapp-visible/corebox-ai-copy-failure.png',
+      'evidence/coreapp-visible/corebox-ai-failure-logged-out.png',
+      'evidence/coreapp-visible/corebox-ai-failure-provider-unavailable.png',
+      'evidence/coreapp-visible/corebox-ai-failure-quota-exhausted.png',
+      'evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png'
     ],
     blockedWhen: [
       'The preview hides provider/model/trace context.',
-      'Failure state appears as a generic error without a recovery hint.'
+      'Text success and OCR success are not captured as separate recent paths.',
+      'Logged-out, provider unavailable, quota exhausted, or model unsupported appears as a generic error without a recovery hint.'
     ]
   },
   {
