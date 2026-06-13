@@ -123,11 +123,6 @@ export class TuffTransportError extends Error {
   readonly pluginName?: string
 
   /**
-   * Original error that caused this error (if applicable).
-   */
-  override readonly cause?: Error
-
-  /**
    * Timestamp when this error occurred.
    */
   readonly timestamp: number
@@ -153,7 +148,14 @@ export class TuffTransportError extends Error {
     this.code = code
     this.eventName = options?.eventName
     this.pluginName = options?.pluginName
-    this.cause = options?.cause
+    if (options?.cause) {
+      Object.defineProperty(this, 'cause', {
+        value: options.cause,
+        configurable: true,
+        enumerable: false,
+        writable: true,
+      })
+    }
     this.timestamp = Date.now()
 
     // Maintain proper stack trace in V8 environments

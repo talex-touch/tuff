@@ -151,7 +151,7 @@ describe('publish', () => {
     expect(request.mock.calls[1]?.[0].url).toContain('/api/dashboard/plugins')
     expect(request.mock.calls[2]?.[0].url).toContain('/api/dashboard/plugins/plugin-1/versions')
     expect(request.mock.calls[2]?.[0].headers).toMatchObject({
-      Authorization: 'Bearer test-token',
+      'Authorization': 'Bearer test-token',
       'X-Device-Client': 'cli',
     })
   })
@@ -213,11 +213,11 @@ describe('publish', () => {
 
     expect(refreshAppJwt).toHaveBeenCalledTimes(1)
     expect(request.mock.calls[1]?.[0].headers).toMatchObject({
-      Authorization: `Bearer ${freshAppJwt}`,
+      'Authorization': `Bearer ${freshAppJwt}`,
       'X-Device-Client': 'cli',
     })
     expect(request.mock.calls[3]?.[0].headers).toMatchObject({
-      Authorization: `Bearer ${freshAppJwt}`,
+      'Authorization': `Bearer ${freshAppJwt}`,
       'X-Device-Client': 'cli',
     })
   })
