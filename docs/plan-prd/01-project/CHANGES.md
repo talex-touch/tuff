@@ -5,6 +5,14 @@
 
 ## 2026-06-13
 
+### fix(nexus): keep docs sidebar active item in view
+
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a route/data-change sync that scrolls the active docs sidebar link into the nearest sidebar scroll container after render.
+  - Keeps component/TuffEx docs navigation focused on the selected entry without moving the main document viewport.
+  - 验证：scoped Nexus ESLint and Nexus typecheck passed.
+
 ### fix(tuffex): make style entry build idempotent
 
 - `packages/tuffex/packages/script/build/index.ts`
