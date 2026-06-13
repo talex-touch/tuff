@@ -4,6 +4,7 @@ import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import fse from 'fs-extra'
 
 const permissionModuleMock = vi.hoisted(() => ({
@@ -817,6 +818,57 @@ describe('TouchPlugin.triggerFeature', () => {
         name: 'test-plugin',
         uniqueKey: expect.any(String),
         verified: expect.any(Boolean)
+      }
+    })
+  })
+
+  it('exposes intelligence SDK with the current plugin sdkapi marker', async () => {
+    const transport = {
+      invoke: vi.fn().mockResolvedValue({
+        ok: true,
+        result: { result: 'pong' }
+      }),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'touch-intelligence',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.2',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.sdkapi = 260615
+    const featureUtil = plugin.getFeatureUtil()
+
+    await expect(featureUtil.intelligence.invoke('text.chat', { messages: [] })).resolves.toEqual({
+      result: 'pong'
+    })
+    expect(featureUtil.plugin.intelligence).toBe(featureUtil.intelligence)
+
+    const [event, payload, context] = vi.mocked(transport.invoke).mock.calls[0]
+    expect(event.toEventName()).toBe(intelligenceApiEvents.invoke.toEventName())
+    expect(payload).toEqual({
+      capabilityId: 'text.chat',
+      payload: { messages: [] },
+      options: undefined,
+      _sdkapi: 260615
+    })
+    expect(context).toEqual({
+      plugin: {
+        name: 'touch-intelligence',
+        uniqueKey: '',
+        verified: false
       }
     })
   })

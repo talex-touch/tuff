@@ -31,6 +31,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { isSearchProviderEnabledByConfig } from '@talex-touch/utils/search'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
@@ -132,6 +133,22 @@ function createSafePluginOpenUrl(pluginName: string, logger: PluginLogger) {
       })
       throw error
     }
+  }
+}
+
+function withPluginSdkapiPayload(payload: unknown, sdkapi?: number): unknown {
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    typeof sdkapi !== 'number'
+  ) {
+    return payload
+  }
+
+  return {
+    ...(payload as Record<string, unknown>),
+    _sdkapi: sdkapi
   }
 }
 
@@ -1719,6 +1736,10 @@ export class TouchPlugin implements ITouchPlugin {
         })
       }
     }
+    const intelligence = createIntelligenceClient({
+      send: (eventName, payload) =>
+        touchChannel.send(eventName, withPluginSdkapiPayload(payload, this.sdkapi))
+    })
 
     type BoxChannelHandler = (data: PluginStandardChannelData) => unknown
     const boxChannelHandlers = new Map<string, Map<BoxChannelHandler, () => void>>()
@@ -2076,6 +2097,7 @@ export class TouchPlugin implements ITouchPlugin {
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,
       quickActions: quickActionsSDK,
+      intelligence,
       power: powerSDK,
       recommend: recommendSDK
     }
@@ -2091,6 +2113,7 @@ export class TouchPlugin implements ITouchPlugin {
       clipboard: clipboardUtil,
       channel: channelBridge,
       touchChannel,
+      intelligence,
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,
       quickActions: quickActionsSDK,

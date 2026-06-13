@@ -1,4 +1,4 @@
-const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel } = globalThis
+const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel, intelligence } = globalThis
 const crypto = require('node:crypto')
 
 const PLUGIN_NAME = 'touch-intelligence'
@@ -30,6 +30,10 @@ const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，�
 const conversationSessions = new Map()
 
 function resolveIntelligenceClient() {
+  if (intelligence?.invoke) {
+    return intelligence
+  }
+
   const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence/client')
   return createIntelligenceClient(touchChannel)
 }
@@ -496,18 +500,6 @@ function buildInfoItem({
   return builder.setMeta(meta).build()
 }
 
-function buildPlaceholderItem(featureId) {
-  return buildInfoItem({
-    id: `${featureId}-placeholder`,
-    featureId,
-    title: '输入问题或复制图片后提问',
-    subtitle: '示例：ai 帮我总结今天待办；复制图片后可先 OCR 再回答',
-    description: 'CoreBox AI Ask 等待文本或剪贴板图片输入。',
-    accessory: 'AI Ask',
-    status: 'empty',
-  })
-}
-
 function resolveDisplayPrompt(prompt, hasImage) {
   const normalizedPrompt = normalizePrompt(prompt)
   if (normalizedPrompt)
@@ -683,13 +675,16 @@ function extractQueryContext(query) {
   const rawText = getQueryText(query)
   const prompt = normalizePrompt(rawText)
   const imageDataUrl = extractImageDataUrl(query)
-  const shouldUseOcr = Boolean(imageDataUrl && (!prompt || hasAiPrefix(rawText)))
+  const isExplicitAiQuery = hasAiPrefix(rawText)
+  const shouldUseOcr = Boolean(imageDataUrl && (!prompt || isExplicitAiQuery))
+  const shouldShowEntry = Boolean((prompt && isExplicitAiQuery) || shouldUseOcr)
 
   return {
     rawText,
     prompt,
     imageDataUrl: shouldUseOcr ? imageDataUrl : '',
     inputKinds: extractInputKinds(query),
+    shouldShowEntry,
   }
 }
 
@@ -882,10 +877,8 @@ const pluginLifecycle = {
 
       plugin.feature.clearItems()
 
-      if (!queryContext.prompt && !queryContext.imageDataUrl) {
-        plugin.feature.pushItems([buildPlaceholderItem(resolvedFeatureId)])
+      if (!queryContext.shouldShowEntry)
         return true
-      }
 
       const draft = storeDraft(session, queryContext)
       plugin.feature.pushItems([buildSendItem(resolvedFeatureId, draft)])

@@ -3,7 +3,7 @@
   "name": "touch-intelligence",
   "version": "1.0.2",
   "author": "TalexTouch Team",
-  "sdkapi": 260428,
+  "sdkapi": 260615,
   "category": "ai",
   "icon": {
     "type": "file",
@@ -50,7 +50,7 @@
     {
       "id": "intelligence-ask",
       "name": "智能问答",
-      "desc": "输入问题或复制图片后直接调用 AI 回答",
+      "desc": "使用 ai/@ai 前缀在 CoreBox 里调用 AI 回答，支持图片 OCR",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"

@@ -96,6 +96,29 @@ describe('intelligence plugin', () => {
     })
   })
 
+  it('prefers the injected intelligence SDK from the plugin runtime', async () => {
+    const injectedIntelligence = {
+      invoke: vi.fn(async () => ({ result: 'injected' })),
+    }
+    const pluginWithInjectedSdk = loadPluginModule(
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
+      createPluginGlobals({
+        intelligence: injectedIntelligence,
+        touchChannel: {
+          send: vi.fn(async () => {
+            throw new Error('legacy channel should not be used')
+          }),
+        },
+      }),
+    )
+
+    const client = pluginWithInjectedSdk.__test.resolveIntelligenceClient()
+    const result = await client.invoke('text.chat', { messages: [] })
+
+    expect(result).toEqual({ result: 'injected' })
+    expect(injectedIntelligence.invoke).toHaveBeenCalledWith('text.chat', { messages: [] })
+  })
+
   it('builds chat payload with OCR context', () => {
     const payload = intelligenceTest.buildInvokePayload('总结重点', [], {
       ocrText: '第一行\n第二行',
@@ -133,6 +156,7 @@ describe('intelligence plugin', () => {
     ).toMatchObject({
       prompt: '',
       imageDataUrl: 'data:image/png;base64,abc',
+      shouldShowEntry: true,
     })
 
     expect(
@@ -143,6 +167,63 @@ describe('intelligence plugin', () => {
     ).toMatchObject({
       prompt: '普通搜索',
       imageDataUrl: '',
+      shouldShowEntry: false,
+    })
+  })
+
+  it('keeps root results silent until an AI query is actionable', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const pluginWithFeatureMocks = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', '')
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', '普通搜索')
+
+    expect(clearItems).toHaveBeenCalledTimes(2)
+    expect(pushItems).not.toHaveBeenCalled()
+  })
+
+  it('shows a send item for explicit AI text queries', async () => {
+    const clearItems = vi.fn()
+    const pushItems = vi.fn()
+    const pluginWithFeatureMocks = loadPluginModule(
+      intelligencePluginUrl,
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        plugin: {
+          feature: { clearItems, pushItems },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide() {} },
+        },
+      }),
+    )
+
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
+
+    expect(pushItems).toHaveBeenCalledOnce()
+    expect(pushItems.mock.calls[0][0][0].render.basic).toMatchObject({
+      title: '写一段总结',
+      accessory: 'AI Ask',
     })
   })
 
