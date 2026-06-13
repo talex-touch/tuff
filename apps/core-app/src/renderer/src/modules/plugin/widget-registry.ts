@@ -18,7 +18,11 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
-import { registerCustomRenderer, unregisterCustomRenderer } from '../box/custom-render'
+import {
+  getCustomRenderer,
+  registerCustomRenderer,
+  unregisterCustomRenderer
+} from '../box/custom-render'
 import { devLog } from '../../utils/dev-log'
 import { createRendererLogger } from '../../utils/renderer-log'
 import {
@@ -46,6 +50,7 @@ const widgetUnregisterEvent = PluginEvents.widget.unregister
 const widgetFailedEvent = PluginEvents.widget.failed
 const isDev = import.meta.env?.DEV ?? false
 const pollingService = PollingService.getInstance()
+const registeredWidgetHashes = new Map<string, string>()
 let transportBindingsReady = false
 let transportBindingTaskId: string | null = null
 
@@ -1344,6 +1349,19 @@ function injectStyles(widgetId: string, styles: string): void {
   injectedStyles.set(widgetId, style)
 }
 
+function removeInjectedStyles(widgetId: string): void {
+  const style = injectedStyles.get(widgetId)
+  if (!style) return
+  style.remove()
+  injectedStyles.delete(widgetId)
+}
+
+function clearRegisteredWidgetRuntime(widgetId: string): void {
+  registeredWidgetHashes.delete(widgetId)
+  unregisterCustomRenderer(widgetId)
+  removeInjectedStyles(widgetId)
+}
+
 function resolveErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -1379,6 +1397,16 @@ function recordWidgetRuntimeFailure(
 }
 
 export async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
+  if (
+    registeredWidgetHashes.get(payload.widgetId) === payload.hash &&
+    getCustomRenderer(payload.widgetId)
+  ) {
+    if (isDev) {
+      devLog(`[WidgetRegistry] skip duplicate widget register ${payload.widgetId}`)
+    }
+    return
+  }
+
   let sandboxEvidence: WidgetSandboxEvidence | undefined
   try {
     clearWidgetFailure(payload.widgetId)
@@ -1415,6 +1443,7 @@ export async function handleWidgetRegister(payload: WidgetRegistrationPayload): 
           })
         : runtimeComponent
     registerCustomRenderer(payload.widgetId, component)
+    registeredWidgetHashes.set(payload.widgetId, payload.hash)
     injectStyles(payload.widgetId, payload.styles)
     if (isDev) {
       const componentName =
@@ -1427,6 +1456,7 @@ export async function handleWidgetRegister(payload: WidgetRegistrationPayload): 
     if (sandboxEvidence) {
       recordWidgetSandboxEvidence(sandboxEvidence)
     }
+    clearRegisteredWidgetRuntime(payload.widgetId)
     recordWidgetRuntimeFailure(payload, error, sandboxEvidence)
     widgetRegistryLog.error('Widget registration failed', error)
     throw error
@@ -1470,6 +1500,7 @@ export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Pr
           })
         : runtimeComponent
     registerCustomRenderer(payload.widgetId, component)
+    registeredWidgetHashes.set(payload.widgetId, payload.hash)
     injectStyles(payload.widgetId, payload.styles)
     if (isDev) {
       const componentName =
@@ -1482,6 +1513,7 @@ export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Pr
     if (sandboxEvidence) {
       recordWidgetSandboxEvidence(sandboxEvidence)
     }
+    clearRegisteredWidgetRuntime(payload.widgetId)
     recordWidgetRuntimeFailure(payload, error, sandboxEvidence)
     widgetRegistryLog.error('Widget update failed', error)
     throw error
@@ -1496,12 +1528,7 @@ export function handleWidgetUnregister({ widgetId }: { widgetId: string }): void
     clearWidgetRuntimeSource(widgetId)
     clearWidgetFailure(widgetId)
     clearWidgetSandboxEvidence(widgetId)
-    unregisterCustomRenderer(widgetId)
-    const style = injectedStyles.get(widgetId)
-    if (style) {
-      style.remove()
-      injectedStyles.delete(widgetId)
-    }
+    clearRegisteredWidgetRuntime(widgetId)
   } catch (error) {
     widgetRegistryLog.error('Widget unregister failed', error)
     throw error
@@ -1515,7 +1542,7 @@ export function handleWidgetFailed(payload: WidgetFailurePayload): void {
     recordWidgetSandboxEvidence(payload.sandboxEvidence)
   }
   clearWidgetRuntimeSource(payload.widgetId)
-  unregisterCustomRenderer(payload.widgetId)
+  clearRegisteredWidgetRuntime(payload.widgetId)
   if (isDev) {
     devLog(`[WidgetRegistry] widget failed ${payload.widgetId} (${payload.code})`, payload)
   }
