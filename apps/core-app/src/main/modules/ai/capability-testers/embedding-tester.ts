@@ -26,14 +26,10 @@ export class EmbeddingCapabilityTester extends BaseCapabilityTester<
       .map((v) => v.toFixed(4))
       .join(', ')}...]`
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: 'Embedding 测试成功',
-      textPreview: preview,
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: preview
+    })
   }
 
   getDefaultInputHint(): string {

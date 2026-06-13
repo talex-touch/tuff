@@ -25,14 +25,10 @@ export class SummarizeCapabilityTester extends BaseCapabilityTester<
   formatTestResult(result: IntelligenceInvokeResult<string>) {
     const preview = result.result.length > 200 ? `${result.result.slice(0, 200)}...` : result.result
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: '摘要生成成功',
-      textPreview: preview,
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: preview
+    })
   }
 
   getDefaultInputHint(): string {

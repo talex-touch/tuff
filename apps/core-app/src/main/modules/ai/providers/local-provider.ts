@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import type {
+  IntelligenceChatPayload,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceVisionOcrPayload,
@@ -13,7 +14,19 @@ import {
   type NativeOcrBlock
 } from '@talex-touch/tuff-native'
 import { enterPerfContext } from '../../../utils/perf-context'
+import { getNetworkService } from '../../network'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
+
+interface OllamaChatResponse {
+  model?: string
+  message?: {
+    content?: string
+  }
+  prompt_eval_count?: number
+  eval_count?: number
+}
+
+const LOCAL_DIRECT_PROXY = { mode: 'direct' as const }
 
 export class LocalProvider extends OpenAiCompatibleLangChainProvider {
   readonly type = IntelligenceProviderType.LOCAL
@@ -22,6 +35,86 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
   protected readonly defaultChatModel = 'llama3.1'
   protected readonly defaultEmbeddingModel = 'nomic-embed-text'
   protected readonly requireApiKey = false
+
+  private resolveOllamaBaseUrl(): string {
+    const normalized = (this.config.baseUrl || this.defaultBaseUrl).replace(/\/+$/, '')
+    const lower = normalized.toLowerCase()
+    for (const suffix of ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']) {
+      if (lower.endsWith(suffix)) {
+        return normalized.slice(0, -suffix.length).replace(/\/+$/, '')
+      }
+    }
+    return normalized
+  }
+
+  private resolveLocalChatModel(options: IntelligenceInvokeOptions): string {
+    return options.modelPreference?.[0] || this.config.defaultModel || this.defaultChatModel
+  }
+
+  async chat(
+    payload: IntelligenceChatPayload,
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
+    const startedAt = Date.now()
+    const traceId = this.generateTraceId()
+    const model = this.resolveLocalChatModel(options)
+
+    try {
+      const response = await getNetworkService().request<OllamaChatResponse>({
+        method: 'POST',
+        url: `${this.resolveOllamaBaseUrl()}/api/chat`,
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: {
+          model,
+          messages: payload.messages,
+          stream: false,
+          options: {
+            ...(typeof payload.temperature === 'number'
+              ? { temperature: payload.temperature }
+              : {}),
+            ...(typeof payload.maxTokens === 'number' ? { num_predict: payload.maxTokens } : {})
+          }
+        },
+        responseType: 'json',
+        proxyOverride: LOCAL_DIRECT_PROXY,
+        timeoutMs: options.timeout ?? this.config.timeout ?? 60_000,
+        retryPolicy: {
+          maxRetries: 0,
+          retryOnNetworkError: false,
+          retryOnTimeout: false,
+          retryableStatusCodes: []
+        },
+        cooldownPolicy: {
+          key: `${this.config.id}:ollama.chat`,
+          failureThreshold: 2,
+          cooldownMs: 15_000,
+          autoResetOnSuccess: true
+        }
+      })
+
+      const content = response.data.message?.content ?? ''
+      return {
+        result: content,
+        usage: {
+          promptTokens: response.data.prompt_eval_count ?? 0,
+          completionTokens: response.data.eval_count ?? 0,
+          totalTokens: (response.data.prompt_eval_count ?? 0) + (response.data.eval_count ?? 0)
+        },
+        model: response.data.model || model,
+        latency: Date.now() - startedAt,
+        traceId,
+        provider: this.type
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (!message.includes('404')) {
+        throw error
+      }
+      return await super.chat(payload, options)
+    }
+  }
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,

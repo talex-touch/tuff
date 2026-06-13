@@ -22,14 +22,10 @@ export class IntentDetectTester extends BaseCapabilityTester {
     const intent = result.result?.intent || 'unknown'
     const confidence = result.result?.confidence || 0
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: `意图识别: ${intent} (置信度: ${(confidence * 100).toFixed(1)}%)`,
-      textPreview: JSON.stringify(result.result, null, 2),
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: JSON.stringify(result.result, null, 2)
+    })
   }
 
   getDefaultInputHint(): string {
@@ -56,14 +52,10 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
     const sentiment = result.result?.sentiment || 'neutral'
     const score = result.result?.score || 0
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: `情感分析: ${sentiment} (得分: ${score.toFixed(2)})`,
-      textPreview: JSON.stringify(result.result, null, 2),
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: JSON.stringify(result.result, null, 2)
+    })
   }
 
   getDefaultInputHint(): string {
@@ -92,14 +84,10 @@ export class KeywordsExtractTester extends BaseCapabilityTester {
     const keywords = result.result?.keywords || []
     const keywordList = keywords.map((k) => k.term).join(', ')
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: `提取了 ${keywords.length} 个关键词`,
-      textPreview: keywordList || '无关键词',
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: keywordList || '无关键词'
+    })
   }
 
   getDefaultInputHint(): string {

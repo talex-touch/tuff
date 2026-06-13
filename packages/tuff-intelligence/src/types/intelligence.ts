@@ -439,6 +439,8 @@ export interface IntelligenceInvokeResult<T = any> {
   traceId: string
   /** Provider that handled the request. */
   provider: string
+  /** Optional model reasoning or thinking trace when exposed by the provider. */
+  reasoning?: string
 }
 
 /**
@@ -2433,6 +2435,15 @@ export interface CapabilityTestResult {
   latency?: number
   provider?: string
   model?: string
+  usage?: IntelligenceUsageInfo
+  tokensPerSecond?: number
+  stability?: {
+    status: 'stable' | 'slow' | 'unstable' | 'unknown'
+    score?: number
+    summary: string
+    signals?: string[]
+  }
+  reasoning?: string
   textPreview?: string
   timestamp: number
 }
