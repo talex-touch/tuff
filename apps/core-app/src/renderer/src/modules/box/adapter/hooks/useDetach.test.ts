@@ -101,6 +101,25 @@ describe('buildDetachedFeatureConfig', () => {
     })
   })
 
+  it('honors explicit hidden input for detached webcontent features', () => {
+    const detached = buildDetachedFeatureConfig(
+      createFeatureItem({
+        meta: {
+          pluginName: 'demo-plugin',
+          featureId: 'manager',
+          interaction: {
+            type: 'webcontent',
+            path: 'manager/index.html',
+            showInput: false
+          } as { type: 'webcontent'; path: string; showInput: boolean }
+        }
+      }),
+      'clipboard'
+    )
+
+    expect(detached?.config.ui).toEqual({ showInput: false, initialInput: '' })
+  })
+
   it('does not build DivisionBox config for non-plugin search results', () => {
     const detached = buildDetachedFeatureConfig(
       createFeatureItem({

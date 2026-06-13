@@ -25,6 +25,12 @@ interface UseDetachOptions {
   deactivateProvider: (id?: string) => Promise<void>
 }
 
+interface DetachedFeatureInteraction {
+  type?: 'widget' | 'webcontent' | 'index'
+  path?: string
+  showInput?: boolean
+}
+
 function resolveIcon(item: TuffItem): string | ITuffIcon | undefined {
   const icon = item.render?.basic?.icon
   if (!icon) return undefined
@@ -65,8 +71,11 @@ export function buildDetachedFeatureConfig(
   item: TuffItem,
   query: string
 ): { config: DivisionBoxConfig; isWidget: boolean } | null {
-  const interaction = item.meta?.interaction
-  const showInput = interaction?.type !== 'widget'
+  const interaction = item.meta?.interaction as DetachedFeatureInteraction | undefined
+  const showInput =
+    typeof interaction?.showInput === 'boolean'
+      ? interaction.showInput
+      : interaction?.type !== 'widget'
   const pluginId = resolveFeaturePluginId(item)
   if (!pluginId) {
     return null

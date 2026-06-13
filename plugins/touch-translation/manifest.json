@@ -1,7 +1,7 @@
 {
   "id": "com.tuffex.translation",
   "name": "touch-translation",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "author": "TalexTouch Team",
   "sdkapi": 260428,
   "category": "utilities",
@@ -102,7 +102,9 @@
       ],
       "interaction": {
         "type": "widget",
-        "path": "translate-panel"
+        "path": "translate-panel",
+        "showInput": true,
+        "allowInput": true
       }
     },
     {
@@ -130,7 +132,9 @@
       ],
       "interaction": {
         "type": "webcontent",
-        "path": "/multi-translate"
+        "path": "/multi-translate",
+        "showInput": true,
+        "allowInput": true
       }
     },
     {
@@ -159,7 +163,9 @@
       ],
       "interaction": {
         "type": "widget",
-        "path": "screenshot-translate"
+        "path": "screenshot-translate",
+        "showInput": false,
+        "allowInput": false
       }
     }
   ]

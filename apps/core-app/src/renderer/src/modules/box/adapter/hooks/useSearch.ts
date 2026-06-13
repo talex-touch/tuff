@@ -679,6 +679,7 @@ export function useSearch(
 
       const interaction = (itemToExecute.meta as { interaction?: unknown } | null | undefined)
         ?.interaction
+      const explicitShowInput = isRecord(interaction) ? interaction.showInput : undefined
       const allowInput = isRecord(interaction) && interaction.allowInput === true
 
       const acceptedInputTypes = (
@@ -686,7 +687,10 @@ export function useSearch(
       )?.extension?.acceptedInputTypes
       const hasAcceptedInputTypes =
         Array.isArray(acceptedInputTypes) && acceptedInputTypes.length > 0
-      const shouldShowInput = hasAcceptedInputTypes || allowInput
+      const shouldShowInput =
+        typeof explicitShowInput === 'boolean'
+          ? explicitShowInput
+          : hasAcceptedInputTypes || allowInput
 
       activeActivations.value = [
         {

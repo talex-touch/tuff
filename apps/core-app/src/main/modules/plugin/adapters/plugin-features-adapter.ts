@@ -74,6 +74,20 @@ function mapIconType(type: string): TuffIconType {
       return 'emoji'
   }
 }
+
+function resolveFeatureShowInput(feature: IPluginFeature): boolean {
+  if (feature.interaction?.showInput === false) {
+    return false
+  }
+  if (feature.interaction?.showInput === true) {
+    return true
+  }
+
+  const hasAcceptedInputTypes = Boolean(feature.acceptedInputTypes?.length)
+  const allowInput = feature.interaction?.allowInput === true
+  return hasAcceptedInputTypes || allowInput
+}
+
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly id = 'plugin-features'
   public readonly type: TuffSourceType = 'plugin'
@@ -228,11 +242,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     if (feature.interaction && feature.interaction.type === 'webcontent') {
       const query = searchQuery
 
-      // Determine if input should be shown while webcontent view is attached
-      const hasAcceptedInputTypes =
-        feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
-      const allowInput = feature.interaction?.allowInput === true
-      const shouldShowInput = hasAcceptedInputTypes || allowInput
+      const shouldShowInput = resolveFeatureShowInput(feature)
 
       // IMPORTANT: Pre-activate the provider BEFORE loading the plugin view
       // This ensures items pushed by the plugin during onFeatureTriggered
@@ -297,11 +307,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     // For push-mode features, pre-activate BEFORE triggering to ensure
     // items pushed during onFeatureTriggered have correct activation state
     if (feature.push) {
-      // Determine if input should be shown based on feature config
-      const hasAcceptedInputTypes =
-        feature.acceptedInputTypes && feature.acceptedInputTypes.length > 0
-      const allowInput = feature.interaction?.allowInput === true
-      const shouldShowInput = hasAcceptedInputTypes || allowInput
+      const shouldShowInput = resolveFeatureShowInput(feature)
 
       const activation: IProviderActivate = {
         id: this.id,

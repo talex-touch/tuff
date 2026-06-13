@@ -5,6 +5,21 @@
 
 ## 2026-06-13
 
+### fix(core-app): respect plugin input visibility for adapted plugin surfaces
+
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `plugins/clipboard-history/manifest.json`
+- `plugins/clipboard-history/src/views/ClipboardManagerView.vue`
+- `plugins/clipboard-history/src/components/ClipboardActionBar.vue`
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+  - CoreBox plugin feature activation now honors explicit `interaction.showInput` before falling back to accepted input types and input monitoring.
+  - Clipboard History declares its manager as an exclusive webcontent surface and its footer/action bar now compresses inside the CoreBox width without hiding the main content.
+  - Translation declares the intended input visibility for text, multi-source, and screenshot translation entries, and the widget panel now wraps long query/provider controls in narrow hosts.
+  - 验证：focused CoreApp adapter/detach Vitest、CoreApp typecheck、Translation typecheck、Clipboard History typecheck/test 与 `git diff --check` 均通过。
+
 ### chore(release): close 2.4.11 beta.8 gate checklist
 
 - `docs/plan-prd/04-implementation/Release-2.4.11-Closure-2026-06-13.md`
