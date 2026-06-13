@@ -1117,7 +1117,7 @@ importers:
         specifier: ^3.5.33
         version: 3.5.33(typescript@5.9.3)
       vue-tsc:
-        specifier: catalog:dev
+        specifier: ^3.2.7
         version: 3.2.7(typescript@5.9.3)
 
   packages/tuffex/packages/components:

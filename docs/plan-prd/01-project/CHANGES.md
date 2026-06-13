@@ -5,6 +5,26 @@
 
 ## 2026-06-13
 
+### chore(release): close 2.4.11 beta.8 gate checklist
+
+- `docs/plan-prd/04-implementation/Release-2.4.11-Closure-2026-06-13.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `package.json`
+- `packages/tuffex/package.json`
+- `packages/utils/transport/errors.ts`
+- `packages/tuff-cli-core/src/__tests__/publish-smoke.test.ts`
+- `apps/nexus/server/api/docs/navigation.get.ts`
+- `apps/nexus/test/api/docs/navigation.get.test.ts`
+- `apps/nexus/server/utils/pluginContentStore.test.ts`
+  - Synced active release docs to root/CoreApp `2.4.11-beta.8`, separated Windows/macOS real-device regression into a later platform evidence track, and added the release closure checklist with explicit non-blocking items.
+  - Stabilized release gates by allowing ESLint 9 unmatched workspace globs, building TuffEx before cross-workspace typecheck, removing publish-manifest `catalog:` leakage from TuffEx, and preserving transport `cause` runtime behavior without requiring ES2022 lib typing.
+  - Added Nexus docs navigation development fallback coverage for temporarily missing Nuxt Content docs tables, and moved plugin content store test imports behind `beforeAll` so release Vitest collection no longer depends on top-level await.
+  - 验证：Nexus docs navigation focused Vitest/scoped ESLint/typecheck、`pnpm quality:pr`、`pnpm publish:check`、`pnpm publish:check:pack`、`pnpm typecheck:all`、`pnpm quality:release` 与 `git diff --check` 均通过；真实 `npm publish`、tag/release 创建和 `git push` 未执行。
+
 ### ref(core-app): extract CommonChannel secure store handlers
 
 - `apps/core-app/src/main/channel/common.ts`

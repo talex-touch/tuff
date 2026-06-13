@@ -1,5 +1,5 @@
 import type { PluginContentStatus, PluginContentVisibility } from '@talex-touch/utils/types/cloud-share'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 interface ContentRow {
   id: string
@@ -188,14 +188,20 @@ vi.mock('nitropack/runtime/internal/storage', () => ({
   }),
 }))
 
-const {
-  createPluginContentPackage,
-  getPluginContentPackage,
-  installPluginContentPackage,
-  listPluginContentPackages,
-} = await import('./pluginContentStore')
+let createPluginContentPackage: typeof import('./pluginContentStore')['createPluginContentPackage']
+let getPluginContentPackage: typeof import('./pluginContentStore')['getPluginContentPackage']
+let installPluginContentPackage: typeof import('./pluginContentStore')['installPluginContentPackage']
+let listPluginContentPackages: typeof import('./pluginContentStore')['listPluginContentPackages']
 
 const event = {} as any
+
+beforeAll(async () => {
+  const store = await import('./pluginContentStore')
+  createPluginContentPackage = store.createPluginContentPackage
+  getPluginContentPackage = store.getPluginContentPackage
+  installPluginContentPackage = store.installPluginContentPackage
+  listPluginContentPackages = store.listPluginContentPackages
+})
 
 describe('pluginContentStore', () => {
   beforeEach(() => {
