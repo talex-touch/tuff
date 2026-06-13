@@ -1,20 +1,13 @@
 <script setup lang="ts">
-import { $fetch as rawFetch } from 'ofetch'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxLoadingState } from '@talex-touch/tuffex/loading-state'
-import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { defineComponent, h, render } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
-import DocsFeedback from '~/components/docs/DocsFeedback.vue'
 import { appDescription, appName } from '~/constants'
-import type {
-  DocAnalyticsEvidenceSummary,
-  DocAnalyticsResponse,
-} from '~/types/docs-engagement'
-import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { useTypedFetch } from '~/utils/request'
+import { DOCS_SUPPORTED_LOCALES, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 definePageMeta({
   layout: 'docs',
@@ -24,53 +17,24 @@ definePageMeta({
 const route = useRoute()
 const requestUrl = useRequestURL()
 const nuxtApp = useNuxtApp()
-const { locale, t } = useI18n()
-const localePath = useLocalePath()
-const { deviceId } = useDeviceIdentity()
+const { t } = useI18n()
 const toast = useToast()
+const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
+const isZhDocs = computed(() => docsLocale.value === 'zh')
+const localizedDocsPath = (path: string | null | undefined) => toLocalizedDocsPath(path, docsLocale.value)
 
 const { user } = useAuthUser()
 const isAdmin = computed(() => user.value?.role === 'admin')
 
-const SUPPORTED_LOCALES = ['en', 'zh']
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
-function stripLocalePrefix(path: string) {
-  if (!path)
-    return '/'
-  for (const code of SUPPORTED_LOCALES) {
-    const exact = `/${code}`
-    if (path === exact || path === `${exact}/`)
-      return '/'
-    const prefixed = `${exact}/`
-    if (path.startsWith(prefixed))
-      return path.slice(exact.length) || '/'
-  }
-  return path
-}
+const docPath = computed(() => normalizeDocsPagePath(route.path))
 
-function stripContentExtension(path: string) {
-  return path.replace(/\.(md|mdc)$/i, '')
-}
-
-function stripLocaleSuffix(path: string) {
-  return path.replace(/\.(en|zh)$/i, '')
-}
-
-const docPath = computed(() => {
-  const rawPath = route.path.endsWith('/') && route.path.length > 1
-    ? route.path.slice(0, -1)
-    : route.path
-  const normalized = stripLocaleSuffix(stripContentExtension(stripLocalePrefix(rawPath)))
-  return normalized || '/docs'
-})
-
-const requestKey = computed(() => `doc:${docPath.value}:${locale.value}`)
+const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
-  const prefixed = path.startsWith('/') ? path : `/${path}`
-  return stripLocaleSuffix(stripContentExtension(stripLocalePrefix(prefixed)))
+  return normalizeDocsPagePath(path)
 }
 
 function stripCjk(value: string) {
@@ -90,7 +54,7 @@ function fallbackTitleFromPath(path?: string) {
 }
 
 function normalizeTitleForLocale(value: string, path?: string) {
-  if (locale.value !== 'en')
+  if (docsLocale.value !== 'en')
     return value
   const stripped = stripCjk(value)
   if (stripped)
@@ -101,7 +65,7 @@ function normalizeTitleForLocale(value: string, path?: string) {
 function normalizeDescriptionForLocale(value?: string | null) {
   if (!value)
     return ''
-  if (locale.value !== 'en')
+  if (docsLocale.value !== 'en')
     return value
   return stripCjk(value)
 }
@@ -151,7 +115,7 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
     key: requestKey,
     query: computed(() => ({
       path: docPath.value,
-      locale: locale.value,
+      locale: docsLocale.value,
     })),
     default: () => null,
   },
@@ -207,8 +171,9 @@ const { data: navigationTreePayload } = await useTypedFetch<unknown>(
 
 const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
-const docLocaleState = useState<string>('docs-locale', () => locale.value)
+const docLocaleState = useState<string>('docs-locale', () => docsLocale.value)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+const viewCount = ref<number | null>(null)
 const docsClientPanelsMounted = ref(false)
 const shouldMountDocClientPanels = ref(false)
 
@@ -217,54 +182,13 @@ watch(
   () => {
     outlineState.value = []
     docTitleState.value = ''
-    docLocaleState.value = locale.value
+    docLocaleState.value = docsLocale.value
     docMetaState.value = {}
     shouldMountDocClientPanels.value = false
   },
 )
 
 type TocEntry = DocTocEntry
-
-interface DocSectionInsight {
-  sectionId: string
-  sectionTitle: string
-  viewCount: number
-  readPercent: number
-  jumpCount: number
-  copyCount: number
-  selectCount: number
-  avgStayMs: number
-}
-
-interface DocOverlayRect {
-  key: string
-  type: 'copy' | 'select'
-  left: number
-  top: number
-  width: number
-  height: number
-  opacity: number
-  tooltip: string
-}
-
-interface DocSectionBadge {
-  key: string
-  label: string
-  left: number
-  top: number
-  tooltip: string
-}
-
-interface DocSectionBlock {
-  key: string
-  label: string
-  left: number
-  top: number
-  width: number
-  height: number
-  opacity: number
-  tooltip: string
-}
 
 function extractDocText(value: any): string {
   if (!value)
@@ -355,8 +279,8 @@ const docDisplayDescription = computed(() =>
 const heroBreadcrumbs = computed(() => {
   const isComponentDoc = docScope.value.isComponent
   const prefixLabel = isComponentDoc
-    ? (locale.value === 'zh' ? '组件' : 'Components')
-    : (locale.value === 'zh' ? '文档' : 'Docs')
+    ? (isZhDocs.value ? '组件' : 'Components')
+    : (isZhDocs.value ? '文档' : 'Docs')
   const prefixPath = isComponentDoc ? '/docs/dev/components' : '/docs'
   const category = docMeta.value.category ? String(docMeta.value.category) : ''
   const categoryLabel = category ? normalizeTitleForLocale(category) : ''
@@ -371,7 +295,7 @@ const heroReadTimeLabel = computed(() => {
   const text = extractDocText(doc.value?.body).replace(/\s+/g, ' ').trim()
   if (!text)
     return ''
-  if (locale.value === 'zh') {
+  if (isZhDocs.value) {
     const charCount = text.replace(/\s/g, '').length
     const minutes = Math.max(1, Math.round(charCount / 350))
     return `${minutes} 分钟阅读`
@@ -383,7 +307,7 @@ const heroReadTimeLabel = computed(() => {
 const heroSinceLabel = computed(() => {
   const raw = docMeta.value?.since ?? docMeta.value?.meta?.since
   const fallback = (() => {
-    if (locale.value === 'zh') {
+    if (isZhDocs.value) {
       if (docScope.value.isComponent)
         return '通用组件'
       if (docScope.value.isExtension)
@@ -409,7 +333,7 @@ const heroSinceLabel = computed(() => {
   const value = String(raw).trim()
   if (!value)
     return fallback
-  return locale.value === 'zh' ? `自 ${value}` : `Since ${value}`
+  return isZhDocs.value ? `自 ${value}` : `Since ${value}`
 })
 const heroBetaLabel = computed(() => {
   if (toBoolean(docMeta.value?.verified))
@@ -444,15 +368,15 @@ function resolveDocLocale(target: any) {
     return 'zh'
   if (path.endsWith('.en'))
     return 'en'
-  return 'en'
+  return docsLocale.value
 }
 
 function matchesLocale(target: any) {
   const path = typeof target?.path === 'string' ? target.path : ''
   if (path.endsWith('.zh'))
-    return locale.value === 'zh'
+    return docsLocale.value === 'zh'
   if (path.endsWith('.en'))
-    return locale.value === 'en'
+    return docsLocale.value === 'en'
   return true
 }
 
@@ -552,7 +476,7 @@ const lastUpdatedDate = computed(() => {
   return null
 })
 
-const heroUpdatedLocale = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
+const heroUpdatedLocale = computed(() => (isZhDocs.value ? 'zh-CN' : 'en-US'))
 const heroUpdatedAgo = useTimeAgoIntl(
   () => lastUpdatedDate.value?.getTime() ?? Date.now(),
   {
@@ -564,7 +488,7 @@ const heroUpdatedAgo = useTimeAgoIntl(
 const heroUpdatedLabel = computed(() => {
   if (!lastUpdatedDate.value)
     return ''
-  return locale.value === 'zh'
+  return isZhDocs.value
     ? `更新于 ${heroUpdatedAgo.value}`
     : `Updated ${heroUpdatedAgo.value}`
 })
@@ -603,8 +527,8 @@ const heroSyncBanner = computed(() => {
     return {
       status: 'in_progress',
       icon: 'i-carbon-in-progress',
-      title: locale.value === 'zh' ? '当前组件文档正在开发中' : 'This component doc is in progress',
-      description: locale.value === 'zh'
+      title: isZhDocs.value ? '当前组件文档正在开发中' : 'This component doc is in progress',
+      description: isZhDocs.value
         ? '该页面正在持续迁移，示例与 API 可能会继续调整。'
         : 'This page is still being migrated. Demos and API details may change.',
     }
@@ -613,8 +537,8 @@ const heroSyncBanner = computed(() => {
   return {
     status: 'migrated',
     icon: 'i-carbon-warning-alt',
-    title: locale.value === 'zh' ? '该页面由 AI 迁移生成，请谨慎使用' : 'This page was migrated by AI, please review carefully',
-    description: locale.value === 'zh'
+    title: isZhDocs.value ? '该页面由 AI 迁移生成，请谨慎使用' : 'This page was migrated by AI, please review carefully',
+    description: isZhDocs.value
       ? '内容已迁移完成，但仍建议结合源码和人工评审结果使用。'
       : 'Migration is complete, but please validate against source code and manual review.',
   }
@@ -623,7 +547,7 @@ const heroSyncBanner = computed(() => {
 const formattedLastUpdated = computed(() => {
   if (!lastUpdatedDate.value)
     return null
-  return new Intl.DateTimeFormat(locale.value, {
+  return new Intl.DateTimeFormat(docsLocale.value, {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(lastUpdatedDate.value)
@@ -640,7 +564,7 @@ const docSeoTitleText = computed(() => {
 })
 
 const docSeoPageTitle = computed(() => {
-  const title = docSeoTitleText.value || (locale.value === 'zh' ? '文档' : 'Docs')
+  const title = docSeoTitleText.value || (isZhDocs.value ? '文档' : 'Docs')
   return `${title} | ${appName}`
 })
 
@@ -649,14 +573,31 @@ const docSeoDescription = computed(() => {
   const description = normalizeDescriptionForLocale(rawDescription ? String(rawDescription) : '')
   if (description)
     return description
-  return locale.value === 'zh'
+  return isZhDocs.value
     ? 'Tuff 官方文档，涵盖桌面指令中心、插件扩展、组件与开发者 API。'
     : appDescription
 })
 
 const docCanonicalPath = computed(() => normalizedDocPath.value || docPath.value || '/docs')
-const docCanonicalLocalePath = computed(() => localePath({ path: docCanonicalPath.value }))
+const docCanonicalLocalePath = computed(() => toLocalizedDocsPath(docCanonicalPath.value, docsLocale.value))
 const docCanonicalUrl = computed(() => resolveAbsoluteUrl(docCanonicalLocalePath.value))
+const docAlternateLinks = computed(() => {
+  return [
+    ...DOCS_SUPPORTED_LOCALES.map((targetLocale) => {
+      const href = resolveAbsoluteUrl(toLocalizedDocsPath(docCanonicalPath.value, targetLocale))
+      return {
+        rel: 'alternate',
+        hreflang: targetLocale === 'zh' ? 'zh-CN' : 'en',
+        href,
+      }
+    }),
+    {
+      rel: 'alternate',
+      hreflang: 'x-default',
+      href: resolveAbsoluteUrl(toLocalizedDocsPath(docCanonicalPath.value, 'en')),
+    },
+  ]
+})
 const docRobotsContent = computed(() => viewState.value === 'content' ? 'index,follow' : 'noindex,nofollow')
 
 const docStructuredData = computed<Record<string, unknown> | null>(() => {
@@ -668,7 +609,7 @@ const docStructuredData = computed<Record<string, unknown> | null>(() => {
     '@type': 'TechArticle',
     headline: docSeoTitleText.value || docDisplayTitle.value,
     description: docSeoDescription.value,
-    inLanguage: locale.value === 'zh' ? 'zh-CN' : 'en-US',
+    inLanguage: isZhDocs.value ? 'zh-CN' : 'en-US',
     url: docCanonicalUrl.value,
     mainEntityOfPage: {
       '@type': 'WebPage',
@@ -719,6 +660,7 @@ useHead(() => ({
       rel: 'canonical',
       href: docCanonicalUrl.value,
     },
+    ...docAlternateLinks.value,
   ],
   script: docStructuredDataText.value
     ? [
@@ -752,14 +694,13 @@ const pagerNextTitle = computed(() => {
 
 const currentDocRenderKey = computed(() => {
   const path = typeof doc.value?.path === 'string' ? doc.value.path : docPath.value
-  return `${path}:${locale.value}`
+  return `${path}:${docsLocale.value}`
 })
 const isDocsContentReady = computed(() => viewState.value === 'content' && Boolean(doc.value))
 let lastEnhancedDocKey = ''
-let docsTrackerRefreshRaf: number | null = null
 
 watch(
-  () => [doc.value, locale.value] as const,
+  () => [doc.value, docsLocale.value] as const,
   ([currentDoc]) => {
     if (currentDoc) {
       outlineState.value = buildDocOutlineFromBody(currentDoc.body)
@@ -778,7 +719,7 @@ watch(
 
     outlineState.value = []
     docTitleState.value = ''
-    docLocaleState.value = locale.value
+    docLocaleState.value = docsLocale.value
     docMetaState.value = {}
   },
   { immediate: true },
@@ -788,732 +729,16 @@ onBeforeUnmount(() => {
   outlineState.value = []
   docTitleState.value = ''
   docMetaState.value = {}
-  docsAnalyticsOptionsReady.value = false
-  docsAnalyticsConfigOpen.value = false
   clearCodeEnhanceSchedule()
   clearRenderedCodeHeaders()
-  docsOverlayResizeObserver?.disconnect()
-  docsOverlayResizeObserver = null
   if (import.meta.client) {
-    window.removeEventListener('resize', scheduleDocsAnalyticsOverlay)
     document.removeEventListener('click', handleDocsInlineCodeClick)
     document.removeEventListener('keydown', handleDocsInlineCodeKeydown)
   }
-  if (docsOverlayFrameRaf)
-    cancelAnimationFrame(docsOverlayFrameRaf)
-  if (docsTrackerRefreshRaf)
-    cancelAnimationFrame(docsTrackerRefreshRaf)
-  clearDocsAnalyticsVisuals()
 })
-
-// View tracking (admin only display)
-const viewCount = ref<number | null>(null)
-
-const docsTracker = useDocEngagementTracker({
-  source: 'docs_page',
-  path: () => docPath.value,
-  title: () => docDisplayTitle.value || (doc.value?.title ? String(doc.value.title) : ''),
-  clientId: () => deviceId.value || '',
-  enabled: () => viewState.value === 'content' && Boolean(docPath.value),
-  contentSelector: '.docs-prose',
-  trackSections: true,
-  captureSelection: true,
-  onViewTracked: (views) => {
-    viewCount.value = views
-  },
-})
-
-function scheduleDocsTrackerRefresh() {
-  if (import.meta.server)
-    return
-  if (docsTrackerRefreshRaf)
-    return
-  void nextTick(() => {
-    if (docsTrackerRefreshRaf)
-      return
-    docsTrackerRefreshRaf = requestAnimationFrame(() => {
-      docsTrackerRefreshRaf = null
-      docsTracker.refreshSections()
-    })
-  })
-}
-
-function normalizeAnalyticsPath(path: string | null | undefined) {
-  if (!path)
-    return ''
-  return path.replace(/^\/+|\/+$/g, '').toLowerCase()
-}
-
-function formatCompactDuration(ms: number) {
-  if (!ms)
-    return locale.value === 'zh' ? '0 秒' : '0s'
-  const totalSeconds = Math.max(0, Math.round(ms / 1000))
-  if (totalSeconds < 60)
-    return locale.value === 'zh' ? `${totalSeconds} 秒` : `${totalSeconds}s`
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return locale.value === 'zh'
-    ? `${minutes} 分 ${seconds} 秒`
-    : `${minutes}m ${seconds}s`
-}
-
-function formatPercent(value: number) {
-  const clamped = Math.max(0, Math.min(100, value))
-  if (clamped === 0 || clamped >= 10)
-    return `${clamped.toFixed(0)}%`
-  return `${clamped.toFixed(1)}%`
-}
-
-const docsAnalyticsVisible = ref(false)
-const docsAnalyticsLoading = ref(false)
-const docsAnalyticsError = ref<string | null>(null)
-const docsAnalyticsResult = ref<DocAnalyticsResponse | null>(null)
-const docsAnalyticsUpdatedAt = ref<number | null>(null)
-const docsAnalyticsRects = ref<DocOverlayRect[]>([])
-const docsAnalyticsBadges = ref<DocSectionBadge[]>([])
-const docsAnalyticsSectionBlocks = ref<DocSectionBlock[]>([])
-const docsAnalyticsFrame = ref({
-  ready: false,
-  top: 0,
-  left: 0,
-  width: 0,
-  height: 0,
-})
-const docsAnalyticsConfigOpen = ref(false)
-const docsAnalyticsAdvancedOpen = ref(false)
-const docsAnalyticsConfigTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
-const docsAnalyticsConfigTriggerEl = computed(() => docsAnalyticsConfigTriggerRef.value?.$el || null)
-
-interface DocsAnalyticsOptions {
-  days: number
-  hotSectionLimit: number
-  evidenceLimit: number
-  showSectionBlocks: boolean
-  showBadges: boolean
-  showCopy: boolean
-  showSelect: boolean
-}
-
-const DOCS_ANALYTICS_DEFAULTS: DocsAnalyticsOptions = Object.freeze({
-  days: 30,
-  hotSectionLimit: 6,
-  evidenceLimit: 160,
-  showSectionBlocks: true,
-  showBadges: true,
-  showCopy: true,
-  showSelect: true,
-})
-const DOCS_ANALYTICS_STORAGE_KEY = 'nexus.docs.analytics.overlay.v1'
-
-const docsAnalyticsOptions = reactive<DocsAnalyticsOptions>({
-  days: DOCS_ANALYTICS_DEFAULTS.days,
-  hotSectionLimit: DOCS_ANALYTICS_DEFAULTS.hotSectionLimit,
-  evidenceLimit: DOCS_ANALYTICS_DEFAULTS.evidenceLimit,
-  showSectionBlocks: DOCS_ANALYTICS_DEFAULTS.showSectionBlocks,
-  showBadges: DOCS_ANALYTICS_DEFAULTS.showBadges,
-  showCopy: DOCS_ANALYTICS_DEFAULTS.showCopy,
-  showSelect: DOCS_ANALYTICS_DEFAULTS.showSelect,
-})
-const docsAnalyticsOptionsReady = ref(false)
-
-const docAnalyticsPath = computed(() => {
-  const normalized = normalizeContentPath(doc.value?.path ?? docPath.value) ?? docPath.value
-  return normalizeAnalyticsPath(normalized)
-})
-
-const adminAnalyticsHref = computed(() => {
-  const params = new URLSearchParams()
-  params.set('section', 'docs')
-  params.set('source', 'docs_page')
-  if (docAnalyticsPath.value)
-    params.set('path', docAnalyticsPath.value)
-  return `/dashboard/admin/analytics?${params.toString()}`
-})
-
-const docsAnalyticsDetail = computed(() => docsAnalyticsResult.value?.detail ?? null)
-const docsAnalyticsSummary = computed(() => {
-  const rows = docsAnalyticsResult.value?.docs ?? []
-  const target = docAnalyticsPath.value
-  const matched = rows.find(item => normalizeAnalyticsPath(item.path) === target)
-  return matched ?? rows[0] ?? null
-})
-
-const docsSectionInsightMap = computed(() => {
-  const detail = docsAnalyticsDetail.value
-  const summary = docsAnalyticsSummary.value
-  if (!detail)
-    return new Map<string, DocSectionInsight>()
-
-  const readerBase = Math.max(summary?.sessionCount || summary?.views || 0, 1)
-  const jumpBySection = new Map<string, number>()
-  const copyBySection = new Map<string, number>()
-  const selectBySection = new Map<string, number>()
-
-  for (const item of detail.evidence) {
-    const sectionId = normalizeAnalyticsPath(item.sectionId || 'root') || 'root'
-    if (item.actionType === 'jump')
-      jumpBySection.set(sectionId, (jumpBySection.get(sectionId) || 0) + item.count)
-    if (item.actionType === 'copy')
-      copyBySection.set(sectionId, (copyBySection.get(sectionId) || 0) + item.count)
-    if (item.actionType === 'select')
-      selectBySection.set(sectionId, (selectBySection.get(sectionId) || 0) + item.count)
-  }
-
-  const map = new Map<string, DocSectionInsight>()
-  for (const section of detail.sections) {
-    const sectionId = normalizeAnalyticsPath(section.sectionId || 'root') || 'root'
-    const readPercent = Math.min(100, (section.viewCount / readerBase) * 100)
-    map.set(sectionId, {
-      sectionId,
-      sectionTitle: section.sectionTitle || section.sectionId || 'Untitled',
-      viewCount: section.viewCount,
-      readPercent,
-      jumpCount: jumpBySection.get(sectionId) || 0,
-      copyCount: copyBySection.get(sectionId) || 0,
-      selectCount: selectBySection.get(sectionId) || 0,
-      avgStayMs: section.viewCount > 0 ? Math.round(section.activeMs / section.viewCount) : 0,
-    })
-  }
-
-  return map
-})
-
-const docsAnalyticsOverviewLabel = computed(() => {
-  const summary = docsAnalyticsSummary.value
-  if (!summary)
-    return locale.value === 'zh' ? '暂无聚合数据' : 'No analytics data yet'
-
-  const readers = summary.sessionCount || summary.views
-  const readText = locale.value === 'zh' ? `${readers} 阅读会话` : `${readers} reading sessions`
-  const stayText = locale.value === 'zh'
-    ? `人均停留 ${formatCompactDuration(summary.activeMs / Math.max(1, readers))}`
-    : `avg stay ${formatCompactDuration(summary.activeMs / Math.max(1, readers))}`
-  return `${readText} · ${stayText}`
-})
-
-const docsAnalyticsQuickTips = computed(() => {
-  if (locale.value === 'zh') {
-    return {
-      toggle: docsAnalyticsVisible.value ? '关闭文档热区' : '开启文档热区',
-      refresh: '刷新统计',
-      settings: '展开配置',
-      analytics: '打开后台 Analytics',
-      close: '关闭配置',
-      apply: '应用并刷新',
-      reset: '恢复默认',
-      advanced: docsAnalyticsAdvancedOpen.value ? '收起高级配置' : '展开高级配置',
-      sectionBlocks: '热门段落背景框选',
-      badges: '段落标签',
-      copy: '复制下划线高亮',
-      select: '圈选背景高亮',
-    }
-  }
-
-  return {
-    toggle: docsAnalyticsVisible.value ? 'Hide docs overlays' : 'Show docs overlays',
-    refresh: 'Refresh analytics',
-    settings: 'Open settings',
-    analytics: 'Open admin analytics',
-    close: 'Close settings',
-    apply: 'Apply and refresh',
-    reset: 'Reset defaults',
-    advanced: docsAnalyticsAdvancedOpen.value ? 'Collapse advanced settings' : 'Expand advanced settings',
-    sectionBlocks: 'Section block highlight',
-    badges: 'Section badges',
-    copy: 'Copy underline highlight',
-    select: 'Selection background highlight',
-  }
-})
-
-function clampDocsAnalyticsOptions() {
-  docsAnalyticsOptions.days = Math.max(7, Math.min(90, Math.round(docsAnalyticsOptions.days || DOCS_ANALYTICS_DEFAULTS.days)))
-  docsAnalyticsOptions.hotSectionLimit = Math.max(1, Math.min(12, Math.round(docsAnalyticsOptions.hotSectionLimit || DOCS_ANALYTICS_DEFAULTS.hotSectionLimit)))
-  docsAnalyticsOptions.evidenceLimit = Math.max(20, Math.min(360, Math.round(docsAnalyticsOptions.evidenceLimit || DOCS_ANALYTICS_DEFAULTS.evidenceLimit)))
-}
-
-function loadDocsAnalyticsOptions() {
-  if (!import.meta.client)
-    return
-  try {
-    const raw = window.localStorage.getItem(DOCS_ANALYTICS_STORAGE_KEY)
-    if (!raw)
-      return
-    const parsed = JSON.parse(raw) as Partial<typeof docsAnalyticsOptions>
-    if (typeof parsed.days === 'number')
-      docsAnalyticsOptions.days = parsed.days
-    if (typeof parsed.hotSectionLimit === 'number')
-      docsAnalyticsOptions.hotSectionLimit = parsed.hotSectionLimit
-    if (typeof parsed.evidenceLimit === 'number')
-      docsAnalyticsOptions.evidenceLimit = parsed.evidenceLimit
-    if (typeof parsed.showSectionBlocks === 'boolean')
-      docsAnalyticsOptions.showSectionBlocks = parsed.showSectionBlocks
-    if (typeof parsed.showBadges === 'boolean')
-      docsAnalyticsOptions.showBadges = parsed.showBadges
-    if (typeof parsed.showCopy === 'boolean')
-      docsAnalyticsOptions.showCopy = parsed.showCopy
-    if (typeof parsed.showSelect === 'boolean')
-      docsAnalyticsOptions.showSelect = parsed.showSelect
-  }
-  catch {}
-  clampDocsAnalyticsOptions()
-}
-
-function persistDocsAnalyticsOptions() {
-  if (!import.meta.client || !docsAnalyticsOptionsReady.value)
-    return
-  try {
-    window.localStorage.setItem(DOCS_ANALYTICS_STORAGE_KEY, JSON.stringify({
-      days: docsAnalyticsOptions.days,
-      hotSectionLimit: docsAnalyticsOptions.hotSectionLimit,
-      evidenceLimit: docsAnalyticsOptions.evidenceLimit,
-      showSectionBlocks: docsAnalyticsOptions.showSectionBlocks,
-      showBadges: docsAnalyticsOptions.showBadges,
-      showCopy: docsAnalyticsOptions.showCopy,
-      showSelect: docsAnalyticsOptions.showSelect,
-    }))
-  }
-  catch {}
-}
-
-function buildSectionBadgeTooltip(insight: DocSectionInsight) {
-  if (locale.value === 'zh') {
-    return [
-      `${insight.sectionTitle}`,
-      `阅读覆盖：${formatPercent(insight.readPercent)}（${insight.viewCount}）`,
-      `链接跳转：${insight.jumpCount} 次`,
-      `平均停留：${formatCompactDuration(insight.avgStayMs)}`,
-      `复制：${insight.copyCount} 次`,
-      `圈选：${insight.selectCount} 次`,
-    ].join('\n')
-  }
-
-  return [
-    insight.sectionTitle,
-    `Read coverage: ${formatPercent(insight.readPercent)} (${insight.viewCount})`,
-    `Direct jumps: ${insight.jumpCount}`,
-    `Avg stay: ${formatCompactDuration(insight.avgStayMs)}`,
-    `Copy: ${insight.copyCount}`,
-    `Select: ${insight.selectCount}`,
-  ].join('\n')
-}
-
-interface SectionTextSlice {
-  node: Text
-  start: number
-  end: number
-}
-
-interface SectionDomContext {
-  id: string
-  heading: HTMLElement | null
-  textNodes: SectionTextSlice[]
-  textLength: number
-}
-
-function resolveSectionList(root: HTMLElement) {
-  const headings = Array.from(root.querySelectorAll<HTMLElement>('h1, h2, h3, h4'))
-    .filter(item => Boolean(item.id?.trim()))
-
-  if (!headings.length) {
-    return [{
-      id: 'root',
-      heading: null,
-      range: (() => {
-        const range = document.createRange()
-        if (root.firstChild)
-          range.setStartBefore(root.firstChild)
-        else
-          range.setStart(root, 0)
-        if (root.lastChild)
-          range.setEndAfter(root.lastChild)
-        else
-          range.setEnd(root, 0)
-        return range
-      })(),
-    }]
-  }
-
-  return headings.map((heading, index) => {
-    const nextHeading = headings[index + 1] || null
-    const range = document.createRange()
-    range.setStartBefore(heading)
-    if (nextHeading)
-      range.setEndBefore(nextHeading)
-    else if (root.lastChild)
-      range.setEndAfter(root.lastChild)
-    else
-      range.setEnd(root, 0)
-    return {
-      id: normalizeAnalyticsPath(heading.id) || 'root',
-      heading,
-      range,
-    }
-  })
-}
-
-function buildSectionDomContext(root: HTMLElement) {
-  const contexts = new Map<string, SectionDomContext>()
-  const sections = resolveSectionList(root)
-
-  for (const section of sections) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    const textNodes: SectionTextSlice[] = []
-    let cursor = 0
-    let current = walker.nextNode() as Text | null
-    while (current) {
-      const text = current.textContent || ''
-      if (text.length > 0 && section.range.intersectsNode(current)) {
-        const start = cursor
-        cursor += text.length
-        textNodes.push({
-          node: current,
-          start,
-          end: cursor,
-        })
-      }
-      current = walker.nextNode() as Text | null
-    }
-
-    contexts.set(section.id, {
-      id: section.id,
-      heading: section.heading,
-      textNodes,
-      textLength: cursor,
-    })
-  }
-
-  return contexts
-}
-
-function resolveNodeOffset(context: SectionDomContext, anchor: number) {
-  if (!context.textNodes.length)
-    return null
-  const safeAnchor = Math.max(0, Math.min(Math.floor(anchor), Math.max(context.textLength - 1, 0)))
-  for (const slice of context.textNodes) {
-    if (safeAnchor < slice.end) {
-      const localOffset = Math.max(0, Math.min(slice.node.textContent?.length || 0, safeAnchor - slice.start))
-      return { node: slice.node, offset: localOffset }
-    }
-  }
-  const last = context.textNodes[context.textNodes.length - 1]
-  if (!last)
-    return null
-  return {
-    node: last.node,
-    offset: Math.max(0, (last.node.textContent?.length || 1) - 1),
-  }
-}
-
-function clearDocsAnalyticsVisuals() {
-  docsAnalyticsRects.value = []
-  docsAnalyticsBadges.value = []
-  docsAnalyticsSectionBlocks.value = []
-  docsAnalyticsFrame.value = {
-    ready: false,
-    top: 0,
-    left: 0,
-    width: 0,
-    height: 0,
-  }
-}
-
-function toHighlightRange(
-  context: SectionDomContext,
-  evidence: DocAnalyticsEvidenceSummary,
-) {
-  if (!context.textNodes.length || context.textLength <= 0)
-    return null
-
-  const hasAnchors = evidence.anchorStart >= 0 && evidence.anchorEnd >= 0 && evidence.anchorEnd >= evidence.anchorStart
-  const fallbackLength = Math.max(1, Math.min(context.textLength, evidence.textLength || 36))
-  let start = hasAnchors ? evidence.anchorStart : 0
-  let end = hasAnchors ? evidence.anchorEnd : start + fallbackLength
-
-  if (!hasAnchors && evidence.anchorBucket >= 0) {
-    const ratioStart = Math.min(0.95, Math.max(0, evidence.anchorBucket / 20))
-    start = Math.floor(context.textLength * ratioStart)
-    end = Math.min(context.textLength, start + fallbackLength)
-  }
-
-  start = Math.max(0, Math.min(start, Math.max(context.textLength - 1, 0)))
-  end = Math.max(start + 1, Math.min(end, context.textLength))
-
-  const startPoint = resolveNodeOffset(context, start)
-  const endPoint = resolveNodeOffset(context, end - 1)
-  if (!startPoint || !endPoint)
-    return null
-
-  const range = document.createRange()
-  range.setStart(startPoint.node, startPoint.offset)
-  range.setEnd(endPoint.node, Math.min((endPoint.node.textContent?.length || 1), endPoint.offset + 1))
-  return range
-}
-
-let docsOverlayFrameRaf: number | null = null
-let docsOverlayResizeObserver: ResizeObserver | null = null
-
-function renderDocsAnalyticsOverlay() {
-  if (!import.meta.client)
-    return
-
-  if (!isAdmin.value || !docsAnalyticsVisible.value || !docsAnalyticsDetail.value || viewState.value !== 'content') {
-    clearDocsAnalyticsVisuals()
-    return
-  }
-
-  const surface = document.querySelector<HTMLElement>('.docs-surface')
-  const root = document.querySelector<HTMLElement>('.docs-prose')
-  if (!surface || !root) {
-    clearDocsAnalyticsVisuals()
-    return
-  }
-
-  const surfaceRect = surface.getBoundingClientRect()
-  const rootRect = root.getBoundingClientRect()
-  docsAnalyticsFrame.value = {
-    ready: true,
-    top: rootRect.top - surfaceRect.top,
-    left: rootRect.left - surfaceRect.left,
-    width: rootRect.width,
-    height: rootRect.height,
-  }
-
-  const sectionContexts = buildSectionDomContext(root)
-  const insightMap = docsSectionInsightMap.value
-  const rankedSections = [...(docsAnalyticsDetail.value.sections || [])]
-    .sort((a, b) => b.viewCount - a.viewCount)
-  const rankLookup = new Map<string, number>()
-  rankedSections.forEach((item, index) => {
-    const key = normalizeAnalyticsPath(item.sectionId || 'root') || 'root'
-    rankLookup.set(key, index + 1)
-  })
-
-  const badges: DocSectionBadge[] = []
-  const headingNodes = Array.from(root.querySelectorAll<HTMLElement>('h1, h2, h3, h4'))
-  if (docsAnalyticsOptions.showBadges) {
-    for (const heading of headingNodes) {
-      const sectionId = normalizeAnalyticsPath(heading.id || 'root') || 'root'
-      const insight = insightMap.get(sectionId)
-      if (!insight)
-        continue
-      const headingRect = heading.getBoundingClientRect()
-      const rank = rankLookup.get(sectionId) || 0
-      const label = rank > 0 && rank <= 3
-        ? `${locale.value === 'zh' ? '热门' : 'Top'} ${rank}`
-        : `${formatPercent(insight.readPercent)}`
-      badges.push({
-        key: `badge:${sectionId}`,
-        label,
-        left: Math.max(0, headingRect.left - rootRect.left - 86),
-        top: Math.max(0, headingRect.top - rootRect.top + 4),
-        tooltip: buildSectionBadgeTooltip(insight),
-      })
-    }
-  }
-
-  const sectionNodes = headingNodes.map((heading, index) => ({
-    id: normalizeAnalyticsPath(heading.id || 'root') || 'root',
-    heading,
-    nextHeading: headingNodes[index + 1] || null,
-  }))
-  const sectionNodeMap = new Map(sectionNodes.map(item => [item.id, item]))
-  const hotSections = rankedSections
-    .filter(item => (item.viewCount || 0) > 0)
-    .slice(0, Math.max(1, Math.min(12, Math.round(docsAnalyticsOptions.hotSectionLimit))))
-  const sectionBlocks: DocSectionBlock[] = []
-  if (docsAnalyticsOptions.showSectionBlocks) {
-    for (const section of hotSections) {
-      const sectionId = normalizeAnalyticsPath(section.sectionId || 'root') || 'root'
-      if (sectionId === 'root')
-        continue
-      const node = sectionNodeMap.get(sectionId)
-      if (!node)
-        continue
-      const insight = insightMap.get(sectionId)
-      if (!insight)
-        continue
-      const headingRect = node.heading.getBoundingClientRect()
-      const nextRectTop = node.nextHeading
-        ? node.nextHeading.getBoundingClientRect().top - rootRect.top
-        : rootRect.height
-      const top = Math.max(0, headingRect.top - rootRect.top + headingRect.height * 0.2)
-      const bottom = Math.max(top + 24, nextRectTop - 10)
-      const rank = rankLookup.get(sectionId) || 0
-      const intensity = Math.max(0.22, Math.min(0.65, insight.readPercent / 100 + (4 - Math.min(rank, 3)) * 0.1))
-      const label = `${locale.value === 'zh' ? '热门段落' : 'Hot section'} ${rank || '-'} · ${formatPercent(insight.readPercent)}`
-      sectionBlocks.push({
-        key: `section:${sectionId}`,
-        label,
-        left: 0,
-        top,
-        width: rootRect.width,
-        height: bottom - top,
-        opacity: intensity,
-        tooltip: buildSectionBadgeTooltip(insight),
-      })
-    }
-  }
-
-  const evidence = docsAnalyticsDetail.value.evidence
-    .filter((item) => {
-      if (item.actionType === 'copy')
-        return docsAnalyticsOptions.showCopy
-      if (item.actionType === 'select')
-        return docsAnalyticsOptions.showSelect
-      return false
-    })
-    .slice(0, Math.max(20, Math.min(360, Math.round(docsAnalyticsOptions.evidenceLimit))))
-  const maxCopyCount = Math.max(1, ...evidence.filter(item => item.actionType === 'copy').map(item => item.count))
-  const maxSelectCount = Math.max(1, ...evidence.filter(item => item.actionType === 'select').map(item => item.count))
-
-  const rects: DocOverlayRect[] = []
-  let rectIndex = 0
-  for (const item of evidence) {
-    const sectionId = normalizeAnalyticsPath(item.sectionId || 'root') || 'root'
-    const context = sectionContexts.get(sectionId) || sectionContexts.get('root')
-    if (!context)
-      continue
-    const range = toHighlightRange(context, item)
-    if (!range)
-      continue
-    const rectList = Array.from(range.getClientRects())
-    if (!rectList.length)
-      continue
-    for (const rect of rectList) {
-      if (rect.width < 3 || rect.height < 2)
-        continue
-      const isCopy = item.actionType === 'copy'
-      const baseTop = rect.top - rootRect.top
-      const baseHeight = rect.height
-      const opacityBase = isCopy
-        ? item.count / maxCopyCount
-        : item.count / maxSelectCount
-      const tooltip = locale.value === 'zh'
-        ? [
-            `${isCopy ? '复制热点' : '圈选热点'} · ${item.sectionTitle || item.sectionId || 'root'}`,
-            `次数：${item.count}`,
-            `位置桶：${item.anchorBucket >= 0 ? item.anchorBucket : 'n/a'}`,
-            item.textHash ? `Hash：${item.textHash.slice(0, 20)}` : 'Hash：n/a',
-          ].join('\n')
-        : [
-            `${isCopy ? 'Copy hotspot' : 'Selection hotspot'} · ${item.sectionTitle || item.sectionId || 'root'}`,
-            `Count: ${item.count}`,
-            `Bucket: ${item.anchorBucket >= 0 ? item.anchorBucket : 'n/a'}`,
-            item.textHash ? `Hash: ${item.textHash.slice(0, 20)}` : 'Hash: n/a',
-          ].join('\n')
-
-      rects.push({
-        key: `${item.actionType}:${item.sectionId}:${item.textHash || 'none'}:${item.anchorBucket}:${rectIndex}`,
-        type: isCopy ? 'copy' : 'select',
-        left: rect.left - rootRect.left,
-        top: isCopy ? baseTop + Math.max(0, baseHeight - 2) : baseTop,
-        width: rect.width,
-        height: isCopy ? 2 : baseHeight,
-        opacity: isCopy ? Math.min(0.95, 0.35 + opacityBase * 0.6) : Math.min(0.5, 0.12 + opacityBase * 0.35),
-        tooltip,
-      })
-      rectIndex += 1
-      if (rectIndex >= 360)
-        break
-    }
-    if (rectIndex >= 360)
-      break
-  }
-
-  docsAnalyticsBadges.value = badges
-  docsAnalyticsSectionBlocks.value = sectionBlocks
-  docsAnalyticsRects.value = rects
-}
-
-function scheduleDocsAnalyticsOverlay() {
-  if (!import.meta.client)
-    return
-  if (docsOverlayFrameRaf)
-    cancelAnimationFrame(docsOverlayFrameRaf)
-  docsOverlayFrameRaf = requestAnimationFrame(() => {
-    docsOverlayFrameRaf = null
-    renderDocsAnalyticsOverlay()
-  })
-}
-
-function bindDocsAnalyticsResizeObserver() {
-  if (!import.meta.client || typeof ResizeObserver === 'undefined')
-    return
-  docsOverlayResizeObserver?.disconnect()
-  docsOverlayResizeObserver = null
-  const root = document.querySelector<HTMLElement>('.docs-prose')
-  if (!root)
-    return
-  docsOverlayResizeObserver = new ResizeObserver(() => {
-    if (!docsAnalyticsVisible.value)
-      return
-    scheduleDocsAnalyticsOverlay()
-  })
-  docsOverlayResizeObserver.observe(root)
-}
-
-async function loadDocsAnalyticsOverlay(force = false) {
-  if (!isAdmin.value || !docAnalyticsPath.value || docsAnalyticsLoading.value)
-    return
-  if (!force && docsAnalyticsResult.value && docsAnalyticsVisible.value) {
-    scheduleDocsAnalyticsOverlay()
-    return
-  }
-
-  docsAnalyticsLoading.value = true
-  docsAnalyticsError.value = null
-  try {
-    const response = await rawFetch<DocAnalyticsResponse>('/api/admin/analytics/docs', {
-      query: {
-        days: Math.max(7, Math.min(90, Math.round(docsAnalyticsOptions.days))),
-        path: docAnalyticsPath.value,
-        source: 'docs_page',
-      },
-    })
-    docsAnalyticsResult.value = response
-    docsAnalyticsVisible.value = true
-    docsAnalyticsUpdatedAt.value = Date.now()
-    await nextTick()
-    scheduleDocsAnalyticsOverlay()
-  }
-  catch (error: any) {
-    docsAnalyticsError.value = error?.data?.statusMessage || error?.message || 'Failed to load docs analytics'
-    docsAnalyticsVisible.value = false
-    clearDocsAnalyticsVisuals()
-  }
-  finally {
-    docsAnalyticsLoading.value = false
-  }
-}
-
-async function toggleDocsAnalyticsOverlay() {
-  if (docsAnalyticsVisible.value) {
-    docsAnalyticsVisible.value = false
-    clearDocsAnalyticsVisuals()
-    return
-  }
-  await loadDocsAnalyticsOverlay()
-}
-
-function resetDocsAnalyticsConfig() {
-  docsAnalyticsOptions.days = DOCS_ANALYTICS_DEFAULTS.days
-  docsAnalyticsOptions.hotSectionLimit = DOCS_ANALYTICS_DEFAULTS.hotSectionLimit
-  docsAnalyticsOptions.evidenceLimit = DOCS_ANALYTICS_DEFAULTS.evidenceLimit
-  docsAnalyticsOptions.showSectionBlocks = DOCS_ANALYTICS_DEFAULTS.showSectionBlocks
-  docsAnalyticsOptions.showBadges = DOCS_ANALYTICS_DEFAULTS.showBadges
-  docsAnalyticsOptions.showCopy = DOCS_ANALYTICS_DEFAULTS.showCopy
-  docsAnalyticsOptions.showSelect = DOCS_ANALYTICS_DEFAULTS.showSelect
-  docsAnalyticsAdvancedOpen.value = false
-  if (docsAnalyticsVisible.value)
-    scheduleDocsAnalyticsOverlay()
-}
-
-async function applyDocsAnalyticsConfig() {
-  await loadDocsAnalyticsOverlay(true)
-}
 
 const copyLabels = computed(() => {
-  const isZh = locale.value === 'zh'
+  const isZh = isZhDocs.value
   return {
     copy: isZh ? '复制' : 'Copy',
     copyInline: isZh ? '点击复制' : 'Click to copy',
@@ -1574,6 +799,13 @@ function getInlineCodeElement(target: EventTarget | null) {
   return code
 }
 
+function dispatchDocsAction(detail: Record<string, unknown>) {
+  if (!import.meta.client)
+    return
+
+  window.dispatchEvent(new CustomEvent('docs:action', { detail }))
+}
+
 async function copyInlineCode(code: HTMLElement) {
   const text = code.textContent?.trim() ?? ''
   if (!text)
@@ -1584,7 +816,7 @@ async function copyInlineCode(code: HTMLElement) {
     code.classList.add('is-copied')
     window.setTimeout(() => code.classList.remove('is-copied'), 900)
     toast.success(copyLabels.value.copied)
-    void docsTracker.recordAction({
+    dispatchDocsAction({
       type: 'copy',
       source: 'inline_code',
       sectionId: 'root',
@@ -1674,7 +906,7 @@ const CodeHeader = defineComponent({
       try {
         await writeToClipboard(props.codeText)
         toast.success(copyLabels.value.copied)
-        void docsTracker.recordAction({
+        dispatchDocsAction({
           type: 'copy',
           source: 'code_block',
           sectionId: 'root',
@@ -1803,137 +1035,39 @@ async function scheduleCodeEnhance(delay = 0) {
   await queueEnhance()
 }
 
-async function fetchViewCount() {
-  if (!docPath.value || !isAdmin.value)
-    return
-
-  try {
-    const result = await rawFetch<{ views: number }>('/api/docs/view', {
-      method: 'GET',
-      query: { path: docPath.value },
-    })
-    viewCount.value = result.views
-  }
-  catch (error) {
-    console.warn('[docs] Failed to fetch view count:', error)
-  }
-}
-
 // Enhance code blocks on mount
 onMounted(() => {
   docsClientPanelsMounted.value = true
-  loadDocsAnalyticsOptions()
-  docsAnalyticsOptionsReady.value = true
-  clampDocsAnalyticsOptions()
-  window.addEventListener('resize', scheduleDocsAnalyticsOverlay, { passive: true })
   document.addEventListener('click', handleDocsInlineCodeClick)
   document.addEventListener('keydown', handleDocsInlineCodeKeydown)
 })
 
-// Refetch view count when doc changes (for admins)
-watch(
-  () => [docPath.value, isAdmin.value],
-  () => {
-    if (isAdmin.value && viewCount.value === null) {
-      fetchViewCount()
-    }
-  },
-  { immediate: true },
-)
-
 watch(
   () => [currentDocRenderKey.value, isDocsContentReady.value] as const,
-  async ([docKey, ready]) => {
-    if (!import.meta.client)
-      return
-    shouldMountDocClientPanels.value = false
-    if (!ready || !docsClientPanelsMounted.value)
-      return
-
-    await nextTick()
-    if (
-      docKey !== currentDocRenderKey.value
-      || !isDocsContentReady.value
-      || !docsClientPanelsMounted.value
-    )
+  ([renderKey, isReady]) => {
+    if (!isReady || !docsClientPanelsMounted.value)
       return
 
     shouldMountDocClientPanels.value = true
-    if (lastEnhancedDocKey !== docKey) {
-      lastEnhancedDocKey = docKey
-      scheduleCodeEnhance(260)
+    if (lastEnhancedDocKey !== renderKey) {
+      lastEnhancedDocKey = renderKey
+      void scheduleCodeEnhance(260)
       void scheduleOutlineSync(280)
     }
-    bindDocsAnalyticsResizeObserver()
-    scheduleDocsTrackerRefresh()
   },
   { immediate: true },
 )
 
 watch(
   docsClientPanelsMounted,
-  (mounted) => {
-    if (!mounted || !isDocsContentReady.value)
+  (isMounted) => {
+    if (!isMounted || !isDocsContentReady.value)
       return
+
     shouldMountDocClientPanels.value = true
+    void scheduleCodeEnhance(260)
+    void scheduleOutlineSync(280)
   },
-)
-
-watch(
-  () => docAnalyticsPath.value,
-  () => {
-    docsAnalyticsConfigOpen.value = false
-    docsAnalyticsAdvancedOpen.value = false
-    docsAnalyticsVisible.value = false
-    docsAnalyticsError.value = null
-    docsAnalyticsResult.value = null
-    docsAnalyticsUpdatedAt.value = null
-    clearDocsAnalyticsVisuals()
-  },
-)
-
-watch(
-  () => [docsAnalyticsVisible.value, docsAnalyticsDetail.value, viewState.value, locale.value],
-  () => {
-    if (!docsAnalyticsVisible.value || viewState.value !== 'content') {
-      clearDocsAnalyticsVisuals()
-      return
-    }
-    nextTick(() => scheduleDocsAnalyticsOverlay())
-  },
-)
-
-watch(
-  () => [
-    docsAnalyticsOptions.hotSectionLimit,
-    docsAnalyticsOptions.evidenceLimit,
-    docsAnalyticsOptions.showSectionBlocks,
-    docsAnalyticsOptions.showBadges,
-    docsAnalyticsOptions.showCopy,
-    docsAnalyticsOptions.showSelect,
-  ],
-  () => {
-    if (!docsAnalyticsVisible.value)
-      return
-    scheduleDocsAnalyticsOverlay()
-  },
-)
-
-watch(
-  () => ({
-    days: docsAnalyticsOptions.days,
-    hotSectionLimit: docsAnalyticsOptions.hotSectionLimit,
-    evidenceLimit: docsAnalyticsOptions.evidenceLimit,
-    showSectionBlocks: docsAnalyticsOptions.showSectionBlocks,
-    showBadges: docsAnalyticsOptions.showBadges,
-    showCopy: docsAnalyticsOptions.showCopy,
-    showSelect: docsAnalyticsOptions.showSelect,
-  }),
-  () => {
-    clampDocsAnalyticsOptions()
-    persistDocsAnalyticsOptions()
-  },
-  { deep: true },
 )
 </script>
 
@@ -1954,7 +1088,7 @@ watch(
               <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb.label}-${index}`">
                 <NuxtLink
                   v-if="crumb.path && index < heroBreadcrumbs.length - 1"
-                  :to="localePath({ path: crumb.path })"
+                  :to="localizedDocsPath(crumb.path)"
                   class="docs-hero-crumb"
                 >
                   {{ crumb.label }}
@@ -2008,225 +1142,23 @@ watch(
               { 'docs-prose--hero': showDocHero },
             ]"
           />
-          <ClientOnly v-if="shouldMountDocClientPanels">
-            <Teleport to="#docs-outline-tools">
-              <div v-if="isAdmin && viewState === 'content'" class="docs-analytics-toolbar docs-analytics-toolbar--outline">
-                <div class="docs-analytics-toolbar__main docs-analytics-toolbar__main--icons">
-                  <TxTooltip :content="docsAnalyticsQuickTips.toggle" :anchor="{ placement: 'bottom', showArrow: true }">
-                    <TxButton
-                      size="small"
-                      circle
-                      variant="bare"
-                      native-type="button"
-                      class="docs-analytics-icon-btn"
-                      :class="{ 'is-active': docsAnalyticsVisible }"
-                      :loading="docsAnalyticsLoading"
-                      @click="toggleDocsAnalyticsOverlay"
-                    >
-                      <span :class="docsAnalyticsVisible ? 'i-carbon-view-off' : 'i-carbon-view'" />
-                    </TxButton>
-                  </TxTooltip>
-                  <TxTooltip :content="docsAnalyticsQuickTips.settings" :anchor="{ placement: 'bottom', showArrow: true }">
-                    <TxButton
-                      ref="docsAnalyticsConfigTriggerRef"
-                      size="small"
-                      circle
-                      variant="bare"
-                      native-type="button"
-                      class="docs-analytics-icon-btn"
-                      :class="{ 'is-active': docsAnalyticsConfigOpen }"
-                      @click="docsAnalyticsConfigOpen = !docsAnalyticsConfigOpen"
-                    >
-                      <span class="i-carbon-settings-adjust" />
-                    </TxButton>
-                  </TxTooltip>
-                </div>
-                <p class="docs-analytics-toolbar__meta docs-analytics-toolbar__meta--compact">
-                  {{ docsAnalyticsOverviewLabel }}
-                  <span v-if="docsAnalyticsUpdatedAt"> · {{ locale === 'zh' ? '更' : 'Up' }} {{ new Date(docsAnalyticsUpdatedAt).toLocaleTimeString() }}</span>
-                </p>
-                <p v-if="docsAnalyticsError" class="docs-analytics-toolbar__error">
-                  {{ docsAnalyticsError }}
-                </p>
-              </div>
-            </Teleport>
-            <FlipDialog
-                v-model="docsAnalyticsConfigOpen"
-                :reference="docsAnalyticsConfigTriggerEl"
-                size="md"
-              >
-                <template #header-display>
-                  <div class="docs-analytics-config__title-wrap">
-                    <span class="i-carbon-chart-line-data docs-analytics-config__title-icon" />
-                    <h3 class="docs-analytics-config__title">
-                      {{ locale === 'zh' ? '文档热区配置' : 'Docs Overlay Settings' }}
-                    </h3>
-                  </div>
-                </template>
-                <template #header-actions>
-                  <div class="docs-analytics-config__header-actions">
-                    <TxTooltip :content="docsAnalyticsQuickTips.refresh" :anchor="{ placement: 'bottom', showArrow: true }">
-                      <TxButton
-                        circle
-                        size="small"
-                        variant="bare"
-                        native-type="button"
-                        class="docs-analytics-icon-btn"
-                        :loading="docsAnalyticsLoading"
-                        @click="loadDocsAnalyticsOverlay(true)"
-                      >
-                        <span class="i-carbon-renew" />
-                      </TxButton>
-                    </TxTooltip>
-                    <TxTooltip :content="docsAnalyticsQuickTips.analytics" :anchor="{ placement: 'bottom', showArrow: true }">
-                      <NuxtLink
-                        :to="adminAnalyticsHref"
-                        class="docs-analytics-icon-link"
-                      >
-                        <span class="i-carbon-launch" />
-                      </NuxtLink>
-                    </TxTooltip>
-                  </div>
-                </template>
-                <template #default>
-                  <section class="docs-analytics-config">
-                    <div class="docs-analytics-config__group">
-                      <label class="docs-analytics-config__label">
-                        {{ locale === 'zh' ? '统计窗口（天）' : 'Window (days)' }}
-                      </label>
-                      <input
-                        v-model.number="docsAnalyticsOptions.days"
-                        class="docs-analytics-config__input"
-                        type="number"
-                        min="7"
-                        max="90"
-                        step="1"
-                      >
-                    </div>
-
-                    <div class="docs-analytics-config__group">
-                      <label class="docs-analytics-config__label">
-                        {{ locale === 'zh' ? '热门段落数量' : 'Hot sections' }}
-                      </label>
-                      <input
-                        v-model.number="docsAnalyticsOptions.hotSectionLimit"
-                        class="docs-analytics-config__input"
-                        type="number"
-                        min="1"
-                        max="12"
-                        step="1"
-                      >
-                    </div>
-
-                    <TxButton
-                      variant="ghost"
-                      size="small"
-                      native-type="button"
-                      class="docs-analytics-config__advanced-toggle"
-                      @click="docsAnalyticsAdvancedOpen = !docsAnalyticsAdvancedOpen"
-                    >
-                      <span :class="docsAnalyticsAdvancedOpen ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'" />
-                      {{ docsAnalyticsQuickTips.advanced }}
-                    </TxButton>
-
-                    <Transition name="docs-analytics-fold">
-                      <div v-if="docsAnalyticsAdvancedOpen" class="docs-analytics-config__advanced">
-                        <div class="docs-analytics-config__group">
-                          <label class="docs-analytics-config__label">
-                            {{ locale === 'zh' ? '细粒度热点上限' : 'Fine-grain hotspot limit' }}
-                          </label>
-                          <input
-                            v-model.number="docsAnalyticsOptions.evidenceLimit"
-                            class="docs-analytics-config__input"
-                            type="number"
-                            min="20"
-                            max="360"
-                            step="10"
-                          >
-                        </div>
-                        <label class="docs-analytics-config__switch">
-                          <input v-model="docsAnalyticsOptions.showSectionBlocks" type="checkbox">
-                          <span>{{ docsAnalyticsQuickTips.sectionBlocks }}</span>
-                        </label>
-                        <label class="docs-analytics-config__switch">
-                          <input v-model="docsAnalyticsOptions.showBadges" type="checkbox">
-                          <span>{{ docsAnalyticsQuickTips.badges }}</span>
-                        </label>
-                        <label class="docs-analytics-config__switch">
-                          <input v-model="docsAnalyticsOptions.showCopy" type="checkbox">
-                          <span>{{ docsAnalyticsQuickTips.copy }}</span>
-                        </label>
-                        <label class="docs-analytics-config__switch">
-                          <input v-model="docsAnalyticsOptions.showSelect" type="checkbox">
-                          <span>{{ docsAnalyticsQuickTips.select }}</span>
-                        </label>
-                      </div>
-                    </Transition>
-
-                    <footer class="docs-analytics-config__actions">
-                      <TxButton variant="ghost" size="small" native-type="button" @click="resetDocsAnalyticsConfig">
-                        {{ docsAnalyticsQuickTips.reset }}
-                      </TxButton>
-                      <TxButton variant="primary" size="small" native-type="button" :loading="docsAnalyticsLoading" @click="applyDocsAnalyticsConfig">
-                        {{ docsAnalyticsQuickTips.apply }}
-                      </TxButton>
-                    </footer>
-                  </section>
-                </template>
-              </FlipDialog>
-          </ClientOnly>
-          <div
-            v-if="shouldMountDocClientPanels && isAdmin && docsAnalyticsVisible && docsAnalyticsFrame.ready"
-            class="docs-analytics-overlay"
-            :style="{
-              top: `${docsAnalyticsFrame.top}px`,
-              left: `${docsAnalyticsFrame.left}px`,
-              width: `${docsAnalyticsFrame.width}px`,
-              height: `${docsAnalyticsFrame.height}px`,
-            }"
-          >
-            <div
-              v-for="section in docsAnalyticsSectionBlocks"
-              :key="section.key"
-              class="docs-analytics-overlay__section"
-              :title="section.tooltip"
-              :style="{
-                top: `${section.top}px`,
-                left: `${section.left}px`,
-                width: `${section.width}px`,
-                height: `${section.height}px`,
-                opacity: section.opacity.toFixed(2),
-              }"
-            >
-              <span class="docs-analytics-overlay__section-label">{{ section.label }}</span>
-            </div>
-            <div
-              v-for="badge in docsAnalyticsBadges"
-              :key="badge.key"
-              class="docs-analytics-overlay__badge"
-              :title="badge.tooltip"
-              :style="{
-                top: `${badge.top}px`,
-                left: `${badge.left}px`,
-              }"
-            >
-              {{ badge.label }}
-            </div>
-            <div
-              v-for="item in docsAnalyticsRects"
-              :key="item.key"
-              class="docs-analytics-overlay__rect"
-              :class="`is-${item.type}`"
-              :title="item.tooltip"
-              :style="{
-                top: `${item.top}px`,
-                left: `${item.left}px`,
-                width: `${item.width}px`,
-                height: `${item.height}px`,
-                opacity: item.opacity.toFixed(2),
-              }"
+          <ClientOnly>
+            <LazyDocsEngagementClient
+              v-if="shouldMountDocClientPanels"
+              :doc-path="docPath"
+              :title="docDisplayTitle || (doc?.title ? String(doc.title) : '')"
+              :enabled="viewState === 'content'"
+              :is-admin="isAdmin"
+              @view-count="viewCount = $event"
             />
-          </div>
+            <LazyDocsAdminAnalyticsClient
+              v-if="shouldMountDocClientPanels && isAdmin"
+              :doc-path="docPath"
+              :is-admin="isAdmin"
+              :is-zh="isZhDocs"
+              :ready="viewState === 'content'"
+            />
+          </ClientOnly>
           <div
             v-if="formattedLastUpdated || isAdmin"
             class="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-dark/5 pt-6 text-sm text-black/40 dark:border-light/5 dark:text-light/40"
@@ -2266,7 +1198,7 @@ watch(
           </div>
 
           <ClientOnly>
-            <DocsFeedback v-if="shouldMountDocClientPanels" :doc-path="docPath" />
+            <LazyDocsFeedback v-if="shouldMountDocClientPanels" :doc-path="docPath" />
           </ClientOnly>
 
           <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
@@ -2276,7 +1208,7 @@ watch(
             <div class="grid gap-4 lg:grid-cols-2">
               <NuxtLink
                 v-if="pagerPrevPath"
-                :to="localePath({ path: pagerPrevPath })"
+                :to="localizedDocsPath(pagerPrevPath)"
                 prefetch
                 class="group flex flex-col gap-2 border border-dark/10 rounded-2xl px-5 py-4 no-underline transition dark:border-light/10 hover:border-dark/20 hover:bg-dark/5 dark:hover:border-light/20 dark:hover:bg-light/5"
               >
@@ -2290,7 +1222,7 @@ watch(
               </NuxtLink>
               <NuxtLink
                 v-if="pagerNextPath"
-                :to="localePath({ path: pagerNextPath })"
+                :to="localizedDocsPath(pagerNextPath)"
                 prefetch
                 class="group flex flex-col items-end gap-2 border border-dark/10 rounded-2xl px-5 py-4 text-right no-underline transition dark:border-light/10 hover:border-primary/30 hover:bg-primary/5 dark:hover:border-primary/40 dark:hover:bg-primary/10"
               >
@@ -2306,7 +1238,7 @@ watch(
           </div>
 
           <ClientOnly>
-            <DocsComments v-if="shouldMountDocClientPanels" :doc-path="docPath" />
+            <LazyDocsComments v-if="shouldMountDocClientPanels" :doc-path="docPath" />
           </ClientOnly>
         </div>
 
@@ -2324,7 +1256,7 @@ watch(
             {{ t('docs.notFoundDescription') }}
           </p>
           <NuxtLink
-            to="/docs"
+            :to="localizedDocsPath('/docs')"
             class="inline-flex items-center justify-center gap-2 rounded-full bg-dark px-5 py-2 text-sm text-light font-medium no-underline transition dark:bg-light hover:bg-black dark:text-black dark:hover:bg-light/90"
           >
             <span class="i-carbon-arrow-left text-base" />
@@ -2401,276 +1333,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.docs-analytics-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  border-radius: 14px;
-  padding: 9px 10px;
-  border: 1px dashed color-mix(in srgb, var(--tx-color-primary) 46%, transparent);
-  background: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
-}
-
-.docs-analytics-toolbar--outline {
-  position: relative;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
-}
-
-.docs-analytics-toolbar__main {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-}
-
-.docs-analytics-toolbar__main--icons {
-  flex-wrap: nowrap;
-}
-
-.docs-analytics-config__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.docs-analytics-icon-btn {
-  --tx-button-bg-color-hover: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
-  --tx-button-bg-color-active: color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
-  --tx-button-text-color: var(--tx-text-color-secondary);
-  --tx-button-border-color: transparent;
-  width: 30px;
-  height: 30px;
-}
-
-.docs-analytics-icon-btn :global(span[class^='i-carbon']) {
-  font-size: 14px;
-}
-
-.docs-analytics-icon-btn.is-active {
-  --tx-button-text-color: color-mix(in srgb, var(--tx-color-primary) 85%, #1d4ed8);
-  --tx-button-bg-color-hover: color-mix(in srgb, var(--tx-color-primary) 26%, transparent);
-}
-
-.docs-analytics-icon-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  color: var(--tx-text-color-secondary);
-  text-decoration: none;
-  transition: color 0.2s ease, background-color 0.2s ease;
-}
-
-.docs-analytics-icon-link:hover {
-  color: color-mix(in srgb, var(--tx-color-primary) 85%, #1d4ed8);
-  background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
-}
-
-.docs-analytics-icon-link :global(span[class^='i-carbon']) {
-  font-size: 14px;
-}
-
-.docs-analytics-toolbar__meta {
-  margin: 0;
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
-  line-height: 1.45;
-}
-
-.docs-analytics-toolbar__meta--compact {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.docs-analytics-toolbar__error {
-  margin: 0;
-  font-size: 11px;
-  color: color-mix(in srgb, var(--tx-color-danger) 85%, #b91c1c);
-}
-
-.docs-analytics-config {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  height: 100%;
-  padding: 18px;
-}
-
-.docs-analytics-config__title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.docs-analytics-config__title-icon {
-  font-size: 16px;
-  color: color-mix(in srgb, var(--tx-color-primary) 80%, #2563eb);
-}
-
-.docs-analytics-config__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-}
-
-.docs-analytics-config__group {
-  display: grid;
-  gap: 6px;
-}
-
-.docs-analytics-config__label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tx-text-color-secondary);
-}
-
-.docs-analytics-config__input {
-  width: 100%;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color) 78%, transparent);
-  background: color-mix(in srgb, var(--tx-fill-color-light) 76%, transparent);
-  color: var(--tx-text-color-primary);
-  padding: 0 10px;
-  font-size: 12px;
-  outline: none;
-}
-
-.docs-analytics-config__input:focus {
-  border-color: color-mix(in srgb, var(--tx-color-primary) 60%, transparent);
-}
-
-.docs-analytics-config__advanced-toggle {
-  justify-content: flex-start;
-  gap: 6px;
-  padding-left: 6px;
-  color: var(--tx-text-color-secondary);
-}
-
-.docs-analytics-config__advanced {
-  display: grid;
-  gap: 8px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color-light) 76%, transparent);
-  background: color-mix(in srgb, var(--tx-fill-color-light) 52%, transparent);
-  padding: 10px 12px;
-}
-
-.docs-analytics-config__switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.docs-analytics-config__switch input {
-  width: 13px;
-  height: 13px;
-}
-
-.docs-analytics-config__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.docs-analytics-fold-enter-active,
-.docs-analytics-fold-leave-active {
-  transition: max-height 220ms ease, opacity 220ms ease, transform 220ms ease;
-  overflow: hidden;
-}
-
-.docs-analytics-fold-enter-from,
-.docs-analytics-fold-leave-to {
-  max-height: 0;
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-.docs-analytics-fold-enter-to,
-.docs-analytics-fold-leave-from {
-  max-height: 280px;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.docs-analytics-overlay {
-  position: absolute;
-  z-index: 6;
-  pointer-events: none;
-}
-
-.docs-analytics-overlay__section {
-  position: absolute;
-  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 55%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--tx-color-primary) 24%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
-  pointer-events: auto;
-  z-index: 1;
-}
-
-.docs-analytics-overlay__section-label {
-  position: absolute;
-  left: 10px;
-  top: 8px;
-  max-width: calc(100% - 18px);
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-primary) 84%, #0f172a);
-  color: #fff;
-  padding: 1px 8px;
-  font-size: 10px;
-  line-height: 1.5;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.docs-analytics-overlay__badge {
-  position: absolute;
-  max-width: 82px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-primary) 82%, #0f172a);
-  color: #fff;
-  font-size: 10px;
-  line-height: 1.7;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
-  pointer-events: auto;
-  z-index: 3;
-}
-
-.docs-analytics-overlay__rect {
-  position: absolute;
-  border-radius: 3px;
-  pointer-events: auto;
-  z-index: 2;
-}
-
-.docs-analytics-overlay__rect.is-select {
-  background: color-mix(in srgb, var(--tx-color-warning) 65%, transparent);
-}
-
-.docs-analytics-overlay__rect.is-copy {
-  background: color-mix(in srgb, var(--tx-color-primary) 80%, transparent);
-  border-radius: 2px;
 }
 
 .docs-sync-banner {
@@ -3016,43 +1678,5 @@ a.docs-hero-crumb:hover {
   :deep(.docs-prose hr) {
     animation: none;
   }
-}
-</style>
-
-<style>
-.docs-analytics-config-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1880;
-  background: rgba(10, 14, 24, 0.36);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.docs-analytics-config-mask-enter-active,
-.docs-analytics-config-mask-leave-active {
-  transition: opacity 180ms ease;
-}
-
-.docs-analytics-config-mask-enter-from,
-.docs-analytics-config-mask-leave-to {
-  opacity: 0;
-}
-
-.docs-analytics-config-card {
-  width: min(440px, 92vw);
-  height: min(520px, 78vh);
-  border-radius: 16px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
 }
 </style>

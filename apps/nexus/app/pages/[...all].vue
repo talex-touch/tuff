@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 definePageMeta({
   layout: false,
 })
 
 const router = useRouter()
 const route = useRoute()
+const { locale } = useI18n()
+const docsHomePath = computed(() => toLocalizedDocsPath('/docs', locale.value === 'zh' ? 'zh' : 'en'))
 
 function goBack() {
   if (window.history.length > 2) {
@@ -72,7 +75,7 @@ function goHome() {
       <!-- Help links -->
       <div class="mt-16 flex flex-wrap items-center justify-center gap-6 text-sm text-black/40 dark:text-white/40">
         <NuxtLink
-          to="/docs"
+          :to="docsHomePath"
           class="inline-flex items-center gap-1.5 transition-colors hover:text-black dark:hover:text-white"
         >
           <span class="i-carbon-document" />

@@ -2,9 +2,9 @@
 import type { ShortcutRowView } from './shortcut-dialog.types'
 
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
 
 const props = defineProps<{
   row: ShortcutRowView
@@ -64,7 +64,7 @@ const emit = defineEmits<{
       {{ row.sourceLabel }}
     </div>
     <div class="ShortcutDialog-Enabled ShortcutDialog-EnabledCell">
-      <TSwitch
+      <TxSwitch
         :model-value="row.isEnabled"
         @update:model-value="(value) => emit('update-enabled', row.shortcut.id, Boolean(value))"
       />

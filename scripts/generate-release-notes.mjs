@@ -46,6 +46,43 @@ const RELEASE_NOTE_PLACEHOLDER_PATTERNS = [
   /发布说明/,
 ]
 
+const DOWNLOAD_MATRIX_ROWS = [
+  {
+    os: 'Android',
+    downloads: ['APK ARMv8', 'APK ARMv7', 'APK x64'],
+    availability: 'planned',
+  },
+  {
+    os: 'iOS',
+    downloads: ['IPA Unsigned'],
+    availability: 'planned',
+  },
+  {
+    os: 'macOS',
+    downloads: [
+      '[DMG Apple Silicon](https://tuff.tagzxia.com/updates)',
+      '[DMG Intel](https://github.com/talex-touch/tuff/releases)',
+    ],
+    availability: 'available',
+  },
+  {
+    os: 'Windows',
+    downloads: [
+      '[Setup x64](https://tuff.tagzxia.com/updates)',
+      '[ZIP x64](https://github.com/talex-touch/tuff/releases)',
+    ],
+    availability: 'available',
+  },
+  {
+    os: 'Linux',
+    downloads: [
+      '[AppImage x64](https://tuff.tagzxia.com/updates)',
+      '[DEB x64](https://github.com/talex-touch/tuff/releases)',
+    ],
+    availability: 'available',
+  },
+]
+
 function runGit(args, { fallback = '' } = {}) {
   try {
     return execFileSync('git', args, {
@@ -385,6 +422,47 @@ function selectHighlights(prs, locale, maxHighlights = 8) {
   return source.slice(0, maxHighlights).map(pr => formatPrLine(pr, locale))
 }
 
+export function buildReleaseDownloadMatrix(locale = 'en') {
+  const isZh = locale === 'zh'
+  const lines = [
+    isZh ? '## 按设备下载' : '## Download Based on Your Device',
+    '',
+    `| ${isZh ? '系统' : 'OS'} | ${isZh ? '下载' : 'Download'} |`,
+    '| --- | --- |',
+  ]
+
+  for (const row of DOWNLOAD_MATRIX_ROWS) {
+    const suffix = row.availability === 'planned'
+      ? (isZh ? '（计划中）' : ' (planned)')
+      : ''
+    lines.push(`| ${row.os} | ${row.downloads.join('<br>')}${suffix} |`)
+  }
+
+  lines.push('')
+  lines.push(isZh
+    ? '> 桌面端以当前 GitHub Release / Nexus Updates 页面实际资产为准；移动端包会在对应构建链路上线后开放。'
+    : '> Desktop downloads follow the actual GitHub Release / Nexus Updates assets; mobile packages will open after their build pipelines are shipped.')
+
+  return `${lines.join('\n').trimEnd()}\n`
+}
+
+function stripReleaseDownloadMatrix(markdown) {
+  const candidates = [
+    '\n## 按设备下载',
+    '\n## Download Based on Your Device',
+  ]
+  const index = candidates
+    .map(heading => markdown.indexOf(heading))
+    .filter(position => position >= 0)
+    .sort((a, b) => a - b)[0]
+
+  if (index === undefined) {
+    return markdown
+  }
+
+  return `${markdown.slice(0, index).trimEnd()}\n`
+}
+
 async function readOptionalFile(filePath) {
   if (!existsSync(filePath)) {
     return ''
@@ -457,6 +535,8 @@ function buildGeneratedNotes({ tag, previousTag, prs, manualNotes, locale }) {
   lines.push(isZh
     ? '- 具体平台验证、签名和发布证据仍以当前版本的 Release Evidence 与发布清单为准。'
     : '- Platform validation, signing status, and release evidence remain governed by the release evidence and asset checklist for this version.')
+  lines.push('')
+  lines.push(buildReleaseDownloadMatrix(locale).trimEnd())
 
   return `${lines.join('\n').trimEnd()}\n`
 }
@@ -505,11 +585,6 @@ function buildGitHubBody({ tag, previousTag, prs, zhNotes, enNotes }) {
   lines.push('')
   lines.push('- Full bilingual notes are synced to Nexus through `notes` / `notesHtml`.')
   lines.push(`- Generated source files: \`update_${getVersionFromTag(tag)}.zh.md\`, \`update_${getVersionFromTag(tag)}.en.md\`.`)
-  lines.push('')
-  lines.push('## Downloads')
-  lines.push('')
-  lines.push('- Release assets are attached below after the platform build matrix succeeds.')
-  lines.push('- Windows uses the setup installer; macOS uses the app zip or DMG; Linux uses AppImage/deb packages when available.')
 
   if (zhNotes || enNotes) {
     lines.push('')
@@ -520,17 +595,20 @@ function buildGitHubBody({ tag, previousTag, prs, zhNotes, enNotes }) {
     if (zhNotes) {
       lines.push('### 中文')
       lines.push('')
-      lines.push(zhNotes.replace(/^# .+\n?/, '').trim())
+      lines.push(stripReleaseDownloadMatrix(zhNotes).replace(/^# .+\n?/, '').trim())
       lines.push('')
     }
     if (enNotes) {
       lines.push('### English')
       lines.push('')
-      lines.push(enNotes.replace(/^# .+\n?/, '').trim())
+      lines.push(stripReleaseDownloadMatrix(enNotes).replace(/^# .+\n?/, '').trim())
       lines.push('')
     }
     lines.push('</details>')
   }
+
+  lines.push('')
+  lines.push(buildReleaseDownloadMatrix('en').trimEnd())
 
   return `${lines.join('\n').trimEnd()}\n`
 }

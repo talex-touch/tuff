@@ -147,9 +147,13 @@ code: |
   # 在 monorepo 根目录
   pnpm install
   
-  # 在 packages/tuffex 目录
-  pnpm docs:dev    # 启动文档服务器 :8000
-  pnpm build       # 构建库
+  # 组件源码包
+  pnpm -C packages/tuffex run build
+  pnpm -C packages/tuffex run test
+  pnpm -C packages/tuffex run typecheck
+
+  # 展示与文档统一由 Nexus 承载
+  pnpm -C apps/nexus run dev
 ---
 :::
 

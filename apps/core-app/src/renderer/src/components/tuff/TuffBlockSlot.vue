@@ -1,6 +1,7 @@
 <script lang="ts" name="TuffBlockSlot" setup>
+// Legacy CoreApp business wrapper: keep the existing API while delegating primitives to TuffEx.
 import { computed } from 'vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { type IconValue, toIcon } from './tuff-icon-utils'
 
 const props = withDefaults(

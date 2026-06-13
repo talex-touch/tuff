@@ -95,7 +95,7 @@
 1. AI 2.5.0 evidence：补 CoreBox AI Ask 文本/OCR packaged Electron 成功 evidence；补 auth/provider unavailable/quota/model unsupported 失败路径；把 provider/model/trace/latency metadata chips 与 Nexus invoke failure evidence 对齐。
 2. Search Provider / Indexing Runtime：优先 File write/store boundary，把 FileProvider SQLite/FTS 写入、progress、integrity reset 继续收敛到 runtime store/task；随后推进 Browser Bookmarks official plugin lifecycle、Everything productionization、Quicklinks persistent feed/UI evidence、Browser History/System Settings/Obsidian/VSCode。
 3. PreviewSDK：保持 14-case benchmark 为当前最低门槛；下一步只接受能增加能力边界或减少 fake-success 的能力迁移，候选为 Currency adapter 迁移评估、日期/时区 preview、更多 no-result 边界和 benchmark case。
-4. TuffEx/UI：`TxDatePicker` adaptive field calendar 已落地；下一步优先主路径语义控件、示例插件全量样式入口清理、focus/keyboard evidence 与 visual smoke 条件恢复。
+4. TuffEx/UI：`TxDatePicker` adaptive field calendar 与 CoreApp UI Contract pilot 已落地；下一步优先主路径语义控件、剩余 legacy Tabs/Menu/Drawer 小切片、focus/keyboard evidence 与 visual smoke 条件恢复。
 5. Nexus：优先数据收集治理闭环与 docs render/SEO；补 provider registry production/preview operator evidence、live send/live object storage/D1 migration/backfill、文档页 metadata/OG/canonical/prerender evidence、release notes sanitizer 回归与 visual smoke 条件恢复。
 6. 平台 evidence：Windows/macOS 阻塞级人工回归仍是 release-blocking；Everything registry PATH、Windows App indexing、CoreBox function key、手动索引完成通知和 packaged AI UI evidence 必须补真实设备证据。
 

@@ -11,7 +11,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
 import ActionPanel from '~/components/render/ActionPanel.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'

@@ -12,7 +12,7 @@ import { FlowEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 interface Props {

@@ -147,9 +147,13 @@ code: |
   # In monorepo root
   pnpm install
   
-  # In packages/tuffex directory
-  pnpm docs:dev    # Start docs server at :8000
-  pnpm build       # Build library
+  # Component source package
+  pnpm -C packages/tuffex run build
+  pnpm -C packages/tuffex run test
+  pnpm -C packages/tuffex run typecheck
+
+  # Showcase and docs are hosted by Nexus
+  pnpm -C apps/nexus run dev
 ---
 :::
 

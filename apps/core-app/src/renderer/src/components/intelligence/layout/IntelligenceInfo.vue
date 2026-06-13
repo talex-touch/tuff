@@ -252,7 +252,7 @@ async function handleLogin() {
     height: 48px;
   }
 
-  :deep(.TBlockSlot-Content > .TuffIcon) {
+  :deep(.TBlockSlot-Content > .tuff-icon) {
     color: v-bind("isLoggedIn ? 'var(--tx-color-success)' : 'var(--tx-color-warning)'");
   }
 }

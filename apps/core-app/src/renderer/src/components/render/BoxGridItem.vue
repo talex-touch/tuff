@@ -3,7 +3,7 @@ import type { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 
 interface Props {

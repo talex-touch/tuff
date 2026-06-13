@@ -29,13 +29,7 @@
   "include": [
     "packages/**/*.ts",
     "packages/**/*.d.ts",
-    "packages/**/*.vue",
-    "docs/**/*.ts",
-    "docs/**/*.d.ts",
-    "docs/**/*.vue",
-    "docs/.vitepress/**/*.ts",
-    "docs/.vitepress/**/*.d.ts",
-    "docs/.vitepress/**/*.vue"
+    "packages/**/*.vue"
   ],
   "exclude": [
     "dist",

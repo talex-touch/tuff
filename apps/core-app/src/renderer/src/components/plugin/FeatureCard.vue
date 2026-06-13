@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 
 interface FeatureCommandData {
   name?: string

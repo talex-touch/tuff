@@ -5,7 +5,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TouchScroll from '~/components/base/TouchScroll.vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import PluginStatus from '~/components/plugin/action/PluginStatus.vue'
 
 const props = defineProps<{

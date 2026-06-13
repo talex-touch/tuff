@@ -1,4 +1,5 @@
 <script lang="ts">
+// Legacy tabs surface: new CoreApp code should import TxTabs from @talex-touch/tuffex/tabs.
 import type { Component, VNode, VNodeChild } from 'vue'
 import { defineComponent, h, nextTick, ref } from 'vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'

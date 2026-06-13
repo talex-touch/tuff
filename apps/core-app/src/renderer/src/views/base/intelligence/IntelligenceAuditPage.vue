@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceAuditPage" setup>
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
+import { TxSwitch } from '@talex-touch/tuffex/switch'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
 import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
@@ -100,7 +100,7 @@ function handleCacheExpirationBlur() {
             active-icon="i-carbon-checkmark"
             :active="globalConfig.enableAudit"
           >
-            <TSwitch v-model="globalConfig.enableAudit" @update:model-value="handleGlobalChange" />
+            <TxSwitch v-model="globalConfig.enableAudit" @update:model-value="handleGlobalChange" />
           </TuffBlockSlot>
         </TuffGroupBlock>
 
@@ -119,7 +119,7 @@ function handleCacheExpirationBlur() {
             active-icon="i-carbon-checkmark"
             :active="globalConfig.enableCache"
           >
-            <TSwitch v-model="globalConfig.enableCache" @update:model-value="handleGlobalChange" />
+            <TxSwitch v-model="globalConfig.enableCache" @update:model-value="handleGlobalChange" />
           </TuffBlockSlot>
 
           <TuffBlockInput

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+// Legacy adaptor: new CoreApp code should use TxDrawer from @talex-touch/tuffex/drawer.
 import { useModelWrapper } from '@talex-touch/utils/renderer'
 import TouchScroll from '../TouchScroll.vue'
 

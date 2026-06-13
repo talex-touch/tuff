@@ -3,7 +3,6 @@ import { createDocsPrerenderRoutes } from './docs-prerender-routes'
 export const publicPrerenderRoutes = [
   '/',
   '/next',
-  '/docs',
   '/pricing',
   '/license',
   '/privacy',

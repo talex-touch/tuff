@@ -1,7 +1,7 @@
 <script setup name="IntelligenceFuture" lang="ts">
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import TButton from '~/components/base/tuff/TButton.vue'
+import { TxButton } from '@talex-touch/tuffex/button'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
@@ -36,10 +36,10 @@ function handleWorkflowClick() {
       active-icon="i-carbon-flow-connection"
       @click="handleWorkflowClick"
     >
-      <TButton variant="ghost" @click="handleWorkflowClick">
+      <TxButton variant="ghost" @click="handleWorkflowClick">
         <i class="i-carbon-arrow-right" />
         <span>{{ t('intelligence.workflow.entryButton') }}</span>
-      </TButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -49,10 +49,10 @@ function handleWorkflowClick() {
       active-icon="i-carbon-bot"
       @click="handleAgentsClick"
     >
-      <TButton variant="ghost" @click="handleAgentsClick">
+      <TxButton variant="ghost" @click="handleAgentsClick">
         <i class="i-carbon-arrow-right" />
         <span>{{ t('intelligence.agents.title') }}</span>
-      </TButton>
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -62,10 +62,10 @@ function handleWorkflowClick() {
       active-icon="i-carbon-notes"
       @click="handleDocsClick"
     >
-      <TButton variant="ghost" @click="handleDocsClick">
+      <TxButton variant="ghost" @click="handleDocsClick">
         <i class="i-carbon-link" />
         <span>{{ t('settings.intelligence.docsButton') }}</span>
-      </TButton>
+      </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>

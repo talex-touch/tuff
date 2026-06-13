@@ -17,10 +17,8 @@ export default antfu(
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
-      'docs/**',
       'packages/**/dist/**',
       'packages/**/coverage/**',
-      'packages/**/.vitepress/cache/**',
     ],
   },
   {

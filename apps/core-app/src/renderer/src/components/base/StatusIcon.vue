@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { computed } from 'vue'
-import TuffIcon from './TuffIcon.vue'
 
 type StatusIconTone = 'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'
 

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 🧹 包体职责收口
+
+- TuffEx 包移除本地 VitePress `docs:*` / playground 展示入口，源码包只保留 build、watch、lint、test、typecheck 与 package audit 脚本。
+- 运行时 Demo 与公开文档统一迁移到 Nexus 承载，本地预览改为 `pnpm -C "apps/nexus" run dev`。
+
 ### 🧩 组件导出
 
 - 新增 `@talex-touch/tuffex/<component>` 稳定子路径导出与 `<component>/style.css` 局部样式入口，保留根入口兼容但推荐新代码使用按需子路径导入。

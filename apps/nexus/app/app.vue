@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { appName } from '~/constants'
+import { resolveDocsLocaleFromRoute } from '#shared/utils/docs-path'
 
 useHead({
   title: appName,
@@ -21,7 +22,7 @@ const isAuthShellRoute = computed(() => {
     || path.startsWith('/device-auth')
 })
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearch()
-const { initLocale, reconcileClientLocale, syncFromProfileOnAuth } = useLocaleOrchestrator()
+const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
 const { user, pending: authUserPending } = useAuthUser()
 const mounted = ref(false)
@@ -31,10 +32,18 @@ const isAuthenticated = computed(() => status.value === 'authenticated')
 const protectedSessionRecheckDone = ref(false)
 const protectedSessionRecheckRunning = ref(false)
 const searchTriggerSelector = '[data-role="global-search-trigger"]'
+const docsRouteLocale = computed(() => {
+  const path = route.path || ''
+  return /^\/(en|zh)\/docs(?=\/|$)/.test(path)
+    ? resolveDocsLocaleFromRoute(path)
+    : null
+})
 await initLocale({
   isAuthenticated: status.value === 'authenticated',
   profileLocale: user.value?.locale ?? null,
 })
+if (docsRouteLocale.value)
+  await setLocaleSerial(docsRouteLocale.value, 'browser')
 
 watch(
   () => [status.value, user.value?.id ?? null, user.value?.locale ?? null] as const,
@@ -98,10 +107,15 @@ onMounted(() => {
   closeSearch()
   window.addEventListener('keydown', handleGlobalSearchShortcut)
   void (async () => {
-    await reconcileClientLocale({
-      isAuthenticated: status.value === 'authenticated',
-      profileLocale: user.value?.locale ?? null,
-    })
+    if (docsRouteLocale.value) {
+      await setLocaleSerial(docsRouteLocale.value, 'browser')
+    }
+    else {
+      await reconcileClientLocale({
+        isAuthenticated: status.value === 'authenticated',
+        profileLocale: user.value?.locale ?? null,
+      })
+    }
     await syncFromProfileOnAuth({
       status: status.value,
       userId: user.value?.id ?? null,
@@ -117,6 +131,15 @@ onBeforeUnmount(() => {
 watch(
   () => route.fullPath,
   () => closeSearch(),
+)
+
+watch(
+  docsRouteLocale,
+  (targetLocale) => {
+    if (!targetLocale)
+      return
+    void setLocaleSerial(targetLocale, 'browser')
+  },
 )
 
 function pickFirstQueryValue(value: unknown) {

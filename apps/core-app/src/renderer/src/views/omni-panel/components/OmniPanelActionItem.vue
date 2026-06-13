@@ -4,7 +4,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 
 const props = defineProps<{
   item: OmniPanelFeatureItemPayload

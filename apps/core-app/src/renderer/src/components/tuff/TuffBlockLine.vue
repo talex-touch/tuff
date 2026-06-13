@@ -1,4 +1,5 @@
 <script lang="ts" name="TuffBlockLine" setup>
+// Legacy CoreApp business wrapper: keep the existing API while TuffEx group-block migration completes.
 const props = withDefaults(
   defineProps<{
     title?: string

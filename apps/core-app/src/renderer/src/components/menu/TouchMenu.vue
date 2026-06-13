@@ -1,4 +1,5 @@
 <script name="TouchMenu" lang="ts" setup>
+// Legacy navigation surface: new CoreApp code should use TuffEx navigation/menu primitives.
 import { sleep } from '@talex-touch/utils/common'
 import { nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { useRouter } from 'vue-router'

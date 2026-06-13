@@ -21,10 +21,19 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
 const tuffexComponentsSourceRoot = resolve(currentDir, '../../packages/tuffex/packages/components/src')
+const tuffexDistRoot = resolve(currentDir, '../../packages/tuffex/dist/es')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
+const tuffexDistEntry = resolve(tuffexDistRoot, 'index.js')
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
-const tuffexComponentStyleEntry = resolve(currentDir, '../../packages/tuffex/dist/es/$1/style.css')
+const tuffexBaseStyleEntry = useWorkspaceSource
+  ? tuffexStyleEntry
+  : resolve(tuffexDistRoot, 'base.css')
+const tuffexComponentEntry = useWorkspaceSource
+  ? `${tuffexComponentsSourceRoot}/$1/index.ts`
+  : `${tuffexDistRoot}/$1/index.js`
+const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
+const tuffexDistUtilsEntry = resolve(tuffexDistRoot, 'utils/index.js')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
@@ -42,7 +51,9 @@ const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
 
 function isNexusAutoImportScannable(file: string) {
-  return !file.replace(/\\/g, '/').endsWith('/server/utils/billing/index.ts')
+  const normalized = file.replace(/\\/g, '/')
+  return !normalized.endsWith('/server/utils/billing/index.ts')
+    && !normalized.endsWith('/shared/utils/docs-path.ts')
 }
 
 function isEnvFlagEnabled(value?: string) {
@@ -123,7 +134,7 @@ export default defineNuxtConfig({
     },
   },
 
-  css: ['@talex-touch/tuffex/base.css', 'vue-sonner/style.css'],
+  css: [tuffexBaseStyleEntry, 'vue-sonner/style.css'],
 
   colorMode: {
     classSuffix: '',
@@ -237,7 +248,7 @@ export default defineNuxtConfig({
     transpile: [
       '@talex-touch/tuff-business',
       '@talex-touch/utils',
-      ...(useWorkspaceSource ? ['@talex-touch/tuffex'] : []),
+      '@talex-touch/tuffex',
     ],
   },
 
@@ -330,15 +341,11 @@ export default defineNuxtConfig({
         { find: /^next-auth\/core$/, replacement: nextAuthCoreEntry },
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@tuffex-components\/(.+)$/, replacement: `${tuffexComponentsSourceRoot}/$1` },
-        { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
-        ...(useWorkspaceSource
-          ? [
-              { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
-              { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexStyleEntry },
-              { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
-              { find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/, replacement: `${tuffexComponentsSourceRoot}/$1/index.ts` },
-            ]
-          : []),
+        { find: /^@talex-touch\/tuffex$/, replacement: useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry },
+        { find: /^@talex-touch\/tuffex\/utils$/, replacement: useWorkspaceSource ? tuffexUtilsEntry : tuffexDistUtilsEntry },
+        { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
+        { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
+        { find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/, replacement: tuffexComponentEntry },
       ],
     },
     plugins: [tuffexOnDemandStylePlugin({ enabled: !useWorkspaceSource })],
@@ -358,10 +365,11 @@ export default defineNuxtConfig({
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
           '@tuffex-components/*': [`${tuffexComponentsSourceRoot}/*`],
-          '@talex-touch/tuffex': [tuffexSourceEntry],
-          '@talex-touch/tuffex/base.css': [tuffexStyleEntry],
+          '@talex-touch/tuffex': [useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry],
+          '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],
           '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleEntry],
-          '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
+          '@talex-touch/tuffex/utils': [useWorkspaceSource ? tuffexUtilsEntry : tuffexDistUtilsEntry],
+          '@talex-touch/tuffex/*': [tuffexComponentEntry],
         },
       },
     },
@@ -383,6 +391,24 @@ export default defineNuxtConfig({
         if (ignoredContentComponentPatterns.some(pattern => filePath.includes(pattern)))
           components.splice(index, 1)
       }
+    },
+    'pages:extend'(pages) {
+      const docsCatchAll = pages.find(page => page.file?.replace(/\\/g, '/').endsWith('/app/pages/docs/[...slug].vue'))
+      if (!docsCatchAll?.file)
+        return
+
+      pages.push(
+        {
+          name: 'docs-locale-slug',
+          path: '/:docsLocale(en|zh)/docs/:slug(.*)*',
+          file: docsCatchAll.file,
+        },
+        {
+          name: 'docs-locale-index',
+          path: '/:docsLocale(en|zh)/docs',
+          file: docsCatchAll.file,
+        },
+      )
     },
   },
 

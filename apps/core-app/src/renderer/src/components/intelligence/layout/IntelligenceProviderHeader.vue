@@ -3,12 +3,12 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import {
   isNexusManagedProvider as checkNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ICON
@@ -321,7 +321,7 @@ function closeDeleteConfirm() {
           </span>
         </TxDropdownItem>
       </TxDropdownMenu>
-      <TSwitch v-model="localEnabled" :aria-label="`Toggle ${provider.name}`" />
+      <TxSwitch v-model="localEnabled" :aria-label="`Toggle ${provider.name}`" />
     </div>
   </header>
 
@@ -394,7 +394,7 @@ function closeDeleteConfirm() {
   min-width: 0;
 }
 
-.provider-action-item__content :deep(.TuffIcon),
+.provider-action-item__content :deep(.tuff-icon),
 .provider-action-item__content :deep(.tx-icon) {
   flex: 0 0 auto;
 }

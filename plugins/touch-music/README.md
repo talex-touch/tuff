@@ -4,7 +4,7 @@
 
 ## 开发入口
 
-- 调试：`pnpm -C "plugins/touch-music" run music:dev`
+- 调试：`pnpm -C "plugins/touch-music" run dev`
 - 构建：`pnpm -C "plugins/touch-music" run build`
 - Lint：`pnpm -C "plugins/touch-music" run lint`
 

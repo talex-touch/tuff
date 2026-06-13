@@ -85,6 +85,7 @@
     "sass": "catalog:",
     "typescript": "catalog:dev",
     "unocss": "catalog:build",
+    "vitepress": "catalog:",
     "vue": "^3.5.33",
     "vue-tsc": "catalog:dev",
     "webpack": "catalog:dev",

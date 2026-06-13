@@ -1,6 +1,6 @@
 <script lang="ts" name="TuffItemTemplate" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import TuffIcon from '../../base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import TuffStatusBadge from '../TuffStatusBadge.vue'
 
 export interface TuffItemBadge {
@@ -253,7 +253,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     width: 2rem;
     height: 2rem;
 
-    :deep(.TuffIcon) {
+    :deep(.tuff-icon) {
       font-size: 1rem;
     }
   }
@@ -262,7 +262,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     width: 2.5rem;
     height: 2.5rem;
 
-    :deep(.TuffIcon) {
+    :deep(.tuff-icon) {
       font-size: 1.25rem;
     }
   }
@@ -271,7 +271,7 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
     width: 3rem;
     height: 3rem;
 
-    :deep(.TuffIcon) {
+    :deep(.tuff-icon) {
       font-size: 1.5rem;
     }
   }

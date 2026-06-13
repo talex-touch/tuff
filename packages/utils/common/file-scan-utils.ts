@@ -345,7 +345,10 @@ async function mapWithConcurrency<T>(
   const workers = Array.from({ length: limit }, async () => {
     while (cursor < items.length) {
       const index = cursor++
-      await task(items[index])
+      const item = items[index]
+      if (item === undefined)
+        continue
+      await task(item)
     }
   })
   await Promise.all(workers)

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'vitest'
 import {
+  buildReleaseDownloadMatrix,
   buildReleaseNotesPayload,
   categorizePullRequest,
   extractLocalizedReleaseNotes,
@@ -57,6 +58,14 @@ describe('generate-release-notes', () => {
     assert.equal(shouldSkipPullRequest({ labels: [{ name: 'skip-changelog' }] }), true)
   })
 
+  it('builds the release download matrix', () => {
+    const matrix = buildReleaseDownloadMatrix('en')
+
+    assert.match(matrix, /## Download Based on Your Device/)
+    assert.match(matrix, /\| Android \| APK ARMv8<br>APK ARMv7<br>APK x64 \(planned\) \|/)
+    assert.match(matrix, /\| macOS \| \[DMG Apple Silicon\]\(https:\/\/tuff\.tagzxia\.com\/updates\)<br>\[DMG Intel\]\(https:\/\/github\.com\/talex-touch\/tuff\/releases\) \|/)
+  })
+
   it('builds bilingual notes and filters skip-changelog PRs', async () => {
     const payload = await buildReleaseNotesPayload({
       tag: 'v2.4.11-beta.4',
@@ -85,6 +94,10 @@ describe('generate-release-notes', () => {
     assert.match(payload.zhNotes, /优化启动器/)
     assert.match(payload.enNotes, /Improve launcher/)
     assert.match(payload.githubBody, /Merged Pull Requests/)
+    assert.match(payload.zhNotes, /## 按设备下载/)
+    assert.match(payload.enNotes, /## Download Based on Your Device/)
+    assert.equal((payload.githubBody.match(/## Download Based on Your Device/g) ?? []).length, 1)
+    assert.ok(payload.githubBody.trimEnd().endsWith(buildReleaseDownloadMatrix('en').trimEnd()))
     assert.equal(payload.prs.length, 1)
   })
 })

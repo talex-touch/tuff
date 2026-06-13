@@ -1,7 +1,7 @@
 <script lang="ts" name="FloatingNav" setup>
 import { TxButton } from '@talex-touch/tuffex/button'
 import { ref } from 'vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 
 const open = ref(false)
 

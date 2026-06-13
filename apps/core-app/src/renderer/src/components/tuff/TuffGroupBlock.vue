@@ -1,7 +1,8 @@
 <script lang="ts" name="TuffGroupBlock" setup>
+// Legacy CoreApp business wrapper: keep the existing API while delegating primitives to TuffEx.
 import gsap from 'gsap'
 import { computed, onMounted, ref, watch } from 'vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useUiPreference } from '~/modules/storage/ui-preference-storage'
 import { type IconValue, toIcon } from './tuff-icon-utils'
 const props = withDefaults(

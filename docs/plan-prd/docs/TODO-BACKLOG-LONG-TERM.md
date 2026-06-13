@@ -39,7 +39,7 @@
 
 - [ ] Build Signature：OIDC + RSA 签名信任链增强（`>=2.5.0`）。
 - [ ] Nexus 支付多渠道 provider 抽象与回调联调。
-- [ ] TuffEx：构建与 docs:build 门禁持续收敛。
+- [ ] TuffEx：源码包构建/测试/审计与 Nexus 展示门禁持续收敛。
 - [ ] `@talex-touch/unplugin-export-plugin` CLI shim 在 `2.5.0` 退场。
 - [ ] 插件发布：package policy/security scan 与真实 `.tpex` 上传端到端证据。
 
