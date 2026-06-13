@@ -14,6 +14,50 @@ export interface ClipboardInfoRow {
   value: string
 }
 
+export interface ClipboardTextInsight {
+  characterTokens: string[]
+  wordTokens: string[]
+  characterCount: number
+  wordCount: number
+  lineCount: number
+}
+
+export interface ClipboardColorToken {
+  value: string
+  label: string
+}
+
+export interface ClipboardOcrInsight {
+  status: string | null
+  statusLabel: string
+  text: string | null
+  excerpt: string | null
+  displayText: string | null
+  language: string | null
+  confidence: string | null
+  keywords: string[]
+}
+
+export interface ClipboardImagePreviewState {
+  src: string | null
+  isThumbnailOnly: boolean
+}
+
+interface GraphemeSegmenter {
+  segment: (input: string) => Iterable<{ segment: string }>
+}
+
+interface WordSegmenter {
+  segment: (input: string) => Iterable<{ segment: string; isWordLike?: boolean }>
+}
+
+interface IntlWithSegmenter {
+  Segmenter?: new (
+    locale: string,
+    options: { granularity: 'grapheme' } | { granularity: 'word' }
+  ) => GraphemeSegmenter | WordSegmenter
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -79,13 +123,126 @@ function normalizeTimestamp(timestamp: PluginClipboardItem['timestamp']): number
   return null
 }
 
+function parseMetadata(metadata: string | null | undefined): Record<string, unknown> {
+  if (!metadata) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(metadata)
+    return isRecord(parsed) ? parsed : {}
+  }
+  catch {
+    return {}
+  }
+}
+
 function getMeta(item: PluginClipboardItem): Record<string, unknown> {
-  return isRecord(item.meta) ? item.meta : {}
+  return {
+    ...parseMetadata(item.metadata),
+    ...(isRecord(item.meta) ? item.meta : {}),
+  }
+}
+
+function unique<T>(values: T[], getKey: (value: T) => string): T[] {
+  const seen = new Set<string>()
+  const result: T[] = []
+
+  for (const value of values) {
+    const key = getKey(value)
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    result.push(value)
+  }
+
+  return result
+}
+
+function normalizeHexColor(value: string): string {
+  const hex = value.replace('#', '').trim()
+  if (hex.length === 3) {
+    return `#${hex.split('').map(char => `${char}${char}`).join('')}`.toUpperCase()
+  }
+  return `#${hex}`.toUpperCase()
+}
+
+function isValidRgbPart(value: string): boolean {
+  const next = Number(value)
+  return Number.isFinite(next) && next >= 0 && next <= 255
+}
+
+function normalizeRgbColor(value: string): string | null {
+  const parts = value.match(/\d+(?:\.\d+)?/g)
+  if (!parts || parts.length < 3 || !parts.slice(0, 3).every(isValidRgbPart)) {
+    return null
+  }
+
+  const channels = parts.slice(0, 3).map(part => Math.round(Number(part)))
+  const alpha = parts[3] === undefined ? null : Number(parts[3])
+  if (alpha === null) {
+    return `rgb(${channels.join(', ')})`
+  }
+  if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) {
+    return null
+  }
+
+  return `rgba(${channels.join(', ')}, ${Number(alpha.toFixed(3))})`
+}
+
+function normalizeColorToken(value: string): ClipboardColorToken | null {
+  const trimmed = value.trim()
+  const hexMatch = trimmed.match(/^#?([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
+  if (hexMatch) {
+    const color = normalizeHexColor(hexMatch[1] ?? trimmed)
+    return {
+      value: color,
+      label: color,
+    }
+  }
+
+  const rgbMatch = trimmed.match(/^rgba?\(([^)]+)\)$/i)
+  if (rgbMatch) {
+    const color = normalizeRgbColor(trimmed)
+    return color ? { value: color, label: color } : null
+  }
+
+  return null
+}
+
+function collectStringValues(value: unknown, maxDepth = 2): string[] {
+  if (typeof value === 'string') {
+    return [value]
+  }
+  if (Array.isArray(value) && maxDepth > 0) {
+    return value.flatMap(item => collectStringValues(item, maxDepth - 1))
+  }
+  if (isRecord(value) && maxDepth > 0) {
+    return Object.values(value).flatMap(item => collectStringValues(item, maxDepth - 1))
+  }
+
+  return []
+}
+
+function extractColorTokensFromText(text: string): ClipboardColorToken[] {
+  const tokens: ClipboardColorToken[] = []
+  const colorPattern = /#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b|rgba?\([^)]+\)/gi
+  const matches = text.match(colorPattern) ?? []
+
+  for (const match of matches) {
+    const token = normalizeColorToken(match)
+    if (token) {
+      tokens.push(token)
+    }
+  }
+
+  return tokens
 }
 
 function getImageSize(item: PluginClipboardItem): { width: number; height: number } | null {
   const meta = getMeta(item)
-  const raw = meta.image_size
+  const raw = meta.image_size ?? meta.imageSize
   if (!isRecord(raw)) {
     return null
   }
@@ -101,7 +258,7 @@ function getImageSize(item: PluginClipboardItem): { width: number; height: numbe
 
 function getImageFileSize(item: PluginClipboardItem): number | null {
   const meta = getMeta(item)
-  const size = Number(meta.image_file_size)
+  const size = Number(meta.image_file_size ?? meta.imageFileSize)
   return Number.isFinite(size) ? size : null
 }
 
@@ -125,35 +282,78 @@ export function resolveListImageSrc(item: PluginClipboardItem | null | undefined
     return null
   }
 
-  return isRenderableImageUrl(item.thumbnail) ? item.thumbnail : null
+  return resolveLightweightImagePreview(item).src
 }
 
 export function resolveDetailImageSrc(item: PluginClipboardItem | null | undefined): string | null {
+  return resolveDetailImagePreview(item).src
+}
+
+export function resolveDetailImagePreview(
+  item: PluginClipboardItem | null | undefined,
+  resolvedOriginalUrl?: string | null,
+): ClipboardImagePreviewState {
   if (!item || item.type !== 'image') {
-    return null
+    return {
+      src: null,
+      isThumbnailOnly: false,
+    }
+  }
+
+  if (isRenderableImageUrl(resolvedOriginalUrl)) {
+    return {
+      src: resolvedOriginalUrl,
+      isThumbnailOnly: false,
+    }
   }
 
   const meta = getMeta(item)
-  const originalUrl = meta.image_original_url
+  const originalUrl = readMetaString(meta, 'image_original_url', 'imageOriginalUrl')
   if (isRenderableImageUrl(originalUrl)) {
-    return originalUrl
+    return {
+      src: originalUrl,
+      isThumbnailOnly: false,
+    }
   }
 
-  const contentKind = typeof meta.image_content_kind === 'string' ? meta.image_content_kind : ''
-  if (contentKind === 'thumbnail') {
-    return null
+  const contentKind = readMetaString(meta, 'image_content_kind', 'imageContentKind') ?? ''
+  if (contentKind !== 'thumbnail' && isRenderableImageUrl(item.content) && item.content !== item.thumbnail) {
+    return {
+      src: item.content,
+      isThumbnailOnly: false,
+    }
   }
 
-  if (isRenderableImageUrl(item.content) && item.content !== item.thumbnail) {
-    return item.content
-  }
-
-  const previewUrl = meta.image_preview_url
+  const previewUrl = readMetaString(meta, 'image_preview_url', 'imagePreviewUrl')
   if (isRenderableImageUrl(previewUrl)) {
-    return previewUrl
+    return {
+      src: previewUrl,
+      isThumbnailOnly: false,
+    }
   }
 
-  return null
+  return resolveLightweightImagePreview(item)
+}
+
+function resolveLightweightImagePreview(item: PluginClipboardItem): ClipboardImagePreviewState {
+  if (isRenderableImageUrl(item.thumbnail)) {
+    return {
+      src: item.thumbnail,
+      isThumbnailOnly: true,
+    }
+  }
+
+  if (isRenderableImageUrl(item.content)) {
+    return {
+      src: item.content,
+      isThumbnailOnly: true,
+    }
+  }
+
+  return {
+    src: null,
+    isThumbnailOnly: false,
+  }
 }
 
 export function inferClipboardMime(item: PluginClipboardItem | null | undefined): string {
@@ -288,6 +488,171 @@ export function getClipboardInfoRows(item: PluginClipboardItem): ClipboardInfoRo
   ]
 }
 
+export function getClipboardTextInsight(item: PluginClipboardItem | null | undefined): ClipboardTextInsight | null {
+  if (!item || item.type !== 'text') {
+    return null
+  }
+
+  const content = item.content ?? ''
+  if (!content) {
+    return {
+      characterTokens: [],
+      wordTokens: [],
+      characterCount: 0,
+      wordCount: 0,
+      lineCount: 0,
+    }
+  }
+
+  const SegmenterCtor = typeof Intl !== 'undefined' && 'Segmenter' in Intl
+    ? (Intl as IntlWithSegmenter).Segmenter
+    : null
+  const characterSegmenter = SegmenterCtor
+    ? new SegmenterCtor('zh-CN', { granularity: 'grapheme' })
+    : null
+  const wordSegmenter = SegmenterCtor
+    ? new SegmenterCtor('zh-CN', { granularity: 'word' })
+    : null
+  const characters = characterSegmenter
+    ? Array.from(characterSegmenter.segment(content), segment => segment.segment)
+    : Array.from(content)
+  const characterTokens = characters.filter(char => char.trim().length > 0)
+  const words = wordSegmenter
+    ? Array.from(wordSegmenter.segment(content) as Iterable<{ segment: string; isWordLike?: boolean }>)
+        .filter(segment => segment.isWordLike === true || /[\p{L}\p{N}_-]/u.test(segment.segment))
+        .map(segment => segment.segment.trim())
+        .filter(Boolean)
+    : (content.match(/[\p{L}\p{N}_-]+/gu) ?? [])
+  const lines = content.length > 0 ? content.split(/\r\n|\r|\n/).length : 0
+
+  return {
+    characterTokens: characterTokens.slice(0, 80),
+    wordTokens: unique(words, word => word.toLowerCase()).slice(0, 40),
+    characterCount: characters.length,
+    wordCount: words.length,
+    lineCount: lines,
+  }
+}
+
+export function getClipboardColorTokens(item: PluginClipboardItem | null | undefined): ClipboardColorToken[] {
+  if (!item) {
+    return []
+  }
+
+  const meta = getMeta(item)
+  const tokens: ClipboardColorToken[] = []
+
+  if (item.type === 'text') {
+    tokens.push(...extractColorTokensFromText(item.content ?? ''))
+    if (item.rawContent) {
+      tokens.push(...extractColorTokensFromText(item.rawContent))
+    }
+  }
+
+  const likelyColorKeys = [
+    'color',
+    'colors',
+    'palette',
+    'dominant_color',
+    'dominantColor',
+    'accent_color',
+    'accentColor',
+    'background_color',
+    'backgroundColor',
+  ]
+
+  for (const key of likelyColorKeys) {
+    const value = meta[key]
+    for (const raw of collectStringValues(value)) {
+      const direct = normalizeColorToken(raw)
+      if (direct) {
+        tokens.push(direct)
+      }
+      else {
+        tokens.push(...extractColorTokensFromText(raw))
+      }
+    }
+  }
+
+  return unique(tokens, token => token.value.toLowerCase()).slice(0, 12)
+}
+
+export function getClipboardOcrInsight(item: PluginClipboardItem | null | undefined): ClipboardOcrInsight | null {
+  if (!item) {
+    return null
+  }
+
+  const meta = getMeta(item)
+  const hasOcr = Object.keys(meta).some(key => key.startsWith('ocr_') || key.startsWith('ocr'))
+  if (!hasOcr) {
+    return null
+  }
+
+  const status = readMetaString(meta, 'ocr_status', 'ocrStatus')
+  const text = readMetaString(meta, 'ocr_text', 'ocrText')
+  const excerpt = readMetaString(meta, 'ocr_excerpt', 'ocrExcerpt')
+  const language = readMetaString(meta, 'ocr_language', 'ocrLanguage')
+  const confidence =
+    typeof meta.ocr_confidence === 'number'
+      ? `${Math.round(meta.ocr_confidence * 100)}%`
+      : typeof meta.ocr_confidence === 'string'
+        ? meta.ocr_confidence.trim() || null
+        : typeof meta.ocrConfidence === 'number'
+          ? `${Math.round(meta.ocrConfidence * 100)}%`
+          : typeof meta.ocrConfidence === 'string'
+            ? meta.ocrConfidence.trim() || null
+            : null
+  const rawKeywords = Array.isArray(meta.ocr_keywords)
+    ? meta.ocr_keywords
+    : Array.isArray(meta.ocrKeywords)
+      ? meta.ocrKeywords
+      : typeof meta.ocr_keywords === 'string'
+        ? meta.ocr_keywords.split(',')
+        : typeof meta.ocrKeywords === 'string'
+          ? meta.ocrKeywords.split(',')
+          : []
+  const keywords = rawKeywords
+    .filter((keyword): keyword is string => typeof keyword === 'string')
+    .map(keyword => keyword.trim())
+    .filter(Boolean)
+
+  return {
+    status,
+    statusLabel: formatOcrStatus(status),
+    text,
+    excerpt,
+    displayText: text || excerpt,
+    language,
+    confidence,
+    keywords: unique(keywords, keyword => keyword.toLowerCase()).slice(0, 12),
+  }
+}
+
+function readMetaString(meta: Record<string, unknown>, snakeKey: string, camelKey: string): string | null {
+  const value = meta[snakeKey] ?? meta[camelKey]
+  return typeof value === 'string' ? value.trim() || null : null
+}
+
+function formatOcrStatus(status: string | null): string {
+  switch (status?.toLowerCase()) {
+    case 'done':
+    case 'success':
+    case 'succeeded':
+      return '已完成'
+    case 'pending':
+    case 'queued':
+      return '等待识别'
+    case 'running':
+    case 'processing':
+      return '识别中'
+    case 'failed':
+    case 'error':
+      return '识别失败'
+    default:
+      return status || '未知'
+  }
+}
+
 export function groupClipboardItems(items: PluginClipboardItem[]): ClipboardSection[] {
   const formatter = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
@@ -331,6 +696,7 @@ export function selectNextClipboardItemId(
   items: PluginClipboardItem[],
   currentSelectedId: number | null,
   removedId?: number | null,
+  removedIndex?: number | null,
 ): number | null {
   if (items.length === 0) {
     return null
@@ -346,12 +712,9 @@ export function selectNextClipboardItemId(
   }
 
   if (removedId !== null && removedId !== undefined) {
-    const removedIndex = items.findIndex(item => item.id === removedId)
-    if (removedIndex >= 0) {
-      return Number(items[removedIndex]?.id ?? null)
-    }
-
-    const fallbackIndex = Math.min(items.length - 1, Math.max(0, removedIndex))
+    const fallbackIndex = Number.isFinite(removedIndex)
+      ? Math.min(items.length - 1, Math.max(0, Number(removedIndex)))
+      : 0
     return Number(items[fallbackIndex]?.id ?? null)
   }
 
