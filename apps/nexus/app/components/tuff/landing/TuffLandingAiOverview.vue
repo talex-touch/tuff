@@ -21,19 +21,19 @@ const featureCards = computed(() => [
   {
     title: t("landing.os.aiOverview.cards.chat.title"),
     copy: t("landing.os.aiOverview.cards.chat.copy"),
-    icon: "i-carbon-chat",
+    icon: "i-carbon-flow-modeler",
     scenario: "chat" as const,
   },
   {
     title: t("landing.os.aiOverview.cards.assist.title"),
     copy: t("landing.os.aiOverview.cards.assist.copy"),
-    icon: "i-carbon-text-annotation-toggle",
+    icon: "i-carbon-screen",
     scenario: "assist" as const,
   },
   {
     title: t("landing.os.aiOverview.cards.workflow.title"),
     copy: t("landing.os.aiOverview.cards.workflow.copy"),
-    icon: "i-carbon-flow",
+    icon: "i-carbon-tool-kit",
     scenario: "workflow" as const,
   },
 ]);

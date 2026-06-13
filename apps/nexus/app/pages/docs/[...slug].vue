@@ -6,8 +6,9 @@ import DocHero from '~/components/docs/DocHero.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
+import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
 import { useTypedFetch } from '~/utils/request'
-import { DOCS_SUPPORTED_LOCALES, normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
+import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 definePageMeta({
   layout: 'docs',
@@ -17,11 +18,22 @@ definePageMeta({
 const route = useRoute()
 const requestUrl = useRequestURL()
 const nuxtApp = useNuxtApp()
-const { t } = useI18n()
+const { t, setLocale } = useI18n()
 const toast = useToast()
 const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 const isZhDocs = computed(() => docsLocale.value === 'zh')
 const localizedDocsPath = (path: string | null | undefined) => toLocalizedDocsPath(path, docsLocale.value)
+
+if (import.meta.server)
+  await setLocale(docsLocale.value)
+
+watch(
+  docsLocale,
+  (locale) => {
+    void setLocale(locale)
+  },
+  { immediate: import.meta.client },
+)
 
 const { user } = useAuthUser()
 const isAdmin = computed(() => user.value?.role === 'admin')
@@ -92,21 +104,6 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
     ...parsedMeta,
     ...record,
   }
-}
-
-function normalizePublicPath(path: string) {
-  if (!path)
-    return '/'
-  return path.startsWith('/') ? path : `/${path}`
-}
-
-function resolveAbsoluteUrl(path: string) {
-  const origin = requestUrl.origin.replace(/\/$/, '')
-  return new URL(normalizePublicPath(path), `${origin}/`).toString()
-}
-
-function serializeJsonLd(value: Record<string, unknown>) {
-  return JSON.stringify(value).replace(/</g, '\\u003C')
 }
 
 const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
@@ -563,11 +560,6 @@ const docSeoTitleText = computed(() => {
   )
 })
 
-const docSeoPageTitle = computed(() => {
-  const title = docSeoTitleText.value || (isZhDocs.value ? '文档' : 'Docs')
-  return `${title} | ${appName}`
-})
-
 const docSeoDescription = computed(() => {
   const rawDescription = docSeoMeta.value.description ?? docDisplayDescription.value
   const description = normalizeDescriptionForLocale(rawDescription ? String(rawDescription) : '')
@@ -578,95 +570,63 @@ const docSeoDescription = computed(() => {
     : appDescription
 })
 
-const docCanonicalPath = computed(() => normalizedDocPath.value || docPath.value || '/docs')
-const docCanonicalLocalePath = computed(() => toLocalizedDocsPath(docCanonicalPath.value, docsLocale.value))
-const docCanonicalUrl = computed(() => resolveAbsoluteUrl(docCanonicalLocalePath.value))
-const docAlternateLinks = computed(() => {
-  return [
-    ...DOCS_SUPPORTED_LOCALES.map((targetLocale) => {
-      const href = resolveAbsoluteUrl(toLocalizedDocsPath(docCanonicalPath.value, targetLocale))
-      return {
-        rel: 'alternate',
-        hreflang: targetLocale === 'zh' ? 'zh-CN' : 'en',
-        href,
-      }
-    }),
-    {
-      rel: 'alternate',
-      hreflang: 'x-default',
-      href: resolveAbsoluteUrl(toLocalizedDocsPath(docCanonicalPath.value, 'en')),
-    },
-  ]
-})
-const docRobotsContent = computed(() => viewState.value === 'content' ? 'index,follow' : 'noindex,nofollow')
-
-const docStructuredData = computed<Record<string, unknown> | null>(() => {
-  if (!doc.value)
-    return null
-
-  const data: Record<string, unknown> = {
-    '@context': 'https://schema.org',
-    '@type': 'TechArticle',
-    headline: docSeoTitleText.value || docDisplayTitle.value,
+const docCanonicalPath = computed(() => normalizeDocsSeoCanonicalPath(normalizedDocPath.value || docPath.value || '/docs'))
+const docSeoHead = computed(() =>
+  buildDocsSeoHead({
+    appName,
     description: docSeoDescription.value,
-    inLanguage: isZhDocs.value ? 'zh-CN' : 'en-US',
-    url: docCanonicalUrl.value,
-    mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id': docCanonicalUrl.value,
-    },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Tuff',
-      url: resolveAbsoluteUrl('/'),
-    },
-    isPartOf: {
-      '@type': 'CreativeWorkSeries',
-      name: appName,
-    },
-  }
-
-  if (lastUpdatedDate.value)
-    data.dateModified = lastUpdatedDate.value.toISOString()
-
-  return data
-})
-
-const docStructuredDataText = computed(() =>
-  docStructuredData.value ? serializeJsonLd(docStructuredData.value) : '',
+    origin: requestUrl.origin,
+    canonicalPath: docCanonicalPath.value,
+    locale: docsLocale.value,
+    title: docSeoTitleText.value || docDisplayTitle.value,
+    hasContent: viewState.value === 'content' && Boolean(doc.value),
+    modifiedAt: lastUpdatedDate.value,
+  }),
 )
 
 useSeoMeta({
-  title: docSeoPageTitle,
-  description: docSeoDescription,
-  ogTitle: docSeoPageTitle,
-  ogDescription: docSeoDescription,
+  title: () => docSeoHead.value.pageTitle,
+  description: () => docSeoHead.value.description,
+  ogTitle: () => docSeoHead.value.pageTitle,
+  ogDescription: () => docSeoHead.value.description,
   ogType: 'article',
-  ogUrl: docCanonicalUrl,
-  twitterCard: 'summary',
-  twitterTitle: docSeoPageTitle,
-  twitterDescription: docSeoDescription,
+  ogUrl: () => docSeoHead.value.canonicalUrl,
+  ogSiteName: appName,
+  ogLocale: () => docSeoHead.value.ogLocale,
+  ogImage: () => docSeoHead.value.socialImageUrl,
+  twitterCard: () => docSeoHead.value.twitterCard,
+  twitterTitle: () => docSeoHead.value.pageTitle,
+  twitterDescription: () => docSeoHead.value.description,
+  twitterImage: () => docSeoHead.value.socialImageUrl,
 })
 
 useHead(() => ({
   meta: [
     {
       name: 'robots',
-      content: docRobotsContent.value,
+      content: docSeoHead.value.robotsContent,
+    },
+    {
+      property: 'og:locale:alternate',
+      content: docSeoHead.value.ogAlternateLocale,
     },
   ],
   link: [
     {
       rel: 'canonical',
-      href: docCanonicalUrl.value,
+      href: docSeoHead.value.canonicalUrl,
     },
-    ...docAlternateLinks.value,
+    ...docSeoHead.value.alternateLinks.map(link => ({
+      rel: link.rel,
+      hreflang: link.hreflang,
+      href: link.href,
+    })),
   ],
-  script: docStructuredDataText.value
+  script: docSeoHead.value.structuredDataText
     ? [
         {
           type: 'application/ld+json',
-          innerHTML: docStructuredDataText.value,
+          innerHTML: docSeoHead.value.structuredDataText,
         },
       ]
     : [],

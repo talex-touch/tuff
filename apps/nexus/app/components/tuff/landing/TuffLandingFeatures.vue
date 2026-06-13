@@ -11,6 +11,15 @@ interface ExtensibilityContent {
 const { t } = useI18n()
 
 const sdkItems: TuffSdkItem[] = tuffSdkItems
+const previewKeys = ['keyboard', 'fileSearch', 'browser', 'visual', 'token', 'upcoming'] as const
+const previewIcons = {
+  keyboard: 'i-carbon-keyboard',
+  fileSearch: 'i-carbon-search-locate',
+  browser: 'i-carbon-cics-program',
+  visual: 'i-carbon-image-search',
+  token: 'i-carbon-meter',
+  upcoming: 'i-carbon-roadmap',
+} as const
 
 const marqueeDurations = ['46s', '54s', '62s']
 
@@ -19,6 +28,13 @@ const extensibility = computed<ExtensibilityContent>(() => ({
   headline: t('landing.os.extensibility.headline'),
   subheadline: t('landing.os.extensibility.subheadline'),
 }))
+
+const previews = computed(() => previewKeys.map(key => ({
+  id: key,
+  icon: previewIcons[key],
+  title: t(`landing.os.extensibility.preview.${key}.title`),
+  copy: t(`landing.os.extensibility.preview.${key}.copy`),
+})))
 
 const sdkRows = computed(() => {
   const rows: TuffSdkItem[][] = [[], [], []]
@@ -80,6 +96,22 @@ async function copySdkCode(item: TuffSdkItem) {
       },
     }"
   >
+    <div class="landing-features__preview-grid" data-reveal>
+      <article
+        v-for="item in previews"
+        :key="item.id"
+        class="landing-features__preview"
+      >
+        <span class="landing-features__preview-icon" aria-hidden="true">
+          <span :class="item.icon" />
+        </span>
+        <span class="landing-features__preview-copy">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.copy }}</span>
+        </span>
+      </article>
+    </div>
+
     <div class="landing-features__panel">
       <div class="landing-features__marquee">
         <div
@@ -159,6 +191,54 @@ async function copySdkCode(item: TuffSdkItem) {
   background: transparent;
   box-shadow: none;
   overflow: hidden;
+}
+
+.landing-features__preview-grid {
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.landing-features__preview {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: start;
+  min-height: 104px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.landing-features__preview-icon {
+  display: inline-flex;
+  width: 2.15rem;
+  height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #93c5fd;
+  font-size: 1.1rem;
+}
+
+.landing-features__preview-copy {
+  display: grid;
+  gap: 0.3rem;
+  color: rgba(248, 250, 252, 0.68);
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.landing-features__preview-copy strong {
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-weight: 650;
 }
 
 .landing-features__marquee {
@@ -378,6 +458,22 @@ async function copySdkCode(item: TuffSdkItem) {
   .landing-features__track {
     animation: none;
     transform: translateX(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .landing-features__preview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-features__preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-features__preview {
+    min-height: auto;
   }
 }
 </style>

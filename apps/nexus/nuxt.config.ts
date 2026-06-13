@@ -33,7 +33,9 @@ const tuffexComponentEntry = useWorkspaceSource
   : `${tuffexDistRoot}/$1/index.js`
 const tuffexComponentStyleEntry = resolve(tuffexDistRoot, '$1/style.css')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
-const tuffexDistUtilsEntry = resolve(tuffexDistRoot, 'utils/index.js')
+const tuffexDistUtilsEntry = useWorkspaceSource
+  ? tuffexUtilsEntry
+  : resolve(tuffexDistRoot, 'utils/index.js')
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const nextAuthCoreEntry = resolve(currentDir, 'node_modules/next-auth/core/index.js')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
@@ -342,7 +344,7 @@ export default defineNuxtConfig({
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@tuffex-components\/(.+)$/, replacement: `${tuffexComponentsSourceRoot}/$1` },
         { find: /^@talex-touch\/tuffex$/, replacement: useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry },
-        { find: /^@talex-touch\/tuffex\/utils$/, replacement: useWorkspaceSource ? tuffexUtilsEntry : tuffexDistUtilsEntry },
+        { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexDistUtilsEntry },
         { find: /^@talex-touch\/tuffex\/base\.css$/, replacement: tuffexBaseStyleEntry },
         { find: /^@talex-touch\/tuffex\/([^/]+)\/style\.css$/, replacement: tuffexComponentStyleEntry },
         { find: /^@talex-touch\/tuffex\/([a-z0-9-]+)$/, replacement: tuffexComponentEntry },
@@ -368,7 +370,7 @@ export default defineNuxtConfig({
           '@talex-touch/tuffex': [useWorkspaceSource ? tuffexSourceEntry : tuffexDistEntry],
           '@talex-touch/tuffex/base.css': [tuffexBaseStyleEntry],
           '@talex-touch/tuffex/*/style.css': [tuffexComponentStyleEntry],
-          '@talex-touch/tuffex/utils': [useWorkspaceSource ? tuffexUtilsEntry : tuffexDistUtilsEntry],
+          '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
           '@talex-touch/tuffex/*': [tuffexComponentEntry],
         },
       },

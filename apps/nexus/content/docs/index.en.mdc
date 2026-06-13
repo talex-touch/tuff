@@ -1,0 +1,26 @@
+---
+title: Tuff Documentation
+description: Official documentation hub for Tuff users and developers.
+verified: true
+---
+
+# Tuff Documentation
+
+> Start here for product guides, usage playbooks, and developer references.
+
+## Sections
+
+- **[Product Guide](./guide/index.en.md)**: installation, onboarding, CoreBox workflows, and built-in capabilities.
+- **[Quick Start](./guide/start.en.md)**: the shortest path from install to first productive run.
+- **[Developer Hub](./dev/index.en.md)**: plugin manifests, SDK APIs, publishing, and architecture notes.
+- **[Tuffex Components](./dev/components/index.en.md)**: component demos and API reference for Nexus and dashboard surfaces.
+
+## Recommended Path
+
+1. Read the quick start if you are using Tuff for the first time.
+2. Open the product guide when you need feature-level context.
+3. Move to the developer hub when you are building plugins or integrating with Tuff.
+
+## Feedback
+
+Use the CoreBox `feedback` command or open an issue when a page is missing, outdated, or unclear.
