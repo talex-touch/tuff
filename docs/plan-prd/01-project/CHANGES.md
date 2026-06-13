@@ -5,6 +5,15 @@
 
 ## 2026-06-13
 
+### ref(core-app): extract CommonChannel system shell handlers
+
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/main/channel/system-shell-handlers.ts`
+- `apps/core-app/src/main/channel/system-shell-handlers.test.ts`
+  - Extracted renderer system shell/open handlers from `CommonChannelModule` into a focused registration helper.
+  - Kept `openExternal`, `showInFolder`, `openApp`, `openPromptsFolder` and `executeCommand` behavior unchanged while reducing CommonChannel responsibility.
+  - 验证：focused CommonChannel/system-shell Vitest, scoped ESLint and CoreApp node typecheck.
+
 ### fix(nexus): keep docs sidebar active item in view
 
 - `apps/nexus/app/components/DocsSidebar.vue`

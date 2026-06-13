@@ -116,7 +116,6 @@ import { deviceIdleService } from '../service/device-idle-service'
 import { TalexTouch } from '../types'
 import { setLocale } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
-import { validateExternalUrl } from '../utils/external-url-policy'
 import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
@@ -132,6 +131,7 @@ import {
   setSecureStoreValue
 } from '../utils/secure-store'
 import { tempFileService } from '../service/temp-file.service'
+import { registerSystemShellHandlers } from './system-shell-handlers'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
@@ -1475,66 +1475,11 @@ export class CommonChannelModule extends BaseModule {
       transport.on<void, SecureStoreHealthResponse>(AppEvents.system.getSecureStoreHealth, () =>
         getSecureStoreHealth(this.getSecureStoreRootPath())
       ),
-      transport.on(AppEvents.system.openExternal, (payload) => {
-        const decision = validateExternalUrl(payload?.url)
-        if (!decision.allowed) {
-          log.warn('Blocked external URL open request', {
-            meta: {
-              reason: decision.reason,
-              protocol: decision.protocol
-            }
-          })
-          return undefined
-        }
-        return shell.openExternal(decision.url)
+      ...registerSystemShellHandlers(transport, {
+        configRootPath: () => storageModule.filePath,
+        logger: log,
+        registerSafeHandler
       }),
-      transport.on(AppEvents.system.showInFolder, (payload) => {
-        const target = typeof payload?.path === 'string' ? payload.path : ''
-        if (target) {
-          shell.showItemInFolder(target)
-        }
-      }),
-      transport.on(AppEvents.system.openApp, (payload) => {
-        const target = payload?.appName || payload?.path
-        if (target) {
-          void shell.openPath(target)
-        }
-        return undefined
-      }),
-      transport.on(AppEvents.system.openPromptsFolder, async () => {
-        const basePath = storageModule.filePath
-        if (!basePath) {
-          throw new Error('Config path not available')
-        }
-
-        const promptFilePath = path.join(basePath, 'intelligence', 'prompt-library')
-        try {
-          await fs.stat(promptFilePath)
-          shell.showItemInFolder(promptFilePath)
-          return
-        } catch {
-          // Ignore and fallback to opening config root
-        }
-
-        const error = await shell.openPath(basePath)
-        if (error) {
-          throw new Error(error)
-        }
-      }),
-      registerSafeHandler(
-        AppEvents.system.executeCommand,
-        async (payload: { command?: string }) => {
-          const command = typeof payload?.command === 'string' ? payload.command : ''
-          if (!command) {
-            throw new Error('No command provided')
-          }
-
-          const error = await shell.openPath(command)
-          if (error) {
-            throw new Error(error)
-          }
-        }
-      ),
       transport.on(AppEvents.i18n.setLocale, (payload) => {
         const locale = getOptionalStringProp(payload, 'locale')
         if (locale && isLocale(locale)) {
