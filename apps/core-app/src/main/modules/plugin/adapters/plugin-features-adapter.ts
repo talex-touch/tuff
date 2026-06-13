@@ -261,7 +261,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           feature: item
         },
         hideResults: true, // webcontent mode - hide results area for plugin UI view
-        showInput: shouldShowInput
+        showInput: shouldShowInput,
+        forceMax: feature.interaction?.forceMax === true
       }
       searchEngineCore.activateProviders([activation])
 
@@ -318,7 +319,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           feature: item
         },
         hideResults: false, // push mode - show results area for pushed items
-        showInput: shouldShowInput // show input if feature accepts input types or has allowInput
+        showInput: shouldShowInput, // show input if feature accepts input types or has allowInput
+        forceMax: feature.interaction?.forceMax === true
       }
       searchEngineCore.activateProviders([activation])
 

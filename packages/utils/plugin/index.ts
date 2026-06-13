@@ -314,6 +314,10 @@ export interface IFeatureInteraction {
    * Defaults to true for webcontent features.
    */
   allowInput?: boolean
+  /**
+   * Whether CoreBox should expand to its maximum height when this feature is active.
+   */
+  forceMax?: boolean
 }
 
 /**
