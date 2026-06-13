@@ -5,6 +5,15 @@
 
 ## 2026-06-13
 
+### fix(plugin): include dot-directory files in package integrity manifests
+
+- `packages/unplugin-export-plugin/src/core/exporter.ts`
+- `packages/unplugin-export-plugin/src/__tests__/index-bundling.test.ts`
+- `packages/tuff-cli-core/src/exporter.ts`
+- `packages/tuff-cli-core/src/__tests__/builder-widgets.test.ts`
+  - Plugin packaging now includes dot-directory files such as `widgets/.compiled/*` in `manifest._files`, keeping packaged `.tpex` contents aligned with Nexus integrity verification.
+  - Added focused coverage for generic dot-directory assets and precompiled widget outputs.
+
 ### fix(core-app): respect plugin input visibility for adapted plugin surfaces
 
 - `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`

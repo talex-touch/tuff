@@ -94,6 +94,8 @@ describe('builder widget precompile', () => {
       await expect(
         fs.pathExists(path.join(root, 'dist', 'build', widget.metaPath)),
       ).resolves.toBe(true)
+      expect(manifest._files).toHaveProperty(widget.compiledPath)
+      expect(manifest._files).toHaveProperty(widget.metaPath)
       expect(widget.styles).toContain('.panel')
       expect(widget.dependencies).toContain('vue')
     })

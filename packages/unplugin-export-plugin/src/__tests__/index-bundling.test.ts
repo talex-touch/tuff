@@ -230,4 +230,35 @@ describe('index bundling precedence', () => {
     },
     30000,
   )
+
+  it(
+    'records dot-directory files in manifest integrity hashes',
+    async () => {
+      const root = await createProject({
+        preludeEntryContent: 'console.log(\'dot-files\')',
+      })
+
+      try {
+        const compiledWidgetPath = path.join(root, 'widgets', '.compiled', 'panel.cjs')
+        await fs.ensureDir(path.dirname(compiledWidgetPath))
+        await fs.writeFile(compiledWidgetPath, 'module.exports = {}\n')
+
+        await build({
+          root,
+          outDir: 'dist',
+          indexDir: 'index',
+          manifest: 'manifest.json',
+          minify: false,
+          sourcemap: false,
+        })
+
+        const manifest = await fs.readJson(path.join(root, 'dist/build/manifest.json'))
+        expect(manifest._files).toHaveProperty('widgets/.compiled/panel.cjs')
+      }
+      finally {
+        await fs.remove(root)
+      }
+    },
+    30000,
+  )
 })
