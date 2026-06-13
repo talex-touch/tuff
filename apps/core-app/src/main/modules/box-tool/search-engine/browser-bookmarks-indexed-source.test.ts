@@ -190,7 +190,8 @@ describe('browserBookmarksIndexedSource', () => {
         owner: 'official-plugin'
       }
     })
-    expect(manifestSource?.admission?.notes).toContain('does not read browser files by itself')
+    expect(manifestSource?.admission?.notes).toContain('after consent')
+    expect(manifestSource?.admission?.notes).toContain('maintains the indexed source lifecycle')
   })
 
   it('reports consent-gated diagnostics without changing plugin search behavior', async () => {
@@ -210,7 +211,7 @@ describe('browserBookmarksIndexedSource', () => {
         reason: BROWSER_BOOKMARKS_DISABLED_REASON,
         metadata: expect.objectContaining({
           providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
-          runtimeBridge: false,
+          runtimeOwner: 'official-plugin',
           persistentPluginIndexing: false,
           enablementReason: 'not-configured',
           linkedProviderIds: [
@@ -272,12 +273,14 @@ describe('browserBookmarksIndexedSource', () => {
       batches.push(batch)
     }
 
-    await expect(source.handleWatchEvent?.({
-      sourceId: source.descriptor.id,
-      action: 'change',
-      path: '/browser/Default/Bookmarks',
-      occurredAt: 1700000000000
-    })).resolves.toEqual([])
+    await expect(
+      source.handleWatchEvent?.({
+        sourceId: source.descriptor.id,
+        action: 'change',
+        path: '/browser/Default/Bookmarks',
+        occurredAt: 1700000000000
+      })
+    ).resolves.toEqual([])
 
     expect(batches).toEqual([])
     expect(readFileSync).not.toHaveBeenCalled()
@@ -317,7 +320,7 @@ describe('browserBookmarksIndexedSource', () => {
           metadata: expect.objectContaining({
             scannerOwner: 'touch-browser-data',
             providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
-            runtimeBridge: true
+            runtimeOwner: 'official-plugin'
           })
         }),
         expect.objectContaining({
@@ -326,8 +329,8 @@ describe('browserBookmarksIndexedSource', () => {
           reason: BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON,
           metadata: expect.objectContaining({
             providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
-            runtimeBridge: true,
-            persistentPluginIndexing: false,
+            runtimeOwner: 'official-plugin',
+            persistentPluginIndexing: true,
             enablementReason: 'explicitly-enabled',
             enabledProviderIds: [BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID]
           })
@@ -555,7 +558,7 @@ describe('browserBookmarksIndexedSource', () => {
     ).toBe(false)
   })
 
-  it('reports runtime reset state and rejects direct clear without runtime boundary', async () => {
+  it('reports runtime reset state and supports direct clear through owned runtime', async () => {
     const source = buildEnabledSource()
 
     await expect(
@@ -573,8 +576,23 @@ describe('browserBookmarksIndexedSource', () => {
       scanProgressRows: 0
     })
 
-    await expect(source.clearIndex?.()).rejects.toThrow(
-      'browser-bookmarks-clear-requires-runtime-reset'
-    )
+    await expect(source.clearIndex?.()).resolves.toBeUndefined()
+  })
+
+  it('does not claim direct reset cleared the search index without the runtime boundary', async () => {
+    const source = buildEnabledSource()
+
+    const result = await source.resetIndex?.({
+      sourceId: source.descriptor.id,
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true,
+      clearScanProgress: true
+    })
+
+    expect(result).toMatchObject({
+      sourceId: 'browser-bookmarks',
+      clearedSearchIndex: false,
+      clearedScanProgress: false
+    })
   })
 })

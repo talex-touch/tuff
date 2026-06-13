@@ -222,6 +222,10 @@
   min-width: 0;
 }
 
+.source-diagnostics-row--dialog {
+  justify-content: flex-start;
+}
+
 .source-status-pill,
 .source-diagnostic-chip {
   display: inline-flex;
@@ -275,6 +279,11 @@
   flex-wrap: wrap;
 }
 
+.source-diagnostics-maintenance--dialog {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
 .source-maintenance-button {
   min-width: 58px;
   height: 24px;
@@ -282,6 +291,48 @@
   border-radius: 6px;
   font-size: 12px;
   white-space: nowrap;
+}
+
+.source-maintenance-button--dialog {
+  min-width: 76px;
+}
+
+.source-diagnostic-detail-button {
+  min-width: 62px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.source-diagnostic-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(720px, 70vw);
+  max-height: min(68vh, 620px);
+  overflow: auto;
+  padding: 12px 14px 16px;
+}
+
+.source-diagnostic-dialog-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tx-fill-color) 46%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 58%, transparent);
+}
+
+.source-diagnostic-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx-text-color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .provider-config-summary {
@@ -322,14 +373,47 @@
 
 .provider-config-item {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) minmax(120px, auto) 24px 24px auto;
+  grid-template-columns: 28px minmax(100px, 1fr) minmax(120px, auto) auto;
   align-items: center;
   gap: 6px;
-  min-height: 30px;
-  padding: 4px 6px;
+  min-height: 34px;
+  padding: 4px 6px 4px 0;
   border-radius: 7px;
   background: color-mix(in srgb, var(--tx-fill-color) 50%, transparent);
   border: 1px solid color-mix(in srgb, var(--tx-border-color) 58%, transparent);
+  overflow: hidden;
+}
+
+.provider-config-ghost {
+  opacity: 1;
+  border: 2px dashed currentColor;
+  background-color: var(--tx-fill-color-dark);
+}
+
+.provider-config-drag-handle {
+  align-self: stretch;
+  width: 28px;
+  cursor: move;
+  color: var(--tx-text-color-placeholder);
+  background:
+    radial-gradient(circle, currentColor 10%, transparent 11%) 25% 25%,
+    radial-gradient(circle, currentColor 10%, transparent 11%) 75% 25%,
+    radial-gradient(circle, currentColor 10%, transparent 11%) 25% 75%,
+    radial-gradient(circle, currentColor 10%, transparent 11%) 75% 75%,
+    radial-gradient(circle, currentColor 10%, transparent 11%) 25% 50%,
+    radial-gradient(circle, currentColor 10%, transparent 11%) 75% 50%;
+  background-color: var(--tx-fill-color-dark);
+  background-size: 50% 50%;
+  background-repeat: no-repeat;
+  border-radius: 7px 0 0 7px;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.provider-config-drag-handle:hover {
+  color: var(--tx-text-color-primary);
+  background-color: color-mix(in srgb, var(--tx-fill-color-dark) 80%, currentColor 8%);
 }
 
 .provider-config-item--disabled {
@@ -356,13 +440,6 @@
   text-overflow: ellipsis;
 }
 
-.provider-config-icon-button {
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border-radius: 6px;
-}
-
 .provider-config-toggle {
   min-width: 54px;
   height: 24px;
@@ -371,10 +448,37 @@
   white-space: nowrap;
 }
 
+.browser-bookmarks-runtime-panel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-width: min(760px, 62vw);
+}
+
+.browser-bookmarks-runtime-evidence,
+.browser-bookmarks-runtime-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.browser-bookmarks-runtime-actions :deep(.tx-button) {
+  min-height: 24px;
+  white-space: nowrap;
+}
+
 .source-diagnostic-chip {
   max-width: 148px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.source-diagnostic-dialog .source-diagnostic-chip {
+  max-width: min(620px, 64vw);
 }
 
 .source-diagnostic-task-chip {

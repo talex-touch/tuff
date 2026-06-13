@@ -35,7 +35,7 @@ export const BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID = 'touch-browser-data.browse
 export const BROWSER_BOOKMARKS_DISABLED_REASON =
   'browser-bookmarks-official-provider-consent-required'
 export const BROWSER_BOOKMARKS_RUNTIME_BRIDGE_REASON =
-  'browser-bookmarks-runtime-bridge-awaiting-plugin-owned-persistence'
+  'browser-bookmarks-official-plugin-owned-runtime'
 
 const browserProfileDiagnosticsService = new IndexedSourceProfileDiagnosticsService()
 
@@ -59,9 +59,12 @@ export interface BrowserBookmarksIndexedSourceOptions {
 export function buildBrowserBookmarksIndexedSourceDescriptor(): IndexedSourceDescriptor {
   return createBrowserBookmarksIndexedSourceDescriptor({
     id: BROWSER_BOOKMARKS_INDEXED_SOURCE_ID,
+    capabilities: {
+      reset: true
+    },
     admission: {
       notes:
-        'Chromium Bookmarks JSON is gated by the official touch-browser-data provider; persistent plugin-owned indexing remains a follow-up.'
+        'Chromium Bookmarks JSON is gated by the official touch-browser-data provider and indexed through the plugin-owned runtime lifecycle.'
     }
   })
 }
@@ -135,7 +138,7 @@ function readBrowserBookmarksSnapshot(
     metadata: {
       scannerOwner: 'touch-browser-data',
       providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
-      runtimeBridge: true
+      runtimeOwner: 'official-plugin'
     }
   })
 
@@ -196,10 +199,10 @@ function buildProviderLifecycleEvidence(
     metadata: {
       providerId: BROWSER_BOOKMARKS_OFFICIAL_PROVIDER_ID,
       currentOwner: 'touch-browser-data',
-      runtimeBridge: enabled,
-      plannedStorage: 'sqlite-index',
-      plannedPrivacy: 'high',
-      persistentPluginIndexing: false,
+      runtimeOwner: 'official-plugin',
+      storage: 'sqlite-index',
+      privacy: 'high',
+      persistentPluginIndexing: enabled,
       enablementReason: enablement.reason,
       linkedProviderIds: enablement.providerIds,
       configuredProviderIds: enablement.configuredProviderIds,
@@ -424,7 +427,7 @@ export function buildBrowserBookmarksIndexedSource(
       return buildBrowserBookmarksResetResult(request)
     },
     clearIndex: async () => {
-      throw new Error('browser-bookmarks-clear-requires-runtime-reset')
+      snapshotCache.clear()
     }
   }
 }
