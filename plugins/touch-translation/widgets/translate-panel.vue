@@ -1370,14 +1370,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: auto;
   padding: 2px 4px 2px 2px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.TranslationWidget__providers.is-focused {
-  border-color: rgba(64, 158, 255, 0.45);
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.12);
 }
 
 .TranslationWidget__provider {

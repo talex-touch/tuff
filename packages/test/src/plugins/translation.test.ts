@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
 const translationPlugin = loadPluginModule(
@@ -59,6 +59,48 @@ function resolvePath(relativePath: string): string {
   return fileURLToPath(new URL(relativePath, import.meta.url))
 }
 
+class TestTuffItemBuilder {
+  private readonly item: Record<string, any>
+
+  constructor(id: string) {
+    this.item = { id, actions: [], meta: {} }
+  }
+
+  setSource(type: string, id: string, name: string) {
+    this.item.source = { type, id, name }
+    return this
+  }
+
+  setTitle(title: string) {
+    this.item.title = title
+    return this
+  }
+
+  setSubtitle(subtitle: string) {
+    this.item.subtitle = subtitle
+    return this
+  }
+
+  setIcon(icon: unknown) {
+    this.item.icon = icon
+    return this
+  }
+
+  setCustomRender(runtime: string, widgetId: string, payload: unknown) {
+    this.item.customRender = { runtime, widgetId, payload }
+    return this
+  }
+
+  setMeta(meta: Record<string, unknown>) {
+    this.item.meta = meta
+    return this
+  }
+
+  build() {
+    return this.item
+  }
+}
+
 const require = createRequire(import.meta.url)
 const { syncTouchTranslationBundledRuntime } = require(
   '../../../../apps/core-app/scripts/lib/touch-translation-runtime-sync.js',
@@ -109,6 +151,77 @@ describe('touch-translation shared helpers', () => {
     )
 
     expect(enabledProviders).toEqual(['tuffintelligence', 'google'])
+  })
+
+  it('filters tuffintelligence out of runtime provider display when auth token is unavailable', async () => {
+    const providerConfigs = [
+      { id: 'tuffintelligence' },
+      { id: 'google' },
+    ]
+
+    await expect(
+      translationTest.filterAuthorizedProviderConfigs(providerConfigs, {
+        canUseTuffIntelligenceProvider: async () => false,
+      }),
+    ).resolves.toEqual([{ id: 'google' }])
+
+    await expect(
+      translationTest.filterAuthorizedProviderConfigs(providerConfigs, {
+        canUseTuffIntelligenceProvider: async () => true,
+      }),
+    ).resolves.toEqual(providerConfigs)
+  })
+
+  it('does not show tuffintelligence in triggered widget state while logged out', async () => {
+    vi.useFakeTimers()
+    const updatedItems: any[] = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        TuffItemBuilder: TestTuffItemBuilder,
+        URLSearchParams,
+        channel: {
+          async send() {
+            return ''
+          },
+        },
+        plugin: {
+          feature: {
+            clearItems() {},
+            updateItem(_id: string, item: unknown) {
+              updatedItems.push(item)
+            },
+            pushItems(items: unknown[]) {
+              updatedItems.push(...items)
+            },
+          },
+          storage: {
+            async getFile() {
+              return {
+                tuffintelligence: { enabled: true },
+                google: { enabled: true },
+              }
+            },
+            async setFile() {},
+          },
+          box: {
+            hide() {},
+          },
+        },
+      }),
+    )
+    const controller = new AbortController()
+    controller.abort()
+
+    try {
+      await pluginModule.onFeatureTriggered('touch-translate', 'hello', {}, controller.signal)
+      const providers = updatedItems[0]?.customRender?.payload?.providers ?? []
+      expect(providers.map((provider: { id: string }) => provider.id)).toEqual(['google'])
+    }
+    finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('normalizes translation failure messages', () => {
