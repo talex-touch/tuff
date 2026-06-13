@@ -1,9 +1,243 @@
 # 变更日志
 
-> 更新时间：2026-06-13
+> 更新时间：2026-06-14
 > 说明：主文件只保留近 30 天重点索引与后续新增变更；压缩前完整快照见 `./archive/changes/CHANGES-pre-doc-compression-2026-05-14.md`。更早历史继续按月归档在 `./archive/changes/`。
 
+## 2026-06-14
+
+### feat(core-app): add sticky manual save for capability config
+
+- `apps/core-app/src/renderer/src/modules/hooks/useIntelligenceManager.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceCapabilitiesPage.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - Capability configuration now exposes a bottom sticky save bar with dirty/saving/saved/error states.
+  - Manual save flushes pending prompt edits and forces the Intelligence settings storage to persist immediately, while keeping the existing auto-save path intact.
+  - 验证：`pnpm -C "apps/core-app" run typecheck:web` 通过。
+
+### feat(core-app): enrich intelligence capability test result metrics
+
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `apps/core-app/src/main/modules/ai/capability-testers/*`
+- `apps/core-app/src/main/modules/ai/providers/langchain-openai-compatible-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/anthropic-provider.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/CapabilityTestResult.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/AISDKCapabilityDetails.vue`
+  - Capability test results now include token usage, token speed, elapsed time, stability analysis, and optional reasoning/thinking content when exposed by LangChain providers.
+  - Capability testers share one result builder for metrics and stability signals, avoiding duplicated per-capability formatting logic.
+  - The test result panel now renders metrics, stability, reasoning, and response preview with theme-safe contrast.
+  - 验证：`pnpm -C "apps/core-app" run typecheck:node`、`pnpm -C "apps/core-app" run typecheck:web`、`pnpm -C "packages/tuff-intelligence" run build` 均通过。
+
+### feat(tuffex): add AI Elements Vue adapter for intelligence answers
+
+- `pnpm-workspace.yaml`
+- `packages/tuffex/package.json`
+- `packages/tuffex/packages/components/src/ai-elements/*`
+- `packages/tuffex/packages/components/src/components.ts`
+- `apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue`
+  - Added `ai-elements-vue` to the workspace catalog and made `@talex-touch/tuffex` own the dependency surface so app workspaces consume AI UI through TuffEx.
+  - Added TuffEx `TxAiConversation` / `TxAiMessage` adapters that mirror AI Elements conversation/message semantics while using existing TuffEx tokens and markdown sanitization.
+  - CoreBox Intelligence answers now render prompt + assistant response through the TuffEx AI conversation component instead of local `v-html` formatting.
+  - 验证：`pnpm -C "packages/tuffex" run typecheck`、`pnpm -C "packages/tuffex" run build`、目标 `CoreIntelligenceAnswer.vue` ESLint 与 `git diff --check` 通过；CoreApp `typecheck:web` 被既有 `useSearch.core.test.ts:293` mock `TuffItem` 类型错误阻断。
+
+### fix(plugin): keep touch-intelligence silent until actionable
+
+- `plugins/touch-intelligence/index.js`
+- `plugins/touch-intelligence/manifest.json`
+- `packages/test/src/plugins/intelligence.test.ts`
+  - `touch-intelligence` no longer pushes the placeholder root result when CoreBox opens with an empty query or a non-AI search term.
+  - The plugin now only shows its send item for explicit `ai` / `@ai` / `/ai` text queries, image-only clipboard input, or explicit AI image prompts, keeping normal search results uncluttered.
+  - Updated the manifest description to describe explicit AI-prefix usage and OCR support instead of implying automatic image-question prompting.
+  - 验证：`pnpm -C "packages/test" exec vitest run "src/plugins/intelligence.test.ts"` 通过。
+
+### fix(core-app): preserve CoreBox query on plugin feature entry
+
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts`
+  - CoreBox now keeps the launcher query visible when entering a plugin feature input session, while still passing the same query as the feature's initial execution payload.
+  - Plugin feature activation no longer triggers an immediate follow-up search from the retained query, avoiding accidental empty or duplicate live-input broadcasts after the initial feature handoff.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/adapter/hooks/useSearch.core.test.ts"` 通过。
+
+### feat(core-app): unify plugin permission request cards
+
+- `apps/core-app/src/renderer/src/components/permission/PermissionRequestToast.vue`
+- `apps/core-app/src/renderer/src/modules/permission/permission-request-card.ts`
+- `apps/core-app/src/renderer/src/composables/usePermissionStartup.ts`
+- `apps/core-app/src/renderer/src/modules/install/install-manager.ts`
+  - Plugin startup permission prompts and install-time permission confirmations now share the same dark permission request card pattern with deny/session/always actions.
+  - Permission labels still resolve from the registry i18n keys and manifest reasons, avoiding plugin-specific hardcoding while matching the new visual baseline.
+
+### fix(plugin): close runtime widget auth and reset consistency
+
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/index.js`
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+  - Widget registration cache now avoids dev/runtime-compile stale hits and clears previous renderer/style state before surfacing newer register/compile failures.
+  - `touch-translation` filters `tuffintelligence` out of provider display before creating pending widget state when no account token is available.
+  - Browser Bookmarks direct source reset no longer claims search-index clear ownership; settings reset success now requires an actual cleared search index or scan-progress result.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/widget/widget-manager.test.ts" "src/renderer/src/modules/plugin/widget-registry.test.ts" "src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.test.ts"`、`pnpm exec vitest run "packages/test/src/plugins/translation.test.ts"`、`pnpm -C "plugins/touch-translation" exec vitest run "translation-helper.test.ts"` 通过。
+
 ## 2026-06-13
+
+### fix(plugin): adapt touch-intelligence to sdkapi 260615
+
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.test.ts`
+- `plugins/touch-intelligence/manifest.json`
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/intelligence.test.ts`
+  - Main-process plugin preludes now receive the typed Intelligence SDK with the plugin `sdkapi` marker attached to protected transport payloads.
+  - `touch-intelligence` now declares `sdkapi: 260615` and prefers the injected Intelligence SDK while retaining the legacy client fallback for older runtimes.
+  - Focused tests cover SDK injection with `_sdkapi` forwarding and the plugin-side injected SDK preference.
+
+### fix(core-app): render capability model config per provider binding
+
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/ProviderList.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/AISDKCapabilityDetails.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue`
+  - Capability provider selection now renders each channel as a row with a right-side switch for toggling enabled channels.
+  - Capability configuration now renders one model-management row for each enabled channel, allowing every provider binding to keep its own ordered model list while preserving the existing `models: string[]` data shape.
+  - Capability model transfer now scopes its transient model cache by provider, preventing default models from a previously edited channel from leaking into another channel's available model list.
+  - Capability binding model management now uses the same flip-dialog interaction as channel model configuration instead of a side drawer.
+  - Capability edits now persist through the Intelligence settings storage instead of mutating only the renderer runtime data proxy, so channel bindings, model priorities, and prompts survive page reloads.
+
+### fix(core-app): restore Local Model connection and model discovery
+
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue`
+- `apps/core-app/src/main/modules/network/network-service.ts`
+- `apps/core-app/src/main/modules/ai/providers/langchain-openai-compatible-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/local-provider.ts`
+- `apps/core-app/src/main/modules/ai/provider-models.ts`
+  - Local Model settings now allow connection testing and model fetching without an API key while still validating the configured Base URL.
+  - OpenAI-compatible LangChain calls now inject the unified `NetworkService` fetch adapter, keeping provider requests on the configured proxy/session path.
+  - Local Model chat now tries native Ollama `/api/chat` through `NetworkService` first, then falls back to OpenAI-compatible chat on 404.
+  - Local model discovery now tries Ollama `/api/tags` first, falls back to OpenAI-compatible `/v1/models`, and only reuses stored models when live discovery is unavailable.
+
+### fix(core-app): keep running plugin detail actions operable
+
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+  - Plugin detail headers now treat `ACTIVE` as an operable running state instead of a disabled transition state, keeping stop/reload/folder/devtools/uninstall actions reachable while showing a themed `运行中` / `Running` badge.
+  - Real transition states such as loading, disabling and dev reconnecting still keep the primary action disabled to avoid duplicate lifecycle requests.
+
+### fix(core-app): clarify search diagnostics interactions
+
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.css`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+  - Changed the search provider toggle button to show the next action instead of the current state, so disabled providers show `启用` / `Enable` and enabled providers show `关闭` / `Turn off`.
+  - Moved per-source diagnostics controls into a click-through detail dialog, keeping the source list to a single detail action and preventing dense evidence/action chips from overlapping in the settings panel.
+  - Replaced provider up/down controls with a left-side drag handle that matches the plugin market source editor ordering pattern.
+
+### fix(core-app): close plugin widget surface follow-up
+
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `plugins/clipboard-history/manifest.json`
+- `plugins/touch-translation/manifest.json`
+  - Widget manager now reuses cached registration payloads on repeated feature triggers, avoiding repeated precompiled reads or runtime compilation.
+  - Renderer widget registry skips duplicate `widgetId + hash` registrations when the renderer is already present, while update/unregister/failure paths still replace or clear runtime state.
+  - `interaction.forceMax` is now the explicit contract for CoreBox max-height expansion; regular widget activations no longer imply max height by type alone, and full-height official widget surfaces declare it in manifest.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/widget/widget-manager.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/plugin/widget-registry.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts"`、`pnpm -C "apps/core-app" exec vitest run "src/renderer/src/modules/box/adapter/hooks/useResize.test.ts"` 均通过。
+
+### fix(core-app): harden macOS dev Electron signing
+
+- `apps/core-app/scripts/dev-electron-wrapper.mjs`
+  - Normalized copied Electron framework bundles back to versioned macOS framework symlinks before signing, avoiding `codesign` ambiguous framework detection on npm Electron artifacts.
+  - Replaced one-shot `codesign --deep` dev signing with explicit inside-out helper app/framework/app signing and quarantine cleanup, restoring reliable `pnpm core:dev` startup on macOS.
+
+### feat(clipboard-history): finish detail insights and interaction polish
+
+- `plugins/clipboard-history/src/utils/clipboard-items.ts`
+- `plugins/clipboard-history/src/components/ClipboardDetail.vue`
+- `plugins/clipboard-history/src/views/ClipboardManagerView.vue`
+- `plugins/clipboard-history/src/main.css`
+- `plugins/clipboard-history/src/components/ClipboardActionBar.vue`
+- `plugins/clipboard-history/src/utils/clipboard-items.test.ts`
+- `plugins/clipboard-history/src/components/ClipboardActionBar.test.ts`
+- `plugins/clipboard-history/src/views/ClipboardManagerView.test.ts`
+  - Clipboard History detail view now surfaces text statistics, copyable character tokens, color tokens, and OCR insights with stable normalization from `meta` and serialized `metadata`.
+  - Image detail rendering now lazily resolves original history image URLs, falls back to explicit thumbnail previews instead of blank states, keeps list/detail lightweight image fallback consistent, and uses the resolved original URL for copy actions when available.
+  - The manager view now restores word-token chips, keeps ArrowUp/ArrowDown selection scroll-aligned, requests force-max expansion on mount, and bridges CoreBox/Tuff theme variables into the unified `--tx-*` token set to avoid mixed-theme surfaces.
+  - Color extraction now normalizes hex/rgb/rgba tokens, deduplicates values, and respects palette/dominant/accent/background metadata keys.
+  - OCR insight rendering now supports snake_case and camelCase metadata, status labels, confidence, excerpt fallback, deduped keywords, and copy interactions for OCR text/keywords; the manager view has a focused test covering detail insight chips writing through `clipboard.write({ text })`.
+  - 验证：`pnpm -C "plugins/clipboard-history" exec vitest run "src/utils/clipboard-items.test.ts" "src/components/ClipboardActionBar.test.ts" "src/views/ClipboardManagerView.test.ts"`、`pnpm -C "plugins/clipboard-history" run typecheck` 与 `pnpm -C "plugins/clipboard-history" exec eslint --cache --max-warnings=0 "src/**/*.{ts,vue}"` 通过。
+
+### docs(nexus): retarget landing narrative to desktop Agent capabilities
+
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/app/components/tuff/landing/TuffLandingAiOverview.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingFeatures.vue`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - Retargeted the Nexus landing page from cinematic/pioneer productivity copy toward Tuff as a local-first desktop Agent command center.
+  - Updated hero, AI overview, desktop-context and feature/search-index copy to emphasize CoreBox, model routing, desktop context, Agent tool execution, plugin SDKs and local-first boundaries.
+  - Added a compact capability preview rail for keyboard-first operation, file search, CDP browser control, visual interaction, token saving and upcoming Agent capabilities without introducing new runtime dependencies.
+  - Synced TODO and Roadmap so model routing, desktop context and Agent tool execution remain tied to 2.5.0 evidence, while CDP browser control, visual interaction, token saving, Skills, Computer Use, MiniApp, ACP, automation and sandboxing stay Beta/Experimental or future-preview commitments.
+
+### feat(search): promote Browser Bookmarks to owned runtime lifecycle
+
+- `apps/core-app/src/main/modules/box-tool/search-engine/browser-bookmarks-indexed-source.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `plugins/touch-browser-data/manifest.json`
+  - Browser Bookmarks is now described and diagnosed as an official `touch-browser-data` owned indexed-source runtime instead of a metadata-only follow-up.
+  - Settings now exposes Browser Bookmarks consent, disable, rebuild and clear actions beside the existing source diagnostics, while preserving watch roots, evidence chips and recent task visibility.
+  - Manifest notes now state the consent-gated official runtime behavior, and focused tests cover provider contract, roots/evidence, watch deltas, reset/clear and disabled no-read behavior.
+
+### feat(nexus): tighten docs seo and prerender evidence
+
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/utils/docs-seo.ts`
+- `apps/nexus/app/utils/docs-seo.test.ts`
+- `apps/nexus/content/docs/index.en.mdc`
+- `apps/nexus/content/docs/index.zh.mdc`
+- `apps/nexus/build/nexus-prerender-routes.ts`
+- `apps/nexus/build/docs-prerender-routes.test.ts`
+- `apps/nexus/build/check-worker-bundle.mjs`
+- `apps/nexus/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Docs content pages now emit fuller social metadata: OG site name, locale, image, Twitter large image, canonical, localized alternates, robots, and TechArticle JSON-LD stay derived from the resolved content route through a testable SEO head helper.
+  - Kept Nuxt i18n `no_prefix` as the app-wide strategy and made docs the localized transition path with explicit `/en/docs/**` and `/zh/docs/**` routes plus page-level locale sync.
+  - Added real docs root index content so `/en/docs` and `/zh/docs` are not route-only prerender targets.
+  - Added a prerender evidence helper that reuses the actual Nexus route enumeration and verifies real repository localized docs navigation anchors plus stable docs APIs, keeping evidence aligned with production prerender input.
+  - Updated the Worker bundle static-route expectation from unprefixed `/docs` to localized `/en/docs` and `/zh/docs`.
+  - 验证：`pnpm -C "apps/nexus" exec vitest run "build/docs-prerender-routes.test.ts" "app/utils/docs-seo.test.ts" "server/utils/docsPath.test.ts"` 与 scoped Nexus ESLint 均通过。
+
+### test(core-app): require CoreBox AI Ask recent-path evidence
+
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.ts`
+- `apps/core-app/src/main/modules/platform/coreapp-visible-experience-evidence.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+  - Split the CoreBox AI Ask visible-experience evidence contract into fixed text `text.chat` success, clipboard image `vision.ocr -> text.chat` success, logged-out, provider unavailable, quota exhausted, and model unsupported recent paths.
+  - Updated recommended artifacts so packaged Electron capture cannot pass with only one generic AI failure screenshot.
+  - Synced TODO and Quality Baseline to keep the boundary clear: focused evidence tests are now covered, but real packaged Electron UI artifacts are still required before declaring the AI desktop entry closed.
+
+### fix(core-app): reuse registered widgets and restore clipboard split view
+
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.test.ts`
+- `plugins/clipboard-history/src/views/ClipboardManagerView.vue`
+- `plugins/clipboard-history/src/components/ClipboardActionBar.vue`
+- `plugins/touch-translation/index/main.ts`
+  - Widget registration now reuses cached payloads for repeated feature triggers, avoiding repeated precompiled widget reads before interaction is shown.
+  - Translation pushes a pending widget result immediately for new text queries while keeping request debounce for provider calls.
+  - Clipboard History keeps the original split list/detail layout until genuinely narrow widths, with horizontal footer controls preserved.
 
 ### fix(plugin): include dot-directory files in package integrity manifests
 
