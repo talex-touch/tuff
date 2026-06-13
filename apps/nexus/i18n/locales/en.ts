@@ -2438,14 +2438,14 @@ Tuff may update this agreement at any time. Continued submission indicates accep
   landing: {
     hero: {
       description:
-        'A strong adaptation more platform all-tool program that elevates your desktop into a responsive, intelligent control center.',
-      heading: 'Profoundly Powerful. Deceptively Simple.',
+        'Tuff is a local-first desktop Agent command center that brings search, execution, plugins, and intelligence into one summon.',
+      heading: 'A local desktop Agent center, one touch away.',
       bullets: {
-        cinematic: 'Cinematic command surfaces with synchronized transitions on desktop, web, and mobile.',
-        policy: 'Policy-aware rollout controls with signed extensions and regional manifests.',
-        realtime: 'Realtime collaboration that mirrors the intent of your FlowScript and docs playbooks.',
+        cinematic: 'Summon CoreBox with Alt + Space and keep search, execution, and chat in one entry.',
+        policy: 'Electron runtime plus plugin SDKs keep extension power controlled, auditable, and typed.',
+        realtime: 'Local state comes first; Nexus coordinates docs, ecosystem, and trusted releases.',
       },
-      primaryCta: 'Join waitlist',
+      primaryCta: 'Download Tuff',
       secondaryCta: 'Developer docs',
       stats: {
         commands: {
@@ -2463,16 +2463,16 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
       highlights: {
         integrations: {
-          title: 'Native integrations',
-          description: 'Aligns with system automation, launchers, and voice control out of the box.',
+          title: 'Desktop entry',
+          description: 'CoreBox opens from a global shortcut so daily actions stay in keyboard flow.',
         },
         workspace: {
-          title: 'Workspace DNA',
-          description: 'Curate dashboards, scripts, and messaging in a single adaptive surface.',
+          title: 'Local context',
+          description: 'Clipboard, files, apps, and desktop state become structured Agent input.',
         },
         focus: {
-          title: 'Realtime focus',
-          description: 'Ambient cues keep the most important signals one glance away.',
+          title: 'Plugin coordination',
+          description: 'Manifest, Prelude, and Surface connect capabilities to one command surface.',
         },
       },
     },
@@ -2572,9 +2572,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
       aiOverview: {
-        eyebrow: 'AI Specialization',
-        headline: 'Specialized intelligence crafted for your operating rhythm.',
-        subheadline: 'Agents, retrieval, and automation compose together inside Tuff.',
+        eyebrow: 'Agent Core',
+        headline: 'Models, context, and tools enter the same desktop workflow.',
+        subheadline: 'Tuff Intelligence brings model routing, desktop context, and Agent execution into CoreBox.',
         demo: {
           chat: {
             placeholder: 'Ask me anything...',
@@ -2704,20 +2704,20 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
         cards: {
           chat: {
-            title: 'Ask AI Anything',
-            copy: 'Ask anything, anytime, anywhere. AI answers instantly.',
+            title: 'Model routing',
+            copy: 'Set an entry model, then route specialized scenes to the right model automatically.',
           },
           assist: {
-            title: 'Smart Text Actions',
-            copy: 'Intelligently process selected text: fix spelling, translate, or ask questions.',
+            title: 'Desktop context',
+            copy: 'Clipboard, files, apps, and selected text become callable Agent context.',
           },
           preview: {
             title: 'Instant Preview',
             copy: 'Smart recognition instantly previews calculations and conversions.',
           },
           workflow: {
-            title: 'AI Workflows',
-            copy: 'Chain multi-step tasks together — automate complex routines in one command.',
+            title: 'Agent tool execution',
+            copy: 'Built-in tools, MCP, and plugins move requests from intent to real actions.',
           },
         },
       },
@@ -2955,8 +2955,34 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
       extensibility: {
         eyebrow: 'Capabilities Center',
-        headline: 'Free everything, powerful tools.',
-        subheadline: 'TuffFamilyKit offers a suite of tools to extend Tuff\'s capabilities to every tool you use.',
+        headline: 'Plugins, Agents, and SDKs extend the desktop together.',
+        subheadline: 'From CoreBox search sources to the Intelligence SDK, every capability enters through clear contracts.',
+        preview: {
+          keyboard: {
+            title: 'Keyboard-first',
+            copy: 'Daily actions stay keyboard-first to reduce mouse switching.',
+          },
+          fileSearch: {
+            title: 'File search',
+            copy: 'Everything on Windows, local indexing and native support on macOS.',
+          },
+          browser: {
+            title: 'CDP control',
+            copy: 'Browser control connects automation with lightweight fingerprint simulation.',
+          },
+          visual: {
+            title: 'Visual interaction',
+            copy: 'Visual editing kits adapt Agent changes across model families.',
+          },
+          token: {
+            title: 'Token saving',
+            copy: 'Built-in rtk-based token saving works out of the box.',
+          },
+          upcoming: {
+            title: 'Coming next',
+            copy: 'Skills, Computer Use, MiniApp, ACP, automation, and sandboxing are being merged in.',
+          },
+        },
         copied: 'Copied',
       },
       openFoundation: {
@@ -2982,28 +3008,28 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         ctaHref: '/docs/dev/components/foundations',
       },
       proactive: {
-        eyebrow: 'Proactive Intelligence',
-        headline: 'It knows what you need. Before you do.',
-        subheadline: 'Introducing Tuff Intelligence. On-device, private, and deeply aware of your context.',
-        shieldLabel: 'On-Device AI · Your privacy is paramount',
+        eyebrow: 'Desktop Context',
+        headline: 'Turn desktop state into context an Agent can understand.',
+        subheadline: 'Tuff starts with clipboard, app state, desktop state, and selected text, then expands toward foreground, focus, screen, UI, traces, workspace, and notifications.',
+        shieldLabel: 'Local-first · Controlled context',
         scenarios: {
           developer: {
-            tab: 'Developer · VS Code',
-            title: 'Select any import and Tuff suggests the docs you need.',
-            copy: 'Inline recommendations open the correct reference, example snippets, and recent changelog entries.',
-            action: 'Open FlowScript API reference',
+            tab: 'App state',
+            title: 'Current app, window, and workspace state enter the request context.',
+            copy: 'The Agent no longer reads only a prompt; it understands which app, file, and task you are working on.',
+            action: 'Read active app · Summarize window state',
           },
           designer: {
-            tab: 'Designer · Figma',
-            title: 'Contextual actions appear the moment you select a layer.',
-            copy: 'Export presets, CSS tokens, and accessibility checks line up without breaking your stride.',
-            action: 'Export layer as PNG · Copy CSS',
+            tab: 'Clipboard & selection',
+            title: 'Text, images, files, and HTML clipboard data can be passed in structurally.',
+            copy: 'Selected text and clipboard content become explicit inputs, reducing repeated context setup.',
+            action: 'Read clipboard · Parse selection',
           },
           zero: {
-            tab: 'Zero Input',
-            title: 'Summon Tuff and your next moves are already queued.',
-            copy: 'Recent files, meetings, and automation scenes appear based on the rhythm of your day.',
-            action: 'Resume “Launch Prep” workspace · Join Daily Sync',
+            tab: 'Desktop & notifications',
+            title: 'Desktop state, notifications, and workspace signals will feed the context graph.',
+            copy: 'Give the Agent enough context to handle the request and return manual setup time to creative work.',
+            action: 'Sync desktop state · Aggregate workspace signals',
           },
         },
       },
@@ -3064,34 +3090,34 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     features: {
       items: {
         innovativeDesign: {
-          title: 'Innovative Design',
+          title: 'Visual interaction',
           description:
-            'A modern interface with cinematic motion that highlights the content you need while reducing visual noise.',
+            'Use visual kits to edit and preview Agent output across different model interaction styles.',
         },
         lightningFast: {
-          title: 'Lightning Fast',
+          title: 'One touch away',
           description:
-            'Launch instantly, orchestrate tasks, and pivot between workspaces without dropping a single frame.',
+            'Alt + Space opens instantly, keeping search, execution, and questions in a keyboard-first loop.',
         },
         secureReliable: {
-          title: 'Secure & Reliable',
+          title: 'Local-first',
           description:
-            'End-to-end encrypted channels keep your ideas safe while redundancy protects every sync.',
+            'SQLite remains the local source of truth while sensitive context and credentials stay within clear safety boundaries.',
         },
         crossPlatform: {
-          title: 'Cross-Platform',
+          title: 'File search',
           description:
-            'Stay in the flow across desktop environments with pixel-perfect parity and native gestures.',
+            'Everything powers Windows search while macOS and Linux use local indexing and platform capabilities.',
         },
         extensible: {
-          title: 'Extensible',
+          title: 'Agent toolchain',
           description:
-            'Craft behaviours with a flexible plugin API and lifecycle tooling built for teams.',
+            'Built-in tools, MCP, plugins, and model routing work together to execute real desktop tasks.',
         },
         customizable: {
-          title: 'Customizable',
+          title: 'Capability preview',
           description:
-            'Dial in colour, layout, and automation so every workspace mirrors your personal rhythm.',
+            'Skills, Computer Use, MiniApp, ACP, automation, and sandbox capabilities are being merged in.',
         },
       },
     },

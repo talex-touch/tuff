@@ -20,7 +20,8 @@ const distBudget = {
 const expectedStaticRoutes = [
   '/',
   '/next',
-  '/docs',
+  '/en/docs',
+  '/zh/docs',
   '/pricing',
   '/license',
   '/privacy',

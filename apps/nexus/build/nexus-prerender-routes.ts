@@ -1,4 +1,5 @@
 import { createDocsPrerenderRoutes } from './docs-prerender-routes'
+import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 
 export const publicPrerenderRoutes = [
   '/',
@@ -21,6 +22,14 @@ export const docsApiPrerenderRoutes = [
   '/api/docs/sidebar-components',
 ] as const
 
+export const docsPrerenderEvidenceRoutes = [
+  '/docs',
+  '/docs/dev',
+  '/docs/dev/getting-started/quickstart',
+  '/docs/dev/components',
+  '/docs/guide/start',
+] as const
+
 export function createNexusPrerenderRoutes(nexusRoot: string) {
   return [
     ...new Set([
@@ -29,4 +38,27 @@ export function createNexusPrerenderRoutes(nexusRoot: string) {
       ...createDocsPrerenderRoutes(nexusRoot),
     ]),
   ]
+}
+
+export function createNexusPrerenderEvidence(nexusRoot: string) {
+  const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
+  const routes = createNexusPrerenderRoutes(nexusRoot)
+  const routeSet = new Set(routes)
+  const requiredDocsRoutes = docsPrerenderEvidenceRoutes.flatMap(route => toLocalizedDocsPaths(route))
+  const staticWorkerRoutes = [
+    ...publicPrerenderRoutes,
+    ...docsApiPrerenderRoutes,
+    ...requiredDocsRoutes,
+  ]
+
+  return {
+    publicRoutes: [...publicPrerenderRoutes],
+    docsApiRoutes: [...docsApiPrerenderRoutes],
+    docsRoutes,
+    requiredDocsRoutes,
+    staticWorkerRoutes,
+    missingRequiredDocsRoutes: requiredDocsRoutes.filter(route => !routeSet.has(route)),
+    routeCount: routes.length,
+    docsRouteCount: docsRoutes.length,
+  }
 }

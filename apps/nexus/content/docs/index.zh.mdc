@@ -1,0 +1,26 @@
+---
+title: Tuff 文档
+description: 面向 Tuff 用户与开发者的官方文档入口。
+verified: true
+---
+
+# Tuff 文档
+
+> 从这里进入产品指南、使用技巧与开发者参考。
+
+## 文档分区
+
+- **[产品指南](./guide/index.zh.md)**：安装、首次引导、CoreBox 工作流与内置能力。
+- **[快速开始](./guide/start.zh.md)**：从安装到完成第一次有效使用的最短路径。
+- **[开发者中心](./dev/index.zh.md)**：插件 Manifest、SDK API、发布流程与架构说明。
+- **[Tuffex 组件](./dev/components/index.zh.md)**：Nexus 与后台界面使用的组件 Demo 和 API 参考。
+
+## 推荐路径
+
+1. 第一次使用 Tuff 时，先阅读快速开始。
+2. 需要理解功能边界时，进入产品指南。
+3. 开发插件或做集成时，再进入开发者中心。
+
+## 反馈
+
+如果页面缺失、过时或表述不清，可以通过 CoreBox 输入 `feedback`，或直接提交 issue。
