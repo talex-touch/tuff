@@ -19,18 +19,22 @@ import { useI18n } from 'vue-i18n'
 import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
 import TuffItemTemplate from '~/components/tuff/template/TuffItemTemplate.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
+import { createRendererLogger } from '~/utils/renderer-log'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
 const aiClient = createIntelligenceClient(transport)
+const capabilityPageLog = createRendererLogger('IntelligenceCapabilitiesPage')
 
 const {
   providers,
   capabilities,
   loading,
+  saving,
   updateCapability,
   setCapabilityProviders,
-  updateProvider
+  updateProvider,
+  saveSettings
 } = useIntelligenceManager()
 
 const searchQuery = ref('')
@@ -53,6 +57,8 @@ const filteredCapabilities = computed(() => {
 })
 
 const selectedCapabilityId = ref<string | null>(null)
+const hasPendingCapabilityChanges = ref(false)
+const saveState = ref<'idle' | 'dirty' | 'saved' | 'error'>('idle')
 const selectedCapability = computed<IntelligenceCapabilityConfig | null>(() => {
   if (!selectedCapabilityId.value) return null
   const values = Object.values(capabilityList.value)
@@ -161,6 +167,7 @@ function updateCapabilityBinding(
     current[index] = { ...current[index], ...patch }
   }
   setCapabilityProviders(capabilityId, current)
+  markCapabilityDirty()
 }
 
 function handleCapabilityProviderToggle(
@@ -179,6 +186,7 @@ function handleCapabilityProviderToggle(
     if (!capability?.providers) return
     const remaining = capability.providers.filter((binding) => binding.providerId !== providerId)
     setCapabilityProviders(capabilityId, remaining)
+    markCapabilityDirty()
   }
 }
 
@@ -189,6 +197,7 @@ function handleCapabilityModels(capabilityId: string, providerId: string, models
 
 function handleCapabilityPrompt(capabilityId: string, prompt: string): void {
   updateCapability(capabilityId, { promptTemplate: prompt })
+  markCapabilityDirty()
 }
 
 function activeBindings(capabilityId: string): CapabilityBinding[] {
@@ -220,6 +229,28 @@ function onUpdatePrompt(prompt: string): void {
 function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): void {
   if (!selectedCapability.value) return
   setCapabilityProviders(selectedCapability.value.id, bindings)
+  markCapabilityDirty()
+}
+
+function markCapabilityDirty(): void {
+  hasPendingCapabilityChanges.value = true
+  saveState.value = 'dirty'
+}
+
+async function handleSaveCapabilities(): Promise<void> {
+  try {
+    await saveSettings()
+    hasPendingCapabilityChanges.value = false
+    saveState.value = 'saved'
+    window.setTimeout(() => {
+      if (saveState.value === 'saved') {
+        saveState.value = 'idle'
+      }
+    }, 1800)
+  } catch (error) {
+    capabilityPageLog.error('Failed to save capability settings', error)
+    saveState.value = 'error'
+  }
 }
 
 async function handleCapabilityTest(
@@ -285,7 +316,6 @@ async function handleCapabilityTest(
           :key="capability.id"
           class="capability-card"
           :title="capability.label || capability.id"
-          :subtitle="capability.description"
           :icon="getCapabilityIcon(capability)"
           :selected="selectedCapabilityId === capability.id"
           :top-badge="getCapabilityBadge(capability)"
@@ -315,10 +345,14 @@ async function handleCapabilityTest(
           :bindings="activeBindings(selectedCapability.id)"
           :is-testing="!!capabilityTesting[selectedCapability.id]"
           :test-result="capabilityTests[selectedCapability.id]"
+          :has-pending-changes="hasPendingCapabilityChanges"
+          :is-saving="saving"
+          :save-state="saveState"
           @toggle-provider="onToggleProvider"
           @update-models="onUpdateModels"
           @update-prompt="onUpdatePrompt"
           @reorder-providers="onReorderProviders"
+          @save="handleSaveCapabilities"
           @test="
             (params?: {
               providerId?: string
@@ -346,25 +380,12 @@ async function handleCapabilityTest(
 .capability-card {
   flex: 0 0 auto;
   align-self: stretch;
-  height: 5.75rem;
+  height: 4.5rem;
   min-height: 0;
 }
 
 .capability-card :deep(.TuffItemTemplate-Content) {
   gap: 0.25rem;
-}
-
-.capability-card :deep(.TuffItemTemplate-Subtitle) {
-  align-items: flex-start;
-}
-
-.capability-card :deep(.TuffItemTemplate-SubtitleText) {
-  display: -webkit-box;
-  white-space: normal;
-  line-height: 1.35;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .capability-list-empty {

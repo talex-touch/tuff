@@ -71,8 +71,7 @@ const apiKeyDescription = computed(() => {
 })
 
 const canTest = computed(() => {
-  const isNotLocal = props.modelValue.type !== 'local'
-  if (!isNotLocal) {
+  if (!isBaseUrlValid(localBaseUrl.value)) {
     return false
   }
   if (!requiresApiKey.value) {
@@ -92,16 +91,25 @@ function validateApiKey(value: string): boolean {
   return true
 }
 
+function isBaseUrlValid(value: string): boolean {
+  if (!value.trim()) {
+    return true
+  }
+
+  try {
+    new URL(value)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function validateBaseUrl(value: string): boolean {
   baseUrlError.value = ''
 
-  if (value.trim()) {
-    try {
-      new URL(value)
-    } catch {
-      baseUrlError.value = t('intelligence.config.api.baseUrlInvalid')
-      return false
-    }
+  if (!isBaseUrlValid(value)) {
+    baseUrlError.value = t('intelligence.config.api.baseUrlInvalid')
+    return false
   }
 
   return true
@@ -117,6 +125,7 @@ function handleBaseUrlBlur() {
 
 async function handleTest() {
   if (!canTest.value || isTesting.value) return
+  if (!validateBaseUrl(localBaseUrl.value) || !validateApiKey(localApiKey.value)) return
 
   isTesting.value = true
   testError.value = ''
@@ -285,8 +294,7 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
           :loading="isTesting"
           @click="handleTest"
         >
-          <i v-if="isTesting" class="i-carbon-renew animate-spin" />
-          <i v-else class="i-carbon-play-filled" />
+          <i v-if="!isTesting" class="i-carbon-play-filled" />
           <span>{{ t('intelligence.config.api.testButton') }}</span>
         </TxButton>
       </div>

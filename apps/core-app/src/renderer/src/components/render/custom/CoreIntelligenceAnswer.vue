@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { TuffItem } from '@talex-touch/utils'
+import type { AiElementMessage } from '@talex-touch/tuffex/ai-elements'
+import { TxAiConversation } from '@talex-touch/tuffex/ai-elements'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
@@ -75,11 +77,27 @@ const usageLabel = computed(() => {
   })
 })
 
-const answerHtml = computed(() => {
-  if (!aiData.value.answer) {
-    return ''
+const conversationMessages = computed<AiElementMessage[]>(() => {
+  const messages: AiElementMessage[] = [
+    {
+      id: `${aiData.value.requestId || 'core-intelligence'}-prompt`,
+      role: 'user',
+      name: t('coreBox.intelligence.userLabel', 'You'),
+      content: formattedPrompt.value
+    }
+  ]
+
+  if (hasAnswer.value) {
+    messages.push({
+      id: `${aiData.value.requestId || 'core-intelligence'}-answer`,
+      role: 'assistant',
+      name: t('coreBox.intelligence.assistantLabel', 'AI'),
+      content: aiData.value.answer ?? '',
+      status: 'complete'
+    })
   }
-  return formatAnswer(aiData.value.answer)
+
+  return messages
 })
 
 const showUsage = computed(() => usageLabel.value.length > 0)
@@ -93,19 +111,6 @@ watch(
     copyError.value = ''
   }
 )
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function formatAnswer(answer: string): string {
-  return escapeHtml(answer).replace(/\n/g, '<br />')
-}
 
 function copyAnswer(): void {
   if (!aiData.value.answer) {
@@ -157,9 +162,8 @@ function copyAnswer(): void {
       </TxButton>
     </header>
 
-    <div v-if="hasAnswer">
-      <!-- eslint-disable-next-line vue/no-v-html -->
-      <div class="CoreIntelligence__answer" v-html="answerHtml" />
+    <div v-if="hasAnswer" class="CoreIntelligence__conversation">
+      <TxAiConversation :messages="conversationMessages" compact />
       <div v-if="copyError" class="CoreIntelligence__inlineError">
         {{ copyError }}
       </div>
@@ -316,15 +320,13 @@ function copyAnswer(): void {
   }
 }
 
-.CoreIntelligence__answer {
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--tx-text-color-primary);
-  white-space: normal;
-  word-break: break-word;
+.CoreIntelligence__conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.CoreIntelligence__answer :deep(code) {
+.CoreIntelligence__conversation :deep(code) {
   font-family: var(--app-font-mono, 'Fira Code', monospace);
 }
 

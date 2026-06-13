@@ -6,7 +6,7 @@ import type {
   TestResult
 } from '@talex-touch/tuff-intelligence'
 import type { ComputedRef, Ref } from 'vue'
-import { intelligenceData, intelligenceSettings } from '@talex-touch/utils/renderer/storage'
+import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, ref, watch } from 'vue'
 
 /**
@@ -27,6 +27,8 @@ interface UseIntelligenceManagerReturn {
   testResults: Ref<Map<string, TestResult>>
   /** Loading state for async operations */
   loading: Ref<boolean>
+  /** Saving state for Intelligence settings storage */
+  saving: Ref<boolean>
   /** Computed array of enabled providers */
   enabledProviders: ComputedRef<IntelligenceProviderConfig[]>
   /** Computed array of disabled providers */
@@ -47,6 +49,8 @@ interface UseIntelligenceManagerReturn {
   updateCapability: (id: string, updates: Partial<IntelligenceCapabilityConfig>) => void
   /** Function to assign provider bindings for a capability */
   setCapabilityProviders: (id: string, providers: IntelligenceCapabilityProviderBinding[]) => void
+  /** Function to force-save the current Intelligence settings */
+  saveSettings: () => Promise<void>
   /** Function to set test result for a provider */
   setTestResult: (id: string, result: TestResult) => void
   /** Function to clear test result for a provider */
@@ -116,14 +120,19 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   })
 
   const capabilities = computed<Record<string, IntelligenceCapabilityConfig>>({
-    get: () => intelligenceData.capabilities,
+    get: () => intelligenceSettings.get().capabilities,
     set: (value) => {
-      intelligenceData.capabilities = value
+      const currentData = intelligenceSettings.get()
+      intelligenceSettings.set({
+        ...currentData,
+        capabilities: value
+      })
     }
   })
 
   const testResults = ref<Map<string, TestResult>>(new Map())
   const loading = ref(false)
+  const saving = intelligenceSettings.savingState
 
   /**
    * Currently selected provider object.
@@ -283,6 +292,10 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
     capabilities.value = updated
   }
 
+  async function saveSettings(): Promise<void> {
+    await intelligenceSettings.saveToRemote({ force: true })
+  }
+
   /**
    * Sets a test result for a provider.
    *
@@ -320,6 +333,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
     capabilities,
     testResults,
     loading,
+    saving,
     enabledProviders,
     disabledProviders,
     selectProvider,
@@ -330,6 +344,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
     updateGlobalConfig,
     updateCapability,
     setCapabilityProviders,
+    saveSettings,
     setTestResult,
     clearTestResult,
     getProvider

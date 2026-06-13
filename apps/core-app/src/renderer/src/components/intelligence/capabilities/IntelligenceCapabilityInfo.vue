@@ -7,6 +7,7 @@ import type {
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -24,6 +25,9 @@ const props = defineProps<{
   bindings: CapabilityBinding[]
   isTesting: boolean
   testResult?: CapabilityTestResult | null
+  hasPendingChanges: boolean
+  isSaving: boolean
+  saveState: 'idle' | 'dirty' | 'saved' | 'error'
 }>()
 
 const emits = defineEmits<{
@@ -40,15 +44,17 @@ const emits = defineEmits<{
     }
   ]
   reorderProviders: [bindings: IntelligenceCapabilityProviderBinding[]]
+  save: []
 }>()
 
 const { t } = useI18n()
 
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
-const showModelDrawer = ref(false)
+const showModelDialog = ref(false)
 const showPromptDrawer = ref(false)
 const showTestDrawer = ref(false)
+const modelDialogSource = ref<HTMLElement | null>(null)
 let promptTimer: number | null = null
 let syncingFromProps = false
 
@@ -129,26 +135,6 @@ const canEditModels = computed(() => {
   return !!focusedProvider.value && selectedProviderIds.value.has(focusedProviderId.value)
 })
 
-const modelSummary = computed(() => {
-  if (!focusedProvider.value) {
-    return t('settings.intelligence.selectProviderHint')
-  }
-
-  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
-    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
-      ? '开启渠道后再配置模型'
-      : hint
-  }
-
-  const count = focusedBinding.value?.models?.length ?? 0
-  if (count === 0) {
-    return t('settings.intelligence.capabilityBindingModelsDesc')
-  }
-
-  return t('settings.intelligence.capabilityBindingsStat', { count })
-})
-
 const promptSummary = computed(() => {
   const trimmed = (promptValue.value || '').trim()
   if (!trimmed) {
@@ -158,6 +144,16 @@ const promptSummary = computed(() => {
   const singleLine = trimmed.replace(/\s+/g, ' ')
   return singleLine.length > 100 ? `${singleLine.slice(0, 97)}...` : singleLine
 })
+
+function getBindingModelSummary(binding: CapabilityBinding): string {
+  const count = binding.models?.length ?? 0
+
+  if (count === 0) {
+    return t('settings.intelligence.capabilityBindingModelsDesc')
+  }
+
+  return t('settings.intelligence.capabilityModelCount', { count })
+}
 
 watch(
   () => props.capability.promptTemplate,
@@ -195,16 +191,7 @@ watch(
   }
 )
 
-function handleProviderToggle(providerId: string, enabled: boolean): void {
-  emits('toggleProvider', providerId, enabled)
-  if (enabled) {
-    focusedProviderId.value = providerId
-  }
-}
-
-function handleProviderCardClick(providerId: string): void {
-  const currentlyEnabled = selectedProviderIds.value.has(providerId)
-  handleProviderToggle(providerId, !currentlyEnabled)
+function handleProviderFocus(providerId: string): void {
   focusedProviderId.value = providerId
 }
 
@@ -224,12 +211,20 @@ function handleModelTransferUpdates(models: string[]): void {
   emits('updateModels', focusedProviderId.value, models)
 }
 
-function openModelDrawer(): void {
+function resolveDialogSource(event?: MouseEvent): HTMLElement | null {
+  return event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+}
+
+function openModelDialogForProvider(providerId: string, event?: MouseEvent): void {
+  focusedProviderId.value = providerId
+  openModelDialog(event)
+}
+
+function openModelDialog(event?: MouseEvent): void {
   if (!focusedProvider.value) return
-  if (!canEditModels.value) {
-    handleProviderToggle(focusedProvider.value.id, true)
-  }
-  showModelDrawer.value = true
+  if (!canEditModels.value) return
+  modelDialogSource.value = resolveDialogSource(event)
+  showModelDialog.value = true
 }
 
 function openPromptDrawer(): void {
@@ -249,6 +244,31 @@ function handleTest(options?: {
 }): void {
   if (props.isTesting) return
   emits('test', options)
+}
+
+const saveStatusIcon = computed(() => {
+  if (props.isSaving) return 'i-carbon-renew animate-spin'
+  if (props.saveState === 'saved') return 'i-carbon-checkmark'
+  if (props.saveState === 'error') return 'i-carbon-warning-alt'
+  if (props.hasPendingChanges) return 'i-carbon-dot-mark'
+  return 'i-carbon-checkmark-outline'
+})
+
+const saveStatusText = computed(() => {
+  if (props.isSaving) return t('settings.intelligence.capabilitySaveSaving')
+  if (props.saveState === 'saved') return t('settings.intelligence.capabilitySaveSaved')
+  if (props.saveState === 'error') return t('settings.intelligence.capabilitySaveError')
+  if (props.hasPendingChanges) return t('settings.intelligence.capabilitySavePending')
+  return t('settings.intelligence.capabilitySaveIdle')
+})
+
+function handleManualSave(): void {
+  if (promptTimer) {
+    clearTimeout(promptTimer)
+    promptTimer = null
+  }
+  flushPrompt()
+  emits('save')
 }
 
 watch(
@@ -320,8 +340,7 @@ onBeforeUnmount(() => {
           <ProviderList
             :enabled-bindings="enabledBindings"
             :disabled-bindings="disabledProviders"
-            :focused-provider-id="focusedProviderId"
-            @select="handleProviderCardClick"
+            @focus="handleProviderFocus"
             @reorder="emitProvidersOrder"
           />
         </template>
@@ -336,19 +355,30 @@ onBeforeUnmount(() => {
       >
         <template #default>
           <TuffBlockSlot
-            :title="
-              focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')
-            "
-            :description="modelSummary"
+            v-for="binding in enabledBindings"
+            :key="`model-${binding.providerId}`"
+            :title="binding.provider?.name || binding.providerId"
+            :description="getBindingModelSummary(binding)"
             default-icon="i-carbon-model"
-            :active="!!focusedBinding"
-            @click="openModelDrawer"
+            :active="!!binding.models?.length"
+            @click="openModelDialogForProvider(binding.providerId, $event)"
           >
-            <TxButton variant="flat" type="primary" @click.stop="openModelDrawer">
+            <TxButton
+              variant="flat"
+              type="primary"
+              @click.stop="openModelDialogForProvider(binding.providerId, $event)"
+            >
               <i class="i-carbon-settings" aria-hidden="true" />
               <span>{{ t('settings.intelligence.manageModels') }}</span>
             </TxButton>
           </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="enabledBindings.length === 0"
+            :title="t('settings.intelligence.capabilityBindingModelsTitle')"
+            :description="t('settings.intelligence.capabilityBindingModelsDesc')"
+            default-icon="i-carbon-model"
+          />
 
           <TuffBlockSlot
             :title="t('settings.intelligence.capabilityPromptSectionTitle')"
@@ -363,20 +393,42 @@ onBeforeUnmount(() => {
           </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
+
+      <div class="capability-info__save-bar" role="status">
+        <div class="capability-info__save-status">
+          <i :class="saveStatusIcon" aria-hidden="true" />
+          <span>{{ saveStatusText }}</span>
+        </div>
+        <TxButton
+          variant="flat"
+          type="primary"
+          :disabled="isSaving"
+          :aria-busy="isSaving"
+          @click="handleManualSave"
+        >
+          <i class="i-carbon-save" aria-hidden="true" />
+          <span>{{ t('settings.intelligence.capabilitySaveButton') }}</span>
+        </TxButton>
+      </div>
     </template>
   </TouchScroll>
 
-  <TuffDrawer
-    v-model:visible="showModelDrawer"
-    :title="t('settings.intelligence.capabilityBindingModelsTitle')"
+  <FlipDialog
+    v-model="showModelDialog"
+    :reference="modelDialogSource"
+    :header-title="t('settings.intelligence.capabilityBindingModelsTitle')"
+    :header-desc="focusedProvider?.name || focusedProviderId"
+    size="xl"
+    max-height="calc(86dvh - 24px)"
   >
     <CapabilityModelTransfer
+      :scope-key="focusedProviderId"
       :model-value="focusedBinding?.models || []"
       :available-models="focusedProvider?.models || []"
       :disabled="!canEditModels"
       @update:model-value="handleModelTransferUpdates"
     />
-  </TuffDrawer>
+  </FlipDialog>
 
   <TuffDrawer
     v-model:visible="showPromptDrawer"
@@ -453,5 +505,35 @@ onBeforeUnmount(() => {
 
 .capability-info__drawer :deep(.FlatMarkdown-Container) {
   min-height: 280px;
+}
+
+.capability-info__save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--tx-border-color-lighter);
+  background: color-mix(in srgb, var(--tx-bg-color) 92%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+.capability-info__save-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 0.875rem;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 </style>

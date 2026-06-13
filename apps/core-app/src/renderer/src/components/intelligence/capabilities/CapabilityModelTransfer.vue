@@ -7,11 +7,13 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string[]
     availableModels?: string[]
+    scopeKey?: string
     disabled?: boolean
   }>(),
   {
     modelValue: () => [],
     availableModels: () => [],
+    scopeKey: '',
     disabled: false
   }
 )
@@ -38,6 +40,16 @@ function trackModel(value?: string): void {
     seenModels.value = [...seenModels.value, normalized]
   }
 }
+
+watch(
+  () => props.scopeKey,
+  () => {
+    availableSelection.value = []
+    selectedSelection.value = []
+    customModelInput.value = ''
+    seenModels.value = []
+  }
+)
 
 watch(
   () => props.availableModels,

@@ -98,6 +98,13 @@ async function emitUtilsDeclarations() {
   ])
 }
 
+async function emitUtilsEntryDeclaration() {
+  const entryPath = resolve(distEsPath, 'utils/index.d.ts')
+  const specifier = toDistUtilsSpecifier(entryPath)
+
+  await writeFile(entryPath, `export * from '${specifier}';\n`)
+}
+
 async function rewriteUtilsReferences() {
   const declarationFiles = await collectFiles(distEsPath, filePath => filePath.endsWith('.d.ts'))
   const outsideUtilsPattern = /(['"])((?:\.\.\/)+utils((?:\/[\w.-]+)*))\1/g
@@ -139,6 +146,7 @@ async function rewriteVueGlobalComponentReferences() {
 
 export async function fixComponentDeclarations() {
   await emitUtilsDeclarations()
+  await emitUtilsEntryDeclaration()
   await rewriteUtilsReferences()
   await rewriteVueGlobalComponentReferences()
 }
