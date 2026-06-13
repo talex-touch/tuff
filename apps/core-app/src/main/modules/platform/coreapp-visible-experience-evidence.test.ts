@@ -72,6 +72,38 @@ describe('CoreApp visible experience evidence', () => {
     )
   })
 
+  it('requires CoreBox AI Ask text, OCR, and recoverable failure recent paths', () => {
+    const coreboxAiAsk = COREAPP_VISIBLE_EXPERIENCE_SURFACES.find(
+      (surface) => surface.id === 'corebox-ai-ask'
+    )
+
+    expect(coreboxAiAsk).toBeDefined()
+    expect(coreboxAiAsk?.requiredEvidence).toEqual(
+      expect.arrayContaining([
+        'CoreBox AI Ask text.chat success preview is visible',
+        'CoreBox AI Ask clipboard image vision.ocr to text.chat success preview is visible',
+        'Provider, model, latency, trace id, and input kind metadata are visible for text and OCR paths',
+        'Logged-out failure shows a sign-in recovery hint',
+        'Provider unavailable failure shows a provider health or settings recovery hint',
+        'Quota exhausted failure shows a credits or team quota recovery hint',
+        'Model unsupported failure shows a supported model or capability recovery hint'
+      ])
+    )
+    expect(coreboxAiAsk?.recommendedArtifacts).toEqual(
+      expect.arrayContaining([
+        'evidence/coreapp-visible/corebox-ai-text-success.png',
+        'evidence/coreapp-visible/corebox-ai-ocr-success.png',
+        'evidence/coreapp-visible/corebox-ai-failure-logged-out.png',
+        'evidence/coreapp-visible/corebox-ai-failure-provider-unavailable.png',
+        'evidence/coreapp-visible/corebox-ai-failure-quota-exhausted.png',
+        'evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png'
+      ])
+    )
+    expect(coreboxAiAsk?.blockedWhen).toContain(
+      'Text success and OCR success are not captured as separate recent paths.'
+    )
+  })
+
   it('passes when all required items have matching artifacts', () => {
     const manifest = buildCoreAppVisibleExperienceManifest({
       baselineVersion: '2.4.10-beta.25',
@@ -118,9 +150,13 @@ describe('CoreApp visible experience evidence', () => {
     expect(template).toContain('### CoreBox search states')
     expect(template).toContain('### Assistant floating ball entry')
     expect(template).toContain('### Assistant clipboard image translation')
+    expect(template).toContain('### CoreBox AI Ask preview')
     expect(template).toContain('- Collection steps:')
     expect(template).toContain(
       '- Run a query that returns no results and capture the retry/settings actions.'
+    )
+    expect(template).toContain(
+      '- Ask with a clipboard image and capture the vision.ocr to text.chat answer preview.'
     )
     expect(template).toContain(
       '- Click the floating ball and capture the Voice Panel opened next to the ball.'
@@ -128,12 +164,18 @@ describe('CoreApp visible experience evidence', () => {
     expect(template).toContain(
       '- Repeat with an empty clipboard image state and capture the recovery hint.'
     )
+    expect(template).toContain('- [ ] CoreBox AI Ask text.chat success preview is visible')
+    expect(template).toContain(
+      '- [ ] Provider unavailable failure shows a provider health or settings recovery hint'
+    )
     expect(template).toContain('- [ ] No-result state shows retry and File Index settings actions')
     expect(template).toContain(
       '- [ ] Clicking the floating ball opens the Voice Panel beside the ball'
     )
     expect(template).toContain('- Recommended artifacts:')
     expect(template).toContain('evidence/coreapp-visible/corebox-no-result.png')
+    expect(template).toContain('evidence/coreapp-visible/corebox-ai-ocr-success.png')
+    expect(template).toContain('evidence/coreapp-visible/corebox-ai-failure-model-unsupported.png')
     expect(template).toContain(
       'evidence/coreapp-visible/assistant-clipboard-image-translate-result.png'
     )
