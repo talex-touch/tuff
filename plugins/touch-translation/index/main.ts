@@ -1,6 +1,7 @@
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { createIntelligenceClient } from '@talex-touch/tuff-intelligence/client'
 import type { IntelligenceImageTranslateE2eResult } from '@talex-touch/tuff-intelligence/client'
+import { AccountEvents } from '@talex-touch/utils/transport/events'
 import {
   applyProviderPresentation,
   DEFAULT_ENABLED_PROVIDER_IDS,
@@ -16,7 +17,7 @@ import {
 } from '@talex-touch/utils/plugin'
 import { GoogleProvider, TuffIntelligenceProvider } from './providers'
 import { parseImageDataUrl, toImageDataUrl } from './utils'
-const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis as any
+const { plugin, clipboard, logger, permission, TuffItemBuilder, touchChannel } = globalThis as any
 
 const PLUGIN_NAME = 'touch-translation'
 const WIDGET_ITEM_ID = 'translation-widget'
@@ -24,6 +25,7 @@ const IMAGE_TRANSLATION_ITEM_ID = 'image-translation-widget'
 const IMAGE_TRANSLATION_TARGET_LANG = 'zh'
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
+const TUFF_INTELLIGENCE_PROVIDER_ID = 'tuffintelligence'
 
 interface ProviderState {
   id: string
@@ -86,7 +88,7 @@ let networkPermissionState: boolean | null = null
 let aiPermissionState: boolean | null = null
 
 const providers = new Map([
-  ['tuffintelligence', applyProviderPresentation(new TuffIntelligenceProvider())],
+  [TUFF_INTELLIGENCE_PROVIDER_ID, applyProviderPresentation(new TuffIntelligenceProvider())],
   ['google', applyProviderPresentation(new GoogleProvider())],
 ])
 
@@ -575,11 +577,7 @@ async function startTranslationRequest(
   const targetLang = resolveTargetLanguage(detectedLang)
   const requestId = `translation-${Date.now()}-${nextSeq}`
 
-  const providersConfig = await plugin.storage.getFile('providers_config')
-  const providersToShow = getEnabledProviderIds(providersConfig, {
-    supportedIds: Array.from(providers.keys()),
-    fallbackIds: DEFAULT_ENABLED_PROVIDER_IDS,
-  })
+  const providersToShow = await resolveEnabledProviderIds()
   const state = createWidgetState(
     featureId,
     textToTranslate,
@@ -668,6 +666,55 @@ async function startTranslationRequest(
   )
 }
 
+async function resolveEnabledProviderIds(): Promise<string[]> {
+  const providersConfig = await plugin.storage.getFile('providers_config')
+  const enabledProviderIds = getEnabledProviderIds(providersConfig, {
+    supportedIds: Array.from(providers.keys()),
+    fallbackIds: DEFAULT_ENABLED_PROVIDER_IDS,
+  })
+  return filterAuthorizedProviderIds(enabledProviderIds, {
+    canUseTuffIntelligenceProvider,
+  })
+}
+
+async function filterAuthorizedProviderIds(
+  providerIds: string[],
+  guards: {
+    canUseTuffIntelligenceProvider: () => Promise<boolean>
+  },
+): Promise<string[]> {
+  if (!providerIds.includes(TUFF_INTELLIGENCE_PROVIDER_ID)) {
+    return providerIds
+  }
+
+  const canUseTuffIntelligence = await guards.canUseTuffIntelligenceProvider()
+  if (canUseTuffIntelligence) {
+    return providerIds
+  }
+
+  return providerIds.filter(providerId => providerId !== TUFF_INTELLIGENCE_PROVIDER_ID)
+}
+
+async function canUseTuffIntelligenceProvider(): Promise<boolean> {
+  const token = await resolveTuffIntelligenceAuthToken()
+  return token.length > 0
+}
+
+async function resolveTuffIntelligenceAuthToken(): Promise<string> {
+  if (!touchChannel?.send) {
+    return ''
+  }
+
+  try {
+    const eventName = AccountEvents.auth.getToken.toEventName()
+    const token = await touchChannel?.send?.(eventName)
+    return typeof token === 'string' ? token.trim() : ''
+  }
+  catch {
+    return ''
+  }
+}
+
 const pluginLifecycle = {
   async onFeatureTriggered(featureId: string, query: any, _feature: any, signal: AbortSignal) {
     try {
@@ -700,6 +747,23 @@ const pluginLifecycle = {
 
         const nextSeq = (latestRequestSeqByFeature.get(featureId) || 0) + 1
         latestRequestSeqByFeature.set(featureId, nextSeq)
+
+        const detectedLang = detectLanguage(textToTranslate)
+        const targetLang = resolveTargetLanguage(detectedLang)
+        const providersToShow = await resolveEnabledProviderIds()
+        widgetStateByFeature.set(
+          featureId,
+          createWidgetState(
+            featureId,
+            textToTranslate,
+            detectedLang,
+            targetLang,
+            providersToShow,
+            `translation-${Date.now()}-${nextSeq}`,
+            nextSeq,
+          ),
+        )
+        upsertWidgetItem(featureId)
 
         const prevTimer = debounceTimersByFeature.get(featureId)
         if (prevTimer) {
@@ -765,4 +829,11 @@ const pluginLifecycle = {
   },
 }
 
-module.exports = pluginLifecycle
+module.exports = {
+  ...pluginLifecycle,
+  __test: {
+    canUseTuffIntelligenceProvider,
+    filterAuthorizedProviderIds,
+    resolveTuffIntelligenceAuthToken,
+  },
+}

@@ -17,15 +17,23 @@ function copyDirectoryContents(sourceDir, targetDir) {
 }
 
 function writeBundledPackageVersion(sourcePackagePath, bundledPackagePath) {
-  if (!fs.existsSync(sourcePackagePath) || !fs.existsSync(bundledPackagePath)) {
+  if (!fs.existsSync(sourcePackagePath)) {
     return
   }
 
   const sourcePackage = JSON.parse(fs.readFileSync(sourcePackagePath, 'utf8'))
-  const bundledPackage = JSON.parse(fs.readFileSync(bundledPackagePath, 'utf8'))
+  const bundledPackageExists = fs.existsSync(bundledPackagePath)
+  const bundledPackage = bundledPackageExists
+    ? JSON.parse(fs.readFileSync(bundledPackagePath, 'utf8'))
+    : {
+        name: sourcePackage.name,
+        private: true,
+        version: sourcePackage.version,
+        type: sourcePackage.type
+      }
   const nextVersion = typeof sourcePackage.version === 'string' ? sourcePackage.version : undefined
 
-  if (!nextVersion || bundledPackage.version === nextVersion) {
+  if (!nextVersion || (bundledPackageExists && bundledPackage.version === nextVersion)) {
     return
   }
 

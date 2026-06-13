@@ -28,6 +28,7 @@ const {
 const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
 const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
+const TUFF_INTELLIGENCE_PROVIDER_ID = 'tuffintelligence'
 const IMAGE_TRANSLATION_ITEM_ID = 'image-translation-widget'
 const IMAGE_TRANSLATION_TARGET_LANG = 'zh'
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
@@ -52,7 +53,12 @@ function getCreateIntelligenceClient() {
 
 function getMakeWidgetId() {
   if (!makeWidgetIdLoader) {
-    ({ makeWidgetId: makeWidgetIdLoader } = require('@talex-touch/utils/plugin/widget'))
+    try {
+      ;({ makeWidgetId: makeWidgetIdLoader } = require('@talex-touch/utils/plugin/widget'))
+    }
+    catch {
+      makeWidgetIdLoader = (pluginName, featureId) => `${pluginName}::${featureId}`
+    }
   }
   return makeWidgetIdLoader
 }
@@ -249,14 +255,46 @@ async function resolveTextToTranslate(featureId, query) {
   }
 }
 
-async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
-  const detectedLang = detectLanguage(textToTranslate)
-  const targetLang = resolveTargetLanguage(detectedLang)
-  const requestId = `translation-${Date.now()}-${nextSeq}`
+async function resolveTuffIntelligenceAuthToken() {
+  const runtimeChannel = globalThis.touchChannel || globalThis.$touchChannel || channel
+  if (!runtimeChannel?.send) {
+    return ''
+  }
 
+  try {
+    const { AccountEvents } = require('@talex-touch/utils/transport/events')
+    const eventName = AccountEvents.auth.getToken.toEventName()
+    const token = await runtimeChannel.send(eventName)
+    return typeof token === 'string' ? token.trim() : ''
+  }
+  catch {
+    return ''
+  }
+}
+
+async function canUseTuffIntelligenceProvider() {
+  const token = await resolveTuffIntelligenceAuthToken()
+  return token.length > 0
+}
+
+async function filterAuthorizedProviderConfigs(providersToShow, guards = {
+  canUseTuffIntelligenceProvider,
+}) {
+  if (!providersToShow.some(provider => provider.id === TUFF_INTELLIGENCE_PROVIDER_ID)) {
+    return providersToShow
+  }
+
+  if (await guards.canUseTuffIntelligenceProvider()) {
+    return providersToShow
+  }
+
+  return providersToShow.filter(provider => provider.id !== TUFF_INTELLIGENCE_PROVIDER_ID)
+}
+
+async function loadEnabledProviderConfigs() {
   const providersConfig = await plugin.storage.getFile('providers_config')
   const enabledProviderIds = getEnabledProviderIds(providersConfig)
-  const providersToShow = await Promise.all(enabledProviderIds.map(async (providerId) => {
+  const providerConfigs = await Promise.all(enabledProviderIds.map(async (providerId) => {
     const providerConfig = providersConfig && typeof providersConfig === 'object' ? providersConfig[providerId] : null
     const rawConfig = providerConfig && typeof providerConfig === 'object'
       ? providerConfig.config
@@ -268,6 +306,16 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
       metadata: stripProviderSecrets(providerId, rawConfig),
     }
   }))
+
+  return filterAuthorizedProviderConfigs(providerConfigs)
+}
+
+async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
+  const detectedLang = detectLanguage(textToTranslate)
+  const targetLang = resolveTargetLanguage(detectedLang)
+  const requestId = `translation-${Date.now()}-${nextSeq}`
+
+  const providersToShow = await loadEnabledProviderConfigs()
   const state = createWidgetState(
     featureId,
     textToTranslate,
@@ -1398,6 +1446,20 @@ const pluginLifecycle = {
         const nextSeq = (latestRequestSeqByFeature.get(featureId) || 0) + 1
         latestRequestSeqByFeature.set(featureId, nextSeq)
 
+        const detectedLang = detectLanguage(textToTranslate)
+        const targetLang = resolveTargetLanguage(detectedLang)
+        const providersToShow = await loadEnabledProviderConfigs()
+        createWidgetState(
+          featureId,
+          textToTranslate,
+          detectedLang,
+          targetLang,
+          providersToShow,
+          `translation-${Date.now()}-${nextSeq}`,
+          nextSeq
+        )
+        upsertWidgetItem(featureId)
+
         const prevTimer = debounceTimersByFeature.get(featureId)
         if (prevTimer) {
           clearTimeout(prevTimer)
@@ -1486,11 +1548,14 @@ module.exports = {
     getEnabledProviderIds,
     getProviderSecretKey,
     getTranslationProviderLabel,
+    canUseTuffIntelligenceProvider,
+    filterAuthorizedProviderConfigs,
     mergeProviderSecrets,
     normalizeCallFailureMessage,
     normalizeErrorMessage: normalizeTranslationErrorMessage,
     parseImageDataUrl,
     resolveTargetLanguage,
+    resolveTuffIntelligenceAuthToken,
     stripProviderSecrets,
     toImageDataUrl,
   },
