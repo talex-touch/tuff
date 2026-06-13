@@ -9,8 +9,8 @@ import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { VueDraggable as draggable } from 'vue-draggable-plus'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -19,6 +19,8 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import CapabilityModelTransfer from './CapabilityModelTransfer.vue'
 import CapabilityTestDialog from './CapabilityTestDialog.vue'
+import CapabilityTestResultView from './CapabilityTestResult.vue'
+import ProviderList from './ProviderList.vue'
 
 const props = defineProps<{
   capability: IntelligenceCapabilityConfig
@@ -42,9 +44,10 @@ const intelligence = createIntelligenceClient(transport)
 const capabilityDetailsLog = createRendererLogger('IntelligenceCapabilityDetails')
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
-const showModelDrawer = ref(false)
+const showModelDialog = ref(false)
 const showPromptDrawer = ref(false)
 const showTestDialog = ref(false)
+const modelDialogSource = ref<HTMLElement | null>(null)
 const testMeta = ref({ requiresUserInput: false, inputHint: '' })
 let promptTimer: number | null = null
 let syncingFromProps = false
@@ -107,16 +110,6 @@ const disabledProviders = computed<CapabilityBinding[]>(() => {
   return [...leftover, ...remaining]
 })
 
-const sortableEnabledBindings = ref<CapabilityBinding[]>([])
-
-watch(
-  enabledBindings,
-  (list) => {
-    sortableEnabledBindings.value = list
-  },
-  { immediate: true, deep: true }
-)
-
 const focusedProvider = computed(
   () => props.providers.find((provider) => provider.id === focusedProviderId.value) || null
 )
@@ -130,25 +123,15 @@ const canEditModels = computed(() => {
   return !!focusedProvider.value && selectedProviderIds.value.has(focusedProviderId.value)
 })
 
-const modelSummary = computed(() => {
-  if (!focusedProvider.value) {
-    return t('settings.intelligence.selectProviderHint')
-  }
+function getBindingModelSummary(binding: CapabilityBinding): string {
+  const count = binding.models?.length ?? 0
 
-  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
-    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
-      ? '开启渠道后再配置模型'
-      : hint
-  }
-
-  const count = focusedBinding.value?.models?.length ?? 0
   if (count === 0) {
     return t('settings.intelligence.capabilityBindingModelsDesc')
   }
 
-  return t('settings.intelligence.capabilityBindingsStat', { count })
-})
+  return t('settings.intelligence.capabilityModelCount', { count })
+}
 
 const promptSummary = computed(() => {
   const trimmed = (promptValue.value || '').trim()
@@ -160,25 +143,13 @@ const promptSummary = computed(() => {
   return singleLine.length > 100 ? `${singleLine.slice(0, 97)}...` : singleLine
 })
 
-const modelTransferDescription = computed(() => {
-  if (!focusedProvider.value) {
-    return t('settings.intelligence.capabilityBindingModelsDesc')
-  }
-  if (!selectedProviderIds.value.has(focusedProvider.value.id)) {
-    const hint = t('settings.intelligence.capabilityBindingModelsEnableHint')
-    return hint === 'settings.intelligence.capabilityBindingModelsEnableHint'
-      ? '开启渠道后再配置模型'
-      : hint
-  }
-  return t('settings.intelligence.capabilityBindingModelsDesc')
-})
-
 const testSummary = computed(() => {
   if (!props.testResult) return ''
   const pieces: string[] = []
   if (props.testResult.provider) pieces.push(props.testResult.provider)
   if (props.testResult.model) pieces.push(props.testResult.model)
   if (props.testResult.latency) pieces.push(`${props.testResult.latency}ms`)
+  if (props.testResult.tokensPerSecond) pieces.push(`${props.testResult.tokensPerSecond}/s`)
   return pieces.join(' · ')
 })
 
@@ -224,21 +195,12 @@ watch(
   }
 )
 
-function handleProviderToggle(providerId: string, enabled: boolean): void {
-  emits('toggleProvider', providerId, enabled)
-  if (enabled) {
-    focusedProviderId.value = providerId
-  }
-}
-
-function handleProviderCardClick(providerId: string): void {
-  const currentlyEnabled = selectedProviderIds.value.has(providerId)
-  handleProviderToggle(providerId, !currentlyEnabled)
+function handleProviderFocus(providerId: string): void {
   focusedProviderId.value = providerId
 }
 
-function emitProvidersOrder(): void {
-  const reordered = sortableEnabledBindings.value.map((binding, index) => {
+function emitProvidersOrder(bindings: CapabilityBinding[]): void {
+  const reordered = bindings.map((binding, index) => {
     const { provider, ...rest } = binding
     return {
       ...rest,
@@ -253,9 +215,19 @@ function handleModelTransferUpdates(models: string[]): void {
   emits('updateModels', focusedProviderId.value, models)
 }
 
-function openModelDrawer(): void {
+function resolveDialogSource(event?: MouseEvent): HTMLElement | null {
+  return event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+}
+
+function openModelDialogForProvider(providerId: string, event?: MouseEvent): void {
+  focusedProviderId.value = providerId
+  openModelDialog(event)
+}
+
+function openModelDialog(event?: MouseEvent): void {
   if (!canEditModels.value) return
-  showModelDrawer.value = true
+  modelDialogSource.value = resolveDialogSource(event)
+  showModelDialog.value = true
 }
 
 function openPromptDrawer(): void {
@@ -371,133 +343,35 @@ onBeforeUnmount(() => {
         :memory-name="`capability-actions-${capability.id}`"
       >
         <template #default>
-          <div class="capability-providers-shell">
-            <div class="capability-providers__enabled-section">
-              <div class="capability-providers__section-header">
-                <p class="capability-providers__section-title">
-                  {{ t('settings.intelligence.capabilityActionsLabel') }}
-                </p>
-                <p class="capability-providers__section-hint">
-                  {{ t('settings.intelligence.capabilityActionsHint') }}
-                </p>
-              </div>
-              <div class="capability-providers__list">
-                <div
-                  v-if="sortableEnabledBindings.length === 0"
-                  class="capability-providers__empty"
-                >
-                  <p>{{ t('settings.intelligence.capabilityActionsEmpty') }}</p>
-                </div>
-                <draggable
-                  v-else
-                  v-model="sortableEnabledBindings"
-                  item-key="providerId"
-                  class="capability-providers__draggable"
-                  handle=".provider-card__grab"
-                  @end="emitProvidersOrder"
-                >
-                  <template #item="{ element }">
-                    <TxButton
-                      variant="bare"
-                      native-type="button"
-                      class="provider-card"
-                      :class="{
-                        'is-focused': focusedProviderId === element.providerId
-                      }"
-                      @click="handleProviderCardClick(element.providerId)"
-                    >
-                      <div class="provider-card__content">
-                        <span class="provider-card__name">
-                          {{ element.provider?.name || element.providerId }}
-                        </span>
-                        <span class="provider-card__details">
-                          {{ element.provider?.type || element.providerId }}
-                          <span v-if="element.models?.length">
-                            ·
-                            {{
-                              t('settings.intelligence.capabilityModelCount', {
-                                count: element.models.length
-                              })
-                            }}
-                          </span>
-                        </span>
-                      </div>
-                      <div class="provider-card__meta">
-                        <span
-                          class="provider-card__status"
-                          :class="{ 'is-active': element.enabled !== false }"
-                        >
-                          {{
-                            element.enabled !== false
-                              ? t('settings.intelligence.capabilityChannelEnabled')
-                              : t('settings.intelligence.capabilityChannelDisabled')
-                          }}
-                        </span>
-                        <i
-                          class="i-carbon-drag-horizontal provider-card__grab"
-                          aria-hidden="true"
-                        />
-                      </div>
-                    </TxButton>
-                  </template>
-                </draggable>
-              </div>
-            </div>
-
-            <div v-if="disabledProviders.length" class="capability-providers__disabled-section">
-              <div class="capability-providers__section-header">
-                <p class="capability-providers__section-title">
-                  {{ t('settings.intelligence.capabilityDisabledLabel') }}
-                </p>
-              </div>
-              <div class="capability-providers__disabled-list">
-                <TxButton
-                  v-for="entry in disabledProviders"
-                  :key="entry.providerId"
-                  variant="bare"
-                  class="provider-card provider-card--disabled"
-                  native-type="button"
-                  @click="handleProviderCardClick(entry.providerId)"
-                >
-                  <div class="provider-card__content">
-                    <span class="provider-card__name">
-                      {{ entry.provider?.name || entry.providerId }}
-                    </span>
-                    <span class="provider-card__details">
-                      {{ entry.provider?.type || entry.providerId }}
-                    </span>
-                  </div>
-                  <div class="provider-card__meta">
-                    <span class="provider-card__badge">
-                      {{ t('settings.intelligence.capabilityChannelDisabled') }}
-                    </span>
-                  </div>
-                </TxButton>
-              </div>
-            </div>
-          </div>
+          <ProviderList
+            :enabled-bindings="enabledBindings"
+            :disabled-bindings="disabledProviders"
+            @focus="handleProviderFocus"
+            @reorder="emitProvidersOrder"
+          />
         </template>
       </TuffGroupBlock>
 
       <div class="capability-details__secondary">
         <TuffBlockSlot
-          :title="focusedProvider?.name || t('settings.intelligence.capabilityBindingModelsTitle')"
-          :description="modelTransferDescription"
+          v-for="binding in enabledBindings"
+          :key="`model-${binding.providerId}`"
+          :title="binding.provider?.name || binding.providerId"
+          :description="getBindingModelSummary(binding)"
           default-icon="i-carbon-model"
           active-icon="i-carbon-model"
-          :active="!!focusedBinding"
+          :active="!!binding.models?.length"
           guidance
         >
           <template #default>
             <div class="capability-details__slot-row">
               <p class="capability-details__slot-summary">
-                {{ modelSummary }}
+                {{ getBindingModelSummary(binding) }}
               </p>
               <TxButton
                 variant="flat"
                 type="primary"
-                :disabled="!canEditModels"
-                @click="openModelDrawer"
+                @click="openModelDialogForProvider(binding.providerId, $event)"
               >
                 <i class="i-carbon-settings" aria-hidden="true" />
                 <span>{{ t('settings.intelligence.manageModels') }}</span>
@@ -505,6 +379,15 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </TuffBlockSlot>
+
+        <TuffBlockSlot
+          v-if="enabledBindings.length === 0"
+          :title="t('settings.intelligence.capabilityBindingModelsTitle')"
+          :description="t('settings.intelligence.capabilityBindingModelsDesc')"
+          default-icon="i-carbon-model"
+          active-icon="i-carbon-model"
+          guidance
+        />
 
         <TuffBlockSlot
           :title="t('settings.intelligence.capabilityPromptSectionTitle')"
@@ -534,44 +417,28 @@ onBeforeUnmount(() => {
           active-icon="i-carbon-result"
           :active="true"
         >
-          <div
-            class="test-result"
-            :class="testResult.success ? 'test-result--success' : 'test-result--fail'"
-            role="status"
-          >
-            <p class="font-semibold">
-              {{
-                testResult.success
-                  ? t('settings.intelligence.testSuccess')
-                  : t('settings.intelligence.testFailed')
-              }}
-            </p>
-            <p class="mt-2 text-sm">
-              {{ testResult.message }}
-            </p>
-            <p
-              v-if="testResult.textPreview"
-              class="mt-2 text-xs text-[var(--tx-text-color-secondary)]"
-            >
-              {{ testResult.textPreview }}
-            </p>
-          </div>
+          <CapabilityTestResultView :result="testResult" />
         </TuffBlockSlot>
       </div>
     </div>
   </TouchScroll>
 
-  <TuffDrawer
-    v-model:visible="showModelDrawer"
-    :title="t('settings.intelligence.capabilityBindingModelsTitle')"
+  <FlipDialog
+    v-model="showModelDialog"
+    :reference="modelDialogSource"
+    :header-title="t('settings.intelligence.capabilityBindingModelsTitle')"
+    :header-desc="focusedProvider?.name || focusedProviderId"
+    size="xl"
+    max-height="calc(86dvh - 24px)"
   >
     <CapabilityModelTransfer
+      :scope-key="focusedProviderId"
       :model-value="focusedBinding?.models || []"
       :available-models="focusedProvider?.models || []"
       :disabled="!canEditModels"
       @update:model-value="handleModelTransferUpdates"
     />
-  </TuffDrawer>
+  </FlipDialog>
 
   <TuffDrawer
     v-model:visible="showPromptDrawer"
@@ -657,143 +524,6 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.capability-providers-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.capability-providers__section-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 0.75rem;
-}
-
-.capability-providers__section-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin: 0;
-}
-
-.capability-providers__section-hint {
-  margin: 0;
-  color: var(--tx-text-color-secondary);
-  font-size: 0.85rem;
-}
-
-.capability-providers__list {
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1rem;
-  background: var(--tx-fill-color-blank);
-  padding: 0.75rem;
-  min-height: 120px;
-}
-
-.capability-providers__empty {
-  color: var(--tx-text-color-secondary);
-  font-size: 0.9rem;
-  text-align: center;
-  padding: 1rem 0;
-}
-
-.capability-providers__draggable {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.capability-providers__disabled-section {
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1rem;
-  padding: 0.75rem;
-  background: var(--tx-fill-color-blank);
-}
-
-.capability-providers__disabled-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.provider-card {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  border-radius: 0.9rem;
-  border: 1px solid transparent;
-  background: var(--tx-fill-color);
-  color: var(--tx-text-color-primary);
-  cursor: pointer;
-  transition:
-    border 0.2s,
-    transform 0.2s;
-
-  &:hover {
-    border-color: var(--tx-border-color);
-  }
-
-  &.is-focused {
-    border-color: var(--tx-color-primary);
-    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
-  }
-}
-
-.provider-card--disabled {
-  opacity: 0.8;
-}
-
-.provider-card__content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  text-align: left;
-}
-
-.provider-card__name {
-  font-weight: 600;
-}
-
-.provider-card__details {
-  font-size: 0.85rem;
-  color: var(--tx-text-color-secondary);
-}
-
-.provider-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.provider-card__status {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  border: 1px solid var(--tx-border-color);
-  color: var(--tx-text-color-secondary);
-
-  &.is-active {
-    border-color: rgba(34, 197, 94, 0.3);
-    color: #22c55e;
-  }
-}
-
-.provider-card__badge {
-  font-size: 0.75rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  border: 1px dashed var(--tx-border-color);
-}
-
-.provider-card__grab {
-  font-size: 1rem;
-  color: var(--tx-text-color-placeholder);
-  cursor: grab;
-}
-
 .capability-details__secondary {
   display: flex;
   flex-direction: column;
@@ -832,25 +562,5 @@ onBeforeUnmount(() => {
 
 .capability-details__drawer :deep(.FlatMarkdown-Container) {
   min-height: 280px;
-}
-
-.test-result {
-  border-radius: 0.75rem;
-  padding: 1rem;
-  border: 1px solid transparent;
-
-  &--success {
-    border-color: rgba(34, 197, 94, 0.3);
-    background: rgba(34, 197, 94, 0.08);
-  }
-
-  &--fail {
-    border-color: rgba(248, 113, 113, 0.3);
-    background: rgba(248, 113, 113, 0.06);
-  }
-}
-
-.capability-providers__draggable :deep(.sortable-ghost) {
-  opacity: 0.6;
 }
 </style>

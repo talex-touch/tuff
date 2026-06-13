@@ -255,11 +255,14 @@ function openInstructionsDrawer(event?: MouseEvent) {
   showInstructionsDrawer.value = true
 }
 
-// 检查是否可以获取模型（需要 API Key 且不是本地模型）
+// 检查是否可以获取模型（本地模型不需要 API Key）
 const canFetchModels = computed(() => {
+  if (props.modelValue.type === 'local') {
+    return true
+  }
+
   const hasApiKey = !!props.modelValue.apiKey?.trim()
-  const isNotLocal = props.modelValue.type !== 'local'
-  return hasApiKey && isNotLocal
+  return hasApiKey
 })
 
 function validateModels(): boolean {
@@ -295,7 +298,7 @@ function handleAddModel() {
   if (!modelName) return
 
   if (localModels.value.includes(modelName)) {
-    modelsError.value = t('intelligence.config.model.modelExists')
+    toast.warning(t('intelligence.config.model.modelExists'))
     return
   }
 
@@ -325,21 +328,22 @@ async function handleFetchModels() {
       enabled: true,
       apiKey: props.modelValue.apiKey,
       baseUrl: props.modelValue.baseUrl,
-      models: [],
+      models: [...localModels.value],
       timeout: props.modelValue.timeout || 30000
     }
 
     const result = await aiClient.fetchModels(fetchConfig)
 
-    if (result.success && result.models) {
+    if (result.success && result.models?.length) {
       applyModelUpdates([...localModels.value, ...result.models])
 
       toast.success(
         t('intelligence.config.api.modelsFetchedToast', { count: result.models.length })
       )
     } else {
-      modelsError.value = result.message || t('intelligence.config.api.modelsFetchFailed')
-      toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message: result.message }))
+      const message = result.message || t('intelligence.config.api.modelsFetchEmpty')
+      modelsError.value = message
+      toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message }))
     }
   } catch (error) {
     const message =
@@ -442,10 +446,6 @@ watch(
       max-height="calc(86dvh - 24px)"
     >
       <div class="models-drawer-content">
-        <p class="text-sm text-[var(--tx-text-color-secondary)] mb-4">
-          {{ t('intelligence.config.model.modelsHint') }}
-        </p>
-
         <div class="model-transfer-section">
           <TxTransfer
             v-model="transferSelectedModels"
@@ -460,26 +460,7 @@ watch(
           />
         </div>
 
-        <!-- Fetch Models Button -->
-        <div class="fetch-models-section">
-          <TxButton
-            variant="flat"
-            class="fetch-models-button"
-            :disabled="disabled || !canFetchModels || isFetching"
-            :loading="isFetching"
-            @click="handleFetchModels"
-          >
-            <i v-if="isFetching" class="i-carbon-renew animate-spin" />
-            <i v-else class="i-carbon-download" />
-            {{ t('intelligence.config.model.fetchModels') }}
-          </TxButton>
-          <p class="text-xs text-[var(--tx-text-color-secondary)]">
-            {{ t('intelligence.config.model.fetchModelsHint') }}
-          </p>
-        </div>
-
-        <!-- Add Model Input -->
-        <div class="add-model-section">
+        <div class="model-actions">
           <input
             v-model="newModelInput"
             type="text"
@@ -496,11 +477,17 @@ watch(
             <i class="i-carbon-add" />
             {{ t('intelligence.config.model.addModel') }}
           </TxButton>
+          <TxButton
+            variant="flat"
+            class="fetch-models-button"
+            :disabled="disabled || !canFetchModels || isFetching"
+            :loading="isFetching"
+            @click="handleFetchModels"
+          >
+            <i v-if="!isFetching" class="i-carbon-download" />
+            {{ t('intelligence.config.model.fetchModels') }}
+          </TxButton>
         </div>
-
-        <p v-if="modelsError" class="error-message">
-          {{ modelsError }}
-        </p>
       </div>
     </FlipDialog>
 
@@ -610,16 +597,13 @@ watch(
 }
 
 .models-drawer-content {
-  padding: 0 4px;
+  padding: 4px 12px 12px;
 
   .model-transfer-section {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 
     :deep(.tx-transfer) {
       width: 100%;
-      border-radius: 12px;
-      border: 1px solid var(--tx-border-color-lighter);
-      background: var(--tx-fill-color-blank);
       min-height: 260px;
     }
 
@@ -629,57 +613,20 @@ watch(
 
     :deep(.tx-transfer__panel) {
       min-height: 220px;
+      border-radius: 10px;
     }
   }
 
-  .fetch-models-section {
-    margin-bottom: 16px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--tx-border-color-lighter);
-  }
-
-  .fetch-models-button {
+  .model-actions {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 8px 16px;
-    background: var(--tx-color-primary);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-    width: 100%;
-    justify-content: center;
-    margin-bottom: 8px;
-
-    &:hover:not(.is-disabled) {
-      background: var(--tx-color-primary-light-3);
-    }
-
-    &.is-disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    i {
-      font-size: 16px;
-    }
-
-    .animate-spin {
-      animation: spin 1s linear infinite;
-    }
-  }
-
-  .add-model-section {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+    padding-top: 2px;
   }
 
   .add-model-input {
     flex: 1;
+    min-width: 0;
     padding: 8px 12px;
     border: 1px solid var(--tx-border-color);
     border-radius: 6px;
@@ -697,6 +644,7 @@ watch(
     }
   }
 
+  .fetch-models-button,
   .add-model-button {
     display: flex;
     align-items: center;
@@ -721,21 +669,6 @@ watch(
 
     i {
       font-size: 16px;
-    }
-  }
-
-  .error-message {
-    color: var(--tx-color-danger);
-    font-size: 12px;
-    margin: 0;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
     }
   }
 }

@@ -1,4 +1,5 @@
 export * from './agents/index'
+export * from './ai-elements/index'
 export * from './alert/index'
 export * from './auto-sizer/index'
 export * from './base-anchor/index'

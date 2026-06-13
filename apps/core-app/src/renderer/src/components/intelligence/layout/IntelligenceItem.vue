@@ -145,11 +145,37 @@ function handleClick() {
     :subtitle="providerSubtitle"
     :icon="getProviderIcon(provider)"
     :selected="isSelected"
-    :top-badge="
-      hasConfigError ? errorBadge : isNexusManagedProvider(provider) ? nexusBadge : undefined
-    "
+    :top-badge="hasConfigError ? errorBadge : undefined"
     :status-dot="statusDot"
     :aria-label="t('intelligence.item.selectProvider', { name: provider.name })"
     @click="handleClick"
-  />
+  >
+    <template v-if="isNexusManagedProvider(provider)" #title-badge>
+      <span class="nexus-title-badge" :class="{ 'is-ready': isLoggedIn }" :title="nexusBadge.text">
+        {{ nexusBadge.text }}
+      </span>
+    </template>
+  </TuffItemTemplate>
 </template>
+
+<style lang="scss" scoped>
+.nexus-title-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--tx-color-primary);
+  background: var(--tx-color-primary-soft);
+  white-space: nowrap;
+
+  &.is-ready {
+    color: var(--tx-color-success);
+    background: color-mix(in srgb, var(--tx-color-success) 14%, transparent);
+  }
+}
+</style>
