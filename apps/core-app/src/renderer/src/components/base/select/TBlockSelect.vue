@@ -1,4 +1,5 @@
 <script name="TBlockSelect" setup>
+// Legacy adaptor: new CoreApp code should use TuffEx select or CoreApp TuffBlockSelect.
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import TSelect from '~/components/base/select/TSelect.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'

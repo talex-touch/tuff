@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MetaAction } from '@talex-touch/utils/transport/events/types/meta-overlay'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 
 const props = defineProps<{
   action: MetaAction

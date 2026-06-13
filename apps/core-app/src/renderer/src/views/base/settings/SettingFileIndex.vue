@@ -23,6 +23,7 @@ import {
 } from '@talex-touch/utils/search'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
+import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
@@ -30,7 +31,6 @@ import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
-import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -1790,7 +1790,6 @@ async function triggerRebuild() {
     v-model="appIndexManagerVisible"
     :title="t('settings.settingFileIndex.appIndexManagerDialogTitle')"
     width="960px"
-    height="min(760px, 82vh)"
   >
     <div class="app-index-manager-dialog">
       <SettingFileIndexAppIndexManager />

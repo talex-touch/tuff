@@ -7,21 +7,40 @@ import { createNexusPrerenderRoutes, docsApiPrerenderRoutes, publicPrerenderRout
 
 describe('docs prerender routes', () => {
   it('normalizes locale and markdown suffixes to canonical docs routes', () => {
-    expect(normalizeDocsContentRoute('guide/start.en.md')).toEqual(['/docs/guide/start'])
-    expect(normalizeDocsContentRoute('hello.zh.mdc')).toEqual(['/docs/hello'])
+    expect(normalizeDocsContentRoute('guide/start.en.md')).toEqual([
+      '/en/docs/guide/start',
+      '/zh/docs/guide/start',
+    ])
+    expect(normalizeDocsContentRoute('hello.zh.mdc')).toEqual([
+      '/en/docs/hello',
+      '/zh/docs/hello',
+    ])
   })
 
-  it('keeps long-tail developer docs on runtime SSR', () => {
-    expect(normalizeDocsContentRoute('dev/api/box.zh.mdc')).toEqual([])
-    expect(normalizeDocsContentRoute('dev/components/button.en.mdc')).toEqual([])
+  it('includes long-tail developer docs in static prerender routes', () => {
+    expect(normalizeDocsContentRoute('dev/api/box.zh.mdc')).toEqual([
+      '/en/docs/dev/api/box',
+      '/zh/docs/dev/api/box',
+    ])
+    expect(normalizeDocsContentRoute('dev/components/button.en.mdc')).toEqual([
+      '/en/docs/dev/components/button',
+      '/zh/docs/dev/components/button',
+    ])
   })
 
   it('adds directory routes for index documents', () => {
     expect(normalizeDocsContentRoute('dev/index.zh.mdc')).toEqual([
-      '/docs/dev/index',
-      '/docs/dev',
+      '/en/docs/dev/index',
+      '/zh/docs/dev/index',
+      '/en/docs/dev',
+      '/zh/docs/dev',
     ])
-    expect(normalizeDocsContentRoute('index.en.mdc')).toEqual(['/docs/index', '/docs'])
+    expect(normalizeDocsContentRoute('index.en.mdc')).toEqual([
+      '/en/docs/index',
+      '/zh/docs/index',
+      '/en/docs',
+      '/zh/docs',
+    ])
   })
 
   it('deduplicates locale variants when scanning content files', () => {
@@ -34,9 +53,14 @@ describe('docs prerender routes', () => {
     writeFileSync(join(docsDir, 'automation.zh.md'), '# Runtime only')
 
     expect(createDocsPrerenderRoutes(root)).toEqual([
-      '/docs/guide',
-      '/docs/guide/index',
-      '/docs/guide/start',
+      '/en/docs/guide',
+      '/en/docs/guide/automation',
+      '/en/docs/guide/index',
+      '/en/docs/guide/start',
+      '/zh/docs/guide',
+      '/zh/docs/guide/automation',
+      '/zh/docs/guide/index',
+      '/zh/docs/guide/start',
     ])
   })
 
@@ -51,11 +75,12 @@ describe('docs prerender routes', () => {
     expect(routes).toEqual(expect.arrayContaining([
       ...publicPrerenderRoutes,
       ...docsApiPrerenderRoutes,
-      '/docs/guide/start',
+      '/en/docs/guide/start',
+      '/zh/docs/guide/start',
     ]))
-    expect(routes.filter(route => route === '/docs')).toHaveLength(1)
     expect(routes).not.toEqual(expect.arrayContaining([
-      '/docs/dev/components/button',
+      '/docs',
+      '/docs/guide/start',
       '/dashboard',
     ]))
   })

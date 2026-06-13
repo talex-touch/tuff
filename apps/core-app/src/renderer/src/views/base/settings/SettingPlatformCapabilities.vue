@@ -12,7 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
 

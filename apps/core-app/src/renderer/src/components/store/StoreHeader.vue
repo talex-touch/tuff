@@ -1,14 +1,13 @@
 <script setup lang="ts" name="StoreHeader">
 import type { StoreProviderResultMeta } from '@talex-touch/utils/store'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxFlatRadio, TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
 import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
 import { TxSelect, TxSelectItem } from '@talex-touch/tuffex/select'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
-import TLabelSelect from '~/components/base/select/TLabelSelect.vue'
-import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
 
 const props = defineProps<{
   loading: boolean
@@ -148,16 +147,16 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
       </div>
 
       <div flex items-center gap-2>
-        <TLabelSelect v-model="installFilter">
-          <TLabelSelectItem value="all" icon="i-ri-apps-2-line" />
-          <TLabelSelectItem value="not-installed" icon="i-ri-download-line" />
-          <TLabelSelectItem value="installed" icon="i-ri-check-double-line" />
-        </TLabelSelect>
+        <TxFlatRadio v-model="installFilter" class="store-filter-radio" size="sm">
+          <TxFlatRadioItem value="all" icon="i-ri-apps-2-line" />
+          <TxFlatRadioItem value="not-installed" icon="i-ri-download-line" />
+          <TxFlatRadioItem value="installed" icon="i-ri-check-double-line" />
+        </TxFlatRadio>
 
-        <TLabelSelect v-model="viewType">
-          <TLabelSelectItem value="grid" icon="i-carbon-table-split" />
-          <TLabelSelectItem value="list" icon="i-carbon-list-boxes" />
-        </TLabelSelect>
+        <TxFlatRadio v-model="viewType" class="store-filter-radio" size="sm">
+          <TxFlatRadioItem value="grid" icon="i-carbon-table-split" />
+          <TxFlatRadioItem value="list" icon="i-carbon-list-boxes" />
+        </TxFlatRadio>
 
         <TxButton variant="flat" size="sm" :disabled="loading" @click="emit('refresh')">
           <i :class="loading ? 'i-ri-loader-4-line animate-spin' : 'i-ri-refresh-line'" text-base />
@@ -227,6 +226,14 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
 .category-filter :deep(.tx-input__inner) {
   height: 32px;
   font-size: 0.82rem;
+}
+
+.store-filter-radio {
+  min-height: 28px;
+}
+
+.store-filter-radio :deep(.tx-flat-radio-item) {
+  min-width: 40px;
 }
 
 .provider-status {

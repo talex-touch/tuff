@@ -19,8 +19,13 @@ async function run(command, args, cwd) {
 
 async function runPnpm(args, cwd) {
   const npmExecPath = process.env.npm_execpath
-  if (npmExecPath && /(?:^|[/\\])pnpm(?:\.cjs)?$/i.test(npmExecPath)) {
-    await run(process.execPath, [npmExecPath, ...args], cwd)
+  if (npmExecPath && /(?:^|[/\\])pnpm(?:\.(?:cjs|mjs|js))?$/i.test(npmExecPath)) {
+    if (/\.(?:cjs|mjs|js)$/i.test(npmExecPath)) {
+      await run(process.execPath, [npmExecPath, ...args], cwd)
+      return
+    }
+
+    await run(npmExecPath, args, cwd)
     return
   }
 

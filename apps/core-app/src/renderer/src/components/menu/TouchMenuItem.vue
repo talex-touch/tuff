@@ -1,4 +1,5 @@
 <script lang="ts" name="TouchMenuItem" setup>
+// Legacy navigation surface: new CoreApp code should use TuffEx navigation/menu primitives.
 import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

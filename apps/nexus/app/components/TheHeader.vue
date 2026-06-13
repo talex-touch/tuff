@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import HeaderUserMenu from './HeaderUserMenu.vue'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 withDefaults(defineProps<{
   title?: string
@@ -14,7 +15,8 @@ const route = useRoute()
 const { status } = useAuth()
 
 const scrolled = ref(false)
-const { t } = useI18n()
+const { locale, t } = useI18n()
+const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 
 function handleScroll() {
   scrolled.value = window.scrollY > 0
@@ -22,8 +24,8 @@ function handleScroll() {
 
 const links = computed(() => [
   { to: '/store', label: t('nav.store') },
-  { to: '/docs/guide/start', label: t('nav.tutorial') },
-  { to: '/docs', label: t('nav.doc') },
+  { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
+  { to: docsLink('/docs'), label: t('nav.doc') },
   // { to: '/#developer', label: t('nav.developer') },
   { to: '/updates', label: t('nav.download') },
   // { to: '/#blog', label: t('nav.blog') },

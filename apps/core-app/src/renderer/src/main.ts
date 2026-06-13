@@ -10,11 +10,13 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { createPinia } from 'pinia'
 import type { Router } from 'vue-router'
 import { createApp } from 'vue'
+import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
 import { resolveInitialLanguagePreference, setupI18n } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
+import { createCoreAppIconConfig } from '~/modules/tuffex/icon-config'
 
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -116,6 +118,7 @@ async function bootstrap() {
   )
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
+  app.provide(TX_ICON_CONFIG_KEY, createCoreAppIconConfig())
 
   await runBootStep('Registering plugins and global modules', 0.05, () => {
     return registerCorePlugins(app, i18n, router)

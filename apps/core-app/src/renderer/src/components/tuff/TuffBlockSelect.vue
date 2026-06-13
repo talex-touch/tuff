@@ -1,4 +1,5 @@
 <script lang="ts" name="TuffBlockSelect" setup>
+// Legacy CoreApp business wrapper: keep the existing API while delegating primitives to TuffEx.
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'

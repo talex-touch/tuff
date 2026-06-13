@@ -1,4 +1,5 @@
 <script lang="ts" name="TButton" setup>
+// Legacy adaptor: new CoreApp code should import TxButton from @talex-touch/tuffex/button.
 import { TxButton } from '@talex-touch/tuffex/button'
 
 withDefaults(

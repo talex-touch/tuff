@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "music:dev": "vite",
+    "dev": "vite",
     "build": "vite build",
     "lint": "pnpm exec eslint --cache \"src/**/*.{js,ts,tsx,vue}\" \"vite.config.*\"",
     "lint:fix": "pnpm exec eslint --cache --fix \"src/**/*.{js,ts,tsx,vue}\" \"vite.config.*\"",

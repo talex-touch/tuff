@@ -21,6 +21,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Supports explicit `beta`, `snapshot`, and `release` manual build types; `v*-beta*` tags are published as pre-releases with BETA runtime metadata and snapshot packaging policy
   - Uploads only release assets and updater metadata from each platform job, not the full unpacked `dist`
   - Generates concise GitHub release notes from the previous same-channel tag range, including merged PR metadata and bilingual summaries
+  - Appends a "Download Based on Your Device" matrix to the end of generated GitHub/Nexus release notes; desktop rows point to current release/download surfaces, mobile rows stay marked as planned until mobile build assets exist
   - Notes sync priority (tag push): committed `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → generated bilingual notes → GitHub release body fallback
   - 若配置 `NEXUS_SYNC_BASE_URL` 或 `ADMIN_CF_ACCESS_CLIENT_ID` / `ADMIN_CF_ACCESS_CLIENT_SECRET`，则仍会正常执行完整 Nexus 同步链路
   - `sync-nexus-release` 仅在 `POST /api/releases` 返回精确的重复 tag 错误时才转 `PATCH`；其余非 2xx 会按真实错误失败

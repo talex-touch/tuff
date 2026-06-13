@@ -12,6 +12,7 @@
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 质量基线与门禁约束。
 - `docs/plan-prd/docs/TODO-BACKLOG-LONG-TERM.md` - 长期债务池。
 - `docs/engineering/README.md` - 工程过程资料索引。
+- `docs/engineering/coreapp-ui-contract.md` - CoreApp UI Contract 与 TuffEx 渐进收口规则。
 
 ## 当前状态快照
 

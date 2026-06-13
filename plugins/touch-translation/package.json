@@ -11,9 +11,7 @@
     "lint:fix": "eslint --fix .",
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
-    "test": "vitest",
-    "up": "taze major -I",
-    "postinstall": "node -e \"if (process.env.INIT_CWD && process.env.INIT_CWD === process.cwd()) require('child_process').execSync('npx simple-git-hooks', { stdio: 'inherit' })\""
+    "test": "vitest"
   },
   "dependencies": {
     "@talex-touch/tuff-intelligence": "workspace:^",
@@ -35,10 +33,6 @@
     "eslint": "^9.39.4",
     "eslint-plugin-format": "^1.5.0",
     "jsdom": "^26.1.0",
-    "lint-staged": "^16.4.0",
-    "pnpm": "^10.33.2",
-    "simple-git-hooks": "^2.13.1",
-    "taze": "^19.11.0",
     "typescript": "^5.9.3",
     "unocss": "^66.6.8",
     "unplugin-auto-import": "^20.3.0",
@@ -48,11 +42,5 @@
     "vite": "^7.3.2",
     "vitest": "^3.2.4",
     "vue-tsc": "^3.2.7"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
-  },
-  "lint-staged": {
-    "*": "eslint --fix"
   }
 }

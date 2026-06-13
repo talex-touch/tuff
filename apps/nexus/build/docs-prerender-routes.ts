@@ -1,16 +1,9 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { toLocalizedDocsPaths } from '../shared/utils/docs-path'
 
 const DOC_FILE_PATTERN = /\.(md|mdc)$/i
 const LOCALE_SUFFIX_PATTERN = /\.(en|zh)$/i
-const STATIC_DOC_ROUTE_ALLOWLIST = new Set([
-  'dev/index',
-  'guide/features/preview',
-  'guide/index',
-  'guide/start',
-  'hello',
-  'index',
-])
 
 function toPosixPath(path: string) {
   return path.replace(/\\/g, '/')
@@ -40,15 +33,19 @@ export function normalizeDocsContentRoute(relativePath: string) {
     .replace(LOCALE_SUFFIX_PATTERN, '')
     .replace(/^\/+/, '')
 
-  if (!normalized || !STATIC_DOC_ROUTE_ALLOWLIST.has(normalized))
+  if (!normalized)
     return []
 
-  const routes = new Set<string>([`/docs/${normalized}`])
+  const canonicalPath = `/docs/${normalized}`
+  const routes = new Set<string>(toLocalizedDocsPaths(canonicalPath))
   if (normalized === 'index') {
-    routes.add('/docs')
+    for (const route of toLocalizedDocsPaths('/docs'))
+      routes.add(route)
   }
   else if (normalized.endsWith('/index')) {
-    routes.add(`/docs/${normalized.slice(0, -'/index'.length)}`)
+    const directoryPath = `/docs/${normalized.slice(0, -'/index'.length)}`
+    for (const route of toLocalizedDocsPaths(directoryPath))
+      routes.add(route)
   }
 
   return [...routes]

@@ -2,7 +2,7 @@
   "name": "@talex-touch/tuffex",
   "version": "0.3.9",
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
-  "description": "TuffEx - Modern Vue3 component library with beautiful animations and tactile experience.",
+  "description": "TuffEx - Vue 3 UI source package for the Tuff ecosystem.",
   "keywords": [
     "tuff",
     "tuffex",
@@ -44,14 +44,11 @@
   "scripts": {
     "build": "node --loader ts-node/esm ./node_modules/gulp/bin/gulp.js -f packages/script/build/index.ts",
     "build:vite": "vite build",
-    "component:create": "esno ./utils/create/index.ts",
-    "comp:create": "esno ./utils/createComponent/index.ts",
-    "dev": "vitepress dev docs --port 8000--host",
+    "dev": "vite build --watch",
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
-    "docs:dev": "vitepress dev docs --port 8000 --host",
-    "docs:new": "esno ./utils/createVitepressComp/index.ts",
-    "docs:build": "vitepress build docs",
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "audit:exports": "node ./scripts/audit-package-exports.mjs",
     "audit:types": "node ./scripts/audit-package-types.mjs",
     "audit:size": "node ./scripts/audit-package-size.mjs"
@@ -88,9 +85,6 @@
     "yaml": "^2.8.3"
   },
   "devDependencies": {
-    "@iconify-json/carbon": "^1.2.20",
-    "@iconify-json/ri": "^1.2.10",
-    "@iconify-json/simple-icons": "^1.2.80",
     "@types/gulp": "^4.0.18",
     "@types/gulp-autoprefixer": "^0.0.37",
     "@types/gulp-sass": "^5.0.4",
@@ -103,14 +97,12 @@
     "gulp-autoprefixer": "^9.0.0",
     "gulp-sass": "^5.1.0",
     "sass": "^1.99.0",
-    "search-insights": "^2.17.3",
     "sucrase": "^3.35.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "unocss": "^66.6.8",
     "vite": "^7.3.2",
     "vite-plugin-dts": "^4.5.4",
-    "vitepress": "^1.6.4",
-    "vue": "^3.5.33"
+    "vue": "^3.5.33",
+    "vue-tsc": "catalog:dev"
   }
 }

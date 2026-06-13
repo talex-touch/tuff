@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/tree%20shaking-%E2%9C%93-success?style=flat-square" alt="Tree Shaking">
 </p>
 
-TuffEx 是 Tuff 生态中的 Vue 3 组件库，重点在触感交互、动效和桌面风格 UI 组合能力。
+TuffEx 是 Tuff 生态中的 Vue 3 UI 源码包，重点在触感交互、动效和桌面风格 UI 组合能力。运行时 Demo 与公开文档统一由 Nexus 承载；本包只负责组件源码、构建、测试与包体审计。
 
 ## 安装
 
@@ -80,7 +80,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 参考来源：
 
 - 导出入口：`packages/components/src/components.ts`
-- 文档索引：[docs/components/index.md](./docs/components/index.md)
+- 公开文档：`apps/nexus/content/docs/dev/tools/tuffex.zh.mdc`
 
 ## 导出约定
 
@@ -91,16 +91,17 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 ## 文档
 
 - 在线文档：[tuffex.tagzxia.com/docs/dev/tuffex](https://tuffex.tagzxia.com/docs/dev/tuffex)
-- 本地文档：`pnpm -C "packages/tuffex" run docs:dev`
+- 本地文档预览：`pnpm -C "apps/nexus" run dev`
 
 ## 开发
 
 ```bash
 pnpm install
 pnpm -C "packages/tuffex" run lint
+pnpm -C "packages/tuffex" run typecheck
+pnpm -C "packages/tuffex" run test
 pnpm -C "packages/tuffex" run build
 pnpm -C "packages/tuffex" run audit:size
 pnpm -C "packages/tuffex" run audit:exports
 pnpm -C "packages/tuffex" run audit:types
-pnpm -C "packages/tuffex" run docs:build
 ```

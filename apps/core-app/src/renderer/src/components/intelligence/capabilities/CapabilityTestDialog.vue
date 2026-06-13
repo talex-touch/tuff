@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const props = defineProps<{
@@ -59,7 +59,7 @@ function handleCancel(): void {
 </script>
 
 <template>
-  <TuffDrawer v-model:visible="visible" :title="t('settings.intelligence.capabilityTestTitle')">
+  <TxDrawer v-model:visible="visible" :title="t('settings.intelligence.capabilityTestTitle')">
     <div class="capability-test-dialog">
       <p class="capability-test-dialog__description">
         {{ t('settings.intelligence.capabilityTestDesc') }}
@@ -135,7 +135,7 @@ function handleCancel(): void {
         </TxButton>
       </div>
     </div>
-  </TuffDrawer>
+  </TxDrawer>
 </template>
 
 <style lang="scss" scoped>

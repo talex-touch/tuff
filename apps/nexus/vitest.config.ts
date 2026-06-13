@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '#imports': fileURLToPath(new URL('./test/mocks/nuxt-imports.ts', import.meta.url)),
+      '#shared': fileURLToPath(new URL('./shared', import.meta.url)),
       '~': fileURLToPath(new URL('./app', import.meta.url)),
     },
   },

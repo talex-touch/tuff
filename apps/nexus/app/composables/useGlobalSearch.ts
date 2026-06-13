@@ -2,6 +2,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { matchFeature } from '@talex-touch/utils/search'
 import { featureSearchItems } from '~/data/search/featureIndex'
 import { pageSearchItems } from '~/data/search/pageIndex'
+import { isDocsPath, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 export type SearchSource = 'docs' | 'feature' | 'page'
 
@@ -138,6 +139,10 @@ export function useGlobalSearch() {
   const loading = useState<boolean>('global-search-loading', () => false)
   const anchorRect = useState<SearchAnchorRect | null>('global-search-anchor-rect', () => null)
   const { t, locale } = useI18n()
+  const docsLocale = computed(() => locale.value === 'zh' ? 'zh' : 'en')
+  const resolveSearchPath = (path: string) => {
+    return isDocsPath(path) ? toLocalizedDocsPath(path, docsLocale.value) : path
+  }
 
   function prefersReducedMotion() {
     return hasWindow() && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -249,7 +254,7 @@ export function useGlobalSearch() {
             source: 'docs' as const,
             title: title || path,
             description,
-            to: path,
+            to: resolveSearchPath(path),
             score: 0,
             icon: 'i-carbon-document',
             keywords: [title, description].filter(Boolean) as string[],
@@ -279,7 +284,7 @@ export function useGlobalSearch() {
           source: 'docs' as const,
           title: item.title,
           description: item.description,
-          to: item.path,
+          to: resolveSearchPath(item.path),
           score: match.score,
           icon: item.icon,
           keywords: item.searchTokens,
@@ -308,7 +313,7 @@ export function useGlobalSearch() {
           source: 'page' as const,
           title,
           description,
-          to: item.path,
+          to: resolveSearchPath(item.path),
           score: match.score,
           icon: item.icon,
           keywords: item.searchTokens,
@@ -337,7 +342,7 @@ export function useGlobalSearch() {
           source: 'feature' as const,
           title,
           description,
-          to: item.path,
+          to: resolveSearchPath(item.path),
           score: match.score,
           icon: item.icon,
           keywords: item.searchTokens,

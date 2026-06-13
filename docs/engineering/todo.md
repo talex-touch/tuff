@@ -12,7 +12,7 @@
 - [ ] 【P2】测试覆盖提升：核心流程（插件加载、搜索、IPC 通信）系统测试
 - [ ] 【P2】i18n 候选 key 清理（~410 keys）
   - 参考：已识别的 i18n ISSUES
-- [ ] 【P2】TuffEx 构建跑通：`pnpm -C packages/tuffex build` + `docs:build`
+- [ ] 【P2】TuffEx 构建跑通：`pnpm -C packages/tuffex build` + Nexus 展示页验证
 - [x] 【P3】工程过程资料已迁移到 `docs/engineering/` 并新增索引入口
 
 ## 待确认 / 待处理

@@ -10,9 +10,9 @@
   "scripts": {
     "lint": "pnpm exec eslint --cache .",
     "lint:fix": "pnpm exec eslint --cache --fix .",
-    "test:nodemon": "nodemon",
     "test": "vitest",
-    "coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "test:watch": "nodemon"
   },
   "dependencies": {
     "@talex-touch/tuff-intelligence": "workspace:^",

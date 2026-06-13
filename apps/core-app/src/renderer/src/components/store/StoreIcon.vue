@@ -1,7 +1,7 @@
 <script lang="ts" name="StoreIcon" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import { computed } from 'vue'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { normalizeStoreIcon } from '~/modules/store/providers/store-icon-normalizer'
 
 interface StoreIconProps {

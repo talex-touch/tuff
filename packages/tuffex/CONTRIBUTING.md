@@ -56,13 +56,18 @@ Before you begin, ensure you have the following installed:
    pnpm install
    ```
 
-3. **Start development server**
+3. **Start component watch build**
    ```bash
-   # Start documentation development server
-   pnpm docs:dev
+   # Watch the UI source package
+   pnpm dev
    ```
 
-4. **Run tests**
+4. **Preview documentation in Nexus**
+   ```bash
+   pnpm -C "../../apps/nexus" run dev
+   ```
+
+5. **Run tests**
    ```bash
    # Run all tests
    pnpm test
@@ -86,8 +91,7 @@ talex-touch/
 │   ├── theme/              # Theme system
 │   ├── utils/              # Utility functions
 │   └── tuffex/             # Main package entry
-├── docs/                   # Documentation source
-├── scripts/                # Build and development scripts
+├── scripts/                # Package audit scripts
 ├── tests/                  # Test files
 └── tools/                  # Development tools
 ```
@@ -193,8 +197,8 @@ When creating a new component:
 
 5. **Document the component**
    - Add JSDoc comments for props and methods
-   - Create documentation page in `docs/components/`
-   - Include usage examples
+   - Update the Nexus TuffEx docs/showcase when public usage changes
+   - Include usage examples in the Nexus content source
 
 ### Testing
 
@@ -264,7 +268,7 @@ TuffEx focuses on smooth, meaningful animations:
    pnpm test
 
    # Check types
-   pnpm type-check
+   pnpm typecheck
 
    # Lint code
    pnpm lint

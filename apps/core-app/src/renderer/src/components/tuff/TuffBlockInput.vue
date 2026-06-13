@@ -1,4 +1,5 @@
 <script lang="ts" name="TuffBlockInput" setup>
+// Legacy CoreApp business wrapper: keep the existing control slot API while using TuffEx primitives.
 import type { ITuffIcon } from '@talex-touch/utils'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'

@@ -1,9 +1,10 @@
 <script lang="ts" name="TuffBlockSwitch" setup>
+// Legacy CoreApp business wrapper: keep the existing API while delegating primitives to TuffEx.
 import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { TxSwitch } from '@talex-touch/tuffex/switch'
 import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(
@@ -63,7 +64,7 @@ function handleClick(event: MouseEvent) {
           v-if="loading"
           class="i-ri-loader-4-line text-[var(--tx-text-color-secondary)] animate-spin"
         />
-        <TSwitch v-model="value" :disabled="disabled || loading" @change="handleChange" />
+        <TxSwitch v-model="value" :disabled="disabled || loading" @change="handleChange" />
       </div>
     </template>
     <template v-else>

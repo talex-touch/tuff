@@ -3,7 +3,7 @@ import type { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import { renderHighlightedTextHtml } from './highlight-html'
@@ -289,7 +289,7 @@ const shouldShowNoticeReason = computed(
   border-color: color-mix(in srgb, var(--tx-color-primary) 40%, var(--notice-color));
 }
 
-.BoxItem--notice :deep(.TuffIcon) {
+.BoxItem--notice :deep(.tuff-icon) {
   color: var(--notice-color);
 }
 

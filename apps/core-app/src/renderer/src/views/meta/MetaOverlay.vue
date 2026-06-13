@@ -9,7 +9,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TuffIcon from '~/components/base/TuffIcon.vue'
+import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 

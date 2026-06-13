@@ -2,6 +2,7 @@
 import DocSection from './docs/DocSection.vue'
 import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
+import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -45,8 +46,7 @@ const { data: componentDocsPayload, pending: componentDocsPending } = await useT
 )
 const route = useRoute()
 const { t, locale } = useI18n()
-const localePath = useLocalePath()
-const SUPPORTED_LOCALES = ['en', 'zh']
+const docsLocale = computed(() => resolveDocsLocaleFromRoute(route.path))
 const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 
 function stripCjk(value: string) {
@@ -304,33 +304,14 @@ const docLabels = computed<Record<string, string>>(() => ({
   '/docs/guide/start.zh': t('docsNav.start'),
 }))
 
-function stripLocalePrefix(path: string | null | undefined) {
-  if (!path)
-    return '/'
-  for (const code of SUPPORTED_LOCALES) {
-    const exact = `/${code}`
-    if (path === exact)
-      return '/'
-    const prefixed = `${exact}/`
-    if (path.startsWith(prefixed))
-      return path.slice(exact.length) || '/'
-  }
-  return path
-}
-
-function stripContentExtension(path: string) {
-  return path.replace(/\.(md|mdc)$/i, '')
-}
-
-function stripLocaleSuffix(path: string) {
-  return path.replace(/\.(en|zh)$/i, '')
-}
-
 function normalizeContentPath(path: string | null | undefined) {
   if (!path)
     return null
-  const fullPath = path.startsWith('/') ? path : `/${path}`
-  return stripLocaleSuffix(stripContentExtension(stripLocalePrefix(fullPath)))
+  return normalizeDocsPagePath(path)
+}
+
+function localizedDocsPath(path: string | null | undefined) {
+  return toLocalizedDocsPath(path, docsLocale.value)
 }
 
 function filterByLocale(items: any[]): any[] {
@@ -393,7 +374,7 @@ function sortTree(items: any[], parentPath: string | null): any[] {
 const items = computed(() => coerceJsonArray<any>(navigationTreePayload.value))
 const componentItems = computed(() => filterByLocale(coerceJsonArray<SidebarComponentDoc>(componentDocsPayload.value) as any[]))
 const lastComponentSections = shallowRef<any[]>([])
-const normalizedRoutePath = computed(() => stripLocalePrefix(route.path))
+const normalizedRoutePath = computed(() => normalizeDocsPagePath(route.path))
 const isTutorialRoute = computed(() => normalizedRoutePath.value.startsWith('/docs/guide'))
 
 const allSections = computed(() => {
@@ -683,7 +664,7 @@ watch(
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
-          :to="localePath({ path: sec.entryPath || sec.basePath })"
+          :to="localizedDocsPath(sec.entryPath || sec.basePath)"
           prefetch
           class="flex flex-1 items-center justify-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium no-underline transition-all duration-200"
           :class="activeTopSection === sec.key
@@ -709,7 +690,7 @@ watch(
           <li class="docs-nav-item">
             <NuxtLink
               v-if="linkTarget(currentSectionData)"
-              :to="localePath({ path: linkTarget(currentSectionData)! })"
+              :to="localizedDocsPath(linkTarget(currentSectionData)!)"
               prefetch
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
@@ -757,7 +738,7 @@ watch(
           >
             <NuxtLink
               v-if="linkTarget(child)"
-              :to="localePath({ path: linkTarget(child)! })"
+              :to="localizedDocsPath(linkTarget(child)!)"
               prefetch
               class="docs-nav-link"
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/tree%20shaking-%E2%9C%93-success?style=flat-square" alt="Tree Shaking">
 </p>
 
-TuffEx is a Vue 3 component library in the Tuff ecosystem, focused on tactile interaction, animation, and desktop-style UI composition.
+TuffEx is the Vue 3 UI source package in the Tuff ecosystem, focused on tactile interaction, animation, and desktop-style UI composition. Runtime demos and public documentation are hosted by Nexus; this package only owns component source, builds, tests, and package audits.
 
 ## Installation
 
@@ -80,7 +80,7 @@ Current source-of-truth export modules: **102**.
 Reference:
 
 - Export entry: `packages/components/src/components.ts`
-- Docs index: [docs/components/index.md](./docs/components/index.md)
+- Public docs: `apps/nexus/content/docs/dev/tools/tuffex.en.mdc`
 
 ## Export Convention
 
@@ -91,18 +91,19 @@ Reference:
 ## Documentation
 
 - Online docs: [tuffex.tagzxia.com/docs/dev/tuffex](https://tuffex.tagzxia.com/docs/dev/tuffex)
-- Local docs: `pnpm -C "packages/tuffex" run docs:dev`
+- Local docs preview: `pnpm -C "apps/nexus" run dev`
 
 ## Development
 
 ```bash
 pnpm install
 pnpm -C "packages/tuffex" run lint
+pnpm -C "packages/tuffex" run typecheck
+pnpm -C "packages/tuffex" run test
 pnpm -C "packages/tuffex" run build
 pnpm -C "packages/tuffex" run audit:size
 pnpm -C "packages/tuffex" run audit:exports
 pnpm -C "packages/tuffex" run audit:types
-pnpm -C "packages/tuffex" run docs:build
 ```
 
 ## Integration with Tuff

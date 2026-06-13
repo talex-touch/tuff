@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import DocsRedirectLoading from '~/components/docs/DocsRedirectLoading.vue'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 const { t } = useI18n()
-const localePath = useLocalePath()
+const { docsLocale } = useDocsRoute()
 const route = useRoute()
-const target = computed(() => localePath({ path: '/docs/dev/index' }))
+const target = computed(() => toLocalizedDocsPath('/docs/dev/index', docsLocale.value))
 
 definePageMeta({
   layout: 'fullscreen',

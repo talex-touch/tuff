@@ -123,7 +123,7 @@ function handleHelp(): void {
 
     height: 100%;
 
-    .TuffIcon {
+    .tuff-icon {
       font-size: 32px;
     }
   }

@@ -17,6 +17,20 @@
   - Kept fixed system setting protocols, app-launcher protocol launches, plugin `openUrl` and CommonChannel openExternal on their existing specialized guards.
   - 验证：focused external-url, CommonChannel, OmniPanel, native-share and Auth Vitest, scoped ESLint and CoreApp node typecheck.
 
+### chore(workspace): trim package scripts and hand off TuffEx showcase to Nexus
+
+- `package.json`
+- `packages/tuffex/package.json`
+- `packages/tuffex/README.md`
+- `packages/tuffex/README_ZHCN.md`
+- `packages/tuffex/docs/**`
+- `apps/nexus/content/docs/dev/tools/tuffex.en.mdc`
+- `apps/nexus/content/docs/dev/tools/tuffex.zh.mdc`
+  - Removed root `tuffex:dev` / `tuffex:docs` and TuffEx-local `docs:*` VitePress entries so TuffEx stays a UI source/build/test package.
+  - Deleted the legacy TuffEx VitePress docs/playground assets and old docs audit scripts; Nexus now owns the local showcase preview and explicitly declares its `vitepress` dependency.
+  - Moved local showcase guidance to `pnpm -C "apps/nexus" run dev`, kept TuffEx package validation on build/test/typecheck/audit scripts, and normalized obvious package script noise.
+  - 验证：TuffEx lint/typecheck/test/build/audit suites, Nexus typecheck, `pnpm install --lockfile-only`, JSON package parsing and `git diff --check` passed. Existing peer/deprecated dependency warnings remain unrelated.
+
 ### ref(core-app): observe plugin view security profiles
 
 - `apps/core-app/src/main/modules/plugin/runtime/plugin-view-security-profile.ts`
@@ -26,6 +40,40 @@
   - Added an observation-only plugin view security profile resolver for the `260615` migration marker.
   - Routed Plugin Window, CoreBox `attachUIView` and DivisionBox `attachUIView` through the resolver while keeping the effective runtime on `compat-plugin-view`.
   - 验证：focused CoreApp plugin-view security/profile Vitest, scoped ESLint and CoreApp node typecheck.
+
+### ref(core-app): establish UI contract and TuffEx pilot
+
+- `docs/engineering/coreapp-ui-contract.md`
+- `apps/core-app/src/renderer/src/modules/tuffex/icon-config.ts`
+- `apps/core-app/src/renderer/src/main.ts`
+- `scripts/check-coreapp-ui-contract.mjs`
+  - Added the CoreApp UI Contract for renderer page, business-composition and legacy-adaptor component boundaries.
+  - Injected `TX_ICON_CONFIG_KEY` in the renderer root so TuffEx `TxIcon` resolves CoreApp `file`, local path, `/api/*` and SVG fetch behavior consistently.
+  - Migrated the first pilot set from local `TuffIcon`/`TButton`/`TModal`/`TSwitch` usages to TuffEx primitives while keeping business wrappers and complex legacy surfaces as explicit adaptors.
+  - 验证：focused icon config Vitest, UI contract scan, CoreApp web typecheck.
+
+### feat(nexus): prerender localized canonical docs routes
+
+- `apps/nexus/build/docs-prerender-routes.ts`
+- `apps/nexus/shared/utils/docs-path.ts`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/components/docs/DocsEngagementClient.vue`
+- `apps/nexus/app/components/docs/DocsAdminAnalyticsClient.vue`
+- `apps/nexus/server/middleware/docs-legacy-redirect.ts`
+  - Removed the docs prerender allowlist and now scan `content/docs/**/*.{md,mdc}` into explicit `/en/docs/**` and `/zh/docs/**` prerender routes, including index directory aliases while keeping `crawlLinks: false`.
+  - Added docs-specific locale path helpers, localized Nuxt docs routes, canonical/hreflang JSON-LD SEO output, and a permanent legacy `/docs/**` to `/en/docs/**` redirect.
+  - Moved engagement tracking, view count, feedback/comments and admin analytics overlay behind lazy client-only docs components; canonical storage paths remain unprefixed `/docs/**`.
+  - 验证：focused docs prerender/docsPath Vitest and Nexus typecheck passed.
+
+### chore(release): append device download matrix to generated notes
+
+- `scripts/generate-release-notes.mjs`
+- `scripts/generate-release-notes.test.mjs`
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+  - Added a reusable release-note download matrix that is appended to generated GitHub and Nexus release notes.
+  - Kept the matrix as release-note presentation only: current desktop downloads point at the existing Updates/GitHub release surfaces, while Android/iOS entries remain marked planned until real mobile release assets exist.
+  - 验证：focused release notes generator Vitest.
 
 ### chore(sdkapi): introduce 260615 plugin SDK marker
 

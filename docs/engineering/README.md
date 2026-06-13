@@ -15,6 +15,7 @@
 - `notes/`：工程笔记。
 - `typecheck/`：类型检查修复记录。
 - `archive/`：入口文档压缩前快照与后续归档。
+- `coreapp-ui-contract.md`：CoreApp renderer UI 组件使用边界与 TuffEx 渐进收口规则。
 
 ## 当前维护规则
 

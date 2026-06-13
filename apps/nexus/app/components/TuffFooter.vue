@@ -3,8 +3,10 @@ import { computed } from 'vue'
 import BetaIcon from './BetaIcon.vue'
 import Logo from './icon/Logo.vue'
 import TouchAurora from './tuff/background/TouchAurora.vue'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
-const { t } = useI18n()
+const { locale, t } = useI18n()
+const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 
 const year = new Date().getFullYear()
 
@@ -13,7 +15,7 @@ const footerSections = computed(() => [
     title: t('landing.footer.sections.product'),
     links: [
       { to: '/store', label: t('nav.store') },
-      { to: '/docs/guide/start', label: t('nav.tutorial') },
+      { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
       { to: '/developer', label: t('nav.developer') },
       { to: '/updates', label: t('nav.download') },
       { to: '/pricing', label: t('nav.pricing') },
@@ -22,7 +24,7 @@ const footerSections = computed(() => [
   {
     title: t('landing.footer.sections.resources'),
     links: [
-      { to: '/docs', label: t('nav.doc') },
+      { to: docsLink('/docs'), label: t('nav.doc') },
       { to: '/blog', label: t('nav.blog') },
     ],
   },
