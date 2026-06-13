@@ -5,6 +5,13 @@
 
 ## 2026-06-13
 
+### fix(tuffex): make style entry build idempotent
+
+- `packages/tuffex/packages/script/build/index.ts`
+  - Made `buildStyleEntry` read an existing generated base style or compile `packages/components/style/index.scss` as a fallback instead of hard-failing when `dist/es/index.css` has already been moved/removed.
+  - Restored the full CoreApp `typecheck:web` chain, including the TuffEx build preflight.
+  - 验证：TuffEx build, scoped build-script ESLint and CoreApp web typecheck.
+
 ### fix(core-app): route dynamic external URL opens through policy
 
 - `apps/core-app/src/main/utils/external-url-policy.ts`
