@@ -272,6 +272,10 @@ export function useSearch(
     return `${text}::${activationKey}::${inputsKey}`
   }
 
+  function hasPluginFeatureActivation(activations: IProviderActivate[] | null): boolean {
+    return activations?.some((activation) => activation.id === 'plugin-features') ?? false
+  }
+
   function buildQueryInputs(options?: {
     queryText?: string
     allowPendingTextClipboard?: boolean
@@ -731,6 +735,8 @@ export function useSearch(
 
     loading.value = true
 
+    let pluginFeatureActivated = false
+
     try {
       const activationState = await transport.send(
         CoreBoxEvents.item.execute,
@@ -747,8 +753,9 @@ export function useSearch(
         activationState as ActivationState | IProviderActivate[] | null
       )
       activeActivations.value = newActivationState
+      pluginFeatureActivated = isPluginFeature && hasPluginFeatureActivation(newActivationState)
 
-      if (newActivationState && newActivationState.length > 0) {
+      if (newActivationState && newActivationState.length > 0 && !pluginFeatureActivated) {
         searchVal.value = ''
       }
 
@@ -788,7 +795,9 @@ export function useSearch(
 
     select.value = -1
 
-    await handleSearch()
+    if (!pluginFeatureActivated) {
+      await handleSearch()
+    }
   }
 
   async function deactivateProvider(providerId?: string): Promise<boolean> {
@@ -966,7 +975,10 @@ export function useSearch(
 
     if (!isDivisionBoxMode()) {
       coreBoxShownHandler = () => {
-        if (searchVal.value || !activeActivations.value?.length) {
+        if (
+          !hasPluginFeatureActivation(activeActivations.value) &&
+          (searchVal.value || !activeActivations.value?.length)
+        ) {
           handleSearchImmediate({ force: true })
         }
       }

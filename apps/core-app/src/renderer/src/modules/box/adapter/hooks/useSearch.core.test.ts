@@ -138,7 +138,7 @@ function createSearchResult(query: string, index = 1): TuffSearchResult {
         id: `item-${index}`,
         kind: 'app',
         source: { id: 'test-source', type: 'system' },
-        render: { basic: { title: `${query}-${index}` } }
+        render: { mode: 'default', basic: { title: `${query}-${index}` } }
       } as TuffItem
     ],
     query: { text: query, inputs: [] },
@@ -252,7 +252,7 @@ describe('useSearch CoreBox reopen behavior', () => {
       id: 'app-1',
       kind: 'app',
       source: { id: 'app-provider', type: 'application' },
-      render: { basic: { title: 'Slow App' } },
+      render: { mode: 'default', basic: { title: 'Slow App' } },
       meta: { app: { path: '/Applications/Slow.app' } }
     } as TuffItem
 
@@ -266,6 +266,61 @@ describe('useSearch CoreBox reopen behavior', () => {
     )
     expect(String(state.send.mock.calls[0][0])).toBe('core-box:ui:hide')
     expect(String(state.send.mock.calls[1][0])).toBe('core-box:execute')
+  })
+
+  it('keeps the query visible when entering a plugin feature input session', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    hook.searchVal.value = 'translate hello'
+    await nextTick()
+    await flushPromises()
+
+    state.send.mockClear()
+    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+      const eventName = typeof event === 'string' ? event : String(event)
+      if (eventName === 'core-box:execute') {
+        return { activeProviders: ['plugin-features:touch-translation'] }
+      }
+      if (eventName.includes('provider')) return []
+      if (eventName === 'core-box:query') {
+        const query = getSearchQueryText(payload)
+        return createSearchResult(query)
+      }
+      return undefined
+    })
+
+    const featureItem = {
+      id: 'touch-translation/translate',
+      kind: 'feature',
+      source: { id: 'plugin-features', type: 'plugin' },
+      render: { mode: 'default', basic: { title: 'Translate' } },
+      meta: {
+        pluginName: 'touch-translation',
+        featureId: 'translate',
+        interaction: { type: 'widget', allowInput: true },
+        extension: {
+          acceptedInputTypes: ['text']
+        }
+      }
+    } as TuffItem
+
+    await hook.handleExecute(featureItem)
+    await flushPromises()
+
+    const executeCall = state.send.mock.calls.find(
+      ([event]) => String(event) === 'core-box:execute'
+    )
+    const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
+
+    expect(executePayload?.searchResult?.query.text).toBe('translate hello')
+    expect(hook.searchVal.value).toBe('translate hello')
+    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+
+    window.dispatchEvent(new CustomEvent('corebox:shown'))
+    await flushPromises()
+
+    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
   })
 
   it('does not invalidate an in-flight search when duplicate query is skipped', async () => {
