@@ -22,14 +22,10 @@ export class CodeGenerateTester extends BaseCapabilityTester {
     const code = result.result?.code || ''
     const preview = code.length > 300 ? `${code.slice(0, 300)}...` : code
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: '代码生成测试成功',
-      textPreview: preview,
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: preview
+    })
   }
 
   getDefaultInputHint(): string {
@@ -66,14 +62,10 @@ function multiply(x, y) {
     const summary = result.result?.summary || ''
     const issueCount = result.result?.issues?.length || 0
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: `代码审查完成，发现 ${issueCount} 个问题`,
-      textPreview: summary,
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: summary
+    })
   }
 
   getDefaultInputHint(): string {

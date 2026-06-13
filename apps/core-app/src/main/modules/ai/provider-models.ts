@@ -9,10 +9,12 @@ const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
   [IntelligenceProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
   [IntelligenceProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
   [IntelligenceProviderType.CUSTOM]: undefined,
-  [IntelligenceProviderType.LOCAL]: undefined
+  [IntelligenceProviderType.LOCAL]: 'http://localhost:11434'
 }
 
 const ANTHROPIC_VERSION = '2023-06-01'
+const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
+const LOCAL_DIRECT_PROXY = { mode: 'direct' as const }
 
 function joinUrl(base: string, path: string): string {
   const normalizedBase = base.replace(/\/+$/, '')
@@ -36,6 +38,28 @@ function ensureApiKey(provider: IntelligenceProviderConfig): string {
   return key || ''
 }
 
+function resolveOpenAiCompatibleBaseUrl(provider: IntelligenceProviderConfig): string {
+  const baseUrl = resolveBaseUrl(provider)
+  const normalized = baseUrl.replace(/\/+$/, '')
+  const lower = normalized.toLowerCase()
+  if (OPENAI_VERSION_SUFFIXES.some((suffix) => lower.endsWith(suffix))) {
+    return normalized
+  }
+  return `${normalized}/v1`
+}
+
+function resolveOllamaBaseUrl(provider: IntelligenceProviderConfig): string {
+  const baseUrl = resolveBaseUrl(provider)
+  const normalized = baseUrl.replace(/\/+$/, '')
+  const lower = normalized.toLowerCase()
+  const suffix = OPENAI_VERSION_SUFFIXES.find((item) => lower.endsWith(item))
+  return suffix ? normalized.slice(0, -suffix.length).replace(/\/+$/, '') : normalized
+}
+
+function getStoredModels(provider: IntelligenceProviderConfig): string[] {
+  return provider.models?.length ? [...new Set(provider.models)] : []
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
@@ -56,16 +80,10 @@ function normalizeModelEntries(entries: unknown[]): string[] {
   return Array.from(new Set(normalized))
 }
 
-export async function fetchProviderModels(provider: IntelligenceProviderConfig): Promise<string[]> {
-  if (isNexusManagedProvider(provider)) {
-    return provider.models?.length ? [...new Set(provider.models)] : []
-  }
-
-  if (provider.type === IntelligenceProviderType.LOCAL) {
-    return provider.models?.length ? [...new Set(provider.models)] : []
-  }
-
-  const baseUrl = resolveBaseUrl(provider)
+async function fetchOpenAiCompatibleModels(
+  provider: IntelligenceProviderConfig,
+  baseUrl = resolveBaseUrl(provider)
+): Promise<string[]> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'
   }
@@ -74,7 +92,10 @@ export async function fetchProviderModels(provider: IntelligenceProviderConfig):
     headers['x-api-key'] = ensureApiKey(provider)
     headers['anthropic-version'] = ANTHROPIC_VERSION
   } else {
-    headers.Authorization = `Bearer ${ensureApiKey(provider)}`
+    const apiKey = ensureApiKey(provider)
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`
+    }
   }
 
   const endpoint = joinUrl(baseUrl, 'models')
@@ -82,7 +103,8 @@ export async function fetchProviderModels(provider: IntelligenceProviderConfig):
     method: 'GET',
     url: endpoint,
     headers,
-    responseType: 'json'
+    responseType: 'json',
+    proxyOverride: provider.type === IntelligenceProviderType.LOCAL ? LOCAL_DIRECT_PROXY : undefined
   })
 
   const body = response.data
@@ -93,11 +115,71 @@ export async function fetchProviderModels(provider: IntelligenceProviderConfig):
       ? bodyRecord.models
       : []
 
-  const models = normalizeModelEntries(rawEntries)
+  return normalizeModelEntries(rawEntries)
+}
+
+async function fetchOllamaModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+  const endpoint = joinUrl(resolveOllamaBaseUrl(provider), 'api/tags')
+  const response = await getNetworkService().request<unknown>({
+    method: 'GET',
+    url: endpoint,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    responseType: 'json',
+    proxyOverride: LOCAL_DIRECT_PROXY
+  })
+
+  const body = response.data
+  const bodyRecord = isRecord(body) ? body : {}
+  const rawEntries = Array.isArray(bodyRecord.models) ? bodyRecord.models : []
+  return normalizeModelEntries(rawEntries)
+}
+
+async function fetchLocalModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+  const storedModels = getStoredModels(provider)
+  let lastError: unknown
+
+  for (const fetcher of [
+    fetchOllamaModels,
+    (config: IntelligenceProviderConfig) =>
+      fetchOpenAiCompatibleModels(config, resolveOpenAiCompatibleBaseUrl(config))
+  ]) {
+    try {
+      const models = await fetcher(provider)
+      if (models.length) {
+        return models
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (storedModels.length) {
+    return storedModels
+  }
+
+  if (lastError) {
+    throw lastError
+  }
+
+  return []
+}
+
+export async function fetchProviderModels(provider: IntelligenceProviderConfig): Promise<string[]> {
+  if (isNexusManagedProvider(provider)) {
+    return getStoredModels(provider)
+  }
+
+  if (provider.type === IntelligenceProviderType.LOCAL) {
+    return await fetchLocalModels(provider)
+  }
+
+  const models = await fetchOpenAiCompatibleModels(provider)
 
   // Fallback to stored models if API returned nothing
-  if (models.length === 0 && provider.models?.length) {
-    return [...new Set(provider.models)]
+  if (models.length === 0) {
+    return getStoredModels(provider)
   }
 
   return models

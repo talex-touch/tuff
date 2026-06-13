@@ -43,14 +43,10 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
 
     const keywords = ocrResult.keywords?.length ? `\n关键词: ${ocrResult.keywords.join(', ')}` : ''
 
-    return {
-      success: true,
+    return this.buildTestResult(result, {
       message: 'OCR 测试成功',
-      textPreview: preview + keywords,
-      provider: result.provider,
-      model: result.model,
-      latency: result.latency
-    }
+      textPreview: preview + keywords
+    })
   }
 
   getDefaultInputHint(): string {

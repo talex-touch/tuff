@@ -38,6 +38,8 @@ interface OpenAiChatModelLike {
   stream(messages: BaseMessage[]): Promise<AsyncIterable<unknown>>
 }
 
+type OpenAiClientFetch = NonNullable<import('openai').ClientOptions['fetch']>
+
 function trimBaseUrl(value: string): string {
   return value.replace(/\/+$/, '')
 }
@@ -62,6 +64,10 @@ export function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
   return `${trimmed}/v1`
 }
 
+export function createNetworkServiceFetch(): OpenAiClientFetch {
+  return async (url, init) => getNetworkService().fetch(url, init)
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
@@ -73,6 +79,104 @@ function numberFrom(...candidates: unknown[]): number {
     }
   }
   return 0
+}
+
+function extractNestedReasoningText(value: unknown, depth = 0): string {
+  if (depth > 4 || value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractNestedReasoningText(item, depth + 1))
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+  }
+  if (typeof value !== 'object') {
+    return ''
+  }
+
+  const row = asRecord(value)
+  const directCandidates = [
+    row.text,
+    row.content,
+    row.summary,
+    row.output_text,
+    row.reasoning_text,
+    row.thinking_text
+  ]
+  for (const candidate of directCandidates) {
+    const text = extractNestedReasoningText(candidate, depth + 1)
+    if (text) return text
+  }
+
+  const nestedCandidates = [
+    row.reasoning,
+    row.thinking,
+    row.analysis,
+    row.delta,
+    row.message,
+    row.payload
+  ]
+  for (const candidate of nestedCandidates) {
+    const text = extractNestedReasoningText(candidate, depth + 1)
+    if (text) return text
+  }
+
+  return ''
+}
+
+export function extractReasoningContent(rawMessage: Record<string, unknown>): string | undefined {
+  const additionalKwargs = asRecord(rawMessage.additional_kwargs)
+  const responseMetadata = asRecord(rawMessage.response_metadata)
+  const contentBlocks = Array.isArray(rawMessage.content) ? rawMessage.content : []
+  const blockReasoning = contentBlocks
+    .map((item) => {
+      const row = asRecord(item)
+      const type = String(row.type || '').toLowerCase()
+      if (!type.includes('reasoning') && !type.includes('thinking')) {
+        return extractNestedReasoningText(row.reasoning ?? row.thinking)
+      }
+      return extractNestedReasoningText(item)
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim()
+
+  const candidates = [
+    blockReasoning,
+    rawMessage.reasoning,
+    rawMessage.reasoning_content,
+    rawMessage.reasoningContent,
+    rawMessage.reasoning_text,
+    rawMessage.thinking,
+    rawMessage.thinking_text,
+    additionalKwargs.reasoning,
+    additionalKwargs.reasoning_content,
+    additionalKwargs.reasoningContent,
+    additionalKwargs.reasoning_text,
+    additionalKwargs.thinking,
+    additionalKwargs.thinking_text,
+    responseMetadata.reasoning,
+    responseMetadata.reasoning_content,
+    responseMetadata.reasoningContent,
+    responseMetadata.reasoning_text,
+    responseMetadata.thinking,
+    responseMetadata.thinking_text
+  ]
+
+  for (const candidate of candidates) {
+    const text = extractNestedReasoningText(candidate)
+    if (text) return text
+  }
+
+  return undefined
 }
 
 export function extractTextContent(content: unknown): string {
@@ -287,7 +391,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       streaming: params.streaming,
       timeout: params.options.timeout,
       configuration: {
-        baseURL: this.resolveBaseUrl()
+        baseURL: this.resolveBaseUrl(),
+        fetch: createNetworkServiceFetch()
       }
     })
   }
@@ -318,7 +423,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       model: resolveModelName(rawMessage, modelName),
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type
+      provider: this.type,
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
@@ -368,7 +474,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       model: modelName,
       timeout: options.timeout,
       configuration: {
-        baseURL: this.resolveBaseUrl()
+        baseURL: this.resolveBaseUrl(),
+        fetch: createNetworkServiceFetch()
       }
     })
 
@@ -499,7 +606,8 @@ export abstract class OpenAiCompatibleLangChainProvider extends IntelligenceProv
       model: resolveModelName(rawMessage, modelName),
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type
+      provider: this.type,
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 

@@ -252,6 +252,15 @@ function getBody(method: string, body: unknown, headers: Headers): BodyInit | un
   return String(body)
 }
 
+function requestInitHeadersToRecord(headers?: HeadersInit): Record<string, string> {
+  if (!headers) {
+    return {}
+  }
+
+  const normalized = new Headers(headers)
+  return normalizeHeaders(normalized)
+}
+
 function isSuccessStatus(status: number, validateStatus?: number[]): boolean {
   if (Array.isArray(validateStatus) && validateStatus.length > 0) {
     return validateStatus.includes(status)
@@ -510,6 +519,20 @@ export class NetworkService {
         url: response.url,
         ok: response.ok
       }
+    })
+  }
+
+  async fetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+    const url = typeof input === 'string' ? input : input.toString()
+    const method = (init.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
+
+    return await this.executeFetch({
+      method,
+      url,
+      headers: requestInitHeadersToRecord(init.headers),
+      body: init.body,
+      signal: init.signal ?? undefined,
+      validateStatus: Array.from({ length: 600 }, (_, status) => status)
     })
   }
 

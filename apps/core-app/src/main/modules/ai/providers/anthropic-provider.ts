@@ -15,7 +15,7 @@ import type {
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import { ChatAnthropic } from '@langchain/anthropic'
-import { extractTextContent } from './langchain-openai-compatible-provider'
+import { extractReasoningContent, extractTextContent } from './langchain-openai-compatible-provider'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'
@@ -222,7 +222,8 @@ export class AnthropicProvider extends IntelligenceProvider {
       model: modelName,
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type
+      provider: this.type,
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 
@@ -357,7 +358,8 @@ export class AnthropicProvider extends IntelligenceProvider {
       model: modelName,
       latency: Date.now() - startTime,
       traceId,
-      provider: this.type
+      provider: this.type,
+      reasoning: extractReasoningContent(rawMessage)
     }
   }
 }

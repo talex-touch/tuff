@@ -32,4 +32,61 @@ describe('fetchProviderModels', () => {
     expect(models).toEqual(['gpt-4o-mini', 'gpt-4o'])
     expect(networkMocks.request).not.toHaveBeenCalled()
   })
+
+  it('fetches local Ollama models from /api/tags without an API key', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      data: {
+        models: [{ name: 'llama3.1:8b' }, { model: 'qwen2.5:7b' }, { name: 'llama3.1:8b' }]
+      }
+    })
+
+    const models = await fetchProviderModels({
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: true,
+      priority: 3,
+      baseUrl: 'http://localhost:11434',
+      models: []
+    })
+
+    expect(models).toEqual(['llama3.1:8b', 'qwen2.5:7b'])
+    expect(networkMocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'GET',
+        url: 'http://localhost:11434/api/tags',
+        proxyOverride: { mode: 'direct' }
+      })
+    )
+  })
+
+  it('falls back to OpenAI-compatible local models when Ollama tags are unavailable', async () => {
+    networkMocks.request
+      .mockRejectedValueOnce(new Error('Ollama endpoint unavailable'))
+      .mockResolvedValueOnce({
+        data: {
+          data: [{ id: 'local-openai-model' }]
+        }
+      })
+
+    const models = await fetchProviderModels({
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: true,
+      priority: 3,
+      baseUrl: 'http://localhost:11434',
+      models: []
+    })
+
+    expect(models).toEqual(['local-openai-model'])
+    expect(networkMocks.request).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: 'GET',
+        url: 'http://localhost:11434/v1/models',
+        proxyOverride: { mode: 'direct' }
+      })
+    )
+  })
 })

@@ -12,6 +12,13 @@ import { LocalProvider } from './local-provider'
 
 const mockedGetNativeOcrSupport = vi.mocked(getNativeOcrSupport)
 const mockedRecognizeImageText = vi.mocked(recognizeImageText)
+const networkMocks = vi.hoisted(() => ({
+  request: vi.fn()
+}))
+
+vi.mock('../../network', () => ({
+  getNetworkService: () => networkMocks
+}))
 
 function createProvider() {
   return new LocalProvider({
@@ -91,5 +98,53 @@ describe('LocalProvider.visionOcr', () => {
         {}
       )
     ).rejects.toThrow('Native OCR unavailable')
+  })
+})
+
+describe('LocalProvider.chat', () => {
+  it('uses Ollama /api/chat through the unified network service', async () => {
+    networkMocks.request.mockResolvedValueOnce({
+      data: {
+        model: 'llama3.1:8b',
+        message: { content: 'pong' },
+        prompt_eval_count: 3,
+        eval_count: 2
+      }
+    })
+
+    const provider = new LocalProvider({
+      id: 'local-default',
+      type: IntelligenceProviderType.LOCAL,
+      name: 'Local Model',
+      enabled: true,
+      priority: 3,
+      baseUrl: 'http://localhost:11434',
+      defaultModel: 'llama3.1:8b',
+      models: ['llama3.1:8b']
+    })
+
+    const result = await provider.chat(
+      {
+        messages: [{ role: 'user', content: 'ping' }],
+        maxTokens: 12,
+        temperature: 0.2
+      },
+      {}
+    )
+
+    expect(result.result).toBe('pong')
+    expect(result.model).toBe('llama3.1:8b')
+    expect(result.usage.totalTokens).toBe(5)
+    expect(networkMocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: 'http://localhost:11434/api/chat',
+        proxyOverride: { mode: 'direct' },
+        body: expect.objectContaining({
+          model: 'llama3.1:8b',
+          stream: false
+        })
+      })
+    )
   })
 })
