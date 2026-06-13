@@ -64,7 +64,13 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ### 2.5.0 - AI 桌面入口收口
 
-**目标**：让 CoreBox / OmniPanel 成为用户可感知的桌面 AI 主入口。
+**目标**：让 CoreBox / OmniPanel 成为用户可感知的桌面 AI 主入口，并把 Nexus 首页公开叙事收敛为“本地优先的桌面 Agent 指令中心”。
+
+**Agent 叙事同步口径**：
+
+- 首页可表达的核心能力为模型路由、桌面上下文与 Agent 工具执行；它们必须分别对应 provider/model/scene metadata、剪贴板/选区/OCR/活动应用上下文 evidence、内置工具/MCP/插件执行 evidence。
+- 全键盘、文件搜索、本地 SoT、插件 SDK 与 Nexus 生态属于既有产品方向，继续按 CoreBox、Search Provider / Indexing Runtime、Plugin SDK 与 release integrity 主线补证。
+- CDP 浏览器控制、可视化交互、Token 节省、Skills、Computer Use、MiniApp、ACP、自动化与沙箱只作为 Beta/Experimental 或后续能力预告，不进入 2.5.0 Stable 已交付承诺。
 
 **Stable**：
 
@@ -78,6 +84,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - CoreBox AI Ask
 - OmniPanel Writing Tools MVP
 - 默认 Nexus AI provider / 登录态 invoke
+- 模型路由的可见配置、场景绑定与 provider/model metadata chips
+- 首批桌面上下文输入：剪贴板、选中文本、OCR 结果、活动应用/窗口状态摘要
 
 **Beta**：
 
@@ -85,6 +93,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Review Queue。
 - Skills Pack / Background Automations 与 AI 联动。
 - 剪贴板整理、会议纪要、文本批处理 P0 模板。
+- Agent 工具执行：内置工具、MCP 与插件能力的受控调用、失败恢复与 audit evidence。
+- CDP 浏览器控制、可视化交互与 Token 节省策略。
 
 **Experimental / 2.5.x 后续**：
 
@@ -92,12 +102,16 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 多 Agent 长任务面板。
 - image/audio/video 生成编辑。
 - Nexus Scene runtime 全量 orchestration。
+- Computer Use、MiniApp、ACP、自动化编排、沙箱隔离与深层桌面 UI/轨迹/通知上下文。
 
 **当前证据缺口**：
 
 - CoreBox AI Ask 文本与 OCR 场景仍需要 packaged Electron success/failure UI evidence。
 - OmniPanel Writing Tools 已有 dev 切片，但需要真实 provider-backed 运行、copy/retry/replace clipboard 与失败恢复证据。
 - Nexus invoke 需要覆盖未登录、provider 不可用、quota 不足、model 不支持的明确错误与 provider metadata chips。
+- 模型路由需要可见 scene/provider/model 绑定、fallback、latency/token/trace chips 与错误路径证据。
+- 桌面上下文需要证明首批输入只读取已授权或显式传入的数据，并展示 degraded/unsupported reason；前台、焦点、屏幕、UI、轨迹、工作区与通知仍是后续扩展。
+- Agent 工具执行需要内置工具、MCP、插件能力的 permission gate、audit trail、失败恢复和 packaged UI evidence；CDP/视觉交互/Token 节省不能只停留在 copy。
 - Workflow/Skills/Automation 保持 Beta；Assistant、语音、多模态生成保持 Experimental，不进入当前稳定化承诺。
 
 ### 2.5.3 - 本地知识检索与上下文构建
@@ -202,6 +216,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - FileProvider 编译边界已恢复且 CoreApp `typecheck:node` 已通过；`quality:release` 仍被 CoreApp 既有 lint debt 阻断，不得宣称全仓 release gate 已绿。
 - 2026-05-22 兼容性/占位实现增量审计未发现新的 P0 假成功；`touch-snipaste`、`touch-window-presets`、Browser Data source diagnostics 与 `touch-quick-actions` 已有 live-tree hardening 证据，`2.4.11` 后续聚焦 Credential Locker/libsecret、widget runtime sandbox regression、裸 console、示例插件调试噪声、SRP 小切片与 release checklist；真实平台 evidence 后移为平台专项。
 - 2026-05-25 UI/兼容/占位/架构审计继续未发现新的 P0 fixed fake-success；2026-05-26 已完成 preload debug DOM 文本化与同段 debug console 清理；2026-05-29 增量审计确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度，同日已完成 legacy retained aliases hit telemetry/hard-cut 判定记录、`touch-text-snippets` / `touch-code-snippets` hidden/deprecated/replacedBy 退场、Nexus `source: memory` evidence source 分层、dialog message 文本/可信 HTML 分流与 TuffEx docs visual smoke 脚本；同日 post-slice 复核确认 UI 方向应继续走专业工具高密度可扫描路线；`v2.4.11-beta.6` 发布成功并通过发布后 Gate D strict 复核，2026-06-13 代码版本已到 `v2.4.11-beta.8`，CLI publish 旧 token 刷新体验已补。当前仍缺完整 release cycle legacy hit=0 观察，以及 Nexus 资产 signatureUrl / signature endpoint 收口；visual smoke 先作为 focused evidence，不改变 `quality:pr` / `quality:release` 门禁。Windows/macOS 真机人工回归不纳入本轮阻塞。
+- 2026-06-13 Nexus docs SEO/prerender 收口为过渡方案：全站 i18n 仍保持 `no_prefix`，docs 显式生成 `/en/docs/**`、`/zh/docs/**` 并在页面内同步 locale；真实 docs 根索引已补齐，SEO head/canonical/alternate/robots/OG/Twitter/TechArticle JSON-LD 与 localized prerender evidence 均有 focused Vitest 覆盖，不改变 `quality:pr` / `quality:release` 门禁。
 - CoreApp 启动异步化 P0/P1/P2/P3 代码切片已推进，剩余真实设备 benchmark 与长尾补证。
 - App Data Plugins 与 Everything 已新增专题 Roadmap，近期不进入更新系统 Nexus Hard-Cut 范围；Browser Data、Obsidian、VSCode、macOS App Data、Epic 与 Everything 生产化收口按插件/搜索主线推进。
 - Nexus Provider Registry / Scene 已具备最小运行链路，后续继续补旧 AI provider 表退场、user-scope OCR 绑定策略、success rate/配额/dynamic pricingRef。
