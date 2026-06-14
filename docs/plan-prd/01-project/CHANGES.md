@@ -17,6 +17,9 @@
   - Locked the product rule that new sessions do not inherit old session raw context by default; old sessions can only be injected through relevance-based retrieval or explicit user continuation intent.
   - Clarified that LangChain can be an orchestration/execution layer, while Tuff-owned SQLite Session / Checkpoint / Memory models remain the business SoT.
   - Expanded the PRD into an implementation-ready shape with module responsibilities, Session/Memory state machines, ScopeDecision API, SQLite schema details, MemoryPolicy sensitive blocking, UI settings, observability, fixed evidence items, and unit/integration/UI test plans.
+  - Follow-up reviewer/debugger/planner pass tightened the PRD around sensitive/secret turn storage, tombstone-first deletion, plugin memory capability boundaries, LangChain external tracing/cache/vectorstore restrictions, migration/degraded contracts, session write serialization, feature flags, CoreBox-only P0 rollout, token estimate safety margins, and concurrency-focused evidence.
+  - Added implementation handoff details: explicit error/degraded code catalog, consent and retention matrix, fixed evidence matrix, P0 issue-slice checklist, risk register, and open decisions for idle threshold, suggested-memory UI, retention defaults, explain drawer scope, and global preference confirmation.
+  - Further refined implementation readiness with prepare/finalize sequencing, fixed prompt section ordering, ScopeDetector and Compression output contracts, dependency matrix, rollout kill switches, automatic degraded thresholds, and phase-level Definition of Done.
 
 ### fix(plugin): preserve Dev Toolbox network permission block reasons
 
