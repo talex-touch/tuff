@@ -26,10 +26,12 @@ const coreBoxLog = createLogger('CoreBox')
 const COREBOX_MIN_HEIGHT = 64
 const SEARCH_DIAGNOSTICS_BURST_DURATION_MS = 30_000
 const COREBOX_SHORTCUT_OWNER = 'module.corebox'
+const COREBOX_SHORTCUT_CLOSE_GRACE_MS = 800
 
 export { getCoreBoxWindow } from './window'
 
 let lastScreenId: number | undefined
+let lastShortcutOpenAt = 0
 
 const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime<TalexEvents>('core-box')
 
@@ -117,21 +119,28 @@ export class CoreBoxModule extends BaseModule {
 
         const curScreen = windowManager.getCurScreen()
 
-        if (coreBoxManager.showCoreBox) {
+        const currentWindow = windowManager.current
+        const isWindowVisible =
+          currentWindow && !currentWindow.window.isDestroyed() && currentWindow.window.isVisible()
+        const isWindowFocused = isWindowVisible && currentWindow.window.isFocused()
+
+        if (isWindowVisible && isWindowFocused) {
+          if (Date.now() - lastShortcutOpenAt < COREBOX_SHORTCUT_CLOSE_GRACE_MS) {
+            coreBoxManager.trigger(true, { triggeredByShortcut: true })
+            lastScreenId = curScreen.id
+            return
+          }
+
           if (lastScreenId === curScreen.id) {
             coreBoxManager.trigger(false)
           } else {
-            const currentWindow = windowManager.current
-            if (currentWindow) {
-              windowManager.updatePosition(currentWindow, curScreen)
-              lastScreenId = curScreen.id
-            } else {
-              coreBoxLog.error('No current window available')
-            }
+            windowManager.updatePosition(currentWindow, curScreen)
+            lastScreenId = curScreen.id
           }
         } else {
           // Pass triggeredByShortcut flag when opening CoreBox via shortcut
           coreBoxManager.trigger(true, { triggeredByShortcut: true })
+          lastShortcutOpenAt = Date.now()
           lastScreenId = curScreen.id
         }
       },
@@ -269,6 +278,22 @@ export class CoreBoxModule extends BaseModule {
     if (!currentWindow || currentWindow.isDestroyed()) {
       if (logEnabled) {
         coreBoxLog.info('Layout update skipped (no window)', {
+          meta: {
+            height: Number(payload.height),
+            resultCount: Number(payload.resultCount),
+            loading: payload.loading === true,
+            recommendationPending: payload.recommendationPending === true,
+            activationCount: Number(payload.activationCount),
+            source: String(payload.source ?? '')
+          }
+        })
+      }
+      return
+    }
+
+    if (!currentWindow.isVisible()) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update skipped (window hidden)', {
           meta: {
             height: Number(payload.height),
             resultCount: Number(payload.resultCount),

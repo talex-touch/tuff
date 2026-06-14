@@ -5,6 +5,22 @@
 
 ## 2026-06-14
 
+### fix(corebox): recover shortcut toggle from stale hidden state
+
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/flow-bus/module.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.test.ts`
+  - CoreBox shortcut toggle now checks the real BrowserWindow visibility/focus before deciding to hide or show.
+  - Visible-but-unfocused CoreBox windows are brought forward instead of being toggled closed, with a short close grace window after shortcut opens.
+  - BrowserWindow show/hide events now synchronize CoreBox manager visibility state, preventing stale `_show` from swallowing shortcut opens.
+  - Shortcut-triggered show now focuses the app/window more aggressively to avoid a visible background panel that closes on the next shortcut press.
+  - Hidden CoreBox windows now ignore renderer layout/shrink updates so background empty-input refreshes cannot collapse the next open.
+  - CoreBox initialization no longer hides the window after load if a shortcut already requested it visible.
+  - FlowBus detach now hides CoreBox through `coreBoxManager.trigger(false, { immediate: true })` instead of bypassing manager state.
+  - Added regression coverage for stale manager state, visible-but-unfocused toggle recovery, and hidden-window layout updates.
+
 ### docs(ai): add ContextHygiene and memory governance PRD
 
 - `docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md`

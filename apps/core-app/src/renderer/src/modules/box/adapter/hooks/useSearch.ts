@@ -276,6 +276,27 @@ export function useSearch(
     return activations?.some((activation) => activation.id === 'plugin-features') ?? false
   }
 
+  function hasWidgetPluginFeatureActivation(activations: IProviderActivate[] | null): boolean {
+    return (
+      activations?.some((activation) => {
+        if (activation.id !== 'plugin-features') return false
+        const feature = (
+          activation.meta as
+            | {
+                feature?: {
+                  meta?: { interaction?: { type?: string } }
+                  interaction?: { type?: string }
+                }
+              }
+            | undefined
+        )?.feature
+        return (
+          feature?.meta?.interaction?.type === 'widget' || feature?.interaction?.type === 'widget'
+        )
+      }) ?? false
+    )
+  }
+
   function buildQueryInputs(options?: {
     queryText?: string
     allowPendingTextClipboard?: boolean
@@ -893,6 +914,15 @@ export function useSearch(
   })
 
   watch(searchVal, (val) => {
+    if (hasWidgetPluginFeatureActivation(activeActivations.value)) {
+      const cancelable = debouncedSearch as unknown as { cancel?: () => void }
+      cancelable.cancel?.()
+      if (!val) {
+        void handleSearchImmediate()
+      }
+      return
+    }
+
     if (!val) {
       const cancelable = debouncedSearch as unknown as { cancel?: () => void }
       cancelable.cancel?.()

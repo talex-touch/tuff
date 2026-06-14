@@ -1,5 +1,5 @@
 <script lang="ts">
-import { computed, defineComponent, nextTick, ref, watch } from 'vue'
+import { computed, defineComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 type IntelligenceWidgetStatus = 'idle' | 'ocr-pending' | 'chat-pending' | 'ready' | 'error'
 
@@ -35,6 +35,8 @@ export default defineComponent({
   },
   setup(props) {
     const contentRef = ref<HTMLElement | null>(null)
+    const renderedMessages = ref<IntelligenceWidgetMessage[]>([])
+    let streamTimer: ReturnType<typeof setInterval> | null = null
     const widgetPayload = computed<IntelligenceWidgetPayload>(() => props.payload ?? {})
     const status = computed<IntelligenceWidgetStatus>(() => {
       const value = widgetPayload.value.status
@@ -57,6 +59,57 @@ export default defineComponent({
     const errorCode = computed(() => String(widgetPayload.value.errorCode || '').trim())
     const errorMessage = computed(() => String(widgetPayload.value.errorMessage || '').trim())
     const isPermissionDenied = computed(() => errorCode.value === 'PERMISSION_DENIED')
+    function clearStreamTimer() {
+      if (!streamTimer) return
+      clearInterval(streamTimer)
+      streamTimer = null
+    }
+
+    function cloneMessage(message: IntelligenceWidgetMessage): IntelligenceWidgetMessage {
+      return { ...message }
+    }
+
+    function syncRenderedMessages() {
+      clearStreamTimer()
+      const nextMessages = messages.value.map(cloneMessage)
+      const lastIndex = nextMessages.length - 1
+      const lastMessage = nextMessages[lastIndex]
+      const shouldStream =
+        status.value === 'ready' &&
+        lastMessage?.role === 'assistant' &&
+        lastMessage.status === 'complete' &&
+        Boolean(lastMessage.content?.trim())
+
+      if (!shouldStream) {
+        renderedMessages.value = nextMessages
+        scrollToBottom()
+        return
+      }
+
+      const fullContent = lastMessage.content || ''
+      renderedMessages.value = nextMessages.map((message, index) =>
+        index === lastIndex ? { ...message, content: '', status: 'streaming' } : message,
+      )
+
+      let cursor = 0
+      streamTimer = setInterval(() => {
+        cursor = Math.min(fullContent.length, cursor + Math.max(1, Math.ceil(fullContent.length / 36)))
+        renderedMessages.value = renderedMessages.value.map((message, index) =>
+          index === lastIndex
+            ? {
+                ...message,
+                content: fullContent.slice(0, cursor),
+                status: cursor >= fullContent.length ? 'complete' : 'streaming',
+              }
+            : message,
+        )
+        scrollToBottom()
+        if (cursor >= fullContent.length) {
+          clearStreamTimer()
+        }
+      }, 28)
+    }
+
     function scrollToBottom() {
       void nextTick(() => {
         const el = contentRef.value
@@ -66,15 +119,17 @@ export default defineComponent({
     }
 
     watch(
-      () => [messages.value.length, status.value, widgetPayload.value.updatedAt],
-      () => scrollToBottom(),
-      { immediate: true },
+      () => [messages.value, status.value, widgetPayload.value.updatedAt],
+      () => syncRenderedMessages(),
+      { immediate: true, deep: true },
     )
+
+    onBeforeUnmount(() => clearStreamTimer())
 
     return {
       contentRef,
       status,
-      messages,
+      messages: renderedMessages,
       isEmpty,
       isBusy,
       errorCode,
@@ -137,6 +192,16 @@ export default defineComponent({
 
 <style scoped>
 .AiChatbot {
+  --ai-chat-bg: transparent;
+  --ai-chat-text: var(--tx-text-color-primary, #1f2937);
+  --ai-chat-text-secondary: var(--tx-text-color-secondary, #6b7280);
+  --ai-chat-border: color-mix(in srgb, var(--tx-border-color, #dcdfe6) 72%, transparent);
+  --ai-chat-assistant-bg: color-mix(in srgb, var(--tx-fill-color, #f3f4f6) 82%, transparent);
+  --ai-chat-user-bg: color-mix(in srgb, var(--tx-color-primary, #3082ff) 18%, transparent);
+  --ai-chat-user-border: color-mix(in srgb, var(--tx-color-primary, #3082ff) 42%, transparent);
+  --ai-chat-floating-bg: color-mix(in srgb, var(--tx-bg-color, #ffffff) 86%, transparent);
+  --ai-chat-danger-bg: color-mix(in srgb, var(--tx-color-danger, #e5484d) 14%, transparent);
+  --ai-chat-danger-border: color-mix(in srgb, var(--tx-color-danger, #e5484d) 28%, transparent);
   position: relative;
   display: flex;
   width: 100%;
@@ -145,8 +210,8 @@ export default defineComponent({
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  background: transparent;
-  color: var(--tx-text-color-primary, #1f2937);
+  background: var(--ai-chat-bg);
+  color: var(--ai-chat-text);
 }
 
 .AiChatbot__conversation {
@@ -175,7 +240,7 @@ export default defineComponent({
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--tx-text-color-secondary, #6b7280);
+  color: var(--ai-chat-text-secondary);
   text-align: center;
 }
 
@@ -189,7 +254,7 @@ export default defineComponent({
 }
 
 .AiChatbot__empty strong {
-  color: var(--tx-text-color-primary, #1f2937);
+  color: var(--ai-chat-text);
   font-size: 16px;
   font-weight: 650;
 }
@@ -218,6 +283,7 @@ export default defineComponent({
   box-sizing: border-box;
   padding: 12px 16px;
   border-radius: 16px;
+  color: var(--ai-chat-text);
   font-size: 14px;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -225,19 +291,19 @@ export default defineComponent({
 }
 
 .AiMessage--user .AiMessage__content {
-  border: 1px solid rgba(48, 130, 255, 0.18);
-  background: rgba(48, 130, 255, 0.1);
+  border: 1px solid var(--ai-chat-user-border);
+  background: var(--ai-chat-user-bg);
 }
 
 .AiMessage--assistant .AiMessage__content {
-  border: 1px solid rgba(31, 41, 55, 0.08);
-  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--ai-chat-border);
+  background: var(--ai-chat-assistant-bg);
 }
 
 .AiMessage.is-error .AiMessage__content {
-  border-color: rgba(239, 68, 68, 0.14);
-  background: rgba(239, 68, 68, 0.1);
-  color: #e5484d;
+  border-color: var(--ai-chat-danger-border);
+  background: var(--ai-chat-danger-bg);
+  color: var(--tx-color-danger, #e5484d);
 }
 
 .AiMessage.is-streaming .AiMessage__content {
@@ -252,7 +318,7 @@ export default defineComponent({
   height: 6px;
   border-radius: 999px;
   animation: ai-conversation-dot 1.15s ease-in-out infinite;
-  background: var(--tx-text-color-secondary, #6b7280);
+  background: var(--ai-chat-text-secondary);
 }
 
 .AiTypingDot:nth-child(2) { animation-delay: 0.14s; }
@@ -262,10 +328,10 @@ export default defineComponent({
   display: grid;
   gap: 6px;
   padding: 12px 14px;
-  border: 1px solid rgba(239, 68, 68, 0.16);
+  border: 1px solid var(--ai-chat-danger-border);
   border-radius: 14px;
-  background: rgba(239, 68, 68, 0.08);
-  color: #e5484d;
+  background: var(--ai-chat-danger-bg);
+  color: var(--tx-color-danger, #e5484d);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -276,7 +342,7 @@ export default defineComponent({
 }
 
 .AiChatbot__errorNotice small {
-  color: rgba(229, 72, 77, 0.78);
+  color: color-mix(in srgb, var(--tx-color-danger, #e5484d) 78%, var(--ai-chat-text));
   font-size: 12px;
 }
 
@@ -288,12 +354,12 @@ export default defineComponent({
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid rgba(31, 41, 55, 0.1);
+  border: 1px solid var(--ai-chat-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
-  color: var(--tx-text-color-secondary, #6b7280);
+  background: var(--ai-chat-floating-bg);
+  color: var(--ai-chat-text-secondary);
   font-size: 16px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ai-chat-text) 10%, transparent);
 }
 
 @keyframes ai-conversation-dot {

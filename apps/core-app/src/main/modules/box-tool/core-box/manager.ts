@@ -120,6 +120,19 @@ export class CoreBoxManager {
     return this._isUIMode
   }
 
+  public syncVisibility(visible: boolean): void {
+    if (this._show === visible) {
+      return
+    }
+
+    this._show = visible
+    if (visible) {
+      this.applyActivePressure()
+    } else {
+      this.pollingService.clearGlobalPressure(COREBOX_PRESSURE_REASON)
+    }
+  }
+
   /**
    * Toggle CoreBox visibility
    * @param show - Whether to show or hide CoreBox
