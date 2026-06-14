@@ -5,6 +5,14 @@
 
 ## 2026-06-14
 
+### fix(ci): pin Windows release runner to stable VS toolchain
+
+- `.github/workflows/build-and-release.yml`
+- `.node-version`
+  - Build and Release now runs the Windows matrix leg on `windows-2022` instead of floating `windows-latest`, avoiding `extract-file-icon` / `node-gyp` install failures caused by the newer VS 18 image not being recognized.
+  - Windows-only workflow steps now use `runner.os == 'Windows'`, so future runner label changes do not require updating every conditional.
+  - Repository-level Node version is pinned to `22.16.0` so external builders such as Cloudflare Pages can align with the project toolchain.
+
 ### fix(corebox): recover shortcut toggle from stale hidden state
 
 - `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
