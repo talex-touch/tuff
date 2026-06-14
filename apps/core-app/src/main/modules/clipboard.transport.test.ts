@@ -23,6 +23,10 @@ const notificationModuleMock = vi.hoisted(() => ({
   showInternalSystemNotification: vi.fn()
 }))
 
+const permissionModuleMock = vi.hoisted(() => ({
+  getPermissionModule: vi.fn(() => null as null | { enforcePermission: ReturnType<typeof vi.fn> })
+}))
+
 const clipboardRuntimeMocks = vi.hoisted(() => ({
   transportOn: vi.fn(),
   transportOnStream: vi.fn(),
@@ -314,7 +318,7 @@ vi.mock('./ocr/ocr-service', () => ({
 }))
 
 vi.mock('./permission', () => ({
-  getPermissionModule: vi.fn(() => null)
+  getPermissionModule: permissionModuleMock.getPermissionModule
 }))
 
 vi.mock('./notification', () => ({
@@ -391,6 +395,7 @@ type ClipboardModuleTestHandle = {
 
 afterEach(() => {
   vi.clearAllMocks()
+  permissionModuleMock.getPermissionModule.mockReturnValue(null)
   clipboardRuntimeMocks.transportOn.mockImplementation(() => () => {})
   clipboardRuntimeMocks.transportOnStream.mockImplementation(() => () => {})
   clipboardRuntimeMocks.pollingService.isRegistered.mockReturnValue(false)
@@ -435,6 +440,56 @@ describe('ClipboardModule transport registration', () => {
     for (const retiredEvent of RETIRED_CLIPBOARD_EVENT_NAMES) {
       expect(registeredEvents).not.toContain(retiredEvent)
     }
+  })
+
+  it('blocks plugin clipboard write transport before mutating clipboard when permission is denied', async () => {
+    const permissionError = new Error('clipboard.write denied') as Error & {
+      code?: string
+      permissionId?: string
+      pluginId?: string
+      showRequest?: boolean
+    }
+    permissionError.code = 'PERMISSION_DENIED'
+    permissionError.permissionId = 'clipboard.write'
+    permissionError.pluginId = 'touch-translation'
+    permissionError.showRequest = true
+
+    const enforcePermission = vi.fn(() => {
+      throw permissionError
+    })
+    permissionModuleMock.getPermissionModule.mockReturnValue({ enforcePermission })
+
+    const module = new ClipboardModule() as unknown as ClipboardModuleTestHandle
+    module.transportChannel = {
+      keyManager: {}
+    }
+    module.registerTransportHandlers()
+
+    const writeHandlerCall = clipboardRuntimeMocks.transportOn.mock.calls.find(
+      ([eventName]) => String(eventName) === ClipboardEvents.write.toString()
+    )
+    expect(writeHandlerCall).toBeTruthy()
+
+    const writeHandler = writeHandlerCall?.[1] as (
+      request: { text: string; _sdkapi: number },
+      context: { plugin?: { name?: string } }
+    ) => Promise<void>
+
+    await expect(
+      writeHandler(
+        { text: 'translated text', _sdkapi: 260428 },
+        { plugin: { name: 'touch-translation' } }
+      )
+    ).rejects.toMatchObject({
+      code: 'CLIPBOARD_CAPABILITY_UNAVAILABLE',
+      permissionId: 'clipboard:write',
+      pluginId: 'touch-translation',
+      showRequest: true
+    })
+
+    expect(enforcePermission).toHaveBeenCalledWith('touch-translation', 'clipboard:write', 260428)
+    const { clipboard } = await import('electron')
+    expect(clipboard.write).not.toHaveBeenCalled()
   })
 })
 

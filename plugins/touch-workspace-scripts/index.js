@@ -50,13 +50,22 @@ function getQueryText(query) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request)
+    return { granted: false, reason: 'permission-sdk-unavailable' }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission)
+      return { granted: true, reason: '' }
+    const granted = await permission.request(permissionId, reason)
+    return granted
+      ? { granted: true, reason: '' }
+      : { granted: false, reason: 'permission-denied' }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-workspace-scripts] Failed to request permission', error)
+    return { granted: false, reason: 'permission-request-failed' }
+  }
 }
 
 function resolveShellStatus() {
@@ -75,7 +84,8 @@ function resolveShellStatus() {
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check) {
     return {
-      granted: true,
+      granted: false,
+      reason: 'permission-sdk-unavailable',
     }
   }
 
@@ -587,9 +597,9 @@ const pluginLifecycle = {
           return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
         }
 
-        const canRun = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行开发命令')
-        if (!canRun)
-          return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
+        const permissionState = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行开发命令')
+        if (!permissionState.granted)
+          return { externalAction: true, status: 'blocked', reason: permissionState.reason }
 
         const confirmed = await confirmRun(command)
         if (!confirmed)

@@ -378,27 +378,53 @@ function resolveGroupOrder(presets) {
   return order
 }
 
-async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
+async function requestPermissionState(permissionId, reason) {
+  if (!permission?.check || !permission?.request)
+    return { granted: false, reason: 'permission-sdk-unavailable' }
 
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission)
+      return { granted: true, reason: '' }
 
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+    const granted = await permission.request(permissionId, reason)
+    return granted
+      ? { granted: true, reason: '' }
+      : { granted: false, reason: 'permission-denied' }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-window-presets] Failed to request permission', error)
+    return { granted: false, reason: 'permission-request-failed' }
+  }
 }
 
 async function getPermissionState(permissionId) {
-  if (!permission) {
-    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+  if (!permission?.check) {
+    return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
   }
 
-  const granted = Boolean(await permission.check(permissionId))
-  return granted
-    ? { granted: true, status: 'available', reason: '' }
-    : { granted: false, status: 'permission-missing', reason: `${permissionId} permission is required` }
+  try {
+    const granted = Boolean(await permission.check(permissionId))
+    return granted
+      ? { granted: true, status: 'available', reason: '' }
+      : { granted: false, status: 'permission-missing', reason: `${permissionId} permission is required` }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-window-presets] Failed to check permission', error)
+    return { granted: false, status: 'permission-missing', reason: 'permission-check-failed' }
+  }
+}
+
+function formatPermissionBlockedMessage(reason) {
+  if (reason === 'permission-denied')
+    return '缺少 system.shell 权限'
+  if (reason === 'permission-sdk-unavailable')
+    return '权限系统不可用，无法执行窗口预设'
+  if (reason === 'permission-request-failed')
+    return '权限请求失败，无法执行窗口预设'
+  if (reason === 'permission-check-failed')
+    return '权限检查失败，无法执行窗口预设'
+  return '缺少 system.shell 权限'
 }
 
 function buildCapabilityMeta({
@@ -579,14 +605,14 @@ const pluginLifecycle = {
     if (!presetId)
       return
 
-    const hasPermission = await ensurePermission(SHELL_PERMISSION_ID, '需要 system.shell 权限执行窗口预设')
-    if (!hasPermission) {
+    const permissionState = await requestPermissionState(SHELL_PERMISSION_ID, '需要 system.shell 权限执行窗口预设')
+    if (!permissionState.granted) {
       return {
         externalAction: true,
         success: false,
         status: 'blocked',
-        reason: 'permission-missing',
-        message: '缺少 system.shell 权限',
+        reason: permissionState.reason,
+        message: formatPermissionBlockedMessage(permissionState.reason),
       }
     }
 
@@ -621,6 +647,7 @@ module.exports = {
     buildWindowsScript,
     matchPresets,
     buildCapabilityMeta,
+    formatPermissionBlockedMessage,
     getPermissionState,
     normalizeWindows,
     resolveGroupOrder,

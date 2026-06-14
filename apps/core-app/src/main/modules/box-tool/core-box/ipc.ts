@@ -241,6 +241,14 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
+      transport.on(CoreBoxEvents.ui.setPinned, (payload) => {
+        const pinned = payload?.pinned === true
+        windowManager.setPinned(pinned)
+        return { pinned: windowManager.isPinned() }
+      })
+    )
+
+    this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.expand, (payload) => {
         this.handleExpandRequest(payload as ExpandOptions | number)
       })

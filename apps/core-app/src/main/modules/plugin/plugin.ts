@@ -1740,6 +1740,18 @@ export class TouchPlugin implements ITouchPlugin {
       send: (eventName, payload) =>
         touchChannel.send(eventName, withPluginSdkapiPayload(payload, this.sdkapi))
     })
+    const permission = {
+      check: async (permissionId: string) => {
+        const permissionModule = getPermissionModule()
+        if (!permissionModule) return false
+        return permissionModule.getStore().hasPermission(pluginName, permissionId, this.sdkapi)
+      },
+      request: async (permissionId: string) => {
+        const permissionModule = getPermissionModule()
+        if (!permissionModule) return false
+        return permissionModule.getStore().hasPermission(pluginName, permissionId, this.sdkapi)
+      }
+    }
 
     type BoxChannelHandler = (data: PluginStandardChannelData) => unknown
     const boxChannelHandlers = new Map<string, Map<BoxChannelHandler, () => void>>()
@@ -2113,6 +2125,7 @@ export class TouchPlugin implements ITouchPlugin {
       clipboard: clipboardUtil,
       channel: channelBridge,
       touchChannel,
+      permission,
       intelligence,
       divisionBox: divisionBoxSDK,
       meta: quickActionsSDK,

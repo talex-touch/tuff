@@ -5,6 +5,7 @@ import { isBrowserBookmarksSourceEnabled } from './browser-bookmarks-source-conf
 import { buildEverythingIndexedSource } from './everything-indexed-source'
 import { buildFileIndexedSource } from './file-indexed-source'
 import { buildQuicklinksIndexedSource } from './quicklinks-indexed-source'
+import { loadQuicklinksRootResultsSnapshot } from './quicklinks-root-results-feed'
 import { isQuicklinksSourceEnabled } from './quicklinks-source-config'
 
 export function registerCoreIndexedSources(runtime: IndexingRuntime): void {
@@ -13,7 +14,8 @@ export function registerCoreIndexedSources(runtime: IndexingRuntime): void {
   runtime.registerSource(buildEverythingIndexedSource())
   runtime.registerSource(
     buildQuicklinksIndexedSource({
-      isEnabled: isQuicklinksSourceEnabled
+      isEnabled: isQuicklinksSourceEnabled,
+      loadSnapshot: loadQuicklinksRootResultsSnapshot
     })
   )
   runtime.registerSource(

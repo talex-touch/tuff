@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const windowPlugin = loadPluginModule(new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url))
 const { __test: windowTest } = windowPlugin
@@ -192,6 +192,37 @@ describe('window manager', () => {
     }
   })
 
+  it('shows permission sdk unavailable diagnostics without requesting shell permission', async () => {
+    const items: Array<{ title?: string, meta?: any }> = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url),
+      createPluginGlobals({
+        TuffItemBuilder: FakeBuilder,
+        permission: withoutGlobal(),
+        plugin: {
+          feature: {
+            clearItems() { items.length = 0 },
+            pushItems(next: Array<{ title?: string, meta?: any }>) { items.push(...next) },
+          },
+          storage: {
+            async getFile() { return null },
+            async setFile() {},
+          },
+        },
+      }),
+    )
+
+    await pluginModule.onFeatureTriggered('window-app', '')
+
+    if (windowTest.isShellPlatformSupported(process.platform)) {
+      expect(items[0]?.title).toBe('缺少系统权限')
+      expect(items[0]?.meta?.capability).toMatchObject({
+        status: 'permission-missing',
+        reason: 'permission-sdk-unavailable',
+      })
+    }
+  })
+
   it('blocks window actions before requesting permission when shell support is unavailable', async () => {
     const request = vi.fn(async () => true)
     const pluginModule = loadPluginModule(
@@ -221,5 +252,91 @@ describe('window manager', () => {
       reason: 'platform:linux',
     })
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('blocks window actions when permission sdk is unavailable', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: withoutGlobal(),
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'window-manager',
+        actionId: 'activate',
+        payload: {
+          platform: 'darwin',
+          window: { name: 'Safari', title: 'Safari' },
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-sdk-unavailable',
+    })
+  })
+
+  it('blocks window actions when permission is denied', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => false,
+          request: async () => false,
+        },
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'window-manager',
+        actionId: 'activate',
+        payload: {
+          platform: 'darwin',
+          window: { name: 'Safari', title: 'Safari' },
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+  })
+
+  it('blocks window actions when permission request fails', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => false,
+          request: async () => {
+            throw new Error('permission transport failed')
+          },
+        },
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'window-manager',
+        actionId: 'activate',
+        payload: {
+          platform: 'darwin',
+          window: { name: 'Safari', title: 'Safari' },
+        },
+      },
+    })
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-request-failed',
+    })
   })
 })

@@ -8,7 +8,13 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { resolveCoreBoxFooterTitle } from './coreBoxFooterDisplay'
-import { isPluginFooterItem, resolveSecondaryFooterHintVisible } from './coreBoxFooterHints'
+import {
+  isPluginFooterItem,
+  resolveCoreBoxFooterVisible,
+  resolvePrimaryFooterHintVisible,
+  resolveQuickSelectFooterHintVisible,
+  resolveSecondaryFooterHintVisible
+} from './coreBoxFooterHints'
 import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
@@ -35,6 +41,11 @@ const isIndexing = computed(() => {
   const stage = indexProgress.value?.stage
   return stage && stage !== 'idle' && stage !== 'completed'
 })
+const footerVisible = computed(() => resolveCoreBoxFooterVisible(props.item))
+const shouldDisplayFooter = computed(
+  () => isIndexing.value || (displayValue.value && footerVisible.value)
+)
+const debouncedFooterDisplay = useDebounce(shouldDisplayFooter, 100)
 
 const indexingLabel = computed(() => {
   if (!isIndexing.value || !indexProgress.value) return ''
@@ -97,7 +108,7 @@ const primaryActionLabel = computed(() => {
 
 /** 主操作是否显示 */
 const primaryVisible = computed(() => {
-  return footerHintsConfig.value?.primary?.visible !== false
+  return resolvePrimaryFooterHintVisible(props.item)
 })
 
 /** Meta+K 辅助操作是否显示 */
@@ -124,17 +135,16 @@ const secondaryLabel = computed(() => {
  * - item 显式配置优先级最高
  */
 const quickSelectVisible = computed(() => {
-  // item 显式配置优先
-  const itemConfig = footerHintsConfig.value?.quickSelect?.visible
-  if (itemConfig !== undefined) return itemConfig
-
   // 有激活的 provider 时默认隐藏（如 AI 模式）
   if (props.activeActivations && props.activeActivations.length > 0) {
-    return false
+    return resolveQuickSelectFooterHintVisible(props.item, false)
   }
 
   // 推荐模式或有搜索结果时显示
-  return props.isRecommendation || (props.resultCount ?? 0) > 0
+  return resolveQuickSelectFooterHintVisible(
+    props.item,
+    Boolean(props.isRecommendation || (props.resultCount ?? 0) > 0)
+  )
 })
 
 const keyHints = computed(() => {
@@ -175,7 +185,7 @@ const keyHints = computed(() => {
 
 <template>
   <div
-    :class="{ display: debouncedDisplay || isIndexing }"
+    :class="{ display: debouncedFooterDisplay || isIndexing }"
     class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--tx-border-color-lighter)] bg-transparent text-12px text-[color:var(--tx-text-color-secondary)]"
   >
     <div class="FooterInfo">

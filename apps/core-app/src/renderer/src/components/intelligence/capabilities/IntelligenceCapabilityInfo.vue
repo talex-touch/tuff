@@ -28,6 +28,7 @@ const props = defineProps<{
   hasPendingChanges: boolean
   isSaving: boolean
   saveState: 'idle' | 'dirty' | 'saved' | 'error'
+  saveErrorDetail?: string
 }>()
 
 const emits = defineEmits<{
@@ -257,7 +258,12 @@ const saveStatusIcon = computed(() => {
 const saveStatusText = computed(() => {
   if (props.isSaving) return t('settings.intelligence.capabilitySaveSaving')
   if (props.saveState === 'saved') return t('settings.intelligence.capabilitySaveSaved')
-  if (props.saveState === 'error') return t('settings.intelligence.capabilitySaveError')
+  if (props.saveState === 'error') {
+    const detail = props.saveErrorDetail?.trim()
+    return detail
+      ? t('settings.intelligence.capabilitySaveErrorWithDetail', { detail })
+      : t('settings.intelligence.capabilitySaveError')
+  }
   if (props.hasPendingChanges) return t('settings.intelligence.capabilitySavePending')
   return t('settings.intelligence.capabilitySaveIdle')
 })
@@ -524,16 +530,16 @@ onBeforeUnmount(() => {
 
 .capability-info__save-status {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.5rem;
   min-width: 0;
   color: var(--tx-text-color-secondary);
   font-size: 0.875rem;
+  line-height: 1.45;
 
   span {
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 }
 </style>

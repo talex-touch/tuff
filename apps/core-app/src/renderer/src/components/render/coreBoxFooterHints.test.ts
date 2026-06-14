@@ -1,6 +1,12 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
-import { isPluginFooterItem, resolveSecondaryFooterHintVisible } from './coreBoxFooterHints'
+import {
+  isPluginFooterItem,
+  resolveCoreBoxFooterVisible,
+  resolvePrimaryFooterHintVisible,
+  resolveQuickSelectFooterHintVisible,
+  resolveSecondaryFooterHintVisible
+} from './coreBoxFooterHints'
 
 function item(overrides: Partial<TuffItem>): TuffItem {
   return {
@@ -13,7 +19,7 @@ function item(overrides: Partial<TuffItem>): TuffItem {
 }
 
 describe('coreBoxFooterHints', () => {
-  it('hides secondary hints for plugin-provided widget items by default', () => {
+  it('hides the footer for plugin-provided widget items by default', () => {
     const pluginWidget = item({
       source: { type: 'plugin', id: 'plugin-features' },
       render: {
@@ -30,28 +36,58 @@ describe('coreBoxFooterHints', () => {
     })
 
     expect(isPluginFooterItem(pluginWidget)).toBe(true)
+    expect(resolveCoreBoxFooterVisible(pluginWidget)).toBe(false)
+    expect(resolvePrimaryFooterHintVisible(pluginWidget)).toBe(false)
     expect(resolveSecondaryFooterHintVisible(pluginWidget)).toBe(false)
+    expect(resolveQuickSelectFooterHintVisible(pluginWidget, true)).toBe(false)
   })
 
-  it('keeps secondary hints visible for non-plugin items by default', () => {
+  it('keeps the footer visible for non-plugin items by default', () => {
+    expect(resolveCoreBoxFooterVisible(item({}))).toBe(true)
+    expect(resolvePrimaryFooterHintVisible(item({}))).toBe(true)
     expect(resolveSecondaryFooterHintVisible(item({}))).toBe(true)
+    expect(resolveQuickSelectFooterHintVisible(item({}), true)).toBe(true)
   })
 
-  it('honors explicit footer hint visibility', () => {
+  it('hides the footer when no item is available', () => {
+    expect(resolveCoreBoxFooterVisible(null)).toBe(false)
+    expect(resolvePrimaryFooterHintVisible(null)).toBe(false)
+    expect(resolveSecondaryFooterHintVisible(null)).toBe(false)
+    expect(resolveQuickSelectFooterHintVisible(null, true)).toBe(false)
+  })
+
+  it('shows plugin footer only when a hint is explicitly visible', () => {
+    const pluginItem = item({
+      source: { type: 'plugin', id: 'plugin-features' },
+      meta: {
+        pluginName: 'plugin-a',
+        footerHints: {
+          secondary: {
+            visible: true
+          }
+        }
+      }
+    })
+
+    expect(resolveCoreBoxFooterVisible(pluginItem)).toBe(true)
+    expect(resolveSecondaryFooterHintVisible(pluginItem)).toBe(true)
+  })
+
+  it('keeps plugin footer hidden when hints are explicitly disabled', () => {
     expect(
-      resolveSecondaryFooterHintVisible(
+      resolveCoreBoxFooterVisible(
         item({
           source: { type: 'plugin', id: 'plugin-features' },
           meta: {
             pluginName: 'plugin-a',
             footerHints: {
-              secondary: {
-                visible: true
-              }
+              primary: { visible: false },
+              secondary: { visible: false },
+              quickSelect: { visible: false }
             }
           }
         })
       )
-    ).toBe(true)
+    ).toBe(false)
   })
 })

@@ -7,7 +7,7 @@ import type {
   StorageUpdateNotification,
 } from '../../transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
-import { reactive, ref, toRaw, watch } from 'vue'
+import { isRef, reactive, ref, toRaw, unref, watch } from 'vue'
 import { isElectronRenderer } from '../../env'
 import { StorageEvents } from '../../transport/events'
 
@@ -29,6 +29,20 @@ export type StorageInitMode = 'auto' | 'sync' | 'async'
 
 export interface TouchStorageOptions {
   initMode?: StorageInitMode
+}
+
+export class TouchStorageSaveError extends Error {
+  constructor(
+    message: string,
+    readonly details: {
+      key: string
+      reason: 'transport-uninitialized' | 'conflict' | 'remote-failed'
+      version?: number
+    },
+  ) {
+    super(message)
+    this.name = 'TouchStorageSaveError'
+  }
 }
 
 let transport: ITuffTransport | null = null
@@ -415,7 +429,7 @@ export class TouchStorage<T extends object> {
         const shouldApply = versionedResult.version > this.#currentVersion || !this.#hydrated
         if (shouldApply) {
           const patch = this.#localDirty
-            ? buildPatch(this.#lastSyncedSnapshot ?? {}, toRaw(this.data))
+            ? buildPatch(this.#lastSyncedSnapshot ?? {}, toPlainStorageValue(this.data))
             : null
           const patchHasChanges = Boolean(patch && (patch.set.length > 0 || patch.unset.length > 0))
           const remoteData = (versionedResult.data ?? {}) as Partial<T>
@@ -433,7 +447,7 @@ export class TouchStorage<T extends object> {
           }
           this.#isRemoteUpdate = false
 
-          this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+          this.#lastSyncedSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
           this.#hydrated = true
           this.#notifyHydrated()
           if (this.#pendingSave || patchHasChanges) {
@@ -449,7 +463,7 @@ export class TouchStorage<T extends object> {
       this.#isRemoteUpdate = true
       this.assignData(result as Partial<T>, true, true)
       this.#isRemoteUpdate = false
-      this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+      this.#lastSyncedSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
       this.#hydrated = true
       this.#notifyHydrated()
       if (this.#pendingSave) {
@@ -513,7 +527,10 @@ export class TouchStorage<T extends object> {
     if (!transport) {
       console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: no transport`)
       if (isElectronRenderer()) {
-        throw new Error('TouchStorage: transport not initialized')
+        throw new TouchStorageSaveError('Storage transport is not initialized', {
+          key: this.#qualifiedName,
+          reason: 'transport-uninitialized',
+        })
       }
       return
     }
@@ -535,7 +552,7 @@ export class TouchStorage<T extends object> {
       return
     }
 
-    const rawData = toRaw(this.data)
+    const rawData = toPlainStorageValue(this.data)
     console.debug(`[TouchStorage] #executeSave("${this.#qualifiedName}") SAVING, background.source=`, (rawData as any)?.background?.source)
 
     this.savingState.value = true
@@ -550,13 +567,25 @@ export class TouchStorage<T extends object> {
       if (result.success) {
         console.debug(`[TouchStorage] #executeSave("${this.#qualifiedName}") SUCCESS, version=${result.version}`)
         this.#currentVersion = result.version
-        this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+        this.#lastSyncedSnapshot = cloneValue(toPlainStorageValue(this.data) as T) as T
         this.#localDirty = false
       }
       else if (result.conflict) {
         // Conflict detected - reload from remote
         console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
         void this.#loadFromRemoteWithVersion()
+        throw new TouchStorageSaveError('Storage save conflict detected; latest data is being reloaded', {
+          key: this.#qualifiedName,
+          reason: 'conflict',
+          version: result.version,
+        })
+      }
+      else {
+        throw new TouchStorageSaveError('Storage save returned an unsuccessful result', {
+          key: this.#qualifiedName,
+          reason: 'remote-failed',
+          version: result.version,
+        })
       }
     }
     finally {
@@ -1033,4 +1062,36 @@ function cloneValue<T>(value: T): T {
   catch {
     return value
   }
+}
+
+function toPlainStorageValue(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+  const unwrapped = isRef(value) ? unref(value) : value
+  if (!unwrapped || typeof unwrapped !== 'object') {
+    return unwrapped
+  }
+
+  const raw = toRaw(unwrapped)
+  if (!raw || typeof raw !== 'object') {
+    return raw
+  }
+  if (seen.has(raw)) {
+    return seen.get(raw)
+  }
+  if (Array.isArray(raw)) {
+    const output: unknown[] = []
+    seen.set(raw, output)
+    for (const item of raw) {
+      output.push(toPlainStorageValue(item, seen))
+    }
+    return output
+  }
+  if (isPlainObject(raw)) {
+    const output: Record<string, unknown> = {}
+    seen.set(raw, output)
+    for (const [key, item] of Object.entries(raw)) {
+      output[key] = toPlainStorageValue(item, seen)
+    }
+    return output
+  }
+  return cloneValue(raw)
 }

@@ -236,7 +236,17 @@ test('buildResultItems creates open items with copy URL action', () => {
       urlHost: 'tuff.tagzxia.com',
     },
   })
-  assert.equal(items[0].actions[0].payload, 'https://tuff.tagzxia.com/docs')
+  assert.deepEqual(items[0].meta.actions.copyUrl, {
+    actionId: 'copy-url',
+    payload: { url: 'https://tuff.tagzxia.com/docs' },
+    permission: 'clipboard.write',
+  })
+  assert.deepEqual(items[0].actions[0], {
+    id: 'copy-url',
+    type: 'plugin',
+    title: '复制 URL',
+    payload: { url: 'https://tuff.tagzxia.com/docs' },
+  })
   assert.equal(items.at(-1).title, '扫描状态')
 })
 
@@ -283,6 +293,38 @@ test('buildResultItems shows network permission diagnostics without prompting', 
   assert.equal(items[0].meta.capability.audit.urlHost, 'tuff.tagzxia.com')
 })
 
+test('network diagnostics fail closed when permission sdk is unavailable', async () => {
+  const pluginModule = loadFreshPluginModule({
+    permission: {},
+  })
+
+  const capabilityState = await pluginModule.__test.resolveNetworkOpenCapabilityState()
+
+  assert.equal(capabilityState.status, 'permission-missing')
+  assert.equal(capabilityState.reason, 'permission-sdk-unavailable')
+})
+
+test('onFeatureTriggered blocks local bookmark scan when permission sdk is unavailable', async () => {
+  const pushed = []
+  const pluginModule = loadFreshPluginModule({
+    permission: {},
+    plugin: {
+      feature: {
+        clearItems() {},
+        pushItems(items) {
+          pushed.push(items)
+        },
+      },
+    },
+  })
+
+  const result = await pluginModule.onFeatureTriggered('browser-data', 'browser tuff')
+
+  assert.equal(result, true)
+  assert.equal(pushed.at(-1)?.[0]?.id, 'browser-data-permission')
+  assert.equal(pushed.at(-1)?.[0]?.title, '缺少文件读取权限')
+})
+
 test('onItemAction blocks external URL opening when network permission is denied', async () => {
   let opened = false
   const pluginModule = loadFreshPluginModule({
@@ -317,6 +359,67 @@ test('onItemAction blocks external URL opening when network permission is denied
   assert.equal(opened, false)
 })
 
+test('onItemAction blocks external URL opening when permission sdk is unavailable', async () => {
+  let opened = false
+  const pluginModule = loadFreshPluginModule({
+    openUrl: async () => {
+      opened = true
+    },
+    permission: {},
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'open-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs', title: 'Tuff Docs' },
+    },
+  })
+
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-sdk-unavailable',
+    message: '缺少 network.internet 权限',
+  })
+  assert.equal(opened, false)
+})
+
+test('onItemAction blocks external URL opening when permission request fails', async () => {
+  let opened = false
+  const pluginModule = loadFreshPluginModule({
+    openUrl: async () => {
+      opened = true
+    },
+    permission: {
+      async check() {
+        return false
+      },
+      async request() {
+        throw new Error('permission transport failed')
+      },
+    },
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'open-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs', title: 'Tuff Docs' },
+    },
+  })
+
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-request-failed',
+    message: '缺少 network.internet 权限',
+  })
+  assert.equal(opened, false)
+})
+
 test('onItemAction opens external URL after network permission is granted', async () => {
   const opened = []
   const pluginModule = loadFreshPluginModule({
@@ -343,6 +446,127 @@ test('onItemAction opens external URL after network permission is granted', asyn
 
   assert.deepEqual(result, { externalAction: true, status: 'started' })
   assert.deepEqual(opened, ['https://tuff.tagzxia.com/docs'])
+})
+
+test('onItemAction blocks URL copy when clipboard.write permission is denied', async () => {
+  const writes = []
+  const pluginModule = loadFreshPluginModule({
+    clipboard: {
+      writeText(value) {
+        writes.push(value)
+      },
+    },
+    permission: {
+      async check() {
+        return false
+      },
+      async request() {
+        return false
+      },
+    },
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'copy-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs' },
+    },
+  })
+
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-denied',
+    message: '缺少 clipboard.write 权限',
+  })
+  assert.deepEqual(writes, [])
+})
+
+test('onItemAction blocks URL copy when permission sdk is unavailable', async () => {
+  const writes = []
+  const pluginModule = loadFreshPluginModule({
+    clipboard: {
+      writeText(value) {
+        writes.push(value)
+      },
+    },
+    permission: {},
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'copy-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs' },
+    },
+  })
+
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'permission-sdk-unavailable')
+  assert.deepEqual(writes, [])
+})
+
+test('onItemAction blocks URL copy when permission request fails', async () => {
+  const writes = []
+  const pluginModule = loadFreshPluginModule({
+    clipboard: {
+      writeText(value) {
+        writes.push(value)
+      },
+    },
+    permission: {
+      async check() {
+        return false
+      },
+      async request() {
+        throw new Error('permission transport failed')
+      },
+    },
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'copy-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs' },
+    },
+  })
+
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'permission-request-failed')
+  assert.deepEqual(writes, [])
+})
+
+test('onItemAction copies URL after clipboard.write permission is granted', async () => {
+  const writes = []
+  const pluginModule = loadFreshPluginModule({
+    clipboard: {
+      writeText(value) {
+        writes.push(value)
+      },
+    },
+    permission: {
+      async check(permissionId) {
+        return permissionId === 'clipboard.write'
+      },
+      async request() {
+        return true
+      },
+    },
+  })
+
+  const result = await pluginModule.onItemAction({
+    meta: {
+      defaultAction: 'browser-data',
+      actionId: 'copy-url',
+      payload: { url: 'https://tuff.tagzxia.com/docs' },
+    },
+  })
+
+  assert.deepEqual(result, { externalAction: true, status: 'started' })
+  assert.deepEqual(writes, ['https://tuff.tagzxia.com/docs'])
 })
 
 test('buildResultItems uses platform-aware source availability in empty state', () => {

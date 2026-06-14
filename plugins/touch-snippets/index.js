@@ -418,13 +418,36 @@ function rankSnippets(snippets, keyword) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-snippets] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 async function ensureSnippetsFile() {
@@ -471,6 +494,19 @@ async function readClipboardTextForContent(content, reason) {
   if (!/\{\{clipboard\}\}/i.test(String(content ?? '')))
     return ''
   return readClipboardText(reason)
+}
+
+async function writeClipboardText(text, reason) {
+  const permissionResult = await ensurePermission('clipboard.write', reason)
+  if (!permissionResult.granted) {
+    return {
+      written: false,
+      reason: permissionResult.reason || 'permission-denied',
+    }
+  }
+
+  clipboard.writeText(text)
+  return { written: true }
 }
 
 function getTypeLabel(type) {
@@ -776,7 +812,16 @@ const pluginLifecycle = {
           '需要读取剪贴板以支持 {{clipboard}} 占位符',
         )
         const resolved = applyPlaceholders(snippet.content, { clipboardText })
-        clipboard.writeText(resolved)
+        const copyResult = await writeClipboardText(resolved, '需要剪贴板写入权限以复制片段内容')
+        if (!copyResult.written) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: copyResult.reason || 'permission-denied',
+            message: '缺少 clipboard.write 权限',
+          }
+        }
         await markSnippetUsed(snippet.id)
         return { externalAction: true }
       }
@@ -804,7 +849,19 @@ const pluginLifecycle = {
             title: 'Touch Snippets Pack',
             summary: `${snippets.length} snippets exported from touch-snippets`,
           })
-          clipboard.writeText(JSON.stringify(pack, null, 2))
+          const copyResult = await writeClipboardText(
+            JSON.stringify(pack, null, 2),
+            '需要剪贴板写入权限以导出片段包',
+          )
+          if (!copyResult.written) {
+            return {
+              externalAction: true,
+              success: false,
+              status: 'blocked',
+              reason: copyResult.reason || 'permission-denied',
+              message: '缺少 clipboard.write 权限',
+            }
+          }
           return { externalAction: true }
         }
         if (actionId === 'pack-import-clipboard') {

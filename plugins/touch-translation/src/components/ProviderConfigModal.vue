@@ -8,7 +8,7 @@ import { BingTranslateProvider } from '../providers/bing-translate'
 import { CustomTranslateProvider } from '../providers/custom-translate'
 import { DeepLTranslateProvider } from '../providers/deepl-translate'
 import { TencentTranslateProvider } from '../providers/tencent-translate'
-import { hasProviderSecretDefinition } from '../composables/useTranslationProvider'
+import { canPersistProviderSecrets, hasProviderSecretDefinition } from '../composables/useTranslationProvider'
 
 interface Props {
   show: boolean
@@ -119,7 +119,7 @@ function closeModal() {
   emit('close')
 }
 
-function saveConfig() {
+async function saveConfig() {
   if (!props.provider)
     return
 
@@ -127,6 +127,17 @@ function saveConfig() {
   if (missingFields.length > 0) {
     testResult.value = { success: false, message: `请填写必填项: ${missingFields.join(', ')}` }
     return
+  }
+
+  if (providerUsesSecret.value) {
+    await refreshSecretHealth()
+    if (!canPersistProviderSecrets(props.provider.id, secretHealth.value)) {
+      testResult.value = {
+        success: false,
+        message: secretHealth.value?.reason || '密钥存储不可用，无法安全保存密钥。',
+      }
+      return
+    }
   }
 
   const config: Record<string, any> = {}

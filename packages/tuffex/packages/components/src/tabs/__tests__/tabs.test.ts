@@ -43,11 +43,13 @@ function mountTabs(props: Record<string, unknown> = {}) {
           default: ({ props: headerProps }: any) => h('div', { class: 'active-header' }, headerProps.node?.props?.name),
         }),
         h(TxTabItem, { name: 'General', iconClass: 'i-general', activation: true }, {
+          name: () => '概览',
           default: () => 'General content',
         }),
         h(TxTabItemGroup, { name: 'Advanced' }, {
           default: () => [
             h(TxTabItem, { name: 'Network', iconClass: 'i-network' }, {
+              name: () => '网络',
               default: () => 'Network content',
             }),
             h(TxTabItem, { name: 'Disabled', disabled: true }, {
@@ -83,6 +85,11 @@ describe('txTabs', () => {
     expect(wrapper.find('.tx-tabs__group-name').text()).toBe('Advanced')
     expect(wrapper.find('.nav-action').exists()).toBe(true)
     expect(wrapper.find('.active-header').text()).toBe('General')
+    expect(wrapper.findAll('.tx-tab-item__name').map(item => item.text())).toEqual([
+      '概览',
+      '网络',
+      'Disabled',
+    ])
     expect(wrapper.find('.tx-tabs__content-scroll').exists()).toBe(true)
     expect(wrapper.text()).toContain('General content')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['General'])

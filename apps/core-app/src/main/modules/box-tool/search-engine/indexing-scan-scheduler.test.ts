@@ -63,4 +63,31 @@ describe('ScanScheduler', () => {
     expect(scheduler.isRunning('test-source')).toBe(false)
     expect(scan).toHaveBeenCalledTimes(1)
   })
+
+  it('applies empty done batches so completion reaches the runtime store boundary', async () => {
+    const doneBatch = {
+      sourceId: 'test-source',
+      records: [],
+      done: true
+    }
+    const scan = vi.fn(async function* () {
+      yield doneBatch
+    })
+    const store: IndexStoreAdapter = {
+      applyBatch: vi.fn(async () => {}),
+      applyDelta: vi.fn(async () => {}),
+      clearSource: vi.fn(async () => {})
+    }
+    const scheduler = new ScanScheduler(store)
+
+    await expect(
+      scheduler.scanSource(buildSource(scan), IndexedSourceScanReasons.Scheduled)
+    ).resolves.toMatchObject({
+      sourceId: 'test-source',
+      batches: 1,
+      records: 0
+    })
+
+    expect(store.applyBatch).toHaveBeenCalledWith(doneBatch)
+  })
 })

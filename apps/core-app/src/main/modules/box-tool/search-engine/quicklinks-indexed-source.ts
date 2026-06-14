@@ -135,7 +135,8 @@ function buildDisabledQuicklinksHealth(): IndexedSourceHealth {
 
 function buildQuicklinksEvidence(
   sourceId: string,
-  snapshot: QuicklinksIndexedSourceSnapshot
+  snapshot: QuicklinksIndexedSourceSnapshot,
+  options: QuicklinksIndexedSourceOptions
 ): IndexedSourceEvidence[] {
   if (snapshot.evidence) {
     return snapshot.evidence
@@ -151,6 +152,7 @@ function buildQuicklinksEvidence(
       lastCheckedAt: snapshot.lastLoadedAt,
       reason: snapshot.items.length > 0 ? undefined : 'quicklinks-empty',
       metadata: {
+        clearHandlerConfigured: typeof options.clear === 'function',
         storage: 'runtime-feed'
       }
     }
@@ -274,7 +276,7 @@ export function buildQuicklinksIndexedSource(
         return buildDisabledQuicklinksEvidence(descriptor.id)
       }
 
-      return buildQuicklinksEvidence(descriptor.id, await buildSnapshot(options))
+      return buildQuicklinksEvidence(descriptor.id, await buildSnapshot(options), options)
     },
     scan: async function* quicklinksScan(
       _request: IndexedSourceScanRequest
@@ -288,9 +290,7 @@ export function buildQuicklinksIndexedSource(
         done: true
       })
 
-      if (batch.records.length > 0) {
-        yield batch
-      }
+      yield batch
     },
     reconcile: async (
       request: IndexedSourceReconcileRequest
@@ -323,7 +323,11 @@ export function buildQuicklinksIndexedSource(
         return
       }
 
-      await options.clear?.()
+      if (!options.clear) {
+        throw new Error('quicklinks-clear-handler-not-configured')
+      }
+
+      await options.clear()
     },
     open: async (
       record: IndexedSourceRecord,

@@ -18,6 +18,7 @@ declare global {
   const TuffIntelligenceTranslateProvider: typeof import('./src/providers/tuffintelligence-translate').TuffIntelligenceTranslateProvider
   const asyncComputed: typeof import('@vueuse/core').asyncComputed
   const autoResetRef: typeof import('@vueuse/core').autoResetRef
+  const canPersistProviderSecrets: typeof import('./src/composables/useTranslationProvider').canPersistProviderSecrets
   const computed: typeof import('vue').computed
   const computedAsync: typeof import('@vueuse/core').computedAsync
   const computedEager: typeof import('@vueuse/core').computedEager
@@ -46,6 +47,7 @@ declare global {
   const getCurrentInstance: typeof import('vue').getCurrentInstance
   const getCurrentScope: typeof import('vue').getCurrentScope
   const getCurrentWatcher: typeof import('vue').getCurrentWatcher
+  const getProviderSecretKey: typeof import('./src/composables/useTranslationProvider').getProviderSecretKey
   const h: typeof import('vue').h
   const hasProviderSecretDefinition: typeof import('./src/composables/useTranslationProvider').hasProviderSecretDefinition
   const ignorableWatch: typeof import('@vueuse/core').ignorableWatch
@@ -104,6 +106,7 @@ declare global {
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
+  const stripProviderSecrets: typeof import('./src/composables/useTranslationProvider').stripProviderSecrets
   const syncRef: typeof import('@vueuse/core').syncRef
   const syncRefs: typeof import('@vueuse/core').syncRefs
   const templateRef: typeof import('@vueuse/core').templateRef
@@ -360,6 +363,7 @@ declare module 'vue' {
     readonly TuffIntelligenceTranslateProvider: UnwrapRef<typeof import('./src/providers/tuffintelligence-translate')['TuffIntelligenceTranslateProvider']>
     readonly asyncComputed: UnwrapRef<typeof import('@vueuse/core')['asyncComputed']>
     readonly autoResetRef: UnwrapRef<typeof import('@vueuse/core')['autoResetRef']>
+    readonly canPersistProviderSecrets: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['canPersistProviderSecrets']>
     readonly computed: UnwrapRef<typeof import('vue')['computed']>
     readonly computedAsync: UnwrapRef<typeof import('@vueuse/core')['computedAsync']>
     readonly computedEager: UnwrapRef<typeof import('@vueuse/core')['computedEager']>
@@ -388,6 +392,7 @@ declare module 'vue' {
     readonly getCurrentInstance: UnwrapRef<typeof import('vue')['getCurrentInstance']>
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
+    readonly getProviderSecretKey: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['getProviderSecretKey']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
     readonly hasProviderSecretDefinition: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['hasProviderSecretDefinition']>
     readonly ignorableWatch: UnwrapRef<typeof import('@vueuse/core')['ignorableWatch']>
@@ -446,6 +451,7 @@ declare module 'vue' {
     readonly shallowReactive: UnwrapRef<typeof import('vue')['shallowReactive']>
     readonly shallowReadonly: UnwrapRef<typeof import('vue')['shallowReadonly']>
     readonly shallowRef: UnwrapRef<typeof import('vue')['shallowRef']>
+    readonly stripProviderSecrets: UnwrapRef<typeof import('./src/composables/useTranslationProvider')['stripProviderSecrets']>
     readonly syncRef: UnwrapRef<typeof import('@vueuse/core')['syncRef']>
     readonly syncRefs: UnwrapRef<typeof import('@vueuse/core')['syncRefs']>
     readonly templateRef: UnwrapRef<typeof import('@vueuse/core')['templateRef']>

@@ -532,6 +532,22 @@ export function useKeyboard(
     return event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown'
   }
 
+  function getActivePluginFeatureItem(): TuffItem | undefined {
+    const activation = activeActivations.value?.find((item) => item?.id === 'plugin-features')
+    const feature = (activation?.meta as { feature?: TuffItem } | undefined)?.feature
+    return feature && typeof feature === 'object' ? feature : undefined
+  }
+
+  function shouldSubmitActivePluginFeature(event: KeyboardEvent): boolean {
+    if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || event.repeat) {
+      return false
+    }
+    const feature = getActivePluginFeatureItem()
+    const interaction = (feature?.meta as { interaction?: { type?: string } } | undefined)
+      ?.interaction
+    return Boolean(feature && interaction?.type === 'widget' && searchVal.value.trim())
+  }
+
   /**
    * Global keyboard event handler for CoreBox window
    * @param event - KeyboardEvent from user interaction
@@ -612,6 +628,12 @@ export function useKeyboard(
     }
 
     const focusedItem = res.value[boxOptions.focus]
+    if (!uiMode && shouldSubmitActivePluginFeature(event)) {
+      handleExecute(getActivePluginFeatureItem())
+      event.preventDefault()
+      return
+    }
+
     if (!uiMode && shouldForwardToCustomWidget(event, focusedItem)) {
       publishWidgetHostKeyEvent(focusedItem!.id, serializeKeyEvent(event))
       event.preventDefault()

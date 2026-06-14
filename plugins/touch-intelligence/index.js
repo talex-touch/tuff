@@ -1,6 +1,20 @@
 const { plugin, clipboard, logger, TuffItemBuilder, permission, touchChannel, intelligence } = globalThis
 const crypto = require('node:crypto')
 
+let makeWidgetIdLoader = null
+
+function getMakeWidgetId() {
+  if (!makeWidgetIdLoader) {
+    try {
+      ;({ makeWidgetId: makeWidgetIdLoader } = require('@talex-touch/utils/plugin/widget'))
+    }
+    catch {
+      makeWidgetIdLoader = (pluginName, featureId) => `${pluginName}::${featureId}`
+    }
+  }
+  return makeWidgetIdLoader
+}
+
 const PLUGIN_NAME = 'touch-intelligence'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
@@ -11,10 +25,12 @@ const MAX_DRAFTS = 20
 const MAX_OCR_CONTEXT_CHARS = 4000
 const CALLER_ID = `plugin:${PLUGIN_NAME}`
 const ENTRY_ID = 'corebox.ai-ask'
+const WIDGET_ITEM_ID = 'intelligence-widget'
 const HANDOFF_SOURCE = 'corebox.touch-intelligence'
 const HANDOFF_SESSION_PREFIX = 'corebox_ai_ask'
 const INPUT_TYPE_TEXT = 'text'
 const INPUT_TYPE_IMAGE = 'image'
+const HISTORY_FILE = 'conversation-history.json'
 
 const AI_ERROR_MESSAGES = {
   PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic',
@@ -119,6 +135,33 @@ function keepNewestBusinessMessages(messages) {
   return normalized.slice(normalized.length - MAX_HISTORY_MESSAGES)
 }
 
+async function loadStoredHistory(featureId) {
+  try {
+    const raw = await plugin?.storage?.getFile?.(HISTORY_FILE)
+    const byFeature = raw && typeof raw === 'object' ? raw[resolveFeatureId(featureId)] : null
+    return keepNewestBusinessMessages(byFeature?.messages || [])
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to load conversation history', error)
+    return []
+  }
+}
+
+async function saveStoredHistory(featureId, messages) {
+  try {
+    const raw = await plugin?.storage?.getFile?.(HISTORY_FILE)
+    const next = raw && typeof raw === 'object' ? { ...raw } : {}
+    next[resolveFeatureId(featureId)] = {
+      messages: keepNewestBusinessMessages(messages),
+      updatedAt: Date.now(),
+    }
+    await plugin?.storage?.setFile?.(HISTORY_FILE, next)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] failed to save conversation history', error)
+  }
+}
+
 function canCommitResponse(session, requestId) {
   return session.activeRequestId === requestId && session.uiRequestId === requestId
 }
@@ -137,6 +180,8 @@ function getSession(featureId) {
       uiRequestId: '',
       handoffSessionId: buildHandoffSessionId(resolvedFeatureId),
       drafts: new Map(),
+      lastReadyDraftId: '',
+      lastReadyPromptKey: '',
     })
   }
 
@@ -393,15 +438,21 @@ function normalizeInvokeError(error) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
+  if (!permission?.check || !permission?.request)
+    return false
 
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission)
+      return true
 
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+    const granted = await permission.request(permissionId, reason)
+    return Boolean(granted)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-intelligence] Failed to request permission', error)
+    return false
+  }
 }
 
 function buildIntelligenceMeta(details = {}) {
@@ -505,6 +556,172 @@ function resolveDisplayPrompt(prompt, hasImage) {
   if (normalizedPrompt)
     return normalizedPrompt
   return hasImage ? '分析剪贴板图片' : ''
+}
+
+function buildWidgetMessages(state = {}) {
+  const messages = cloneHistory(state.history).map((message, index) => ({
+    id: `${normalizeText(state.requestId) || 'history'}-${index}`,
+    role: message.role,
+    content: message.content,
+    status: 'complete',
+  }))
+  const prompt = normalizeText(state.prompt)
+  const answer = normalizeText(state.answer)
+  if (prompt) {
+    messages.push({
+      id: `${normalizeText(state.requestId) || 'draft'}-user`,
+      role: 'user',
+      content: prompt,
+      status: 'complete',
+    })
+  }
+  if (answer) {
+    messages.push({
+      id: `${normalizeText(state.requestId) || 'draft'}-assistant`,
+      role: 'assistant',
+      content: answer,
+      status: 'complete',
+    })
+  }
+  else if (state.status === 'error') {
+    messages.push({
+      id: `${normalizeText(state.requestId) || 'draft'}-assistant-error`,
+      role: 'assistant',
+      content: normalizeText(state.errorMessage) || AI_ERROR_MESSAGES.UNKNOWN,
+      status: 'error',
+    })
+  }
+  else if (state.status === 'ocr-pending' || state.status === 'chat-pending') {
+    messages.push({
+      id: `${normalizeText(state.requestId) || 'draft'}-assistant-pending`,
+      role: 'assistant',
+      content: state.status === 'ocr-pending' ? '正在识别图片文字…' : '正在生成回答…',
+      status: 'streaming',
+    })
+  }
+  return messages
+}
+
+function buildWidgetPayload(state = {}) {
+  return {
+    requestId: normalizeText(state.requestId),
+    prompt: normalizeText(state.prompt),
+    answer: normalizeText(state.answer),
+    provider: normalizeText(state.provider),
+    model: normalizeText(state.model),
+    traceId: normalizeText(state.traceId),
+    latency: normalizeLatency(state.latency),
+    handoffSessionId: normalizeText(state.handoffSessionId),
+    status: normalizeText(state.status) || 'idle',
+    stage: normalizeText(state.stage),
+    capabilityId: normalizeText(state.capabilityId),
+    inputKinds: normalizeStringList(state.inputKinds),
+    errorCode: normalizeText(state.errorCode),
+    errorMessage: normalizeText(state.errorMessage),
+    messages: buildWidgetMessages(state),
+    updatedAt: Date.now(),
+  }
+}
+
+function resolveWidgetAction(state = {}) {
+  const status = normalizeText(state.status)
+  if (status === 'ready-to-send') {
+    return {
+      actionId: 'send',
+      payload: {
+        prompt: state.prompt,
+        draftId: state.draftId,
+        inputKinds: state.inputKinds,
+      },
+    }
+  }
+  if (status === 'ready') {
+    return {
+      actionId: 'copy-answer',
+      payload: {
+        prompt: state.prompt,
+        answer: state.answer,
+        provider: state.provider,
+        model: state.model,
+        traceId: state.traceId,
+        latency: state.latency,
+        handoffSessionId: state.handoffSessionId,
+      },
+    }
+  }
+  if (status === 'error') {
+    return {
+      actionId: 'retry',
+      payload: {
+        prompt: state.prompt,
+        history: cloneHistory(state.history),
+        draftId: state.draftId,
+        inputKinds: state.inputKinds,
+        errorCode: state.errorCode,
+        errorMessage: state.errorMessage,
+        handoffSessionId: state.handoffSessionId,
+      },
+    }
+  }
+  return null
+}
+
+function buildWidgetItem(featureId, state = {}) {
+  const status = normalizeText(state.status) || 'idle'
+  const prompt = resolveDisplayPrompt(state.prompt, Boolean(state.imageDataUrl || state.ocrText))
+  const title = prompt ? `智能问答：${truncateText(prompt, 48)}` : '智能问答'
+  const action = resolveWidgetAction({ ...state, prompt: prompt || state.prompt })
+  const subtitleMap = {
+    'idle': '等待 AI 输入',
+    'ready-to-send': '按回车发送到 AI',
+    'ocr-pending': '正在识别剪贴板图片…',
+    'chat-pending': 'AI 正在思考…',
+    'ready': '回答已生成',
+    'error': 'AI 请求失败',
+  }
+
+  return new TuffItemBuilder(WIDGET_ITEM_ID)
+    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setTitle(title)
+    .setSubtitle(subtitleMap[status] || '智能问答')
+    .setIcon(ICON)
+    .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, featureId), buildWidgetPayload({
+      ...state,
+      prompt: prompt || state.prompt,
+    }))
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      status,
+      keepCoreBoxOpen: true,
+      ...(action
+        ? {
+            defaultAction: ACTION_ID,
+            actionId: action.actionId,
+            payload: action.payload,
+          }
+        : {}),
+      intelligence: buildIntelligenceMeta({
+        status,
+        stage: state.stage,
+        requestId: state.requestId,
+        capabilityId: state.capabilityId,
+        provider: state.provider,
+        model: state.model,
+        traceId: state.traceId,
+        latency: state.latency,
+        inputKinds: state.inputKinds,
+        errorCode: state.errorCode,
+        errorMessage: state.errorMessage,
+        handoffSessionId: state.handoffSessionId,
+      }),
+    })
+    .build()
+}
+
+function pushWidgetState(featureId, state = {}) {
+  plugin.feature.clearItems()
+  plugin.feature.pushItems([buildWidgetItem(featureId, state)])
 }
 
 function buildSendItem(featureId, draft) {
@@ -676,8 +893,8 @@ function extractQueryContext(query) {
   const prompt = normalizePrompt(rawText)
   const imageDataUrl = extractImageDataUrl(query)
   const isExplicitAiQuery = hasAiPrefix(rawText)
-  const shouldUseOcr = Boolean(imageDataUrl && (!prompt || isExplicitAiQuery))
-  const shouldShowEntry = Boolean((prompt && isExplicitAiQuery) || shouldUseOcr)
+  const shouldUseOcr = Boolean(imageDataUrl && prompt && isExplicitAiQuery)
+  const shouldShowEntry = Boolean(prompt || shouldUseOcr)
 
   return {
     rawText,
@@ -787,12 +1004,16 @@ async function dispatchPrompt({
         })
       }
 
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildPendingItem(resolvedFeatureId, displayPrompt, requestId, 'chat', handoffSessionId, {
-          inputKinds,
-        }),
-      ])
+      pushWidgetState(resolvedFeatureId, {
+        prompt: displayPrompt,
+        requestId,
+        status: 'chat-pending',
+        stage: 'chat',
+        capabilityId: 'text.chat',
+        handoffSessionId,
+        inputKinds,
+        history: resolvedHistory,
+      })
     }
 
     const chatPrompt = normalizedPrompt || '请总结剪贴板图片中的文字。'
@@ -822,6 +1043,7 @@ async function dispatchPrompt({
       { role: 'user', content: displayPrompt },
       { role: 'assistant', content: mapped.answer },
     ])
+    await saveStoredHistory(resolvedFeatureId, session.history)
     await updateHandoffSession(client, session, {
       featureId: resolvedFeatureId,
       prompt: displayPrompt,
@@ -832,9 +1054,16 @@ async function dispatchPrompt({
     })
     session.activeRequestId = ''
     session.uiRequestId = requestId
+    session.lastReadyDraftId = ''
+    session.lastReadyPromptKey = ''
 
-    plugin.feature.clearItems()
-    plugin.feature.pushItems([buildReadyItem(resolvedFeatureId, mapped)])
+    pushWidgetState(resolvedFeatureId, {
+      ...mapped,
+      status: 'ready',
+      stage: 'chat',
+      capabilityId: 'text.chat',
+      history: resolvedHistory,
+    })
   }
   catch (error) {
     if (!canCommitResponse(session, requestId))
@@ -842,17 +1071,22 @@ async function dispatchPrompt({
 
     session.activeRequestId = ''
     session.uiRequestId = requestId
+    session.lastReadyDraftId = ''
+    session.lastReadyPromptKey = ''
     const normalizedError = normalizeInvokeError(error)
     logger?.error?.('[touch-intelligence] invoke failed', error)
-    plugin.feature.clearItems()
-    plugin.feature.pushItems([
-      buildErrorItem(resolvedFeatureId, displayPrompt, normalizedError, resolvedHistory, {
-        draftId,
-        inputKinds,
-        capabilityId: imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
-        handoffSessionId: session.handoffSessionId,
-      }),
-    ])
+    pushWidgetState(resolvedFeatureId, {
+      prompt: displayPrompt,
+      requestId,
+      status: 'error',
+      stage: 'error',
+      capabilityId: imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
+      inputKinds,
+      errorCode: normalizedError.code,
+      errorMessage: normalizedError.message,
+      handoffSessionId: session.handoffSessionId,
+      history: resolvedHistory,
+    })
   }
 }
 
@@ -874,23 +1108,85 @@ const pluginLifecycle = {
       const resolvedFeatureId = resolveFeatureId(featureId)
       const session = getSession(resolvedFeatureId)
       const queryContext = extractQueryContext(query)
+      const storedHistory = await loadStoredHistory(resolvedFeatureId)
+      if (storedHistory.length > session.history.length) {
+        session.history = storedHistory
+      }
 
       plugin.feature.clearItems()
 
-      if (!queryContext.shouldShowEntry)
+      if (!queryContext.shouldShowEntry) {
+        session.lastReadyDraftId = ''
+        session.lastReadyPromptKey = ''
+        pushWidgetState(resolvedFeatureId, {
+          status: 'idle',
+          stage: 'chat',
+          capabilityId: 'text.chat',
+          history: cloneHistory(session.history),
+          handoffSessionId: session.handoffSessionId,
+        })
         return true
+      }
 
       const draft = storeDraft(session, queryContext)
-      plugin.feature.pushItems([buildSendItem(resolvedFeatureId, draft)])
+      const displayPrompt = resolveDisplayPrompt(draft.prompt, Boolean(draft.imageDataUrl || draft.ocrText))
+      if (!displayPrompt)
+        return true
+
+      const hasPermission = await ensurePermission(
+        'intelligence.basic',
+        '需要 AI 权限以执行智能问答',
+      )
+      if (!hasPermission) {
+        const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
+        pushWidgetState(resolvedFeatureId, {
+          ...draft,
+          prompt: displayPrompt,
+          status: 'error',
+          stage: 'error',
+          errorCode: normalizedError.code,
+          errorMessage: normalizedError.message,
+          handoffSessionId: session.handoffSessionId,
+          history: cloneHistory(session.history),
+        })
+        return true
+      }
+
+      const requestId = crypto.randomUUID()
+      markPendingRequest(session, requestId)
+      session.lastReadyDraftId = ''
+      session.lastReadyPromptKey = ''
+      pushWidgetState(resolvedFeatureId, {
+        ...draft,
+        prompt: displayPrompt,
+        requestId,
+        status: draft.imageDataUrl ? 'ocr-pending' : 'chat-pending',
+        stage: draft.imageDataUrl ? 'ocr' : 'chat',
+        capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
+        handoffSessionId: session.handoffSessionId,
+        history: cloneHistory(session.history),
+      })
+      void dispatchPrompt({
+        featureId: resolvedFeatureId,
+        prompt: draft.prompt,
+        requestId,
+        historySnapshot: cloneHistory(session.history),
+        imageDataUrl: draft.imageDataUrl,
+        ocrText: draft.ocrText,
+        inputKinds: draft.inputKinds,
+        draftId: draft.draftId,
+      })
       return true
     }
     catch (error) {
       const normalizedError = normalizeInvokeError(error)
       logger?.error?.('[touch-intelligence] Failed to handle feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildErrorItem(featureId, '', normalizedError),
-      ])
+      pushWidgetState(featureId, {
+        status: 'error',
+        stage: 'error',
+        errorCode: normalizedError.code,
+        errorMessage: normalizedError.message,
+      })
       return true
     }
   },
@@ -916,11 +1212,13 @@ const pluginLifecycle = {
           return {
             externalAction: true,
             success: false,
+            status: 'blocked',
+            reason: 'permission-denied',
             message: '复制失败：缺少 clipboard.write 权限',
           }
         }
 
-        return { externalAction: true }
+        return { externalAction: true, status: 'started' }
       }
 
       if (actionId === 'send' || actionId === 'retry') {
@@ -937,14 +1235,15 @@ const pluginLifecycle = {
         )
         if (!hasPermission) {
           const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
-          plugin.feature.clearItems()
-          plugin.feature.pushItems([
-            buildErrorItem(featureId, displayPrompt, normalizedError, [], {
-              draftId: draft.draftId,
-              inputKinds: draft.inputKinds,
-              handoffSessionId: session.handoffSessionId,
-            }),
-          ])
+          pushWidgetState(featureId, {
+            prompt: displayPrompt,
+            status: 'error',
+            stage: 'error',
+            inputKinds: draft.inputKinds,
+            errorCode: normalizedError.code,
+            errorMessage: normalizedError.message,
+            handoffSessionId: session.handoffSessionId,
+          })
           return {
             externalAction: true,
             success: false,
@@ -958,17 +1257,15 @@ const pluginLifecycle = {
 
         const requestId = crypto.randomUUID()
         markPendingRequest(session, requestId)
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildPendingItem(
-            featureId,
-            displayPrompt,
-            requestId,
-            draft.imageDataUrl ? 'ocr' : 'chat',
-            session.handoffSessionId,
-            { inputKinds: draft.inputKinds },
-          ),
-        ])
+        pushWidgetState(featureId, {
+          prompt: displayPrompt,
+          requestId,
+          status: draft.imageDataUrl ? 'ocr-pending' : 'chat-pending',
+          stage: draft.imageDataUrl ? 'ocr' : 'chat',
+          capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
+          handoffSessionId: session.handoffSessionId,
+          inputKinds: draft.inputKinds,
+        })
         void dispatchPrompt({
           featureId,
           prompt: draft.prompt,
@@ -994,6 +1291,8 @@ module.exports = {
     buildInvokePayload,
     buildInvokeOptions,
     buildErrorItem,
+    buildWidgetItem,
+    buildWidgetPayload,
     buildHandoffContext,
     buildHandoffSessionId,
     buildIntelligenceMeta,

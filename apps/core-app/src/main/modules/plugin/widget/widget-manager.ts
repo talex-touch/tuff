@@ -146,6 +146,36 @@ function findPrecompiledWidgetEntry(
   )
 }
 
+function findPrecompiledMetaMismatch(
+  entry: WidgetPrecompiledManifestEntry,
+  meta: WidgetPrecompiledMeta | null
+): string | null {
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return 'meta'
+
+  const expectedFields = [
+    'featureId',
+    'widgetId',
+    'sourcePath',
+    'compiledPath',
+    'hash',
+    'runtime',
+    'runtimeStage'
+  ] as const
+
+  for (const field of expectedFields) {
+    const expected = entry[field]
+    const actual = meta[field]
+    if (expected !== undefined && actual === undefined) {
+      return field
+    }
+    if (expected !== undefined && actual !== expected) {
+      return field
+    }
+  }
+
+  return null
+}
+
 async function loadPrecompiledWidget(
   plugin: ITouchPlugin,
   feature: IPluginFeature,
@@ -256,6 +286,22 @@ async function loadPrecompiledWidget(
     if (await fse.pathExists(metaPath)) {
       try {
         meta = await fse.readJson(metaPath)
+        const mismatchedField = findPrecompiledMetaMismatch(entry, meta)
+        if (mismatchedField) {
+          return {
+            cache: null,
+            failure: {
+              code: 'WIDGET_PRECOMPILED_INTEGRITY_MISMATCH',
+              message: `Precompiled widget meta does not match manifest entry for feature "${feature.id}". Rebuild the plugin package.`,
+              fromManifestEntry: true,
+              runtime: entryRuntime,
+              runtimeStage: entryRuntimeStage,
+              filePath: metaPath,
+              hash: entry.hash,
+              cause: mismatchedField
+            }
+          }
+        }
       } catch (error) {
         plugin.logger.warn(
           `[WidgetManager] Failed to read precompiled widget meta: ${metaPath}`,

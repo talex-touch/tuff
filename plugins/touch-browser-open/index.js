@@ -381,19 +381,43 @@ function normalizeUrlInput(rawInput) {
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-browser-open] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check) {
     return {
-      granted: true,
+      granted: false,
+      reason: 'permission-sdk-unavailable',
     }
   }
 
@@ -503,7 +527,9 @@ function buildBrowserOpenCapability({
 async function ensureNetworkPermission() {
   if (networkPermissionGranted !== null)
     return networkPermissionGranted
-  networkPermissionGranted = await ensurePermission('network.internet', '需要网络权限以获取搜索建议')
+
+  const permissionResult = await ensurePermission('network.internet', '需要网络权限以获取搜索建议')
+  networkPermissionGranted = Boolean(permissionResult.granted)
   return networkPermissionGranted
 }
 
@@ -1031,8 +1057,8 @@ async function tryCopyUrl(url) {
   if (!clipboard?.writeText)
     return false
 
-  const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制链接')
-  if (!canCopy)
+  const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制链接')
+  if (!permissionResult.granted)
     return false
 
   clipboard.writeText(url)
@@ -1424,9 +1450,14 @@ const pluginLifecycle = {
         return { externalAction: true, status: 'started' }
       }
 
-      const hasShell = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以打开浏览器')
-      if (!hasShell)
-        return { externalAction: true, status: 'blocked', reason: 'permission-denied' }
+      const shellPermission = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以打开浏览器')
+      if (!shellPermission.granted) {
+        return {
+          externalAction: true,
+          status: 'blocked',
+          reason: shellPermission.reason || 'permission-denied',
+        }
+      }
 
       if (actionId === 'default-open') {
         const result = await executeBrowserOpenAction(url, null, actionId)

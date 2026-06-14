@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const translationPlugin = loadPluginModule(
   new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
@@ -274,6 +274,162 @@ describe('touch-translation shared helpers', () => {
       secretKey: 'secure-baidu-secret',
     })
     expect(secretGetCalls).toEqual(['providers.baidu.secretKey'])
+  })
+
+  it('rechecks network permission after a denied translation request', async () => {
+    let checkGranted = false
+    const request = vi.fn(async () => checkGranted)
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => checkGranted,
+          request,
+        },
+      }),
+    )
+
+    await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(false)
+
+    checkGranted = true
+    await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(true)
+
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('blocks network and AI helpers when permission sdk is unavailable', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: withoutGlobal(),
+      }),
+    )
+
+    await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(false)
+    await expect(pluginModule.__test.ensureClipboardWritePermission()).resolves.toBe(false)
+    await expect(pluginModule.__test.canUseTuffIntelligenceProvider({ authToken: 'token' })).resolves.toBe(false)
+  })
+
+  it('blocks translation copy when clipboard.write permission is denied', async () => {
+    const hide = vi.fn()
+    const writeText = vi.fn()
+    const request = vi.fn(async () => false)
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        clipboard: { writeText },
+        permission: {
+          check: async () => false,
+          request,
+        },
+        plugin: {
+          feature: {
+            clearItems() {},
+            pushItems() {},
+          },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide },
+        },
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: { defaultAction: 'copy' },
+      actions: [{ type: 'copy', payload: 'translated text' }],
+    })
+
+    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制翻译结果')
+    expect(writeText).not.toHaveBeenCalled()
+    expect(hide).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+  })
+
+  it('blocks translation copy when permission sdk is unavailable', async () => {
+    const hide = vi.fn()
+    const writeText = vi.fn()
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        clipboard: { writeText },
+        permission: withoutGlobal(),
+        plugin: {
+          feature: {
+            clearItems() {},
+            pushItems() {},
+          },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide },
+        },
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: { defaultAction: 'copy' },
+      actions: [{ type: 'copy', payload: 'translated text' }],
+    })
+
+    expect(writeText).not.toHaveBeenCalled()
+    expect(hide).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      externalAction: true,
+      success: false,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+  })
+
+  it('copies translation payload after clipboard.write permission is granted', async () => {
+    const hide = vi.fn()
+    const writeText = vi.fn()
+    const request = vi.fn()
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
+      createPluginGlobals({
+        clipboard: { writeText },
+        permission: {
+          check: async () => true,
+          request,
+        },
+        plugin: {
+          feature: {
+            clearItems() {},
+            pushItems() {},
+          },
+          storage: {
+            async getFile() {
+              return null
+            },
+            async setFile() {},
+          },
+          box: { hide },
+        },
+      }),
+    )
+
+    const result = await pluginModule.onItemAction({
+      meta: { defaultAction: 'copy' },
+      actions: [{ type: 'copy', payload: 'translated text' }],
+    })
+
+    expect(request).not.toHaveBeenCalled()
+    expect(writeText).toHaveBeenCalledWith('translated text')
+    expect(hide).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ externalAction: true, status: 'started' })
   })
 
   it('keeps translate-panel widgets sandbox-compatible in canonical and bundled runtime copies', () => {

@@ -16,6 +16,7 @@ export const FLIP_DIALOG_FULL_MAX_HEIGHT = 'calc(92dvh - 24px)'
 export interface FlipDialogSizeStyleOptions {
   size: FlipDialogSize
   width?: string
+  height?: string
   maxHeight?: string
   minHeight?: string
 }
@@ -81,6 +82,7 @@ export function resolveFlipDialogCardStyleVariables(
       options.maxHeight ||
       (options.size === 'full' ? FLIP_DIALOG_FULL_MAX_HEIGHT : FLIP_DIALOG_DEFAULT_MAX_HEIGHT)
   }
+  if (options.height) variables['--flip-dialog-height'] = options.height
   if (options.minHeight) variables['--flip-dialog-min-height'] = options.minHeight
   return variables
 }

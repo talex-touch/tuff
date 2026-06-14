@@ -3,8 +3,11 @@ import type { IProviderActivate, ITuffIcon } from '@talex-touch/utils'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { computed, ref } from 'vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { appSetting } from '~/modules/storage/app-storage'
+import { devLog } from '~/utils/dev-log'
 import BoxInput from './BoxInput.vue'
 import PrefixPart from './PrefixPart.vue'
 import TagSection from './tag/TagSection.vue'
@@ -27,6 +30,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const transport = useTuffTransport()
 
 const boxInputRef = ref()
 defineExpose({ boxInputRef })
@@ -42,8 +46,19 @@ const pinIcon = computed<ITuffIcon>(() => ({
   status: 'normal'
 }))
 
-function handleTogglePin(): void {
-  appSetting.tools.autoHide = !appSetting.tools.autoHide
+async function handleTogglePin(): Promise<void> {
+  const nextPinned = appSetting.tools.autoHide
+  const previousAutoHide = appSetting.tools.autoHide
+
+  appSetting.tools.autoHide = !nextPinned
+
+  try {
+    const response = await transport.send(CoreBoxEvents.ui.setPinned, { pinned: nextPinned })
+    appSetting.tools.autoHide = !response.pinned
+  } catch (error) {
+    appSetting.tools.autoHide = previousAutoHide
+    devLog('[MainBoxHeader] Failed to toggle window pin:', error)
+  }
 }
 
 function handlePaste(): void {

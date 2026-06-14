@@ -1,9 +1,10 @@
-const { plugin, logger, TuffItemBuilder, openUrl } = globalThis
+const { plugin, logger, TuffItemBuilder, openUrl, permission } = globalThis
 
 const PLUGIN_NAME = 'touch-dev-toolbox'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'dev-toolbox'
+const NETWORK_PERMISSION_ID = 'network.internet'
 const TOOLBOX_FILE = 'toolbox.json'
 
 const DEFAULT_CONFIG = {
@@ -66,6 +67,39 @@ async function ensureToolboxFile() {
 async function loadConfig() {
   const raw = await plugin.storage.getFile(TOOLBOX_FILE)
   return parseToolboxConfig(raw)
+}
+
+async function ensurePermission(permissionId, reason) {
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-dev-toolbox] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 function matchKeyword(target, keyword) {
@@ -203,8 +237,29 @@ const pluginLifecycle = {
       if (actionId === 'open-link') {
         const url = item.meta?.payload?.url
         if (typeof url === 'string' && url) {
-          openUrl?.(url)
-          return { externalAction: true }
+          const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开开发工具箱链接')
+          if (!permissionResult.granted) {
+            return {
+              externalAction: true,
+              success: false,
+              status: 'blocked',
+              reason: permissionResult.reason || 'permission-denied',
+              message: '缺少 network.internet 权限',
+            }
+          }
+
+          if (!openUrl) {
+            return {
+              externalAction: true,
+              success: false,
+              status: 'blocked',
+              reason: 'open-url-unavailable',
+              message: '当前运行时不支持打开外部链接',
+            }
+          }
+
+          await openUrl(url)
+          return { externalAction: true, status: 'started' }
         }
       }
     }

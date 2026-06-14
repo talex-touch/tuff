@@ -1,4 +1,5 @@
-const { plugin, clipboard, logger, TuffItemBuilder } = globalThis
+const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis
+const { Buffer } = require('node:buffer')
 const { randomUUID } = require('node:crypto')
 
 const PLUGIN_NAME = 'touch-dev-utils'
@@ -28,6 +29,25 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
+async function ensurePermission(permissionId, reason) {
+  if (!permission?.check || !permission?.request) {
+    return false
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return true
+    }
+    const granted = await permission.request(permissionId, reason)
+    return Boolean(granted)
+  }
+  catch (error) {
+    logger?.warn?.('[touch-dev-utils] Failed to request permission', error)
+    return false
+  }
+}
+
 function buildCopyItem({ id, featureId, title, subtitle, output }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
@@ -39,7 +59,7 @@ function buildCopyItem({ id, featureId, title, subtitle, output }) {
       featureId,
       defaultAction: COPY_ACTION_ID,
     })
-    .createAndAddAction(COPY_ACTION_ID, 'copy', '复制', output)
+    .createAndAddAction(COPY_ACTION_ID, 'plugin', '复制', { text: output })
     .build()
 }
 
@@ -71,7 +91,7 @@ function addCopyItem(items, seen, data) {
 function splitWords(value) {
   const normalized = normalizeText(value)
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_-\s]+/g, ' ')
+    .replace(/[-_\s]+/g, ' ')
   if (!normalized) {
     return []
   }
@@ -209,7 +229,7 @@ function unescapeStringLiteral(value) {
 }
 
 function isLikelyJwt(value) {
-  return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(normalizeText(value))
+  return /^[\w-]+\.[\w-]+\.[\w-]+$/.test(normalizeText(value))
 }
 
 function isLikelyTimestamp(value) {
@@ -265,7 +285,7 @@ function addNowItems(items, seen, featureId) {
 }
 
 function addNamingItems(items, seen, featureId, rawText) {
-  if (!/[A-Za-z]/.test(rawText)) {
+  if (!/[a-z]/i.test(rawText)) {
     return
   }
 
@@ -513,11 +533,26 @@ const pluginLifecycle = {
       }
 
       const copyAction = Array.isArray(item.actions)
-        ? item.actions.find(action => action.type === 'copy')
+        ? item.actions.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
         : null
 
       if (copyAction?.payload) {
-        clipboard.writeText(copyAction.payload)
+        const canCopy = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制开发工具结果')
+        if (!canCopy) {
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: 'permission-denied',
+            message: '缺少 clipboard.write 权限',
+          }
+        }
+        const payloadText = typeof copyAction.payload === 'string' ? copyAction.payload : copyAction.payload.text
+        if (typeof payloadText !== 'string') {
+          return
+        }
+        clipboard.writeText(payloadText)
+        return { externalAction: true, status: 'started' }
       }
     }
     catch (error) {

@@ -245,6 +245,33 @@ describe('fileIndexedSource', () => {
     expect(fileProviderMock.scanIndexedSource).toHaveBeenCalledWith(request)
   })
 
+  it('keeps empty done scan batches so the runtime store can observe completion', async () => {
+    const source = buildFileIndexedSource()
+    const request = {
+      sourceId: 'file-provider',
+      reason: IndexedSourceScanReasons.Scheduled
+    }
+    const emptyBatch: IndexedSourceRecordBatch = {
+      sourceId: 'file-provider',
+      records: []
+    }
+    const doneBatch: IndexedSourceRecordBatch = {
+      sourceId: 'file-provider',
+      records: [],
+      done: true
+    }
+    fileProviderMock.scanIndexedSource.mockResolvedValue({
+      batches: [emptyBatch, doneBatch]
+    })
+
+    const batches: IndexedSourceRecordBatch[] = []
+    for await (const batch of source.scan(request)) {
+      batches.push(batch)
+    }
+
+    expect(batches).toEqual([doneBatch])
+  })
+
   it('delegates reconcile and watch lifecycle to FileProvider', async () => {
     const source = buildFileIndexedSource()
     const reconcileRequest = { sourceId: 'file-provider', limit: 10 }

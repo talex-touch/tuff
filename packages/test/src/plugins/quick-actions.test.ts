@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 const quickActionsPlugin = loadPluginModule(new URL('../../../../plugins/touch-quick-actions/index.js', import.meta.url))
 const { __test: quickActionsTest } = quickActionsPlugin
@@ -41,6 +41,16 @@ class FakeBuilder {
 }
 
 describe('quick actions plugin', () => {
+  function installShellRunner(pluginModule: any) {
+    pluginModule.__test.setSpawnShellCommandForTest(() => ({
+      on(event: string, callback: (code?: number) => void) {
+        if (event === 'close')
+          callback(0)
+        return this
+      },
+    }))
+  }
+
   it('returns windows quick actions set', () => {
     const actions = quickActionsTest.resolveActions('win32')
     const ids = actions.map(action => action.id)
@@ -147,6 +157,7 @@ describe('quick actions plugin', () => {
       },
     })
     const pluginModule = loadPluginModule(quickActionsUrl, globals)
+    installShellRunner(pluginModule)
 
     await pluginModule.onFeatureTriggered('quick-actions', '')
 
@@ -182,6 +193,7 @@ describe('quick actions plugin', () => {
       },
     })
     const pluginModule = loadPluginModule(quickActionsUrl, globals)
+    installShellRunner(pluginModule)
 
     await pluginModule.onFeatureTriggered('quick-actions', '')
 
@@ -194,8 +206,111 @@ describe('quick actions plugin', () => {
     expect(items[0]?.meta?.capability).toMatchObject({
       permission: 'system.shell',
       status: 'permission-missing',
-      reason: 'system.shell',
+      reason: 'system-shell-permission-required',
     })
+  })
+
+  it('pushes diagnostic meta when permission SDK is unavailable', async () => {
+    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
+    const globals = createPluginGlobals({
+      TuffItemBuilder: FakeBuilder,
+      permission: withoutGlobal(),
+      plugin: {
+        feature: {
+          clearItems() { items.length = 0 },
+          pushItems(next: Array<{ title?: string, meta?: Record<string, any> }>) { items.push(...next) },
+        },
+      },
+    })
+    const pluginModule = loadPluginModule(quickActionsUrl, globals)
+    installShellRunner(pluginModule)
+
+    await pluginModule.onFeatureTriggered('quick-actions', '')
+
+    if (!quickActionsTest.isShellPlatformSupported(process.platform)) {
+      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
+      return
+    }
+
+    expect(items[0]?.title).toBe('缺少 system.shell 权限')
+    expect(items[0]?.meta?.capability).toMatchObject({
+      permission: 'system.shell',
+      status: 'permission-missing',
+      reason: 'permission-sdk-unavailable',
+    })
+  })
+
+  it('blocks quick action execution when permission SDK is unavailable', async () => {
+    const pluginModule = loadPluginModule(quickActionsUrl, createPluginGlobals({
+      permission: withoutGlobal(),
+    }))
+    installShellRunner(pluginModule)
+    const action = quickActionsTest.resolveActions(process.platform)
+      .find((candidate: { id: string }) => candidate.id === 'lock-screen')
+      ?? quickActionsTest.resolveActions(process.platform)[0]
+
+    if (!action) {
+      const result = await pluginModule.onItemAction({
+        meta: {
+          defaultAction: 'quick-actions',
+          actionId: 'run-action',
+          payload: { action: { id: 'missing', command: 'true' } },
+        },
+      })
+      expect(result?.success).toBe(false)
+      expect(result?.reason).toBe('platform:linux')
+      return
+    }
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'quick-actions',
+        actionId: 'run-action',
+        payload: { action },
+      },
+    })
+
+    expect(result?.success).toBe(false)
+    expect(result?.reason).toBe('permission-sdk-unavailable')
+    expect(result?.message).toBe('权限系统不可用，无法执行系统快捷动作')
+  })
+
+  it('blocks quick action execution when shell permission is denied', async () => {
+    const pluginModule = loadPluginModule(quickActionsUrl, createPluginGlobals({
+      permission: {
+        check: async () => false,
+        request: async () => false,
+      },
+    }))
+    installShellRunner(pluginModule)
+    const action = quickActionsTest.resolveActions(process.platform)
+      .find((candidate: { id: string }) => candidate.id === 'lock-screen')
+      ?? quickActionsTest.resolveActions(process.platform)[0]
+
+    if (!action) {
+      const result = await pluginModule.onItemAction({
+        meta: {
+          defaultAction: 'quick-actions',
+          actionId: 'run-action',
+          payload: { action: { id: 'missing', command: 'true' } },
+        },
+      })
+      expect(result?.success).toBe(false)
+      expect(result?.reason).toBe('platform:linux')
+      return
+    }
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'quick-actions',
+        actionId: 'run-action',
+        payload: { action },
+      },
+    })
+
+    expect(result?.success).toBe(false)
+    expect(result?.reason).toBe('permission-denied')
+    expect(result?.message).toBe('缺少 system.shell 权限')
   })
 
   it('executes dynamic feature directly without entering list mode', async () => {
@@ -221,10 +336,16 @@ describe('quick actions plugin', () => {
       },
     })
     const pluginModule = loadPluginModule(quickActionsUrl, globals)
+    installShellRunner(pluginModule)
 
     const result = await pluginModule.onFeatureTriggered('quick-action-restart', '')
 
-    expect(result).toBe(false)
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'cancelled',
+      success: false,
+      reason: 'user-cancelled',
+    })
     expect(confirmCalls).toBe(1)
   })
 
@@ -248,6 +369,7 @@ describe('quick actions plugin', () => {
       },
     })
     const pluginModule = loadPluginModule(quickActionsUrl, globals)
+    installShellRunner(pluginModule)
 
     const result = await pluginModule.onItemAction({
       meta: {

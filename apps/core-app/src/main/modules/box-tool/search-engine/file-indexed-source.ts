@@ -148,7 +148,7 @@ export function buildFileIndexedSource(): IndexedSource {
     async *scan(request: IndexedSourceScanRequest): AsyncIterable<IndexedSourceRecordBatch> {
       const result = await fileProvider.scanIndexedSource(request)
       for (const batch of result?.batches ?? []) {
-        if (batch.records.length > 0) {
+        if (batch.records.length > 0 || batch.done === true) {
           yield batch
         }
       }

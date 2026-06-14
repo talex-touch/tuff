@@ -83,6 +83,7 @@ describe('quicklinksIndexedSource', () => {
 
   it('reports empty runtime-feed diagnostics without faking indexed content', async () => {
     const source = buildQuicklinksIndexedSource()
+    const batches: IndexedSourceRecordBatch[] = []
 
     await expect(source.getHealth()).resolves.toMatchObject({
       status: 'degraded',
@@ -98,8 +99,27 @@ describe('quicklinksIndexedSource', () => {
         id: 'quicklinks:official-plugin-feed',
         status: 'degraded',
         itemCount: 0,
-        reason: 'quicklinks-empty'
+        reason: 'quicklinks-empty',
+        metadata: {
+          clearHandlerConfigured: false,
+          storage: 'runtime-feed'
+        }
       })
+    ])
+
+    for await (const batch of source.scan({
+      sourceId: source.descriptor.id,
+      reason: IndexedSourceScanReasons.Startup
+    })) {
+      batches.push(batch)
+    }
+
+    expect(batches).toEqual([
+      {
+        sourceId: 'quicklinks',
+        records: [],
+        done: true
+      }
     ])
   })
 
@@ -246,5 +266,13 @@ describe('quicklinksIndexedSource', () => {
 
     expect(clear).toHaveBeenCalledTimes(1)
     expect(openUrl).toHaveBeenCalledWith('https://docs.example.com', record, { id: 'default' })
+  })
+
+  it('fails closed when clearing enabled Quicklinks without a persistent clear handler', async () => {
+    const source = buildQuicklinksIndexedSource({ items: [quicklink] })
+    const disabledSource = buildQuicklinksIndexedSource({ enabled: false, items: [quicklink] })
+
+    await expect(source.clearIndex?.()).rejects.toThrow('quicklinks-clear-handler-not-configured')
+    await expect(disabledSource.clearIndex?.()).resolves.toBeUndefined()
   })
 })

@@ -184,13 +184,36 @@ function buildRenamePlan(paths, rules, now = new Date(), exists = fs.existsSync)
 }
 
 async function ensurePermission(permissionId, reason) {
-  if (!permission)
-    return true
-  const hasPermission = await permission.check(permissionId)
-  if (hasPermission)
-    return true
-  const granted = await permission.request(permissionId, reason)
-  return Boolean(granted)
+  if (!permission?.check || !permission?.request) {
+    return {
+      granted: false,
+      reason: 'permission-sdk-unavailable',
+    }
+  }
+
+  try {
+    const hasPermission = await permission.check(permissionId)
+    if (hasPermission) {
+      return { granted: true }
+    }
+
+    const granted = await permission.request(permissionId, reason)
+    if (granted) {
+      return { granted: true }
+    }
+
+    return {
+      granted: false,
+      reason: 'permission-denied',
+    }
+  }
+  catch (error) {
+    logger?.warn?.('[touch-batch-rename] Failed to request permission', error)
+    return {
+      granted: false,
+      reason: 'permission-request-failed',
+    }
+  }
 }
 
 async function pickFiles(featureId) {
@@ -371,8 +394,8 @@ const pluginLifecycle = {
         return true
       }
 
-      const canRead = await ensurePermission('fs.read', '需要读取文件信息以生成重命名计划')
-      if (!canRead) {
+      const readPermission = await ensurePermission('fs.read', '需要读取文件信息以生成重命名计划')
+      if (!readPermission.granted) {
         items.push(buildInfoItem({
           id: `${featureId}-no-permission`,
           featureId,
@@ -492,9 +515,16 @@ const pluginLifecycle = {
         return
       }
 
-      const canWrite = await ensurePermission('fs.write', '需要文件写入权限以执行重命名')
-      if (!canWrite)
-        return
+      const writePermission = await ensurePermission('fs.write', '需要文件写入权限以执行重命名')
+      if (!writePermission.granted) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: writePermission.reason || 'permission-denied',
+          message: '缺少 fs.write 权限',
+        }
+      }
 
       const confirmed = await confirmAction('确认执行批量重命名？', '将对选中文件执行不可逆重命名。')
       if (!confirmed)
@@ -519,9 +549,16 @@ const pluginLifecycle = {
     }
 
     if (actionId === 'undo') {
-      const canWrite = await ensurePermission('fs.write', '需要文件写入权限以撤销重命名')
-      if (!canWrite)
-        return
+      const writePermission = await ensurePermission('fs.write', '需要文件写入权限以撤销重命名')
+      if (!writePermission.granted) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: writePermission.reason || 'permission-denied',
+          message: '缺少 fs.write 权限',
+        }
+      }
 
       const confirmed = await confirmAction('确认撤销上次重命名？', '将根据 last-rename.json 还原文件名。')
       if (!confirmed)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
 class FakeBuilder {
   item: Record<string, unknown>
@@ -53,6 +53,20 @@ function createTestGlobals(
       },
     },
   })
+}
+
+function createSafeShellRunner(calls: string[] = []) {
+  return (command: string) => {
+    calls.push(command)
+    return {
+      on(event: string, callback: (code?: number) => void) {
+        if (event === 'close') {
+          callback(0)
+        }
+        return this
+      },
+    }
+  }
 }
 
 const systemPlugin = loadPluginModule(new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url))
@@ -156,6 +170,25 @@ describe('system actions plugin', () => {
     }
   })
 
+  it('marks permission sdk unavailable as permission missing when shell is otherwise available', async () => {
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: withoutGlobal(),
+      }),
+    )
+    pluginModule.__test.setSpawnShellCommandForTest(() => ({
+      on() {
+        return this
+      },
+    }))
+
+    expect(await pluginModule.__test.resolveFeatureShellCapabilityState('darwin')).toMatchObject({
+      status: 'permission-missing',
+      reason: 'permission-sdk-unavailable',
+    })
+  })
+
   it('returns empty hint when no matches', async () => {
     const items: Array<{ title?: string }> = []
     const globals = createTestGlobals(items, true)
@@ -226,6 +259,50 @@ describe('system actions plugin', () => {
     })
   })
 
+  it('executes main window action without shell permission sdk', async () => {
+    let shown = 0
+    let focused = 0
+    const previousApp = (globalThis as Record<string, any>).$app
+    ;(globalThis as Record<string, any>).$app = {
+      window: {
+        window: {
+          show() { shown += 1 },
+          focus() { focused += 1 },
+        },
+      },
+    }
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: withoutGlobal(),
+      }),
+    )
+
+    try {
+      const result = await pluginModule.onItemAction({
+        meta: {
+          defaultAction: 'system-actions',
+          actionId: 'open-main-window',
+        },
+      })
+
+      expect(result).toMatchObject({
+        externalAction: true,
+        status: 'started',
+      })
+      expect(shown).toBe(1)
+      expect(focused).toBe(1)
+    }
+    finally {
+      if (typeof previousApp === 'undefined') {
+        delete (globalThis as Record<string, any>).$app
+      }
+      else {
+        ;(globalThis as Record<string, any>).$app = previousApp
+      }
+    }
+  })
+
   it('blocks shell action execution when safe-shell is unavailable before permission request', async () => {
     const requested: string[] = []
     const globals = createPluginGlobals({
@@ -257,5 +334,108 @@ describe('system actions plugin', () => {
       })
       expect(requested).toEqual([])
     }
+  })
+
+  it('does not execute shell action when permission sdk is unavailable', async () => {
+    const shellCalls: string[] = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: withoutGlobal(),
+      }),
+    )
+    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'system-actions',
+        actionId: 'lock-screen',
+      },
+    })
+
+    if (!systemTest.isShellPlatformSupported(process.platform)) {
+      expect(result).toMatchObject({
+        externalAction: true,
+        status: 'blocked',
+        reason: `platform:${process.platform}`,
+      })
+      expect(shellCalls).toEqual([])
+      return
+    }
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-sdk-unavailable',
+    })
+    expect(shellCalls).toEqual([])
+  })
+
+  it('does not execute shell action when permission is denied', async () => {
+    const shellCalls: string[] = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => false,
+          request: async () => false,
+        },
+      }),
+    )
+    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'system-actions',
+        actionId: 'lock-screen',
+      },
+    })
+
+    if (!systemTest.isShellPlatformSupported(process.platform)) {
+      expect(result).toMatchObject({ reason: `platform:${process.platform}` })
+      return
+    }
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-denied',
+    })
+    expect(shellCalls).toEqual([])
+  })
+
+  it('does not execute shell action when permission request fails', async () => {
+    const shellCalls: string[] = []
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      createPluginGlobals({
+        permission: {
+          check: async () => false,
+          request: async () => {
+            throw new Error('permission transport failed')
+          },
+        },
+      }),
+    )
+    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
+
+    const result = await pluginModule.onItemAction({
+      meta: {
+        defaultAction: 'system-actions',
+        actionId: 'lock-screen',
+      },
+    })
+
+    if (!systemTest.isShellPlatformSupported(process.platform)) {
+      expect(result).toMatchObject({ reason: `platform:${process.platform}` })
+      return
+    }
+
+    expect(result).toMatchObject({
+      externalAction: true,
+      status: 'blocked',
+      reason: 'permission-request-failed',
+    })
+    expect(shellCalls).toEqual([])
   })
 })

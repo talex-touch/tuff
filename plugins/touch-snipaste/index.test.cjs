@@ -73,6 +73,7 @@ function loadPluginModule(filename) {
 const snipastePlugin = loadPluginModule(path.join(__dirname, 'index.js'))
 const {
   buildCapabilityMeta,
+  formatBlockedMessage,
   normalizeAction,
   normalizeArgs,
   runSnipaste,
@@ -110,6 +111,12 @@ test('buildCapabilityMeta exposes shell capability audit fields', () => {
   assert.equal(meta.capability.actionId, 'builtin:snip')
 })
 
+test('formatBlockedMessage keeps permission failure reasons user-visible', () => {
+  assert.equal(formatBlockedMessage('permission-denied'), '缺少 system.shell 权限')
+  assert.equal(formatBlockedMessage('permission-sdk-unavailable'), '权限系统不可用，无法启动 Snipaste')
+  assert.equal(formatBlockedMessage('permission-request-failed'), '权限请求失败，无法启动 Snipaste')
+})
+
 test('runSnipaste blocks before spawn when permission is missing', async () => {
   const originalCheck = globalThis.permission.check
   const originalRequest = globalThis.permission.request
@@ -119,11 +126,42 @@ test('runSnipaste blocks before spawn when permission is missing', async () => {
   try {
     const result = await runSnipaste(['snip'])
     assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-missing')
+    assert.equal(result.reason, 'permission-denied')
   }
   finally {
     globalThis.permission.check = originalCheck
     globalThis.permission.request = originalRequest
+  }
+})
+
+test('permission diagnostics fail closed when permission sdk is unavailable', async () => {
+  const originalPermission = globalThis.permission
+  delete globalThis.permission
+
+  try {
+    const pluginWithoutPermission = loadPluginModule(path.join(__dirname, 'index.js'))
+    const state = await pluginWithoutPermission.__test.getShellPermissionState()
+    assert.equal(state.granted, false)
+    assert.equal(state.status, 'permission-missing')
+    assert.equal(state.reason, 'permission-sdk-unavailable')
+  }
+  finally {
+    globalThis.permission = originalPermission
+  }
+})
+
+test('runSnipaste blocks before spawn when permission sdk is unavailable', async () => {
+  const originalPermission = globalThis.permission
+  delete globalThis.permission
+
+  try {
+    const pluginWithoutPermission = loadPluginModule(path.join(__dirname, 'index.js'))
+    const result = await pluginWithoutPermission.__test.runSnipaste(['snip'])
+    assert.equal(result.status, 'blocked')
+    assert.equal(result.reason, 'permission-sdk-unavailable')
+  }
+  finally {
+    globalThis.permission = originalPermission
   }
 })
 

@@ -122,26 +122,44 @@ function buildCapabilityMeta({
 }
 
 async function getShellPermissionState() {
-  if (!permission) {
-    return { granted: true, status: 'available', reason: 'permission-api-unavailable' }
+  if (!permission?.check) {
+    return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
   }
 
-  const granted = Boolean(await permission.check(SHELL_PERMISSION_ID))
-  return granted
-    ? { granted: true, status: 'available', reason: '' }
-    : { granted: false, status: 'permission-missing', reason: 'system.shell permission is required' }
+  try {
+    const granted = Boolean(await permission.check(SHELL_PERMISSION_ID))
+    return granted
+      ? { granted: true, status: 'available', reason: '' }
+      : { granted: false, status: 'permission-missing', reason: 'system.shell permission is required' }
+  }
+  catch {
+    logger?.warn?.('[touch-snipaste] Failed to check permission')
+    return { granted: false, status: 'permission-missing', reason: 'permission-check-failed' }
+  }
+}
+
+async function requestShellPermissionState() {
+  if (!permission?.check || !permission?.request)
+    return { granted: false, reason: 'permission-sdk-unavailable' }
+
+  try {
+    const hasPermission = await permission.check(SHELL_PERMISSION_ID)
+    if (hasPermission)
+      return { granted: true, reason: '' }
+
+    const granted = await permission.request(SHELL_PERMISSION_ID, '需要 system.shell 权限启动 Snipaste')
+    return granted
+      ? { granted: true, reason: '' }
+      : { granted: false, reason: 'permission-denied' }
+  }
+  catch {
+    logger?.warn?.('[touch-snipaste] Failed to request permission')
+    return { granted: false, reason: 'permission-request-failed' }
+  }
 }
 
 async function requestShellPermission() {
-  if (!permission)
-    return true
-
-  const hasPermission = await permission.check(SHELL_PERMISSION_ID)
-  if (hasPermission)
-    return true
-
-  const granted = await permission.request(SHELL_PERMISSION_ID, '需要 system.shell 权限启动 Snipaste')
-  return Boolean(granted)
+  return (await requestShellPermissionState()).granted
 }
 
 function buildInfoItem({ id, featureId, title, subtitle, meta }) {
@@ -173,6 +191,20 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, capability 
       }),
     })
     .build()
+}
+
+function formatBlockedMessage(reason) {
+  if (reason === 'permission-denied')
+    return '缺少 system.shell 权限'
+  if (reason === 'permission-sdk-unavailable')
+    return '权限系统不可用，无法启动 Snipaste'
+  if (reason === 'permission-request-failed')
+    return '权限请求失败，无法启动 Snipaste'
+  if (reason === 'permission-check-failed')
+    return '权限检查失败，无法启动 Snipaste'
+  if (reason === 'permission-missing')
+    return '缺少 system.shell 权限'
+  return 'Snipaste 命令已阻止'
 }
 
 function normalizeArgs(args) {
@@ -354,12 +386,12 @@ function spawnCommand(command, args) {
 
 async function runSnipaste(args, options = {}) {
   if (options.checkPermission !== false) {
-    const granted = await requestShellPermission()
-    if (!granted) {
+    const permissionState = await requestShellPermissionState()
+    if (!permissionState.granted) {
       return {
         status: 'blocked',
         ok: false,
-        reason: 'permission-missing',
+        reason: permissionState.reason,
       }
     }
   }
@@ -518,7 +550,7 @@ const pluginLifecycle = {
           success: false,
           status: 'blocked',
           reason: result.reason,
-          message: result.reason === 'permission-missing' ? '缺少 system.shell 权限' : 'Snipaste 命令已阻止',
+          message: formatBlockedMessage(result.reason),
         }
       }
       if (!result.ok) {
@@ -551,6 +583,8 @@ module.exports = {
     matchesKeyword,
     normalizeArgs,
     runSnipaste,
+    getShellPermissionState,
     buildCapabilityMeta,
+    formatBlockedMessage,
   },
 }

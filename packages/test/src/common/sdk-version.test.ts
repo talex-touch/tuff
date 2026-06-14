@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import {
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
+  isSupportedSdkVersion,
   resolveSdkApiVersion,
   SdkApi,
 } from '@talex-touch/utils/plugin'
@@ -28,8 +29,12 @@ function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
 }
 
 describe('sdk-version', () => {
-  it('treats 260428 as the current supported sdkapi marker', () => {
-    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260428)
+  it('treats 260615 as the current sdkapi marker and keeps 260428 supported', () => {
+    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260615)
+    expect(resolveSdkApiVersion(SdkApi.V260615)).toBe(SdkApi.V260615)
+    expect(checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning).toBeUndefined()
+
+    expect(isSupportedSdkVersion(SdkApi.V260428)).toBe(true)
     expect(resolveSdkApiVersion(SdkApi.V260428)).toBe(SdkApi.V260428)
     expect(checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning).toBeUndefined()
   })
@@ -53,11 +58,17 @@ describe('sdk-version', () => {
     expect(compatibility.warning).toContain('260501')
   })
 
-  it('keeps bundled plugin manifests on the current sdkapi marker', () => {
-    const outdated = readPluginManifests()
-      .filter(({ sdkapi }) => sdkapi !== CURRENT_SDK_VERSION)
+  it('keeps bundled plugin manifests on explicitly supported sdkapi markers', () => {
+    const manifests = readPluginManifests()
+    const unsupported = manifests
+      .filter(({ sdkapi }) => !isSupportedSdkVersion(sdkapi))
       .map(({ pluginName, sdkapi }) => `${pluginName}:${String(sdkapi)}`)
+    const currentMarkerPlugins = manifests
+      .filter(({ sdkapi }) => sdkapi === CURRENT_SDK_VERSION)
+      .map(({ pluginName }) => pluginName)
+      .sort()
 
-    expect(outdated).toEqual([])
+    expect(unsupported).toEqual([])
+    expect(currentMarkerPlugins).toEqual(['touch-intelligence'])
   })
 })

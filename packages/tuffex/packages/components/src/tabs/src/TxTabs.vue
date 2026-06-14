@@ -43,6 +43,20 @@ function getDefaultChildren(vnode: any): any[] {
     : []
 }
 
+function resolveTabNavSlots(vnode: any): Record<string, () => any> | undefined {
+  const children = vnode?.children
+  if (!children || typeof children !== 'object')
+    return undefined
+
+  const navSlots: Record<string, () => any> = {}
+  if (typeof children.icon === 'function')
+    navSlots.icon = children.icon
+  if (typeof children.name === 'function')
+    navSlots.name = children.name
+
+  return Object.keys(navSlots).length > 0 ? navSlots : undefined
+}
+
 export default defineComponent({
   name: 'TxTabs',
   props: {
@@ -448,7 +462,7 @@ export default defineComponent({
             })
           }
         },
-      })
+      }, resolveTabNavSlots(vnode))
 
       return tab
     }

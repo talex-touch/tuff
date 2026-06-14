@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { reactive, ref } from 'vue'
 import { initializeRendererStorage } from '../renderer/storage/bootstrap'
 import {
   initStorageChannel,
@@ -142,7 +143,46 @@ describe('renderer storage transport bootstrap', () => {
     expect(compat.channel.send).not.toHaveBeenCalled()
   })
 
-  it('keeps TouchStorage save stable when transport returns undefined', async () => {
+  it('sends a plain cloneable payload when storage contains nested Vue refs', async () => {
+    const transport = createTransportMock({
+      'plain-save.ini': { data: {}, version: 1 },
+    })
+    transport.send.mockImplementation(async (event: unknown, payload?: { key?: string }) => {
+      if (event === StorageEvents.app.save) {
+        return { success: true, version: 2 }
+      }
+      if (payload?.key) {
+        return { data: {}, version: 1 }
+      }
+      return null
+    })
+
+    initializeRendererStorage(transport as any)
+    const storage = new TouchStorage('plain-save.ini', {
+      nested: reactive({
+        models: [ref('gpt-4.1'), reactive({ id: 'claude-sonnet-4' })],
+      }),
+    })
+
+    await storage.whenHydrated()
+    storage.data.nested = reactive({
+      models: [ref('gpt-5'), reactive({ id: 'gemini-2.5-pro' })],
+    })
+    await storage.saveToRemote({ force: true })
+
+    expect(transport.send).toHaveBeenCalledWith(
+      StorageEvents.app.save,
+      expect.objectContaining({
+        value: {
+          nested: {
+            models: ['gpt-5', { id: 'gemini-2.5-pro' }],
+          },
+        },
+      }),
+    )
+  })
+
+  it('reports remote save failure when transport returns undefined', async () => {
     const transport = createTransportMock({
       'unstable-save.ini': { data: { source: 'transport' }, version: 3 },
     })
@@ -161,7 +201,13 @@ describe('renderer storage transport bootstrap', () => {
     const storage = new TouchStorage('unstable-save.ini', { source: 'initial' })
 
     await storage.whenHydrated()
-    await expect(storage.saveToRemote({ force: true })).resolves.toBeUndefined()
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: 'unstable-save.ini',
+        reason: 'remote-failed',
+        version: 3,
+      },
+    })
 
     expect(storage.savingState.value).toBe(false)
     expect(warnSpy).toHaveBeenCalledWith(
@@ -170,7 +216,7 @@ describe('renderer storage transport bootstrap', () => {
     )
   })
 
-  it('keeps TouchStorage save stable when transport returns a malformed result', async () => {
+  it('reports remote save failure when transport returns a malformed result', async () => {
     const transport = createTransportMock({
       'malformed-save.ini': { data: { source: 'transport' }, version: 4 },
     })
@@ -189,7 +235,13 @@ describe('renderer storage transport bootstrap', () => {
     const storage = new TouchStorage('malformed-save.ini', { source: 'initial' })
 
     await storage.whenHydrated()
-    await expect(storage.saveToRemote({ force: true })).resolves.toBeUndefined()
+    await expect(storage.saveToRemote({ force: true })).rejects.toMatchObject({
+      details: {
+        key: 'malformed-save.ini',
+        reason: 'remote-failed',
+        version: 4,
+      },
+    })
 
     expect(storage.savingState.value).toBe(false)
     expect(warnSpy).toHaveBeenCalledWith(
