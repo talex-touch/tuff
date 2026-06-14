@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-2022, macos-latest, ubuntu-latest]
 
     steps:
       - name: Check out git repository
@@ -166,7 +166,7 @@ jobs:
           echo "Build artifacts and caches cleaned"
 
       - name: Clean Windows Build Artifacts
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: powershell
         run: |
           Write-Host "Cleaning previous Windows build artifacts..."
@@ -195,7 +195,7 @@ jobs:
           Write-Host "Windows build artifacts cleaned"
 
       - name: Check Windows Disk Space and Write Permission
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: powershell
         run: |
           Write-Host "Checking disk space and write permission..."
@@ -213,7 +213,7 @@ jobs:
           }
 
       - name: Prepare Windows Build Environment
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: powershell
         run: |
           Write-Host "Preparing Windows build environment..."
@@ -524,7 +524,7 @@ jobs:
           fi
 
       - name: Assert Windows Installer Exists
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: powershell
         run: |
           $distPath = "apps/core-app/dist"
@@ -618,7 +618,7 @@ jobs:
           if-no-files-found: error
 
       - name: Cleanup Artifacts for Windows
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         shell: powershell
         run: |
           $distPath = "apps/core-app/dist"
