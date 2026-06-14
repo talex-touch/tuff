@@ -5,6 +5,12 @@
 
 ## 2026-06-14
 
+### fix(nexus): build TuffEx root package before Cloudflare Pages build
+
+- `apps/nexus/package.json`
+  - Nexus production build now runs the root `packages/tuffex` build instead of only `packages/tuffex/packages/components`, ensuring `dist/es/base.css`, component `style.css` entries, and package exports are generated in clean CI environments.
+  - Fixes Cloudflare Pages / Nuxt production builds failing to resolve `@talex-touch/tuffex/base.css` from `packages/tuffex/dist/es/base.css`.
+
 ### fix(ci): pin Windows release runner to stable VS toolchain
 
 - `.github/workflows/build-and-release.yml`
