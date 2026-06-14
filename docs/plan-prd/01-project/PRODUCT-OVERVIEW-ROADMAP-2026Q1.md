@@ -1,6 +1,6 @@
 # Tuff 产品总览与路线图
 
-> 更新时间：2026-06-13
+> 更新时间：2026-06-14
 > 定位：产品目标与版本路线主入口。压缩前完整快照见 `./archive/PRODUCT-OVERVIEW-ROADMAP-2026Q1-pre-compression-2026-05-14.md`。
 
 ## 1. 产品定义
@@ -24,7 +24,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 | 质量目标 | 建立稳定质量门禁，typecheck/lint/test/build 可复现、可追踪 | PR lint 已收敛为 changed-file lint；2026-05-25 UI/兼容/占位/架构审计未发现新的 P0 fixed fake-success，并把 legacy alias hard-cut、旧 snippets placeholder、memory fallback 证据分层、preload/dialog 安全收口与 TuffEx visual smoke 列为近期治理项；2026-05-26 已收口 preload debug 运行时日志文本化与同段 debug console 清理；2026-05-29 增量审计继续未发现新的 P0 fixed fake-success，确认 Nexus/TuffEx 组合 demo 与 dashboard chart wrapper 改善 UI 完善度；同日已落地 legacy alias hit telemetry/hard-cut 判定记录、旧 snippets hidden/deprecated/replacedBy 退场、Nexus evidence source enum/UI 分层、dialog message 文本/可信 HTML 分流与 TuffEx visual smoke 脚本；2026-06-06 增量审计继续未发现生产路径 P0 fixed fake-success，dialog trusted HTML boundary 与 Widget runtime sandbox evidence 已完成 focused 切片；2026-06-13 当前代码版本 root/CoreApp `2.4.11-beta.8`，本地 `HEAD=47787615b fix(tuffex): make style entry build idempotent` 且 `master` 相对 `origin/master` 领先 9 个提交；CLI publish 旧 token 交互刷新已落地且非交互仍 fail-closed，`touch-music`/`touch-image` 示例插件清理已完成；剩余高信号风险收敛为 release checklist/质量门禁、publish/release integrity evidence、UI 语义控件、Widget 扩展边界长尾与 File write/store boundary；Windows/macOS 真机人工回归后移为平台专项，不阻塞本轮 `2.4.11` 收口；2026-05-18 已删除独立 OmniPanel Gate workflow，OmniPanel scoped typecheck/lint/unit/build/smoke 不再作为 GitHub Actions 自动门禁；`quality:release` 仍受 CoreApp 既有 lint debt 阻断，需记录替代验证；旧 compat registry / legacy allowlist / size allowlist 已退场 |
 | 发布目标 | 打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环 | `build-and-release` 为桌面发版主线；`v2.4.10` GitHub Release 与 Nexus release metadata sync 已成功；当前代码版本已到 `v2.4.11-beta.8`，`v2.4.11-beta.6` GitHub prerelease 与 Nexus BETA latest sync 成功、发布后 Gate D strict 通过的证据仍作为最近完整发布链路记录；Nexus 资产 sha256/signatureUrl 与 signature endpoint 仍是 release integrity debt；`@talex-touch/tuffex@0.3.7` 补发链路已完成本地等价验证，`@talex-touch/tuff-cli@0.0.7` 已补 publish 旧 token 刷新体验；其余公共 npm 子包补发仍需仓库 token 覆盖 `@talex-touch` scope |
 | 产品目标 | Flow / DivisionBox / Intelligence 核心能力闭环 | 当前主线转入 `2.4.11` 稳定化与债务退场 |
-| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但体验闭环仍缺 packaged Electron 文本/OCR成功与失败路径证据；2.5.0 Stable 只承诺文本 + OCR，2.5.3 / 2.5.5 / 2.5.8 保持本地知识检索、本地模型运行时与 ASR 的 PRD 锁方向，不抢 2.4.11 稳定化 |
+| AI 目标 | CoreBox / OmniPanel 成为桌面 AI 主入口，AI Runtime 可观测、可恢复 | AI 已有 Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但体验闭环仍缺 packaged Electron 文本/OCR成功与失败路径证据；2.5.0 Stable 只承诺文本 + OCR，2.5.3 / 2.5.4 / 2.5.5 / 2.5.8 保持本地知识检索、ContextHygiene 与自动记忆治理、本地模型运行时与 ASR 的 PRD 锁方向，不抢 2.4.11 稳定化 |
 | Provider 目标 | Nexus Provider registry + Scene 编排承载汇率、AI、翻译、图片/截图翻译 | 已有最小 runtime/API/Dashboard/ledger，后续补旧表退场、高级策略与 Nexus invoke 未登录/provider 不可用/quota 不足/model 不支持的可见证据 |
 | 插件数据源目标 | 官方插件扩展本地 App 数据搜索，并把 Windows Everything 收口到可诊断、可回归、可受控发布 | 已新增 App Data Plugins 与 Everything Roadmap；当前第一优先级是 File write/store boundary 迁移，其次 Browser Bookmarks official `touch-browser-data` runtime source lifecycle，再补 Everything registry PATH、Windows App indexing、手动索引完成通知、Quicklinks feed/UI evidence |
 
@@ -125,6 +125,19 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 不把上传即 embedding 即 vector db 作为 MVP，不在第一版引入 Tantivy/HNSW 独立索引。
 - 检索能力独立于 2.5.5 本地模型 runtime，可服务 Nexus / 云端 / 本地模型。
 
+### 2.5.4 - ContextHygiene 与自动记忆治理
+
+**目标**：把 TuffIntelligence ContextHygiene 抽成上下文治理层，让用户可以随时提问，但系统不会默认继承无限长历史；新会话有 checkpoint 边界，旧会话只在相关时检索召回，稳定事实通过 MemoryPolicy 沉淀为可查看、可禁用、可删除的记忆。
+
+**方向**：
+
+- Session Boundary / Checkpoint 优先：长时间未活跃、显式新话题、手动新会话、任务切换与 token overflow 都可创建边界。
+- 默认轻上下文：新 session 不注入旧 session 原文；用户显式“继续刚才”时才优先召回旧摘要。
+- 自动压缩必须结构化：保留目标、决策、约束、产物、未完成事项和记忆候选，不保存普通流水账摘要作为唯一依据。
+- Memory 分层治理：区分临时上下文、会话摘要、任务记忆、用户偏好、知识记忆与敏感记忆；敏感信息默认不进入普通记忆。
+- ContextPackage 可解释：每段被注入的历史、记忆或检索片段都要带来源、reason 与 token 预算。
+- LangChain 只作为执行/编排层，Tuff-owned SQLite Session / Checkpoint / Memory 模型仍是业务 SoT。
+
 ### 2.5.5 - 本地开源模型运行时
 
 **目标**：把本地开源大模型升级为 Tuff Intelligence 的一等运行方向，用户可在本机下载、管理并运行轻量模型，文本能力优先本地执行并可回退云端 provider。
@@ -136,7 +149,7 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - Runtime 管理覆盖模型目录、下载/删除、加载/停止、健康状态、失败原因与流式输出。
 - 首批只承诺文本能力：`text.chat`、翻译、摘要、改写、代码解释/Review；多模态生成编辑不进入 2.5.5 Stable。
 - 新增接口继续走 typed transport / domain SDK，并复用现有 Provider / Capability / Audit / Workflow 路由。
-- 不实现本地知识库索引、Context Builder、ASR 或 TTS；这些分别归属 2.5.3 与 2.5.8。
+- 不实现本地知识库索引、Context Builder、ContextHygiene、ASR 或 TTS；这些分别归属 2.5.3、2.5.4 与 2.5.8。
 
 ### App Data Plugins 与 Everything 收口 - 官方数据源插件路线
 

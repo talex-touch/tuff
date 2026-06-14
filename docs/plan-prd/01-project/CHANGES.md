@@ -5,6 +5,19 @@
 
 ## 2026-06-14
 
+### docs(ai): add ContextHygiene and memory governance PRD
+
+- `docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/INDEX.md`
+  - Added the 2.5.4 direction for TuffIntelligence ContextHygiene, covering session boundaries, checkpoints, rolling summaries, automatic memory governance, prompt budget, and explainable ContextPackage assembly.
+  - Locked the product rule that new sessions do not inherit old session raw context by default; old sessions can only be injected through relevance-based retrieval or explicit user continuation intent.
+  - Clarified that LangChain can be an orchestration/execution layer, while Tuff-owned SQLite Session / Checkpoint / Memory models remain the business SoT.
+  - Expanded the PRD into an implementation-ready shape with module responsibilities, Session/Memory state machines, ScopeDecision API, SQLite schema details, MemoryPolicy sensitive blocking, UI settings, observability, fixed evidence items, and unit/integration/UI test plans.
+
 ### fix(plugin): preserve Dev Toolbox network permission block reasons
 
 - `plugins/touch-dev-toolbox/index.js`

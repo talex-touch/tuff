@@ -1,6 +1,6 @@
 # PRD 质量基线
 
-> 更新时间：2026-06-13
+> 更新时间：2026-06-14
 > 定位：活跃 PRD 的最小质量约束。压缩前完整规则快照见 `./archive/PRD-QUALITY-BASELINE-pre-compression-2026-05-14.md`。
 
 ## 1. 适用范围
@@ -21,6 +21,7 @@
 - `2.4.11` 必须关闭或显式降权剩余 legacy/compat/size 债务，并以 release checklist、质量门禁、release integrity 与 npm publish evidence 为本轮收口主线；按最新维护决策，Windows/macOS 真机人工回归不纳入本轮阻塞项，后移为平台专项。
 - `2.5.0` AI Stable 只承诺文本 + OCR；Workflow/Skills/Automation 为 Beta；Assistant、多模态生成编辑、Nexus Scene runtime orchestration 为 Experimental 或后续。AI 已有 CoreApp Intelligence module、provider runtime、workflow service、agent/tool channels、OmniPanel Writing Tools 与 Assistant typed transport，但只有 packaged Electron 文本/OCR成功与失败路径证据补齐后才能宣称体验闭环。
 - `2.5.3` 本地知识检索方向已锁定：SQLite / FTS5 / metadata / Context Builder 优先，embeddings 与 rerank 是增强项；MVP 不引入独立向量数据库服务。
+- `2.5.4` ContextHygiene 与自动记忆治理方向已锁定：Session / Checkpoint / CompressionSnapshot / MemoryItem / ContextPackage 必须以本地 SQLite 为 SoT；新 session 不默认继承旧 session 原文，旧会话只允许通过相关性检索或用户显式继续意图注入。
 - `2.5.5` 本地模型运行时方向已锁定：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重不得进入安装包、同步载荷或普通日志。
 - `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
 - App Data Plugins 与 Everything 收口已新增 Roadmap：新增 Browser Data、Obsidian、VSCode、macOS App Data、Epic 等数据源必须显式授权、只读优先、可清理索引、可见 degraded/unsupported reason；Windows Everything 必须明确 SDK/CLI 策略、路径授权过滤与真机 evidence。
@@ -101,7 +102,8 @@
 - 未登录、provider 不可用、quota 不足、model/capability 不支持、网络失败必须返回明确错误和用户可见恢复建议，不得返回空结果或伪成功。
 - Provider metadata chips 至少展示 capability/provider/model/latency/trace 中的可用字段；缺失字段必须有 pending/unavailable fallback，不能渲染空 footer。
 - Provider secret、API key、prompt/response 明文不得进入普通配置、localStorage、日志或同步 JSON；审计默认只记录 trace/provider/model/latency/usage/success/errorCode。
-- `2.5.3` / `2.5.5` / `2.5.8` 在当前稳定窗口只允许文档、schema 或小型 SDK 探索，不得把本地大模型、语音或多模态生成提前作为 `2.4.11` 或 `2.5.0 Stable` blocker。
+- `2.5.3` / `2.5.4` / `2.5.5` / `2.5.8` 在当前稳定窗口只允许文档、schema 或小型 SDK 探索，不得把本地知识库、自动长期记忆、本地大模型、语音或多模态生成提前作为 `2.4.11` 或 `2.5.0 Stable` blocker。
+- ContextHygiene 必须可解释 prompt 组装来源；MemoryPolicy 必须在写入前拦截 API key、token、恢复码、口令等敏感内容，ContextPackage 日志默认只记录 source id、reason、token estimate 与 trace，不保存完整 prompt/response。
 
 ### 4.9 App Data / Indexing Runtime
 
