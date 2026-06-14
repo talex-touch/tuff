@@ -5,6 +5,23 @@
 
 ## 2026-06-14
 
+### fix(corebox): hide plugin MetaK hints unless declared
+
+- `apps/core-app/src/renderer/src/components/render/CoreBoxFooter.vue`
+- `apps/core-app/src/renderer/src/components/render/coreBoxFooterHints.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/plugin/sdk/meta/README.md`
+  - Plugin feature entries and plugin-provided widget items now hide the CoreBox footer MetaK/Quick Actions hint by default; plugins must explicitly declare `footerHints.secondary.visible: true` to show it.
+  - Plugin feature manifests now preserve `footerHints` through the runtime feature model and generated `TuffItem.meta`, reusing the existing TUFF footer-hints SDK contract.
+  - MetaOverlay execution now returns explicit success/failure, hides immediately on selection, and guards duplicate Enter/click dispatch.
+  - MetaOverlay item actions now route common `navigate` / `copy` / `open` / `execute` action types through the renderer action pipeline instead of always falling back to default item execution.
+  - 验证：`pnpm -C "apps/core-app" exec vitest run "src/main/modules/plugin/adapters/plugin-features-adapter.test.ts" "src/renderer/src/modules/box/adapter/hooks/useActionPanel.test.ts" "src/main/modules/box-tool/core-box/meta-overlay.test.ts" "src/renderer/src/components/render/coreBoxFooterHints.test.ts"` 通过；`pnpm -C "apps/core-app" exec vue-tsc --noEmit --pretty false` 通过。
+
 ### feat(core-app): add sticky manual save for capability config
 
 - `apps/core-app/src/renderer/src/modules/hooks/useIntelligenceManager.ts`

@@ -421,7 +421,10 @@ export class MetaOverlayManager {
    * @param actionId - The action ID to execute
    * @param item - The item context for the action
    */
-  public async executeAction(actionId: string, item?: TuffItem): Promise<void> {
+  public async executeAction(
+    actionId: string,
+    item?: TuffItem
+  ): Promise<{ success: boolean; error?: string }> {
     // Find the action
     let action: MetaAction | undefined
     let pluginId: string | undefined
@@ -444,14 +447,14 @@ export class MetaOverlayManager {
     if (!targetItem) {
       metaOverlayLog.warn(`Cannot execute action ${actionId}: missing item context`)
       this.hide()
-      return
+      return { success: false, error: 'Missing item context' }
     }
 
     const runtime = getCoreBoxRuntimeOrNull()
     if (!runtime) {
       metaOverlayLog.debug(`Skip executing action ${actionId}: CoreBox runtime unavailable`)
       this.hide()
-      return
+      return { success: false, error: 'CoreBox runtime unavailable' }
     }
 
     const touchApp = runtime.app
@@ -503,6 +506,7 @@ export class MetaOverlayManager {
 
     // Hide MetaOverlay after execution
     this.hide()
+    return { success: true }
   }
 
   /**

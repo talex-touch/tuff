@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   listeners: new Map<string, (payload?: unknown) => void>(),
   send: vi.fn(),
   showInFolder: vi.fn(),
+  openApp: vi.fn(),
+  openExternal: vi.fn(),
   refreshSearch: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn()
@@ -27,7 +29,9 @@ vi.mock('@talex-touch/utils/transport', () => ({
 
 vi.mock('@talex-touch/utils/renderer', () => ({
   useAppSdk: () => ({
-    showInFolder: state.showInFolder
+    showInFolder: state.showInFolder,
+    openApp: state.openApp,
+    openExternal: state.openExternal
   })
 }))
 
@@ -139,5 +143,50 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     })
     expect(item.meta?.pinned?.isPinned).toBe(true)
     expect(state.refreshSearch).toHaveBeenCalledTimes(1)
+  })
+
+  it('executes item open actions through the app sdk instead of falling back to default execute', async () => {
+    useActionPanel()
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'open',
+      item: createItem({
+        actions: [
+          {
+            id: 'open',
+            type: 'open',
+            label: 'Open',
+            payload: { path: '/Applications/CC Switch 2.app' }
+          }
+        ]
+      })
+    })
+    await flushAsyncAction()
+
+    expect(state.openApp).toHaveBeenCalledWith({ path: '/Applications/CC Switch 2.app' })
+    expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
+  })
+
+  it('routes item navigate actions through the provided navigation callback', async () => {
+    const navigate = vi.fn()
+    useActionPanel({ navigate })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'open-settings',
+      item: createItem({
+        actions: [
+          {
+            id: 'open-settings',
+            type: 'navigate',
+            label: 'Open settings',
+            payload: { path: '/settings/plugins' }
+          }
+        ]
+      })
+    })
+    await flushAsyncAction()
+
+    expect(navigate).toHaveBeenCalledWith('/settings/plugins')
+    expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
 })

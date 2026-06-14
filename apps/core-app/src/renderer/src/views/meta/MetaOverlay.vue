@@ -22,6 +22,7 @@ const searchQuery = ref('')
 const activeIndex = ref(0)
 const item = ref<TuffItem | null>(null)
 const allActions = ref<MetaAction[]>([])
+const executingActionId = ref<string | null>(null)
 
 const searchInput = ref<HTMLInputElement>()
 
@@ -93,6 +94,7 @@ const flatActions = computed(() => {
 // Listen for show/hide messages from main process via IPC
 const unregShow = transport.on(MetaOverlayEvents.ui.show, (data: MetaShowRequest) => {
   item.value = data.item
+  executingActionId.value = null
   const merged: MetaAction[] = [
     ...(data.pluginActions || []),
     ...(data.itemActions || []),
@@ -106,6 +108,7 @@ const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
   visible.value = false
   searchQuery.value = ''
   activeIndex.value = 0
+  executingActionId.value = null
 })
 
 // Focus search input when visible
@@ -195,15 +198,28 @@ function normalizeShortcut(shortcut: string): string {
 }
 
 async function handleActionExecute(action: MetaAction) {
+  if (executingActionId.value || action.render.disabled) {
+    return
+  }
+
+  executingActionId.value = action.id
+  visible.value = false
   try {
     const payload: MetaActionExecuteRequest & { item?: TuffItem } = {
       actionId: action.id,
       itemId: item.value?.id ?? '',
       item: item.value ?? undefined
     }
-    await transport.send(MetaOverlayEvents.action.execute, payload)
+    const response = await transport.send(MetaOverlayEvents.action.execute, payload)
+    if (response && response.success === false) {
+      throw new Error(response.error || 'MetaOverlay action failed')
+    }
   } catch (error) {
     metaOverlayLog.error('Failed to execute action', error)
+  } finally {
+    searchQuery.value = ''
+    activeIndex.value = 0
+    executingActionId.value = null
   }
 }
 

@@ -76,6 +76,31 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.extension?.matchResult).toEqual([{ start: 0, end: 7 }])
   })
 
+  it('hides MetaK footer hints for plugin feature items by default', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const item = adapter.createTuffItem(createPlugin(), createFeature())
+
+    expect(item.meta?.footerHints?.secondary?.visible).toBe(false)
+  })
+
+  it('honors explicit plugin feature footer hint declarations', () => {
+    const adapter = new PluginFeaturesAdapter()
+    const item = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      footerHints: {
+        secondary: {
+          visible: true,
+          label: 'More'
+        }
+      }
+    })
+
+    expect(item.meta?.footerHints?.secondary).toMatchObject({
+      visible: true,
+      label: 'More'
+    })
+  })
+
   it('does not repopulate feature items for active push features with empty query', async () => {
     const adapter = new PluginFeaturesAdapter()
     const pushFeature = { ...createFeature(), push: true }
@@ -184,6 +209,50 @@ describe('plugin-features-adapter', () => {
     expect(activation?.forceMax).toBe(true)
     expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
       expect.objectContaining({ showInput: false, forceMax: true })
+    ])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('keeps push widget feature activations at normal height by default', async () => {
+    const adapter = new PluginFeaturesAdapter()
+    const feature = {
+      ...createFeature(),
+      push: true,
+      interaction: {
+        type: 'widget',
+        path: 'panel',
+        showInput: true,
+        allowInput: true
+      }
+    } as IPluginFeature
+    const triggerFeature = vi.fn(async () => true)
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeature: vi.fn(() => feature),
+      triggerFeature
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    const activation = await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: {
+          pluginName: 'test-plugin',
+          featureId: feature.id
+        }
+      },
+      searchResult: {
+        query: { text: 'hello' },
+        items: []
+      }
+    } as never)
+
+    expect(activation?.forceMax).toBe(false)
+    expect(searchEngineCore.activateProviders).toHaveBeenCalledWith([
+      expect.objectContaining({ forceMax: false, hideResults: false, showInput: true })
     ])
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })

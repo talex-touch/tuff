@@ -16,6 +16,18 @@ import {
 } from '../../../../../../shared/events/corebox-scenes'
 import { devLog } from '~/utils/dev-log'
 
+function getActionPayloadString(payload: unknown, key: string): string {
+  if (!payload || typeof payload !== 'object') return ''
+  const value = (payload as Record<string, unknown>)[key]
+  return typeof value === 'string' ? value : ''
+}
+
+function getItemOpenTarget(targetItem: TuffItem): string {
+  return (
+    targetItem.meta?.app?.path || targetItem.meta?.file?.path || targetItem.meta?.web?.url || ''
+  )
+}
+
 interface UseActionPanelOptions {
   openFlowSelector?: (item: TuffItem) => void
   refreshSearch?: () => void
@@ -118,11 +130,48 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
       }
       default:
         if (itemAction?.type === 'navigate') {
-          const path = typeof itemAction.payload?.path === 'string' ? itemAction.payload.path : ''
+          const path = getActionPayloadString(itemAction.payload, 'path')
           if (path) {
             navigate?.(path)
             return
           }
+        }
+        if (itemAction?.type === 'copy') {
+          const value =
+            getActionPayloadString(itemAction.payload, 'value') ||
+            getActionPayloadString(itemAction.payload, 'text') ||
+            targetItem.render?.basic?.title ||
+            ''
+          if (value) {
+            await transport.send(ClipboardEvents.write, {
+              type: 'text',
+              value
+            })
+            toast.success(t('corebox.copied', '已复制'))
+            return
+          }
+        }
+        if (itemAction?.type === 'open') {
+          const target =
+            getActionPayloadString(itemAction.payload, 'path') ||
+            getActionPayloadString(itemAction.payload, 'url') ||
+            getItemOpenTarget(targetItem)
+          if (target) {
+            if (/^https?:\/\//i.test(target)) {
+              await appSdk.openExternal(target)
+            } else if (targetItem.kind === 'app') {
+              await appSdk.openApp({ path: target })
+            } else {
+              await appSdk.showInFolder(target)
+            }
+            return
+          }
+        }
+        if (itemAction?.type === 'execute') {
+          await transport.send(CoreBoxEvents.item.execute, {
+            item: JSON.parse(JSON.stringify(targetItem))
+          })
+          return
         }
         devLog('[useActionPanel] Fallback execute for MetaOverlay action:', actionId, targetItem.id)
         try {

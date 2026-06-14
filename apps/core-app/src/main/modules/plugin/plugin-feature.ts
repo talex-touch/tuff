@@ -133,6 +133,7 @@ export class PluginFeature implements IPluginFeature {
   experimental?: boolean
   acceptedInputTypes?: IPluginFeature['acceptedInputTypes']
   omniTransfer?: IPluginFeature['omniTransfer']
+  footerHints?: IPluginFeature['footerHints']
   dev: IPluginDev
   searchTokens?: string[]
 
@@ -156,6 +157,9 @@ export class PluginFeature implements IPluginFeature {
           ...options.omniTransfer,
           payload: options.omniTransfer.payload ? { ...options.omniTransfer.payload } : undefined
         }
+      : undefined
+    this.footerHints = options.footerHints
+      ? JSON.parse(JSON.stringify(options.footerHints))
       : undefined
     this.dev = dev
   }
@@ -182,7 +186,8 @@ export class PluginFeature implements IPluginFeature {
       priority: this.priority,
       experimental: this.experimental,
       acceptedInputTypes: this.acceptedInputTypes,
-      omniTransfer: this.omniTransfer
+      omniTransfer: this.omniTransfer,
+      footerHints: this.footerHints
     }
   }
 }

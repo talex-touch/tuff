@@ -4,6 +4,7 @@ import type {
   ISearchProvider,
   ITuffIcon,
   TuffIconType,
+  TuffFooterHints,
   TuffItem,
   TuffQuery,
   TuffSearchResult,
@@ -86,6 +87,16 @@ function resolveFeatureShowInput(feature: IPluginFeature): boolean {
   const hasAcceptedInputTypes = Boolean(feature.acceptedInputTypes?.length)
   const allowInput = feature.interaction?.allowInput === true
   return hasAcceptedInputTypes || allowInput
+}
+
+function resolveFeatureFooterHints(feature: IPluginFeature): TuffFooterHints {
+  return {
+    ...feature.footerHints,
+    secondary: {
+      visible: false,
+      ...feature.footerHints?.secondary
+    }
+  }
 }
 
 export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
@@ -438,6 +449,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         pluginName: plugin.name,
         featureId: feature.id,
         interaction: feature.interaction,
+        footerHints: resolveFeatureFooterHints(feature),
         priority: feature.priority ?? 0,
         extension: {
           // Filter out non-serializable fields (functions, RegExp) from commands

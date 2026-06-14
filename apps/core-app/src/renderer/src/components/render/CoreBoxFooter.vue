@@ -8,6 +8,7 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { resolveCoreBoxFooterTitle } from './coreBoxFooterDisplay'
+import { isPluginFooterItem, resolveSecondaryFooterHintVisible } from './coreBoxFooterHints'
 import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
@@ -79,19 +80,19 @@ const footerHintsConfig = computed<TuffFooterHints | undefined>(() => {
   return props.item?.meta?.footerHints
 })
 
+const isPluginItem = computed(() => {
+  return isPluginFooterItem(props.item)
+})
+
 /** 主操作按钮文案 */
 const primaryActionLabel = computed(() => {
   // 优先使用 item 配置的文案
   const customLabel = footerHintsConfig.value?.primary?.label
   if (customLabel) return customLabel
 
-  const item = props.item
-  const isPluginFeature =
-    item?.kind === 'feature' && (item.source?.type === 'plugin' || item.meta?.pluginName)
-
-  const translationKey = isPluginFeature ? 'coreBox.hints.execute' : 'coreBox.hints.open'
+  const translationKey = isPluginItem.value ? 'coreBox.hints.execute' : 'coreBox.hints.open'
   const translated = t(translationKey)
-  return translated === translationKey ? (isPluginFeature ? 'Execute' : 'Open') : translated
+  return translated === translationKey ? (isPluginItem.value ? 'Execute' : 'Open') : translated
 })
 
 /** 主操作是否显示 */
@@ -99,14 +100,9 @@ const primaryVisible = computed(() => {
   return footerHintsConfig.value?.primary?.visible !== false
 })
 
-/** Meta+K 辅助操作是否显示（默认显示，用于操作面板） */
+/** Meta+K 辅助操作是否显示 */
 const secondaryVisible = computed(() => {
-  // 如果 item 显式配置了，使用配置
-  if (footerHintsConfig.value?.secondary?.visible !== undefined) {
-    return footerHintsConfig.value.secondary.visible
-  }
-  // 默认显示（用于固定功能）
-  return true
+  return resolveSecondaryFooterHintVisible(props.item)
 })
 
 /** Meta+K 辅助操作文案 */

@@ -657,8 +657,7 @@ export class IpcManager {
     this.transportDisposers.push(
       transport.on(MetaOverlayEvents.action.execute, async (request) => {
         const payload = request as MetaActionExecuteRequest & { item?: TuffItem }
-        await metaOverlayManager.executeAction(payload.actionId, payload.item)
-        return { success: true }
+        return await metaOverlayManager.executeAction(payload.actionId, payload.item)
       })
     )
 
